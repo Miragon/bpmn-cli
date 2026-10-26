@@ -90,13 +90,13 @@ export class Groups {
       const plane = raw<El>(diagram, 'plane');
       if (!rawList(plane, 'planeElement').some(this.isGroupShape)) continue;
       const shapes = this.items(plane);
-      for (const g of shapes.values()) {
-        if (!is(g.el, 'bpmn:Group')) continue;
+      for (const group of shapes.values()) {
+        if (!is(group.el, 'bpmn:Group')) continue;
         byValue ??= this.categoryMembers();
-        const value = raw<El>(g.el, 'categoryValueRef');
+        const value = raw<El>(group.el, 'categoryValueRef');
         const referenced = (value && byValue.get(value)) || [];
-        const members = referenced.length ? referenced : [...shapes.values()].filter((s) => s !== g && this.holds(g.box, s)).map((s) => s.id);
-        out.push({ id: g.id, root: idOf(raw(plane, 'bpmnElement')), bounds: g.box, ...(g.label ? { label: g.label } : {}), members });
+        const members = referenced.length ? referenced : [...shapes.values()].filter((shape) => shape !== group && this.holds(group.box, shape)).map((shape) => shape.id);
+        out.push({ id: group.id, root: idOf(raw(plane, 'bpmnElement')), bounds: group.box, ...(group.label ? { label: group.label } : {}), members });
       }
     }
     return out;
@@ -121,22 +121,22 @@ export class Groups {
 
   members(): Map<string, string[]> {
     const out = new Map([...this.groupElements().keys()].map((id): [string, string[]] => [id, []]));
-    for (const g of [...this.remembered(), ...this.undrawn()]) if (!out.get(g.id)?.length) out.set(g.id, g.members);
+    for (const group of [...this.remembered(), ...this.undrawn()]) if (!out.get(group.id)?.length) out.set(group.id, group.members);
     return out;
   }
 
   /** Element id -> the groups that held it, outermost (largest old box) first. */
   static membersOf(groups: readonly RememberedGroup[]): Map<string, string[]> {
     const out = new Map<string, string[]>();
-    const area = (g: RememberedGroup): number => g.bounds.width * g.bounds.height;
-    for (const g of [...groups].sort((a, b) => area(b) - area(a))) for (const id of g.members) out.set(id, [...(out.get(id) ?? []), g.id]);
+    const area = (group: RememberedGroup): number => group.bounds.width * group.bounds.height;
+    for (const group of [...groups].sort((first, second) => area(second) - area(first))) for (const id of group.members) out.set(id, [...(out.get(id) ?? []), group.id]);
     return out;
   }
 
   private groupElements(): Map<string, El> {
     const out = new Map<string, El>();
     const visit = (scope: unknown): void => {
-      for (const a of rawList(scope, 'artifacts')) if (is(a, 'bpmn:Group') && idOf(a)) out.set(idOf(a)!, a);
+      for (const artifact of rawList(scope, 'artifacts')) if (is(artifact, 'bpmn:Group') && idOf(artifact)) out.set(idOf(artifact)!, artifact);
       for (const fe of rawList(scope, 'flowElements')) if (rawList(fe, 'flowElements').length || rawList(fe, 'artifacts').length) visit(fe);
     };
     for (const root of rawList(this.defs, 'rootElements')) visit(root);
@@ -151,53 +151,53 @@ export class Groups {
    * Each side stops half-way to a non-member or to the border of a frame around `u`.
    * Other groups are ignored, so the order groups are drawn in never changes a box.
    */
-  private padded(shapes: Map<string, Item>, self: string, ids: Set<string>, u: Box, top: number): Box {
+  private padded(shapes: Map<string, Item>, self: string, ids: Set<string>, memberUnion: Box, top: number): Box {
     const half = (gap: number): number => Math.max(0, Math.floor(gap / 2));
-    let [t, r, b, l] = [top, GROUP_PAD, GROUP_PAD, GROUP_PAD];
-    for (const s of shapes.values()) {
-      if (s.id === self || ids.has(s.id) || is(s.el, 'bpmn:Group')) continue;
-      const o = s.box;
-      if (s.whole && inside(u, o)) {
-        [t, r, b, l] = [Math.min(t, half(u.y - o.y)), Math.min(r, half(right(o) - right(u))), Math.min(b, half(bottom(o) - bottom(u))), Math.min(l, half(u.x - o.x))];
+    let [topPad, rightPad, bottomPad, leftPad] = [top, GROUP_PAD, GROUP_PAD, GROUP_PAD];
+    for (const shape of shapes.values()) {
+      if (shape.id === self || ids.has(shape.id) || is(shape.el, 'bpmn:Group')) continue;
+      const shapeBox = shape.box;
+      if (shape.whole && inside(memberUnion, shapeBox)) {
+        [topPad, rightPad, bottomPad, leftPad] = [Math.min(topPad, half(memberUnion.y - shapeBox.y)), Math.min(rightPad, half(right(shapeBox) - right(memberUnion))), Math.min(bottomPad, half(bottom(shapeBox) - bottom(memberUnion))), Math.min(leftPad, half(memberUnion.x - shapeBox.x))];
         continue;
       }
-      const across = o.x < right(u) + GROUP_PAD && right(o) > u.x - GROUP_PAD;
-      const along = o.y < bottom(u) + GROUP_PAD && bottom(o) > u.y - top;
-      if (across && o.y >= bottom(u)) b = Math.min(b, half(o.y - bottom(u)));
-      if (across && bottom(o) <= u.y) t = Math.min(t, half(u.y - bottom(o)));
-      if (along && o.x >= right(u)) r = Math.min(r, half(o.x - right(u)));
-      if (along && right(o) <= u.x) l = Math.min(l, half(u.x - right(o)));
+      const across = shapeBox.x < right(memberUnion) + GROUP_PAD && right(shapeBox) > memberUnion.x - GROUP_PAD;
+      const along = shapeBox.y < bottom(memberUnion) + GROUP_PAD && bottom(shapeBox) > memberUnion.y - top;
+      if (across && shapeBox.y >= bottom(memberUnion)) bottomPad = Math.min(bottomPad, half(shapeBox.y - bottom(memberUnion)));
+      if (across && bottom(shapeBox) <= memberUnion.y) topPad = Math.min(topPad, half(memberUnion.y - bottom(shapeBox)));
+      if (along && shapeBox.x >= right(memberUnion)) rightPad = Math.min(rightPad, half(shapeBox.x - right(memberUnion)));
+      if (along && right(shapeBox) <= memberUnion.x) leftPad = Math.min(leftPad, half(memberUnion.x - right(shapeBox)));
     }
-    return { x: u.x - l, y: u.y - t, width: u.width + l + r, height: u.height + t + b };
+    return { x: memberUnion.x - leftPad, y: memberUnion.y - topPad, width: memberUnion.width + leftPad + rightPad, height: memberUnion.height + topPad + bottomPad };
   }
 
   /** A member's label only grows the box when it pulls no other shape into it. */
   private withLabels(shapes: Map<string, Item>, self: string, ids: Set<string>): Box {
-    let u = unionAll([...ids].map((id) => shapes.get(id)!.box))!;
-    const others = [...shapes.values()].filter((s) => s.id !== self && !ids.has(s.id) && !is(s.el, 'bpmn:Group') && !(s.whole && inside(u, s.box)));
+    let memberUnion = unionAll([...ids].map((id) => shapes.get(id)!.box))!;
+    const others = [...shapes.values()].filter((shape) => shape.id !== self && !ids.has(shape.id) && !is(shape.el, 'bpmn:Group') && !(shape.whole && inside(memberUnion, shape.box)));
     for (const id of [...ids].sort()) {
       const label = shapes.get(id)!.label;
       if (!label) continue;
-      const grown = union(u, label);
-      if (others.every((o) => !overlaps(o.box, grown) || overlaps(o.box, u))) u = grown;
+      const grown = union(memberUnion, label);
+      if (others.every((other) => !overlaps(other.box, grown) || overlaps(other.box, memberUnion))) memberUnion = grown;
     }
-    return u;
+    return memberUnion;
   }
 
   private fit(shapes: Map<string, Item>, self: string, ids: Set<string>, top: number): Box {
     const withEvents = (): void => {
-      for (const s of shapes.values()) if (s.host && ids.has(s.host)) ids.add(s.id);
+      for (const shape of shapes.values()) if (shape.host && ids.has(shape.host)) ids.add(shape.id);
     };
     withEvents();
     let box: Box | undefined;
     for (let round = 0; round < ROUNDS; round++) {
       box = this.padded(shapes, self, ids, this.withLabels(shapes, self, ids), top);
       const size = ids.size;
-      for (const s of shapes.values()) {
-        if (s.id === self || ids.has(s.id) || !this.holds(box, s)) continue;
-        ids.add(s.id);
+      for (const shape of shapes.values()) {
+        if (shape.id === self || ids.has(shape.id) || !this.holds(box, shape)) continue;
+        ids.add(shape.id);
         // a boundary event joins together with its host, never alone
-        if (s.host && shapes.has(s.host)) ids.add(s.host);
+        if (shape.host && shapes.has(shape.host)) ids.add(shape.host);
       }
       withEvents();
       if (ids.size === size) break;
@@ -205,17 +205,17 @@ export class Groups {
     return box!;
   }
 
-  private boundsEl(moddle: BpmnModdle, b: Box): El {
-    return moddle.create('dc:Bounds', { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) }) as El;
+  private boundsEl(moddle: BpmnModdle, box: Box): El {
+    return moddle.create('dc:Bounds', { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) }) as El;
   }
 
   private extentOf(plane: El, shapes: Map<string, Item>): Box | undefined {
     const boxes: Box[] = [];
-    for (const s of shapes.values()) boxes.push(s.box, ...(s.label ? [s.label] : []));
+    for (const shape of shapes.values()) boxes.push(shape.box, ...(shape.label ? [shape.label] : []));
     for (const pe of rawList(plane, 'planeElement')) {
       if (!is(pe, 'bpmndi:BPMNEdge')) continue;
-      const pts = rawList(pe, 'waypoint').map((w) => ({ x: raw<number>(w, 'x'), y: raw<number>(w, 'y') })).filter((p): p is Point => Number.isFinite(p.x) && Number.isFinite(p.y));
-      boxes.push(...pts.map((p) => ({ x: p.x, y: p.y, width: 0, height: 0 })));
+      const pts = rawList(pe, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x'), y: raw<number>(waypoint, 'y') })).filter((point): point is Point => Number.isFinite(point.x) && Number.isFinite(point.y));
+      boxes.push(...pts.map((point) => ({ x: point.x, y: point.y, width: 0, height: 0 })));
       const label = boxOf(raw(raw(pe, 'label'), 'bounds'));
       if (label) boxes.push(label);
     }
@@ -224,14 +224,14 @@ export class Groups {
 
   /** A group without drawn members keeps its old bounds while they are free, else goes below. */
   private keptBounds(plane: El, shapes: Map<string, Item>, old: Box, placed: readonly Box[]): Box {
-    const taken = (b: Box): boolean =>
-      placed.some((p) => overlaps(p, b)) ||
-      [...shapes.values()].some((s) => (overlaps(s.box, b) && !(s.whole && inside(b, s.box))) || (!!s.label && overlaps(s.label, b)));
+    const taken = (box: Box): boolean =>
+      placed.some((placedBox) => overlaps(placedBox, box)) ||
+      [...shapes.values()].some((shape) => (overlaps(shape.box, box) && !(shape.whole && inside(box, shape.box))) || (!!shape.label && overlaps(shape.label, box)));
     if (!taken(old)) return old;
     const drawing = this.extentOf(plane, shapes);
     if (!drawing) return old;
     const box = { x: drawing.x, y: bottom(drawing) + GROUP_PAD, width: old.width, height: old.height };
-    for (let hit = placed.find((p) => overlaps(p, box)); hit; hit = placed.find((p) => overlaps(p, box))) box.y = bottom(hit) + GROUP_PAD;
+    for (let hit = placed.find((placedBox) => overlaps(placedBox, box)); hit; hit = placed.find((placedBox) => overlaps(placedBox, box))) box.y = bottom(hit) + GROUP_PAD;
     return box;
   }
 
@@ -259,77 +259,77 @@ export class Groups {
     if (!groups.length) return result;
     const elements = this.groupElements();
     const planes = rawList(this.defs, 'diagrams')
-      .map((d) => raw<El>(d, 'plane'))
-      .filter((p): p is El => !!p)
+      .map((diagram) => raw<El>(diagram, 'plane'))
+      .filter((plane): plane is El => !!plane)
       .map((plane) => ({ plane, root: idOf(raw(plane, 'bpmnElement')), shapes: this.items(plane) }));
     if (!planes.length) return result;
-    const area = (g: RememberedGroup): number => g.bounds.width * g.bounds.height;
-    const round = (b: Box): Box => ({ x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) });
+    const area = (group: RememberedGroup): number => group.bounds.width * group.bounds.height;
+    const round = (box: Box): Box => ({ x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
     const shapes = new Map<RememberedGroup, { plane: El; shape: El }>();
     const done = new Set<string>();
-    const empty: Array<{ g: RememberedGroup; el: El }> = [];
-    const fitted: Array<{ g: RememberedGroup; el: El; home: (typeof planes)[number]; ids: Set<string>; top: number; box: Box; label?: Box }> = [];
-    const add = (g: RememberedGroup, el: El, plane: El, box: Box, label: Box | undefined): void => {
-      const shape = moddle.create('bpmndi:BPMNShape', { id: shapeId(g.id), bpmnElement: el, bounds: this.boundsEl(moddle, box) }) as El;
+    const empty: Array<{ group: RememberedGroup; el: El }> = [];
+    const fitted: Array<{ group: RememberedGroup; el: El; home: (typeof planes)[number]; ids: Set<string>; top: number; box: Box; label?: Box }> = [];
+    const add = (group: RememberedGroup, el: El, plane: El, box: Box, label: Box | undefined): void => {
+      const shape = moddle.create('bpmndi:BPMNShape', { id: shapeId(group.id), bpmnElement: el, bounds: this.boundsEl(moddle, box) }) as El;
       if (label) shape.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.boundsEl(moddle, label) }));
-      shapes.set(g, { plane, shape });
+      shapes.set(group, { plane, shape });
     };
-    for (const g of [...groups].sort((a, b) => area(a) - area(b))) {
-      const el = elements.get(g.id);
-      if (!el || done.has(g.id) || planes.some((p) => p.shapes.has(g.id))) continue;
-      done.add(g.id);
+    for (const group of [...groups].sort((first, second) => area(first) - area(second))) {
+      const el = elements.get(group.id);
+      if (!el || done.has(group.id) || planes.some((plane) => plane.shapes.has(group.id))) continue;
+      done.add(group.id);
       let home: (typeof planes)[number] | undefined;
       let most = 0;
-      for (const p of planes) {
-        const n = g.members.filter((id) => p.shapes.has(id)).length;
-        if (n > most || (n === most && n > 0 && p.root === g.root)) {
-          home = p;
-          most = n;
+      for (const plane of planes) {
+        const memberCount = group.members.filter((id) => plane.shapes.has(id)).length;
+        if (memberCount > most || (memberCount === most && memberCount > 0 && plane.root === group.root)) {
+          home = plane;
+          most = memberCount;
         }
       }
       if (!home) {
-        if (g.bounds.width && g.bounds.height) empty.push({ g, el });
+        if (group.bounds.width && group.bounds.height) empty.push({ group, el });
         continue;
       }
       const hasName = this.named(el);
-      const ids = new Set(g.members.filter((id) => home!.shapes.has(id)));
+      const ids = new Set(group.members.filter((id) => home!.shapes.has(id)));
       const top = GROUP_PAD + (hasName ? NAME_ROOM : 0);
-      const box = round(this.fit(home.shapes, g.id, ids, top));
-      const label = hasName && g.label ? this.labelOn(box, g.label) : undefined;
-      home.shapes.set(g.id, { id: g.id, el, box, whole: true, ...(label ? { label } : {}) });
-      fitted.push({ g, el, home, ids, top, box, label });
-      result.drawn.push(g.id);
+      const box = round(this.fit(home.shapes, group.id, ids, top));
+      const label = hasName && group.label ? this.labelOn(box, group.label) : undefined;
+      home.shapes.set(group.id, { id: group.id, el, box, whole: true, ...(label ? { label } : {}) });
+      fitted.push({ group, el, home, ids, top, box, label });
+      result.drawn.push(group.id);
     }
     // refit boxes holding a later group or a changed member group, so a second redraw is stable
     let changed = new Set<string>();
     for (let pass = 0; pass < ROUNDS; pass++) {
-      const again = fitted.filter((f) => fitted.some((o) => o !== f && o.home === f.home && (f.ids.has(o.g.id) ? changed.has(o.g.id) : inside(o.box, f.box))));
+      const again = fitted.filter((fit) => fitted.some((other) => other !== fit && other.home === fit.home && (fit.ids.has(other.group.id) ? changed.has(other.group.id) : inside(other.box, fit.box))));
       if (!again.length) break;
       changed = new Set();
-      for (const f of again) {
-        const box = round(this.fit(f.home.shapes, f.g.id, f.ids, f.top));
-        if (box.x === f.box.x && box.y === f.box.y && box.width === f.box.width && box.height === f.box.height) continue;
-        changed.add(f.g.id);
-        f.box = box;
-        if (f.label) f.label = this.labelOn(box, f.label);
-        f.home.shapes.set(f.g.id, { id: f.g.id, el: f.el, box, whole: true, ...(f.label ? { label: f.label } : {}) });
+      for (const fit of again) {
+        const box = round(this.fit(fit.home.shapes, fit.group.id, fit.ids, fit.top));
+        if (box.x === fit.box.x && box.y === fit.box.y && box.width === fit.box.width && box.height === fit.box.height) continue;
+        changed.add(fit.group.id);
+        fit.box = box;
+        if (fit.label) fit.label = this.labelOn(box, fit.label);
+        fit.home.shapes.set(fit.group.id, { id: fit.group.id, el: fit.el, box, whole: true, ...(fit.label ? { label: fit.label } : {}) });
       }
     }
-    for (const f of fitted) add(f.g, f.el, f.home.plane, f.box, f.label);
+    for (const fit of fitted) add(fit.group, fit.el, fit.home.plane, fit.box, fit.label);
     // groups around nothing come last and never become a member of another group
     const placed = new Map<El, Box[]>();
-    for (const { g, el } of empty) {
-      const home = planes.find((p) => p.root === g.root) ?? planes[0]!;
+    for (const { group, el } of empty) {
+      const home = planes.find((plane) => plane.root === group.root) ?? planes[0]!;
       const here = placed.get(home.plane) ?? [];
-      const box = this.keptBounds(home.plane, home.shapes, g.bounds, here);
-      const [dx, dy] = [box.x - g.bounds.x, box.y - g.bounds.y];
-      add(g, el, home.plane, box, g.label && { ...g.label, x: g.label.x + dx, y: g.label.y + dy });
-      placed.set(home.plane, [...here, box, ...(g.label ? [{ ...g.label, x: g.label.x + dx, y: g.label.y + dy }] : [])]);
-      result.kept.push(g.id);
-      if (dx || dy) result.moved.push(g.id);
+      const box = this.keptBounds(home.plane, home.shapes, group.bounds, here);
+      const [dx, dy] = [box.x - group.bounds.x, box.y - group.bounds.y];
+      add(group, el, home.plane, box, group.label && { ...group.label, x: group.label.x + dx, y: group.label.y + dy });
+      placed.set(home.plane, [...here, box, ...(group.label ? [{ ...group.label, x: group.label.x + dx, y: group.label.y + dy }] : [])]);
+      result.kept.push(group.id);
+      if (dx || dy) result.moved.push(group.id);
     }
-    for (const g of groups) {
-      const drawn = shapes.get(g);
+    for (const group of groups) {
+      const drawn = shapes.get(group);
       if (drawn) addTo(drawn.plane, 'planeElement', drawn.shape);
     }
     return result;

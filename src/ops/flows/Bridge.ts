@@ -65,16 +65,16 @@ export class Bridge {
   group(group: El[]): void {
     const doc = this.doc;
     const inside = new Set<El>();
-    for (const n of group) {
-      inside.add(n);
-      if (is(n, 'bpmn:Activity')) for (const b of doc.boundaryEventsOf(n)) inside.add(b);
+    for (const member of group) {
+      inside.add(member);
+      if (is(member, 'bpmn:Activity')) for (const boundary of doc.boundaryEventsOf(member)) inside.add(boundary);
     }
     const entries: El[] = [];
     const exits: El[] = [];
-    for (const n of inside) {
-      for (const f of doc.incoming(n)) if (!inside.has(f.get<El>('sourceRef'))) entries.push(f);
-      if (is(n, 'bpmn:BoundaryEvent')) continue;
-      for (const f of doc.outgoing(n)) if (!inside.has(f.get<El>('targetRef'))) exits.push(f);
+    for (const member of inside) {
+      for (const flow of doc.incoming(member)) if (!inside.has(flow.get<El>('sourceRef'))) entries.push(flow);
+      if (is(member, 'bpmn:BoundaryEvent')) continue;
+      for (const flow of doc.outgoing(member)) if (!inside.has(flow.get<El>('targetRef'))) exits.push(flow);
     }
     if (entries.length !== 1 || exits.length !== 1) return;
     const inFlow = entries[0]!;
@@ -102,9 +102,9 @@ export class Bridge {
       if (outFlow.get<El>('targetRef') !== node && inFlow.get<El>('sourceRef') !== node) return this.carry(inFlow, outFlow, idOf(node), 'node');
     }
     // a self-loop is both incoming and outgoing: remove and report it once
-    for (const f of new Set([...incoming, ...outgoing])) {
-      cs.remove(ChangeSet.flowEntryOf(f));
-      this.flows.remove(f, cs);
+    for (const flow of new Set([...incoming, ...outgoing])) {
+      cs.remove(ChangeSet.flowEntryOf(flow));
+      this.flows.remove(flow, cs);
     }
     return undefined;
   }
@@ -171,7 +171,7 @@ export class Bridge {
     const bridged: string[] = [];
     for (const inFlow of incoming) {
       const predecessor = inFlow.get<El>('sourceRef');
-      const already = doc.outgoing(predecessor).some((f) => f !== inFlow && f.get<El | undefined>('targetRef') === successor);
+      const already = doc.outgoing(predecessor).some((flow) => flow !== inFlow && flow.get<El | undefined>('targetRef') === successor);
       if (predecessor === successor || predecessor === node || already) {
         this.flows.remove(inFlow, cs);
         cs.remove(ChangeSet.flowEntryOf(inFlow));
@@ -207,7 +207,7 @@ export class Bridge {
     if (!synchronises(node)) return;
     const incoming = this.doc.incoming(node);
     const successor = this.doc.outgoing(node)[0]!.get<El>('targetRef');
-    const preds = [...new Set(incoming.map((f) => idOf(f.get<El>('sourceRef'))))];
+    const preds = [...new Set(incoming.map((flow) => idOf(flow.get<El>('sourceRef'))))];
     throw modelError(
       'E_AMBIGUOUS_BRIDGE',
       `${idOf(node)} is a ${Bridge.joinKind(node)} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${idOf(successor)} ends the synchronisation (${idOf(successor)} would run once per path), removing it without a bridge leaves ${idOf(successor)} unconnected`,

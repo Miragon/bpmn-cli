@@ -55,37 +55,37 @@ function problemBox(plane: Plane, ids: string[]): Box | undefined {
   let y0 = Infinity;
   let x1 = -Infinity;
   let y1 = -Infinity;
-  const add = (b: Box): void => {
-    x0 = Math.min(x0, b.x);
-    y0 = Math.min(y0, b.y);
-    x1 = Math.max(x1, b.x + b.width);
-    y1 = Math.max(y1, b.y + b.height);
+  const add = (box: Box): void => {
+    x0 = Math.min(x0, box.x);
+    y0 = Math.min(y0, box.y);
+    x1 = Math.max(x1, box.x + box.width);
+    y1 = Math.max(y1, box.y + box.height);
   };
   for (const id of ids) {
-    const s = plane.shapes.get(id);
-    if (s) [s.bounds, s.label].forEach((b) => b && add(b));
-    const e = plane.edges.get(id);
-    if (e) {
-      for (const p of e.points) add({ x: p.x, y: p.y, width: 0, height: 0 });
-      if (e.label) add(e.label);
+    const shape = plane.shapes.get(id);
+    if (shape) [shape.bounds, shape.label].forEach((bounds) => bounds && add(bounds));
+    const edge = plane.edges.get(id);
+    if (edge) {
+      for (const point of edge.points) add({ x: point.x, y: point.y, width: 0, height: 0 });
+      if (edge.label) add(edge.label);
     }
   }
   return Number.isFinite(x0) ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : undefined;
 }
 
-const inBox = (b: Box, p: { x: number; y: number }): boolean => p.x >= b.x - 0.01 && p.x <= b.x + b.width + 0.01 && p.y >= b.y - 0.01 && p.y <= b.y + b.height + 0.01;
+const inBox = (box: Box, point: { x: number; y: number }): boolean => point.x >= box.x - 0.01 && point.x <= box.x + box.width + 0.01 && point.y >= box.y - 0.01 && point.y <= box.y + box.height + 0.01;
 
 /** The ids drawn in full (`<g data-id>`), the faded connections and the context frames of an SVG. */
 function drawnIds(svg: string, attr = 'data-id'): string[] {
-  return [...svg.matchAll(new RegExp(`<g ${attr}="([^"]+)"`, 'g'))].map((m) => m[1]!);
+  return [...svg.matchAll(new RegExp(`<g ${attr}="([^"]+)"`, 'g'))].map((match) => match[1]!);
 }
 
 /** The badges of an SVG: number -> centre. */
 function badgesOf(svg: string): Map<number, { x: number; y: number }> {
-  return new Map([...svg.matchAll(/<g data-problem="(\d+)"><circle cx="([\d.-]+)" cy="([\d.-]+)"/g)].map((m) => [Number(m[1]), { x: Number(m[2]), y: Number(m[3]) }]));
+  return new Map([...svg.matchAll(/<g data-problem="(\d+)"><circle cx="([\d.-]+)" cy="([\d.-]+)"/g)].map((match) => [Number(match[1]), { x: Number(match[2]), y: Number(match[3]) }]));
 }
 
-const shown = (p: LayoutProblem): string => `${p.kind} ${p.ids.join(',')}${p.detail ? ` ${p.detail}` : ''}`;
+const shown = (problem: LayoutProblem): string => `${problem.kind} ${problem.ids.join(',')}${problem.detail ? ` ${problem.detail}` : ''}`;
 
 describe('locateProblems', () => {
   const files = [...bpmnFiles(SCENARIOS), ...bpmnFiles(join(ROOT, 'test', 'fixtures'))];
@@ -96,22 +96,22 @@ describe('locateProblems', () => {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
       const defs = doc.definitions;
       const problems = LayoutAnalysis.of(defs).problems;
-      for (const p of problems) expect(p, file).not.toHaveProperty('at');
+      for (const problem of problems) expect(problem, file).not.toHaveProperty('at');
       const planes = new DiagramReader(defs).planes();
       const out = new ProblemLocator(defs).locate(problems);
-      expect(out.map(({ at: _, ...p }) => p), file).toEqual(problems);
-      for (const p of out) {
-        const plane = planes.find((x) => x.shapes.has(p.ids[0] ?? '') || x.edges.has(p.ids[0] ?? ''));
-        if (p.kind === 'missing' || p.kind === 'failed' || !plane) {
-          if (p.kind === 'missing' || p.kind === 'failed') expect(p.at, `${file} ${shown(p)}`).toBeUndefined();
+      expect(out.map(({ at: _unusedAt, ...problem }) => problem), file).toEqual(problems);
+      for (const problem of out) {
+        const plane = planes.find((candidate) => candidate.shapes.has(problem.ids[0] ?? '') || candidate.edges.has(problem.ids[0] ?? ''));
+        if (problem.kind === 'missing' || problem.kind === 'failed' || !plane) {
+          if (problem.kind === 'missing' || problem.kind === 'failed') expect(problem.at, `${file} ${shown(problem)}`).toBeUndefined();
           continue;
         }
         // every problem on a plane has a place (degenerate edges without waypoints aside)
-        if (p.kind !== 'degenerateEdge') expect(p.at, `${file} ${shown(p)}`).toBeDefined();
-        if (!p.at) continue;
+        if (problem.kind !== 'degenerateEdge') expect(problem.at, `${file} ${shown(problem)}`).toBeDefined();
+        if (!problem.at) continue;
         located++;
-        expect(p.at.plane, `${file} ${shown(p)}`).toBe(plane.rootId);
-        expect(inBox(problemBox(plane, p.ids)!, p.at), `${file} ${shown(p)} at ${p.at.x},${p.at.y}`).toBe(true);
+        expect(problem.at.plane, `${file} ${shown(problem)}`).toBe(plane.rootId);
+        expect(inBox(problemBox(plane, problem.ids)!, problem.at), `${file} ${shown(problem)} at ${problem.at.x},${problem.at.y}`).toBe(true);
       }
     }
     expect(located).toBeGreaterThan(300);
@@ -120,14 +120,14 @@ describe('locateProblems', () => {
   it('locates each kind on the defect: a crossing at the crossing point, an overlap in the overlap', async () => {
     const doc = await Doc.fromXml(readFileSync(O2C, 'utf8'));
     const out = new ProblemLocator(doc.definitions).locate(LayoutAnalysis.of(doc.definitions).problems);
-    const crossing = out.find((p) => p.kind === 'crossings')!;
+    const crossing = out.find((problem) => problem.kind === 'crossings')!;
     expect(crossing.ids).toEqual(['Flow_6', 'Flow_21']);
     const plane = new DiagramReader(doc.definitions).planes()[0]!;
     // the crossing point lies on both flows
     const onFlow = (id: string): boolean =>
-      plane.edges.get(id)!.points.some((a, i, pts) => {
-        const b = pts[i + 1];
-        return !!b && Math.abs((b.x - a.x) * (crossing.at!.y - a.y) - (b.y - a.y) * (crossing.at!.x - a.x)) < 1 && inBox({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) }, crossing.at!);
+      plane.edges.get(id)!.points.some((point, index, pts) => {
+        const nextPoint = pts[index + 1];
+        return !!nextPoint && Math.abs((nextPoint.x - point.x) * (crossing.at!.y - point.y) - (nextPoint.y - point.y) * (crossing.at!.x - point.x)) < 1 && inBox({ x: Math.min(point.x, nextPoint.x), y: Math.min(point.y, nextPoint.y), width: Math.abs(nextPoint.x - point.x), height: Math.abs(nextPoint.y - point.y) }, crossing.at!);
       });
     expect(onFlow('Flow_6') && onFlow('Flow_21')).toBe(true);
   });
@@ -140,13 +140,13 @@ describe('--problems', () => {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
       if (!new DiagramReader(doc.definitions).planes().length) continue;
       const metrics = LayoutAnalysis.of(doc.definitions).problems;
-      const r = renderDocSvg(doc, { maxSize: 2000, problems: true });
-      expect(r.problems.map((p) => `${p.n} ${shown(p)}`), file).toEqual(metrics.map((p, i) => `${i + 1} ${shown(p)}`));
-      const plane = new DiagramReader(doc.definitions).planes().find((p) => p.rootId === r.plane)!;
-      const drawn = badgesOf(r.svg);
-      expect([...drawn.keys()].sort((a, b) => a - b), file).toEqual(r.problems.filter((p) => p.drawn).map((p) => p.n));
-      for (const p of r.problems.filter((x) => x.drawn)) {
-        expect(inBox(problemBox(plane, p.ids)!, drawn.get(p.n)!), `${file} ${p.n} ${shown(p)}`).toBe(true);
+      const rendered = renderDocSvg(doc, { maxSize: 2000, problems: true });
+      expect(rendered.problems.map((problem) => `${problem.n} ${shown(problem)}`), file).toEqual(metrics.map((problem, index) => `${index + 1} ${shown(problem)}`));
+      const plane = new DiagramReader(doc.definitions).planes().find((candidatePlane) => candidatePlane.rootId === rendered.plane)!;
+      const drawn = badgesOf(rendered.svg);
+      expect([...drawn.keys()].sort((left, right) => left - right), file).toEqual(rendered.problems.filter((problem) => problem.drawn).map((problem) => problem.n));
+      for (const problem of rendered.problems.filter((candidate) => candidate.drawn)) {
+        expect(inBox(problemBox(plane, problem.ids)!, drawn.get(problem.n)!), `${file} ${problem.n} ${shown(problem)}`).toBe(true);
         badges++;
       }
     }
@@ -154,9 +154,9 @@ describe('--problems', () => {
   }, 60000);
 
   it('moves a badge that would cover an earlier one aside, still inside its elements', async () => {
-    const r = await renderSvg(readFileSync(O2C, 'utf8'), { problems: true });
-    const spots = [...badgesOf(r.svg).values()];
-    for (const [i, a] of spots.entries()) for (const b of spots.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(17.9);
+    const rendered = await renderSvg(readFileSync(O2C, 'utf8'), { problems: true });
+    const spots = [...badgesOf(rendered.svg).values()];
+    for (const [index, spot] of spots.entries()) for (const otherSpot of spots.slice(index + 1)) expect(Math.hypot(spot.x - otherSpot.x, spot.y - otherSpot.y)).toBeGreaterThan(17.9);
   });
 
   it('a list of problems: exactly those, numbered in its order; a problem on another plane is listed, not drawn', async () => {
@@ -164,12 +164,12 @@ describe('--problems', () => {
     const doc = await Doc.fromXml(xml);
     const all = LayoutAnalysis.of(doc.definitions).problems;
     const asked = [all[3]!, all[0]!];
-    const r = await renderSvg(xml, { problems: asked });
-    expect(r.problems.map((p) => [p.n, p.kind, p.ids])).toEqual([
+    const rendered = await renderSvg(xml, { problems: asked });
+    expect(rendered.problems.map((problem) => [problem.n, problem.kind, problem.ids])).toEqual([
       [1, asked[0]!.kind, asked[0]!.ids],
       [2, asked[1]!.kind, asked[1]!.ids],
     ]);
-    expect([...badgesOf(r.svg).keys()]).toEqual([1, 2]);
+    expect([...badgesOf(rendered.svg).keys()]).toEqual([1, 2]);
     const gallery = readFileSync(GALLERY, 'utf8');
     const missing: LayoutProblem = { kind: 'missing', ids: ['Activity_Nowhere'] };
     expect((await renderSvg(gallery, { problems: [missing] })).problems).toEqual([{ n: 1, kind: 'missing', ids: ['Activity_Nowhere'], drawn: false }]);
@@ -183,20 +183,20 @@ describe('crops', () => {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
       const planes = new DiagramReader(doc.definitions).planes();
       if (!planes.length) continue;
-      const nodes = [...doc.byId().values()].filter((el) => is(el, 'bpmn:FlowNode') && planes.some((p) => p.shapes.has(el.get<string>('id'))));
-      for (const [i, node] of nodes.entries()) {
+      const nodes = [...doc.byId().values()].filter((el) => is(el, 'bpmn:FlowNode') && planes.some((candidatePlane) => candidatePlane.shapes.has(el.get<string>('id'))));
+      for (const [index, node] of nodes.entries()) {
         const id = node.get<string>('id');
-        const r = renderDocSvg(doc, { maxSize: 2000, around: { id, depth: 2 } });
-        tokens.push(r.tokens);
-        if (i % 4) continue; // the node set of every 4th node (the renders above cover every node)
-        const plane = planes.find((p) => p.rootId === r.plane)!;
-        const window = aroundView(doc, id, { depth: 2 }).nodes.map((n) => n.id).filter((n) => plane.shapes.has(n));
-        const flowNodes = drawnIds(r.svg).filter((x) => plane.shapes.has(x) && is(plane.shapes.get(x)!.el, 'bpmn:FlowNode'));
+        const rendered = renderDocSvg(doc, { maxSize: 2000, around: { id, depth: 2 } });
+        tokens.push(rendered.tokens);
+        if (index % 4) continue; // the node set of every 4th node (the renders above cover every node)
+        const plane = planes.find((candidatePlane) => candidatePlane.rootId === rendered.plane)!;
+        const window = aroundView(doc, id, { depth: 2 }).nodes.map((windowNode) => windowNode.id).filter((nodeId) => plane.shapes.has(nodeId));
+        const flowNodes = drawnIds(rendered.svg).filter((drawnId) => plane.shapes.has(drawnId) && is(plane.shapes.get(drawnId)!.el, 'bpmn:FlowNode'));
         expect(new Set(flowNodes), `${file} --around ${id}`).toEqual(new Set(window));
-        expect(r.nodes, `${file} --around ${id}`).toEqual(window);
+        expect(rendered.nodes, `${file} --around ${id}`).toEqual(window);
       }
     }
-    tokens.sort((a, b) => a - b);
+    tokens.sort((left, right) => left - right);
     const median = tokens[Math.floor(tokens.length / 2)]!;
     expect(tokens.length).toBeGreaterThan(1500);
     expect(median).toBeLessThanOrEqual(1000);
@@ -204,16 +204,16 @@ describe('crops', () => {
 
   it('--around: the connections between the nodes in full, the rest faded, frames as context; --depth and --inner as in show', async () => {
     const xml = readFileSync(O2C, 'utf8');
-    const r = await renderSvg(xml, { around: { id: 'Gateway_OrderValid', depth: 1 } });
-    expect(r.nodes).toEqual(['Activity_ValidateOrder', 'Gateway_OrderValid', 'Activity_CheckCredit', 'Event_OrderRejected']);
-    expect(drawnIds(r.svg).sort()).toEqual(['Activity_CheckCredit', 'Activity_ValidateOrder', 'Event_OrderRejected', 'Flow_2', 'Flow_3', 'Flow_4', 'Gateway_OrderValid'].sort());
-    expect(drawnIds(r.svg, 'data-faded')).toEqual(expect.arrayContaining(['Flow_1', 'Flow_5']));
-    expect(drawnIds(r.svg, 'data-context')).toEqual(expect.arrayContaining(['Lane_Sales', 'Lane_Finance']));
+    const rendered = await renderSvg(xml, { around: { id: 'Gateway_OrderValid', depth: 1 } });
+    expect(rendered.nodes).toEqual(['Activity_ValidateOrder', 'Gateway_OrderValid', 'Activity_CheckCredit', 'Event_OrderRejected']);
+    expect(drawnIds(rendered.svg).sort()).toEqual(['Activity_CheckCredit', 'Activity_ValidateOrder', 'Event_OrderRejected', 'Flow_2', 'Flow_3', 'Flow_4', 'Gateway_OrderValid'].sort());
+    expect(drawnIds(rendered.svg, 'data-faded')).toEqual(expect.arrayContaining(['Flow_1', 'Flow_5']));
+    expect(drawnIds(rendered.svg, 'data-context')).toEqual(expect.arrayContaining(['Lane_Sales', 'Lane_Finance']));
     // the image fits the nodes, not the whole drawing
     const whole = await renderSvg(xml);
-    expect(r.width).toBeLessThan(whole.width / 2);
+    expect(rendered.width).toBeLessThan(whole.width / 2);
     const deeper = await renderSvg(xml, { around: { id: 'Gateway_OrderValid', depth: 3 } });
-    expect(deeper.nodes!.length).toBeGreaterThan(r.nodes!.length);
+    expect(deeper.nodes!.length).toBeGreaterThan(rendered.nodes!.length);
   });
 
   it('--path draws the nodes and flows of the path; --scope a pool, lane or sub-process with what lies inside; ids exactly these', async () => {
@@ -268,8 +268,8 @@ describe('crops', () => {
 describe('halos', () => {
   it('draws a halo under each highlighted element, coloured by category; a list is orange and its unknown ids are E_NOT_FOUND', async () => {
     const xml = readFileSync(O2C, 'utf8');
-    const r = await renderSvg(xml, { highlight: { created: ['Activity_CheckCredit'], changed: ['Activity_CheckCredit', 'Flow_5'], moved: ['Gateway_CreditOk', 'Lane_Finance'] } });
-    const svg = r.svg;
+    const rendered = await renderSvg(xml, { highlight: { created: ['Activity_CheckCredit'], changed: ['Activity_CheckCredit', 'Flow_5'], moved: ['Gateway_CreditOk', 'Lane_Finance'] } });
+    const svg = rendered.svg;
     const haloOf = (color: string): number => svg.split(`stroke="${color}"`).length - 1;
     expect(haloOf(HALO_COLORS.created)).toBe(1); // created wins over changed
     expect(haloOf(HALO_COLORS.changed)).toBe(1); // the flow
@@ -288,12 +288,12 @@ describe('halos', () => {
   it('changeHighlight: created, changed (model, colour) and moved (layout, format) ids, each in its first category', async () => {
     const doc = await Doc.fromXml(readFileSync(O2C, 'utf8'));
     const result = await mutateDoc(doc, parseOps([{ op: 'add', kind: 'userTask', name: 'Approve credit', after: 'Activity_CheckCredit' }, { op: 'color', ids: ['Activity_ShipGoods'], color: 'green' }]), { dryRun: true });
-    const h = changeHighlight(mutationReport(result));
-    expect(h.created).toEqual(expect.arrayContaining(['Activity_ApproveCredit', 'Flow_ApproveCreditToCreditOk']));
-    expect(h.changed).toEqual(expect.arrayContaining(['Flow_5', 'Activity_ShipGoods']));
-    expect(h.changed).not.toContain('Activity_ApproveCredit');
-    expect(h.moved).toContain('Gateway_CreditOk');
-    for (const id of h.moved) expect([...h.created, ...h.changed]).not.toContain(id);
+    const highlight = changeHighlight(mutationReport(result));
+    expect(highlight.created).toEqual(expect.arrayContaining(['Activity_ApproveCredit', 'Flow_ApproveCreditToCreditOk']));
+    expect(highlight.changed).toEqual(expect.arrayContaining(['Flow_5', 'Activity_ShipGoods']));
+    expect(highlight.changed).not.toContain('Activity_ApproveCredit');
+    expect(highlight.moved).toContain('Gateway_CreditOk');
+    for (const id of highlight.moved) expect([...highlight.created, ...highlight.changed]).not.toContain(id);
   });
 });
 
@@ -302,36 +302,36 @@ describe('tiles', () => {
     const xml = readFileSync(LONG, 'utf8');
     const whole = await renderSvg(xml, { maxSize: 2000 });
     expect(whole.scale).toBeLessThan(MIN_LABEL_SCALE);
-    const r = await renderSvg(xml, { maxSize: 2000, tiles: true, problems: true });
-    expect(r.tiles!.length).toBeGreaterThanOrEqual(2);
-    expect(r.scale).toBe(1);
+    const rendered = await renderSvg(xml, { maxSize: 2000, tiles: true, problems: true });
+    expect(rendered.tiles!.length).toBeGreaterThanOrEqual(2);
+    expect(rendered.scale).toBe(1);
     let next = 0;
-    for (const t of r.tiles!) {
-      expect(Math.max(t.width, t.height)).toBeLessThanOrEqual(2000);
-      expect(t.tokens).toBe(Math.round((t.width * t.height) / 784));
-      expect(t.columns![0]).toBe(next);
-      next = t.columns![1] + 1;
+    for (const tile of rendered.tiles!) {
+      expect(Math.max(tile.width, tile.height)).toBeLessThanOrEqual(2000);
+      expect(tile.tokens).toBe(Math.round((tile.width * tile.height) / 784));
+      expect(tile.columns![0]).toBe(next);
+      next = tile.columns![1] + 1;
     }
     const doc = await Doc.fromXml(xml);
     const columns = (await import('../src/index.js')).layoutView(doc.definitions).diagrams[0]!.columns;
     expect(next).toBe(columns);
-    expect(r.svg).toBe(r.tiles![0]!.svg);
-    expect(r.notes.join('\n')).toMatch(new RegExp(`split into ${r.tiles!.length} tiles at the diagram's columns`));
-    expect(r.notes.join('\n')).not.toMatch(/hard to read/);
+    expect(rendered.svg).toBe(rendered.tiles![0]!.svg);
+    expect(rendered.notes.join('\n')).toMatch(new RegExp(`split into ${rendered.tiles!.length} tiles at the diagram's columns`));
+    expect(rendered.notes.join('\n')).not.toMatch(/hard to read/);
     // every node lies in exactly one tile (the tiles cut between columns)
-    for (const id of [...doc.byId().keys()].filter((k) => k.startsWith('Activity_'))) {
-      expect(r.tiles!.filter((t) => t.svg.includes(`<g data-id="${id}">`)).length, id).toBe(1);
+    for (const id of [...doc.byId().keys()].filter((elementId) => elementId.startsWith('Activity_'))) {
+      expect(rendered.tiles!.filter((tile) => tile.svg.includes(`<g data-id="${id}">`)).length, id).toBe(1);
     }
     const png = await renderPng(xml, { tiles: true });
-    expect(png.images.map((i) => [i.width, i.height, i.columns])).toEqual(r.tiles!.map((t) => [t.width, t.height, t.columns]));
+    expect(png.images.map((image) => [image.width, image.height, image.columns])).toEqual(rendered.tiles!.map((tile) => [tile.width, tile.height, tile.columns]));
   });
 
   it('splits a tall drawing into bands too; a readable image stays one, with a note', async () => {
     const gallery = readFileSync(GALLERY, 'utf8');
-    const r = await renderSvg(gallery, { maxSize: 600, tiles: true, problems: true });
-    expect(r.tiles!.some((t) => (t.band ?? 1) > 1)).toBe(true);
-    for (const t of r.tiles!) expect(Math.max(t.width, t.height)).toBeLessThanOrEqual(600);
-    for (const p of r.problems.filter((x) => x.drawn)) expect(r.tiles![p.tile! - 1]!.svg).toContain(`<g data-problem="${p.n}">`);
+    const rendered = await renderSvg(gallery, { maxSize: 600, tiles: true, problems: true });
+    expect(rendered.tiles!.some((tile) => (tile.band ?? 1) > 1)).toBe(true);
+    for (const tile of rendered.tiles!) expect(Math.max(tile.width, tile.height)).toBeLessThanOrEqual(600);
+    for (const problem of rendered.problems.filter((candidate) => candidate.drawn)) expect(rendered.tiles![problem.tile! - 1]!.svg).toContain(`<g data-problem="${problem.n}">`);
     const small = await renderSvg(readFileSync(O2C, 'utf8'), { tiles: true });
     expect(small.tiles).toBeUndefined();
     expect(small.notes).toContain('--tiles: the image is readable as one (scale 1.00); no tiles');
@@ -341,11 +341,11 @@ describe('tiles', () => {
 describe('focus', () => {
   it('draws the whole plane when it is readable, else the region around the focus elements and their neighbours', async () => {
     const xml = readFileSync(LONG, 'utf8');
-    const r = await renderSvg(xml, { maxSize: 2000, focus: ['Activity_PackItems'] });
-    expect(r.scale).toBe(1);
-    expect(r.notes.join('\n')).toMatch(/the image shows the region around the 1 element in focus/);
-    for (const id of ['Activity_PickItems', 'Activity_PackItems', 'Activity_WeighParcel']) expect(drawnIds(r.svg)).toContain(id);
-    expect(drawnIds(r.svg)).not.toContain('Activity_ReceiveOrder');
+    const rendered = await renderSvg(xml, { maxSize: 2000, focus: ['Activity_PackItems'] });
+    expect(rendered.scale).toBe(1);
+    expect(rendered.notes.join('\n')).toMatch(/the image shows the region around the 1 element in focus/);
+    for (const id of ['Activity_PickItems', 'Activity_PackItems', 'Activity_WeighParcel']) expect(drawnIds(rendered.svg)).toContain(id);
+    expect(drawnIds(rendered.svg)).not.toContain('Activity_ReceiveOrder');
     const o2c = await renderSvg(readFileSync(O2C, 'utf8'), { maxSize: 2000, focus: ['Activity_CheckCredit'] });
     expect(o2c.notes).toEqual([]);
     expect(drawnIds(o2c.svg)).toContain('Event_OrderReceived');
@@ -362,20 +362,20 @@ describe('the commands', () => {
   });
 
   function cli(args: string[]): { code: number; out: string; err: string } {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { cwd: ROOT, input: '', encoding: 'utf8' });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+    const child = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { cwd: ROOT, input: '', encoding: 'utf8' });
+    return { code: child.status ?? -1, out: child.stdout, err: child.stderr };
   }
 
   it('render --around --problems --highlight: the crop line, the halo legend and the numbered problems', () => {
     const out = join(dir, 'around.png');
-    const r = cli(['render', O2C, '--around', 'Gateway_OrderValid', '--depth', '2', '--problems', '--highlight', 'Gateway_OrderValid', '-o', out]);
-    expect(r.err).toBe('');
-    expect(r.code).toBe(0);
+    const run = cli(['render', O2C, '--around', 'Gateway_OrderValid', '--depth', '2', '--problems', '--highlight', 'Gateway_OrderValid', '-o', out]);
+    expect(run.err).toBe('');
+    expect(run.code).toBe(0);
     expect(existsSync(out)).toBe(true);
-    expect(r.out).toMatch(/^wrote \S+around\.png  \d+x\d+ px  ~\d+ image tokens  scale 1\.00  plane Process_OrderToCash\n/);
-    expect(r.out).toContain('\ncrop: around Gateway_OrderValid (depth 2): 7 nodes\n');
-    expect(r.out).toContain('\nhalos: orange --highlight\n');
-    expect(r.out).toContain('\nproblems (numbered in the image):\n  1 crossings [Flow_6, Flow_21]\n');
+    expect(run.out).toMatch(/^wrote \S+around\.png  \d+x\d+ px  ~\d+ image tokens  scale 1\.00  plane Process_OrderToCash\n/);
+    expect(run.out).toContain('\ncrop: around Gateway_OrderValid (depth 2): 7 nodes\n');
+    expect(run.out).toContain('\nhalos: orange --highlight\n');
+    expect(run.out).toContain('\nproblems (numbered in the image):\n  1 crossings [Flow_6, Flow_21]\n');
     const json = JSON.parse(cli(['render', O2C, '--path', 'Event_OrderReceived', 'Gateway_OrderValid', '--json', '-o', join(dir, 'path.svg')]).out);
     expect(json).toMatchObject({ format: 'svg', nodes: ['Event_OrderReceived', 'Activity_ValidateOrder', 'Gateway_OrderValid'], problems: [] });
     const ids = cli(['render', O2C, 'Activity_CheckCredit', 'Gateway_CreditOk', '--json', '-o', join(dir, 'ids.png')]);
@@ -383,13 +383,13 @@ describe('the commands', () => {
   });
 
   it('render --tiles writes <name>-1.png, <name>-2.png, ... and a line per tile', () => {
-    const r = cli(['render', LONG, '--tiles', '-o', join(dir, 'long.png')]);
-    expect(r.code).toBe(0);
-    const lines = r.out.split('\n').filter((l) => l.startsWith('wrote '));
+    const run = cli(['render', LONG, '--tiles', '-o', join(dir, 'long.png')]);
+    expect(run.code).toBe(0);
+    const lines = run.out.split('\n').filter((line) => line.startsWith('wrote '));
     expect(lines.length).toBeGreaterThanOrEqual(2);
-    lines.forEach((l, i) => expect(l).toMatch(new RegExp(`^wrote \\S+long-${i + 1}\\.png  \\d+x\\d+ px  ~[\\d,]+ image tokens  scale 1\\.00  plane Process_LongOrder  tile ${i + 1}/${lines.length} c\\d+-c\\d+$`)));
-    for (const i of lines.keys()) expect(existsSync(join(dir, `long-${i + 1}.png`))).toBe(true);
-    expect(r.out).toMatch(new RegExp(`\\n${lines.length} tiles, ~[\\d,]+ image tokens in all\\n`));
+    lines.forEach((line, index) => expect(line).toMatch(new RegExp(`^wrote \\S+long-${index + 1}\\.png  \\d+x\\d+ px  ~[\\d,]+ image tokens  scale 1\\.00  plane Process_LongOrder  tile ${index + 1}/${lines.length} c\\d+-c\\d+$`)));
+    for (const index of lines.keys()) expect(existsSync(join(dir, `long-${index + 1}.png`))).toBe(true);
+    expect(run.out).toMatch(new RegExp(`\\n${lines.length} tiles, ~[\\d,]+ image tokens in all\\n`));
   });
 
   it('render refuses flags that do not go together', () => {
@@ -407,10 +407,10 @@ describe('the commands', () => {
     const file = join(dir, 'o2c.bpmn');
     copyFileSync(O2C, file);
     const png = join(dir, 'change.png');
-    const r = cli(['add', file, 'userTask', 'Approve credit', '--after', 'Activity_CheckCredit', '--render', png]);
-    expect(r.code).toBe(0);
+    const run = cli(['add', file, 'userTask', 'Approve credit', '--after', 'Activity_CheckCredit', '--render', png]);
+    expect(run.code).toBe(0);
     expect(existsSync(png)).toBe(true);
-    expect(r.out).toMatch(/\nrender: wrote \S+change\.png  \d+x\d+ px  ~[\d,]+ image tokens  scale [\d.]+  plane Process_OrderToCash\n  halos: green created, orange changed, blue moved\n  layout problems the change added: none\n?/);
+    expect(run.out).toMatch(/\nrender: wrote \S+change\.png  \d+x\d+ px  ~[\d,]+ image tokens  scale [\d.]+  plane Process_OrderToCash\n  halos: green created, orange changed, blue moved\n  layout problems the change added: none\n?/);
     // --json: the render block next to the report
     copyFileSync(O2C, file);
     const json = JSON.parse(cli(['add', file, 'task', 'Check limit', '--after', 'Activity_CheckCredit', '--render', join(dir, 'change.svg'), '--json', '--summary']).out);
@@ -428,9 +428,9 @@ describe('the commands', () => {
     copyFileSync(O2C, file);
     const blocker = join(dir, 'a-file');
     writeFileSync(blocker, 'x');
-    const r = cli(['add', file, 'task', 'Check limit', '--after', 'Activity_CheckCredit', '--render', join(blocker, 'x.png')]);
-    expect(r.code).toBe(0);
-    expect(r.out).toMatch(/\nrender: failed E_IO: Cannot write /);
+    const run = cli(['add', file, 'task', 'Check limit', '--after', 'Activity_CheckCredit', '--render', join(blocker, 'x.png')]);
+    expect(run.code).toBe(0);
+    expect(run.out).toMatch(/\nrender: failed E_IO: Cannot write /);
     expect(readFileSync(file, 'utf8')).toContain('Activity_CheckLimit');
     const bad = cli(['add', file, 'task', 'Other', '--after', 'Activity_CheckLimit', '--render', join(dir, 'x.jpg')]);
     expect(bad.code).toBe(1);
@@ -448,9 +448,9 @@ describe('the fuzz walk renders every result', () => {
     const failing = { draw: async (): Promise<never> => Promise.reject(new CliError('E_RENDER', 'The PNG rasteriser failed: unreachable', 'io')), maxSize: 2000 };
     const bad = await runWalk({ ...base, render: failing });
     expect(bad.ok).toBeGreaterThan(0);
-    expect(bad.violations.filter((v: { kind: string }) => v.kind === 'render').map((v: { severity: string; detail: string }) => [v.severity, v.detail])[0]).toEqual(['error', 'E_RENDER: The PNG rasteriser failed: unreachable']);
-    const good = await runWalk({ ...base, render: { draw: (x: string) => renderPng(x, { problems: true, tiles: true }), maxSize: 2000 } });
-    expect(good.violations.filter((v: { kind: string }) => v.kind === 'render')).toEqual([]);
+    expect(bad.violations.filter((violation: { kind: string }) => violation.kind === 'render').map((violation: { severity: string; detail: string }) => [violation.severity, violation.detail])[0]).toEqual(['error', 'E_RENDER: The PNG rasteriser failed: unreachable']);
+    const good = await runWalk({ ...base, render: { draw: (source: string) => renderPng(source, { problems: true, tiles: true }), maxSize: 2000 } });
+    expect(good.violations.filter((violation: { kind: string }) => violation.kind === 'render')).toEqual([]);
   }, 60000);
 });
 

@@ -14,27 +14,27 @@ export class C7SchemaRules extends C7Rules {
    */
   checkSchemaAttributes(): void {
     for (const { el, owner, id, di, addr, keys } of this.unprefixedAttributes()) {
-      for (const k of keys) {
-        const vendor = this.kit.camunda.attr(k);
-        const fits = !!vendor && vendor.owners.some((o) => this.kit.is(el, o)) && !!id && el === owner;
+      for (const key of keys) {
+        const vendor = this.kit.camunda.attr(key);
+        const fits = !!vendor && vendor.owners.some((ownerType) => this.kit.is(el, ownerType)) && !!id && el === owner;
         const where = el === owner ? this.describe(el, undefined) : `${el.$type}${id ? ` in ${id}` : ''}`;
-        const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${k}=`)}\`` : undefined;
+        const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${key}=`)}\`` : undefined;
         /**
          * an unprefixed decision link (bpmn-cli's calledDecision, or calledElement read as one):
          * `set calledDecision=` writes the engines' spelling, unless another implementation stays
          */
-        const implemented = Object.keys(el.$attrs ?? {}).some((a) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(a) && this.kit.camunda.reads(this.ns.uriOfName(a)));
-        const link = el === owner && !!id && !implemented && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
+        const implemented = Object.keys(el.$attrs ?? {}).some((attributeName) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(attributeName) && this.kit.camunda.reads(this.ns.uriOfName(attributeName)));
+        const link = el === owner && !!id && !implemented && this.kit.is(el, 'bpmn:BusinessRuleTask') && (key === 'calledDecision' || key === 'calledElement') ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
         const hint = link
-          ? `Write the decision link in the engines' spelling: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.p}:decisionRef; the unprefixed ${k} is removed).`
+          ? `Write the decision link in the engines' spelling: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.prefix}:decisionRef; the unprefixed ${key} is removed).`
           : fits
-          ? `Use the vendor attribute instead: \`bpmn set <file> ${id} ${sh(`${k}=`)} ${sh(`${this.p}:${k}=${String(el.$attrs[k] ?? '')}`)}\`.`
+          ? `Use the vendor attribute instead: \`bpmn set <file> ${id} ${sh(`${key}=`)} ${sh(`${this.prefix}:${key}=${String(el.$attrs[key] ?? '')}`)}\`.`
           : remove
-            ? `Remove it: ${remove} (vendor attributes need their namespace prefix, e.g. ${this.p}:<name>).`
+            ? `Remove it: ${remove} (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`
             : di
-              ? `Remove ${k}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`
-              : `Remove ${k}="..." from the XML${id ? ` of ${id}` : ''} (vendor attributes need their namespace prefix, e.g. ${this.p}:<name>).`;
-        this.push('deploy', 'W_C7_DEPLOY_SCHEMA', el, owner, `schema:${k}`, `${where} has the attribute ${k}, which the BPMN schema does not define${fits ? ` (did you mean ${this.p}:${k}?)` : ''}; the engines validate the file against the schema and refuse it`, hint);
+              ? `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`
+              : `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''} (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`;
+        this.push('deploy', 'W_C7_DEPLOY_SCHEMA', el, owner, `schema:${key}`, `${where} has the attribute ${key}, which the BPMN schema does not define${fits ? ` (did you mean ${this.prefix}:${key}?)` : ''}; the engines validate the file against the schema and refuse it`, hint);
       }
     }
   }
@@ -69,7 +69,7 @@ export class C7SchemaRules extends C7Rules {
       } else if (this.kit.is(def, 'bpmn:LinkEventDefinition') && (peek<string>(def, 'name') === undefined || peek<string>(def, 'name') === null)) {
         this.push('deploy', 'W_C7_DEPLOY_LINK', event ?? def, undefined, `link:name${subject}`, `${what('Link event')} has no link name, which the BPMN schema requires; the engines refuse the file`, fix('link=<Name>', 'the throw and the catch event of a pair share the name'));
       } else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) {
-        const set = TIMER_ELEMENTS.filter((k) => peek<El>(def, k));
+        const set = TIMER_ELEMENTS.filter((timerKind) => peek<El>(def, timerKind));
         if (set.length < 2) continue;
         this.push('deploy', 'W_C7_DEPLOY_EVENT_DEFINITION', event ?? def, undefined, `timer:elements${subject}`, `${what('Timer event')} has ${set.join(' and ')}; the BPMN schema allows only one of timeDate, timeCycle and timeDuration, and the engines refuse the file`, fix('timer=<value>', 'R/PT1H is a cycle, PT1H a duration, else a date; the other elements go'));
       }

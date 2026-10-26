@@ -3,160 +3,160 @@ import type { Box, Point } from '../types.js';
 
 export type { Box, Point };
 
-export function center(b: Box): Point {
-  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+export function center(box: Box): Point {
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-export function boxesOverlap(a: Box, b: Box, margin = 0): boolean {
-  return a.x < b.x + b.width + margin && a.x + a.width + margin > b.x && a.y < b.y + b.height + margin && a.y + a.height + margin > b.y;
+export function boxesOverlap(first: Box, second: Box, margin = 0): boolean {
+  return first.x < second.x + second.width + margin && first.x + first.width + margin > second.x && first.y < second.y + second.height + margin && first.y + first.height + margin > second.y;
 }
 
-export const right = (b: Box): number => b.x + b.width;
-export const bottom = (b: Box): number => b.y + b.height;
-export const cx = (b: Box): number => b.x + b.width / 2;
-export const cy = (b: Box): number => b.y + b.height / 2;
+export const right = (box: Box): number => box.x + box.width;
+export const bottom = (box: Box): number => box.y + box.height;
+export const cx = (box: Box): number => box.x + box.width / 2;
+export const cy = (box: Box): number => box.y + box.height / 2;
 
-export function copyBox(b: Box): Box {
-  return { x: b.x, y: b.y, width: b.width, height: b.height };
+export function copyBox(box: Box): Box {
+  return { x: box.x, y: box.y, width: box.width, height: box.height };
 }
 
 export function copyPoints(pts: readonly Point[]): Point[] {
-  return pts.map((p) => ({ x: p.x, y: p.y }));
+  return pts.map((point) => ({ x: point.x, y: point.y }));
 }
 
-export function sameBox(a: Box | undefined, b: Box | undefined, tol = 0.5): boolean {
-  if (!a || !b) return a === b;
-  return Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol && Math.abs(a.width - b.width) <= tol && Math.abs(a.height - b.height) <= tol;
+export function sameBox(first: Box | undefined, second: Box | undefined, tol = 0.5): boolean {
+  if (!first || !second) return first === second;
+  return Math.abs(first.x - second.x) <= tol && Math.abs(first.y - second.y) <= tol && Math.abs(first.width - second.width) <= tol && Math.abs(first.height - second.height) <= tol;
 }
 
-export function samePoints(a: readonly Point[], b: readonly Point[], tol = 0.5): boolean {
-  return a.length === b.length && a.every((p, i) => Math.abs(p.x - b[i]!.x) <= tol && Math.abs(p.y - b[i]!.y) <= tol);
+export function samePoints(first: readonly Point[], second: readonly Point[], tol = 0.5): boolean {
+  return first.length === second.length && first.every((point, index) => Math.abs(point.x - second[index]!.x) <= tol && Math.abs(point.y - second[index]!.y) <= tol);
 }
 
 /** Closer than `margin` on both axes; with margin 0 they share interior. */
-export function overlaps(a: Box, b: Box, margin = 0): boolean {
-  return a.x < right(b) + margin && right(a) + margin > b.x && a.y < bottom(b) + margin && bottom(a) + margin > b.y;
+export function overlaps(first: Box, second: Box, margin = 0): boolean {
+  return first.x < right(second) + margin && right(first) + margin > second.x && first.y < bottom(second) + margin && bottom(first) + margin > second.y;
 }
 
 export function inside(inner: Box, outer: Box, pad = 0): boolean {
   return inner.x >= outer.x + pad - 0.5 && inner.y >= outer.y + pad - 0.5 && right(inner) <= right(outer) - pad + 0.5 && bottom(inner) <= bottom(outer) - pad + 0.5;
 }
 
-export function containsPoint(b: Box, p: Point, tol = 0): boolean {
-  return p.x >= b.x - tol && p.x <= right(b) + tol && p.y >= b.y - tol && p.y <= bottom(b) + tol;
+export function containsPoint(box: Box, point: Point, tol = 0): boolean {
+  return point.x >= box.x - tol && point.x <= right(box) + tol && point.y >= box.y - tol && point.y <= bottom(box) + tol;
 }
 
-export function equalBoxes(a: Box, b: Box): boolean {
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+export function equalBoxes(first: Box, second: Box): boolean {
+  return first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height;
 }
 
-export function union(a: Box, b: Box): Box {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, width: Math.max(right(a), right(b)) - x, height: Math.max(bottom(a), bottom(b)) - y };
+export function union(first: Box, second: Box): Box {
+  const left = Math.min(first.x, second.x);
+  const top = Math.min(first.y, second.y);
+  return { x: left, y: top, width: Math.max(right(first), right(second)) - left, height: Math.max(bottom(first), bottom(second)) - top };
 }
 
 export function unionAll(boxes: readonly Box[]): Box | undefined {
   let out: Box | undefined;
-  for (const b of boxes) out = out ? union(out, b) : copyBox(b);
+  for (const box of boxes) out = out ? union(out, box) : copyBox(box);
   return out;
 }
 
-export function grow(b: Box, by: number): Box {
-  return { x: b.x - by, y: b.y - by, width: b.width + 2 * by, height: b.height + 2 * by };
+export function grow(box: Box, by: number): Box {
+  return { x: box.x - by, y: box.y - by, width: box.width + 2 * by, height: box.height + 2 * by };
 }
 
-export function translate(b: Box, dx: number, dy: number): void {
-  b.x += dx;
-  b.y += dy;
+export function translate(box: Box, dx: number, dy: number): void {
+  box.x += dx;
+  box.y += dy;
 }
 
-function slab(p: number, d: number, lo: number, hi: number): [number, number] {
-  const a = (lo - p) / d;
-  const b = (hi - p) / d;
-  return a < b ? [a, b] : [b, a];
+function slab(origin: number, direction: number, lo: number, hi: number): [number, number] {
+  const lowExit = (lo - origin) / direction;
+  const highExit = (hi - origin) / direction;
+  return lowExit < highExit ? [lowExit, highExit] : [highExit, lowExit];
 }
 
 /**
  * A diagonal segment is clipped against the box (Liang-Barsky),
  * so a straight association passing beside a shape does not hit it.
  */
-export function segmentHits(p: Point, q: Point, b: Box, shrink = 2): boolean {
-  const boxHit = Math.min(p.x, q.x) < right(b) - shrink && Math.max(p.x, q.x) > b.x + shrink && Math.min(p.y, q.y) < bottom(b) - shrink && Math.max(p.y, q.y) > b.y + shrink;
-  if (!boxHit || p.x === q.x || p.y === q.y) return boxHit;
-  if (right(b) - shrink <= b.x + shrink || bottom(b) - shrink <= b.y + shrink) return false;
-  const [ax, bx] = slab(p.x, q.x - p.x, b.x + shrink, right(b) - shrink);
-  const [ay, by] = slab(p.y, q.y - p.y, b.y + shrink, bottom(b) - shrink);
+export function segmentHits(start: Point, end: Point, box: Box, shrink = 2): boolean {
+  const boxHit = Math.min(start.x, end.x) < right(box) - shrink && Math.max(start.x, end.x) > box.x + shrink && Math.min(start.y, end.y) < bottom(box) - shrink && Math.max(start.y, end.y) > box.y + shrink;
+  if (!boxHit || start.x === end.x || start.y === end.y) return boxHit;
+  if (right(box) - shrink <= box.x + shrink || bottom(box) - shrink <= box.y + shrink) return false;
+  const [ax, bx] = slab(start.x, end.x - start.x, box.x + shrink, right(box) - shrink);
+  const [ay, by] = slab(start.y, end.y - start.y, box.y + shrink, bottom(box) - shrink);
   const lo = Math.max(ax, ay);
   const hi = Math.min(bx, by);
   return lo < hi && lo < 1 && hi > 0;
 }
 
 /** Touching the border does not count. */
-export function segmentHitsBox(a: Point, b: Point, box: Box): boolean {
-  return Math.min(a.x, b.x) < right(box) && Math.max(a.x, b.x) > box.x && Math.min(a.y, b.y) < bottom(box) && Math.max(a.y, b.y) > box.y;
+export function segmentHitsBox(start: Point, end: Point, box: Box): boolean {
+  return Math.min(start.x, end.x) < right(box) && Math.max(start.x, end.x) > box.x && Math.min(start.y, end.y) < bottom(box) && Math.max(start.y, end.y) > box.y;
 }
 
-const orient = (a: Point, b: Point, c: Point): number => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+const orient = (first: Point, second: Point, third: Point): number => Math.sign((second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x));
 
 /** Shared end points, T-junctions and collinear runs are no proper crossing. */
-export function segmentsCross(a: Point, b: Point, c: Point, d: Point): boolean {
-  const o1 = orient(a, b, c);
-  const o2 = orient(a, b, d);
-  const o3 = orient(c, d, a);
-  const o4 = orient(c, d, b);
+export function segmentsCross(firstStart: Point, firstEnd: Point, secondStart: Point, secondEnd: Point): boolean {
+  const o1 = orient(firstStart, firstEnd, secondStart);
+  const o2 = orient(firstStart, firstEnd, secondEnd);
+  const o3 = orient(secondStart, secondEnd, firstStart);
+  const o4 = orient(secondStart, secondEnd, firstEnd);
   return o1 !== o2 && o3 !== o4 && !!o1 && !!o2 && !!o3 && !!o4;
 }
 
-export function polylinesCross(a: readonly Point[], b: readonly Point[]): boolean {
-  for (let i = 0; i + 1 < a.length; i++) {
-    for (let j = 0; j + 1 < b.length; j++) if (segmentsCross(a[i]!, a[i + 1]!, b[j]!, b[j + 1]!)) return true;
+export function polylinesCross(first: readonly Point[], second: readonly Point[]): boolean {
+  for (let firstIndex = 0; firstIndex + 1 < first.length; firstIndex++) {
+    for (let secondIndex = 0; secondIndex + 1 < second.length; secondIndex++) if (segmentsCross(first[firstIndex]!, first[firstIndex + 1]!, second[secondIndex]!, second[secondIndex + 1]!)) return true;
   }
   return false;
 }
 
-export function pathHits(points: readonly Point[], b: Box, shrink = 2): boolean {
-  for (let i = 0; i + 1 < points.length; i++) if (segmentHits(points[i]!, points[i + 1]!, b, shrink)) return true;
+export function pathHits(points: readonly Point[], box: Box, shrink = 2): boolean {
+  for (let index = 0; index + 1 < points.length; index++) if (segmentHits(points[index]!, points[index + 1]!, box, shrink)) return true;
   return false;
 }
 
 export function isOrthogonal(points: readonly Point[], tol = 0.5): boolean {
-  for (let i = 0; i + 1 < points.length; i++) {
-    const p = points[i]!;
-    const q = points[i + 1]!;
-    if (Math.abs(p.x - q.x) > tol && Math.abs(p.y - q.y) > tol) return false;
+  for (let index = 0; index + 1 < points.length; index++) {
+    const start = points[index]!;
+    const end = points[index + 1]!;
+    if (Math.abs(start.x - end.x) > tol && Math.abs(start.y - end.y) > tol) return false;
   }
   return true;
 }
 
 /** Positive inside and outside. */
-export function borderDistance(b: Box, p: Point): number {
-  const dx = Math.max(b.x - p.x, 0, p.x - right(b));
-  const dy = Math.max(b.y - p.y, 0, p.y - bottom(b));
+export function borderDistance(box: Box, point: Point): number {
+  const dx = Math.max(box.x - point.x, 0, point.x - right(box));
+  const dy = Math.max(box.y - point.y, 0, point.y - bottom(box));
   if (dx > 0 || dy > 0) return Math.hypot(dx, dy);
-  return Math.min(p.x - b.x, right(b) - p.x, p.y - b.y, bottom(b) - p.y);
+  return Math.min(point.x - box.x, right(box) - point.x, point.y - box.y, bottom(box) - point.y);
 }
 
 export function median(values: readonly number[]): number | undefined {
   if (!values.length) return undefined;
-  const s = [...values].sort((a, b) => a - b);
-  const k = s.length >> 1;
-  return s.length % 2 ? s[k]! : (s[k - 1]! + s[k]!) / 2;
+  const sorted = [...values].sort((first, second) => first - second);
+  const middleIndex = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[middleIndex]! : (sorted[middleIndex - 1]! + sorted[middleIndex]!) / 2;
 }
 
-export function clamp(v: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, v));
+export function clamp(value: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, value));
 }
 
-export function borderPoint(b: Box, to: Point): Point {
-  const c = { x: cx(b), y: cy(b) };
-  const dx = to.x - c.x;
-  const dy = to.y - c.y;
-  if (!dx && !dy) return c;
-  const sx = dx ? Math.abs(b.width / 2 / dx) : Infinity;
-  const sy = dy ? Math.abs(b.height / 2 / dy) : Infinity;
-  const s = Math.min(sx, sy);
-  return { x: c.x + dx * s, y: c.y + dy * s };
+export function borderPoint(box: Box, to: Point): Point {
+  const middle = { x: cx(box), y: cy(box) };
+  const dx = to.x - middle.x;
+  const dy = to.y - middle.y;
+  if (!dx && !dy) return middle;
+  const sx = dx ? Math.abs(box.width / 2 / dx) : Infinity;
+  const sy = dy ? Math.abs(box.height / 2 / dy) : Infinity;
+  const scale = Math.min(sx, sy);
+  return { x: middle.x + dx * scale, y: middle.y + dy * scale };
 }
 
 /** Fewer than two distinct points once rounded to whole pixels. */
@@ -166,10 +166,10 @@ export function degenerate(pts: readonly Point[]): boolean {
 
 export function roundPoints(pts: readonly Point[]): Point[] {
   const out: Point[] = [];
-  for (const p of pts) {
-    const q = { x: Math.round(p.x), y: Math.round(p.y) };
+  for (const point of pts) {
+    const rounded = { x: Math.round(point.x), y: Math.round(point.y) };
     const last = out[out.length - 1];
-    if (!last || last.x !== q.x || last.y !== q.y) out.push(q);
+    if (!last || last.x !== rounded.x || last.y !== rounded.y) out.push(rounded);
   }
   return out;
 }

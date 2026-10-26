@@ -10,10 +10,10 @@ export function laneSetOf(owner: El): El | undefined {
 
 function laneDepth(lane: El): number {
   let depth = 0;
-  let p = lane.$parent as El | undefined;
-  while (p && !is(p, 'bpmn:Process')) {
-    if (is(p, 'bpmn:Lane')) depth++;
-    p = p.$parent as El | undefined;
+  let ancestor = lane.$parent as El | undefined;
+  while (ancestor && !is(ancestor, 'bpmn:Process')) {
+    if (is(ancestor, 'bpmn:Lane')) depth++;
+    ancestor = ancestor.$parent as El | undefined;
   }
   return depth;
 }

@@ -66,11 +66,11 @@ if (!existsSync(join(ROOT, 'dist', 'index.js'))) {
 
 /* 1. the core entry in a browser bundle */
 const full = await bundleCore({ entry: join('dist', 'index.js'), splitting: true });
-for (const v of full.violations) {
-  problems.push(v.kind === 'global' ? `${v.file}: uses the Node-only global \`${v.what}\`` : `${v.file}${v.line ? `:${v.line}` : ''}: ${v.kind === 'builtin' ? `imports the Node builtin "${v.what}"` : v.text}`);
+for (const violation of full.violations) {
+  problems.push(violation.kind === 'global' ? `${violation.file}: uses the Node-only global \`${violation.what}\`` : `${violation.file}${violation.line ? `:${violation.line}` : ''}: ${violation.kind === 'builtin' ? `imports the Node builtin "${violation.what}"` : violation.text}`);
 }
-for (const f of full.inputs) {
-  if (/^dist\/(node\/|commands\/|cli\.js$)/.test(f)) problems.push(`the core bundle contains ${f} (Node only)`);
+for (const input of full.inputs) {
+  if (/^dist\/(node\/|commands\/|cli\.js$)/.test(input)) problems.push(`the core bundle contains ${input} (Node only)`);
 }
 
 /* 2. what a host pays for the edit engine alone */
@@ -129,54 +129,54 @@ try {
  * with its marker module and the on-demand chunks it imports statically;
  * the rest named by its packages).
  */
-function sizeOf(b) {
-  if (!b.entry) throw new Error('isomorphism check: the bundle has no entry chunk');
-  const byPath = new Map(b.chunks.map((c) => [c.path, c]));
+function sizeOf(bundle) {
+  if (!bundle.entry) throw new Error('isomorphism check: the bundle has no entry chunk');
+  const byPath = new Map(bundle.chunks.map((chunk) => [chunk.path, chunk]));
   const closure = (start, skip = new Set()) => {
     const seen = new Set();
-    const visit = (c) => {
-      if (!c || seen.has(c) || skip.has(c)) return;
-      seen.add(c);
-      for (const p of c.imports) visit(byPath.get(p));
+    const visit = (chunk) => {
+      if (!chunk || seen.has(chunk) || skip.has(chunk)) return;
+      seen.add(chunk);
+      for (const importPath of chunk.imports) visit(byPath.get(importPath));
     };
     visit(start);
     return seen;
   };
-  const initial = closure(b.entry);
+  const initial = closure(bundle.entry);
   // the modules the entry loads statically, and what a rule module imports of them
   const reach = (start) => {
     const seen = new Set();
-    const visit = (f) => {
-      if (seen.has(f) || !b.graph[f]) return;
-      seen.add(f);
-      for (const g of b.graph[f]) visit(g);
+    const visit = (modulePath) => {
+      if (seen.has(modulePath) || !bundle.graph[modulePath]) return;
+      seen.add(modulePath);
+      for (const imported of bundle.graph[modulePath]) visit(imported);
     };
     visit(start);
     return seen;
   };
-  const entryModules = reach(b.entry.entryPoint);
-  const importsOfEntry = (marker) => [...reach(marker)].filter((f) => !entryModules.has(f)).flatMap((f) => b.graph[f].filter((g) => entryModules.has(g)).map((g) => ({ from: f, to: g })));
-  const sum = (chunks) => ({ bytes: [...chunks].reduce((n, c) => n + c.bytes, 0), gzip: [...chunks].reduce((n, c) => n + c.gzip, 0) });
-  const lazy = b.chunks.filter((c) => !initial.has(c));
+  const entryModules = reach(bundle.entry.entryPoint);
+  const importsOfEntry = (marker) => [...reach(marker)].filter((modulePath) => !entryModules.has(modulePath)).flatMap((modulePath) => bundle.graph[modulePath].filter((imported) => entryModules.has(imported)).map((imported) => ({ from: modulePath, to: imported })));
+  const sum = (chunks) => ({ bytes: [...chunks].reduce((total, chunk) => total + chunk.bytes, 0), gzip: [...chunks].reduce((total, chunk) => total + chunk.gzip, 0) });
+  const lazy = bundle.chunks.filter((chunk) => !initial.has(chunk));
   const counted = new Set();
   const onDemand = [];
   for (const part of ON_DEMAND) {
-    const has = (f) => (typeof part.marker === 'string' ? f === part.marker : part.marker.test(f));
-    const root = lazy.find((c) => c.inputs.some(has));
+    const has = (modulePath) => (typeof part.marker === 'string' ? modulePath === part.marker : part.marker.test(modulePath));
+    const root = lazy.find((chunk) => chunk.inputs.some(has));
     if (!root) continue;
     const chunks = closure(root, initial);
-    for (const c of chunks) counted.add(c);
-    onDemand.push({ name: part.name, label: part.label, ...sum(chunks), modules: [...chunks].flatMap((c) => c.inputs), importsOfEntry: part.rules.length ? importsOfEntry(part.marker) : [] });
+    for (const chunk of chunks) counted.add(chunk);
+    onDemand.push({ name: part.name, label: part.label, ...sum(chunks), modules: [...chunks].flatMap((chunk) => chunk.inputs), importsOfEntry: part.rules.length ? importsOfEntry(part.marker) : [] });
   }
-  const rest = lazy.filter((c) => !counted.has(c));
+  const rest = lazy.filter((chunk) => !counted.has(chunk));
   if (rest.length) {
-    const packages = [...new Set(rest.flatMap((c) => c.inputs).map((f) => /node_modules\/((?:@[^/]+\/)?[^/]+)/.exec(f)?.[1] ?? f))];
-    onDemand.push({ name: 'other', label: packages.join(', '), ...sum(rest), modules: rest.flatMap((c) => c.inputs) });
+    const packages = [...new Set(rest.flatMap((chunk) => chunk.inputs).map((modulePath) => /node_modules\/((?:@[^/]+\/)?[^/]+)/.exec(modulePath)?.[1] ?? modulePath))];
+    onDemand.push({ name: 'other', label: packages.join(', '), ...sum(rest), modules: rest.flatMap((chunk) => chunk.inputs) });
   }
-  return { ...sum(initial), modules: b.inputs.length, initialModules: [...initial].flatMap((c) => c.inputs), onDemand };
+  return { ...sum(initial), modules: bundle.inputs.length, initialModules: [...initial].flatMap((chunk) => chunk.inputs), onDemand };
 }
 
-const sizes = Object.fromEntries([['core', full], ['applyToXmlOnly', lean]].filter(([, b]) => b && !b.violations.length).map(([key, b]) => [key, sizeOf(b)]));
+const sizes = Object.fromEntries([['core', full], ['applyToXmlOnly', lean]].filter(([, bundle]) => bundle && !bundle.violations.length).map(([key, bundle]) => [key, sizeOf(bundle)]));
 
 /* 5. the engine rules load on demand, and every size is within its budget */
 const KB = 1024;
@@ -188,48 +188,48 @@ const overBudget = (what, size, limit) => {
   }
 };
 for (const entry of ENTRIES) {
-  const s = sizes[entry.key];
-  if (!s) continue;
+  const entrySize = sizes[entry.key];
+  if (!entrySize) continue;
   for (const part of ON_DEMAND) {
-    for (const f of part.rules) {
-      if (s.initialModules.includes(f)) problems.push(`the initial chunks of ${entry.name} contain ${f}: the ${part.label} load on demand (only src/platform/profiles/PlatformProfiles.ts imports them, with import())`);
+    for (const rule of part.rules) {
+      if (entrySize.initialModules.includes(rule)) problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/platform/profiles/PlatformProfiles.ts imports them, with import())`);
     }
-    if (part.rules.length && !s.onDemand.some((d) => d.name === part.name)) problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
-    for (const { from, to } of s.onDemand.find((d) => d.name === part.name)?.importsOfEntry ?? []) {
+    if (part.rules.length && !entrySize.onDemand.some((demandPart) => demandPart.name === part.name)) problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
+    for (const { from, to } of entrySize.onDemand.find((demandPart) => demandPart.name === part.name)?.importsOfEntry ?? []) {
       problems.push(`${from} imports ${to}, which ${entry.name} loads too: a host's bundler (Rollup / Vite) puts it into the entry chunk and makes the ${part.label} chunk import the entry chunk back, so a host whose entry module awaits a call at top level waits forever; hand it to the rules in src/platform/profiles/rule-kit.ts (RULE_KIT) instead of importing it`);
     }
   }
-  overBudget(entry.name, s, budget.entries?.[entry.label]);
-  for (const d of s.onDemand) {
-    if (budget.onDemand?.[d.name] !== undefined || ON_DEMAND.find((p) => p.name === d.name)?.rules.length) overBudget(`the ${d.label} chunk of ${entry.name}`, d, budget.onDemand?.[d.name]);
+  overBudget(entry.name, entrySize, budget.entries?.[entry.label]);
+  for (const demandPart of entrySize.onDemand) {
+    if (budget.onDemand?.[demandPart.name] !== undefined || ON_DEMAND.find((candidate) => candidate.name === demandPart.name)?.rules.length) overBudget(`the ${demandPart.label} chunk of ${entry.name}`, demandPart, budget.onDemand?.[demandPart.name]);
   }
 }
 
-function sizeLine(label, s) {
-  const lazy = s.onDemand.length ? ` + on demand: ${s.onDemand.map((d) => `${d.label} ${kb(d.bytes)} / ${kb(d.gzip)}`).join(', ')}` : '';
-  return `  ${label}: minified ${kb(s.bytes)}, gzip ${kb(s.gzip)}${lazy}`;
+function sizeLine(label, entrySize) {
+  const lazy = entrySize.onDemand.length ? ` + on demand: ${entrySize.onDemand.map((demandPart) => `${demandPart.label} ${kb(demandPart.bytes)} / ${kb(demandPart.gzip)}`).join(', ')}` : '';
+  return `  ${label}: minified ${kb(entrySize.bytes)}, gzip ${kb(entrySize.gzip)}${lazy}`;
 }
 
 /** The "Browser bundles" table of docs/library.md (KB = 1024 bytes). */
 function sizeTable() {
   const fmt = (bytes) => `${(bytes / KB).toFixed(1)} KB`;
-  const limit = (b) => (b ? `${b.minified} / ${b.gzip} KB` : 'none');
+  const limit = (budgetLimit) => (budgetLimit ? `${budgetLimit.minified} / ${budgetLimit.gzip} KB` : 'none');
   const rows = ['| bundle | minified | gzip | budget (tools/iso/budget.json) | loads |', '| --- | ---: | ---: | ---: | --- |'];
   for (const entry of ENTRIES) {
-    const s = sizes[entry.key];
-    if (s) rows.push(`| ${entry.title} | ${fmt(s.bytes)} | ${fmt(s.gzip)} | ${limit(budget.entries?.[entry.label])} | with the entry |`);
+    const entrySize = sizes[entry.key];
+    if (entrySize) rows.push(`| ${entry.title} | ${fmt(entrySize.bytes)} | ${fmt(entrySize.gzip)} | ${limit(budget.entries?.[entry.label])} | with the entry |`);
   }
   // the on-demand chunks are the same for both entries (the measured ones of the applyToXml-only entry)
   const lazy = (sizes.applyToXmlOnly ?? sizes.core)?.onDemand ?? [];
-  for (const d of lazy) {
-    const part = ON_DEMAND.find((p) => p.name === d.name);
-    const modules = part?.rules.length ? ` (${part.rules.map((f) => `\`${f.replace(/^dist\//, '').replace(/\.js$/, '')}\``).join(', ')})` : '';
-    rows.push(`| ${d.label}${modules} | ${fmt(d.bytes)} | ${fmt(d.gzip)} | ${limit(budget.onDemand?.[d.name])} | on demand: ${part?.when ?? 'on demand'} |`);
+  for (const demandPart of lazy) {
+    const part = ON_DEMAND.find((candidate) => candidate.name === demandPart.name);
+    const modules = part?.rules.length ? ` (${part.rules.map((rule) => `\`${rule.replace(/^dist\//, '').replace(/\.js$/, '')}\``).join(', ')})` : '';
+    rows.push(`| ${demandPart.label}${modules} | ${fmt(demandPart.bytes)} | ${fmt(demandPart.gzip)} | ${limit(budget.onDemand?.[demandPart.name])} | on demand: ${part?.when ?? 'on demand'} |`);
   }
   return rows.join('\n');
 }
 
-const publicSizes = Object.fromEntries(Object.entries(sizes).map(([k, { initialModules: _m, onDemand, ...s }]) => [k, { ...s, onDemand: onDemand.map(({ modules, importsOfEntry: _i, ...d }) => ({ ...d, modules: modules.length })) }]));
+const publicSizes = Object.fromEntries(Object.entries(sizes).map(([key, { initialModules: _m, onDemand, ...publicSize }]) => [key, { ...publicSize, onDemand: onDemand.map(({ modules, importsOfEntry: _i, ...publicPart }) => ({ ...publicPart, modules: modules.length })) }]));
 if (json) {
   console.log(JSON.stringify({ ok: problems.length === 0, problems, sizes: publicSizes, budget }, null, 2));
 } else if (table && !problems.length) {
@@ -239,6 +239,6 @@ if (json) {
     console.log(`isomorphic: dist/index.js bundles for the browser without Node builtins or globals (${full.inputs.length} modules); the exports and their types resolve for a strict consumer; the engine rules load on demand and import nothing the entry loads; every size is within ${BUDGET_FILE}`);
     for (const entry of ENTRIES) if (sizes[entry.key]) console.log(sizeLine(entry.label, sizes[entry.key]));
   }
-  for (const p of problems) console.error(`isomorphism check: ${p}`);
+  for (const problem of problems) console.error(`isomorphism check: ${problem}`);
 }
 process.exit(problems.length ? 1 : 0);

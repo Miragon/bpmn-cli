@@ -13,7 +13,7 @@ export class ElementLinks {
     if (!this.associationList) {
       const collab = this.doc.collaboration();
       const owners = [...this.doc.processes().flatMap(scopesWithin), ...(collab ? [collab] : [])];
-      this.associationList = owners.flatMap((s) => list(s, 'artifacts')).filter((a) => is(a, 'bpmn:Association'));
+      this.associationList = owners.flatMap((owner) => list(owner, 'artifacts')).filter((artifact) => is(artifact, 'bpmn:Association'));
     }
     return this.associationList;
   }
@@ -24,9 +24,9 @@ export class ElementLinks {
       for (const el of list(owner, 'artifacts')) {
         if (!is(el, 'bpmn:TextAnnotation')) continue;
         const attachedTo: string[] = [];
-        for (const a of this.associations()) {
-          const source = peek<El>(a, 'sourceRef');
-          const target = peek<El>(a, 'targetRef');
+        for (const association of this.associations()) {
+          const source = peek<El>(association, 'sourceRef');
+          const target = peek<El>(association, 'targetRef');
           if (source === el && target) attachedTo.push(shownId(target));
           else if (target === el && source) attachedTo.push(shownId(source));
         }
@@ -39,11 +39,11 @@ export class ElementLinks {
 
   annotationsOf(el: El): Array<{ id: string; text?: string }> {
     const out: Array<{ id: string; text?: string }> = [];
-    for (const a of this.associations()) {
-      const source = peek<El>(a, 'sourceRef');
-      const target = peek<El>(a, 'targetRef');
+    for (const association of this.associations()) {
+      const source = peek<El>(association, 'sourceRef');
+      const target = peek<El>(association, 'targetRef');
       const other = source === el ? target : target === el ? source : undefined;
-      if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((o) => o.id === shownId(other))) continue;
+      if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((listed) => listed.id === shownId(other))) continue;
       const text = peek<string>(other, 'text');
       out.push(compact({ id: shownId(other), text: text ? String(text) : undefined }));
     }
@@ -82,17 +82,17 @@ export class ElementLinks {
   }
 
   dataLinksOf(el: El): DetailData | undefined {
-    const ref = (d: El | undefined) => (d ? compact({ id: shownId(d), name: nameOf(d) }) : undefined);
+    const ref = (data: El | undefined) => (data ? compact({ id: shownId(data), name: nameOf(data) }) : undefined);
     if (is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference')) {
       const process = this.doc.processOf(el);
-      const nodes = process ? scopesWithin(process).flatMap((s) => this.doc.flowNodes(s)) : [];
-      const writtenBy = nodes.filter((n) => list(n, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)).map(shownId);
-      const readBy = nodes.filter((n) => list(n, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))).map(shownId);
+      const nodes = process ? scopesWithin(process).flatMap((scope) => this.doc.flowNodes(scope)) : [];
+      const writtenBy = nodes.filter((node) => list(node, 'dataOutputAssociations').some((association) => peek<El>(association, 'targetRef') === el)).map(shownId);
+      const readBy = nodes.filter((node) => list(node, 'dataInputAssociations').some((association) => list(association, 'sourceRef').includes(el))).map(shownId);
       return readBy.length || writtenBy.length ? compact<DetailData>({ readBy: nonEmpty(readBy), writtenBy: nonEmpty(writtenBy) }) : undefined;
     }
-    const isData = (d: El | undefined): d is El => !!d && (is(d, 'bpmn:DataObjectReference') || is(d, 'bpmn:DataStoreReference'));
-    const reads = list(el, 'dataInputAssociations').flatMap((a) => list(a, 'sourceRef')).filter(isData).map((d) => ref(d)!);
-    const writes = list(el, 'dataOutputAssociations').map((a) => peek<El>(a, 'targetRef')).filter(isData).map((d) => ref(d)!);
+    const isData = (data: El | undefined): data is El => !!data && (is(data, 'bpmn:DataObjectReference') || is(data, 'bpmn:DataStoreReference'));
+    const reads = list(el, 'dataInputAssociations').flatMap((association) => list(association, 'sourceRef')).filter(isData).map((data) => ref(data)!);
+    const writes = list(el, 'dataOutputAssociations').map((association) => peek<El>(association, 'targetRef')).filter(isData).map((data) => ref(data)!);
     return reads.length || writes.length ? compact<DetailData>({ reads: nonEmpty(reads), writes: nonEmpty(writes) }) : undefined;
   }
 

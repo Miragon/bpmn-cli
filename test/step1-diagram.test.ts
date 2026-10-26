@@ -42,11 +42,11 @@ function fixture(name: string): string {
   return readFileSync(join(HERE, 'fixtures', 'step1', name), 'utf8');
 }
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ r: MutationResult; after: Doc }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental', ...opts });
-  const after = await Doc.fromXml(r.xml);
+async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+  const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental', ...opts });
+  const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
-  return { r, after };
+  return { result, after };
 }
 
 async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; related?: string[] }> {
@@ -61,23 +61,23 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnShape of diagramPlane.shapes.values()) if (!out.has(drawnShape.id)) out.set(drawnShape.id, drawnShape);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnEdge of diagramPlane.edges.values()) if (!out.has(drawnEdge.id)) out.set(drawnEdge.id, drawnEdge);
   return out;
 }
 
-const right = (s: DShape): number => s.bounds.x + s.bounds.width;
-const bottom = (s: DShape): number => s.bounds.y + s.bounds.height;
-const overlap = (a: DShape, b: DShape): boolean => a.bounds.x < right(b) && b.bounds.x < right(a) && a.bounds.y < bottom(b) && b.bounds.y < bottom(a);
+const right = (drawnShape: DShape): number => drawnShape.bounds.x + drawnShape.bounds.width;
+const bottom = (drawnShape: DShape): number => drawnShape.bounds.y + drawnShape.bounds.height;
+const overlap = (first: DShape, second: DShape): boolean => first.bounds.x < right(second) && second.bounds.x < right(first) && first.bounds.y < bottom(second) && second.bounds.y < bottom(first);
 
 /** Problems of the given kinds in the drawing. */
 function problems(doc: Doc, kinds: MetricKey[]): LayoutProblem[] {
-  return LayoutAnalysis.of(doc.definitions).problems.filter((p) => kinds.includes(p.kind));
+  return LayoutAnalysis.of(doc.definitions).problems.filter((problem) => kinds.includes(problem.kind));
 }
 
 const FRAME_DEFECTS: MetricKey[] = ['frameIntrusion', 'frameOverlap', 'outsideSub', 'outsideLane', 'outsidePool', 'overlaps', 'degenerateEdge'];
@@ -90,10 +90,10 @@ describe('a growing frame makes room around it instead of growing over foreign s
   it('nested sub-process grows right: what is in the way moves at every level, inside-out', async () => {
     const xml = fixture('nested.bpmn');
     const before = shapes(await Doc.fromXml(xml));
-    const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'I1' }]);
-    expect(r.layout.mode).toBe('incremental');
-    const s = shapes(after);
-    const [inner, outer, rightTask, afterTask] = ['IN', 'OUT', 'RIGHT', 'AFTER'].map((id) => s.get(id)!) as [DShape, DShape, DShape, DShape];
+    const { result, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'I1' }]);
+    expect(result.layout.mode).toBe('incremental');
+    const shapesById = shapes(after);
+    const [inner, outer, rightTask, afterTask] = ['IN', 'OUT', 'RIGHT', 'AFTER'].map((id) => shapesById.get(id)!) as [DShape, DShape, DShape, DShape];
     expect(right(inner)).toBeGreaterThan(right(before.get('IN')!));
     // RIGHT (in OUT, on IN's row) and AFTER (right of OUT, below IN's rows) keep their distance to the frame that grew
     expect(rightTask.bounds.x - right(inner)).toBe(before.get('RIGHT')!.bounds.x - right(before.get('IN')!));
@@ -104,22 +104,22 @@ describe('a growing frame makes room around it instead of growing over foreign s
   it('nested sub-process grows down: the parent grows, a shape below the parent outside the column moves', async () => {
     const xml = fixture('nested.bpmn');
     const { after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Extra', in: 'IN' }]);
-    const s = shapes(after);
-    expect(s.get('N')!.parentId).toBe('IN');
-    expect(bottom(s.get('IN')!)).toBeGreaterThan(270);
-    expect(s.get('LOW')!.bounds.y).toBeGreaterThanOrEqual(bottom(s.get('IN')!));
-    expect(s.get('BELOW')!.bounds.y).toBeGreaterThanOrEqual(bottom(s.get('OUT')!));
+    const shapesById = shapes(after);
+    expect(shapesById.get('N')!.parentId).toBe('IN');
+    expect(bottom(shapesById.get('IN')!)).toBeGreaterThan(270);
+    expect(shapesById.get('LOW')!.bounds.y).toBeGreaterThanOrEqual(bottom(shapesById.get('IN')!));
+    expect(shapesById.get('BELOW')!.bounds.y).toBeGreaterThanOrEqual(bottom(shapesById.get('OUT')!));
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 
   it('a frame with room inside its parent grows into it: the parent and the shapes around it stay', async () => {
     const xml = fixture('nested-room.bpmn');
     const before = shapes(await Doc.fromXml(xml));
-    const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'EH' }]);
-    const s = shapes(after);
-    expect(right(s.get('EV')!)).toBeGreaterThan(right(before.get('EV')!));
-    for (const id of ['OUT', 'AFTER', 'E', 'OT', 'OE']) expect(s.get(id)!.bounds).toEqual(before.get(id)!.bounds);
-    expect(r.layout.moved).not.toContain('OUT');
+    const { result, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'EH' }]);
+    const shapesById = shapes(after);
+    expect(right(shapesById.get('EV')!)).toBeGreaterThan(right(before.get('EV')!));
+    for (const id of ['OUT', 'AFTER', 'E', 'OT', 'OE']) expect(shapesById.get(id)!.bounds).toEqual(before.get(id)!.bounds);
+    expect(result.layout.moved).not.toContain('OUT');
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 
@@ -127,33 +127,33 @@ describe('a growing frame makes room around it instead of growing over foreign s
     const xml = fixture('pool-branch.bpmn');
     const before = shapes(await Doc.fromXml(xml));
     const { after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Label parcel', after: 'ST' }]);
-    const s = shapes(after);
-    const shift = (id: string): number => s.get(id)!.bounds.x - before.get(id)!.bounds.x;
+    const shapesById = shapes(after);
+    const shift = (id: string): number => shapesById.get(id)!.bounds.x - before.get(id)!.bounds.x;
     expect(shift('G')).toBeGreaterThan(0);
     for (const id of ['T_UP', 'E1', 'T_LOW', 'E2']) expect(shift(id)).toBe(shift('G'));
-    expect(s.get('T_LOW')!.bounds.x).toBeGreaterThan(right(s.get('G')!));
-    expect(right(s.get('G')!)).toBeLessThanOrEqual(right(s.get('Pool')!));
+    expect(shapesById.get('T_LOW')!.bounds.x).toBeGreaterThan(right(shapesById.get('G')!));
+    expect(right(shapesById.get('G')!)).toBeLessThanOrEqual(right(shapesById.get('Pool')!));
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 
   it('expanding a sub-process inside a parent never makes the parent overlap a sibling frame', async () => {
     const xml = fixture('expand-sibling.bpmn');
     const { after } = await run(xml, [{ op: 'set', id: 'C', values: { expanded: 'true' } }]);
-    const s = shapes(after);
-    expect(s.get('C')!.expanded).toBe(true);
-    expect(overlap(s.get('P')!, s.get('Q')!)).toBe(false);
-    expect(s.get('QT')!.bounds.y).toBeGreaterThan(s.get('Q')!.bounds.y);
+    const shapesById = shapes(after);
+    expect(shapesById.get('C')!.expanded).toBe(true);
+    expect(overlap(shapesById.get('P')!, shapesById.get('Q')!)).toBe(false);
+    expect(shapesById.get('QT')!.bounds.y).toBeGreaterThan(shapesById.get('Q')!.bounds.y);
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 
   it('makeSpace in frame mode: nothing outside the frame changes while the frame has room', () => {
     const el = {} as El;
-    const sh = (id: string, kind: DShape['kind'], b: [number, number, number, number], extra: Partial<DShape> = {}): DShape => ({
+    const sh = (id: string, kind: DShape['kind'], rect: [number, number, number, number], extra: Partial<DShape> = {}): DShape => ({
       id,
       el,
       kind,
       container: kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && extra.expanded === true),
-      bounds: { x: b[0], y: b[1], width: b[2], height: b[3] },
+      bounds: { x: rect[0], y: rect[1], width: rect[2], height: rect[3] },
       ...extra,
     });
     const list = [
@@ -164,13 +164,13 @@ describe('a growing frame makes room around it instead of growing over foreign s
       sh('B', 'task', [380, 340, 100, 80], { parentId: 'F', laneId: 'L', poolId: 'Pool' }),
       sh('Up', 'task', [600, 150, 100, 80], { laneId: 'L', poolId: 'Pool' }),
     ];
-    const plane: Plane = { id: 'p', rootId: 'r', root: el, shapes: new Map(list.map((s) => [s.id, s])), edges: new Map(), dropped: [] };
-    const r = new Drawing(plane).makeSpace({ axis: 'x', line: 351, delta: 120, anchors: ['A'], frame: 'F' });
+    const plane: Plane = { id: 'p', rootId: 'r', root: el, shapes: new Map(list.map((drawnShape) => [drawnShape.id, drawnShape])), edges: new Map(), dropped: [] };
+    const space = new Drawing(plane).makeSpace({ axis: 'x', line: 351, delta: 120, anchors: ['A'], frame: 'F' });
     expect(plane.shapes.get('F')!.bounds.width).toBe(420);
     expect(plane.shapes.get('B')!.bounds.x).toBe(500);
     // Up is beyond the line but outside the frame: it stays; the lane and the pool do not grow
     expect(plane.shapes.get('Up')!.bounds.x).toBe(600);
-    expect([...r.resized]).toEqual(['F']);
+    expect([...space.resized]).toEqual(['F']);
     expect(plane.shapes.get('Pool')!.bounds.width).toBe(900);
   });
 });
@@ -182,34 +182,34 @@ describe('a growing frame makes room around it instead of growing over foreign s
 describe('an unconnected node goes below its own container content', () => {
   it('a label of a flow outside the sub-process does not count', async () => {
     const { after } = await run(fixture('far-label.bpmn'), [{ op: 'add', kind: 'task', id: 'X', name: 'Extra', in: 'SUB' }]);
-    const s = shapes(after);
-    const x = s.get('X')!;
-    expect(x.parentId).toBe('SUB');
+    const shapesById = shapes(after);
+    const extraShape = shapesById.get('X')!;
+    expect(extraShape.parentId).toBe('SUB');
     // right below the inner row (bottom 200), far above the label of F4 (y 560)
-    expect(x.bounds.y).toBeGreaterThan(200);
-    expect(x.bounds.y).toBeLessThan(320);
-    expect(bottom(s.get('SUB')!)).toBeLessThan(420);
+    expect(extraShape.bounds.y).toBeGreaterThan(200);
+    expect(extraShape.bounds.y).toBeLessThan(320);
+    expect(bottom(shapesById.get('SUB')!)).toBeLessThan(420);
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 
   it('a node moved into a lane without a free row goes below that lane\'s content, not below a label elsewhere', async () => {
     const { after } = await run(fixture('lane-label.bpmn'), [{ op: 'move', ids: ['M'], lane: 'L1' }]);
-    const s = shapes(after);
-    const lane = s.get('L1')!;
-    expect(s.get('M')!.laneId).toBe('L1');
+    const shapesById = shapes(after);
+    const lane = shapesById.get('L1')!;
+    expect(shapesById.get('M')!.laneId).toBe('L1');
     expect(lane.bounds.height).toBeLessThan(320);
-    expect(s.get('M')!.bounds.y).toBeGreaterThanOrEqual(170);
+    expect(shapesById.get('M')!.bounds.y).toBeGreaterThanOrEqual(170);
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 
   it('a lane row used as tightly as the drawing uses it takes a moved node without growing the lane', async () => {
     const xml = fixture('lane-tight.bpmn');
     const before = shapes(await Doc.fromXml(xml));
-    const { r, after } = await run(xml, [{ op: 'move', ids: ['X'], lane: 'L1' }]);
-    const s = shapes(after);
-    expect(s.get('X')!.bounds.y).toBe(before.get('A')!.bounds.y);
-    for (const id of ['Pool', 'L1', 'L2', 'E']) expect(s.get(id)!.bounds).toEqual(before.get(id)!.bounds);
-    expect(r.layout.moved).toEqual(['X']);
+    const { result, after } = await run(xml, [{ op: 'move', ids: ['X'], lane: 'L1' }]);
+    const shapesById = shapes(after);
+    expect(shapesById.get('X')!.bounds.y).toBe(before.get('A')!.bounds.y);
+    for (const id of ['Pool', 'L1', 'L2', 'E']) expect(shapesById.get(id)!.bounds).toEqual(before.get(id)!.bounds);
+    expect(result.layout.moved).toEqual(['X']);
   });
 });
 
@@ -221,10 +221,10 @@ describe('place / align never push the reference or its frames away', () => {
   it('refuses a row in another pool that its own pool could only reach by pushing that pool away', async () => {
     const xml = fixture('two-pools.bpmn');
     for (const op of [{ op: 'place', ids: ['Need'], rowOf: 'Pick' }, { op: 'align', ids: ['Need'], axis: 'row', to: 'Pick' }] as Op[]) {
-      const e = await failure(xml, [op]);
-      expect(e.code).toBe('E_NO_ROOM');
-      expect(e.message).toMatch(/push away pool Supplier of Pick/);
-      expect(e.related).toEqual(['Pick', 'Supplier']);
+      const failed = await failure(xml, [op]);
+      expect(failed.code).toBe('E_NO_ROOM');
+      expect(failed.message).toMatch(/push away pool Supplier of Pick/);
+      expect(failed.related).toEqual(['Pick', 'Supplier']);
     }
   });
 
@@ -243,9 +243,9 @@ describe('place / align never push the reference or its frames away', () => {
 
   it('still places in the own pool', async () => {
     const { after } = await run(fixture('two-pools.bpmn'), [{ op: 'place', ids: ['Done'], below: 'Send' }]);
-    const s = shapes(after);
-    expect(s.get('Done')!.bounds.y).toBeGreaterThan(bottom(s.get('Send')!));
-    expect(s.get('Supplier')!.bounds.y - bottom(s.get('Customer')!)).toBeGreaterThan(0);
+    const shapesById = shapes(after);
+    expect(shapesById.get('Done')!.bounds.y).toBeGreaterThan(bottom(shapesById.get('Send')!));
+    expect(shapesById.get('Supplier')!.bounds.y - bottom(shapesById.get('Customer')!)).toBeGreaterThan(0);
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
 });
@@ -256,18 +256,18 @@ describe('place / align never push the reference or its frames away', () => {
 
 describe('connections always keep two distinct waypoints', () => {
   it('a zero-length connection counts as broken and is routed again', async () => {
-    const { r, after } = await run(fixture('zero-edge.bpmn'), [{ op: 'set', id: 'S', values: { name: 'Go' } }]);
-    expect(r.layout.rerouted).toContain('F2');
+    const { result, after } = await run(fixture('zero-edge.bpmn'), [{ op: 'set', id: 'S', values: { name: 'Go' } }]);
+    expect(result.layout.rerouted).toContain('F2');
     const pts = edges(after).get('F2')!.points;
     expect(pts.length).toBeGreaterThanOrEqual(2);
-    expect(pts.some((p) => p.x !== pts[0]!.x || p.y !== pts[0]!.y)).toBe(true);
+    expect(pts.some((point) => point.x !== pts[0]!.x || point.y !== pts[0]!.y)).toBe(true);
     expect(problems(after, ['degenerateEdge'])).toEqual([]);
   });
 
   it('a straight association whose end moved and that now really cuts a shape is routed again', async () => {
     // before the edit its bounding box covers X but the line passes above it: not a cut
-    const { r, after } = await run(fixture('diagonal-assoc.bpmn'), [{ op: 'add', kind: 'task', id: 'B', name: 'Before', after: 'S' }]);
-    expect(r.layout.rerouted).toContain('DIA');
+    const { result, after } = await run(fixture('diagonal-assoc.bpmn'), [{ op: 'add', kind: 'task', id: 'B', name: 'Before', after: 'S' }]);
+    expect(result.layout.rerouted).toContain('DIA');
     expect(problems(after, ['through'])).toEqual([]);
   });
 
@@ -301,13 +301,13 @@ const DI_NS =
 
 type Rect = [x: number, y: number, width: number, height: number];
 
-function shape(id: string, [x, y, width, height]: Rect, expanded?: boolean): string {
+function shape(id: string, [left, top, width, height]: Rect, expanded?: boolean): string {
   const exp = expanded === undefined ? '' : ` isExpanded="${expanded}"`;
-  return `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${exp}><dc:Bounds x="${x}" y="${y}" width="${width}" height="${height}" /></bpmndi:BPMNShape>`;
+  return `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${exp}><dc:Bounds x="${left}" y="${top}" width="${width}" height="${height}" /></bpmndi:BPMNShape>`;
 }
 
 function edge(id: string, points: Array<[number, number]>): string {
-  return `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${points.map(([x, y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
+  return `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${points.map(([pointX, pointY]) => `<di:waypoint x="${pointX}" y="${pointY}" />`).join('')}</bpmndi:BPMNEdge>`;
 }
 
 function diagramXml(body: string, planeOf: string, di: string[], extraRoots = ''): string {
@@ -315,7 +315,7 @@ function diagramXml(body: string, planeOf: string, di: string[], extraRoots = ''
   return definitionsXml(body, { nsDecl: DI_NS, extraRoots: `${extraRoots}${diagram}` });
 }
 
-const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await LayoutAnalysis.ofXml(xml)).problems.filter((p) => kinds.includes(p.kind));
+const kindsOf = async (xml: string, kinds: MetricKey[]): Promise<LayoutProblem[]> => (await LayoutAnalysis.ofXml(xml)).problems.filter((problem) => kinds.includes(problem.kind));
 
 /** Edges near and far from their ends: A 100..200, B 300..400 (y 100..180); Near ends 10 px left of B (still attached), Far 60 px left of it, Both starts 50 px right of A and ends below-left of B, Undrawn ends at a node without a shape, DOA 64 px left of its data object. */
 const DETACHED_BODY = `
@@ -366,8 +366,8 @@ describe('metrics: frame defects and real segment tests', () => {
   it('frameOverlap: two sub-processes, neither inside the other, overlapping', async () => {
     const xml = diagramXml(SUBS, 'Process_1', subsDi([700, 150, 100, 80], [450, 350, 300, 150]));
     expect(await kindsOf(xml, ['frameOverlap'])).toEqual([{ kind: 'frameOverlap', ids: ['SubA', 'SubB'] }]);
-    const a = { kind: 'frameOverlap' as const, ids: ['SubA', 'SubB'] };
-    expect(diffProblems([a], [{ ...a, ids: ['SubB', 'SubA'] }])).toEqual({ added: [], resolved: [] });
+    const frameOverlap = { kind: 'frameOverlap' as const, ids: ['SubA', 'SubB'] };
+    expect(diffProblems([frameOverlap], [{ ...frameOverlap, ids: ['SubB', 'SubA'] }])).toEqual({ added: [], resolved: [] });
   });
 
   it('pools and lanes: a node in a foreign pool intrudes, lane-less artifacts and collaboration notes do not', async () => {
@@ -390,7 +390,7 @@ describe('metrics: frame defects and real segment tests', () => {
     ];
     expect(await kindsOf(diagramXml(body, 'Collab', di([200, 500, 100, 80]), roots), ['frameIntrusion', 'frameOverlap'])).toEqual([]);
     const moved = await LayoutAnalysis.ofXml(diagramXml(body, 'Collab', di([200, 270, 100, 80]), roots));
-    expect(moved.problems.filter((p) => p.kind === 'frameIntrusion')).toEqual([
+    expect(moved.problems.filter((problem) => problem.kind === 'frameIntrusion')).toEqual([
       { kind: 'frameIntrusion', ids: ['T2', 'PoolA'] },
       { kind: 'frameIntrusion', ids: ['T2', 'L2'] },
     ]);
@@ -402,20 +402,20 @@ describe('metrics: frame defects and real segment tests', () => {
   it('degenerateEdge: one waypoint, or two on one point', async () => {
     const body = `<bpmn:task id="A" /><bpmn:task id="B" /><bpmn:sequenceFlow id="F1" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="B" /><bpmn:sequenceFlow id="F3" sourceRef="A" targetRef="B" />`;
     const di = [shape('A', [100, 100, 100, 80]), shape('B', [300, 100, 100, 80]), edge('F1', [[200, 140]]), edge('F2', [[200, 140], [200, 140]]), edge('F3', [[200, 140], [300, 140]])];
-    const m = await LayoutAnalysis.ofXml(diagramXml(body, 'Process_1', di));
-    expect(m.problems.filter((p) => p.kind === 'degenerateEdge')).toEqual([
+    const analysis = await LayoutAnalysis.ofXml(diagramXml(body, 'Process_1', di));
+    expect(analysis.problems.filter((problem) => problem.kind === 'degenerateEdge')).toEqual([
       { kind: 'degenerateEdge', ids: ['F1'] },
       { kind: 'degenerateEdge', ids: ['F2'] },
     ]);
-    expect(m.score).toBeGreaterThanOrEqual(20);
+    expect(analysis.score).toBeGreaterThanOrEqual(20);
   });
 
   it('brokenEdge: an end point more than 10 px outside its end is broken whatever it was before (detachedEnds)', async () => {
     const doc = await Doc.fromXml(diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI));
     const plane = new DiagramReader(doc.definitions).planes()[0]!;
-    const broken = [...plane.edges.values()].filter((e) => new Drawing(plane).brokenEdge(e, new Drawing(plane).edgeBefore(e))).map((e) => e.id);
+    const broken = [...plane.edges.values()].filter((drawnEdge) => new Drawing(plane).brokenEdge(drawnEdge, new Drawing(plane).edgeBefore(drawnEdge))).map((drawnEdge) => drawnEdge.id);
     expect(broken).toEqual(['Far', 'Both', 'DOA']);
-    expect([...plane.edges.values()].map((e) => [e.id, new Drawing(plane).detachedEnds(e)])).toEqual([
+    expect([...plane.edges.values()].map((drawnEdge) => [drawnEdge.id, new Drawing(plane).detachedEnds(drawnEdge)])).toEqual([
       ['Near', []],
       ['Far', ['B']],
       ['Both', ['A', 'B']],
@@ -426,23 +426,23 @@ describe('metrics: frame defects and real segment tests', () => {
 
   it('detachedEdge: an edge that does not reach its ends, with the ends it misses, located at that end point; a write that reroutes it resolves it', async () => {
     const xml = diagramXml(DETACHED_BODY, 'Process_1', DETACHED_DI);
-    const m = await LayoutAnalysis.ofXml(xml);
-    const found = m.problems.filter((p) => p.kind === 'detachedEdge');
+    const analysis = await LayoutAnalysis.ofXml(xml);
+    const found = analysis.problems.filter((problem) => problem.kind === 'detachedEdge');
     expect(found).toEqual([
       { kind: 'detachedEdge', ids: ['Far', 'B'] },
       { kind: 'detachedEdge', ids: ['Both', 'A', 'B'] },
       { kind: 'detachedEdge', ids: ['DOA', 'DO'] },
     ]);
     expect(WEIGHTS.detachedEdge).toBe(WEIGHTS.degenerateEdge);
-    expect(new ProblemLocator((await Doc.fromXml(xml)).definitions).locate(found).map((p) => p.at)).toEqual([
+    expect(new ProblemLocator((await Doc.fromXml(xml)).definitions).locate(found).map((problem) => problem.at)).toEqual([
       { plane: 'Process_1', x: 240, y: 140 },
       { plane: 'Process_1', x: 250, y: 160 },
       { plane: 'Process_1', x: 250, y: 325 },
     ]);
-    const { r, after } = await run(xml, [{ op: 'set', id: 'B', values: { name: 'Book' } }]);
+    const { result, after } = await run(xml, [{ op: 'set', id: 'B', values: { name: 'Book' } }]);
     // Undrawn: its end N is placed now
-    expect(r.layout.rerouted).toEqual(['Far', 'Both', 'Undrawn', 'DOA']);
-    expect(r.layout.metrics!.resolved.filter((p) => p.kind === 'detachedEdge')).toEqual(found);
+    expect(result.layout.rerouted).toEqual(['Far', 'Both', 'Undrawn', 'DOA']);
+    expect(result.layout.metrics!.resolved.filter((problem) => problem.kind === 'detachedEdge')).toEqual(found);
     expect(LayoutAnalysis.of(after.definitions).counts.detachedEdge).toBe(0);
   });
 

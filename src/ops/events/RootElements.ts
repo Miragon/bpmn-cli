@@ -36,7 +36,7 @@ export class RootElements {
       throw modelError('E_INVALID_VALUE', `The ${ROOT_PREFIX[type].toLowerCase()} name is empty`, { hint: 'Pass a name, e.g. --message OrderReceived.' });
     }
     const existing = doc.rootElementsOfType(type);
-    let el = existing.find((e) => idOf(e) === key) ?? existing.find((e) => e.get<string | undefined>('name') === key);
+    let el = existing.find((candidate) => idOf(candidate) === key) ?? existing.find((candidate) => candidate.get<string | undefined>('name') === key);
     let created = false;
     if (!el) {
       el = doc.create(type, { id: doc.edit.allocator.allocate(typeRequest(type, { name: key, prefix: ROOT_PREFIX[type] })).id, name: key });
@@ -55,7 +55,7 @@ export class RootElements {
     const roots = RootElements.referencedBy(el);
     const id = el.get<string | undefined>('id') ?? el.$type;
     if (roots.length !== 1) {
-      throw usageError(`refAs ${alias}: ${kindLabel(el)} ${id} references ${roots.length ? `${roots.length} root elements (${roots.map((r) => r.get<string>('id')).join(', ')})` : 'no message, error, signal or escalation'}`, {
+      throw usageError(`refAs ${alias}: ${kindLabel(el)} ${id} references ${roots.length ? `${roots.length} root elements (${roots.map((root) => root.get<string>('id')).join(', ')})` : 'no message, error, signal or escalation'}`, {
         element: id,
         hint: roots.length ? 'Refer to one of them by its id.' : 'refAs names the message / error / signal / escalation the element references: give it one in the same op ("message": "<Name>", "error": ..., "signal": ..., "escalation": ...).',
       });
@@ -65,8 +65,8 @@ export class RootElements {
 
   private static referencedBy(el: El): El[] {
     const out: El[] = [];
-    const add = (r: El | undefined): void => {
-      if (r && !out.includes(r)) out.push(r);
+    const add = (root: El | undefined): void => {
+      if (root && !out.includes(root)) out.push(root);
     };
     if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) add(el.get<El | undefined>('messageRef'));
     if (is(el, 'bpmn:Event')) {

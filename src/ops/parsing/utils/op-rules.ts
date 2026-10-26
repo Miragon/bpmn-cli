@@ -12,7 +12,7 @@ export type FieldSpelling = (field: string) => string;
 const PLACEMENT_ORDER = ['after', 'before', 'flow', 'in', 'on'];
 
 export function placementViolation(present: string[], name: FieldSpelling): RuleViolation | undefined {
-  const used = PLACEMENT_ORDER.filter((k) => present.includes(k));
+  const used = PLACEMENT_ORDER.filter((placementKey) => present.includes(placementKey));
   if (used.length <= 1 || (used.length === 2 && used.includes('after') && used.includes('before'))) return undefined;
   return {
     message: `${used.map(name).join(' and ')} cannot be combined`,
@@ -29,9 +29,9 @@ export function defaultWithConditionViolation(isDefault: boolean, hasCondition: 
 }
 
 export function groupViolation(present: string[], groups: string[][], name: FieldSpelling): RuleViolation | undefined {
-  for (const g of groups) {
-    const used = g.filter((k) => present.includes(k));
-    if (used.length > 1) return { message: `${used.map(name).join(' and ')} cannot be combined`, hint: `Give at most one of ${g.map(name).join(', ')}.` };
+  for (const group of groups) {
+    const used = group.filter((groupKey) => present.includes(groupKey));
+    if (used.length > 1) return { message: `${used.map(name).join(' and ')} cannot be combined`, hint: `Give at most one of ${group.map(name).join(', ')}.` };
   }
   return undefined;
 }

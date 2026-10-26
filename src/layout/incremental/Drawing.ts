@@ -51,12 +51,12 @@ export class Drawing {
     return this.space.closeStrip(req);
   }
 
-  fitInFrame(id: string, pad?: number, frameFn?: (s: DShape) => DShape | undefined, keepAlso?: Iterable<string>): SpaceResult {
+  fitInFrame(id: string, pad?: number, frameFn?: (shape: DShape) => DShape | undefined, keepAlso?: Iterable<string>): SpaceResult {
     return this.space.fitInFrame(id, pad, frameFn, keepAlso);
   }
 
-  unitBox(s: DShape): Box {
-    return this.space.unitBox(s);
+  unitBox(shape: DShape): Box {
+    return this.space.unitBox(shape);
   }
 
   borderPad(frame: DShape, box: Box, axis: Axis): number {
@@ -75,57 +75,57 @@ export class Drawing {
     return this.separation.tidy(opts);
   }
 
-  route(e: DEdge, opts: RouteOptions): Point[] | undefined {
-    return this.routes.routeEdge(e, opts);
+  route(edge: DEdge, opts: RouteOptions): Point[] | undefined {
+    return this.routes.routeEdge(edge, opts);
   }
 
   routingLines(except?: string): Point[][] {
     return this.routes.routingLines(except);
   }
 
-  routeRank(e: DEdge): number {
-    return this.routes.routeRank(e);
+  routeRank(edge: DEdge): number {
+    return this.routes.routeRank(edge);
   }
 
   routeOrder(edges: Iterable<DEdge>): DEdge[] {
-    return [...edges].sort((p, q) => this.routes.routeRank(p) - this.routes.routeRank(q));
+    return [...edges].sort((left, right) => this.routes.routeRank(left) - this.routes.routeRank(right));
   }
 
-  edgeBefore(e: DEdge): EdgeBefore {
-    return this.routes.edgeBefore(e);
+  edgeBefore(edge: DEdge): EdgeBefore {
+    return this.routes.edgeBefore(edge);
   }
 
-  brokenEdge(e: DEdge, before: EdgeBefore | undefined, opts?: { detached?: boolean }): boolean {
-    return this.routes.brokenEdge(e, before, opts);
+  brokenEdge(edge: DEdge, before: EdgeBefore | undefined, opts?: { detached?: boolean }): boolean {
+    return this.routes.brokenEdge(edge, before, opts);
   }
 
-  detachedEnds(e: DEdge): string[] {
-    return this.routes.detachedEnds(e);
+  detachedEnds(edge: DEdge): string[] {
+    return this.routes.detachedEnds(edge);
   }
 
-  reroute(e: DEdge, opts: { lines?: Point[][]; sourceSides?: Side[]; targetSides?: Side[] } = {}): boolean {
+  reroute(edge: DEdge, opts: { lines?: Point[][]; sourceSides?: Side[]; targetSides?: Side[] } = {}): boolean {
     const { lines, ...sides } = opts;
-    const pts = this.routes.routeEdge(e, { lines: lines ?? this.routes.routingLines(e.id), ...sides });
+    const pts = this.routes.routeEdge(edge, { lines: lines ?? this.routes.routingLines(edge.id), ...sides });
     if (!pts || pts.length < 2) return false;
-    this.adoptRoute(e, pts);
+    this.adoptRoute(edge, pts);
     return true;
   }
 
-  adoptRoute(e: DEdge, points: Point[]): void {
-    e.points = points;
-    if (e.label || raw<string>(e.el, 'name')) this.labels.placeEdgeLabel(e);
+  adoptRoute(edge: DEdge, points: Point[]): void {
+    edge.points = points;
+    if (edge.label || raw<string>(edge.el, 'name')) this.labels.placeEdgeLabel(edge);
   }
 
-  placeShapeLabel(s: DShape, prefer?: LabelSide): Box | undefined {
-    return this.labels.placeShapeLabel(s, prefer);
+  placeShapeLabel(shape: DShape, prefer?: LabelSide): Box | undefined {
+    return this.labels.placeShapeLabel(shape, prefer);
   }
 
-  placeEdgeLabel(e: DEdge): Box | undefined {
-    return this.labels.placeEdgeLabel(e);
+  placeEdgeLabel(edge: DEdge): Box | undefined {
+    return this.labels.placeEdgeLabel(edge);
   }
 
-  labelOnSide(s: DShape, side: LabelSide, size: { width: number; height: number }): Box {
-    return this.labels.labelOnSide(s, side, size);
+  labelOnSide(shape: DShape, side: LabelSide, size: { width: number; height: number }): Box {
+    return this.labels.labelOnSide(shape, side, size);
   }
 
   refitLabel(owner: DShape | DEdge): Box | undefined {
@@ -137,13 +137,13 @@ export class Drawing {
   }
 
   clearLabels(fresh: readonly DEdge[]): void {
-    const segs = fresh.flatMap((e) => e.points.slice(1).map((q, i) => [e.points[i]!, q] as const));
+    const segs = fresh.flatMap((edge) => edge.points.slice(1).map((end, index) => [edge.points[index]!, end] as const));
     if (!segs.length) return;
-    for (const s of this.plane.shapes.values()) {
-      if (!s.label || !hasExternalLabel(s) || !segs.some(([p, q]) => segmentHits(p, q, s.label!, 1))) continue;
-      const host = s.hostId ? this.plane.shapes.get(s.hostId)?.bounds : undefined;
-      const side = labelSideOf(s, host);
-      this.labels.placeShapeLabel(s, side === 'inside' ? undefined : side);
+    for (const shape of this.plane.shapes.values()) {
+      if (!shape.label || !hasExternalLabel(shape) || !segs.some(([start, end]) => segmentHits(start, end, shape.label!, 1))) continue;
+      const host = shape.hostId ? this.plane.shapes.get(shape.hostId)?.bounds : undefined;
+      const side = labelSideOf(shape, host);
+      this.labels.placeShapeLabel(shape, side === 'inside' ? undefined : side);
     }
   }
 
@@ -153,47 +153,47 @@ export class Drawing {
    */
   settle(before: DrawingSnapshot): string[] {
     const delta = new Map<string, { dx: number; dy: number }>();
-    for (const s of this.plane.shapes.values()) {
-      const b = before.bounds.get(s.id);
-      if (!b || Math.abs(b.width - s.bounds.width) > 0.5 || Math.abs(b.height - s.bounds.height) > 0.5) continue;
-      const dx = s.bounds.x - b.x;
-      const dy = s.bounds.y - b.y;
-      if (dx || dy) delta.set(s.id, { dx, dy });
+    for (const shape of this.plane.shapes.values()) {
+      const beforeBox = before.bounds.get(shape.id);
+      if (!beforeBox || Math.abs(beforeBox.width - shape.bounds.width) > 0.5 || Math.abs(beforeBox.height - shape.bounds.height) > 0.5) continue;
+      const dx = shape.bounds.x - beforeBox.x;
+      const dy = shape.bounds.y - beforeBox.y;
+      if (dx || dy) delta.set(shape.id, { dx, dy });
     }
-    for (const e of this.plane.edges.values()) {
-      if (!before.unchanged(e)) continue;
-      const a = e.sourceId ? delta.get(e.sourceId) : undefined;
-      const b = e.targetId ? delta.get(e.targetId) : undefined;
-      if (!a || !b || a.dx !== b.dx || a.dy !== b.dy) continue;
-      for (const p of e.points) {
-        p.x += a.dx;
-        p.y += a.dy;
+    for (const edge of this.plane.edges.values()) {
+      if (!before.unchanged(edge)) continue;
+      const sourceDelta = edge.sourceId ? delta.get(edge.sourceId) : undefined;
+      const targetDelta = edge.targetId ? delta.get(edge.targetId) : undefined;
+      if (!sourceDelta || !targetDelta || sourceDelta.dx !== targetDelta.dx || sourceDelta.dy !== targetDelta.dy) continue;
+      for (const point of edge.points) {
+        point.x += sourceDelta.dx;
+        point.y += sourceDelta.dy;
       }
-      if (e.label) {
-        e.label.x += a.dx;
-        e.label.y += a.dy;
+      if (edge.label) {
+        edge.label.x += sourceDelta.dx;
+        edge.label.y += sourceDelta.dy;
       }
     }
     const rerouted: DEdge[] = [];
-    for (const e of this.routeOrder(this.plane.edges.values())) {
-      if (!this.routes.brokenEdge(e, before.edges.get(e))) continue;
-      if (this.reroute(e)) rerouted.push(e);
+    for (const edge of this.routeOrder(this.plane.edges.values())) {
+      if (!this.routes.brokenEdge(edge, before.edges.get(edge))) continue;
+      if (this.reroute(edge)) rerouted.push(edge);
     }
     this.clearLabels(rerouted);
     this.labels.clearTitles((owner, sub) => before.clearOfTitle(owner, sub));
-    return rerouted.map((e) => e.id);
+    return rerouted.map((edge) => edge.id);
   }
 
   /** Runs a change that must not make the drawing worse: the guard may reject and undo it. */
   attempt(guard: TrialGuard, change: () => SpaceResult | undefined, force: readonly string[] = []): boolean {
     const st = this.checkpoint();
-    const before = new Map([...this.plane.edges.values()].map((e) => [e, this.routes.edgeBefore(e)] as const));
-    const r = change();
-    if (!r || (!r.moved.size && !r.resized.size)) {
+    const before = new Map([...this.plane.edges.values()].map((edge) => [edge, this.routes.edgeBefore(edge)] as const));
+    const result = change();
+    if (!result || (!result.moved.size && !result.resized.size)) {
       st.restore();
       return false;
     }
-    const fresh = this.routeOrder(this.plane.edges.values()).filter((e) => (force.includes(e.id) || this.routes.brokenEdge(e, before.get(e))) && this.reroute(e));
+    const fresh = this.routeOrder(this.plane.edges.values()).filter((edge) => (force.includes(edge.id) || this.routes.brokenEdge(edge, before.get(edge))) && this.reroute(edge));
     this.clearLabels(fresh);
     if (guard.judge().ok) return true;
     st.restore();

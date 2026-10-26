@@ -72,8 +72,8 @@ export class FullLayout {
     addTo(definitions, 'diagrams', diagram);
   }
 
-  private toWarningInfo(w: LayoutWarning): LayoutWarningInfo {
-    return { code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: w.relatedElementIds ?? [] };
+  private toWarningInfo(warning: LayoutWarning): LayoutWarningInfo {
+    return { code: warning.code, elementId: warning.elementId, message: warning.message, relatedElementIds: warning.relatedElementIds ?? [] };
   }
 
   /** Clobbers the model's in-memory DI; treat the returned XML as the truth. */
@@ -89,7 +89,7 @@ export class FullLayout {
       const redrawn = new Groups(this.model.definitions).redraw(this.model.moddle, groups);
       diIds.restore(this.model.definitions);
       const { xml } = await this.model.moddle.toXML(this.model.definitions, { format: true });
-      return { xml, warnings: warnings.map((w) => ({ code: w.code, elementId: w.elementId, message: w.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...this.groupNotes(redrawn) };
+      return { xml, warnings: warnings.map((warning) => ({ code: warning.code, elementId: warning.elementId, message: warning.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...this.groupNotes(redrawn) };
     }
     // without old DI the layouter's ids stand unless a DI id would exceed 64 characters
     const cut = !diIds.diagrams.length && !diIdsFit(this.model.definitions);
@@ -102,7 +102,7 @@ export class FullLayout {
     } finally {
       temporary.withdraw(this.model.definitions);
     }
-    const missingDi = result.warnings.some((w) => w.code === 'DI_NOT_CREATED');
+    const missingDi = result.warnings.some((warning) => warning.code === 'DI_NOT_CREATED');
     if (!temporary.count && !missingDi && !diIds.diagrams.length && !cut) return { ...result, ...given };
 
     const laidOut = await parseXml(result.xml);
@@ -113,7 +113,7 @@ export class FullLayout {
     diIds.restore(laidOut.definitions);
     return {
       xml: await serialize(laidOut),
-      warnings: result.warnings.filter((w) => !(w.code === 'DI_NOT_CREATED' && fixed.has(w.elementId)) && !(w.code === 'GROUP_MEMBERS_NOT_FOUND' && placed.has(w.elementId))),
+      warnings: result.warnings.filter((warning) => !(warning.code === 'DI_NOT_CREATED' && fixed.has(warning.elementId)) && !(warning.code === 'GROUP_MEMBERS_NOT_FOUND' && placed.has(warning.elementId))),
       expanded: result.expanded,
       ...given,
       ...this.groupNotes(redrawn),

@@ -58,8 +58,8 @@ export class PoolEditor {
   private insertProcess(process: El): void {
     const roots = many(this.doc.definitions, 'rootElements');
     let idx = -1;
-    roots.forEach((r, i) => {
-      if (is(r, 'bpmn:Process') || is(r, 'bpmn:Collaboration')) idx = i;
+    roots.forEach((root, index) => {
+      if (is(root, 'bpmn:Process') || is(root, 'bpmn:Collaboration')) idx = index;
     });
     insertInto(this.doc.definitions, 'rootElements', idx + 1, process);
   }
@@ -85,7 +85,7 @@ export class PoolEditor {
       return { process, mode: 'bind' };
     }
     if (!doc.collaboration()) {
-      const unbound = doc.processes().filter((p) => !doc.participantOf(p));
+      const unbound = doc.processes().filter((process) => !doc.participantOf(process));
       if (unbound.length === 1) return { process: unbound[0]!, mode: 'wrap' };
       if (unbound.length > 1) {
         throw modelError('E_AMBIGUOUS_SCOPE', `The file has ${unbound.length} processes; say which one the participant wraps with --process <processId>`, {

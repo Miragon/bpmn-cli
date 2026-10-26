@@ -41,10 +41,10 @@ export abstract class EngineRules {
   protected readonly incoming: Map<El, El[]>;
   private readonly out: ProfileFinding[];
 
-  /** `p`: the prefix of the engine's namespace in this file, for messages and hints */
+  /** `prefix`: the prefix of the engine's namespace in this file, for messages and hints */
   constructor(
     run: RuleRun,
-    protected readonly p: string,
+    protected readonly prefix: string,
   ) {
     this.kit = run.kit;
     this.doc = run.doc;
@@ -78,14 +78,14 @@ export abstract class EngineRules {
   /** The generic extension elements of a BPMN element, with their namespace. */
   protected extensionValues(el: El | undefined): ExtValue[] {
     const ext = peek<El>(el, 'extensionElements');
-    return list(ext, 'values').map((v, index) => ({ el: v, uri: isGeneric(v) ? this.ns.uriOfElement(v) : undefined, local: localName(v.$type), index }));
+    return list(ext, 'values').map((extension, index) => ({ el: extension, uri: isGeneric(extension) ? this.ns.uriOfElement(extension) : undefined, local: localName(extension.$type), index }));
   }
 
   /** The attributes without namespace prefix of every BPMN element (refused by the schema). */
   protected unprefixedAttributes(): UnprefixedAttributes[] {
     const found: UnprefixedAttributes[] = [];
     for (const el of this.kit.walk(this.doc.definitions, { bpmnOnly: true })) {
-      const keys = Object.keys(el.$attrs ?? {}).filter((k) => !k.includes(':') && k !== 'xmlns');
+      const keys = Object.keys(el.$attrs ?? {}).filter((key) => !key.includes(':') && key !== 'xmlns');
       if (!keys.length) continue;
       // a nested element is reported on and addressed through its flow node / flow
       const parent = el.$parent as El | undefined;

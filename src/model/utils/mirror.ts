@@ -28,8 +28,8 @@ const listOf = (node: El, direction: Direction): El[] => (node.get<El[] | undefi
 export function completeMirrorLists(definitions: El): number {
   let added = 0;
   const has = (node: El, direction: Direction, flow: El): boolean => {
-    const v = (node as unknown as Record<string, unknown>)[direction];
-    return Array.isArray(v) && v.includes(flow);
+    const flows = (node as unknown as Record<string, unknown>)[direction];
+    return Array.isArray(flows) && flows.includes(flow);
   };
   for (const flow of walk(definitions)) {
     if (!is(flow, 'bpmn:SequenceFlow')) continue;
@@ -96,23 +96,23 @@ export function unkeptEntries(definitions: El, snapshot: MirrorSnapshot): Mirror
 /** The entries are put back afterwards. */
 export async function serializeWithout(model: Model, entries: MirrorEntry[]): Promise<string> {
   const removed: Array<{ list: El[]; index: number; flow: El }> = [];
-  for (const e of entries) {
-    const list = listOf(e.node, e.direction);
-    const index = list.indexOf(e.flow);
+  for (const entry of entries) {
+    const list = listOf(entry.node, entry.direction);
+    const index = list.indexOf(entry.flow);
     if (index < 0) continue;
     list.splice(index, 1);
-    removed.push({ list, index, flow: e.flow });
+    removed.push({ list, index, flow: entry.flow });
   }
   try {
     return await serialize(model);
   } finally {
-    for (const r of removed.reverse()) r.list.splice(r.index, 0, r.flow);
+    for (const removal of removed.reverse()) removal.list.splice(removal.index, 0, removal.flow);
   }
 }
 
 /** Matches by id: the final XML may come from another model instance (a redraw, the format ops). */
 export async function withoutEntries(xml: string, entries: MirrorEntry[]): Promise<string> {
-  const keys = new Set(entries.map((e) => `${e.node.get<string>('id')}\u0000${e.direction}\u0000${e.flow.get<string>('id')}`));
+  const keys = new Set(entries.map((entry) => `${entry.node.get<string>('id')}\u0000${entry.direction}\u0000${entry.flow.get<string>('id')}`));
   const model = await parseXml(xml);
   let removed = 0;
   for (const [id, node] of indexById(model.definitions, { semanticOnly: true })) {
@@ -120,9 +120,9 @@ export async function withoutEntries(xml: string, entries: MirrorEntry[]): Promi
     for (const direction of DIRECTIONS) {
       const list = node.get<El[] | undefined>(direction);
       if (!list?.length) continue;
-      for (let i = list.length - 1; i >= 0; i--) {
-        if (!keys.has(`${id}\u0000${direction}\u0000${list[i]!.get<string>('id')}`)) continue;
-        list.splice(i, 1);
+      for (let index = list.length - 1; index >= 0; index--) {
+        if (!keys.has(`${id}\u0000${direction}\u0000${list[index]!.get<string>('id')}`)) continue;
+        list.splice(index, 1);
         removed++;
       }
     }

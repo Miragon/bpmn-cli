@@ -31,7 +31,7 @@ export interface PlacementHooks {
   /** resolves the plane an element belongs on (creating it when needed) */
   planeFor(id: string): Plane | undefined;
   /** called after a shape was placed (blocks add their content here) */
-  afterPlace?(plane: Plane, s: DShape): void;
+  afterPlace?(plane: Plane, shape: DShape): void;
   /**
    * called after placeFlowNodes placed a node when more nodes follow: its flows to drawn nodes
    * are routed right away, so the next placement sees them like the next single command would
@@ -107,7 +107,7 @@ export class NodePlacer {
     readonly notes: string[],
     private readonly hooks: PlacementHooks,
   ) {
-    this.spacing = new Map(planes.map((p) => [p, PlaneQuery.spacingOf(p)]));
+    this.spacing = new Map(planes.map((plane) => [plane, PlaneQuery.spacingOf(plane)]));
     const obstacles = new PlacementObstacles(this);
     this.rows = new RowChooser(this, obstacles);
     this.boundaries = new BoundaryPlacer(this, obstacles, this.rows);
@@ -132,13 +132,13 @@ export class NodePlacer {
   }
 
   restore(st: PlacerState): void {
-    const refill = <T>(into: Set<T>, from: Set<T>): void => {
+    const refill = <TElement>(into: Set<TElement>, from: Set<TElement>): void => {
       into.clear();
-      for (const x of from) into.add(x);
+      for (const element of from) into.add(element);
     };
-    const remap = <K, V>(into: Map<K, V>, from: Map<K, V>): void => {
+    const remap = <TKey, TValue>(into: Map<TKey, TValue>, from: Map<TKey, TValue>): void => {
       into.clear();
-      for (const [k, v] of from) into.set(k, v);
+      for (const [key, entry] of from) into.set(key, entry);
     };
     refill(this.placed, st.placed);
     refill(this.moved, st.moved);
@@ -154,18 +154,18 @@ export class NodePlacer {
   }
 
   drawing(plane: Plane): Drawing {
-    let d = this.drawings.get(plane);
-    if (!d) this.drawings.set(plane, (d = new Drawing(plane)));
-    return d;
+    let drawing = this.drawings.get(plane);
+    if (!drawing) this.drawings.set(plane, (drawing = new Drawing(plane)));
+    return drawing;
   }
 
   spacingFor(plane: Plane): Spacing {
-    let s = this.spacing.get(plane);
-    if (!s) {
-      s = PlaneQuery.spacingOf(plane);
-      this.spacing.set(plane, s);
+    let spacing = this.spacing.get(plane);
+    if (!spacing) {
+      spacing = PlaneQuery.spacingOf(plane);
+      this.spacing.set(plane, spacing);
     }
-    return s;
+    return spacing;
   }
 
   private defaultSize(el: El): { width: number; height: number } {
@@ -189,15 +189,15 @@ export class NodePlacer {
     if (kind === 'subProcess' && this.expandedByDefault(id)) return { width: 350, height: 200 };
     if (kind === 'annotation') return this.defaultSize(el);
     // events and boundary events share a size, so do tasks and collapsed sub-processes
-    const family = (k: ShapeKind): string => (k === 'boundary' ? 'event' : k === 'subProcess' ? 'task' : k);
-    const sameKind = (s: DShape): boolean => !s.container && family(s.kind) === family(kind) && (kind !== 'data' || s.el.$type === el.$type);
+    const family = (shapeKind: ShapeKind): string => (shapeKind === 'boundary' ? 'event' : shapeKind === 'subProcess' ? 'task' : shapeKind);
+    const sameKind = (shape: DShape): boolean => !shape.container && family(shape.kind) === family(kind) && (kind !== 'data' || shape.el.$type === el.$type);
     const peers = [...plane.shapes.values()].filter(sameKind);
-    const w = median(peers.map((s) => s.bounds.width));
-    const h = median(peers.map((s) => s.bounds.height));
-    const d = this.defaultSize(el);
-    if (w === undefined || h === undefined) return d;
+    const medianWidth = median(peers.map((shape) => shape.bounds.width));
+    const medianHeight = median(peers.map((shape) => shape.bounds.height));
+    const fallback = this.defaultSize(el);
+    if (medianWidth === undefined || medianHeight === undefined) return fallback;
     // stay within a sensible range of the default (hand drawings may contain one huge task)
-    return { width: Math.round(clamp(w, d.width * 0.6, d.width * 1.6)), height: Math.round(clamp(h, d.height * 0.6, d.height * 1.6)) };
+    return { width: Math.round(clamp(medianWidth, fallback.width * 0.6, fallback.width * 1.6)), height: Math.round(clamp(medianHeight, fallback.height * 0.6, fallback.height * 1.6)) };
   }
 
   /** New sub-processes are expanded unless a collapse was requested. */
@@ -211,131 +211,131 @@ export class NodePlacer {
     const el = this.sem.byId.get(id)!;
     const kind = DiagramReader.shapeKind(el);
     const expanded = kind === 'subProcess' ? (reuse ? reuse.shape.expanded === true : this.expandedByDefault(id) || this.blockSize.has(id)) : undefined;
-    const s: DShape = { id, el, bounds, kind, container: kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true) };
-    if (reuse?.shape.di) s.di = reuse.shape.di;
+    const shape: DShape = { id, el, bounds, kind, container: kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true) };
+    if (reuse?.shape.di) shape.di = reuse.shape.di;
     // a BPMNShape without valid bounds gets its bounds now (one DI per element, its colours kept)
     else if (!reuse) {
-      const di = this.planes.map((p) => p.unbounded?.get(id)).find((x) => !!x);
-      if (di) s.di = di;
+      const di = this.planes.map((candidate) => candidate.unbounded?.get(id)).find((unbounded) => !!unbounded);
+      if (di) shape.di = di;
     }
-    if (expanded !== undefined) s.expanded = expanded;
+    if (expanded !== undefined) shape.expanded = expanded;
     if (kind === 'boundary') {
       const host = idOf(raw(el, 'attachedToRef'));
-      if (host) s.hostId = host;
+      if (host) shape.hostId = host;
     }
     const lane = kind === 'lane' ? this.sem.laneParent.get(id) : this.sem.laneOf.get(id);
-    if (lane) s.laneId = lane;
+    if (lane) shape.laneId = lane;
     const pool = this.sem.poolOf(id);
-    if (pool) s.poolId = pool;
+    if (pool) shape.poolId = pool;
     const scope = this.sem.scopeOf.get(id);
     const sid = idOf(scope);
-    if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) s.parentId = sid;
+    if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) shape.parentId = sid;
     if (reuse?.shape.label) {
       const old = reuse.shape.bounds;
-      s.label = { ...reuse.shape.label, x: reuse.shape.label.x + bounds.x - old.x, y: reuse.shape.label.y + bounds.y - old.y };
+      shape.label = { ...reuse.shape.label, x: reuse.shape.label.x + bounds.x - old.x, y: reuse.shape.label.y + bounds.y - old.y };
     }
-    return s;
+    return shape;
   }
 
   /** Adds a placed shape to the plane with its reused boundary events, fitted into its frame. */
-  commit(plane: Plane, s: DShape): void {
+  commit(plane: Plane, shape: DShape): void {
     // never above / left of the frame's interior (fitInFrame only grows a frame right and down)
-    const frame = s.kind === 'boundary' ? undefined : Frames.of(plane, s);
+    const frame = shape.kind === 'boundary' ? undefined : Frames.of(plane, shape);
     if (frame) {
       const inner = Frames.interior(frame, 15);
-      const dx = Math.max(0, Math.round(inner.x - s.bounds.x));
-      const dy = Math.max(0, Math.round(inner.y - s.bounds.y));
+      const dx = Math.max(0, Math.round(inner.x - shape.bounds.x));
+      const dy = Math.max(0, Math.round(inner.y - shape.bounds.y));
       if (dx || dy) {
-        s.bounds.x += dx;
-        s.bounds.y += dy;
-        if (s.label) {
-          s.label.x += dx;
-          s.label.y += dy;
+        shape.bounds.x += dx;
+        shape.bounds.y += dy;
+        if (shape.label) {
+          shape.label.x += dx;
+          shape.label.y += dy;
         }
       }
     }
-    plane.shapes.set(s.id, s);
-    this.placed.add(s.id);
-    const reuse = this.reuse.get(s.id);
+    plane.shapes.set(shape.id, shape);
+    this.placed.add(shape.id);
+    const reuse = this.reuse.get(shape.id);
     if (reuse) {
       const old = reuse.shape.bounds;
-      const dx = s.bounds.x - old.x;
-      const dy = s.bounds.y - old.y;
-      const translate = (b: DShape): void => {
-        b.bounds.x += dx;
-        b.bounds.y += dy;
-        if (b.label) {
-          b.label.x += dx;
-          b.label.y += dy;
+      const dx = shape.bounds.x - old.x;
+      const dy = shape.bounds.y - old.y;
+      const translate = (moving: DShape): void => {
+        moving.bounds.x += dx;
+        moving.bounds.y += dy;
+        if (moving.label) {
+          moving.label.x += dx;
+          moving.label.y += dy;
         }
-        plane.shapes.set(b.id, b);
-        this.moved.add(b.id);
+        plane.shapes.set(moving.id, moving);
+        this.moved.add(moving.id);
       };
       reuse.boundaries.forEach(translate);
-      for (const c of reuse.content?.shapes ?? []) translate(c);
-      for (const e of reuse.content?.edges ?? []) {
-        for (const p of e.points) {
-          p.x += dx;
-          p.y += dy;
+      for (const child of reuse.content?.shapes ?? []) translate(child);
+      for (const edge of reuse.content?.edges ?? []) {
+        for (const point of edge.points) {
+          point.x += dx;
+          point.y += dy;
         }
-        if (e.label) {
-          e.label.x += dx;
-          e.label.y += dy;
+        if (edge.label) {
+          edge.label.x += dx;
+          edge.label.y += dy;
         }
         if (reuse.from !== plane) {
-          reuse.from.edges.delete(e.id);
-          plane.edges.set(e.id, e);
+          reuse.from.edges.delete(edge.id);
+          plane.edges.set(edge.id, edge);
         }
       }
-      this.reuse.delete(s.id);
+      this.reuse.delete(shape.id);
     }
-    this.hooks.afterPlace?.(plane, s);
-    const r = this.drawing(plane).fitInFrame(s.id, 15);
-    r.moved.forEach((x) => this.moved.add(x));
+    this.hooks.afterPlace?.(plane, shape);
+    const fitted = this.drawing(plane).fitInFrame(shape.id, 15);
+    fitted.moved.forEach((movedId) => this.moved.add(movedId));
     // the label a new gateway gets above it: room below the title of its sub-process
-    const name = raw<string>(s.el, 'name')?.trim();
-    if (!reuse && name && frame?.kind === 'subProcess' && hasExternalLabel(s) && s.kind !== 'boundary' && defaultLabelSide(s.kind) === 'above') {
+    const name = raw<string>(shape.el, 'name')?.trim();
+    if (!reuse && name && frame?.kind === 'subProcess' && hasExternalLabel(shape) && shape.kind !== 'boundary' && defaultLabelSide(shape.kind) === 'above') {
       const { width, height } = labelSize(name);
-      const room = this.drawing(plane).roomBelowTitle(frame, labelAt(s, { width, height }, 'above'), s.id);
+      const room = this.drawing(plane).roomBelowTitle(frame, labelAt(shape, { width, height }, 'above'), shape.id);
       if (room) this.recordSpace(room.res);
     }
-    if (!reuse && s.kind !== 'boundary') this.boundaries.reattachBoundaries(plane, s);
+    if (!reuse && shape.kind !== 'boundary') this.boundaries.reattachBoundaries(plane, shape);
   }
 
-  recordSpace(r: { moved: Set<string> }): void {
-    r.moved.forEach((x) => this.moved.add(x));
+  recordSpace(result: { moved: Set<string> }): void {
+    result.moved.forEach((movedId) => this.moved.add(movedId));
   }
 
   /** Moves an existing node into its (new) lane: same x, a free row of the lane band. */
   changeLane(plane: Plane, id: string): boolean {
-    const s = plane.shapes.get(id);
-    const lane = s?.laneId ? plane.shapes.get(s.laneId) : undefined;
-    if (!s || !lane) return false;
+    const shape = plane.shapes.get(id);
+    const lane = shape?.laneId ? plane.shapes.get(shape.laneId) : undefined;
+    if (!shape || !lane) return false;
     const inner = Frames.interior(lane, 2);
-    const inLane = (): boolean => s.bounds.y >= inner.y && bottom(s.bounds) <= bottom(inner) && s.bounds.x >= lane.bounds.x && right(s.bounds) <= right(lane.bounds);
+    const inLane = (): boolean => shape.bounds.y >= inner.y && bottom(shape.bounds) <= bottom(inner) && shape.bounds.x >= lane.bounds.x && right(shape.bounds) <= right(lane.bounds);
     if (inLane()) return false;
-    const exclude = new Set([id, ...PlaneQuery.boundariesOf(plane, id).map((b) => b.id)]);
+    const exclude = new Set([id, ...PlaneQuery.boundariesOf(plane, id).map((boundary) => boundary.id)]);
     const neighbours = [...this.sem.predecessors(id), ...this.sem.successors(id)]
-      .map((n) => plane.shapes.get(n))
-      .filter((n): n is DShape => !!n && n.laneId === lane.id)
-      .map((n) => Math.round(cy(n.bounds)));
-    const c = this.rows.rowInLane(plane, lane, s.bounds.x, s.bounds.width, s.bounds.height, neighbours, exclude);
-    const dy = Math.round(c - s.bounds.height / 2 - s.bounds.y);
-    for (const m of this.drawing(plane).shift(id, 0, dy)) this.moved.add(m);
+      .map((neighbour) => plane.shapes.get(neighbour))
+      .filter((neighbour): neighbour is DShape => !!neighbour && neighbour.laneId === lane.id)
+      .map((neighbour) => Math.round(cy(neighbour.bounds)));
+    const centre = this.rows.rowInLane(plane, lane, shape.bounds.x, shape.bounds.width, shape.bounds.height, neighbours, exclude);
+    const dy = Math.round(centre - shape.bounds.height / 2 - shape.bounds.y);
+    for (const movedId of this.drawing(plane).shift(id, 0, dy)) this.moved.add(movedId);
     // a row of the lane's own (as close to the border as its shapes sit) needs no growth
     if (!inLane()) this.recordSpace(this.drawing(plane).fitInFrame(id, 15));
     return true;
   }
 
   probeOf(plane: Plane, id: string): Probe {
-    const s = this.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
-    return { id, kind: s.kind, ...(s.parentId ? { parentId: s.parentId } : {}), ...(s.laneId ? { laneId: s.laneId } : {}), ...(s.poolId ? { poolId: s.poolId } : {}) };
+    const shape = this.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
+    return { id, kind: shape.kind, ...(shape.parentId ? { parentId: shape.parentId } : {}), ...(shape.laneId ? { laneId: shape.laneId } : {}), ...(shape.poolId ? { poolId: shape.poolId } : {}) };
   }
 
-  placeAt(plane: Plane, id: string, x: number, centreY: number, size: { width: number; height: number }): DShape {
-    const s = this.newShape(plane, id, { x: Math.round(x), y: Math.round(centreY - size.height / 2), ...size });
-    this.commit(plane, s);
-    return s;
+  placeAt(plane: Plane, id: string, left: number, centreY: number, size: { width: number; height: number }): DShape {
+    const shape = this.newShape(plane, id, { x: Math.round(left), y: Math.round(centreY - size.height / 2), ...size });
+    this.commit(plane, shape);
+    return shape;
   }
 
   /** Whether `to` follows `from` along sequence flows (at most 500 nodes visited). */
@@ -343,11 +343,11 @@ export class NodePlacer {
     const seen = new Set([from]);
     const queue = [from];
     while (queue.length && seen.size <= 500) {
-      for (const n of this.sem.successors(queue.shift()!)) {
-        if (n === to) return true;
-        if (seen.has(n)) continue;
-        seen.add(n);
-        queue.push(n);
+      for (const successor of this.sem.successors(queue.shift()!)) {
+        if (successor === to) return true;
+        if (seen.has(successor)) continue;
+        seen.add(successor);
+        queue.push(successor);
       }
     }
     return false;
@@ -362,16 +362,16 @@ export class NodePlacer {
     for (const jid of this.sem.successors(id)) {
       const join = plane.shapes.get(jid);
       if (!join || !this.placed.has(jid) || pending.has(jid) || !is(join.el, 'bpmn:Gateway')) continue;
-      const preds = this.sem.predecessors(jid).map((p) => plane.shapes.get(p));
+      const preds = this.sem.predecessors(jid).map((predId) => plane.shapes.get(predId));
       const outs = this.sem.successors(jid);
-      const S = outs.length === 1 ? plane.shapes.get(outs[0]!) : undefined;
-      if (preds.length < 2 || !S || !preds.every((p): p is DShape => !!p)) continue;
-      const sameFrame = (s: DShape): boolean => s.poolId === join.poolId && s.parentId === join.parentId;
-      if (!preds.every(sameFrame) || !sameFrame(S) || S.bounds.x <= Math.max(...preds.map((p) => right(p.bounds)))) continue;
-      if (!preds.some((p) => cx(join.bounds) < p.bounds.x && !this.leadsTo(jid, p.id))) continue;
+      const successor = outs.length === 1 ? plane.shapes.get(outs[0]!) : undefined;
+      if (preds.length < 2 || !successor || !preds.every((pred): pred is DShape => !!pred)) continue;
+      const sameFrame = (shape: DShape): boolean => shape.poolId === join.poolId && shape.parentId === join.parentId;
+      if (!preds.every(sameFrame) || !sameFrame(successor) || successor.bounds.x <= Math.max(...preds.map((pred) => right(pred.bounds)))) continue;
+      if (!preds.some((pred) => cx(join.bounds) < pred.bounds.x && !this.leadsTo(jid, pred.id))) continue;
       plane.shapes.delete(jid);
-      (this.joins ??= new Map()).set(jid, S.id);
-      if (LayoutDebug.on()) LayoutDebug.log(`[join] ${jid}: a flow from ${preds.map((p) => p.id).join(', ')} would enter it backwards: placed again before ${S.id}`);
+      (this.joins ??= new Map()).set(jid, successor.id);
+      if (LayoutDebug.on()) LayoutDebug.log(`[join] ${jid}: a flow from ${preds.map((pred) => pred.id).join(', ')} would enter it backwards: placed again before ${successor.id}`);
       this.neighbours.placeAfter(plane, jid, preds, pending);
     }
   }
@@ -392,16 +392,16 @@ export class NodePlacer {
     const exception = new Set<string>();
     const walk = ids.filter((id) => is(this.sem.byId.get(id), 'bpmn:BoundaryEvent'));
     while (walk.length) {
-      for (const n of this.sem.successors(walk.shift()!)) {
-        if (!pending.has(n) || exception.has(n)) continue;
-        exception.add(n);
-        walk.push(n);
+      for (const successor of this.sem.successors(walk.shift()!)) {
+        if (!pending.has(successor) || exception.has(successor)) continue;
+        exception.add(successor);
+        walk.push(successor);
       }
     }
     let last: { plane: Plane; id: string } | undefined;
     while (pending.size) {
       // a relocated node brings its boundary events and content along (commit): never placed twice
-      for (const id of pending) if (this.planes.some((p) => p.shapes.has(id))) pending.delete(id);
+      for (const id of pending) if (this.planes.some((candidate) => candidate.shapes.has(id))) pending.delete(id);
       if (!pending.size) break;
       // more nodes follow: the one placed last gets its flows now, so the next placement sees them
       if (last) this.hooks.afterNode?.(last.plane, last.id);
@@ -420,10 +420,10 @@ export class NodePlacer {
             continue;
           } else if (mode === 'after' || mode === 'exception') {
             if (is(el, 'bpmn:BoundaryEvent') || exception.has(id) !== (mode === 'exception')) continue;
-            const preds = this.sem.predecessors(id).map((p) => shapeOn(plane, p)).filter((p): p is DShape => !!p);
+            const preds = this.sem.predecessors(id).map((predId) => shapeOn(plane, predId)).filter((pred): pred is DShape => !!pred);
             if (preds.length) chosen = { id, plane, mode, preds };
           } else if (mode === 'before') {
-            const succ = this.sem.successors(id).map((p) => shapeOn(plane, p)).find((p): p is DShape => !!p);
+            const succ = this.sem.successors(id).map((succId) => shapeOn(plane, succId)).find((shape): shape is DShape => !!shape);
             if (succ) chosen = { id, plane, mode, succ };
           } else chosen = { id, plane, mode };
           if (chosen) break;

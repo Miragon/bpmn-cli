@@ -42,7 +42,7 @@ export class ElementRemover {
           if (gone.has(idOf(el))) continue;
           new Bridge(this.doc, cs).single(el, false);
           this.cascade(el, cs);
-          for (const r of cs.removed) gone.add(r.id);
+          for (const removal of cs.removed) gone.add(removal.id);
         }
       }
       this.doc.invalidate();
@@ -69,7 +69,7 @@ export class ElementRemover {
         new Bridge(this.doc, cs).forRemoval(el, bridge, !!op.bridgeAll, removing);
       }
       this.cascade(el, cs);
-      for (const r of cs.removed) gone.add(r.id);
+      for (const removal of cs.removed) gone.add(removal.id);
     }
     this.doc.invalidate();
     return cs;
@@ -82,50 +82,50 @@ export class ElementRemover {
   branchOf(root: El): { nodes: El[]; stops: El[] } {
     const incoming = this.doc.incoming(root);
     if (incoming.length > 1) {
-      throw modelError('E_AMBIGUOUS_BRANCH', `${idOf(root)} is reached by ${incoming.length} paths (${incoming.map((f) => idOf(f.get<El>('sourceRef'))).join(', ')}); its downstream is not the branch of one path`, {
+      throw modelError('E_AMBIGUOUS_BRANCH', `${idOf(root)} is reached by ${incoming.length} paths (${incoming.map((flow) => idOf(flow.get<El>('sourceRef'))).join(', ')}); its downstream is not the branch of one path`, {
         element: idOf(root),
-        candidates: incoming.map((f) => idOf(f)),
+        candidates: incoming.map((flow) => idOf(flow)),
         hint: `Remove the branch from a node only one path reaches (the first node after the split), or remove ${idOf(root)} alone (\`bpmn remove <file> ${idOf(root)} --bridge-all\` reconnects the paths to its successor).`,
       });
     }
     const inBranch = new Set<El>([root]);
-    const next = (n: El): El[] => [
-      ...this.doc.outgoing(n).map((f) => f.get<El>('targetRef')),
-      ...(is(n, 'bpmn:Activity') ? this.doc.boundaryEventsOf(n) : []),
-      ...this.compensationHandlers(n),
+    const next = (node: El): El[] => [
+      ...this.doc.outgoing(node).map((flow) => flow.get<El>('targetRef')),
+      ...(is(node, 'bpmn:Activity') ? this.doc.boundaryEventsOf(node) : []),
+      ...this.compensationHandlers(node),
     ];
-    const before = (n: El): El[] => {
-      if (is(n, 'bpmn:BoundaryEvent')) return [n.get<El>('attachedToRef')];
-      const preds = this.doc.incoming(n).map((f) => f.get<El>('sourceRef'));
-      if (n.get<boolean | undefined>('isForCompensation')) preds.push(...this.compensationSources(n));
+    const before = (node: El): El[] => {
+      if (is(node, 'bpmn:BoundaryEvent')) return [node.get<El>('attachedToRef')];
+      const preds = this.doc.incoming(node).map((flow) => flow.get<El>('sourceRef'));
+      if (node.get<boolean | undefined>('isForCompensation')) preds.push(...this.compensationSources(node));
       return preds;
     };
     const stops = new Set<El>();
     for (let grew = true; grew; ) {
       grew = false;
-      for (const n of [...inBranch]) {
-        for (const s of next(n)) {
-          if (inBranch.has(s)) continue;
-          if (before(s).every((p) => inBranch.has(p))) {
-            inBranch.add(s);
-            stops.delete(s);
+      for (const member of [...inBranch]) {
+        for (const successor of next(member)) {
+          if (inBranch.has(successor)) continue;
+          if (before(successor).every((predecessor) => inBranch.has(predecessor))) {
+            inBranch.add(successor);
+            stops.delete(successor);
             grew = true;
-          } else stops.add(s);
+          } else stops.add(successor);
         }
       }
     }
-    const order = new Map([...this.doc.byId().values()].map((el, i) => [el, i]));
-    const sorted = [...inBranch].sort((a, b) => (a === root ? -1 : b === root ? 1 : (order.get(a) ?? 0) - (order.get(b) ?? 0)));
-    return { nodes: sorted, stops: [...stops].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)) };
+    const order = new Map([...this.doc.byId().values()].map((el, position) => [el, position]));
+    const sorted = [...inBranch].sort((left, right) => (left === root ? -1 : right === root ? 1 : (order.get(left) ?? 0) - (order.get(right) ?? 0)));
+    return { nodes: sorted, stops: [...stops].sort((left, right) => (order.get(left) ?? 0) - (order.get(right) ?? 0)) };
   }
 
-  private compensationHandlers(n: El): El[] {
-    if (!is(n, 'bpmn:BoundaryEvent')) return [];
-    return [...this.doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && a.get<El | undefined>('sourceRef') === n).map((a) => a.get<El>('targetRef')).filter((t) => !!t && !!t.get<boolean | undefined>('isForCompensation'));
+  private compensationHandlers(node: El): El[] {
+    if (!is(node, 'bpmn:BoundaryEvent')) return [];
+    return [...this.doc.byId().values()].filter((association) => is(association, 'bpmn:Association') && association.get<El | undefined>('sourceRef') === node).map((association) => association.get<El>('targetRef')).filter((target) => !!target && !!target.get<boolean | undefined>('isForCompensation'));
   }
 
   private compensationSources(handler: El): El[] {
-    return [...this.doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && a.get<El | undefined>('targetRef') === handler).map((a) => a.get<El>('sourceRef')).filter((s): s is El => !!s && is(s, 'bpmn:BoundaryEvent'));
+    return [...this.doc.byId().values()].filter((association) => is(association, 'bpmn:Association') && association.get<El | undefined>('targetRef') === handler).map((association) => association.get<El>('sourceRef')).filter((source): source is El => !!source && is(source, 'bpmn:BoundaryEvent'));
   }
 
   private isAttached(el: El): boolean {
@@ -171,12 +171,12 @@ export class ElementRemover {
     const subtree = [...walk(el, { bpmnOnly: true })];
     const removed = new Set(subtree);
     const parent = detachFromParent(el);
-    for (const e of subtree) {
-      const id = e.get<string | undefined>('id');
+    for (const element of subtree) {
+      const id = element.get<string | undefined>('id');
       if (id) this.doc.ids.release(id);
     }
     if (ElementRemover.reportable(el) || el.get<string | undefined>('id')) cs.remove(ElementRemover.removedEntry(el));
-    for (const e of subtree) if (e !== el && ElementRemover.reportable(e)) cs.remove(ElementRemover.removedEntry(e));
+    for (const element of subtree) if (element !== el && ElementRemover.reportable(element)) cs.remove(ElementRemover.removedEntry(element));
     this.doc.invalidate();
     this.afterDetach(el, parent, cs);
     this.cleanupReferences(removed, cs);
@@ -216,7 +216,7 @@ export class ElementRemover {
     }
     if (is(el, 'bpmn:Group')) {
       const value = el.get<El | undefined>('categoryValueRef');
-      if (!value || !this.isAttached(value) || findReferences(this.doc.definitions, value).some((r) => is(r.holder, 'bpmn:Group'))) return;
+      if (!value || !this.isAttached(value) || findReferences(this.doc.definitions, value).some((reference) => is(reference.holder, 'bpmn:Group'))) return;
       const category = value.$parent as El;
       this.cascade(value, cs);
       if (is(category, 'bpmn:Category') && !many(category, 'categoryValue').length) this.cascade(category, cs);
@@ -224,14 +224,14 @@ export class ElementRemover {
     }
     if (is(el, 'bpmn:Process')) {
       const pid = idOf(el);
-      for (const e of walk(this.doc.definitions)) {
-        if (is(e, 'bpmn:CallActivity') && e.get<string | undefined>('calledElement') === pid) {
+      for (const element of walk(this.doc.definitions)) {
+        if (is(element, 'bpmn:CallActivity') && element.get<string | undefined>('calledElement') === pid) {
           cs.warn({
             code: 'W_DANGLING_CALLED_ELEMENT',
-            message: `${idOf(e)} still calls the removed process ${pid}`,
-            element: idOf(e),
+            message: `${idOf(element)} still calls the removed process ${pid}`,
+            element: idOf(element),
             related: [pid],
-            hint: `Set another process with \`bpmn set <file> ${idOf(e)} calledElement=<processId>\` or remove the call activity.`,
+            hint: `Set another process with \`bpmn set <file> ${idOf(element)} calledElement=<processId>\` or remove the call activity.`,
           });
         }
       }
@@ -246,7 +246,7 @@ export class ElementRemover {
     cs.remove(ChangeSet.entryOf(participant));
     this.doc.invalidate();
     this.cleanupReferences(new Set([participant]), cs);
-    if (process && this.isAttached(process) && !this.doc.participants().some((p) => p.get<El | undefined>('processRef') === process)) {
+    if (process && this.isAttached(process) && !this.doc.participants().some((otherParticipant) => otherParticipant.get<El | undefined>('processRef') === process)) {
       this.cascade(process, cs);
     }
     if (collaboration && is(collaboration, 'bpmn:Collaboration') && this.isAttached(collaboration) && !many(collaboration, 'participants').length) {
@@ -263,8 +263,8 @@ export class ElementRemover {
         const gone = is(holder, 'bpmndi:BPMNPlane') ? (holder.$parent as El) : holder;
         detachFromParent(gone);
         // released so a later `set id=` of the batch can take the derived DI id along
-        for (const e of walk(gone, { bpmnOnly: true })) {
-          const id = idOf(e);
+        for (const element of walk(gone, { bpmnOnly: true })) {
+          const id = idOf(element);
           if (id) this.doc.ids.release(id);
         }
         continue;

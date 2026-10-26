@@ -54,15 +54,15 @@ export interface SlotRef {
 }
 
 export function parseSlotRef(text: string): SlotRef | undefined {
-  const m = /^(\w+)(?:\[\s*([^\]]*?)\s*\])?$/.exec(text.trim());
-  if (!m || !(NESTED_SLOTS as readonly string[]).includes(m[1]!)) return undefined;
-  const ref: SlotRef = { slot: m[1] as NestedSlot, text: text.trim() };
-  const sel = m[2];
+  const match = /^(\w+)(?:\[\s*([^\]]*?)\s*\])?$/.exec(text.trim());
+  if (!match || !(NESTED_SLOTS as readonly string[]).includes(match[1]!)) return undefined;
+  const ref: SlotRef = { slot: match[1] as NestedSlot, text: text.trim() };
+  const sel = match[2];
   if (sel === undefined) return ref;
   if (/^\d+$/.test(sel)) ref.index = Number(sel);
   else {
-    const t = normalizeTrigger(sel);
-    if (t && t !== 'none') ref.trigger = t;
+    const trigger = normalizeTrigger(sel);
+    if (trigger && trigger !== 'none') ref.trigger = trigger;
     else ref.invalid = sel;
   }
   return ref;
@@ -82,7 +82,7 @@ export function slotsOf(el: El): NestedSlot[] {
   const out: NestedSlot[] = [];
   if (is(el, 'bpmn:Event')) out.push('definition');
   if (is(el, 'bpmn:Activity')) out.push('loop');
-  if (is(el, 'bpmn:SequenceFlow') || definitionsOf(el).some((d) => is(d, 'bpmn:ConditionalEventDefinition'))) out.push('condition');
+  if (is(el, 'bpmn:SequenceFlow') || definitionsOf(el).some((definition) => is(definition, 'bpmn:ConditionalEventDefinition'))) out.push('condition');
   return out;
 }
 
@@ -98,7 +98,7 @@ export function nestedElement(el: El, slot: NestedSlot): El | undefined {
       return is(el, 'bpmn:Activity') ? el.get<El | undefined>('loopCharacteristics') : undefined;
     case 'condition': {
       if (is(el, 'bpmn:SequenceFlow')) return el.get<El | undefined>('conditionExpression');
-      const conditional = definitionsOf(el).filter((d) => is(d, 'bpmn:ConditionalEventDefinition'));
+      const conditional = definitionsOf(el).filter((definition) => is(definition, 'bpmn:ConditionalEventDefinition'));
       return conditional.length === 1 ? conditional[0]!.get<El | undefined>('condition') : undefined;
     }
     default:
@@ -111,11 +111,11 @@ export function nestedEntries(el: El): Array<{ slot: NestedSlot; prefix: string;
   for (const slot of slotsOf(el)) {
     if (slot === 'definition') {
       const defs = definitionsOf(el);
-      defs.forEach((d, i) => out.push({ slot, prefix: defs.length > 1 ? `definition[${i}]` : 'definition', el: d }));
+      defs.forEach((definition, index) => out.push({ slot, prefix: defs.length > 1 ? `definition[${index}]` : 'definition', el: definition }));
       continue;
     }
-    const n = nestedElement(el, slot);
-    if (n) out.push({ slot, prefix: slot, el: n });
+    const nested = nestedElement(el, slot);
+    if (nested) out.push({ slot, prefix: slot, el: nested });
   }
   return out;
 }
@@ -137,9 +137,9 @@ export function resolveNested(el: El, ref: SlotRef, what: string, example?: (pre
   }
   if (ref.slot !== 'definition') return nestedElement(el, ref.slot);
   const defs = definitionsOf(el);
-  const listing = defs.map((d, i) => `definition[${i}] = ${definitionText(d)}`).join(', ');
+  const listing = defs.map((definition, index) => `definition[${index}] = ${definitionText(definition)}`).join(', ');
   if (ref.index !== undefined || ref.trigger) {
-    const hits = ref.index !== undefined ? (defs[ref.index] ? [defs[ref.index]!] : []) : defs.filter((d) => is(d, TRIGGER_TYPES[ref.trigger!]));
+    const hits = ref.index !== undefined ? (defs[ref.index] ? [defs[ref.index]!] : []) : defs.filter((definition) => is(definition, TRIGGER_TYPES[ref.trigger!]));
     if (hits.length === 1) return hits[0];
     if (!hits.length) {
       throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition ${ref.text} (${what})`, {
@@ -155,14 +155,14 @@ export function resolveNested(el: El, ref: SlotRef, what: string, example?: (pre
 
 function ambiguousNested(el: El, defs: El[], what: string, count: string, example?: (prefix: string) => string) {
   const id = idOf(el);
-  const listing = defs.map((d, i) => `definition[${i}] = ${definitionText(d)}`).join(', ');
-  const triggers = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0]).filter((t): t is string => !!t);
-  const unique = triggers.filter((t, i) => triggers.indexOf(t) === i && triggers.lastIndexOf(t) === i);
+  const listing = defs.map((definition, index) => `definition[${index}] = ${definitionText(definition)}`).join(', ');
+  const triggers = defs.map((definition) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, type]) => is(definition, type))?.[0]).filter((trigger): trigger is string => !!trigger);
+  const unique = triggers.filter((trigger, index) => triggers.indexOf(trigger) === index && triggers.lastIndexOf(trigger) === index);
   const rest = what.replace(/^definition(\[[^\]]*\])?\./, '');
   const show = example ?? ((prefix: string) => `bpmn set <file> ${id} '${prefix}.${rest}=<value>'`);
   return modelError('E_AMBIGUOUS_NESTED', `${kindLabel(el)} ${id} has ${count} (${listing}); ${what} does not say which one`, {
     element: id,
-    candidates: defs.map((_, i) => `definition[${i}]`),
+    candidates: defs.map((_definition, index) => `definition[${index}]`),
     hint: `Name one by position (0-based) or by trigger, e.g. \`${show('definition[1]')}\`${unique.length ? ` or \`${show(`definition[${unique[unique.length - 1]}]`)}\`` : ''} (quote the brackets in a shell). The engines act on only one event definition per event; to keep a single one, set the trigger again: \`bpmn set <file> ${id} trigger=<trigger> ...\`.`,
   });
 }

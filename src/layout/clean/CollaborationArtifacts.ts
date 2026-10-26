@@ -37,15 +37,15 @@ export class CollaborationArtifacts {
     const { pools } = this;
     const { absBoxes } = this.writer;
     const artifacts = many(this.root, 'artifacts');
-    const links = artifacts.filter((a) => is(a, 'bpmn:Association'));
-    const notes = artifacts.filter((a) => is(a, 'bpmn:TextAnnotation'));
+    const links = artifacts.filter((artifact) => is(artifact, 'bpmn:Association'));
+    const notes = artifacts.filter((artifact) => is(artifact, 'bpmn:TextAnnotation'));
     const edges = this.drawnEdges();
-    const poolBoxes = pools.map((p) => p.box);
+    const poolBoxes = pools.map((poolLayout) => poolLayout.box);
     const jobs: NoteJob[] = notes.map((note) => {
       const size = annotationSize(note.get<string | undefined>('text'));
       for (const link of links) {
-        const s = link.get<El | undefined>('sourceRef'), t = link.get<El | undefined>('targetRef');
-        const other = s === note ? t : t === note ? s : undefined;
+        const source = link.get<El | undefined>('sourceRef'), target = link.get<El | undefined>('targetRef');
+        const other = source === note ? target : target === note ? source : undefined;
         const anchor = this.endBox(other, edges, poolBoxes);
         if (!other || !anchor) continue;
         // inside the anchor's pool, and in its lane when it has one
@@ -54,55 +54,55 @@ export class CollaborationArtifacts {
       }
       return { ...size };
     });
-    const world = { ...this.drawnWorld(), pools: pools.map((p) => p.box) };
+    const world = { ...this.drawnWorld(), pools: pools.map((poolLayout) => poolLayout.box) };
     const boxes = new NotePlacer(world).place(jobs);
-    return [...notes.map((el, i) => ({ el, box: boxes[i] })), ...artifacts.filter((a) => !is(a, 'bpmn:Association') && !is(a, 'bpmn:TextAnnotation') && !is(a, 'bpmn:Group')).map((el) => ({ el }))];
+    return [...notes.map((el, index) => ({ el, box: boxes[index] })), ...artifacts.filter((artifact) => !is(artifact, 'bpmn:Association') && !is(artifact, 'bpmn:TextAnnotation') && !is(artifact, 'bpmn:Group')).map((el) => ({ el }))];
   }
 
   private links(): Array<{ el: El; points?: Point[] }> {
     const edges = this.drawnEdges();
-    const poolBoxes = this.pools.map((p) => p.box);
+    const poolBoxes = this.pools.map((poolLayout) => poolLayout.box);
     return many(this.root, 'artifacts')
-      .filter((a) => is(a, 'bpmn:Association'))
+      .filter((artifact) => is(artifact, 'bpmn:Association'))
       .map((el) => {
-        const a = this.endBox(el.get<El | undefined>('sourceRef'), edges, poolBoxes);
-        const b = this.endBox(el.get<El | undefined>('targetRef'), edges, poolBoxes);
-        if (!a || !b) return { el };
-        const p = borderPoint(a, center(b));
-        return { el, points: [p, borderPoint(b, p)] };
+        const sourceBox = this.endBox(el.get<El | undefined>('sourceRef'), edges, poolBoxes);
+        const targetBox = this.endBox(el.get<El | undefined>('targetRef'), edges, poolBoxes);
+        if (!sourceBox || !targetBox) return { el };
+        const start = borderPoint(sourceBox, center(targetBox));
+        return { el, points: [start, borderPoint(targetBox, start)] };
       });
   }
 
   private drawnEdges(): Map<string, Point[]> {
     const out = new Map<string, Point[]>();
-    for (const d of this.writer.di) {
-      const el = d.get<El | undefined>('bpmnElement');
-      if (!el || is(d, 'bpmndi:BPMNShape')) continue;
-      out.set(idOf(el), many(d, 'waypoint').map((w) => ({ x: w.get<number>('x'), y: w.get<number>('y') })));
+    for (const diElement of this.writer.di) {
+      const el = diElement.get<El | undefined>('bpmnElement');
+      if (!el || is(diElement, 'bpmndi:BPMNShape')) continue;
+      out.set(idOf(el), many(diElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') })));
     }
     return out;
   }
 
   private edgeAnchor(points: Point[]): Box | undefined {
     let best: [Point, Point] | undefined;
-    for (let i = 0; i + 1 < points.length; i++) {
-      const a = points[i]!, b = points[i + 1]!;
-      if (!best || Math.abs(b.x - a.x) + Math.abs(b.y - a.y) > Math.abs(best[1].x - best[0].x) + Math.abs(best[1].y - best[0].y)) best = [a, b];
+    for (let index = 0; index + 1 < points.length; index++) {
+      const start = points[index]!, end = points[index + 1]!;
+      if (!best || Math.abs(end.x - start.x) + Math.abs(end.y - start.y) > Math.abs(best[1].x - best[0].x) + Math.abs(best[1].y - best[0].y)) best = [start, end];
     }
     return best ? { x: Math.round((best[0].x + best[1].x) / 2), y: Math.round((best[0].y + best[1].y) / 2), width: 0, height: 0 } : undefined;
   }
 
-  private outsidePieces(a: Point, b: Point, boxes: Box[]): Array<[Point, Point]> {
-    const vertical = a.x === b.x;
-    if (!vertical && a.y !== b.y) return [[a, b]];
-    const lo = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x), hi = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
-    const fixed = vertical ? a.x : a.y;
+  private outsidePieces(start: Point, end: Point, boxes: Box[]): Array<[Point, Point]> {
+    const vertical = start.x === end.x;
+    if (!vertical && start.y !== end.y) return [[start, end]];
+    const lo = vertical ? Math.min(start.y, end.y) : Math.min(start.x, end.x), hi = vertical ? Math.max(start.y, end.y) : Math.max(start.x, end.x);
+    const fixed = vertical ? start.x : start.y;
     const cuts = boxes
-      .filter((r) => (vertical ? fixed > r.x && fixed < r.x + r.width : fixed > r.y && fixed < r.y + r.height))
-      .map((r) => (vertical ? [r.y, r.y + r.height] : [r.x, r.x + r.width]) as [number, number])
-      .sort((p, q) => p[0] - q[0]);
+      .filter((obstacle) => (vertical ? fixed > obstacle.x && fixed < obstacle.x + obstacle.width : fixed > obstacle.y && fixed < obstacle.y + obstacle.height))
+      .map((obstacle) => (vertical ? [obstacle.y, obstacle.y + obstacle.height] : [obstacle.x, obstacle.x + obstacle.width]) as [number, number])
+      .sort((firstCut, secondCut) => firstCut[0] - secondCut[0]);
     const out: Array<[Point, Point]> = [];
-    const at = (v: number): Point => (vertical ? { x: fixed, y: v } : { x: v, y: fixed });
+    const at = (position: number): Point => (vertical ? { x: fixed, y: position } : { x: position, y: fixed });
     let cursor = lo;
     for (const [c1, c2] of cuts) {
       if (c1 > cursor) out.push([at(cursor), at(Math.min(c1, hi))]);
@@ -122,14 +122,14 @@ export class CollaborationArtifacts {
     const points = edges.get(id);
     if (!points) return undefined;
     if (is(el, 'bpmn:MessageFlow')) {
-      const pieces = points.slice(1).flatMap((p, i) => this.outsidePieces(points[i]!, p, pools));
+      const pieces = points.slice(1).flatMap((point, index) => this.outsidePieces(points[index]!, point, pools));
       if (pieces.length) return this.edgeAnchor(pieces.reduce((best, piece) => (this.len(piece) > this.len(best) ? piece : best)));
     }
     return this.edgeAnchor(points);
   }
 
-  private len([a, b]: [Point, Point]): number {
-    return Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+  private len([start, end]: [Point, Point]): number {
+    return Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
   }
 
   private laneBoxOf(el: El): Box | undefined {
@@ -153,35 +153,35 @@ export class CollaborationArtifacts {
   }
 
   /** the first box when they do not intersect */
-  private clip(a: Box, b: Box | undefined): Box {
-    if (!b) return a;
-    const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
-    const r = Math.min(a.x + a.width, b.x + b.width), d = Math.min(a.y + a.height, b.y + b.height);
-    return r > x && d > y ? { x, y, width: r - x, height: d - y } : a;
+  private clip(box: Box, laneBox: Box | undefined): Box {
+    if (!laneBox) return box;
+    const left = Math.max(box.x, laneBox.x), top = Math.max(box.y, laneBox.y);
+    const right = Math.min(box.x + box.width, laneBox.x + laneBox.width), bottom = Math.min(box.y + box.height, laneBox.y + laneBox.height);
+    return right > left && bottom > top ? { x: left, y: top, width: right - left, height: bottom - top } : box;
   }
 
-  private poolContent(p: PoolLayout): Box {
-    const left = SIZES.participantHeader + (p.scope?.lanes.length ? laneDepth(p.scope.lanes) : 0) * SIZES.laneHeader;
-    return { x: p.box.x + left, y: p.box.y, width: p.box.width - left, height: p.box.height };
+  private poolContent(pool: PoolLayout): Box {
+    const left = SIZES.participantHeader + (pool.scope?.lanes.length ? laneDepth(pool.scope.lanes) : 0) * SIZES.laneHeader;
+    return { x: pool.box.x + left, y: pool.box.y, width: pool.box.width - left, height: pool.box.height };
   }
 
   private drawnWorld(): { obstacles: Box[]; lines: Segment[] } {
     const { absBoxes } = this.writer;
     const obstacles: Box[] = [];
     const lines: Segment[] = [];
-    const boxOf = (b: El): Box => ({ x: b.get<number>('x'), y: b.get<number>('y'), width: b.get<number>('width'), height: b.get<number>('height') });
-    for (const d of this.writer.di) {
-      const el = d.get<El | undefined>('bpmnElement');
+    const boxOf = (bounds: El): Box => ({ x: bounds.get<number>('x'), y: bounds.get<number>('y'), width: bounds.get<number>('width'), height: bounds.get<number>('height') });
+    for (const diElement of this.writer.di) {
+      const el = diElement.get<El | undefined>('bpmnElement');
       if (!el) continue;
-      const label = d.get<El | undefined>('label')?.get<El | undefined>('bounds');
+      const label = diElement.get<El | undefined>('label')?.get<El | undefined>('bounds');
       if (label) obstacles.push(boxOf(label));
-      if (is(d, 'bpmndi:BPMNShape')) {
+      if (is(diElement, 'bpmndi:BPMNShape')) {
         const box = absBoxes.get(idOf(el));
-        if (box && !isContainerShape(d, el)) obstacles.push(box);
+        if (box && !isContainerShape(diElement, el)) obstacles.push(box);
         continue;
       }
-      const pts = many(d, 'waypoint').map((w) => ({ x: w.get<number>('x'), y: w.get<number>('y') }));
-      for (let i = 0; i + 1 < pts.length; i++) lines.push([pts[i]!, pts[i + 1]!]);
+      const pts = many(diElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
+      for (let index = 0; index + 1 < pts.length; index++) lines.push([pts[index]!, pts[index + 1]!]);
     }
     return { obstacles, lines };
   }

@@ -24,41 +24,41 @@ import { runWalk } from './lib/walk.mjs';
 
 const SPEC = { seed: 1, mode: 'auto', steps: 30, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, render: true, hard: 'error', replay: undefined, saveSteps: false, strict: false };
 
-export async function walkOnce(model, o) {
-  const out = resolve(o.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'walks', `${basename(model, '.bpmn')}-s${o.seed}-${o.mode}`));
+export async function walkOnce(model, options) {
+  const out = resolve(options.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'walks', `${basename(model, '.bpmn')}-s${options.seed}-${options.mode}`));
   mkdirSync(out, { recursive: true });
   const log = join(out, 'log.jsonl');
   writeFileSync(log, '');
   const summary = await runWalk({
-    xml: readFileSync(model, 'utf8'), model: basename(model), seed: o.seed, mode: o.mode, steps: o.steps,
-    exec: await makeExecutor({ exec: o.exec, via: o.via, workDir: join(out, 'work') }), metrics: await loadMetrics(),
-    render: o.render ? await loadRender() : undefined,
-    semantic: o.semantic, format: o.format, detEvery: o.detEvery, hardSeverity: o.hard,
-    replay: o.replay ? JSON.parse(readFileSync(o.replay, 'utf8')) : undefined,
+    xml: readFileSync(model, 'utf8'), model: basename(model), seed: options.seed, mode: options.mode, steps: options.steps,
+    exec: await makeExecutor({ exec: options.exec, via: options.via, workDir: join(out, 'work') }), metrics: await loadMetrics(),
+    render: options.render ? await loadRender() : undefined,
+    semantic: options.semantic, format: options.format, detEvery: options.detEvery, hardSeverity: options.hard,
+    replay: options.replay ? JSON.parse(readFileSync(options.replay, 'utf8')) : undefined,
     onStep: (entry, xml) => {
       appendFileSync(log, `${JSON.stringify(entry)}\n`);
-      if (o.saveSteps && entry.status === 'ok') writeFileSync(join(out, `step-${String(entry.step).padStart(3, '0')}.bpmn`), xml);
+      if (options.saveSteps && entry.status === 'ok') writeFileSync(join(out, `step-${String(entry.step).padStart(3, '0')}.bpmn`), xml);
     },
   });
   const { ops, ...rest } = summary;
   writeFileSync(join(out, 'steps.json'), JSON.stringify(ops, null, 1));
-  writeFileSync(join(out, 'summary.json'), JSON.stringify({ ...rest, modelPath: resolve(model), config: { exec: o.exec, via: o.via, semantic: o.semantic, format: o.format, render: o.render, detEvery: o.detEvery, hard: o.hard } }, null, 1));
+  writeFileSync(join(out, 'summary.json'), JSON.stringify({ ...rest, modelPath: resolve(model), config: { exec: options.exec, via: options.via, semantic: options.semantic, format: options.format, render: options.render, detEvery: options.detEvery, hard: options.hard } }, null, 1));
   return { out, summary };
 }
 
 async function main() {
-  let o;
+  let options;
   try {
-    o = parseArgs(process.argv.slice(2), SPEC);
-    if (o._.length !== 1) throw new Error('usage: node tools/fuzz/walk.mjs <model.bpmn> [options]');
-  } catch (e) {
-    console.error(e.message);
+    options = parseArgs(process.argv.slice(2), SPEC);
+    if (options._.length !== 1) throw new Error('usage: node tools/fuzz/walk.mjs <model.bpmn> [options]');
+  } catch (error) {
+    console.error(error.message);
     process.exit(2);
   }
-  const { summary } = await walkOnce(o._[0], o);
-  const kinds = [...new Set(summary.violations.map((v) => v.kind))];
+  const { summary } = await walkOnce(options._[0], options);
+  const kinds = [...new Set(summary.violations.map((violation) => violation.kind))];
   console.log(JSON.stringify({ model: summary.model, seed: summary.seed, mode: summary.mode, steps: summary.steps, ok: summary.ok, refused: summary.refused, errors: summary.errors, warnings: summary.warnings, kinds }));
-  process.exit(summary.errors || (o.strict && summary.warnings) ? 1 : 0);
+  process.exit(summary.errors || (options.strict && summary.warnings) ? 1 : 0);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

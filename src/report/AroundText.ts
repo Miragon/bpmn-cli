@@ -1,6 +1,6 @@
 import type { AroundNode, AroundScope, AroundView } from '../query/context.js';
 import { truncate } from '../query/utils/view.js';
-import { annotationLine, DOC_MAX, flowText, implementationFlags, INDENT, messageFlowLine, named, q, scalar } from './utils/view-lines.js';
+import { annotationLine, DOC_MAX, flowText, implementationFlags, INDENT, messageFlowLine, named, quote, scalar } from './utils/view-lines.js';
 
 /**
  * `bpmn show <file> --around <id>`: a header with what is shown and left out, then the window's
@@ -12,7 +12,7 @@ export class AroundText {
   private readonly headed = new Set<string>();
 
   constructor(private readonly view: AroundView) {
-    this.scopes = new Map(view.scopes.map((s) => [s.id, s]));
+    this.scopes = new Map(view.scopes.map((scope) => [scope.id, scope]));
   }
 
   text(): string {
@@ -22,20 +22,20 @@ export class AroundText {
       `around ${view.around} (depth ${view.depth}${view.inner ? ', inner' : ''}): ${shown.nodes} of ${shown.nodes + omitted.nodes} nodes, ${shown.flows} of ${shown.flows + omitted.flows} flows` +
         (omitted.nodes || omitted.flows ? `; ${omitted.nodes} nodes, ${omitted.flows} flows omitted` : ''),
     );
-    const p = view.process;
-    out.push(`process ${named(p.id, p.name)}${p.participant ? ` in ${named(p.participant, p.participantName)}` : ''}`);
-    const shownIds = new Set(view.nodes.map((n) => n.id));
-    for (const n of view.nodes) {
-      this.heading(n.scope);
-      const hostShown = !!n.host && shownIds.has(n.host);
-      const parts = [n.kind, n.id];
-      if (n.name) parts.push(q(n.name));
-      const flags = AroundText.flags(n, hostShown);
+    const process = view.process;
+    out.push(`process ${named(process.id, process.name)}${process.participant ? ` in ${named(process.participant, process.participantName)}` : ''}`);
+    const shownIds = new Set(view.nodes.map((node) => node.id));
+    for (const node of view.nodes) {
+      this.heading(node.scope);
+      const hostShown = !!node.host && shownIds.has(node.host);
+      const parts = [node.kind, node.id];
+      if (node.name) parts.push(quote(node.name));
+      const flags = AroundText.flags(node, hostShown);
       if (flags.length) parts.push(`[${flags.join(', ')}]`);
       let line = parts.join(' ');
-      if (n.from?.length) line += ` <- ${n.from.map((f) => `${f.source} (${f.id}${f.name ? ` ${q(f.name)}` : ''})`).join(', ')}`;
-      if (n.outgoing.length) line += ` -> ${n.outgoing.map(flowText).join(', ')}`;
-      out.push(INDENT.repeat(this.level(n.scope) + 1 + (hostShown ? 1 : 0)) + line);
+      if (node.from?.length) line += ` <- ${node.from.map((flow) => `${flow.source} (${flow.id}${flow.name ? ` ${quote(flow.name)}` : ''})`).join(', ')}`;
+      if (node.outgoing.length) line += ` -> ${node.outgoing.map(flowText).join(', ')}`;
+      out.push(INDENT.repeat(this.level(node.scope) + 1 + (hostShown ? 1 : 0)) + line);
     }
     if (view.messageFlows.length) {
       out.push('message flows:');
@@ -43,42 +43,42 @@ export class AroundText {
     }
     if (view.annotations.length) {
       out.push('annotations:');
-      for (const a of view.annotations) out.push(INDENT + annotationLine(a));
+      for (const annotation of view.annotations) out.push(INDENT + annotationLine(annotation));
     }
     if (view.data.length) {
       out.push('data:');
-      for (const d of view.data) {
-        const links = [d.from.length ? `from ${d.from.join(', ')}` : '', d.to.length ? `to ${d.to.join(', ')}` : ''].filter(Boolean).join('; ');
-        out.push(`${INDENT}${d.kind} ${named(d.id, d.name)}${links ? ` (${links})` : ''}`);
+      for (const data of view.data) {
+        const links = [data.from.length ? `from ${data.from.join(', ')}` : '', data.to.length ? `to ${data.to.join(', ')}` : ''].filter(Boolean).join('; ');
+        out.push(`${INDENT}${data.kind} ${named(data.id, data.name)}${links ? ` (${links})` : ''}`);
       }
     }
     return out.join('\n');
   }
 
   private level(id: string): number {
-    const s = this.scopes.get(id);
-    return s?.parent ? this.level(s.parent) + 1 : 0;
+    const scope = this.scopes.get(id);
+    return scope?.parent ? this.level(scope.parent) + 1 : 0;
   }
 
   private heading(id: string): void {
-    const s = this.scopes.get(id);
-    if (!s || !s.parent || s.inWindow || this.headed.has(id)) return;
-    this.heading(s.parent);
+    const scope = this.scopes.get(id);
+    if (!scope || !scope.parent || scope.inWindow || this.headed.has(id)) return;
+    this.heading(scope.parent);
     this.headed.add(id);
-    this.out.push(`${INDENT.repeat(this.level(id))}in ${s.kind} ${named(s.id, s.name)}${s.lane ? ` [lane=${s.lane}]` : ''}:`);
+    this.out.push(`${INDENT.repeat(this.level(id))}in ${scope.kind} ${named(scope.id, scope.name)}${scope.lane ? ` [lane=${scope.lane}]` : ''}:`);
   }
 
-  private static flags(n: AroundNode, hostShown: boolean): string[] {
+  private static flags(node: AroundNode, hostShown: boolean): string[] {
     const flags: string[] = [];
-    if (n.host && !hostShown) flags.push(`on ${n.host}`);
-    if (n.lane) flags.push(`lane=${n.lane}`);
-    if (n.trigger) flags.push(n.trigger);
-    if (n.nonInterrupting) flags.push('non-interrupting');
-    if (n.expanded !== undefined) flags.push(n.expanded ? 'expanded' : 'collapsed');
-    if (n.content) flags.push(`content: ${n.content} node${n.content === 1 ? '' : 's'}`);
-    for (const [k, v] of Object.entries(n.props ?? {})) flags.push(`${k}=${scalar(v)}`);
-    flags.push(...implementationFlags(n.impl));
-    if (n.documentation) flags.push(`doc: ${q(truncate(n.documentation, DOC_MAX))}`);
+    if (node.host && !hostShown) flags.push(`on ${node.host}`);
+    if (node.lane) flags.push(`lane=${node.lane}`);
+    if (node.trigger) flags.push(node.trigger);
+    if (node.nonInterrupting) flags.push('non-interrupting');
+    if (node.expanded !== undefined) flags.push(node.expanded ? 'expanded' : 'collapsed');
+    if (node.content) flags.push(`content: ${node.content} node${node.content === 1 ? '' : 's'}`);
+    for (const [key, value] of Object.entries(node.props ?? {})) flags.push(`${key}=${scalar(value)}`);
+    flags.push(...implementationFlags(node.impl));
+    if (node.documentation) flags.push(`doc: ${quote(truncate(node.documentation, DOC_MAX))}`);
     return flags;
   }
 }

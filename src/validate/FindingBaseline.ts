@@ -97,12 +97,12 @@ export class FindingBaseline {
     const validation = this.validation!;
     if (!this.validators.size) return validation;
     const after = await this.validators.run({ xml: async () => candidate, doc: once(() => Doc.fromXml(candidate, this.opts.file)) }, { ...this.context, phase: 'after' });
-    const reports = FindingBaseline.compareRuns(this.doc.source ? this.validatorsBefore : this.validatorsBefore.filter((r) => r.blocks !== false), after, this.renames());
-    const introduced = reports.flatMap((r) => r.errors);
+    const reports = FindingBaseline.compareRuns(this.doc.source ? this.validatorsBefore : this.validatorsBefore.filter((run) => run.blocks !== false), after, this.renames());
+    const introduced = reports.flatMap((report) => report.errors);
     if (introduced.length && !this.opts.force) throw validatorRefusal(introduced);
-    reports.forEach((report, i) => {
+    reports.forEach((report, index) => {
       for (const issue of report.resolved) {
-        const key = coveredLint(after[i]!, issue);
+        const key = coveredLint(after[index]!, issue);
         if (key) this.validatorCovered.add(key);
       }
     });
@@ -121,23 +121,23 @@ export class FindingBaseline {
     const remaining = [...raw.warnings];
     const platformResolved = final.platform?.resolved ?? [];
     const coveredByPlatform = lintCoveredBy(platformResolved);
-    const covered = (w: Warning): boolean => coveredByPlatform(w) || this.validatorCovered.has(lintKey(w));
-    const resolved = before.filter((b) => !FindingBaseline.takeMatch(remaining, (a) => this.sameWarning(b, a)) && !raw.warnings.some((a) => this.stillAbout(b, a)) && !covered(b));
+    const covered = (warning: Warning): boolean => coveredByPlatform(warning) || this.validatorCovered.has(lintKey(warning));
+    const resolved = before.filter((earlier) => !FindingBaseline.takeMatch(remaining, (candidate) => this.sameWarning(earlier, candidate)) && !raw.warnings.some((current) => this.stillAbout(earlier, current)) && !covered(earlier));
     const errors = [...raw.errors];
-    resolved.push(...this.before.errors.filter((b) => !FindingBaseline.takeMatch(errors, (a) => this.sameFinding(b, a))));
-    resolved.push(...platformResolved, ...(final.validators ?? []).flatMap((r) => r.resolved));
+    resolved.push(...this.before.errors.filter((earlier) => !FindingBaseline.takeMatch(errors, (candidate) => this.sameFinding(earlier, candidate))));
+    resolved.push(...platformResolved, ...(final.validators ?? []).flatMap((report) => report.resolved));
     // counted only: the result lists the added platform findings
     const addedFindings = new Set<ProfileFinding>(final.platform?.added ?? []);
-    const kept = (this.profileAfter?.findings ?? []).filter((f) => !addedFindings.has(f));
-    const keptCount = final.platform ? Math.max(0, Object.values(final.platform.counts).reduce((a, b) => a + b, 0) - addedFindings.size) : 0;
+    const kept = (this.profileAfter?.findings ?? []).filter((finding) => !addedFindings.has(finding));
+    const keptCount = final.platform ? Math.max(0, Object.values(final.platform.counts).reduce((sum, count) => sum + count, 0) - addedFindings.size) : 0;
     const coveredByKept = lintCoveredBy(kept);
     const pool = [...before];
     const added: Warning[] = [];
     let preexistingCount = keptCount;
-    for (const w of final.warnings) {
-      if (w.code === 'W_PREEXISTING_ERROR') preexistingCount++;
-      else if (FindingBaseline.takeMatch(pool, (b) => this.sameWarning(b, w))) preexistingCount += coveredByKept(w) ? 0 : 1;
-      else added.push(w);
+    for (const warning of final.warnings) {
+      if (warning.code === 'W_PREEXISTING_ERROR') preexistingCount++;
+      else if (FindingBaseline.takeMatch(pool, (earlier) => this.sameWarning(earlier, warning))) preexistingCount += coveredByKept(warning) ? 0 : 1;
+      else added.push(warning);
     }
     return { added, resolved, preexisting: preexistingCount };
   }
@@ -154,7 +154,7 @@ export class FindingBaseline {
     return after.map((run) => {
       const nth = seen.get(run.name) ?? 0;
       seen.set(run.name, nth + 1);
-      const prev = before.filter((b) => b.name === run.name)[nth];
+      const prev = before.filter((beforeRun) => beforeRun.name === run.name)[nth];
       // without a run before (a created document) nothing is compared: every finding is reported
       const reasonOf = (issue: ValidatorIssue) => (prev ? leftOutOf(issue) : undefined);
       const left = (prev?.issues ?? []).filter((issue) => reasonOf(issue) === undefined).map((issue) => ({ issue, id: FindingBaseline.identity(issue, rename, renames) }));
@@ -170,9 +170,9 @@ export class FindingBaseline {
           continue;
         }
         const id = FindingBaseline.identity(issue, (text) => text, none);
-        const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
-        if (i !== -1) {
-          left.splice(i, 1);
+        const matchIndex = left.findIndex((entry) => entry.id === id && entry.issue.severity === issue.severity);
+        if (matchIndex !== -1) {
+          left.splice(matchIndex, 1);
           if (issue.severity === 'error' && blocking) report.preexisting.push(issue);
           continue;
         }
@@ -182,10 +182,10 @@ export class FindingBaseline {
       // a finding the file had that is now left out is still in the result: not resolved
       for (const issue of marked) {
         const id = FindingBaseline.identity(issue, (text) => text, none);
-        const i = left.findIndex((b) => b.id === id && b.issue.severity === issue.severity);
-        if (i !== -1) left.splice(i, 1);
+        const matchIndex = left.findIndex((entry) => entry.id === id && entry.issue.severity === issue.severity);
+        if (matchIndex !== -1) left.splice(matchIndex, 1);
       }
-      report.resolved = left.map((b) => b.issue);
+      report.resolved = left.map((entry) => entry.issue);
       if (leftOut.size) report.leftOut = [...leftOut].map(([reason, count]) => ({ reason, count }));
       return report;
     });
@@ -195,14 +195,14 @@ export class FindingBaseline {
     const left = [...this.before.errors];
     const errors: Warning[] = [];
     const kept: Warning[] = [];
-    for (const f of after.errors) {
-      const i = left.findIndex((b) => this.sameFinding(b, f));
-      if (i === -1) {
-        errors.push(f);
+    for (const finding of after.errors) {
+      const matchIndex = left.findIndex((earlier) => this.sameFinding(earlier, finding));
+      if (matchIndex === -1) {
+        errors.push(finding);
         continue;
       }
-      left.splice(i, 1);
-      kept.push(preexisting(f));
+      left.splice(matchIndex, 1);
+      kept.push(preexisting(finding));
     }
     return { errors, warnings: [...kept, ...after.warnings] };
   }
@@ -235,12 +235,12 @@ export class FindingBaseline {
     if (GROUP_CODES.has(after.code) || LIST_CODES.has(after.code)) {
       if (LIST_CODES.has(after.code) && !this.sameFinding(before, after)) return false;
       const had = FindingBaseline.membersOf(before);
-      return FindingBaseline.membersOf(after).every((id) => had.some((b) => this.sameElement(b, id)));
+      return FindingBaseline.membersOf(after).every((id) => had.some((hadId) => this.sameElement(hadId, id)));
     }
     if (!this.sameFinding(before, after)) return false;
-    const a = before.related ?? [];
-    const b = after.related ?? [];
-    return a.length === b.length && a.every((id, i) => this.sameElement(id, b[i]!));
+    const relatedBefore = before.related ?? [];
+    const relatedAfter = after.related ?? [];
+    return relatedBefore.length === relatedAfter.length && relatedBefore.every((id, index) => this.sameElement(id, relatedAfter[index]!));
   }
 
   /** A group warning that still shares an element with `before` changed: it is not resolved. */
@@ -248,24 +248,24 @@ export class FindingBaseline {
     if (before.code !== after.code || !(GROUP_CODES.has(after.code) || LIST_CODES.has(after.code))) return false;
     if (LIST_CODES.has(after.code)) return this.sameFinding(before, after);
     const had = FindingBaseline.membersOf(before);
-    return FindingBaseline.membersOf(after).some((id) => had.some((b) => this.sameElement(b, id)));
+    return FindingBaseline.membersOf(after).some((id) => had.some((hadId) => this.sameElement(hadId, id)));
   }
 
-  private static membersOf(w: Warning): string[] {
-    return GROUP_CODES.has(w.code) ? [...(w.element ? [w.element] : []), ...(w.related ?? [])] : (w.related ?? []);
+  private static membersOf(warning: Warning): string[] {
+    return GROUP_CODES.has(warning.code) ? [...(warning.element ? [warning.element] : []), ...(warning.related ?? [])] : (warning.related ?? []);
   }
 
-  private static takeMatch<T>(pool: T[], match: (item: T) => boolean): boolean {
-    const i = pool.findIndex(match);
-    if (i === -1) return false;
-    pool.splice(i, 1);
+  private static takeMatch<TItem>(pool: TItem[], match: (item: TItem) => boolean): boolean {
+    const matchIndex = pool.findIndex(match);
+    if (matchIndex === -1) return false;
+    pool.splice(matchIndex, 1);
     return true;
   }
 
   /** Whole ids (XML NCName boundaries), in one pass: ids swapped in one batch stay apart. */
   private static renamer(renames: Map<string, string>): (text: string) => string {
     if (!renames.size) return (text) => text;
-    const ids = [...renames.keys()].sort((a, b) => b.length - a.length).map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const ids = [...renames.keys()].sort((first, second) => second.length - first.length).map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const re = new RegExp(`(?<![\\w.-])(?:${ids.join('|')})(?![\\w.-])`, 'g');
     return (text) => text.replace(re, (id) => renames.get(id) ?? id);
   }

@@ -38,20 +38,20 @@ const HARD = new Set(['overlaps', 'through', 'missing', 'outsideLane', 'outsideP
 
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'gate', name), 'utf8');
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ r: MutationResult; after: Doc }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
-  const after = await Doc.fromXml(r.xml);
+async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+  const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
+  const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
-  return { r, after };
+  return { result, after };
 }
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) if (!out.has(shape.id)) out.set(shape.id, shape);
   return out;
 }
 
-const ids = (els: El[] | undefined): string[] => (els ?? []).map((e) => e.get<string>('id'));
+const ids = (els: El[] | undefined): string[] => (els ?? []).map((element) => element.get<string>('id'));
 
 describe('fitInFrame keeps an inner frame with its content when the drawing has it outside its lane', () => {
   const LONG = 'Check all submitted documents thoroughly and inform the responsible clerk about the outcome';
@@ -59,36 +59,36 @@ describe('fitInFrame keeps an inner frame with its content when the drawing has 
   it('a renamed task grows inside its event sub-process; the sub-process is not pulled into its member lane', async () => {
     const xml = fixture('eventsub-wrong-lane.bpmn');
     const before = await Doc.fromXml(xml);
-    const { r, after } = await run(xml, [{ op: 'set', id: 'R', values: { name: LONG } }], { layout: 'incremental' });
-    expect(r.layout.mode).toBe('incremental');
+    const { result, after } = await run(xml, [{ op: 'set', id: 'R', values: { name: LONG } }], { layout: 'incremental' });
+    expect(result.layout.mode).toBe('incremental');
     const added = diffProblems(LayoutAnalysis.of(before.definitions).problems, LayoutAnalysis.of(after.definitions).problems).added;
-    expect(added.filter((p) => HARD.has(p.kind))).toEqual([]);
-    const b = shapes(before);
-    const s = shapes(after);
+    expect(added.filter((problem) => HARD.has(problem.kind))).toEqual([]);
+    const beforeShapes = shapes(before);
+    const afterShapes = shapes(after);
     // the task grew and stays inside its sub-process, which stays where the drawing has it
-    expect(s.get('R')!.bounds.width).toBeGreaterThan(b.get('R')!.bounds.width);
-    const esp = s.get('Esp')!.bounds;
-    const task = s.get('R')!.bounds;
+    expect(afterShapes.get('R')!.bounds.width).toBeGreaterThan(beforeShapes.get('R')!.bounds.width);
+    const esp = afterShapes.get('Esp')!.bounds;
+    const task = afterShapes.get('R')!.bounds;
     expect(task.x).toBeGreaterThanOrEqual(esp.x);
     expect(task.y).toBeGreaterThanOrEqual(esp.y);
     expect(task.x + task.width).toBeLessThanOrEqual(esp.x + esp.width);
     expect(task.y + task.height).toBeLessThanOrEqual(esp.y + esp.height);
-    expect(esp.y).toBe(b.get('Esp')!.bounds.y);
+    expect(esp.y).toBe(beforeShapes.get('Esp')!.bounds.y);
     // the lanes keep their bands: nothing outside the sub-process's row moved down
-    for (const id of ['L1', 'L2', 'A', 'B', 'E']) expect(s.get(id)!.bounds.y).toBe(b.get(id)!.bounds.y);
-    expect(s.get('L1')!.bounds.height).toBe(b.get('L1')!.bounds.height);
+    for (const id of ['L1', 'L2', 'A', 'B', 'E']) expect(afterShapes.get(id)!.bounds.y).toBe(beforeShapes.get(id)!.bounds.y);
+    expect(afterShapes.get('L1')!.bounds.height).toBe(beforeShapes.get('L1')!.bounds.height);
   });
 });
 
 describe('removing a sequence flow drops stale mirror entries of it', () => {
   it('a bridged remove next to a stale <incoming> entry writes without --force and leaves no dangling reference', async () => {
     const xml = fixture('stale-flow-list.bpmn');
-    const { r, after } = await run(xml, [{ op: 'remove', ids: ['T'] }]);
-    expect(r.changes.removed.map((x) => x.id)).toEqual(expect.arrayContaining(['T', 'F2']));
+    const { result, after } = await run(xml, [{ op: 'remove', ids: ['T'] }]);
+    expect(result.changes.removed.map((removed) => removed.id)).toEqual(expect.arrayContaining(['T', 'F2']));
     const end = after.require('End');
     expect(ids(end.get<El[]>('incoming'))).toEqual(['F3']);
     expect(after.require('F1').get<El>('targetRef').get<string>('id')).toBe('Sub');
-    const codes = validateDoc(after).errors.map((e) => e.code);
+    const codes = validateDoc(after).errors.map((error) => error.code);
     expect(codes).not.toContain('E_DANGLING_REF');
     expect(codes).not.toContain('E_FLOW_LINKS');
   });
@@ -98,7 +98,7 @@ describe('removing a sequence flow drops stale mirror entries of it', () => {
     const { after } = await run(xml, [{ op: 'remove', ids: ['F2'] }]);
     expect(ids(after.require('End').get<El[]>('incoming'))).toEqual(['F3']);
     expect(ids(after.require('Sub').get<El[]>('incoming'))).toEqual([]);
-    expect(validateDoc(after).errors.map((e) => e.code)).not.toContain('E_DANGLING_REF');
+    expect(validateDoc(after).errors.map((error) => error.code)).not.toContain('E_DANGLING_REF');
   });
 });
 
@@ -106,15 +106,15 @@ describe('making room for place / align never leaves a new overlap', () => {
   it('a row reference the neighbours were pushed onto moves along; the row still holds', async () => {
     const xml = fixture('place-pinned-row.bpmn');
     const before = await Doc.fromXml(xml);
-    const { r, after } = await run(xml, [{ op: 'place', ids: ['M'], rowOf: 'J', after: 'X' }]);
+    const { result, after } = await run(xml, [{ op: 'place', ids: ['M'], rowOf: 'J', after: 'X' }]);
     const added = diffProblems(LayoutAnalysis.of(before.definitions).problems, LayoutAnalysis.of(after.definitions).problems).added;
-    expect(added.filter((p) => HARD.has(p.kind))).toEqual([]);
-    const s = shapes(after);
-    const centreY = (id: string): number => s.get(id)!.bounds.y + s.get(id)!.bounds.height / 2;
+    expect(added.filter((problem) => HARD.has(problem.kind))).toEqual([]);
+    const afterShapes = shapes(after);
+    const centreY = (id: string): number => afterShapes.get(id)!.bounds.y + afterShapes.get(id)!.bounds.height / 2;
     expect(centreY('M')).toBe(centreY('J'));
-    expect(s.get('M')!.bounds.x).toBeGreaterThan(s.get('X')!.bounds.x + s.get('X')!.bounds.width);
-    const [b, j] = [s.get('B')!.bounds, s.get('J')!.bounds];
-    expect(b.x + b.width).toBeLessThanOrEqual(j.x);
-    expect(r.layout.format?.[0]?.moved).toContain('J');
+    expect(afterShapes.get('M')!.bounds.x).toBeGreaterThan(afterShapes.get('X')!.bounds.x + afterShapes.get('X')!.bounds.width);
+    const [branchBox, joinBox] = [afterShapes.get('B')!.bounds, afterShapes.get('J')!.bounds];
+    expect(branchBox.x + branchBox.width).toBeLessThanOrEqual(joinBox.x);
+    expect(result.layout.format?.[0]?.moved).toContain('J');
   });
 });

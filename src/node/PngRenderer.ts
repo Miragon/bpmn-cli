@@ -87,9 +87,9 @@ export class PngRenderer {
     } catch (err) {
       throw this.renderError('The PNG rasteriser failed', err);
     } finally {
-      for (const o of [image, doc]) {
+      for (const owner of [image, doc]) {
         try {
-          o?.free();
+          owner?.free();
         } catch {
           // a trapped instance cannot free; the error above is what counts
         }

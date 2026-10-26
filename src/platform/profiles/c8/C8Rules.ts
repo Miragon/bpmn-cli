@@ -18,25 +18,25 @@ export abstract class C8Rules extends EngineRules {
   /** Top-level zeebe extension elements of type `local`. */
   protected zeebe(el: El | undefined, local: string): El[] {
     return this.extensionValues(el)
-      .filter((v) => v.uri === this.kit.zeebe.uri && v.local === local)
-      .map((v) => v.el);
+      .filter((extValue) => extValue.uri === this.kit.zeebe.uri && extValue.local === local)
+      .map((extValue) => extValue.el);
   }
 
   /** Zeebe children of a generic element (all, or of type `local`). */
   protected kids(el: El, local?: string): El[] {
     const raw = peek<unknown[]>(el, '$children');
     if (!Array.isArray(raw)) return [];
-    return (raw as El[]).filter((c) => c && typeof c.$type === 'string' && isGeneric(c) && this.ns.uriOfElement(c) === this.kit.zeebe.uri && (local === undefined || localName(c.$type) === local));
+    return (raw as El[]).filter((child) => child && typeof child.$type === 'string' && isGeneric(child) && this.ns.uriOfElement(child) === this.kit.zeebe.uri && (local === undefined || localName(child.$type) === local));
   }
 
-  /** `<p>:taskDefinition` in the file's spelling. */
-  protected z(local: string): string {
-    return `${this.p}:${local}`;
+  /** `<prefix>:taskDefinition` in the file's spelling. */
+  protected zeebeName(local: string): string {
+    return `${this.prefix}:${local}`;
   }
 
   protected messageOf(el: El): El | undefined {
     if (this.kit.is(el, 'bpmn:ReceiveTask') || this.kit.is(el, 'bpmn:SendTask')) return peek<El>(el, 'messageRef');
-    const def = list(el, 'eventDefinitions').find((d) => this.kit.is(d, 'bpmn:MessageEventDefinition'));
+    const def = list(el, 'eventDefinitions').find((definition) => this.kit.is(definition, 'bpmn:MessageEventDefinition'));
     return peek<El>(def, 'messageRef');
   }
 
@@ -51,22 +51,22 @@ export abstract class C8Rules extends EngineRules {
    * `bpmn ext add` that rebuilds the flat zeebe element `v` with `fix` laid over its attributes
    * (`--replace` replaces it as a whole, so it carries every attribute); undefined with children.
    */
-  private replaceCommand(host: El, owner: El | undefined, v: El, fix: Record<string, string>): string | undefined {
-    if (this.kids(v).length) return undefined;
+  private replaceCommand(host: El, owner: El | undefined, zeebeElement: El, fix: Record<string, string>): string | undefined {
+    if (this.kids(zeebeElement).length) return undefined;
     const attrs: Record<string, string> = {};
-    for (const [k, val] of Object.entries(v as unknown as Record<string, unknown>)) {
-      if (k.startsWith('$') || k.startsWith('xmlns') || val === undefined || val === null || typeof val === 'object') continue;
-      attrs[k] = String(val);
+    for (const [key, val] of Object.entries(zeebeElement as unknown as Record<string, unknown>)) {
+      if (key.startsWith('$') || key.startsWith('xmlns') || val === undefined || val === null || typeof val === 'object') continue;
+      attrs[key] = String(val);
     }
     Object.assign(attrs, fix);
-    const args = Object.entries(attrs).map(([k, val]) => sh(`${k}=${val}`));
-    return this.extAdd(host, owner, [v.$type, ...args, '--replace'].join(' '));
+    const args = Object.entries(attrs).map(([key, val]) => sh(`${key}=${val}`));
+    return this.extAdd(host, owner, [zeebeElement.$type, ...args, '--replace'].join(' '));
   }
 
   /** The replace command for `v`, or the list-and-rebuild hint when it has children. */
-  protected fixHint(host: El, owner: El | undefined, v: El, fix: Record<string, string>): string {
-    const cmd = this.replaceCommand(host, owner, v, fix);
-    return cmd ? `${cmd}.` : this.rebuildHint(host, owner, v.$type);
+  protected fixHint(host: El, owner: El | undefined, zeebeElement: El, fix: Record<string, string>): string {
+    const cmd = this.replaceCommand(host, owner, zeebeElement, fix);
+    return cmd ? `${cmd}.` : this.rebuildHint(host, owner, zeebeElement.$type);
   }
 
   /** How to rebuild a zeebe element with its content: list it, then add it again with --replace. */

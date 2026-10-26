@@ -80,8 +80,8 @@ const REDEFINES_NOTHING = { name: 'X', prefix: 'x', uri: 'http://example.org/x',
 /** The same XML without the incoming / outgoing lists (a generated or hand-written model). */
 const listless = (xml: string): string => xml.replace(/\s*<bpmn:(incoming|outgoing)>[^<]*<\/bpmn:\1>/g, '');
 
-const lintOf = (issues: readonly unknown[]): ValidatorIssue[] => (issues as ValidatorIssue[]).filter((w) => w.validator === 'bpmnlint');
-const codes = (issues: readonly unknown[]): string[] => (issues as Array<{ code: string; element?: string }>).map((w) => `${w.code}${w.element ? ` ${w.element}` : ''}`);
+const lintOf = (issues: readonly unknown[]): ValidatorIssue[] => (issues as ValidatorIssue[]).filter((warning) => warning.validator === 'bpmnlint');
+const codes = (issues: readonly unknown[]): string[] => (issues as Array<{ code: string; element?: string }>).map((warning) => `${warning.code}${warning.element ? ` ${warning.element}` : ''}`);
 
 describe('resolveBpmnlintConfig: the effective rules', () => {
   it('normalises the names, keeps the options as bpmnlint hands them to the rule, runs any flag but off as a warning', async () => {
@@ -134,7 +134,7 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
     };
     const resolved = await resolveBpmnlintConfig({ Linter, resolver: asyncResolver }, rc);
     expect(resolved).toEqual(sync);
-    const run = async (engine: BpmnlintEngine, r: typeof sync) => (await bpmnlintValidator(engine, r).validate!(xml, { phase: 'check', platform: 'none', ops: [], doc: () => Doc.fromXml(xml) })) as ValidatorFinding[];
+    const run = async (engine: BpmnlintEngine, resolvedConfig: typeof sync) => (await bpmnlintValidator(engine, resolvedConfig).validate!(xml, { phase: 'check', platform: 'none', ops: [], doc: () => Doc.fromXml(xml) })) as ValidatorFinding[];
     expect(await run({ Linter, resolver: asyncResolver }, resolved)).toEqual(await run({ Linter, resolver }, sync));
     const rejecting: BpmnlintResolver = { resolveConfig: asyncResolver.resolveConfig, resolveRule: async (pkg, name) => (name === 'label-required' ? Promise.reject(new Error('no label rule here')) : resolver.resolveRule(pkg, name)) };
     const partial = await resolveBpmnlintConfig({ Linter, resolver: rejecting }, rc);
@@ -149,7 +149,7 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
       resolveConfig: (pkg, name) => (pkg === 'bpmnlint-plugin-loop' ? { extends: 'plugin:loop/self', rules: { 'bpmnlint/label-required': 'warn' } } : resolver.resolveConfig(pkg, name)),
     };
     const resolved = await resolveBpmnlintConfig({ Linter, resolver: looping }, { extends: ['bpmnlint:recommended', { _: 1 } as unknown as string, 'plugin:loop/self'] });
-    expect(resolved.unavailable.map((u) => [u.kind, u.name, u.reason])).toEqual([
+    expect(resolved.unavailable.map((unavailableEntry) => [unavailableEntry.kind, unavailableEntry.name, unavailableEntry.reason])).toEqual([
       ['config', '{"_":1}', 'extends takes config names (strings)'],
       ['config', 'plugin:loop/self', 'it extends itself, directly or through the configs it extends (a cycle; bpmnlint fails on the whole file with it); its rules apply once'],
     ]);
@@ -170,10 +170,10 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
     };
     // before: 2^16 walks and a message of 900 KB (twice; three parents ran out of memory), seconds for the three configs
     const resolved = await resolveBpmnlintConfig({ Linter, resolver: cyclic }, { extends: ['plugin:cyc/twice', 'plugin:cyc/all'] });
-    expect(resolved.unavailable.map((u) => u.name)).toEqual(['plugin:cyc/twice', 'plugin:cyc/all', 'plugin:cyc/recommended', 'plugin:cyc/strict']);
-    expect(Object.fromEntries(Object.entries(resolved.rules).map(([name, s]) => [name, s.severity]))).toEqual({ 'label-required': 'warn', 'single-blank-start-event': 'error', 'superfluous-gateway': 'warn', 'no-gateway-join-fork': 'warn' });
+    expect(resolved.unavailable.map((unavailableEntry) => unavailableEntry.name)).toEqual(['plugin:cyc/twice', 'plugin:cyc/all', 'plugin:cyc/recommended', 'plugin:cyc/strict']);
+    expect(Object.fromEntries(Object.entries(resolved.rules).map(([name, ruleSetting]) => [name, ruleSetting.severity]))).toEqual({ 'label-required': 'warn', 'single-blank-start-event': 'error', 'superfluous-gateway': 'warn', 'no-gateway-join-fork': 'warn' });
     const findings = bpmnlintUnavailableFindings(resolved.unavailable);
-    expect(findings.map((f) => f.message)).toEqual([
+    expect(findings.map((finding) => finding.message)).toEqual([
       'plugin:cyc/twice, plugin:cyc/all, plugin:cyc/recommended, plugin:cyc/strict left out: it extends itself, directly or through the configs it extends (a cycle; bpmnlint fails on the whole file with it); its rules apply once',
     ]);
   });
@@ -189,7 +189,7 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
     for (const host of [{ moddleExtensions: {} }, {}]) {
       const resolved = await resolveBpmnlintConfig(bpmnlintEngine(), { moddleExtensions: { a: 5, b: null, e: true } }, host);
       expect(resolved.moddleExtensions).toEqual({});
-      expect(resolved.unavailable.map((u) => [u.kind, u.name, u.pkg, u.reason])).toEqual([
+      expect(resolved.unavailable.map((unavailableEntry) => [unavailableEntry.kind, unavailableEntry.name, unavailableEntry.pkg, unavailableEntry.reason])).toEqual([
         ['moddle', 'a', '5', reason],
         ['moddle', 'b', 'null', reason],
         ['moddle', 'e', 'true', reason],
@@ -201,7 +201,7 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
     for (const host of [{ moddleExtensions: {} }, {}]) {
       const resolved = await resolveBpmnlintConfig(bpmnlintEngine(), { moddleExtensions: 'camunda' as unknown as Record<string, unknown> }, host);
       expect(resolved.moddleExtensions).toEqual({});
-      expect(bpmnlintUnavailableFindings(resolved.unavailable).map((f) => f.message)).toEqual([
+      expect(bpmnlintUnavailableFindings(resolved.unavailable).map((finding) => finding.message)).toEqual([
         'moddleExtensions "camunda" left out: it is not an object of prefix -> descriptor or module path (bpmnlint fails on the whole file with it); rules reading the properties of a moddle extension may report findings that are not there',
       ]);
     }
@@ -219,22 +219,22 @@ describe('bpmnlintValidator: findings', () => {
   it('maps a report to code, element, severity and a key without array indices; nothing else of the report', async () => {
     const engine = bpmnlintEngine();
     const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
-    const v = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', rules: { 'fake-join': 'info', 'label-required': 'warn' } }), { detail: 'test' });
-    expect(v).toMatchObject({ name: 'bpmnlint', detail: 'test', blocks: false, covers: BPMNLINT_COVERS });
-    const found = (await v.validate!(xml, ctx(xml))) as ValidatorFinding[];
+    const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', rules: { 'fake-join': 'info', 'label-required': 'warn' } }), { detail: 'test' });
+    expect(lintValidator).toMatchObject({ name: 'bpmnlint', detail: 'test', blocks: false, covers: BPMNLINT_COVERS });
+    const found = (await lintValidator.validate!(xml, ctx(xml))) as ValidatorFinding[];
     expect(found).toEqual([{ severity: 'warning', code: 'label-required', message: 'Element is missing label/name', element: 'Activity_AfterCheck', key: 'Activity_AfterCheck|name|Element is missing label/name' }]);
   });
 
   it('the key of a finding with a path leaves out the array indices: removing an earlier sibling changes nothing', async () => {
     const dir = repo({ extends: 'plugin:camunda-compat/camunda-cloud-8-10', moddleExtensions: { zeebe: 'zeebe-bpmn-moddle/resources/zeebe.json' } });
-    const xml = await model(LINE).then((x) => applyToXml(x, [{ op: 'ext', id: 'Activity_Check', action: 'add', type: 'zeebe:input', attrs: { source: '=a', target: 'a' } }]));
+    const xml = await model(LINE).then((modelXml) => applyToXml(modelXml, [{ op: 'ext', id: 'Activity_Check', action: 'add', type: 'zeebe:input', attrs: { source: '=a', target: 'a' } }]));
     // a second input without target (the io-mapping rule reports it with its index in the path)
     const file = join(dir, 'c8.bpmn');
     writeFileSync(file, xml.xml.replace('<zeebe:input source="=a" target="a" />', '<zeebe:input source="=a" target="a" />\n          <zeebe:input source="=b" />'));
     const before = lintOf((await checkFile(file, { lintProjectCode: true })).validation.errors);
     expect(codes(before)).toContain('camunda-compat/io-mapping Activity_Check');
-    const r = await mutateFile(file, [{ op: 'ext', id: 'Activity_Check', action: 'remove', type: 'zeebe:input[target=a]' }], { dryRun: true });
-    const report = mutationReport(r);
+    const mutated = await mutateFile(file, [{ op: 'ext', id: 'Activity_Check', action: 'remove', type: 'zeebe:input[target=a]' }], { dryRun: true });
+    const report = mutationReport(mutated);
     expect(codes(report.warnings.added)).not.toContain('camunda-compat/io-mapping Activity_Check');
     expect(codes(report.warnings.resolved)).not.toContain('camunda-compat/io-mapping Activity_Check');
   });
@@ -245,7 +245,7 @@ describe('bpmnlintValidator: findings', () => {
       boom: () => ({ check: (node: { $type: string; id: string }) => {
         if (node.$type === 'bpmn:EndEvent') throw new Error(`kaboom on ${node.id}`);
       } }),
-      'bad-options': (o: { size: number }) => ({ check: () => o.size.toFixed() }),
+      'bad-options': (options: { size: number }) => ({ check: () => options.size.toFixed() }),
       'no-check': () => ({}),
       leave: () => ({ check: { leave: (node: { $type: string; id: string }) => { if (node.$type === 'bpmn:UserTask') throw new Error('on leave'); } } }),
     };
@@ -256,14 +256,14 @@ describe('bpmnlintValidator: findings', () => {
     try {
       const found = (await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))) as ValidatorFinding[];
       expect(error).not.toHaveBeenCalled();
-      expect(found.map((f) => `${f.code}: ${f.message}`).sort()).toEqual([
+      expect(found.map((finding) => `${finding.code}: ${finding.message}`).sort()).toEqual([
         'W_LINT_FAILED: bpmnlint rule local/bad-options failed: Cannot read properties of undefined (reading \'size\'); its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/boom failed: kaboom on Event_Done; its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/leave failed: on leave; its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/no-check failed: the rule has no check; its findings are left out',
         'label-required: Element is missing label/name',
       ]);
-      expect(found.find((f) => f.code === 'W_LINT_FAILED')!.key).toMatch(/^failed\|local\//);
+      expect(found.find((finding) => finding.code === 'W_LINT_FAILED')!.key).toMatch(/^failed\|local\//);
     } finally {
       error.mockRestore();
     }
@@ -297,7 +297,7 @@ describe('bpmnlintValidator: findings', () => {
       const found = (await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))) as ValidatorFinding[];
       await new Promise((done) => setTimeout(done, 20));
       expect(unhandled).not.toHaveBeenCalled();
-      expect(found.map((f) => `${f.code}${f.element ? ` ${f.element}` : ''}: ${f.message}`).sort()).toEqual([
+      expect(found.map((finding) => `${finding.code}${finding.element ? ` ${finding.element}` : ''}: ${finding.message}`).sort()).toEqual([
         'W_LINT_FAILED: bpmnlint rule local/async-check failed: async boom; its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/async-factory failed: the rule factory returned a promise (bpmnlint rules are synchronous); its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/async-factory-ok failed: the rule factory returned a promise (bpmnlint rules are synchronous); its findings are left out',
@@ -322,10 +322,10 @@ describe('bpmnlintValidator: findings', () => {
       key: 'failed|',
       hint: "No rule ran. Check the .bpmnlintrc's moddleExtensions (a descriptor bpmnlint cannot load fails in CI too); else report the file and the .bpmnlintrc. --no-lint-config skips bpmnlint.",
     };
-    const v = bpmnlintValidator(engine, resolved);
-    expect(await v.validate!(xml, ctx(xml))).toEqual([failed]);
+    const lintValidator = bpmnlintValidator(engine, resolved);
+    expect(await lintValidator.validate!(xml, ctx(xml))).toEqual([failed]);
     // a write does not compare it: its validator line says that no rule ran
-    for (const phase of ['before', 'after'] as const) expect(await v.validate!(xml, ctx(xml, phase)), phase).toEqual([{ ...failed, leftOut: 'W_LINT_FAILED, no rule ran' }]);
+    for (const phase of ['before', 'after'] as const) expect(await lintValidator.validate!(xml, ctx(xml, phase)), phase).toEqual([{ ...failed, leftOut: 'W_LINT_FAILED, no rule ran' }]);
   });
 
   it('a moddle descriptor BpmnModdle rejects (a prefix or uri already defined, an extends of an unknown type) is left out alone: W_LINT_UNAVAILABLE, the other rules run', async () => {
@@ -352,8 +352,8 @@ describe('bpmnlintValidator: findings', () => {
       { kind: 'moddle', name: 'second', pkg: 'descriptor object', reason: 'BpmnModdle rejects it (package with prefix <undefined> already defined)', hint },
     ]);
     const found = (await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))) as ValidatorFinding[];
-    expect(codes(found.filter((f) => !f.code.startsWith('W_LINT_')))).toEqual(['label-required Activity_Task', 'no-disconnected Activity_Task', 'no-implicit-end Activity_Task', 'no-implicit-start Activity_Task']);
-    expect(found.filter((f) => f.code.startsWith('W_LINT_')).map((f) => f.message)).toEqual([
+    expect(codes(found.filter((finding) => !finding.code.startsWith('W_LINT_')))).toEqual(['label-required Activity_Task', 'no-disconnected Activity_Task', 'no-implicit-end Activity_Task', 'no-implicit-start Activity_Task']);
+    expect(found.filter((finding) => finding.code.startsWith('W_LINT_')).map((finding) => finding.message)).toEqual([
       'moddle extension dup (descriptor object) left out: BpmnModdle rejects it (package with prefix <bpmn> already defined); rules reading dup: properties may report findings that are not there',
       expect.stringMatching(/^moddle extension nope \(descriptor object\) left out: BpmnModdle rejects it \(.+\); rules reading nope: properties may report findings that are not there$/),
       'moddle extension uri (descriptor object) left out: BpmnModdle rejects it (package with uri <http://www.omg.org/spec/BPMN/20100524/MODEL> already defined); rules reading uri: properties may report findings that are not there',
@@ -365,11 +365,11 @@ describe('bpmnlintValidator: findings', () => {
   it('a new Linter per run: stateful rules (no-duplicate-sequence-flows) do not carry state from one run to the next', async () => {
     const engine = bpmnlintEngine();
     const xml = fixture('incremental/orders.bpmn');
-    const v = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:all' }));
-    const first = (await v.validate!(xml, ctx(xml))) as ValidatorFinding[];
-    const second = (await v.validate!(xml, ctx(xml))) as ValidatorFinding[];
+    const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:all' }));
+    const first = (await lintValidator.validate!(xml, ctx(xml))) as ValidatorFinding[];
+    const second = (await lintValidator.validate!(xml, ctx(xml))) as ValidatorFinding[];
     expect(second).toEqual(first);
-    expect(first.filter((f) => f.code === 'no-duplicate-sequence-flows')).toEqual([]);
+    expect(first.filter((finding) => finding.code === 'no-duplicate-sequence-flows')).toEqual([]);
   });
 
   it('finds what bpmnlint finds (orders.bpmn, gallery.bpmn), every finding once', async () => {
@@ -380,10 +380,10 @@ describe('bpmnlintValidator: findings', () => {
       const { Linter } = bpmnlintEngine();
       const { BpmnModdle } = await import('bpmn-moddle');
       const reports = await new Linter({ config: rc, resolver: plugin.createBundledResolver() }).lint((await new BpmnModdle().fromXML(xml)).rootElement);
-      const expected = Object.entries(reports).flatMap(([rule, list]) => list.map((r) => `${rule} ${r.id ?? ''} ${r.message}`)).sort();
+      const expected = Object.entries(reports).flatMap(([rule, list]) => list.map((reportEntry) => `${rule} ${reportEntry.id ?? ''} ${reportEntry.message}`)).sort();
       const engine = bpmnlintEngine();
       const check = await checkDoc(await Doc.fromXml(xml), { validators: [bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, rc))] });
-      const found = lintOf([...check.validation.errors, ...check.validation.warnings]).map((f) => `${f.code} ${f.element ?? ''} ${f.message}`).sort();
+      const found = lintOf([...check.validation.errors, ...check.validation.warnings]).map((finding) => `${finding.code} ${finding.element ?? ''} ${finding.message}`).sort();
       expect(found, name).toEqual(expected);
       expect(found.length, name).toBeGreaterThan(5);
     }
@@ -392,8 +392,8 @@ describe('bpmnlintValidator: findings', () => {
   it('the import warnings of the lint parse bpmn-cli\'s reader does not report: import-warning errors with a hint; bpmn-cli\'s decision link in a model without an engine has its own', async () => {
     const engine = bpmnlintEngine();
     const run = async (xml: string, rc: object) => {
-      const v = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, rc));
-      return { check: await checkDoc(await Doc.fromXml(xml)), found: (await v.validate!(xml, ctx(xml))) as ValidatorFinding[] };
+      const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, rc));
+      return { check: await checkDoc(await Doc.fromXml(xml)), found: (await lintValidator.validate!(xml, ctx(xml))) as ValidatorFinding[] };
     };
     // a model without an engine (no engine namespace): bpmn-cli's reader takes calledDecision as the decision link, bpmnlint's parse does not know it
     const design = await model([...LINE, { op: 'add', kind: 'businessRuleTask', name: 'Decide', after: 'Activity_Check' }, { op: 'set', id: 'Activity_Decide', values: { calledDecision: 'risk' } }]);
@@ -420,8 +420,8 @@ describe('bpmnlintValidator: findings', () => {
 describe('covered lint warnings and the incoming / outgoing lists', () => {
   const run = async (xml: string, rules: Record<string, unknown> = {}) => {
     const engine = bpmnlintEngine();
-    const v = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', rules }));
-    return checkDoc(await Doc.fromXml(xml), { validators: [v] });
+    const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', rules }));
+    return checkDoc(await Doc.fromXml(xml), { validators: [lintValidator] });
   };
 
   it('each row of BPMNLINT_COVERS: the lint warning about the same element is dropped, the bpmnlint finding takes its hint', async () => {
@@ -430,11 +430,11 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     for (const [xml, rule] of [[empty, 'start-event-required'], [empty, 'end-event-required'], [noEnd, 'no-implicit-end']] as const) {
       const lint = BPMNLINT_COVERS[rule]!;
       const plain = await checkDoc(await Doc.fromXml(xml));
-      const warning = plain.validation.warnings.find((w) => w.code === lint)!;
+      const warning = plain.validation.warnings.find((candidate) => candidate.code === lint)!;
       expect(warning, rule).toBeDefined();
       const checked = await run(xml);
       expect(codes(checked.validation.warnings), rule).not.toContain(`${lint} ${warning.element}`);
-      const finding = [...checked.validation.errors, ...checked.validation.warnings].find((w) => w.code === rule && w.element === warning.element);
+      const finding = [...checked.validation.errors, ...checked.validation.warnings].find((issue) => issue.code === rule && issue.element === warning.element);
       expect(finding?.hint, rule).toBe(warning.hint);
     }
     // a rule that is off covers nothing
@@ -445,9 +445,9 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
   it('a file without incoming / outgoing lists: validate lists the list rules with a hint, a write leaves the false ones out', async () => {
     const xml = listless(await model(LINE));
     const checked = await run(xml);
-    const lists = lintOf(checked.validation.errors).filter((f) => ['no-implicit-end', 'no-implicit-start', 'no-disconnected'].includes(f.code));
+    const lists = lintOf(checked.validation.errors).filter((finding) => ['no-implicit-end', 'no-implicit-start', 'no-disconnected'].includes(finding.code));
     expect(codes(lists).sort()).toEqual(['no-disconnected Activity_Check', 'no-disconnected Event_Done', 'no-disconnected Event_Received', 'no-implicit-end Activity_Check', 'no-implicit-end Event_Received', 'no-implicit-start Activity_Check', 'no-implicit-start Event_Done']);
-    for (const f of lists) expect(f.hint).toMatch(/^The element has sequence flows the file does not list under incoming \/ outgoing, which no-/);
+    for (const finding of lists) expect(finding.hint).toMatch(/^The element has sequence flows the file does not list under incoming \/ outgoing, which no-/);
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'listless.bpmn': xml });
     const added = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }], { dryRun: true })).warnings.added;
     expect(lintOf(added)).toEqual([]);
@@ -455,7 +455,7 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     const loose = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Loose', in: 'Process_Order' }], { dryRun: true })).warnings.added;
     expect(codes(lintOf(loose))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
     expect(codes(loose)).not.toContain('W_DEAD_END Activity_Loose');
-    expect(lintOf(loose).find((f) => f.code === 'no-implicit-end')!.hint).toMatch(/^Continue the flow/);
+    expect(lintOf(loose).find((finding) => finding.code === 'no-implicit-end')!.hint).toMatch(/^Continue the flow/);
   });
 
   it("a write on a file without incoming / outgoing lists counts the findings it leaves out: its totals are validate's, also after a new element; they never block", async () => {
@@ -494,16 +494,16 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'loose.bpmn': listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }])) });
     const file = join(dir, 'loose.bpmn');
     // the loose task: no-disconnected, no-implicit-end and no-implicit-start, real ones (it has no flow)
-    expect(codes(lintOf((await checkFile(file)).validation.errors)).filter((c) => c.endsWith('Activity_Loose'))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
+    expect(codes(lintOf((await checkFile(file)).validation.errors)).filter((code) => code.endsWith('Activity_Loose'))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
     for (const ops of [[{ op: 'add', kind: 'end', name: 'Fin', after: 'Activity_Loose' }], [{ op: 'connect', source: 'Activity_Check', target: 'Activity_Loose' }]] as Op[][]) {
-      const r = mutationReport(await mutateFile(file, ops, { dryRun: true, lintFrom: dir }));
-      const v = r.validation.validators![0]!;
+      const mutation = mutationReport(await mutateFile(file, ops, { dryRun: true, lintFrom: dir }));
+      const firstValidator = mutation.validation.validators![0]!;
       // bpmnlint in CI still reports them (the lists stay unwritten): left out, not resolved
-      expect(lintOf(r.warnings.resolved), ops[0]!.op).toEqual([]);
-      expect(v.resolved, ops[0]!.op).toEqual([]);
+      expect(lintOf(mutation.warnings.resolved), ops[0]!.op).toEqual([]);
+      expect(firstValidator.resolved, ops[0]!.op).toEqual([]);
       // added + already in the file + left out = the totals
-      const kept = v.counts.errors + v.counts.warnings - v.warnings.length - v.leftOut![0]!.count;
-      expect(renderMutation(r), ops[0]!.op).toContain(` in the result (${v.warnings.length} added, 0 resolved, ${kept} already in the file, ${v.leftOut![0]!.count} left out (`);
+      const kept = firstValidator.counts.errors + firstValidator.counts.warnings - firstValidator.warnings.length - firstValidator.leftOut![0]!.count;
+      expect(renderMutation(mutation), ops[0]!.op).toContain(` in the result (${firstValidator.warnings.length} added, 0 resolved, ${kept} already in the file, ${firstValidator.leftOut![0]!.count} left out (`);
     }
     const ended = mutationReport(await mutateFile(file, [{ op: 'add', kind: 'end', name: 'Fin', after: 'Activity_Loose' }], { dryRun: true, lintFrom: dir }));
     expect(codes(ended.warnings.resolved)).toEqual(['W_DEAD_END Activity_Loose']);
@@ -517,10 +517,10 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     // Activity_Loose has an incoming flow and no outgoing one: a dead end among the findings of the missing lists
     const xml = listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Ship', after: 'Activity_Check' }, { op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }, { op: 'connect', source: 'Activity_Ship', target: 'Activity_Loose' }]));
     const engine = bpmnlintEngine();
-    const v = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' }));
-    const lines = renderValidation(validationReport(await checkDoc(await Doc.fromXml(xml), { validators: [v] }))).split('\n');
+    const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' }));
+    const lines = renderValidation(validationReport(await checkDoc(await Doc.fromXml(xml), { validators: [lintValidator] }))).split('\n');
     expect(lines).toContain('[bpmnlint error] no-implicit-end x3 [Event_Received, Activity_Check, Activity_Ship]: Element is an implicit end  (The element has sequence flows the file does not list under incoming / outgoing, which no-implicit-end reads (bpmnlint in CI reports it too); bpmn-cli writes those lists only where the file keeps them.)');
-    expect(lines.find((l) => l.startsWith('[bpmnlint error] no-implicit-end Activity_Loose: Element is an implicit end  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_Loose`)'))).toBeDefined();
+    expect(lines.find((outputLine) => outputLine.startsWith('[bpmnlint error] no-implicit-end Activity_Loose: Element is an implicit end  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_Loose`)'))).toBeDefined();
   });
 
   it('event-based-gateway counts the outgoing list: validate lists it with the hint, a write that draws two branches does not, one branch is reported in both', async () => {
@@ -533,16 +533,16 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'paid.bpmn': base });
     const file = join(dir, 'paid.bpmn');
     for (const lintBlocks of [false, true]) {
-      const r = mutationReport(await mutateFile(file, branches, { dryRun: true, lintBlocks }));
-      expect(codes(lintOf(r.warnings.added)), String(lintBlocks)).toEqual([]);
+      const mutation = mutationReport(await mutateFile(file, branches, { dryRun: true, lintBlocks }));
+      expect(codes(lintOf(mutation.warnings.added)), String(lintBlocks)).toEqual([]);
     }
     const two = await run((await mutateFile(file, branches, { dryRun: true })).xml);
-    const gateway = lintOf(two.validation.errors).find((f) => f.code === 'event-based-gateway');
+    const gateway = lintOf(two.validation.errors).find((finding) => finding.code === 'event-based-gateway');
     expect(gateway).toMatchObject({ element: 'Gateway_AfterPaid', hint: expect.stringMatching(/^The element has sequence flows the file does not list under incoming \/ outgoing, which event-based-gateway reads/) });
     // one branch: a finding of the model, not of the lists
     const one = mutationReport(await mutateFile(file, branches.slice(0, 2), { dryRun: true }));
     expect(codes(lintOf(one.warnings.added))).toContain('event-based-gateway Gateway_AfterPaid');
-    const single = lintOf((await run((await mutateFile(file, branches.slice(0, 2), { dryRun: true })).xml)).validation.errors).find((f) => f.code === 'event-based-gateway');
+    const single = lintOf((await run((await mutateFile(file, branches.slice(0, 2), { dryRun: true })).xml)).validation.errors).find((finding) => finding.code === 'event-based-gateway');
     expect(single?.hint).toBeUndefined();
   });
 });
@@ -585,12 +585,12 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
     expect(findBpmnlintConfig(outside)).toBe(join(outside, '.bpmnlintrc'));
     const own = await checkFile(join(outside, 'x.bpmn'), { lintProjectCode: true, lintFrom: outside });
     expect(codes(lintOf(own.validation.errors))).toContain('label-required Activity_AfterCheck');
-    expect(own.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([
+    expect(own.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`)).toEqual([
       'plugin:evil/recommended left out: bpmnlint-plugin-evil is not bundled with bpmn-cli, and bpmn-cli runs project plugins only inside a git repository (the .bpmnlintrc in . is in none)  (Keep the .bpmnlintrc and the plugin in a git repository, or remove the plugin from the configuration; --no-lint-config skips bpmnlint.)',
     ]);
     // a library host without lintProjectCode: the hint does not send it to a setting that would not help
     const host = await checkFile(join(outside, 'x.bpmn'), { lintFrom: outside });
-    expect(host.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([
+    expect(host.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`)).toEqual([
       'plugin:evil/recommended left out: bpmnlint-plugin-evil is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)  (Remove it from the configuration; lintProjectCode: true would not run it either: bpmn-cli runs project plugins only inside a git repository (the .bpmnlintrc in . is in none).)',
     ]);
     expect(existsSync(marker)).toBe(false);
@@ -611,9 +611,9 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
       for (const [file, from, git] of [[join(dir, 'x.bpmn'), dir, '.git'], [join(dir, 'models', 'y.bpmn'), join(dir, 'models'), '../.git']] as const) {
         const checked = await checkFile(file, { lintProjectCode: true, lintFrom: from });
         expect(codes(lintOf(checked.validation.errors)), file).toContain('label-required Activity_AfterCheck');
-        expect(checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => w.message), file).toEqual([why(git)]);
+        expect(checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => warning.message), file).toEqual([why(git)]);
         // git's safe.directory is not read: the hint does not say git refuses the repository
-        expect(checked.validation.warnings.find((w) => w.code === 'W_LINT_UNAVAILABLE')?.hint).toBe("Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; --no-lint-config skips bpmnlint.");
+        expect(checked.validation.warnings.find((warning) => warning.code === 'W_LINT_UNAVAILABLE')?.hint).toBe("Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; --no-lint-config skips bpmnlint.");
       }
       expect(existsSync(marker)).toBe(false);
     } finally {
@@ -663,7 +663,7 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
         const below = await checkFile(join(dir, 'models', 'y.bpmn'), { lintProjectCode: true, lintFrom: join(dir, 'models') });
         if (counts) {
           expect(codes(lintOf(below.validation.errors)), dir).toContain('label-required Activity_AfterCheck');
-          expect(below.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => w.message), dir).toEqual([why('../.git')]);
+          expect(below.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => warning.message), dir).toEqual([why('../.git')]);
         } else {
           expect(below.validation.validators, dir).toBeUndefined();
         }
@@ -671,7 +671,7 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
         writeFileSync(join(dir, 'x.bpmn'), xml);
         const checked = await checkFile(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
         expect(codes(lintOf(checked.validation.errors)), dir).toContain('label-required Activity_AfterCheck');
-        expect(checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => w.message), dir).toEqual([why('.git')]);
+        expect(checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => warning.message), dir).toEqual([why('.git')]);
         expect(existsSync(marker), dir).toBe(false);
       }
     } finally {
@@ -682,7 +682,7 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
     const marker = join(dir, 'RAN.txt');
     plugin(dir, 'bpmnlint-plugin-evil', evil(marker));
     const root = vi.spyOn(process, 'getuid').mockReturnValue(0);
-    const run = async () => (await checkFile(join(dir, 'models', 'y.bpmn'), { lintProjectCode: true, lintFrom: dir })).validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => w.message);
+    const run = async () => (await checkFile(join(dir, 'models', 'y.bpmn'), { lintProjectCode: true, lintFrom: dir })).validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => warning.message);
     try {
       // only the decimal digits sudo writes (git's strtoul would also take a leading blank or +)
       for (const sudo of ['', ` ${me}`]) {
@@ -730,7 +730,7 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
     writeFileSync(join(dir, 'x.bpmn'), xml);
     writeFileSync(join(dir, 'sub', 'y.bpmn'), xml);
     const checked = await checkFile(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
-    expect(checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([
+    expect(checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`)).toEqual([
       'plugin:local/recommended left out: bpmnlint-plugin-local is not bundled with bpmn-cli, and bpmn-cli runs project plugins only inside a git repository (.git is a file that names no git directory, so git takes it for no repository either)  (Fix or remove that .git file (a worktree or submodule whose git directory moved), or remove the plugin from the configuration; --no-lint-config skips bpmnlint.)',
     ]);
     expect(findBpmnlintConfig(join(dir, 'sub'))).toBeUndefined();
@@ -774,14 +774,14 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
       // the planted C:\.git makes C:\ a repository: the lookup goes up to it (the user's own ~/.bpmnlintrc here); only bundled rules run
       expect(findBpmnlintConfig(join(home, 'Downloads', 'm'))).toBe(join(home, '.bpmnlintrc'));
       const checked = await checkFile(join(proj, 'x.bpmn'), { lintProjectCode: true, lintFrom: proj });
-      expect(checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([homeOff('../../../../.git')]);
+      expect(checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`)).toEqual([homeOff('../../../../.git')]);
       expect(existsSync(marker)).toBe(false);
       expect(findBpmnlintConfig(join(stale, 'models'))).toBeUndefined();
       // outside the home directory: the repository's .bpmnlintrc applies with bpmn-cli's rules, the plugin is left out and named
       expect(findBpmnlintConfig(join(dev, 'models'))).toBe(join(dev, '.bpmnlintrc'));
       const outside = await checkFile(join(dev, 'models', 'z.bpmn'), { lintProjectCode: true, lintFrom: join(dev, 'models') });
       expect(codes(lintOf(outside.validation.errors))).toContain('label-required Activity_AfterCheck');
-      expect(outside.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([homeOff('../.git')]);
+      expect(outside.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`)).toEqual([homeOff('../.git')]);
       expect(existsSync(devMarker)).toBe(false);
       // inside the home directory: the parent .bpmnlintrc counts and the plugin runs
       expect(findBpmnlintConfig(join(own, 'models'))).toBe(join(own, '.bpmnlintrc'));
@@ -846,14 +846,14 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
     const dir = repo('{ // a comment\n "extends": "bpmnlint:recommended", }', { 'x.bpmn': await model(LINE), 'other.json': '{ "extends": "bpmnlint:recommended" }' });
     const file = join(dir, 'x.bpmn');
     for (const lintConfig of ['missing.json', '.bpmnlintrc']) {
-      const err = await checkFile(file, { lintConfig, lintFrom: dir }).then(() => undefined, (e: CliError) => e);
+      const err = await checkFile(file, { lintConfig, lintFrom: dir }).then(() => undefined, (failure: CliError) => failure);
       expect(err, lintConfig).toMatchObject({ code: 'E_LINT_CONFIG', category: 'io' });
     }
     const other = await checkFile(file, { lintConfig: 'other.json', lintFrom: dir });
     expect(other.validation.validators?.[0]).toMatchObject({ name: 'bpmnlint', detail: '--lint-config other.json' });
     const broken = await checkFile(file, { lintFrom: dir });
     expect(broken.validation.validators?.[0]).toMatchObject({ detail: '.bpmnlintrc in .; bpmnlint did not run (bpmn validate lists why)', counts: { errors: 0, warnings: 1 } });
-    expect(broken.validation.warnings.find((w) => w.code === 'W_LINT_UNAVAILABLE')?.message).toMatch(/^\.bpmnlintrc is not JSON \(.*; bpmnlint reads it with JSON\.parse: no comments, no trailing commas\); bpmnlint did not run$/);
+    expect(broken.validation.warnings.find((warning) => warning.code === 'W_LINT_UNAVAILABLE')?.message).toMatch(/^\.bpmnlintrc is not JSON \(.*; bpmnlint reads it with JSON\.parse: no comments, no trailing commas\); bpmnlint did not run$/);
   });
 
   it('the settings (projectBpmnlintSettings): same lookup, normalised names, off included, a later bare flag drops options, unresolvable rules left out', async () => {
@@ -862,13 +862,13 @@ describe('the .bpmnlintrc on disk: lookup and flags', () => {
       rules: { '@miragon/bpmnlint-plugin-rules/element-id-naming': ['error', { case: 'PascalCase' }], 'label-required': 'off', 'local/r': 'warn', 'missing/x': 'warn' },
     });
     plugin(dir, 'bpmnlint-plugin-local', { configs: { base: { rules: { r: ['error', { a: 1 }] } } }, rules: { r: 'module.exports = () => ({ check() {} });' } });
-    const s = await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
-    expect(s?.path).toBe(join(dir, '.bpmnlintrc'));
-    expect(s?.rules['@miragon/rules/element-id-naming']).toEqual({ severity: 'error', config: { case: 'PascalCase' } });
-    expect(s?.rules['label-required']).toEqual({ severity: 'off', config: {} });
-    expect(s?.rules['local/r']).toEqual({ severity: 'warn', config: {} });
-    expect(s?.rules['missing/x']).toBeUndefined();
-    expect(s?.unavailable.map((u) => u.name)).toEqual(['missing/x']);
+    const settings = await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
+    expect(settings?.path).toBe(join(dir, '.bpmnlintrc'));
+    expect(settings?.rules['@miragon/rules/element-id-naming']).toEqual({ severity: 'error', config: { case: 'PascalCase' } });
+    expect(settings?.rules['label-required']).toEqual({ severity: 'off', config: {} });
+    expect(settings?.rules['local/r']).toEqual({ severity: 'warn', config: {} });
+    expect(settings?.rules['missing/x']).toBeUndefined();
+    expect(settings?.unavailable.map((unavailableEntry) => unavailableEntry.name)).toEqual(['missing/x']);
     expect(await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintConfig: false })).toBeUndefined();
     const jsonc = repo('{ "extends": "bpmnlint:recommended", }');
     const broken = await projectBpmnlintSettings(join(jsonc, 'x.bpmn'));
@@ -954,10 +954,10 @@ describe('the resolver chain: bundled, shipped, project', () => {
     expect(used.get('rule:bpmnlint/label-required')).toBe('bundled');
     const found = lintOf((await checkFile(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir })).validation.warnings);
     // info -> warning, options from the .bpmnlintrc
-    expect(found.map((f) => `${f.code} ${f.element}: ${f.message}`)).toEqual(['local/topic Activity_Book: Service task has no topic', 'camunda-compat/history-time-to-live Process_Order: from the project']);
+    expect(found.map((finding) => `${finding.code} ${finding.element}: ${finding.message}`)).toEqual(['local/topic Activity_Book: Service task has no topic', 'camunda-compat/history-time-to-live Process_Order: from the project']);
     // a host that does not run project code (the library default)
     const nocode = await chainOf(dir, false);
-    expect(nocode.loaded.resolved.unavailable.map((u) => `${u.name}: ${u.reason}`)).toEqual([
+    expect(nocode.loaded.resolved.unavailable.map((unavailableEntry) => `${unavailableEntry.name}: ${unavailableEntry.reason}`)).toEqual([
       'plugin:local/recommended: bpmnlint-plugin-local is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)',
       'plugin:camunda-compat/camunda-cloud-99-0: bpmnlint-plugin-camunda-compat 2.61.1 (bundled with bpmn-cli) has no config camunda-cloud-99-0, and this host does not run project plugins (lintProjectCode)',
       'local/topic: bpmnlint-plugin-local is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)',
@@ -975,7 +975,7 @@ describe('the resolver chain: bundled, shipped, project', () => {
     }, outer);
     const checked = await checkFile(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
     expect(existsSync(marker)).toBe(false);
-    const messages = checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => w.message);
+    const messages = checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => warning.message);
     expect(messages).toEqual([
       expect.stringMatching(/^plugin:up\/recommended left out: bpmnlint-plugin-up resolves outside the repository \(.*bpmnlint-plugin-up.index\.js\); bpmn-cli loads project plugins only from inside .*repo\d+$/),
       'moddle extension x (./tools/x.cjs) left out: only JSON descriptors are loaded (tools/x.cjs); rules reading x: properties may report findings that are not there',
@@ -987,7 +987,7 @@ describe('the resolver chain: bundled, shipped, project', () => {
   it('what cannot be resolved is named once per package and reason, with a hint; the rest runs', async () => {
     const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:missing/recommended'], rules: { 'missing/foo': 'error', 'nope-rule': 'warn', 'miragon/element-id-naming': 'warn' } }, { 'x.bpmn': await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]) });
     const checked = await checkFile(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
-    const unavailable = checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`);
+    const unavailable = checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`);
     expect(unavailable).toEqual([
       'plugin:missing/recommended, missing/foo left out: bpmnlint-plugin-missing is not installed (looked up from .)  (Install it next to the .bpmnlintrc (npm i -D bpmnlint-plugin-missing) or remove it from the configuration; --no-lint-config skips bpmnlint.)',
       'nope-rule left out: bpmnlint 11.15.0 has no rule nope-rule  (bpmn-cli runs bpmnlint 11.15.0; update bpmn-cli or remove the rule.)',
@@ -996,7 +996,7 @@ describe('the resolver chain: bundled, shipped, project', () => {
     expect(codes(lintOf(checked.validation.errors))).toContain('label-required Activity_AfterCheck');
     // no rule: validate's text never folds them, each keeps its hint
     const text = renderValidation(validationReport(checked)).split('\n');
-    expect(text.filter((l) => l.startsWith('[bpmnlint] W_LINT_UNAVAILABLE'))).toEqual(unavailable.map((u) => `[bpmnlint] W_LINT_UNAVAILABLE: ${u}`));
+    expect(text.filter((outputLine) => outputLine.startsWith('[bpmnlint] W_LINT_UNAVAILABLE'))).toEqual(unavailable.map((unavailableLine) => `[bpmnlint] W_LINT_UNAVAILABLE: ${unavailableLine}`));
     // a write counts them, and its validator line says they are there
     expect(checked.validation.validators?.[0]?.detail).toBe('.bpmnlintrc in .; 3 left out (W_LINT_UNAVAILABLE; bpmn validate lists them)');
   });
@@ -1007,7 +1007,7 @@ describe('the resolver chain: bundled, shipped, project', () => {
     const outside = join(top, 'outside-hints');
     mkdirSync(outside, { recursive: true });
     writeFileSync(join(outside, '.bpmnlintrc'), JSON.stringify(rc));
-    const hints = async (dir: string) => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintFrom: dir }))?.unavailable.map((u) => `${u.name}: ${u.hint}`);
+    const hints = async (dir: string) => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintFrom: dir }))?.unavailable.map((unavailableEntry) => `${unavailableEntry.name}: ${unavailableEntry.hint}`);
     expect(await hints(inRepo)).toEqual([
       'camunda-compat/no-such-rule: Check the name; a newer bpmnlint-plugin-camunda-compat installed in the repository next to the .bpmnlintrc is used only when the host passes lintProjectCode: true.',
       'missing/foo: Remove it from the configuration, or install it next to the .bpmnlintrc (npm i -D bpmnlint-plugin-missing) and let the host pass lintProjectCode: true.',
@@ -1022,7 +1022,7 @@ describe('the resolver chain: bundled, shipped, project', () => {
     const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:bad/recommended'] }, { 'x.bpmn': await model(LINE) });
     plugin(dir, 'bpmnlint-plugin-bad', { main: "throw new Error('cannot start');" });
     const checked = await checkFile(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir });
-    expect(checked.validation.warnings.filter((w) => w.code === 'W_LINT_UNAVAILABLE').map((w) => `${w.message}  (${w.hint})`)).toEqual([
+    expect(checked.validation.warnings.filter((warning) => warning.code === 'W_LINT_UNAVAILABLE').map((warning) => `${warning.message}  (${warning.hint})`)).toEqual([
       'plugin:bad/recommended left out: bpmnlint-plugin-bad fails to load: cannot start  (Fix or reinstall bpmnlint-plugin-bad; --no-lint-config skips bpmnlint.)',
     ]);
   });
@@ -1035,7 +1035,7 @@ describe('a long-running host: the load cache follows what the .bpmnlintrc left 
   it('a plugin or moddle package installed after the hint, and a descriptor fixed or edited, are picked up by the next call in the same process', async () => {
     const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:local/recommended'], moddleExtensions: { y: './tools/y.json', z: 'z-moddle/resources/z' } }, { 'x.bpmn': await model(LINE), 'tools/y.json': '{ broken' });
     const opts = { lintProjectCode: true, lintFrom: dir };
-    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), opts))!.unavailable.map((u) => `${u.name}: ${u.reason}`);
+    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), opts))!.unavailable.map((unavailableEntry) => `${unavailableEntry.name}: ${unavailableEntry.reason}`);
     expect(await left()).toEqual([
       'plugin:local/recommended: bpmnlint-plugin-local is not installed (looked up from .)',
       expect.stringMatching(/^y: cannot be read \(/),
@@ -1066,14 +1066,14 @@ describe('a long-running host: the load cache follows what the .bpmnlintrc left 
   it('a project plugin that failed to load is loaded again once it is fixed; a library host without lintProjectCode gets the hint for the installed package', async () => {
     const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:bad/recommended'] }, { 'x.bpmn': await model(LINE) });
     const pkg = plugin(dir, 'bpmnlint-plugin-bad', { main: "throw new Error('cannot start');" });
-    const left = async (lintProjectCode: boolean) => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode, lintFrom: dir }))!.unavailable.map((u) => `${u.name}: ${u.reason}`);
+    const left = async (lintProjectCode: boolean) => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode, lintFrom: dir }))!.unavailable.map((unavailableEntry) => `${unavailableEntry.name}: ${unavailableEntry.reason}`);
     expect(await left(true)).toEqual(['plugin:bad/recommended: bpmnlint-plugin-bad fails to load: cannot start']);
     writeFileSync(join(pkg, 'index.js'), `module.exports = { configs: { recommended: { rules: { always: 'error' } } } };`);
     writeFileSync(join(pkg, 'rules', 'always.js'), ALWAYS);
     expect(await left(true)).toEqual([]);
     // the host that does not run project code: not installed -> installed changes the reason
     const other = repo({ extends: ['plugin:later/recommended'] });
-    const hostLeft = async () => (await projectBpmnlintSettings(join(other, 'x.bpmn'), { lintFrom: other }))!.unavailable.map((u) => `${u.name}: ${u.reason}`);
+    const hostLeft = async () => (await projectBpmnlintSettings(join(other, 'x.bpmn'), { lintFrom: other }))!.unavailable.map((unavailableEntry) => `${unavailableEntry.name}: ${unavailableEntry.reason}`);
     expect(await hostLeft()).toEqual(['plugin:later/recommended: bpmnlint-plugin-later is not installed (looked up from .)']);
     plugin(other, 'bpmnlint-plugin-later', { configs: { recommended: { rules: {} } } });
     expect(await hostLeft()).toEqual(['plugin:later/recommended: bpmnlint-plugin-later is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)']);
@@ -1090,7 +1090,7 @@ describe('a long-running host: the load cache follows what the .bpmnlintrc left 
     moddle(parent);
     const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:outer/recommended'], moddleExtensions: { z: 'z-moddle/resources/z' } }, { 'x.bpmn': await model(LINE) }, parent);
     const opts = { lintProjectCode: true, lintFrom: dir };
-    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), opts))!.unavailable.map((u) => `${u.name}: ${u.reason} (${u.hint})`);
+    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), opts))!.unavailable.map((unavailableEntry) => `${unavailableEntry.name}: ${unavailableEntry.reason} (${unavailableEntry.hint})`);
     expect(await left()).toEqual([
       expect.stringMatching(/^plugin:outer\/recommended: bpmnlint-plugin-outer resolves outside the repository \(.*\(Install it inside the repository \(npm i -D bpmnlint-plugin-outer\)\.\)$/),
       expect.stringMatching(/^z: not installed \(looked up from \.\);.*\(Install its package next to the \.bpmnlintrc/),
@@ -1111,9 +1111,9 @@ describe('a long-running host: the load cache follows what the .bpmnlintrc left 
   it('a package or descriptor that appears while the load runs is seen by the next call (the state is taken before the load looks)', async () => {
     // a project plugin that writes the moddle descriptor when it is required: npm i finishing while the host lints
     const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:setup/recommended'], moddleExtensions: { z: 'z-moddle/resources/z' } }, { 'x.bpmn': await model(LINE) });
-    const z = join(dir, 'node_modules', 'z-moddle', 'resources');
-    plugin(dir, 'bpmnlint-plugin-setup', { main: `require('fs').mkdirSync(${JSON.stringify(z)}, { recursive: true }); require('fs').writeFileSync(${JSON.stringify(join(z, 'z.json'))}, ${JSON.stringify(descriptor('z'))});\nmodule.exports = { configs: { recommended: { rules: {} } } };` });
-    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir }))!.unavailable.map((u) => u.name);
+    const zModdleResources = join(dir, 'node_modules', 'z-moddle', 'resources');
+    plugin(dir, 'bpmnlint-plugin-setup', { main: `require('fs').mkdirSync(${JSON.stringify(zModdleResources)}, { recursive: true }); require('fs').writeFileSync(${JSON.stringify(join(zModdleResources, 'z.json'))}, ${JSON.stringify(descriptor('z'))});\nmodule.exports = { configs: { recommended: { rules: {} } } };` });
+    const left = async () => (await projectBpmnlintSettings(join(dir, 'x.bpmn'), { lintProjectCode: true, lintFrom: dir }))!.unavailable.map((unavailableEntry) => unavailableEntry.name);
     expect(await left()).toEqual(['z']);
     expect(await left()).toEqual([]);
     expect(await left()).toEqual([]);
@@ -1128,28 +1128,28 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     const file = join(dir, 'x.bpmn');
     const ops: Op[] = [{ op: 'add', kind: 'task', after: 'Activity_Check' }];
     const plain = await mutateFile(file, ops, { dryRun: true, lintConfig: false });
-    const r = await mutateFile(file, ops, { dryRun: true, lintFrom: dir });
+    const mutated = await mutateFile(file, ops, { dryRun: true, lintFrom: dir });
     // recommended-for-automation turns element-id-naming on: the new task and the flows bpmn-cli names take its prefixes and case (#34)
     const ids: Array<[string, string]> = [
       ['Activity_AfterCheck', 'task_afterCheck'],
       ['Flow_CheckToAfterCheck', 'flow_checkToAfterCheck'],
       ['Flow_AfterCheckToDone', 'flow_afterCheckToDone'],
     ];
-    expect(r.xml).toBe(ids.reduce((xml, [a, b]) => xml.replaceAll(a, b), plain.xml));
-    expect(r.conventions).toEqual({ ids: ['task_afterCheck', 'flow_checkToAfterCheck', 'flow_afterCheckToDone'], source: '.bpmnlintrc in .' });
-    const report = mutationReport(r);
+    expect(mutated.xml).toBe(ids.reduce((xml, [fromId, toId]) => xml.replaceAll(fromId, toId), plain.xml));
+    expect(mutated.conventions).toEqual({ ids: ['task_afterCheck', 'flow_checkToAfterCheck', 'flow_afterCheckToDone'], source: '.bpmnlintrc in .' });
+    const report = mutationReport(mutated);
     // no element-id-naming finding is added; the spliced flow's old one (Flow_CheckToDone) is resolved by its rename
     expect(codes(lintOf(report.warnings.added))).toEqual(['label-required task_afterCheck']);
     expect(codes(lintOf(report.warnings.resolved))).toEqual(['@miragon/rules/element-id-naming Flow_CheckToDone']);
     expect(lintOf(report.warnings.added)[0]).toMatchObject({ severity: 'error' });
     // W_LINT_UNAVAILABLE is the same before and after: counted, not added
     expect(codes(report.warnings.added)).not.toContain('W_LINT_UNAVAILABLE');
-    const v = report.validation.validators?.find((x) => x.name === 'bpmnlint');
-    expect(v).toMatchObject({ blocks: false, errors: [], preexisting: [] });
+    const validatorEntry = report.validation.validators?.find((validator) => validator.name === 'bpmnlint');
+    expect(validatorEntry).toMatchObject({ blocks: false, errors: [], preexisting: [] });
     const text = renderMutation(report);
     expect(text).toContain('warning [bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
-    const kept = v!.counts.errors + v!.counts.warnings - 1;
-    expect(text).toContain(`\nvalidator bpmnlint (.bpmnlintrc in .; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): ${v!.counts.errors} error(s), ${v!.counts.warnings} warning(s) in the result (1 added, ${v!.resolved.length} resolved, ${kept} already in the file)\n`);
+    const kept = validatorEntry!.counts.errors + validatorEntry!.counts.warnings - 1;
+    expect(text).toContain(`\nvalidator bpmnlint (.bpmnlintrc in .; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): ${validatorEntry!.counts.errors} error(s), ${validatorEntry!.counts.warnings} warning(s) in the result (1 added, ${validatorEntry!.resolved.length} resolved, ${kept} already in the file)\n`);
     expect(text).toContain("\nconventions: task_afterCheck, flow_checkToAfterCheck, flow_afterCheckToDone follow element-id-naming (.bpmnlintrc in .), not the file's own id style  (`bpmn show <file> --conventions`)\n");
     // --summary has no validator line: its count line counts the old findings (the library form of the CLI's --summary)
     const summary = renderSummary(mutationSummary(report), { advisory: advisoryValidators(report) });
@@ -1195,8 +1195,8 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
 
   it('a lint warning the change resolved that a bpmnlint finding covers is listed once, as that finding', async () => {
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'x.bpmn': (await newXml({ processName: 'Order' })).xml });
-    const r = mutationReport(await mutateFile(join(dir, 'x.bpmn'), [{ op: 'add', kind: 'start', name: 'Received' }], { dryRun: true }));
-    expect(codes(r.warnings.resolved)).toEqual(['start-event-required Process_Order']);
+    const mutation = mutationReport(await mutateFile(join(dir, 'x.bpmn'), [{ op: 'add', kind: 'start', name: 'Received' }], { dryRun: true }));
+    expect(codes(mutation.warnings.resolved)).toEqual(['start-event-required Process_Order']);
   });
 
   it('`new` lists the findings of the new model; lintBlocks makes bpmnlint block a write like a validator, old errors do not', async () => {
@@ -1208,7 +1208,7 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     expect(created.validation.validators?.[0]?.counts).toEqual({ errors: 2, warnings: 0 });
     // and validate fails on them (exit 2 in the CLI)
     expect((await checkFile(join(dir, 'new.bpmn'))).validation.errors.length).toBe(2);
-    const err = await mutateFile(join(dir, 'new.bpmn'), [{ op: 'add', kind: 'task', in: 'Process_Order' }], { lintBlocks: true }).then(() => undefined, (e: CliError) => e);
+    const err = await mutateFile(join(dir, 'new.bpmn'), [{ op: 'add', kind: 'task', in: 'Process_Order' }], { lintBlocks: true }).then(() => undefined, (failure: CliError) => failure);
     expect(err).toMatchObject({ code: 'E_VALIDATION' });
     expect(String(err?.details.hint)).toContain("The project's bpmnlint blocks here because the host asked for it (lintBlocks).");
     const fine = await mutateFile(join(dir, 'new.bpmn'), [{ op: 'set', id: 'Process_Order', values: { name: 'Orders' } }], { lintBlocks: true, dryRun: true });
@@ -1220,23 +1220,23 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     const report = validationReport(await checkFile(join(dir, 'gallery.bpmn'), { lintFrom: dir }));
     const all = lintOf([...report.errors, ...report.warnings]);
     const text = renderValidation(report);
-    const lines = text.split('\n').filter((l) => /^\[bpmnlint( error)?\] /.test(l));
+    const lines = text.split('\n').filter((outputLine) => /^\[bpmnlint( error)?\] /.test(outputLine));
     // one line per rule and hint (W_LINT_* is no rule: one line each)
     const byRule = new Map<string, number>();
-    for (const f of all) {
-      const key = f.code.startsWith('W_LINT_') ? `${f.code}|${byRule.size}` : `${f.code}|${f.hint ?? ''}`;
+    for (const finding of all) {
+      const key = finding.code.startsWith('W_LINT_') ? `${finding.code}|${byRule.size}` : `${finding.code}|${finding.hint ?? ''}`;
       byRule.set(key, (byRule.get(key) ?? 0) + 1);
     }
-    expect(lines.length).toBe([...byRule.values()].reduce((n, c) => n + (c >= 3 ? 1 : c), 0));
+    expect(lines.length).toBe([...byRule.values()].reduce((total, count) => total + (count >= 3 ? 1 : count), 0));
     expect(lines.length).toBeLessThan(all.length / 3);
     // an error reads [bpmnlint error], a warning [bpmnlint]
-    for (const f of all) expect(lines.some((l) => l.startsWith(`[bpmnlint${f.severity === 'error' ? ' error' : ''}] ${f.code}`)), f.code).toBe(true);
-    const naming = lines.find((l) => l.startsWith('[bpmnlint] @miragon/rules/element-id-naming x'))!;
+    for (const finding of all) expect(lines.some((outputLine) => outputLine.startsWith(`[bpmnlint${finding.severity === 'error' ? ' error' : ''}] ${finding.code}`)), finding.code).toBe(true);
+    const naming = lines.find((outputLine) => outputLine.startsWith('[bpmnlint] @miragon/rules/element-id-naming x'))!;
     const [, listed, convention] = naming.match(/^\[bpmnlint\] @miragon\/rules\/element-id-naming x\d+ \[([^\]]+)\]: (Element id must match the naming convention <\w+>) \(\d+ of \d+; \d+ others with \d+ other messages, --json lists them\)$/)!;
     // the ids listed are those with the message shown
     const ids = listed!.split(', ').filter((id) => !id.startsWith('+'));
     expect(ids.length).toBeGreaterThan(2);
-    for (const id of ids) expect(all.find((f) => f.code === '@miragon/rules/element-id-naming' && f.element === id)?.message, id).toBe(convention);
+    for (const id of ids) expect(all.find((finding) => finding.code === '@miragon/rules/element-id-naming' && finding.element === id)?.message, id).toBe(convention);
     const loose = ['A', 'B', 'C'].map((name): Op => ({ op: 'add', kind: 'task', name, in: 'Process_RenderGallery' }));
     const write = renderMutation(mutationReport(await mutateFile(join(dir, 'gallery.bpmn'), loose, { dryRun: true, lintFrom: dir })));
     expect(write).toMatch(/^warning \[bpmnlint error\] no-disconnected x3 \[task_a, task_b, task_c\]: Element is not connected$/m);
@@ -1250,7 +1250,7 @@ describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
   it('element-id-naming of the .bpmnlintrc decides the new ids; lintConfig false, a host\'s own conventions or its own bpmnlint validator switch the lookup off', async () => {
     const dir = repo(AUTOMATION, { 'x.bpmn': await model(LINE) });
     const file = join(dir, 'x.bpmn');
-    const ids = async (opts: Parameters<typeof mutateFile>[2]) => (await mutateFile(file, ADD, { dryRun: true, lintFrom: dir, ...opts })).changes.created.map((c) => c.id);
+    const ids = async (opts: Parameters<typeof mutateFile>[2]) => (await mutateFile(file, ADD, { dryRun: true, lintFrom: dir, ...opts })).changes.created.map((createdElement) => createdElement.id);
     expect(await ids({})).toEqual(['serviceTask_ship', 'flow_shipToDone']);
     expect(await ids({ lintConfig: false })).toEqual(['Activity_Ship', 'Flow_ShipToDone']);
     expect(await ids({ conventions: { prefixes: { 'bpmn:ServiceTask': 'svc_' }, case: 'PascalCase' } })).toEqual(['svc_Ship', 'Flow_ShipToDone']);
@@ -1262,16 +1262,16 @@ describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
     const rc = { extends: 'bpmnlint:recommended', rules: { '@miragon/rules/element-id-naming': ['warn', { case: 'camelcase', prefixes: { 'bpmn:UserTask': 'user task_' } }] } };
     const dir = repo(rc, { 'x.bpmn': await model(LINE) });
     const file = join(dir, 'x.bpmn');
-    const notes = (issues: readonly unknown[]) => lintOf(issues).filter((i) => i.code === 'W_CONFIG_IGNORED');
+    const notes = (issues: readonly unknown[]) => lintOf(issues).filter((issue) => issue.code === 'W_CONFIG_IGNORED');
     const checked = await checkFile(file, { lintFrom: dir });
-    expect(notes(checked.validation.warnings).map((n) => n.message)).toEqual([
+    expect(notes(checked.validation.warnings).map((note) => note.message)).toEqual([
       '.bpmnlintrc in .: @miragon/rules/element-id-naming case "camelcase" is unknown: the rule checks PascalCase, and new ids take it',
       ".bpmnlintrc in .: @miragon/rules/element-id-naming prefix of bpmn:UserTask \"user task_\" cannot start an id (a letter or _ first, then letters, digits, _ . -, at most 56 characters): new ids of the type follow the learned id style, and the rule reports them",
     ]);
     expect(renderValidation(validationReport(checked))).toMatch(/^\[bpmnlint\] W_CONFIG_IGNORED: \.bpmnlintrc in \.: @miragon\/rules\/element-id-naming case "camelcase" is unknown: .* {2}\(Write one of camelCase, PascalCase, snake_case, any in the \.bpmnlintrc\. Did you mean camelCase\?\)$/m);
     const write = await mutateFile(file, [...ADD, { op: 'add', kind: 'userTask', name: 'Approve', after: 'Activity_Check' }], { dryRun: true, lintFrom: dir });
     // the user task's prefix is ignored: learned from the file's ids that do not follow the rule (Activity_Check)
-    expect(write.changes.created.map((c) => c.id)).toEqual(['serviceTask_Ship', 'flow_ShipToDone', 'Activity_Approve', 'flow_ApproveToShip']);
+    expect(write.changes.created.map((createdElement) => createdElement.id)).toEqual(['serviceTask_Ship', 'flow_ShipToDone', 'Activity_Approve', 'flow_ApproveToShip']);
     const report = mutationReport(write);
     expect(notes(report.warnings.added)).toEqual([]);
     expect(renderMutation(report)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .; 2 element-id-naming values ignored (W_CONFIG_IGNORED; bpmn validate lists them)): ');
@@ -1296,7 +1296,7 @@ describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
   });
 
   it('a .bpmnlintrc without element-id-naming, or with it off, writes every byte as without a .bpmnlintrc (the fixtures)', async () => {
-    const fixtures = readdirSync(join(ROOT, 'test', 'fixtures'), { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.bpmn'));
+    const fixtures = readdirSync(join(ROOT, 'test', 'fixtures'), { recursive: true, encoding: 'utf8' }).filter((fixturePath) => fixturePath.endsWith('.bpmn'));
     expect(fixtures.length).toBeGreaterThan(40);
     const off = repo({ extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/recommended-for-modeling'], rules: { '@miragon/rules/element-id-naming': 'off' } });
     const absent = repo({ extends: 'bpmnlint:recommended' });
@@ -1317,11 +1317,11 @@ describe('the id conventions of the .bpmnlintrc (#34, in process)', () => {
       for (const dir of [off, absent, undefined]) {
         const file = join(dir ?? top, `probe-${compared.length}.bpmn`);
         writeFileSync(file, text);
-        const r = await mutateFile(file, ops, { dryRun: true, ...(dir ? { lintFrom: dir } : { lintConfig: false }) }).then(
-          (m) => `${m.xml}\n${JSON.stringify(m.changes.created)}`,
-          (e: CliError) => `${e.code} ${e.message}`,
+        const outcome = await mutateFile(file, ops, { dryRun: true, ...(dir ? { lintFrom: dir } : { lintConfig: false }) }).then(
+          (mutatedFile) => `${mutatedFile.xml}\n${JSON.stringify(mutatedFile.changes.created)}`,
+          (failure: CliError) => `${failure.code} ${failure.message}`,
         );
-        results.push(r);
+        results.push(outcome);
       }
       expect(results[0], fixture).toBe(results[2]);
       expect(results[1], fixture).toBe(results[2]);
@@ -1349,17 +1349,17 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
   }, 120000);
 
   const bpmn = (cwd: string, args: string[], input?: string, bin = cli) => {
-    const r = spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', input: input ?? '' });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+    const spawned = spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', input: input ?? '' });
+    return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
   };
 
   it('validate runs the .bpmnlintrc (exit 2 on its errors); --no-lint-config and --lint-config; stdin from the working directory; JSON', async () => {
     const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'models/x.bpmn': xml, 'lint/strict.json': JSON.stringify({ rules: { 'label-required': 'warn' } }) });
-    const v = bpmn(dir, ['validate', 'models/x.bpmn']);
-    expect(v.code, v.err).toBe(2);
-    expect(v.out).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
-    expect(v.out).toContain('validator bpmnlint (.bpmnlintrc in .): 1 error(s), 0 warning(s) in the file\n');
+    const validated = bpmn(dir, ['validate', 'models/x.bpmn']);
+    expect(validated.code, validated.err).toBe(2);
+    expect(validated.out).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(validated.out).toContain('validator bpmnlint (.bpmnlintrc in .): 1 error(s), 0 warning(s) in the file\n');
     const off = bpmn(dir, ['validate', 'models/x.bpmn', '--no-lint-config']);
     expect(off.code).toBe(0);
     expect(off.out).not.toContain('bpmnlint');
@@ -1386,11 +1386,11 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     plugin(dir, 'bpmnlint-plugin-evil', { main: `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran'); module.exports = { configs: { recommended: { rules: {} } } };` });
     const asRoot = join(top, 'as-root.cjs');
     writeFileSync(asRoot, 'process.getuid = () => 0; delete process.env.SUDO_UID;\n');
-    const r = spawnSync(process.execPath, ['--require', asRoot, cli, 'validate', 'x.bpmn'], { cwd: join(dir, 'models'), encoding: 'utf8', input: '' });
-    expect(r.status, r.stderr).toBe(2);
-    expect(r.stdout).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
-    expect(r.stdout).toContain("[bpmnlint] W_LINT_UNAVAILABLE: plugin:evil/recommended left out: bpmnlint-plugin-evil is not bundled with bpmn-cli, and bpmn-cli runs project plugins only in a repository of the user running it (the repository of ../.git belongs to another user)  (Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; --no-lint-config skips bpmnlint.)\n");
-    expect(r.stdout).toContain('validator bpmnlint (.bpmnlintrc in ..; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): 1 error(s), 1 warning(s) in the file\n');
+    const spawned = spawnSync(process.execPath, ['--require', asRoot, cli, 'validate', 'x.bpmn'], { cwd: join(dir, 'models'), encoding: 'utf8', input: '' });
+    expect(spawned.status, spawned.stderr).toBe(2);
+    expect(spawned.stdout).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(spawned.stdout).toContain("[bpmnlint] W_LINT_UNAVAILABLE: plugin:evil/recommended left out: bpmnlint-plugin-evil is not bundled with bpmn-cli, and bpmn-cli runs project plugins only in a repository of the user running it (the repository of ../.git belongs to another user)  (Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; --no-lint-config skips bpmnlint.)\n");
+    expect(spawned.stdout).toContain('validator bpmnlint (.bpmnlintrc in ..; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): 1 error(s), 1 warning(s) in the file\n');
     expect(existsSync(marker)).toBe(false);
     // as the checkout's owner the plugin runs
     const own = bpmn(join(dir, 'models'), ['validate', 'x.bpmn']);
@@ -1416,10 +1416,10 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     const dir = repo({ rules: { 'big/many': 'error' } }, { 'x.bpmn': await model(LINE), 'lint/warn.json': JSON.stringify({ rules: { 'big/many': 'warn' } }) });
     plugin(dir, 'bpmnlint-plugin-big', { rules: { many } });
     const piped = (args: string[], code: number) => {
-      const r = bpmn(dir, args);
-      expect(r.code, r.err).toBe(code);
-      expect(r.out.length, args.join(' ')).toBeGreaterThan(65536);
-      return JSON.parse(r.out) as { errors?: unknown[]; warnings?: unknown };
+      const cliRun = bpmn(dir, args);
+      expect(cliRun.code, cliRun.err).toBe(code);
+      expect(cliRun.out.length, args.join(' ')).toBeGreaterThan(65536);
+      return JSON.parse(cliRun.out) as { errors?: unknown[]; warnings?: unknown };
     };
     expect(piped(['validate', 'x.bpmn', '--json'], 2).errors).toHaveLength(300);
     piped(['validate', 'x.bpmn', '--json', '--strict', '--lint-config', 'lint/warn.json'], 5);
@@ -1429,7 +1429,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
       new Promise<{ code: number | null; err: string }>((done) => {
         const child = spawn(process.execPath, [cli, ...args], { cwd: dir });
         let err = '';
-        child.stderr.setEncoding('utf8').on('data', (d: string) => (err += d));
+        child.stderr.setEncoding('utf8').on('data', (chunk: string) => (err += chunk));
         child.stdout.once('data', () => child.stdout.destroy());
         child.on('close', (code) => done({ code, err }));
       });
@@ -1447,9 +1447,9 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     });
     for (const [args, code] of [[['validate', 'x.bpmn'], 2], [['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run'], 0]] as const) {
       const started = Date.now();
-      const r = spawnSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8', input: '', timeout: 20000 });
-      expect(r.signal, args.join(' ')).toBeNull();
-      expect(r.status, r.stderr).toBe(code);
+      const spawned = spawnSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8', input: '', timeout: 20000 });
+      expect(spawned.signal, args.join(' ')).toBeNull();
+      expect(spawned.status, spawned.stderr).toBe(code);
       expect(Date.now() - started, args.join(' ')).toBeLessThan(15000);
     }
   }, 60000);
@@ -1459,12 +1459,12 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     const gone = join(top, 'gone-cwd');
     const inGone = (args: string[]) => {
       mkdirSync(gone, { recursive: true });
-      const r = spawnSync('/bin/sh', ['-c', 'cd "$1" && rmdir "$1" && shift && exec "$@"', 'sh', gone, process.execPath, cli, ...args], { encoding: 'utf8', input: '' });
-      return { code: r.status, out: r.stdout, err: r.stderr };
+      const spawned = spawnSync('/bin/sh', ['-c', 'cd "$1" && rmdir "$1" && shift && exec "$@"', 'sh', gone, process.execPath, cli, ...args], { encoding: 'utf8', input: '' });
+      return { code: spawned.status, out: spawned.stdout, err: spawned.stderr };
     };
-    const v = inGone(['validate', join(dir, 'x.bpmn')]);
-    expect(v.code, v.err).toBe(2);
-    expect(v.out).toContain('[bpmnlint error] label-required Activity_AfterCheck');
+    const validated = inGone(['validate', join(dir, 'x.bpmn')]);
+    expect(validated.code, validated.err).toBe(2);
+    expect(validated.out).toContain('[bpmnlint error] label-required Activity_AfterCheck');
     const off = inGone(['validate', join(dir, 'x.bpmn'), '--no-lint-config']);
     expect(off.code, off.err).toBe(0);
     const add = inGone(['add', join(dir, 'x.bpmn'), 'task', 'Ship', '--after', 'Activity_AfterCheck', '--dry-run']);
@@ -1541,10 +1541,10 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     writeFileSync(join(stub, 'index.cjs'), "throw new Error('the plugin is broken');");
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'x.bpmn': await model(LINE) });
     const bin = join(broken, 'dist', 'cli.js');
-    const v = bpmn(dir, ['validate', 'x.bpmn'], undefined, bin);
-    expect(v.code, v.err).toBe(0);
-    expect(v.out).toContain('[bpmnlint] W_LINT_UNAVAILABLE: bpmnlint could not be loaded: the plugin is broken; the plugin found bpmnlint 11.15.0 in ');
-    expect(v.out).toContain('validator bpmnlint (.bpmnlintrc in .; bpmnlint did not run (bpmn validate lists why)): 0 error(s), 1 warning(s) in the file\n');
+    const validated = bpmn(dir, ['validate', 'x.bpmn'], undefined, bin);
+    expect(validated.code, validated.err).toBe(0);
+    expect(validated.out).toContain('[bpmnlint] W_LINT_UNAVAILABLE: bpmnlint could not be loaded: the plugin is broken; the plugin found bpmnlint 11.15.0 in ');
+    expect(validated.out).toContain('validator bpmnlint (.bpmnlintrc in .; bpmnlint did not run (bpmn validate lists why)): 0 error(s), 1 warning(s) in the file\n');
     const add = bpmn(dir, ['add', 'x.bpmn', 'task', 'Ship', '--after', 'Activity_Check'], undefined, bin);
     expect(add.code, add.err).toBe(0);
     expect(add.out).toContain('written: x.bpmn');
@@ -1572,9 +1572,9 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
       writeFileSync(join(target, 'package.json'), JSON.stringify({ name: 'bpmnlint', version: '11.0.0', main: 'lib/index.js' }));
     });
     writeFileSync(join(old.dir, 'x.bpmn'), xml);
-    const v = bpmn(old.dir, ['validate', 'x.bpmn'], undefined, old.bin);
-    expect(v.code, v.err).toBe(0);
-    expect(v.out).toMatch(/\[bpmnlint\] W_LINT_UNAVAILABLE: bpmnlint could not be loaded: Cannot find module 'bpmnlint\/[^']+'; the plugin found bpmnlint 11\.0\.0 in node_modules\/bpmnlint; bpmnlint did not run {2}\(bpmn-cli needs bpmnlint >= 11\.14 next to @miragon\/bpmnlint-plugin-rules \(it pins 11\.15\.0\): update the project's bpmnlint \(npm i -D bpmnlint@11\.15\.0\) or run bpmn-cli from its own install \(npx\); --no-lint-config skips bpmnlint\.\)\n/);
+    const validated = bpmn(old.dir, ['validate', 'x.bpmn'], undefined, old.bin);
+    expect(validated.code, validated.err).toBe(0);
+    expect(validated.out).toMatch(/\[bpmnlint\] W_LINT_UNAVAILABLE: bpmnlint could not be loaded: Cannot find module 'bpmnlint\/[^']+'; the plugin found bpmnlint 11\.0\.0 in node_modules\/bpmnlint; bpmnlint did not run {2}\(bpmn-cli needs bpmnlint >= 11\.14 next to @miragon\/bpmnlint-plugin-rules \(it pins 11\.15\.0\): update the project's bpmnlint \(npm i -D bpmnlint@11\.15\.0\) or run bpmn-cli from its own install \(npx\); --no-lint-config skips bpmnlint\.\)\n/);
     const other = project('other', (target) => {
       cpSync(join(ROOT, 'node_modules', 'bpmnlint'), target, { recursive: true });
       const pkg = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8'));
@@ -1588,8 +1588,8 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
 
   it('the examples of docs/bpmnlint.md: validate and a write on a Camunda 7 project with camunda-compat, @miragon/rules and a project plugin', async () => {
     const doc = readFileSync(join(ROOT, 'docs', 'bpmnlint.md'), 'utf8');
-    const blocks = [...doc.matchAll(/```(?:console)?\n(\$ bpmn [\s\S]*?)```/g)].map((m) => m[1]!.trimEnd().split('\n'));
-    expect(blocks.map((b) => b[0])).toEqual(['$ bpmn validate models/order.bpmn', '$ bpmn add models/order.bpmn serviceTask "Book order" --after Activity_CheckOrder camunda:type=external', '$ bpmn show models/order.bpmn --conventions']);
+    const blocks = [...doc.matchAll(/```(?:console)?\n(\$ bpmn [\s\S]*?)```/g)].map((match) => match[1]!.trimEnd().split('\n'));
+    expect(blocks.map((block) => block[0])).toEqual(['$ bpmn validate models/order.bpmn', '$ bpmn add models/order.bpmn serviceTask "Book order" --after Activity_CheckOrder camunda:type=external', '$ bpmn show models/order.bpmn --conventions']);
     const dir = repo({
       extends: ['bpmnlint:recommended', 'plugin:camunda-compat/camunda-platform-7-24', 'plugin:@miragon/rules/recommended-for-automation', 'plugin:local/recommended'],
       moddleExtensions: { camunda: 'camunda-bpmn-moddle/resources/camunda.json' },
@@ -1606,12 +1606,12 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
       { op: 'add', kind: 'userTask', name: 'Check order', id: 'Activity_CheckOrder', after: 'Event_OrderReceived' },
       { op: 'add', kind: 'end', name: 'Order checked', id: 'Event_OrderChecked', after: 'Activity_CheckOrder' },
     ])).xml);
-    const args = (line: string) => [...line.matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]!).slice(2);
+    const args = (line: string) => [...line.matchAll(/"([^"]*)"|(\S+)/g)].map((match) => match[1] ?? match[2]!).slice(2);
     const [validate, add, conventions] = blocks as [string[], string[], string[]];
     // the write first, then validate the result and show its id conventions
     const written = bpmn(dir, args(add[0]!));
     expect(written.code, written.err).toBe(0);
-    for (const line of add.slice(1).filter((l) => l !== '...')) expect(written.out.split('\n'), line).toContain(line);
+    for (const line of add.slice(1).filter((outputLine) => outputLine !== '...')) expect(written.out.split('\n'), line).toContain(line);
     const checked = bpmn(dir, args(validate[0]!));
     expect(checked.code).toBe(2);
     expect(checked.out.trimEnd()).toBe(validate.slice(1).join('\n'));
@@ -1688,9 +1688,9 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     const checked = bpmn(dir, ['validate', 'a.bpmn']);
     expect(checked.out).toContain(`[bpmnlint] ${line('bpmndi:BPMNShape', 'shape_')}\n[bpmnlint] ${line('bpmndi:BPMNEdge', 'edge_')}\n`);
     const shown = bpmn(dir, ['show', 'a.bpmn', '--conventions']);
-    expect(shown.out.split('\n').filter((l) => l.startsWith('warning '))).toEqual([`warning ${line('bpmndi:BPMNShape', 'shape_')}`, `warning ${line('bpmndi:BPMNEdge', 'edge_')}`]);
+    expect(shown.out.split('\n').filter((outputLine) => outputLine.startsWith('warning '))).toEqual([`warning ${line('bpmndi:BPMNShape', 'shape_')}`, `warning ${line('bpmndi:BPMNEdge', 'edge_')}`]);
     // DI ids stay bpmn-cli's: no row of the view names them
-    expect(shown.out.split('\n').filter((l) => l.startsWith('  ') && /shape_|edge_|BPMN/.test(l))).toEqual([]);
+    expect(shown.out.split('\n').filter((outputLine) => outputLine.startsWith('  ') && /shape_|edge_|BPMN/.test(outputLine))).toEqual([]);
   });
 });
 
@@ -1731,8 +1731,8 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
         { op: 'add', kind: 'end', name: 'Done', after: '$t' },
       ];
       const result = (await applyToXml(xml, ops, { validators: [lint], conventions })).result;
-      expect(result.created.map((c) => c.id), target).toEqual(['startEvent_orderReceived', 'userTask_checkOrder', 'flow_orderReceivedToCheckOrder', 'endEvent_done', 'flow_checkOrderToDone']);
-      expect(lintOf(result.warnings.added).filter((w) => w.code === ID_NAMING_RULE), target).toEqual([]);
+      expect(result.created.map((createdElement) => createdElement.id), target).toEqual(['startEvent_orderReceived', 'userTask_checkOrder', 'flow_orderReceivedToCheckOrder', 'endEvent_done', 'flow_checkOrderToDone']);
+      expect(lintOf(result.warnings.added).filter((warning) => warning.code === ID_NAMING_RULE), target).toEqual([]);
     }
     const c7 = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ engine: 'c7' }));
     expect(Object.keys(c7.moddleExtensions)).toEqual(['camunda']);
@@ -1752,10 +1752,10 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
     const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });
     const ops: Op[] = [{ op: 'add', kind: 'serviceTask', name: 'Ship', after: 'Activity_Check' }];
     const named = await applyToXml(await model(LINE), ops, { validators: [bpmnlintValidator(engine, automation, { notes })], conventions });
-    expect(named.result.created.map((c) => c.id)).toEqual(['serviceTask_ship', 'flow_shipToDone']);
+    expect(named.result.created.map((createdElement) => createdElement.id)).toEqual(['serviceTask_ship', 'flow_shipToDone']);
     expect(named.result.conventions).toEqual({ ids: ['serviceTask_ship', 'flow_checkToShip', 'flow_shipToDone'], source: 'our rules' });
-    expect(lintOf(named.result.warnings.added).filter((w) => w.code === ID_NAMING_RULE)).toEqual([]);
+    expect(lintOf(named.result.warnings.added).filter((warning) => warning.code === ID_NAMING_RULE)).toEqual([]);
     const table = await applyToXml(await model(LINE), ops, { conventions: { prefixes: { 'bpmn:ServiceTask': 'serviceTask_', 'bpmn:SequenceFlow': 'flow_' }, case: 'camelCase' } });
-    expect(table.result.created.map((c) => c.id)).toEqual(['serviceTask_ship', 'flow_shipToDone']);
+    expect(table.result.created.map((createdElement) => createdElement.id)).toEqual(['serviceTask_ship', 'flow_shipToDone']);
   });
 });

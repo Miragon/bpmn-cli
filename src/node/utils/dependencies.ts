@@ -29,17 +29,17 @@ export function isBare(id: string): boolean {
 
 export function packageOf(id: string): { name: string; sub: string } {
   const parts = id.split('/');
-  const n = id.startsWith('@') ? 2 : 1;
-  return { name: parts.slice(0, n).join('/'), sub: parts.slice(n).join('/') };
+  const segmentCount = id.startsWith('@') ? 2 : 1;
+  return { name: parts.slice(0, segmentCount).join('/'), sub: parts.slice(segmentCount).join('/') };
 }
 
 function onDisk(dir: string, id: string): string[] {
   if (!isBare(id)) return [resolve(dir, id)];
   const { name, sub } = packageOf(id);
-  for (let d = dir; ; d = dirname(d)) {
-    const pkg = join(d, 'node_modules', name);
-    if (basename(d) !== 'node_modules' && exists(pkg)) return [pkg, join(pkg, 'package.json'), ...(sub ? [join(pkg, sub)] : [])];
-    if (dirname(d) === d) return [];
+  for (let searchDir = dir; ; searchDir = dirname(searchDir)) {
+    const pkg = join(searchDir, 'node_modules', name);
+    if (basename(searchDir) !== 'node_modules' && exists(pkg)) return [pkg, join(pkg, 'package.json'), ...(sub ? [join(pkg, sub)] : [])];
+    if (dirname(searchDir) === searchDir) return [];
   }
 }
 

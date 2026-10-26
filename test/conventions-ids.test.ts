@@ -24,18 +24,18 @@ const NOT_SPEAKING = /_([01][0-9a-z]{6}|\d+)$/;
 
 /** A chain of flow nodes `[tag, id, name?]` connected by flows with the given ids (incoming / outgoing kept). */
 function chain(nodes: Array<[string, string, string?]>, flowIds: string[]): string {
-  const body = nodes.map(([tag, id, name], i) => {
-    const links = [...(i > 0 ? [`<bpmn:incoming>${flowIds[i - 1]}</bpmn:incoming>`] : []), ...(i + 1 < nodes.length ? [`<bpmn:outgoing>${flowIds[i]}</bpmn:outgoing>`] : [])];
+  const body = nodes.map(([tag, id, name], nodeIndex) => {
+    const links = [...(nodeIndex > 0 ? [`<bpmn:incoming>${flowIds[nodeIndex - 1]}</bpmn:incoming>`] : []), ...(nodeIndex + 1 < nodes.length ? [`<bpmn:outgoing>${flowIds[nodeIndex]}</bpmn:outgoing>`] : [])];
     return `<bpmn:${tag} id="${id}"${name ? ` name="${name}"` : ''}>${links.join('')}</bpmn:${tag}>`;
   });
-  for (let i = 0; i + 1 < nodes.length; i++) body.push(`<bpmn:sequenceFlow id="${flowIds[i]}" sourceRef="${nodes[i]![1]}" targetRef="${nodes[i + 1]![1]}" />`);
+  for (let flowIndex = 0; flowIndex + 1 < nodes.length; flowIndex++) body.push(`<bpmn:sequenceFlow id="${flowIds[flowIndex]}" sourceRef="${nodes[flowIndex]![1]}" targetRef="${nodes[flowIndex + 1]![1]}" />`);
   return definitionsXml(body.join('\n'));
 }
 
 async function created(xml: string, ops: Op[]): Promise<{ doc: Doc; ids: string[]; warnings: string[] }> {
   const doc = await Doc.fromXml(xml);
   const cs = runOps(doc, ops);
-  return { doc, ids: cs.created.map((c) => c.id), warnings: cs.warnings.map((w) => w.code) };
+  return { doc, ids: cs.created.map((created) => created.id), warnings: cs.warnings.map((warning) => warning.code) };
 }
 
 /** Camunda Modeler: random 7-character ids, `<id>_di` DI. */
@@ -105,24 +105,24 @@ describe('id style inference (edits follow the file)', () => {
 
   it('a Camunda Modeler file gets speaking ids with the modeler prefixes; flows name their ends', async () => {
     const ops: Op[] = [{ op: 'add', kind: 'userTask', name: 'Pack order', after: 'Activity_0k3x9qa' }];
-    const a = await created(MODELER, ops);
+    const spliceEdit = await created(MODELER, ops);
     // hashes show no case: pascal bodies, the file's prefixes and flow prefix
     expect(IdStyle.infer((await Doc.fromXml(MODELER)).definitions).info()).toEqual({ body: 'pascal', sequenceFlow: { form: 'named', prefix: 'Flow' }, messageFlow: { form: 'named', prefix: 'Flow' } });
     // `--after` splices: the anchor's (hashed) flow keeps its id and now ends at the new node, a new flow runs on to the
     // old target, named after the ends (the gateway by its name: its id says nothing)
-    expect(a.ids).toEqual(['Activity_PackOrder', 'Flow_PackOrderToOrderOk']);
-    expect(flowBetween(a.doc, 'Activity_0k3x9qa', 'Activity_PackOrder')).toBe('Flow_1q2w3e4');
+    expect(spliceEdit.ids).toEqual(['Activity_PackOrder', 'Flow_PackOrderToOrderOk']);
+    expect(flowBetween(spliceEdit.doc, 'Activity_0k3x9qa', 'Activity_PackOrder')).toBe('Flow_1q2w3e4');
     // the same edit on the same file gives the same ids
-    expect((await created(MODELER, ops)).ids).toEqual(a.ids);
+    expect((await created(MODELER, ops)).ids).toEqual(spliceEdit.ids);
     // unnamed elements: a word for the kind and the context (Timer On <host>, After <anchor>)
-    const b = await created(MODELER, [
+    const unnamedEdit = await created(MODELER, [
       { op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_0k3x9qa', timer: 'PT1H' },
       { op: 'add', kind: 'endEvent', after: 'Event_TimerOnCheckOrder' },
       { op: 'add', kind: 'parallelGateway', after: 'Activity_1m2n3b4' },
     ]);
     // a flow names an unnamed end by its own id's speaking part (its kind and place), never by a bare kind word
-    expect(b.ids).toEqual(['Event_TimerOnCheckOrder', 'Event_EndAfterTimerOnCheckOrder', 'Flow_TimerOnCheckOrderToEndAfterTimerOnCheckOrder', 'Gateway_AfterShipOrder', 'Flow_AfterShipOrderToOrderShipped']);
-    for (const id of [...a.ids, ...b.ids]) expect(id).not.toMatch(NOT_SPEAKING);
+    expect(unnamedEdit.ids).toEqual(['Event_TimerOnCheckOrder', 'Event_EndAfterTimerOnCheckOrder', 'Flow_TimerOnCheckOrderToEndAfterTimerOnCheckOrder', 'Gateway_AfterShipOrder', 'Flow_AfterShipOrderToOrderShipped']);
+    for (const id of [...spliceEdit.ids, ...unnamedEdit.ids]) expect(id).not.toMatch(NOT_SPEAKING);
   });
 
   it('type-named camelCase files: serviceTask_checkStock, flow_checkStockToApproveOrder', async () => {
@@ -238,7 +238,7 @@ describe('id style inference (edits follow the file)', () => {
     const doc = await Doc.fromXml(CAMEL);
     const cs = runOps(doc, [{ op: 'add', kind: 'serviceTask', name: 'Check stock', in: 'Process_1' }]);
     expect(cs.created[0]!.id).toBe('serviceTask_checkStock_2');
-    expect(cs.warnings.map((w) => w.message)).toEqual(['Id serviceTask_checkStock is already taken; using serviceTask_checkStock_2']);
+    expect(cs.warnings.map((warning) => warning.message)).toEqual(['Id serviceTask_checkStock is already taken; using serviceTask_checkStock_2']);
     let hint = '';
     try {
       runOps(doc, [{ op: 'add', kind: 'userTask', name: 'Pack goods', in: 'Process_1', ifAbsent: true }]);
@@ -303,7 +303,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
   });
 
   it("#31: bpmn-cli's own suffixed flows still count for a flow12 file's form, as in 0.6: the file keeps flowAToB as long", async () => {
-    const tasks = ['Check', 'Ship', 'Bill', 'Archive', 'Pay', 'Log', 'Send'].map((n): [string, string, string] => ['task', `Activity_${n}`, n]);
+    const tasks = ['Check', 'Ship', 'Bill', 'Archive', 'Pay', 'Log', 'Send'].map((taskName): [string, string, string] => ['task', `Activity_${taskName}`, taskName]);
     const glued = chain(tasks, ['flow1', 'flow2', 'flow3', 'flowArchiveToPay', 'flowPayToLog', 'flowLogToSend']);
     const { doc } = await created(glued, [
       { op: 'connect', source: 'Activity_Pay', target: 'Activity_Log' },
@@ -316,7 +316,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     expect(again.idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'flow', sep: '' });
     const cs = runOps(again, [{ op: 'add', kind: 'task', name: 'Audit', flow: 'flowLogToSend' }]);
     expect(cs.renames).toEqual([expect.objectContaining({ from: 'flowLogToSend', to: 'flowLogToAudit' })]);
-    expect(cs.created.map((c) => c.id)).toEqual(['Activity_Audit', 'flowAuditToSend']);
+    expect(cs.created.map((created) => created.id)).toEqual(['Activity_Audit', 'flowAuditToSend']);
     // and after three more commands: the glued flows without a suffix vote for flow12's prefix too (before: three flow12
     // ids and the suffixed flow against eight of them, the file read as Flow_ and the splice kept flowLogToAudit)
     let xml = await again.toXml();
@@ -329,7 +329,7 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     expect(later.idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'flow', sep: '' });
     const spliced = runOps(later, [{ op: 'add', kind: 'task', name: 'Weigh', flow: 'flowLogToAudit' }]);
     expect(spliced.renames).toEqual([expect.objectContaining({ from: 'flowLogToAudit', to: 'flowLogToWeigh' })]);
-    expect(spliced.created.map((c) => c.id)).toEqual(['Activity_Weigh', 'flowWeighToAudit']);
+    expect(spliced.created.map((created) => created.id)).toEqual(['Activity_Weigh', 'flowWeighToAudit']);
   });
 
   it('an unnamed element in such a file still gets a prefix (its kind and context need one)', async () => {
@@ -392,8 +392,8 @@ describe('id style inference: ids without prefix, numbers without separator, sco
     );
     const doc = await Doc.fromXml(scoped);
     expect(doc.idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'KotO' });
-    const r = await created(scoped, [{ op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', after: 'serviceTask_KotO_ReserveInventory' }]);
-    expect(r.ids).toEqual(['userTask_KotO_ReviewOrder', 'Flow_KotO_ReviewToConfirm']);
+    const reviewEdit = await created(scoped, [{ op: 'add', kind: 'userTask', id: 'userTask_KotO_ReviewOrder', name: 'Review order', after: 'serviceTask_KotO_ReserveInventory' }]);
+    expect(reviewEdit.ids).toEqual(['userTask_KotO_ReviewOrder', 'Flow_KotO_ReviewToConfirm']);
     // an end event as the target, a start event as the source; a second flow of the same words gets a number
     const ends = await created(scoped, [
       { op: 'add', kind: 'endEvent', id: 'endEvent_KotO_Failed', name: 'Failed', in: 'Process_1' },
@@ -464,8 +464,8 @@ describe('id style inference: ids without prefix, numbers without separator, sco
       ],
       ['Flow_KotO_ValidateToReserve', 'Flow_KotO_ReserveToPdf10'],
     );
-    const s = await created(scoped, [{ op: 'connect', source: 'serviceTask_KotO_ReserveInventory', target: 'serviceTask_KotO_Pdf10Senden' }]);
-    expect(s.ids).toEqual(['Flow_KotO_ReserveToPdf10No2']);
+    const connectEdit = await created(scoped, [{ op: 'connect', source: 'serviceTask_KotO_ReserveInventory', target: 'serviceTask_KotO_Pdf10Senden' }]);
+    expect(connectEdit.ids).toEqual(['Flow_KotO_ReserveToPdf10No2']);
     // 0.6 glued the number to the digit: its flows still follow their ends
     const old = chain(
       [
@@ -489,12 +489,12 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
   const tasks = (flows: Array<[string, string, string]>): string =>
     definitionsXml(
       [
-        ...['A', 'B', 'C', 'D', 'E', 'F'].map((n) => {
-          const id = `Activity_${n}`;
-          const links = [...flows.filter((f) => f[2] === id).map((f) => `<bpmn:incoming>${f[0]}</bpmn:incoming>`), ...flows.filter((f) => f[1] === id).map((f) => `<bpmn:outgoing>${f[0]}</bpmn:outgoing>`)];
-          return `<bpmn:task id="${id}" name="${n}">${links.join('')}</bpmn:task>`;
+        ...['A', 'B', 'C', 'D', 'E', 'F'].map((letter) => {
+          const id = `Activity_${letter}`;
+          const links = [...flows.filter((flow) => flow[2] === id).map((flow) => `<bpmn:incoming>${flow[0]}</bpmn:incoming>`), ...flows.filter((flow) => flow[1] === id).map((flow) => `<bpmn:outgoing>${flow[0]}</bpmn:outgoing>`)];
+          return `<bpmn:task id="${id}" name="${letter}">${links.join('')}</bpmn:task>`;
         }),
-        ...flows.map(([id, s, t]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${s}" targetRef="${t}" />`),
+        ...flows.map(([id, source, target]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`),
       ].join('\n'),
     );
 
@@ -503,42 +503,42 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
     let prev = 'A';
     const renames: Array<Record<string, string>> = [];
     for (const name of ['Pack', 'Weigh', 'Label', 'Notify', 'Bill', 'Archive']) {
-      const r = await applyToXml(xml, [{ op: 'add', kind: 'task', name, after: prev, as: '$t' }], { layout: false });
-      renames.push(r.result.renamed ?? {});
-      prev = r.result.aliases!.$t!;
-      xml = r.xml;
+      const result = await applyToXml(xml, [{ op: 'add', kind: 'task', name, after: prev, as: '$t' }], { layout: false });
+      renames.push(result.result.renamed ?? {});
+      prev = result.result.aliases!.$t!;
+      xml = result.xml;
     }
     // before: four f flows of nine after the fifth add, the file read as Flow_; the sixth kept fBillTo... on Archive -> C
     // and named the new flow Flow_ArchiveToShipTheGoodsToTheCustomer
     expect(renames.at(-1)).toEqual({ fBillToShipTheGoodsToTheCustomer: 'fBillToArchive' });
-    expect([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1])).toEqual(['f1', 'f2', 'fPackToWeigh', 'fWeighToLabel', 'fLabelToNotify', 'fNotifyToBill', 'fBillToArchive', 'fArchiveToShipTheGoodsToTheCustomer', 'f3', 'f4']);
+    expect([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1])).toEqual(['f1', 'f2', 'fPackToWeigh', 'fWeighToLabel', 'fLabelToNotify', 'fNotifyToBill', 'fBillToArchive', 'fArchiveToShipTheGoodsToTheCustomer', 'f3', 'f4']);
     expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'f', sep: '' });
   });
 
   it.each([
     ['snake_case', ['task_pack_goods', 'task_check_order', 'task_ship_goods'], ['fweigh_parcel_to_label_parcel', 'flabel_parcel_to_notify_customer', 'fnotify_customer_to_bill_customer', 'fbill_customer_to_archive_order', 'farchive_order_to_close_case', 'fclose_case_to_event'], { farchive_order_to_event: 'farchive_order_to_close_case' }],
     ['Pascal_Snake', ['Task_Pack_Goods', 'Task_Check_Order', 'Task_Ship_Goods'], ['fWeigh_Parcel_To_Label_Parcel', 'fLabel_Parcel_To_Notify_Customer', 'fNotify_Customer_To_Bill_Customer', 'fBill_Customer_To_Archive_Order', 'fArchive_Order_To_Close_Case', 'fClose_Case_To_Event'], { fArchive_Order_To_Event: 'fArchive_Order_To_Close_Case' }],
-  ])("in a %s body too: bpmn-cli's glued flows (with `_`) vote for f, six adds keep it (eight with ids kept)", async (_body, [a, b, c], glued, last) => {
-    const ends: Array<[string, string, string]> = [['f1', 'start_event', a!], ['f2', a!, b!], ['f3', b!, c!], ['f4', c!, 'end_event']];
-    const links = (id: string): string => [...ends.filter((f) => f[2] === id).map((f) => `<bpmn:incoming>${f[0]}</bpmn:incoming>`), ...ends.filter((f) => f[1] === id).map((f) => `<bpmn:outgoing>${f[0]}</bpmn:outgoing>`)].join('');
+  ])("in a %s body too: bpmn-cli's glued flows (with `_`) vote for f, six adds keep it (eight with ids kept)", async (_body, [firstId, secondId, thirdId], glued, last) => {
+    const ends: Array<[string, string, string]> = [['f1', 'start_event', firstId!], ['f2', firstId!, secondId!], ['f3', secondId!, thirdId!], ['f4', thirdId!, 'end_event']];
+    const links = (id: string): string => [...ends.filter((flow) => flow[2] === id).map((flow) => `<bpmn:incoming>${flow[0]}</bpmn:incoming>`), ...ends.filter((flow) => flow[1] === id).map((flow) => `<bpmn:outgoing>${flow[0]}</bpmn:outgoing>`)].join('');
     const start = definitionsXml(
       [
         `<bpmn:startEvent id="start_event">${links('start_event')}</bpmn:startEvent>`,
-        ...[a!, b!, c!].map((id, i) => `<bpmn:task id="${id}" name="${['Pack goods', 'Check order', 'Ship goods'][i]}">${links(id)}</bpmn:task>`),
+        ...[firstId!, secondId!, thirdId!].map((id, taskIndex) => `<bpmn:task id="${id}" name="${['Pack goods', 'Check order', 'Ship goods'][taskIndex]}">${links(id)}</bpmn:task>`),
         `<bpmn:endEvent id="end_event">${links('end_event')}</bpmn:endEvent>`,
-        ...ends.map(([id, s, t]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${s}" targetRef="${t}" />`),
+        ...ends.map(([id, source, target]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`),
       ].join('\n'),
     );
     /** Adds the tasks one by one, each after the one before; the last command's renames and the file. */
     const walk = async (names: string[], keepFlowIds: boolean): Promise<{ renamed: Record<string, string>; xml: string }> => {
       let xml = start;
-      let prev = c!;
+      let prev = thirdId!;
       let renamed: Record<string, string> = {};
       for (const name of names) {
-        const r = await applyToXml(xml, [{ op: 'add', kind: 'task', name, after: prev, as: '$t' }], { layout: false, keepFlowIds });
-        renamed = r.result.renamed ?? {};
-        prev = r.result.aliases!.$t!;
-        xml = r.xml;
+        const result = await applyToXml(xml, [{ op: 'add', kind: 'task', name, after: prev, as: '$t' }], { layout: false, keepFlowIds });
+        renamed = result.result.renamed ?? {};
+        prev = result.result.aliases!.$t!;
+        xml = result.xml;
       }
       return { renamed, xml };
     };
@@ -547,7 +547,7 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
     // before: `fweigh_parcel_to_...` read as the prefix fweigh and voted nothing; after the fifth add the file read as
     // Flow_, and the sixth renamed the file's own glued flow to Flow_archive_order_to_close_case
     expect(renamed).toEqual(last);
-    expect([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1])).toEqual(['f1', 'f2', 'f3', 'f4', ...glued]);
+    expect([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1])).toEqual(['f1', 'f2', 'f3', 'f4', ...glued]);
     expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'f', sep: '' });
     // with ids kept the spliced flows keep `..._to_event` on their new targets: they still name their source after f
     const kept = await walk([...names, 'File case', 'Audit case'], true);
@@ -555,7 +555,7 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
   });
 
   it('a glued flow votes only for a glued numbered prefix it starts with; a flow of a plain glued name, or of another prefix, does not', async () => {
-    const style = async (flows: string[]) => (await Doc.fromXml(tasks(flows.map((id, i) => [id, `Activity_${'ABCDEF'[i]}`, `Activity_${'ABCDEF'[i + 1]}`])))).idStyle.info().sequenceFlow;
+    const style = async (flows: string[]) => (await Doc.fromXml(tasks(flows.map((id, flowIndex) => [id, `Activity_${'ABCDEF'[flowIndex]}`, `Activity_${'ABCDEF'[flowIndex + 1]}`])))).idStyle.info().sequenceFlow;
     expect(await style(['f1', 'fBToC', 'fCToD', 'fDToE'])).toEqual({ form: 'named', prefix: 'f', sep: '' });
     // `flowBToC` starts with flow, not with f followed by an upper-case letter; F12 glues no words (F_BToC)
     expect(await style(['f1', 'f2', 'flowCToD', 'flowDToE', 'flowEToF'])).toEqual({ form: 'named', prefix: 'Flow' });
@@ -568,26 +568,26 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
   });
 
   it('a tie between flow prefixes goes to the one the flows use most, then alphabetically, never by declaration order', async () => {
-    const F: Array<[string, string, string]> = [['F1', 'Activity_A', 'Activity_B'], ['F2', 'Activity_B', 'Activity_C']];
-    const G: Array<[string, string, string]> = [['G1', 'Activity_C', 'Activity_D'], ['G2', 'Activity_D', 'Activity_E']];
-    const X: Array<[string, string, string]> = [['F_EToF', 'Activity_E', 'Activity_F']];
-    for (const flows of [[...F, ...G, ...X], [...G, ...F, ...X], [...X, ...G, ...F]]) {
+    const fFlows: Array<[string, string, string]> = [['F1', 'Activity_A', 'Activity_B'], ['F2', 'Activity_B', 'Activity_C']];
+    const gFlows: Array<[string, string, string]> = [['G1', 'Activity_C', 'Activity_D'], ['G2', 'Activity_D', 'Activity_E']];
+    const underscoredFlows: Array<[string, string, string]> = [['F_EToF', 'Activity_E', 'Activity_F']];
+    for (const flows of [[...fFlows, ...gFlows, ...underscoredFlows], [...gFlows, ...fFlows, ...underscoredFlows], [...underscoredFlows, ...gFlows, ...fFlows]]) {
       const xml = tasks(flows);
       expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'F', sep: '' });
       // before: with G1, G2 declared first G won, F_EToF kept its id on E -> Log, and the new flow was G_LogToF
       const cs = runOps(await Doc.fromXml(xml), [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_E' }]);
       expect(cs.renames).toEqual([expect.objectContaining({ from: 'F_EToF', to: 'F_EToLog' })]);
-      expect(cs.created.map((c) => c.id)).toEqual(['Activity_Log', 'F_LogToF']);
+      expect(cs.created.map((created) => created.id)).toEqual(['Activity_Log', 'F_LogToF']);
     }
     // nothing tells them apart: the alphabetically first
-    const tied = [...G, ...F];
+    const tied = [...gFlows, ...fFlows];
     expect((await Doc.fromXml(tasks(tied))).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'F', sep: '' });
     // two Camunda Modeler versions: SequenceFlow_ and Flow_ hashes, tied; SequenceFlow_ names one more flow
     const hashes = tasks([['Flow_0aaaaaa', 'Activity_A', 'Activity_B'], ['Flow_1bbbbbb', 'Activity_B', 'Activity_C'], ['SequenceFlow_0cccccc', 'Activity_C', 'Activity_D'], ['SequenceFlow_1dddddd', 'Activity_D', 'Activity_E'], ['SequenceFlow_EToF', 'Activity_E', 'Activity_F']]);
     expect((await Doc.fromXml(hashes)).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'SequenceFlow' });
     // a glued prefix counts its flows too: f1, f2 against sf_1, sf_2 is a tie, f the alphabetically first (before: sf
     // whenever it was declared first)
-    const chainOf = (ids: string[]): string => tasks(ids.map((id, i) => [id, `Activity_${'ABCDEF'[i]}`, `Activity_${'ABCDEF'[i + 1]}`]));
+    const chainOf = (ids: string[]): string => tasks(ids.map((id, flowIndex) => [id, `Activity_${'ABCDEF'[flowIndex]}`, `Activity_${'ABCDEF'[flowIndex + 1]}`]));
     for (const ids of [['f1', 'f2', 'sf_1', 'sf_2'], ['sf_1', 'sf_2', 'f1', 'f2']]) expect((await Doc.fromXml(chainOf(ids))).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'f', sep: '' });
     // a tie between two forms under one prefix goes to the one that names the ends (before: hashes declared first, named)
     for (const ids of [['Flow_0aaaaaa', 'Flow_1bbbbbb', 'Flow_Activity_C_Activity_D', 'Flow_Activity_D_Activity_E'], ['Flow_Activity_A_Activity_B', 'Flow_Activity_B_Activity_C', 'Flow_0cccccc', 'Flow_1dddddd']]) {
@@ -598,15 +598,15 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
   it('a tie between the scopes of one prefix and form keeps the first one counted, as before (such a file does not change)', async () => {
     const xml = readFileSync(join(HERE, 'fixtures', 'mixed-styles', 'scope-tie.bpmn'), 'utf8');
     expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'Ord' });
-    const r = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Pack', after: 'Activity_Check' }], { layout: false });
-    expect(r.result.renamed).toEqual({ Flow_Ord_CheckToShip: 'Flow_Ord_CheckToPack' });
-    expect(r.result.created.map((c) => c.id)).toEqual(['Activity_Pack', 'Flow_Ord_PackToShip']);
+    const result = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Pack', after: 'Activity_Check' }], { layout: false });
+    expect(result.result.renamed).toEqual({ Flow_Ord_CheckToShip: 'Flow_Ord_CheckToPack' });
+    expect(result.result.created.map((created) => created.id)).toEqual(['Activity_Pack', 'Flow_Ord_PackToShip']);
     // a flow under the other scope still names its ends: it follows them into the scope new flows there take (before:
     // Flow_Bil_InvoiceToBook stayed on Invoice -> Weigh)
     const split = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Weigh', flow: 'Flow_Bil_InvoiceToBook' }], { layout: false });
     expect(split.result.renamed).toEqual({ Flow_Bil_InvoiceToBook: 'Flow_Ord_InvoiceToWeigh' });
-    expect(split.result.created.map((c) => c.id)).toEqual(['Activity_Weigh', 'Flow_Ord_WeighToBook']);
-    const flows = [...xml.matchAll(/ {4}<bpmn:sequenceFlow [^\n]*\n/g)].map((m) => m[0]);
+    expect(split.result.created.map((created) => created.id)).toEqual(['Activity_Weigh', 'Flow_Ord_WeighToBook']);
+    const flows = [...xml.matchAll(/ {4}<bpmn:sequenceFlow [^\n]*\n/g)].map((match) => match[0]);
     const billingFirst = xml.replace(flows.join(''), [...flows.slice(2), ...flows.slice(0, 2)].join(''));
     expect((await Doc.fromXml(billingFirst)).idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'Bil' });
   });
@@ -620,7 +620,7 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
     const keep = await Doc.fromXml(xml);
     keep.followFlowEnds = false;
     const kept = runOps(keep, [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_E' }]);
-    expect(kept.warnings.filter((w) => w.code === 'W_FLOW_ID_STALE').map((w) => w.element)).toEqual(['Flow_EToF']);
+    expect(kept.warnings.filter((warning) => warning.code === 'W_FLOW_ID_STALE').map((warning) => warning.element)).toEqual(['Flow_EToF']);
     // and a flow of another form the file's flows show (idPair under SF_, outvoted by named Flow_ flows)
     const forms = tasks([['Flow_AToB', 'Activity_A', 'Activity_B'], ['Flow_BToC', 'Activity_B', 'Activity_C'], ['Flow_CToD', 'Activity_C', 'Activity_D'], ['SF_Activity_D_Activity_E', 'Activity_D', 'Activity_E'], ['SF_Activity_E_Activity_F', 'Activity_E', 'Activity_F']]);
     expect((await Doc.fromXml(forms)).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'Flow' });
@@ -633,22 +633,22 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
     const short = ['Validate', 'Reserve', 'Ship'];
     const els: string[] = [];
     const flows: Array<[string, string, string]> = [];
-    short.forEach((w, i) => {
-      els.push(`<bpmn:serviceTask id="serviceTask_KotO_${w}${i}x" name="${w}" />`, `<bpmn:serviceTask id="serviceTask_KotO_${short[(i + 1) % 3]}Y${i}" name="${short[(i + 1) % 3]}" />`);
-      flows.push([`Flow_KotO_${w}${i}xTo${short[(i + 1) % 3]}Y${i}`, `serviceTask_KotO_${w}${i}x`, `serviceTask_KotO_${short[(i + 1) % 3]}Y${i}`]);
+    short.forEach((word, wordIndex) => {
+      els.push(`<bpmn:serviceTask id="serviceTask_KotO_${word}${wordIndex}x" name="${word}" />`, `<bpmn:serviceTask id="serviceTask_KotO_${short[(wordIndex + 1) % 3]}Y${wordIndex}" name="${short[(wordIndex + 1) % 3]}" />`);
+      flows.push([`Flow_KotO_${word}${wordIndex}xTo${short[(wordIndex + 1) % 3]}Y${wordIndex}`, `serviceTask_KotO_${word}${wordIndex}x`, `serviceTask_KotO_${short[(wordIndex + 1) % 3]}Y${wordIndex}`]);
     });
-    long.forEach((w, i) => {
-      els.push(`<bpmn:serviceTask id="serviceTask_KotO_${w}_${i}" name="${w}" />`, `<bpmn:serviceTask id="serviceTask_KotO_${long[(i + 1) % 4]}_${i}" name="${long[(i + 1) % 4]}" />`);
+    long.forEach((word, wordIndex) => {
+      els.push(`<bpmn:serviceTask id="serviceTask_KotO_${word}_${wordIndex}" name="${word}" />`, `<bpmn:serviceTask id="serviceTask_KotO_${long[(wordIndex + 1) % 4]}_${wordIndex}" name="${long[(wordIndex + 1) % 4]}" />`);
       // 0.6 cut Flow_KotO_<A>To<B> to 61 characters at whole words: the target went
-      flows.push([`Flow_KotO_${w}To`, `serviceTask_KotO_${w}_${i}`, `serviceTask_KotO_${long[(i + 1) % 4]}_${i}`]);
+      flows.push([`Flow_KotO_${word}To`, `serviceTask_KotO_${word}_${wordIndex}`, `serviceTask_KotO_${long[(wordIndex + 1) % 4]}_${wordIndex}`]);
     });
-    const xml = definitionsXml([...els, ...flows.map(([id, s, t]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${s}" targetRef="${t}" />`)].join('\n'));
+    const xml = definitionsXml([...els, ...flows.map(([id, source, target]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`)].join('\n'));
     // before: four of seven flows matched no form, and the file read as named Flow_
     const doc = await Doc.fromXml(xml);
     expect(doc.idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'KotO' });
     const cs = runOps(doc, [{ op: 'add', kind: 'serviceTask', id: 'serviceTask_KotO_Pack', name: 'Pack', flow: 'Flow_KotO_WarenwirtschaftssystemabgleichTo' }]);
     expect(cs.renames).toEqual([expect.objectContaining({ from: 'Flow_KotO_WarenwirtschaftssystemabgleichTo', to: 'Flow_KotO_WarenwirtschaftssystemabgleichToPack' })]);
-    expect(cs.created.map((c) => c.id)).toEqual(['serviceTask_KotO_Pack', 'Flow_KotO_PackToKundenstammdatenaktualisierung']);
+    expect(cs.created.map((created) => created.id)).toEqual(['serviceTask_KotO_Pack', 'Flow_KotO_PackToKundenstammdatenaktualisierung']);
     // a shape alone is no vote: `<scope>_<A>To` whose A is not the source's end word
     const other = xml.replace(/Flow_KotO_([A-Za-z]+)To"/g, 'Flow_KotO_Other$1To"');
     expect((await Doc.fromXml(other)).idStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'Flow' });
@@ -679,12 +679,12 @@ describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow fo
   /** `old -> new` of the renames of the default, and `flow -> suggested id` of the W_FLOW_ID_STALE with ids kept. */
   async function bothModes(xml: string, ops: Op[]): Promise<{ renamed: string[]; stale: string[] }> {
     const follow = await Doc.fromXml(xml);
-    const renamed = runOps(follow, ops).renames.map((r) => `${r.from} -> ${r.to}`);
+    const renamed = runOps(follow, ops).renames.map((rename) => `${rename.from} -> ${rename.to}`);
     const keep = await Doc.fromXml(xml);
     keep.followFlowEnds = false;
     const cs = runOps(keep, ops);
     expect(cs.renames).toEqual([]);
-    const stale = cs.warnings.filter((w) => w.code === 'W_FLOW_ID_STALE').map((w) => `${w.element} -> ${/ id=(\S+)`/.exec(w.hint!)![1]}`);
+    const stale = cs.warnings.filter((warning) => warning.code === 'W_FLOW_ID_STALE').map((warning) => `${warning.element} -> ${/ id=(\S+)`/.exec(warning.hint!)![1]}`);
     return { renamed, stale };
   }
 
@@ -801,7 +801,7 @@ describe('speaking ids on two branches of a file (independent edits)', () => {
       { op: 'add', kind: 'startEvent', name: 'S' },
       { op: 'add', kind: 'task', name: 'T', after: 'Event_S' },
     ]);
-    expect(cs.created.map((c) => c.id)).toEqual(['Event_S', 'Activity_T', 'Flow_SToT']);
+    expect(cs.created.map((created) => created.id)).toEqual(['Event_S', 'Activity_T', 'Flow_SToT']);
   });
 
   it('files that number their flows get speaking flows with their prefix (Flow_12 -> Flow_BToEnd)', async () => {
@@ -813,10 +813,10 @@ describe('speaking ids on two branches of a file (independent edits)', () => {
       ],
       ['Flow_11', 'Flow_12'],
     );
-    const r = await created(xml, [{ op: 'add', kind: 'task', name: 'B', after: 'Activity_A' }]);
-    expect(r.ids).toEqual(['Activity_B', 'Flow_BToEnd']);
+    const result = await created(xml, [{ op: 'add', kind: 'task', name: 'B', after: 'Activity_A' }]);
+    expect(result.ids).toEqual(['Activity_B', 'Flow_BToEnd']);
     // a numbered flow says nothing about its ends: it keeps its id when a splice changes them
-    expect(flowBetween(r.doc, 'Activity_A', 'Activity_B')).toBe('Flow_12');
+    expect(flowBetween(result.doc, 'Activity_A', 'Activity_B')).toBe('Flow_12');
   });
 });
 
@@ -861,8 +861,8 @@ describe('documentation', () => {
 describe('ids through the pipeline', () => {
   it('a write reports the generated ids of the file style', async () => {
     const doc = await Doc.fromXml(CAMEL);
-    const r = await mutateDoc(doc, [{ op: 'add', kind: 'userTask', name: 'Pack goods', after: 'serviceTask_checkStock' }], { dryRun: true, layout: false });
-    expect(r.changes.created.map((c) => c.id)).toEqual(['userTask_packGoods', 'flow_packGoodsToApproveOrder']);
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="flow_packGoodsToApproveOrder" sourceRef="userTask_packGoods" targetRef="userTask_approveOrder" />');
+    const result = await mutateDoc(doc, [{ op: 'add', kind: 'userTask', name: 'Pack goods', after: 'serviceTask_checkStock' }], { dryRun: true, layout: false });
+    expect(result.changes.created.map((created) => created.id)).toEqual(['userTask_packGoods', 'flow_packGoodsToApproveOrder']);
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="flow_packGoodsToApproveOrder" sourceRef="userTask_packGoods" targetRef="userTask_approveOrder" />');
   });
 });

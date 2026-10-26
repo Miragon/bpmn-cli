@@ -28,32 +28,32 @@ export const DX = [1, 0, -1, 0];
 export const DY = [0, 1, 0, -1];
 export const OUTWARD: Record<Side, number> = { right: 0, bottom: 1, left: 2, top: 3 };
 
-function orient(a: Point, b: Point, c: Point): number {
-  return Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+function orient(first: Point, second: Point, third: Point): number {
+  return Math.sign((second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x));
 }
 
-export function segmentsCross(a: Point, b: Point, c: Point, d: Point): boolean {
-  const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+export function segmentsCross(firstStart: Point, firstEnd: Point, secondStart: Point, secondEnd: Point): boolean {
+  const o1 = orient(firstStart, firstEnd, secondStart), o2 = orient(firstStart, firstEnd, secondEnd), o3 = orient(secondStart, secondEnd, firstStart), o4 = orient(secondStart, secondEnd, firstEnd);
   return o1 * o2 < 0 && o3 * o4 < 0;
 }
 
 /** The router's crossing cost uses the same test. */
 export function crossings(points: readonly Point[], lines: readonly Point[][]): number {
-  let n = 0;
-  for (let i = 0; i + 1 < points.length; i++) {
-    for (const line of lines) for (let k = 0; k + 1 < line.length; k++) if (segmentsCross(points[i]!, points[i + 1]!, line[k]!, line[k + 1]!)) n++;
+  let crossings = 0;
+  for (let index = 0; index + 1 < points.length; index++) {
+    for (const line of lines) for (let segmentIndex = 0; segmentIndex + 1 < line.length; segmentIndex++) if (segmentsCross(points[index]!, points[index + 1]!, line[segmentIndex]!, line[segmentIndex + 1]!)) crossings++;
   }
-  return n;
+  return crossings;
 }
 
 export function simplify(points: Point[]): Point[] {
   const out: Point[] = [];
-  for (const p of points) {
+  for (const point of points) {
     const last = out[out.length - 1];
-    if (last && last.x === p.x && last.y === p.y) continue;
+    if (last && last.x === point.x && last.y === point.y) continue;
     const prev = out[out.length - 2];
-    if (prev && last && ((prev.x === last.x && last.x === p.x) || (prev.y === last.y && last.y === p.y))) out.pop();
-    out.push({ x: p.x, y: p.y });
+    if (prev && last && ((prev.x === last.x && last.x === point.x) || (prev.y === last.y && last.y === point.y))) out.pop();
+    out.push({ x: point.x, y: point.y });
   }
   // ports on one spot keep both ends: never fewer than two points
   if (out.length === 1 && points.length > 1) out.push({ ...out[0]! });
@@ -67,26 +67,26 @@ export interface Port {
   cost: number;
 }
 
-export function span(b: Box, side: Side): [number, number] {
-  return side === 'left' || side === 'right' ? [b.y, bottom(b)] : [b.x, right(b)];
+export function span(box: Box, side: Side): [number, number] {
+  return side === 'left' || side === 'right' ? [box.y, bottom(box)] : [box.x, right(box)];
 }
 
-export function pointOn(b: Box, side: Side, t: number): Point {
+export function pointOn(box: Box, side: Side, progress: number): Point {
   switch (side) {
     case 'left':
-      return { x: b.x, y: t };
+      return { x: box.x, y: progress };
     case 'right':
-      return { x: right(b), y: t };
+      return { x: right(box), y: progress };
     case 'top':
-      return { x: t, y: b.y };
+      return { x: progress, y: box.y };
     case 'bottom':
-      return { x: t, y: bottom(b) };
+      return { x: progress, y: bottom(box) };
   }
 }
 
 export interface Seg {
-  a: Point;
-  b: Point;
+  start: Point;
+  end: Point;
   kind: 'h' | 'v' | 'd';
   ends?: Point[];
   /** on the shared tail into a join's top / bottom port: following it there is no overlap */

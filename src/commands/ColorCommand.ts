@@ -11,11 +11,11 @@ export class ColorCommand extends FormatCommand {
   register(program: CommandType): void {
     this.withMutationOptions(
       this.withSelectors(this.define(program, 'color').addOption(new Option('--color <color>', COLOR_VALUES.join(' | ')).choices([...COLOR_VALUES]).makeOptionMandatory()), 'colour'),
-    ).action((file: string, ids: string[], o: RawOpts) =>
+    ).action((file: string, ids: string[], options: RawOpts) =>
       this.cli.guarded(async () => {
-        const op: ColorOp = { op: 'color', ...this.selectorsOf(ids, o, true), color: o['color'] as ColorOp['color'] };
-        await this.runFormat(file, op, o);
-      }, !!o['json']),
+        const op: ColorOp = { op: 'color', ...this.selectorsOf(ids, options, true), color: options['color'] as ColorOp['color'] };
+        await this.runFormat(file, op, options);
+      }, !!options['json']),
     );
   }
 }

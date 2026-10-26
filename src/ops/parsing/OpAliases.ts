@@ -33,7 +33,7 @@ const NODE_DEF_KEYS = Object.keys(NODE_FIELDS).filter((key) => NODE_FIELDS[key a
 
 type Raw = Record<string, unknown>;
 
-type Slot = { key: string; get: () => unknown; put: (v: unknown) => void; holder: Raw; name: string };
+type Slot = { key: string; get: () => unknown; put: (slotValue: unknown) => void; holder: Raw; name: string };
 
 /**
  * Batch aliases (`"as": "$check"`): later ops of an `apply` batch use them wherever an element
@@ -47,11 +47,11 @@ export class OpAliases {
   defined(): string[] {
     const op = this.op;
     const raw = op as unknown as Raw;
-    const out = (DEF_KEYS[op.op] ?? []).map((k) => raw[k]).filter((v): v is string => typeof v === 'string');
+    const out = (DEF_KEYS[op.op] ?? []).map((defKey) => raw[defKey]).filter((definedId): definedId is string => typeof definedId === 'string');
     if (op.op === 'split') {
-      this.eachObject(op.branches, (b) =>
-        this.eachObject(b['nodes'], (n) => {
-          for (const k of NODE_DEF_KEYS) if (typeof n[k] === 'string') out.push(n[k] as string);
+      this.eachObject(op.branches, (branch) =>
+        this.eachObject(branch['nodes'], (node) => {
+          for (const defKey of NODE_DEF_KEYS) if (typeof node[defKey] === 'string') out.push(node[defKey] as string);
         }),
       );
     }
@@ -60,10 +60,10 @@ export class OpAliases {
 
   referencedIds(): string[] {
     const out: string[] = [];
-    for (const s of this.slots(this.op)) {
-      const v = s.get();
-      if (typeof v === 'string') out.push(v);
-      else if (Array.isArray(v)) for (const x of v) if (typeof x === 'string') out.push(x);
+    for (const slot of this.slots(this.op)) {
+      const slotValue = slot.get();
+      if (typeof slotValue === 'string') out.push(slotValue);
+      else if (Array.isArray(slotValue)) for (const entry of slotValue) if (typeof entry === 'string') out.push(entry);
     }
     return out;
   }
@@ -71,10 +71,10 @@ export class OpAliases {
   /** Every alias the op refers to, with the key it stands in (`ids[1]`, `values.default`). */
   references(): Array<{ key: string; alias: string }> {
     const out: Array<{ key: string; alias: string }> = [];
-    for (const s of this.slots(this.op)) {
-      const v = s.get();
-      if (isAlias(v)) out.push({ key: s.key, alias: v });
-      else if (Array.isArray(v)) v.forEach((x, i) => isAlias(x) && out.push({ key: `${s.key}[${i}]`, alias: x }));
+    for (const slot of this.slots(this.op)) {
+      const slotValue = slot.get();
+      if (isAlias(slotValue)) out.push({ key: slot.key, alias: slotValue });
+      else if (Array.isArray(slotValue)) slotValue.forEach((entry, index) => isAlias(entry) && out.push({ key: `${slot.key}[${index}]`, alias: entry }));
     }
     return out;
   }
@@ -84,10 +84,10 @@ export class OpAliases {
     if (!this.references().length) return op;
     const copy = JSON.parse(JSON.stringify(op)) as Op;
     const id = (alias: string, key: string): string => table.idOf(alias, index, op, key);
-    for (const s of this.slots(copy)) {
-      const v = s.get();
-      if (isAlias(v)) s.put(id(v, s.key));
-      else if (Array.isArray(v)) s.put(v.map((x, i) => (isAlias(x) ? id(x, `${s.key}[${i}]`) : x)));
+    for (const slot of this.slots(copy)) {
+      const slotValue = slot.get();
+      if (isAlias(slotValue)) slot.put(id(slotValue, slot.key));
+      else if (Array.isArray(slotValue)) slot.put(slotValue.map((entry, entryIndex) => (isAlias(entry) ? id(entry, `${slot.key}[${entryIndex}]`) : entry)));
     }
     return copy;
   }
@@ -95,21 +95,21 @@ export class OpAliases {
   private slots(op: Op): Slot[] {
     const out: Slot[] = [];
     const slot = (holder: Raw, name: string, key: string): void => {
-      out.push({ key, holder, name, get: () => holder[name], put: (v) => (holder[name] = v) });
+      out.push({ key, holder, name, get: () => holder[name], put: (slotValue) => (holder[name] = slotValue) });
     };
     const raw = op as unknown as Raw;
     for (const key of REF_KEYS[op.op] ?? []) slot(raw, key, key);
     const map = (holder: Raw, name: string, path: string): void => {
-      const m = holder[name];
-      if (m && typeof m === 'object') for (const k of SET_REF_KEYS) slot(m as Raw, k, `${path}.${k}`);
+      const member = holder[name];
+      if (member && typeof member === 'object') for (const refKey of SET_REF_KEYS) slot(member as Raw, refKey, `${path}.${refKey}`);
     };
     if (op.op === 'set') map(raw, 'values', 'values');
     if (op.op === 'add') map(raw, 'set', 'set');
     if (op.op === 'split') {
-      this.eachObject(op.branches, (b, i) =>
-        this.eachObject(b['nodes'], (n, j) => {
-          slot(n, 'lane', `branches[${i}].nodes[${j}].lane`);
-          map(n, 'set', `branches[${i}].nodes[${j}].set`);
+      this.eachObject(op.branches, (branch, branchIndex) =>
+        this.eachObject(branch['nodes'], (node, nodeIndex) => {
+          slot(node, 'lane', `branches[${branchIndex}].nodes[${nodeIndex}].lane`);
+          map(node, 'set', `branches[${branchIndex}].nodes[${nodeIndex}].set`);
         }),
       );
     }
@@ -117,7 +117,7 @@ export class OpAliases {
   }
 
   /** Typed library ops skip parsing: a malformed split list must reach splitFlow's own check. */
-  private eachObject(list: unknown, fn: (item: Raw, i: number) => void): void {
-    if (Array.isArray(list)) list.forEach((item, i) => item && typeof item === 'object' && fn(item as Raw, i));
+  private eachObject(list: unknown, fn: (item: Raw, index: number) => void): void {
+    if (Array.isArray(list)) list.forEach((item, index) => item && typeof item === 'object' && fn(item as Raw, index));
   }
 }

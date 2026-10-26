@@ -83,11 +83,11 @@ export class CommandCatalogue {
   ) {}
 
   command(name: string): CommandDoc {
-    return this.commands.find((c) => c.name === name)!;
+    return this.commands.find((command) => command.name === name)!;
   }
 
   commonOption(longFlag: string): [flags: string, help: string] {
-    const doc = this.commonOptions.find((o) => (o.flags ?? o.option).split(/[ ,]+/).includes(longFlag))!;
+    const doc = this.commonOptions.find((option) => (option.flags ?? option.option).split(/[ ,]+/).includes(longFlag))!;
     return [doc.flags ?? doc.option, doc.help ?? doc.description];
   }
 }

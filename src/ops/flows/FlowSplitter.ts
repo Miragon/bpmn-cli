@@ -68,15 +68,15 @@ export class FlowSplitter {
     return { id, base };
   }
 
-  private static describe(v: unknown): string {
-    if (v === null) return 'null';
-    if (Array.isArray(v)) return 'an array';
-    if (typeof v === 'object') return 'an object';
-    return `${typeof v} ${JSON.stringify(v)}`;
+  private static describe(input: unknown): string {
+    if (input === null) return 'null';
+    if (Array.isArray(input)) return 'an array';
+    if (typeof input === 'object') return 'an object';
+    return `${typeof input} ${JSON.stringify(input)}`;
   }
 
-  private static isObject(v: unknown): v is Record<string, unknown> {
-    return typeof v === 'object' && v !== null && !Array.isArray(v);
+  private static isObject(candidate: unknown): candidate is Record<string, unknown> {
+    return typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate);
   }
 
   /**
@@ -89,13 +89,13 @@ export class FlowSplitter {
       throw usageError(`split: "branches" must be an array of branch objects, got ${FlowSplitter.describe(branches)}`, { hint: 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].' });
     }
     const missing = (path: string, key: string, description: string): CliError => usageError(`${path}: missing required key "${key}" (${description})`);
-    branches.forEach((branch: unknown, i) => {
-      if (!FlowSplitter.isObject(branch)) throw usageError(`split branches[${i}]: expected an object, got ${FlowSplitter.describe(branch)}`);
+    branches.forEach((branch: unknown, branchIndex) => {
+      if (!FlowSplitter.isObject(branch)) throw usageError(`split branches[${branchIndex}]: expected an object, got ${FlowSplitter.describe(branch)}`);
       const nodes = branch['nodes'];
-      if (nodes === undefined || nodes === null) throw missing(`split branches[${i}]`, 'nodes', BRANCH_FIELDS.nodes.description);
-      if (!Array.isArray(nodes)) throw usageError(`split branches[${i}]: "nodes" must be an array of node objects, got ${FlowSplitter.describe(nodes)}`, { hint: 'An empty array is allowed: the branch is then a direct gateway -> join flow.' });
-      nodes.forEach((node: unknown, j) => {
-        const path = `split branches[${i}].nodes[${j}]`;
+      if (nodes === undefined || nodes === null) throw missing(`split branches[${branchIndex}]`, 'nodes', BRANCH_FIELDS.nodes.description);
+      if (!Array.isArray(nodes)) throw usageError(`split branches[${branchIndex}]: "nodes" must be an array of node objects, got ${FlowSplitter.describe(nodes)}`, { hint: 'An empty array is allowed: the branch is then a direct gateway -> join flow.' });
+      nodes.forEach((node: unknown, nodeIndex) => {
+        const path = `split branches[${branchIndex}].nodes[${nodeIndex}]`;
         if (!FlowSplitter.isObject(node)) throw usageError(`${path}: expected an object, got ${FlowSplitter.describe(node)}`);
         const kind = node['kind'];
         if (kind === undefined || kind === null) throw missing(path, 'kind', NODE_FIELDS.kind.description);
@@ -146,7 +146,7 @@ export class FlowSplitter {
       cs.create(ChangeSet.flowEntryOf(flow));
       cs.note(`appended ${gatewayId} after ${op.after}`);
     }
-    const gwEntry = cs.created.find((c) => c.id === gatewayId);
+    const gwEntry = cs.created.find((change) => change.id === gatewayId);
     if (gwEntry) gwEntry.detail = spliced ? `between ${op.after} and ${idOf(successor!)}` : `after ${op.after}`;
 
     // 2. branches
@@ -164,9 +164,9 @@ export class FlowSplitter {
         continue;
       }
       let prev = gatewayId;
-      branch.nodes.forEach((node, i) => {
+      branch.nodes.forEach((node, index) => {
         const own = FlowOptions.of(node);
-        const addOp: AddOp = { ...node, ...(i === 0 ? { ...flowOptions, ...own } : own), op: 'add', after: prev };
+        const addOp: AddOp = { ...node, ...(index === 0 ? { ...flowOptions, ...own } : own), op: 'add', after: prev };
         const nodeCs = new ElementAdder(this.doc).add(addOp);
         cs.merge(nodeCs);
         prev = FlowSplitter.createdId(nodeCs);
@@ -175,8 +175,8 @@ export class FlowSplitter {
     }
 
     // 3. join (branches ending in an end event terminate there)
-    const terminating = ends.filter((e) => !e.direct && is(this.doc.require(e.end), 'bpmn:EndEvent'));
-    const continuing = ends.filter((e) => !terminating.includes(e));
+    const terminating = ends.filter((branchEnd) => !branchEnd.direct && is(this.doc.require(branchEnd.end), 'bpmn:EndEvent'));
+    const continuing = ends.filter((branchEnd) => !terminating.includes(branchEnd));
     let joinId: string | undefined;
     const why = !withJoin ? 'join is false' : !continuing.length ? 'every branch ends in an end event' : continuing.length === 1 ? `only one branch continues (the others end in an end event), and a join needs two` : undefined;
     if (op.joinAs && why) {
@@ -201,7 +201,7 @@ export class FlowSplitter {
       // generated, not the caller's (ElementAdder.add claimed it as given)
       if (wanted.base !== undefined) this.doc.edit.allocator.markGenerated(joinId, wanted.base);
       cs.bind(op.joinAs, this.doc.get(joinId));
-      const joinEntry = cs.created.find((c) => c.id === joinId);
+      const joinEntry = cs.created.find((change) => change.id === joinId);
       if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;
     }
     const target = joinId ?? (successor ? idOf(successor) : undefined);
@@ -221,7 +221,7 @@ export class FlowSplitter {
       cs.merge(new ElementConnector(this.doc).connect({ op: 'connect', source: joinId, target: idOf(successor) }));
     }
 
-    const branchIds = ends.map((e) => (e.direct ? '(direct)' : terminating.includes(e) ? `${e.end} (end event)` : e.end));
+    const branchIds = ends.map((branchEnd) => (branchEnd.direct ? '(direct)' : terminating.includes(branchEnd) ? `${branchEnd.end} (end event)` : branchEnd.end));
     cs.note(`split ${gatewayId}: ${ends.length} branch(es) ending at ${branchIds.join(', ')}${joinId ? `, joined at ${joinId}` : ''}${successor && continuing.length ? `, continues to ${idOf(successor)}` : ''}`);
     this.doc.invalidate();
     return cs;

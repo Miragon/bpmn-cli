@@ -5,7 +5,7 @@ import { CliError } from '../../shared/CliError.js';
 import { usageError } from '../../shared/utils/errors.js';
 
 export function flag(key: string): string {
-  return `--${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+  return `--${key.replace(/[A-Z]/g, (upper) => `-${upper.toLowerCase()}`)}`;
 }
 
 export function parseKeyValues(items: string[], what = 'property'): Record<string, string> {
@@ -22,13 +22,13 @@ export function splitList(value: string | undefined): string[] | undefined {
   if (!value) return undefined;
   return value
     .split(',')
-    .map((s) => s.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
 }
 
-export function depthArg(v: string): number {
-  if (!/^\d+$/.test(v)) throw new InvalidArgumentError('expected a whole number >= 0');
-  return Number(v);
+export function depthArg(raw: string): number {
+  if (!/^\d+$/.test(raw)) throw new InvalidArgumentError('expected a whole number >= 0');
+  return Number(raw);
 }
 
 export function assertPathFlags(path: string[] | undefined, via: unknown, hints: { path: string; via?: string }): void {
@@ -55,7 +55,7 @@ export function renderFormat(format: string | undefined, out: string | undefined
 }
 
 /** --render <file>: a .png or .svg file (the extension decides the format). */
-export function renderTarget(v: string): string {
-  if (v === '-' || !/\.(png|svg)$/i.test(v)) throw new InvalidArgumentError('expected a file name ending in .png or .svg (the image of the result; the XML or the report owns stdout)');
-  return v;
+export function renderTarget(raw: string): string {
+  if (raw === '-' || !/\.(png|svg)$/i.test(raw)) throw new InvalidArgumentError('expected a file name ending in .png or .svg (the image of the result; the XML or the report owns stdout)');
+  return raw;
 }

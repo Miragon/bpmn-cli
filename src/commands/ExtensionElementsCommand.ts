@@ -17,17 +17,17 @@ export class ExtensionElementsCommand extends MutationCommand {
         .option('--body <text>', 'text content')
         .option('--xml <snippet>', 'raw XML snippet (may contain nested elements); its roots must be of <type>')
         .option('--replace', 'replace existing elements of the same type (and key) instead of merging'),
-    ).action((file: string, id: string, type: string, attrs: string[], o: RawOpts) => this.add(file, id, type, attrs, o));
-    this.withMutationOptions(this.subcommand(ext, 'remove')).action((file: string, id: string, typeOrIndex: string, o: RawOpts) => this.remove(file, id, typeOrIndex, o));
-    this.withJsonOptions(this.subcommand(ext, 'list')).action((file: string, id: string, o: RawOpts) => this.list(file, id, o));
+    ).action((file: string, id: string, type: string, attrs: string[], options: RawOpts) => this.add(file, id, type, attrs, options));
+    this.withMutationOptions(this.subcommand(ext, 'remove')).action((file: string, id: string, typeOrIndex: string, options: RawOpts) => this.remove(file, id, typeOrIndex, options));
+    this.withJsonOptions(this.subcommand(ext, 'list')).action((file: string, id: string, options: RawOpts) => this.list(file, id, options));
   }
 
   private subcommand(ext: CommandType, name: string): CommandType {
-    return this.defineSignature(ext, CliCommand.catalogue.command('ext').subcommands!.find((s) => s.name === name)!);
+    return this.defineSignature(ext, CliCommand.catalogue.command('ext').subcommands!.find((subcommand) => subcommand.name === name)!);
   }
 
-  private async add(file: string, id: string, type: string, attrs: string[], o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async add(file: string, id: string, type: string, attrs: string[], options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       const op: ExtOp = {
         op: 'ext',
@@ -35,16 +35,16 @@ export class ExtensionElementsCommand extends MutationCommand {
         action: 'add',
         type,
         ...(attrs.length ? { attrs: parseKeyValues(attrs, 'attribute') } : {}),
-        ...(o['body'] ? { body: String(o['body']) } : {}),
-        ...(o['xml'] ? { xml: String(o['xml']) } : {}),
-        ...(o['replace'] ? { replace: true } : {}),
+        ...(options['body'] ? { body: String(options['body']) } : {}),
+        ...(options['xml'] ? { xml: String(options['xml']) } : {}),
+        ...(options['replace'] ? { replace: true } : {}),
       };
       await this.mutate(file, [op], opts);
     }, opts.json);
   }
 
-  private async remove(file: string, id: string, typeOrIndex: string, o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async remove(file: string, id: string, typeOrIndex: string, options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       // `2` or `loop.2` is an index into the extension elements; anything else a selector
       const indexed = /^(?:(definition|loop|condition)\.)?(\d+)$/.exec(typeOrIndex.trim());
@@ -55,13 +55,13 @@ export class ExtensionElementsCommand extends MutationCommand {
     }, opts.json);
   }
 
-  private async list(file: string, id: string, o: RawOpts): Promise<void> {
+  private async list(file: string, id: string, options: RawOpts): Promise<void> {
     await this.cli.guarded(async () => {
       const doc = await this.cli.readDocArg(file);
       const el = doc.require(id);
       const items = new ExtensionLister().listAll(el);
-      if (o['json']) this.cli.printJson(items, !!o['pretty']);
+      if (options['json']) this.cli.printJson(items, !!options['pretty']);
       else this.cli.print(renderExtensionList(items));
-    }, !!o['json']);
+    }, !!options['json']);
   }
 }

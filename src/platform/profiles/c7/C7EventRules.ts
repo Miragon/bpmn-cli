@@ -12,10 +12,10 @@ const VARIABLE_EVENTS = ['create', 'update', 'delete'];
 export class C7EventRules extends C7Rules {
   constructor(
     run: RuleRun,
-    p: string,
+    prefix: string,
     private readonly implementation: C7ImplementationRules,
   ) {
-    super(run, p);
+    super(run, prefix);
   }
 
   /**
@@ -29,7 +29,7 @@ export class C7EventRules extends C7Rules {
     const kinds = defs.map(triggerName);
     const acting = this.actingDefinition(el);
     const what = acting
-      ? `the engines act on the ${triggerName(acting)} only and ignore the ${kinds.filter((_, i) => defs[i] !== acting).join(' and ')}`
+      ? `the engines act on the ${triggerName(acting)} only and ignore the ${kinds.filter((_kind, index) => defs[index] !== acting).join(' and ')}`
       : 'the engines act on one of them only and ignore the others';
     const keep = acting ? triggerName(acting) : '<trigger>';
     this.push('runtime', 'W_C7_MULTIPLE_EVENT_DEFINITIONS', el, undefined, 'definitions', `${this.describe(el, undefined)} has ${defs.length} event definitions (${kinds.join(', ')}); ${what}`, `Keep one: \`bpmn set <file> ${id} trigger=${keep}\` (keeps that definition, drops the others), and model each other trigger as its own event (behind an event-based gateway, or another boundary / start event). One definition is edited with \`bpmn set <file> ${id} 'definition[<n>].<key>=<value>'\`.`);
@@ -117,7 +117,7 @@ export class C7EventRules extends C7Rules {
   }
 
   private checkTimerDefinition(el: El, def: El): void {
-    if (TIMER_ELEMENTS.some((k) => peek<El>(def, k))) return;
+    if (TIMER_ELEMENTS.some((timerKind) => peek<El>(def, timerKind))) return;
     this.push('deploy', 'W_C7_DEPLOY_EVENT_DEFINITION', el, undefined, 'timer', `Timer of ${this.describe(el, undefined)} has no date, cycle or duration; the engines refuse the file`, `\`bpmn set <file> ${idOf(el)} timer=PT1H\` (or R/PT1H, or a date).`);
   }
 
@@ -126,7 +126,7 @@ export class C7EventRules extends C7Rules {
     // a missing condition element is a schema error
     const cond = peek<El>(def, 'condition');
     if (cond && this.emptyCondition(cond)) {
-      this.push('runtime', 'W_C7_EMPTY_CONDITION', el, undefined, 'emptyCondition', `Conditional event ${id} has an empty condition (no expression and no ${this.p}:resource): it deploys, but evaluating it fails when the process runs`, `\`bpmn set <file> ${id} ${sh('when=${expression}')}\` (or a script: \`bpmn set <file> ${id} condition.${this.p}:resource=deployment://<script>.groovy condition.language=groovy\`).`);
+      this.push('runtime', 'W_C7_EMPTY_CONDITION', el, undefined, 'emptyCondition', `Conditional event ${id} has an empty condition (no expression and no ${this.prefix}:resource): it deploys, but evaluating it fails when the process runs`, `\`bpmn set <file> ${id} ${sh('when=${expression}')}\` (or a script: \`bpmn set <file> ${id} condition.${this.prefix}:resource=deployment://<script>.groovy condition.language=groovy\`).`);
     }
     this.checkVariableEvents(el, def);
   }
@@ -134,9 +134,9 @@ export class C7EventRules extends C7Rules {
   private checkVariableEvents(el: El, def: El): void {
     const events = this.c7(def, 'variableEvents');
     if (events === undefined) return;
-    const bad = events.split(',').map((e) => e.trim()).filter((e) => e && !VARIABLE_EVENTS.includes(e));
+    const bad = events.split(',').map((eventName) => eventName.trim()).filter((eventName) => eventName && !VARIABLE_EVENTS.includes(eventName));
     if (!bad.length) return;
-    this.push('runtime', 'W_C7_BAD_VALUE', def, el, 'attr:variableEvents', `${this.p}:variableEvents="${events}" of ${this.describe(el, undefined)} lists ${bad.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, `\`bpmn set <file> ${idOf(el)} ${sh(`${this.addressOf(def, el)?.prefix ?? 'definition.'}${this.p}:variableEvents=create, update`)}\`.`);
+    this.push('runtime', 'W_C7_BAD_VALUE', def, el, 'attr:variableEvents', `${this.prefix}:variableEvents="${events}" of ${this.describe(el, undefined)} lists ${bad.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, `\`bpmn set <file> ${idOf(el)} ${sh(`${this.addressOf(def, el)?.prefix ?? 'definition.'}${this.prefix}:variableEvents=create, update`)}\`.`);
   }
 
   /**
@@ -155,9 +155,9 @@ export class C7EventRules extends C7Rules {
     const sid = idOf(scope) ?? '<scopeId>';
     const candidates = this.doc
       .flowNodes(scope)
-      .filter((n) => this.kit.is(n, 'bpmn:Activity') && !this.kit.isEventSubProcess(n))
+      .filter((node) => this.kit.is(node, 'bpmn:Activity') && !this.kit.isEventSubProcess(node))
       .map(idOf)
-      .filter((x): x is string => !!x)
+      .filter((candidateId): candidateId is string => !!candidateId)
       .slice(0, 5);
     const what = this.kit.is(ref, 'bpmn:FlowNode') ? `${this.describe(ref, undefined)}, which is not in ${sid}` : `${idOf(ref)}, which is not a flow node`;
     const key = `${this.addressOf(def, el)?.prefix ?? 'definition.'}activityRef`;
@@ -172,10 +172,10 @@ export class C7EventRules extends C7Rules {
   /** Every flow node of a scope and of its nested sub-processes. */
   private allFlowNodes(scope: El): El[] {
     const out: El[] = [];
-    for (const n of this.doc.flowNodes(scope)) {
-      out.push(n);
+    for (const node of this.doc.flowNodes(scope)) {
+      out.push(node);
       // the engines skip the content of an ad-hoc sub-process
-      if (this.kit.is(n, 'bpmn:SubProcess') && !this.kit.is(n, 'bpmn:AdHocSubProcess')) out.push(...this.allFlowNodes(n));
+      if (this.kit.is(node, 'bpmn:SubProcess') && !this.kit.is(node, 'bpmn:AdHocSubProcess')) out.push(...this.allFlowNodes(node));
     }
     return out;
   }
@@ -275,7 +275,7 @@ export class C7EventRules extends C7Rules {
   checkStartEvents(scope: El): void {
     const id = idOf(scope) ?? '<scopeId>';
     const nodes = this.doc.flowNodes(scope);
-    const starts = nodes.filter((n) => this.kit.is(n, 'bpmn:StartEvent'));
+    const starts = nodes.filter((node) => this.kit.is(node, 'bpmn:StartEvent'));
     const isProcess = this.kit.is(scope, 'bpmn:Process');
     const transaction = this.kit.is(scope, 'bpmn:Transaction');
     const kind = isProcess ? 'Process' : this.kit.isEventSubProcess(scope) ? 'Event sub-process' : transaction ? 'Transaction' : 'Sub-process';
@@ -293,7 +293,7 @@ export class C7EventRules extends C7Rules {
       }
       return;
     }
-    const limited = isProcess ? starts.filter((n) => this.actedOn(n).every((d) => this.kit.is(d, 'bpmn:TimerEventDefinition'))) : starts;
+    const limited = isProcess ? starts.filter((start) => this.actedOn(start).every((definition) => this.kit.is(definition, 'bpmn:TimerEventDefinition'))) : starts;
     const [first, ...rest] = limited;
     for (const extra of rest) {
       const sid = idOf(extra)!;
@@ -310,10 +310,10 @@ export class C7EventRules extends C7Rules {
     const queue = [from];
     while (queue.length) {
       for (const flow of this.outgoing.get(queue.shift()!) ?? []) {
-        const t = peek<El>(flow, 'targetRef');
-        if (t && !seen.has(t)) {
-          seen.add(t);
-          queue.push(t);
+        const target = peek<El>(flow, 'targetRef');
+        if (target && !seen.has(target)) {
+          seen.add(target);
+          queue.push(target);
         }
       }
     }
@@ -330,19 +330,19 @@ export class C7EventRules extends C7Rules {
     const fid = idOf(first)!;
     const reached = this.reachableFrom(first);
     const flows = this.outgoing.get(extra) ?? [];
-    const own = flows.filter((f) => {
-      const t = peek<El>(f, 'targetRef');
-      return t && t !== first && !reached.has(t);
+    const own = flows.filter((flow) => {
+      const target = peek<El>(flow, 'targetRef');
+      return target && target !== first && !reached.has(target);
     });
-    const into = flows.filter((f) => !own.includes(f));
+    const into = flows.filter((flow) => !own.includes(flow));
     // nodes (no end events) that a branch of its own runs into and `first` reaches as well
     const meet = new Set<string>();
-    for (const f of own) {
-      const t = peek<El>(f, 'targetRef')!;
-      for (const n of this.reachableFrom(t)) if (reached.has(n) && !this.kit.is(n, 'bpmn:EndEvent') && idOf(n)) meet.add(idOf(n)!);
+    for (const flow of own) {
+      const target = peek<El>(flow, 'targetRef')!;
+      for (const node of this.reachableFrom(target)) if (reached.has(node) && !this.kit.is(node, 'bpmn:EndEvent') && idOf(node)) meet.add(idOf(node)!);
     }
     const ids = (els: El[]): string => els.map(idOf).join(', ');
-    const targets = (els: El[]): string => [...new Set(els.map((f) => idOf(peek<El>(f, 'targetRef'))).filter((x): x is string => !!x))].join(', ');
+    const targets = (els: El[]): string => [...new Set(els.map((flow) => idOf(peek<El>(flow, 'targetRef'))).filter((targetId): targetId is string => !!targetId))].join(', ');
     const remove = `\`bpmn remove <file> ${sid}\``;
     const parts: string[] = [];
     if (!own.length) {
@@ -351,7 +351,7 @@ export class C7EventRules extends C7Rules {
       const names = [...meet].slice(0, 3).join(', ') + (meet.size > 3 ? ', ...' : '');
       parts.push(`Remove it: ${remove} (${targets(own)} is then no longer started; starting it from ${fid} instead would run ${names}, which ${fid} reaches too, once per branch)`);
     } else {
-      const moves = own.map((f) => `\`bpmn set <file> ${idOf(f)} source=${fid}\``).join(', ');
+      const moves = own.map((flow) => `\`bpmn set <file> ${idOf(flow)} source=${fid}\``).join(', ');
       const notes = [(this.outgoing.get(first) ?? []).length ? `${fid} then starts both branches in parallel` : '', into.length ? `${ids(into)} into ${targets(into)}, which ${fid} already reaches, go${into.length === 1 ? 'es' : ''} with ${sid}` : ''].filter(Boolean);
       parts.push(`Start its branch from ${fid}: ${moves}, then ${remove}${notes.length ? ` (${notes.join('; ')})` : ''}`);
     }

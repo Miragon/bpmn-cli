@@ -61,7 +61,7 @@ export class ConventionsTable {
     const conventions = this.conventions;
     // a pattern of one kind reads as it is (Process_{name:pascal}, not <Kind>_)
     const rows: ConventionsRow[] = this.groups.map(({ concrete, ...row }) => (row.kinds.length === 1 ? { ...row, pattern: concrete } : row));
-    const examples = ['bpmn:StartEvent:timer', 'bpmn:BoundaryEvent:message', 'bpmn:EndEvent:error'].map((k) => declared?.prefixes[k]).filter((p): p is string => !!p);
+    const examples = ['bpmn:StartEvent:timer', 'bpmn:BoundaryEvent:message', 'bpmn:EndEvent:error'].map((key) => declared?.prefixes[key]).filter((prefix): prefix is string => !!prefix);
     const mode = declared?.qualifier ?? 'optional';
     const source = conventions?.source ?? opts.where;
     const undeclared = declared ? undefined : (opts.undeclared ?? (conventions ? 'no prefixes' : undefined));
@@ -78,7 +78,7 @@ export class ConventionsTable {
   }
 
   private add(kind: string, concrete: string, pattern: string, source: PrefixSource, note?: string): void {
-    const row = this.groups.find((r) => r.pattern === pattern && r.source === source && r.note === note);
+    const row = this.groups.find((candidate) => candidate.pattern === pattern && candidate.source === source && candidate.note === note);
     if (row) row.kinds.push(kind);
     else this.groups.push({ concrete, pattern, source, kinds: [kind], ...(note ? { note } : {}) });
   }
@@ -91,13 +91,13 @@ export class ConventionsTable {
   }
 
   private flow(kind: 'sequenceFlow' | 'messageFlow', type: 'bpmn:SequenceFlow' | 'bpmn:MessageFlow'): void {
-    const f = this.style.explainFlow(type);
+    const flowExplanation = this.style.explainFlow(type);
     // message flows the rule does not name: they take the sequence flows' prefix, unchecked
-    const borrowed = kind === 'messageFlow' && f.source === 'lint' && !this.declared?.prefixes['bpmn:MessageFlow'];
-    const pattern = `${f.head}${this.flowTail(f.form, f.style.scope)}`;
+    const borrowed = kind === 'messageFlow' && flowExplanation.source === 'lint' && !this.declared?.prefixes['bpmn:MessageFlow'];
+    const pattern = `${flowExplanation.head}${this.flowTail(flowExplanation.form, flowExplanation.style.scope)}`;
     // a long head stays where the ends fit beside it: Flow_ elsewhere
-    const notes = [borrowed || f.source !== 'lint' ? this.unnamed(type) : undefined, f.fallback ? `${f.fallback} where the ends do not fit` : undefined].filter((n): n is string => !!n);
-    this.add(kind, pattern, pattern, borrowed ? 'lint shape' : f.source, notes.length ? notes.join('; ') : undefined);
+    const notes = [borrowed || flowExplanation.source !== 'lint' ? this.unnamed(type) : undefined, flowExplanation.fallback ? `${flowExplanation.fallback} where the ends do not fit` : undefined].filter((note): note is string => !!note);
+    this.add(kind, pattern, pattern, borrowed ? 'lint shape' : flowExplanation.source, notes.length ? notes.join('; ') : undefined);
   }
 
   private unnamed(type: string): string | undefined {

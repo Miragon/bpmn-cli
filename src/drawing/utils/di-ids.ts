@@ -27,12 +27,12 @@ export function allIds(defs: El): Set<string> {
     if (id) ids.add(id);
     const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
     if (descriptor.isGeneric) continue;
-    for (const p of descriptor.properties ?? []) {
-      if (p.isReference) continue;
-      const v = raw<unknown>(el, p.name);
-      if (Array.isArray(v)) {
-        for (const c of v) if (c && typeof c === 'object' && '$type' in c) stack.push(c as El);
-      } else if (v && typeof v === 'object' && '$type' in v) stack.push(v as El);
+    for (const property of descriptor.properties ?? []) {
+      if (property.isReference) continue;
+      const value = raw<unknown>(el, property.name);
+      if (Array.isArray(value)) {
+        for (const child of value) if (child && typeof child === 'object' && '$type' in child) stack.push(child as El);
+      } else if (value && typeof value === 'object' && '$type' in value) stack.push(value as El);
     }
   }
   return ids;
@@ -51,14 +51,14 @@ export function diStyles(defs: El): { shape?: Style; edge?: Style } {
       if (style) votes[kind].set(style, (votes[kind].get(style) ?? 0) + 1);
     }
   }
-  const pick = (m: Map<Style, number>, fallback?: Style): Style | undefined => {
+  const pick = (styleCounts: Map<Style, number>, fallback?: Style): Style | undefined => {
     let best = fallback;
-    let n = 0;
-    for (const s of ['suffix', 'bpmn', 'short'] as Style[]) {
-      const v = m.get(s) ?? 0;
-      if (v > n) {
-        best = s;
-        n = v;
+    let bestCount = 0;
+    for (const style of ['suffix', 'bpmn', 'short'] as Style[]) {
+      const count = styleCounts.get(style) ?? 0;
+      if (count > bestCount) {
+        best = style;
+        bestCount = count;
       }
     }
     return best;
@@ -85,7 +85,7 @@ function isOrSuffixed(diId: string, base: string): boolean {
 
 /** Recognises cut ids (now or as 0.6 cut) and collision suffixes too. */
 export function diStyleOf(diId: string, elId: string, kind: 'Shape' | 'Edge'): Style | undefined {
-  return styleOf(diId, elId, kind) ?? (['suffix', 'bpmn', 'short'] as Style[]).find((s) => isOrSuffixed(diId, styledId(s, kind, elId)) || isOrSuffixed(diId, styledId(s, kind, elId, true)));
+  return styleOf(diId, elId, kind) ?? (['suffix', 'bpmn', 'short'] as Style[]).find((style) => isOrSuffixed(diId, styledId(style, kind, elId)) || isOrSuffixed(diId, styledId(style, kind, elId, true)));
 }
 
 export function rootDiId(kind: 'Plane' | 'Diagram', root: string, legacy = false): string {
@@ -122,7 +122,7 @@ export function followDiIds(defs: El, el: El, old: string, id: string, ids: IdCl
       const base = styledId(style, kind, id);
       if (isOrSuffixed(diId, base)) continue;
       let next = base;
-      for (let i = 2; ids.has(next); i++) next = `${base}_${i}`;
+      for (let index = 2; ids.has(next); index++) next = `${base}_${index}`;
       ids.release(diId);
       ids.claim(next);
       pe.set('id', next);
@@ -134,7 +134,7 @@ export function followDiIds(defs: El, el: El, old: string, id: string, ids: IdCl
 
 export function claimUnique(taken: Set<string>, base: string): string {
   let id = base;
-  for (let i = 2; taken.has(id); i++) id = `${base}_${i}`;
+  for (let index = 2; taken.has(id); index++) id = `${base}_${index}`;
   taken.add(id);
   return id;
 }

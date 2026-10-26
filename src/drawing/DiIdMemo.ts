@@ -56,28 +56,28 @@ export class DiIdMemo {
     const rootId = (kind: 'Plane' | 'Diagram', el: El, root: string | undefined): string => (root ? rootDiId(kind, root) : (idOf(el) ?? `BPMN${kind}_1`));
     const old = [...this.diagrams];
     const main = old[0];
-    const derived = (o: { root?: string; plane?: string; diagram?: string }): boolean => !!o.root && (namesRoot('Plane', o.plane, o.root) || namesRoot('Diagram', o.diagram, o.root));
+    const derived = (memo: { root?: string; plane?: string; diagram?: string }): boolean => !!memo.root && (namesRoot('Plane', memo.plane, memo.root) || namesRoot('Diagram', memo.diagram, memo.root));
     const unmatched: El[] = [];
     for (const diagram of diagrams) {
       const plane = raw<El>(diagram, 'plane');
       const root = idOf(raw(plane, 'bpmnElement'));
-      const i = old.findIndex((o) => o.root === root);
-      if (i === -1) {
+      const memoIndex = old.findIndex((memo) => memo.root === root);
+      if (memoIndex === -1) {
         unmatched.push(diagram);
         continue;
       }
-      const [o] = old.splice(i, 1);
-      if (plane) claim(plane, o!.plane, rootId('Plane', plane, root));
-      claim(diagram, o!.diagram, rootId('Diagram', diagram, root));
+      const [matchedMemo] = old.splice(memoIndex, 1);
+      if (plane) claim(plane, matchedMemo!.plane, rootId('Plane', plane, root));
+      claim(diagram, matchedMemo!.diagram, rootId('Diagram', diagram, root));
     }
     for (const diagram of unmatched) {
       const plane = raw<El>(diagram, 'plane');
       const root = idOf(raw(plane, 'bpmnElement'));
       // a main diagram whose root changed (e.g. to a new collaboration) keeps the old main ids
-      const o = diagram === diagrams[0] && main && old.includes(main) && !derived(main) ? main : undefined;
-      if (o) old.splice(old.indexOf(o), 1);
-      if (plane) claim(plane, o?.plane, rootId('Plane', plane, root));
-      claim(diagram, o?.diagram, rootId('Diagram', diagram, root));
+      const reusedMemo = diagram === diagrams[0] && main && old.includes(main) && !derived(main) ? main : undefined;
+      if (reusedMemo) old.splice(old.indexOf(reusedMemo), 1);
+      if (plane) claim(plane, reusedMemo?.plane, rootId('Plane', plane, root));
+      claim(diagram, reusedMemo?.diagram, rootId('Diagram', diagram, root));
     }
     for (const diagram of diagrams) {
       for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
@@ -91,7 +91,7 @@ export class DiIdMemo {
       }
     }
     // uncut ids first, so a cut id never pushes one that needs no cut to `_2`
-    const uncut = (f: { el: El; base: string }): boolean => idOf(f.el) === f.base;
-    for (const { el, base } of [...fresh.filter(uncut), ...fresh.filter((f) => !uncut(f))]) el.set('id', claimUnique(taken, base));
+    const uncut = (candidate: { el: El; base: string }): boolean => idOf(candidate.el) === candidate.base;
+    for (const { el, base } of [...fresh.filter(uncut), ...fresh.filter((candidate) => !uncut(candidate))]) el.set('id', claimUnique(taken, base));
   }
 }

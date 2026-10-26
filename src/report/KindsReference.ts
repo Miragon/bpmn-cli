@@ -37,7 +37,7 @@ export interface ZeebeElementDoc {
 }
 
 /** `ext add` merges a second one of these into the first. */
-const ZEEBE_SINGLE = [...EXTENSION_STRUCTURE.singleTop].filter((t) => t.startsWith('zeebe:'));
+const ZEEBE_SINGLE = [...EXTENSION_STRUCTURE.singleTop].filter((type) => type.startsWith('zeebe:'));
 
 /** The sections of `bpmn kinds` by their JSON key. */
 const SECTION_KEYS: Record<string, string[]> = {
@@ -64,26 +64,26 @@ export class KindsReference {
 
   json(): Record<string, unknown> {
     return {
-      kinds: KINDS.map((k) => ({
-        kind: k.kind,
-        type: k.type,
-        family: k.family,
-        aliases: k.aliases,
-        prefix: k.prefix,
-        ...(k.triggers ? { triggers: k.triggers } : {}),
-        ...(k.props ? { props: k.props } : {}),
-        description: k.description,
+      kinds: KINDS.map((kind) => ({
+        kind: kind.kind,
+        type: kind.type,
+        family: kind.family,
+        aliases: kind.aliases,
+        prefix: kind.prefix,
+        ...(kind.triggers ? { triggers: kind.triggers } : {}),
+        ...(kind.props ? { props: kind.props } : {}),
+        description: kind.description,
       })),
       triggers: Object.fromEntries(
-        TRIGGER_OPTIONS.map((t) => [
-          t.trigger,
+        TRIGGER_OPTIONS.map((trigger) => [
+          trigger.trigger,
           {
-            ...(t.trigger !== 'none' ? { type: TRIGGER_TYPES[t.trigger] } : {}),
-            option: t.option,
-            keys: t.keys,
-            description: t.description,
-            kinds: this.kindsWithTrigger(t.trigger),
-            ...(t.alsoOn ? { alsoOn: t.alsoOn } : {}),
+            ...(trigger.trigger !== 'none' ? { type: TRIGGER_TYPES[trigger.trigger] } : {}),
+            option: trigger.option,
+            keys: trigger.keys,
+            description: trigger.description,
+            kinds: this.kindsWithTrigger(trigger.trigger),
+            ...(trigger.alsoOn ? { alsoOn: trigger.alsoOn } : {}),
           },
         ]),
       ),
@@ -102,7 +102,7 @@ export class KindsReference {
       ids: ID_CONVENTIONS,
       colors: SWATCHES,
       errors: ERROR_CATALOGUE,
-      exitCodes: Object.fromEntries(EXIT_CODE_DOCS.map((e) => [String(e.code), e.meaning])),
+      exitCodes: Object.fromEntries(EXIT_CODE_DOCS.map((exitCode) => [String(exitCode.code), exitCode.meaning])),
     };
   }
 
@@ -111,42 +111,42 @@ export class KindsReference {
     const names = Object.keys(SECTION_KEYS);
     return spec
       .split(',')
-      .map((s) => s.trim())
+      .map((part) => part.trim())
       .filter(Boolean)
       .map((raw) => {
         const key = raw.toLowerCase().replace(/[\s_-]/g, '');
-        const found = names.find((n) => n.toLowerCase() === key) ?? names.find((n) => n.toLowerCase() === key.replace(/s$/, '')) ?? names.find((n) => SECTION_KEYS[n]!.some((k) => k.toLowerCase() === key));
+        const found = names.find((name) => name.toLowerCase() === key) ?? names.find((name) => name.toLowerCase() === key.replace(/s$/, '')) ?? names.find((name) => SECTION_KEYS[name]!.some((kind) => kind.toLowerCase() === key));
         if (!found) throw usageError(`Unknown kinds section "${raw}"`, { candidates: names, hint: `Sections: ${names.join(', ')} (several: --section ops,errors).` });
         return found;
       });
   }
 
   sectionText(sections: string[]): string {
-    return sections.map((s) => this.section(s)).join('\n').replace(/^\n/, '') + '\n';
+    return sections.map((section) => this.section(section)).join('\n').replace(/^\n/, '') + '\n';
   }
 
   sectionJson(sections: string[]): Record<string, unknown> {
     const all = this.json();
     const out: Record<string, unknown> = {};
-    for (const s of sections) for (const k of SECTION_KEYS[s]!) out[k] = all[k];
+    for (const section of sections) for (const key of SECTION_KEYS[section]!) out[key] = all[key];
     return out;
   }
 
   placementSection(): string {
-    return [heading('PLACEMENT  (add / move; ops JSON key in parentheses)'), table(PLACEMENT_DOCS.map((p) => [p.option, `(${p.key})`, p.rule])), ...PLACEMENT_NOTES.map((n) => `  ${n}`)].join('\n');
+    return [heading('PLACEMENT  (add / move; ops JSON key in parentheses)'), table(PLACEMENT_DOCS.map((placement) => [placement.option, `(${placement.key})`, placement.rule])), ...PLACEMENT_NOTES.map((note) => `  ${note}`)].join('\n');
   }
 
   triggersSection(): string {
-    const rows = TRIGGER_OPTIONS.map((t) => [t.trigger, t.option, t.description, `on: ${[...this.kindsWithTrigger(t.trigger), ...(t.alsoOn ?? [])].join(', ') || '-'}`]);
+    const rows = TRIGGER_OPTIONS.map((trigger) => [trigger.trigger, trigger.option, trigger.description, `on: ${[...this.kindsWithTrigger(trigger.trigger), ...(trigger.alsoOn ?? [])].join(', ') || '-'}`]);
     return [heading('TRIGGERS  (event kind suffix + option; ops JSON keys = option names in lowerCamelCase)'), table(rows), `  ${NON_INTERRUPTING_DOC}`].join('\n');
   }
 
   opsSection(): string {
     const out: string[] = [heading('OPS JSON  (bpmn apply <file> ops.json; keys = CLI flags in lowerCamelCase; full schema: bpmn kinds --json -> ops)')];
-    for (const n of OP_NAMES) {
-      const required = Object.entries(OP_FIELDS[n]).filter(([, s]) => s.required).map(([k]) => k);
-      out.push(`  ${n.padEnd(8)} ${OP_DESCRIPTIONS[n]}`);
-      out.push(`           keys: ${Object.keys(OP_FIELDS[n]).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
+    for (const opName of OP_NAMES) {
+      const required = Object.entries(OP_FIELDS[opName]).filter(([, spec]) => spec.required).map(([key]) => key);
+      out.push(`  ${opName.padEnd(8)} ${OP_DESCRIPTIONS[opName]}`);
+      out.push(`           keys: ${Object.keys(OP_FIELDS[opName]).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
     }
     out.push('\nBatch aliases: "as": "$name" on add / connect / split / split nodes ("flowAs" on add and split nodes: the flow into the');
     out.push('node, on a prepend before a join or a node without incoming flow the flow out of it; "outAs" on add: the one flow');
@@ -176,16 +176,16 @@ export class KindsReference {
   }
 
   exitCodesSection(): string {
-    return [heading('EXIT CODES'), table(EXIT_CODE_DOCS.map((e) => [String(e.code), e.meaning]))].join('\n');
+    return [heading('EXIT CODES'), table(EXIT_CODE_DOCS.map((exitCode) => [String(exitCode.code), exitCode.meaning]))].join('\n');
   }
 
   private kindsSection(): string {
     const out: string[] = [heading('KINDS  (bpmn add <file> <kind[:trigger]> [name] ...; aliases in parentheses; id prefix in the 2nd column)')];
-    const families = [...new Set(KINDS.map((k) => k.family))];
+    const families = [...new Set(KINDS.map((kind) => kind.family))];
     for (const family of families) {
       out.push(`\n${FAMILY_LABELS[family]}`);
       const rows: string[][] = [];
-      for (const def of KINDS.filter((k) => k.family === family)) {
+      for (const def of KINDS.filter((kind) => kind.family === family)) {
         rows.push([this.kindLabelWithAliases(def), `${def.prefix}_`, def.description]);
         if (def.triggers) rows.push(['', '', `triggers: ${def.triggers.join(', ')}`]);
       }
@@ -202,7 +202,7 @@ export class KindsReference {
     }
     for (const [appliesTo, keys] of this.groupSetKeys(SET_KEYS)) {
       out.push(`\n${appliesTo}`);
-      out.push(table(keys.map((k) => [k.key, k.description])));
+      out.push(table(keys.map((key) => [key.key, key.description])));
     }
     return out.join('\n');
   }
@@ -213,7 +213,7 @@ export class KindsReference {
     const rows: string[][] = [];
     for (const slot of NESTED_SLOTS) {
       for (const [type, keys] of Object.entries(keyTable[slot])) {
-        const shown = keys.filter((k) => k !== `${slot}.id`);
+        const shown = keys.filter((key) => key !== `${slot}.id`);
         if (shown.length) rows.push([type.replace('bpmn:', ''), shown.join(', ')]);
       }
     }
@@ -226,9 +226,9 @@ export class KindsReference {
 
   private zeebeSection(): string {
     const out: string[] = [heading('CAMUNDA 8  (zeebe extension elements: bpmn ext add <file> <id> <type> attr=value; FEEL values start with =, write attr==<expression>; from the Zeebe descriptor)')];
-    for (const z of this.zeebeElementTable()) {
-      out.push(`  ${z.type.padEnd(28)} ${[z.attributes.join(' '), z.children ? `children: ${z.children.join(', ')}` : ''].filter(Boolean).join('; ') || '(no attributes)'}${z.single ? '  (one per element)' : ''}`);
-      out.push(`      on: ${z.on.join(', ') || 'see the descriptor'}`);
+    for (const zeebeRow of this.zeebeElementTable()) {
+      out.push(`  ${zeebeRow.type.padEnd(28)} ${[zeebeRow.attributes.join(' '), zeebeRow.children ? `children: ${zeebeRow.children.join(', ')}` : ''].filter(Boolean).join('; ') || '(no attributes)'}${zeebeRow.single ? '  (one per element)' : ''}`);
+      out.push(`      on: ${zeebeRow.on.join(', ') || 'see the descriptor'}`);
     }
     out.push('  Child types go into their container (zeebe:input -> zeebe:ioMapping), a single element is merged, a keyed item (zeebe:input by target,');
     out.push('  zeebe:header by key, zeebe:property by name) is replaced. A zeebe attribute set on the element itself is refused (E_WRONG_HOST).');
@@ -237,7 +237,7 @@ export class KindsReference {
 
   private errorsSection(): string {
     const out: string[] = [heading('ERRORS AND WARNINGS')];
-    for (const e of ERROR_CATALOGUE) out.push(`  ${e.code}\n      ${e.meaning}\n      fix: ${e.fix}`);
+    for (const error of ERROR_CATALOGUE) out.push(`  ${error.code}\n      ${error.meaning}\n      fix: ${error.fix}`);
     return out.join('\n');
   }
 
@@ -247,10 +247,10 @@ export class KindsReference {
 
   private groupSetKeys(keys: SetKeyDoc[]): Map<string, SetKeyDoc[]> {
     const groups = new Map<string, SetKeyDoc[]>();
-    for (const k of keys) {
-      const list = groups.get(k.appliesTo) ?? [];
-      list.push(k);
-      groups.set(k.appliesTo, list);
+    for (const key of keys) {
+      const list = groups.get(key.appliesTo) ?? [];
+      list.push(key);
+      groups.set(key.appliesTo, list);
     }
     return groups;
   }
@@ -268,33 +268,33 @@ export class KindsReference {
   private zeebeElementTable(): ZeebeElementDoc[] {
     const out: ZeebeElementDoc[] = [];
     for (const name of ZEEBE.typeNames()) {
-      const t = ZEEBE.type(name)!;
+      const zeebeType = ZEEBE.type(name)!;
       const on: string[] = [];
-      if (ZEEBE.nestedOnly(name)) on.push(...ZEEBE.containersOf(name).map((c) => `in ${c}`));
+      if (ZEEBE.nestedOnly(name)) on.push(...ZEEBE.containersOf(name).map((container) => `in ${container}`));
       else {
         if (ZEEBE.allowedOn(name, 'bpmn:Process') === true) on.push('process');
         // a whole family (all events, all tasks, ...) is named once
         const families = new Map<string, KindDef[]>();
-        for (const k of KINDS) families.set(k.family, [...(families.get(k.family) ?? []), k]);
+        for (const kind of KINDS) families.set(kind.family, [...(families.get(kind.family) ?? []), kind]);
         for (const [family, kinds] of families) {
-          const allowed = kinds.filter((k) => ZEEBE.allowedOn(name, k.type) === true);
+          const allowed = kinds.filter((kind) => ZEEBE.allowedOn(name, kind.type) === true);
           if (allowed.length && allowed.length === kinds.length && kinds.length > 1) on.push(`${family === 'subProcess' ? 'sub-processe' : family}s`);
-          else on.push(...allowed.map((k) => k.kind));
+          else on.push(...allowed.map((kind) => kind.kind));
         }
         if (ZEEBE.allowedOn(name, 'bpmn:Message') === true && ZEEBE.allowedOn(name, 'bpmn:Task') !== true) on.push('message');
         if (ZEEBE.allowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) on.push('loop. (multi-instance activities)');
-        const defs = ['Message', 'Conditional'].filter((d) => ZEEBE.allowedOn(name, `bpmn:${d}EventDefinition`) === true);
-        for (const d of defs) on.push(`definition. (${d.toLowerCase()} events)`);
+        const defs = ['Message', 'Conditional'].filter((definition) => ZEEBE.allowedOn(name, `bpmn:${definition}EventDefinition`) === true);
+        for (const definition of defs) on.push(`definition. (${definition.toLowerCase()} events)`);
         if (ZEEBE.allowedOn(name, 'bpmn:Lane') === true && ZEEBE.allowedOn(name, 'bpmn:Message') === true) on.splice(0, on.length, 'any element');
-        for (const c of ZEEBE.containersOf(name)) on.push(`in ${c}`);
+        for (const container of ZEEBE.containersOf(name)) on.push(`in ${container}`);
       }
-      out.push({ type: name, on, attributes: t.attributes.map((a) => a.name), ...(t.children.length ? { children: t.children } : {}), single: ZEEBE_SINGLE.includes(name) });
+      out.push({ type: name, on, attributes: zeebeType.attributes.map((attribute) => attribute.name), ...(zeebeType.children.length ? { children: zeebeType.children } : {}), single: ZEEBE_SINGLE.includes(name) });
     }
     return out;
   }
 
   private kindsWithTrigger(trigger: Trigger): string[] {
-    return KINDS.filter((k) => k.triggers?.includes(trigger)).map((k) => k.kind);
+    return KINDS.filter((kind) => kind.triggers?.includes(trigger)).map((kind) => kind.kind);
   }
 
   private simpleRows(title: string, rows: string[][]): string {
@@ -310,9 +310,9 @@ export class KindsReference {
       zeebeElements: () => this.zeebeSection(),
       placement: () => this.placementSection(),
       ops: () => this.opsSection(),
-      layoutModes: () => this.simpleRows('LAYOUT MODES', LAYOUT_MODES.map((m) => [m])),
+      layoutModes: () => this.simpleRows('LAYOUT MODES', LAYOUT_MODES.map((mode) => [mode])),
       ids: () => [heading('IDS'), JSON.stringify(ID_CONVENTIONS, null, 2)].join('\n'),
-      colors: () => this.simpleRows('COLORS', Object.entries(SWATCHES).map(([name, c]) => [name, JSON.stringify(c)])),
+      colors: () => this.simpleRows('COLORS', Object.entries(SWATCHES).map(([name, swatch]) => [name, JSON.stringify(swatch)])),
       errors: () => this.errorsSection(),
       exitCodes: () => this.exitCodesSection(),
     };

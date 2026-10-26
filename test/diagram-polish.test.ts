@@ -27,73 +27,73 @@ import { type MutationResult } from '../src/pipeline/index.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');
 
-async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; before: Doc; after: Doc }> {
+async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; before: Doc; after: Doc }> {
   const before = await Doc.fromXml(xml, 'x.bpmn');
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
-  const after = await Doc.fromXml(r.xml);
+  const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
+  const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
-  expect(r.layout.mode).toBe('incremental');
-  return { r, before, after };
+  expect(result.layout.mode).toBe('incremental');
+  return { result, before, after };
 }
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const shape of diagramPlane.shapes.values()) out.set(shape.id, shape);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const edge of diagramPlane.edges.values()) out.set(edge.id, edge);
   return out;
 }
 
-const right = (b: Box): number => b.x + b.width;
-const bottom = (b: Box): number => b.y + b.height;
-const cy = (b: Box): number => b.y + b.height / 2;
-const overlap = (a: Box, b: Box): boolean => a.x < right(b) && right(a) > b.x && a.y < bottom(b) && bottom(a) > b.y;
+const right = (box: Box): number => box.x + box.width;
+const bottom = (box: Box): number => box.y + box.height;
+const cy = (box: Box): number => box.y + box.height / 2;
+const overlap = (first: Box, second: Box): boolean => first.x < right(second) && right(first) > second.x && first.y < bottom(second) && bottom(first) > second.y;
 
 /** The vertices of a gateway's diamond, as "x,y". */
-const vertices = (b: Box): string[] => [`${b.x},${cy(b)}`, `${right(b)},${cy(b)}`, `${b.x + b.width / 2},${b.y}`, `${b.x + b.width / 2},${bottom(b)}`];
-const key = (p: Point): string => `${p.x},${p.y}`;
+const vertices = (box: Box): string[] => [`${box.x},${cy(box)}`, `${right(box)},${cy(box)}`, `${box.x + box.width / 2},${box.y}`, `${box.x + box.width / 2},${bottom(box)}`];
+const key = (point: Point): string => `${point.x},${point.y}`;
 
 /* ------------------------------------------------------------------ */
 /* space tool                                                           */
 /* ------------------------------------------------------------------ */
 
 const EL = {} as El;
-function sh(id: string, kind: DShape['kind'], b: [number, number, number, number], extra: Partial<DShape> = {}): DShape {
+function sh(id: string, kind: DShape['kind'], bounds: [number, number, number, number], extra: Partial<DShape> = {}): DShape {
   const container = kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && extra.expanded === true);
-  return { id, el: EL, kind, container, bounds: { x: b[0], y: b[1], width: b[2], height: b[3] }, ...extra };
+  return { id, el: EL, kind, container, bounds: { x: bounds[0], y: bounds[1], width: bounds[2], height: bounds[3] }, ...extra };
 }
 function ed(id: string, sourceId: string, targetId: string, pts: Array<[number, number]>, extra: Partial<DEdge> = {}): DEdge {
-  return { id, el: EL, kind: 'sequenceFlow', sourceId, targetId, points: pts.map(([x, y]) => ({ x, y })), ...extra };
+  return { id, el: EL, kind: 'sequenceFlow', sourceId, targetId, points: pts.map(([pointX, pointY]) => ({ x: pointX, y: pointY })), ...extra };
 }
 function plane(shapes: DShape[], edges: DEdge[] = []): Plane {
-  return { id: 'p', rootId: 'r', root: EL, shapes: new Map(shapes.map((s) => [s.id, s])), edges: new Map(edges.map((e) => [e.id, e])), dropped: [] };
+  return { id: 'p', rootId: 'r', root: EL, shapes: new Map(shapes.map((shape) => [shape.id, shape])), edges: new Map(edges.map((edge) => [edge.id, edge])), dropped: [] };
 }
 
 describe('makeSpace: labels go with their connection', () => {
   it('moves the label of a translated message flow even outside the `within` band', () => {
-    const p = plane(
+    const drawnPlane = plane(
       [sh('Top', 'participant', [100, 0, 800, 60]), sh('Pool', 'participant', [100, 120, 800, 200]), sh('A', 'task', [200, 160, 100, 80], { poolId: 'Pool' }), sh('R', 'task', [400, 160, 100, 80], { poolId: 'Pool' })],
       [ed('M', 'R', 'Top', [[450, 160], [450, 60]], { kind: 'messageFlow', label: { x: 456, y: 85, width: 40, height: 14 } })],
     );
-    new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 150, within: { x: 100, y: 120, width: 800, height: 200 } });
-    expect(p.edges.get('M')!.points).toEqual([{ x: 600, y: 160 }, { x: 600, y: 60 }]);
-    expect(p.edges.get('M')!.label!.x).toBe(606);
+    new Drawing(drawnPlane).makeSpace({ axis: 'x', line: 301, delta: 150, within: { x: 100, y: 120, width: 800, height: 200 } });
+    expect(drawnPlane.edges.get('M')!.points).toEqual([{ x: 600, y: 160 }, { x: 600, y: 60 }]);
+    expect(drawnPlane.edges.get('M')!.label!.x).toBe(606);
   });
 
   it('keeps the label of a connection that stays and of the part of a stretched one before the line', () => {
-    const p = plane(
+    const drawnPlane = plane(
       [sh('A', 'task', [100, 100, 100, 80]), sh('B', 'task', [500, 100, 100, 80]), sh('C', 'task', [100, 300, 100, 80]), sh('D', 'task', [200, 300, 30, 80])],
       [ed('F', 'A', 'B', [[200, 140], [500, 140]], { label: { x: 210, y: 120, width: 30, height: 14 } }), ed('K', 'C', 'D', [[200, 340], [200, 340]], { label: { x: 420, y: 320, width: 30, height: 14 } })],
     );
-    new Drawing(p).makeSpace({ axis: 'x', line: 300, delta: 100, within: { x: 0, y: 50, width: 1000, height: 150 } });
-    expect(p.edges.get('F')!.points).toEqual([{ x: 200, y: 140 }, { x: 600, y: 140 }]);
-    expect(p.edges.get('F')!.label!.x).toBe(210);
+    new Drawing(drawnPlane).makeSpace({ axis: 'x', line: 300, delta: 100, within: { x: 0, y: 50, width: 1000, height: 150 } });
+    expect(drawnPlane.edges.get('F')!.points).toEqual([{ x: 200, y: 140 }, { x: 600, y: 140 }]);
+    expect(drawnPlane.edges.get('F')!.label!.x).toBe(210);
     // a connection outside the band does not move, nor does its label (even beyond the line)
-    expect(p.edges.get('K')!.label!.x).toBe(420);
+    expect(drawnPlane.edges.get('K')!.label!.x).toBe(420);
   });
 });
 
@@ -122,34 +122,34 @@ describe('makeSpace: expanded sub-processes the line crosses', () => {
   }
 
   it('anchored outside them: the one mostly before the line stays, the other moves as a whole', () => {
-    const p = rows();
-    const r = new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['A'] });
-    expect(p.shapes.get('Sub1')!.bounds).toEqual({ x: 150, y: 200, width: 250, height: 150 });
-    expect(p.shapes.get('S1b')!.bounds.x).toBe(340);
-    expect(p.shapes.get('S1b')!.label!.x).toBe(335);
-    expect(p.edges.get('G1')!.points.map((q) => q.x)).toEqual([206, 270, 270, 340]);
-    expect(p.edges.get('G1')!.label!.x).toBe(310);
-    expect(p.shapes.get('Sub2')!.bounds).toEqual({ x: 410, y: 400, width: 400, height: 150 });
-    expect(p.shapes.get('S2a')!.bounds.x).toBe(430);
-    expect(p.shapes.get('S2b')!.bounds.x).toBe(740);
-    expect(p.shapes.get('S2x')!.bounds.x).toBe(792);
+    const drawnPlane = rows();
+    const spaceResult = new Drawing(drawnPlane).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['A'] });
+    expect(drawnPlane.shapes.get('Sub1')!.bounds).toEqual({ x: 150, y: 200, width: 250, height: 150 });
+    expect(drawnPlane.shapes.get('S1b')!.bounds.x).toBe(340);
+    expect(drawnPlane.shapes.get('S1b')!.label!.x).toBe(335);
+    expect(drawnPlane.edges.get('G1')!.points.map((point) => point.x)).toEqual([206, 270, 270, 340]);
+    expect(drawnPlane.edges.get('G1')!.label!.x).toBe(310);
+    expect(drawnPlane.shapes.get('Sub2')!.bounds).toEqual({ x: 410, y: 400, width: 400, height: 150 });
+    expect(drawnPlane.shapes.get('S2a')!.bounds.x).toBe(430);
+    expect(drawnPlane.shapes.get('S2b')!.bounds.x).toBe(740);
+    expect(drawnPlane.shapes.get('S2x')!.bounds.x).toBe(792);
     // the inner connection is translated, bends before the line included
-    expect(p.edges.get('G2')!.points.map((q) => q.x)).toEqual([466, 490, 490, 740, 740]);
-    expect(p.shapes.get('N')!.bounds.x).toBe(520);
-    expect(r.resized.has('Sub1')).toBe(false);
-    expect(r.resized.has('Sub2')).toBe(false);
+    expect(drawnPlane.edges.get('G2')!.points.map((point) => point.x)).toEqual([466, 490, 490, 740, 740]);
+    expect(drawnPlane.shapes.get('N')!.bounds.x).toBe(520);
+    expect(spaceResult.resized.has('Sub1')).toBe(false);
+    expect(spaceResult.resized.has('Sub2')).toBe(false);
   });
 
   it('anchored inside one: that one grows, as without anchors', () => {
-    const p = rows();
-    new Drawing(p).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['S1a'] });
-    expect(p.shapes.get('Sub1')!.bounds.width).toBe(410);
-    expect(p.shapes.get('S1a')!.bounds.x).toBe(170);
-    expect(p.shapes.get('S1b')!.bounds.x).toBe(500);
-    const q = rows();
-    new Drawing(q).makeSpace({ axis: 'x', line: 301, delta: 160 });
-    expect(q.shapes.get('Sub1')!.bounds.width).toBe(410);
-    expect(q.shapes.get('Sub2')!.bounds.width).toBe(560);
+    const drawnPlane = rows();
+    new Drawing(drawnPlane).makeSpace({ axis: 'x', line: 301, delta: 160, anchors: ['S1a'] });
+    expect(drawnPlane.shapes.get('Sub1')!.bounds.width).toBe(410);
+    expect(drawnPlane.shapes.get('S1a')!.bounds.x).toBe(170);
+    expect(drawnPlane.shapes.get('S1b')!.bounds.x).toBe(500);
+    const freePlane = rows();
+    new Drawing(freePlane).makeSpace({ axis: 'x', line: 301, delta: 160 });
+    expect(freePlane.shapes.get('Sub1')!.bounds.width).toBe(410);
+    expect(freePlane.shapes.get('Sub2')!.bounds.width).toBe(560);
   });
 });
 
@@ -158,33 +158,33 @@ describe('makeSpace: expanded sub-processes the line crosses', () => {
 /* ------------------------------------------------------------------ */
 
 describe('router: gateway vertices, taken sides, crossings next to an arrowhead', () => {
-  const g: Box = { x: 100, y: 100, width: 50, height: 50 };
+  const gateway: Box = { x: 100, y: 100, width: 50, height: 50 };
 
   it('keeps a middle-only port on the vertex even when another connection docks there', () => {
-    const t: Box = { x: 250, y: 160, width: 100, height: 80 };
+    const target: Box = { x: 250, y: 160, width: 100, height: 80 };
     const docked = [[{ x: 150, y: 125 }, { x: 250, y: 125 }]];
-    const free = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right'], obstacles: [], lines: docked });
-    const middle = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right'], sourceMiddle: true, obstacles: [], lines: docked });
+    const free = OrthogonalRouter.route({ source: gateway, target, sourceSides: ['right'], obstacles: [], lines: docked });
+    const middle = OrthogonalRouter.route({ source: gateway, target, sourceSides: ['right'], sourceMiddle: true, obstacles: [], lines: docked });
     expect(key(free[0]!)).not.toBe('150,125');
     expect(key(middle[0]!)).toBe('150,125');
   });
 
   it('leaves by another vertex than a taken one when that costs no more than a crossing', () => {
-    const t: Box = { x: 250, y: 300, width: 100, height: 80 };
+    const target: Box = { x: 250, y: 300, width: 100, height: 80 };
     const taken = [[{ x: 125, y: 150 }, { x: 125, y: 220 }, { x: 250, y: 220 }]];
-    const pts = OrthogonalRouter.route({ source: g, target: t, sourceSides: ['right', 'bottom', 'top'], sourceMiddle: true, sourceAvoid: ['bottom'], obstacles: [{ x: 250, y: 180, width: 100, height: 80 }], lines: taken });
+    const pts = OrthogonalRouter.route({ source: gateway, target, sourceSides: ['right', 'bottom', 'top'], sourceMiddle: true, sourceAvoid: ['bottom'], obstacles: [{ x: 250, y: 180, width: 100, height: 80 }], lines: taken });
     expect(key(pts[0]!)).toBe('150,125');
   });
 
   it('crosses another connection away from its arrowhead', () => {
     // the line to cross ends at the box E; going straight down would cross right before its arrowhead
-    const s: Box = { x: 100, y: 100, width: 100, height: 80 };
-    const t: Box = { x: 230, y: 300, width: 100, height: 80 };
+    const source: Box = { x: 100, y: 100, width: 100, height: 80 };
+    const target: Box = { x: 230, y: 300, width: 100, height: 80 };
     const line = [[{ x: 120, y: 240 }, { x: 290, y: 240 }]];
-    const pts = OrthogonalRouter.route({ source: s, target: t, sourceSides: ['right'], targetSides: ['top', 'left'], sourceMiddle: true, obstacles: [{ x: 290, y: 222, width: 36, height: 36 }], lines: line });
-    const crossAt = pts.slice(1).flatMap((q, i) => {
-      const p = pts[i]!;
-      return p.x === q.x && Math.min(p.y, q.y) < 240 && Math.max(p.y, q.y) > 240 ? [p.x] : [];
+    const pts = OrthogonalRouter.route({ source, target, sourceSides: ['right'], targetSides: ['top', 'left'], sourceMiddle: true, obstacles: [{ x: 290, y: 222, width: 36, height: 36 }], lines: line });
+    const crossAt = pts.slice(1).flatMap((point, pointIndex) => {
+      const previous = pts[pointIndex]!;
+      return previous.x === point.x && Math.min(previous.y, point.y) < 240 && Math.max(previous.y, point.y) > 240 ? [previous.x] : [];
     });
     expect(crossAt.length).toBe(1);
     expect(Math.abs(290 - crossAt[0]!)).toBeGreaterThanOrEqual(25);
@@ -228,43 +228,43 @@ describe('judged edits on hand drawings', () => {
   it('insert: the message flow label moves with its flow; event sub-processes the line crosses are moved or kept, never stretched', async () => {
     const xml = fixture('polish-collab.bpmn');
     const { before, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New step', after: 'A' }]);
-    const b = shapes(before);
-    const a = shapes(after);
-    const dx = a.get('R')!.bounds.x - b.get('R')!.bounds.x;
+    const shapesBefore = shapes(before);
+    const shapesAfter = shapes(after);
+    const dx = shapesAfter.get('R')!.bounds.x - shapesBefore.get('R')!.bounds.x;
     expect(dx).toBeGreaterThan(0);
     const m0 = edges(before).get('M1')!;
     const m1 = edges(after).get('M1')!;
-    expect(m1.points).toEqual(m0.points.map((p) => ({ x: p.x + dx, y: p.y })));
+    expect(m1.points).toEqual(m0.points.map((point) => ({ x: point.x + dx, y: point.y })));
     expect(m1.label!.x).toBe(m0.label!.x + dx);
     expect(m1.label!.y).toBe(m0.label!.y);
     // mostly before the insertion line: untouched with its content and inner flows
-    for (const id of ['ESP', 'ES', 'ET', 'EE']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
+    for (const id of ['ESP', 'ES', 'ET', 'EE']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
     expect(edges(after).get('EF2')!.points).toEqual(edges(before).get('EF2')!.points);
     // mostly beyond it: moved as a whole
-    for (const id of ['ESP2', 'BS', 'BT', 'BE']) expect(a.get(id)!.bounds, id).toEqual({ ...b.get(id)!.bounds, x: b.get(id)!.bounds.x + dx });
-    expect(edges(after).get('BF1')!.points).toEqual(edges(before).get('BF1')!.points.map((p) => ({ x: p.x + dx, y: p.y })));
+    for (const id of ['ESP2', 'BS', 'BT', 'BE']) expect(shapesAfter.get(id)!.bounds, id).toEqual({ ...shapesBefore.get(id)!.bounds, x: shapesBefore.get(id)!.bounds.x + dx });
+    expect(edges(after).get('BF1')!.points).toEqual(edges(before).get('BF1')!.points.map((point) => ({ x: point.x + dx, y: point.y })));
   });
 
   it('rename: a long name grows its task (wider, then higher), the boundary event stays on the border, what follows keeps its distance', async () => {
     const xml = fixture('polish-rename.bpmn');
     const name = 'Check all submitted documents thoroughly and inform the responsible clerk about the outcome';
-    const { r, before, after } = await run(xml, [{ op: 'set', id: 'A', values: { name } }]);
-    const b = shapes(before);
-    const a = shapes(after);
-    const A = a.get('A')!.bounds;
-    expect(A.x).toBe(b.get('A')!.bounds.x);
-    expect(cy(A)).toBe(cy(b.get('A')!.bounds));
-    expect(A.width).toBeGreaterThan(100);
-    expect(A.width).toBeLessThanOrEqual(200);
-    expect(fitsInside(name, A, BOTTOM_ROOM)).toBe(true);
-    const B = a.get('B')!.bounds;
-    expect(Math.abs(cy(B) - bottom(A))).toBeLessThanOrEqual(3);
-    expect(B.x).toBeGreaterThanOrEqual(A.x);
-    expect(right(B)).toBeLessThanOrEqual(right(A));
-    expect(a.get('C')!.bounds.x - right(A)).toBeGreaterThanOrEqual(40);
-    expect(overlap(a.get('B')!.label!, A)).toBe(false);
+    const { result, before, after } = await run(xml, [{ op: 'set', id: 'A', values: { name } }]);
+    const shapesBefore = shapes(before);
+    const shapesAfter = shapes(after);
+    const boundsA = shapesAfter.get('A')!.bounds;
+    expect(boundsA.x).toBe(shapesBefore.get('A')!.bounds.x);
+    expect(cy(boundsA)).toBe(cy(shapesBefore.get('A')!.bounds));
+    expect(boundsA.width).toBeGreaterThan(100);
+    expect(boundsA.width).toBeLessThanOrEqual(200);
+    expect(fitsInside(name, boundsA, BOTTOM_ROOM)).toBe(true);
+    const boundsB = shapesAfter.get('B')!.bounds;
+    expect(Math.abs(cy(boundsB) - bottom(boundsA))).toBeLessThanOrEqual(3);
+    expect(boundsB.x).toBeGreaterThanOrEqual(boundsA.x);
+    expect(right(boundsB)).toBeLessThanOrEqual(right(boundsA));
+    expect(shapesAfter.get('C')!.bounds.x - right(boundsA)).toBeGreaterThanOrEqual(40);
+    expect(overlap(shapesAfter.get('B')!.label!, boundsA)).toBe(false);
     expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
-    expect(r.layout.notes.some((n) => n.startsWith('A grew'))).toBe(true);
+    expect(result.layout.notes.some((note) => note.startsWith('A grew'))).toBe(true);
   });
 
   it('rename: a short name never shrinks a shape; a name that fits changes nothing', async () => {
@@ -273,42 +273,42 @@ describe('judged edits on hand drawings', () => {
       { op: 'set', id: 'C', values: { name: 'Ship' } },
       { op: 'set', id: 'A', values: { name: 'Check the order' } },
     ]);
-    const b = shapes(before);
-    const a = shapes(after);
-    for (const id of ['A', 'B', 'C', 'E', 'EB']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
+    const shapesBefore = shapes(before);
+    const shapesAfter = shapes(after);
+    for (const id of ['A', 'B', 'C', 'E', 'EB']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
   });
 
   it('lane change: the rerouted flows dock only on vertices, free ones of the split; the join\'s entries from below share its bottom vertex', async () => {
     const xml = fixture('polish-lanes.bpmn');
     const { after } = await run(xml, [{ op: 'set', id: 'T1', values: { lane: 'L2' } }]);
-    const a = shapes(after);
+    const shapesAfter = shapes(after);
     const es = [...edges(after).values()];
-    const docksOf = (gw: string): string[] => [...es.filter((e) => e.sourceId === gw).map((e) => e.points[0]!), ...es.filter((e) => e.targetId === gw).map((e) => e.points[e.points.length - 1]!)].map(key);
+    const docksOf = (gw: string): string[] => [...es.filter((edge) => edge.sourceId === gw).map((edge) => edge.points[0]!), ...es.filter((edge) => edge.targetId === gw).map((edge) => edge.points[edge.points.length - 1]!)].map(key);
     for (const gw of ['G1', 'J']) {
       const docks = docksOf(gw);
       expect(docks).toHaveLength(3);
-      for (const d of docks) expect(vertices(a.get(gw)!.bounds), `${gw} ${d}`).toContain(d);
+      for (const dock of docks) expect(vertices(shapesAfter.get(gw)!.bounds), `${gw} ${dock}`).toContain(dock);
     }
     expect(new Set(docksOf('G1')).size).toBe(3);
     // T1, now in the lower lane, rises into J's bottom vertex beside T2's flow (bpmn-js draws a join so), without crossing it
-    const j = a.get('J')!.bounds;
+    const joinBounds = shapesAfter.get('J')!.bounds;
     const end = (id: string): string => key(edges(after).get(id)!.points.at(-1)!);
-    expect(end('f4')).toBe(`${j.x + j.width / 2},${bottom(j)}`);
+    expect(end('f4')).toBe(`${joinBounds.x + joinBounds.width / 2},${bottom(joinBounds)}`);
     expect(end('f5')).toBe(end('f4'));
-    const between = LayoutAnalysis.of(after.definitions).problems.filter((p) => p.ids.includes('f4') && p.ids.includes('f5'));
+    const between = LayoutAnalysis.of(after.definitions).problems.filter((problem) => problem.ids.includes('f4') && problem.ids.includes('f5'));
     expect(between).toEqual([]);
   });
 
   it('remove: when other rows block the strip, the row of the removed node closes on its own', async () => {
     const xml = fixture('polish-remove.bpmn');
     const { before, after } = await run(xml, [{ op: 'remove', ids: ['X'] }]);
-    const b = shapes(before);
-    const a = shapes(after);
-    const dx = a.get('M')!.bounds.x - b.get('M')!.bounds.x;
-    expect(a.get('M')!.bounds.x).toBe(b.get('X')!.bounds.x);
-    expect(a.get('E2')!.bounds.x - b.get('E2')!.bounds.x).toBe(dx);
-    expect(a.get('M')!.label!.x - b.get('M')!.label!.x).toBe(dx);
-    for (const id of ['S', 'H', 'B', 'E1', 'Org']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
+    const shapesBefore = shapes(before);
+    const shapesAfter = shapes(after);
+    const dx = shapesAfter.get('M')!.bounds.x - shapesBefore.get('M')!.bounds.x;
+    expect(shapesAfter.get('M')!.bounds.x).toBe(shapesBefore.get('X')!.bounds.x);
+    expect(shapesAfter.get('E2')!.bounds.x - shapesBefore.get('E2')!.bounds.x).toBe(dx);
+    expect(shapesAfter.get('M')!.label!.x - shapesBefore.get('M')!.label!.x).toBe(dx);
+    for (const id of ['S', 'H', 'B', 'E1', 'Org']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
     expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
   });
 
@@ -320,8 +320,8 @@ describe('judged edits on hand drawings', () => {
         '<bpmndi:BPMNShape id="T_di" bpmnElement="T"><dc:Bounds x="600" y="100" width="120" height="30"/></bpmndi:BPMNShape><bpmndi:BPMNEdge id="As_di" bpmnElement="As"><di:waypoint x="566" y="266"/><di:waypoint x="620" y="130"/></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="f1_di"',
       );
     const { before, after } = await run(xml, [{ op: 'remove', ids: ['X'] }]);
-    const b = shapes(before);
-    const a = shapes(after);
-    for (const id of ['M', 'E2', 'T']) expect(a.get(id)!.bounds, id).toEqual(b.get(id)!.bounds);
+    const shapesBefore = shapes(before);
+    const shapesAfter = shapes(after);
+    for (const id of ['M', 'E2', 'T']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
   });
 });

@@ -51,100 +51,100 @@ export const severityOf = (kind, hardSeverity = 'error') => {
   return kind.startsWith('hard:') ? hardSeverity : 'error';
 };
 
-const sortedKeys = (problems) => problems.map((p) => `${p.kind}:${p.ids.join(',')}`).sort();
+const sortedKeys = (problems) => problems.map((problem) => `${problem.kind}:${problem.ids.join(',')}`).sort();
 
 function failureViolations(res, before, readBack) {
-  const v = [];
-  if (res.status === 'crash') v.push({ kind: 'crash', detail: `${res.code}: ${res.message}` });
-  if (res.status === 'usage') v.push({ kind: 'usage', detail: `${res.code}: ${res.message}` });
-  if (readBack !== undefined && readBack !== before) v.push({ kind: 'writtenOnFailure', detail: res.code });
-  return v;
+  const violations = [];
+  if (res.status === 'crash') violations.push({ kind: 'crash', detail: `${res.code}: ${res.message}` });
+  if (res.status === 'usage') violations.push({ kind: 'usage', detail: `${res.code}: ${res.message}` });
+  if (readBack !== undefined && readBack !== before) violations.push({ kind: 'writtenOnFailure', detail: res.code });
+  return violations;
 }
 
 function hardViolations(added, hard, after) {
   const isGroup = (id) => after.sem?.byId.get(id)?.$type === 'bpmn:Group';
-  return added.filter((p) => hard.includes(p.kind)).map((p) => ({
-    kind: `${p.ids.some(isGroup) ? 'group' : 'hard'}:${p.kind}`,
-    detail: `${p.ids.join(',')}${p.detail ? ` (${p.detail})` : ''}`,
+  return added.filter((problem) => hard.includes(problem.kind)).map((problem) => ({
+    kind: `${problem.ids.some(isGroup) ? 'group' : 'hard'}:${problem.kind}`,
+    detail: `${problem.ids.join(',')}${problem.detail ? ` (${problem.detail})` : ''}`,
   }));
 }
 
 function consistencyViolations(layout, now, addedHard, hard) {
-  const v = [];
+  const violations = [];
   const reported = layout?.metrics;
-  if (!reported?.after?.counts) return v;
+  if (!reported?.after?.counts) return violations;
   // only kinds both sides know: a CLI build under test may predate kinds of the measuring library
-  const shared = Object.keys(now.counts).filter((k) => k in reported.after.counts);
-  const diff = shared.filter((k) => reported.after.counts[k] !== now.counts[k]);
-  if (diff.length) v.push({ kind: 'metricsMismatch', detail: diff.map((k) => `${k}: result ${reported.after.counts[k]} vs metrics ${now.counts[k]}`).join('; ') });
-  const known = (p) => hard.includes(p.kind) && shared.includes(p.kind);
+  const shared = Object.keys(now.counts).filter((kind) => kind in reported.after.counts);
+  const diff = shared.filter((kind) => reported.after.counts[kind] !== now.counts[kind]);
+  if (diff.length) violations.push({ kind: 'metricsMismatch', detail: diff.map((kind) => `${kind}: result ${reported.after.counts[kind]} vs metrics ${now.counts[kind]}`).join('; ') });
+  const known = (problem) => hard.includes(problem.kind) && shared.includes(problem.kind);
   const theirs = sortedKeys((reported.added ?? []).filter(known));
   const mine = sortedKeys(addedHard.filter(known));
-  if (JSON.stringify(theirs) !== JSON.stringify(mine)) v.push({ kind: 'addedMismatch', detail: `result [${theirs.join(' ')}] vs measured [${mine.join(' ')}]` });
-  return v;
+  if (JSON.stringify(theirs) !== JSON.stringify(mine)) violations.push({ kind: 'addedMismatch', detail: `result [${theirs.join(' ')}] vs measured [${mine.join(' ')}]` });
+  return violations;
 }
 
 function stabilityViolations(prev, next, layout) {
   const keeps = layout?.mode === 'incremental' || (layout?.format?.length && layout?.mode !== 'full');
   if (!keeps) return [];
   const st = stability(geometry(prev), geometry(next), reportedIds(layout));
-  const v = [];
-  if (st.unreportedShapes.length) v.push({ kind: 'unreportedMove', n: st.unreportedShapes.length, detail: st.unreportedShapes.slice(0, 5).map((u) => `${u.id} ${u.from.join(',')} -> ${u.to.join(',')}`).join(' | ') });
-  if (st.unreportedEdges.length) v.push({ kind: 'unreportedReroute', n: st.unreportedEdges.length, detail: st.unreportedEdges.slice(0, 3).map((u) => `${u.id}: ${u.from} -> ${u.to}`).join(' | ') });
-  return v;
+  const violations = [];
+  if (st.unreportedShapes.length) violations.push({ kind: 'unreportedMove', n: st.unreportedShapes.length, detail: st.unreportedShapes.slice(0, 5).map((unreported) => `${unreported.id} ${unreported.from.join(',')} -> ${unreported.to.join(',')}`).join(' | ') });
+  if (st.unreportedEdges.length) violations.push({ kind: 'unreportedReroute', n: st.unreportedEdges.length, detail: st.unreportedEdges.slice(0, 3).map((unreported) => `${unreported.id}: ${unreported.from} -> ${unreported.to}`).join(' | ') });
+  return violations;
 }
 
 function extentViolations(prev, next, start) {
-  const b = bbox(next), pb = bbox(prev);
+  const nextBox = bbox(next), pb = bbox(prev);
   // a model drawn for the first time has no extent to compare with
-  if (![b.w, b.h, pb.w, pb.h, start.x1, start.y1].every(Number.isFinite)) return [];
-  const v = [];
-  if (b.w - pb.w > 1500 || b.h - pb.h > 1000) v.push({ kind: 'bboxJump', detail: `${Math.round(pb.w)}x${Math.round(pb.h)} -> ${Math.round(b.w)}x${Math.round(b.h)}` });
-  if (b.x1 < start.x1 - 2000 || b.y1 < start.y1 - 2000 || b.x1 < -5000 || b.y1 < -5000) v.push({ kind: 'drift', detail: `origin ${Math.round(b.x1)},${Math.round(b.y1)} (start ${Math.round(start.x1)},${Math.round(start.y1)})` });
-  return v;
+  if (![nextBox.w, nextBox.h, pb.w, pb.h, start.x1, start.y1].every(Number.isFinite)) return [];
+  const violations = [];
+  if (nextBox.w - pb.w > 1500 || nextBox.h - pb.h > 1000) violations.push({ kind: 'bboxJump', detail: `${Math.round(pb.w)}x${Math.round(pb.h)} -> ${Math.round(nextBox.w)}x${Math.round(nextBox.h)}` });
+  if (nextBox.x1 < start.x1 - 2000 || nextBox.y1 < start.y1 - 2000 || nextBox.x1 < -5000 || nextBox.y1 < -5000) violations.push({ kind: 'drift', detail: `origin ${Math.round(nextBox.x1)},${Math.round(nextBox.y1)} (start ${Math.round(start.x1)},${Math.round(start.y1)})` });
+  return violations;
 }
 
 /** The result renders like `bpmn render --problems --tiles` (see contract). */
 async function renderViolations(render, xml, met) {
   if (!render) return [];
   try {
-    const r = await render.draw(xml);
-    const v = [];
-    const big = r.images.find((i) => Math.max(i.width, i.height) > render.maxSize);
-    if (big) v.push({ kind: 'render', detail: `an image of ${big.width}x${big.height} px exceeds ${render.maxSize}` });
-    const expected = met?.problems ? met.problems.filter((p) => p.kind !== 'failed').length : undefined;
-    if (expected !== undefined && r.problems.length !== expected) v.push({ kind: 'render', detail: `${r.problems.length} problems listed, the metrics have ${expected}` });
-    return v;
-  } catch (e) {
-    return [{ kind: 'render', detail: `${e?.code ?? 'exception'}: ${String(e?.message ?? e).split('\n')[0].slice(0, 300)}` }];
+    const rendered = await render.draw(xml);
+    const violations = [];
+    const big = rendered.images.find((image) => Math.max(image.width, image.height) > render.maxSize);
+    if (big) violations.push({ kind: 'render', detail: `an image of ${big.width}x${big.height} px exceeds ${render.maxSize}` });
+    const expected = met?.problems ? met.problems.filter((problem) => problem.kind !== 'failed').length : undefined;
+    if (expected !== undefined && rendered.problems.length !== expected) violations.push({ kind: 'render', detail: `${rendered.problems.length} problems listed, the metrics have ${expected}` });
+    return violations;
+  } catch (error) {
+    return [{ kind: 'render', detail: `${error?.code ?? 'exception'}: ${String(error?.message ?? error).split('\n')[0].slice(0, 300)}` }];
   }
 }
 
 async function measureSafe(metrics, xml) {
   try {
     return await metrics.measure(xml);
-  } catch (e) {
-    return { error: String(e?.message ?? e).split('\n')[0] };
+  } catch (error) {
+    return { error: String(error?.message ?? error).split('\n')[0] };
   }
 }
 
-const hardCount = (m, hard) => hard.reduce((s, k) => s + (m.counts?.[k] ?? 0), 0);
+const hardCount = (measured, hard) => hard.reduce((sum, kind) => sum + (measured.counts?.[kind] ?? 0), 0);
 
 /** Checks of one successful step; returns the violations and the new state. */
 async function checkSuccess(cfg, st, res) {
   const next = await analyse(res.xml);
   const inv = diInvariants(next);
-  const v = inv.filter((x) => !st.inv.has(x)).map((x) => ({ kind: `di:${x.split('|')[0]}`, detail: x.slice(x.indexOf('|') + 1) }));
+  const violations = inv.filter((invariant) => !st.inv.has(invariant)).map((invariant) => ({ kind: `di:${invariant.split('|')[0]}`, detail: invariant.slice(invariant.indexOf('|') + 1) }));
   const now = await measureSafe(cfg.metrics, res.xml);
-  if (now.error) v.push({ kind: 'metricsFailed', detail: now.error });
+  if (now.error) violations.push({ kind: 'metricsFailed', detail: now.error });
   else {
     const added = st.met.problems ? cfg.metrics.diff(st.met.problems, now.problems).added : [];
     const hardV = hardViolations(added, cfg.metrics.hard, next);
-    v.push(...hardV, ...consistencyViolations(res.layout, now, added.filter((p) => cfg.metrics.hard.includes(p.kind)), cfg.metrics.hard));
+    violations.push(...hardV, ...consistencyViolations(res.layout, now, added.filter((problem) => cfg.metrics.hard.includes(problem.kind)), cfg.metrics.hard));
   }
-  if (!next.parseError) v.push(...stabilityViolations(st.a, next, res.layout), ...extentViolations(st.a, next, st.box0));
-  if (!next.parseError) v.push(...(await renderViolations(cfg.render, res.xml, now.error ? undefined : now)));
-  return { v, state: { ...st, xml: res.xml, a: next, inv: new Set(inv), met: now.error ? st.met : now } };
+  if (!next.parseError) violations.push(...stabilityViolations(st.a, next, res.layout), ...extentViolations(st.a, next, st.box0));
+  if (!next.parseError) violations.push(...(await renderViolations(cfg.render, res.xml, now.error ? undefined : now)));
+  return { v: violations, state: { ...st, xml: res.xml, a: next, inv: new Set(inv), met: now.error ? st.met : now } };
 }
 
 async function determinism(cfg, prevXml, ops, res) {
@@ -154,14 +154,14 @@ async function determinism(cfg, prevXml, ops, res) {
 }
 
 async function initialState(xml, metrics) {
-  const a = await analyse(xml);
+  const analysed = await analyse(xml);
   const met = await measureSafe(metrics, xml);
-  return { xml, a, inv: new Set(diInvariants(a)), met: met.error ? { counts: {}, problems: undefined } : met, box0: bbox(a) };
+  return { xml, a: analysed, inv: new Set(diInvariants(analysed)), met: met.error ? { counts: {}, problems: undefined } : met, box0: bbox(analysed) };
 }
 
 export async function runWalk(cfg) {
   const t0 = Date.now();
-  const r = rng(cfg.seed >>> 0);
+  const random = rng(cfg.seed >>> 0);
   let st = await initialState(cfg.xml, cfg.metrics);
   const hard = cfg.metrics.hard;
   const summary = {
@@ -170,30 +170,30 @@ export async function runWalk(cfg) {
   };
   const total = cfg.replay ? cfg.replay.length : cfg.steps;
   for (let step = 0; step < total; step++) {
-    const gen = cfg.replay ? cfg.replay[step] : genStep(st.a, r, step, { semantic: cfg.semantic !== false, format: cfg.format !== false });
+    const gen = cfg.replay ? cfg.replay[step] : genStep(st.a, random, step, { semantic: cfg.semantic !== false, format: cfg.format !== false });
     if (!gen) break;
     summary.ops.push(gen);
     summary.steps++;
     const res = await cfg.exec.run(st.xml, gen.ops, { mode: cfg.mode });
     const entry = { step, name: gen.name, status: res.status, ms: res.ms };
-    let v;
+    let violations;
     if (res.status !== 'ok') {
       entry.code = res.code;
       summary.refused[res.code] = (summary.refused[res.code] ?? 0) + 1;
-      v = failureViolations(res, st.xml, res.readBack);
+      violations = failureViolations(res, st.xml, res.readBack);
     } else {
       summary.ok++;
       entry.mode = res.layout?.mode ?? res.layout?.status;
       summary.modes[entry.mode] = (summary.modes[entry.mode] ?? 0) + 1;
       const prevXml = st.xml;
-      ({ v, state: st } = await checkSuccess(cfg, st, res));
-      if (cfg.detEvery && step % cfg.detEvery === cfg.detEvery - 1) v.push(...(await determinism(cfg, prevXml, gen.ops, res)));
+      ({ v: violations, state: st } = await checkSuccess(cfg, st, res));
+      if (cfg.detEvery && step % cfg.detEvery === cfg.detEvery - 1) violations.push(...(await determinism(cfg, prevXml, gen.ops, res)));
     }
-    entry.violations = v.map((x) => ({ ...x, severity: severityOf(x.kind, cfg.hardSeverity) }));
-    for (const x of entry.violations) summary.violations.push({ step, op: gen.name, ...x });
+    entry.violations = violations.map((violation) => ({ ...violation, severity: severityOf(violation.kind, cfg.hardSeverity) }));
+    for (const violation of entry.violations) summary.violations.push({ step, op: gen.name, ...violation });
     cfg.onStep?.(entry, st.xml);
   }
-  summary.errors = summary.violations.filter((x) => x.severity === 'error').length;
+  summary.errors = summary.violations.filter((violation) => violation.severity === 'error').length;
   summary.warnings = summary.violations.length - summary.errors;
   summary.finalHard = hardCount(st.met, hard);
   summary.finalScore = st.met.score;

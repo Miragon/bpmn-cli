@@ -18,7 +18,7 @@ export function decodeXmlBytes(bytes: Uint8Array, file = 'the file'): string {
   try {
     decoder = new TextDecoder(encoding.trim());
   } catch {
-    if (buf.every((b) => b < 0x80)) return buf.toString('utf8');
+    if (buf.every((byte) => byte < 0x80)) return buf.toString('utf8');
     throw ioError('E_IO', `Cannot read ${file}: it declares the encoding ${encoding}, which bpmn cannot decode`, { file, hint: 'Convert the file to UTF-8 (and declare encoding="UTF-8"), e.g. with iconv.' });
   }
   return decoder.decode(buf);
@@ -30,8 +30,8 @@ export async function readXml(file: string): Promise<string> {
   try {
     bytes = await readFile(file);
   } catch (err) {
-    const e = err as NodeJS.ErrnoException;
-    throw ioError(e.code === 'ENOENT' ? 'E_FILE_NOT_FOUND' : 'E_IO', `Cannot read ${file}: ${e.message}`, { file });
+    const error = err as NodeJS.ErrnoException;
+    throw ioError(error.code === 'ENOENT' ? 'E_FILE_NOT_FOUND' : 'E_IO', `Cannot read ${file}: ${error.message}`, { file });
   }
   return decodeXmlBytes(bytes, file);
 }
@@ -46,8 +46,8 @@ export async function writeAtomic(file: string, content: string): Promise<void> 
     await rename(tmp, file);
   } catch (err) {
     await rm(tmp, { force: true }).catch(() => undefined);
-    const e = err as NodeJS.ErrnoException;
-    throw ioError('E_IO', `Cannot write ${file}: ${e.code === 'EISDIR' ? 'it is a directory' : e.message}`, { file, hint: 'Name a file (not a directory) in a directory you can write to.' });
+    const error = err as NodeJS.ErrnoException;
+    throw ioError('E_IO', `Cannot write ${file}: ${error.code === 'EISDIR' ? 'it is a directory' : error.message}`, { file, hint: 'Name a file (not a directory) in a directory you can write to.' });
   }
 }
 

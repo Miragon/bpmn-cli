@@ -371,13 +371,13 @@ export class AgentGuide {
     out.push(heading('OUTPUT  (results, warnings, JSON, stdin / stdout)'));
     out.push(OUTPUT.join('\n'));
     out.push(heading('COMMANDS'));
-    for (const c of COMMANDS) {
-      out.push(`\n  ${c.usage}`);
-      out.push(`      ${c.summary}`);
-      for (const ex of c.examples) out.push(`      $ ${ex}`);
+    for (const command of COMMANDS) {
+      out.push(`\n  ${command.usage}`);
+      out.push(`      ${command.summary}`);
+      for (const ex of command.examples) out.push(`      $ ${ex}`);
     }
     out.push('\n  Common options of every mutating command:');
-    out.push(table(COMMON_OPTIONS.map((o) => [o.option, o.description]), '      '));
+    out.push(table(COMMON_OPTIONS.map((option) => [option.option, option.description]), '      '));
     out.push('\n  Result (text): one line per created/changed/removed element, then notes, the warnings the change added (see');
     out.push('  OUTPUT), "layout: ok - <full|incremental> (<reason>)" or "layout: skipped", the ids the layout placed / moved / rerouted /');
     out.push('  pruned, one "format <op> #<index>: moved ...; rerouted ...; colored ..." line per format op, "layout quality:');
@@ -404,8 +404,8 @@ export class AgentGuide {
     out.push(this.kinds.exitCodesSection());
     out.push(heading('COMMON ERRORS'));
     for (const code of COMMON_ERRORS) {
-      const e = ERROR_CATALOGUE.find((d) => d.code === code);
-      if (e) out.push(`  ${e.code}: ${e.meaning}\n      fix: ${e.fix}`);
+      const errorEntry = ERROR_CATALOGUE.find((catalogued) => catalogued.code === code);
+      if (errorEntry) out.push(`  ${errorEntry.code}: ${errorEntry.meaning}\n      fix: ${errorEntry.fix}`);
     }
     out.push('  The full catalogue: `bpmn kinds` (section ERRORS AND WARNINGS) or `bpmn kinds --json` -> errors.');
     return out.join('\n') + '\n';
@@ -474,7 +474,7 @@ export class AgentGuide {
       throw usageError(`Unknown guide topic "${topic}"`, { candidates: names, hint: 'Pass one of the listed topics, or `bpmn guide --short` for the core.' });
     }
     const sections = this.guideSections();
-    const parts = entry[1].sections.map((title) => sections.find((s) => s.title.startsWith(title))?.text ?? '');
+    const parts = entry[1].sections.map((title) => sections.find((section) => section.title.startsWith(title))?.text ?? '');
     return parts.filter(Boolean).join('\n\n') + '\n';
   }
 
@@ -483,13 +483,13 @@ export class AgentGuide {
     const lines = this.text().split('\n');
     const out: Array<{ title: string; text: string }> = [];
     let current: { title: string; lines: string[] } | undefined;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i]!;
-      const next = lines[i + 1];
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index]!;
+      const next = lines[index + 1];
       if (next !== undefined && line.length > 0 && /^-+$/.test(next) && next.length === line.length) {
         if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
         current = { title: line, lines: [line, next] };
-        i++;
+        index++;
         continue;
       }
       current?.lines.push(line);
@@ -500,13 +500,13 @@ export class AgentGuide {
 
   /** `*` = required; add / retype fold their trigger keys into `<trigger keys>`. */
   private opKeyLines(): string[] {
-    const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((t) => t.keys), 'nonInterrupting']);
-    return OP_NAMES.map((n) => {
-      const fields = Object.entries(OP_FIELDS[n]).filter(([k]) => !FULL_GUIDE_ONLY_KEYS.has(k));
-      const folds = fields.filter(([k]) => triggerKeys.has(k)).length > 3;
-      const keys = fields.filter(([k]) => !folds || !triggerKeys.has(k)).map(([k, spec]) => (spec.required ? `${k}*` : k));
+    const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((trigger) => trigger.keys), 'nonInterrupting']);
+    return OP_NAMES.map((opName) => {
+      const fields = Object.entries(OP_FIELDS[opName]).filter(([key]) => !FULL_GUIDE_ONLY_KEYS.has(key));
+      const folds = fields.filter(([key]) => triggerKeys.has(key)).length > 3;
+      const keys = fields.filter(([key]) => !folds || !triggerKeys.has(key)).map(([key, spec]) => (spec.required ? `${key}*` : key));
       if (folds) keys.push('<trigger keys>');
-      return `  ${n.padEnd(8)} ${keys.join(' ')}`;
+      return `  ${opName.padEnd(8)} ${keys.join(' ')}`;
     });
   }
 }

@@ -38,17 +38,17 @@ const EVAL = (() => {
   return /<<'BPMN_FIXTURE'\n([\s\S]*?)\nBPMN_FIXTURE/.exec(script)![1]! + '\n';
 })();
 
-const shapes = (xml: string): string[] => [...xml.matchAll(/bpmnElement="([^"]+)"[^>]*>\s*<dc:Bounds ([^/]+)\/>/g)].map((m) => `${m[1]} ${m[2]}`).sort();
+const shapes = (xml: string): string[] => [...xml.matchAll(/bpmnElement="([^"]+)"[^>]*>\s*<dc:Bounds ([^/]+)\/>/g)].map((match) => `${match[1]} ${match[2]}`).sort();
 const boundsOf = (xml: string, id: string): { x: number; y: number; width: number; height: number } => {
-  const m = new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([-\\d.]+)" y="([-\\d.]+)" width="([\\d.]+)" height="([\\d.]+)"`).exec(xml)!;
-  return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
+  const match = new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([-\\d.]+)" y="([-\\d.]+)" width="([\\d.]+)" height="([\\d.]+)"`).exec(xml)!;
+  return { x: Number(match[1]), y: Number(match[2]), width: Number(match[3]), height: Number(match[4]) };
 };
 const waypoints = (xml: string, id: string): Array<{ x: number; y: number }> => {
   const edge = new RegExp(`<bpmndi:BPMNEdge [^>]*bpmnElement="${id}"[^>]*>([\\s\\S]*?)</bpmndi:BPMNEdge>`).exec(xml)![1]!;
-  return [...edge.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+  return [...edge.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
 };
-const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((p) => p.kind);
-const cy = (b: { y: number; height: number }): number => b.y + b.height / 2;
+const added = async (before: string, after: string): Promise<string[]> => diffProblems((await LayoutAnalysis.ofXml(before)).problems, (await LayoutAnalysis.ofXml(after)).problems).added.map((problem) => problem.kind);
+const cy = (box: { y: number; height: number }): number => box.y + box.height / 2;
 
 async function batch(xml: string, ops: object[]): Promise<string> {
   return (await applyToXml(xml, ops, { force: true })).xml;
@@ -67,16 +67,16 @@ describe('a crossing-aware row choice that makes room (issue #18 (2))', () => {
 
   it('a boundary path above a line from an earlier boundary event: the row below the host is opened, the line goes down, no crossing', async () => {
     const xml = fixture('bypass-under-host.bpmn');
-    const s = await singles(xml, reminder);
-    expect(await added(xml, s)).toEqual([]);
-    expect(shapes(await batch(xml, reminder))).toEqual(shapes(s));
-    const host = boundsOf(s, 'Activity_ApproveClaim');
-    const remind = boundsOf(s, 'Activity_RemindApprover');
+    const single = await singles(xml, reminder);
+    expect(await added(xml, single)).toEqual([]);
+    expect(shapes(await batch(xml, reminder))).toEqual(shapes(single));
+    const host = boundsOf(single, 'Activity_ApproveClaim');
+    const remind = boundsOf(single, 'Activity_RemindApprover');
     // the path right below the host, the line from "Claim invalid" and its end pushed below the path
     expect(remind.y).toBeGreaterThan(host.y + host.height);
-    const line = waypoints(s, 'Flow_ClaimInvalidToClaimRejected');
-    expect(Math.max(...line.map((p) => p.y))).toBeGreaterThan(remind.y + remind.height);
-    expect(boundsOf(s, 'Event_ClaimRejected').y).toBeGreaterThan(remind.y + remind.height);
+    const line = waypoints(single, 'Flow_ClaimInvalidToClaimRejected');
+    expect(Math.max(...line.map((point) => point.y))).toBeGreaterThan(remind.y + remind.height);
+    expect(boundsOf(single, 'Event_ClaimRejected').y).toBeGreaterThan(remind.y + remind.height);
   });
 
   it('a decision spliced into a branch with a bypass right under it: the new "no" branch goes above the row, no crossing', async () => {
@@ -87,11 +87,11 @@ describe('a crossing-aware row choice that makes room (issue #18 (2))', () => {
       { op: 'add', kind: 'sendTask', name: 'Offer standard shipping', id: 'Activity_OfferStandard', after: 'Gateway_WeightOk', flowName: 'no' },
       { op: 'add', kind: 'endEvent', name: 'Standard offered', id: 'Event_StandardOffered', after: 'Activity_OfferStandard' },
     ];
-    const s = await singles(xml, ops);
-    expect(await added(xml, s)).toEqual([]);
-    expect(shapes(await batch(xml, ops))).toEqual(shapes(s));
-    expect(cy(boundsOf(s, 'Activity_OfferStandard'))).toBeLessThan(boundsOf(s, 'Gateway_WeightOk').y);
-    expect(cy(boundsOf(s, 'Gateway_WeightOk'))).toBe(cy(boundsOf(s, 'Gateway_Express')));
+    const single = await singles(xml, ops);
+    expect(await added(xml, single)).toEqual([]);
+    expect(shapes(await batch(xml, ops))).toEqual(shapes(single));
+    expect(cy(boundsOf(single, 'Activity_OfferStandard'))).toBeLessThan(boundsOf(single, 'Gateway_WeightOk').y);
+    expect(cy(boundsOf(single, 'Gateway_WeightOk'))).toBe(cy(boundsOf(single, 'Gateway_Express')));
   });
 
   const approve = { op: 'add', kind: 'userTask', name: 'Approve purchase', id: 'Activity_ApprovePurchase', flow: 'Flow_0yq6cfd' };
@@ -114,18 +114,18 @@ describe('a crossing-aware row choice that makes room (issue #18 (2))', () => {
   for (const [name, ops] of Object.entries(evalBatches)) {
     it(`the eval's model, ${name} + the reminder path: score 0, batch and single commands alike`, async () => {
       const all = [...ops, ...evalReminder];
-      const b = await batch(EVAL, all);
-      expect((await metricsXml(b)).score).toBe(0);
-      expect(shapes(await singles(EVAL, all))).toEqual(shapes(b));
+      const batched = await batch(EVAL, all);
+      expect((await metricsXml(batched)).score).toBe(0);
+      expect(shapes(await singles(EVAL, all))).toEqual(shapes(batched));
     });
   }
 
   it('the eval\'s reminder path that crossed the "no" flow goes above the approval on its own (the event on the top border)', async () => {
-    const r = await applyToXml(EVAL, [...evalBatches['decision, "no" to the existing node']!, ...evalReminder], { force: true });
-    const host = boundsOf(r.xml, 'Activity_ApprovePurchase');
-    expect(cy(boundsOf(r.xml, 'Event_ApprovalOverdue'))).toBe(host.y);
-    expect(boundsOf(r.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
-    expect(r.result.layout?.notes?.join(' ')).toContain('Event_ApprovalOverdue moved to the top border of Activity_ApprovePurchase');
+    const applied = await applyToXml(EVAL, [...evalBatches['decision, "no" to the existing node']!, ...evalReminder], { force: true });
+    const host = boundsOf(applied.xml, 'Activity_ApprovePurchase');
+    expect(cy(boundsOf(applied.xml, 'Event_ApprovalOverdue'))).toBe(host.y);
+    expect(boundsOf(applied.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
+    expect(applied.result.layout?.notes?.join(' ')).toContain('Event_ApprovalOverdue moved to the top border of Activity_ApprovePurchase');
   });
 
   it('a branch row keeps clear of the boundary event on its frame\'s bottom border (audit #63)', async () => {
@@ -145,15 +145,15 @@ describe('a crossing-aware row choice that makes room (issue #18 (2))', () => {
     ]);
     // a format command makes the drawing hand-made: the next edit keeps it
     xml = (await applyToXml(xml, [{ op: 'space', after: 'Event_Requested', by: 10 }])).xml;
-    const r = await applyToXml(xml, [
+    const applied = await applyToXml(xml, [
       { op: 'add', kind: 'serviceTask', name: 'Reserve car', id: 'Activity_ReserveCar', after: 'Gateway_HotelNeeded', flowName: 'car' },
       { op: 'add', kind: 'endEvent', name: 'Car booked', id: 'Event_CarBooked', after: 'Activity_ReserveCar' },
     ]);
-    expect(r.result.layout?.mode).toBe('incremental');
-    expect(await added(xml, r.xml)).not.toContain('overlaps');
-    const car = boundsOf(r.xml, 'Activity_ReserveCar');
-    const cancel = boundsOf(r.xml, 'Event_Cancelled');
-    const tx = boundsOf(r.xml, 'Activity_BookTrip');
+    expect(applied.result.layout?.mode).toBe('incremental');
+    expect(await added(xml, applied.xml)).not.toContain('overlaps');
+    const car = boundsOf(applied.xml, 'Activity_ReserveCar');
+    const cancel = boundsOf(applied.xml, 'Event_Cancelled');
+    const tx = boundsOf(applied.xml, 'Activity_BookTrip');
     // the event stays on the frame's border, 10 px clear of the new task
     expect(cy(cancel)).toBe(tx.y + tx.height);
     expect(cancel.y).toBeGreaterThanOrEqual(car.y + car.height + 10);
@@ -163,13 +163,13 @@ describe('a crossing-aware row choice that makes room (issue #18 (2))', () => {
 describe('the local repair after placement (issue #18 (3))', () => {
   it('an existing line a new flow crosses is routed again around the new shape; the run reports it', async () => {
     const xml = fixture('line-next-to-task.bpmn');
-    const r = await applyToXml(xml, [{ op: 'add', kind: 'sendTask', name: 'Send offer', id: 'Activity_SendOffer', after: 'Activity_PrepareOffer' }], { force: true });
-    expect(await added(xml, r.xml)).toEqual([]);
-    expect(r.result.layout?.rerouted).toContain('Flow_CollectDataToArchiveData');
-    expect(r.result.layout?.notes).toContain('Flow_CollectDataToArchiveData routed again: it crossed the new Flow_PrepareOfferToSendOffer');
+    const applied = await applyToXml(xml, [{ op: 'add', kind: 'sendTask', name: 'Send offer', id: 'Activity_SendOffer', after: 'Activity_PrepareOffer' }], { force: true });
+    expect(await added(xml, applied.xml)).toEqual([]);
+    expect(applied.result.layout?.rerouted).toContain('Flow_CollectDataToArchiveData');
+    expect(applied.result.layout?.notes).toContain('Flow_CollectDataToArchiveData routed again: it crossed the new Flow_PrepareOfferToSendOffer');
     // the hand drawing is kept otherwise: the new task where a single command puts it, nothing moved
-    expect(r.result.layout?.moved ?? []).toEqual([]);
-    expect(cy(boundsOf(r.xml, 'Activity_SendOffer'))).toBe(cy(boundsOf(xml, 'Activity_PrepareOffer')));
+    expect(applied.result.layout?.moved ?? []).toEqual([]);
+    expect(cy(boundsOf(applied.xml, 'Activity_SendOffer'))).toBe(cy(boundsOf(xml, 'Activity_PrepareOffer')));
   });
 
   it('a chain that still crosses starts at its next row candidate, kept because the score goes down (public scenario)', async () => {
@@ -180,13 +180,13 @@ describe('the local repair after placement (issue #18 (3))', () => {
       { op: 'add', kind: 'sendTask', id: 'Activity_ProbeReject', name: 'Probe reject', after: 'Gateway_ProbeOk', flowName: 'no' },
       { op: 'add', kind: 'endEvent', id: 'Event_ProbeRejected', name: 'Probe rejected', after: 'Activity_ProbeReject' },
     ];
-    const r = await applyToXml(xml, ops, { force: true });
-    expect(r.result.layout?.notes).toContain('Activity_ProbeReject placed at another row: at the first one its path crossed a line');
-    const kinds = await added(xml, r.xml);
+    const applied = await applyToXml(xml, ops, { force: true });
+    expect(applied.result.layout?.notes).toContain('Activity_ProbeReject placed at another row: at the first one its path crossed a line');
+    const kinds = await added(xml, applied.xml);
     expect(kinds).not.toContain('crossings');
-    expect(kinds.filter((k) => ['overlaps', 'through', 'outsideLane', 'outsidePool', 'frameIntrusion', 'frameOverlap'].includes(k))).toEqual([]);
+    expect(kinds.filter((kind) => ['overlaps', 'through', 'outsideLane', 'outsidePool', 'frameIntrusion', 'frameOverlap'].includes(kind))).toEqual([]);
     // deterministic: the same input gives the same bytes
-    expect((await applyToXml(xml, ops, { force: true })).xml).toBe(r.xml);
+    expect((await applyToXml(xml, ops, { force: true })).xml).toBe(applied.xml);
   });
 });
 
@@ -200,12 +200,12 @@ describe('the findings of the stage B verification (issue #18)', () => {
     // the plugin's own recovery: the event goes to the top border first, then the reminder is added after it
     let xml = await singles(EVAL, [approve, timer]);
     xml = (await applyToXml(xml, [{ op: 'place', ids: ['Event_ApprovalOverdue'], side: 'top' }])).xml;
-    const r = await applyToXml(xml, [remind], { force: true });
-    expect(await added(xml, r.xml)).toEqual([]);
-    expect(r.result.layout?.moved ?? []).toEqual([]);
-    for (const id of mainRow) expect(boundsOf(r.xml, id)).toEqual(boundsOf(xml, id));
-    const host = boundsOf(r.xml, 'Activity_ApprovePurchase');
-    expect(boundsOf(r.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
+    const applied = await applyToXml(xml, [remind], { force: true });
+    expect(await added(xml, applied.xml)).toEqual([]);
+    expect(applied.result.layout?.moved ?? []).toEqual([]);
+    for (const id of mainRow) expect(boundsOf(applied.xml, id)).toEqual(boundsOf(xml, id));
+    const host = boundsOf(applied.xml, 'Activity_ApprovePurchase');
+    expect(boundsOf(applied.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
   });
 
   it('a batch with two exception paths from one new timer (one connected later) keeps the row', async () => {
@@ -220,9 +220,9 @@ describe('the findings of the stage B verification (issue #18)', () => {
       { op: 'connect', source: 'Event_ApprovalOverdue', target: 'Activity_LogOverdueApproval' },
       { op: 'add', kind: 'endEvent', name: 'Overdue logged', id: 'Event_OverdueLogged', after: 'Activity_LogOverdueApproval' },
     ];
-    const b = await batch(EVAL, ops);
-    expect(await added(EVAL, b)).toEqual([]);
-    for (const id of ['StartEvent_1', 'Activity_0k3x9qa', 'Event_0q2mb7c']) expect(cy(boundsOf(b, id))).toBe(cy(boundsOf(EVAL, id)));
+    const batched = await batch(EVAL, ops);
+    expect(await added(EVAL, batched)).toEqual([]);
+    for (const id of ['StartEvent_1', 'Activity_0k3x9qa', 'Event_0q2mb7c']) expect(cy(boundsOf(batched, id))).toBe(cy(boundsOf(EVAL, id)));
   });
 });
 
@@ -248,17 +248,17 @@ describe('the top-border spot of a boundary path (stage B verification)', () => 
       { op: 'add', kind: 'sendTask', name: 'Escalate case', id: 'Activity_EscalateCase', after: 'Event_CaseOverdue' },
       { op: 'add', kind: 'endEvent', name: 'Case escalated', id: 'Event_CaseEscalated', after: 'Activity_EscalateCase' },
     ];
-    const r = await applyToXml(xml, path, { force: true });
-    expect(boundsOf(r.xml, 'Event_CaseOverdue')).toEqual(boundsOf(xml, 'Event_CaseOverdue'));
-    expect(r.result.layout?.moved ?? []).not.toContain('Event_CaseOverdue');
-    expect(r.result.layout?.notes?.join(' ')).not.toContain('top border');
-    expect(await added(xml, r.xml)).toEqual([]);
+    const applied = await applyToXml(xml, path, { force: true });
+    expect(boundsOf(applied.xml, 'Event_CaseOverdue')).toEqual(boundsOf(xml, 'Event_CaseOverdue'));
+    expect(applied.result.layout?.moved ?? []).not.toContain('Event_CaseOverdue');
+    expect(applied.result.layout?.notes?.join(' ')).not.toContain('top border');
+    expect(await added(xml, applied.xml)).toEqual([]);
     // the same event added by a command first: it sits where the command put it, and its path goes above the host
     const bare = xml.replace(/<bpmn:boundaryEvent id="Event_CaseOverdue"[\s\S]*?<\/bpmn:boundaryEvent>/, '').replace(/<bpmndi:BPMNShape id="Event_CaseOverdue_di"[\s\S]*?<\/bpmndi:BPMNShape>/, '');
     const added1 = (await applyToXml(bare, [{ op: 'add', kind: 'boundaryEvent:timer', name: '1 week', id: 'Event_CaseOverdue', on: 'Activity_HandleCase', timer: 'P1W' }], { force: true })).xml;
-    const s = await singles(added1, path);
-    expect(cy(boundsOf(s, 'Event_CaseOverdue'))).toBe(boundsOf(s, 'Activity_HandleCase').y);
-    expect(shapes(await batch(bare, [{ op: 'add', kind: 'boundaryEvent:timer', name: '1 week', id: 'Event_CaseOverdue', on: 'Activity_HandleCase', timer: 'P1W' }, ...path]))).toEqual(shapes(s));
+    const single = await singles(added1, path);
+    expect(cy(boundsOf(single, 'Event_CaseOverdue'))).toBe(boundsOf(single, 'Activity_HandleCase').y);
+    expect(shapes(await batch(bare, [{ op: 'add', kind: 'boundaryEvent:timer', name: '1 week', id: 'Event_CaseOverdue', on: 'Activity_HandleCase', timer: 'P1W' }, ...path]))).toEqual(shapes(single));
   });
 });
 
@@ -287,15 +287,15 @@ describe('a line along a new shape (stage B verification)', () => {
       { op: 'add', kind: 'endEvent', name: 'Clerk reminded', id: 'Event_ClerkReminded', after: 'Activity_RemindClerk' },
     ];
     // a segment touching the box (its border included, 1 px around it)
-    const touches = (pts: Array<{ x: number; y: number }>, b: { x: number; y: number; width: number; height: number }): boolean =>
-      pts.slice(1).some((q, i) => {
-        const p = pts[i]!;
-        return Math.min(p.x, q.x) <= b.x + b.width + 1 && Math.max(p.x, q.x) >= b.x - 1 && Math.min(p.y, q.y) <= b.y + b.height + 1 && Math.max(p.y, q.y) >= b.y - 1;
+    const touches = (pts: Array<{ x: number; y: number }>, box: { x: number; y: number; width: number; height: number }): boolean =>
+      pts.slice(1).some((segmentEnd, index) => {
+        const segmentStart = pts[index]!;
+        return Math.min(segmentStart.x, segmentEnd.x) <= box.x + box.width + 1 && Math.max(segmentStart.x, segmentEnd.x) >= box.x - 1 && Math.min(segmentStart.y, segmentEnd.y) <= box.y + box.height + 1 && Math.max(segmentStart.y, segmentEnd.y) >= box.y - 1;
       });
     for (const after of [await batch(xml, ops), await singles(xml, ops)]) {
       expect(await added(xml, after)).toEqual([]);
       const end = boundsOf(after, 'Event_ClerkReminded');
-      const others = [...after.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((m) => m[1]!).filter((id) => id !== 'Flow_RemindClerkToClerkReminded');
+      const others = [...after.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((match) => match[1]!).filter((id) => id !== 'Flow_RemindClerkToClerkReminded');
       for (const id of others) expect(touches(waypoints(after, id), end), id).toBe(false);
     }
   });
@@ -311,13 +311,13 @@ describe('the guard of the local repair (stage B verification)', () => {
       { op: 'add', kind: 'sendTask', name: 'Remind approver', id: 'Activity_RemindApprover', after: 'Event_ApprovalOverdue' },
       { op: 'add', kind: 'endEvent', name: 'Approver reminded', id: 'Event_ApproverReminded', after: 'Activity_RemindApprover' },
     ];
-    const r = await applyToXml(xml, ops, { force: true });
-    const drawn = new Set([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1]!));
+    const applied = await applyToXml(xml, ops, { force: true });
+    const drawn = new Set([...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1]!));
     // the crossings between two flows drawn before the edit
-    const among = async (x: string): Promise<string[]> =>
-      (await LayoutAnalysis.ofXml(x)).problems.filter((p) => p.kind === 'crossings' && p.ids.every((id) => drawn.has(id))).map((p) => p.ids.join(' x '));
-    expect(await among(r.xml)).toEqual(await among(xml));
-    expect(r.result.layout?.rerouted ?? []).not.toContain('Flow_ApprovedNo');
+    const among = async (laidXml: string): Promise<string[]> =>
+      (await LayoutAnalysis.ofXml(laidXml)).problems.filter((problem) => problem.kind === 'crossings' && problem.ids.every((id) => drawn.has(id))).map((problem) => problem.ids.join(' x '));
+    expect(await among(applied.xml)).toEqual(await among(xml));
+    expect(applied.result.layout?.rerouted ?? []).not.toContain('Flow_ApprovedNo');
   });
 });
 
@@ -331,12 +331,12 @@ describe('the cost of the local repair (stage B verification)', () => {
       { op: 'add', kind: 'endEvent', id: 'Event_ProbeRejected', name: 'Probe rejected', after: 'Activity_ProbeReject' },
     ];
     const lines: string[] = [];
-    const r = await applyToXml(xml, ops, { force: true, debug: (l) => lines.push(l) });
-    const repair = lines.filter((l) => l.startsWith('[repair]'));
-    expect(repair.some((l) => l.endsWith('still crossing, not measured'))).toBe(true);
+    const applied = await applyToXml(xml, ops, { force: true, debug: (line) => lines.push(line) });
+    const repair = lines.filter((line) => line.startsWith('[repair]'));
+    expect(repair.some((line) => line.endsWith('still crossing, not measured'))).toBe(true);
     // every measured trial is judged (kept or undone); the skipped ones are not
-    for (const l of repair.filter((x) => x.includes('not measured'))) expect(l).not.toMatch(/score \d+ ->/);
+    for (const line of repair.filter((candidate) => candidate.includes('not measured'))) expect(line).not.toMatch(/score \d+ ->/);
     // the same drawing as without the debug sink
-    expect((await applyToXml(xml, ops, { force: true })).xml).toBe(r.xml);
+    expect((await applyToXml(xml, ops, { force: true })).xml).toBe(applied.xml);
   });
 });

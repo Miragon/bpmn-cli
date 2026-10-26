@@ -19,7 +19,7 @@ export class LoadCache {
 
   loaded(key: string, text: string, dir: string, load: () => Promise<{ loaded: LoadedBpmnlint; deps: LoadDeps }>): Promise<LoadedBpmnlint> {
     const hit = this.entries.get(key);
-    if (hit && hit.text === text && (!hit.deps || hit.deps.every((d) => depState(dir, d.ids) === d.state))) return hit.loaded;
+    if (hit && hit.text === text && (!hit.deps || hit.deps.every((dep) => depState(dir, dep.ids) === dep.state))) return hit.loaded;
     if (hit?.deps) this.forgetResolutions(hit.deps);
     const entry: CacheEntry = {
       text,
@@ -44,14 +44,14 @@ export class LoadCache {
     if (!paths || typeof paths !== 'object') return;
     const requests = new Set<string>();
     const packages: string[] = [];
-    for (const id of deps.flatMap((d) => d.ids)) {
+    for (const id of deps.flatMap((dep) => dep.ids)) {
       if (isBare(id)) packages.push(`${packageOf(id).name}/`);
       requests.add(isBare(id) ? packageOf(id).name : id);
     }
     for (const key of Object.keys(paths)) {
       const end = key.indexOf('\x00');
       const request = end < 0 ? key : key.slice(0, end);
-      if (requests.has(request) || packages.some((p) => request.startsWith(p))) delete paths[key];
+      if (requests.has(request) || packages.some((pkg) => request.startsWith(pkg))) delete paths[key];
     }
   }
 }

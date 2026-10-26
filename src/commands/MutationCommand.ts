@@ -48,9 +48,9 @@ export abstract class MutationCommand extends CliCommand {
     this.withJsonOptions(cmd).option(...option('--summary')).option(...option('--out')).option(...option('--dry-run')).option(...option('--render'), renderTarget);
     if (layoutToggle) {
       cmd
-        .option(...option('--layout'), (v: string) => {
-          if (!(LAYOUT_MODES as readonly string[]).includes(v)) throw new InvalidArgumentError(`expected ${LAYOUT_MODES.join(', ')}`);
-          return v;
+        .option(...option('--layout'), (raw: string) => {
+          if (!(LAYOUT_MODES as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${LAYOUT_MODES.join(', ')}`);
+          return raw;
         })
         .option(...option('--relayout'))
         .option(...option('--no-layout'));
@@ -62,9 +62,9 @@ export abstract class MutationCommand extends CliCommand {
       .option(...option('--strict'))
       .option(...option('--keep-flow-ids'))
       .option(...option('--no-keep-flow-ids'))
-      .option(...option('--engine'), (v: string) => {
-        if (v !== 'clean' && v !== 'auto') throw new InvalidArgumentError('expected clean or auto');
-        return v;
+      .option(...option('--engine'), (raw: string) => {
+        if (raw !== 'clean' && raw !== 'auto') throw new InvalidArgumentError('expected clean or auto');
+        return raw;
       });
   }
 
@@ -83,58 +83,58 @@ export abstract class MutationCommand extends CliCommand {
       .option('--non-interrupting', 'non-interrupting boundary / start event');
   }
 
-  protected triggerOptions(o: RawOpts): TriggerOptions {
-    const t: TriggerOptions = {};
-    if (o['timer']) t.timer = String(o['timer']);
-    if (o['timerKind']) t.timerKind = String(o['timerKind']) as TriggerOptions['timerKind'];
-    if (o['message']) t.message = String(o['message']);
-    if (o['error']) t.error = String(o['error']);
-    if (o['errorCode']) t.errorCode = String(o['errorCode']);
-    if (o['signal']) t.signal = String(o['signal']);
-    if (o['escalation']) t.escalation = String(o['escalation']);
-    if (o['escalationCode']) t.escalationCode = String(o['escalationCode']);
-    if (o['when']) t.when = String(o['when']);
-    if (o['link']) t.link = String(o['link']);
-    if (o['nonInterrupting']) t.nonInterrupting = true;
-    return t;
+  protected triggerOptions(options: RawOpts): TriggerOptions {
+    const trigger: TriggerOptions = {};
+    if (options['timer']) trigger.timer = String(options['timer']);
+    if (options['timerKind']) trigger.timerKind = String(options['timerKind']) as TriggerOptions['timerKind'];
+    if (options['message']) trigger.message = String(options['message']);
+    if (options['error']) trigger.error = String(options['error']);
+    if (options['errorCode']) trigger.errorCode = String(options['errorCode']);
+    if (options['signal']) trigger.signal = String(options['signal']);
+    if (options['escalation']) trigger.escalation = String(options['escalation']);
+    if (options['escalationCode']) trigger.escalationCode = String(options['escalationCode']);
+    if (options['when']) trigger.when = String(options['when']);
+    if (options['link']) trigger.link = String(options['link']);
+    if (options['nonInterrupting']) trigger.nonInterrupting = true;
+    return trigger;
   }
 
-  protected mutationOptions(o: RawOpts): MutationFlags {
-    const { keep: keepFlowIds, env: keepFlowIdsEnv } = this.keepFlowIdsOption(o);
+  protected mutationOptions(options: RawOpts): MutationFlags {
+    const { keep: keepFlowIds, env: keepFlowIdsEnv } = this.keepFlowIdsOption(options);
     return {
-      json: !!o['json'],
-      pretty: !!o['pretty'],
-      summary: !!o['summary'],
-      out: o['out'] as string | undefined,
-      dryRun: !!o['dryRun'],
-      layout: this.layoutOption(o),
-      force: !!o['force'],
-      backup: !!o['backup'],
-      show: !!o['show'],
-      strict: !!o['strict'],
-      ...(o['render'] !== undefined ? { render: String(o['render']) } : {}),
-      ...(o['engine'] ? { engine: o['engine'] as 'clean' | 'auto' } : {}),
+      json: !!options['json'],
+      pretty: !!options['pretty'],
+      summary: !!options['summary'],
+      out: options['out'] as string | undefined,
+      dryRun: !!options['dryRun'],
+      layout: this.layoutOption(options),
+      force: !!options['force'],
+      backup: !!options['backup'],
+      show: !!options['show'],
+      strict: !!options['strict'],
+      ...(options['render'] !== undefined ? { render: String(options['render']) } : {}),
+      ...(options['engine'] ? { engine: options['engine'] as 'clean' | 'auto' } : {}),
       ...(keepFlowIds !== undefined ? { keepFlowIds } : {}),
       ...(keepFlowIdsEnv !== undefined ? { keepFlowIdsEnv } : {}),
-      ...this.lintOptions(o),
+      ...this.lintOptions(options),
     };
   }
 
   /** Exactly one placement, or --after together with --before. */
-  protected checkPlacementFlags(o: RawOpts): void {
-    const violation = placementViolation(Object.keys(o).filter((k) => o[k] !== undefined && o[k] !== ''), flag);
+  protected checkPlacementFlags(options: RawOpts): void {
+    const violation = placementViolation(Object.keys(options).filter((key) => options[key] !== undefined && options[key] !== ''), flag);
     if (violation) throw usageError(violation.message, { hint: violation.hint });
   }
 
   /** Flow options describe the flow INTO the node; they need a placement that creates one. */
-  protected checkFlowFlags(o: RawOpts, needsPlacement: boolean): void {
-    const conditionedDefault = defaultWithConditionViolation(!!o['default'], o['condition'] !== undefined, flag);
+  protected checkFlowFlags(options: RawOpts, needsPlacement: boolean): void {
+    const conditionedDefault = defaultWithConditionViolation(!!options['default'], options['condition'] !== undefined, flag);
     if (conditionedDefault) throw usageError(conditionedDefault.message, { hint: conditionedDefault.hint });
     if (!needsPlacement) return;
-    const used = Object.keys(FLOW_FLAGS).filter((k) => o[k] !== undefined && o[k] !== false);
-    const createsFlow = !!o['after'] || !!o['before'] || !!o['flow'];
+    const used = Object.keys(FLOW_FLAGS).filter((key) => options[key] !== undefined && options[key] !== false);
+    const createsFlow = !!options['after'] || !!options['before'] || !!options['flow'];
     if (used.length && !createsFlow) {
-      throw usageError(`${used.map((k) => FLOW_FLAGS[k]).join(', ')} describe the flow into the node and need --after, --before or --flow`, {
+      throw usageError(`${used.map((key) => FLOW_FLAGS[key]).join(', ')} describe the flow into the node and need --after, --before or --flow`, {
         hint: 'With --in or --on no sequence flow is created; connect the node afterwards with `bpmn connect`.',
       });
     }
@@ -146,10 +146,10 @@ export abstract class MutationCommand extends CliCommand {
       await this.runMutation(
         file,
         opts,
-        (o) => new ModelFile(file).mutate(ops, o),
-        (doc, o) => {
-          doc.assertLossless(o);
-          return new DocFile(doc).mutate(ops, o);
+        (fileOptions) => new ModelFile(file).mutate(ops, fileOptions),
+        (doc, fileOptions) => {
+          doc.assertLossless(fileOptions);
+          return new DocFile(doc).mutate(ops, fileOptions);
         },
       );
     } catch (err) {
@@ -165,8 +165,8 @@ export abstract class MutationCommand extends CliCommand {
   protected async runMutation(
     file: string,
     opts: MutationFlags,
-    fromFile: (o: FileMutationOptions) => Promise<MutationResult>,
-    fromDoc: (doc: Doc, o: FileMutationOptions) => Promise<MutationResult>,
+    fromFile: (fileOptions: FileMutationOptions) => Promise<MutationResult>,
+    fromDoc: (doc: Doc, fileOptions: FileMutationOptions) => Promise<MutationResult>,
   ): Promise<void> {
     const stdout = opts.out === '-' || (file === '-' && opts.out === undefined);
     const fileOpts: FileMutationOptions = stdout ? { ...opts, out: undefined, dryRun: true, backup: false } : opts;
@@ -228,8 +228,8 @@ export abstract class MutationCommand extends CliCommand {
   private keptByEnvNote(result: MutationResult, value: string | undefined): string | undefined {
     if (value === undefined) return undefined;
     const { created, changed, warnings, relocated } = result.changes;
-    const putBack = relocated.length > 0 && changed.some((c) => c.kind === 'sequenceFlow' && !created.some((n) => n.id === c.id));
-    if (!putBack && !warnings.some((w) => w.code === 'W_FLOW_ID_STALE')) return undefined;
+    const putBack = relocated.length > 0 && changed.some((change) => change.kind === 'sequenceFlow' && !created.some((creation) => creation.id === change.id));
+    if (!putBack && !warnings.some((warning) => warning.code === 'W_FLOW_ID_STALE')) return undefined;
     return `flow ids kept: BPMN_KEEP_FLOW_IDS=${value} (--no-keep-flow-ids renames flows after their new ends for one command)`;
   }
 
@@ -269,9 +269,9 @@ export abstract class MutationCommand extends CliCommand {
   }
 
   /** --layout <mode> / --relayout / --no-layout -> FileMutationOptions.layout */
-  private layoutOption(o: RawOpts): FileMutationOptions['layout'] {
-    const layout = o['layout'] as string | false | undefined;
-    if (o['relayout']) {
+  private layoutOption(options: RawOpts): FileMutationOptions['layout'] {
+    const layout = options['layout'] as string | false | undefined;
+    if (options['relayout']) {
       if (layout === false || (layout !== undefined && layout !== 'full')) {
         throw usageError(`--relayout cannot be combined with ${layout === false ? '--no-layout' : `--layout ${layout}`}`, { hint: '--relayout is --layout full; pass only one of them.' });
       }
@@ -285,8 +285,8 @@ export abstract class MutationCommand extends CliCommand {
    * --keep-flow-ids / --no-keep-flow-ids, else BPMN_KEEP_FLOW_IDS; `env`: the variable's
    * value when it kept the ids.
    */
-  private keepFlowIdsOption(o: RawOpts): { keep?: boolean; env?: string } {
-    const flag = o['keepFlowIds'] as boolean | undefined;
+  private keepFlowIdsOption(options: RawOpts): { keep?: boolean; env?: string } {
+    const flag = options['keepFlowIds'] as boolean | undefined;
     if (flag !== undefined) return { keep: flag };
     const keep = this.envSwitch('BPMN_KEEP_FLOW_IDS', 'Set BPMN_KEEP_FLOW_IDS=1 (true, yes, on) to keep flow ids, BPMN_KEEP_FLOW_IDS=0 (false, no, off) or unset it to rename them after their new ends; --keep-flow-ids / --no-keep-flow-ids decide for one command.');
     if (keep === undefined) return {};

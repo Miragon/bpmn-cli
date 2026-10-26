@@ -12,11 +12,11 @@ import { MutationCommand } from './MutationCommand.js';
  */
 export class ApplyOpsCommand extends MutationCommand {
   register(program: CommandType): void {
-    this.withMutationOptions(this.define(program, 'apply')).action((file: string, opsFile: string | undefined, o: RawOpts) => this.run(file, opsFile, o));
+    this.withMutationOptions(this.define(program, 'apply')).action((file: string, opsFile: string | undefined, options: RawOpts) => this.run(file, opsFile, options));
   }
 
-  private async run(file: string, opsFile: string | undefined, o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, opsFile: string | undefined, options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       const ops: Op[] = new OpsParser().parse(parseOpsJson(await this.readOpsText(file, opsFile)));
       await this.mutate(file, ops, opts);
@@ -31,8 +31,8 @@ export class ApplyOpsCommand extends MutationCommand {
     try {
       return await readFile(opsFile, 'utf8');
     } catch (err) {
-      const e = err as NodeJS.ErrnoException;
-      throw ioError(e.code === 'ENOENT' ? 'E_FILE_NOT_FOUND' : 'E_IO', `Cannot read ops file ${opsFile}: ${e.message}`, {
+      const error = err as NodeJS.ErrnoException;
+      throw ioError(error.code === 'ENOENT' ? 'E_FILE_NOT_FOUND' : 'E_IO', `Cannot read ops file ${opsFile}: ${error.message}`, {
         file: opsFile,
         hint: 'Pass the path of a JSON ops file, or `-` to read the ops from stdin.',
       });

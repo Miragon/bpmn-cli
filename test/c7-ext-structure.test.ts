@@ -43,8 +43,8 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
   try {
     fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const cliError = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: cliError.code, message: cliError.message, details: cliError.details ?? {} };
   }
   throw new Error('expected an error');
 }
@@ -58,13 +58,13 @@ function add(doc: Doc, id: string, type: string, attrs: Record<string, string> =
 }
 
 function types(items: Array<Omit<ExtensionInfo, 'index'>> | undefined): string[] {
-  return (items ?? []).map((i) => i.type);
+  return (items ?? []).map((item) => item.type);
 }
 
 /** child summaries `type name=value` of the first extension of a type */
 function kids(doc: Doc, id: string, type: string): string[] {
-  const e = listExtensions(doc.require(id)).find((x) => x.type === type);
-  return (e?.children ?? []).map((c) => `${c.type}${Object.entries(c.attrs).map(([k, v]) => ` ${k}=${v}`).join('')}${c.body !== undefined ? ` "${c.body}"` : ''}`);
+  const extension = listExtensions(doc.require(id)).find((candidate) => candidate.type === type);
+  return (extension?.children ?? []).map((child) => `${child.type}${Object.entries(child.attrs).map(([key, value]) => ` ${key}=${value}`).join('')}${child.body !== undefined ? ` "${child.body}"` : ''}`);
 }
 
 /** start -> external service task -> user task -> end, C7 namespaces declared, through XML like a file on disk. */
@@ -163,7 +163,7 @@ describe('ext add: single-instance containers are merged, not duplicated (1a)', 
     add(doc, 'Activity_Approve', 'zeebe:ioMapping', {}, { xml: '<zeebe:ioMapping><zeebe:output source="=b" target="b"/></zeebe:ioMapping>' });
     add(doc, 'Activity_Approve', 'zeebe:taskDefinition', { type: 'x' });
     add(doc, 'Activity_Approve', 'zeebe:taskDefinition', { retries: '3' });
-    expect(listExtensions(doc.require('Activity_Approve')).map((e) => [e.type, e.attrs, types(e.children)])).toEqual([
+    expect(listExtensions(doc.require('Activity_Approve')).map((extension) => [extension.type, extension.attrs, types(extension.children)])).toEqual([
       ['zeebe:ioMapping', {}, ['zeebe:input', 'zeebe:output']],
       ['zeebe:taskDefinition', { type: 'x', retries: '3' }, []],
     ]);
@@ -171,12 +171,12 @@ describe('ext add: single-instance containers are merged, not duplicated (1a)', 
   });
 
   it('documents the single-instance list (engine-verified for camunda)', () => {
-    for (const t of ['camunda:inputOutput', 'camunda:formData', 'camunda:connector', 'camunda:failedJobRetryTimeCycle', 'camunda:properties', 'zeebe:ioMapping', 'zeebe:taskDefinition']) {
-      expect(EXTENSION_STRUCTURE.singleTop.has(t)).toBe(true);
+    for (const type of ['camunda:inputOutput', 'camunda:formData', 'camunda:connector', 'camunda:failedJobRetryTimeCycle', 'camunda:properties', 'zeebe:ioMapping', 'zeebe:taskDefinition']) {
+      expect(EXTENSION_STRUCTURE.singleTop.has(type)).toBe(true);
     }
     // repeatable ones stay repeatable (the engines accept several)
-    for (const t of ['camunda:executionListener', 'camunda:taskListener', 'camunda:in', 'camunda:out', 'camunda:field', 'camunda:potentialStarter', 'camunda:errorEventDefinition', 'camunda:formProperty']) {
-      expect(EXTENSION_STRUCTURE.singleTop.has(t)).toBe(false);
+    for (const type of ['camunda:executionListener', 'camunda:taskListener', 'camunda:in', 'camunda:out', 'camunda:field', 'camunda:potentialStarter', 'camunda:errorEventDefinition', 'camunda:formProperty']) {
+      expect(EXTENSION_STRUCTURE.singleTop.has(type)).toBe(false);
     }
   });
 
@@ -234,11 +234,11 @@ describe('ext add: child types go into their container (1b)', () => {
     add(doc, 'Activity_Call', 'camunda:connectorId', {}, { body: 'http-connector' });
     add(doc, 'Activity_Call', 'zeebe:input', { source: '=a', target: 'a' });
     add(doc, 'Activity_Call', 'zeebe:header', { key: 'k', value: 'v' });
-    expect(listExtensions(doc.require('Activity_Approve')).map((e) => [e.type, types(e.children)])).toEqual([
+    expect(listExtensions(doc.require('Activity_Approve')).map((extension) => [extension.type, types(extension.children)])).toEqual([
       ['camunda:formData', ['camunda:formField', 'camunda:formField']],
       ['camunda:properties', ['camunda:property']],
     ]);
-    expect(listExtensions(doc.require('Activity_Call')).map((e) => [e.type, types(e.children)])).toEqual([
+    expect(listExtensions(doc.require('Activity_Call')).map((extension) => [extension.type, types(extension.children)])).toEqual([
       ['camunda:connector', ['camunda:connectorId']],
       ['zeebe:ioMapping', ['zeebe:input']],
       ['zeebe:taskHeaders', ['zeebe:header']],
@@ -254,7 +254,7 @@ describe('ext add: child types go into their container (1b)', () => {
     const [connector, io] = listExtensions(doc.require('Activity_Call'));
     expect(connector).toMatchObject({ type: 'camunda:connector' });
     // the modeler's order: inputOutput before connectorId
-    expect(connector!.children!.map((c) => [c.type, types(c.children)])).toEqual([
+    expect(connector!.children!.map((child) => [child.type, types(child.children)])).toEqual([
       ['camunda:inputOutput', ['camunda:inputParameter']],
       ['camunda:connectorId', []],
     ]);
@@ -264,7 +264,7 @@ describe('ext add: child types go into their container (1b)', () => {
     const cs = add(doc, 'Activity_Approve', 'camunda:formField[id=amount]/camunda:validation/camunda:constraint', { name: 'min', config: '1' });
     expect(cs.changed[0]!.detail).toBe('ext added camunda:validation to camunda:formField[id=amount], camunda:constraint[name=min] to camunda:validation');
     add(doc, 'Activity_Approve', 'camunda:formField[id=amount]/camunda:property', { id: 'p1', value: 'x' });
-    expect(listExtensions(doc.require('Activity_Approve'))[0]!.children![0]!.children!.map((c) => [c.type, types(c.children)])).toEqual([
+    expect(listExtensions(doc.require('Activity_Approve'))[0]!.children![0]!.children!.map((child) => [child.type, types(child.children)])).toEqual([
       ['camunda:properties', ['camunda:property']],
       ['camunda:validation', ['camunda:constraint']],
     ]);
@@ -274,7 +274,7 @@ describe('ext add: child types go into their container (1b)', () => {
     add(doc, 'Activity_Approve', 'camunda:taskListener', { event: 'create', expression: '${b}' });
     expect(caught(() => add(doc, 'Activity_Approve', 'camunda:taskListener/camunda:field', { name: 'f' })).code).toBe('E_AMBIGUOUS_EXTENSION');
     add(doc, 'Activity_Approve', 'camunda:taskListener[1]/camunda:field', { name: 'f', stringValue: 'v' });
-    expect(listExtensions(doc.require('Activity_Approve')).filter((e) => e.type === 'camunda:taskListener').map((e) => types(e.children))).toEqual([[], ['camunda:field']]);
+    expect(listExtensions(doc.require('Activity_Approve')).filter((extension) => extension.type === 'camunda:taskListener').map((extension) => types(extension.children))).toEqual([[], ['camunda:field']]);
     // only attribute-free containers are created on the way; a listener or form field must exist first
     const missing = caught(() => add(doc, 'Activity_Call', 'camunda:executionListener/camunda:field', { name: 'f' }));
     expect(missing.code).toBe('E_NO_EXTENSION');
@@ -282,7 +282,7 @@ describe('ext add: child types go into their container (1b)', () => {
     // --replace reaches into the container: a single child is replaced, not refused
     expect(caught(() => add(doc, 'Activity_Call', 'camunda:connectorId', {}, { body: 'soap-http-connector' })).code).toBe('E_DUPLICATE_EXTENSION');
     add(doc, 'Activity_Call', 'camunda:connectorId', {}, { body: 'soap-http-connector', replace: true });
-    expect(listExtensions(doc.require('Activity_Call'))[0]!.children!.map((c) => [c.type, c.body])).toEqual([
+    expect(listExtensions(doc.require('Activity_Call'))[0]!.children!.map((child) => [child.type, child.body])).toEqual([
       ['camunda:inputOutput', undefined],
       ['camunda:connectorId', 'soap-http-connector'],
     ]);
@@ -306,10 +306,10 @@ describe('ext add: child types go into their container (1b)', () => {
   it('warns W_MISPLACED_EXTENSION for content the engines do not read where it is put', async () => {
     const doc = await c7Doc();
     const loose = add(doc, 'Activity_Approve', 'camunda:constraint', { name: 'required' });
-    expect(loose.warnings.map((w) => w.code)).toEqual(['W_MISPLACED_EXTENSION']);
+    expect(loose.warnings.map((warning) => warning.code)).toEqual(['W_MISPLACED_EXTENSION']);
     expect(loose.warnings[0]!.hint).toContain("'camunda:formField[id=<id>]/camunda:validation/camunda:constraint'");
     const field = add(doc, 'Activity_Approve', 'camunda:field', { name: 'f', stringValue: 'v' });
-    expect(field.warnings.map((w) => w.code)).toEqual(['W_MISPLACED_EXTENSION']);
+    expect(field.warnings.map((warning) => warning.code)).toEqual(['W_MISPLACED_EXTENSION']);
     expect(add(doc, 'Activity_Call', 'camunda:field', { name: 'f', stringValue: 'v' }).warnings).toEqual([]);
   });
 });
@@ -355,7 +355,7 @@ describe('ext remove: one nested item by selector (1c)', () => {
     add(doc, 'Activity_Approve', 'camunda:formField[id=amount]/camunda:validation/camunda:constraint', { name: 'max', config: '9' });
     ext(doc, { id: 'Activity_Approve', action: 'remove', type: 'camunda:constraint[name=min]' });
     ext(doc, { id: 'Activity_Approve', action: 'remove', type: "camunda:formField[id='amount']/camunda:validation/camunda:constraint[name=\"max\"]" });
-    expect(listExtensions(doc.require('Activity_Approve'))[0]!.children!.map((c) => [c.attrs['id'], types(c.children)])).toEqual([
+    expect(listExtensions(doc.require('Activity_Approve'))[0]!.children!.map((child) => [child.attrs['id'], types(child.children)])).toEqual([
       ['amount', []],
       ['note', []],
     ]);
@@ -377,7 +377,7 @@ describe('ext remove: one nested item by selector (1c)', () => {
     expect(err.code).toBe('E_AMBIGUOUS_EXTENSION');
     expect(err.details['candidates']).toEqual(['camunda:executionListener[0]/camunda:field[name=x]', 'camunda:executionListener[1]/camunda:field[name=x]']);
     ext(doc, { id: 'Activity_Call', action: 'remove', type: 'camunda:executionListener[1]/camunda:field[name=x]' });
-    expect(listExtensions(doc.require('Activity_Call')).map((e) => types(e.children))).toEqual([['camunda:field'], []]);
+    expect(listExtensions(doc.require('Activity_Call')).map((extension) => types(extension.children))).toEqual([['camunda:field'], []]);
   });
 
   it('parses selectors', async () => {
@@ -429,7 +429,7 @@ describe('ext add --xml: bpmn: children inside a vendor element (1d)', () => {
     // inside a vendor element through a path it is fine
     add(doc, 'Activity_Approve', 'camunda:taskListener', { event: 'timeout', id: 'TO2', expression: '${true}' });
     add(doc, 'Activity_Approve', 'camunda:taskListener[id=TO2]/bpmn:timerEventDefinition', {}, { xml: '<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2H</bpmn:timeDuration></bpmn:timerEventDefinition>' });
-    expect(listExtensions(doc.require('Activity_Approve'))[0]!.children!.map((c) => c.type)).toEqual(['bpmn:timerEventDefinition']);
+    expect(listExtensions(doc.require('Activity_Approve'))[0]!.children!.map((child) => child.type)).toEqual(['bpmn:timerEventDefinition']);
   });
 
   it("maps an aliased BPMN prefix to the file's own prefix instead of declaring a second one", async () => {
@@ -500,11 +500,11 @@ const MSG_ROOTS = `<bpmn:message id="Message_Paid" name="Paid" /><bpmn:message i
 
 /** Fills incoming / outgoing of the flow nodes from the sequence flows (what modeler files carry; Doc.fromXml completes them in memory already). */
 function withMirrors(doc: Doc): Doc {
-  for (const f of many(doc.require('Process_1'), 'flowElements')) {
-    if (!is(f, 'bpmn:SequenceFlow')) continue;
+  for (const flowElement of many(doc.require('Process_1'), 'flowElements')) {
+    if (!is(flowElement, 'bpmn:SequenceFlow')) continue;
     for (const [end, list] of [['sourceRef', 'outgoing'], ['targetRef', 'incoming']] as const) {
-      const entries = many(f.get<El>(end), list);
-      if (!entries.includes(f)) entries.push(f);
+      const entries = many(flowElement.get<El>(end), list);
+      if (!entries.includes(flowElement)) entries.push(flowElement);
     }
   }
   return doc;
@@ -550,13 +550,13 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
     new ElementRemover(nb).remove({ op: 'remove', ids: ['Event_Paid'], bridge: false });
-    expect(nb.outgoing(nb.require('Gateway_Wait')).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
+    expect(nb.outgoing(nb.require('Gateway_Wait')).map((flow) => flow.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
     const both = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
     new ElementRemover(both).remove({ op: 'remove', ids: ['Event_Paid', 'End_A'] });
-    expect(both.outgoing(both.require('Gateway_Wait')).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
+    expect(both.outgoing(both.require('Gateway_Wait')).map((flow) => flow.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
   });
 
   it('refuses a bridge that makes two branches wait for the same message name', async () => {
@@ -617,8 +617,8 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:endEvent id="End_A" />`);
     const cs = new ElementRemover(ok).remove({ op: 'remove', ids: ['Event_Paid'] });
     expect(cs.notes).toContain('bridged: Gateway_Wait -> Event_Confirmed');
-    const r = await mutateDoc(ok, [], { dryRun: true, layout: false });
-    expect(r.validation.errors).toEqual([]);
+    const result = await mutateDoc(ok, [], { dryRun: true, layout: false });
+    expect(result.validation.errors).toEqual([]);
   });
 
   it('applies to move as well (it bridges the old place the same way)', async () => {
@@ -639,8 +639,8 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:intermediateThrowEvent id="C_Throw" />
     <bpmn:userTask id="C_Task" />`,
     );
-    const g = doc.require('Gateway_Wait');
-    const problem = (id: string) => new EventGatewayRule(doc).targetProblem(g, doc.require(id));
+    const gateway = doc.require('Gateway_Wait');
+    const problem = (id: string) => new EventGatewayRule(doc).targetProblem(gateway, doc.require(id));
     expect(problem('C_Cond')).toBeUndefined();
     expect(problem('C_Link')).toMatch(/link catch event/);
     expect(problem('C_None')).toMatch(/plain catch event/);
@@ -688,17 +688,17 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
   it('warns W_DUPLICATE_FLOW when connect adds a second flow between the same nodes', async () => {
     const doc = await compDoc();
     const first = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
-    expect(first.warnings.map((w) => w.code)).not.toContain('W_DUPLICATE_FLOW');
+    expect(first.warnings.map((warning) => warning.code)).not.toContain('W_DUPLICATE_FLOW');
     const second = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
-    const dup = second.warnings.find((w) => w.code === 'W_DUPLICATE_FLOW');
+    const dup = second.warnings.find((warning) => warning.code === 'W_DUPLICATE_FLOW');
     // the file numbers its flows F1, F2: new ones keep the prefix and name their ends; the second one takes a suffix
     expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F_StartToEnd\b/);
-    expect(second.created.map((c) => c.id)).toEqual(['F_StartToEnd_2']);
-    expect(second.warnings.map((w) => w.code)).toContain('W_ID_SUFFIXED');
+    expect(second.created.map((created) => created.id)).toEqual(['F_StartToEnd_2']);
+    expect(second.warnings.map((warning) => warning.code)).toContain('W_ID_SUFFIXED');
     expect(dup?.hint).toMatch(/--if-absent/);
     const skipped = new ElementConnector(doc).connect({ op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
     expect(skipped.warnings).toEqual([]);
     expect(skipped.created).toEqual([]);
-    expect(many(doc.require('Process_1'), 'flowElements').filter((f) => is(f, 'bpmn:SequenceFlow') && f.get<El>('targetRef').get('id') === 'End')).toHaveLength(3);
+    expect(many(doc.require('Process_1'), 'flowElements').filter((element) => is(element, 'bpmn:SequenceFlow') && element.get<El>('targetRef').get('id') === 'End')).toHaveLength(3);
   });
 });

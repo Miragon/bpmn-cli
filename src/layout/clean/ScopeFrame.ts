@@ -17,8 +17,8 @@ export class ScopeFrame {
    */
   framedSize(): { width: number; left: number } {
     const labels = new ScopeLabels(this.layout).all();
-    const left = Math.max(0, ...labels.map((l) => -l.x));
-    return { width: Math.max(this.layout.width, ...labels.map((l) => l.x + l.width)) + left, left };
+    const left = Math.max(0, ...labels.map((label) => -label.x));
+    return { width: Math.max(this.layout.width, ...labels.map((label) => label.x + label.width)) + left, left };
   }
 
   /**
@@ -27,17 +27,17 @@ export class ScopeFrame {
    */
   fitSubProcess(node: GNode): void {
     const child = this.layout;
-    const p = SIZES.subProcessPadding;
+    const padding = SIZES.subProcessPadding;
     const childLabels = new ScopeLabels(child);
     const labels = [...childLabels.all(), ...childLabels.data()];
-    const left = Math.max(0, ...labels.map((l) => -l.x - (p.left - LABEL_KEEP)));
-    const right = Math.max(child.width, ...labels.map((l) => l.x + l.width - (p.right - LABEL_KEEP)));
-    const below = Math.max(child.height, ...labels.map((l) => l.y + l.height - (p.bottom - LABEL_KEEP)));
-    const above = Math.max(0, ...labels.map((l) => -l.y));
+    const left = Math.max(0, ...labels.map((label) => -label.x - (padding.left - LABEL_KEEP)));
+    const right = Math.max(child.width, ...labels.map((label) => label.x + label.width - (padding.right - LABEL_KEEP)));
+    const below = Math.max(child.height, ...labels.map((label) => label.y + label.height - (padding.bottom - LABEL_KEEP)));
+    const above = Math.max(0, ...labels.map((label) => -label.y));
     const inner = Math.ceil(left + right);
-    node.width = Math.max(SIZES.subProcessMin.width, inner + p.left + p.right);
-    const top = Math.max(p.top, Math.ceil(titleDepth(node.el.get<string | undefined>('name'), node.width) + TITLE_GAP + above));
-    node.height = Math.max(SIZES.subProcessMin.height, Math.ceil(below) + top + p.bottom);
+    node.width = Math.max(SIZES.subProcessMin.width, inner + padding.left + padding.right);
+    const top = Math.max(padding.top, Math.ceil(titleDepth(node.el.get<string | undefined>('name'), node.width) + TITLE_GAP + above));
+    node.height = Math.max(SIZES.subProcessMin.height, Math.ceil(below) + top + padding.bottom);
     node.childPad = { left, top, inner };
   }
 }

@@ -276,11 +276,11 @@ export const TRIGGER_KEYS = Object.keys(TRIGGER_FIELDS) as Array<keyof TriggerOp
 
 /** `after` + `before` is the only placement pair that combines. */
 export const PLACEMENT_CONFLICTS: Array<[string, string]> = [];
-for (let i = 0; i < PLACEMENT_KEYS.length; i++) {
-  for (let j = i + 1; j < PLACEMENT_KEYS.length; j++) {
-    const a = PLACEMENT_KEYS[i]!;
-    const b = PLACEMENT_KEYS[j]!;
-    if (!(a === 'after' && b === 'before')) PLACEMENT_CONFLICTS.push([a, b]);
+for (let firstIndex = 0; firstIndex < PLACEMENT_KEYS.length; firstIndex++) {
+  for (let secondIndex = firstIndex + 1; secondIndex < PLACEMENT_KEYS.length; secondIndex++) {
+    const firstKey = PLACEMENT_KEYS[firstIndex]!;
+    const secondKey = PLACEMENT_KEYS[secondIndex]!;
+    if (!(firstKey === 'after' && secondKey === 'before')) PLACEMENT_CONFLICTS.push([firstKey, secondKey]);
   }
 }
 

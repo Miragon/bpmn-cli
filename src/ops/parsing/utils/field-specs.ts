@@ -14,7 +14,7 @@ export interface FieldSpec {
   alias?: boolean;
 }
 
-export type FieldsOf<T> = { [K in Exclude<keyof T, 'op'>]-?: FieldSpec };
+export type FieldsOf<TOp> = { [TKey in Exclude<keyof TOp, 'op'>]-?: FieldSpec };
 
 export type SplitNode = SplitBranch['nodes'][number];
 

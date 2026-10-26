@@ -64,11 +64,11 @@ export class StaleFlowReport {
 
   /** The W_OPTION_IGNORED hints that deferred to a W_FLOW_ID_STALE that never came. */
   private restoreFlowIdHints(cs: ChangeSet, flow: El, id: string): void {
-    cs.warnings = cs.warnings.map((w) => {
-      const flowId = w.code === 'W_OPTION_IGNORED' ? /^--flow-id (\S+) ignored/.exec(w.message)?.[1] : undefined;
-      if (!flowId || w.hint !== StaleFlowReport.flowIdIgnoredHint(flowId, id, true)) return w;
+    cs.warnings = cs.warnings.map((warning) => {
+      const flowId = warning.code === 'W_OPTION_IGNORED' ? /^--flow-id (\S+) ignored/.exec(warning.message)?.[1] : undefined;
+      if (!flowId || warning.hint !== StaleFlowReport.flowIdIgnoredHint(flowId, id, true)) return warning;
       const still = this.doc.get(id) === flow && !this.doc.has(flowId);
-      return { ...w, hint: StaleFlowReport.flowIdIgnoredHint(flowId, still ? id : undefined) };
+      return { ...warning, hint: StaleFlowReport.flowIdIgnoredHint(flowId, still ? id : undefined) };
     });
   }
 }

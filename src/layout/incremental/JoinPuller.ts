@@ -33,38 +33,38 @@ export class JoinPuller {
       const seen = new Set([from]);
       const stack = [from];
       while (stack.length) {
-        for (const n of next.get(stack.pop()!) ?? []) {
-          if (n === to) return true;
-          if (seen.has(n)) continue;
-          seen.add(n);
-          stack.push(n);
+        for (const successor of next.get(stack.pop()!) ?? []) {
+          if (successor === to) return true;
+          if (seen.has(successor)) continue;
+          seen.add(successor);
+          stack.push(successor);
         }
       }
       return false;
     };
-    const seqFlows = (el: El | undefined, prop: 'incoming' | 'outgoing'): El[] => rawList(el, prop).filter((f) => is(f, 'bpmn:SequenceFlow'));
+    const seqFlows = (el: El | undefined, prop: 'incoming' | 'outgoing'): El[] => rawList(el, prop).filter((flow) => is(flow, 'bpmn:SequenceFlow'));
     for (const el of this.run.sem.byId.values()) {
       const fid = idOf(el);
       if (!fid || !is(el, 'bpmn:SequenceFlow') || (before.has(fid) && !this.run.place.oldTarget.has(fid))) continue;
       const { sourceId, targetId } = DiagramReader.edgeEnds(el);
-      const plane = this.run.planes.find((p) => !!targetId && p.shapes.has(targetId));
+      const plane = this.run.planes.find((candidate) => !!targetId && candidate.shapes.has(targetId));
       const join = targetId ? plane?.shapes.get(targetId) : undefined;
       const source = sourceId ? plane?.shapes.get(sourceId) : undefined;
       if (!plane || !join || !source || !join.di || !this.snap.byDi.has(join.di) || this.run.relocated.has(join.id) || this.run.place.joins?.has(join.id)) continue;
       if (!is(join.el, 'bpmn:Gateway') || cx(join.bounds) >= source.bounds.x) continue;
       const ins = seqFlows(join.el, 'incoming');
       const outs = seqFlows(join.el, 'outgoing');
-      const S = outs.length === 1 ? plane.shapes.get(idOf(raw(outs[0], 'targetRef')) ?? '') : undefined;
-      if (ins.length < 2 || !S || reaches(join.id, source.id)) continue;
-      const preds = ins.map((f) => plane.shapes.get(idOf(raw(f, 'sourceRef')) ?? ''));
-      const sameFrame = (s: DShape | undefined): boolean => !!s && s.poolId === join.poolId && s.parentId === join.parentId;
-      if (!preds.every(sameFrame) || !sameFrame(S) || S.bounds.x <= Math.max(...preds.map((p) => right(p!.bounds)))) continue;
+      const successor = outs.length === 1 ? plane.shapes.get(idOf(raw(outs[0], 'targetRef')) ?? '') : undefined;
+      if (ins.length < 2 || !successor || reaches(join.id, source.id)) continue;
+      const preds = ins.map((flow) => plane.shapes.get(idOf(raw(flow, 'sourceRef')) ?? ''));
+      const sameFrame = (shape: DShape | undefined): boolean => !!shape && shape.poolId === join.poolId && shape.parentId === join.parentId;
+      if (!preds.every(sameFrame) || !sameFrame(successor) || successor.bounds.x <= Math.max(...preds.map((pred) => right(pred!.bounds)))) continue;
       plane.shapes.delete(join.id);
       this.run.place.reuse.set(join.id, { shape: join, boundaries: [], from: plane });
-      (this.run.place.joins ??= new Map()).set(join.id, S.id);
+      (this.run.place.joins ??= new Map()).set(join.id, successor.id);
       this.run.relocated.add(join.id);
-      for (const e of plane.edges.values()) if (e.sourceId === join.id || e.targetId === join.id) this.run.reroute.add(e.id);
-      if (LayoutDebug.on()) LayoutDebug.log(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${S.id}`);
+      for (const edge of plane.edges.values()) if (edge.sourceId === join.id || edge.targetId === join.id) this.run.reroute.add(edge.id);
+      if (LayoutDebug.on()) LayoutDebug.log(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${successor.id}`);
     }
   }
 }

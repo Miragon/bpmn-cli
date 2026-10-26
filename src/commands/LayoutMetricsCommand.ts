@@ -10,13 +10,13 @@ import { MetricsText } from '../report/MetricsText.js';
  */
 export class LayoutMetricsCommand extends CliCommand {
   register(program: CommandType): void {
-    this.withJsonOptions(this.define(program, 'metrics')).action((file: string, o: RawOpts) =>
+    this.withJsonOptions(this.define(program, 'metrics')).action((file: string, options: RawOpts) =>
       this.cli.guarded(async () => {
         const doc = await this.cli.readDocArg(file);
-        const m = LayoutAnalysis.of(doc.definitions);
-        if (o['json']) this.cli.printJson({ file, ...metricsJson(m) }, !!o['pretty']);
-        else this.cli.print(new MetricsText(m).text());
-      }, !!o['json']),
+        const metrics = LayoutAnalysis.of(doc.definitions);
+        if (options['json']) this.cli.printJson({ file, ...metricsJson(metrics) }, !!options['pretty']);
+        else this.cli.print(new MetricsText(metrics).text());
+      }, !!options['json']),
     );
   }
 }

@@ -50,46 +50,46 @@ export class PoolStacker {
       }
     }
     let maxWidth = 300;
-    for (const p of pools) {
-      if (!p.scope) continue;
-      const depth = p.scope.lanes.length ? laneDepth(p.scope.lanes) : 0;
-      const framed = new ScopeFrame(p.scope).framedSize();
+    for (const pool of pools) {
+      if (!pool.scope) continue;
+      const depth = pool.scope.lanes.length ? laneDepth(pool.scope.lanes) : 0;
+      const framed = new ScopeFrame(pool.scope).framedSize();
       const contentW = framed.width - framed.left + 2 * SIZES.lanePadding + depth * SIZES.laneHeader;
       maxWidth = Math.max(maxWidth, SIZES.participantHeader + contentW);
-      p.box.height = p.scope.lanes.length ? p.scope.height : Math.max(150, p.scope.height + 2 * SIZES.lanePadding);
+      pool.box.height = pool.scope.lanes.length ? pool.scope.height : Math.max(150, pool.scope.height + 2 * SIZES.lanePadding);
     }
     const margin = SIZES.outerMargin;
-    let y = margin;
-    for (const p of pools) {
-      p.box = { x: margin, y, width: maxWidth, height: p.box.height };
-      const depth = p.scope?.lanes.length ? laneDepth(p.scope.lanes) : 0;
-      p.origin = { x: p.box.x + SIZES.participantHeader + depth * SIZES.laneHeader + SIZES.lanePadding, y: p.box.y + (p.scope?.lanes.length ? 0 : SIZES.lanePadding) };
-      y += p.box.height + SIZES.poolGap;
+    let top = margin;
+    for (const pool of pools) {
+      pool.box = { x: margin, y: top, width: maxWidth, height: pool.box.height };
+      const depth = pool.scope?.lanes.length ? laneDepth(pool.scope.lanes) : 0;
+      pool.origin = { x: pool.box.x + SIZES.participantHeader + depth * SIZES.laneHeader + SIZES.lanePadding, y: pool.box.y + (pool.scope?.lanes.length ? 0 : SIZES.lanePadding) };
+      top += pool.box.height + SIZES.poolGap;
     }
-    for (const p of pools) {
+    for (const pool of pools) {
       const first = writer.di.length;
-      writer.shape(p.participant, p.box, { isHorizontal: true });
-      if (p.scope) {
-        for (const lane of p.scope.lanes) stretchLane(lane, p.box.width - SIZES.participantHeader);
-        writer.emitScope(p.scope, p.scope.lanes.length ? { x: p.origin.x, y: p.box.y } : p.origin);
-        for (const lane of p.scope.lanes) writer.fixLaneShapes(lane, p);
+      writer.shape(pool.participant, pool.box, { isHorizontal: true });
+      if (pool.scope) {
+        for (const lane of pool.scope.lanes) stretchLane(lane, pool.box.width - SIZES.participantHeader);
+        writer.emitScope(pool.scope, pool.scope.lanes.length ? { x: pool.origin.x, y: pool.box.y } : pool.origin);
+        for (const lane of pool.scope.lanes) writer.fixLaneShapes(lane, pool);
       }
-      p.di = writer.di.slice(first);
+      pool.di = writer.di.slice(first);
     }
   }
 
   drawMessageFlows(warnings: EngineWarning[]): void {
     const { pools, writer } = this;
     const flows = this.collectMessageFlows(warnings);
-    let views = new Map(pools.map((p) => [p, this.messageView(p)]));
-    const order = new MessageFlowRouter(this.messageJobs(flows, views), pools.map((p) => views.get(p)!)).poolOrder();
-    const reordered = order.map((view) => pools.find((p) => views.get(p) === view)!);
-    if (reordered.some((p, i) => p !== pools[i])) {
+    let views = new Map(pools.map((pool) => [pool, this.messageView(pool)]));
+    const order = new MessageFlowRouter(this.messageJobs(flows, views), pools.map((pool) => views.get(pool)!)).poolOrder();
+    const reordered = order.map((view) => pools.find((pool) => views.get(pool) === view)!);
+    if (reordered.some((pool, index) => pool !== pools[index])) {
       this.restackPools(reordered);
       pools.splice(0, pools.length, ...reordered);
-      views = new Map(pools.map((p) => [p, this.messageView(p)]));
+      views = new Map(pools.map((pool) => [pool, this.messageView(pool)]));
     }
-    for (const route of new MessageFlowRouter(this.messageJobs(flows, views), pools.map((p) => views.get(p)!)).route()) {
+    for (const route of new MessageFlowRouter(this.messageJobs(flows, views), pools.map((pool) => views.get(pool)!)).route()) {
       const name = route.el.get<string | undefined>('name');
       writer.edge(route.el, route.points, name ? MessageFlowRouter.label(route.points, name, route.channelY) : undefined);
     }
@@ -99,9 +99,9 @@ export class PoolStacker {
     const parent = el.$parent as El | undefined;
     if (!parent || is(el, 'bpmn:Participant')) return [];
     return many(parent, 'flowElements')
-      .filter((b) => is(b, 'bpmn:BoundaryEvent') && b.get<El | undefined>('attachedToRef') === el)
-      .map((b) => this.writer.absBoxes.get(idOf(b)))
-      .filter((b): b is Box => !!b);
+      .filter((boundary) => is(boundary, 'bpmn:BoundaryEvent') && boundary.get<El | undefined>('attachedToRef') === el)
+      .map((boundary) => this.writer.absBoxes.get(idOf(boundary)))
+      .filter((boundary): boundary is Box => !!boundary);
   }
 
   private collectMessageFlows(warnings: EngineWarning[]): MessageFlowEnds[] {
@@ -109,66 +109,66 @@ export class PoolStacker {
     const { absBoxes } = this.writer;
     const out: MessageFlowEnds[] = [];
     for (const mf of many(this.root, 'messageFlows')) {
-      const s = mf.get<El | undefined>('sourceRef');
-      const t = mf.get<El | undefined>('targetRef');
-      const sb = s ? absBoxes.get(idOf(s)) : undefined;
-      const tb = t ? absBoxes.get(idOf(t)) : undefined;
-      if (!s || !t || !sb || !tb) {
+      const source = mf.get<El | undefined>('sourceRef');
+      const target = mf.get<El | undefined>('targetRef');
+      const sb = source ? absBoxes.get(idOf(source)) : undefined;
+      const tb = target ? absBoxes.get(idOf(target)) : undefined;
+      if (!source || !target || !sb || !tb) {
         warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(mf), message: `No DI created for message flow ${idOf(mf)} (endpoint without shape)` });
         continue;
       }
-      out.push({ el: mf, source: s, target: t, sourceBox: sb, targetBox: tb, sourceOwn: this.boundaryBoxes(s), targetOwn: this.boundaryBoxes(t), sourcePool: poolOf(pools, s), targetPool: poolOf(pools, t) });
+      out.push({ el: mf, source, target, sourceBox: sb, targetBox: tb, sourceOwn: this.boundaryBoxes(source), targetOwn: this.boundaryBoxes(target), sourcePool: poolOf(pools, source), targetPool: poolOf(pools, target) });
     }
     return out;
   }
 
   private messageJobs(flows: MessageFlowEnds[], views: Map<PoolLayout, MessagePool>): MessageFlowJob[] {
-    return flows.map((f) => ({ ...f, sourcePool: f.sourcePool && views.get(f.sourcePool), targetPool: f.targetPool && views.get(f.targetPool) }));
+    return flows.map((flow) => ({ ...flow, sourcePool: flow.sourcePool && views.get(flow.sourcePool), targetPool: flow.targetPool && views.get(flow.targetPool) }));
   }
 
-  private messageView(p: PoolLayout): MessagePool {
+  private messageView(pool: PoolLayout): MessagePool {
     const obstacles: Box[] = [];
     const lines: Segment[] = [];
-    for (const d of p.di ?? []) {
-      const el = d.get<El | undefined>('bpmnElement');
+    for (const diagramElement of pool.di ?? []) {
+      const el = diagramElement.get<El | undefined>('bpmnElement');
       if (!el) continue;
-      if (is(d, 'bpmndi:BPMNShape')) {
+      if (is(diagramElement, 'bpmndi:BPMNShape')) {
         const box = this.writer.absBoxes.get(idOf(el));
-        if (box && !isContainerShape(d, el)) obstacles.push(box);
+        if (box && !isContainerShape(diagramElement, el)) obstacles.push(box);
         continue;
       }
-      const pts = many(d, 'waypoint').map((w) => ({ x: w.get<number>('x'), y: w.get<number>('y') }));
-      for (let i = 0; i + 1 < pts.length; i++) lines.push([pts[i]!, pts[i + 1]!]);
+      const pts = many(diagramElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
+      for (let index = 0; index + 1 < pts.length; index++) lines.push([pts[index]!, pts[index + 1]!]);
     }
-    const depth = p.scope?.lanes.length ? laneDepth(p.scope.lanes) : 0;
-    return { box: p.box, obstacles, lines, contentLeft: p.box.x + SIZES.participantHeader + depth * SIZES.laneHeader };
+    const depth = pool.scope?.lanes.length ? laneDepth(pool.scope.lanes) : 0;
+    return { box: pool.box, obstacles, lines, contentLeft: pool.box.x + SIZES.participantHeader + depth * SIZES.laneHeader };
   }
 
-  private shiftPool(p: PoolLayout, dy: number): void {
+  private shiftPool(pool: PoolLayout, dy: number): void {
     if (!dy) return;
-    const moveBounds = (b: El | undefined): void => {
-      if (b) b.set('y', b.get<number>('y') + dy);
+    const moveBounds = (bounds: El | undefined): void => {
+      if (bounds) bounds.set('y', bounds.get<number>('y') + dy);
     };
-    for (const d of p.di ?? []) {
-      moveBounds(d.get<El | undefined>('label')?.get<El | undefined>('bounds'));
-      if (!is(d, 'bpmndi:BPMNShape')) {
-        for (const w of many(d, 'waypoint')) w.set('y', w.get<number>('y') + dy);
+    for (const diagramElement of pool.di ?? []) {
+      moveBounds(diagramElement.get<El | undefined>('label')?.get<El | undefined>('bounds'));
+      if (!is(diagramElement, 'bpmndi:BPMNShape')) {
+        for (const waypoint of many(diagramElement, 'waypoint')) waypoint.set('y', waypoint.get<number>('y') + dy);
         continue;
       }
-      moveBounds(d.get<El | undefined>('bounds'));
-      const el = d.get<El | undefined>('bpmnElement');
+      moveBounds(diagramElement.get<El | undefined>('bounds'));
+      const el = diagramElement.get<El | undefined>('bpmnElement');
       const box = el ? this.writer.absBoxes.get(idOf(el)) : undefined;
       if (box) box.y += dy;
     }
-    p.box.y += dy;
-    p.origin.y += dy;
+    pool.box.y += dy;
+    pool.origin.y += dy;
   }
 
   private restackPools(order: PoolLayout[]): void {
-    let y = SIZES.outerMargin;
-    for (const p of order) {
-      this.shiftPool(p, y - p.box.y);
-      y += p.box.height + SIZES.poolGap;
+    let top = SIZES.outerMargin;
+    for (const pool of order) {
+      this.shiftPool(pool, top - pool.box.y);
+      top += pool.box.height + SIZES.poolGap;
     }
   }
 }

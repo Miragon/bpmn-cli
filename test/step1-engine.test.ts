@@ -42,7 +42,7 @@ interface Drawn {
   byId: Map<string, El>;
 }
 
-const boxOf = (b: El): Box => ({ x: b.get<number>('x'), y: b.get<number>('y'), width: b.get<number>('width'), height: b.get<number>('height') });
+const boxOf = (element: El): Box => ({ x: element.get<number>('x'), y: element.get<number>('y'), width: element.get<number>('width'), height: element.get<number>('height') });
 
 async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
   const source = await parseXml(xml);
@@ -52,15 +52,15 @@ async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
   const edges: Drawn['edges'] = new Map();
   const planes: string[] = [];
   const diagrams = many(model.definitions, 'diagrams');
-  diagrams.forEach((d, i) => {
-    const plane = d.get<El>('plane');
+  diagrams.forEach((diagram, index) => {
+    const plane = diagram.get<El>('plane');
     planes.push(plane.get<El>('bpmnElement').get<string>('id'));
-    if (i > 0) return;
+    if (index > 0) return;
     for (const pe of many(plane, 'planeElement')) {
       const el = pe.get<El>('bpmnElement');
       const label = pe.get<El | undefined>('label')?.get<El | undefined>('bounds');
       if (is(pe, 'bpmndi:BPMNShape')) shapes.set(el.get<string>('id'), { el, box: boxOf(pe.get<El>('bounds')), expanded: pe.get<boolean | undefined>('isExpanded') === true, ...(label ? { label: boxOf(label) } : {}) });
-      else edges.set(el.get<string>('id'), { el, points: many(pe, 'waypoint').map((w) => ({ x: w.get<number>('x'), y: w.get<number>('y') })), ...(label ? { label: boxOf(label) } : {}) });
+      else edges.set(el.get<string>('id'), { el, points: many(pe, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') })), ...(label ? { label: boxOf(label) } : {}) });
     }
   });
   const byId = new Map<string, El>();
@@ -77,134 +77,134 @@ async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
   return { model, warnings, shapes, edges, planes, byId };
 }
 
-const inside = (a: Box, b: Box): boolean => a.x >= b.x && a.y >= b.y && a.x + a.width <= b.x + b.width && a.y + a.height <= b.y + b.height;
-const overlap = (a: Box, b: Box): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const inside = (inner: Box, outer: Box): boolean => inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
+const overlap = (first: Box, second: Box): boolean => first.x < second.x + second.width && second.x < first.x + first.width && first.y < second.y + second.height && second.y < first.y + first.height;
 /** a segment cuts a box (2 px tolerance at the border, as the harness counts it) */
-const cuts = (p: Point, q: Point, b: Box): boolean =>
-  Math.min(p.x, q.x) < b.x + b.width - 2 && Math.max(p.x, q.x) > b.x + 2 && Math.min(p.y, q.y) < b.y + b.height - 2 && Math.max(p.y, q.y) > b.y + 2;
-const segments = (pts: Point[]): Array<[Point, Point]> => pts.slice(1).map((q, i) => [pts[i]!, q]);
+const cuts = (segmentStart: Point, segmentEnd: Point, box: Box): boolean =>
+  Math.min(segmentStart.x, segmentEnd.x) < box.x + box.width - 2 && Math.max(segmentStart.x, segmentEnd.x) > box.x + 2 && Math.min(segmentStart.y, segmentEnd.y) < box.y + box.height - 2 && Math.max(segmentStart.y, segmentEnd.y) > box.y + 2;
+const segments = (pts: Point[]): Array<[Point, Point]> => pts.slice(1).map((point, index) => [pts[index]!, point]);
 
 /** Leaf lanes with their flow nodes (boundary events excluded: they sit on the host's border). */
-function leafLanes(d: Drawn): Array<{ id: string; nodes: string[] }> {
+function leafLanes(drawing: Drawn): Array<{ id: string; nodes: string[] }> {
   const out: Array<{ id: string; nodes: string[] }> = [];
   const visit = (lane: El): void => {
     const child = lane.get<El | undefined>('childLaneSet');
     if (child && many(child, 'lanes').length) return many(child, 'lanes').forEach(visit);
-    const nodes = (lane.get<El[] | undefined>('flowNodeRef') ?? []).filter((n) => !is(n, 'bpmn:BoundaryEvent')).map((n) => n.get<string>('id'));
+    const nodes = (lane.get<El[] | undefined>('flowNodeRef') ?? []).filter((node) => !is(node, 'bpmn:BoundaryEvent')).map((node) => node.get<string>('id'));
     out.push({ id: lane.get<string>('id'), nodes });
   };
-  for (const el of d.byId.values()) if (is(el, 'bpmn:LaneSet') && !is(el.$parent as El, 'bpmn:Lane')) many(el, 'lanes').forEach(visit);
+  for (const el of drawing.byId.values()) if (is(el, 'bpmn:LaneSet') && !is(el.$parent as El, 'bpmn:Lane')) many(el, 'lanes').forEach(visit);
   return out;
 }
 
-function outsideLane(d: Drawn): string[] {
+function outsideLane(drawing: Drawn): string[] {
   const bad: string[] = [];
-  for (const lane of leafLanes(d)) {
-    const lb = d.shapes.get(lane.id)?.box;
+  for (const lane of leafLanes(drawing)) {
+    const lb = drawing.shapes.get(lane.id)?.box;
     if (!lb) continue;
     for (const id of lane.nodes) {
-      const s = d.shapes.get(id);
-      if (s && !inside(s.box, lb)) bad.push(`${id} outside ${lane.id}`);
+      const shape = drawing.shapes.get(id);
+      if (shape && !inside(shape.box, lb)) bad.push(`${id} outside ${lane.id}`);
     }
   }
   return bad;
 }
 
-const isContainer = (s: { el: El; expanded: boolean }): boolean => is(s.el, 'bpmn:Participant') || is(s.el, 'bpmn:Lane') || s.expanded;
+const isContainer = (shape: { el: El; expanded: boolean }): boolean => is(shape.el, 'bpmn:Participant') || is(shape.el, 'bpmn:Lane') || shape.expanded;
 
-function leafOverlaps(d: Drawn): string[] {
-  const leaves = [...d.shapes].filter(([, s]) => !isContainer(s));
+function leafOverlaps(drawing: Drawn): string[] {
+  const leaves = [...drawing.shapes].filter(([, shape]) => !isContainer(shape));
   const host = (el: El): string | undefined => el.get<El | undefined>('attachedToRef')?.get<string>('id');
   const bad: string[] = [];
-  for (let i = 0; i < leaves.length; i++) {
-    for (let j = i + 1; j < leaves.length; j++) {
-      const [a, sa] = leaves[i]!, [b, sb] = leaves[j]!;
-      if (host(sa.el) === b || host(sb.el) === a) continue;
-      if (overlap(sa.box, sb.box)) bad.push(`${a}~${b}`);
+  for (let index = 0; index < leaves.length; index++) {
+    for (let otherIndex = index + 1; otherIndex < leaves.length; otherIndex++) {
+      const [firstId, sa] = leaves[index]!, [secondId, sb] = leaves[otherIndex]!;
+      if (host(sa.el) === secondId || host(sb.el) === firstId) continue;
+      if (overlap(sa.box, sb.box)) bad.push(`${firstId}~${secondId}`);
     }
   }
   return bad;
 }
 
 /** Leaf shapes an edge cuts although it does not connect them (nor their host / boundary events). */
-function cutShapes(d: Drawn, edgeId: string): string[] {
-  const e = d.edges.get(edgeId)!;
+function cutShapes(drawing: Drawn, edgeId: string): string[] {
+  const edge = drawing.edges.get(edgeId)!;
   const ends = new Set<string>();
   for (const key of ['sourceRef', 'targetRef']) {
-    const end = e.el.get<El | undefined>(key);
+    const end = edge.el.get<El | undefined>(key);
     if (end) ends.add(end.get<string>('id'));
   }
   const bad: string[] = [];
-  for (const [id, s] of d.shapes) {
-    if (isContainer(s) || ends.has(id)) continue;
-    const host = s.el.get<El | undefined>('attachedToRef')?.get<string>('id');
+  for (const [id, shape] of drawing.shapes) {
+    if (isContainer(shape) || ends.has(id)) continue;
+    const host = shape.el.get<El | undefined>('attachedToRef')?.get<string>('id');
     if (host && ends.has(host)) continue;
-    if (segments(e.points).some(([p, q]) => cuts(p, q, s.box))) bad.push(id);
+    if (segments(edge.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, shape.box))) bad.push(id);
   }
   return bad;
 }
 
-const messageFlowIds = (d: Drawn): string[] => [...d.edges].filter(([, e]) => is(e.el, 'bpmn:MessageFlow')).map(([id]) => id);
+const messageFlowIds = (drawing: Drawn): string[] => [...drawing.edges].filter(([, edge]) => is(edge.el, 'bpmn:MessageFlow')).map(([id]) => id);
 
 /* ------------------------------------------------------------------ */
 
 describe('lane bands follow the content after routing', () => {
   // a loop drawn over the top (or an annotation strip) moved every node down; the bands stayed where the rows were
   it.each(['lanes__complaint-t1.bpmn', 'lanes__complaint-t2.bpmn', 'subproc__s19-lanes-loop-3.bpmn'])('%s: every node lies inside its lane', async (file) => {
-    const d = await drawn(scenario(file));
-    expect(outsideLane(d)).toEqual([]);
+    const drawing = await drawn(scenario(file));
+    expect(outsideLane(drawing)).toEqual([]);
   });
 
   it.each(['lanes__complaint-t1.bpmn', 'lanes__complaint-t2.bpmn'])('%s: lanes stack without gaps and fill the pool', async (file) => {
-    const d = await drawn(scenario(file));
-    const lanes = leafLanes(d).map((l) => d.shapes.get(l.id)!.box);
-    for (let i = 1; i < lanes.length; i++) expect(lanes[i]!.y).toBe(lanes[i - 1]!.y + lanes[i - 1]!.height);
-    const pool = d.shapes.get('Participant_Reklamationsbearbeitung')!.box;
+    const drawing = await drawn(scenario(file));
+    const lanes = leafLanes(drawing).map((lane) => drawing.shapes.get(lane.id)!.box);
+    for (let index = 1; index < lanes.length; index++) expect(lanes[index]!.y).toBe(lanes[index - 1]!.y + lanes[index - 1]!.height);
+    const pool = drawing.shapes.get('Participant_Reklamationsbearbeitung')!.box;
     expect(lanes[0]!.y).toBe(pool.y);
     expect(lanes[lanes.length - 1]!.y + lanes[lanes.length - 1]!.height).toBe(pool.y + pool.height);
   });
 
   it.each(['lanes__complaint-t1.bpmn', 'lanes__complaint-t2.bpmn'])('%s: no two shapes overlap', async (file) => {
-    const d = await drawn(scenario(file));
-    expect(leafOverlaps(d)).toEqual([]);
+    const drawing = await drawn(scenario(file));
+    expect(leafOverlaps(drawing)).toEqual([]);
   });
 });
 
 describe('message flows', () => {
   it.each(['lanes__complaint-t1.bpmn', 'lanes__complaint-t2.bpmn', 'subproc__s08-collab3.bpmn', 'agent__onb.bpmn'])('%s: no message flow cuts a shape', async (file) => {
-    const d = await drawn(scenario(file));
-    const ids = messageFlowIds(d);
+    const drawing = await drawn(scenario(file));
+    const ids = messageFlowIds(drawing);
     expect(ids.length).toBeGreaterThan(0);
-    for (const id of ids) expect(cutShapes(d, id), id).toEqual([]);
+    for (const id of ids) expect(cutShapes(drawing, id), id).toEqual([]);
   });
 
   it('a black-box pool whose flows end in the top lane is drawn above the process pool', async () => {
-    const d = await drawn(scenario('lanes__complaint-t1.bpmn'));
-    const customer = d.shapes.get('Participant_Kunde')!.box;
-    const process = d.shapes.get('Participant_Reklamationsbearbeitung')!.box;
+    const drawing = await drawn(scenario('lanes__complaint-t1.bpmn'));
+    const customer = drawing.shapes.get('Participant_Kunde')!.box;
+    const process = drawing.shapes.get('Participant_Reklamationsbearbeitung')!.box;
     expect(customer.y + customer.height).toBeLessThan(process.y);
   });
 
   it('pools are ordered so that no message flow has to skip a pool', async () => {
     // declared order Shop, Customer, Supplier: Shop <-> Supplier flows had to run around the Customer pool
-    const d = await drawn(scenario('subproc__s08-collab3.bpmn'));
-    for (const id of messageFlowIds(d)) expect(d.edges.get(id)!.points.length, id).toBeLessThanOrEqual(4);
+    const drawing = await drawn(scenario('subproc__s08-collab3.bpmn'));
+    for (const id of messageFlowIds(drawing)) expect(drawing.edges.get(id)!.points.length, id).toBeLessThanOrEqual(4);
   });
 
   it('a message flow does not run on top of a sequence flow leaving the same element', async () => {
-    const d = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
-    const msg = segments(d.edges.get('Flow_Order')!.points);
-    const seq = segments(d.edges.get('Flow_1')!.points);
-    const collinear = msg.some(([a, b]) => seq.some(([c, e]) => a.x === b.x && c.x === e.x && a.x === c.x && Math.min(Math.max(a.y, b.y), Math.max(c.y, e.y)) > Math.max(Math.min(a.y, b.y), Math.min(c.y, e.y))));
+    const drawing = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
+    const msg = segments(drawing.edges.get('Flow_Order')!.points);
+    const seq = segments(drawing.edges.get('Flow_1')!.points);
+    const collinear = msg.some(([messageStart, messageEnd]) => seq.some(([seqStart, seqEnd]) => messageStart.x === messageEnd.x && seqStart.x === seqEnd.x && messageStart.x === seqStart.x && Math.min(Math.max(messageStart.y, messageEnd.y), Math.max(seqStart.y, seqEnd.y)) > Math.max(Math.min(messageStart.y, messageEnd.y), Math.min(seqStart.y, seqEnd.y))));
     expect(collinear).toBe(false);
   });
 
   it('the label of a straight message flow sits in the gap between the pools', async () => {
-    const d = await drawn(scenario('artifacts__17-pool-notes-msg.bpmn'));
-    const pools = [...d.shapes.values()].filter((s) => is(s.el, 'bpmn:Participant')).map((s) => s.box).sort((a, b) => a.y - b.y);
+    const drawing = await drawn(scenario('artifacts__17-pool-notes-msg.bpmn'));
+    const pools = [...drawing.shapes.values()].filter((shape) => is(shape.el, 'bpmn:Participant')).map((shape) => shape.box).sort((first, second) => first.y - second.y);
     const gapTop = pools[0]!.y + pools[0]!.height, gapBottom = pools[1]!.y;
-    for (const id of messageFlowIds(d)) {
-      const label = d.edges.get(id)!.label;
+    for (const id of messageFlowIds(drawing)) {
+      const label = drawing.edges.get(id)!.label;
       if (!label) continue;
       expect(label.y, id).toBeGreaterThanOrEqual(gapTop);
       expect(label.y + label.height, id).toBeLessThanOrEqual(gapBottom);
@@ -220,31 +220,31 @@ describe('message flows', () => {
     const lower: MessagePool = { box: target, obstacles: [], lines: [], contentLeft: 30 };
     const job = { el: fakeEl('bpmn:Task'), source: fakeEl('bpmn:Task'), target: fakeEl('bpmn:Participant'), sourceBox: source, targetBox: target, sourceOwn: [], targetOwn: [], sourcePool: upper, targetPool: lower } as unknown as MessageFlowJob;
     const [route] = new MessageFlowRouter([job], [upper, lower]).route();
-    expect(segments(route!.points).some(([p, q]) => cuts(p, q, blocker))).toBe(false);
+    expect(segments(route!.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, blocker))).toBe(false);
     expect(route!.points[0]).toEqual({ x: 250, y: 180 });
-    for (const [p, q] of segments(route!.points)) expect(p.x === q.x || p.y === q.y).toBe(true);
+    for (const [segmentStart, segmentEnd] of segments(route!.points)) expect(segmentStart.x === segmentEnd.x || segmentStart.y === segmentEnd.y).toBe(true);
   });
 
   it('keeps the declaration order when no order is better', () => {
-    const a: MessagePool = { box: { x: 0, y: 0, width: 600, height: 200 }, obstacles: [], lines: [], contentLeft: 30 };
-    const b: MessagePool = { box: { x: 0, y: 280, width: 600, height: 60 }, obstacles: [], lines: [], contentLeft: 30 };
-    const job = { el: fakeEl('bpmn:MessageFlow'), source: fakeEl('bpmn:Task'), target: fakeEl('bpmn:Participant'), sourceBox: { x: 100, y: 60, width: 100, height: 80 }, targetBox: b.box, sourceOwn: [], targetOwn: [], sourcePool: a, targetPool: b } as unknown as MessageFlowJob;
-    const order = new MessageFlowRouter([job], [a, b]).poolOrder();
-    expect(order).toEqual([a, b]);
+    const upperPool: MessagePool = { box: { x: 0, y: 0, width: 600, height: 200 }, obstacles: [], lines: [], contentLeft: 30 };
+    const lowerPool: MessagePool = { box: { x: 0, y: 280, width: 600, height: 60 }, obstacles: [], lines: [], contentLeft: 30 };
+    const job = { el: fakeEl('bpmn:MessageFlow'), source: fakeEl('bpmn:Task'), target: fakeEl('bpmn:Participant'), sourceBox: { x: 100, y: 60, width: 100, height: 80 }, targetBox: lowerPool.box, sourceOwn: [], targetOwn: [], sourcePool: upperPool, targetPool: lowerPool } as unknown as MessageFlowJob;
+    const order = new MessageFlowRouter([job], [upperPool, lowerPool]).poolOrder();
+    expect(order).toEqual([upperPool, lowerPool]);
   });
 });
 
 /** Just enough of a moddle element for the pure geometry functions (they only ask `$instanceOf`). */
 function fakeEl(type: string): El {
-  return { $instanceOf: (t: string) => t === type, get: () => undefined } as unknown as El;
+  return { $instanceOf: (candidateType: string) => candidateType === type, get: () => undefined } as unknown as El;
 }
 
 describe('notes on boundary events', () => {
   it('a note does not cover a sibling boundary event or its outgoing flow', async () => {
-    const d = await drawn(scenario('lanes__complaint-t2.bpmn'));
-    const note = d.shapes.get('TextAnnotation_Fristen')!.box;
-    expect(overlap(note, d.shapes.get('Event_Erinnerung3Tage')!.box)).toBe(false);
-    expect(cutShapes(d, 'Flow_33')).toEqual([]);
+    const drawing = await drawn(scenario('lanes__complaint-t2.bpmn'));
+    const note = drawing.shapes.get('TextAnnotation_Fristen')!.box;
+    expect(overlap(note, drawing.shapes.get('Event_Erinnerung3Tage')!.box)).toBe(false);
+    expect(cutShapes(drawing, 'Flow_33')).toEqual([]);
   });
 
   it('inline model: two boundary events with handlers, a note on the first', async () => {
@@ -270,31 +270,31 @@ describe('notes on boundary events', () => {
     <bpmn:association id="A" sourceRef="N" targetRef="B1" />
   </bpmn:process>
 </bpmn:definitions>`;
-    const d = await drawn(xml);
-    expect(leafOverlaps(d)).toEqual([]);
-    for (const id of ['F3', 'F4', 'F5', 'F6']) expect(cutShapes(d, id), id).toEqual([]);
+    const drawing = await drawn(xml);
+    expect(leafOverlaps(drawing)).toEqual([]);
+    for (const id of ['F3', 'F4', 'F5', 'F6']) expect(cutShapes(drawing, id), id).toEqual([]);
   });
 });
 
 describe('event sub-processes', () => {
   it('an event sub-process is drawn in its own lane, not in the last one', async () => {
-    const d = await drawn(scenario('lanes__eventsub-own-lane.bpmn'));
-    expect(inside(d.shapes.get('Activity_OnCancel')!.box, d.shapes.get('Lane_Sales')!.box)).toBe(true);
-    expect(outsideLane(d)).toEqual([]);
-    expect(leafOverlaps(d)).toEqual([]);
-    for (const id of ['Flow_4', 'Flow_5', 'Flow_6', 'Flow_7', 'Flow_8', 'Flow_9']) expect(cutShapes(d, id), id).toEqual([]);
+    const drawing = await drawn(scenario('lanes__eventsub-own-lane.bpmn'));
+    expect(inside(drawing.shapes.get('Activity_OnCancel')!.box, drawing.shapes.get('Lane_Sales')!.box)).toBe(true);
+    expect(outsideLane(drawing)).toEqual([]);
+    expect(leafOverlaps(drawing)).toEqual([]);
+    for (const id of ['Flow_4', 'Flow_5', 'Flow_6', 'Flow_7', 'Flow_8', 'Flow_9']) expect(cutShapes(drawing, id), id).toEqual([]);
     // no flow runs through the event sub-process frame either
-    const frame = d.shapes.get('Activity_OnCancel')!.box;
-    for (const id of ['Flow_4', 'Flow_5']) expect(segments(d.edges.get(id)!.points).some(([p, q]) => cuts(p, q, frame)), id).toBe(false);
+    const frame = drawing.shapes.get('Activity_OnCancel')!.box;
+    for (const id of ['Flow_4', 'Flow_5']) expect(segments(drawing.edges.get(id)!.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, frame)), id).toBe(false);
   });
 
   it('collapse is honoured for an event sub-process (option)', async () => {
-    const d = await drawn(scenario('lanes__eventsub-own-lane.bpmn'), { collapse: ['Activity_OnCancel'] });
-    const shape = d.shapes.get('Activity_OnCancel')!;
+    const drawing = await drawn(scenario('lanes__eventsub-own-lane.bpmn'), { collapse: ['Activity_OnCancel'] });
+    const shape = drawing.shapes.get('Activity_OnCancel')!;
     expect(shape.expanded).toBe(false);
     expect(shape.box.width).toBe(100);
-    expect(d.planes).toContain('Activity_OnCancel');
-    expect(d.shapes.has('Activity_Refund')).toBe(false); // on its own plane
+    expect(drawing.planes).toContain('Activity_OnCancel');
+    expect(drawing.shapes.has('Activity_Refund')).toBe(false); // on its own plane
   });
 
   it('collapse is honoured for an event sub-process (existing DI)', async () => {
@@ -309,31 +309,31 @@ describe('event sub-processes', () => {
 
 describe('text annotations owned by the collaboration', () => {
   it('every note and association gets DI, without warnings', async () => {
-    const d = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
-    for (const id of ['TextAnnotation_Sla', 'TextAnnotation_Portal', 'TextAnnotation_Pdf', 'TextAnnotation_Loose']) expect(d.shapes.has(id), id).toBe(true);
-    for (const id of ['Association_Sla', 'Association_Portal', 'Association_Pdf']) expect(d.edges.get(id)?.points.length, id).toBe(2);
-    expect(d.warnings.filter((w) => w.code === 'DI_NOT_CREATED')).toEqual([]);
+    const drawing = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
+    for (const id of ['TextAnnotation_Sla', 'TextAnnotation_Portal', 'TextAnnotation_Pdf', 'TextAnnotation_Loose']) expect(drawing.shapes.has(id), id).toBe(true);
+    for (const id of ['Association_Sla', 'Association_Portal', 'Association_Pdf']) expect(drawing.edges.get(id)?.points.length, id).toBe(2);
+    expect(drawing.warnings.filter((warning) => warning.code === 'DI_NOT_CREATED')).toEqual([]);
   });
 
   it('notes cover no shape, label or pool they do not belong to', async () => {
-    const d = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
-    expect(leafOverlaps(d)).toEqual([]);
-    const pools = [...d.shapes.values()].filter((s) => is(s.el, 'bpmn:Participant')).map((s) => s.box);
+    const drawing = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
+    expect(leafOverlaps(drawing)).toEqual([]);
+    const pools = [...drawing.shapes.values()].filter((shape) => is(shape.el, 'bpmn:Participant')).map((shape) => shape.box);
     for (const id of ['TextAnnotation_Portal', 'TextAnnotation_Pdf', 'TextAnnotation_Loose']) {
-      const note = d.shapes.get(id)!.box;
-      expect(pools.some((p) => overlap(p, note)), id).toBe(false);
+      const note = drawing.shapes.get(id)!.box;
+      expect(pools.some((pool) => overlap(pool, note)), id).toBe(false);
     }
-    const labels = [...d.shapes.values(), ...d.edges.values()].flatMap((s) => (s.label ? [s.label] : []));
+    const labels = [...drawing.shapes.values(), ...drawing.edges.values()].flatMap((drawnElement) => (drawnElement.label ? [drawnElement.label] : []));
     for (const id of ['TextAnnotation_Sla', 'TextAnnotation_Portal', 'TextAnnotation_Pdf']) {
-      const note = d.shapes.get(id)!.box;
-      expect(labels.some((l) => overlap(l, note)), id).toBe(false);
+      const note = drawing.shapes.get(id)!.box;
+      expect(labels.some((label) => overlap(label, note)), id).toBe(false);
     }
   });
 
   it('a note on a message flow sits next to the flow, between the pools', async () => {
-    const d = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
-    const note = d.shapes.get('TextAnnotation_Pdf')!.box;
-    const pools = [...d.shapes.values()].filter((s) => is(s.el, 'bpmn:Participant')).map((s) => s.box).sort((a, b) => a.y - b.y);
+    const drawing = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
+    const note = drawing.shapes.get('TextAnnotation_Pdf')!.box;
+    const pools = [...drawing.shapes.values()].filter((shape) => is(shape.el, 'bpmn:Participant')).map((shape) => shape.box).sort((first, second) => first.y - second.y);
     expect(note.y).toBeGreaterThanOrEqual(pools[0]!.y + pools[0]!.height);
     expect(note.y + note.height).toBeLessThanOrEqual(pools[1]!.y);
   });
@@ -366,16 +366,16 @@ describe('associations between scope levels', () => {
 </bpmn:definitions>`;
 
   it('a process-level note on a task inside an expanded sub-process gets an association edge', async () => {
-    const d = await drawn(xml);
-    expect(d.edges.get('Assoc')?.points.length).toBe(2);
-    expect(d.edges.get('AssocDeep')?.points.length).toBe(2);
-    expect(d.warnings).toEqual([]);
+    const drawing = await drawn(xml);
+    expect(drawing.edges.get('Assoc')?.points.length).toBe(2);
+    expect(drawing.edges.get('AssocDeep')?.points.length).toBe(2);
+    expect(drawing.warnings).toEqual([]);
   });
 
   it('collapsed: the association whose ends are on two planes is reported, the one inside the plane is drawn', async () => {
-    const d = await drawn(xml, { collapse: ['Sub'] });
-    expect(d.warnings.map((w) => `${w.code}:${w.elementId}`)).toEqual(['DI_NOT_CREATED:Assoc']);
-    const subPlane = many(d.model.definitions, 'diagrams').map((g) => g.get<El>('plane')).find((p) => p.get<El>('bpmnElement').get<string>('id') === 'Sub')!;
+    const drawing = await drawn(xml, { collapse: ['Sub'] });
+    expect(drawing.warnings.map((warning) => `${warning.code}:${warning.elementId}`)).toEqual(['DI_NOT_CREATED:Assoc']);
+    const subPlane = many(drawing.model.definitions, 'diagrams').map((diagram) => diagram.get<El>('plane')).find((plane) => plane.get<El>('bpmnElement').get<string>('id') === 'Sub')!;
     const drawnThere = many(subPlane, 'planeElement').map((pe) => pe.get<El>('bpmnElement').get<string>('id'));
     expect(drawnThere).toContain('AssocDeep');
   });

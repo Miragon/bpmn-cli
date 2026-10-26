@@ -72,14 +72,14 @@ export class SchemaText {
         // bpmn-moddle reads any other xsd:boolean value as false
         const type = schema.typeOf(el.local, el.uri, undefined);
         const booleans = type ? schema.booleanAttrs(type) : undefined;
-        for (const a of booleans?.size ? el.attrs : []) {
-          if (!booleans!.has(a.name)) continue;
-          const v = this.kit.decodeXml(a.raw);
+        for (const attribute of booleans?.size ? el.attrs : []) {
+          if (!booleans!.has(attribute.name)) continue;
+          const decoded = this.kit.decodeXml(attribute.raw);
           // a diagram element's issue is its BPMN element's
-          if (!XSD_BOOLEAN.test(v)) out.push({ kind: 'boolean', owner: el.uri === this.kit.BPMN_NS ? here : (this.attr(el, 'bpmnElement')?.trim() ?? owner), element: el.local, ref: a.name, value: v, attribute: true });
+          if (!XSD_BOOLEAN.test(decoded)) out.push({ kind: 'boolean', owner: el.uri === this.kit.BPMN_NS ? here : (this.attr(el, 'bpmnElement')?.trim() ?? owner), element: el.local, ref: attribute.name, value: decoded, attribute: true });
         }
       }
-      for (const c of this.kit.elementChildren(el)) collect(c, here);
+      for (const child of this.kit.elementChildren(el)) collect(child, here);
     };
     collect(root, undefined);
 
@@ -87,40 +87,40 @@ export class SchemaText {
       const here = this.attr(el, 'id') ?? owner;
       for (const [base, names] of IDREF_ATTRS) {
         if (!schema.isA(type, base)) continue;
-        for (const n of names) {
-          const v = this.attr(el, n)?.trim();
-          if (v && !ids.has(v)) out.push({ kind: 'idref', owner: here, element: el.local, ref: n, value: v, attribute: true });
+        for (const attrName of names) {
+          const idref = this.attr(el, attrName)?.trim();
+          if (idref && !ids.has(idref)) out.push({ kind: 'idref', owner: here, element: el.local, ref: attrName, value: idref, attribute: true });
         }
       }
       const kids = this.kit.elementChildren(el);
       for (const [base, names] of IDREF_CHILDREN) {
         if (!schema.isA(type, base)) continue;
-        for (const k of kids) {
-          if (k.uri !== this.kit.BPMN_NS || !names.includes(k.local)) continue;
-          const v = this.text(xml, k);
-          if (v && !ids.has(v)) out.push({ kind: 'idref', owner: here, element: el.local, ref: k.local, value: v });
+        for (const kid of kids) {
+          if (kid.uri !== this.kit.BPMN_NS || !names.includes(kid.local)) continue;
+          const idref = this.text(xml, kid);
+          if (idref && !ids.has(idref)) out.push({ kind: 'idref', owner: here, element: el.local, ref: kid.local, value: idref });
         }
       }
       const slots = schema.slotsOf(type);
       let last = -1;
       let lastName = '';
-      for (const k of kids) {
-        if (k.uri !== this.kit.BPMN_NS && k.uri !== BPMNDI_NS) continue;
-        const s = slots.get(k.local);
-        if (s === undefined || s < 0) continue;
-        if (s < last) {
-          out.push({ kind: 'order', owner: here, element: el.local, child: k.local, before: lastName });
+      for (const kid of kids) {
+        if (kid.uri !== this.kit.BPMN_NS && kid.uri !== BPMNDI_NS) continue;
+        const slot = slots.get(kid.local);
+        if (slot === undefined || slot < 0) continue;
+        if (slot < last) {
+          out.push({ kind: 'order', owner: here, element: el.local, child: kid.local, before: lastName });
           break;
         }
-        if (s > last) {
-          last = s;
-          lastName = k.local;
+        if (slot > last) {
+          last = slot;
+          lastName = kid.local;
         }
       }
-      for (const k of kids) {
-        if (k.uri !== this.kit.BPMN_NS || OPAQUE.has(k.local)) continue;
-        const t = schema.typeOf(k.local, k.uri, type);
-        if (t) visit(k, t, here);
+      for (const kid of kids) {
+        if (kid.uri !== this.kit.BPMN_NS || OPAQUE.has(kid.local)) continue;
+        const kidType = schema.typeOf(kid.local, kid.uri, type);
+        if (kidType) visit(kid, kidType, here);
       }
     };
     if (root.uri === this.kit.BPMN_NS && root.local === 'definitions') visit(root, 'bpmn:Definitions', undefined);
@@ -128,8 +128,8 @@ export class SchemaText {
   }
 
   private attr(el: XElement, name: string): string | undefined {
-    const a = el.attrs.find((x) => x.name === name);
-    return a ? this.kit.decodeXml(a.raw) : undefined;
+    const attribute = el.attrs.find((candidate) => candidate.name === name);
+    return attribute ? this.kit.decodeXml(attribute.raw) : undefined;
   }
 
   private text(doc: string, el: XElement): string {

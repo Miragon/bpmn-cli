@@ -1,68 +1,68 @@
 import type { ContextCatch, ContextLink, ContextMessage, ContextRef, ElementContext } from '../query/context.js';
 import { truncate } from '../query/utils/view.js';
-import { detailMessageFlowText, DOC_MAX, flagValue, implementationFlags, named, q, scalar } from './utils/view-lines.js';
+import { detailMessageFlowText, DOC_MAX, flagValue, implementationFlags, named, quote, scalar } from './utils/view-lines.js';
 
 /**
  * `bpmn show <file> <id> --context`: the element's line, then one line per context
  * (`in:`, `lane:`, `from:` / `to:`, `caught by:`, ...); lines without content are left out.
  */
 export class ContextText {
-  constructor(private readonly c: ElementContext) {}
+  constructor(private readonly context: ElementContext) {}
 
   text(): string {
-    const c = this.c;
+    const context = this.context;
     const out: string[] = [];
     const flags: string[] = [];
-    if (c.trigger) flags.push(c.trigger);
-    if (c.nonInterrupting) flags.push('non-interrupting');
-    for (const [k, v] of Object.entries(c.props ?? {})) flags.push(`${k}=${scalar(v)}`);
-    if (c.documentation) flags.push(`doc: ${q(truncate(c.documentation, DOC_MAX))}`);
-    out.push(`${c.kind} ${named(c.id, c.name)}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
-    const impl = implementationFlags(c.implementation);
+    if (context.trigger) flags.push(context.trigger);
+    if (context.nonInterrupting) flags.push('non-interrupting');
+    for (const [key, value] of Object.entries(context.props ?? {})) flags.push(`${key}=${scalar(value)}`);
+    if (context.documentation) flags.push(`doc: ${quote(truncate(context.documentation, DOC_MAX))}`);
+    out.push(`${context.kind} ${named(context.id, context.name)}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
+    const impl = implementationFlags(context.implementation);
     if (impl.length) out.push(`implementation: ${impl.join(', ')}`);
-    if (c.message) out.push(`message: ${ContextText.messageText(c.message)}`);
-    const where = [...(c.pool ? [`participant ${named(c.pool.id, c.pool.name)}`] : []), ...c.ancestors.map(ContextText.refText)];
+    if (context.message) out.push(`message: ${ContextText.messageText(context.message)}`);
+    const where = [...(context.pool ? [`participant ${named(context.pool.id, context.pool.name)}`] : []), ...context.ancestors.map(ContextText.refText)];
     if (where.length) out.push(`in: ${where.join(' > ')}`);
-    if (c.lane) {
-      const extra = [c.lane.via ? `via ${c.lane.via}` : '', c.lane.parents?.length ? `within ${c.lane.parents.map((l) => named(l.id, l.name)).join(' > ')}` : ''].filter(Boolean);
-      out.push(`lane: ${named(c.lane.id, c.lane.name)}${extra.length ? ` (${extra.join('; ')})` : ''}`);
+    if (context.lane) {
+      const extra = [context.lane.via ? `via ${context.lane.via}` : '', context.lane.parents?.length ? `within ${context.lane.parents.map((lane) => named(lane.id, lane.name)).join(' > ')}` : ''].filter(Boolean);
+      out.push(`lane: ${named(context.lane.id, context.lane.name)}${extra.length ? ` (${extra.join('; ')})` : ''}`);
     }
-    if (c.host) out.push(`host: ${ContextText.refText(c.host)}`);
-    if (c.from.length) out.push(`from: ${c.from.map(ContextText.linkText).join('; ')}`);
-    if (c.to.length) out.push(`to: ${c.to.map(ContextText.linkText).join('; ')}`);
-    if (c.boundary.length) out.push(`boundary: ${c.boundary.map(ContextText.catchText).join('; ')}`);
-    if (c.caughtBy.length) out.push(`caught by: ${c.caughtBy.map(ContextText.catchText).join('; ')}`);
-    if (c.eventSubProcesses.length) {
-      out.push(`event sub-processes: ${c.eventSubProcesses.map((e) => `${ContextText.refText(e)} in ${e.in}${e.start ? ` [${ContextText.catchText(e.start)}]` : ''}`).join('; ')}`);
+    if (context.host) out.push(`host: ${ContextText.refText(context.host)}`);
+    if (context.from.length) out.push(`from: ${context.from.map(ContextText.linkText).join('; ')}`);
+    if (context.to.length) out.push(`to: ${context.to.map(ContextText.linkText).join('; ')}`);
+    if (context.boundary.length) out.push(`boundary: ${context.boundary.map(ContextText.catchText).join('; ')}`);
+    if (context.caughtBy.length) out.push(`caught by: ${context.caughtBy.map(ContextText.catchText).join('; ')}`);
+    if (context.eventSubProcesses.length) {
+      out.push(`event sub-processes: ${context.eventSubProcesses.map((eventSubProcess) => `${ContextText.refText(eventSubProcess)} in ${eventSubProcess.in}${eventSubProcess.start ? ` [${ContextText.catchText(eventSubProcess.start)}]` : ''}`).join('; ')}`);
     }
-    if (c.annotations.length) out.push(`annotations: ${c.annotations.map((a) => `${a.id}${a.text ? ` ${q(truncate(a.text, 120))}` : ''}`).join('; ')}`);
-    if (c.messageFlows.length) out.push(`message flows: ${c.messageFlows.map(detailMessageFlowText).join('; ')}`);
-    if (c.usedBy?.length) out.push(`used by: ${c.usedBy.map(ContextText.refText).join('; ')}`);
-    if (c.data?.reads?.length) out.push(`reads: ${c.data.reads.map((d) => named(d.id, d.name)).join(', ')}`);
-    if (c.data?.writes?.length) out.push(`writes: ${c.data.writes.map((d) => named(d.id, d.name)).join(', ')}`);
-    if (c.data?.readBy?.length) out.push(`read by: ${c.data.readBy.join(', ')}`);
-    if (c.data?.writtenBy?.length) out.push(`written by: ${c.data.writtenBy.join(', ')}`);
+    if (context.annotations.length) out.push(`annotations: ${context.annotations.map((annotation) => `${annotation.id}${annotation.text ? ` ${quote(truncate(annotation.text, 120))}` : ''}`).join('; ')}`);
+    if (context.messageFlows.length) out.push(`message flows: ${context.messageFlows.map(detailMessageFlowText).join('; ')}`);
+    if (context.usedBy?.length) out.push(`used by: ${context.usedBy.map(ContextText.refText).join('; ')}`);
+    if (context.data?.reads?.length) out.push(`reads: ${context.data.reads.map((data) => named(data.id, data.name)).join(', ')}`);
+    if (context.data?.writes?.length) out.push(`writes: ${context.data.writes.map((data) => named(data.id, data.name)).join(', ')}`);
+    if (context.data?.readBy?.length) out.push(`read by: ${context.data.readBy.join(', ')}`);
+    if (context.data?.writtenBy?.length) out.push(`written by: ${context.data.writtenBy.join(', ')}`);
     return out.join('\n');
   }
 
-  private static refText(r: ContextRef): string {
-    return `${r.kind} ${named(r.id, r.name)}`;
+  private static refText(ref: ContextRef): string {
+    return `${ref.kind} ${named(ref.id, ref.name)}`;
   }
 
-  private static linkText(l: ContextLink): string {
-    const flow = [l.flow];
-    if (l.flowName) flow.push(q(l.flowName));
-    if (l.condition) flow.push(`if ${truncate(l.condition, 120)}`);
-    if (l.default) flow.push('default');
-    return `${ContextText.refText(l)} (${flow.join(' ')})${l.pool ? ` in ${named(l.pool, l.poolName)}` : ''}`;
+  private static linkText(link: ContextLink): string {
+    const flow = [link.flow];
+    if (link.flowName) flow.push(quote(link.flowName));
+    if (link.condition) flow.push(`if ${truncate(link.condition, 120)}`);
+    if (link.default) flow.push('default');
+    return `${ContextText.refText(link)} (${flow.join(' ')})${link.pool ? ` in ${named(link.pool, link.poolName)}` : ''}`;
   }
 
-  private static messageText(m: ContextMessage): string {
-    return `${named(m.id, m.name)}${m.correlationKey !== undefined ? ` [correlationKey=${flagValue(m.correlationKey)}]` : ''}`;
+  private static messageText(message: ContextMessage): string {
+    return `${named(message.id, message.name)}${message.correlationKey !== undefined ? ` [correlationKey=${flagValue(message.correlationKey)}]` : ''}`;
   }
 
-  private static catchText(c: ContextCatch): string {
-    const flags = [c.trigger, c.nonInterrupting ? 'non-interrupting' : undefined].filter(Boolean);
-    return `${ContextText.refText(c)}${c.on ? ` on ${c.on}` : ''}${flags.length ? ` [${flags.join(', ')}]` : ''}${c.to?.length ? ` -> ${c.to.join(', ')}` : ''}`;
+  private static catchText(caught: ContextCatch): string {
+    const flags = [caught.trigger, caught.nonInterrupting ? 'non-interrupting' : undefined].filter(Boolean);
+    return `${ContextText.refText(caught)}${caught.on ? ` on ${caught.on}` : ''}${flags.length ? ` [${flags.join(', ')}]` : ''}${caught.to?.length ? ` -> ${caught.to.join(', ')}` : ''}`;
   }
 }

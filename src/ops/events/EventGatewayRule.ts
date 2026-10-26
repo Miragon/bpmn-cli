@@ -42,7 +42,7 @@ export class EventGatewayRule {
   }
 
   private otherIncoming(target: El, leaving: El[], what: string): string | undefined {
-    const others = this.doc.incoming(target).filter((f) => !leaving.includes(f));
+    const others = this.doc.incoming(target).filter((flow) => !leaving.includes(flow));
     if (!others.length) return undefined;
     return `${labelOf(target)} already has the incoming flow ${others.map(idOf).join(', ')}; ${what} after an event-based gateway can have no other incoming flow`;
   }
@@ -59,13 +59,13 @@ export class EventGatewayRule {
     if (incoming) return incoming;
     const mine = EventGatewayRule.subscriptionOf(target);
     if (mine) {
-      for (const f of this.doc.outgoing(gateway)) {
-        if (leaving.includes(f)) continue;
-        const t = f.get<El | undefined>('targetRef');
-        if (!t || t === target) continue;
-        const theirs = EventGatewayRule.subscriptionOf(t);
+      for (const flow of this.doc.outgoing(gateway)) {
+        if (leaving.includes(flow)) continue;
+        const flowTarget = flow.get<El | undefined>('targetRef');
+        if (!flowTarget || flowTarget === target) continue;
+        const theirs = EventGatewayRule.subscriptionOf(flowTarget);
         if (theirs && theirs.kind === mine.kind && theirs.name === mine.name) {
-          return `${idOf(t)} on another branch of ${idOf(gateway)} already waits for the ${mine.kind} "${mine.name}"; the engines allow one subscription per ${mine.kind} name and gateway`;
+          return `${idOf(flowTarget)} on another branch of ${idOf(gateway)} already waits for the ${mine.kind} "${mine.name}"; the engines allow one subscription per ${mine.kind} name and gateway`;
         }
       }
     }
@@ -80,7 +80,7 @@ export class EventGatewayRule {
     if (!receive) {
       const defs = target.get<El[] | undefined>('eventDefinitions') ?? [];
       const allowed = ['bpmn:MessageEventDefinition', 'bpmn:TimerEventDefinition', 'bpmn:SignalEventDefinition', 'bpmn:ConditionalEventDefinition'];
-      if (!defs.length || defs.some((d) => !allowed.some((t) => is(d, t)))) {
+      if (!defs.length || defs.some((definition) => !allowed.some((allowedType) => is(definition, allowedType)))) {
         const trigger = triggerOf(target) ?? 'none';
         return `${labelOf(target)} is a ${trigger === 'none' ? 'plain' : trigger} catch event; after an event-based gateway BPMN 2.0 allows message, timer, signal and conditional catch events only`;
       }
@@ -91,12 +91,12 @@ export class EventGatewayRule {
       return `${labelOf(target)} has boundary events (${this.doc.boundaryEventsOf(target).map(idOf).join(', ')}); BPMN 2.0 does not allow them on a receive task after an event-based gateway`;
     }
     if (receive || EventGatewayRule.waitsForMessage(target)) {
-      for (const f of this.doc.outgoing(gateway)) {
-        if (leaving.includes(f)) continue;
-        const t = f.get<El | undefined>('targetRef');
-        if (!t || t === target) continue;
-        if (receive ? EventGatewayRule.waitsForMessage(t) : is(t, 'bpmn:ReceiveTask')) {
-          return `${idOf(t)} on another branch of ${idOf(gateway)} is a ${receive ? 'message catch event' : 'receive task'}; BPMN 2.0 does not mix receive tasks and message catch events behind one event-based gateway`;
+      for (const flow of this.doc.outgoing(gateway)) {
+        if (leaving.includes(flow)) continue;
+        const flowTarget = flow.get<El | undefined>('targetRef');
+        if (!flowTarget || flowTarget === target) continue;
+        if (receive ? EventGatewayRule.waitsForMessage(flowTarget) : is(flowTarget, 'bpmn:ReceiveTask')) {
+          return `${idOf(flowTarget)} on another branch of ${idOf(gateway)} is a ${receive ? 'message catch event' : 'receive task'}; BPMN 2.0 does not mix receive tasks and message catch events behind one event-based gateway`;
         }
       }
     }
@@ -114,6 +114,6 @@ export class EventGatewayRule {
   }
 
   private static waitsForMessage(el: El): boolean {
-    return is(el, 'bpmn:IntermediateCatchEvent') && (el.get<El[] | undefined>('eventDefinitions') ?? []).some((d) => is(d, 'bpmn:MessageEventDefinition'));
+    return is(el, 'bpmn:IntermediateCatchEvent') && (el.get<El[] | undefined>('eventDefinitions') ?? []).some((definition) => is(definition, 'bpmn:MessageEventDefinition'));
   }
 }

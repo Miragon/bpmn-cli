@@ -1,33 +1,33 @@
 import { elementChildren, idOf, rawOf, type XDocument, type XElement } from './utils/text-reader.js';
 
 /**
- * Pairs the elements of document `a` with their counterparts in `b`, from the roots down:
+ * Pairs the elements of document `left` with their counterparts in `right`, from the roots down:
  * among siblings by unique id (also across a retype), the others by name and order.
  */
 export class ElementAligner {
   constructor(
-    private readonly a: XDocument,
-    private readonly b: XDocument,
+    private readonly left: XDocument,
+    private readonly right: XDocument,
     private readonly byText: boolean,
   ) {}
 
   /** Empty when the roots differ. */
   counterparts(): Map<XElement, XElement> {
-    const { a, b } = this;
+    const { left, right } = this;
     const map = new Map<XElement, XElement>();
-    if (a.root.uri !== b.root.uri || a.root.local !== b.root.local) return map;
-    const stack: Array<[XElement, XElement]> = [[a.root, b.root]];
+    if (left.root.uri !== right.root.uri || left.root.local !== right.root.local) return map;
+    const stack: Array<[XElement, XElement]> = [[left.root, right.root]];
     while (stack.length) {
-      const [x, y] = stack.pop()!;
-      map.set(x, y);
-      stack.push(...this.pairChildren(x, y));
+      const [leftEl, rightEl] = stack.pop()!;
+      map.set(leftEl, rightEl);
+      stack.push(...this.pairChildren(leftEl, rightEl));
     }
     return map;
   }
 
-  private pairChildren(x: XElement, y: XElement): Array<[XElement, XElement]> {
-    const xs = elementChildren(x);
-    const ys = elementChildren(y);
+  private pairChildren(leftEl: XElement, rightEl: XElement): Array<[XElement, XElement]> {
+    const xs = elementChildren(leftEl);
+    const ys = elementChildren(rightEl);
     if (!xs.length || !ys.length) return [];
     const xIds = this.uniqueIds(xs);
     const yIds = this.uniqueIds(ys);
@@ -36,24 +36,24 @@ export class ElementAligner {
       const id = idOf(el);
       return id !== undefined && ids.get(id) === el;
     };
-    for (const c of xs) {
-      if (!keyed(c, xIds)) continue;
-      const d = yIds.get(idOf(c)!);
-      if (d) pairs.push([c, d]);
+    for (const child of xs) {
+      if (!keyed(child, xIds)) continue;
+      const counterpart = yIds.get(idOf(child)!);
+      if (counterpart) pairs.push([child, counterpart]);
     }
     const groups = new Map<string, { xs: XElement[]; ys: XElement[] }>();
     const group = (el: XElement): { xs: XElement[]; ys: XElement[] } => {
       const key = `${el.uri} ${el.local}`;
-      let g = groups.get(key);
-      if (!g) groups.set(key, (g = { xs: [], ys: [] }));
-      return g;
+      let entry = groups.get(key);
+      if (!entry) groups.set(key, (entry = { xs: [], ys: [] }));
+      return entry;
     };
-    for (const c of xs) if (!keyed(c, xIds) && idOf(c) === undefined) group(c).xs.push(c);
-    for (const d of ys) if (!keyed(d, yIds) && idOf(d) === undefined) group(d).ys.push(d);
-    for (const g of groups.values()) {
-      if (!g.xs.length || !g.ys.length) continue;
-      if (this.byText) pairs.push(...this.sequencePairs(g.xs, g.ys));
-      else for (let i = 0; i < Math.min(g.xs.length, g.ys.length); i++) pairs.push([g.xs[i]!, g.ys[i]!]);
+    for (const child of xs) if (!keyed(child, xIds) && idOf(child) === undefined) group(child).xs.push(child);
+    for (const child of ys) if (!keyed(child, yIds) && idOf(child) === undefined) group(child).ys.push(child);
+    for (const entry of groups.values()) {
+      if (!entry.xs.length || !entry.ys.length) continue;
+      if (this.byText) pairs.push(...this.sequencePairs(entry.xs, entry.ys));
+      else for (let index = 0; index < Math.min(entry.xs.length, entry.ys.length); index++) pairs.push([entry.xs[index]!, entry.ys[index]!]);
     }
     return pairs;
   }
@@ -72,35 +72,35 @@ export class ElementAligner {
 
   /** Equal texts first (longest common subsequence), then the rest in order. */
   private sequencePairs(xs: XElement[], ys: XElement[]): Array<[XElement, XElement]> {
-    const { a, b } = this;
-    const m = xs.length;
-    const k = ys.length;
+    const { left, right } = this;
+    const xCount = xs.length;
+    const yCount = ys.length;
     const used = { x: new Set<number>(), y: new Set<number>() };
     const pairs: Array<[XElement, XElement]> = [];
-    if (m * k <= 250_000) {
-      const tx = xs.map((x) => rawOf(a, x));
-      const ty = ys.map((y) => rawOf(b, y));
-      const w = k + 1;
-      const dp = new Uint32Array((m + 1) * w);
-      for (let i = m - 1; i >= 0; i--) {
-        for (let j = k - 1; j >= 0; j--) {
-          dp[i * w + j] = tx[i] === ty[j] ? dp[(i + 1) * w + j + 1]! + 1 : Math.max(dp[(i + 1) * w + j]!, dp[i * w + j + 1]!);
+    if (xCount * yCount <= 250_000) {
+      const tx = xs.map((el) => rawOf(left, el));
+      const ty = ys.map((el) => rawOf(right, el));
+      const rowWidth = yCount + 1;
+      const dp = new Uint32Array((xCount + 1) * rowWidth);
+      for (let xIndex = xCount - 1; xIndex >= 0; xIndex--) {
+        for (let yIndex = yCount - 1; yIndex >= 0; yIndex--) {
+          dp[xIndex * rowWidth + yIndex] = tx[xIndex] === ty[yIndex] ? dp[(xIndex + 1) * rowWidth + yIndex + 1]! + 1 : Math.max(dp[(xIndex + 1) * rowWidth + yIndex]!, dp[xIndex * rowWidth + yIndex + 1]!);
         }
       }
-      for (let i = 0, j = 0; i < m && j < k; ) {
-        if (tx[i] === ty[j]) {
-          pairs.push([xs[i]!, ys[j]!]);
-          used.x.add(i);
-          used.y.add(j);
-          i++;
-          j++;
-        } else if (dp[(i + 1) * w + j]! >= dp[i * w + j + 1]!) i++;
-        else j++;
+      for (let xIndex = 0, yIndex = 0; xIndex < xCount && yIndex < yCount; ) {
+        if (tx[xIndex] === ty[yIndex]) {
+          pairs.push([xs[xIndex]!, ys[yIndex]!]);
+          used.x.add(xIndex);
+          used.y.add(yIndex);
+          xIndex++;
+          yIndex++;
+        } else if (dp[(xIndex + 1) * rowWidth + yIndex]! >= dp[xIndex * rowWidth + yIndex + 1]!) xIndex++;
+        else yIndex++;
       }
     }
-    const restX = xs.filter((_, i) => !used.x.has(i));
-    const restY = ys.filter((_, j) => !used.y.has(j));
-    for (let i = 0; i < Math.min(restX.length, restY.length); i++) pairs.push([restX[i]!, restY[i]!]);
+    const restX = xs.filter((_xElement, xIndex) => !used.x.has(xIndex));
+    const restY = ys.filter((_yElement, yIndex) => !used.y.has(yIndex));
+    for (let index = 0; index < Math.min(restX.length, restY.length); index++) pairs.push([restX[index]!, restY[index]!]);
     return pairs;
   }
 }

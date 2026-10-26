@@ -16,13 +16,13 @@ export class AlignCommand extends FormatCommand {
           .option('--to <id>', 'reference element that stays (default: the first id; with only --kind and --axis column: the rightmost one)'),
         'align',
       ),
-    ).action((file: string, ids: string[], o: RawOpts) =>
+    ).action((file: string, ids: string[], options: RawOpts) =>
       this.cli.guarded(async () => {
-        const sel = this.selectorsOf(ids, o, true);
-        if (!sel.path && !sel.kind && !sel.branch && ids.length < 2 && !o['to']) throw usageError('align needs two ids, or one id and --to <id>');
-        const op: AlignOp = { op: 'align', ...sel, axis: o['axis'] as AlignOp['axis'], ...this.pick(o, ['to'] as const) };
-        await this.runFormat(file, op, o);
-      }, !!o['json']),
+        const sel = this.selectorsOf(ids, options, true);
+        if (!sel.path && !sel.kind && !sel.branch && ids.length < 2 && !options['to']) throw usageError('align needs two ids, or one id and --to <id>');
+        const op: AlignOp = { op: 'align', ...sel, axis: options['axis'] as AlignOp['axis'], ...this.pick(options, ['to'] as const) };
+        await this.runFormat(file, op, options);
+      }, !!options['json']),
     );
   }
 }

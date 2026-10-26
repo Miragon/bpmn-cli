@@ -33,7 +33,7 @@ export class ExtensionEditor {
     }
     const { host, op: inner } = NESTED_HOSTS.resolve(doc, owner, NESTED_HOSTS.normalizeIndex(op), notes);
     const cs = inner.action === 'add' ? new ExtensionInserter(doc).add(host, inner) : new ExtensionRemover(doc).remove(host, inner);
-    for (const n of notes) cs.note(n);
+    for (const note of notes) cs.note(note);
     return cs;
   }
 }

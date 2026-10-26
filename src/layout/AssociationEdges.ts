@@ -32,56 +32,56 @@ export class AssociationEdges {
   constructor(private readonly model: Model) {}
 
   private boundsOf(shape: El): Rect | undefined {
-    const b = shape.get<El | undefined>('bounds');
-    if (!b) return undefined;
-    const x = b.get<number>('x');
-    const y = b.get<number>('y');
-    const width = b.get<number>('width');
-    const height = b.get<number>('height');
-    if ([x, y, width, height].some((v) => typeof v !== 'number')) return undefined;
-    return { x, y, width, height };
+    const bounds = shape.get<El | undefined>('bounds');
+    if (!bounds) return undefined;
+    const left = bounds.get<number>('x');
+    const top = bounds.get<number>('y');
+    const width = bounds.get<number>('width');
+    const height = bounds.get<number>('height');
+    if ([left, top, width, height].some((coordinate) => typeof coordinate !== 'number')) return undefined;
+    return { x: left, y: top, width, height };
   }
 
   private setBounds(shape: El, rect: Rect): void {
-    const b = shape.get<El>('bounds');
-    b.set('x', rect.x);
-    b.set('y', rect.y);
+    const bounds = shape.get<El>('bounds');
+    bounds.set('x', rect.x);
+    bounds.set('y', rect.y);
   }
 
-  private overlaps(a: Rect, b: Rect, margin = 0): boolean {
-    return a.x - margin < b.x + b.width && a.x + a.width + margin > b.x && a.y - margin < b.y + b.height && a.y + a.height + margin > b.y;
+  private overlaps(first: Rect, second: Rect, margin = 0): boolean {
+    return first.x - margin < second.x + second.width && first.x + first.width + margin > second.x && first.y - margin < second.y + second.height && first.y + first.height + margin > second.y;
   }
 
   private contains(outer: Rect, inner: Rect): boolean {
     return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
   }
 
-  private borderPoint(r: Rect, to: Point): Point {
-    const c = center(r);
-    const dx = to.x - c.x;
-    const dy = to.y - c.y;
-    if (!dx && !dy) return c;
-    const hw = r.width / 2;
-    const hh = r.height / 2;
+  private borderPoint(rect: Rect, to: Point): Point {
+    const middle = center(rect);
+    const dx = to.x - middle.x;
+    const dy = to.y - middle.y;
+    if (!dx && !dy) return middle;
+    const hw = rect.width / 2;
+    const hh = rect.height / 2;
     if (Math.abs(dx) * hh >= Math.abs(dy) * hw) {
       const sx = Math.sign(dx) * hw;
-      return { x: Math.round(c.x + sx), y: Math.round(c.y + (dy * sx) / dx) };
+      return { x: Math.round(middle.x + sx), y: Math.round(middle.y + (dy * sx) / dx) };
     }
     const sy = Math.sign(dy) * hh;
-    return { x: Math.round(c.x + (dx * sy) / dy), y: Math.round(c.y + sy) };
+    return { x: Math.round(middle.x + (dx * sy) / dy), y: Math.round(middle.y + sy) };
   }
 
   private waypoints(edge: El): Point[] {
-    return many(edge, 'waypoint').map((p) => ({ x: p.get<number>('x'), y: p.get<number>('y') }));
+    return many(edge, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
   }
 
   private midpoint(points: Point[]): Point | undefined {
     if (!points.length) return undefined;
     if (points.length === 1) return points[0];
-    const i = Math.floor((points.length - 1) / 2);
-    const a = points[i]!;
-    const b = points[i + 1]!;
-    return { x: Math.round((a.x + b.x) / 2), y: Math.round((a.y + b.y) / 2) };
+    const middleIndex = Math.floor((points.length - 1) / 2);
+    const segmentStart = points[middleIndex]!;
+    const segmentEnd = points[middleIndex + 1]!;
+    return { x: Math.round((segmentStart.x + segmentEnd.x) / 2), y: Math.round((segmentStart.y + segmentEnd.y) / 2) };
   }
 
   private indexPlanes(defs: El): PlaneIndex[] {
@@ -127,16 +127,16 @@ export class AssociationEdges {
 
   private isCompensationHandlerPair(source: El, target: El): boolean {
     if (!is(source, 'bpmn:BoundaryEvent') || !is(target, 'bpmn:Activity')) return false;
-    return many(source, 'eventDefinitions').some((d) => is(d, 'bpmn:CompensateEventDefinition'));
+    return many(source, 'eventDefinitions').some((definition) => is(definition, 'bpmn:CompensateEventDefinition'));
   }
 
-  private containersAround(index: PlaneIndex, p: Point): Rect[] {
+  private containersAround(index: PlaneIndex, point: Point): Rect[] {
     const out: Rect[] = [];
     for (const [el, shape] of index.shapes) {
-      const isContainer = is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane') || (SUB_PROCESS_TYPES.some((t) => is(el, t)) && shape.get<boolean | undefined>('isExpanded') === true);
+      const isContainer = is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane') || (SUB_PROCESS_TYPES.some((type) => is(el, type)) && shape.get<boolean | undefined>('isExpanded') === true);
       if (!isContainer) continue;
-      const r = this.boundsOf(shape);
-      if (r && containsPoint(r, p)) out.push(r);
+      const rect = this.boundsOf(shape);
+      if (rect && containsPoint(rect, point)) out.push(rect);
     }
     return out;
   }
@@ -147,15 +147,15 @@ export class AssociationEdges {
     for (const [el, shape] of index.shapes) {
       if (el === handler) continue;
       if (is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane')) continue;
-      if (SUB_PROCESS_TYPES.some((t) => is(el, t)) && shape.get<boolean | undefined>('isExpanded') === true) continue;
-      const r = this.boundsOf(shape);
-      if (r) others.push(r);
+      if (SUB_PROCESS_TYPES.some((type) => is(el, type)) && shape.get<boolean | undefined>('isExpanded') === true) continue;
+      const rect = this.boundsOf(shape);
+      if (rect) others.push(rect);
     }
-    const x = Math.round(cx(eventRect) - handlerRect.width / 2);
+    const left = Math.round(cx(eventRect) - handlerRect.width / 2);
     for (let gap = HANDLER_GAP; gap <= HANDLER_GAP * 4; gap += 20) {
-      const candidate: Rect = { x, y: eventRect.y + eventRect.height + gap, width: handlerRect.width, height: handlerRect.height };
-      if (others.some((o) => this.overlaps(candidate, o, OVERLAP_MARGIN))) continue;
-      if (!containers.every((c) => this.contains(c, candidate))) return undefined;
+      const candidate: Rect = { x: left, y: eventRect.y + eventRect.height + gap, width: handlerRect.width, height: handlerRect.height };
+      if (others.some((other) => this.overlaps(candidate, other, OVERLAP_MARGIN))) continue;
+      if (!containers.every((container) => this.contains(container, candidate))) return undefined;
       return candidate;
     }
     return undefined;
@@ -166,13 +166,13 @@ export class AssociationEdges {
     const planes = this.indexPlanes(definitions);
     if (!planes.length) return [];
     const fixed: string[] = [];
-    for (const assoc of [...walk(definitions)].filter((e) => is(e, 'bpmn:Association'))) {
+    for (const assoc of [...walk(definitions)].filter((element) => is(element, 'bpmn:Association'))) {
       const source = assoc.get<El | undefined>('sourceRef');
       const target = assoc.get<El | undefined>('targetRef');
       const id = assoc.get<string | undefined>('id');
       if (!source || !target || !id) continue;
-      if (planes.some((p) => p.edges.has(assoc))) continue;
-      const index = planes.find((p) => (p.shapes.has(source) || p.edges.has(source)) && (p.shapes.has(target) || p.edges.has(target)));
+      if (planes.some((plane) => plane.edges.has(assoc))) continue;
+      const index = planes.find((plane) => (plane.shapes.has(source) || plane.edges.has(source)) && (plane.shapes.has(target) || plane.edges.has(target)));
       if (!index) continue;
       let from = this.anchorOf(index, source);
       let to = this.anchorOf(index, target);
@@ -184,12 +184,12 @@ export class AssociationEdges {
           to = { rect: moved };
         }
       }
-      const a = this.dock(from, this.referenceOf(to));
-      const b = this.dock(to, a);
+      const sourceDock = this.dock(from, this.referenceOf(to));
+      const targetDock = this.dock(to, sourceDock);
       const edge = moddle.create('bpmndi:BPMNEdge', {
         id: `BPMNEdge_${id}`,
         bpmnElement: assoc,
-        waypoint: [moddle.create('dc:Point', a), moddle.create('dc:Point', b)],
+        waypoint: [moddle.create('dc:Point', sourceDock), moddle.create('dc:Point', targetDock)],
       });
       addTo(index.plane, 'planeElement', edge);
       index.edges.set(assoc, edge);

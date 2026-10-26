@@ -12,7 +12,7 @@ import { BpmnModdle } from 'bpmn-moddle';
 
 const LOSSY = [/unparsable content/i, /unrecognized element/i, /unresolved reference/i, /duplicate ID/i];
 
-export const is = (el, t) => !!el && typeof el.$instanceOf === 'function' && el.$instanceOf(t);
+export const is = (el, type) => !!el && typeof el.$instanceOf === 'function' && el.$instanceOf(type);
 const short = (el) => (el.$type || '').replace(/^bpmn:/, '');
 
 export async function readModel(xml) {
@@ -27,8 +27,8 @@ export async function readModel(xml) {
 
   const walkLanes = (ls, processId) => {
     for (const lane of ls?.lanes || []) {
-      lanes.set(lane.id, { id: lane.id, name: lane.name, processId, members: (lane.flowNodeRef || []).map((n) => n.id), leaf: !lane.childLaneSet?.lanes?.length });
-      for (const n of lane.flowNodeRef || []) laneOf.set(n.id, lane.id); // nested lanes overwrite: innermost wins
+      lanes.set(lane.id, { id: lane.id, name: lane.name, processId, members: (lane.flowNodeRef || []).map((node) => node.id), leaf: !lane.childLaneSet?.lanes?.length });
+      for (const node of lane.flowNodeRef || []) laneOf.set(node.id, lane.id); // nested lanes overwrite: innermost wins
       if (lane.childLaneSet) walkLanes(lane.childLaneSet, processId);
     }
   };
@@ -46,34 +46,34 @@ export async function readModel(xml) {
   for (const root of defs.rootElements || []) {
     if (is(root, 'bpmn:Process')) { processes.push(root); walk(root, root.id); }
     if (is(root, 'bpmn:Collaboration')) {
-      for (const p of root.participants || []) pools.push({ id: p.id, processId: p.processRef?.id });
+      for (const participant of root.participants || []) pools.push({ id: participant.id, processId: participant.processRef?.id });
     }
   }
-  for (const f of flows.values()) {
-    nodes.get(f.sourceId)?.outgoing.push(f.id);
-    nodes.get(f.targetId)?.incoming.push(f.id);
+  for (const flow of flows.values()) {
+    nodes.get(flow.sourceId)?.outgoing.push(flow.id);
+    nodes.get(flow.targetId)?.incoming.push(flow.id);
   }
-  for (const n of nodes.values()) n.laneId = laneOf.get(n.id);
+  for (const node of nodes.values()) node.laneId = laneOf.get(node.id);
 
   const shapes = new Map();
   const edges = new Map();
-  for (const d of defs.diagrams || []) {
-    for (const pe of d.plane?.planeElement || []) {
+  for (const diagram of defs.diagrams || []) {
+    for (const pe of diagram.plane?.planeElement || []) {
       const id = pe.bpmnElement?.id;
       if (!id) continue;
       if (is(pe, 'bpmndi:BPMNShape') && pe.bounds && !shapes.has(id)) shapes.set(id, { x: pe.bounds.x, y: pe.bounds.y, width: pe.bounds.width, height: pe.bounds.height, expanded: pe.isExpanded });
-      if (is(pe, 'bpmndi:BPMNEdge') && !edges.has(id)) edges.set(id, (pe.waypoint || []).map((w) => ({ x: w.x, y: w.y })));
+      if (is(pe, 'bpmndi:BPMNEdge') && !edges.has(id)) edges.set(id, (pe.waypoint || []).map((waypoint) => ({ x: waypoint.x, y: waypoint.y })));
     }
   }
-  const lossy = warnings.filter((w) => LOSSY.some((p) => p.test(w.message))).length;
+  const lossy = warnings.filter((warning) => LOSSY.some((pattern) => pattern.test(warning.message))).length;
   return { defs, warnings, lossy, nodes, flows, lanes, shapes, edges, processes, pools };
 }
 
-export const centre = (b) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+export const centre = (bounds) => ({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 });
 
 /** Flow nodes that need a shape: every flow node (boundary events included). */
-export function diCoverage(m) {
+export function diCoverage(model) {
   let withDi = 0;
-  for (const id of m.nodes.keys()) if (m.shapes.has(id)) withDi++;
-  return { flowNodes: m.nodes.size, withDi, missing: m.nodes.size - withDi, ratio: m.nodes.size ? withDi / m.nodes.size : 0 };
+  for (const id of model.nodes.keys()) if (model.shapes.has(id)) withDi++;
+  return { flowNodes: model.nodes.size, withDi, missing: model.nodes.size - withDi, ratio: model.nodes.size ? withDi / model.nodes.size : 0 };
 }

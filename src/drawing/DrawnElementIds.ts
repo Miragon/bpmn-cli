@@ -42,8 +42,8 @@ export class DrawnElementIds {
     return typeof id === 'string' && id ? id : undefined;
   }
 
-  private lcfirst(s: string): string {
-    return s.charAt(0).toLowerCase() + s.slice(1);
+  private lcfirst(text: string): string {
+    return text.charAt(0).toLowerCase() + text.slice(1);
   }
 
   private endsOf(el: El): [El | undefined, El | undefined] {
@@ -55,7 +55,7 @@ export class DrawnElementIds {
   private requestFor(el: El, context: string): IdRequest {
     const name = el.get<string | undefined>('name');
     const named = typeof name === 'string' && name.trim() ? { name } : {};
-    if (CONNECTIONS.some((t) => is(el, t))) {
+    if (CONNECTIONS.some((type) => is(el, type))) {
       const [source, target] = this.endsOf(el);
       if (source && target && this.idOf(source) && this.idOf(target) && (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow'))) {
         return ElementLabels.flowRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, named.name);
@@ -75,11 +75,11 @@ export class DrawnElementIds {
   private contextOf(el: El): string {
     if (is(el, 'bpmn:Collaboration')) {
       const participants = el.get<El[] | undefined>('participants') ?? [];
-      const process = participants.map((p) => p.get<El | undefined>('processRef')).find(Boolean) ?? (this.defs.get<El[] | undefined>('rootElements') ?? []).find((r) => is(r, 'bpmn:Process'));
+      const process = participants.map((participant) => participant.get<El | undefined>('processRef')).find(Boolean) ?? (this.defs.get<El[] | undefined>('rootElements') ?? []).find((root) => is(root, 'bpmn:Process'));
       return process ? new ElementLabels(process).label() : '';
     }
     if (is(el, 'bpmn:Process')) {
-      const pool = [...walk(this.defs, { bpmnOnly: true })].find((p) => is(p, 'bpmn:Participant') && p.get<El | undefined>('processRef') === el);
+      const pool = [...walk(this.defs, { bpmnOnly: true })].find((participant) => is(participant, 'bpmn:Participant') && participant.get<El | undefined>('processRef') === el);
       return pool && (this.idOf(pool) || pool.get<string | undefined>('name')) ? new ElementLabels(pool).label() : '';
     }
     // a lane set or an id-less parent names nothing
@@ -92,7 +92,7 @@ export class DrawnElementIds {
   give(allocate?: (req: IdRequest) => string): GivenId[] {
     const idless: El[] = [];
     for (const el of walk(this.defs, { bpmnOnly: true })) {
-      if (isDiElement(el) || this.idOf(el) || !DRAWN.some((t) => is(el, t))) continue;
+      if (isDiElement(el) || this.idOf(el) || !DRAWN.some((type) => is(el, type))) continue;
       idless.push(el);
     }
     if (!idless.length) return [];
@@ -107,7 +107,7 @@ export class DrawnElementIds {
       };
     }
     // nodes and containers first: a connection is named after its ends
-    const ordered = [...idless.filter((el) => !CONNECTIONS.some((t) => is(el, t))), ...idless.filter((el) => CONNECTIONS.some((t) => is(el, t)))];
+    const ordered = [...idless.filter((el) => !CONNECTIONS.some((type) => is(el, type))), ...idless.filter((el) => CONNECTIONS.some((type) => is(el, type)))];
     const given: GivenId[] = [];
     for (const el of ordered) {
       const id = next(this.requestFor(el, this.contextOf(el)));

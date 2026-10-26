@@ -37,19 +37,19 @@ export class C7ExtensionRules extends C7Rules {
 
   constructor(
     run: RuleRun,
-    p: string,
+    prefix: string,
     private readonly names: C7DescriptorNames,
     private readonly content: C7ExtensionContentRules,
   ) {
-    super(run, p);
-    this.errors = new Map(run.doc.rootElementsOfType('bpmn:Error').map((e) => [idOf(e) ?? '', e] as const));
+    super(run, prefix);
+    this.errors = new Map(run.doc.rootElementsOfType('bpmn:Error').map((error) => [idOf(error) ?? '', error] as const));
   }
 
   private wrongSide(def: El, owner: El | undefined, local: string, kind: 'attrs' | 'ext'): string | undefined {
     if (!owner || !list(owner, 'eventDefinitions').includes(def)) return undefined;
     const side = this.kit.is(owner, 'bpmn:CatchEvent') ? 'catch' : this.kit.is(owner, 'bpmn:ThrowEvent') ? 'throw' : undefined;
     if (!side) return undefined;
-    const rule = SIDE_RULES.find((r) => this.kit.is(def, r.def) && r[kind].includes(local));
+    const rule = SIDE_RULES.find((sideRule) => this.kit.is(def, sideRule.def) && sideRule[kind].includes(local));
     return rule && rule.side !== side ? rule.where : undefined;
   }
 
@@ -70,8 +70,8 @@ export class C7ExtensionRules extends C7Rules {
       if (!this.kit.camunda.reads(uri)) continue;
       const def = this.kit.camunda.attr(local);
       if (!def) {
-        const applicable = this.kit.camunda.attrs().filter((a) => a.owners.some((o) => this.kit.is(el, o))).map((a) => localName(a.name));
-        const guess = didYouMean(local, this.kit.camunda.attrs().map((a) => localName(a.name)), applicable);
+        const applicable = this.kit.camunda.attrs().filter((attribute) => attribute.owners.some((ownerType) => this.kit.is(el, ownerType))).map((attribute) => localName(attribute.name));
+        const guess = didYouMean(local, this.kit.camunda.attrs().map((attribute) => localName(attribute.name)), applicable);
         const prefix = key.slice(0, key.indexOf(':'));
         const fits = !!guess && applicable.includes(guess);
         const elsewhere = guess && !fits ? ` It applies to ${kindsText(this.kit.camunda.attr(guess)!.owners)} only.` : '';
@@ -86,7 +86,7 @@ export class C7ExtensionRules extends C7Rules {
         );
         continue;
       }
-      const owned = def.owners.some((o) => this.kit.is(el, o));
+      const owned = def.owners.some((ownerType) => this.kit.is(el, ownerType));
       const readOn = owned ? this.wrongSide(el, owner, local, 'attrs') : kindsText(def.owners);
       if (readOn !== undefined) {
         this.push('runtime', 'W_C7_MISPLACED_ATTRIBUTE', el, owner, `attr:${key}`, `${key} on ${where} has no effect: the engines read it on ${readOn} only`, owned ? `Remove it: ${unset}.` : this.misplacedHint(el, owner, key, local, value, def.owners));
@@ -101,10 +101,10 @@ export class C7ExtensionRules extends C7Rules {
   private misplacedHint(el: El, owner: El | undefined, key: string, local: string, value: string, owners: string[]): string {
     const addr = this.addressOf(el, owner);
     const id = addr?.id;
-    const move = (prefix: string): string => `\`bpmn set <file> ${id} ${sh(`${addr!.prefix}${key}=`)} ${sh(`${prefix}${this.p}:${local}=${value}`)}\``;
+    const move = (prefix: string): string => `\`bpmn set <file> ${id} ${sh(`${addr!.prefix}${key}=`)} ${sh(`${prefix}${this.prefix}:${local}=${value}`)}\``;
     if (id && addr!.prefix === '') {
       const defs = list(el, 'eventDefinitions');
-      const fit = defs.findIndex((d) => owners.some((o) => this.kit.is(d, o)));
+      const fit = defs.findIndex((definition) => owners.some((ownerType) => this.kit.is(definition, ownerType)));
       if (this.kit.is(el, 'bpmn:Event') && fit !== -1) {
         return `It belongs on the event definition: ${move(defs.length > 1 ? `definition[${fit}].` : 'definition.')}.`;
       }
@@ -120,70 +120,70 @@ export class C7ExtensionRules extends C7Rules {
   }
 
   private allowedTop(local: string, host: El): boolean {
-    const t = this.kit.camunda.type(local);
-    if (!t) return true;
-    const hosts = [...t.allowedIn, ...(EXTRA_HOSTS[local] ?? [])];
-    return hosts.some((a) => a === '*' || (a.startsWith('bpmn:') && this.kit.is(host, a)));
+    const vendorType = this.kit.camunda.type(local);
+    if (!vendorType) return true;
+    const hosts = [...vendorType.allowedIn, ...(EXTRA_HOSTS[local] ?? [])];
+    return hosts.some((allowedHost) => allowedHost === '*' || (allowedHost.startsWith('bpmn:') && this.kit.is(host, allowedHost)));
   }
 
   /** Attributes and children of a generic camunda element, recursively. */
-  private checkVendorElement(v: El, host: El, owner: El | undefined, topEl: El, path: string): void {
-    const local = localName(v.$type);
-    const t = this.kit.camunda.type(local);
-    if (!t) return;
+  private checkVendorElement(vendorElement: El, host: El, owner: El | undefined, topEl: El, path: string): void {
+    const local = localName(vendorElement.$type);
+    const vendorType = this.kit.camunda.type(local);
+    if (!vendorType) return;
     const rebuild = (): string => this.extHint(host, owner, topEl, localName(topEl.$type));
-    const where = `${this.p}:${local}${path ? ` (in ${path})` : ''} of ${this.describe(host, owner)}`;
-    const names = this.names.attrNames(t);
+    const where = `${this.prefix}:${local}${path ? ` (in ${path})` : ''} of ${this.describe(host, owner)}`;
+    const names = this.names.attrNames(vendorType);
     for (const extra of EXTRA_ATTRS[local] ?? []) names.add(extra);
-    for (const [k, raw] of Object.entries(v as unknown as Record<string, unknown>)) {
-      if (k.startsWith('$') || k.startsWith('xmlns')) continue;
-      if (k.includes(':')) {
-        if (this.ns.uriOfName(k) === this.kit.zeebe.uri) this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}@${k}`, `${where} carries the Camunda 8 attribute ${k}, which Camunda 7 ignores`, rebuild());
+    for (const [key, raw] of Object.entries(vendorElement as unknown as Record<string, unknown>)) {
+      if (key.startsWith('$') || key.startsWith('xmlns')) continue;
+      if (key.includes(':')) {
+        if (this.ns.uriOfName(key) === this.kit.zeebe.uri) this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}@${key}`, `${where} carries the Camunda 8 attribute ${key}, which Camunda 7 ignores`, rebuild());
         continue;
       }
-      if (!names.has(k)) {
-        const guess = didYouMean(k, [...names]);
-        this.push('runtime', 'W_C7_UNKNOWN_ATTRIBUTE', host, owner, `ext:${path}/${local}@${k}`, `${where} has the unknown attribute ${k}${guess ? ` (did you mean ${guess}?)` : ''}; the engines ignore it`, rebuild());
+      if (!names.has(key)) {
+        const guess = didYouMean(key, [...names]);
+        this.push('runtime', 'W_C7_UNKNOWN_ATTRIBUTE', host, owner, `ext:${path}/${local}@${key}`, `${where} has the unknown attribute ${key}${guess ? ` (did you mean ${guess}?)` : ''}; the engines ignore it`, rebuild());
         continue;
       }
-      const prop = t.properties.find((p) => p.name === k);
+      const prop = vendorType.properties.find((property) => property.name === key);
       if (prop?.type === 'Boolean' && raw !== 'true' && raw !== 'false' && raw !== true && raw !== false) {
-        this.push('runtime', 'W_C7_BAD_VALUE', host, owner, `ext:${path}/${local}@${k}`, `${k}="${String(raw)}" on ${where} is not true or false; the engines read only the exact value true`, rebuild());
+        this.push('runtime', 'W_C7_BAD_VALUE', host, owner, `ext:${path}/${local}@${key}`, `${key}="${String(raw)}" on ${where} is not true or false; the engines read only the exact value true`, rebuild());
       }
     }
-    const texts = this.names.textChildNames(t);
-    const kids = peek<unknown[]>(v, '$children');
-    for (const c of Array.isArray(kids) ? (kids as El[]) : []) {
-      if (!c || typeof c.$type !== 'string' || !isGeneric(c)) continue;
-      const uri = this.ns.uriOfElement(c);
-      const cl = localName(c.$type);
+    const texts = this.names.textChildNames(vendorType);
+    const kids = peek<unknown[]>(vendorElement, '$children');
+    for (const child of Array.isArray(kids) ? (kids as El[]) : []) {
+      if (!child || typeof child.$type !== 'string' || !isGeneric(child)) continue;
+      const uri = this.ns.uriOfElement(child);
+      const cl = localName(child.$type);
       if (uri === this.kit.zeebe.uri) {
-        this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}/${cl}`, `${where} contains the Camunda 8 element ${c.$type}, which Camunda 7 ignores`, rebuild());
+        this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}/${cl}`, `${where} contains the Camunda 8 element ${child.$type}, which Camunda 7 ignores`, rebuild());
         continue;
       }
       if (!this.kit.camunda.reads(uri)) continue;
-      const childPath = path ? `${path} > ${this.p}:${local}` : `${this.p}:${local}`;
+      const childPath = path ? `${path} > ${this.prefix}:${local}` : `${this.prefix}:${local}`;
       if (texts.has(cl)) continue;
       const ct = this.kit.camunda.type(cl);
       if (!ct) {
-        const guess = didYouMean(cl, [...texts, ...t.properties.filter((p) => p.type.startsWith('camunda:')).map((p) => localName(p.type).replace(/^./, (s) => s.toLowerCase()))]);
-        this.push('runtime', 'W_C7_UNKNOWN_ELEMENT', host, owner, `ext:${childPath}/${cl}`, `${where} contains the unknown element ${this.p}:${cl}${guess ? ` (did you mean ${this.p}:${guess}?)` : ''}; the engines ignore it`, rebuild());
+        const guess = didYouMean(cl, [...texts, ...vendorType.properties.filter((property) => property.type.startsWith('camunda:')).map((property) => localName(property.type).replace(/^./, (firstLetter) => firstLetter.toLowerCase()))]);
+        this.push('runtime', 'W_C7_UNKNOWN_ELEMENT', host, owner, `ext:${childPath}/${cl}`, `${where} contains the unknown element ${this.prefix}:${cl}${guess ? ` (did you mean ${this.prefix}:${guess}?)` : ''}; the engines ignore it`, rebuild());
         continue;
       }
-      if (!this.kit.camunda.containersOf(cl).includes(t.name)) {
-        this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${childPath}/${cl}`, `${this.p}:${cl} does not belong inside ${this.p}:${local} (${where}); the engines ignore it`, rebuild());
+      if (!this.kit.camunda.containersOf(cl).includes(vendorType.name)) {
+        this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${childPath}/${cl}`, `${this.prefix}:${cl} does not belong inside ${this.prefix}:${local} (${where}); the engines ignore it`, rebuild());
         continue;
       }
-      this.checkVendorElement(c, host, owner, topEl, childPath);
+      this.checkVendorElement(child, host, owner, topEl, childPath);
     }
   }
 
   private isAsync(el: El): boolean {
-    return ['async', 'asyncBefore', 'asyncAfter'].some((a) => this.c7(el, a) === 'true');
+    return ['async', 'asyncBefore', 'asyncAfter'].some((asyncAttribute) => this.c7(el, asyncAttribute) === 'true');
   }
 
   private hasTimer(el: El): boolean {
-    return list(el, 'eventDefinitions').some((d) => this.kit.is(d, 'bpmn:TimerEventDefinition'));
+    return list(el, 'eventDefinitions').some((definition) => this.kit.is(definition, 'bpmn:TimerEventDefinition'));
   }
 
   /**
@@ -202,50 +202,50 @@ export class C7ExtensionRules extends C7Rules {
     const slot = addr?.prefix ?? '';
     const where = this.describe(host, owner);
     if (this.kit.is(host, 'bpmn:Definitions')) {
-      const types = values.map((v) => v.el.$type).join(', ');
+      const types = values.map((extValue) => extValue.el.$type).join(', ');
       this.push('deploy', 'W_C7_DEPLOY_DEFINITIONS_EXTENSION', host, undefined, 'definitions', `bpmn:definitions carries bpmn:extensionElements (${types}), which the BPMN schema does not allow there; the engines refuse the file`, `Move the content to the process: \`bpmn ext remove <file> ${hostId ?? '<definitionsId>'} <type>\`, then \`bpmn ext add <file> <processId> <type> ...\`.`);
       return;
     }
     // per namespace: Operaton reads one operaton:inputOutput next to one camunda:inputOutput
     const byType = new Map<string, { local: string; type: string; uri: string; els: El[] }>();
-    for (const v of values) {
-      if (!v.uri) continue;
-      if (v.uri === this.kit.zeebe.uri) {
-        this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${v.el.$type}`, `${where} contains the Camunda 8 extension ${v.el.$type}, which Camunda 7 ignores`, hostId ? `Remove it: \`bpmn ext remove <file> ${hostId} ${slotted(slot, v.el.$type)}\`.` : 'Remove it from the XML.');
+    for (const extValue of values) {
+      if (!extValue.uri) continue;
+      if (extValue.uri === this.kit.zeebe.uri) {
+        this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${extValue.el.$type}`, `${where} contains the Camunda 8 extension ${extValue.el.$type}, which Camunda 7 ignores`, hostId ? `Remove it: \`bpmn ext remove <file> ${hostId} ${slotted(slot, extValue.el.$type)}\`.` : 'Remove it from the XML.');
         continue;
       }
-      if (!this.kit.camunda.reads(v.uri)) continue;
-      const t = this.kit.camunda.type(v.local);
-      if (!t) {
-        const guess = didYouMean(v.local, this.names.typeNames());
-        this.push('runtime', 'W_C7_UNKNOWN_ELEMENT', host, owner, `ext:${v.local}`, `${where} has the unknown extension element ${this.p}:${v.local}${guess ? ` (did you mean ${this.p}:${guess}?)` : ''}; the engines ignore it`, hostId ? `Remove it (\`bpmn ext remove <file> ${hostId} ${slotted(slot, String(v.index))}\`) and add the right one with \`bpmn ext add <file> ${hostId} ${slotted(slot, `${this.p}:${guess ?? '<type>'}`)} ...\`.` : 'Fix it in the XML.');
+      if (!this.kit.camunda.reads(extValue.uri)) continue;
+      const vendorType = this.kit.camunda.type(extValue.local);
+      if (!vendorType) {
+        const guess = didYouMean(extValue.local, this.names.typeNames());
+        this.push('runtime', 'W_C7_UNKNOWN_ELEMENT', host, owner, `ext:${extValue.local}`, `${where} has the unknown extension element ${this.prefix}:${extValue.local}${guess ? ` (did you mean ${this.prefix}:${guess}?)` : ''}; the engines ignore it`, hostId ? `Remove it (\`bpmn ext remove <file> ${hostId} ${slotted(slot, String(extValue.index))}\`) and add the right one with \`bpmn ext add <file> ${hostId} ${slotted(slot, `${this.prefix}:${guess ?? '<type>'}`)} ...\`.` : 'Fix it in the XML.');
         continue;
       }
-      const key = `${v.uri}\u0000${v.local}`;
-      const group = byType.get(key) ?? { local: v.local, type: v.el.$type, uri: v.uri, els: [] };
-      group.els.push(v.el);
+      const key = `${extValue.uri}\u0000${extValue.local}`;
+      const group = byType.get(key) ?? { local: extValue.local, type: extValue.el.$type, uri: extValue.uri, els: [] };
+      group.els.push(extValue.el);
       byType.set(key, group);
-      const side = this.wrongSide(host, owner, v.local, 'ext');
+      const side = this.wrongSide(host, owner, extValue.local, 'ext');
       if (side) {
-        this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${v.local}`, `${v.el.$type} on ${where} has no effect: the engines read it on ${side} only`, hostId ? `Remove it: \`bpmn ext remove <file> ${hostId} ${sh(`${slot}${this.selectorOf(host, v.el)}`)}\`.` : 'Remove it from the XML.');
+        this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${extValue.local}`, `${extValue.el.$type} on ${where} has no effect: the engines read it on ${side} only`, hostId ? `Remove it: \`bpmn ext remove <file> ${hostId} ${sh(`${slot}${this.selectorOf(host, extValue.el)}`)}\`.` : 'Remove it from the XML.');
         continue;
       }
-      if (!this.allowedTop(v.local, host)) {
-        const containers = t.allowedIn.length ? [] : this.kit.camunda.containersOf(v.local);
+      if (!this.allowedTop(extValue.local, host)) {
+        const containers = vendorType.allowedIn.length ? [] : this.kit.camunda.containersOf(extValue.local);
         const message = containers.length
-          ? `${this.p}:${v.local} sits directly in the extension elements of ${where}, but belongs inside ${containers.map((c) => c.replace(/^camunda:/, `${this.p}:`)).join(' / ')}; the engines ignore it`
-          : `${this.p}:${v.local} on ${where} has no effect: the engines read it on ${kindsText([...t.allowedIn, ...(EXTRA_HOSTS[v.local] ?? [])])} only`;
-        const again = extAddArgs(v.el, `${this.p}:${v.local}`);
+          ? `${this.prefix}:${extValue.local} sits directly in the extension elements of ${where}, but belongs inside ${containers.map((container) => container.replace(/^camunda:/, `${this.prefix}:`)).join(' / ')}; the engines ignore it`
+          : `${this.prefix}:${extValue.local} on ${where} has no effect: the engines read it on ${kindsText([...vendorType.allowedIn, ...(EXTRA_HOSTS[extValue.local] ?? [])])} only`;
+        const again = extAddArgs(extValue.el, `${this.prefix}:${extValue.local}`);
         const hint = !hostId
           ? 'Fix it in the XML.'
           : containers.length
-            ? `Remove it (\`bpmn ext remove <file> ${hostId} ${slotted(slot, String(v.index))}\`) and add it again, \`bpmn ext add\` files it into its container: ${again ? `\`bpmn ext add <file> ${hostId} ${slotted(slot, again)}\`` : `\`bpmn ext add <file> ${hostId} ${slotted(slot, `${this.p}:${v.local}`)} --xml '...'\``}.`
-            : `Remove it: \`bpmn ext remove <file> ${hostId} ${slotted(slot, String(v.index))}\`${this.movable(host, owner, v.local, again)}.`;
-        this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${v.local}`, message, hint);
+            ? `Remove it (\`bpmn ext remove <file> ${hostId} ${slotted(slot, String(extValue.index))}\`) and add it again, \`bpmn ext add\` files it into its container: ${again ? `\`bpmn ext add <file> ${hostId} ${slotted(slot, again)}\`` : `\`bpmn ext add <file> ${hostId} ${slotted(slot, `${this.prefix}:${extValue.local}`)} --xml '...'\``}.`
+            : `Remove it: \`bpmn ext remove <file> ${hostId} ${slotted(slot, String(extValue.index))}\`${this.movable(host, owner, extValue.local, again)}.`;
+        this.push('runtime', 'W_C7_MISPLACED_EXTENSION', host, owner, `ext:${extValue.local}`, message, hint);
         continue;
       }
-      this.checkVendorElement(v.el, host, owner, v.el, '');
-      if (executable) this.content.checkContent(host, owner, v.el, v.local);
+      this.checkVendorElement(extValue.el, host, owner, extValue.el, '');
+      if (executable) this.content.checkContent(host, owner, extValue.el, extValue.local);
     }
     if (!executable) return;
     // duplicates of the containers the engines read with a single-element lookup
@@ -253,7 +253,7 @@ export class C7ExtensionRules extends C7Rules {
       if (els.length < 2) continue;
       let read = false;
       if (local === 'inputOutput') read = this.kit.is(host, 'bpmn:FlowNode');
-      else if (local === 'connector') read = SERVICE_LIKE.some((t) => this.kit.is(host, t));
+      else if (local === 'connector') read = SERVICE_LIKE.some((serviceType) => this.kit.is(host, serviceType));
       else if (local === 'formData') read = this.kit.is(host, 'bpmn:UserTask') || this.kit.is(host, 'bpmn:StartEvent');
       else if (local === 'failedJobRetryTimeCycle') read = this.isAsync(host) || this.hasTimer(host);
       else continue;
@@ -266,7 +266,7 @@ export class C7ExtensionRules extends C7Rules {
         this.push('practice', 'W_C7_DUPLICATE_EXTENSION', host, owner, subject, `${where} has ${els.length} ${type} elements; once it runs asynchronously the engines refuse the file`, merge);
       }
     }
-    this.content.checkInputOutputHost(host, owner, [...byType.values()].filter((g) => g.local === 'inputOutput').flatMap((g) => g.els));
+    this.content.checkInputOutputHost(host, owner, [...byType.values()].filter((group) => group.local === 'inputOutput').flatMap((group) => group.els));
   }
 
   /**
@@ -281,17 +281,17 @@ export class C7ExtensionRules extends C7Rules {
 
   /** Id references inside camunda content (camunda:errorEventDefinition errorRef -> bpmn:Error). */
   checkVendorRefs(host: El, owner: El | undefined): void {
-    for (const v of this.extensionValues(host)) {
-      if (!v.uri || !this.kit.camunda.reads(v.uri)) continue;
+    for (const extValue of this.extensionValues(host)) {
+      if (!extValue.uri || !this.kit.camunda.reads(extValue.uri)) continue;
       for (const ref of this.kit.camunda.idReferenceAttrs()) {
-        if (localName(ref.element) !== v.local) continue;
-        const target = attr(v.el, ref.attr);
+        if (localName(ref.element) !== extValue.local) continue;
+        const target = attr(extValue.el, ref.attr);
         if (target === undefined) continue;
         const el = this.doc.get(target);
         if (el && this.kit.is(el, ref.target)) continue;
         const candidates = ref.target === 'bpmn:Error' ? [...this.errors.keys()] : [];
         const pointAt = `Point it at an existing one${candidates.length ? ` (${candidates.slice(0, 5).join(', ')})` : ''}`;
-        this.push('runtime', 'W_C7_DANGLING_REF', host, owner, `ref:${v.local}#${v.index}@${ref.attr}`, `${v.el.$type} of ${this.describe(host, owner)} references ${ref.attr}="${target}", which is not a ${ref.target} in the file; the engines ignore the mapping when it runs`, `${pointAt}. ${this.extHint(host, owner, v.el, v.local, { [ref.attr]: `<${localName(ref.target).replace(/^./, (c) => c.toLowerCase())}Id>` })}`);
+        this.push('runtime', 'W_C7_DANGLING_REF', host, owner, `ref:${extValue.local}#${extValue.index}@${ref.attr}`, `${extValue.el.$type} of ${this.describe(host, owner)} references ${ref.attr}="${target}", which is not a ${ref.target} in the file; the engines ignore the mapping when it runs`, `${pointAt}. ${this.extHint(host, owner, extValue.el, extValue.local, { [ref.attr]: `<${localName(ref.target).replace(/^./, (firstLetter) => firstLetter.toLowerCase())}Id>` })}`);
       }
     }
   }

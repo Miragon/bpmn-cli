@@ -27,11 +27,11 @@ export class C7Profile extends EngineProfile {
   protected override checkDocument(run: RuleRun, opts: { operaton?: boolean }): void {
     const { doc, ns } = run;
     const operaton = opts.operaton ?? (ns.usage().get(this.kit.OPERATON_URI) ?? 0) > 0;
-    const p = (operaton ? ns.prefixOf(this.kit.OPERATON_URI) : undefined) ?? ns.prefixOf(this.kit.camunda.uri) ?? ns.prefixOf(this.kit.OPERATON_URI) ?? 'camunda';
-    this.implementation = new C7ImplementationRules(run, p);
-    this.extensions = new C7ExtensionRules(run, p, this.names, new C7ExtensionContentRules(run, p, this.implementation));
-    this.events = new C7EventRules(run, p, this.implementation);
-    this.flows = new C7FlowRules(run, p, operaton, this.implementation);
+    const prefix = (operaton ? ns.prefixOf(this.kit.OPERATON_URI) : undefined) ?? ns.prefixOf(this.kit.camunda.uri) ?? ns.prefixOf(this.kit.OPERATON_URI) ?? 'camunda';
+    this.implementation = new C7ImplementationRules(run, prefix);
+    this.extensions = new C7ExtensionRules(run, prefix, this.names, new C7ExtensionContentRules(run, prefix, this.implementation));
+    this.events = new C7EventRules(run, prefix, this.implementation);
+    this.flows = new C7FlowRules(run, prefix, operaton, this.implementation);
     const defs = doc.definitions;
     this.extensions.checkAttributes(defs, undefined);
     this.extensions.checkExtensions(defs, undefined, true);
@@ -44,7 +44,7 @@ export class C7Profile extends EngineProfile {
       this.visit(root, undefined, false);
     }
     if (executable.length) this.events.checkSignalNames();
-    const schema = new C7SchemaRules(run, p);
+    const schema = new C7SchemaRules(run, prefix);
     schema.checkSchemaEventDefinitions();
     schema.checkSchemaAttributes();
   }
@@ -62,7 +62,7 @@ export class C7Profile extends EngineProfile {
     if (!executable) return 'descend';
     const implementation = this.implementation;
     if (is(el, 'bpmn:Process')) implementation.checkProcess(el);
-    if (SERVICE_LIKE.some((t) => is(el, t))) implementation.checkServiceLike(el);
+    if (SERVICE_LIKE.some((type) => is(el, type))) implementation.checkServiceLike(el);
     if (is(el, 'bpmn:BusinessRuleTask')) implementation.checkBusinessRule(el);
     if (is(el, 'bpmn:CallActivity')) implementation.checkCallActivity(el);
     if (is(el, 'bpmn:UserTask') || is(el, 'bpmn:StartEvent')) implementation.checkForms(el);

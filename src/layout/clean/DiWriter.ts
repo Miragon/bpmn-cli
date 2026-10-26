@@ -17,43 +17,43 @@ export class DiWriter {
 
   shape(el: El, box: Box, extra: Record<string, unknown> = {}, label?: Box): void {
     const { moddle } = this;
-    const s = moddle.create('bpmndi:BPMNShape', { id: `BPMNShape_${idOf(el)}`, bpmnElement: el, bounds: this.bounds(box), ...extra });
-    if (label) s.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
-    this.di.push(s);
+    const shapeDi = moddle.create('bpmndi:BPMNShape', { id: `BPMNShape_${idOf(el)}`, bpmnElement: el, bounds: this.bounds(box), ...extra });
+    if (label) shapeDi.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+    this.di.push(shapeDi);
     this.absBoxes.set(idOf(el), { ...box });
   }
 
   edge(el: El, points: Point[], label?: Box): void {
     const { moddle } = this;
-    const e = moddle.create('bpmndi:BPMNEdge', { id: `BPMNEdge_${idOf(el)}`, bpmnElement: el, waypoint: points.map((p) => moddle.create('dc:Point', { x: Math.round(p.x), y: Math.round(p.y) })) });
-    if (label) e.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
-    this.di.push(e);
+    const edgeDi = moddle.create('bpmndi:BPMNEdge', { id: `BPMNEdge_${idOf(el)}`, bpmnElement: el, waypoint: points.map((point) => moddle.create('dc:Point', { x: Math.round(point.x), y: Math.round(point.y) })) });
+    if (label) edgeDi.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+    this.di.push(edgeDi);
   }
 
   emitScope(scope: ScopeLayout, origin: Point): void {
     this.crossLinks.push(...scope.crossLinks);
     for (const lane of scope.lanes) this.emitLane(lane, origin);
-    for (const n of [...scope.nodes, ...scope.eventSubs]) this.emitNode(n, origin);
-    for (const e of scope.edges) this.edge(e.el, this.shiftPts(e.points, origin), e.label ? this.shift(e.label, origin) : undefined);
-    for (const c of scope.compensations) this.edge(c.el, this.shiftPts(c.points, origin));
-    for (const a of scope.artifacts) {
-      const box = this.shift(a.box, origin);
-      const label = a.kind === 'annotation' ? undefined : ScopeLabels.of(a, 'data');
-      this.shape(a.el, box, {}, label ? this.shift(label, origin) : undefined);
-      for (const link of a.links) this.edge(link.el, this.shiftPts(link.points, origin));
+    for (const node of [...scope.nodes, ...scope.eventSubs]) this.emitNode(node, origin);
+    for (const edge of scope.edges) this.edge(edge.el, this.shiftPts(edge.points, origin), edge.label ? this.shift(edge.label, origin) : undefined);
+    for (const compensation of scope.compensations) this.edge(compensation.el, this.shiftPts(compensation.points, origin));
+    for (const artifact of scope.artifacts) {
+      const box = this.shift(artifact.box, origin);
+      const label = artifact.kind === 'annotation' ? undefined : ScopeLabels.of(artifact, 'data');
+      this.shape(artifact.el, box, {}, label ? this.shift(label, origin) : undefined);
+      for (const link of artifact.links) this.edge(link.el, this.shiftPts(link.points, origin));
     }
   }
 
   fixLaneShapes(lane: LaneBox, pool: PoolLayout, processOnly = false): void {
-    const s = this.di.find((d) => d.get<El>('bpmnElement') === lane.el);
-    if (s) {
-      const b = s.get<El>('bounds');
+    const laneShape = this.di.find((diagramElement) => diagramElement.get<El>('bpmnElement') === lane.el);
+    if (laneShape) {
+      const bounds = laneShape.get<El>('bounds');
       const baseX = processOnly ? pool.box.x : pool.box.x + SIZES.participantHeader;
-      b.set('x', baseX + lane.box.x);
-      b.set('y', pool.box.y + lane.box.y);
+      bounds.set('x', baseX + lane.box.x);
+      bounds.set('y', pool.box.y + lane.box.y);
       this.absBoxes.set(lane.id, { x: baseX + lane.box.x, y: pool.box.y + lane.box.y, width: lane.box.width, height: lane.box.height });
     }
-    for (const c of lane.children) this.fixLaneShapes(c, pool, processOnly);
+    for (const childLane of lane.children) this.fixLaneShapes(childLane, pool, processOnly);
   }
 
   startPlane(): void {
@@ -73,7 +73,7 @@ export class DiWriter {
 
   private flushCrossLinks(warnings: EngineWarning[]): void {
     const { absBoxes, crossLinks } = this;
-    const here = new Set(this.di.filter((d) => is(d, 'bpmndi:BPMNShape')).map((d) => idOf(d.get<El>('bpmnElement'))));
+    const here = new Set(this.di.filter((diagramElement) => is(diagramElement, 'bpmndi:BPMNShape')).map((diagramElement) => idOf(diagramElement.get<El>('bpmnElement'))));
     for (const link of crossLinks) {
       const sb = here.has(link.sourceId) ? absBoxes.get(link.sourceId) : undefined;
       const tb = here.has(link.targetId) ? absBoxes.get(link.targetId) : undefined;
@@ -87,42 +87,42 @@ export class DiWriter {
     crossLinks.length = 0;
   }
 
-  private bounds(b: Box): El {
-    return this.moddle.create('dc:Bounds', { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) });
+  private bounds(box: Box): El {
+    return this.moddle.create('dc:Bounds', { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
   }
 
-  private shift(b: Box, o: Point): Box {
-    return { x: b.x + o.x, y: b.y + o.y, width: b.width, height: b.height };
+  private shift(box: Box, offset: Point): Box {
+    return { x: box.x + offset.x, y: box.y + offset.y, width: box.width, height: box.height };
   }
 
-  private shiftPts(pts: Point[], o: Point): Point[] {
-    return pts.map((p) => ({ x: p.x + o.x, y: p.y + o.y }));
+  private shiftPts(pts: Point[], offset: Point): Point[] {
+    return pts.map((point) => ({ x: point.x + offset.x, y: point.y + offset.y }));
   }
 
   private emitLane(lane: LaneBox, origin: Point): void {
     this.shape(lane.el, this.shift(lane.box, origin), { isHorizontal: true });
-    for (const c of lane.children) this.emitLane(c, origin);
+    for (const childLane of lane.children) this.emitLane(childLane, origin);
   }
 
-  private emitNode(n: GNode, origin: Point): void {
-    const box = this.shift(n.box, origin);
-    if (n.child) {
-      this.shape(n.el, box, { isExpanded: true });
-      const p = SIZES.subProcessPadding;
-      const pad = n.childPad ?? { left: 0, top: p.top, inner: n.child.width };
-      this.emitScope(n.child, { x: box.x + p.left + pad.left + Math.max(0, (box.width - p.left - p.right - pad.inner) / 2), y: box.y + pad.top });
-    } else if (n.kind === 'subProcess' || n.kind === 'eventSubProcess') {
-      this.shape(n.el, box); // collapsed: own plane
+  private emitNode(node: GNode, origin: Point): void {
+    const box = this.shift(node.box, origin);
+    if (node.child) {
+      this.shape(node.el, box, { isExpanded: true });
+      const padding = SIZES.subProcessPadding;
+      const pad = node.childPad ?? { left: 0, top: padding.top, inner: node.child.width };
+      this.emitScope(node.child, { x: box.x + padding.left + pad.left + Math.max(0, (box.width - padding.left - padding.right - pad.inner) / 2), y: box.y + pad.top });
+    } else if (node.kind === 'subProcess' || node.kind === 'eventSubProcess') {
+      this.shape(node.el, box); // collapsed: own plane
     } else {
-      const kind = n.kind === 'gateway' ? 'gateway' : is(n.el, 'bpmn:Event') ? 'event' : undefined;
-      const label = kind ? ScopeLabels.of(n, kind) : undefined;
-      const extra = is(n.el, 'bpmn:ExclusiveGateway') ? { isMarkerVisible: true } : {};
-      this.shape(n.el, box, extra, label ? this.shift(label, origin) : undefined);
+      const kind = node.kind === 'gateway' ? 'gateway' : is(node.el, 'bpmn:Event') ? 'event' : undefined;
+      const label = kind ? ScopeLabels.of(node, kind) : undefined;
+      const extra = is(node.el, 'bpmn:ExclusiveGateway') ? { isMarkerVisible: true } : {};
+      this.shape(node.el, box, extra, label ? this.shift(label, origin) : undefined);
     }
-    for (const b of n.boundary) {
-      const bb = this.shift(b.box, origin);
-      const label = ScopeLabels.of(b, 'boundary');
-      this.shape(b.el, bb, {}, label ? this.shift(label, origin) : undefined);
+    for (const boundaryEvent of node.boundary) {
+      const bb = this.shift(boundaryEvent.box, origin);
+      const label = ScopeLabels.of(boundaryEvent, 'boundary');
+      this.shape(boundaryEvent.el, bb, {}, label ? this.shift(label, origin) : undefined);
     }
   }
 }

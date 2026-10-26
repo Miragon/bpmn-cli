@@ -52,32 +52,32 @@ export class Separation {
   ) {}
 
   /** The smaller of the two axis shortfalls; <= 0 means no conflict. */
-  private shortfall(a: Box, b: Box, gap: number): number {
-    return Math.min(gap - this.gapX(a, b), gap - this.gapY(a, b));
+  private shortfall(first: Box, second: Box, gap: number): number {
+    return Math.min(gap - this.gapX(first, second), gap - this.gapY(first, second));
   }
 
   private baselineBox(base: ReadonlyMap<string, Box>, id: string): Box | undefined {
-    let b = base.get(id);
-    if (!b) return undefined;
+    let box = base.get(id);
+    if (!box) return undefined;
     for (const be of this.plane.shapes.values()) {
       if (be.hostId !== id) continue;
-      const o = base.get(be.id);
-      if (!o) continue;
-      const x = Math.min(b.x, o.x);
-      const y = Math.min(b.y, o.y);
-      b = { x, y, width: Math.max(right(b), right(o)) - x, height: Math.max(bottom(b), bottom(o)) - y };
+      const otherBox = base.get(be.id);
+      if (!otherBox) continue;
+      const left = Math.min(box.x, otherBox.x);
+      const top = Math.min(box.y, otherBox.y);
+      box = { x: left, y: top, width: Math.max(right(box), right(otherBox)) - left, height: Math.max(bottom(box), bottom(otherBox)) - top };
     }
-    return b;
+    return box;
   }
 
   /** Boundary events fold into their host, which moves with them as one rigid unit. */
   private unitsOf(): Map<string, Unit> {
     const out = new Map<string, Unit>();
-    for (const s of this.plane.shapes.values()) {
-      if (!PlaneQuery.isLeaf(s) && !(s.kind === 'subProcess' && s.container)) continue;
-      const host = s.hostId ? this.plane.shapes.get(s.hostId) : undefined;
+    for (const shape of this.plane.shapes.values()) {
+      if (!PlaneQuery.isLeaf(shape) && !(shape.kind === 'subProcess' && shape.container)) continue;
+      const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
       if (host && (PlaneQuery.isLeaf(host) || (host.kind === 'subProcess' && host.container))) continue;
-      out.set(s.id, { id: s.id, shape: s });
+      out.set(shape.id, { id: shape.id, shape });
     }
     return out;
   }
@@ -88,54 +88,54 @@ export class Separation {
     return host && units.has(host) ? host : undefined;
   }
 
-  private nested(a: DShape, b: DShape): boolean {
+  private nested(first: DShape, second: DShape): boolean {
     const inside = (inner: DShape, outer: DShape): boolean => {
-      let p = inner.parentId ?? (inner.hostId ? this.plane.shapes.get(inner.hostId)?.parentId : undefined);
-      for (let i = 0; p && i < 20; i++) {
-        if (p === outer.id) return true;
-        p = this.plane.shapes.get(p)?.parentId;
+      let parentId = inner.parentId ?? (inner.hostId ? this.plane.shapes.get(inner.hostId)?.parentId : undefined);
+      for (let depth = 0; parentId && depth < 20; depth++) {
+        if (parentId === outer.id) return true;
+        parentId = this.plane.shapes.get(parentId)?.parentId;
       }
       return false;
     };
-    return inside(a, b) || inside(b, a);
+    return inside(first, second) || inside(second, first);
   }
 
-  private gapX(a: Box, b: Box): number {
-    return Math.max(b.x - right(a), a.x - right(b));
+  private gapX(first: Box, second: Box): number {
+    return Math.max(second.x - right(first), first.x - right(second));
   }
 
-  private gapY(a: Box, b: Box): number {
-    return Math.max(b.y - bottom(a), a.y - bottom(b));
+  private gapY(first: Box, second: Box): number {
+    return Math.max(second.y - bottom(first), first.y - bottom(second));
   }
 
-  private readingOrder(a: Box, b: Box): number {
-    return cx(a) - (cx(b)) || cy(a) - (cy(b));
+  private readingOrder(first: Box, second: Box): number {
+    return cx(first) - (cx(second)) || cy(first) - (cy(second));
   }
 
-  private candidateMoves(a: Unit, b: Unit, boxes: Map<string, Box>, ctx: { movable: Set<string>; active: Set<string>; used: Map<string, Set<Dir>>; gap: number; lockedX: Set<string>; lockedY: Set<string> }): Move[] {
+  private candidateMoves(unitA: Unit, unitB: Unit, boxes: Map<string, Box>, ctx: { movable: Set<string>; active: Set<string>; used: Map<string, Set<Dir>>; gap: number; lockedX: Set<string>; lockedY: Set<string> }): Move[] {
     const out: Move[] = [];
-    const [first, second] = this.readingOrder(boxes.get(a.id)!, boxes.get(b.id)!) <= 0 ? [a, b] : [b, a];
-    for (const [s, o] of [
+    const [first, second] = this.readingOrder(boxes.get(unitA.id)!, boxes.get(unitB.id)!) <= 0 ? [unitA, unitB] : [unitB, unitA];
+    for (const [mover, obstacle] of [
       [second, first],
       [first, second],
     ] as const) {
-      if (!ctx.movable.has(s.id)) continue;
-      const sb = boxes.get(s.id)!;
-      const ob = boxes.get(o.id)!;
-      const used = ctx.used.get(s.id) ?? new Set<Dir>();
-      if (s === second) out.push({ unit: s.id, dir: 'right', need: right(ob) + ctx.gap - sb.x });
+      if (!ctx.movable.has(mover.id)) continue;
+      const sb = boxes.get(mover.id)!;
+      const ob = boxes.get(obstacle.id)!;
+      const used = ctx.used.get(mover.id) ?? new Set<Dir>();
+      if (mover === second) out.push({ unit: mover.id, dir: 'right', need: right(ob) + ctx.gap - sb.x });
       const lower = cy(sb) >= cy(ob);
-      if (lower && !used.has('up')) out.push({ unit: s.id, dir: 'down', need: bottom(ob) + ctx.gap - sb.y });
-      if (!lower && ctx.active.has(s.id) && !used.has('down')) {
+      if (lower && !used.has('up')) out.push({ unit: mover.id, dir: 'down', need: bottom(ob) + ctx.gap - sb.y });
+      if (!lower && ctx.active.has(mover.id) && !used.has('down')) {
         const need = bottom(sb) - (ob.y - ctx.gap);
-        const frame = Frames.of(this.plane, s.shape);
+        const frame = Frames.of(this.plane, mover.shape);
         const top = frame ? frame.bounds.y + (frame.kind === 'subProcess' ? 25 : 10) : -Infinity;
-        if (sb.y - need >= top) out.push({ unit: s.id, dir: 'up', need });
+        if (sb.y - need >= top) out.push({ unit: mover.id, dir: 'up', need });
       }
     }
     return out
-      .filter((m) => m.need > 0 && !(m.dir === 'right' ? ctx.lockedX : ctx.lockedY).has(m.unit))
-      .sort((p, q) => p.need - q.need);
+      .filter((move) => move.need > 0 && !(move.dir === 'right' ? ctx.lockedX : ctx.lockedY).has(move.unit))
+      .sort((left, right) => left.need - right.need);
   }
 
   /**
@@ -147,7 +147,7 @@ export class Separation {
     const grow = opts.grow ?? true;
     const res: SeparateResult = { moved: new Set(), resized: new Set(), unresolved: [] };
     const units = this.unitsOf();
-    const toUnits = (ids: Iterable<string>): Set<string> => new Set([...ids].map((id) => this.unitOf(units, id)).filter((x): x is string => !!x));
+    const toUnits = (ids: Iterable<string>): Set<string> => new Set([...ids].map((id) => this.unitOf(units, id)).filter((unitId): unitId is string => !!unitId));
     // an active boundary event stays itself: only its own box is checked
     const active = new Set([...opts.active].filter((id) => this.plane.shapes.has(id)));
     const movable = opts.movable ? toUnits(opts.movable) : toUnits(active);
@@ -160,32 +160,32 @@ export class Separation {
     const skipped = new Set<string>();
     const limit = 40 + 8 * units.size;
     for (let step = 0; step < limit; step++) {
-      const boxes = new Map([...units.values()].map((u) => [u.id, this.space.unitBox(u.shape)]));
+      const boxes = new Map([...units.values()].map((unit) => [unit.id, this.space.unitBox(unit.shape)]));
       const probeBox = (id: string): Box | undefined => {
         if (units.has(id)) return boxes.get(id);
         return this.plane.shapes.get(id)?.bounds;
       };
       const order = [...active]
         .filter((id) => !!this.unitOf(units, id) && probeBox(id))
-        .sort((p, q) => this.readingOrder(probeBox(p)!, probeBox(q)!) || (p < q ? -1 : 1));
+        .sort((leftId, rightId) => this.readingOrder(probeBox(leftId)!, probeBox(rightId)!) || (leftId < rightId ? -1 : 1));
       let conflict: [Unit, Unit] | undefined;
       let conflictGap = gap;
       for (const id of order) {
-        const a = units.get(this.unitOf(units, id)!)!;
+        const first = units.get(this.unitOf(units, id)!)!;
         const ab = probeBox(id)!;
         const need = units.has(id) ? gap : Math.min(gap, 8);
-        for (const b of units.values()) {
-          if (b === a || this.nested(a.shape, b.shape)) continue;
-          const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+        for (const second of units.values()) {
+          if (second === first || this.nested(first.shape, second.shape)) continue;
+          const key = first.id < second.id ? `${first.id}|${second.id}` : `${second.id}|${first.id}`;
           if (skipped.has(key)) continue;
-          const bb = boxes.get(b.id)!;
+          const bb = boxes.get(second.id)!;
           if (this.gapX(ab, bb) < need && this.gapY(ab, bb) < need) {
             if (opts.baseline) {
-              const a0 = units.has(id) ? this.baselineBox(opts.baseline, a.id) : opts.baseline.get(id);
-              const b0 = this.baselineBox(opts.baseline, b.id);
+              const a0 = units.has(id) ? this.baselineBox(opts.baseline, first.id) : opts.baseline.get(id);
+              const b0 = this.baselineBox(opts.baseline, second.id);
               if (a0 && b0 && this.shortfall(a0, b0, need) >= this.shortfall(ab, bb, need) - 1) continue;
             }
-            conflict = [a, b];
+            conflict = [first, second];
             conflictGap = need;
             break;
           }
@@ -193,15 +193,15 @@ export class Separation {
         if (conflict) break;
       }
       if (!conflict) break;
-      const [a, b] = conflict;
-      const move = this.candidateMoves(a, b, boxes, { movable, active, used, gap: conflictGap, lockedX, lockedY }).filter((m) => m.need <= MAX_PUSH)[0];
+      const [unitA, unitB] = conflict;
+      const move = this.candidateMoves(unitA, unitB, boxes, { movable, active, used, gap: conflictGap, lockedX, lockedY }).filter((candidate) => candidate.need <= MAX_PUSH)[0];
       if (!move) {
-        skipped.add(a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`);
-        res.unresolved.push([a.id, b.id]);
+        skipped.add(unitA.id < unitB.id ? `${unitA.id}|${unitB.id}` : `${unitB.id}|${unitA.id}`);
+        res.unresolved.push([unitA.id, unitB.id]);
         continue;
       }
       const need = Math.ceil(move.need);
-      if (LayoutDebug.on()) LayoutDebug.log(`[separate] ${a.id} ~ ${b.id}: ${move.unit} ${move.dir} ${need}`);
+      if (LayoutDebug.on()) LayoutDebug.log(`[separate] ${unitA.id} ~ ${unitB.id}: ${move.unit} ${move.dir} ${need}`);
       const dy = move.dir === 'down' ? need : move.dir === 'up' ? -need : 0;
       const dx = move.dir === 'right' ? need : 0;
       for (const id of this.space.shiftShape(move.unit, dx, dy)) res.moved.add(id);
@@ -209,9 +209,9 @@ export class Separation {
       used.get(move.unit)!.add(move.dir);
       active.add(move.unit);
       if (grow) {
-        const r = this.space.fitInFrame(move.unit, 10);
-        r.moved.forEach((x) => res.moved.add(x));
-        r.resized.forEach((x) => res.resized.add(x));
+        const result = this.space.fitInFrame(move.unit, 10);
+        result.moved.forEach((movedId) => res.moved.add(movedId));
+        result.resized.forEach((resizedId) => res.resized.add(resizedId));
       }
     }
     return res;
@@ -219,8 +219,8 @@ export class Separation {
 
   /** Every given shape is active and movable (`bpmn layout --tidy`). */
   tidy(opts: { ids?: Iterable<string>; gap?: number } = {}): { moved: string[]; resized: string[]; unresolved: Array<[string, string]> } {
-    const ids = opts.ids ? [...opts.ids] : [...this.plane.shapes.values()].filter(PlaneQuery.isLeaf).map((s) => s.id);
-    const r = this.separate({ active: ids, movable: ids, ...(opts.gap !== undefined ? { gap: opts.gap } : {}) });
-    return { moved: [...r.moved], resized: [...r.resized], unresolved: r.unresolved };
+    const ids = opts.ids ? [...opts.ids] : [...this.plane.shapes.values()].filter(PlaneQuery.isLeaf).map((shape) => shape.id);
+    const result = this.separate({ active: ids, movable: ids, ...(opts.gap !== undefined ? { gap: opts.gap } : {}) });
+    return { moved: [...result.moved], resized: [...result.resized], unresolved: result.unresolved };
   }
 }

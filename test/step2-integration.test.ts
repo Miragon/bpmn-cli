@@ -26,13 +26,13 @@ const ROOT = join(import.meta.dirname, '..');
 const STYLED = readFileSync(join(ROOT, 'test', 'fixtures', 'roundtrip', 'styled.bpmn'), 'utf8');
 
 /** The lines of `a` that `b` no longer has (as a multiset), in order. */
-function removedLines(a: string, b: string): string[] {
+function removedLines(before: string, after: string): string[] {
   const left = new Map<string, number>();
-  for (const l of b.split('\n')) left.set(l, (left.get(l) ?? 0) + 1);
-  return a.split('\n').filter((l) => {
-    const n = left.get(l) ?? 0;
-    if (!n) return true;
-    left.set(l, n - 1);
+  for (const line of after.split('\n')) left.set(line, (left.get(line) ?? 0) + 1);
+  return before.split('\n').filter((line) => {
+    const count = left.get(line) ?? 0;
+    if (!count) return true;
+    left.set(line, count - 1);
     return false;
   });
 }
@@ -41,11 +41,11 @@ function removedLines(a: string, b: string): string[] {
 const semantic = (xml: string): string => xml.split('<bpmndi:BPMNDiagram')[0]!;
 
 /** The start tags of every DI element, in order. */
-const diTags = (xml: string): string[] => [...xml.matchAll(/<bpmndi:(?:BPMNShape|BPMNEdge|BPMNPlane|BPMNDiagram) [^>]*>/g)].map((m) => m[0]);
+const diTags = (xml: string): string[] => [...xml.matchAll(/<bpmndi:(?:BPMNShape|BPMNEdge|BPMNPlane|BPMNDiagram) [^>]*>/g)].map((match) => match[0]);
 
-async function rejected(p: Promise<unknown>): Promise<CliError> {
+async function rejected(promise: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await promise;
   } catch (err) {
     return err as CliError;
   }
@@ -79,36 +79,36 @@ afterAll(() => {
 
 describe('the in-memory API keeps the text (core + roundtrip + conventions)', () => {
   it('a no-op is unchanged: the input string itself', async () => {
-    const r = await applyToXml(STYLED, [{ op: 'set', id: 'Task_Check', values: { name: 'Check order' } }]);
-    expect(r.unchanged).toBe(true);
-    expect(r.xml).toBe(STYLED);
-    expect(r.result.unchanged).toBe(true);
+    const result = await applyToXml(STYLED, [{ op: 'set', id: 'Task_Check', values: { name: 'Check order' } }]);
+    expect(result.unchanged).toBe(true);
+    expect(result.xml).toBe(STYLED);
+    expect(result.result.unchanged).toBe(true);
   });
 
   it("an insert gets ids in the file's style and changes only the lines it touched", async () => {
-    const r = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
-    expect(r.unchanged).toBe(false);
+    const result = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
+    expect(result.unchanged).toBe(false);
     // Task_ + PascalCase like Task_Check / Task_Script; the file numbers its flows (Flow_1, Flow_2, Flow_4): a new one
     // keeps the prefix and names its ends
-    expect(r.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
+    expect(result.result.created.map((change) => change.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
     // in the process only the spliced flow's target changed (its incoming entry moved to the new task); comments, CDATA and quoting stay
-    expect(removedLines(semantic(STYLED), semantic(r.xml)).map((l) => l.trim())).toEqual(['<bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Gateway_Ok"/>']);
-    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">\n            <bpmn:incoming>Flow_AuditOrderToOrderOk</bpmn:incoming>');
-    expect(r.xml.startsWith(STYLED.split('<bpmn:process')[0]!)).toBe(true);
-    expect(r.xml).toContain('<bpmn:userTask id="Task_AuditOrder" name="Audit order">\n            <bpmn:incoming>Flow_2</bpmn:incoming>');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_AuditOrderToOrderOk" sourceRef="Task_AuditOrder" targetRef="Gateway_Ok"/>');
+    expect(removedLines(semantic(STYLED), semantic(result.xml)).map((line) => line.trim())).toEqual(['<bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Gateway_Ok"/>']);
+    expect(result.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">\n            <bpmn:incoming>Flow_AuditOrderToOrderOk</bpmn:incoming>');
+    expect(result.xml.startsWith(STYLED.split('<bpmn:process')[0]!)).toBe(true);
+    expect(result.xml).toContain('<bpmn:userTask id="Task_AuditOrder" name="Audit order">\n            <bpmn:incoming>Flow_2</bpmn:incoming>');
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_AuditOrderToOrderOk" sourceRef="Task_AuditOrder" targetRef="Gateway_Ok"/>');
     // new DI in the file's DI id style (<id>_di), the old DI keeps its start tags
-    expect(r.xml).toContain('<bpmndi:BPMNShape id="Task_AuditOrder_di" bpmnElement="Task_AuditOrder">');
-    expect(r.xml).toContain('<bpmndi:BPMNEdge id="Flow_AuditOrderToOrderOk_di" bpmnElement="Flow_AuditOrderToOrderOk">');
-    expect(diTags(r.xml).filter((t) => !/Task_AuditOrder|Flow_AuditOrderToOrderOk/.test(t))).toEqual(diTags(STYLED));
-    expect(r.xml.endsWith('<!-- end of the synthetic fixture -->\n</bpmn:definitions>')).toBe(true);
+    expect(result.xml).toContain('<bpmndi:BPMNShape id="Task_AuditOrder_di" bpmnElement="Task_AuditOrder">');
+    expect(result.xml).toContain('<bpmndi:BPMNEdge id="Flow_AuditOrderToOrderOk_di" bpmnElement="Flow_AuditOrderToOrderOk">');
+    expect(diTags(result.xml).filter((tag) => !/Task_AuditOrder|Flow_AuditOrderToOrderOk/.test(tag))).toEqual(diTags(STYLED));
+    expect(result.xml.endsWith('<!-- end of the synthetic fixture -->\n</bpmn:definitions>')).toBe(true);
   });
 
   it('a full redraw (layoutXml) keeps every DI start tag and the process text byte for byte', async () => {
-    const r = await layoutXml(STYLED);
-    expect(r.result.layout.mode).toBe('full');
-    expect(diTags(r.xml)).toEqual(diTags(STYLED));
-    expect(semantic(r.xml)).toBe(semantic(STYLED));
+    const result = await layoutXml(STYLED);
+    expect(result.result.layout.mode).toBe('full');
+    expect(diTags(result.xml)).toEqual(diTags(STYLED));
+    expect(semantic(result.xml)).toBe(semantic(STYLED));
   });
 
   it('a design-iq sticky follows its node and keeps its own text apart from the new position', async () => {
@@ -116,10 +116,10 @@ describe('the in-memory API keeps the text (core + roundtrip + conventions)', ()
       /(<bpmn:process id="Process_Styled"[^>]*>\n)/,
       '$1        <bpmn:extensionElements>\n            <bpmiq:sticky id="Sticky_1" text="Who packs?" x="510" y="180" width="80" height="40"/>\n        </bpmn:extensionElements>\n',
     );
-    const r = await applyToXml(withSticky, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
-    expect(r.result.layout.stickies).toEqual([{ sticky: 'Sticky_1', node: 'Task_Script' }]);
+    const result = await applyToXml(withSticky, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
+    expect(result.result.layout.stickies).toEqual([{ sticky: 'Sticky_1', node: 'Task_Script' }]);
     // Task_Script moved 149 px right (the space tool pushes only by the room that is missing); the sticky by the same shift, nothing else of its line changed
-    expect(r.xml).toContain('\n            <bpmiq:sticky id="Sticky_1" text="Who packs?" x="659" y="180" width="80" height="40"/>\n');
+    expect(result.xml).toContain('\n            <bpmiq:sticky id="Sticky_1" text="Who packs?" x="659" y="180" width="80" height="40"/>\n');
     expect((await applyToXml(withSticky, [{ op: 'set', id: 'Task_Check', values: { name: 'Check order' } }])).unchanged).toBe(true);
   });
 });
@@ -131,13 +131,13 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
       seen.push({ phase: ctx.phase, file: ctx.file, comment: xml.includes('<!-- the order starts here -->'), cdata: xml.includes('<![CDATA[var total') });
       return ctx.phase === 'after' && xml.includes('Task_AuditOrder') ? [{ severity: 'WARN', ruleId: 'audit/seen', message: 'audit step added' }] : [];
     };
-    const r = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }], { validators: [spy], file: 'models/order.bpmn' });
+    const result = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }], { validators: [spy], file: 'models/order.bpmn' });
     expect(seen).toEqual([
       { phase: 'before', file: 'models/order.bpmn', comment: true, cdata: true },
       { phase: 'after', file: 'models/order.bpmn', comment: true, cdata: true },
     ]);
-    expect(r.result.validation.validators).toMatchObject([{ name: 'spy', warnings: [{ code: 'audit/seen', validator: 'spy' }] }]);
-    expect(renderLines(r.result.warnings.added)).toContain('[spy] audit/seen');
+    expect(result.result.validation.validators).toMatchObject([{ name: 'spy', warnings: [{ code: 'audit/seen', validator: 'spy' }] }]);
+    expect(renderLines(result.result.warnings.added)).toContain('[spy] audit/seen');
   });
 
   it('a host validator in memory: a write that introduces its error is refused, validateXml reports every finding', async () => {
@@ -145,20 +145,20 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
     /** a call activity calls a process the host knows (a warning); every task is reached by a sequence flow (an error) */
     const host = (text: string): ValidatorFinding[] => [
       ...[...text.matchAll(/<bpmn:callActivity id="([^"]+)"[^>]*calledElement="([^"]+)"/g)]
-        .filter((m) => m[2] !== 'payments')
-        .map((m) => ({ severity: 'WARN', ruleId: 'refs/dangling', message: `${m[1]} calls ${m[2]}, which the host does not know`, element: m[1] })),
-      ...[...text.matchAll(/<bpmn:task id="([^"]+)"/g)].filter((m) => !text.includes(`targetRef="${m[1]}"`)).map((m) => ({ severity: 'ERROR', ruleId: 'flow/unreachable', message: `${m[1]} is never reached`, element: m[1] })),
+        .filter((match) => match[2] !== 'payments')
+        .map((match) => ({ severity: 'WARN', ruleId: 'refs/dangling', message: `${match[1]} calls ${match[2]}, which the host does not know`, element: match[1] })),
+      ...[...text.matchAll(/<bpmn:task id="([^"]+)"/g)].filter((match) => !text.includes(`targetRef="${match[1]}"`)).map((match) => ({ severity: 'ERROR', ruleId: 'flow/unreachable', message: `${match[1]} is never reached`, element: match[1] })),
     ];
     expect((await validateXml(xml)).validators).toBeUndefined();
     const report = await validateXml(xml, { validators: [host], file: 'order.bpmn' });
     expect(report.ok).toBe(true);
-    expect(report.warnings.map((w) => `${w.code} ${w.element}`)).toEqual(['refs/dangling Call_Billing']);
+    expect(report.warnings.map((warning) => `${warning.code} ${warning.element}`)).toEqual(['refs/dangling Call_Billing']);
     expect((await validateXml(await orderModel('payments'), { validators: [host] })).warnings).toEqual([]);
 
     // a write that leaves a node unconnected is refused by the host validator, a connected one passes
     const err = await rejected(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }], { validators: [host] }));
     expect(err.code).toBe('E_VALIDATION');
-    expect((err.details['errors'] as Array<{ code: string; validator?: string }>).map((e) => `${e.validator} ${e.code}`)).toEqual(['host flow/unreachable']);
+    expect((err.details['errors'] as Array<{ code: string; validator?: string }>).map((error) => `${error.validator} ${error.code}`)).toEqual(['host flow/unreachable']);
     const ok = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Check', after: 'Start' }], { validators: [host] });
     expect(ok.result.validation.validators?.[0]).toMatchObject({ name: 'host', errors: [], counts: { errors: 0, warnings: 1 } });
   });
@@ -166,7 +166,7 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
 
 /** The text lines of findings (`[validator] CODE`), for a quick look. */
 function renderLines(findings: Array<{ code: string; validator?: string }>): string[] {
-  return findings.map((f) => `${f.validator ? `[${f.validator}] ` : ''}${f.code}`);
+  return findings.map((finding) => `${finding.validator ? `[${finding.validator}] ` : ''}${finding.code}`);
 }
 
 describe('the node layer tells the validators the file (validation + core)', () => {
@@ -176,11 +176,11 @@ describe('the node layer tells the validators the file (validation + core)', () 
     const files: Array<string | undefined> = [];
     const seen = (_xml: string, ctx: ValidatorContext): ValidatorFinding[] => (files.push(ctx.file), []);
     const target = join(dir, 'models', 'copy.bpmn');
-    const r = await mutateFile(source, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill the order' } }], { out: target, validators: [seen] });
+    const result = await mutateFile(source, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill the order' } }], { out: target, validators: [seen] });
     expect(files).toEqual([target, target]);
-    expect(r.validation.validators).toMatchObject([{ name: 'seen', errors: [] }]);
-    expect(r.written).toBe(true);
-    expect(r.file).toBe(target);
+    expect(result.validation.validators).toMatchObject([{ name: 'seen', errors: [] }]);
+    expect(result.written).toBe(true);
+    expect(result.file).toBe(target);
 
     files.length = 0;
     await mutateFile(source, [{ op: 'set', id: 'Call_Billing', values: { name: 'Bill' } }], { dryRun: true, validators: [seen] });

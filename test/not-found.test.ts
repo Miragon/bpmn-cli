@@ -49,32 +49,32 @@ describe('E_NOT_FOUND candidates', () => {
   });
 
   it('inside a batch: the ids it created come first and are listed in the hint', async () => {
-    const e = await notFound(await invoice(), [
+    const failure = await notFound(await invoice(), [
       { op: 'add', kind: 'userTask', name: 'Vollständigkeit prüfen', after: 'Activity_CheckInvoice' },
       { op: 'add', kind: 'serviceTask', name: 'Buchen', after: 'Activity_VollstandigkeitPrufen' },
     ]);
-    expect(e.code).toBe('E_NOT_FOUND');
-    expect(e.details.op).toBe(1);
-    expect(e.details.candidates?.[0]).toBe('Activity_VollstaendigkeitPruefen');
-    expect(e.message).toBe('No element with id "Activity_VollstandigkeitPrufen" (did you mean: Activity_VollstaendigkeitPruefen?)');
-    expect(e.details.hint).toMatch(/^Created earlier in this batch: Activity_VollstaendigkeitPruefen, Flow_VollstaendigkeitPruefenToPruefung; name them with "as": "\$name" to refer to them\./);
+    expect(failure.code).toBe('E_NOT_FOUND');
+    expect(failure.details.op).toBe(1);
+    expect(failure.details.candidates?.[0]).toBe('Activity_VollstaendigkeitPruefen');
+    expect(failure.message).toBe('No element with id "Activity_VollstandigkeitPrufen" (did you mean: Activity_VollstaendigkeitPruefen?)');
+    expect(failure.details.hint).toMatch(/^Created earlier in this batch: Activity_VollstaendigkeitPruefen, Flow_VollstaendigkeitPruefenToPruefung; name them with "as": "\$name" to refer to them\./);
   });
 
   it('a flow an op of the batch renamed: the message says to what', async () => {
-    const e = await notFound(await invoice(), [
+    const failure = await notFound(await invoice(), [
       { op: 'add', kind: 'task', name: 'Archive', after: 'Activity_Pruefung' },
       { op: 'set', id: 'Flow_PruefungToDone', values: { name: 'ok' } },
     ]);
-    expect(e.message).toBe('No element with id "Flow_PruefungToDone": an op before this one renamed it to Flow_PruefungToArchive (its id named its old ends)');
-    expect(e.details.candidates?.[0]).toBe('Flow_PruefungToArchive');
+    expect(failure.message).toBe('No element with id "Flow_PruefungToDone": an op before this one renamed it to Flow_PruefungToArchive (its id named its old ends)');
+    expect(failure.details.candidates?.[0]).toBe('Flow_PruefungToArchive');
   });
 
   it('an alias written without $ is pointed out', async () => {
-    const e = await notFound(await invoice(), [
+    const failure = await notFound(await invoice(), [
       { op: 'add', kind: 'task', name: 'Archive', after: 'Activity_Pruefung', as: '$archive' },
       { op: 'add', kind: 'end', name: 'Archived', after: 'archive' },
     ]);
-    expect(e.details.hint).toMatch(/^In this batch \$archive is an alias: write "\$archive"\./);
+    expect(failure.details.hint).toMatch(/^In this batch \$archive is an alias: write "\$archive"\./);
   });
 
   it('a batch that fails at its first op: the plain hint; the batch context is gone afterwards', async () => {
@@ -83,8 +83,8 @@ describe('E_NOT_FOUND candidates', () => {
     try {
       runOps(doc, [{ op: 'remove', ids: ['Activity_ChekInvoice'] }]);
       doc.require('Activity_Chek');
-    } catch (e) {
-      err = e as CliError;
+    } catch (error) {
+      err = error as CliError;
     }
     expect(err?.details.candidates?.[0]).toBe('Activity_CheckInvoice');
     expect(err?.details.hint).toBe('Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.');

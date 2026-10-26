@@ -49,42 +49,42 @@ interface Drawn {
   points?: Array<{ x: number; y: number }>;
 }
 
-const num = (m: RegExpExecArray): Box => ({ x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) });
+const num = (match: RegExpExecArray): Box => ({ x: Number(match[1]), y: Number(match[2]), width: Number(match[3]), height: Number(match[4]) });
 
 /** Shapes (bounds, label) and edges (waypoints, label) of a document, by element id. */
 function drawn(xml: string): Map<string, Drawn> {
   const out = new Map<string, Drawn>();
   const bounds = /<dc:Bounds x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/;
-  for (const m of xml.matchAll(/<bpmndi:(BPMNShape|BPMNEdge)\b[^>]*bpmnElement="([^"]+)"[^>]*>([\s\S]*?)<\/bpmndi:\1>/g)) {
-    const body = m[3]!;
+  for (const match of xml.matchAll(/<bpmndi:(BPMNShape|BPMNEdge)\b[^>]*bpmnElement="([^"]+)"[^>]*>([\s\S]*?)<\/bpmndi:\1>/g)) {
+    const body = match[3]!;
     const label = /<bpmndi:BPMNLabel[\s\S]*?<\/bpmndi:BPMNLabel>/.exec(body);
     const rest = label ? body.replace(label[0], '') : body;
     const lb = label ? bounds.exec(label[0]) : null;
     const sb = bounds.exec(rest);
-    const points = [...rest.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((p) => ({ x: Number(p[1]), y: Number(p[2]) }));
-    out.set(m[2]!, { ...(sb ? { bounds: num(sb) } : {}), ...(lb ? { label: num(lb) } : {}), ...(points.length ? { points } : {}) });
+    const points = [...rest.matchAll(/<di:waypoint x="([-\d.]+)" y="([-\d.]+)"/g)].map((point) => ({ x: Number(point[1]), y: Number(point[2]) }));
+    out.set(match[2]!, { ...(sb ? { bounds: num(sb) } : {}), ...(lb ? { label: num(lb) } : {}), ...(points.length ? { points } : {}) });
   }
   return out;
 }
 
-const overlap = (a: Box, b: Box): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const overlap = (first: Box, box: Box): boolean => first.x < box.x + box.width && box.x < first.x + first.width && first.y < box.y + box.height && box.y < first.y + first.height;
 const inside = (inner: Box, outer: Box): boolean => inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
-const centreIn = (b: Box, f: Box): boolean => inside({ x: b.x + b.width / 2, y: b.y + b.height / 2, width: 0, height: 0 }, f);
-const bottom = (b: Box): number => b.y + b.height;
+const centreIn = (box: Box, frame: Box): boolean => inside({ x: box.x + box.width / 2, y: box.y + box.height / 2, width: 0, height: 0 }, frame);
+const bottom = (box: Box): number => box.y + box.height;
 
 /** The frame and title of an expanded sub-process, and the labels of what is drawn inside it. */
 function frameOf(xml: string, subId: string, name: string): { frame: Box; title: Box; labels: Array<[string, Box]>; shapes: Array<[string, Box]> } {
-  const d = drawn(xml);
-  const frame = d.get(subId)!.bounds!;
+  const drawing = drawn(xml);
+  const frame = drawing.get(subId)!.bounds!;
   const title = titleBox(frame, name)!;
   const shapes: Array<[string, Box]> = [];
   const labels: Array<[string, Box]> = [];
-  for (const [id, x] of d) {
+  for (const [id, entry] of drawing) {
     if (id === subId) continue;
-    const at = x.bounds ?? (x.points ? { x: x.points[0]!.x, y: x.points[0]!.y, width: 0, height: 0 } : undefined);
+    const at = entry.bounds ?? (entry.points ? { x: entry.points[0]!.x, y: entry.points[0]!.y, width: 0, height: 0 } : undefined);
     if (!at || !centreIn(at, frame)) continue;
-    if (x.bounds) shapes.push([id, x.bounds]);
-    if (x.label) labels.push([id, x.label]);
+    if (entry.bounds) shapes.push([id, entry.bounds]);
+    if (entry.label) labels.push([id, entry.label]);
   }
   return { frame, title, labels, shapes };
 }
@@ -93,8 +93,8 @@ function frameOf(xml: string, subId: string, name: string): { frame: Box; title:
 function expectLabelsClear(xml: string, subId: string, name: string): void {
   const { frame, title, labels } = frameOf(xml, subId, name);
   expect(labels.length).toBeGreaterThan(0);
-  expect(labels.filter(([, l]) => overlap(l, title)).map(([id]) => id)).toEqual([]);
-  expect(labels.filter(([, l]) => !inside(l, frame)).map(([id]) => id)).toEqual([]);
+  expect(labels.filter(([, labelBox]) => overlap(labelBox, title)).map(([id]) => id)).toEqual([]);
+  expect(labels.filter(([, labelBox]) => !inside(labelBox, frame)).map(([id]) => id)).toEqual([]);
 }
 
 const MAIN = [
@@ -110,9 +110,9 @@ const ESP = 'Activity_KuendigungZurueckgezogen';
 const ESP_NAME = 'Kündigung zurückgezogen';
 
 async function drawnNew(ops: unknown[]): Promise<string> {
-  const r = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, ops);
-  expect(r.result.layout.mode).toBe('full');
-  return r.xml;
+  const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, ops);
+  expect(result.result.layout.mode).toBe('full');
+  return result.xml;
 }
 
 describe('full engine: labels stay off the title of an expanded sub-process and inside it', () => {
@@ -127,8 +127,8 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
     expectLabelsClear(batch, ESP, ESP_NAME);
     expect((await metricsXml(batch)).score).toBe(0);
     // the throw event between the start and the end, its label below it as the convention says
-    const d = drawn(batch);
-    const ev = d.get('Event_BeendigungRueckabwickeln')!;
+    const drawing = drawn(batch);
+    const ev = drawing.get('Event_BeendigungRueckabwickeln')!;
     expect(ev.label!.y).toBeGreaterThanOrEqual(bottom(ev.bounds!));
     const later = await applyToXml(await drawnNew([...MAIN, { ...END, after: '$ms' }]), [{ ...THROW, after: 'Event_ChefZiehtZurueck' }]);
     expect(later.result.layout.mode).toBe('full');
@@ -136,7 +136,7 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
   });
 
   it('a gateway in the first row: its label above it, below the title (the frame grows at the top)', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Bestellung' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Bestellung' })).xml, [
       { op: 'add', kind: 'startEvent', name: 'Bestellung eingegangen', in: 'Process_Bestellung', as: '$s' },
       { op: 'add', kind: 'endEvent', name: 'Bestellung erledigt', after: '$s' },
       { op: 'add', kind: 'eventSubProcess', name: 'Stornierung durch den Kunden', in: 'Process_Bestellung', as: '$esp' },
@@ -153,52 +153,52 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       },
     ]);
     const sub = 'Activity_StornierungDurchDenKunden';
-    expectLabelsClear(r.xml, sub, 'Stornierung durch den Kunden');
-    const { frame, title } = frameOf(r.xml, sub, 'Stornierung durch den Kunden');
-    const gw = drawn(r.xml).get('Gateway_StornoMoeglich')!;
+    expectLabelsClear(result.xml, sub, 'Stornierung durch den Kunden');
+    const { frame, title } = frameOf(result.xml, sub, 'Stornierung durch den Kunden');
+    const gw = drawn(result.xml).get('Gateway_StornoMoeglich')!;
     expect(bottom(gw.label!)).toBeLessThanOrEqual(gw.bounds!.y);
     expect(gw.label!.y).toBeGreaterThanOrEqual(bottom(title));
     // more than the 45 px the top padding has without a label above the first row
     expect(gw.bounds!.y - frame.y).toBeGreaterThan(45);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a title of four lines pushes the content down', async () => {
     const name = 'Rücknahme der Kündigung durch den Mitarbeiter innerhalb der gesetzlichen Widerrufsfrist von zwei Wochen';
-    const r = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
       ...MAIN.slice(0, 3),
       { op: 'add', kind: 'eventSubProcess', name, in: 'Process_Kuendigung', as: '$esp' },
       { op: 'add', kind: 'startEvent:message', name: 'Rücknahme eingegangen', in: '$esp', as: '$ms', message: 'Ruecknahme' },
       { op: 'add', kind: 'endEvent', name: 'Kündigung storniert', after: '$ms' },
     ]);
-    const sub = /<bpmn:subProcess id="([^"]+)"/.exec(r.xml)![1]!;
-    const { title, shapes, labels } = frameOf(r.xml, sub, name);
+    const sub = /<bpmn:subProcess id="([^"]+)"/.exec(result.xml)![1]!;
+    const { title, shapes, labels } = frameOf(result.xml, sub, name);
     expect(title.height).toBeGreaterThanOrEqual(3 * 14.4);
-    for (const [, b] of [...shapes, ...labels]) expect(b.y).toBeGreaterThanOrEqual(bottom(title));
-    expectLabelsClear(r.xml, sub, name);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    for (const [, box] of [...shapes, ...labels]) expect(box.y).toBeGreaterThanOrEqual(bottom(title));
+    expectLabelsClear(result.xml, sub, name);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('labels wider than their events stay inside the frame on the left, the right and below', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
       ...MAIN.slice(0, 3),
       { op: 'add', kind: 'eventSubProcess', name: 'Rücknahme', in: 'Process_Kuendigung', as: '$esp' },
       { op: 'add', kind: 'startEvent:message', name: 'Kündigungsrücknahmeerklärung eingegangen', in: '$esp', as: '$ms', message: 'Ruecknahme' },
       { op: 'add', kind: 'intermediateThrowEvent:escalation', name: 'Personalabteilungsleitung informieren', after: '$ms', as: '$x', escalation: 'Info' },
       { op: 'add', kind: 'endEvent', name: 'Arbeitsvertragsfortsetzung', after: '$x' },
     ]);
-    expectLabelsClear(r.xml, 'Activity_Ruecknahme', 'Rücknahme');
+    expectLabelsClear(result.xml, 'Activity_Ruecknahme', 'Rücknahme');
     // the labels below their events, as the convention says (none moved onto the title row)
-    const d = drawn(r.xml);
+    const drawing = drawn(result.xml);
     for (const id of ['Event_Kuendigungsruecknahmeerklaerung', 'Event_PersonalabteilungsleitungInformieren', 'Event_Arbeitsvertragsfortsetzung']) {
-      expect(d.get(id)!.label!.y).toBeGreaterThanOrEqual(bottom(d.get(id)!.bounds!));
+      expect(drawing.get(id)!.label!.y).toBeGreaterThanOrEqual(bottom(drawing.get(id)!.bounds!));
     }
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a loop under an event keeps below its label: the label stays at its spot below the event, inside the frame', async () => {
     // the reminder loop "no" runs back from Paid? to Send invoice under the timer, whose label takes three lines
-    const r = await applyToXml((await newXml({ processName: 'Rechnung' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Rechnung' })).xml, [
       { op: 'add', kind: 'startEvent', in: 'Process_Rechnung', as: '$s' },
       { op: 'add', kind: 'subProcess', name: 'Wait for the payment', after: '$s', as: '$sp' },
       { op: 'add', kind: 'endEvent', name: 'Done', after: '$sp' },
@@ -209,19 +209,19 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'add', kind: 'endEvent', name: 'Paid', after: '$g', flowName: 'yes' },
       { op: 'connect', source: '$g', target: '$t', name: 'no' },
     ]);
-    expect(r.result.layout.mode).toBe('full');
+    expect(result.result.layout.mode).toBe('full');
     const sub = 'Activity_WaitForThePayment';
-    expectLabelsClear(r.xml, sub, 'Wait for the payment');
-    const d = drawn(r.xml);
-    const timer = d.get('Event_TwoWeeksHavePassedSinceSending')!;
+    expectLabelsClear(result.xml, sub, 'Wait for the payment');
+    const drawing = drawn(result.xml);
+    const timer = drawing.get('Event_TwoWeeksHavePassedSinceSending')!;
     expect(timer.label!.y).toBeGreaterThanOrEqual(bottom(timer.bounds!));
-    const loop = [...d.values()].find((x) => x.points && x.label && x.points.length > 3)!;
-    expect(Math.max(...loop.points!.map((p) => p.y))).toBeGreaterThan(bottom(timer.label!));
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    const loop = [...drawing.values()].find((candidate) => candidate.points && candidate.label && candidate.points.length > 3)!;
+    expect(Math.max(...loop.points!.map((point) => point.y))).toBeGreaterThan(bottom(timer.label!));
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('data objects and stores with names of several lines below the last row: the frame holds their labels', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Application' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Application' })).xml, [
       { op: 'add', kind: 'startEvent', name: 'Application received', in: 'Process_Application', as: '$s' },
       { op: 'add', kind: 'subProcess', name: 'Score', after: '$s', as: '$sp' },
       { op: 'add', kind: 'startEvent', in: '$sp', as: '$a' },
@@ -235,25 +235,25 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'add', kind: 'endEvent', name: 'Logged', after: '$log' },
       { op: 'add', kind: 'dataStore', name: 'Cancellation audit store', in: '$esp', to: '$log' },
     ]);
-    expect(r.result.layout.mode).toBe('full');
-    expectLabelsClear(r.xml, 'Activity_Score', 'Score');
-    expectLabelsClear(r.xml, 'Activity_HandleCancel', 'Handle cancel');
-    const d = drawn(r.xml);
+    expect(result.result.layout.mode).toBe('full');
+    expectLabelsClear(result.xml, 'Activity_Score', 'Score');
+    expectLabelsClear(result.xml, 'Activity_HandleCancel', 'Handle cancel');
+    const drawing = drawn(result.xml);
     for (const [kind, sub] of [
       ['dataObjectReference', 'Activity_Score'],
       ['dataStoreReference', 'Activity_HandleCancel'],
     ] as const) {
-      const id = new RegExp(`<bpmn:${kind} id="([^"]+)"`).exec(r.xml)![1]!;
-      expect(d.get(id)?.label, id).toBeDefined();
-      expect(inside(d.get(id)!.label!, d.get(sub)!.bounds!), id).toBe(true);
+      const id = new RegExp(`<bpmn:${kind} id="([^"]+)"`).exec(result.xml)![1]!;
+      expect(drawing.get(id)?.label, id).toBeDefined();
+      expect(inside(drawing.get(id)!.label!, drawing.get(sub)!.bounds!), id).toBe(true);
     }
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a data object on the end event after a join: the event label goes above it beside the title, the data label stays below its object', async () => {
     // the split makes the sub-process tall enough for a spot far below the data object inside it: that one must not win over the near one
     // above the event, beside the narrow title (it took the data label's spot and pushed it out of the frame)
-    const r = await applyToXml((await newXml({ processName: 'M' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'M' })).xml, [
       { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_M', id: 'S0' },
       { op: 'add', kind: 'subProcess', name: 'Dunning', after: 'S0', id: 'SP' },
       { op: 'add', kind: 'endEvent', name: 'End', after: 'SP', id: 'E0' },
@@ -274,18 +274,18 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'add', kind: 'dataObject', name: 'Delivery note with the signature of the recipient', in: 'SP', id: 'D1' },
       { op: 'connect', source: 'D1', target: 'EE' },
     ]);
-    expect(r.result.layout.mode).toBe('full');
-    expectLabelsClear(r.xml, 'SP', 'Dunning');
-    const d = drawn(r.xml);
-    const ee = d.get('EE')!;
-    const data = d.get('D1')!;
+    expect(result.result.layout.mode).toBe('full');
+    expectLabelsClear(result.xml, 'SP', 'Dunning');
+    const drawing = drawn(result.xml);
+    const ee = drawing.get('EE')!;
+    const data = drawing.get('D1')!;
     expect(bottom(ee.label!)).toBeLessThanOrEqual(ee.bounds!.y);
     expect(data.label!.y).toBeGreaterThanOrEqual(bottom(data.bounds!));
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a data object and a data store of one task with long names: the frame holds both labels side by side', async () => {
-    const r = await applyToXml((await newXml({ processName: 'M' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'M' })).xml, [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
       { op: 'add', kind: 'subProcess', id: 'SP', name: 'Handle', after: 'S' },
       { op: 'add', kind: 'endEvent', id: 'E', name: 'End', after: 'SP' },
@@ -297,19 +297,19 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'add', kind: 'dataStoreReference', id: 'DS', name: 'Customer relationship management database of the company', in: 'SP' },
       { op: 'connect', source: 'T', target: 'DS' },
     ]);
-    expect(r.result.layout.mode).toBe('full');
-    expectLabelsClear(r.xml, 'SP', 'Handle');
-    const d = drawn(r.xml);
-    const [doc, store] = [d.get('D')!, d.get('DS')!];
+    expect(result.result.layout.mode).toBe('full');
+    expectLabelsClear(result.xml, 'SP', 'Handle');
+    const drawing = drawn(result.xml);
+    const [doc, store] = [drawing.get('D')!, drawing.get('DS')!];
     expect(overlap(doc.label!, store.label!)).toBe(false);
     // the store's label beside the document's, below the store (the frame grew to the right for it)
     expect(store.label!.y).toBe(doc.label!.y);
     expect(store.label!.x).toBeGreaterThan(doc.label!.x + doc.label!.width);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a transaction and a plain sub-process alike', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
       { op: 'add', kind: 'startEvent', name: 'Kündigung eingegangen', in: 'Process_Kuendigung', as: '$s' },
       { op: 'add', kind: 'transaction', name: 'Kündigung rückabwickeln', after: '$s', as: '$tx' },
       { op: 'add', kind: 'startEvent', name: 'Rückabwicklung gestartet', in: '$tx', as: '$a' },
@@ -321,9 +321,9 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'add', kind: 'intermediateThrowEvent:signal', name: 'Personalakte aktualisieren', after: '$c', as: '$d', signal: 'Akte' },
       { op: 'add', kind: 'endEvent', name: 'Aufräumen beendet', after: '$d' },
     ]);
-    expectLabelsClear(r.xml, 'Activity_KuendigungRueckabwickeln', 'Kündigung rückabwickeln');
-    expectLabelsClear(r.xml, 'Activity_ProzessAufraeumen', 'Prozess aufräumen');
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expectLabelsClear(result.xml, 'Activity_KuendigungRueckabwickeln', 'Kündigung rückabwickeln');
+    expectLabelsClear(result.xml, 'Activity_ProzessAufraeumen', 'Prozess aufräumen');
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
 
@@ -398,17 +398,17 @@ const HAND_MADE = `<?xml version="1.0" encoding="UTF-8"?>
 describe('incremental layout: a kept event sub-process', () => {
   it('a compensation event spliced in between start and end: its label below it, off the title, inside the frame', async () => {
     expect((await metricsXml(HAND_MADE)).score).toBe(0);
-    const r = await applyToXml(HAND_MADE, [{ ...THROW, after: 'Event_Chef' }], { layout: 'incremental' });
-    expect(r.result.layout.mode).toBe('incremental');
-    const id = /<bpmn:intermediateThrowEvent id="([^"]+)"/.exec(r.xml)![1]!;
-    const ev = drawn(r.xml).get(id)!;
+    const result = await applyToXml(HAND_MADE, [{ ...THROW, after: 'Event_Chef' }], { layout: 'incremental' });
+    expect(result.result.layout.mode).toBe('incremental');
+    const id = /<bpmn:intermediateThrowEvent id="([^"]+)"/.exec(result.xml)![1]!;
+    const ev = drawn(result.xml).get(id)!;
     expect(ev.label!.y).toBeGreaterThanOrEqual(bottom(ev.bounds!));
-    expectLabelsClear(r.xml, 'Activity_Esp', ESP_NAME);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expectLabelsClear(result.xml, 'Activity_Esp', ESP_NAME);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a gateway spliced into the first row: room is made below the title for its label above it', async () => {
-    const r = await applyToXml(
+    const result = await applyToXml(
       HAND_MADE,
       [
         { op: 'add', kind: 'exclusiveGateway', name: 'Rücknahme zulässig?', after: 'Event_Chef', as: '$g' },
@@ -416,40 +416,40 @@ describe('incremental layout: a kept event sub-process', () => {
       ],
       { layout: 'incremental' },
     );
-    expect(r.result.layout.mode).toBe('incremental');
-    const gwId = /<bpmn:exclusiveGateway id="([^"]+)"/.exec(r.xml)![1]!;
-    const gw = drawn(r.xml).get(gwId)!;
+    expect(result.result.layout.mode).toBe('incremental');
+    const gwId = /<bpmn:exclusiveGateway id="([^"]+)"/.exec(result.xml)![1]!;
+    const gw = drawn(result.xml).get(gwId)!;
     expect(bottom(gw.label!)).toBeLessThanOrEqual(gw.bounds!.y);
-    expectLabelsClear(r.xml, 'Activity_Esp', ESP_NAME);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expectLabelsClear(result.xml, 'Activity_Esp', ESP_NAME);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a renamed sub-process whose title takes more lines makes room below it, and compact keeps that room', async () => {
     const name = 'Kündigung durch den Mitarbeiter nach Rücksprache mit dem Chef zurückgezogen';
-    const r = await applyToXml(HAND_MADE, [{ op: 'set', id: 'Activity_Esp', values: { name } }], { layout: 'incremental' });
-    expect(r.result.layout.mode).toBe('incremental');
-    expect(r.result.layout.notes?.join(' ')).toMatch(/Activity_Esp made \d+ px of room below its new title/);
-    const { title, shapes, labels } = frameOf(r.xml, 'Activity_Esp', name);
+    const result = await applyToXml(HAND_MADE, [{ op: 'set', id: 'Activity_Esp', values: { name } }], { layout: 'incremental' });
+    expect(result.result.layout.mode).toBe('incremental');
+    expect(result.result.layout.notes?.join(' ')).toMatch(/Activity_Esp made \d+ px of room below its new title/);
+    const { title, shapes, labels } = frameOf(result.xml, 'Activity_Esp', name);
     expect(title.height).toBeGreaterThanOrEqual(3 * 14.4);
-    for (const [, b] of [...shapes, ...labels]) expect(b.y).toBeGreaterThanOrEqual(bottom(title) + 4);
-    expect((await metricsXml(r.xml)).score).toBe(0);
-    const compacted = await applyToXml(r.xml, [{ op: 'compact', ids: ['Activity_Esp'] }]);
+    for (const [, box] of [...shapes, ...labels]) expect(box.y).toBeGreaterThanOrEqual(bottom(title) + 4);
+    expect((await metricsXml(result.xml)).score).toBe(0);
+    const compacted = await applyToXml(result.xml, [{ op: 'compact', ids: ['Activity_Esp'] }]);
     const after = frameOf(compacted.xml, 'Activity_Esp', name);
-    for (const [, b] of [...after.shapes, ...after.labels]) expect(b.y).toBeGreaterThanOrEqual(bottom(after.title) + 3.5);
+    for (const [, box] of [...after.shapes, ...after.labels]) expect(box.y).toBeGreaterThanOrEqual(bottom(after.title) + 3.5);
   });
 
   it('`label --side above` makes room below the title instead of putting the label on it', async () => {
     const xml = await drawnNew([...MAIN, { ...END, after: '$ms' }, { ...THROW, after: '$ms' }]);
     const before = drawn(xml);
-    const r = await applyToXml(xml, [{ op: 'label', id: 'Event_BeendigungRueckabwickeln', side: 'above' }]);
-    expect(r.result.layout.mode).toBe('incremental');
-    expect(r.result.layout.format?.[0]?.notes?.join(' ')).toMatch(/^made \d+ px of room above Event_BeendigungRueckabwickeln in its sub-process Activity_KuendigungZurueckgezogen/);
-    const d = drawn(r.xml);
-    const ev = d.get('Event_BeendigungRueckabwickeln')!;
+    const result = await applyToXml(xml, [{ op: 'label', id: 'Event_BeendigungRueckabwickeln', side: 'above' }]);
+    expect(result.result.layout.mode).toBe('incremental');
+    expect(result.result.layout.format?.[0]?.notes?.join(' ')).toMatch(/^made \d+ px of room above Event_BeendigungRueckabwickeln in its sub-process Activity_KuendigungZurueckgezogen/);
+    const drawing = drawn(result.xml);
+    const ev = drawing.get('Event_BeendigungRueckabwickeln')!;
     expect(bottom(ev.label!)).toBeLessThanOrEqual(ev.bounds!.y);
-    expect(d.get(ESP)!.bounds!.height).toBeGreaterThan(before.get(ESP)!.bounds!.height);
-    expectLabelsClear(r.xml, ESP, ESP_NAME);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect(drawing.get(ESP)!.bounds!.height).toBeGreaterThan(before.get(ESP)!.bounds!.height);
+    expectLabelsClear(result.xml, ESP, ESP_NAME);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
 
@@ -485,16 +485,16 @@ describe('incremental layout: a new event in the title row of a sub-process', ()
     ]);
     const gateway = await applyToXml(init.xml, [{ op: 'add', kind: 'exclusiveGateway', name: 'Query needed?', after: 'S', id: 'FG' }], { layout: 'incremental' });
     // every spot of the new end event's label below the title is taken in its middle: not above the sub-process, but shifted along a side
-    const r = await applyToXml(gateway.xml, [{ op: 'add', kind: 'endEvent', name: 'Payment not received in time', after: 'FG', id: 'FE', flowName: 'no, try again later' }], {
+    const result = await applyToXml(gateway.xml, [{ op: 'add', kind: 'endEvent', name: 'Payment not received in time', after: 'FG', id: 'FE', flowName: 'no, try again later' }], {
       layout: 'incremental',
     });
-    expect(r.result.layout.mode).toBe('incremental');
-    const { frame, title } = frameOf(r.xml, 'SP', name);
-    const fe = drawn(r.xml).get('FE')!;
+    expect(result.result.layout.mode).toBe('incremental');
+    const { frame, title } = frameOf(result.xml, 'SP', name);
+    const fe = drawn(result.xml).get('FE')!;
     expect(fe.bounds!.y).toBeLessThan(bottom(title) + 10);
     expect(inside(fe.label!, frame)).toBe(true);
     expect(overlap(fe.label!, title)).toBe(false);
-    expect((await metricsXml(r.xml)).problems.filter((p) => p.kind === 'labelOutsideFrame' || p.kind === 'labelOnTitle')).toEqual([]);
+    expect((await metricsXml(result.xml)).problems.filter((problem) => problem.kind === 'labelOutsideFrame' || problem.kind === 'labelOnTitle')).toEqual([]);
   });
 });
 
@@ -610,16 +610,16 @@ describe('incremental layout: a renamed sub-process makes room only for the line
   /** two lines in the 420 px wide sub-process (one before) */
   const TWO_LINES = 'Handle the order of the customer: check the items, the address, the payment method and the delivery date';
   const rename = async (xml: string, name: string): Promise<{ xml: string; notes: string[] }> => {
-    const r = await applyToXml(xml, [{ op: 'set', id: 'Activity_Handle', values: { name } }], { layout: 'incremental' });
-    expect(r.result.layout.mode).toBe('incremental');
-    return { xml: r.xml, notes: r.result.layout.notes ?? [] };
+    const result = await applyToXml(xml, [{ op: 'set', id: 'Activity_Handle', values: { name } }], { layout: 'incremental' });
+    expect(result.result.layout.mode).toBe('incremental');
+    return { xml: result.xml, notes: result.result.layout.notes ?? [] };
   };
 
   it('a message flow label above the sub-process is no content: a rename that keeps one line moves nothing', async () => {
     expect((await metricsXml(MESSAGE_ABOVE)).score).toBe(0);
-    const r = await rename(MESSAGE_ABOVE, 'Handle the order');
-    expect(r.notes.join(' ')).not.toMatch(/room below its new title/);
-    expect(geometry(r.xml)).toBe(geometry(MESSAGE_ABOVE));
+    const result = await rename(MESSAGE_ABOVE, 'Handle the order');
+    expect(result.notes.join(' ')).not.toMatch(/room below its new title/);
+    expect(geometry(result.xml)).toBe(geometry(MESSAGE_ABOVE));
   });
 
   it('renamed twice with the same number of lines: the second rename moves nothing', async () => {
@@ -631,21 +631,21 @@ describe('incremental layout: a renamed sub-process makes room only for the line
   });
 
   it('a rename that adds a line makes room for the content in the frame only, not for the label above it', async () => {
-    const r = await rename(MESSAGE_ABOVE, TWO_LINES);
-    const { frame, title } = frameOf(r.xml, 'Activity_Handle', TWO_LINES);
+    const result = await rename(MESSAGE_ABOVE, TWO_LINES);
+    const { frame, title } = frameOf(result.xml, 'Activity_Handle', TWO_LINES);
     expect(title.height).toBeCloseTo(2 * 14.4);
-    const d = drawn(r.xml);
+    const drawing = drawn(result.xml);
     for (const id of ['Event_Begin', 'Activity_Check', 'Event_Checked']) {
-      for (const b of [d.get(id)!.bounds!, ...(d.get(id)!.label ? [d.get(id)!.label!] : [])]) expect(b.y, id).toBeGreaterThanOrEqual(bottom(title) + 4);
+      for (const box of [drawing.get(id)!.bounds!, ...(drawing.get(id)!.label ? [drawing.get(id)!.label!] : [])]) expect(box.y, id).toBeGreaterThanOrEqual(bottom(title) + 4);
     }
     // the task at y 220 is what reaches up to the new title: room for it (10 px), not for the label at y 110
-    const moved = d.get('Activity_Check')!.bounds!.y - 220;
+    const moved = drawing.get('Activity_Check')!.bounds!.y - 220;
     expect(moved).toBe(Math.ceil(bottom(title) + 4 - 220));
     expect(moved).toBeLessThan(15);
     expect(frame.height - 190).toBe(moved);
-    expect(d.get('Flow_OrderDetails')!.label).toEqual({ x: 416, y: 110, width: 70, height: 14 });
-    expect(r.notes.join(' ')).toContain(`Activity_Handle made ${moved} px of room below its new title`);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect(drawing.get('Flow_OrderDetails')!.label).toEqual({ x: 416, y: 110, width: 70, height: 14 });
+    expect(result.notes.join(' ')).toContain(`Activity_Handle made ${moved} px of room below its new title`);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
 
@@ -722,11 +722,11 @@ const LABEL_LEFT_OF_TITLE = `<?xml version="1.0" encoding="UTF-8"?>
 describe('making room in a sub-process: a label the room brings onto its title steps aside', () => {
   /** the gateway's label is off the title (it was before), above the gateway, inside the frame */
   const expectGatewayLabelClear = (xml: string): void => {
-    const d = drawn(xml);
-    const frame = d.get('Activity_Handle')!.bounds!;
+    const drawing = drawn(xml);
+    const frame = drawing.get('Activity_Handle')!.bounds!;
     // the sub-process grew: its centred title moved by half of it, the gateway and its label by all of it
     expect(frame.width).toBeGreaterThan(500);
-    const gw = d.get('Gateway_Valid')!;
+    const gw = drawing.get('Gateway_Valid')!;
     expect(overlap(gw.label!, titleBox(frame, 'Handle the order')!)).toBe(false);
     expect(bottom(gw.label!)).toBeLessThanOrEqual(gw.bounds!.y);
     expect(inside(gw.label!, frame)).toBe(true);
@@ -734,26 +734,26 @@ describe('making room in a sub-process: a label the room brings onto its title s
 
   it('`space --after` widening the sub-process', async () => {
     expect((await metricsXml(LABEL_LEFT_OF_TITLE)).score).toBe(0);
-    const r = await applyToXml(LABEL_LEFT_OF_TITLE, [{ op: 'space', after: 'Event_Begin' }]);
-    expectGatewayLabelClear(r.xml);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    const result = await applyToXml(LABEL_LEFT_OF_TITLE, [{ op: 'space', after: 'Event_Begin' }]);
+    expectGatewayLabelClear(result.xml);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a task spliced in by the incremental layout: a note names the label', async () => {
-    const r = await applyToXml(LABEL_LEFT_OF_TITLE, [{ op: 'add', kind: 'task', name: 'Prepare', after: 'Event_Begin' }], { layout: 'incremental' });
-    expect(r.result.layout.mode).toBe('incremental');
-    expect(r.result.layout.notes).toContain('label of Gateway_Valid moved off the name of Activity_Handle');
-    expectGatewayLabelClear(r.xml);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    const result = await applyToXml(LABEL_LEFT_OF_TITLE, [{ op: 'add', kind: 'task', name: 'Prepare', after: 'Event_Begin' }], { layout: 'incremental' });
+    expect(result.result.layout.mode).toBe('incremental');
+    expect(result.result.layout.notes).toContain('label of Gateway_Valid moved off the name of Activity_Handle');
+    expectGatewayLabelClear(result.xml);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 
   it('a label on the title before stays where the room puts it (the drawing is kept)', async () => {
     const xml = LABEL_LEFT_OF_TITLE.replace('<dc:Bounds x="218" y="90" width="34" height="14" />', '<dc:Bounds x="290" y="90" width="34" height="14" />');
     expect((await metricsXml(xml)).problems).toEqual([{ kind: 'labelOnTitle', ids: ['Gateway_Valid', 'Activity_Handle'] }]);
-    const r = await applyToXml(xml, [{ op: 'space', after: 'Event_Begin' }]);
-    const gw = drawn(r.xml).get('Gateway_Valid')!;
+    const result = await applyToXml(xml, [{ op: 'space', after: 'Event_Begin' }]);
+    const gw = drawn(result.xml).get('Gateway_Valid')!;
     expect(gw.label).toEqual({ x: 290 + gw.bounds!.x - 210, y: 90, width: 34, height: 14 });
-    expect((await metricsXml(r.xml)).problems).toEqual([{ kind: 'labelOnTitle', ids: ['Gateway_Valid', 'Activity_Handle'] }]);
+    expect((await metricsXml(result.xml)).problems).toEqual([{ kind: 'labelOnTitle', ids: ['Gateway_Valid', 'Activity_Handle'] }]);
   });
 });
 
@@ -852,31 +852,31 @@ describe('a rename that only widens the title of a sub-process onto a label', ()
   it('moves the label to a free spot inside the sub-process, never out of it', async () => {
     const name = 'Handle the return of the goods by the customer and inform everyone';
     expect((await metricsXml(LABEL_IN_TITLE_ROW)).score).toBe(0);
-    const r = await applyToXml(LABEL_IN_TITLE_ROW, [{ op: 'set', id: 'Activity_Return', values: { name } }], { layout: 'incremental' });
-    expect(r.result.layout.mode).toBe('incremental');
-    expect(r.result.layout.notes).toContain('label of Gateway_Complete moved off the name of Activity_Return');
-    const { frame, title } = frameOf(r.xml, 'Activity_Return', name);
+    const result = await applyToXml(LABEL_IN_TITLE_ROW, [{ op: 'set', id: 'Activity_Return', values: { name } }], { layout: 'incremental' });
+    expect(result.result.layout.mode).toBe('incremental');
+    expect(result.result.layout.notes).toContain('label of Gateway_Complete moved off the name of Activity_Return');
+    const { frame, title } = frameOf(result.xml, 'Activity_Return', name);
     expect(title.height).toBeCloseTo(14.4);
-    const gw = drawn(r.xml).get('Gateway_Complete')!;
+    const gw = drawn(result.xml).get('Gateway_Complete')!;
     expect(overlap(gw.label!, title)).toBe(false);
     expect(inside(gw.label!, frame)).toBe(true);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
 
 describe('labelOnTitle', () => {
   it('reports a label put on a title by hand-edited DI and locates it on the overlap', async () => {
     const xml = HAND_MADE.replace('<dc:Bounds x="252" y="314" width="89" height="28" />', '<dc:Bounds x="252" y="225" width="89" height="28" />');
-    const m = await metricsXml(xml);
-    expect(m.problems).toEqual([{ kind: 'labelOnTitle', ids: ['Event_Abgebrochen', 'Activity_Esp'] }]);
-    expect(m.score).toBe(2);
+    const metrics = await metricsXml(xml);
+    expect(metrics.problems).toEqual([{ kind: 'labelOnTitle', ids: ['Event_Abgebrochen', 'Activity_Esp'] }]);
+    expect(metrics.score).toBe(2);
     const { definitions } = await parseXml(xml);
-    const [p] = new ProblemLocator(definitions).locate(LayoutAnalysis.of(definitions).problems);
+    const [problem] = new ProblemLocator(definitions).locate(LayoutAnalysis.of(definitions).problems);
     const title = titleBox({ x: 140, y: 220, width: 240, height: 140 }, ESP_NAME)!;
-    expect(p!.at!.plane).toBe('Process_1');
-    expect(overlap({ x: p!.at!.x - 0.5, y: p!.at!.y - 0.5, width: 1, height: 1 }, title)).toBe(true);
-    expect(overlap({ x: p!.at!.x - 0.5, y: p!.at!.y - 0.5, width: 1, height: 1 }, { x: 252, y: 225, width: 89, height: 28 })).toBe(true);
+    expect(problem!.at!.plane).toBe('Process_1');
+    expect(overlap({ x: problem!.at!.x - 0.5, y: problem!.at!.y - 0.5, width: 1, height: 1 }, title)).toBe(true);
+    expect(overlap({ x: problem!.at!.x - 0.5, y: problem!.at!.y - 0.5, width: 1, height: 1 }, { x: 252, y: 225, width: 89, height: 28 })).toBe(true);
     const render = await renderSvg(xml, { problems: true });
-    expect(render.problems?.map((x) => [x.kind, x.drawn])).toEqual([['labelOnTitle', true]]);
+    expect(render.problems?.map((problem) => [problem.kind, problem.drawn])).toEqual([['labelOnTitle', true]]);
   });
 });

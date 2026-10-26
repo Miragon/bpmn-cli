@@ -71,71 +71,71 @@ interface Run {
 }
 
 function sh(script: string, cwd: string): Run {
-  const r = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
+  const spawned = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', script], {
     cwd,
     encoding: 'utf8',
     env: { ...process.env, PATH: `${shimDir}:${process.env.PATH ?? ''}` },
   });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
 function bpmn(args: string[], cwd: string, input?: string): Run {
-  const r = spawnSync(process.execPath, [cliFile, ...args], { cwd, encoding: 'utf8', input: input ?? '' });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const spawned = spawnSync(process.execPath, [cliFile, ...args], { cwd, encoding: 'utf8', input: input ?? '' });
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
 function workDir(name: string): string {
-  const d = join(tmp, name);
-  rmSync(d, { recursive: true, force: true });
-  mkdirSync(d, { recursive: true });
-  return d;
+  const workPath = join(tmp, name);
+  rmSync(workPath, { recursive: true, force: true });
+  mkdirSync(workPath, { recursive: true });
+  return workPath;
 }
 
 /** The ```bash blocks of a markdown file, in order (indentation of list items removed). */
 function bashBlocks(file: string): string[] {
-  return [...readFileSync(file, 'utf8').matchAll(/^( *)```bash\n([\s\S]*?)^\1```/gm)].map((m) => m[2]!.replace(new RegExp(`^${m[1]}`, 'gm'), ''));
+  return [...readFileSync(file, 'utf8').matchAll(/^( *)```bash\n([\s\S]*?)^\1```/gm)].map((match) => match[2]!.replace(new RegExp(`^${match[1]}`, 'gm'), ''));
 }
 
 function runBlocks(file: string, cwd: string): void {
-  bashBlocks(file).forEach((block, i) => {
-    const r = sh(block, cwd);
-    if (r.code !== 0) throw new Error(`${file.slice(ROOT.length + 1)} bash block ${i + 1} failed (${r.code}):\n${block}\n--- stdout\n${r.out}\n--- stderr\n${r.err}`);
+  bashBlocks(file).forEach((block, blockIndex) => {
+    const result = sh(block, cwd);
+    if (result.code !== 0) throw new Error(`${file.slice(ROOT.length + 1)} bash block ${blockIndex + 1} failed (${result.code}):\n${block}\n--- stdout\n${result.out}\n--- stderr\n${result.err}`);
   });
 }
 
 /** A minimal reader for the frontmatter the plugin uses: key: value, 'quoted', [a, b], { k: v }. */
 function frontmatter(text: string): { data: Record<string, unknown>; body: string } {
-  const m = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
-  if (!m) return { data: {}, body: text };
+  const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
+  if (!match) return { data: {}, body: text };
   const data: Record<string, unknown> = {};
-  const lines = m[1]!.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
+  const lines = match[1]!.split('\n');
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex]!;
     const kv = /^([\w-]+):\s*(.*)$/.exec(line);
     if (!kv) continue;
     const [, key, raw] = kv as unknown as [string, string, string];
     if (raw === '') {
       // a YAML list on the following lines
       const items: string[] = [];
-      while (i + 1 < lines.length && /^\s+-\s/.test(lines[i + 1]!)) items.push(lines[++i]!.replace(/^\s+-\s+/, '').replace(/\s+#.*$/, ''));
+      while (lineIndex + 1 < lines.length && /^\s+-\s/.test(lines[lineIndex + 1]!)) items.push(lines[++lineIndex]!.replace(/^\s+-\s+/, '').replace(/\s+#.*$/, ''));
       data[key] = items;
     } else data[key] = scalar(raw);
   }
-  return { data, body: m[2]! };
+  return { data, body: match[2]! };
 }
 
 function scalar(raw: string): unknown {
-  const v = raw.trim();
-  if (v.startsWith("'")) return v.slice(1, v.lastIndexOf("'")).replace(/''/g, "'");
-  if (v.startsWith('"')) return JSON.parse(v);
-  if (v.startsWith('[')) return v.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean);
-  if (v.startsWith('{')) return Object.fromEntries(v.slice(1, -1).split(',').map((p) => p.split(':').map((s) => s.trim()) as [string, string]));
-  if (/^\d+(\.\d+)?$/.test(v)) return Number(v);
-  return v;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("'")) return trimmed.slice(1, trimmed.lastIndexOf("'")).replace(/''/g, "'");
+  if (trimmed.startsWith('"')) return JSON.parse(trimmed);
+  if (trimmed.startsWith('[')) return trimmed.slice(1, -1).split(',').map((part) => part.trim()).filter(Boolean);
+  if (trimmed.startsWith('{')) return Object.fromEntries(trimmed.slice(1, -1).split(',').map((pair) => pair.split(':').map((part) => part.trim()) as [string, string]));
+  if (/^\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return trimmed;
 }
 
-const md = (f: string) => readFileSync(f, 'utf8');
-const skillFiles = () => [join(SKILL, 'SKILL.md'), ...readdirSync(join(SKILL, 'reference')).map((f) => join(SKILL, 'reference', f))];
+const md = (file: string) => readFileSync(file, 'utf8');
+const skillFiles = () => [join(SKILL, 'SKILL.md'), ...readdirSync(join(SKILL, 'reference')).map((fileName) => join(SKILL, 'reference', fileName))];
 
 describe('plugin metadata', () => {
   const manifest = JSON.parse(md(join(PLUGIN, '.claude-plugin', 'plugin.json'))) as Record<string, any>;
@@ -166,7 +166,7 @@ describe('plugin metadata', () => {
     const skill = md(join(SKILL, 'SKILL.md'));
     const pins = [...skill.matchAll(/@miragon\/bpmn-cli@(\d+\.\d+\.\d+)/g)];
     expect(pins.length).toBeGreaterThan(0);
-    for (const line of skill.split('\n').filter((l) => /@miragon\/bpmn-cli@\d/.test(l))) {
+    for (const line of skill.split('\n').filter((skillLine) => /@miragon\/bpmn-cli@\d/.test(skillLine))) {
       // the generic updater replaces the version only on lines that carry the marker
       expect(line).toContain('x-release-please-version');
       expect(line).toContain(`@miragon/bpmn-cli@${pkg.version}`);
@@ -202,13 +202,13 @@ describe('the skill', () => {
     const help = (cmd: string[]): string => {
       const key = cmd.join(' ');
       if (!helpOf.has(key)) {
-        const r = bpmn([...cmd, '--help'], tmp);
-        helpOf.set(key, r.code === 0 ? r.out : '');
+        const result = bpmn([...cmd, '--help'], tmp);
+        helpOf.set(key, result.code === 0 ? result.out : '');
       }
       return helpOf.get(key)!;
     };
     const top = help([]);
-    const commands = new Set([...top.matchAll(/^ {2}([a-z]+)(?:\|[a-z]+)?\s/gm)].map((m) => m[1]!));
+    const commands = new Set([...top.matchAll(/^ {2}([a-z]+)(?:\|[a-z]+)?\s/gm)].map((match) => match[1]!));
     const problems: string[] = [];
     let checked = 0;
     for (const file of skillFiles()) {
@@ -235,9 +235,9 @@ describe('the skill', () => {
   it('the recipes run in order against this CLI', () => {
     const dir = workDir('recipes');
     runBlocks(join(SKILL, 'reference', 'recipes.md'), dir);
-    for (const f of ['order-to-cash.bpmn', 'payment.bpmn', 'shipping.bpmn']) {
-      const r = bpmn(['validate', f, '--strict'], dir);
-      expect(r.code, `${f}: ${r.out}${r.err}`).toBe(0);
+    for (const fixture of ['order-to-cash.bpmn', 'payment.bpmn', 'shipping.bpmn']) {
+      const result = bpmn(['validate', fixture, '--strict'], dir);
+      expect(result.code, `${fixture}: ${result.out}${result.err}`).toBe(0);
     }
   }, SLOW);
 
@@ -256,14 +256,14 @@ describe('the skill', () => {
     if (!existsSync(join(base, 'order-to-cash.bpmn'))) runBlocks(join(SKILL, 'reference', 'recipes.md'), workDir('recipes'));
     const dir = workDir('skill-look');
     cpSync(base, dir, { recursive: true });
-    const blocks = bashBlocks(join(SKILL, 'SKILL.md')).filter((b) => /\bbpmn render\b/.test(b));
+    const blocks = bashBlocks(join(SKILL, 'SKILL.md')).filter((block) => /\bbpmn render\b/.test(block));
     expect(blocks).toHaveLength(1);
-    const r = sh(blocks[0]!, dir);
-    expect(r.code, `${r.out}${r.err}`).toBe(0);
-    const wrote = /^wrote (\S+) {2}(\d+)x(\d+) px {2}~[\d,]+ image tokens {2}scale [\d.]+ {2}plane \S+$/m.exec(r.out);
-    expect(wrote, r.out).not.toBeNull();
+    const result = sh(blocks[0]!, dir);
+    expect(result.code, `${result.out}${result.err}`).toBe(0);
+    const wrote = /^wrote (\S+) {2}(\d+)x(\d+) px {2}~[\d,]+ image tokens {2}scale [\d.]+ {2}plane \S+$/m.exec(result.out);
+    expect(wrote, result.out).not.toBeNull();
     expect(wrote![1]).toMatch(/^\.bpmn-render\/[\w-]+\.png$/);
-    expect(r.out).toMatch(/^problems: none$|^problems \(numbered in the image\):$/m);
+    expect(result.out).toMatch(/^problems: none$|^problems \(numbered in the image\):$/m);
     // a real PNG of the size the line names, within the default --max-size
     const png = readFileSync(join(dir, wrote![1]!));
     expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -300,9 +300,9 @@ describe('the skill', () => {
         const batch = json!.replace(/^ {3}/gm, '');
         found++;
         expect(() => JSON.parse(batch), `${file}:\n${batch}`).not.toThrow();
-        const r = bpmn(['apply', 'empty.bpmn', '-', '--dry-run', '--json'], dir, batch);
+        const result = bpmn(['apply', 'empty.bpmn', '-', '--dry-run', '--json'], dir, batch);
         // ids may not exist in an empty model; the shape must be right
-        expect(r.err, `${file}:\n${batch}`).not.toMatch(/E_USAGE|E_UNKNOWN_ALIAS|E_DUPLICATE_ALIAS/);
+        expect(result.err, `${file}:\n${batch}`).not.toMatch(/E_USAGE|E_UNKNOWN_ALIAS|E_DUPLICATE_ALIAS/);
       }
     }
     expect(found).toBeGreaterThan(8);
@@ -325,25 +325,25 @@ interface Grader {
 function graders(caseDir: string): Grader[] {
   const dir = join(caseDir, 'graders');
   return readdirSync(dir)
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => {
-      const { data, body } = frontmatter(md(join(dir, f)));
-      return { name: f.replace(/\.md$/, ''), type: data.type as string, data, body };
+    .filter((fileName) => fileName.endsWith('.md'))
+    .map((fileName) => {
+      const { data, body } = frontmatter(md(join(dir, fileName)));
+      return { name: fileName.replace(/\.md$/, ''), type: data.type as string, data, body };
     });
 }
 
-function regexPasses(g: Grader, text: string): boolean {
-  const flags = (g.data.flags as string | undefined) ?? '';
-  const match = (g.data.match as string | undefined) ?? 'contains';
-  const re = new RegExp(g.data.pattern as string, flags);
+function regexPasses(grader: Grader, text: string): boolean {
+  const flags = (grader.data.flags as string | undefined) ?? '';
+  const match = (grader.data.match as string | undefined) ?? 'contains';
+  const re = new RegExp(grader.data.pattern as string, flags);
   if (match === 'not_contains') return !re.test(text);
   const count = /^count:(\d+)$/.exec(match);
-  if (count) return [...text.matchAll(new RegExp(g.data.pattern as string, flags.includes('g') ? flags : `${flags}g`))].length === Number(count[1]);
+  if (count) return [...text.matchAll(new RegExp(grader.data.pattern as string, flags.includes('g') ? flags : `${flags}g`))].length === Number(count[1]);
   return re.test(text);
 }
 
 function fileGraders(caseDir: string, file: string): Grader[] {
-  return graders(caseDir).filter((g) => g.type === 'regex' && typeof g.data.target === 'object' && (g.data.target as Record<string, string>).path === file);
+  return graders(caseDir).filter((grader) => grader.type === 'regex' && typeof grader.data.target === 'object' && (grader.data.target as Record<string, string>).path === file);
 }
 
 /** A reference solution per case, made with the CLI: [file, commands run in the workspace]. */
@@ -451,113 +451,113 @@ const GRADER_TYPES = new Set(['regex', 'tool_used', 'tool_order', 'file_exists',
 
 describe('the eval suite', () => {
   const cases = readdirSync(EVALS, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(join(EVALS, d.name, 'prompt.md')))
-    .map((d) => d.name);
+    .filter((entry) => entry.isDirectory() && existsSync(join(EVALS, entry.name, 'prompt.md')))
+    .map((entry) => entry.name);
 
   it('has the cases the plugin is measured on, each with a prompt and graders', () => {
     expect(cases.sort()).toEqual(['build-order-to-cash', 'camunda7-external-task', 'camunda8-retoure-german', 'edit-hand-drawn-model', 'format-happy-path', 'ignores-python-question', 'tidy-after-edit']);
-    for (const c of cases) {
-      const { data, body } = frontmatter(md(join(EVALS, c, 'prompt.md')));
-      for (const key of Object.keys(data)) expect(PROMPT_KEYS.has(key), `${c}: prompt.md key ${key}`).toBe(true);
+    for (const caseName of cases) {
+      const { data, body } = frontmatter(md(join(EVALS, caseName, 'prompt.md')));
+      for (const key of Object.keys(data)) expect(PROMPT_KEYS.has(key), `${caseName}: prompt.md key ${key}`).toBe(true);
       expect(body.trim().length).toBeGreaterThan(50);
       // realistic prompts: the user does not name the skill
       expect(body).not.toMatch(/\bskill\b|bpmn-cli|@miragon/i);
-      expect(graders(join(EVALS, c)).length).toBeGreaterThan(0);
-      if (existsSync(join(EVALS, c, 'case.yaml'))) {
-        const yaml = md(join(EVALS, c, 'case.yaml'));
+      expect(graders(join(EVALS, caseName)).length).toBeGreaterThan(0);
+      if (existsSync(join(EVALS, caseName, 'case.yaml'))) {
+        const yaml = md(join(EVALS, caseName, 'case.yaml'));
         expect(yaml).toMatch(/^schema_version: "1\.1"$/m);
-        expect(yaml).toMatch(new RegExp(`^name: ${c}$`, 'm'));
+        expect(yaml).toMatch(new RegExp(`^name: ${caseName}$`, 'm'));
         const script = /scaffold_script: (\S+)/.exec(yaml)?.[1];
-        if (script) expect(existsSync(join(EVALS, c, script)), `${c}: ${script}`).toBe(true);
+        if (script) expect(existsSync(join(EVALS, caseName, script)), `${caseName}: ${script}`).toBe(true);
       }
     }
   });
 
   it('every grader has a known type and its patterns compile', () => {
-    for (const c of cases) {
-      for (const g of graders(join(EVALS, c))) {
-        expect(GRADER_TYPES.has(g.type), `${c}/${g.name}: type ${g.type}`).toBe(true);
-        if (g.type === 'regex') expect(() => new RegExp(g.data.pattern as string, (g.data.flags as string) ?? ''), `${c}/${g.name}`).not.toThrow();
-        if (g.type === 'tool_used' && g.data.input_match) expect(() => new RegExp(g.data.input_match as string), `${c}/${g.name}`).not.toThrow();
-        if (g.type === 'llm') expect(g.body.trim(), `${c}/${g.name}`).toMatch(/PASS[\s\S]*FAIL/);
+    for (const caseName of cases) {
+      for (const caseGrader of graders(join(EVALS, caseName))) {
+        expect(GRADER_TYPES.has(caseGrader.type), `${caseName}/${caseGrader.name}: type ${caseGrader.type}`).toBe(true);
+        if (caseGrader.type === 'regex') expect(() => new RegExp(caseGrader.data.pattern as string, (caseGrader.data.flags as string) ?? ''), `${caseName}/${caseGrader.name}`).not.toThrow();
+        if (caseGrader.type === 'tool_used' && caseGrader.data.input_match) expect(() => new RegExp(caseGrader.data.input_match as string), `${caseName}/${caseGrader.name}`).not.toThrow();
+        if (caseGrader.type === 'llm') expect(caseGrader.body.trim(), `${caseName}/${caseGrader.name}`).toMatch(/PASS[\s\S]*FAIL/);
       }
     }
   });
 
   it('the tool graders tell CLI use from hand-written XML', () => {
-    const g = (c: string, name: string) => graders(join(EVALS, c)).find((x) => x.name === name)!;
+    const graderOf = (caseName: string, name: string) => graders(join(EVALS, caseName)).find((warning) => warning.name === name)!;
     const matches = (gr: Grader, input: unknown) => new RegExp(gr.data.input_match as string).test(JSON.stringify(input));
-    const skill = g('build-order-to-cash', 'skill-used');
+    const skill = graderOf('build-order-to-cash', 'skill-used');
     expect(matches(skill, { skill: 'bpmn-cli:bpmn' })).toBe(true);
     expect(matches(skill, { skill: 'bpmn' })).toBe(true);
     expect(matches(skill, { skill: 'pdf' })).toBe(false);
-    const xml = g('build-order-to-cash', 'no-xml-in-shell');
+    const xml = graderOf('build-order-to-cash', 'no-xml-in-shell');
     const cli = `bpmn apply order-to-cash.bpmn - <<'EOF'\n[{ "op": "add", "kind": "userTask", "name": "Check order", "id": "Activity_CheckOrder", "after": "Event_OrderReceived" }]\nEOF`;
     expect(matches(xml, { command: cli })).toBe(false);
     expect(matches(xml, { command: `bpmn ext add f.bpmn Activity_X zeebe:ioMapping --xml '<zeebe:ioMapping><zeebe:input source="=a" target="b"/></zeebe:ioMapping>'` })).toBe(false);
     expect(matches(xml, { command: `cat > order-to-cash.bpmn <<'EOF'\n<?xml version="1.0"?>\n<bpmn:definitions>` })).toBe(true);
     expect(matches(xml, { command: `sed -i '' 's/Task_1/Task_2/' order-to-cash.bpmn` })).toBe(true);
     expect(matches(xml, { command: `python3 -c "import xml.etree.ElementTree as ET"` })).toBe(true);
-    const write = g('build-order-to-cash', 'no-bpmn-write');
+    const write = graderOf('build-order-to-cash', 'no-bpmn-write');
     expect(matches(write, { file_path: '/w/order-to-cash.bpmn', content: '<?xml' })).toBe(true);
     expect(matches(write, { file_path: '/w/ops.json', content: '[]' })).toBe(false);
-    const built = g('build-order-to-cash', 'built-with-the-cli');
+    const built = graderOf('build-order-to-cash', 'built-with-the-cli');
     expect(matches(built, { command: `printf '%s' '[]' | bpmn apply order-to-cash.bpmn - --summary` })).toBe(true);
     expect(matches(built, { command: 'bpmn new order-to-cash.bpmn --name "Order to cash"' })).toBe(true);
     expect(matches(built, { command: 'npx -y @miragon/bpmn-cli@1.2.3 add order-to-cash.bpmn userTask "Check order" --after Event_OrderReceived' })).toBe(true);
     expect(matches(built, { command: 'bpmn show order-to-cash.bpmn' })).toBe(false);
     expect(matches(built, { command: `cat > order-to-cash.bpmn <<'EOF'\n<bpmn:definitions>` })).toBe(false);
-    const validated = g('build-order-to-cash', 'validated');
+    const validated = graderOf('build-order-to-cash', 'validated');
     expect(matches(validated, { command: 'bpmn validate order-to-cash.bpmn --strict' })).toBe(true);
     expect(matches(validated, { command: 'npx -y @miragon/bpmn-cli@1.2.3 validate order-to-cash.bpmn' })).toBe(true);
     expect(matches(validated, { command: 'bpmn show order-to-cash.bpmn' })).toBe(false);
-    const look = g('tidy-after-edit', 'render-read');
+    const look = graderOf('tidy-after-edit', 'render-read');
     expect(look.data.arm).toBe('with-only');
     expect(matches(look, { file_path: '/w/.bpmn-render/invoice-approval.png' })).toBe(true);
     expect(matches(look, { file_path: '/w/invoice-approval.bpmn' })).toBe(false);
-    const strict = g('camunda7-external-task', 'strict-validate-ran');
+    const strict = graderOf('camunda7-external-task', 'strict-validate-ran');
     expect(matches(strict, { command: 'bpmn validate payment.bpmn --strict' })).toBe(true);
     expect(matches(strict, { command: 'bpmn validate payment.bpmn' })).toBe(false);
   });
 
-  for (const [c, solution] of Object.entries(SOLUTIONS)) {
-    it(`${c}: a CLI solution passes every file grader; the starting point fails the change graders`, () => {
-      const dir = workDir(`eval-${c}`);
-      const caseDir = join(EVALS, c);
+  for (const [caseName, solution] of Object.entries(SOLUTIONS)) {
+    it(`${caseName}: a CLI solution passes every file grader; the starting point fails the change graders`, () => {
+      const dir = workDir(`eval-${caseName}`);
+      const caseDir = join(EVALS, caseName);
       if (existsSync(join(caseDir, 'scaffold.sh'))) {
-        const s = spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' });
-        expect(s.status, s.stderr).toBe(0);
-        const v = bpmn(['validate', solution.file], dir);
-        expect(v.code, `${c}: the fixture is valid\n${v.out}${v.err}`).toBe(0);
-        expect(v.out).not.toMatch(/^import:/m);
+        const scaffold = spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' });
+        expect(scaffold.status, scaffold.stderr).toBe(0);
+        const validation = bpmn(['validate', solution.file], dir);
+        expect(validation.code, `${caseName}: the fixture is valid\n${validation.out}${validation.err}`).toBe(0);
+        expect(validation.out).not.toMatch(/^import:/m);
         const before = readFileSync(join(dir, solution.file), 'utf8');
-        for (const g of fileGraders(caseDir, solution.file).filter((x) => solution.changeGraders.includes(x.name))) {
-          expect(regexPasses(g, before), `${c}/${g.name} must fail on the untouched fixture`).toBe(false);
+        for (const caseGrader of fileGraders(caseDir, solution.file).filter((warning) => solution.changeGraders.includes(warning.name))) {
+          expect(regexPasses(caseGrader, before), `${caseName}/${caseGrader.name} must fail on the untouched fixture`).toBe(false);
         }
       }
-      const r = sh(solution.script, dir);
-      expect(r.code, `${r.out}${r.err}`).toBe(0);
+      const result = sh(solution.script, dir);
+      expect(result.code, `${result.out}${result.err}`).toBe(0);
       const after = readFileSync(join(dir, solution.file), 'utf8');
       const fg = fileGraders(caseDir, solution.file);
-      expect(fg.map((g) => g.name)).toEqual(expect.arrayContaining(solution.changeGraders));
-      for (const g of fg) expect(regexPasses(g, after), `${c}/${g.name} on the CLI solution`).toBe(true);
+      expect(fg.map((caseGrader) => caseGrader.name)).toEqual(expect.arrayContaining(solution.changeGraders));
+      for (const caseGrader of fg) expect(regexPasses(caseGrader, after), `${caseName}/${caseGrader.name} on the CLI solution`).toBe(true);
       // the transcript graders match what the CLI prints for the solution
-      for (const g of graders(caseDir).filter((x) => x.type === 'regex' && x.data.target === 'trace')) {
-        const v = bpmn(['validate', solution.file, '--strict'], dir);
-        expect(regexPasses(g, v.out), `${c}/${g.name} on: ${v.out}`).toBe(true);
+      for (const caseGrader of graders(caseDir).filter((warning) => warning.type === 'regex' && warning.data.target === 'trace')) {
+        const validation = bpmn(['validate', solution.file, '--strict'], dir);
+        expect(regexPasses(caseGrader, validation.out), `${caseName}/${caseGrader.name} on: ${validation.out}`).toBe(true);
       }
     }, SLOW);
   }
 
   it('the graders check structure and colour, not the CLI\'s id style or palette', () => {
-    const grader = (c: string, name: string) => graders(join(EVALS, c)).find((x) => x.name === name)!;
+    const grader = (caseName: string, name: string) => graders(join(EVALS, caseName)).find((warning) => warning.name === name)!;
     // edit-hand-drawn-model: Modeler-style hash ids fail speaking-new-ids only, not the structure graders
     const edit = SOLUTIONS['edit-hand-drawn-model']!;
     const dir = workDir('eval-hash-ids');
     expect(spawnSync('bash', [join(EVALS, 'edit-hand-drawn-model', 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
     const hashed = edit.script.replaceAll('Activity_ApprovePurchase', 'Activity_1a7mq4e').replaceAll('Event_ApprovalOverdue', 'Event_1x6rt2w');
-    const r = sh(hashed, dir);
-    expect(r.code, `${r.out}${r.err}`).toBe(0);
+    const result = sh(hashed, dir);
+    expect(result.code, `${result.out}${result.err}`).toBe(0);
     const model = readFileSync(join(dir, edit.file), 'utf8');
     for (const name of ['approval-inserted', 'timer-reminder', 'reminder-path']) expect(regexPasses(grader('edit-hand-drawn-model', name), model), name).toBe(true);
     expect(regexPasses(grader('edit-hand-drawn-model', 'speaking-new-ids'), model)).toBe(false);
@@ -577,7 +577,7 @@ describe('the eval suite', () => {
   it('tidy-after-edit: the layout graders say what `bpmn metrics --json` says', () => {
     const caseDir = join(EVALS, 'tidy-after-edit');
     const file = 'invoice-approval.bpmn';
-    const grader = (name: string) => graders(caseDir).find((x) => x.name === name)!;
+    const grader = (name: string) => graders(caseDir).find((warning) => warning.name === name)!;
     const edit = `bpmn add ${file} sendTask "Inform requester" --id Activity_InformRequester --flow Flow_ReturnInvoiceToInvoiceReturned`;
     const branchBelow = `bpmn place ${file} --branch Flow_InvoiceCorrectNo --below Activity_RemindApprover`;
     const label = (side: string) => `bpmn label ${file} Gateway_InvoiceCorrect --side ${side}`;
@@ -596,19 +596,19 @@ describe('the eval suite', () => {
     for (const [name, script] of Object.entries(variants)) {
       const dir = workDir('eval-tidy-metrics');
       expect(spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
-      const r = sh(script, dir);
-      expect(r.code, `${name}: ${r.out}${r.err}`).toBe(0);
-      const m = bpmn(['metrics', file, '--json'], dir);
-      const problems = (JSON.parse(m.out) as { problems: { kind: string; ids: string[] }[] }).problems;
+      const result = sh(script, dir);
+      expect(result.code, `${name}: ${result.out}${result.err}`).toBe(0);
+      const metrics = bpmn(['metrics', file, '--json'], dir);
+      const problems = (JSON.parse(metrics.out) as { problems: { kind: string; ids: string[] }[] }).problems;
       if (name === 'the fixture') {
-        expect(problems.map((p) => `${p.kind} ${p.ids.join(' ')}`).sort()).toEqual([
+        expect(problems.map((problem) => `${problem.kind} ${problem.ids.join(' ')}`).sort()).toEqual([
           'crossings Flow_ReturnInvoiceToInvoiceReturned Flow_ApprovalOverdueToRemindApprover',
           'labelClash Gateway_InvoiceCorrect Activity_ApproveInvoice',
         ]);
       }
       if (name.startsWith('the solution')) expect(problems, name).toEqual([]);
-      const labelProblem = problems.some((p) => /^label/.test(p.kind) && p.ids.includes('Gateway_InvoiceCorrect'));
-      const crossing = problems.some((p) => p.kind === 'crossings');
+      const labelProblem = problems.some((problem) => /^label/.test(problem.kind) && problem.ids.includes('Gateway_InvoiceCorrect'));
+      const crossing = problems.some((problem) => problem.kind === 'crossings');
       const xml = readFileSync(join(dir, file), 'utf8');
       // compact moved the reminder path up: the rows are no longer the solution's
       if (name === 'the solution, then compact') expect(xml).toMatch(/bpmnElement="Activity_RemindApprover"[^>]*>\s*<dc:Bounds x="720" y="327"/);
@@ -622,16 +622,16 @@ describe('the eval suite', () => {
     const dir = workDir('eval-implicit-join');
     const caseDir = join(EVALS, 'edit-hand-drawn-model');
     expect(spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
-    const r = sh(`bpmn apply purchase-request.bpmn - <<'EOF'
+    const result = sh(`bpmn apply purchase-request.bpmn - <<'EOF'
 [
   { "op": "add", "kind": "userTask", "name": "Approve purchase", "id": "Activity_ApprovePurchase", "flow": "Flow_0yq6cfd" },
   { "op": "add", "kind": "exclusiveGateway", "name": "Purchase approved?", "id": "Gateway_PurchaseApproved", "after": "Activity_ApprovePurchase" },
   { "op": "connect", "source": "Gateway_PurchaseApproved", "target": "Activity_0f3j5ny", "name": "no", "default": true }
 ]
 EOF`, dir);
-    expect(r.code, `${r.out}${r.err}`).toBe(0);
-    expect(r.out).toMatch(/W_IMPLICIT_JOIN Activity_0f3j5ny/);
-    const g = graders(caseDir).find((x) => x.name === 'no-implicit-join')!;
-    expect(regexPasses(g, readFileSync(join(dir, 'purchase-request.bpmn'), 'utf8'))).toBe(false);
+    expect(result.code, `${result.out}${result.err}`).toBe(0);
+    expect(result.out).toMatch(/W_IMPLICIT_JOIN Activity_0f3j5ny/);
+    const joinGrader = graders(caseDir).find((warning) => warning.name === 'no-implicit-join')!;
+    expect(regexPasses(joinGrader, readFileSync(join(dir, 'purchase-request.bpmn'), 'utf8'))).toBe(false);
   });
 });

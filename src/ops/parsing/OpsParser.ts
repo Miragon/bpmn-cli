@@ -38,15 +38,15 @@ export class OpsParser {
     });
   }
 
-  private isPlainObject(v: unknown): v is Record<string, unknown> {
-    return typeof v === 'object' && v !== null && !Array.isArray(v);
+  private isPlainObject(candidate: unknown): candidate is Record<string, unknown> {
+    return typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate);
   }
 
-  private describe(v: unknown): string {
-    if (v === null) return 'null';
-    if (Array.isArray(v)) return 'an array';
-    if (typeof v === 'object') return 'an object';
-    return `${typeof v} ${JSON.stringify(v)}`;
+  private describe(input: unknown): string {
+    if (input === null) return 'null';
+    if (Array.isArray(input)) return 'an array';
+    if (typeof input === 'object') return 'an object';
+    return `${typeof input} ${JSON.stringify(input)}`;
   }
 
   private checkString(ctx: Ctx, key: string, spec: FieldSpec, value: unknown): string {
@@ -56,7 +56,7 @@ export class OpsParser {
     if (spec.ref && !value.trim()) throw this.fail(ctx, `"${key}" must not be empty`);
     if (spec.alias && !ALIAS.test(value)) throw this.fail(ctx, `"${key}" must be an alias like "$check" ($ and a letter, then letters, digits, _ or -), got "${value}"`, `Example: "${key}": "$check", then "after": "$check" in a later op.`);
     if (spec.values && !spec.values.includes(value)) {
-      throw this.fail(ctx, `"${key}" must be one of ${spec.values.map((v) => `"${v}"`).join(', ')}, got "${value}"`);
+      throw this.fail(ctx, `"${key}" must be one of ${spec.values.map((allowedValue) => `"${allowedValue}"`).join(', ')}, got "${value}"`);
     }
     return value;
   }
@@ -81,8 +81,8 @@ export class OpsParser {
       throw this.fail(ctx, `"${key}" must be an array of strings, got ${this.describe(value)}`, `Write "${key}": ["Id_1", "Id_2"].`);
     }
     const out: string[] = [];
-    value.forEach((item, i) => {
-      if (typeof item !== 'string' || !item.trim()) throw this.fail(ctx, `"${key}[${i}]" must be a non-empty string, got ${this.describe(item)}`);
+    value.forEach((item, index) => {
+      if (typeof item !== 'string' || !item.trim()) throw this.fail(ctx, `"${key}[${index}]" must be a non-empty string, got ${this.describe(item)}`);
       out.push(item);
     });
     if (spec.minItems && out.length < spec.minItems) {
@@ -103,12 +103,12 @@ export class OpsParser {
       throw this.fail(ctx, `"${key}" must be an object of key/value pairs, got ${this.describe(value)}`, `Write "${key}": {"name": "..."}.`);
     }
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (!k.trim()) throw this.fail(ctx, `"${key}" contains an empty key`);
-      if (typeof v === 'string') out[k] = v;
-      else if (typeof v === 'number' || typeof v === 'boolean') out[k] = String(v);
+    for (const [entryKey, entryValue] of Object.entries(value)) {
+      if (!entryKey.trim()) throw this.fail(ctx, `"${key}" contains an empty key`);
+      if (typeof entryValue === 'string') out[entryKey] = entryValue;
+      else if (typeof entryValue === 'number' || typeof entryValue === 'boolean') out[entryKey] = String(entryValue);
       else {
-        throw this.fail(ctx, `"${key}.${k}" must be a string (numbers and booleans are converted), got ${this.describe(v)}`, v === null ? `Use "" to remove a property (or "unset": ["${k}"] in a set op).` : undefined);
+        throw this.fail(ctx, `"${key}.${entryKey}" must be a string (numbers and booleans are converted), got ${this.describe(entryValue)}`, entryValue === null ? `Use "" to remove a property (or "unset": ["${entryKey}"] in a set op).` : undefined);
       }
     }
     return out;
@@ -117,15 +117,15 @@ export class OpsParser {
   /** A common wrong shape is never accepted silently: the hint shows the op rewritten. */
   private shapeHint(value: Record<string, unknown>, key: string, fields: Record<string, FieldSpec>): { key: string; hint: string } | undefined {
     const op = typeof value['op'] === 'string' ? value['op'] : undefined;
-    const show = (o: Record<string, unknown>): string => JSON.stringify(o);
+    const show = (shown: Record<string, unknown>): string => JSON.stringify(shown);
     if (fields['id'] && value['id'] === undefined && ID_LIKE.has(key)) {
       const { [key]: id, ...rest } = value;
-      return { key: 'id', hint: `${op ?? 'This op'} names its ${op === 'route' ? 'flow' : 'element'} with "id": ${show({ ...(op ? { op } : {}), id, ...Object.fromEntries(Object.entries(rest).filter(([k]) => k !== 'op' && fields[k])) })}.` };
+      return { key: 'id', hint: `${op ?? 'This op'} names its ${op === 'route' ? 'flow' : 'element'} with "id": ${show({ ...(op ? { op } : {}), id, ...Object.fromEntries(Object.entries(rest).filter(([fieldKey]) => fieldKey !== 'op' && fields[fieldKey])) })}.` };
     }
     if (fields['values'] && fields['unset']) {
-      const props = Object.fromEntries(Object.entries(value).filter(([k]) => k !== 'op' && !fields[k]));
+      const props = Object.fromEntries(Object.entries(value).filter(([fieldKey]) => fieldKey !== 'op' && !fields[fieldKey]));
       const values = { ...(this.isPlainObject(value['values']) ? (value['values'] as Record<string, unknown>) : {}), ...props };
-      const known = Object.fromEntries(Object.entries(value).filter(([k]) => k !== 'op' && k !== 'values' && fields[k]));
+      const known = Object.fromEntries(Object.entries(value).filter(([fieldKey]) => fieldKey !== 'op' && fieldKey !== 'values' && fields[fieldKey]));
       return { key: 'values', hint: `${op ?? 'set'} takes the properties to set in "values" (an object): ${show({ ...(op ? { op } : {}), ...known, values })}.` };
     }
     return undefined;
@@ -189,7 +189,7 @@ export class OpsParser {
   }
 
   private presentKeys(obj: Record<string, unknown>, keys: readonly string[]): string[] {
-    return keys.filter((k) => obj[k] !== undefined);
+    return keys.filter((candidateKey) => obj[candidateKey] !== undefined);
   }
 
   private checkPlacement(ctx: Ctx, obj: Record<string, unknown>): void {
@@ -205,7 +205,7 @@ export class OpsParser {
     const used = this.presentKeys(obj, [...FLOW_KEYS, 'flowAs']);
     const createsFlow = obj['after'] !== undefined || obj['before'] !== undefined || obj['flow'] !== undefined;
     if (used.length && !createsFlow) {
-      throw this.fail(ctx, `${used.map((k) => `"${k}"`).join(', ')} describe the flow into the node and need "after", "before" or "flow"`, 'With "in" or "on" no sequence flow is created; connect the node afterwards with a connect op.');
+      throw this.fail(ctx, `${used.map((usedKey) => `"${usedKey}"`).join(', ')} describe the flow into the node and need "after", "before" or "flow"`, 'With "in" or "on" no sequence flow is created; connect the node afterwards with a connect op.');
     }
   }
 
@@ -218,7 +218,7 @@ export class OpsParser {
     const eventSub = /^(eventSubProcess|eventSub|bpmn:eventSubProcess):(.+)$/i.exec(kind);
     if (eventSub) {
       const trigger = normalizeTrigger(eventSub[2]!);
-      const allowed: string[] = (kindByName('startEvent')?.triggers ?? []).filter((t) => t !== 'none');
+      const allowed: string[] = (kindByName('startEvent')?.triggers ?? []).filter((startTrigger) => startTrigger !== 'none');
       if (!trigger || !allowed.includes(trigger)) {
         throw this.fail(ctx, `Trigger "${eventSub[2]}" is not allowed on eventSubProcess. Allowed: ${allowed.join(', ')}`, 'eventSubProcess:<trigger> creates the event sub-process with a startEvent:<trigger> inside, e.g. eventSubProcess:error with "error": "PaymentFailed".', allowed);
       }
@@ -235,9 +235,9 @@ export class OpsParser {
     }
     // send and receive tasks reference a message too
     const messageTask = ['sendTask', 'receiveTask'].includes(parseKind(kind).def.kind);
-    const triggers = this.presentKeys(obj, TRIGGER_KEYS).filter((k) => !(messageTask && k === 'message'));
+    const triggers = this.presentKeys(obj, TRIGGER_KEYS).filter((triggerKey) => !(messageTask && triggerKey === 'message'));
     if (triggers.length && family !== 'event') {
-      throw this.fail(ctx, `${triggers.map((k) => `"${k}"`).join(', ')} only apply to events, but "${kind}" is a ${family}`, 'Use an event kind such as startEvent:timer or boundaryEvent:message, or drop the trigger options.');
+      throw this.fail(ctx, `${triggers.map((triggerKey) => `"${triggerKey}"`).join(', ')} only apply to events, but "${kind}" is a ${family}`, 'Use an event kind such as startEvent:timer or boundaryEvent:message, or drop the trigger options.');
     }
     return family;
   }
@@ -255,8 +255,8 @@ export class OpsParser {
 
   private checkNodes(ctx: Ctx, key: string, value: unknown): SplitNode[] {
     if (!Array.isArray(value)) throw this.fail(ctx, `"${key}" must be an array of node objects, got ${this.describe(value)}`, 'An empty array is allowed: the branch is then a direct gateway -> join flow.');
-    return value.map((node, i) => {
-      const nctx: Ctx = { index: ctx.index, path: `${ctx.path}.${key}[${i}]` };
+    return value.map((node, index) => {
+      const nctx: Ctx = { index: ctx.index, path: `${ctx.path}.${key}[${index}]` };
       const out = this.checkFields(nctx, node, NODE_FIELDS);
       this.checkKind(nctx, out);
       this.checkFlowOptions(nctx, out, false);
@@ -267,8 +267,8 @@ export class OpsParser {
   private checkBranches(ctx: Ctx, key: string, spec: FieldSpec, value: unknown): SplitBranch[] {
     if (!Array.isArray(value)) throw this.fail(ctx, `"${key}" must be an array of branch objects, got ${this.describe(value)}`, 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].');
     if (spec.minItems && value.length < spec.minItems) throw this.fail(ctx, `"${key}" needs at least ${spec.minItems} branch`);
-    return value.map((branch, i) => {
-      const bctx: Ctx = { index: ctx.index, path: `${ctx.path} ${key}[${i}]` };
+    return value.map((branch, index) => {
+      const bctx: Ctx = { index: ctx.index, path: `${ctx.path} ${key}[${index}]` };
       const out = this.checkFields(bctx, branch, BRANCH_FIELDS);
       this.checkFlowOptions(bctx, out, false);
       return out as unknown as SplitBranch;
@@ -283,7 +283,7 @@ export class OpsParser {
       if (obj['xml'] !== undefined && (obj['attrs'] !== undefined || obj['body'] !== undefined)) throw this.fail(ctx, '"xml" cannot be combined with "attrs" or "body"', 'Put everything into the XML snippet, or use type + attrs + body.');
     } else {
       const bad = this.presentKeys(obj, addOnly);
-      if (bad.length) throw this.fail(ctx, `${bad.map((k) => `"${k}"`).join(', ')} only apply to action "add"`);
+      if (bad.length) throw this.fail(ctx, `${bad.map((badKey) => `"${badKey}"`).join(', ')} only apply to action "add"`);
       const hasType = obj['type'] !== undefined;
       const hasIndex = obj['index'] !== undefined;
       if (hasType === hasIndex) throw this.fail(ctx, 'ext remove needs exactly one of "type" or "index"', 'Run `bpmn ext list <file> <id>` to see types and indexes.');
@@ -341,7 +341,7 @@ export class OpsParser {
         this.checkKind(ctx, out, 'gateway');
         break;
       case 'order': {
-        const given = ['flows', 'lanes', 'pools'].filter((k) => out[k] !== undefined);
+        const given = ['flows', 'lanes', 'pools'].filter((givenKey) => out[givenKey] !== undefined);
         if (given.length !== 1) {
           throw this.fail(ctx, `give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_OkToFix","Flow_OkToBook"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_X","pools":["Participant_Customer","Participant_X"]}.');
         }
@@ -350,8 +350,8 @@ export class OpsParser {
       case 'place':
         this.checkSelection(ctx, out, true);
         if (out['side'] !== undefined) {
-          const with_ = PLACE_GROUPS.flat().filter((k) => out[k] !== undefined);
-          if (with_.length) throw this.fail(ctx, `"side" moves a boundary event to a border of its host; it cannot be combined with ${with_.map((k) => `"${k}"`).join(', ')}`, 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
+          const with_ = PLACE_GROUPS.flat().filter((placeKey) => out[placeKey] !== undefined);
+          if (with_.length) throw this.fail(ctx, `"side" moves a boundary event to a border of its host; it cannot be combined with ${with_.map((placeKey) => `"${placeKey}"`).join(', ')}`, 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
           if (this.hasSelector(out) || (out['ids'] as string[] | undefined)?.length !== 1) throw this.fail(ctx, '"side" takes exactly one id (the boundary event)', 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
           break;
         }
@@ -396,8 +396,8 @@ export class OpsParser {
     let ops: unknown;
     if (Array.isArray(input)) ops = input;
     else if (this.isPlainObject(input) && Array.isArray(input['ops'])) {
-      const extra = Object.keys(input).filter((k) => k !== 'ops' && k !== '$schema');
-      if (extra.length) throw usageError(`Unknown top-level key${extra.length > 1 ? 's' : ''} ${extra.map((k) => `"${k}"`).join(', ')}; expected only "ops"`, { hint: 'The ops file is {"ops": [...]} or a plain array of ops.' });
+      const extra = Object.keys(input).filter((inputKey) => inputKey !== 'ops' && inputKey !== '$schema');
+      if (extra.length) throw usageError(`Unknown top-level key${extra.length > 1 ? 's' : ''} ${extra.map((extraKey) => `"${extraKey}"`).join(', ')}; expected only "ops"`, { hint: 'The ops file is {"ops": [...]} or a plain array of ops.' });
       ops = input['ops'];
     } else {
       throw usageError(`Expected an array of ops or an object {"ops": [...]}, got ${this.describe(input)}`, {
@@ -406,7 +406,7 @@ export class OpsParser {
     }
     const list = ops as unknown[];
     if (!list.length) throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "Event_Start"}.' });
-    const parsed = list.map((raw, i) => this.parseOne(raw, i));
+    const parsed = list.map((raw, index) => this.parseOne(raw, index));
     this.checkAliases(parsed);
     return parsed;
   }
@@ -415,25 +415,25 @@ export class OpsParser {
   private checkAliases(ops: readonly Op[]): void {
     const defined = new Map<string, number>();
     const all = new Map<string, number>();
-    ops.forEach((op, i) => {
-      for (const a of new OpAliases(op).defined()) if (!all.has(a)) all.set(a, i);
+    ops.forEach((op, opIndex) => {
+      for (const alias of new OpAliases(op).defined()) if (!all.has(alias)) all.set(alias, opIndex);
     });
-    ops.forEach((op, i) => {
+    ops.forEach((op, opIndex) => {
       const raw = op as unknown as Record<string, unknown>;
       for (const key of NEW_ID_KEYS[op.op] ?? []) {
         if (typeof raw[key] === 'string' && (raw[key] as string).startsWith('$')) {
-          throw usageError(`ops[${i}] (${op.op}): "${key}" is the id of the new element, not an alias; give the alias with "${key === 'flowId' ? 'flowAs' : key === 'joinId' ? 'joinAs' : 'as'}": "${raw[key]}"`, { op: i });
+          throw usageError(`ops[${opIndex}] (${op.op}): "${key}" is the id of the new element, not an alias; give the alias with "${key === 'flowId' ? 'flowAs' : key === 'joinId' ? 'joinAs' : 'as'}": "${raw[key]}"`, { op: opIndex });
         }
       }
       for (const { key, alias } of new OpAliases(op).references()) {
-        if (!defined.has(alias)) throw unknownAlias(i, op, key, alias, defined, all.get(alias));
+        if (!defined.has(alias)) throw unknownAlias(opIndex, op, key, alias, defined, all.get(alias));
       }
-      for (const a of new OpAliases(op).defined()) {
-        if (!ALIAS.test(a)) throw usageError(`ops[${i}] (${op.op}): alias "${a}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op: i, hint: 'Example: "as": "$check", then "after": "$check".' });
-        if (defined.has(a)) {
-          throw new CliError('E_DUPLICATE_ALIAS', `ops[${i}] (${op.op}): alias ${a} is already defined by ops[${defined.get(a)}]`, 'usage', { op: i, hint: 'Every alias names one element of the batch: pick another name.' });
+      for (const alias of new OpAliases(op).defined()) {
+        if (!ALIAS.test(alias)) throw usageError(`ops[${opIndex}] (${op.op}): alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op: opIndex, hint: 'Example: "as": "$check", then "after": "$check".' });
+        if (defined.has(alias)) {
+          throw new CliError('E_DUPLICATE_ALIAS', `ops[${opIndex}] (${op.op}): alias ${alias} is already defined by ops[${defined.get(alias)}]`, 'usage', { op: opIndex, hint: 'Every alias names one element of the batch: pick another name.' });
         }
-        defined.set(a, i);
+        defined.set(alias, opIndex);
       }
     });
   }

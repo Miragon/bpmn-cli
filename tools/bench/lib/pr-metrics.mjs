@@ -26,11 +26,11 @@ export async function loadPrMetrics(env = process.env) {
   return {
     async score(xml) {
       const planes = await readPlanes(xml, 'bench.bpmn');
-      const metrics = planes.map((p) => measurePlane(p));
-      const scores = planes.map((p) => +score(p).toFixed(2));
+      const metrics = planes.map((plane) => measurePlane(plane));
+      const scores = planes.map((plane) => +score(plane).toFixed(2));
       const sums = {};
-      for (const m of metrics) for (const [k, v] of Object.entries(m)) if (typeof v === 'number') sums[k] = (sums[k] ?? 0) + v;
-      return { score: +scores.reduce((a, b) => a + b, 0).toFixed(2), sums, planes: planes.length };
+      for (const metric of metrics) for (const [metricName, metricValue] of Object.entries(metric)) if (typeof metricValue === 'number') sums[metricName] = (sums[metricName] ?? 0) + metricValue;
+      return { score: +scores.reduce((total, planeScore) => total + planeScore, 0).toFixed(2), sums, planes: planes.length };
     },
   };
 }

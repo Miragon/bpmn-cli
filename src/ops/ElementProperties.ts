@@ -20,19 +20,19 @@ export class ElementProperties {
     if (name) out['name'] = name;
     const docs = (ownValue(el, 'documentation') as El[] | undefined) ?? [];
     const text = docs
-      .map((d) => d.get<string | undefined>('text'))
+      .map((documentation) => documentation.get<string | undefined>('text'))
       .filter(Boolean)
       .join('\n');
     if (text) out['doc'] = text;
-    for (const p of descriptorOf(el).properties ?? []) {
-      if (p.name === 'id' || p.name === 'name' || p.name === 'default' || !this.coercer.isSettable(p)) continue;
-      const v = ownValue(el, p.name);
-      if (v === undefined || v === null || v === '') continue;
-      out[p.name] = p.isReference && isEl(v) ? idOf(v) : v;
+    for (const property of descriptorOf(el).properties ?? []) {
+      if (property.name === 'id' || property.name === 'name' || property.name === 'default' || !this.coercer.isSettable(property)) continue;
+      const propValue = ownValue(el, property.name);
+      if (propValue === undefined || propValue === null || propValue === '') continue;
+      out[property.name] = property.isReference && isEl(propValue) ? idOf(propValue) : propValue;
     }
-    for (const [k, v] of Object.entries(el.$attrs ?? {})) {
-      if (k.startsWith('xmlns') || typeof v === 'object') continue;
-      out[k] = v;
+    for (const [attrName, attrValue] of Object.entries(el.$attrs ?? {})) {
+      if (attrName.startsWith('xmlns') || typeof attrValue === 'object') continue;
+      out[attrName] = attrValue;
     }
     if (is(el, 'bpmn:SequenceFlow')) {
       const cond = el.get<El | undefined>('conditionExpression');
@@ -87,7 +87,7 @@ export class ElementProperties {
       if (prefix.includes('[')) out[prefix] = typeLabel(nestedEl);
       const nestedId = nestedEl.get<string | undefined>('id');
       if (nestedId) out[`${prefix}.id`] = nestedId;
-      for (const [k, v] of Object.entries(vendorAttributes(nestedEl))) out[`${prefix}.${k}`] = v;
+      for (const [attrName, attrValue] of Object.entries(vendorAttributes(nestedEl))) out[`${prefix}.${attrName}`] = attrValue;
     }
     return out;
   }

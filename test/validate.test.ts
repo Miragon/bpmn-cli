@@ -10,13 +10,13 @@ import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';
 /* tiny XML builder: nodes + flows with incoming/outgoing maintained   */
 /* ------------------------------------------------------------------ */
 
-interface N {
+interface NodeSpec {
   tag: string;
   id: string;
   attrs?: string;
   inner?: string;
 }
-interface F {
+interface FlowSpec {
   id: string;
   from: string;
   to: string;
@@ -24,29 +24,29 @@ interface F {
   inner?: string;
 }
 
-function body(nodes: N[], flows: F[] = [], extra = ''): string {
+function body(nodes: NodeSpec[], flows: FlowSpec[] = [], extra = ''): string {
   const inc = new Map<string, string[]>();
   const out = new Map<string, string[]>();
-  for (const f of flows) {
-    out.set(f.from, [...(out.get(f.from) ?? []), f.id]);
-    inc.set(f.to, [...(inc.get(f.to) ?? []), f.id]);
+  for (const flow of flows) {
+    out.set(flow.from, [...(out.get(flow.from) ?? []), flow.id]);
+    inc.set(flow.to, [...(inc.get(flow.to) ?? []), flow.id]);
   }
-  const nodeXml = nodes.map((n) => {
+  const nodeXml = nodes.map((node) => {
     const links = [
-      ...(inc.get(n.id) ?? []).map((i) => `<bpmn:incoming>${i}</bpmn:incoming>`),
-      ...(out.get(n.id) ?? []).map((o) => `<bpmn:outgoing>${o}</bpmn:outgoing>`),
+      ...(inc.get(node.id) ?? []).map((incomingId) => `<bpmn:incoming>${incomingId}</bpmn:incoming>`),
+      ...(out.get(node.id) ?? []).map((outgoingId) => `<bpmn:outgoing>${outgoingId}</bpmn:outgoing>`),
     ].join('');
-    return `<bpmn:${n.tag} id="${n.id}" ${n.attrs ?? ''}>${links}${n.inner ?? ''}</bpmn:${n.tag}>`;
+    return `<bpmn:${node.tag} id="${node.id}" ${node.attrs ?? ''}>${links}${node.inner ?? ''}</bpmn:${node.tag}>`;
   });
-  const flowXml = flows.map((f) => `<bpmn:sequenceFlow id="${f.id}" sourceRef="${f.from}" targetRef="${f.to}" ${f.attrs ?? ''}>${f.inner ?? ''}</bpmn:sequenceFlow>`);
+  const flowXml = flows.map((flow) => `<bpmn:sequenceFlow id="${flow.id}" sourceRef="${flow.from}" targetRef="${flow.to}" ${flow.attrs ?? ''}>${flow.inner ?? ''}</bpmn:sequenceFlow>`);
   return [...nodeXml, ...flowXml, extra].join('\n');
 }
 
 /** start -> ...nodes... -> end, chained in order. */
-function chain(nodes: N[], extra = ''): string {
-  const all: N[] = [{ tag: 'startEvent', id: 'Start' }, ...nodes, { tag: 'endEvent', id: 'End' }];
-  const flows: F[] = [];
-  for (let i = 0; i < all.length - 1; i++) flows.push({ id: `F${i + 1}`, from: all[i]!.id, to: all[i + 1]!.id });
+function chain(nodes: NodeSpec[], extra = ''): string {
+  const all: NodeSpec[] = [{ tag: 'startEvent', id: 'Start' }, ...nodes, { tag: 'endEvent', id: 'End' }];
+  const flows: FlowSpec[] = [];
+  for (let index = 0; index < all.length - 1; index++) flows.push({ id: `F${index + 1}`, from: all[index]!.id, to: all[index + 1]!.id });
   return body(all, flows, extra);
 }
 
@@ -55,13 +55,13 @@ async function processDoc(processBody: string, opts: Parameters<typeof definitio
 }
 
 function codes(doc: Doc): { errors: string[]; warnings: string[] } {
-  const r = validateDoc(doc);
-  return { errors: r.errors.map((e) => e.code), warnings: r.warnings.map((w) => w.code) };
+  const result = validateDoc(doc);
+  return { errors: result.errors.map((error) => error.code), warnings: result.warnings.map((warning) => warning.code) };
 }
 
 function findingsOf(doc: Doc, code: string) {
-  const r = validateDoc(doc);
-  return [...r.errors, ...r.warnings].filter((f) => f.code === code);
+  const result = validateDoc(doc);
+  return [...result.errors, ...result.warnings].filter((findings) => findings.code === code);
 }
 
 const timerDef = '<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>';
@@ -81,12 +81,12 @@ describe('validateDoc baseline', () => {
 
   it('every finding has code, message, element and hint', async () => {
     const doc = await processDoc(body([{ tag: 'task', id: 'Lonely' }]));
-    const r = validateDoc(doc);
-    for (const f of [...r.errors, ...r.warnings]) {
-      expect(f.code).toMatch(/^[EW]_[A-Z_]+$/);
-      expect(f.message).toBeTruthy();
-      expect(f.element).toBeTruthy();
-      expect(f.hint).toBeTruthy();
+    const result = validateDoc(doc);
+    for (const finding of [...result.errors, ...result.warnings]) {
+      expect(finding.code).toMatch(/^[EW]_[A-Z_]+$/);
+      expect(finding.message).toBeTruthy();
+      expect(finding.element).toBeTruthy();
+      expect(finding.hint).toBeTruthy();
     }
   });
 });
@@ -102,9 +102,9 @@ describe('structural errors', () => {
     const process = doc.processes()[0]!;
     addTo(process, 'flowElements', doc.create('bpmn:Task', { id: 'Task_A' }));
     doc.invalidate();
-    const f = findingsOf(doc, 'E_DUPLICATE_ID');
-    expect(f).toHaveLength(1);
-    expect(f[0]!.element).toBe('Task_A');
+    const findings = findingsOf(doc, 'E_DUPLICATE_ID');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.element).toBe('Task_A');
   });
 
   it('E_DANGLING_REF for references to elements outside the tree', async () => {
@@ -113,8 +113,8 @@ describe('structural errors', () => {
     const process = doc.processes()[0]!;
     removeFrom(process, 'flowElements', doc.require('Task_A'));
     doc.invalidate();
-    const f = findingsOf(doc, 'E_DANGLING_REF');
-    expect(f.map((x) => [x.element, x.related])).toEqual([
+    const findings = findingsOf(doc, 'E_DANGLING_REF');
+    expect(findings.map((finding) => [finding.element, finding.related])).toEqual([
       ['F1', ['Task_A']],
       ['F2', ['Task_A']],
     ]);
@@ -122,9 +122,9 @@ describe('structural errors', () => {
 
   it('E_DANGLING_REF for unresolved sourceRef/targetRef', async () => {
     const doc = await processDoc(body([{ tag: 'startEvent', id: 'Start' }], [{ id: 'F1', from: 'Start', to: 'Missing' }]));
-    const f = findingsOf(doc, 'E_DANGLING_REF');
-    expect(f).toHaveLength(1);
-    expect(f[0]!.message).toContain('has no target');
+    const findings = findingsOf(doc, 'E_DANGLING_REF');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.message).toContain('has no target');
   });
 
   it('E_DANGLING_REF for lane members and hosts that were removed', async () => {
@@ -133,21 +133,21 @@ describe('structural errors', () => {
     );
     expect(codes(doc).errors).toEqual([]);
     const process = doc.processes()[0]!;
-    const a = doc.require('A');
-    removeFrom(process, 'flowElements', a);
-    for (const f of [...doc.incoming(a), ...doc.outgoing(a)]) removeFrom(process, 'flowElements', f);
+    const taskA = doc.require('A');
+    removeFrom(process, 'flowElements', taskA);
+    for (const finding of [...doc.incoming(taskA), ...doc.outgoing(taskA)]) removeFrom(process, 'flowElements', finding);
     doc.invalidate();
-    const f = findingsOf(doc, 'E_DANGLING_REF');
-    expect(f.some((x) => x.element === 'Lane_1' && x.related?.[0] === 'A')).toBe(true);
+    const findings = findingsOf(doc, 'E_DANGLING_REF');
+    expect(findings.some((finding) => finding.element === 'Lane_1' && finding.related?.[0] === 'A')).toBe(true);
   });
 
   it('E_MULTIPLE_ROOTS', async () => {
     const one = await processDoc(chain([]));
     expect(codes(one).errors).not.toContain('E_MULTIPLE_ROOTS');
     const two = await processDoc(chain([]), { extraRoots: '<bpmn:process id="Process_2" />' });
-    const f = findingsOf(two, 'E_MULTIPLE_ROOTS');
-    expect(f).toHaveLength(1);
-    expect(f[0]!.element).toBe('Process_2');
+    const findings = findingsOf(two, 'E_MULTIPLE_ROOTS');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.element).toBe('Process_2');
   });
 
   it('E_EMPTY_COLLABORATION and E_ORPHAN_PROCESS', async () => {
@@ -160,17 +160,17 @@ describe('structural errors', () => {
     const orphan = await processDoc(chain([]), {
       extraRoots: '<bpmn:collaboration id="C"><bpmn:participant id="P1" processRef="Process_1" /></bpmn:collaboration><bpmn:process id="Process_2" />',
     });
-    const f = findingsOf(orphan, 'E_ORPHAN_PROCESS');
-    expect(f.map((x) => x.element)).toEqual(['Process_2']);
+    const findings = findingsOf(orphan, 'E_ORPHAN_PROCESS');
+    expect(findings.map((finding) => finding.element)).toEqual(['Process_2']);
     expect(codes(orphan).errors).not.toContain('E_MULTIPLE_ROOTS');
   });
 
   it('E_UNSUPPORTED_KIND', async () => {
     const doc = await processDoc(chain([{ tag: 'choreographyTask', id: 'Ch' }]));
-    const f = findingsOf(doc, 'E_UNSUPPORTED_KIND');
-    expect(f).toHaveLength(1);
-    expect(f[0]!.element).toBe('Ch');
-    expect(f[0]!.message).toContain('choreographies');
+    const findings = findingsOf(doc, 'E_UNSUPPORTED_KIND');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.element).toBe('Ch');
+    expect(findings[0]!.message).toContain('choreographies');
     expect(findingsOf(await processDoc(chain([{ tag: 'complexGateway', id: 'Gw' }])), 'E_UNSUPPORTED_KIND')).toEqual([]);
   });
 
@@ -189,12 +189,12 @@ describe('structural errors', () => {
         ],
       ),
     );
-    const r = validateDoc(fromEnd);
-    expect(r.errors.map((e) => [e.code, e.element])).toEqual([
+    const result = validateDoc(fromEnd);
+    expect(result.errors.map((error) => [error.code, error.element])).toEqual([
       ['E_INVALID_SOURCE', 'F2'],
       ['E_INVALID_TARGET', 'F3'],
     ]);
-    expect(r.errors[0]!.related).toEqual(['End', 'A']);
+    expect(result.errors[0]!.related).toEqual(['End', 'A']);
   });
 
   it('E_INVALID_SOURCE / E_INVALID_TARGET: a link throw event ends its path, a link catch event starts one', async () => {
@@ -215,12 +215,12 @@ describe('structural errors', () => {
         ],
       ),
     );
-    const r = validateDoc(doc);
-    expect(r.errors.map((e) => [e.code, e.element])).toEqual([
+    const result = validateDoc(doc);
+    expect(result.errors.map((error) => [error.code, error.element])).toEqual([
       ['E_INVALID_SOURCE', 'F2'],
       ['E_INVALID_TARGET', 'F3'],
     ]);
-    expect(r.errors[0]!.message).toContain('Link throw event Throw');
+    expect(result.errors[0]!.message).toContain('Link throw event Throw');
   });
 
   it('E_CROSS_SCOPE', async () => {
@@ -247,10 +247,10 @@ describe('structural errors', () => {
     addTo(start, 'outgoing', flow);
     addTo(inner, 'incoming', flow);
     doc.invalidate();
-    const f = findingsOf(doc, 'E_CROSS_SCOPE');
-    expect(f).toHaveLength(1);
-    expect(f[0]!.element).toBe('Bad');
-    expect(f[0]!.hint).toMatch(/message flow|move/);
+    const findings = findingsOf(doc, 'E_CROSS_SCOPE');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.element).toBe('Bad');
+    expect(findings[0]!.hint).toMatch(/message flow|move/);
   });
 
   it('E_CROSS_SCOPE when a flow is declared in the wrong scope', async () => {
@@ -272,8 +272,8 @@ describe('structural errors', () => {
     removeFrom(sub, 'flowElements', inner);
     addTo(doc.processes()[0]!, 'flowElements', inner);
     doc.invalidate();
-    const f = findingsOf(doc, 'E_CROSS_SCOPE');
-    expect(f.map((x) => x.element)).toEqual(['I1']);
+    const findings = findingsOf(doc, 'E_CROSS_SCOPE');
+    expect(findings.map((finding) => finding.element)).toEqual(['I1']);
   });
 
   it('missing incoming/outgoing entries are repaired, not reported (they are optional in BPMN 2.0)', async () => {
@@ -288,7 +288,7 @@ describe('structural errors', () => {
     // Doc.fromXml completes the lists in memory (a write keeps the file's own, see model/utils/mirror.ts)
     expect(doc.source?.mirror.listed.has(doc.require('Start'))).toBe(false);
     expect(codes(doc)).toEqual({ errors: [], warnings: [] });
-    const id = (el: { get: <T>(k: string) => T }) => el.get<string>('id');
+    const id = (el: { get: <TValue>(key: string) => TValue }) => el.get<string>('id');
     expect(doc.outgoing(doc.require('Start')).map(id)).toEqual(['F1']);
     expect(doc.incoming(doc.require('A')).map(id)).toEqual(['F1']);
     expect(doc.outgoing(doc.require('A')).map(id)).toEqual(['F2']);
@@ -303,35 +303,35 @@ describe('structural errors', () => {
   it('E_FLOW_LINKS when a node lists a flow that does not touch it', async () => {
     const clean = await linearDoc();
     addTo(clean.require('End'), 'incoming', clean.require('F1'));
-    const f = findingsOf(clean, 'E_FLOW_LINKS');
-    expect(f.map((x) => [x.element, x.related])).toEqual([['End', ['F1']]]);
-    expect(f[0]!.hint).toContain('<bpmn:incoming>F1</bpmn:incoming>');
+    const findings = findingsOf(clean, 'E_FLOW_LINKS');
+    expect(findings.map((finding) => [finding.element, finding.related])).toEqual([['End', ['F1']]]);
+    expect(findings[0]!.hint).toContain('<bpmn:incoming>F1</bpmn:incoming>');
     const out = await linearDoc();
     addTo(out.require('Start'), 'outgoing', out.require('F2'));
-    expect(findingsOf(out, 'E_FLOW_LINKS').map((x) => x.element)).toEqual(['Start']);
+    expect(findingsOf(out, 'E_FLOW_LINKS').map((finding) => finding.element)).toEqual(['Start']);
   });
 
   it('E_INVALID_SOURCE / E_INVALID_TARGET: compensate boundary events and compensation handlers have no sequence flows', async () => {
-    const nodes: N[] = [
+    const nodes: NodeSpec[] = [
       { tag: 'startEvent', id: 'Start' },
       { tag: 'task', id: 'A' },
       { tag: 'boundaryEvent', id: 'Comp', attrs: 'attachedToRef="A"', inner: '<bpmn:compensateEventDefinition />' },
       { tag: 'task', id: 'Handler', attrs: 'isForCompensation="true"' },
       { tag: 'endEvent', id: 'End' },
     ];
-    const main: F[] = [
+    const main: FlowSpec[] = [
       { id: 'F1', from: 'Start', to: 'A' },
       { id: 'F2', from: 'A', to: 'End' },
     ];
     const bad = await processDoc(body(nodes, [...main, { id: 'F3', from: 'Comp', to: 'Handler' }, { id: 'F4', from: 'Handler', to: 'End' }]));
-    const r = validateDoc(bad);
-    expect(r.errors.every((e) => e.code === 'E_INVALID_SOURCE' || e.code === 'E_INVALID_TARGET')).toBe(true);
-    const fromBoundary = r.errors.find((e) => e.element === 'F3' && e.code === 'E_INVALID_SOURCE')!;
+    const result = validateDoc(bad);
+    expect(result.errors.every((error) => error.code === 'E_INVALID_SOURCE' || error.code === 'E_INVALID_TARGET')).toBe(true);
+    const fromBoundary = result.errors.find((error) => error.element === 'F3' && error.code === 'E_INVALID_SOURCE')!;
     expect(fromBoundary.message).toMatch(/Compensate boundary event Comp/);
     expect(fromBoundary.related).toEqual(['Comp', 'Handler']);
     expect(fromBoundary.hint).toContain('bpmn remove <file> F3');
     expect(fromBoundary.hint).toContain('bpmn connect <file> Comp Handler');
-    expect(r.errors.some((e) => e.element === 'F4' && e.code === 'E_INVALID_SOURCE' && /Compensation handler/.test(e.message))).toBe(true);
+    expect(result.errors.some((error) => error.element === 'F4' && error.code === 'E_INVALID_SOURCE' && /Compensation handler/.test(error.message))).toBe(true);
     expect(codes(bad).warnings).not.toContain('W_DEAD_END'); // the handler is no dead end either way
     // the handler linked by a compensation association: clean
     const ok = await processDoc(body(nodes, main, '<bpmn:association id="As" associationDirection="One" sourceRef="Comp" targetRef="Handler" />'));
@@ -340,7 +340,7 @@ describe('structural errors', () => {
 
   it('E_NO_HOST / E_INVALID_HOST for boundary events', async () => {
     const noHost = await processDoc(chain([{ tag: 'task', id: 'A' }], `<bpmn:boundaryEvent id="B" >${timerDef}</bpmn:boundaryEvent>`));
-    expect(findingsOf(noHost, 'E_NO_HOST').map((x) => x.element)).toEqual(['B']);
+    expect(findingsOf(noHost, 'E_NO_HOST').map((finding) => finding.element)).toEqual(['B']);
 
     const ok = await processDoc(chain([{ tag: 'task', id: 'A' }], `<bpmn:boundaryEvent id="B" attachedToRef="A">${timerDef}</bpmn:boundaryEvent>`));
     expect(codes(ok).errors).toEqual([]);
@@ -351,23 +351,23 @@ describe('structural errors', () => {
         `<bpmn:boundaryEvent id="B" attachedToRef="Inner">${timerDef}</bpmn:boundaryEvent>`,
       ),
     );
-    const f = findingsOf(crossScope, 'E_INVALID_HOST');
-    expect(f.map((x) => [x.element, x.related])).toEqual([['B', ['Inner']]]);
+    const findings = findingsOf(crossScope, 'E_INVALID_HOST');
+    expect(findings.map((finding) => [finding.element, finding.related])).toEqual([['B', ['Inner']]]);
 
     const onGateway = await processDoc(chain([{ tag: 'exclusiveGateway', id: 'Gw' }], `<bpmn:boundaryEvent id="B" attachedToRef="Gw">${timerDef}</bpmn:boundaryEvent>`));
-    expect(findingsOf(onGateway, 'E_INVALID_HOST').map((x) => x.element)).toEqual(['B']);
+    expect(findingsOf(onGateway, 'E_INVALID_HOST').map((finding) => finding.element)).toEqual(['B']);
   });
 
   it('E_INVALID_TRIGGER: trigger matrix', async () => {
     const bad = await processDoc(body([{ tag: 'startEvent', id: 'Start', inner: terminateDef }, { tag: 'endEvent', id: 'End', inner: timerDef }], [{ id: 'F1', from: 'Start', to: 'End' }]));
-    expect(findingsOf(bad, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['Start', 'End']);
+    expect(findingsOf(bad, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['Start', 'End']);
     const ok = await processDoc(body([{ tag: 'startEvent', id: 'Start', inner: timerDef }, { tag: 'endEvent', id: 'End', inner: terminateDef }], [{ id: 'F1', from: 'Start', to: 'End' }]));
     expect(codes(ok).errors).toEqual([]);
   });
 
   it('E_INVALID_TRIGGER: error/escalation/compensate starts only in event sub-processes', async () => {
     const bad = await processDoc(body([{ tag: 'startEvent', id: 'Start', inner: errorDef }, { tag: 'endEvent', id: 'End' }], [{ id: 'F1', from: 'Start', to: 'End' }]));
-    expect(findingsOf(bad, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['Start']);
+    expect(findingsOf(bad, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['Start']);
     const ok = await processDoc(
       chain([], `<bpmn:subProcess id="Sub" triggeredByEvent="true">${body([{ tag: 'startEvent', id: 'S2', inner: errorDef }, { tag: 'endEvent', id: 'E2' }], [{ id: 'I1', from: 'S2', to: 'E2' }])}</bpmn:subProcess>`),
     );
@@ -376,23 +376,23 @@ describe('structural errors', () => {
 
   it('E_INVALID_TRIGGER: triggered or non-interrupting starts inside embedded sub-processes', async () => {
     const triggered = await processDoc(chain([{ tag: 'subProcess', id: 'Sub', inner: body([{ tag: 'startEvent', id: 'S2', inner: timerDef }, { tag: 'endEvent', id: 'E2' }], [{ id: 'I1', from: 'S2', to: 'E2' }]) }]));
-    expect(findingsOf(triggered, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['S2']);
+    expect(findingsOf(triggered, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['S2']);
     const nonInterrupting = await processDoc(body([{ tag: 'startEvent', id: 'Start', attrs: 'isInterrupting="false"', inner: messageDef }, { tag: 'endEvent', id: 'End' }], [{ id: 'F1', from: 'Start', to: 'End' }]));
-    expect(findingsOf(nonInterrupting, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['Start']);
+    expect(findingsOf(nonInterrupting, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['Start']);
   });
 
   it('E_INVALID_TRIGGER: non-interrupting error/cancel/compensate boundary events', async () => {
     const bad = await processDoc(chain([{ tag: 'task', id: 'A' }], `<bpmn:boundaryEvent id="B" attachedToRef="A" cancelActivity="false">${errorDef}</bpmn:boundaryEvent>`));
-    expect(findingsOf(bad, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['B']);
+    expect(findingsOf(bad, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['B']);
     const ok = await processDoc(chain([{ tag: 'task', id: 'A' }], `<bpmn:boundaryEvent id="B" attachedToRef="A" cancelActivity="false">${messageDef}</bpmn:boundaryEvent>`));
     expect(codes(ok).errors).toEqual([]);
   });
 
   it('E_INVALID_TRIGGER: cancel events only with transactions', async () => {
     const badEnd = await processDoc(body([{ tag: 'startEvent', id: 'Start' }, { tag: 'endEvent', id: 'End', inner: cancelDef }], [{ id: 'F1', from: 'Start', to: 'End' }]));
-    expect(findingsOf(badEnd, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['End']);
+    expect(findingsOf(badEnd, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['End']);
     const badBoundary = await processDoc(chain([{ tag: 'task', id: 'A' }], `<bpmn:boundaryEvent id="B" attachedToRef="A">${cancelDef}</bpmn:boundaryEvent>`));
-    expect(findingsOf(badBoundary, 'E_INVALID_TRIGGER').map((x) => x.element)).toEqual(['B']);
+    expect(findingsOf(badBoundary, 'E_INVALID_TRIGGER').map((finding) => finding.element)).toEqual(['B']);
     const ok = await processDoc(
       chain(
         [{ tag: 'transaction', id: 'Tx', inner: body([{ tag: 'startEvent', id: 'S2' }, { tag: 'endEvent', id: 'E2', inner: cancelDef }], [{ id: 'I1', from: 'S2', to: 'E2' }]) }],
@@ -416,7 +416,7 @@ describe('structural errors', () => {
         ],
       ),
     );
-    expect(findingsOf(notOutgoing, 'E_INVALID_DEFAULT').map((x) => [x.element, x.related])).toEqual([['Gw', ['F1']]]);
+    expect(findingsOf(notOutgoing, 'E_INVALID_DEFAULT').map((finding) => [finding.element, finding.related])).toEqual([['Gw', ['F1']]]);
     const ok = await processDoc(
       body(
         [
@@ -435,9 +435,9 @@ describe('structural errors', () => {
 
   it('E_EVENT_SUBPROCESS_NO_START / E_EVENT_SUBPROCESS_PLAIN_START', async () => {
     const noStart = await processDoc(chain([], '<bpmn:subProcess id="Sub" triggeredByEvent="true"><bpmn:task id="T" /></bpmn:subProcess>'));
-    expect(findingsOf(noStart, 'E_EVENT_SUBPROCESS_NO_START').map((x) => x.element)).toEqual(['Sub']);
+    expect(findingsOf(noStart, 'E_EVENT_SUBPROCESS_NO_START').map((finding) => finding.element)).toEqual(['Sub']);
     const plain = await processDoc(chain([], `<bpmn:subProcess id="Sub" triggeredByEvent="true">${body([{ tag: 'startEvent', id: 'S2' }, { tag: 'endEvent', id: 'E2' }], [{ id: 'I1', from: 'S2', to: 'E2' }])}</bpmn:subProcess>`));
-    expect(findingsOf(plain, 'E_EVENT_SUBPROCESS_PLAIN_START').map((x) => x.element)).toEqual(['S2']);
+    expect(findingsOf(plain, 'E_EVENT_SUBPROCESS_PLAIN_START').map((finding) => finding.element)).toEqual(['S2']);
     const ok = await processDoc(chain([], `<bpmn:subProcess id="Sub" triggeredByEvent="true">${body([{ tag: 'startEvent', id: 'S2', inner: timerDef }, { tag: 'endEvent', id: 'E2' }], [{ id: 'I1', from: 'S2', to: 'E2' }])}</bpmn:subProcess>`));
     expect(codes(ok).errors).toEqual([]);
   });
@@ -449,14 +449,14 @@ describe('structural errors', () => {
         `<bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>A</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane><bpmn:lane id="L2"><bpmn:flowNodeRef>A</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>`,
       ),
     );
-    expect(findingsOf(conflict, 'E_LANE_CONFLICT').map((x) => [x.element, x.related])).toEqual([['A', ['L1', 'L2']]]);
+    expect(findingsOf(conflict, 'E_LANE_CONFLICT').map((finding) => [finding.element, finding.related])).toEqual([['A', ['L1', 'L2']]]);
     const badMember = await processDoc(
       chain(
         [{ tag: 'subProcess', id: 'Sub', inner: body([{ tag: 'startEvent', id: 'S2' }, { tag: 'endEvent', id: 'E2' }], [{ id: 'I1', from: 'S2', to: 'E2' }]) }],
         `<bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>Sub</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef><bpmn:flowNodeRef>S2</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>`,
       ),
     );
-    expect(findingsOf(badMember, 'E_INVALID_LANE_MEMBER').map((x) => [x.element, x.related])).toEqual([['L1', ['S2']]]);
+    expect(findingsOf(badMember, 'E_INVALID_LANE_MEMBER').map((finding) => [finding.element, finding.related])).toEqual([['L1', ['S2']]]);
     const ok = await processDoc(
       chain([{ tag: 'task', id: 'A' }], `<bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>A</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>`),
     );
@@ -478,9 +478,9 @@ describe('structural errors', () => {
     const ok = await docFromXml(collab('<bpmn:messageFlow id="M1" sourceRef="A" targetRef="P2" /><bpmn:messageFlow id="M2" sourceRef="P2" targetRef="B" />'));
     expect(codes(ok).errors).toEqual([]);
     const fromGateway = await docFromXml(collab('<bpmn:messageFlow id="M1" sourceRef="Gw" targetRef="P2" />'));
-    expect(findingsOf(fromGateway, 'E_INVALID_MESSAGE_FLOW').map((x) => [x.element, x.related])).toEqual([['M1', ['Gw']]]);
+    expect(findingsOf(fromGateway, 'E_INVALID_MESSAGE_FLOW').map((finding) => [finding.element, finding.related])).toEqual([['M1', ['Gw']]]);
     const samePool = await docFromXml(collab('<bpmn:messageFlow id="M1" sourceRef="A" targetRef="B" /><bpmn:messageFlow id="M2" sourceRef="A" targetRef="P1" />'));
-    expect(findingsOf(samePool, 'E_MESSAGE_FLOW_SAME_POOL').map((x) => x.element)).toEqual(['M1', 'M2']);
+    expect(findingsOf(samePool, 'E_MESSAGE_FLOW_SAME_POOL').map((finding) => finding.element)).toEqual(['M1', 'M2']);
   });
 });
 
@@ -497,14 +497,14 @@ describe('lint warnings', () => {
     expect(codes(await linearDoc()).warnings).toEqual([]);
     // sub-processes with nodes get the same check; event sub-processes are not asked for a start
     const sub = await processDoc(chain([{ tag: 'subProcess', id: 'Sub', inner: '<bpmn:task id="T" />' }]));
-    expect(findingsOf(sub, 'W_NO_START').map((x) => x.element)).toEqual(['Sub']);
+    expect(findingsOf(sub, 'W_NO_START').map((finding) => finding.element)).toEqual(['Sub']);
   });
 
   it('W_UNREACHABLE', async () => {
     const doc = await processDoc(chain([], '<bpmn:task id="Lonely" />'));
-    const f = findingsOf(doc, 'W_UNREACHABLE');
-    expect(f.map((x) => x.element)).toEqual(['Lonely']);
-    expect(f[0]!.hint).toContain('bpmn connect');
+    const findings = findingsOf(doc, 'W_UNREACHABLE');
+    expect(findings.map((finding) => finding.element)).toEqual(['Lonely']);
+    expect(findings[0]!.hint).toContain('bpmn connect');
     // without any start event, nodes without incoming are entry points
     const noStart = await processDoc(body([{ tag: 'task', id: 'A' }, { tag: 'endEvent', id: 'End' }], [{ id: 'F1', from: 'A', to: 'End' }]));
     expect(codes(noStart).warnings).not.toContain('W_UNREACHABLE');
@@ -534,13 +534,13 @@ describe('lint warnings', () => {
       ),
     );
     const order = new FlowOrder(doc, doc.processes()[0]!);
-    expect(order.ordered.map((n) => n.get<string>('id'))).toEqual(['Start', 'A', 'End', 'Late', 'Old']);
-    expect([...order.unreachable].map((n) => n.get<string>('id'))).toEqual(['Old']);
+    expect(order.ordered.map((node) => node.get<string>('id'))).toEqual(['Start', 'A', 'End', 'Late', 'Old']);
+    expect([...order.unreachable].map((node) => node.get<string>('id'))).toEqual(['Old']);
   });
 
   it('W_DEAD_END', async () => {
     const doc = await processDoc(body([{ tag: 'startEvent', id: 'Start' }, { tag: 'task', id: 'A' }], [{ id: 'F1', from: 'Start', to: 'A' }]));
-    expect(findingsOf(doc, 'W_DEAD_END').map((x) => x.element)).toEqual(['A']);
+    expect(findingsOf(doc, 'W_DEAD_END').map((finding) => finding.element)).toEqual(['A']);
     // end events, link throws, compensation handlers and compensate boundary events are exempt
     const exempt = await processDoc(
       body(
@@ -586,14 +586,14 @@ describe('lint warnings', () => {
       ),
     );
     const order = new FlowOrder(doc, doc.processes()[0]!);
-    expect(order.ordered.map((n) => n.get<string>('id'))).toEqual(['Start', 'A', 'Throw', 'Catch', 'B', 'End', 'Lonely', 'End2']);
-    expect([...order.unreachable].map((n) => n.get<string>('id'))).toEqual(['Lonely', 'End2']);
-    const f = findingsOf(doc, 'W_UNREACHABLE');
-    expect(f.map((x) => x.element)).toEqual(['Lonely', 'End2']);
-    expect(f[0]!.message).toContain('no throwing link event "L2"');
-    expect(f[1]!.hint).toContain('bpmn connect <file> <fromId> End2');
-    expect(f[0]!.hint).toContain('intermediateThrowEvent:link');
-    expect(f[0]!.hint).toContain('--link L2');
+    expect(order.ordered.map((node) => node.get<string>('id'))).toEqual(['Start', 'A', 'Throw', 'Catch', 'B', 'End', 'Lonely', 'End2']);
+    expect([...order.unreachable].map((node) => node.get<string>('id'))).toEqual(['Lonely', 'End2']);
+    const findings = findingsOf(doc, 'W_UNREACHABLE');
+    expect(findings.map((finding) => finding.element)).toEqual(['Lonely', 'End2']);
+    expect(findings[0]!.message).toContain('no throwing link event "L2"');
+    expect(findings[1]!.hint).toContain('bpmn connect <file> <fromId> End2');
+    expect(findings[0]!.hint).toContain('intermediateThrowEvent:link');
+    expect(findings[0]!.hint).toContain('--link L2');
     expect(codes(doc).warnings).toEqual(['W_UNREACHABLE', 'W_UNREACHABLE']);
   });
 
@@ -602,7 +602,7 @@ describe('lint warnings', () => {
     const adHoc = await processDoc(chain([{ tag: 'adHocSubProcess', id: 'AdHoc', inner }]));
     expect(codes(adHoc)).toEqual({ errors: [], warnings: [] });
     const order = new FlowOrder(adHoc, adHoc.require('AdHoc'));
-    expect(order.ordered.map((n) => n.get<string>('id'))).toEqual(['T1', 'T2']);
+    expect(order.ordered.map((node) => node.get<string>('id'))).toEqual(['T1', 'T2']);
     expect(order.unreachable.size).toBe(0);
     // an ordinary sub-process with the same content is asked for start/end events and flows
     const plain = await processDoc(chain([{ tag: 'subProcess', id: 'Sub', inner }]));
@@ -628,8 +628,8 @@ describe('lint warnings', () => {
         ],
       );
     const bad = await processDoc(split('name="Check"', '', 'name="no"'));
-    expect(findingsOf(bad, 'W_GATEWAY_NAME').map((x) => x.element)).toEqual(['Gw']);
-    expect(findingsOf(bad, 'W_BRANCH_NAME').map((x) => [x.element, x.related])).toEqual([['Gw', ['F2']]]);
+    expect(findingsOf(bad, 'W_GATEWAY_NAME').map((finding) => finding.element)).toEqual(['Gw']);
+    expect(findingsOf(bad, 'W_BRANCH_NAME').map((finding) => [finding.element, finding.related])).toEqual([['Gw', ['F2']]]);
     const unnamed = await processDoc(split('', 'name="yes"', 'name="no"'));
     expect(findingsOf(unnamed, 'W_GATEWAY_NAME')).toHaveLength(1);
     const ok = await processDoc(split('name="Invoice ok?"', 'name="yes"', 'name="no"'));
@@ -657,16 +657,16 @@ describe('lint warnings', () => {
         ],
       );
     const namedJoin = await processDoc(twoIn('inclusiveGateway', 'name="Merge"'));
-    expect(findingsOf(namedJoin, 'W_NAMED_JOIN').map((x) => x.element)).toEqual(['Join']);
+    expect(findingsOf(namedJoin, 'W_NAMED_JOIN').map((finding) => finding.element)).toEqual(['Join']);
     const namedParallel = await processDoc(twoIn('parallelGateway', 'name="Both done"'));
-    expect(findingsOf(namedParallel, 'W_NAMED_PARALLEL').map((x) => x.element)).toEqual(['Join']);
+    expect(findingsOf(namedParallel, 'W_NAMED_PARALLEL').map((finding) => finding.element)).toEqual(['Join']);
     const ok = await processDoc(twoIn('parallelGateway', ''));
     expect(codes(ok).warnings).toEqual([]);
   });
 
   it('W_NOT_IN_LANE', async () => {
     const doc = await processDoc(chain([{ tag: 'task', id: 'A' }], '<bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>'));
-    expect(findingsOf(doc, 'W_NOT_IN_LANE').map((x) => x.element)).toEqual(['A']);
+    expect(findingsOf(doc, 'W_NOT_IN_LANE').map((finding) => finding.element)).toEqual(['A']);
     expect(codes(await linearDoc()).warnings).not.toContain('W_NOT_IN_LANE');
   });
 
@@ -689,29 +689,29 @@ describe('lint warnings', () => {
         ],
       ),
     );
-    expect(findingsOf(doc, 'W_IMPLICIT_SPLIT').map((x) => [x.element, x.related])).toEqual([['A', ['F2', 'F3']]]);
-    expect(findingsOf(doc, 'W_IMPLICIT_JOIN').map((x) => [x.element, x.related])).toEqual([['End', ['F4', 'F5']]]);
+    expect(findingsOf(doc, 'W_IMPLICIT_SPLIT').map((finding) => [finding.element, finding.related])).toEqual([['A', ['F2', 'F3']]]);
+    expect(findingsOf(doc, 'W_IMPLICIT_JOIN').map((finding) => [finding.element, finding.related])).toEqual([['End', ['F4', 'F5']]]);
   });
 
   it('W_EVENT_GATEWAY_TARGET', async () => {
-    const gw = (targets: N[]) =>
+    const gw = (targets: NodeSpec[]) =>
       body(
         [{ tag: 'startEvent', id: 'Start' }, { tag: 'eventBasedGateway', id: 'Gw' }, ...targets, { tag: 'endEvent', id: 'End' }],
         [
           { id: 'F1', from: 'Start', to: 'Gw' },
-          ...targets.map((t, i) => ({ id: `G${i}`, from: 'Gw', to: t.id })),
-          ...targets.map((t, i) => ({ id: `E${i}`, from: t.id, to: 'End' })),
+          ...targets.map((target, index) => ({ id: `G${index}`, from: 'Gw', to: target.id })),
+          ...targets.map((target, index) => ({ id: `E${index}`, from: target.id, to: 'End' })),
         ],
       );
     const bad = await processDoc(gw([{ tag: 'intermediateCatchEvent', id: 'Msg', inner: messageDef }, { tag: 'task', id: 'T' }]));
-    expect(findingsOf(bad, 'W_EVENT_GATEWAY_TARGET').map((x) => [x.element, x.related])).toEqual([['Gw', ['T']]]);
+    expect(findingsOf(bad, 'W_EVENT_GATEWAY_TARGET').map((finding) => [finding.element, finding.related])).toEqual([['Gw', ['T']]]);
     const ok = await processDoc(gw([{ tag: 'intermediateCatchEvent', id: 'Msg', inner: messageDef }, { tag: 'receiveTask', id: 'R' }, { tag: 'intermediateCatchEvent', id: 'Tm', inner: timerDef }]));
     expect(findingsOf(ok, 'W_EVENT_GATEWAY_TARGET')).toEqual([]);
   });
 
   it('W_EMPTY_SUBPROCESS', async () => {
     const doc = await processDoc(chain([{ tag: 'subProcess', id: 'Sub' }]));
-    expect(findingsOf(doc, 'W_EMPTY_SUBPROCESS').map((x) => x.element)).toEqual(['Sub']);
+    expect(findingsOf(doc, 'W_EMPTY_SUBPROCESS').map((finding) => finding.element)).toEqual(['Sub']);
     expect(codes(doc).warnings).not.toContain('W_NO_START');
     const ok = await processDoc(chain([{ tag: 'subProcess', id: 'Sub', inner: body([{ tag: 'startEvent', id: 'S2' }, { tag: 'endEvent', id: 'E2' }], [{ id: 'I1', from: 'S2', to: 'E2' }]) }]));
     expect(codes(ok).warnings).toEqual([]);
@@ -719,7 +719,7 @@ describe('lint warnings', () => {
 
   it('W_DUPLICATE_NAME', async () => {
     const dup = await processDoc(chain([{ tag: 'userTask', id: 'A', attrs: 'name="Do it"' }, { tag: 'userTask', id: 'B', attrs: 'name="Do it"' }]));
-    expect(findingsOf(dup, 'W_DUPLICATE_NAME').map((x) => [x.element, x.related])).toEqual([['A', ['B']]]);
+    expect(findingsOf(dup, 'W_DUPLICATE_NAME').map((finding) => [finding.element, finding.related])).toEqual([['A', ['B']]]);
     const differentKinds = await processDoc(chain([{ tag: 'userTask', id: 'A', attrs: 'name="Do it"' }, { tag: 'serviceTask', id: 'B', attrs: 'name="Do it"' }]));
     expect(codes(differentKinds).warnings).toEqual([]);
     // branch names may repeat
@@ -793,10 +793,10 @@ describe('hints', () => {
     const seen = new Set<string>();
     const hints: Array<[string, string]> = [];
     for (const doc of await fixtures()) {
-      const r = validateDoc(doc);
-      for (const f of [...r.errors, ...r.warnings]) {
-        seen.add(f.code);
-        if (f.hint) hints.push([f.code, f.hint]);
+      const result = validateDoc(doc);
+      for (const finding of [...result.errors, ...result.warnings]) {
+        seen.add(finding.code);
+        if (finding.hint) hints.push([finding.code, finding.hint]);
       }
     }
     expect([...seen]).toEqual(
@@ -805,9 +805,9 @@ describe('hints', () => {
     expect(hints.length).toBeGreaterThan(20);
     for (const [code, hint] of hints) {
       const commands = [...hint.matchAll(/`bpmn (\w+)([^`]*)`/g)];
-      for (const m of commands) {
-        const cmd = m[1]!;
-        const rest = m[2]!;
+      for (const command of commands) {
+        const cmd = command[1]!;
+        const rest = command[2]!;
         expect(cmd, `${code}: ${hint}`).not.toBe('split');
         if (FILE_COMMANDS.includes(cmd)) expect(rest, `${code}: ${hint}`).toMatch(/^ <file>/);
         if (cmd === 'add') expect(rest, `${code}: ${hint}`).not.toMatch(/--name/);

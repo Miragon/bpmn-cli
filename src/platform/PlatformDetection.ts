@@ -35,14 +35,14 @@ export class PlatformDetection {
     const usage = ns.usage();
     const camunda = usage.get(CAMUNDA_URI) ?? 0;
     const operaton = usage.get(OPERATON_URI) ?? 0;
-    const c7 = [...C7_URIS].reduce((n, uri) => n + (usage.get(uri) ?? 0), 0);
+    const c7 = [...C7_URIS].reduce((sum, uri) => sum + (usage.get(uri) ?? 0), 0);
     const c8 = usage.get(ZEEBE_URI) ?? 0;
     const declared = ns.executionPlatform();
     const withOperaton = (info: PlatformInfo): PlatformInfo =>
       info.platform === 'c7' && operaton > 0 ? { ...info, operaton: true, ...(info.source === 'namespace-use' ? {} : { detail: `${info.detail}; ${operaton} operaton attribute(s)/element(s): ${OPERATON_NOTE}` }) } : info;
     if (declared !== undefined) {
-      const p = this.fromExecutionPlatform(declared);
-      if (p) return withOperaton({ platform: p, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"` });
+      const platform = this.fromExecutionPlatform(declared);
+      if (platform) return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"` });
     }
     if (c7 || c8) {
       const platform: Platform = c7 >= c8 ? 'c7' : 'c8';
@@ -50,15 +50,15 @@ export class PlatformDetection {
       const note = platform === 'c7' && operaton ? `; ${OPERATON_NOTE}` : '';
       return withOperaton({ platform, source: 'namespace-use', detail: `${parts} attribute(s)/element(s)${note}` });
     }
-    const declaredC7 = [...C7_URIS].filter((u) => ns.declares(u));
+    const declaredC7 = [...C7_URIS].filter((uri) => ns.declares(uri));
     const declaresC8 = ns.declares(ZEEBE_URI);
     const prefixOf = (uri: string): string => ns.prefixOf(uri) ?? '';
     if (declaredC7.length > 0 !== declaresC8) {
-      const decl = declaresC8 ? `xmlns:${prefixOf(ZEEBE_URI)}` : declaredC7.map((u) => `xmlns:${prefixOf(u)}`).join(' and ');
+      const decl = declaresC8 ? `xmlns:${prefixOf(ZEEBE_URI)}` : declaredC7.map((uri) => `xmlns:${prefixOf(uri)}`).join(' and ');
       return { platform: declaresC8 ? 'c8' : 'c7', source: 'namespace-declaration', detail: `${decl} declared (no vendor content yet)` };
     }
     if (declaredC7.length && declaresC8) {
-      const decl = [...declaredC7.map((u) => `xmlns:${prefixOf(u)}`), `xmlns:${prefixOf(ZEEBE_URI)}`].join(' and ');
+      const decl = [...declaredC7.map((uri) => `xmlns:${prefixOf(uri)}`), `xmlns:${prefixOf(ZEEBE_URI)}`].join(' and ');
       return { platform: 'none', source: 'none', detail: `${decl} declared, but no vendor content tells which engine` };
     }
     return { platform: 'none', source: 'none', detail: declared !== undefined ? `unknown modeler:executionPlatform "${declared}", no vendor content` : 'no executionPlatform and no vendor namespace' };
@@ -74,14 +74,14 @@ export class PlatformDetection {
   }
 
   target(): 'camunda7' | 'camunda8' | undefined {
-    const p = this.info().platform;
-    return p === 'c7' ? 'camunda7' : p === 'c8' ? 'camunda8' : undefined;
+    const platform = this.info().platform;
+    return platform === 'c7' ? 'camunda7' : platform === 'c8' ? 'camunda8' : undefined;
   }
 
   private fromExecutionPlatform(value: string): Platform | undefined {
-    const v = value.trim().toLowerCase();
-    if (v.startsWith('camunda platform') || v.startsWith('camunda 7') || v.startsWith('operaton') || v.startsWith('cib seven') || v.startsWith('cibseven')) return 'c7';
-    if (v.startsWith('camunda cloud') || v.startsWith('camunda 8') || v.startsWith('zeebe')) return 'c8';
+    const normalized = value.trim().toLowerCase();
+    if (normalized.startsWith('camunda platform') || normalized.startsWith('camunda 7') || normalized.startsWith('operaton') || normalized.startsWith('cib seven') || normalized.startsWith('cibseven')) return 'c7';
+    if (normalized.startsWith('camunda cloud') || normalized.startsWith('camunda 8') || normalized.startsWith('zeebe')) return 'c8';
     return undefined;
   }
 }

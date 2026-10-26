@@ -38,16 +38,16 @@ export class TemporaryLaneMembers {
     const neighbours: El[] = [];
     const host = node.get<El | undefined>('attachedToRef');
     if (host) neighbours.push(host);
-    for (const f of node.get<El[] | undefined>('incoming') ?? []) {
-      const src = f.get<El | undefined>('sourceRef');
+    for (const flow of node.get<El[] | undefined>('incoming') ?? []) {
+      const src = flow.get<El | undefined>('sourceRef');
       if (src) neighbours.push(src);
     }
-    for (const f of node.get<El[] | undefined>('outgoing') ?? []) {
-      const tgt = f.get<El | undefined>('targetRef');
+    for (const flow of node.get<El[] | undefined>('outgoing') ?? []) {
+      const tgt = flow.get<El | undefined>('targetRef');
       if (tgt) neighbours.push(tgt);
     }
-    for (const n of neighbours) {
-      const lane = laneOfNode.get(n);
+    for (const neighbour of neighbours) {
+      const lane = laneOfNode.get(neighbour);
       if (lane && TemporaryLaneMembers.isLeafLane(lane)) return lane;
     }
     return leafLanes[0];
@@ -61,7 +61,7 @@ export class TemporaryLaneMembers {
       const leafLanes = lanes.filter(TemporaryLaneMembers.isLeafLane);
       if (!leafLanes.length) continue;
       const laneOfNode = new Map<El, El>();
-      for (const lane of lanes) for (const n of lane.get<El[] | undefined>('flowNodeRef') ?? []) laneOfNode.set(n, lane);
+      for (const lane of lanes) for (const node of lane.get<El[] | undefined>('flowNodeRef') ?? []) laneOfNode.set(node, lane);
       for (const node of many(process, 'flowElements')) {
         if (!is(node, 'bpmn:FlowNode') || laneOfNode.has(node) || !node.get('id')) continue;
         const lane = TemporaryLaneMembers.laneForLayout(node, laneOfNode, leafLanes);

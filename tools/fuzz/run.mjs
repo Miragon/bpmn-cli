@@ -40,124 +40,124 @@ import { rng, seedOf } from './lib/rng.mjs';
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const SPEC = { walks: 24, steps: 30, seed: 1, modes: 'auto,incremental', corpus: undefined, filter: undefined, jobs: 4, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, render: true, hard: 'error', strict: false, minimize: false };
 
-export function planWalks(files, o) {
-  const order = rng(o.seed).shuffle(files);
-  const modes = o.modes.split(',').map((m) => m.trim()).filter(Boolean);
-  return Array.from({ length: o.walks }, (_, i) => {
-    const model = order[i % order.length];
-    const mode = modes[(i + Math.floor(i / order.length)) % modes.length];
-    const seed = seedOf(o.seed, i);
+export function planWalks(files, options) {
+  const order = rng(options.seed).shuffle(files);
+  const modes = options.modes.split(',').map((mode) => mode.trim()).filter(Boolean);
+  return Array.from({ length: options.walks }, (unused, walkIndex) => {
+    const model = order[walkIndex % order.length];
+    const mode = modes[(walkIndex + Math.floor(walkIndex / order.length)) % modes.length];
+    const seed = seedOf(options.seed, walkIndex);
     return { model, mode, seed, dir: `${basename(model, '.bpmn')}-s${seed}-${mode}` };
   });
 }
 
-function walkArgs(w, o, dir) {
-  return [join(HERE, 'walk.mjs'), w.model, '--seed', String(w.seed), '--mode', w.mode, '--steps', String(o.steps), '--out', dir,
-    '--exec', o.exec, '--via', o.via, '--det-every', String(o.detEvery), '--hard', o.hard, ...(o.semantic ? [] : ['--no-semantic']), ...(o.format ? [] : ['--no-format']), ...(o.render ? [] : ['--no-render'])];
+function walkArgs(walk, options, dir) {
+  return [join(HERE, 'walk.mjs'), walk.model, '--seed', String(walk.seed), '--mode', walk.mode, '--steps', String(options.steps), '--out', dir,
+    '--exec', options.exec, '--via', options.via, '--det-every', String(options.detEvery), '--hard', options.hard, ...(options.semantic ? [] : ['--no-semantic']), ...(options.format ? [] : ['--no-format']), ...(options.render ? [] : ['--no-render'])];
 }
 
-function runOne(w, o, dir) {
+function runOne(walk, options, dir) {
   return new Promise((done) => {
-    const child = spawn(process.execPath, walkArgs(w, o, dir), { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, walkArgs(walk, options, dir), { stdio: ['ignore', 'pipe', 'pipe'] });
     let err = '';
-    child.stderr.on('data', (d) => { err += d; });
+    child.stderr.on('data', (chunk) => { err += chunk; });
     child.stdout.resume();
     child.on('close', (code) => {
       const file = join(dir, 'summary.json');
-      done(existsSync(file) ? { ...JSON.parse(readFileSync(file, 'utf8')), dir } : { model: basename(w.model), seed: w.seed, mode: w.mode, dir, crashed: `walk exited ${code}: ${err.slice(0, 500)}`, violations: [], errors: 1, warnings: 0, steps: 0, ok: 0, refused: {}, modes: {} });
+      done(existsSync(file) ? { ...JSON.parse(readFileSync(file, 'utf8')), dir } : { model: basename(walk.model), seed: walk.seed, mode: walk.mode, dir, crashed: `walk exited ${code}: ${err.slice(0, 500)}`, violations: [], errors: 1, warnings: 0, steps: 0, ok: 0, refused: {}, modes: {} });
     });
   });
 }
 
-async function pool(walks, o, root) {
+async function pool(walks, options, root) {
   const results = [];
   let next = 0, finished = 0;
   const worker = async () => {
     while (next < walks.length) {
-      const w = walks[next++];
-      const s = await runOne(w, o, join(root, 'walks', w.dir));
-      results.push(s);
+      const walk = walks[next++];
+      const walkSummary = await runOne(walk, options, join(root, 'walks', walk.dir));
+      results.push(walkSummary);
       finished++;
-      const flag = s.errors ? ` ERRORS ${s.errors}` : s.warnings ? ` warnings ${s.warnings}` : '';
-      process.stderr.write(`[${finished}/${walks.length}] ${w.dir}: ${s.ok}/${s.steps} ok${flag}\n`);
+      const flag = walkSummary.errors ? ` ERRORS ${walkSummary.errors}` : walkSummary.warnings ? ` warnings ${walkSummary.warnings}` : '';
+      process.stderr.write(`[${finished}/${walks.length}] ${walk.dir}: ${walkSummary.ok}/${walkSummary.steps} ok${flag}\n`);
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, o.jobs) }, worker));
-  return results.sort((a, b) => a.dir.localeCompare(b.dir));
+  await Promise.all(Array.from({ length: Math.max(1, options.jobs) }, worker));
+  return results.sort((left, right) => left.dir.localeCompare(right.dir));
 }
 
-const add = (into, from) => { for (const [k, v] of Object.entries(from ?? {})) into[k] = (into[k] ?? 0) + v; return into; };
+const add = (into, from) => { for (const [key, count] of Object.entries(from ?? {})) into[key] = (into[key] ?? 0) + count; return into; };
 
 export function aggregate(results) {
   const agg = { walks: results.length, steps: 0, ok: 0, refused: {}, modes: {}, errors: 0, warnings: 0, byKind: {}, crashedWalks: [] };
-  for (const s of results) {
-    agg.steps += s.steps; agg.ok += s.ok; agg.errors += s.errors; agg.warnings += s.warnings;
-    add(agg.refused, s.refused); add(agg.modes, s.modes);
-    if (s.crashed) agg.crashedWalks.push(`${s.dir}: ${s.crashed}`);
-    for (const v of s.violations) {
-      const k = (agg.byKind[v.kind] ??= { severity: v.severity, n: 0, walks: new Set(), examples: [] });
-      k.n++;
-      k.walks.add(s.dir);
-      if (k.examples.length < 3) k.examples.push(`${basename(s.dir)}#${v.step} ${v.op}: ${String(v.detail ?? '').slice(0, 160)}`);
+  for (const walkSummary of results) {
+    agg.steps += walkSummary.steps; agg.ok += walkSummary.ok; agg.errors += walkSummary.errors; agg.warnings += walkSummary.warnings;
+    add(agg.refused, walkSummary.refused); add(agg.modes, walkSummary.modes);
+    if (walkSummary.crashed) agg.crashedWalks.push(`${walkSummary.dir}: ${walkSummary.crashed}`);
+    for (const violation of walkSummary.violations) {
+      const kindStats = (agg.byKind[violation.kind] ??= { severity: violation.severity, n: 0, walks: new Set(), examples: [] });
+      kindStats.n++;
+      kindStats.walks.add(walkSummary.dir);
+      if (kindStats.examples.length < 3) kindStats.examples.push(`${basename(walkSummary.dir)}#${violation.step} ${violation.op}: ${String(violation.detail ?? '').slice(0, 160)}`);
     }
   }
-  for (const k of Object.values(agg.byKind)) k.walks = [...k.walks];
+  for (const kindStats of Object.values(agg.byKind)) kindStats.walks = [...kindStats.walks];
   return agg;
 }
 
 function report(agg, metrics) {
   const lines = [];
-  const fmt = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') || '-';
+  const fmt = (counts) => Object.entries(counts).sort((left, right) => right[1] - left[1]).map(([key, count]) => `${key} ${count}`).join(', ') || '-';
   lines.push(`FUZZ walks ${agg.walks}  steps ${agg.steps}  ok ${agg.ok}  refused ${agg.steps - agg.ok} (${fmt(agg.refused)})`);
   lines.push(`layout modes: ${fmt(agg.modes)}`);
   lines.push(`hard kinds: ${metrics.hard.join(' ')}${metrics.newKinds.length ? `   (kinds new since the audit: ${metrics.newKinds.join(' ')})` : ''}`);
   for (const sev of ['error', 'warn']) {
-    const kinds = Object.entries(agg.byKind).filter(([, k]) => k.severity === sev).sort((a, b) => b[1].n - a[1].n);
+    const kinds = Object.entries(agg.byKind).filter(([, kindStats]) => kindStats.severity === sev).sort((left, right) => right[1].n - left[1].n);
     lines.push(`${sev === 'error' ? 'ERRORS' : 'warnings'} ${sev === 'error' ? agg.errors : agg.warnings}`);
-    for (const [kind, k] of kinds) {
-      lines.push(`  ${kind.padEnd(24)} ${String(k.n).padStart(4)} in ${k.walks.length} walk(s)`);
-      for (const e of k.examples) lines.push(`      ${e}`);
+    for (const [kind, kindStats] of kinds) {
+      lines.push(`  ${kind.padEnd(24)} ${String(kindStats.n).padStart(4)} in ${kindStats.walks.length} walk(s)`);
+      for (const example of kindStats.examples) lines.push(`      ${example}`);
     }
   }
-  for (const c of agg.crashedWalks) lines.push(`walk crashed: ${c}`);
+  for (const crash of agg.crashedWalks) lines.push(`walk crashed: ${crash}`);
   return lines.join('\n');
 }
 
 async function minimizeAll(agg, results) {
-  for (const [kind, k] of Object.entries(agg.byKind)) {
-    if (k.severity !== 'error') continue;
-    const walk = results.find((s) => s.dir === k.walks[0]);
+  for (const [kind, kindStats] of Object.entries(agg.byKind)) {
+    if (kindStats.severity !== 'error') continue;
+    const walk = results.find((walkSummary) => walkSummary.dir === kindStats.walks[0]);
     process.stderr.write(`minimising ${kind} from ${basename(walk.dir)} ...\n`);
-    const m = await minimizeWalk(walk.dir, { kind: `^${kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` });
-    console.log(m.reproduced ? `  ${kind}: ${m.length} step(s), ${m.tests} tests -> ${m.script}` : `  ${kind}: not reproduced on replay`);
+    const minimized = await minimizeWalk(walk.dir, { kind: `^${kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$` });
+    console.log(minimized.reproduced ? `  ${kind}: ${minimized.length} step(s), ${minimized.tests} tests -> ${minimized.script}` : `  ${kind}: not reproduced on replay`);
   }
 }
 
 async function main() {
-  let o;
+  let options;
   try {
-    o = parseArgs(process.argv.slice(2), SPEC);
-  } catch (e) {
-    console.error(e.message);
+    options = parseArgs(process.argv.slice(2), SPEC);
+  } catch (error) {
+    console.error(error.message);
     process.exit(2);
   }
-  const dirs = o.corpus ? o.corpus.split(/[:,]/).filter(Boolean) : defaultCorpus();
-  const files = corpusFiles(dirs, o.filter);
+  const dirs = options.corpus ? options.corpus.split(/[:,]/).filter(Boolean) : defaultCorpus();
+  const files = corpusFiles(dirs, options.filter);
   if (!files.length) { console.error('no .bpmn files in the corpus'); process.exit(2); }
-  const root = resolve(o.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'latest'));
+  const root = resolve(options.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'latest'));
   rmSync(join(root, 'walks'), { recursive: true, force: true });
   mkdirSync(root, { recursive: true });
   const metrics = await loadMetrics();
-  const walks = planWalks(files, o);
-  console.log(`fuzz: ${walks.length} walk(s) x ${o.steps} steps on ${files.length} model(s), exec ${o.exec}${o.exec === 'cli' ? `/${o.via}` : ''}, seed ${o.seed} -> ${root}`);
+  const walks = planWalks(files, options);
+  console.log(`fuzz: ${walks.length} walk(s) x ${options.steps} steps on ${files.length} model(s), exec ${options.exec}${options.exec === 'cli' ? `/${options.via}` : ''}, seed ${options.seed} -> ${root}`);
   const t0 = Date.now();
-  const results = await pool(walks, o, root);
+  const results = await pool(walks, options, root);
   const agg = aggregate(results);
-  writeFileSync(join(root, 'report.json'), JSON.stringify({ options: { ...o, _: undefined }, corpusFiles: files.length, hard: metrics.hard, ...agg, seconds: Math.round((Date.now() - t0) / 1000) }, null, 1));
+  writeFileSync(join(root, 'report.json'), JSON.stringify({ options: { ...options, _: undefined }, corpusFiles: files.length, hard: metrics.hard, ...agg, seconds: Math.round((Date.now() - t0) / 1000) }, null, 1));
   console.log(report(agg, metrics));
   console.log(`(${Math.round((Date.now() - t0) / 1000)} s; details in ${join(root, 'report.json')})`);
-  if (o.minimize && agg.errors) await minimizeAll(agg, results);
-  process.exit(agg.errors || (o.strict && agg.warnings) ? 1 : 0);
+  if (options.minimize && agg.errors) await minimizeAll(agg, results);
+  process.exit(agg.errors || (options.strict && agg.warnings) ? 1 : 0);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

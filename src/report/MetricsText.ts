@@ -12,12 +12,12 @@ export class MetricsText {
 
   /** `score 12: crossings 1, labelOnLine 7` */
   scoreLine(): string {
-    const m = this.metrics;
-    const counts = KEYS.filter((k) => m.counts[k] > 0).map((k) => `${k} ${m.counts[k]}`);
-    return `score ${m.score}${counts.length ? `: ${counts.join(', ')}` : ': no layout problems'}`;
+    const metrics = this.metrics;
+    const counts = KEYS.filter((key) => metrics.counts[key] > 0).map((key) => `${key} ${metrics.counts[key]}`);
+    return `score ${metrics.score}${counts.length ? `: ${counts.join(', ')}` : ': no layout problems'}`;
   }
 
   problemLines(): string[] {
-    return this.metrics.problems.map((p) => `${INDENT}${problemText(p)}`);
+    return this.metrics.problems.map((problem) => `${INDENT}${problemText(problem)}`);
   }
 }

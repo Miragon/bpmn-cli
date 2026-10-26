@@ -14,7 +14,7 @@ import { definitionsXml } from './helpers.js';
 const ROOT = join(import.meta.dirname, '..');
 const CLAIMS = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');
 
-const codes = (ws: Array<{ code: string; element?: string }>): string[] => ws.map((w) => `${w.code} ${w.element ?? ''}`.trim());
+const codes = (ws: Array<{ code: string; element?: string }>): string[] => ws.map((warning) => `${warning.code} ${warning.element ?? ''}`.trim());
 
 /** start -> T1 -> T2 -> T3 -> end, plus an unconnected task Loose (W_UNREACHABLE, W_DEAD_END) and two tasks named "Twin" (W_DUPLICATE_NAME). */
 const CHAIN = definitionsXml(`
@@ -31,31 +31,31 @@ const CHAIN = definitionsXml(`
 
 describe('warnings as a delta', () => {
   it('an edit that touches none of them only counts the warnings the file already had', async () => {
-    const r = await applyToXml(CHAIN, [{ op: 'set', id: 'T3', values: { name: 'Third' } }], { layout: false });
-    expect(r.result.warnings).toEqual({ added: [], resolved: [], preexistingCount: 3 });
-    expect(r.result.validation).not.toHaveProperty('warnings');
-    const text = renderMutation(r.result);
+    const applied = await applyToXml(CHAIN, [{ op: 'set', id: 'T3', values: { name: 'Third' } }], { layout: false });
+    expect(applied.result.warnings).toEqual({ added: [], resolved: [], preexistingCount: 3 });
+    expect(applied.result.validation).not.toHaveProperty('warnings');
+    const text = renderMutation(applied.result);
     expect(text).not.toMatch(/W_UNREACHABLE|W_DEAD_END|W_DUPLICATE_NAME/);
     expect(text).toContain('3 warnings already in the file (not repeated: `bpmn validate <file>` lists them)');
   });
 
   it('lists what the change added and what it resolved', async () => {
-    const r = await applyToXml(CHAIN, [{ op: 'connect', source: 'Loose', target: 'End' }, { op: 'set', id: 'T2', values: { name: 'Second' } }, { op: 'add', kind: 'task', name: 'Stray', in: 'Process_1', id: 'Stray' }], { layout: false });
+    const applied = await applyToXml(CHAIN, [{ op: 'connect', source: 'Loose', target: 'End' }, { op: 'set', id: 'T2', values: { name: 'Second' } }, { op: 'add', kind: 'task', name: 'Stray', in: 'Process_1', id: 'Stray' }], { layout: false });
     // the new flow into End makes it an implicit join
-    expect(codes(r.result.warnings.added)).toEqual(['W_UNREACHABLE Stray', 'W_IMPLICIT_JOIN End', 'W_DEAD_END Stray']);
-    expect(codes(r.result.warnings.resolved)).toEqual(['W_DEAD_END Loose', 'W_DUPLICATE_NAME T1']);
-    expect(r.result.warnings.preexistingCount).toBe(1); // Loose is still unreachable
-    const text = renderMutation(r.result);
+    expect(codes(applied.result.warnings.added)).toEqual(['W_UNREACHABLE Stray', 'W_IMPLICIT_JOIN End', 'W_DEAD_END Stray']);
+    expect(codes(applied.result.warnings.resolved)).toEqual(['W_DEAD_END Loose', 'W_DUPLICATE_NAME T1']);
+    expect(applied.result.warnings.preexistingCount).toBe(1); // Loose is still unreachable
+    const text = renderMutation(applied.result);
     expect(text).toContain('warning W_UNREACHABLE Stray: ');
     expect(text).toContain('resolved: W_DEAD_END Loose, W_DUPLICATE_NAME T1');
     expect(text).toContain('1 warning already in the file');
   });
 
   it('a warning follows its element through a rename (it stays pre-existing)', async () => {
-    const r = await applyToXml(CHAIN, [{ op: 'set', id: 'Loose', values: { id: 'Loose_Renamed' } }], { layout: false });
-    expect(r.result.warnings.added).toEqual([]);
-    expect(r.result.warnings.resolved).toEqual([]);
-    expect(r.result.warnings.preexistingCount).toBe(3);
+    const applied = await applyToXml(CHAIN, [{ op: 'set', id: 'Loose', values: { id: 'Loose_Renamed' } }], { layout: false });
+    expect(applied.result.warnings.added).toEqual([]);
+    expect(applied.result.warnings.resolved).toEqual([]);
+    expect(applied.result.warnings.preexistingCount).toBe(3);
   });
 
   it('an error the file had and the change fixed is resolved; one it keeps is counted', async () => {
@@ -73,18 +73,18 @@ describe('warnings as a delta', () => {
   });
 
   it('three or more warnings of one code are one line with the ids', async () => {
-    const r = await applyToXml(CHAIN, [{ op: 'remove', ids: ['F0'] }], { layout: false });
-    const unreachable = r.result.warnings.added.filter((w) => w.code === 'W_UNREACHABLE');
-    expect(unreachable.map((w) => w.element)).toEqual(['T1', 'T2', 'T3', 'End']);
-    const text = renderMutation(r.result);
-    const lines = text.split('\n').filter((l) => l.includes('W_UNREACHABLE'));
+    const applied = await applyToXml(CHAIN, [{ op: 'remove', ids: ['F0'] }], { layout: false });
+    const unreachable = applied.result.warnings.added.filter((warning) => warning.code === 'W_UNREACHABLE');
+    expect(unreachable.map((warning) => warning.element)).toEqual(['T1', 'T2', 'T3', 'End']);
+    const text = renderMutation(applied.result);
+    const lines = text.split('\n').filter((line) => line.includes('W_UNREACHABLE'));
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/^warning W_UNREACHABLE x4 \[T1, T2, T3, End\]: task T1 "Twin" is not reachable from any start event/);
     // two of a code stay two lines
     expect(warningLines([{ code: 'W_A', message: 'a', element: 'X' }, { code: 'W_A', message: 'b', element: 'Y' }])).toEqual(['warning W_A X: a', 'warning W_A Y: b']);
     // a stale flow id never floods: each hint is the rename command of its flow
     const stale = ['F1', 'F2', 'F3'].map((id) => ({ code: 'W_FLOW_ID_STALE', message: `${id} stale`, element: id, hint: `\`bpmn set <file> ${id} id=${id}x\`` }));
-    expect(warningLines(stale)).toEqual(stale.map((w) => `warning W_FLOW_ID_STALE ${w.element}: ${w.message}  (${w.hint})`));
+    expect(warningLines(stale)).toEqual(stale.map((warning) => `warning W_FLOW_ID_STALE ${warning.element}: ${warning.message}  (${warning.hint})`));
   });
 
   it('a new document reports its warnings (there was no file before)', async () => {
@@ -94,20 +94,20 @@ describe('warnings as a delta', () => {
   });
 
   it('the pre-existing warnings of a large real-world-like file are not repeated on every write', async () => {
-    const r = await applyToXml(CLAIMS, [{ op: 'set', id: 'Activity_Pay', values: { name: 'Pay the claim' } }], { layout: false });
-    expect(r.result.warnings).toEqual({ added: [], resolved: [], preexistingCount: 1 }); // W_IMPLICIT_JOIN Activity_SendDecision
-    expect(renderMutation(r.result)).not.toContain('W_IMPLICIT_JOIN');
+    const applied = await applyToXml(CLAIMS, [{ op: 'set', id: 'Activity_Pay', values: { name: 'Pay the claim' } }], { layout: false });
+    expect(applied.result.warnings).toEqual({ added: [], resolved: [], preexistingCount: 1 }); // W_IMPLICIT_JOIN Activity_SendDecision
+    expect(renderMutation(applied.result)).not.toContain('W_IMPLICIT_JOIN');
   });
 });
 
 describe('--summary (mutationSummary / renderSummary)', () => {
   it('created ids by kind, changed / removed ids, the added warnings, one layout line', async () => {
-    const r = await applyToXml(CHAIN, [
+    const applied = await applyToXml(CHAIN, [
       { op: 'add', kind: 'userTask', name: 'Review', after: 'T3', id: 'Review' },
       { op: 'add', kind: 'userTask', name: 'Approve', after: 'Review', id: 'Approve' },
       { op: 'remove', ids: ['Loose'] },
     ]);
-    const summary = mutationSummary(r.result);
+    const summary = mutationSummary(applied.result);
     expect(summary.created).toEqual({ userTask: ['Review', 'Approve'], sequenceFlow: [expect.any(String), expect.any(String)] });
     expect(summary.removed).toEqual(['Loose']);
     expect(summary.changed.length).toBeGreaterThan(0);
@@ -121,14 +121,14 @@ describe('--summary (mutationSummary / renderSummary)', () => {
     expect(lines).toContain('warnings: 0 added, 2 resolved, 1 already in the file');
     expect(lines.at(-1)).toMatch(/^layout: full, score \d+$/);
     // much shorter than the full result
-    expect(text.length).toBeLessThan(renderMutation(r.result).length);
+    expect(text.length).toBeLessThan(renderMutation(applied.result).length);
   });
 
   it('a result without changes says so', async () => {
-    const r = await applyToXml(CHAIN, [{ op: 'remove', ids: ['Nothing'], ifExists: true }], { layout: false });
-    expect(r.unchanged).toBe(true);
+    const applied = await applyToXml(CHAIN, [{ op: 'remove', ids: ['Nothing'], ifExists: true }], { layout: false });
+    expect(applied.unchanged).toBe(true);
     // a file without a drawing: the layout line counts its problems instead of listing them
-    expect(renderSummary(mutationSummary(r.result)).split('\n')).toEqual([
+    expect(renderSummary(mutationSummary(applied.result)).split('\n')).toEqual([
       'no changes',
       'warnings: 0 added, 0 resolved, 3 already in the file',
       'layout: skipped, score 100 (10 layout problems: `bpmn metrics <file>` lists them)',

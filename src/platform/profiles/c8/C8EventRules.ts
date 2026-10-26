@@ -11,10 +11,10 @@ import type { C8TaskRules } from './C8TaskRules.js';
 export class C8EventRules extends C8Rules {
   constructor(
     run: RuleRun,
-    p: string,
+    prefix: string,
     private readonly tasks: C8TaskRules,
   ) {
-    super(run, p);
+    super(run, prefix);
   }
 
   private nonInterrupting(el: El): boolean {
@@ -33,7 +33,7 @@ export class C8EventRules extends C8Rules {
   private checkTimer(el: El, def: El): void {
     const id = idOf(el)!;
     const label = this.describe(el);
-    const kinds = TIMER_ELEMENTS.filter((k) => peek<El>(def, k));
+    const kinds = TIMER_ELEMENTS.filter((timerKind) => peek<El>(def, timerKind));
     if (kinds.length !== 1) {
       // two of them is a schema error the engine reports first
       if (!kinds.length) this.push('deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer', `Timer of ${label} has no date, cycle or duration; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} timer=PT1H\` (a duration; R/PT1H is a cycle, an ISO date-time with offset a date).`);
@@ -207,7 +207,7 @@ export class C8EventRules extends C8Rules {
     const label = this.describe(el);
     const msg = this.messageOf(el);
     if (!msg) {
-      this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'messageRef', `${label} has no message; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} message=<MessageName>\` (creates the bpmn:Message), then give it a correlation key: \`bpmn ext add <file> <messageId> ${this.z('subscription')} correlationKey==<expression>\`.`);
+      this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'messageRef', `${label} has no message; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} message=<MessageName>\` (creates the bpmn:Message), then give it a correlation key: \`bpmn ext add <file> <messageId> ${this.zeebeName('subscription')} correlationKey==<expression>\`.`);
       return;
     }
     const mid = idOf(msg)!;
@@ -225,11 +225,11 @@ export class C8EventRules extends C8Rules {
     // two of them: W_C8_DEPLOY_DUPLICATE_EXTENSION on the message
     if (subs.length > 1) return;
     if (!subs.length) {
-      this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, `subscription:${mid}`, `Message ${mid} ("${name}") of ${label} has no ${this.z('subscription')}: Camunda 8 needs one with the correlation key that matches a message to an instance and refuses the file`, `\`bpmn ext add <file> ${mid} ${this.z('subscription')} correlationKey==<expression>\` (e.g. correlationKey==orderId).`, [mid]);
+      this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, `subscription:${mid}`, `Message ${mid} ("${name}") of ${label} has no ${this.zeebeName('subscription')}: Camunda 8 needs one with the correlation key that matches a message to an instance and refuses the file`, `\`bpmn ext add <file> ${mid} ${this.zeebeName('subscription')} correlationKey==<expression>\` (e.g. correlationKey==orderId).`, [mid]);
       return;
     }
     const key = attr(subs[0], 'correlationKey');
-    if (blank(key)) this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, `correlationKey:${mid}`, `The ${this.z('subscription')} of message ${mid} ("${name}") has no correlationKey; Camunda 8 refuses the file`, this.fixHint(msg, undefined, subs[0]!, { correlationKey: '=<expression>' }), [mid]);
+    if (blank(key)) this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, `correlationKey:${mid}`, `The ${this.zeebeName('subscription')} of message ${mid} ("${name}") has no correlationKey; Camunda 8 refuses the file`, this.fixHint(msg, undefined, subs[0]!, { correlationKey: '=<expression>' }), [mid]);
     else if (!isFeel(key)) this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, `correlationKey:${mid}`, `The correlationKey "${key}" of message ${mid} is a static value; Camunda 8 needs a FEEL expression (=${key!.trim()}) and refuses the file`, this.fixHint(msg, undefined, subs[0]!, { correlationKey: `=${key!.trim()}` }), [mid]);
   }
 
@@ -246,7 +246,7 @@ export class C8EventRules extends C8Rules {
   private checkCompensationBoundary(el: El): void {
     const id = idOf(el)!;
     const scope = this.doc.scopeOf(el);
-    const associated = list(scope, 'artifacts').some((a) => this.kit.is(a, 'bpmn:Association') && peek<El>(a, 'sourceRef') === el);
+    const associated = list(scope, 'artifacts').some((artifact) => this.kit.is(artifact, 'bpmn:Association') && peek<El>(artifact, 'sourceRef') === el);
     const out = this.outgoing.get(el) ?? [];
     if (!associated || out.length) {
       this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'compensationBoundary', `Compensation boundary event ${id} ${!associated ? 'has no association to a compensation handler' : 'has an outgoing sequence flow'}; Camunda 8 refuses the file`, !associated ? `Connect it to its handler (an activity with isForCompensation=true): \`bpmn connect <file> ${id} <handlerId>\`.` : `Remove the flow (\`bpmn remove <file> ${idOf(out[0])} --no-bridge\`) and connect the handler instead: \`bpmn connect <file> ${id} <handlerId>\`.`);
@@ -255,13 +255,13 @@ export class C8EventRules extends C8Rules {
 
   checkStartEvents(scope: El): void {
     const id = idOf(scope)!;
-    const starts = this.doc.flowNodes(scope).filter((n) => this.kit.is(n, 'bpmn:StartEvent'));
+    const starts = this.doc.flowNodes(scope).filter((node) => this.kit.is(node, 'bpmn:StartEvent'));
     if (this.kit.is(scope, 'bpmn:Process')) {
       if (!starts.length) {
         this.push('deploy', 'W_C8_DEPLOY_START_EVENT', scope, undefined, 'noStart', `Process ${id} has no start event; Camunda 8 refuses the file`, `\`bpmn add <file> startEvent "<Name>" --before <firstNodeId>\` (or --in ${id}).`);
         return;
       }
-      const none = starts.filter((s) => !list(s, 'eventDefinitions').length);
+      const none = starts.filter((start) => !list(start, 'eventDefinitions').length);
       for (const extra of none.slice(1)) {
         this.push('deploy', 'W_C8_DEPLOY_START_EVENT', extra, undefined, 'noneStart', `Process ${id} has ${none.length} none start events (${none.map(idOf).join(', ')}); Camunda 8 allows one and refuses the file`, `Remove ${idOf(extra)} (\`bpmn remove <file> ${idOf(extra)}\`) or give it a trigger: \`bpmn set <file> ${idOf(extra)} trigger=message message=<MessageName>\`.`, [idOf(none[0])!]);
       }
@@ -280,7 +280,7 @@ export class C8EventRules extends C8Rules {
    */
   checkSubscriptionScopes(scope: El): void {
     const nodes = this.doc.flowNodes(scope);
-    const literal = (n: string | undefined): n is string => !!n && !isFeel(n);
+    const literal = (name: string | undefined): name is string => !!name && !isFeel(name);
     const defOf = (el: El, type: string): El | undefined => {
       const defs = list(el, 'eventDefinitions');
       return defs.length === 1 && this.kit.is(defs[0], type) ? defs[0] : undefined;
@@ -288,7 +288,7 @@ export class C8EventRules extends C8Rules {
     const report = (els: El[], kind: 'message' | 'signal', name: string, where: string, code: string, subjectPrefix: string): void => {
       const [first, ...rest] = els;
       for (const el of rest) {
-        this.push('deploy', code, el, undefined, `${subjectPrefix}:${name}`, `${this.describe(el)} waits for the ${kind} "${name}" like ${this.describe(first!)} ${where}; Camunda 8 refuses one ${kind} name twice there`, `Use another ${kind}: \`bpmn set <file> ${idOf(el)} ${kind}=<Other${kind === 'message' ? 'Message' : 'Signal'}>\`${kind === 'message' ? ` (and a ${this.z('subscription')} on it)` : ''}.`, [idOf(first!)!]);
+        this.push('deploy', code, el, undefined, `${subjectPrefix}:${name}`, `${this.describe(el)} waits for the ${kind} "${name}" like ${this.describe(first!)} ${where}; Camunda 8 refuses one ${kind} name twice there`, `Use another ${kind}: \`bpmn set <file> ${idOf(el)} ${kind}=<Other${kind === 'message' ? 'Message' : 'Signal'}>\`${kind === 'message' ? ` (and a ${this.zeebeName('subscription')} on it)` : ''}.`, [idOf(first!)!]);
       }
     };
     const group = (els: El[], kind: 'message' | 'signal', where: string, code: string, subjectPrefix: string): void => {
@@ -302,25 +302,25 @@ export class C8EventRules extends C8Rules {
       for (const [name, list_] of byName) if (list_.length > 1) report(list_, kind, name, where, code, subjectPrefix);
     };
     // boundary events of one activity (with the activity itself when it is a receive task)
-    for (const act of nodes.filter((n) => this.kit.is(n, 'bpmn:Activity'))) {
-      const boundaries = nodes.filter((n) => this.kit.is(n, 'bpmn:BoundaryEvent') && peek<El>(n, 'attachedToRef') === act);
+    for (const act of nodes.filter((node) => this.kit.is(node, 'bpmn:Activity'))) {
+      const boundaries = nodes.filter((node) => this.kit.is(node, 'bpmn:BoundaryEvent') && peek<El>(node, 'attachedToRef') === act);
       if (!boundaries.length) continue;
       group([...(this.kit.is(act, 'bpmn:ReceiveTask') ? [act] : []), ...boundaries], 'message', `on ${idOf(act)}`, 'W_C8_DEPLOY_MESSAGE', `boundaryMessage:${idOf(act)}`);
       group(boundaries, 'signal', `on ${idOf(act)}`, 'W_C8_DEPLOY_SIGNAL', `boundarySignal:${idOf(act)}`);
       this.checkErrorCodes(boundaries, `the boundary events of ${idOf(act)}`);
     }
     // branches of an event-based gateway
-    for (const gw of nodes.filter((n) => this.kit.is(n, 'bpmn:EventBasedGateway'))) {
-      const targets = (this.outgoing.get(gw) ?? []).map((f) => peek<El>(f, 'targetRef')).filter((t): t is El => !!t && this.kit.is(t, 'bpmn:IntermediateCatchEvent'));
+    for (const gw of nodes.filter((node) => this.kit.is(node, 'bpmn:EventBasedGateway'))) {
+      const targets = (this.outgoing.get(gw) ?? []).map((flow) => peek<El>(flow, 'targetRef')).filter((target): target is El => !!target && this.kit.is(target, 'bpmn:IntermediateCatchEvent'));
       group(targets, 'message', `after event-based gateway ${idOf(gw)}`, 'W_C8_DEPLOY_MESSAGE', `gatewayMessage:${idOf(gw)}`);
     }
     // start events of the event sub-processes of this scope
-    const eventSubStarts = nodes.filter((n) => this.kit.isEventSubProcess(n)).flatMap((sp) => this.doc.flowNodes(sp).filter((n) => this.kit.is(n, 'bpmn:StartEvent')));
+    const eventSubStarts = nodes.filter((node) => this.kit.isEventSubProcess(node)).flatMap((sp) => this.doc.flowNodes(sp).filter((node) => this.kit.is(node, 'bpmn:StartEvent')));
     group(eventSubStarts, 'message', `in the event sub-processes of ${idOf(scope)}`, 'W_C8_DEPLOY_MESSAGE', `eventSubMessage:${idOf(scope)}`);
     this.checkErrorCodes(eventSubStarts, `the event sub-processes of ${idOf(scope)}`);
     // process start events
     if (this.kit.is(scope, 'bpmn:Process')) {
-      const starts = nodes.filter((n) => this.kit.is(n, 'bpmn:StartEvent'));
+      const starts = nodes.filter((node) => this.kit.is(node, 'bpmn:StartEvent'));
       group(starts, 'message', `in process ${idOf(scope)}`, 'W_C8_DEPLOY_MESSAGE', 'startMessage');
       group(starts, 'signal', `in process ${idOf(scope)}`, 'W_C8_DEPLOY_SIGNAL', 'startSignal');
     }
@@ -351,18 +351,18 @@ export class C8EventRules extends C8Rules {
     const catches = new Map<string, El[]>();
     const walkScope = (scope: El): void => {
       const nodes = this.doc.flowNodes(scope);
-      const linkName = (n: El): string | undefined => {
-        const defs = list(n, 'eventDefinitions');
+      const linkName = (node: El): string | undefined => {
+        const defs = list(node, 'eventDefinitions');
         return defs.length === 1 && this.kit.is(defs[0], 'bpmn:LinkEventDefinition') ? peek<string>(defs[0], 'name') : undefined;
       };
-      const here = new Set(nodes.filter((n) => this.kit.is(n, 'bpmn:IntermediateCatchEvent')).map(linkName).filter((n): n is string => n !== undefined));
-      for (const n of nodes) {
-        if (this.kit.is(n, 'bpmn:SubProcess')) walkScope(n);
-        const name = linkName(n);
+      const here = new Set(nodes.filter((node) => this.kit.is(node, 'bpmn:IntermediateCatchEvent')).map(linkName).filter((name): name is string => name !== undefined));
+      for (const node of nodes) {
+        if (this.kit.is(node, 'bpmn:SubProcess')) walkScope(node);
+        const name = linkName(node);
         if (name === undefined) continue;
-        if (this.kit.is(n, 'bpmn:IntermediateCatchEvent')) catches.set(name, [...(catches.get(name) ?? []), n]);
-        else if (this.kit.is(n, 'bpmn:IntermediateThrowEvent') && !here.has(name)) {
-          this.push('deploy', 'W_C8_DEPLOY_LINK', n, undefined, `link:${name}`, `Link throw event ${idOf(n)} goes to "${name}", but ${idOf(scope)} has no link catch event of that name; Camunda 8 refuses the file`, `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${idOf(scope)} --link ${sh(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${idOf(n)} link=<Name>\`).`);
+        if (this.kit.is(node, 'bpmn:IntermediateCatchEvent')) catches.set(name, [...(catches.get(name) ?? []), node]);
+        else if (this.kit.is(node, 'bpmn:IntermediateThrowEvent') && !here.has(name)) {
+          this.push('deploy', 'W_C8_DEPLOY_LINK', node, undefined, `link:${name}`, `Link throw event ${idOf(node)} goes to "${name}", but ${idOf(scope)} has no link catch event of that name; Camunda 8 refuses the file`, `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${idOf(scope)} --link ${sh(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${idOf(node)} link=<Name>\`).`);
         }
       }
     };

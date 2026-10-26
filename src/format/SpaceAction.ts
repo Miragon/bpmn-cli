@@ -19,7 +19,7 @@ export class SpaceAction {
   ) {}
 
   private columnWidth(plane: Plane): number {
-    const widths = [...plane.shapes.values()].filter((s) => s.kind === 'task').map((s) => s.bounds.width);
+    const widths = [...plane.shapes.values()].filter((shape) => shape.kind === 'task').map((shape) => shape.bounds.width);
     return Math.round((median(widths) ?? 100) + PlaneQuery.spacingOf(plane).gap);
   }
 
@@ -29,14 +29,14 @@ export class SpaceAction {
     const gaps = compaction.gaps();
     const loose = compaction.looseEdges();
     const pool = shape.kind === 'participant' ? shape : shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
-    const far = (b: Box): number => (axis === 'x' ? right(b) : bottom(b));
+    const far = (box: Box): number => (axis === 'x' ? right(box) : bottom(box));
     const where = axis === 'x' ? `right of ${refId}` : `below ${refId}`;
     let strip: { from: number; to: number; keep: number } | undefined;
     let within: Box | undefined;
     if (shape.container && shape.kind !== 'subProcess') {
       // within the pool band, so the pool shrinks with a lane
       within = copyBox((pool ?? shape).bounds);
-      const lanes = [...plane.shapes.values()].filter((s) => s.kind === 'lane' && (s.poolId === shape.id || Frames.chain(plane, s).includes(shape))).map((s) => s.id);
+      const lanes = [...plane.shapes.values()].filter((lane) => lane.kind === 'lane' && (lane.poolId === shape.id || Frames.chain(plane, lane).includes(shape))).map((lane) => lane.id);
       const occ = compaction.occupied(axis, shape.bounds, { skip: new Set([shape.id, ...(pool ? [pool.id] : []), ...lanes]), loose });
       const last = occ.length ? occ[occ.length - 1]![1] : undefined;
       if (last !== undefined) strip = { from: last, to: far(shape.bounds), keep: COMPACT_PAD };
@@ -45,12 +45,12 @@ export class SpaceAction {
       within = axis === 'x' && pool ? copyBox(pool.bounds) : undefined;
       const region = axis === 'x' ? { x: far(unit), y: (pool ?? shape).bounds.y, width: 1e6, height: (pool ?? shape).bounds.height } : { x: -1e6, y: far(unit), width: 2e6, height: 1e6 };
       if (axis === 'x' && !pool) Object.assign(region, { y: -1e6, height: 2e6 });
-      const skip = new Set([shape.id, ...[...plane.shapes.values()].filter((s) => s.kind === 'lane' || s.kind === 'participant').map((s) => s.id)]);
-      const occ = compaction.occupied(axis, region, { skip, loose, solid: (s) => s.kind === 'subProcess' && s.container && s.id !== shape.id && !Frames.chain(plane, shape).includes(s) });
+      const skip = new Set([shape.id, ...[...plane.shapes.values()].filter((frame) => frame.kind === 'lane' || frame.kind === 'participant').map((frame) => frame.id)]);
+      const occ = compaction.occupied(axis, region, { skip, loose, solid: (other) => other.kind === 'subProcess' && other.container && other.id !== shape.id && !Frames.chain(plane, shape).includes(other) });
       // the strip starts past what touches the far edge (its label, ...)
       let from = far(unit);
-      for (const [a, b] of occ) if (a <= from + 1) from = Math.max(from, b);
-      const next = occ.find(([a]) => a > from + 1);
+      for (const [start, end] of occ) if (start <= from + 1) from = Math.max(from, end);
+      const next = occ.find(([start]) => start > from + 1);
       if (next) strip = { from, to: next[0], keep: axis === 'x' ? gaps.x : gaps.y };
       else if (shape.container) {
         this.notes.push(`nothing to close ${where}: nothing follows it`);
@@ -63,13 +63,13 @@ export class SpaceAction {
       return [];
     }
     const close = Math.min(room, Math.round(amount));
-    const g = this.ops.guard(plane);
+    const guard = this.ops.guard(plane);
     const part = { from: strip.to - strip.keep - close, to: strip.to, keep: strip.keep };
-    const kept = g.attempt(() => compaction.closeEmpty(axis, part, within));
+    const kept = guard.attempt(() => compaction.closeEmpty(axis, part, within));
     if (!kept) {
-      throw modelError('E_NO_ROOM', `Closing the space ${where} would ${g.rejected.length ? `add ${problemWords(g.rejected)}` : 'move something that is in the way'}; nothing was written`, {
+      throw modelError('E_NO_ROOM', `Closing the space ${where} would ${guard.rejected.length ? `add ${problemWords(guard.rejected)}` : 'move something that is in the way'}; nothing was written`, {
         element: refId,
-        ...(g.rejected.length ? { related: [...new Set(g.rejected.flatMap((p) => p.ids))] } : {}),
+        ...(guard.rejected.length ? { related: [...new Set(guard.rejected.flatMap((problem) => problem.ids))] } : {}),
         hint: 'Close less (`--by -<px>`), or move what is in the way first (`bpmn place`), or use `bpmn compact`, which closes only what it can close without a new problem.',
       });
     }

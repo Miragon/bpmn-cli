@@ -13,9 +13,9 @@ export class RouteCommand extends FormatCommand {
       this.define(program, 'route')
         .addOption(new Option('--exit <side>', `side it leaves its source by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES]))
         .addOption(new Option('--entry <side>', `side it enters its target by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES])),
-    ).action((file: string, flowId: string, o: RawOpts) => {
-      const op: RouteOp = { op: 'route', id: flowId, ...(this.pick(o, ['exit', 'entry'] as const) as Pick<RouteOp, 'exit' | 'entry'>) };
-      return this.runFormat(file, op, o);
+    ).action((file: string, flowId: string, options: RawOpts) => {
+      const op: RouteOp = { op: 'route', id: flowId, ...(this.pick(options, ['exit', 'entry'] as const) as Pick<RouteOp, 'exit' | 'entry'>) };
+      return this.runFormat(file, op, options);
     });
   }
 }

@@ -34,48 +34,48 @@ export class AddElementCommand extends MutationCommand {
           .option('--black-box', 'participants: no process')
           .option('--members <ids>', 'lanes / groups: comma-separated member ids (a group is drawn around them)'),
       ),
-    ).action((file: string, kind: string, name: string | undefined, keyValues: string[], o: RawOpts) => this.run(file, kind, name, keyValues, o));
+    ).action((file: string, kind: string, name: string | undefined, keyValues: string[], options: RawOpts) => this.run(file, kind, name, keyValues, options));
   }
 
-  private async run(file: string, kind: string, name: string | undefined, keyValues: string[], o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, kind: string, name: string | undefined, keyValues: string[], options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       const kv = [...keyValues];
       if (name && /^[A-Za-z_][\w:.-]*=/.test(name)) {
         kv.unshift(name);
         name = undefined;
       }
-      this.checkPlacementFlags(o);
-      this.checkFlowFlags(o, true);
-      if (o['ifAbsent'] && !o['id']) {
+      this.checkPlacementFlags(options);
+      this.checkFlowFlags(options, true);
+      if (options['ifAbsent'] && !options['id']) {
         throw usageError('--if-absent needs an explicit --id to check for', { hint: 'Pass --id <Prefix>_<Name> (the id add would generate), or drop --if-absent.' });
       }
       const op: AddOp = {
         op: 'add',
         kind,
         ...(name !== undefined ? { name } : {}),
-        ...(o['id'] ? { id: String(o['id']) } : {}),
-        ...(o['after'] ? { after: String(o['after']) } : {}),
-        ...(o['before'] ? { before: String(o['before']) } : {}),
-        ...(o['flow'] ? { flow: String(o['flow']) } : {}),
-        ...(o['in'] ? { in: String(o['in']) } : {}),
-        ...(o['on'] ? { on: String(o['on']) } : {}),
-        ...(o['to'] ? { to: String(o['to']) } : {}),
-        ...(o['lane'] ? { lane: String(o['lane']) } : {}),
-        ...(o['flowName'] ? { flowName: String(o['flowName']) } : {}),
-        ...(o['flowId'] ? { flowId: String(o['flowId']) } : {}),
-        ...(o['condition'] !== undefined ? { condition: String(o['condition']) } : {}),
-        ...(o['language'] ? { language: String(o['language']) } : {}),
-        ...(o['default'] ? { default: true } : {}),
-        ...(o['collapsed'] ? { collapsed: true } : {}),
-        ...(o['ifAbsent'] ? { ifAbsent: true } : {}),
-        ...(o['doc'] ? { doc: String(o['doc']) } : {}),
-        ...(o['text'] ? { text: String(o['text']) } : {}),
-        ...(o['process'] ? { process: String(o['process']) } : {}),
-        ...(o['blackBox'] ? { blackBox: true } : {}),
-        ...(o['members'] ? { members: splitList(String(o['members'])) } : {}),
+        ...(options['id'] ? { id: String(options['id']) } : {}),
+        ...(options['after'] ? { after: String(options['after']) } : {}),
+        ...(options['before'] ? { before: String(options['before']) } : {}),
+        ...(options['flow'] ? { flow: String(options['flow']) } : {}),
+        ...(options['in'] ? { in: String(options['in']) } : {}),
+        ...(options['on'] ? { on: String(options['on']) } : {}),
+        ...(options['to'] ? { to: String(options['to']) } : {}),
+        ...(options['lane'] ? { lane: String(options['lane']) } : {}),
+        ...(options['flowName'] ? { flowName: String(options['flowName']) } : {}),
+        ...(options['flowId'] ? { flowId: String(options['flowId']) } : {}),
+        ...(options['condition'] !== undefined ? { condition: String(options['condition']) } : {}),
+        ...(options['language'] ? { language: String(options['language']) } : {}),
+        ...(options['default'] ? { default: true } : {}),
+        ...(options['collapsed'] ? { collapsed: true } : {}),
+        ...(options['ifAbsent'] ? { ifAbsent: true } : {}),
+        ...(options['doc'] ? { doc: String(options['doc']) } : {}),
+        ...(options['text'] ? { text: String(options['text']) } : {}),
+        ...(options['process'] ? { process: String(options['process']) } : {}),
+        ...(options['blackBox'] ? { blackBox: true } : {}),
+        ...(options['members'] ? { members: splitList(String(options['members'])) } : {}),
         ...(kv.length ? { set: parseKeyValues(kv) } : {}),
-        ...this.triggerOptions(o),
+        ...this.triggerOptions(options),
       };
       await this.mutate(file, [op], opts);
     }, opts.json);

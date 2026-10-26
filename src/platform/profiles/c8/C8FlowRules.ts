@@ -11,10 +11,10 @@ export class C8FlowRules extends C8Rules {
   /** flows whose source does not list them in the file's text: flow -> source */
   private readonly unlisted = new Map<El, El>();
 
-  constructor(run: RuleRun, p: string) {
-    super(run, p);
+  constructor(run: RuleRun, prefix: string) {
+    super(run, prefix);
     const { doc } = run;
-    if (doc.source) for (const e of run.kit.unkeptEntries(doc.definitions, doc.source.mirror)) if (e.direction === 'outgoing') this.unlisted.set(e.flow, e.node);
+    if (doc.source) for (const entry of run.kit.unkeptEntries(doc.definitions, doc.source.mirror)) if (entry.direction === 'outgoing') this.unlisted.set(entry.flow, entry.node);
   }
 
   checkTransaction(el: El): void {
@@ -28,12 +28,12 @@ export class C8FlowRules extends C8Rules {
   checkAdHoc(el: El): void {
     const id = idOf(el)!;
     const nodes = this.doc.flowNodes(el);
-    for (const n of nodes) {
-      if (this.kit.is(n, 'bpmn:StartEvent') || this.kit.is(n, 'bpmn:EndEvent')) {
-        this.push('deploy', 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', el, undefined, `adHoc:${idOf(n)}`, `Ad-hoc sub-process ${id} contains the ${this.kit.is(n, 'bpmn:StartEvent') ? 'start' : 'end'} event ${idOf(n)}; Camunda 8 refuses start and end events in ad-hoc sub-processes`, `\`bpmn remove <file> ${idOf(n)}\`.`, [idOf(n)!]);
+    for (const node of nodes) {
+      if (this.kit.is(node, 'bpmn:StartEvent') || this.kit.is(node, 'bpmn:EndEvent')) {
+        this.push('deploy', 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', el, undefined, `adHoc:${idOf(node)}`, `Ad-hoc sub-process ${id} contains the ${this.kit.is(node, 'bpmn:StartEvent') ? 'start' : 'end'} event ${idOf(node)}; Camunda 8 refuses start and end events in ad-hoc sub-processes`, `\`bpmn remove <file> ${idOf(node)}\`.`, [idOf(node)!]);
       }
     }
-    if (!nodes.some((n) => this.kit.is(n, 'bpmn:Activity'))) {
+    if (!nodes.some((node) => this.kit.is(node, 'bpmn:Activity'))) {
       this.push('deploy', 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', el, undefined, 'adHoc:empty', `Ad-hoc sub-process ${id} contains no activity; Camunda 8 refuses the file`, `\`bpmn add <file> serviceTask "<Name>" --in ${id}\`.`);
     }
     // a static completion condition is refused at deploy (unlike a multi-instance one)
@@ -66,9 +66,9 @@ export class C8FlowRules extends C8Rules {
     const flows = this.outgoing.get(gw) ?? [];
     if (flows.length < 2) return;
     const def = peek<El>(gw, 'default');
-    for (const f of flows) {
-      if (f === def || peek<El>(f, 'conditionExpression')) continue;
-      this.push('runtime', 'W_C8_EXCLUSIVE_GATEWAY', gw, undefined, `noCondition:${idOf(f)}`, `Sequence flow ${idOf(f)} out of ${this.describe(gw)} has no condition and is not the default flow: Camunda 8 never takes it (an instance where no condition holds gets an incident)`, `Make it the default flow (\`bpmn set <file> ${idOf(f)} default=true\`) or give it a condition: \`bpmn set <file> ${idOf(f)} ${sh('condition== <expression>')}\`.`, [idOf(f)!]);
+    for (const flow of flows) {
+      if (flow === def || peek<El>(flow, 'conditionExpression')) continue;
+      this.push('runtime', 'W_C8_EXCLUSIVE_GATEWAY', gw, undefined, `noCondition:${idOf(flow)}`, `Sequence flow ${idOf(flow)} out of ${this.describe(gw)} has no condition and is not the default flow: Camunda 8 never takes it (an instance where no condition holds gets an incident)`, `Make it the default flow (\`bpmn set <file> ${idOf(flow)} default=true\`) or give it a condition: \`bpmn set <file> ${idOf(flow)} ${sh('condition== <expression>')}\`.`, [idOf(flow)!]);
     }
   }
 
@@ -76,19 +76,19 @@ export class C8FlowRules extends C8Rules {
     const id = idOf(gw)!;
     const flows = this.outgoing.get(gw) ?? [];
     // the engine counts the <bpmn:outgoing> entries of the gateway, which a file may leave out
-    const listed = flows.filter((f) => !this.unlisted.has(f) || this.unlisted.get(f) !== gw);
+    const listed = flows.filter((flow) => !this.unlisted.has(flow) || this.unlisted.get(flow) !== gw);
     if (flows.length < 2) {
       this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, 'branches', `Event-based gateway ${id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${id} --timer PT1H\`.`);
     } else if (listed.length < 2) {
-      this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, 'branches', `Event-based gateway ${id} has ${flows.length} outgoing flows, but the file lists ${listed.length} of them as its <bpmn:outgoing> entries; Camunda 8 counts the listed ones and refuses the file`, `Add the missing <bpmn:outgoing>${flows.filter((f) => !listed.includes(f)).map(idOf).join('</bpmn:outgoing>, <bpmn:outgoing>')}</bpmn:outgoing> entries to ${id} in the XML (Camunda Modeler writes them; this file leaves the lists out, and \`bpmn\` keeps a file's style).`);
+      this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, 'branches', `Event-based gateway ${id} has ${flows.length} outgoing flows, but the file lists ${listed.length} of them as its <bpmn:outgoing> entries; Camunda 8 counts the listed ones and refuses the file`, `Add the missing <bpmn:outgoing>${flows.filter((flow) => !listed.includes(flow)).map(idOf).join('</bpmn:outgoing>, <bpmn:outgoing>')}</bpmn:outgoing> entries to ${id} in the XML (Camunda Modeler writes them; this file leaves the lists out, and \`bpmn\` keeps a file's style).`);
     }
-    for (const f of flows) {
-      const t = peek<El>(f, 'targetRef');
-      if (!t) continue;
-      const defs = list(t, 'eventDefinitions');
-      const ok = this.kit.is(t, 'bpmn:IntermediateCatchEvent') && defs.length === 1 && this.kit.EVENT_GATEWAY_TRIGGERS.includes(triggerName(defs[0]!) as Trigger);
+    for (const flow of flows) {
+      const target = peek<El>(flow, 'targetRef');
+      if (!target) continue;
+      const defs = list(target, 'eventDefinitions');
+      const ok = this.kit.is(target, 'bpmn:IntermediateCatchEvent') && defs.length === 1 && this.kit.EVENT_GATEWAY_TRIGGERS.includes(triggerName(defs[0]!) as Trigger);
       if (!ok) {
-        this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, `target:${idOf(t)}`, `Event-based gateway ${id} leads to ${this.describe(t)}; Camunda 8 allows only message, timer, signal and conditional intermediate catch events after it and refuses the file`, this.kit.is(t, 'bpmn:ReceiveTask') ? `Use a message catch event: \`bpmn retype <file> ${idOf(t)} intermediateCatchEvent:message --message ${sh(nameOf(this.messageOf(t)) ?? '<MessageName>')}\`.` : `Put a catch event in between: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${idOf(f)} --message <MessageName>\` (or retype ${idOf(t)}).`, [idOf(t)!, idOf(f)!]);
+        this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, `target:${idOf(target)}`, `Event-based gateway ${id} leads to ${this.describe(target)}; Camunda 8 allows only message, timer, signal and conditional intermediate catch events after it and refuses the file`, this.kit.is(target, 'bpmn:ReceiveTask') ? `Use a message catch event: \`bpmn retype <file> ${idOf(target)} intermediateCatchEvent:message --message ${sh(nameOf(this.messageOf(target)) ?? '<MessageName>')}\`.` : `Put a catch event in between: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${idOf(flow)} --message <MessageName>\` (or retype ${idOf(target)}).`, [idOf(target)!, idOf(flow)!]);
       }
     }
   }

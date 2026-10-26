@@ -28,12 +28,12 @@ export class ConfigLookup {
   /** Resolves symlinks of the deepest existing ancestor; a write may create the rest. */
   private physical(): string {
     const rest: string[] = [];
-    for (let d = this.given; ; d = dirname(d)) {
+    for (let dir = this.given; ; dir = dirname(dir)) {
       try {
-        return join(realpathSync(d), ...rest.reverse());
+        return join(realpathSync(dir), ...rest.reverse());
       } catch {
-        if (dirname(d) === d) return this.given;
-        rest.push(basename(d));
+        if (dirname(dir) === dir) return this.given;
+        rest.push(basename(dir));
       }
     }
   }

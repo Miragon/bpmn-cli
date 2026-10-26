@@ -24,39 +24,39 @@ export class NodePlacement {
 
   constructor(
     private readonly doc: Doc,
-    private readonly p: PlacementOptions,
+    private readonly placement: PlacementOptions,
   ) {
     this.flows = new SequenceFlows(doc);
   }
 
-  static modeOf(p: Placement): PlacementMode {
-    if (p.after && p.before) return 'between';
-    if (p.after) return 'after';
-    if (p.before) return 'before';
-    if (p.flow) return 'flow';
-    if (p.on) return 'on';
-    if (p.in) return 'in';
+  static modeOf(placement: Placement): PlacementMode {
+    if (placement.after && placement.before) return 'between';
+    if (placement.after) return 'after';
+    if (placement.before) return 'before';
+    if (placement.flow) return 'flow';
+    if (placement.on) return 'on';
+    if (placement.in) return 'in';
     return 'none';
   }
 
   get mode(): PlacementMode {
-    return NodePlacement.modeOf(this.p);
+    return NodePlacement.modeOf(this.placement);
   }
 
   scope(): El {
-    const { doc, p } = this;
+    const { doc, placement } = this;
     switch (this.mode) {
       case 'after':
       case 'between':
-        return doc.scopeOf(doc.require(p.after!, 'bpmn:FlowNode')) ?? doc.defaultScope();
+        return doc.scopeOf(doc.require(placement.after!, 'bpmn:FlowNode')) ?? doc.defaultScope();
       case 'before':
-        return doc.scopeOf(doc.require(p.before!, 'bpmn:FlowNode')) ?? doc.defaultScope();
+        return doc.scopeOf(doc.require(placement.before!, 'bpmn:FlowNode')) ?? doc.defaultScope();
       case 'flow':
-        return doc.scopeOf(doc.require(p.flow!, 'bpmn:SequenceFlow', 'sequence flow')) ?? doc.defaultScope();
+        return doc.scopeOf(doc.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow')) ?? doc.defaultScope();
       case 'on':
-        return doc.scopeOf(doc.require(p.on!, 'bpmn:Activity', 'activity')) ?? doc.defaultScope();
+        return doc.scopeOf(doc.require(placement.on!, 'bpmn:Activity', 'activity')) ?? doc.defaultScope();
       case 'in':
-        return doc.requireScope(p.in);
+        return doc.requireScope(placement.in);
       default:
         return doc.defaultScope();
     }
@@ -68,7 +68,7 @@ export class NodePlacement {
    * `before` mirrors it. `reuse`: a moved node's old out-flow, put back instead of a new one.
    */
   place(node: El, cs: ChangeSet, reuse?: (source: El) => El | undefined): El | undefined {
-    const { doc, p } = this;
+    const { doc, placement } = this;
     const mode = this.mode;
     const scope = this.scope();
     let entryFlow: El | undefined;
@@ -79,7 +79,7 @@ export class NodePlacement {
     };
 
     if (mode === 'on') {
-      const host = doc.require(p.on!, 'bpmn:Activity', 'activity');
+      const host = doc.require(placement.on!, 'bpmn:Activity', 'activity');
       if (!is(node, 'bpmn:BoundaryEvent')) {
         throw modelError('E_INVALID_PLACEMENT', `--on attaches boundary events only; ${kindLabel(node)} cannot be attached to ${idOf(host)}`, {
           element: idOf(node),
@@ -96,19 +96,19 @@ export class NodePlacement {
     } else if (mode === 'in' || mode === 'none') {
       insertAfterInScope(scope, undefined, node);
     } else if (mode === 'flow') {
-      const flow = doc.require(p.flow!, 'bpmn:SequenceFlow', 'sequence flow');
+      const flow = doc.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow');
       entryFlow = this.spliceWithOptions(node, flow, cs, outFlow);
     } else if (mode === 'between') {
-      const a = doc.require(p.after!, 'bpmn:FlowNode');
-      const b = doc.require(p.before!, 'bpmn:FlowNode');
-      const flow = this.requireFlowBetween(a, b);
+      const afterNode = doc.require(placement.after!, 'bpmn:FlowNode');
+      const beforeNode = doc.require(placement.before!, 'bpmn:FlowNode');
+      const flow = this.requireFlowBetween(afterNode, beforeNode);
       entryFlow = this.spliceWithOptions(node, flow, cs, outFlow);
     } else if (mode === 'after') {
-      const anchor = doc.require(p.after!, 'bpmn:FlowNode');
+      const anchor = doc.require(placement.after!, 'bpmn:FlowNode');
       const out = doc.outgoing(anchor);
       if (is(anchor, 'bpmn:Gateway') || out.length === 0) {
         insertAfterInScope(scope, lastFlowOf(scope, anchor) ?? anchor, node);
-        entryFlow = this.flows.create(anchor, node, { ...new FlowOptions(p).toAttrs(), ...reused(anchor) }, node);
+        entryFlow = this.flows.create(anchor, node, { ...new FlowOptions(placement).toAttrs(), ...reused(anchor) }, node);
         cs.create(ChangeSet.flowEntryOf(entryFlow));
         cs.note(`appended after ${idOf(anchor)}`);
       } else if (out.length === 1) {
@@ -121,16 +121,16 @@ export class NodePlacement {
         });
       }
     } else if (mode === 'before') {
-      const anchor = doc.require(p.before!, 'bpmn:FlowNode');
+      const anchor = doc.require(placement.before!, 'bpmn:FlowNode');
       const inc = doc.incoming(anchor);
       const isJoin = is(anchor, 'bpmn:Gateway') && inc.length >= 2;
       if (inc.length === 0 || isJoin) {
         // prepend: the flow options go to the one flow this creates (node -> anchor)
         insertBeforeInScope(scope, anchor, node);
-        const flow = this.flows.create(node, anchor, { ...new FlowOptions(p).toAttrs(), ...reused(node) }, node);
+        const flow = this.flows.create(node, anchor, { ...new FlowOptions(placement).toAttrs(), ...reused(node) }, node);
         cs.create(ChangeSet.flowEntryOf(flow));
         cs.note(`prepended before ${idOf(anchor)}`);
-        const used = new FlowOptions(p).flags;
+        const used = new FlowOptions(placement).flags;
         if (used.length) {
           cs.note(`${used.join(', ')} applied to ${idOf(flow)} (${idOf(node)} -> ${idOf(anchor)}): ${idOf(anchor)} ${isJoin ? 'is a join gateway' : 'had no incoming flow'}, so no flow into ${idOf(node)} was created`);
         }
@@ -145,8 +145,8 @@ export class NodePlacement {
       }
     }
 
-    if (p.to) {
-      const target = doc.require(p.to, 'bpmn:FlowNode');
+    if (placement.to) {
+      const target = doc.require(placement.to, 'bpmn:FlowNode');
       const flow = this.flows.create(node, target, {}, undefined);
       cs.create(ChangeSet.flowEntryOf(flow));
       if (!is(target, 'bpmn:Gateway') && doc.incoming(target).length > 1) {
@@ -183,14 +183,14 @@ export class NodePlacement {
     }
   }
 
-  private requireFlowBetween(a: El, b: El): El {
-    const flows = this.doc.outgoing(a).filter((f) => f.get<El | undefined>('targetRef') === b);
+  private requireFlowBetween(from: El, to: El): El {
+    const flows = this.doc.outgoing(from).filter((flow) => flow.get<El | undefined>('targetRef') === to);
     if (flows.length === 1) return flows[0]!;
     if (!flows.length) {
-      throw modelError('E_NO_FLOW', `There is no sequence flow ${idOf(a)} -> ${idOf(b)}`, { element: idOf(a), related: [idOf(b)] });
+      throw modelError('E_NO_FLOW', `There is no sequence flow ${idOf(from)} -> ${idOf(to)}`, { element: idOf(from), related: [idOf(to)] });
     }
-    throw modelError('E_AMBIGUOUS_FLOW', `There are ${flows.length} flows ${idOf(a)} -> ${idOf(b)}; use --flow <flowId>`, {
-      element: idOf(a),
+    throw modelError('E_AMBIGUOUS_FLOW', `There are ${flows.length} flows ${idOf(from)} -> ${idOf(to)}; use --flow <flowId>`, {
+      element: idOf(from),
       candidates: flows.map(idOf),
     });
   }
@@ -223,11 +223,11 @@ export class NodePlacement {
     this.assertSpliceable(node, flow);
     const src = flow.get<El>('sourceRef');
     const tgt = flow.get<El>('targetRef');
-    const { second, renamedFrom } = this.flows.splice(flow, node, outFlow, this.p.flowId);
+    const { second, renamedFrom } = this.flows.splice(flow, node, outFlow, this.placement.flowId);
     cs.create(ChangeSet.flowEntryOf(second));
     cs.change(ChangeSet.flowEntryOf(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
     cs.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
-    new FlowOptions(this.p).apply(this.doc, flow, cs);
+    new FlowOptions(this.placement).apply(this.doc, flow, cs);
     return flow;
   }
 }

@@ -27,9 +27,9 @@ const CONDITION = '<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">$
 function errorCodeOf(action: () => unknown): string | undefined {
   try {
     action();
-  } catch (e) {
-    if (isCliError(e)) return e.code;
-    throw e;
+  } catch (error) {
+    if (isCliError(error)) return error.code;
+    throw error;
   }
   return undefined;
 }
@@ -64,20 +64,20 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
   it('retype exclusive -> event-based drops the conditions with W_CONDITION_DROPPED', async () => {
     const doc = await docFromXml(forkXml('exclusiveGateway', CONDITION));
     const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Gw', kind: 'eventBasedGateway' });
-    expect(cs.warnings.map((w) => [w.code, w.element])).toEqual([['W_CONDITION_DROPPED', 'FA']]);
+    expect(cs.warnings.map((warning) => [warning.code, warning.element])).toEqual([['W_CONDITION_DROPPED', 'FA']]);
     expect(conditionOf(doc, 'FA')).toBeUndefined();
   });
 
   it('set source= behind a parallel gateway drops the condition with W_CONDITION_DROPPED', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
     const cs = new PropertySetter(doc).set({ op: 'set', id: 'FX', values: { source: 'Gw' } });
-    expect(cs.warnings.map((w) => [w.code, w.element])).toEqual([['W_CONDITION_DROPPED', 'FX']]);
+    expect(cs.warnings.map((warning) => [warning.code, warning.element])).toEqual([['W_CONDITION_DROPPED', 'FX']]);
     expect(conditionOf(doc, 'FX')).toBeUndefined();
   });
 
   it('validate reports W_CONDITION_IGNORED without a platform', async () => {
     const doc = await docFromXml(forkXml('parallelGateway', CONDITION));
-    const findings = validateDoc(doc).warnings.filter((w) => w.code === 'W_CONDITION_IGNORED');
-    expect(findings.map((w) => [w.element, w.related])).toEqual([['Gw', ['FA']]]);
+    const findings = validateDoc(doc).warnings.filter((warning) => warning.code === 'W_CONDITION_IGNORED');
+    expect(findings.map((warning) => [warning.element, warning.related])).toEqual([['Gw', ['FA']]]);
   });
 });

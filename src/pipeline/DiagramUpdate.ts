@@ -92,13 +92,13 @@ export class DiagramUpdate {
     } else {
       let givenIds: GivenId[] | undefined;
       try {
-        ({ xml, layout, givenIds } = await this.runLayout(edit, this.requested, DiagramUpdate.relocatedIds(ran, changes), changes.created.map((c) => c.id)));
+        ({ xml, layout, givenIds } = await this.runLayout(edit, this.requested, DiagramUpdate.relocatedIds(ran, changes), changes.created.map((created) => created.id)));
       } catch (err) {
         throw toCliError(err);
       }
       if (givenIds?.length) {
-        for (const g of givenIds) changes.change({ id: g.id, kind: g.kind, ...(g.name ? { name: g.name } : {}), detail: 'id added (it had none; the diagram refers to elements by id)' });
-        changes.note(`${givenIds.length} element(s) without id got one in the file's id style so that the redrawn diagram can show them: ${givenIds.map((g) => g.id).join(', ')}`);
+        for (const given of givenIds) changes.change({ id: given.id, kind: given.kind, ...(given.name ? { name: given.name } : {}), detail: 'id added (it had none; the diagram refers to elements by id)' });
+        changes.note(`${givenIds.length} element(s) without id got one in the file's id style so that the redrawn diagram can show them: ${givenIds.map((given) => given.id).join(', ')}`);
       }
     }
 
@@ -131,11 +131,11 @@ export class DiagramUpdate {
       const plane = diagram.get<El | undefined>('plane');
       if (!plane) continue;
       const elements = many(plane, 'planeElement');
-      for (let i = elements.length - 1; i >= 0; i--) {
-        const target = elements[i]!.get<El | undefined>('bpmnElement');
+      for (let elementIndex = elements.length - 1; elementIndex >= 0; elementIndex--) {
+        const target = elements[elementIndex]!.get<El | undefined>('bpmnElement');
         const id = target?.get<string | undefined>('id');
         if (!target || !id || index.get(id) !== target) {
-          elements.splice(i, 1);
+          elements.splice(elementIndex, 1);
           removed++;
         }
       }
@@ -167,7 +167,7 @@ export class DiagramUpdate {
     let newDi: DiIds | undefined;
     for (const [id, expanded] of wanted) {
       const sub = doc.get(id);
-      if (!sub || !SUB_PROCESS_TYPES.some((t) => is(sub, t))) continue;
+      if (!sub || !SUB_PROCESS_TYPES.some((type) => is(sub, type))) continue;
       const existing = shapes.get(id);
       if (existing) {
         existing.set('isExpanded', expanded);
@@ -230,11 +230,11 @@ export class DiagramUpdate {
 
   private resolveAnchors(): ResolvedAnchor[] {
     const out: ResolvedAnchor[] = [];
-    for (const a of this.before.stickies) {
-      const processId = a.process.get<string | undefined>('id');
-      const nodeId = a.node.get<string | undefined>('id');
-      if (!processId || !nodeId || this.doc.get(processId) !== a.process || !this.doc.get(nodeId)) continue;
-      out.push({ processId, index: a.index, ...(a.stickyId !== undefined ? { stickyId: a.stickyId } : {}), nodeId, centre: a.centre });
+    for (const sticky of this.before.stickies) {
+      const processId = sticky.process.get<string | undefined>('id');
+      const nodeId = sticky.node.get<string | undefined>('id');
+      if (!processId || !nodeId || this.doc.get(processId) !== sticky.process || !this.doc.get(nodeId)) continue;
+      out.push({ processId, index: sticky.index, ...(sticky.stickyId !== undefined ? { stickyId: sticky.stickyId } : {}), nodeId, centre: sticky.centre });
     }
     return out;
   }

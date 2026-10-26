@@ -112,7 +112,7 @@ export class EditContext {
     this.allocator.begin();
     this.formerEnds.clear();
     this.style = this.idStyle;
-    this.flows = this.followFlowEnds ? undefined : new Map(this.doc.allSequenceFlows().map((f) => [f, [f.get<El | undefined>('sourceRef'), f.get<El | undefined>('targetRef')]] as const));
+    this.flows = this.followFlowEnds ? undefined : new Map(this.doc.allSequenceFlows().map((flow) => [flow, [flow.get<El | undefined>('sourceRef'), flow.get<El | undefined>('targetRef')]] as const));
   }
 
   /** Conventions the call brought itself must not stick: the document relearns its style. */
@@ -169,7 +169,7 @@ export class EditContext {
   /** A flow id naming the node by its former id or name still names its ends this batch. */
   recordFormerEnd(node: El, end: FormerEnd): void {
     const list = this.formerEnds.get(node) ?? [];
-    if (!list.some((e) => e.id === end.id && e.labels.join('\n') === end.labels.join('\n'))) list.push(end);
+    if (!list.some((existing) => existing.id === end.id && existing.labels.join('\n') === end.labels.join('\n'))) list.push(end);
     this.formerEnds.set(node, list);
   }
 

@@ -29,18 +29,18 @@ const listFrom = (value) => (Array.isArray(value) || value instanceof Set ? [...
 
 export function hardKinds(lib, env = process.env) {
   const keys = [...lib.KEYS];
-  const fromEnv = env.BPMN_HARD_KINDS?.split(',').map((s) => s.trim()).filter(Boolean);
+  const fromEnv = env.BPMN_HARD_KINDS?.split(',').map((kind) => kind.trim()).filter(Boolean);
   if (fromEnv?.length) return fromEnv;
   const exported = listFrom(lib.HARD_KEYS) ?? listFrom(lib.HARD_KINDS);
-  if (exported) return keys.filter((k) => exported.includes(k));
-  return keys.filter((k) => k !== 'failed' && (lib.WEIGHTS[k] ?? 0) >= HARD_WEIGHT);
+  if (exported) return keys.filter((kind) => exported.includes(kind));
+  return keys.filter((kind) => kind !== 'failed' && (lib.WEIGHTS[kind] ?? 0) >= HARD_WEIGHT);
 }
 
 export function newKinds(lib) {
-  return [...lib.KEYS].filter((k) => !ORIGINAL_KINDS.includes(k));
+  return [...lib.KEYS].filter((kind) => !ORIGINAL_KINDS.includes(kind));
 }
 
 /** Counts of the given kinds in a `counts` record (missing kinds count 0). */
 export function countKinds(counts, kinds) {
-  return Object.fromEntries(kinds.map((k) => [k, counts?.[k] ?? 0]));
+  return Object.fromEntries(kinds.map((kind) => [kind, counts?.[kind] ?? 0]));
 }

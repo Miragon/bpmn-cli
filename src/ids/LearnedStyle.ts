@@ -45,7 +45,7 @@ interface FamilyStats {
 
 interface FlowVotes {
   /** all but the glued ones with a suffix, which count only for glued numbered flows */
-  n: number;
+  count: number;
   glued: string[];
   gluedNamed: string[];
   /** decided once the glued prefixes are known */
@@ -113,14 +113,14 @@ export class LearnedStyle {
   private readonly processBodies = new Map<string, Tally<BodyClass>>();
   private rejected = false;
 
-  constructor(defs: El | undefined, d?: DeclaredConventions) {
+  constructor(defs: El | undefined, declared?: DeclaredConventions) {
     const read: IdsRead = { samples: 0, prefixed: 0, nodeBodies: new Tally(), bareBodies: new Tally(), otherBodies: new Tally(), flowVotes: new Map() };
     for (const el of defs ? walk(defs, { bpmnOnly: true }) : []) {
       if (!isBpmnElement(el) || /^(bpmndi|dc|di):/.test(el.$type)) continue;
       const id = el.get<string | undefined>('id');
       if (!id) continue;
-      if (CONNECTIONS.has(el.$type)) this.readFlow(el, id, read.flowVotes, d);
-      else this.readElement(el, id, read, d);
+      if (CONNECTIONS.has(el.$type)) this.readFlow(el, id, read.flowVotes, declared);
+      else this.readElement(el, id, read, declared);
     }
 
     this.strong = read.prefixed >= 3 && read.prefixed * 2 >= read.samples;
@@ -132,12 +132,12 @@ export class LearnedStyle {
     const { bareBodies, nodeBodies, otherBodies } = read;
     this.bareBody = bareBodies.get('pascal') > bareBodies.get('camel') + bareBodies.get('lower') ? 'pascal' : 'camel';
     const bodies = nodeBodies.total >= MIN_EVIDENCE ? nodeBodies : otherBodies;
-    if (bodies === otherBodies) for (const [k, v] of nodeBodies.counts) bodies.add(k, v);
+    if (bodies === otherBodies) for (const [key, count] of nodeBodies.counts) bodies.add(key, count);
     const camel = bodies.get('camel');
     const snake = bodies.get('snake');
     const lowerOnly = camel + snake === 0;
-    const lower = d && lowerOnly && d.case !== 'pascal' ? 0 : bodies.get('lower');
-    const lowerCamel = (camel > 0 && camel >= snake) || (lowerOnly && d?.case === 'pascal');
+    const lower = declared && lowerOnly && declared.case !== 'pascal' ? 0 : bodies.get('lower');
+    const lowerCamel = (camel > 0 && camel >= snake) || (lowerOnly && declared?.case === 'pascal');
     const votes: Array<[Body, number]> = [
       ['pascal', bodies.get('pascal')],
       ['camel', camel + (lowerCamel ? lower : 0)],
@@ -145,11 +145,11 @@ export class LearnedStyle {
       ['pascalSnake', bodies.get('pascalSnake')],
     ];
     let best: [Body, number] = ['pascal', MIN_EVIDENCE - 1];
-    for (const v of votes) if (v[1] > best[1]) best = v;
+    for (const vote of votes) if (vote[1] > best[1]) best = vote;
     this.body = best[0];
     this.bodyVoted = best[1] >= MIN_EVIDENCE;
 
-    for (const [type, v] of read.flowVotes) this.voteFlows(type, v);
+    for (const [type, votes] of read.flowVotes) this.voteFlows(type, votes);
   }
 
   /** The file has an id the declared conventions check that does not follow them. */
@@ -186,13 +186,13 @@ export class LearnedStyle {
    * case, so the process matches the pool made with it. Participant ids never vote.
    */
   processStyle(fileCase: () => Body): { prefix: string; body: Body } | undefined {
-    const prefix = this.processes.top(MIN_EVIDENCE, (a, b) => this.alphabetical(a, b));
+    const prefix = this.processes.top(MIN_EVIDENCE, (first, second) => this.alphabetical(first, second));
     if (prefix === undefined) return undefined;
-    const t = this.processBodies.get(prefix)!;
+    const caseTally = this.processBodies.get(prefix)!;
     const file = fileCase();
     let best: [Body, number] = [file, 0];
-    for (const c of ['pascal', 'camel', 'snake', 'pascalSnake'] as const) if (t.get(c) > best[1] || (t.get(c) === best[1] && best[1] > 0 && c === file)) best = [c, t.get(c)];
-    const body = best[1] || !t.get('lower') ? best[0] : file === 'snake' || file === 'pascalSnake' ? 'snake' : 'camel';
+    for (const bodyCase of ['pascal', 'camel', 'snake', 'pascalSnake'] as const) if (caseTally.get(bodyCase) > best[1] || (caseTally.get(bodyCase) === best[1] && best[1] > 0 && bodyCase === file)) best = [bodyCase, caseTally.get(bodyCase)];
+    const body = best[1] || !caseTally.get('lower') ? best[0] : file === 'snake' || file === 'pascalSnake' ? 'snake' : 'camel';
     return { prefix, body };
   }
 
@@ -200,14 +200,14 @@ export class LearnedStyle {
    * '' only with `bare`: a named element's id can do without a prefix, an unnamed one cannot.
    * The declared prefixes shape a prefix nothing declares where the file shows none.
    */
-  prefixOf(req: IdRequest, bare: boolean, d: DeclaredConventions | undefined): { prefix: string; source: PrefixSource } {
+  prefixOf(req: IdRequest, bare: boolean, declared: DeclaredConventions | undefined): { prefix: string; source: PrefixSource } {
     // a new file looks like one that follows the declared conventions
-    const dv = d && this.lowerFirst + this.upperFirst < MIN_EVIDENCE ? d.votes : NO_VOTES;
+    const dv = declared && this.lowerFirst + this.upperFirst < MIN_EVIDENCE ? declared.votes : NO_VOTES;
     const lowerFile = this.lowerFirst + dv.lower >= MIN_EVIDENCE && this.lowerFirst + dv.lower > this.upperFirst + dv.upper;
     const min = this.strong ? 1 : MIN_EVIDENCE;
     const typeName = req.typeNames[0]!;
     const withTrigger = (lowerFirst: boolean): string => caseLike(req.trigger ? `${req.trigger}${ucfirst(typeName)}` : typeName, lowerFirst);
-    const usable = (p: string | undefined): p is string => p !== undefined && (bare || p !== '');
+    const usable = (prefix: string | undefined): prefix is string => prefix !== undefined && (bare || prefix !== '');
     const file = (prefix: string): { prefix: string; source: PrefixSource } => ({ prefix, source: 'file' });
     if (req.trigger) {
       const exact = this.byKeyTrigger.get(`${req.key}|${req.trigger}`)?.top(min);
@@ -238,172 +238,172 @@ export class LearnedStyle {
    * The other ids show the other first letter than the declared prefixes (Lane_ next to
    * serviceTask_): the declared case goes with the declared shape, so the file keeps bpmn-cli's.
    */
-  otherShape(d: DeclaredConventions): boolean {
+  otherShape(declared: DeclaredConventions): boolean {
     if (this.lowerFirst + this.upperFirst < MIN_EVIDENCE) return false;
-    const v = d.votes;
-    return this.lowerFirst > this.upperFirst ? v.upper > v.lower : this.upperFirst > this.lowerFirst && v.lower > v.upper;
+    const votes = declared.votes;
+    return this.lowerFirst > this.upperFirst ? votes.upper > votes.lower : this.upperFirst > this.lowerFirst && votes.lower > votes.upper;
   }
 
-  private readFlow(el: El, id: string, flowVotes: Map<string, FlowVotes>, d: DeclaredConventions | undefined): void {
-    if (d && !this.rejected && d.rejects({ type: el.$type }, id)) this.rejected = true;
+  private readFlow(el: El, id: string, flowVotes: Map<string, FlowVotes>, declared: DeclaredConventions | undefined): void {
+    if (declared && !this.rejected && declared.rejects({ type: el.$type }, id)) this.rejected = true;
     const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
     const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
     // bpmn-cli wrote a borrowed prefix from the declared conventions: a vote would end borrowing
-    const borrowed = d && el.$type === 'bpmn:MessageFlow' ? d.borrowedHead(el.$type) : undefined;
+    const borrowed = declared && el.$type === 'bpmn:MessageFlow' ? declared.borrowedHead(el.$type) : undefined;
     if (borrowed !== undefined && id.startsWith(borrowed)) return;
-    let v = flowVotes.get(el.$type);
-    if (!v) flowVotes.set(el.$type, (v = { n: 0, glued: [], gluedNamed: [], joined: [], forms: new Tally(), prefixes: new Map(), any: new Tally(), uses: new Tally(), seps: new Map(), scopes: new Tally() }));
+    let votes = flowVotes.get(el.$type);
+    if (!votes) flowVotes.set(el.$type, (votes = { count: 0, glued: [], gluedNamed: [], joined: [], forms: new Tally(), prefixes: new Map(), any: new Tally(), uses: new Tally(), seps: new Map(), scopes: new Tally() }));
     if (GLUED_SUFFIXED.test(id)) {
-      v.glued.push(id);
+      votes.glued.push(id);
       return;
     }
-    v.n++;
+    votes.count++;
     if (!id.includes('_') && GLUED_NAMED.test(id) && !GLUED.test(id)) {
-      v.gluedNamed.push(id);
+      votes.gluedNamed.push(id);
       return;
     }
     // fweigh_parcel_to_label_parcel reads like the prefix fweigh until the glued prefixes are known
     if (source && target && GLUED_JOINED.test(id)) {
-      v.joined.push({ el, id, source, target });
+      votes.joined.push({ el, id, source, target });
       return;
     }
-    this.countFlow(v, el, id, source, target);
+    this.countFlow(votes, el, id, source, target);
   }
 
-  private readElement(el: El, id: string, read: IdsRead, d: DeclaredConventions | undefined): void {
+  private readElement(el: El, id: string, read: IdsRead, declared: DeclaredConventions | undefined): void {
     if (TOOL_DEFAULTS.has(id)) return;
     if (el.$type === 'bpmn:Process') {
-      const m = PREFIXED.exec(id);
-      if (m) {
-        this.processes.add(m[1]!);
-        this.tallyOf(this.processBodies, m[1]!).add(this.bodyClass(m[2]!));
+      const processMatch = PREFIXED.exec(id);
+      if (processMatch) {
+        this.processes.add(processMatch[1]!);
+        this.tallyOf(this.processBodies, processMatch[1]!).add(this.bodyClass(processMatch[2]!));
       }
       return;
     }
-    if (d) {
+    if (declared) {
       const trigger = triggerOf(el);
       const state = { type: el.$type, ...(trigger ? { trigger } : {}) };
-      const heads = d.headsOf(state);
-      if (!this.rejected && !IGNORED.some((t) => is(el, t)) && d.rejects(state, id, heads)) this.rejected = true;
-      if (heads.some((h) => id.startsWith(h))) return;
+      const heads = declared.headsOf(state);
+      if (!this.rejected && !IGNORED.some((type) => is(el, type)) && declared.rejects(state, id, heads)) this.rejected = true;
+      if (heads.some((head) => id.startsWith(head))) return;
     }
-    const s = this.sampleOf(el, id);
-    if (!s) return;
+    const sample = this.sampleOf(el, id);
+    if (!sample) return;
     read.samples++;
-    const m = PREFIXED.exec(id);
-    let fam = this.family.get(s.family);
-    if (!fam) this.family.set(s.family, (fam = { kindish: new Tally(), generic: new Tally(), prefixed: 0 }));
-    if (!m) {
+    const prefixedMatch = PREFIXED.exec(id);
+    let fam = this.family.get(sample.family);
+    if (!fam) this.family.set(sample.family, (fam = { kindish: new Tally(), generic: new Tally(), prefixed: 0 }));
+    if (!prefixedMatch) {
       // a bare id counts only where it spells the name: `GW` or `Start` for "Started" say nothing
-      if (!s.spellsName) return;
-      this.tallyOf(this.byKey, s.key).add('');
-      if (s.trigger) this.tallyOf(this.byKeyTrigger, `${s.key}|${s.trigger}`).add('');
-      this.tallyOf(this.classByKey, s.key).add('literal');
+      if (!sample.spellsName) return;
+      this.tallyOf(this.byKey, sample.key).add('');
+      if (sample.trigger) this.tallyOf(this.byKeyTrigger, `${sample.key}|${sample.trigger}`).add('');
+      this.tallyOf(this.classByKey, sample.key).add('literal');
       fam.generic.add('');
       read.bareBodies.add(this.bodyClass(id));
-      if (s.flowNode) this.bareNodes++;
+      if (sample.flowNode) this.bareNodes++;
       return;
     }
     read.prefixed++;
     fam.prefixed++;
-    if (s.flowNode) this.prefixedNodes++;
-    const prefix = m[1]!;
-    const body = m[2]!;
-    const cls = prefixClass(prefix, s.typeNames, s.trigger, s.family);
-    this.tallyOf(this.byKey, s.key).add(prefix);
-    if (s.trigger) this.tallyOf(this.byKeyTrigger, `${s.key}|${s.trigger}`).add(prefix);
-    this.tallyOf(this.classByKey, s.key).add(cls);
+    if (sample.flowNode) this.prefixedNodes++;
+    const prefix = prefixedMatch[1]!;
+    const body = prefixedMatch[2]!;
+    const cls = prefixClass(prefix, sample.typeNames, sample.trigger, sample.family);
+    this.tallyOf(this.byKey, sample.key).add(prefix);
+    if (sample.trigger) this.tallyOf(this.byKeyTrigger, `${sample.key}|${sample.trigger}`).add(prefix);
+    this.tallyOf(this.classByKey, sample.key).add(cls);
     // `Task_` on a plain task: neither for nor against type-named prefixes
-    if (!(GENERIC.has(prefix.toLowerCase()) && s.typeNames.some((n) => n.toLowerCase() === prefix.toLowerCase()))) this.classes.add(cls);
+    if (!(GENERIC.has(prefix.toLowerCase()) && sample.typeNames.some((typeName) => typeName.toLowerCase() === prefix.toLowerCase()))) this.classes.add(cls);
     if (/^[a-z]/.test(prefix)) this.lowerFirst++;
     else this.upperFirst++;
     if (cls !== 'literal') fam.kindish.add(cls === 'triggerKind' ? 'triggerKind' : 'kind');
-    else if (!this.isSpecific(prefix, s.typeNames, s.trigger, s.family)) fam.generic.add(prefix);
-    if (s.named) (s.flowNode ? read.nodeBodies : read.otherBodies).add(this.bodyClass(body));
+    else if (!this.isSpecific(prefix, sample.typeNames, sample.trigger, sample.family)) fam.generic.add(prefix);
+    if (sample.named) (sample.flowNode ? read.nodeBodies : read.otherBodies).add(this.bodyClass(body));
   }
 
-  private voteFlows(type: string, v: FlowVotes): void {
+  private voteFlows(type: string, votes: FlowVotes): void {
     // glued flows in a file of flow12 ids vote for the longest glued prefix they start with
-    const glued = [...v.seps].filter(([p, sep]) => sep === '' && /[a-z]/.test(p)).map(([p]) => p).sort((a, b) => b.length - a.length);
-    const gluedTo = (id: string): string | undefined => glued.find((p) => id.startsWith(p) && /^[A-Z0-9]/.test(id.charAt(p.length)));
-    const voteNumbered = (p: string | undefined): void => {
-      v.forms.add('numbered');
-      if (p) {
-        this.tallyOf(v.prefixes, 'numbered').add(p);
-        v.uses.add(p);
+    const glued = [...votes.seps].filter(([prefix, sep]) => sep === '' && /[a-z]/.test(prefix)).map(([prefix]) => prefix).sort((first, second) => second.length - first.length);
+    const gluedTo = (id: string): string | undefined => glued.find((prefix) => id.startsWith(prefix) && /^[A-Z0-9]/.test(id.charAt(prefix.length)));
+    const voteNumbered = (prefix: string | undefined): void => {
+      votes.forms.add('numbered');
+      if (prefix) {
+        this.tallyOf(votes.prefixes, 'numbered').add(prefix);
+        votes.uses.add(prefix);
       }
     };
-    if (v.glued.length && [...v.seps.values()].includes('')) {
-      v.n += v.glued.length;
-      for (const id of v.glued) voteNumbered(gluedTo(id));
+    if (votes.glued.length && [...votes.seps.values()].includes('')) {
+      votes.count += votes.glued.length;
+      for (const id of votes.glued) voteNumbered(gluedTo(id));
     }
-    for (const id of v.gluedNamed) {
-      const p = gluedTo(id);
-      if (p) voteNumbered(p);
+    for (const id of votes.gluedNamed) {
+      const gluedPrefix = gluedTo(id);
+      if (gluedPrefix) voteNumbered(gluedPrefix);
     }
-    for (const { el, id, source, target } of v.joined) {
-      let a: string | undefined;
-      let b: string | undefined;
-      const ends = { source: (): string => (a ??= new ElementLabels(el.get<El>('sourceRef')).label()), target: (): string => (b ??= new ElementLabels(el.get<El>('targetRef')).label()) };
-      const p = glued.find((p) => id.startsWith(p) && this.gluedJoinedOf(id, p, ends));
-      if (p) voteNumbered(p);
-      else this.countFlow(v, el, id, source, target);
+    for (const { el, id, source, target } of votes.joined) {
+      let sourceLabel: string | undefined;
+      let targetLabel: string | undefined;
+      const ends = { source: (): string => (sourceLabel ??= new ElementLabels(el.get<El>('sourceRef')).label()), target: (): string => (targetLabel ??= new ElementLabels(el.get<El>('targetRef')).label()) };
+      const gluedPrefix = glued.find((candidate) => id.startsWith(candidate) && this.gluedJoinedOf(id, candidate, ends));
+      if (gluedPrefix) voteNumbered(gluedPrefix);
+      else this.countFlow(votes, el, id, source, target);
     }
-    if (!v.n) return;
+    if (!votes.count) return;
     // ties never go by document order, except between scopes, which keep the first one counted
-    const form = v.forms.top(MIN_EVIDENCE, (a, b) => FORM_ORDER.indexOf(a) < FORM_ORDER.indexOf(b));
-    const prefix = form ? v.prefixes.get(form)!.top(MIN_EVIDENCE, (a, b) => v.uses.get(a) > v.uses.get(b) || (v.uses.get(a) === v.uses.get(b) && a < b)) : undefined;
-    const scope = form === 'scopedTo' ? v.scopes.top() : undefined;
-    const any = v.any.top(MIN_EVIDENCE, (a, b) => this.alphabetical(a, b));
+    const form = votes.forms.top(MIN_EVIDENCE, (first, second) => FORM_ORDER.indexOf(first) < FORM_ORDER.indexOf(second));
+    const prefix = form ? votes.prefixes.get(form)!.top(MIN_EVIDENCE, (first, second) => votes.uses.get(first) > votes.uses.get(second) || (votes.uses.get(first) === votes.uses.get(second) && first < second)) : undefined;
+    const scope = form === 'scopedTo' ? votes.scopes.top() : undefined;
+    const any = votes.any.top(MIN_EVIDENCE, (first, second) => this.alphabetical(first, second));
     let style: FlowStyle;
-    if (form && prefix && v.forms.get(form) * 2 >= v.n && (form !== 'scopedTo' || scope)) {
-      const sep = v.seps.get(prefix);
+    if (form && prefix && votes.forms.get(form) * 2 >= votes.count && (form !== 'scopedTo' || scope)) {
+      const sep = votes.seps.get(prefix);
       // hashed and numbered flows lend new flows their prefix and separator (flow12 -> flowAToB)
       const named = form === 'hash' || form === 'numbered';
       style = { form: named ? 'named' : form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) };
-      if (form === 'scopedTo') this.scopes.set(type, [...v.scopes.counts.keys()].sort((a, b) => v.scopes.get(b) - v.scopes.get(a)));
+      if (form === 'scopedTo') this.scopes.set(type, [...votes.scopes.counts.keys()].sort((first, second) => votes.scopes.get(second) - votes.scopes.get(first)));
       this.flowVoted.add(type);
     } else {
       style = { form: 'named', prefix: any ?? 'Flow' };
       if (any !== undefined) this.flowVoted.add(type);
     }
     this.flows.set(type, style);
-    this.flowStyles.set(type, this.otherStyles(v, style));
+    this.flowStyles.set(type, this.otherStyles(votes, style));
   }
 
-  private countFlow(v: FlowVotes, el: El, id: string, source: string | undefined, target: string | undefined): void {
-    const p = PREFIXED.exec(id)?.[1];
-    if (p) v.any.add(p);
-    const own = p ?? GLUED.exec(id)?.[1];
-    if (own) v.uses.add(own);
+  private countFlow(votes: FlowVotes, el: El, id: string, source: string | undefined, target: string | undefined): void {
+    const prefix = PREFIXED.exec(id)?.[1];
+    if (prefix) votes.any.add(prefix);
+    const own = prefix ?? GLUED.exec(id)?.[1];
+    if (own) votes.uses.add(own);
     if (!source || !target) return;
     const seen = this.flowForms(id, source, target);
     // a flow the length cap cut votes for its form too, else enough of them flip the file's form
-    if (p) {
+    if (prefix) {
       let req: IdRequest | undefined;
       const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: new ElementLabels(el.get<El>('sourceRef')).label(), targetLabel: new ElementLabels(el.get<El>('targetRef')).label() }));
-      for (const form of ID_FORMS) if (!seen.some((f) => f.form === form) && this.cutOfForm(id, form, p, request)) seen.push({ form, prefix: p });
-      const scope = seen.some((f) => f.form === 'scopedTo') ? undefined : this.legacyScopedCut(id, p, source, target);
-      if (scope) seen.push({ form: 'scopedTo', prefix: p, scope });
+      for (const form of ID_FORMS) if (!seen.some((seenForm) => seenForm.form === form) && this.cutOfForm(id, form, prefix, request)) seen.push({ form, prefix });
+      const scope = seen.some((seenForm) => seenForm.form === 'scopedTo') ? undefined : this.legacyScopedCut(id, prefix, source, target);
+      if (scope) seen.push({ form: 'scopedTo', prefix, scope });
     }
-    for (const f of seen) {
-      v.forms.add(f.form);
-      let t = v.prefixes.get(f.form);
-      if (!t) v.prefixes.set(f.form, (t = new Tally()));
-      t.add(f.prefix);
-      if (f.sep !== undefined && !v.seps.has(f.prefix)) v.seps.set(f.prefix, f.sep);
-      if (f.scope) v.scopes.add(f.scope);
+    for (const seenForm of seen) {
+      votes.forms.add(seenForm.form);
+      let tally = votes.prefixes.get(seenForm.form);
+      if (!tally) votes.prefixes.set(seenForm.form, (tally = new Tally()));
+      tally.add(seenForm.prefix);
+      if (seenForm.sep !== undefined && !votes.seps.has(seenForm.prefix)) votes.seps.set(seenForm.prefix, seenForm.sep);
+      if (seenForm.scope) votes.scopes.add(seenForm.scope);
     }
   }
 
   private flowForms(id: string, source: string, target: string): SeenFlow[] {
-    const m = PREFIXED.exec(id);
-    if (!m) {
-      const g = GLUED.exec(id);
-      return g ? [{ form: 'numbered', prefix: g[1]!, sep: '' }] : [];
+    const match = PREFIXED.exec(id);
+    if (!match) {
+      const gluedMatch = GLUED.exec(id);
+      return gluedMatch ? [{ form: 'numbered', prefix: gluedMatch[1]!, sep: '' }] : [];
     }
-    const prefix = m[1]!;
-    const rest = m[2]!;
+    const prefix = match[1]!;
+    const rest = match[2]!;
     if (HASH.test(rest)) return [{ form: 'hash', prefix }];
     if (/^\d+$/.test(rest)) return [{ form: 'numbered', prefix }];
     const out: SeenFlow[] = [];
@@ -420,30 +420,30 @@ export class LearnedStyle {
   private bodyClass(body: string): BodyClass {
     if (HASH.test(body)) return 'hash';
     if (/^\d+$/.test(body)) return 'numbered';
-    const b = body.replace(/_\d+$/, '');
-    if (/^[A-Z][A-Za-z0-9]*$/.test(b)) return 'pascal';
-    if (/^[a-z][a-z0-9]*$/.test(b)) return 'lower';
-    if (/^[a-z][A-Za-z0-9]*$/.test(b)) return 'camel';
-    if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(b)) return 'snake';
-    if (/^[A-Z][A-Za-z0-9]*(_[A-Za-z0-9]+)+$/.test(b)) return 'pascalSnake';
+    const bareBody = body.replace(/_\d+$/, '');
+    if (/^[A-Z][A-Za-z0-9]*$/.test(bareBody)) return 'pascal';
+    if (/^[a-z][a-z0-9]*$/.test(bareBody)) return 'lower';
+    if (/^[a-z][A-Za-z0-9]*$/.test(bareBody)) return 'camel';
+    if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(bareBody)) return 'snake';
+    if (/^[A-Z][A-Za-z0-9]*(_[A-Za-z0-9]+)+$/.test(bareBody)) return 'pascalSnake';
     return 'other';
   }
 
   /** A literal prefix that abbreviates its own kind (End, Sub) says nothing about other kinds. */
   private isSpecific(prefix: string, typeNames: string[], trigger: string | undefined, family: string): boolean {
-    const p = prefix.toLowerCase();
-    if (p === family.toLowerCase() || GENERIC.has(p)) return false;
-    return typeNames.some((n) => n.toLowerCase().startsWith(p)) || (!!trigger && trigger.toLowerCase().startsWith(p));
+    const lowerPrefix = prefix.toLowerCase();
+    if (lowerPrefix === family.toLowerCase() || GENERIC.has(lowerPrefix)) return false;
+    return typeNames.some((typeName) => typeName.toLowerCase().startsWith(lowerPrefix)) || (!!trigger && trigger.toLowerCase().startsWith(lowerPrefix));
   }
 
-  private alphabetical(a: string, b: string): boolean {
-    return a < b;
+  private alphabetical(first: string, second: string): boolean {
+    return first < second;
   }
 
-  private tallyOf<K>(map: Map<string, Tally<K>>, key: string): Tally<K> {
-    let t = map.get(key);
-    if (!t) map.set(key, (t = new Tally<K>()));
-    return t;
+  private tallyOf<TKey>(map: Map<string, Tally<TKey>>, key: string): Tally<TKey> {
+    let tally = map.get(key);
+    if (!tally) map.set(key, (tally = new Tally<TKey>()));
+    return tally;
   }
 
   private folded(text: string): string {
@@ -451,7 +451,7 @@ export class LearnedStyle {
   }
 
   private sampleOf(el: El, id: string): Sample | undefined {
-    if (IGNORED.some((t) => is(el, t))) return undefined;
+    if (IGNORED.some((type) => is(el, type))) return undefined;
     const name = el.get<string | undefined>('name');
     const named = !!name && nameWords(name).length > 0;
     const spellsName = named && this.folded(id) === this.folded(name!);
@@ -476,26 +476,26 @@ export class LearnedStyle {
       if (id.startsWith(`${prefix}${slug(ends.source())}${join}`)) return true;
       const at = (max: number, legacy = false): string => new IdFitter({ legacy }).pair(prefix, slug(ends.source(), legacy), join, slug(ends.target(), legacy), max);
       const uncut = at(Infinity);
-      if (fits(uncut) || (uncut.length > MAX_ID - 4 && [0, 1, 2, 3, 4].some((k) => fits(at(MAX_ID - k))))) return true;
+      if (fits(uncut) || (uncut.length > MAX_ID - 4 && [0, 1, 2, 3, 4].some((trim) => fits(at(MAX_ID - trim))))) return true;
       const legacy = at(LEGACY_BASE, true);
       if (fits(legacy) || fits(cutAt(legacy, MAX_ID - 4, true))) return true;
     }
     return false;
   }
 
-  private otherStyles(v: FlowVotes, style: FlowStyle): FlowStyle[] {
+  private otherStyles(votes: FlowVotes, style: FlowStyle): FlowStyle[] {
     const out = new Map<string, FlowStyle>();
-    const key = (s: FlowStyle): string => (s.form === 'named' ? `named|${new IdFitter({ legacy: true }).namedHead(s.prefix, s.sep).head}` : `${s.form}|${s.prefix}|${s.scope ?? ''}`);
-    const add = (s: FlowStyle): void => {
-      if (!out.has(key(s))) out.set(key(s), s);
+    const key = (flowStyle: FlowStyle): string => (flowStyle.form === 'named' ? `named|${new IdFitter({ legacy: true }).namedHead(flowStyle.prefix, flowStyle.sep).head}` : `${flowStyle.form}|${flowStyle.prefix}|${flowStyle.scope ?? ''}`);
+    const add = (flowStyle: FlowStyle): void => {
+      if (!out.has(key(flowStyle))) out.set(key(flowStyle), flowStyle);
     };
     add(style);
-    for (const prefix of v.any.counts.keys()) add({ form: 'named', prefix });
-    for (const [prefix, sep] of v.seps) add({ form: 'named', prefix, sep });
-    for (const [form, t] of v.prefixes) {
+    for (const prefix of votes.any.counts.keys()) add({ form: 'named', prefix });
+    for (const [prefix, sep] of votes.seps) add({ form: 'named', prefix, sep });
+    for (const [form, tally] of votes.prefixes) {
       if (form === 'hash' || form === 'numbered' || form === 'named') continue;
-      for (const prefix of t.counts.keys()) {
-        if (form === 'scopedTo') for (const scope of v.scopes.counts.keys()) add({ form, prefix, scope });
+      for (const prefix of tally.counts.keys()) {
+        if (form === 'scopedTo') for (const scope of votes.scopes.counts.keys()) add({ form, prefix, scope });
         else add({ form, prefix });
       }
     }
@@ -511,8 +511,8 @@ export class LearnedStyle {
     if (id.length > MAX_ID || !rest.includes(join) || (form === 'stemTo' && /^[A-Z]/.test(rest) && !rest.startsWith(join))) return false;
     const req = request();
     if (form === 'stemTo' || form === 'stemSnake') {
-      const { a, b } = new IdFitter().stemEnds(form, req);
-      if (!beginAlike(a, b) && rest.charAt(0) !== a.charAt(0) && !rest.startsWith(join)) return false;
+      const { sourceEnd, targetEnd } = new IdFitter().stemEnds(form, req);
+      if (!beginAlike(sourceEnd, targetEnd) && rest.charAt(0) !== sourceEnd.charAt(0) && !rest.startsWith(join)) return false;
     }
     const fitter = new IdFitter();
     if (fitter.idForm(form, `${prefix}_`, req, Infinity).length <= MAX_ID - 4) return false;
@@ -524,25 +524,25 @@ export class LearnedStyle {
     // a suffix of up to 4 characters cut the base; a glued one may be any of the last digits
     const digits = (sep === '' ? /\d+$/ : /_\d+$/).exec(id)?.[0] ?? '';
     const ks: number[] = [];
-    for (let k = sep === '' ? 1 : digits.length; k <= Math.min(digits.length, 4); k++) ks.push(k);
+    for (let digitCount = sep === '' ? 1 : digits.length; digitCount <= Math.min(digits.length, 4); digitCount++) ks.push(digitCount);
     if (sep === '' && digits.length <= 4 && id.endsWith(`${SUFFIX_WORD}${digits}`)) ks.push(SUFFIX_WORD.length + digits.length);
-    for (const k of ks) {
-      const suffix = id.slice(id.length - k);
+    for (const digitCount of ks) {
+      const suffix = id.slice(id.length - digitCount);
       if (/^_?0/.test(suffix.slice(suffix.startsWith(SUFFIX_WORD) ? SUFFIX_WORD.length : 0))) continue;
-      if (id.slice(0, -k) === fitter.idForm(form, `${prefix}_`, req, MAX_ID - k)) return true;
+      if (id.slice(0, -digitCount) === fitter.idForm(form, `${prefix}_`, req, MAX_ID - digitCount)) return true;
     }
     return false;
   }
 
   /** SCOPED_TO does not read a flow 0.6 cut to an empty target word, so this does. */
   private legacyScopedCut(id: string, prefix: string, source: string, target: string): string | undefined {
-    const m = SCOPED_CUT.exec(id.slice(prefix.length + 1));
-    if (!m) return undefined;
-    const scope = m[1]!;
+    const match = SCOPED_CUT.exec(id.slice(prefix.length + 1));
+    if (!match) return undefined;
+    const scope = match[1]!;
     const fitter = new IdFitter({ legacy: true });
-    const a = fitter.endWord(source, scope, 'Start');
-    if (!m[2]!.startsWith(a)) return undefined;
-    const legacy = cutAt(`${prefix}_${scope}_${a}To${fitter.endWord(target, scope, 'End')}`, LEGACY_BASE, true);
+    const sourceWord = fitter.endWord(source, scope, 'Start');
+    if (!match[2]!.startsWith(sourceWord)) return undefined;
+    const legacy = cutAt(`${prefix}_${scope}_${sourceWord}To${fitter.endWord(target, scope, 'End')}`, LEGACY_BASE, true);
     const suffixed = (base: string): boolean => id.startsWith(base) && isSuffix(base, id.slice(base.length), '');
     return id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true)) ? scope : undefined;
   }

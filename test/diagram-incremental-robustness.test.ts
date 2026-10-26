@@ -23,29 +23,29 @@ function fixture(name: string): string {
   return readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');
 }
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ r: MutationResult; after: Doc }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
-  const after = await Doc.fromXml(r.xml);
-  return { r, after };
+async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+  const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
+  const after = await Doc.fromXml(result.xml);
+  return { result, after };
 }
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) if (!out.has(s.id)) out.set(s.id, s);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) if (!out.has(shape.id)) out.set(shape.id, shape);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) if (!out.has(e.id)) out.set(e.id, e);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const edge of plane.edges.values()) if (!out.has(edge.id)) out.set(edge.id, edge);
   return out;
 }
 
 /** BPMNShapes / BPMNEdges per `plane|element` (more than one: a duplicate). */
 function diCounts(doc: Doc): Map<string, number> {
   const out = new Map<string, number>();
-  for (const d of doc.definitions.get<El[]>('diagrams')) {
-    const plane = d.get<El>('plane');
+  for (const diagram of doc.definitions.get<El[]>('diagrams')) {
+    const plane = diagram.get<El>('plane');
     for (const pe of plane.get<El[]>('planeElement')) {
       const key = `${plane.get<string>('id')}|${pe.get<El | undefined>('bpmnElement')?.get<string>('id')}`;
       out.set(key, (out.get(key) ?? 0) + 1);
@@ -55,42 +55,42 @@ function diCounts(doc: Doc): Map<string, number> {
 }
 
 function duplicates(doc: Doc): string[] {
-  return [...diCounts(doc)].filter(([, n]) => n > 1).map(([k]) => k);
+  return [...diCounts(doc)].filter(([, count]) => count > 1).map(([diKey]) => diKey);
 }
 
-const right = (s: DShape): number => s.bounds.x + s.bounds.width;
-const bottom = (s: DShape): number => s.bounds.y + s.bounds.height;
-const cx = (s: DShape): number => s.bounds.x + s.bounds.width / 2;
-const cy = (s: DShape): number => s.bounds.y + s.bounds.height / 2;
-const inside = (s: DShape, f: DShape, tol = 0): boolean => s.bounds.x >= f.bounds.x - tol && s.bounds.y >= f.bounds.y - tol && right(s) <= right(f) + tol && bottom(s) <= bottom(f) + tol;
+const right = (shape: DShape): number => shape.bounds.x + shape.bounds.width;
+const bottom = (shape: DShape): number => shape.bounds.y + shape.bounds.height;
+const cx = (shape: DShape): number => shape.bounds.x + shape.bounds.width / 2;
+const cy = (shape: DShape): number => shape.bounds.y + shape.bounds.height / 2;
+const inside = (inner: DShape, frame: DShape, tol = 0): boolean => inner.bounds.x >= frame.bounds.x - tol && inner.bounds.y >= frame.bounds.y - tol && right(inner) <= right(frame) + tol && bottom(inner) <= bottom(frame) + tol;
 
 /** The event's centre lies on the host's border (a few px tolerance). */
 function attached(event: DShape, host: DShape, tol = 3): boolean {
-  const x = cx(event);
-  const y = cy(event);
-  const within = x >= host.bounds.x - tol && x <= right(host) + tol && y >= host.bounds.y - tol && y <= bottom(host) + tol;
-  const onBorder = Math.min(Math.abs(x - host.bounds.x), Math.abs(x - right(host)), Math.abs(y - host.bounds.y), Math.abs(y - bottom(host))) <= tol;
+  const centerX = cx(event);
+  const centerY = cy(event);
+  const within = centerX >= host.bounds.x - tol && centerX <= right(host) + tol && centerY >= host.bounds.y - tol && centerY <= bottom(host) + tol;
+  const onBorder = Math.min(Math.abs(centerX - host.bounds.x), Math.abs(centerX - right(host)), Math.abs(centerY - host.bounds.y), Math.abs(centerY - bottom(host))) <= tol;
   return within && onBorder;
 }
 
 /** Distance between a label and its shape (0 when they touch). */
-function labelGap(s: DShape): number {
-  const l = s.label!;
-  const dx = Math.max(l.x - right(s), s.bounds.x - (l.x + l.width), 0);
-  const dy = Math.max(l.y - bottom(s), s.bounds.y - (l.y + l.height), 0);
+function labelGap(shape: DShape): number {
+  const label = shape.label!;
+  const dx = Math.max(label.x - right(shape), shape.bounds.x - (label.x + label.width), 0);
+  const dy = Math.max(label.y - bottom(shape), shape.bounds.y - (label.y + label.height), 0);
   return Math.hypot(dx, dy);
 }
 
 function boundsOf(doc: Doc): Map<string, string> {
-  return new Map([...shapes(doc)].map(([id, s]) => [id, JSON.stringify(s.bounds)]));
+  return new Map([...shapes(doc)].map(([id, shape]) => [id, JSON.stringify(shape.bounds)]));
 }
 
 /* ------------------------------------------------------------------ */
 
 describe('boundary events of an expanded sub-process', () => {
   it('a new boundary event sits on the sub-process border, the frames do not explode', async () => {
-    const { r, after } = await run(fixture('orders.bpmn'), [{ op: 'add', kind: 'boundaryEvent:error', id: 'B_Sub', on: 'Sub_1' }]);
-    expect(r.layout.mode).toBe('incremental');
+    const { result, after } = await run(fixture('orders.bpmn'), [{ op: 'add', kind: 'boundaryEvent:error', id: 'B_Sub', on: 'Sub_1' }]);
+    expect(result.layout.mode).toBe('incremental');
     const now = shapes(after);
     const sub = now.get('Sub_1')!;
     expect(attached(now.get('B_Sub')!, sub)).toBe(true);
@@ -120,13 +120,13 @@ describe('boundary events of an expanded sub-process', () => {
     const now = shapes(after);
     const sp = now.get('SP')!;
     expect(sp.bounds.width).toBe(100);
-    const events = [...now.values()].filter((s) => s.hostId === 'SP');
+    const events = [...now.values()].filter((shape) => shape.hostId === 'SP');
     expect(events.length).toBe(3);
-    for (const e of events) expect(attached(e, sp)).toBe(true);
-    for (const e of events) if (e.label) expect(labelGap(e)).toBeLessThan(40);
+    for (const event of events) expect(attached(event, sp)).toBe(true);
+    for (const event of events) if (event.label) expect(labelGap(event)).toBeLessThan(40);
     // the ones still on the bottom border keep their left-to-right order
-    const bottomRow = events.filter((e) => Math.abs(cy(e) - bottom(sp)) <= 2).sort((a, b) => cx(a) - cx(b)).map((e) => e.id);
-    const oldOrder = [...before.values()].filter((s) => s.hostId === 'SP').sort((a, b) => cx(a) - cx(b)).map((s) => s.id).filter((id) => bottomRow.includes(id));
+    const bottomRow = events.filter((event) => Math.abs(cy(event) - bottom(sp)) <= 2).sort((first, second) => cx(first) - cx(second)).map((event) => event.id);
+    const oldOrder = [...before.values()].filter((shape) => shape.hostId === 'SP').sort((first, second) => cx(first) - cx(second)).map((shape) => shape.id).filter((id) => bottomRow.includes(id));
     expect(bottomRow).toEqual(oldOrder);
   });
 
@@ -141,8 +141,8 @@ describe('boundary events of an expanded sub-process', () => {
 
 describe('relocation keeps one DI per element', () => {
   it('moving a host with a boundary event brings the event along, no second shape', async () => {
-    const { r, after } = await run(fixture('boundary.bpmn'), [{ op: 'move', ids: ['A'], after: 'C' }]);
-    expect(r.layout.mode).toBe('incremental');
+    const { result, after } = await run(fixture('boundary.bpmn'), [{ op: 'move', ids: ['A'], after: 'C' }]);
+    expect(result.layout.mode).toBe('incremental');
     expect(duplicates(after)).toEqual([]);
     const now = shapes(after);
     expect(attached(now.get('B')!, now.get('A')!)).toBe(true);
@@ -160,11 +160,11 @@ describe('relocation keeps one DI per element', () => {
   });
 
   it('re-attaching a boundary event (move --on) puts its shape on the new host', async () => {
-    const { r, after } = await run(fixture('orders-boundaries.bpmn'), [{ op: 'move', ids: ['Timer_1'], on: 'Task_Notify' }]);
+    const { result, after } = await run(fixture('orders-boundaries.bpmn'), [{ op: 'move', ids: ['Timer_1'], on: 'Task_Notify' }]);
     const now = shapes(after);
     expect(attached(now.get('Timer_1')!, now.get('Task_Notify')!)).toBe(true);
     expect(now.get('Timer_1')!.di!.get('id')).toBe('Timer_1_di');
-    expect(r.layout.rerouted).toContain('F9');
+    expect(result.layout.rerouted).toContain('F9');
     expect(duplicates(after)).toEqual([]);
   });
 });
@@ -172,16 +172,16 @@ describe('relocation keeps one DI per element', () => {
 describe('renaming ids (set id=)', () => {
   it('renaming the process moves nothing', async () => {
     const xml = fixture('sub2.bpmn');
-    const { r, after } = await run(xml, [{ op: 'set', id: 'P1', values: { id: 'Renamed' } }]);
-    expect(r.layout).toMatchObject({ mode: 'incremental', placed: [], moved: [], rerouted: [] });
+    const { result, after } = await run(xml, [{ op: 'set', id: 'P1', values: { id: 'Renamed' } }]);
+    expect(result.layout).toMatchObject({ mode: 'incremental', placed: [], moved: [], rerouted: [] });
     expect(boundsOf(after)).toEqual(boundsOf(await Doc.fromXml(xml)));
     expect(duplicates(after)).toEqual([]);
   });
 
   it('renaming a sub-process keeps its content where it is', async () => {
     const xml = fixture('sub2.bpmn');
-    const { r, after } = await run(xml, [{ op: 'set', id: 'SP', values: { id: 'X' } }]);
-    expect(r.layout.moved).toEqual([]);
+    const { result, after } = await run(xml, [{ op: 'set', id: 'SP', values: { id: 'X' } }]);
+    expect(result.layout.moved).toEqual([]);
     const old = boundsOf(await Doc.fromXml(xml));
     const now = boundsOf(after);
     for (const id of ['SS', 'ST', 'SE', 'BE', 'T']) expect(now.get(id)).toBe(old.get(id));
@@ -190,8 +190,8 @@ describe('renaming ids (set id=)', () => {
 
   it('renaming a connected node keeps the hand-drawn route of its flows', async () => {
     const xml = fixture('orders-detour.bpmn');
-    const { r, after } = await run(xml, [{ op: 'set', id: 'Task_Esc', values: { id: 'Task_Escalate' } }]);
-    expect(r.layout.rerouted).toEqual([]);
+    const { result, after } = await run(xml, [{ op: 'set', id: 'Task_Esc', values: { id: 'Task_Escalate' } }]);
+    expect(result.layout.rerouted).toEqual([]);
     expect(edges(after).get('F9')!.points).toEqual(edges(await Doc.fromXml(xml)).get('F9')!.points);
   });
 });
@@ -212,11 +212,11 @@ describe('closing a strip inside a sub-process', () => {
 
   it('the same on a hand drawing with an end event right of the sub-process in another lane', async () => {
     const xml = fixture('orders.bpmn').replace(/(<bpmndi:BPMNShape id="End_1_di"[^>]*>\s*<dc:Bounds x=")\d+/, '$11312');
-    const { r, after } = await run(xml, [{ op: 'remove', ids: ['S_Task'] }]);
+    const { result, after } = await run(xml, [{ op: 'remove', ids: ['S_Task'] }]);
     const now = shapes(after);
     expect(inside(now.get('End_1')!, now.get('Pool_A')!)).toBe(true);
     expect(inside(now.get('End_1')!, now.get('Lane_1')!)).toBe(true);
-    expect((r.layout.metrics?.added ?? []).map((p) => p.kind)).not.toContain('outsidePool');
+    expect((result.layout.metrics?.added ?? []).map((problem) => problem.kind)).not.toContain('outsidePool');
   });
 });
 
@@ -224,7 +224,7 @@ describe('several diagrams, partial and unusual DI', () => {
   it('a second view of the same process keeps its own connections', async () => {
     const { after } = await run(fixture('twoviews.bpmn'), [{ op: 'set', id: 'C', values: { name: 'Renamed' } }]);
     const planes = new DiagramReader(after.definitions).planes();
-    expect(planes.map((p) => [p.shapes.size, p.edges.size])).toEqual([
+    expect(planes.map((plane) => [plane.shapes.size, plane.edges.size])).toEqual([
       [7, 5],
       [7, 5],
     ]);
@@ -233,36 +233,36 @@ describe('several diagrams, partial and unusual DI', () => {
 
   it('a second view loses the edges of the flows whose ends changed and keeps the rest; with --no-layout both views do', async () => {
     const xml = fixture('twoviews.bpmn');
-    const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((p) => [...p.edges.keys()].sort());
+    const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((plane) => [...plane.edges.keys()].sort());
     // C after D: the bridge F2 (A -> D) and D -> C (F4) get other ends, C -> D (F3) goes, C -> E is new
-    const { r, after } = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: 'incremental' });
+    const { result, after } = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: 'incremental' });
     expect(viewEdges(after)).toEqual([
       ['F1', 'F2', 'F4', 'F5', 'F_TaskCToE'],
       ['F1', 'F5'],
     ]);
-    expect(r.layout.notes).toEqual(['edge(s) of F2, F4 removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out']);
-    expect(new DiagramReader(after.definitions).planes().flatMap((p) => [...p.edges.values()].filter((e) => new Drawing(p).detachedEnds(e).length))).toEqual([]);
+    expect(result.layout.notes).toEqual(['edge(s) of F2, F4 removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out']);
+    expect(new DiagramReader(after.definitions).planes().flatMap((plane) => [...plane.edges.values()].filter((edge) => new Drawing(plane).detachedEnds(edge).length))).toEqual([]);
     expect(duplicates(after)).toEqual([]);
     // a rename of an end is no end change: both views keep every edge
     const renamed = await run(xml, [{ op: 'set', id: 'C', values: { id: 'Activity_C' } }], { layout: 'incremental' });
-    expect(viewEdges(renamed.after).map((v) => v.length)).toEqual([5, 5]);
+    expect(viewEdges(renamed.after).map((planeEdges) => planeEdges.length)).toEqual([5, 5]);
     const skipped = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: false });
     expect(viewEdges(skipped.after)).toEqual([
       ['F1', 'F5'],
       ['F1', 'F5'],
     ]);
-    expect(skipped.r.changes.notes).toContain('removed 6 stale diagram element(s), among them the edge(s) of F2, F4 (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)');
+    expect(skipped.result.changes.notes).toContain('removed 6 stale diagram element(s), among them the edge(s) of F2, F4 (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)');
   });
 
   it('a shape without bounds gets bounds on its own DI (colour kept), no second shape', async () => {
     for (const name of ['nobounds.bpmn', 'nan.bpmn']) {
-      const { r, after } = await run(fixture(name), [{ op: 'set', id: 'E2', values: { name: 'x' } }]);
-      expect(r.layout.placed).toContain('C');
+      const { result, after } = await run(fixture(name), [{ op: 'set', id: 'E2', values: { name: 'x' } }]);
+      expect(result.layout.placed).toContain('C');
       expect(duplicates(after)).toEqual([]);
-      const c = shapes(after).get('C')!;
-      expect(c.di!.get('id')).toBe('C_di');
-      expect(Number.isFinite(c.bounds.x)).toBe(true);
-      if (name === 'nobounds.bpmn') expect(c.di!.get('bioc:fill')).toBe('#ff0000');
+      const shapeC = shapes(after).get('C')!;
+      expect(shapeC.di!.get('id')).toBe('C_di');
+      expect(Number.isFinite(shapeC.bounds.x)).toBe(true);
+      if (name === 'nobounds.bpmn') expect(shapeC.di!.get('bioc:fill')).toBe('#ff0000');
     }
   });
 
@@ -275,8 +275,8 @@ describe('several diagrams, partial and unusual DI', () => {
 
   it('a plane without bpmnElement shows the first process (like bpmn-js): kept, not redrawn', async () => {
     const xml = fixture('noroot.bpmn');
-    const { r, after } = await run(xml, [{ op: 'add', kind: 'task', name: 'N', id: 'N', after: 'A' }]);
-    expect(r.layout.mode).toBe('incremental');
+    const { result, after } = await run(xml, [{ op: 'add', kind: 'task', name: 'N', id: 'N', after: 'A' }]);
+    expect(result.layout.mode).toBe('incremental');
     const now = shapes(after);
     expect(now.get('S')!.di!.get('id')).toBe('S_di');
     expect(now.get('S')!.bounds).toEqual(shapes(await Doc.fromXml(xml.replace('<bpmndi:BPMNPlane id="PL1">', '<bpmndi:BPMNPlane id="PL1" bpmnElement="P1">'))).get('S')!.bounds);
@@ -287,12 +287,12 @@ describe('several diagrams, partial and unusual DI', () => {
     const xml = fixture('vertical.bpmn');
     const ops: Op[] = [{ op: 'move', ids: ['A'], lane: 'L2' }];
     const auto = await run(xml, ops);
-    expect(auto.r.layout.mode).toBe('full');
-    expect(auto.r.layout.warnings.map((w) => w.code)).toContain('INCREMENTAL_FAILED');
+    expect(auto.result.layout.mode).toBe('full');
+    expect(auto.result.layout.warnings.map((warning) => warning.code)).toContain('INCREMENTAL_FAILED');
     await expect(run(xml, ops, { layout: 'incremental' })).rejects.toMatchObject({ code: 'E_LAYOUT_INCREMENTAL' });
     // nothing to place or move: the drawing is kept
     const rename = await run(xml, [{ op: 'set', id: 'A', values: { name: 'Renamed' } }]);
-    expect(rename.r.layout.mode).toBe('incremental');
+    expect(rename.result.layout.mode).toBe('incremental');
   });
 
   it('a line that does not reach its end on a plane with vertical pools stays as drawn: a rename keeps the drawing, the metric still reports it', async () => {
@@ -300,29 +300,29 @@ describe('several diagrams, partial and unusual DI', () => {
     const xml = fixture('vertical.bpmn').replace('<di:waypoint x="218" y="550"/>', '<di:waypoint x="160" y="550"/>');
     const ops: Op[] = [{ op: 'set', id: 'A', values: { name: 'Task A2' } }];
     for (const layout of ['auto', 'incremental'] as const) {
-      const { r, after } = await run(xml, ops, { layout });
-      expect(r.layout.mode, layout).toBe('incremental');
-      expect(r.layout.rerouted ?? [], layout).toEqual([]);
-      expect(r.layout.notes ?? [], layout).toEqual([]);
+      const { result, after } = await run(xml, ops, { layout });
+      expect(result.layout.mode, layout).toBe('incremental');
+      expect(result.layout.rerouted ?? [], layout).toEqual([]);
+      expect(result.layout.notes ?? [], layout).toEqual([]);
       expect(edges(after).get('F3')!.points.at(-1), layout).toEqual({ x: 160, y: 550 });
-      expect(LayoutAnalysis.of(after.definitions).problems.filter((p) => p.kind === 'detachedEdge').map((p) => p.ids)).toEqual([['F3', 'E']]);
+      expect(LayoutAnalysis.of(after.definitions).problems.filter((problem) => problem.kind === 'detachedEdge').map((problem) => problem.ids)).toEqual([['F3', 'E']]);
     }
   });
 
   it('a retype and a rename of the same node in one batch are no end change: both views keep its edges, with and without layout', async () => {
     const xml = fixture('twoviews.bpmn');
-    const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((p) => [...p.edges.keys()].sort());
+    const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((plane) => [...plane.edges.keys()].sort());
     const ops: Op[] = [
       { op: 'retype', id: 'C', kind: 'userTask' },
       { op: 'set', id: 'C', values: { id: 'Activity_C' } },
     ];
     for (const layout of ['incremental', false] as const) {
-      const { r, after } = await run(xml, ops, { layout });
+      const { result, after } = await run(xml, ops, { layout });
       expect(viewEdges(after), String(layout)).toEqual([
         ['F1', 'F2', 'F3', 'F4', 'F5'],
         ['F1', 'F2', 'F3', 'F4', 'F5'],
       ]);
-      expect([...(r.layout.notes ?? []), ...r.changes.notes].filter((n) => n.includes('ends changed')), String(layout)).toEqual([]);
+      expect([...(result.layout.notes ?? []), ...result.changes.notes].filter((note) => note.includes('ends changed')), String(layout)).toEqual([]);
     }
   });
 });
@@ -337,13 +337,13 @@ describe('frames and obstacles', () => {
   it('a new event sub-process at the bottom of a pool keeps its content inside while the pool grows', async () => {
     // a taller pool: the new sub-process straddles its bottom border, its start event lies below the line the pool grows at
     const xml = fixture('pool.bpmn').replace('<dc:Bounds x="100" y="80" width="700" height="160"/>', '<dc:Bounds x="100" y="80" width="700" height="220"/>');
-    const { r, after } = await run(xml, [{ op: 'add', kind: 'eventSubProcess:message', name: 'On msg', id: 'N', in: 'P1', message: 'Mx' }]);
+    const { result, after } = await run(xml, [{ op: 'add', kind: 'eventSubProcess:message', name: 'On msg', id: 'N', in: 'P1', message: 'Mx' }]);
     const now = shapes(after);
-    const start = [...now.values()].find((s) => s.parentId === 'N')!;
+    const start = [...now.values()].find((shape) => shape.parentId === 'N')!;
     expect(start).toBeDefined();
     expect(inside(start, now.get('N')!)).toBe(true);
     expect(inside(now.get('N')!, now.get('Pool')!)).toBe(true);
-    expect((r.layout.metrics?.added ?? []).map((p) => p.kind)).toEqual([]);
+    expect((result.layout.metrics?.added ?? []).map((problem) => problem.kind)).toEqual([]);
   });
 
   it('the strip a node leaves when it moves into a sub-process closes in the frame it left', async () => {
@@ -375,14 +375,14 @@ describe('frames and obstacles', () => {
 
   it('a new task in a lane avoids an annotation drawn in that lane', async () => {
     const xml = readFileSync(join(HERE, '..', 'tools', 'scenarios', 'subproc__s15-lanes-sub-eventsub.bpmn'), 'utf8');
-    const { r, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'Z_T', name: 'Z free', in: 'Process_Main', lane: 'Lane_WH' }]);
-    expect(r.layout.notes ?? []).not.toContainEqual(expect.stringMatching(/overlap left/));
+    const { result, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'Z_T', name: 'Z free', in: 'Process_Main', lane: 'Lane_WH' }]);
+    expect(result.layout.notes ?? []).not.toContainEqual(expect.stringMatching(/overlap left/));
     const now = shapes(after);
-    const t = now.get('Z_T')!;
-    for (const s of now.values()) {
-      if (s.id === 'Z_T' || s.container || s.kind === 'group' || s.kind === 'lane' || s.kind === 'participant') continue;
-      const apart = t.bounds.x >= right(s) || s.bounds.x >= right(t) || t.bounds.y >= bottom(s) || s.bounds.y >= bottom(t);
-      expect(apart, `Z_T overlaps ${s.id}`).toBe(true);
+    const shapeT = now.get('Z_T')!;
+    for (const shape of now.values()) {
+      if (shape.id === 'Z_T' || shape.container || shape.kind === 'group' || shape.kind === 'lane' || shape.kind === 'participant') continue;
+      const apart = shapeT.bounds.x >= right(shape) || shape.bounds.x >= right(shapeT) || shapeT.bounds.y >= bottom(shape) || shape.bounds.y >= bottom(shapeT);
+      expect(apart, `Z_T overlaps ${shape.id}`).toBe(true);
     }
   });
 
@@ -401,21 +401,21 @@ describe('frames and obstacles', () => {
 
 describe('connections', () => {
   it('a kept message flow that a grown sub-process now covers is rerouted', async () => {
-    const { r } = await run(fixture('orders.bpmn'), [{ op: 'add', kind: 'task', id: 'T_New', name: 'In sub', after: 'S_Task' }]);
-    expect(r.layout.rerouted).toContain('Msg_1');
-    expect((r.layout.metrics?.added ?? []).map((p) => p.kind)).toEqual([]);
+    const { result } = await run(fixture('orders.bpmn'), [{ op: 'add', kind: 'task', id: 'T_New', name: 'In sub', after: 'S_Task' }]);
+    expect(result.layout.rerouted).toContain('Msg_1');
+    expect((result.layout.metrics?.added ?? []).map((problem) => problem.kind)).toEqual([]);
   });
 
   it('a new boundary event does not sit on the dock of an existing connection', async () => {
     const xml = fixture('orders.bpmn');
-    const { r, after } = await run(xml, [
+    const { result, after } = await run(xml, [
       { op: 'add', kind: 'boundaryEvent:timer', id: 'B_New', name: 'late', on: 'Task_Notify', timer: 'PT1H' },
       { op: 'add', kind: 'endEvent', id: 'E_New', name: 'Late end', after: 'B_New' },
     ]);
     const dock = edges(await Doc.fromXml(xml)).get('Msg_1')!.points[0]!;
-    const b = shapes(after).get('B_New')!;
-    expect(dock.x < b.bounds.x - 4 || dock.x > right(b) + 4).toBe(true);
-    expect(r.layout.rerouted).not.toContain('Msg_1');
+    const boundary = shapes(after).get('B_New')!;
+    expect(dock.x < boundary.bounds.x - 4 || dock.x > right(boundary) + 4).toBe(true);
+    expect(result.layout.rerouted).not.toContain('Msg_1');
   });
 });
 
@@ -434,54 +434,54 @@ const BASE: Op[] = [
 ];
 
 async function engineXml(ops: Op[]): Promise<string> {
-  const r = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
-  expect(r.layout.mode).toBe('full');
-  return r.xml;
+  const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
+  expect(result.layout.mode).toBe('full');
+  return result.xml;
 }
 
 describe('engine ownership (auto mode)', () => {
   it('an untouched engine drawing is redrawn in full', async () => {
-    const { r } = await run(await engineXml(BASE), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'B' }]);
-    expect(r.layout).toMatchObject({ mode: 'full', reason: 'engine-owned diagram: redrawn' });
+    const { result } = await run(await engineXml(BASE), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'B' }]);
+    expect(result.layout).toMatchObject({ mode: 'full', reason: 'engine-owned diagram: redrawn' });
   });
 
   it('a moved annotation, a hand bend or a dragged label makes it hand-made', async () => {
     const xml = await engineXml([...BASE, { op: 'add', kind: 'textAnnotation', id: 'Note', text: 'Remember', to: 'A' }]);
     const moveNote = async (): Promise<string> => {
       const doc = await Doc.fromXml(xml);
-      for (const d of doc.definitions.get<El[]>('diagrams')) {
-        for (const pe of d.get<El>('plane').get<El[]>('planeElement')) {
+      for (const diagram of doc.definitions.get<El[]>('diagrams')) {
+        for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
           if (pe.get<El>('bpmnElement').get('id') === 'Note') pe.get<El>('bounds').set('x', pe.get<El>('bounds').get<number>('x') + 200);
         }
       }
       return doc.toXml();
     };
     const add: Op[] = [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'B' }];
-    expect((await run(await moveNote(), add)).r.layout.mode).toBe('incremental');
+    expect((await run(await moveNote(), add)).result.layout.mode).toBe('incremental');
     // a format op that only reroutes or moves a label: the next edit keeps it
     const routed = await run(xml, [{ op: 'route', id: (await flowId(xml, 'G', 'C'))!, exit: 'bottom', entry: 'top' } as Op]);
-    const next = await run(routed.r.xml, add);
-    expect(next.r.layout.mode).toBe('incremental');
+    const next = await run(routed.result.xml, add);
+    expect(next.result.layout.mode).toBe('incremental');
     const flow = (await flowId(xml, 'G', 'C'))!;
     expect(edges(next.after).get(flow)!.points).toEqual(edges(routed.after).get(flow)!.points);
     const labelled = await run(xml, [{ op: 'label', id: 'S', side: 'above' } as Op]);
-    expect((await run(labelled.r.xml, add)).r.layout.mode).toBe('incremental');
+    expect((await run(labelled.result.xml, add)).result.layout.mode).toBe('incremental');
   });
 
   it('a node added with --no-layout does not make an engine drawing hand-made', async () => {
     const xml = await engineXml(BASE);
     const stale = await run(xml, [{ op: 'add', kind: 'task', id: 'Off', name: 'Offline step', after: 'A' }], { layout: false });
-    expect(stale.r.layout.status).toBe('skipped');
-    const { r } = await run(stale.r.xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Next', after: 'B' }]);
-    expect(r.layout.mode).toBe('full');
-    expect(r.layout.reason).toMatch(/engine-owned diagram \(1 flow node\(s\) had no shape/);
+    expect(stale.result.layout.status).toBe('skipped');
+    const { result } = await run(stale.result.xml, [{ op: 'add', kind: 'task', id: 'N', name: 'Next', after: 'B' }]);
+    expect(result.layout.mode).toBe('full');
+    expect(result.layout.reason).toMatch(/engine-owned diagram \(1 flow node\(s\) had no shape/);
   });
 
   it('a hand drawing with a node added by --no-layout says why it is kept', async () => {
     const stale = await run(fixture('boundary.bpmn'), [{ op: 'add', kind: 'task', id: 'Off', name: 'Off', after: 'A' }], { layout: false });
-    const { r, after } = await run(stale.r.xml, [{ op: 'add', kind: 'task', id: 'On', name: 'On', after: 'C' }]);
-    expect(r.layout.mode).toBe('incremental');
-    expect(r.layout.reason).toMatch(/1 flow node\(s\) had no shape/);
+    const { result, after } = await run(stale.result.xml, [{ op: 'add', kind: 'task', id: 'On', name: 'On', after: 'C' }]);
+    expect(result.layout.mode).toBe('incremental');
+    expect(result.layout.reason).toMatch(/1 flow node\(s\) had no shape/);
     expect(shapes(after).has('Off')).toBe(true);
   });
 });

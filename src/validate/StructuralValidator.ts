@@ -60,17 +60,17 @@ export class StructuralValidator {
   withProfile(result: ValidationResult, report: ProfileReport, shown: ProfileFinding[], delta?: { added: ProfileFinding[]; resolved: ProfileFinding[] }): ValidationResult {
     const invalidHost = new Set(
       [...result.errors, ...result.warnings]
-        .filter((e) => e.code === 'E_INVALID_HOST' || (e.code === 'W_PREEXISTING_ERROR' && e.message.startsWith('E_INVALID_HOST')))
-        .map((e) => e.element),
+        .filter((error) => error.code === 'E_INVALID_HOST' || (error.code === 'W_PREEXISTING_ERROR' && error.message.startsWith('E_INVALID_HOST')))
+        .map((error) => error.element),
     );
-    const repeated = (f: ProfileFinding): boolean => (f.code === 'W_C7_DEPLOY_BOUNDARY_HOST' || f.code === 'W_C8_DEPLOY_BOUNDARY_HOST') && invalidHost.has(f.element);
+    const repeated = (finding: ProfileFinding): boolean => (finding.code === 'W_C7_DEPLOY_BOUNDARY_HOST' || finding.code === 'W_C8_DEPLOY_BOUNDARY_HOST') && invalidHost.has(finding.element);
     if (invalidHost.size) {
-      shown = shown.filter((f) => !repeated(f));
-      report = { ...report, findings: report.findings.filter((f) => !repeated(f)) };
-      if (delta) delta = { added: delta.added.filter((f) => !repeated(f)), resolved: delta.resolved };
+      shown = shown.filter((finding) => !repeated(finding));
+      report = { ...report, findings: report.findings.filter((finding) => !repeated(finding)) };
+      if (delta) delta = { added: delta.added.filter((finding) => !repeated(finding)), resolved: delta.resolved };
     }
     const covered = lintCoveredBy(shown);
-    const warnings = result.warnings.filter((w) => !covered(w));
+    const warnings = result.warnings.filter((warning) => !covered(warning));
     const platform: PlatformSummary = { ...PLATFORM_PROFILES.summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
     return { errors: result.errors, warnings: [...warnings, ...shown], platform };
   }

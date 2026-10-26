@@ -21,8 +21,8 @@ export class Semantics {
       if (id) this.scopeOf.set(id, scope);
       if (Semantics.isSubProcess(fe)) this.indexScope(fe);
     }
-    for (const a of rawList(scope, 'artifacts')) {
-      const id = idOf(a);
+    for (const artifact of rawList(scope, 'artifacts')) {
+      const id = idOf(artifact);
       if (id) this.scopeOf.set(id, scope);
     }
   }
@@ -54,22 +54,22 @@ export class Semantics {
       if (id) byId.set(id, el);
       const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
       if (descriptor.isGeneric) continue;
-      for (const p of descriptor.properties ?? []) {
-        if (p.isReference) continue;
-        const v = raw<unknown>(el, p.name);
-        if (Array.isArray(v)) {
-          for (const c of v) if (c && typeof c === 'object' && '$type' in c) stack.push(c as El);
-        } else if (v && typeof v === 'object' && '$type' in v) stack.push(v as El);
+      for (const property of descriptor.properties ?? []) {
+        if (property.isReference) continue;
+        const value = raw<unknown>(el, property.name);
+        if (Array.isArray(value)) {
+          for (const child of value) if (child && typeof child === 'object' && '$type' in child) stack.push(child as El);
+        } else if (value && typeof value === 'object' && '$type' in value) stack.push(value as El);
       }
     }
   }
 
   static isSubProcess(el: El): boolean {
-    return SUB_PROCESS_TYPES.some((t) => is(el, t));
+    return SUB_PROCESS_TYPES.some((type) => is(el, type));
   }
 
   static sequenceFlows(el: El | undefined, prop: 'incoming' | 'outgoing'): El[] {
-    return rawList(el, prop).filter((f) => is(f, 'bpmn:SequenceFlow'));
+    return rawList(el, prop).filter((flow) => is(flow, 'bpmn:SequenceFlow'));
   }
 
   static of(defs: El): Semantics {
@@ -81,12 +81,12 @@ export class Semantics {
         for (const ls of rawList(root, 'laneSets')) sem.indexLanes(rawList(ls, 'lanes'), root, undefined);
       } else if (is(root, 'bpmn:Collaboration')) {
         sem.collaboration ??= root;
-        for (const p of rawList(root, 'participants')) {
-          const pid = idOf(raw(p, 'processRef'));
-          if (pid && idOf(p)) sem.poolOfProcess.set(pid, idOf(p)!);
+        for (const participant of rawList(root, 'participants')) {
+          const pid = idOf(raw(participant, 'processRef'));
+          if (pid && idOf(participant)) sem.poolOfProcess.set(pid, idOf(participant)!);
         }
-        for (const a of rawList(root, 'artifacts')) {
-          const id = idOf(a);
+        for (const artifact of rawList(root, 'artifacts')) {
+          const id = idOf(artifact);
           if (id) sem.scopeOf.set(id, root);
         }
       }
@@ -116,11 +116,11 @@ export class Semantics {
   homePlane(planes: readonly Plane[], id: string): Plane | undefined {
     const el = this.byId.get(id);
     if (!el) return undefined;
-    const collabPlane = (): Plane | undefined => (this.collaboration ? planes.find((p) => p.rootId === idOf(this.collaboration)) : undefined);
+    const collabPlane = (): Plane | undefined => (this.collaboration ? planes.find((plane) => plane.rootId === idOf(this.collaboration)) : undefined);
     if (is(el, 'bpmn:Participant') || is(el, 'bpmn:MessageFlow')) return collabPlane();
     if (is(el, 'bpmn:Lane')) {
       const pid = this.laneProcess.get(id);
-      return planes.find((p) => p.rootId === pid) ?? (pid && this.poolOfProcess.has(pid) ? collabPlane() : undefined);
+      return planes.find((plane) => plane.rootId === pid) ?? (pid && this.poolOfProcess.has(pid) ? collabPlane() : undefined);
     }
     const anchorId = is(el, 'bpmn:DataAssociation') ? idOf(el.$parent) : id;
     const scope = anchorId ? this.scopeOf.get(anchorId) : undefined;
@@ -128,22 +128,22 @@ export class Semantics {
     if (!scope || !sid) return undefined;
     if (is(scope, 'bpmn:Collaboration')) return collabPlane();
     if (Semantics.isSubProcess(scope)) {
-      const expandedOn = planes.find((p) => p.shapes.get(sid)?.expanded);
+      const expandedOn = planes.find((plane) => plane.shapes.get(sid)?.expanded);
       if (expandedOn) return expandedOn;
-      return planes.find((p) => p.rootId === sid);
+      return planes.find((plane) => plane.rootId === sid);
     }
-    return planes.find((p) => p.rootId === sid) ?? (this.poolOfProcess.has(sid) ? collabPlane() : undefined);
+    return planes.find((plane) => plane.rootId === sid) ?? (this.poolOfProcess.has(sid) ? collabPlane() : undefined);
   }
 
   predecessors(id: string): string[] {
     return Semantics.sequenceFlows(this.byId.get(id), 'incoming')
-      .map((f) => idOf(raw(f, 'sourceRef')))
-      .filter((x): x is string => !!x);
+      .map((flow) => idOf(raw(flow, 'sourceRef')))
+      .filter((sourceId): sourceId is string => !!sourceId);
   }
 
   successors(id: string): string[] {
     return Semantics.sequenceFlows(this.byId.get(id), 'outgoing')
-      .map((f) => idOf(raw(f, 'targetRef')))
-      .filter((x): x is string => !!x);
+      .map((flow) => idOf(raw(flow, 'targetRef')))
+      .filter((targetId): targetId is string => !!targetId);
   }
 }

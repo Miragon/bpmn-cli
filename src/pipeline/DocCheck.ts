@@ -26,7 +26,7 @@ export class DocCheck {
       await PLATFORM_PROFILES.ensure(doc, opts.platform ?? 'auto');
       let validation = new StructuralValidator(doc).validate({ platform: opts.platform ?? 'auto' });
       const structuralErrors = validation.errors.length;
-      const importWarnings = reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]!);
+      const importWarnings = reportedImportWarnings(doc).map((warning) => warning.message.split('\n')[0]!);
       const file = opts.file ?? doc.file;
       const validators = new ValidatorSet(opts.validators);
       if (validators.size) {
@@ -39,11 +39,11 @@ export class DocCheck {
         layout = { status: 'skipped', warnings: [], expanded: [] };
       } else {
         try {
-          const r = await new FullLayout(doc.model, {}).run();
-          layout = { status: 'ok', warnings: r.warnings, expanded: r.expanded };
+          const layoutResult = await new FullLayout(doc.model, {}).run();
+          layout = { status: 'ok', warnings: layoutResult.warnings, expanded: layoutResult.expanded };
         } catch (err) {
-          const e = toCliError(err) as CliError;
-          layout = { status: 'failed', error: { code: e.code, message: e.message, element: e.details?.element as string | undefined } };
+          const cliError = toCliError(err) as CliError;
+          layout = { status: 'failed', error: { code: cliError.code, message: cliError.message, element: cliError.details?.element as string | undefined } };
         }
       }
       return { validation, layout, importWarnings };
@@ -55,8 +55,8 @@ export class DocCheck {
       name: run.name,
       ...(run.detail ? { detail: run.detail } : {}),
       ...(run.blocks === false ? { blocks: false as const } : {}),
-      errors: run.issues.filter((i) => i.severity === 'error'),
-      warnings: run.issues.filter((i) => i.severity === 'warning'),
+      errors: run.issues.filter((issue) => issue.severity === 'error'),
+      warnings: run.issues.filter((issue) => issue.severity === 'warning'),
       preexisting: [],
       resolved: [],
       counts: counts(run.issues),

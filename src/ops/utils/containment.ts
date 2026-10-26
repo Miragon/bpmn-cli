@@ -2,15 +2,15 @@ import { walk, type El } from '../../model/utils/moddle.js';
 import { descriptorOf, isEl, ownValue } from '../../model/utils/elements.js';
 
 export function contains(parent: El, child: El): boolean {
-  const d = descriptorOf(parent);
-  if (d.isGeneric) {
+  const descriptor = descriptorOf(parent);
+  if (descriptor.isGeneric) {
     const kids = (parent as unknown as { $children?: unknown[] }).$children;
     return Array.isArray(kids) && kids.includes(child);
   }
-  for (const p of d.properties ?? []) {
-    if (p.isReference) continue;
-    const v = ownValue(parent, p.name);
-    if (Array.isArray(v) ? v.includes(child) : v === child) return true;
+  for (const property of descriptor.properties ?? []) {
+    if (property.isReference) continue;
+    const propValue = ownValue(parent, property.name);
+    if (Array.isArray(propValue) ? propValue.includes(child) : propValue === child) return true;
   }
   return false;
 }
@@ -18,17 +18,17 @@ export function contains(parent: El, child: El): boolean {
 export function detachFromParent(el: El): El | undefined {
   const parent = el.$parent as El | undefined;
   if (!parent) return undefined;
-  for (const p of descriptorOf(parent).properties ?? []) {
-    if (p.isReference) continue;
-    const v = ownValue(parent, p.name);
-    if (Array.isArray(v)) {
-      const i = v.indexOf(el);
-      if (i !== -1) {
-        v.splice(i, 1);
+  for (const property of descriptorOf(parent).properties ?? []) {
+    if (property.isReference) continue;
+    const propValue = ownValue(parent, property.name);
+    if (Array.isArray(propValue)) {
+      const index = propValue.indexOf(el);
+      if (index !== -1) {
+        propValue.splice(index, 1);
         return parent;
       }
-    } else if (v === el) {
-      parent.set(p.name, undefined);
+    } else if (propValue === el) {
+      parent.set(property.name, undefined);
       return parent;
     }
   }
@@ -38,15 +38,15 @@ export function detachFromParent(el: El): El | undefined {
 export function referencesToAny(root: El, targets: Set<El>): Array<{ holder: El; prop: string; isMany: boolean; target: El }> {
   const refs: Array<{ holder: El; prop: string; isMany: boolean; target: El }> = [];
   for (const el of walk(root)) {
-    const d = descriptorOf(el);
-    if (d.isGeneric) continue;
-    for (const p of d.properties ?? []) {
-      if (!p.isReference) continue;
-      const v = ownValue(el, p.name);
-      if (p.isMany) {
-        if (Array.isArray(v)) for (const t of v) if (isEl(t) && targets.has(t)) refs.push({ holder: el, prop: p.name, isMany: true, target: t });
-      } else if (isEl(v) && targets.has(v)) {
-        refs.push({ holder: el, prop: p.name, isMany: false, target: v });
+    const descriptor = descriptorOf(el);
+    if (descriptor.isGeneric) continue;
+    for (const property of descriptor.properties ?? []) {
+      if (!property.isReference) continue;
+      const propValue = ownValue(el, property.name);
+      if (property.isMany) {
+        if (Array.isArray(propValue)) for (const entry of propValue) if (isEl(entry) && targets.has(entry)) refs.push({ holder: el, prop: property.name, isMany: true, target: entry });
+      } else if (isEl(propValue) && targets.has(propValue)) {
+        refs.push({ holder: el, prop: property.name, isMany: false, target: propValue });
       }
     }
   }

@@ -30,10 +30,10 @@ export class VendorElements {
   }
 
   canonicalName(name: string, scope: Record<string, string> = {}): string {
-    const m = NAME_RE.exec(name.trim());
-    if (!m) return name.trim();
-    const uri = scope[m[1]!] ?? (m[1] === 'bpmn' ? BPMN_NS : this.doc.namespaceUri(m[1]!));
-    return this.canonical(uri, m[2]!, name.trim());
+    const match = NAME_RE.exec(name.trim());
+    if (!match) return name.trim();
+    const uri = scope[match[1]!] ?? (match[1] === 'bpmn' ? BPMN_NS : this.doc.namespaceUri(match[1]!));
+    return this.canonical(uri, match[2]!, name.trim());
   }
 
   canonicalUri(prefix: string): string | undefined {
@@ -69,13 +69,13 @@ export class VendorElements {
     if (ns.uri === BPMN_NS && !nested) this.refuseBpmnAtTop(name, prefix, el);
     const props: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(attrs)) {
-      const m = NAME_RE.exec(key);
-      if (!m || m[1] === 'xmlns') {
+      const match = NAME_RE.exec(key);
+      if (!match || match[1] === 'xmlns') {
         props[key] = value;
         continue;
       }
-      const a = this.resolvePrefix(el, m[1]!, scope);
-      props[`${a.prefix}:${m[2]}`] = m[1] === 'xsi' && m[2] === 'type' ? this.qnameValue(value, scope) : value;
+      const resolved = this.resolvePrefix(el, match[1]!, scope);
+      props[`${resolved.prefix}:${match[2]}`] = match[1] === 'xsi' && match[2] === 'type' ? this.qnameValue(value, scope) : value;
     }
     if (body !== undefined && body !== '') props['$body'] = body;
     return this.doc.moddle.createAny(`${ns.prefix}:${local}`, ns.uri, props) as unknown as El;
@@ -88,16 +88,16 @@ export class VendorElements {
 
   attrsOf(el: El): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(el as unknown as Raw)) {
-      if (k.startsWith('$') || v === undefined || v === null || typeof v === 'object' || typeof v === 'function') continue;
-      out[k] = String(v);
+    for (const [rawKey, rawValue] of Object.entries(el as unknown as Raw)) {
+      if (rawKey.startsWith('$') || rawValue === undefined || rawValue === null || typeof rawValue === 'object' || typeof rawValue === 'function') continue;
+      out[rawKey] = String(rawValue);
     }
     return out;
   }
 
   bodyOf(el: El): string | undefined {
-    const b = (el as unknown as Raw)['$body'];
-    return typeof b === 'string' && b.trim() ? b : undefined;
+    const body = (el as unknown as Raw)['$body'];
+    return typeof body === 'string' && body.trim() ? body : undefined;
   }
 
   isGeneric(el: El): boolean {
@@ -106,7 +106,7 @@ export class VendorElements {
 
   keyOf(el: El): { attr: string; value: string } | undefined {
     const attrs = this.attrsOf(el);
-    for (const k of EXTENSION_STRUCTURE.keysOf(this.typeOf(el))) if (attrs[k] !== undefined) return { attr: k, value: attrs[k]! };
+    for (const attrKey of EXTENSION_STRUCTURE.keysOf(this.typeOf(el))) if (attrs[attrKey] !== undefined) return { attr: attrKey, value: attrs[attrKey]! };
     return undefined;
   }
 
@@ -121,7 +121,7 @@ export class VendorElements {
     for (let cur: El | undefined = el; cur && !is(cur, 'bpmn:ExtensionElements'); cur = cur.$parent as El | undefined) {
       const parent = cur.$parent as El | undefined;
       const siblings = parent && is(parent, 'bpmn:ExtensionElements') ? many(parent, 'values') : parent ? this.kidsOf(parent) : [cur];
-      const same = siblings.filter((s) => s.$type === cur!.$type);
+      const same = siblings.filter((sibling) => sibling.$type === cur!.$type);
       const key = this.keyOf(cur);
       steps.unshift(key ? this.itemLabel(cur) : same.length > 1 ? `${cur.$type}[${same.indexOf(cur)}]` : cur.$type);
     }
@@ -129,14 +129,14 @@ export class VendorElements {
   }
 
   private canonical(uri: string | undefined, local: string, fallback: string): string {
-    const p = uri ? CANONICAL_PREFIX[uri] : undefined;
-    if (p) return `${p}:${local}`;
+    const canonicalPrefix = uri ? CANONICAL_PREFIX[uri] : undefined;
+    if (canonicalPrefix) return `${canonicalPrefix}:${local}`;
     return uri ? `{${uri}}${local}` : fallback;
   }
 
   private filePrefixFor(uri: string): string | undefined {
-    for (const [k, v] of Object.entries(this.doc.definitions.$attrs as Record<string, unknown>)) {
-      if (k.startsWith('xmlns:') && v === uri) return k.slice(6);
+    for (const [attrName, attrValue] of Object.entries(this.doc.definitions.$attrs as Record<string, unknown>)) {
+      if (attrName.startsWith('xmlns:') && attrValue === uri) return attrName.slice(6);
     }
     return undefined;
   }
@@ -146,12 +146,12 @@ export class VendorElements {
   }
 
   private splitName(name: string, el: El): { prefix: string; local: string } {
-    const m = NAME_RE.exec(name.trim());
-    if (!m) {
+    const match = NAME_RE.exec(name.trim());
+    if (!match) {
       throw modelError('E_INVALID_VALUE', `"${name}" is not a prefixed element name (expected prefix:localName, e.g. zeebe:taskDefinition)`, { element: this.hosts.idOf(el) });
     }
-    if (m[1] === 'xmlns') throw modelError('E_INVALID_VALUE', `"${name}" is not an element name`, { element: this.hosts.idOf(el) });
-    return { prefix: m[1]!, local: m[2]! };
+    if (match[1] === 'xmlns') throw modelError('E_INVALID_VALUE', `"${name}" is not an element name`, { element: this.hosts.idOf(el) });
+    return { prefix: match[1]!, local: match[2]! };
   }
 
   private refuseBpmnAtTop(type: string, prefix: string, el: El): never {
@@ -163,12 +163,12 @@ export class VendorElements {
 
   /** No prefix when BPMN is the file's default namespace. */
   private qnameValue(value: string, scope: Record<string, string>): string {
-    const m = NAME_RE.exec(value.trim());
-    if (!m) return value;
-    const uri = scope[m[1]!] ?? (m[1] === 'bpmn' ? BPMN_NS : undefined);
+    const match = NAME_RE.exec(value.trim());
+    if (!match) return value;
+    const uri = scope[match[1]!] ?? (match[1] === 'bpmn' ? BPMN_NS : undefined);
     if (uri !== BPMN_NS) return value;
     const attrs = this.doc.definitions.$attrs as Record<string, unknown>;
-    if (!this.filePrefixFor(BPMN_NS) && attrs['xmlns'] === BPMN_NS) return m[2]!;
-    return `${this.bpmnPrefix()}:${m[2]}`;
+    if (!this.filePrefixFor(BPMN_NS) && attrs['xmlns'] === BPMN_NS) return match[2]!;
+    return `${this.bpmnPrefix()}:${match[2]}`;
   }
 }

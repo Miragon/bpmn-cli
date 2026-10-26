@@ -76,7 +76,7 @@ export class SequenceFlows {
     const source = flow.get<El | undefined>('sourceRef');
     if (source && source.get<El | undefined>('default') === flow) source.set('default', undefined);
     const scope = flow.$parent as El | undefined;
-    const nodes = scope ? many(scope, 'flowElements').filter((n) => is(n, 'bpmn:FlowNode')) : [];
+    const nodes = scope ? many(scope, 'flowElements').filter((flowElement) => is(flowElement, 'bpmn:FlowNode')) : [];
     for (const node of new Set([source, flow.get<El | undefined>('targetRef'), ...nodes])) {
       if (!node) continue;
       removeFrom(node, 'outgoing', flow);
@@ -173,24 +173,24 @@ export class SequenceFlows {
   /** Bridging: an annotation stays on the flow that replaces `from`. */
   carryAssociations(from: El, to: El, cs: ChangeSet): El[] {
     const carried = this.associationsOf(from);
-    for (const a of carried) {
-      for (const end of ['sourceRef', 'targetRef']) if (a.get<El | undefined>(end) === from) a.set(end, to);
-      cs.change({ id: idOf(a), kind: 'association', detail: `re-attached from ${idOf(from)} to ${idOf(to)}` });
+    for (const association of carried) {
+      for (const end of ['sourceRef', 'targetRef']) if (association.get<El | undefined>(end) === from) association.set(end, to);
+      cs.change({ id: idOf(association), kind: 'association', detail: `re-attached from ${idOf(from)} to ${idOf(to)}` });
     }
     this.doc.invalidate();
     return carried;
   }
 
   private associationsOf(flow: El): El[] {
-    return [...this.doc.byId().values()].filter((a) => is(a, 'bpmn:Association') && (a.get<El | undefined>('sourceRef') === flow || a.get<El | undefined>('targetRef') === flow));
+    return [...this.doc.byId().values()].filter((association) => is(association, 'bpmn:Association') && (association.get<El | undefined>('sourceRef') === flow || association.get<El | undefined>('targetRef') === flow));
   }
 
   private dropAssociations(flow: El, cs: ChangeSet): void {
-    for (const a of this.associationsOf(flow)) {
-      const parent = a.$parent as El | undefined;
-      if (parent) removeFrom(parent, 'artifacts', a);
-      this.doc.ids.release(idOf(a));
-      cs.remove({ id: idOf(a), kind: 'association' });
+    for (const association of this.associationsOf(flow)) {
+      const parent = association.$parent as El | undefined;
+      if (parent) removeFrom(parent, 'artifacts', association);
+      this.doc.ids.release(idOf(association));
+      cs.remove({ id: idOf(association), kind: 'association' });
     }
     this.doc.invalidate();
   }

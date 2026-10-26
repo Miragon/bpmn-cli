@@ -18,8 +18,8 @@ async function bpmn(args: string[], stdin = ''): Promise<{ code: number; out: st
   let out = '';
   let err = '';
   const io: CliIo = {
-    stdout: { write: (s: string | Uint8Array) => ((out += String(s)), true) },
-    stderr: { write: (s: string | Uint8Array) => ((err += String(s)), true) },
+    stdout: { write: (chunk: string | Uint8Array) => ((out += String(chunk)), true) },
+    stderr: { write: (chunk: string | Uint8Array) => ((err += String(chunk)), true) },
     stdin: Readable.from([Buffer.from(stdin)]),
     env: {},
   };
@@ -49,10 +49,10 @@ describe('Cli in-process', () => {
   });
 
   it('prints parser errors like every other error, with the positional hint and the exit code', async () => {
-    const r = await bpmn(['set', 'f.bpmn', 'Activity_A', '--name', 'X']);
-    expect(r.code).toBe(1);
-    expect(r.err).toContain('error E_USAGE: unknown option');
-    expect(r.err).toContain('`bpmn set f.bpmn Activity_A name=X`');
+    const outcome = await bpmn(['set', 'f.bpmn', 'Activity_A', '--name', 'X']);
+    expect(outcome.code).toBe(1);
+    expect(outcome.err).toContain('error E_USAGE: unknown option');
+    expect(outcome.err).toContain('`bpmn set f.bpmn Activity_A name=X`');
     const json = await bpmn(['kinds', '--section', 'nope', '--json']);
     expect(JSON.parse(json.err)).toMatchObject({ ok: false, error: { code: 'E_USAGE' } });
   });
@@ -60,7 +60,7 @@ describe('Cli in-process', () => {
   it('reads the environment it is given, not the process environment', async () => {
     const io = { env: { BPMN_KEEP_FLOW_IDS: 'maybe' } };
     let err = '';
-    const cli = new Cli('9.9.9', { stdout: { write: () => true }, stderr: { write: (s: string | Uint8Array) => ((err += String(s)), true) }, stdin: Readable.from([]), ...io });
+    const cli = new Cli('9.9.9', { stdout: { write: () => true }, stderr: { write: (chunk: string | Uint8Array) => ((err += String(chunk)), true) }, stdin: Readable.from([]), ...io });
     await cli.run(['node', 'bpmn', 'add', join(dir, 'order.bpmn'), 'userTask', 'K']);
     expect(cli.exitCode).toBe(1);
     expect(err).toContain('BPMN_KEEP_FLOW_IDS=maybe is not a switch value');

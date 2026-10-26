@@ -27,10 +27,10 @@ export class LaneInheritance {
     private readonly cross?: CrossLane,
   ) {}
 
-  static of(doc: Doc, p: Placement): LaneInheritance {
-    const anchor = LaneInheritance.anchorOf(doc, p);
+  static of(doc: Doc, placement: Placement): LaneInheritance {
+    const anchor = LaneInheritance.anchorOf(doc, placement);
     const lane = anchor ? laneOf(doc, anchor) : undefined;
-    const flow = LaneInheritance.splicedFlow(doc, p);
+    const flow = LaneInheritance.splicedFlow(doc, placement);
     if (!flow) return new LaneInheritance(lane);
     const source = flow.get<El>('sourceRef');
     const target = flow.get<El>('targetRef');
@@ -66,32 +66,32 @@ export class LaneInheritance {
     return `${id} stays in its lane ${idOf(own)}; the flow it went into runs from ${idOf(cross.source)} in ${cross.from ? idOf(cross.from) : 'no lane'} to ${idOf(cross.target)} in ${cross.to ? idOf(cross.to) : 'no lane'}${there ? ` (\`bpmn move <file> ${id} --lane ${idOf(there)}\` puts it on the row the layout gives a node there)` : ''}`;
   }
 
-  private static anchorOf(doc: Doc, p: Placement): El | undefined {
-    if (p.on) return doc.get(p.on);
-    if (p.after) return doc.get(p.after);
-    if (p.before) return doc.get(p.before);
-    if (p.flow) return doc.get(p.flow)?.get<El | undefined>('sourceRef');
+  private static anchorOf(doc: Doc, placement: Placement): El | undefined {
+    if (placement.on) return doc.get(placement.on);
+    if (placement.after) return doc.get(placement.after);
+    if (placement.before) return doc.get(placement.before);
+    if (placement.flow) return doc.get(placement.flow)?.get<El | undefined>('sourceRef');
     return undefined;
   }
 
-  private static splicedFlow(doc: Doc, p: Placement): El | undefined {
+  private static splicedFlow(doc: Doc, placement: Placement): El | undefined {
     const get = (id: string | undefined): El | undefined => (id ? doc.get(id) : undefined);
-    switch (NodePlacement.modeOf(p)) {
+    switch (NodePlacement.modeOf(placement)) {
       case 'flow':
-        return get(p.flow);
+        return get(placement.flow);
       case 'between': {
-        const a = get(p.after);
-        const b = get(p.before);
-        return a && b ? doc.outgoing(a).find((f) => f.get<El | undefined>('targetRef') === b) : undefined;
+        const afterNode = get(placement.after);
+        const beforeNode = get(placement.before);
+        return afterNode && beforeNode ? doc.outgoing(afterNode).find((flow) => flow.get<El | undefined>('targetRef') === beforeNode) : undefined;
       }
       case 'after': {
-        const a = get(p.after);
-        const out = a && !is(a, 'bpmn:Gateway') ? doc.outgoing(a) : [];
+        const afterNode = get(placement.after);
+        const out = afterNode && !is(afterNode, 'bpmn:Gateway') ? doc.outgoing(afterNode) : [];
         return out.length === 1 ? out[0] : undefined;
       }
       case 'before': {
-        const b = get(p.before);
-        const inc = b ? doc.incoming(b) : [];
+        const beforeNode = get(placement.before);
+        const inc = beforeNode ? doc.incoming(beforeNode) : [];
         return inc.length === 1 ? inc[0] : undefined;
       }
       default:

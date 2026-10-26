@@ -38,10 +38,10 @@ export class ScopeGraph {
     const edges: GEdge[] = [];
     for (const el of flowElements) {
       if (!is(el, 'bpmn:SequenceFlow')) continue;
-      const s = el.get<El | undefined>('sourceRef');
-      const t = el.get<El | undefined>('targetRef');
-      const source = s ? byId.get(idOf(s)) : undefined;
-      const target = t ? byId.get(idOf(t)) : undefined;
+      const sourceEl = el.get<El | undefined>('sourceRef');
+      const targetEl = el.get<El | undefined>('targetRef');
+      const source = sourceEl ? byId.get(idOf(sourceEl)) : undefined;
+      const target = targetEl ? byId.get(idOf(targetEl)) : undefined;
       if (!source || !target) continue;
       const edge: GEdge = { el, id: idOf(el), source, target, back: false, points: [] };
       source.out.push(edge);
@@ -87,10 +87,10 @@ export class ScopeGraph {
    */
   private markBackEdges(): void {
     const { nodes, edges } = this.layout;
-    const srcOf = (e: GEdge): GNode => e.source.host ?? e.source;
-    const forwardOut = (n: GNode): GEdge[] => outgoingOf(n).filter((e) => !e.back);
-    const starts = nodes.filter((n) => n.kind === 'start');
-    const sources = nodes.filter((n) => n.kind !== 'start' && n.in.length === 0);
+    const srcOf = (edge: GEdge): GNode => edge.source.host ?? edge.source;
+    const forwardOut = (node: GNode): GEdge[] => outgoingOf(node).filter((edge) => !edge.back);
+    const starts = nodes.filter((node) => node.kind === 'start');
+    const sources = nodes.filter((node) => node.kind !== 'start' && node.in.length === 0);
     const roots = [...starts, ...sources];
     const depths = (): Map<GNode, number> => {
       const depth = new Map<GNode, number>();
@@ -99,58 +99,58 @@ export class ScopeGraph {
         depth.set(root, 0);
         const queue = [root];
         while (queue.length) {
-          const n = queue.shift()!;
-          for (const e of forwardOut(n)) {
-            if (depth.has(e.target)) continue;
-            depth.set(e.target, depth.get(n)! + 1);
-            queue.push(e.target);
+          const node = queue.shift()!;
+          for (const edge of forwardOut(node)) {
+            if (depth.has(edge.target)) continue;
+            depth.set(edge.target, depth.get(node)! + 1);
+            queue.push(edge.target);
           }
         }
       };
-      for (const r of roots) bfs(r);
-      for (const n of nodes) bfs(n); // nodes only reachable through cycles
+      for (const root of roots) bfs(root);
+      for (const node of nodes) bfs(node); // nodes only reachable through cycles
       return depth;
     };
     const reaches = (from: GNode, to: GNode): boolean => {
       const seen = new Set<GNode>([from]);
       const stack = [from];
       while (stack.length) {
-        const n = stack.pop()!;
-        if (n === to) return true;
-        for (const e of forwardOut(n)) if (!seen.has(e.target)) {
-          seen.add(e.target);
-          stack.push(e.target);
+        const node = stack.pop()!;
+        if (node === to) return true;
+        for (const edge of forwardOut(node)) if (!seen.has(edge.target)) {
+          seen.add(edge.target);
+          stack.push(edge.target);
         }
       }
       return false;
     };
     const hasCycle = (): boolean => {
       const state = new Map<GNode, 1 | 2>();
-      const visit = (n: GNode): boolean => {
-        state.set(n, 1);
-        for (const e of forwardOut(n)) {
-          const s = state.get(e.target);
-          if (s === 1 || (s === undefined && visit(e.target))) return true;
+      const visit = (node: GNode): boolean => {
+        state.set(node, 1);
+        for (const edge of forwardOut(node)) {
+          const targetState = state.get(edge.target);
+          if (targetState === 1 || (targetState === undefined && visit(edge.target))) return true;
         }
-        state.set(n, 2);
+        state.set(node, 2);
         return false;
       };
-      return nodes.some((n) => !state.has(n) && visit(n));
+      return nodes.some((node) => !state.has(node) && visit(node));
     };
     for (let guard = 0; guard <= edges.length && hasCycle(); guard++) {
       const depth = depths();
-      let best: { e: GEdge; index: number; tDepth: number; sDepth: number } | undefined;
-      edges.forEach((e, index) => {
-        if (e.back) return;
-        const u = srcOf(e), v = e.target;
-        const tDepth = depth.get(v) ?? 0, sDepth = depth.get(u) ?? 0;
-        if (tDepth > sDepth || !reaches(v, u)) return;
+      let best: { edge: GEdge; index: number; tDepth: number; sDepth: number } | undefined;
+      edges.forEach((edge, index) => {
+        if (edge.back) return;
+        const sourceNode = srcOf(edge), targetNode = edge.target;
+        const tDepth = depth.get(targetNode) ?? 0, sDepth = depth.get(sourceNode) ?? 0;
+        if (tDepth > sDepth || !reaches(targetNode, sourceNode)) return;
         if (!best || tDepth < best.tDepth || (tDepth === best.tDepth && (sDepth > best.sDepth || (sDepth === best.sDepth && index > best.index)))) {
-          best = { e, index, tDepth, sDepth };
+          best = { edge, index, tDepth, sDepth };
         }
       });
       if (!best) break;
-      best.e.back = true;
+      best.edge.back = true;
     }
   }
 }

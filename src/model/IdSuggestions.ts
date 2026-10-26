@@ -23,8 +23,8 @@ export class IdSuggestions {
   }
 
   private static stemOf(id: string): string {
-    const i = id.indexOf('_');
-    return i === -1 ? id : id.slice(i + 1);
+    const separatorIndex = id.indexOf('_');
+    return separatorIndex === -1 ? id : id.slice(separatorIndex + 1);
   }
 
   /**
@@ -33,7 +33,7 @@ export class IdSuggestions {
    * `Flow_...` suggests flows), then ids the running batch created.
    */
   for(query: string, max = 5): string[] {
-    const q = query.toLowerCase();
+    const lowerQuery = query.toLowerCase();
     const fq = IdSuggestions.foldUmlauts(query);
     const fstem = IdSuggestions.foldUmlauts(IdSuggestions.stemOf(query));
     const batch = this.doc.edit.batch;
@@ -49,7 +49,7 @@ export class IdSuggestions {
       let score = Infinity;
       let dist = 0;
       if (id === renamed) score = -1;
-      else if (lid === q) score = 0;
+      else if (lid === lowerQuery) score = 0;
       else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) score = 1;
       else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) score = 2;
       // Flow_GatewayPurchaseApprovedToOrderGoods -> Flow_PurchaseApprovedToOrderGoods
@@ -59,8 +59,8 @@ export class IdSuggestions {
         const bare = editDistance(fstem, fidStem);
         if (fq && whole <= typoTolerance(fq.length)) [score, dist] = [3, whole];
         else if (fstem && bare <= typoTolerance(fstem.length)) [score, dist] = [3, bare];
-        else if (name && (name === q || name.includes(q) || (!!fq && IdSuggestions.foldUmlauts(name).includes(fq)))) score = 4;
-        else if (q.replace(/[^a-z0-9]/g, '') && lid.replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''))) score = 5;
+        else if (name && (name === lowerQuery || name.includes(lowerQuery) || (!!fq && IdSuggestions.foldUmlauts(name).includes(fq)))) score = 4;
+        else if (lowerQuery.replace(/[^a-z0-9]/g, '') && lid.replace(/[^a-z0-9]/g, '').includes(lowerQuery.replace(/[^a-z0-9]/g, ''))) score = 5;
       }
       if (score < Infinity) hits.push({ id, score, dist });
     }
@@ -69,10 +69,10 @@ export class IdSuggestions {
       void suggestKinds;
     }
     const fresh = (id: string): number => (recent.has(id) ? 0 : 1);
-    const own = (h: { id: string; score: number }): number => (h.score < 0 || (prefix && IdSuggestions.prefixOf(h.id) === prefix) ? 0 : 1);
+    const own = (hit: { id: string; score: number }): number => (hit.score < 0 || (prefix && IdSuggestions.prefixOf(hit.id) === prefix) ? 0 : 1);
     return hits
-      .sort((a, b) => own(a) - own(b) || a.score - b.score || fresh(a.id) - fresh(b.id) || a.dist - b.dist || a.id.localeCompare(b.id))
+      .sort((left, right) => own(left) - own(right) || left.score - right.score || fresh(left.id) - fresh(right.id) || left.dist - right.dist || left.id.localeCompare(right.id))
       .slice(0, max)
-      .map((h) => h.id);
+      .map((hit) => hit.id);
   }
 }

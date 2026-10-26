@@ -34,12 +34,12 @@ export class TimerValue {
   constructor(private readonly value: string) {}
 
   isDuration(): boolean {
-    const v = this.value.trim();
-    const t = v.indexOf('T');
-    if (t === -1) return PERIOD.test(v) && /\d/.test(v);
-    const period = v.slice(0, t);
+    const trimmed = this.value.trim();
+    const timeStart = trimmed.indexOf('T');
+    if (timeStart === -1) return PERIOD.test(trimmed) && /\d/.test(trimmed);
+    const period = trimmed.slice(0, timeStart);
     if (!/^[-+]?[Pp]$/.test(period) && !(PERIOD.test(period) && /\d/.test(period))) return false;
-    return DURATION.test(`P${v.slice(t)}`) && /\d/.test(v.slice(t));
+    return DURATION.test(`P${trimmed.slice(timeStart)}`) && /\d/.test(trimmed.slice(timeStart));
   }
 
   isDateTime(): boolean {
@@ -48,46 +48,46 @@ export class TimerValue {
 
   /** Java's strict parse, which Camunda 8 uses, refuses 2030-02-30 and 25:00. */
   dateTimeRangeProblem(): string | undefined {
-    const m = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2})(?::(\d{2}))?/.exec(this.value.trim());
-    if (!m) return undefined;
-    const [y, mo, d, h, mi, s] = m.slice(1).map((x) => Number(x ?? 0)) as [number, number, number, number, number, number];
-    if (mo < 1 || mo > 12) return `month ${m[2]} is not in 01-12`;
-    const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+    const match = /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2})(?::(\d{2}))?/.exec(this.value.trim());
+    if (!match) return undefined;
+    const [year, mo, day, hour, mi, second] = match.slice(1).map((group) => Number(group ?? 0)) as [number, number, number, number, number, number];
+    if (mo < 1 || mo > 12) return `month ${match[2]} is not in 01-12`;
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
     const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1]!;
-    if (d < 1 || d > days) return `${MONTHS[mo - 1]} ${y} has no day ${m[3]}`;
-    if (h > 23) return `hour ${m[4]} is not in 00-23`;
-    if (mi > 59) return `minute ${m[5]} is not in 00-59`;
-    if (s > 59) return `second ${m[6]} is not in 00-59`;
+    if (day < 1 || day > days) return `${MONTHS[mo - 1]} ${year} has no day ${match[3]}`;
+    if (hour > 23) return `hour ${match[4]} is not in 00-23`;
+    if (mi > 59) return `minute ${match[5]} is not in 00-59`;
+    if (second > 59) return `second ${match[6]} is not in 00-59`;
     const offset = /([+-])(\d{2}):(\d{2})(?::(\d{2}))?(?:\[[^\]]+\])?$/.exec(this.value.trim());
     if (offset && (Number(offset[3]) > 59 || Number(offset[4] ?? 0) > 59 || Number(offset[2]) * 3600 + Number(offset[3]) * 60 + Number(offset[4] ?? 0) > 18 * 3600)) return `offset ${offset[0].replace(/\[.*$/, '')} is not within ±18:00`;
     return undefined;
   }
 
   isCycle(): boolean {
-    const v = this.value.trim();
-    const m = /^R-?\d*\/(.+)$/.exec(v);
-    if (m) {
-      const parts = m[1]!.split('/');
+    const trimmed = this.value.trim();
+    const match = /^R-?\d*\/(.+)$/.exec(trimmed);
+    if (match) {
+      const parts = match[1]!.split('/');
       if (parts.length === 1) return new TimerValue(parts[0]!).isDuration();
       if (parts.length === 2) return new TimerValue(parts[0]!).isDateTime() && new TimerValue(parts[1]!).isDuration();
       return false;
     }
-    if (CRON_MACROS.includes(v)) return true;
-    return v.split(/ +/).length === 6 && !v.startsWith('R') && !this.cronProblem();
+    if (CRON_MACROS.includes(trimmed)) return true;
+    return trimmed.split(/ +/).length === 6 && !trimmed.startsWith('R') && !this.cronProblem();
   }
 
   cycleRangeProblem(): string | undefined {
-    const v = this.value.trim();
-    const m = /^R-?\d*\/(.+)\/.+$/.exec(v);
-    if (m) return new TimerValue(m[1]!).dateTimeRangeProblem();
-    return v.split(/ +/).length === 6 && !v.startsWith('R') ? this.cronProblem() : undefined;
+    const trimmed = this.value.trim();
+    const match = /^R-?\d*\/(.+)\/.+$/.exec(trimmed);
+    if (match) return new TimerValue(match[1]!).dateTimeRangeProblem();
+    return trimmed.split(/ +/).length === 6 && !trimmed.startsWith('R') ? this.cronProblem() : undefined;
   }
 
   cronProblem(): string | undefined {
     const fields = this.value.trim().split(/ +/);
-    for (let i = 0; i < 6; i++) {
-      const spec = CRON_FIELDS[i]!;
-      if (!this.validCronField(fields[i] ?? '', spec)) return `the ${spec.name} field "${fields[i] ?? ''}" is not ${spec.names ? `in ${spec.min}-${spec.max} or ${spec.names[0]}-${spec.names[spec.names.length - 1]}` : `in ${spec.min}-${spec.max}`}${spec.question ? ' (or ?)' : ''}`;
+    for (let index = 0; index < 6; index++) {
+      const spec = CRON_FIELDS[index]!;
+      if (!this.validCronField(fields[index] ?? '', spec)) return `the ${spec.name} field "${fields[index] ?? ''}" is not ${spec.names ? `in ${spec.min}-${spec.max} or ${spec.names[0]}-${spec.names[spec.names.length - 1]}` : `in ${spec.min}-${spec.max}`}${spec.question ? ' (or ?)' : ''}`;
     }
     return undefined;
   }
@@ -96,10 +96,10 @@ export class TimerValue {
     if (spec.quartz?.test(field)) return /^[0-9A-Za-z#?,\-/]+$/.test(field);
     if (spec.question && field === '?') return true;
     const value = (text: string): number | undefined => {
-      const i = spec.names?.indexOf(text.toUpperCase()) ?? -1;
+      const nameIndex = spec.names?.indexOf(text.toUpperCase()) ?? -1;
       // names: 1-based (JAN = 1, MON = 1)
-      const n = i >= 0 ? i + 1 : /^\d+$/.test(text) ? Number(text) : undefined;
-      return n !== undefined && n >= spec.min && n <= spec.max ? n : undefined;
+      const number = nameIndex >= 0 ? nameIndex + 1 : /^\d+$/.test(text) ? Number(text) : undefined;
+      return number !== undefined && number >= spec.min && number <= spec.max ? number : undefined;
     };
     return field.split(',').every((part) => {
       const [range, step, ...rest] = part.split('/');
@@ -109,8 +109,8 @@ export class TimerValue {
       const ends = range.split('-');
       if (ends.length === 1) return value(ends[0]!) !== undefined;
       if (ends.length !== 2) return false;
-      const [a, b] = ends.map(value);
-      return a !== undefined && b !== undefined && a <= b;
+      const [low, high] = ends.map(value);
+      return low !== undefined && high !== undefined && low <= high;
     });
   }
 }

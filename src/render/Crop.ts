@@ -25,9 +25,9 @@ export class Crop {
   ) {}
 
   static of(doc: Doc, sem: Semantics, planes: Plane[], opts: RenderOptions): CropChoice {
-    const asked = (['around', 'path', 'scope', 'ids'] as const).filter((k) => (k === 'ids' ? !!opts.ids?.length : opts[k] !== undefined));
+    const asked = (['around', 'path', 'scope', 'ids'] as const).filter((cropKind) => (cropKind === 'ids' ? !!opts.ids?.length : opts[cropKind] !== undefined));
     if (asked.length > 1) {
-      throw usageError(`${asked.map((k) => (k === 'ids' ? 'element ids' : `--${k}`)).join(' and ')} crop the image in different ways; use one`, { hint: 'Render one part per call: `bpmn render <file> --around <id>`, `--path <from> <to>`, `--scope <id>` or ids.' });
+      throw usageError(`${asked.map((cropKind) => (cropKind === 'ids' ? 'element ids' : `--${cropKind}`)).join(' and ')} crop the image in different ways; use one`, { hint: 'Render one part per call: `bpmn render <file> --around <id>`, `--path <from> <to>`, `--scope <id>` or ids.' });
     }
     if (asked.length && opts.focus?.length) throw usageError('focus does not go with a crop', { hint: 'Use one: a crop (around, path, scope, ids) or focus.' });
     const kind = asked[0];
@@ -36,7 +36,7 @@ export class Crop {
     let crop: Crop;
     if (kind === 'around') {
       const view = new AroundWindow(doc, opts.around!.id, { ...(opts.around!.depth !== undefined ? { depth: opts.around!.depth } : {}), inner: !!opts.around!.inner }).view();
-      const nodes = view.nodes.map((n) => n.id);
+      const nodes = view.nodes.map((node) => node.id);
       crop = new Crop(nodes, nodes, true);
       const seed = planeOfId(planes, opts.around!.id) ? opts.around!.id : first(nodes);
       return { crop, ...Crop.planeHint(planes, seed, nodes, `--around ${opts.around!.id}`) };
@@ -48,7 +48,7 @@ export class Crop {
       return { crop, ...Crop.planeHint(planes, first(ids), ids, `--path ${opts.path!.from} ${opts.path!.to}`) };
     }
     if (kind === 'ids') {
-      const ids = opts.ids!.filter((id, i) => opts.ids!.indexOf(id) === i);
+      const ids = opts.ids!.filter((id, index) => opts.ids!.indexOf(id) === index);
       for (const id of ids) doc.require(id);
       const isNode = (id: string): boolean => {
         const el = sem.byId.get(id);
@@ -59,18 +59,18 @@ export class Crop {
     }
     const id = opts.scope!;
     const el = doc.require(id);
-    const expandedOn = planes.find((p) => p.shapes.get(id)?.container);
+    const expandedOn = planes.find((candidate) => candidate.shapes.get(id)?.container);
     const frameCrop = (frame: string): { crop: Crop; plane?: string } => ({ crop: new Crop([frame], [], false, frame), ...Crop.planeHint(planes, frame, [frame], `--scope ${id}`) });
     if (is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane')) return frameCrop(id);
     if (is(el, 'bpmn:SubProcess')) {
       if (expandedOn) return frameCrop(id);
-      if (planes.some((p) => p.rootId === id)) return { plane: id, scope: id };
+      if (planes.some((candidate) => candidate.rootId === id)) return { plane: id, scope: id };
       throw modelError('E_NO_MATCH', `${id} is not drawn (no shape, no plane of its own)`, { element: id, hint: '`bpmn layout <file>` draws it; `bpmn render <file>` lists the planes.' });
     }
     if (is(el, 'bpmn:Process')) {
       const pool = sem.poolOfProcess.get(id);
       if (pool && planeOfId(planes, pool)) return frameCrop(pool);
-      if (planes.some((p) => p.rootId === id)) return { plane: id, scope: id };
+      if (planes.some((candidate) => candidate.rootId === id)) return { plane: id, scope: id };
     }
     throw modelError('E_WRONG_KIND', `--scope takes a pool, lane, sub-process or process; "${id}" is a ${el.$type.replace(/^bpmn:/, '')}`, {
       element: id,
@@ -79,8 +79,8 @@ export class Crop {
   }
 
   private static planeHint(planes: Plane[], seed: string | undefined, ids: string[], what: string): { plane?: string } {
-    const p = seed ? planeOfId(planes, seed) : undefined;
-    if (p) return { plane: p.rootId };
+    const seedPlane = seed ? planeOfId(planes, seed) : undefined;
+    if (seedPlane) return { plane: seedPlane.rootId };
     throw modelError('E_NO_MATCH', `Nothing of ${what} is drawn (no shape on any plane)`, {
       ...(ids[0] ? { element: ids[0] } : {}),
       hint: '`bpmn layout <file>` draws the elements without a shape; `bpmn show <file> --layout` lists what is drawn.',
@@ -91,14 +91,14 @@ export class Crop {
   drawnOn(plane: Plane, planes: Plane[], notes: string[]): Set<string> {
     const drawn = new Set<string>();
     if (this.frame) {
-      const f = plane.shapes.get(this.frame);
-      if (!f) throw modelError('E_NO_MATCH', `${this.frame} is not drawn on the plane of ${plane.rootId}`, { element: this.frame, hint: 'Drop --plane, or name the plane the scope is drawn on.' });
-      drawn.add(f.id);
-      const b = f.bounds;
-      for (const s of plane.shapes.values()) {
-        const x = cx(s.bounds);
-        const y = cy(s.bounds);
-        if (s !== f && x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height) drawn.add(s.id);
+      const frameShape = plane.shapes.get(this.frame);
+      if (!frameShape) throw modelError('E_NO_MATCH', `${this.frame} is not drawn on the plane of ${plane.rootId}`, { element: this.frame, hint: 'Drop --plane, or name the plane the scope is drawn on.' });
+      drawn.add(frameShape.id);
+      const frameBounds = frameShape.bounds;
+      for (const shape of plane.shapes.values()) {
+        const centerX = cx(shape.bounds);
+        const centerY = cy(shape.bounds);
+        if (shape !== frameShape && centerX >= frameBounds.x && centerX <= frameBounds.x + frameBounds.width && centerY >= frameBounds.y && centerY <= frameBounds.y + frameBounds.height) drawn.add(shape.id);
       }
     } else {
       const elsewhere = new Map<string, number>();
@@ -114,21 +114,21 @@ export class Crop {
           hint: `${[...elsewhere.keys()].length ? `It is on the plane of ${[...elsewhere.keys()].join(', ')} (--plane <id>).` : 'It has no shape: `bpmn layout <file>` draws it.'}`,
         });
       }
-      for (const [p, count] of elsewhere) notes.push(`${count} element${count > 1 ? 's' : ''} of the crop ${count > 1 ? 'are' : 'is'} on the plane of ${p} (--plane ${p})`);
+      for (const [planeId, count] of elsewhere) notes.push(`${count} element${count > 1 ? 's' : ''} of the crop ${count > 1 ? 'are' : 'is'} on the plane of ${planeId} (--plane ${planeId})`);
       if (this.artifacts) {
-        for (const e of plane.edges.values()) {
-          if (e.kind !== 'association' && e.kind !== 'dataAssociation') continue;
+        for (const edge of plane.edges.values()) {
+          if (edge.kind !== 'association' && edge.kind !== 'dataAssociation') continue;
           for (const [here, there] of [
-            [e.sourceId, e.targetId],
-            [e.targetId, e.sourceId],
+            [edge.sourceId, edge.targetId],
+            [edge.targetId, edge.sourceId],
           ]) {
-            const s = there ? plane.shapes.get(there) : undefined;
-            if (here && drawn.has(here) && s && (s.kind === 'data' || s.kind === 'annotation')) drawn.add(s.id);
+            const artifact = there ? plane.shapes.get(there) : undefined;
+            if (here && drawn.has(here) && artifact && (artifact.kind === 'data' || artifact.kind === 'annotation')) drawn.add(artifact.id);
           }
         }
       }
     }
-    for (const e of plane.edges.values()) if (e.sourceId && e.targetId && drawn.has(e.sourceId) && drawn.has(e.targetId)) drawn.add(e.id);
+    for (const edge of plane.edges.values()) if (edge.sourceId && edge.targetId && drawn.has(edge.sourceId) && drawn.has(edge.targetId)) drawn.add(edge.id);
     return drawn;
   }
 }

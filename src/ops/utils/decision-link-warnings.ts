@@ -2,8 +2,8 @@ import type { ImportWarning } from 'bpmn-moddle';
 import type { Doc } from '../../model/Doc.js';
 import { is } from '../../model/utils/moddle.js';
 
-export function isDecisionLinkWarning(w: ImportWarning): boolean {
-  return w.property === 'calledDecision' && is(w.element, 'bpmn:BusinessRuleTask');
+export function isDecisionLinkWarning(warning: ImportWarning): boolean {
+  return warning.property === 'calledDecision' && is(warning.element, 'bpmn:BusinessRuleTask');
 }
 
 /**
@@ -12,5 +12,5 @@ export function isDecisionLinkWarning(w: ImportWarning): boolean {
  */
 export function reportedImportWarnings(doc: Doc): ImportWarning[] {
   if (!doc.importWarnings.some(isDecisionLinkWarning) || doc.platform() !== undefined) return doc.importWarnings;
-  return doc.importWarnings.filter((w) => !isDecisionLinkWarning(w));
+  return doc.importWarnings.filter((warning) => !isDecisionLinkWarning(warning));
 }

@@ -20,20 +20,20 @@ export class FlowOrder {
     private readonly doc: Doc,
     scope: El,
   ) {
-    const nodes = doc.flowNodes(scope).filter((n) => !is(n, 'bpmn:BoundaryEvent') || this.isOrphanBoundary(n, scope));
+    const nodes = doc.flowNodes(scope).filter((node) => !is(node, 'bpmn:BoundaryEvent') || this.isOrphanBoundary(node, scope));
     this.members = new Set(nodes);
     this.linkCatches = FlowOrder.linkCatchesOf(nodes);
-    const starts = nodes.filter((n) => is(n, 'bpmn:StartEvent'));
-    const entries = starts.length ? starts : nodes.filter((n) => doc.incoming(n).length === 0);
-    for (const e of entries) this.visit(e);
+    const starts = nodes.filter((node) => is(node, 'bpmn:StartEvent'));
+    const entries = starts.length ? starts : nodes.filter((node) => doc.incoming(node).length === 0);
+    for (const entry of entries) this.visit(entry);
     const reachable = new Set(this.seen);
-    for (const n of nodes) if (doc.incoming(n).length === 0) this.visit(n);
-    for (const n of nodes) this.visit(n);
+    for (const node of nodes) if (doc.incoming(node).length === 0) this.visit(node);
+    for (const node of nodes) this.visit(node);
     if (is(scope, 'bpmn:AdHocSubProcess')) return;
-    for (const n of nodes) {
-      if (reachable.has(n)) continue;
-      if (isEventSubProcess(n) || peek<boolean>(n, 'isForCompensation') === true || is(n, 'bpmn:BoundaryEvent')) continue;
-      this.unreachable.add(n);
+    for (const node of nodes) {
+      if (reachable.has(node)) continue;
+      if (isEventSubProcess(node) || peek<boolean>(node, 'isForCompensation') === true || is(node, 'bpmn:BoundaryEvent')) continue;
+      this.unreachable.add(node);
     }
   }
 
@@ -52,9 +52,9 @@ export class FlowOrder {
 
   private static linkCatchesOf(nodes: El[]): Map<string, El[]> {
     const out = new Map<string, El[]>();
-    for (const n of nodes) {
-      const name = isLinkCatch(n) ? linkNameOf(n) : undefined;
-      if (name) out.set(name, [...(out.get(name) ?? []), n]);
+    for (const node of nodes) {
+      const name = isLinkCatch(node) ? linkNameOf(node) : undefined;
+      if (name) out.set(name, [...(out.get(name) ?? []), node]);
     }
     return out;
   }
@@ -62,15 +62,15 @@ export class FlowOrder {
   /** A throwing link event continues at the catching link events of the same name. */
   private successors(node: El): El[] {
     const out: El[] = [];
-    for (const f of this.doc.outgoing(node)) {
-      const t = peek<El>(f, 'targetRef');
-      if (t) out.push(t);
+    for (const flow of this.doc.outgoing(node)) {
+      const target = peek<El>(flow, 'targetRef');
+      if (target) out.push(target);
     }
     if (is(node, 'bpmn:Activity')) {
-      for (const b of this.doc.boundaryEventsOf(node)) {
-        for (const f of this.doc.outgoing(b)) {
-          const t = peek<El>(f, 'targetRef');
-          if (t) out.push(t);
+      for (const boundary of this.doc.boundaryEventsOf(node)) {
+        for (const flow of this.doc.outgoing(boundary)) {
+          const target = peek<El>(flow, 'targetRef');
+          if (target) out.push(target);
         }
       }
     }

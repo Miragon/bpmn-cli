@@ -62,7 +62,7 @@ export class ZeebeSubscription {
     const message = is(el, 'bpmn:Message') ? el : this.caughtMessage(el).message;
     if (!message) return false;
     const type = `${key.slice(0, idx)}:subscription`;
-    const existing = (message.get<El | undefined>('extensionElements')?.get<El[]>('values') ?? []).filter((v) => this.names.typeOf(v) === 'zeebe:subscription');
+    const existing = (message.get<El | undefined>('extensionElements')?.get<El[]>('values') ?? []).filter((extension) => this.names.typeOf(extension) === 'zeebe:subscription');
     if (existing.length) {
       const sub = existing[0]! as unknown as Record<string, unknown>;
       if (sub['correlationKey'] !== value) {
@@ -80,15 +80,15 @@ export class ZeebeSubscription {
   private caughtMessage(el: El): { catching: boolean; message?: El } {
     if (is(el, 'bpmn:ReceiveTask')) return { catching: true, message: el.get<El | undefined>('messageRef') };
     if (!is(el, 'bpmn:CatchEvent')) return { catching: false };
-    const def = definitionsOf(el).find((d) => is(d, 'bpmn:MessageEventDefinition'));
+    const def = definitionsOf(el).find((definition) => is(definition, 'bpmn:MessageEventDefinition'));
     return def ? { catching: true, message: def.get<El | undefined>('messageRef') } : { catching: false };
   }
 
   private addedType(op: ExtOp): string | undefined {
     if (op.type) return this.names.canonicalName((this.hosts.splitSlot(op.type)?.rest ?? op.type).split('/')[0]!);
-    const m = op.xml ? /^\s*<([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)([^>]*)>/.exec(op.xml) : null;
-    if (!m) return undefined;
-    const inline = new RegExp(`xmlns:${m[1]!.replace(/[.-]/g, '\\$&')}\\s*=\\s*["']([^"']*)["']`).exec(m[3] ?? '')?.[1];
-    return this.names.canonicalName(`${m[1]}:${m[2]}`, inline ? { [m[1]!]: inline } : {});
+    const match = op.xml ? /^\s*<([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)([^>]*)>/.exec(op.xml) : null;
+    if (!match) return undefined;
+    const inline = new RegExp(`xmlns:${match[1]!.replace(/[.-]/g, '\\$&')}\\s*=\\s*["']([^"']*)["']`).exec(match[3] ?? '')?.[1];
+    return this.names.canonicalName(`${match[1]}:${match[2]}`, inline ? { [match[1]!]: inline } : {});
   }
 }

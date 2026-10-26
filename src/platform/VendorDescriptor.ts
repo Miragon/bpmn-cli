@@ -33,8 +33,8 @@ export interface RawType {
   meta?: { allowedIn?: string[] };
 }
 
-export interface VendorIndex<T extends VendorElementType> {
-  elements: Map<string, T>;
+export interface VendorIndex<TElementType extends VendorElementType> {
+  elements: Map<string, TElementType>;
   attrs: Map<string, VendorAttr>;
 }
 
@@ -45,10 +45,10 @@ const PRIMITIVES = new Set(['String', 'Boolean', 'Integer', 'Real', 'Element']);
  * with a BpmnModdle: typed vendor content would break the byte-stable roundtrip, so vendor
  * content stays generic and the descriptor only answers questions about it.
  */
-export abstract class VendorDescriptor<T extends VendorElementType = VendorElementType> {
+export abstract class VendorDescriptor<TElementType extends VendorElementType = VendorElementType> {
   private static probeModdle: ReturnType<typeof createModdle> | undefined;
   private static readonly subtypeCache = new Map<string, boolean>();
-  private cached: VendorIndex<T> | undefined;
+  private cached: VendorIndex<TElementType> | undefined;
   private readonly singleNames: ReadonlySet<string>;
 
   constructor(
@@ -97,13 +97,13 @@ export abstract class VendorDescriptor<T extends VendorElementType = VendorEleme
   }
 
   /** Mixins such as camunda:AsyncCapable are no element types. */
-  type(name: string): T | undefined {
+  type(name: string): TElementType | undefined {
     if (name.includes(':') && !name.startsWith(`${this.prefix}:`)) return undefined;
     return this.index().elements.get(this.typeKey(name));
   }
 
   typeNames(): string[] {
-    return [...this.index().elements.values()].map((e) => e.name);
+    return [...this.index().elements.values()].map((element) => element.name);
   }
 
   isSingle(name: string): boolean {
@@ -115,9 +115,9 @@ export abstract class VendorDescriptor<T extends VendorElementType = VendorEleme
 
   abstract containersOf(name: string): string[];
 
-  protected abstract buildIndex(): VendorIndex<T>;
+  protected abstract buildIndex(): VendorIndex<TElementType>;
 
-  protected index(): VendorIndex<T> {
+  protected index(): VendorIndex<TElementType> {
     this.cached ??= this.buildIndex();
     return this.cached;
   }

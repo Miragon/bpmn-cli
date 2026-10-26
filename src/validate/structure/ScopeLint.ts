@@ -28,12 +28,12 @@ export class ScopeLint {
 
   private lintStartAndEnd(scope: El, nodes: El[]): void {
     const isProcess = is(scope, 'bpmn:Process');
-    if (!isEventSubProcess(scope) && !nodes.some((n) => is(n, 'bpmn:StartEvent'))) {
+    if (!isEventSubProcess(scope) && !nodes.some((node) => is(node, 'bpmn:StartEvent'))) {
       this.findings.warning('W_NO_START', `${isProcess ? 'Process' : 'Sub-process'} ${shownId(scope)} has no start event`, shownId(scope), {
         hint: `Add one: \`bpmn add <file> startEvent "<Name>" --in ${shownId(scope)}\` (or --before <firstNodeId>).`,
       });
     }
-    if (!nodes.some((n) => is(n, 'bpmn:EndEvent'))) {
+    if (!nodes.some((node) => is(node, 'bpmn:EndEvent'))) {
       this.findings.warning('W_NO_END', `${isProcess ? 'Process' : 'Sub-process'} ${shownId(scope)} has no end event`, shownId(scope), {
         hint: `Add one after the last node: \`bpmn add <file> endEvent "<Name>" --after <nodeId>\`.`,
       });

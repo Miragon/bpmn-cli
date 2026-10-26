@@ -4,32 +4,32 @@
  */
 export const MIN_EVIDENCE = 2;
 
-export class Tally<K> {
-  readonly counts = new Map<K, number>();
-  add(k: K, n = 1): void {
-    this.counts.set(k, (this.counts.get(k) ?? 0) + n);
+export class Tally<TKey> {
+  readonly counts = new Map<TKey, number>();
+  add(key: TKey, amount = 1): void {
+    this.counts.set(key, (this.counts.get(key) ?? 0) + amount);
   }
-  get(k: K): number {
-    return this.counts.get(k) ?? 0;
+  get(key: TKey): number {
+    return this.counts.get(key) ?? 0;
   }
   get total(): number {
-    let t = 0;
-    for (const v of this.counts.values()) t += v;
-    return t;
+    let total = 0;
+    for (const count of this.counts.values()) total += count;
+    return total;
   }
   /**
    * The most frequent key with at least `min` votes. A tie goes to `prefers`, else to the first
    * counted; flow votes pass `prefers` so document order never tips them.
    */
-  top(min = MIN_EVIDENCE, prefers?: (a: K, b: K) => boolean): K | undefined {
-    let best: K | undefined;
-    let n = 0;
-    for (const [k, v] of this.counts) {
-      if (v > n || (v === n && best !== undefined && prefers?.(k, best))) {
-        best = k;
-        n = v;
+  top(min = MIN_EVIDENCE, prefers?: (first: TKey, second: TKey) => boolean): TKey | undefined {
+    let best: TKey | undefined;
+    let bestCount = 0;
+    for (const [key, count] of this.counts) {
+      if (count > bestCount || (count === bestCount && best !== undefined && prefers?.(key, best))) {
+        best = key;
+        bestCount = count;
       }
     }
-    return n >= min ? best : undefined;
+    return bestCount >= min ? best : undefined;
   }
 }

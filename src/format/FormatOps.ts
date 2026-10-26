@@ -48,7 +48,7 @@ export interface FormatEntry {
 }
 
 /** A change of one plane must not add a hard layout problem or raise the score. */
-const GUARDED: TrialPolicy = { key: (p) => (isHardProblem(p) ? problemKey(p) : undefined), lower: false, rebase: false };
+const GUARDED: TrialPolicy = { key: (problem) => (isHardProblem(problem) ? problemKey(problem) : undefined), lower: false, rebase: false };
 
 /**
  * Runs the format ops of a batch (place, align, color, label, route, space, tidy, compact,
@@ -68,10 +68,10 @@ export class FormatOps {
   /** `asFile`: `doc` holds the file's own drawing, so the first refusal may name a command. */
   run(entries: readonly FormatEntry[], asFile = false): FormatResult[] {
     const results: FormatResult[] = [];
-    for (const [i, entry] of entries.entries()) {
+    for (const [position, entry] of entries.entries()) {
       try {
-        const r = this.runOne(entry, asFile && i === 0 && entry.index === 0);
-        if (r) results.push(r);
+        const result = this.runOne(entry, asFile && position === 0 && entry.index === 0);
+        if (result) results.push(result);
       } catch (err) {
         if (err instanceof CliError) err.details['op'] = entry.index;
         throw err;
@@ -93,7 +93,7 @@ export class FormatOps {
     if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) {
       details.hint = `It has no line (added, or its ends changed, with --no-layout): \`bpmn route <file> ${id}\` draws it, and so does the next model edit without --no-layout.`;
     } else if (is(el, 'bpmn:Process')) {
-      const pool = rawList(this.sem.collaboration, 'participants').find((p) => raw(p, 'processRef') === el);
+      const pool = rawList(this.sem.collaboration, 'participants').find((participant) => raw(participant, 'processRef') === el);
       if (pool) details.hint = `A process is drawn as its pool: use the participant id ${idOf(pool)}.`;
       else details.hint = 'A process without pool is the diagram itself; name the shapes inside it.';
     }
@@ -120,7 +120,7 @@ export class FormatOps {
       if (edge) return { plane, edge };
     }
     const ends = DiagramReader.edgeEnds(el);
-    const drawsBoth = (p: Plane | undefined): p is Plane => !!p && !!ends.sourceId && !!ends.targetId && p.shapes.has(ends.sourceId) && p.shapes.has(ends.targetId);
+    const drawsBoth = (candidate: Plane | undefined): candidate is Plane => !!candidate && !!ends.sourceId && !!ends.targetId && candidate.shapes.has(ends.sourceId) && candidate.shapes.has(ends.targetId);
     const plane = !draw ? undefined : is(el, 'bpmn:MessageFlow') ? this.sem.homePlane(this.planes, id) : this.planes.find(drawsBoth);
     if (drawsBoth(plane)) {
       const edge: DEdge = { id, el, kind: DiagramReader.edgeKind(el), ...ends, points: [] };
@@ -136,12 +136,12 @@ export class FormatOps {
 
   movableShape(id: string): { plane: Plane; shape: DShape } {
     const found = this.drawnShape(id);
-    const s = found.shape;
-    if (s.kind === 'boundary') {
-      throw modelError('E_WRONG_KIND', `"${id}" is a boundary event; it follows its host ${s.hostId ?? ''}`.trim(), { element: id, ...(s.hostId ? { related: [s.hostId] } : {}), hint: `Place the host instead${s.hostId ? ` (${s.hostId})` : ''}; \`bpmn place <file> ${id} --side top|bottom\` moves it to the other border of its host, \`bpmn move <file> ${id} --on <activityId>\` attaches it elsewhere.` });
+    const shape = found.shape;
+    if (shape.kind === 'boundary') {
+      throw modelError('E_WRONG_KIND', `"${id}" is a boundary event; it follows its host ${shape.hostId ?? ''}`.trim(), { element: id, ...(shape.hostId ? { related: [shape.hostId] } : {}), hint: `Place the host instead${shape.hostId ? ` (${shape.hostId})` : ''}; \`bpmn place <file> ${id} --side top|bottom\` moves it to the other border of its host, \`bpmn move <file> ${id} --on <activityId>\` attaches it elsewhere.` });
     }
-    if (s.kind === 'participant' || s.kind === 'lane' || s.kind === 'group' || s.kind === 'other') {
-      throw modelError('E_WRONG_KIND', `"${id}" is a ${s.kind === 'participant' ? 'pool' : s.kind}, expected a node, data element or annotation`, {
+    if (shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group' || shape.kind === 'other') {
+      throw modelError('E_WRONG_KIND', `"${id}" is a ${shape.kind === 'participant' ? 'pool' : shape.kind}, expected a node, data element or annotation`, {
         element: id,
         hint: 'Pools and lanes are bands: `bpmn order <file> <collaborationId> <participantIds...>` reorders pools, `bpmn order <file> <poolId> <laneIds...>` reorders lanes, `bpmn space <file> --below <laneId>` makes one taller (`--by -row` smaller).',
       });
@@ -159,9 +159,9 @@ export class FormatOps {
   }
 
   drawing(plane: Plane): Drawing {
-    let d = this.drawings.get(plane);
-    if (!d) this.drawings.set(plane, (d = new Drawing(plane)));
-    return d;
+    let drawing = this.drawings.get(plane);
+    if (!drawing) this.drawings.set(plane, (drawing = new Drawing(plane)));
+    return drawing;
   }
 
   room(plane: Plane): RoomMaker {
@@ -174,7 +174,7 @@ export class FormatOps {
   }
 
   snapshot(): DrawingSnapshot {
-    return new DrawingSnapshot(this.planes.map((p) => this.drawing(p)));
+    return new DrawingSnapshot(this.planes.map((plane) => this.drawing(plane)));
   }
 
   /**
@@ -183,8 +183,8 @@ export class FormatOps {
    */
   guard(plane: Plane): { attempt: Attempt; rejected: LayoutProblem[] } {
     const trials = new TrialGuard(() => this.measure(), GUARDED);
-    const d = this.drawing(plane);
-    return { attempt: (change, force) => d.attempt(trials, change, force), rejected: trials.rejected };
+    const drawing = this.drawing(plane);
+    return { attempt: (change, force) => drawing.attempt(trials, change, force), rejected: trials.rejected };
   }
 
   /**
@@ -192,24 +192,24 @@ export class FormatOps {
    * --kind alone aligns on the rightmost shape, so nothing moves left. `picked`: ids only a
    * selector named; align skips those that would leave their frame.
    */
-  private resolveSelection<T extends FormatOp>(op: T): { op: T; picked: Set<string> } {
+  private resolveSelection<TOp extends FormatOp>(op: TOp): { op: TOp; picked: Set<string> } {
     const none = { op, picked: new Set<string>() };
     if (op.op !== 'place' && op.op !== 'align' && op.op !== 'color' && op.op !== 'tidy') return none;
     if (!op.path && !op.kind && !op.branch) return none;
     if (!this.planes.length) throw this.noDiagram();
-    const shapeOf = (id: string): DShape | undefined => this.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
+    const shapeOf = (id: string): DShape | undefined => this.planes.map((plane) => plane.shapes.get(id)).find((found) => !!found);
     const ids = new ElementSelector(this.doc).select(op, {
       shapesOnly: op.op !== 'color',
-      drawn: (id) => this.planes.some((p) => p.shapes.has(id) || p.edges.has(id)),
+      drawn: (id) => this.planes.some((plane) => plane.shapes.has(id) || plane.edges.has(id)),
       centreX: (id) => {
-        const s = shapeOf(id);
-        return s ? cx(s.bounds) : undefined;
+        const shape = shapeOf(id);
+        return shape ? cx(shape.bounds) : undefined;
       },
     });
     const explicit = new Set(op.ids ?? []);
     const picked = new Set(ids.filter((id) => !explicit.has(id)));
     if (op.op === 'align' && !op.to && !op.ids?.length && !op.path && !op.branch && op.axis === 'column') {
-      const right = [...ids].sort((a, b) => cx(shapeOf(b)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }) - cx(shapeOf(a)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }))[0];
+      const right = [...ids].sort((one, other) => cx(shapeOf(other)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }) - cx(shapeOf(one)?.bounds ?? { x: 0, y: 0, width: 0, height: 0 }))[0];
       return { op: { ...op, ids, ...(right ? { to: right } : {}) }, picked };
     }
     return { op: { ...op, ids }, picked };
@@ -235,9 +235,9 @@ export class FormatOps {
         extra.colored = new ColorAction(this, op).run();
         break;
       case 'label': {
-        const r = new LabelAction(this, op, snap, notes).run();
-        extra.labels = r.labels;
-        rerouted = r.rerouted;
+        const labelled = new LabelAction(this, op, snap, notes).run();
+        extra.labels = labelled.labels;
+        rerouted = labelled.rerouted;
         break;
       }
       case 'route':

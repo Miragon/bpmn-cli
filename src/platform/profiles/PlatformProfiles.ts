@@ -75,7 +75,7 @@ export class PlatformProfiles {
   }
 
   async loadAll(platforms: readonly EnginePlatform[] = ['c7', 'c8']): Promise<void> {
-    await Promise.all(platforms.map((p) => this.load(p)));
+    await Promise.all(platforms.map((platform) => this.load(platform)));
   }
 
   async ensure(doc: Doc, choice: PlatformChoice = 'auto'): Promise<void> {
@@ -97,37 +97,37 @@ export class PlatformProfiles {
   }
 
   summarize(report: ProfileReport): PlatformSummary {
-    const counts = Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Record<Severity, number>;
-    for (const f of report.findings) counts[f.severity]++;
+    const counts = Object.fromEntries(SEVERITIES.map((severity) => [severity, 0])) as Record<Severity, number>;
+    for (const finding of report.findings) counts[finding.severity]++;
     return { platform: report.platform, source: report.source, detail: report.detail, ...(report.operaton ? { operaton: true } : {}), counts };
   }
 
   baseline(doc: Doc, choice: PlatformChoice = 'auto'): ProfileBaseline {
     const report = this.run(doc, choice);
-    return { report, elements: report.findings.map((f) => (f.element ? doc.get(f.element) : undefined)) };
+    return { report, elements: report.findings.map((finding) => (finding.element ? doc.get(finding.element) : undefined)) };
   }
 
   /** Each finding is matched at most once, by code, element identity and subject. */
   delta(doc: Doc, before: ProfileBaseline, after: ProfileReport): { added: ProfileFinding[]; resolved: ProfileFinding[] } {
-    const left = before.report.findings.map((f, i) => ({ f, el: before.elements[i] }));
+    const left = before.report.findings.map((finding, index) => ({ finding, el: before.elements[index] }));
     const added: ProfileFinding[] = [];
-    for (const f of after.findings) {
-      const el = f.element ? doc.get(f.element) : undefined;
-      const i = left.findIndex((b) => this.sameFinding(b.f, b.el, f, el));
-      if (i === -1) added.push(f);
-      else left.splice(i, 1);
+    for (const finding of after.findings) {
+      const el = finding.element ? doc.get(finding.element) : undefined;
+      const matchIndex = left.findIndex((candidate) => this.sameFinding(candidate.finding, candidate.el, finding, el));
+      if (matchIndex === -1) added.push(finding);
+      else left.splice(matchIndex, 1);
     }
-    return { added, resolved: left.map((b) => b.f) };
+    return { added, resolved: left.map((remaining) => remaining.finding) };
   }
 
   private isEnginePlatform(platform: string): platform is EnginePlatform {
     return Object.hasOwn(LOADERS, platform);
   }
 
-  private sameFinding(a: ProfileFinding, aEl: El | undefined, b: ProfileFinding, bEl: El | undefined): boolean {
-    if (a.code !== b.code || subjectOf(a) !== subjectOf(b)) return false;
+  private sameFinding(first: ProfileFinding, aEl: El | undefined, second: ProfileFinding, bEl: El | undefined): boolean {
+    if (first.code !== second.code || subjectOf(first) !== subjectOf(second)) return false;
     if (aEl && bEl) return aEl === bEl;
-    return a.element === b.element;
+    return first.element === second.element;
   }
 }
 

@@ -31,9 +31,9 @@ function failure(fn: () => unknown): CliError {
   throw new Error('expected a failure');
 }
 
-async function rejection(p: Promise<unknown>): Promise<CliError> {
+async function rejection(pending: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await pending;
   } catch (err) {
     if (err instanceof CliError) return err;
     throw err;
@@ -66,8 +66,8 @@ const INVOICE: unknown[] = [
 
 describe('batch aliases', () => {
   it('resolve in every id field, in set values and in format ops; the result lists alias -> final id', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Rechnungsprüfung' })).xml, INVOICE);
-    expect(r.result.aliases).toEqual({
+    const outcome = await applyToXml((await newXml({ processName: 'Rechnungsprüfung' })).xml, INVOICE);
+    expect(outcome.result.aliases).toEqual({
       $start: 'Event_RechnungEingegangen',
       $check: 'Activity_VollstaendigkeitPruefen',
       $ok: 'Gateway_Vollstaendig',
@@ -79,12 +79,12 @@ describe('batch aliases', () => {
       $late: 'Event_TimerOnNachfordern',
       $lateFlow: 'Flow_TimerOnNachfordernToErinnert',
     });
-    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Vollstaendig" name="Vollständig?" default="Flow_VollstaendigToNachfordern">');
-    expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_VollstaendigToBuchen" name="ja" sourceRef="Gateway_Vollstaendig" targetRef="Activity_Buchen">\s*<bpmn:conditionExpression[^>]*>\$\{vollstaendig\}<\/bpmn:conditionExpression>/);
-    expect(r.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_VollstaendigkeitPruefen', 'Flow_VollstaendigToBuchen', 'Flow_TimerOnNachfordernToErinnert'] });
-    expect(renderMutation(r.result)).toContain('aliases: $start = Event_RechnungEingegangen, $check = Activity_VollstaendigkeitPruefen, $ok = Gateway_Vollstaendig');
+    expect(outcome.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Vollstaendig" name="Vollständig?" default="Flow_VollstaendigToNachfordern">');
+    expect(outcome.xml).toMatch(/<bpmn:sequenceFlow id="Flow_VollstaendigToBuchen" name="ja" sourceRef="Gateway_Vollstaendig" targetRef="Activity_Buchen">\s*<bpmn:conditionExpression[^>]*>\$\{vollstaendig\}<\/bpmn:conditionExpression>/);
+    expect(outcome.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_VollstaendigkeitPruefen', 'Flow_VollstaendigToBuchen', 'Flow_TimerOnNachfordernToErinnert'] });
+    expect(renderMutation(outcome.result)).toContain('aliases: $start = Event_RechnungEingegangen, $check = Activity_VollstaendigkeitPruefen, $ok = Gateway_Vollstaendig');
     // without aliases the result has none
-    expect((await applyToXml(r.xml, [{ op: 'set', id: 'Activity_Buchen', values: { name: 'Buchen!' } }])).result.aliases).toBeUndefined();
+    expect((await applyToXml(outcome.xml, [{ op: 'set', id: 'Activity_Buchen', values: { name: 'Buchen!' } }])).result.aliases).toBeUndefined();
   });
 
   it('an alias names the element itself: it follows a rename later in the batch', async () => {
@@ -92,21 +92,21 @@ describe('batch aliases', () => {
       { op: 'add', kind: 'start', name: 'Start' },
       { op: 'add', kind: 'end', name: 'End', after: 'Event_Start' },
     ]);
-    const r = await applyToXml(start.xml, [
+    const outcome = await applyToXml(start.xml, [
       { op: 'add', kind: 'task', name: 'Work', after: 'Event_Start', as: '$work', flowAs: '$in' },
       // splicing into $in renames it (its id named Start and Work); $in follows
       { op: 'add', kind: 'task', name: 'Prepare', flow: '$in' },
       { op: 'set', id: '$in', values: { name: 'go' } },
       { op: 'color', ids: ['$in'], color: 'blue' },
     ]);
-    expect(r.result.aliases).toEqual({ $work: 'Activity_Work', $in: 'Flow_StartToPrepare' });
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_StartToPrepare" name="go" sourceRef="Event_Start" targetRef="Activity_Prepare" />');
-    expect(r.result.layout.format?.[0]).toMatchObject({ colored: ['Flow_StartToPrepare'] });
+    expect(outcome.result.aliases).toEqual({ $work: 'Activity_Work', $in: 'Flow_StartToPrepare' });
+    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_StartToPrepare" name="go" sourceRef="Event_Start" targetRef="Activity_Prepare" />');
+    expect(outcome.result.layout.format?.[0]).toMatchObject({ colored: ['Flow_StartToPrepare'] });
   });
 
   it('an alias follows its element through a retype to another type (a new element): later ops, format ops and the result use it', async () => {
     const xml = (await newXml({ processName: 'Invoice' })).xml;
-    const r = await applyToXml(xml, [
+    const outcome = await applyToXml(xml, [
       { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Invoice', as: '$s' },
       { op: 'add', kind: 'serviceTask', name: 'Check invoice', after: '$s', as: '$t' },
       { op: 'retype', id: '$t', kind: 'userTask' },
@@ -120,12 +120,12 @@ describe('batch aliases', () => {
       { op: 'add', kind: 'end', name: 'Done', after: '$paid' },
       { op: 'color', ids: ['$t', '$ok'], color: 'green' },
     ]);
-    expect(r.result.aliases).toEqual({ $s: 'Event_Start', $t: 'Activity_CheckInvoice', $ok: 'Gateway_Ok', $paid: 'Event_Paid' });
-    expect(r.xml).toContain('<bpmn:manualTask id="Activity_CheckInvoice" name="Check the invoice">');
-    expect(r.xml).toContain('<bpmn:parallelGateway id="Gateway_Ok" name="Ok?">');
-    expect(r.xml).toContain('<bpmn:intermediateThrowEvent id="Event_Paid" name="Paid">');
-    expect(r.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_CheckInvoice', 'Gateway_Ok'] });
-    expect(renderMutation(r.result)).toContain('aliases: $s = Event_Start, $t = Activity_CheckInvoice, $ok = Gateway_Ok, $paid = Event_Paid');
+    expect(outcome.result.aliases).toEqual({ $s: 'Event_Start', $t: 'Activity_CheckInvoice', $ok: 'Gateway_Ok', $paid: 'Event_Paid' });
+    expect(outcome.xml).toContain('<bpmn:manualTask id="Activity_CheckInvoice" name="Check the invoice">');
+    expect(outcome.xml).toContain('<bpmn:parallelGateway id="Gateway_Ok" name="Ok?">');
+    expect(outcome.xml).toContain('<bpmn:intermediateThrowEvent id="Event_Paid" name="Paid">');
+    expect(outcome.result.layout.format?.[0]).toMatchObject({ op: 'color', colored: ['Activity_CheckInvoice', 'Gateway_Ok'] });
+    expect(renderMutation(outcome.result)).toContain('aliases: $s = Event_Start, $t = Activity_CheckInvoice, $ok = Gateway_Ok, $paid = Event_Paid');
     // removed after the retype: still E_NOT_FOUND, and left out of the result
     const removed = await rejection(
       applyToXml(xml, [
@@ -141,7 +141,7 @@ describe('batch aliases', () => {
   it('an alias follows a retype that gives the element a new id under the declared conventions (#34)', async () => {
     const conventions = idConventionsFromLint({ severity: 'warn', config: {} }, bpmnlintEngine().plugin.naming, { source: '.bpmnlintrc in .' }).conventions!;
     const doc = await Doc.fromXml((await newXml({ processName: 'Invoice' })).xml);
-    const r = await mutateDoc(
+    const outcome = await mutateDoc(
       doc,
       [
         { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Invoice', as: '$s' },
@@ -152,14 +152,14 @@ describe('batch aliases', () => {
       ] as Op[],
       { layout: false, conventions },
     );
-    expect(r.aliases).toEqual({ $s: 'startEvent_start', $t: 'userTask_checkInvoice' });
-    expect(r.xml).toContain('<bpmn:userTask id="userTask_checkInvoice" name="Check the invoice">');
-    expect(r.xml).toContain('sourceRef="userTask_checkInvoice" targetRef="endEvent_done"');
-    expect(r.xml).not.toContain('serviceTask_checkInvoice');
+    expect(outcome.aliases).toEqual({ $s: 'startEvent_start', $t: 'userTask_checkInvoice' });
+    expect(outcome.xml).toContain('<bpmn:userTask id="userTask_checkInvoice" name="Check the invoice">');
+    expect(outcome.xml).toContain('sourceRef="userTask_checkInvoice" targetRef="endEvent_done"');
+    expect(outcome.xml).not.toContain('serviceTask_checkInvoice');
   });
 
   it('resolve in the lane of split nodes and in the set map of add', async () => {
-    const r = await applyToXml((await newXml({ processName: 'P' })).xml, [
+    const outcome = await applyToXml((await newXml({ processName: 'P' })).xml, [
       { op: 'add', kind: 'participant', name: 'P' },
       { op: 'add', kind: 'lane', name: 'Clerk', in: 'Participant_P', as: '$clerk' },
       { op: 'add', kind: 'lane', name: 'Accounting', in: 'Participant_P', as: '$acc' },
@@ -168,10 +168,10 @@ describe('batch aliases', () => {
       { op: 'add', kind: 'task', name: 'Log', in: 'Process_P', set: { lane: '$acc' } },
       { op: 'set', id: '$ok', values: { default: '$ask' } },
     ]);
-    const doc = await Doc.fromXml(r.xml);
-    expect(doc.lanesOf(doc.require('Activity_Book')).map((l) => l.get('id'))).toEqual(['Lane_Accounting']);
-    expect(doc.lanesOf(doc.require('Activity_Log')).map((l) => l.get('id'))).toEqual(['Lane_Accounting']);
-    expect(r.xml).toContain('default="Flow_OkToAsk"');
+    const doc = await Doc.fromXml(outcome.xml);
+    expect(doc.lanesOf(doc.require('Activity_Book')).map((lane) => lane.get('id'))).toEqual(['Lane_Accounting']);
+    expect(doc.lanesOf(doc.require('Activity_Log')).map((lane) => lane.get('id'))).toEqual(['Lane_Accounting']);
+    expect(outcome.xml).toContain('default="Flow_OkToAsk"');
     expect(() => parseOps([{ op: 'split', after: 'X', branches: [{ nodes: [{ kind: 'task', lane: '$nope' }] }] }])).toThrow(/"branches\[0\]\.nodes\[0\]\.lane": alias \$nope is not defined/);
   });
 
@@ -182,12 +182,12 @@ describe('batch aliases', () => {
       { op: 'add', kind: 'participant', name: 'Shop' },
       { op: 'add', kind: 'participant', name: 'Customer', blackBox: true },
     ]);
-    const r = await applyToXml(base.xml, [
+    const outcome = await applyToXml(base.xml, [
       { op: 'connect', source: 'Activity_Confirm', target: 'Participant_Customer', message: 'Confirmation', as: '$mf' },
       { op: 'add', kind: 'task', id: 'Activity_Confirm', ifAbsent: true, as: '$confirm' },
       { op: 'connect', source: '$confirm', target: 'Participant_Customer', ifAbsent: true, as: '$same' },
     ]);
-    expect(r.result.aliases).toEqual({ $mf: 'Flow_ConfirmToCustomer', $confirm: 'Activity_Confirm', $same: 'Flow_ConfirmToCustomer' });
+    expect(outcome.result.aliases).toEqual({ $mf: 'Flow_ConfirmToCustomer', $confirm: 'Activity_Confirm', $same: 'Flow_ConfirmToCustomer' });
   });
 
   it('is checked before anything runs: unknown (with the defined ones), defined later or twice, malformed, in an id field', () => {
@@ -213,16 +213,16 @@ describe('batch aliases', () => {
   it('typed ops of the library are resolved and checked the same way while they run', async () => {
     const doc = await Doc.fromXml((await newXml({ processName: 'P' })).xml);
     const ops = [{ op: 'add', kind: 'startEvent', name: 'S', as: '$s' }, { op: 'add', kind: 'task', name: 'T', after: '$x' }] as Op[];
-    const e = await rejection(mutateDoc(doc, ops));
-    expect([e.code, e.details.op, e.details.candidates]).toEqual(['E_UNKNOWN_ALIAS', 1, ['$s']]);
+    const cliError = await rejection(mutateDoc(doc, ops));
+    expect([cliError.code, cliError.details.op, cliError.details.candidates]).toEqual(['E_UNKNOWN_ALIAS', 1, ['$s']]);
     const removed = await rejection(mutateDoc(await Doc.fromXml((await newXml({ processName: 'P' })).xml), [{ op: 'add', kind: 'task', name: 'T', as: '$t' }, { op: 'remove', ids: ['$t'] }, { op: 'set', id: '$t', values: { name: 'x' } }] as Op[]));
     expect([removed.code, removed.message]).toEqual(['E_NOT_FOUND', 'ops[2] (set): "id": $t named Activity_T, which an op before this one removed']);
   });
 
   it('joinAs without a join gateway is refused', async () => {
     const xml = (await applyToXml((await newXml({ processName: 'P' })).xml, [{ op: 'add', kind: 'start', name: 'S' }, { op: 'add', kind: 'task', name: 'T', after: 'Event_S' }])).xml;
-    const e = await rejection(applyToXml(xml, [{ op: 'split', after: 'Activity_T', join: false, joinAs: '$j', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] }]));
-    expect([e.code, e.message]).toEqual(['E_USAGE', 'joinAs $j: split Gateway_AfterT creates no join gateway (join is false)']);
+    const cliError = await rejection(applyToXml(xml, [{ op: 'split', after: 'Activity_T', join: false, joinAs: '$j', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] }]));
+    expect([cliError.code, cliError.message]).toEqual(['E_USAGE', 'joinAs $j: split Gateway_AfterT creates no join gateway (join is false)']);
   });
 
   it('the documented example (bpmn kinds --json -> opsExample) runs on the file it describes', async () => {
@@ -231,10 +231,10 @@ describe('batch aliases', () => {
       { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_OrderReceived' },
       { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
     ]);
-    const r = await applyToXml(order.xml, opsExample());
-    expect(r.result.aliases).toEqual({ $ok: 'Gateway_InvoiceOk', $book: 'Activity_BookInvoice', $clarify: 'Activity_ClarifyInvoice', $reminder: 'Event_Reminder', $remind: 'Activity_RemindCustomer', $sent: 'Event_ReminderSent' });
-    expect(r.result.created.map((c) => c.id)).toContain('Flow_RemindCustomerToReminderSent');
-    expect(r.xml).toContain('<zeebe:taskDefinition type="book-invoice" retries="3" />');
+    const outcome = await applyToXml(order.xml, opsExample());
+    expect(outcome.result.aliases).toEqual({ $ok: 'Gateway_InvoiceOk', $book: 'Activity_BookInvoice', $clarify: 'Activity_ClarifyInvoice', $reminder: 'Event_Reminder', $remind: 'Activity_RemindCustomer', $sent: 'Event_ReminderSent' });
+    expect(outcome.result.created.map((change) => change.id)).toContain('Flow_RemindCustomerToReminderSent');
+    expect(outcome.xml).toContain('<zeebe:taskDefinition type="book-invoice" retries="3" />');
   });
 
   it('the JSON schema describes the alias keys', () => {
@@ -268,13 +268,13 @@ const SPLICE_GATEWAY: unknown[] = [
 
 describe('outAs: the flow an add creates out of the new node', () => {
   it('names the flow a splice creates (new node -> old successor): the same batch gives it a condition', async () => {
-    const r = await applyToXml(await checkToOk(), SPLICE_GATEWAY);
+    const outcome = await applyToXml(await checkToOk(), SPLICE_GATEWAY);
     // flowAs is the flow the file had (renamed after its new ends), outAs the one the splice created
-    expect(r.result.aliases).toEqual({ $in: 'Flow_CheckToValid', $yes: 'Flow_ValidToOk', $valid: 'Gateway_Valid', $no: 'Flow_ValidToRejected' });
-    expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_ValidToOk" name="yes" sourceRef="Gateway_Valid" targetRef="Event_Ok">\s*<bpmn:conditionExpression[^>]*>\$\{valid\}<\/bpmn:conditionExpression>/);
-    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Valid" name="Valid?" default="Flow_ValidToRejected">');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_CheckToValid" sourceRef="Activity_Check" targetRef="Gateway_Valid" />');
-    expect(renderMutation(r.result)).toContain('aliases: $in = Flow_CheckToValid, $yes = Flow_ValidToOk, $valid = Gateway_Valid, $no = Flow_ValidToRejected');
+    expect(outcome.result.aliases).toEqual({ $in: 'Flow_CheckToValid', $yes: 'Flow_ValidToOk', $valid: 'Gateway_Valid', $no: 'Flow_ValidToRejected' });
+    expect(outcome.xml).toMatch(/<bpmn:sequenceFlow id="Flow_ValidToOk" name="yes" sourceRef="Gateway_Valid" targetRef="Event_Ok">\s*<bpmn:conditionExpression[^>]*>\$\{valid\}<\/bpmn:conditionExpression>/);
+    expect(outcome.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Valid" name="Valid?" default="Flow_ValidToRejected">');
+    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_CheckToValid" sourceRef="Activity_Check" targetRef="Gateway_Valid" />');
+    expect(renderMutation(outcome.result)).toContain('aliases: $in = Flow_CheckToValid, $yes = Flow_ValidToOk, $valid = Gateway_Valid, $no = Flow_ValidToRejected');
     // the other splices: after a node with one outgoing flow, before a node with one incoming flow
     const after = await applyToXml(await checkToOk(), [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_Check', outAs: '$o' }]);
     expect(after.result.aliases).toEqual({ $o: 'Flow_LogToOk' });
@@ -284,7 +284,7 @@ describe('outAs: the flow an add creates out of the new node', () => {
 
   it('names the flow to "to" and the flow of a prepend, follows a later rename, and binds an existing node\'s with --if-absent', async () => {
     const xml = (await applyToXml(await checkToOk(), SPLICE_GATEWAY)).xml;
-    const r = await applyToXml(xml, [
+    const outcome = await applyToXml(xml, [
       // a branch that re-joins: appended after the gateway, connected to "to"
       { op: 'add', kind: 'task', name: 'Escalate', after: 'Gateway_Valid', to: 'Event_Ok', condition: '${late}', outAs: '$back' },
       // unconnected with "to", and a boundary event with "to"
@@ -297,7 +297,7 @@ describe('outAs: the flow an add creates out of the new node', () => {
       { op: 'set', id: '$back', values: { name: 'back' } },
       { op: 'add', kind: 'userTask', id: 'Activity_Check', ifAbsent: true, after: 'Event_Start', outAs: '$checkOut' },
     ]);
-    expect(r.result.aliases).toEqual({
+    expect(outcome.result.aliases).toEqual({
       $back: 'Flow_EscalateToRecheck',
       $loneOut: 'Flow_LoneToRejected',
       $lone: 'Activity_Lone',
@@ -307,9 +307,9 @@ describe('outAs: the flow an add creates out of the new node', () => {
       $recheck: 'Flow_RecheckToOk',
       $checkOut: 'Flow_CheckToValid',
     });
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_EscalateToRecheck" name="back" sourceRef="Activity_Escalate" targetRef="Activity_Recheck" />');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_RecheckToOk" sourceRef="Activity_Recheck" targetRef="Event_Ok" />');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_LoneToRejected" sourceRef="Activity_Lone" targetRef="Event_Rejected" />');
+    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_EscalateToRecheck" name="back" sourceRef="Activity_Escalate" targetRef="Activity_Recheck" />');
+    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_RecheckToOk" sourceRef="Activity_Recheck" targetRef="Event_Ok" />');
+    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_LoneToRejected" sourceRef="Activity_Lone" targetRef="Event_Rejected" />');
   });
 
   it('is refused where the add creates no flow out of the node or two (E_USAGE), before anything runs where the keys tell', async () => {
@@ -380,7 +380,7 @@ describe('outAs: the flow an add creates out of the new node', () => {
     expect(Object.keys(defs['node']!.properties)).not.toContain('outAs');
     expect(guideText()).toMatch(/"outAs" on add: the one flow\s+the add creates out of the node, to the old successor on a splice/);
     expect(guideText()).toMatch(/^ {11}keys: kind, name, id, as, flowAs, outAs, refAs, /m);
-    expect(ERROR_CATALOGUE.find((e) => e.code === 'E_UNKNOWN_ALIAS')!.fix).toContain('"outAs"');
+    expect(ERROR_CATALOGUE.find((entry) => entry.code === 'E_UNKNOWN_ALIAS')!.fix).toContain('"outAs"');
     expect(guideShort()).not.toContain('outAs');
   });
 });

@@ -60,18 +60,18 @@ async function refusal(file: string, ops: Op[], opts: MutationOptions): Promise<
     await mutateFile(file, ops, opts);
   } catch (err) {
     expect(readFileSync(file, 'utf8'), 'nothing written').toBe(before);
-    const e = err as { code: string; details: { errors?: Array<Warning & { validator?: string }> } };
-    return { code: e.code, errors: e.details.errors ?? [] };
+    const failure = err as { code: string; details: { errors?: Array<Warning & { validator?: string }> } };
+    return { code: failure.code, errors: failure.details.errors ?? [] };
   }
   throw new Error('the write was not refused');
 }
 
-const codes = (ws: Warning[]): string[] => ws.map((w) => `${(w as { validator?: string }).validator ? `[${(w as { validator?: string }).validator}] ` : ''}${w.code}${w.element ? ` ${w.element}` : ''}`);
+const codes = (ws: Warning[]): string[] => ws.map((warning) => `${(warning as { validator?: string }).validator ? `[${(warning as { validator?: string }).validator}] ` : ''}${warning.code}${warning.element ? ` ${warning.element}` : ''}`);
 
 /** A many-valued property as it is: reading it does not create it (a validator reads the live document before a change). */
 function raw(el: El, prop: string): El[] {
-  const v = (el as unknown as Record<string, unknown>)[prop];
-  return Array.isArray(v) ? (v as El[]) : [];
+  const propValue = (el as unknown as Record<string, unknown>)[prop];
+  return Array.isArray(propValue) ? (propValue as El[]) : [];
 }
 
 const idOf = (el: El): string => String(el.get<string | undefined>('id') ?? '');
@@ -92,20 +92,20 @@ function gate(limit = 9): NamedValidator {
     covers: { E_GATE_UNREACHABLE: 'W_UNREACHABLE', E_GATE_DEAD_END: 'W_DEAD_END' },
     validateDoc: (doc) => {
       const out: ValidatorFinding[] = [];
-      for (const p of doc.processes()) {
-        const elements = raw(p, 'flowElements');
-        const nodes = elements.filter((e) => is(e, 'bpmn:FlowNode'));
-        const flows = elements.filter((e) => is(e, 'bpmn:SequenceFlow'));
-        const sources = new Set(flows.map((f) => f.get<El>('sourceRef')));
-        const targets = new Set(flows.map((f) => f.get<El>('targetRef')));
-        const starts = nodes.filter((n) => is(n, 'bpmn:StartEvent'));
-        if (starts.length > 1) for (const s of starts) out.push({ severity: 'error', code: 'E_GATE_START_EVENTS', message: `${idOf(s)} is one of ${starts.length} start events`, element: idOf(s) });
-        for (const n of nodes) {
-          if (!is(n, 'bpmn:StartEvent') && !is(n, 'bpmn:BoundaryEvent') && !targets.has(n)) out.push({ severity: 'error', code: 'E_GATE_UNREACHABLE', message: `${idOf(n)} has no incoming sequence flow`, element: idOf(n) });
-          if (!is(n, 'bpmn:EndEvent') && !sources.has(n)) out.push({ severity: 'error', code: 'E_GATE_DEAD_END', message: `${idOf(n)} has no outgoing sequence flow`, element: idOf(n) });
+      for (const processElement of doc.processes()) {
+        const elements = raw(processElement, 'flowElements');
+        const nodes = elements.filter((element) => is(element, 'bpmn:FlowNode'));
+        const flows = elements.filter((element) => is(element, 'bpmn:SequenceFlow'));
+        const sources = new Set(flows.map((flow) => flow.get<El>('sourceRef')));
+        const targets = new Set(flows.map((flow) => flow.get<El>('targetRef')));
+        const starts = nodes.filter((node) => is(node, 'bpmn:StartEvent'));
+        if (starts.length > 1) for (const start of starts) out.push({ severity: 'error', code: 'E_GATE_START_EVENTS', message: `${idOf(start)} is one of ${starts.length} start events`, element: idOf(start) });
+        for (const node of nodes) {
+          if (!is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !targets.has(node)) out.push({ severity: 'error', code: 'E_GATE_UNREACHABLE', message: `${idOf(node)} has no incoming sequence flow`, element: idOf(node) });
+          if (!is(node, 'bpmn:EndEvent') && !sources.has(node)) out.push({ severity: 'error', code: 'E_GATE_DEAD_END', message: `${idOf(node)} has no outgoing sequence flow`, element: idOf(node) });
         }
-        const tasks = nodes.filter((n) => is(n, 'bpmn:Task')).length;
-        if (tasks > limit) out.push({ severity: 'warning', code: 'W_GATE_SIZE', message: `process ${idOf(p)} has ${tasks} tasks, more than ${limit}`, key: `size:${idOf(p)}` });
+        const tasks = nodes.filter((node) => is(node, 'bpmn:Task')).length;
+        if (tasks > limit) out.push({ severity: 'warning', code: 'W_GATE_SIZE', message: `process ${idOf(processElement)} has ${tasks} tasks, more than ${limit}`, key: `size:${idOf(processElement)}` });
       }
       return out;
     },
@@ -115,18 +115,18 @@ function gate(limit = 9): NamedValidator {
 /** A host validator that reads the XML: every task and sequence flow needs a shape or an edge. */
 const shapes = (text: string): ValidatorFinding[] =>
   [...text.matchAll(/<bpmn:(task|sequenceFlow) id="([^"]+)"/g)]
-    .filter((m) => !text.includes(`bpmnElement="${m[2]}"`))
-    .map((m) => ({ severity: 'error', code: 'E_NOT_DRAWN', message: `${m[1]} ${m[2]} has no shape or edge`, element: m[2] }));
+    .filter((match) => !text.includes(`bpmnElement="${match[2]}"`))
+    .map((match) => ({ severity: 'error', code: 'E_NOT_DRAWN', message: `${match[1]} ${match[2]} has no shape or edge`, element: match[2] }));
 
 const LOOSE: Op[] = [{ op: 'add', kind: 'task', name: 'Loose', in: 'P' }];
 
 describe('host validators on mutations (MutationOptions.validators)', () => {
   it('refuses a change that introduces a validator error; the same change passes without the validator', async () => {
     const file = await drawn('line.bpmn', LINE);
-    const r = await refusal(file, LOOSE, { validators: [gate()] });
-    expect(r.code).toBe('E_VALIDATION');
-    expect(codes(r.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose', '[gate] E_GATE_DEAD_END Activity_Loose']);
-    expect(r.errors[0]).toMatchObject({ validator: 'gate', severity: 'error' });
+    const result = await refusal(file, LOOSE, { validators: [gate()] });
+    expect(result.code).toBe('E_VALIDATION');
+    expect(codes(result.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose', '[gate] E_GATE_DEAD_END Activity_Loose']);
+    expect(result.errors[0]).toMatchObject({ validator: 'gate', severity: 'error' });
     const plain = await mutateFile(file, LOOSE, { dryRun: true });
     expect(plain.validation.validators).toBeUndefined();
     expect(codes(plain.validation.warnings)).toEqual(expect.arrayContaining(['W_UNREACHABLE Activity_Loose', 'W_DEAD_END Activity_Loose']));
@@ -147,8 +147,8 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const file = await drawn('dead-end.bpmn', DEAD_END);
     const renamed = await mutateFile(file, [{ op: 'set', id: 'A', values: { id: 'Activity_Check', name: 'Check order' } }], { validators: [gate()] });
     expect(renamed.written).toBe(true);
-    const pre = renamed.validation.warnings.filter((w) => w.code === 'W_PREEXISTING_ERROR' && (w as { validator?: string }).validator === 'gate');
-    expect(pre.map((w) => [w.element, w.message])).toEqual([
+    const pre = renamed.validation.warnings.filter((warning) => warning.code === 'W_PREEXISTING_ERROR' && (warning as { validator?: string }).validator === 'gate');
+    expect(pre.map((warning) => [warning.element, warning.message])).toEqual([
       ['Activity_Check', 'E_GATE_DEAD_END: Activity_Check has no outgoing sequence flow (already in the model before this change)'],
       ['E', 'E_GATE_UNREACHABLE: E has no incoming sequence flow (already in the model before this change)'],
     ]);
@@ -187,11 +187,11 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
 
   it('warnings a change introduces are reported once; later writes only count them (a key keeps a finding whose message changes)', async () => {
     const file = await drawn('complex.bpmn', LINE);
-    const ops: Op[] = Array.from({ length: 9 }, (_, i) => ({ op: 'add', kind: 'task', name: `Step ${i}`, after: i === 0 ? 'A' : `Activity_Step${i - 1}` }));
+    const ops: Op[] = Array.from({ length: 9 }, (_unused, index) => ({ op: 'add', kind: 'task', name: `Step ${index}`, after: index === 0 ? 'A' : `Activity_Step${index - 1}` }));
     const grown = await mutateFile(file, ops, { validators: [gate()] });
-    expect(codes(grown.validation.warnings).filter((c) => c.includes('GATE'))).toEqual(['[gate] W_GATE_SIZE']);
+    expect(codes(grown.validation.warnings).filter((code) => code.includes('GATE'))).toEqual(['[gate] W_GATE_SIZE']);
     const again = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'One more', after: 'Activity_Step8' }], { validators: [gate()] });
-    expect(codes(again.validation.warnings).filter((c) => c.includes('GATE'))).toEqual([]);
+    expect(codes(again.validation.warnings).filter((code) => code.includes('GATE'))).toEqual([]);
     expect(again.validation.validators?.[0]?.counts).toEqual({ errors: 0, warnings: 1 });
   });
 
@@ -211,25 +211,25 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
 
   it('checks what would be written: without the layout a new node has no shape', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
-    const r = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], layout: false });
+    const result = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], layout: false });
     // the new flow's id in the file's style (src/ids/IdStyle.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
-    expect(codes(r.errors)).toEqual(['[shapes] E_NOT_DRAWN Activity_Inserted', '[shapes] E_NOT_DRAWN F_InsertedToE']);
+    expect(codes(result.errors)).toEqual(['[shapes] E_NOT_DRAWN Activity_Inserted', '[shapes] E_NOT_DRAWN F_InsertedToE']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
 
   /** ERROR / WARN, ruleId, a message naming the element, no element field */
   const unnamedTasks = (xml: string): ValidatorFinding[] =>
-    [...xml.matchAll(/<bpmn:task id="([^"]+)"(?![^>]*name=)/g)].map((m) => ({ severity: 'ERROR', ruleId: 'naming/task', message: `task ${m[1]} has no name` }));
+    [...xml.matchAll(/<bpmn:task id="([^"]+)"(?![^>]*name=)/g)].map((match) => ({ severity: 'ERROR', ruleId: 'naming/task', message: `task ${match[1]} has no name` }));
 
   it('ruleId findings: an introduced ERROR blocks, a pre-existing one (matched by message, renames followed) does not', async () => {
     const file = await drawn('host.bpmn', LINE);
-    const r = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [unnamedTasks] });
+    const result = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [unnamedTasks] });
     // an unnamed task gets its placement as id (Activity_After<anchor>, src/ids/IdStyle.ts)
-    expect(r.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
+    expect(result.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
 
     const unnamed = await drawn('host-unnamed.bpmn', LINE.replace(' name="Check"', ''));
     const renamed = await mutateFile(unnamed, [{ op: 'set', id: 'A', values: { id: 'Activity_Old' } }], { validators: [{ name: 'naming', validate: unnamedTasks }] });
-    expect(renamed.validation.warnings.filter((w) => w.code === 'W_PREEXISTING_ERROR')).toEqual([
+    expect(renamed.validation.warnings.filter((warning) => warning.code === 'W_PREEXISTING_ERROR')).toEqual([
       { code: 'W_PREEXISTING_ERROR', message: 'naming/task: task Activity_Old has no name (already in the model before this change)', validator: 'naming', severity: 'warning' },
     ]);
     expect(renamed.validation.validators).toEqual([{ name: 'naming', errors: [], warnings: [], preexisting: [expect.objectContaining({ code: 'naming/task' })], resolved: [], counts: { errors: 1, warnings: 0 } }]);
@@ -238,9 +238,9 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('runs before and after with a context; the candidate is the laid-out XML; async validators work', async () => {
     const file = await drawn('ctx.bpmn', LINE);
     const seen: Array<{ phase: string; file?: string; platform: string; ops: number; shape: boolean; doc: boolean }> = [];
-    const spy = async (x: string, ctx: ValidatorContext): Promise<ValidatorFinding[]> => {
+    const spy = async (xml: string, ctx: ValidatorContext): Promise<ValidatorFinding[]> => {
       const doc = await ctx.doc();
-      seen.push({ phase: ctx.phase, file: ctx.file, platform: ctx.platform, ops: ctx.ops.length, shape: x.includes('bpmnElement="Activity_New"'), doc: !!doc.get('A') });
+      seen.push({ phase: ctx.phase, file: ctx.file, platform: ctx.platform, ops: ctx.ops.length, shape: xml.includes('bpmnElement="Activity_New"'), doc: !!doc.get('A') });
       return ctx.phase === 'after' ? [{ severity: 'warning', code: 'W_HOST', message: 'checked', element: 'Activity_New' }] : [];
     };
     const result = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'New', after: 'A' }], { validators: [spy] });
@@ -253,8 +253,8 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
 
   it('a validator that throws fails the write (E_VALIDATOR_FAILED); a bad validator is refused', async () => {
     const file = await drawn('throws.bpmn', LINE);
-    const r = await refusal(file, [{ op: 'set', id: 'A', values: { name: 'X' } }], { validators: [{ name: 'broken', validate: () => { throw new Error('boom'); } }] });
-    expect(r.code).toBe('E_VALIDATOR_FAILED');
+    const result = await refusal(file, [{ op: 'set', id: 'A', values: { name: 'X' } }], { validators: [{ name: 'broken', validate: () => { throw new Error('boom'); } }] });
+    expect(result.code).toBe('E_VALIDATOR_FAILED');
     const notArray = await refusal(file, [{ op: 'set', id: 'A', values: { name: 'X' } }], { validators: [{ name: 'odd', validate: () => 'nope' as unknown as ValidatorFinding[] }] });
     expect(notArray.code).toBe('E_VALIDATOR_FAILED');
     await expect(mutateFile(file, [], { validators: [{ name: 'x' } as never] })).rejects.toMatchObject({ code: 'E_VALIDATOR_FAILED' });
@@ -272,14 +272,14 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('an advisory validator (blocks: false) reports the errors a change introduced among the warnings and never blocks; old errors are only counted', async () => {
     const file = await drawn('advisory.bpmn', LINE);
     const advisory = { name: 'advice', blocks: false, validate: unnamedTasks };
-    const r = await mutateFile(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [advisory], dryRun: true });
-    expect(r.validation.errors).toEqual([]);
-    expect(r.validation.warnings.at(-1)).toEqual({ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'advice', severity: 'error' });
-    expect(r.validation.validators).toEqual([{ name: 'advice', blocks: false, errors: [], warnings: [expect.objectContaining({ code: 'naming/task' })], preexisting: [], resolved: [], counts: { errors: 1, warnings: 0 } }]);
+    const result = await mutateFile(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [advisory], dryRun: true });
+    expect(result.validation.errors).toEqual([]);
+    expect(result.validation.warnings.at(-1)).toEqual({ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'advice', severity: 'error' });
+    expect(result.validation.validators).toEqual([{ name: 'advice', blocks: false, errors: [], warnings: [expect.objectContaining({ code: 'naming/task' })], preexisting: [], resolved: [], counts: { errors: 1, warnings: 0 } }]);
     // an error the file already had: no W_PREEXISTING_ERROR, only the count
     const unnamed = await drawn('advisory-unnamed.bpmn', LINE.replace(' name="Check"', ''));
     const old = await mutateFile(unnamed, [{ op: 'set', id: 'E', values: { name: 'Done' } }], { validators: [advisory], dryRun: true });
-    expect(old.validation.warnings.filter((w) => (w as { validator?: string }).validator === 'advice')).toEqual([]);
+    expect(old.validation.warnings.filter((warning) => (warning as { validator?: string }).validator === 'advice')).toEqual([]);
     expect(old.validation.validators?.[0]).toMatchObject({ blocks: false, preexisting: [], counts: { errors: 1, warnings: 0 } });
     // the default stays blocking
     await expect(mutateFile(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [{ name: 'advice', validate: unnamedTasks }], dryRun: true })).rejects.toMatchObject({ code: 'E_VALIDATION' });
@@ -290,8 +290,8 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const before: ValidatorRun[] = [{ name: 'host', issues: [issue('W_ONE')] }, { name: 'host', issues: [issue('W_TWO')] }];
     const after: ValidatorRun[] = [{ name: 'host', issues: [issue('W_ONE')] }, { name: 'host', issues: [issue('W_TWO'), issue('W_THREE')] }];
     const reports = FindingBaseline.compareRuns(before, after);
-    expect(reports.map((r) => r.warnings.map((w) => w.code))).toEqual([[], ['W_THREE']]);
-    expect(reports.map((r) => r.resolved.length)).toEqual([0, 0]);
+    expect(reports.map((report) => report.warnings.map((warning) => warning.code))).toEqual([[], ['W_THREE']]);
+    expect(reports.map((result) => result.resolved.length)).toEqual([0, 0]);
   });
 
   it('in-memory documents (no file) run the host validators', async () => {
@@ -299,7 +299,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     let phases = 0;
     const result = await mutateDoc(doc, [{ op: 'set', id: 'A', values: { name: 'Y' } }], { validators: [() => (phases++, [])] });
     expect(phases).toBe(2);
-    expect(result.validation.validators?.map((r) => r.name)).toEqual(['validator1']);
+    expect(result.validation.validators?.map((validator) => validator.name)).toEqual(['validator1']);
   });
 });
 
@@ -309,13 +309,13 @@ describe('validator findings in a refusal, a result and their text (library use)
     const before = readFileSync(file, 'utf8');
     const err = await mutateFile(file, LOOSE, { validators: [gate()] }).then(
       () => undefined,
-      (e: unknown) => e as CliError,
+      (error: unknown) => error as CliError,
     );
     expect(err?.code).toBe('E_VALIDATION');
     expect(err?.message).toBe('The change would introduce 2 error(s) reported by validator gate; nothing was written');
     expect(err?.details.hint).not.toContain('--profile');
     // each finding with its validator tag (validatorTag; the CLI's own refusal output is tested below)
-    expect((err?.details['errors'] as Warning[]).map((e) => `${validatorTag(e)}${e.code} ${e.element}: ${e.message}`)).toEqual([
+    expect((err?.details['errors'] as Warning[]).map((error) => `${validatorTag(error)}${error.code} ${error.element}: ${error.message}`)).toEqual([
       '[gate] E_GATE_UNREACHABLE Activity_Loose: Activity_Loose has no incoming sequence flow',
       '[gate] E_GATE_DEAD_END Activity_Loose: Activity_Loose has no outgoing sequence flow',
     ]);
@@ -337,11 +337,11 @@ describe('validator findings in a refusal, a result and their text (library use)
 
 /** gate(), but a write leaves its dead ends out of the comparison (ValidatorFinding.leftOut); a check reports them. */
 function leftOutGate(blocks = true): NamedValidator {
-  const g = gate();
+  const gateValidator = gate();
   return {
-    ...g,
+    ...gateValidator,
     ...(blocks ? {} : { blocks: false }),
-    validateDoc: async (doc, ctx) => (await g.validateDoc!(doc, ctx)).map((f) => (f.code === 'E_GATE_DEAD_END' && ctx.phase !== 'check' ? { ...f, leftOut: 'dead ends the host checks elsewhere' } : f)),
+    validateDoc: async (doc, ctx) => (await gateValidator.validateDoc!(doc, ctx)).map((finding) => (finding.code === 'E_GATE_DEAD_END' && ctx.phase !== 'check' ? { ...finding, leftOut: 'dead ends the host checks elsewhere' } : finding)),
   };
 }
 
@@ -349,12 +349,12 @@ describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
   it('are not compared: never added, kept or resolved, never blocking; counted with their reason, in the text too; their lint warnings stay', async () => {
     const file = await drawn('left-out.bpmn', DEAD_END);
     // the loose task's dead end is left out: only its unreachable start blocks
-    const r = await refusal(file, LOOSE, { validators: [leftOutGate()] });
-    expect(codes(r.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose']);
+    const result = await refusal(file, LOOSE, { validators: [leftOutGate()] });
+    expect(codes(result.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose']);
 
     const renamed = await mutateFile(file, [{ op: 'set', id: 'A', values: { name: 'Checked' } }], { validators: [leftOutGate()], dryRun: true });
-    const v = renamed.validation.validators![0]!;
-    expect(v).toEqual({ name: 'gate', detail: 'the test host', errors: [], warnings: [], preexisting: [expect.objectContaining({ code: 'E_GATE_UNREACHABLE', element: 'E' })], resolved: [], counts: { errors: 2, warnings: 0 }, leftOut: [{ reason: 'dead ends the host checks elsewhere', count: 1 }] });
+    const validator = renamed.validation.validators![0]!;
+    expect(validator).toEqual({ name: 'gate', detail: 'the test host', errors: [], warnings: [], preexisting: [expect.objectContaining({ code: 'E_GATE_UNREACHABLE', element: 'E' })], resolved: [], counts: { errors: 2, warnings: 0 }, leftOut: [{ reason: 'dead ends the host checks elsewhere', count: 1 }] });
     // the issues keep their reason hidden: JSON has the report's leftOut only
     expect(JSON.stringify(renamed.validation)).not.toContain('"leftOut":"');
     // `bpmn validate` does not run a host's validators: the host's check lists them
@@ -380,7 +380,7 @@ describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
     // a check reports them like any other finding (and they cover their lint warning)
     const check = await checkFile(file, { validators: [leftOutGate()] });
     expect(codes(check.validation.errors)).toEqual(['[gate] E_GATE_DEAD_END A', '[gate] E_GATE_UNREACHABLE E']);
-    expect(check.validation.warnings.map((w) => w.code)).not.toContain('W_DEAD_END');
+    expect(check.validation.warnings.map((warning) => warning.code)).not.toContain('W_DEAD_END');
     expect(check.validation.validators![0]).not.toHaveProperty('leftOut');
   });
 
@@ -393,10 +393,10 @@ describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
         { severity: 'warning', code: 'W_THREE', message: 'three', ...left('the first reason') },
       ];
     };
-    const r = await mutateDoc(await Doc.fromXml(LINE), [{ op: 'set', id: 'A', values: { name: 'Y' } }], { validators: [{ name: 'host', blocks: false, validate: host }] });
-    expect(r.validation.validators).toEqual([{ name: 'host', blocks: false, errors: [], warnings: [], preexisting: [], resolved: [], counts: { errors: 1, warnings: 2 }, leftOut: [{ reason: 'the first reason', count: 2 }, { reason: 'the second reason', count: 1 }] }]);
-    expect(renderMutation(mutationReport(r))).toContain('\nvalidator host: 1 error(s), 2 warning(s) in the result (0 added, 0 resolved, 0 already in the file, 2 left out (the first reason; a check lists them), 1 left out (the second reason; a check lists it))\n');
-    expect(renderSummary(mutationSummary(mutationReport(r))).split('\n')).toContain('validator host: 2 left out (the first reason; a check lists them), 1 left out (the second reason; a check lists it)');
+    const result = await mutateDoc(await Doc.fromXml(LINE), [{ op: 'set', id: 'A', values: { name: 'Y' } }], { validators: [{ name: 'host', blocks: false, validate: host }] });
+    expect(result.validation.validators).toEqual([{ name: 'host', blocks: false, errors: [], warnings: [], preexisting: [], resolved: [], counts: { errors: 1, warnings: 2 }, leftOut: [{ reason: 'the first reason', count: 2 }, { reason: 'the second reason', count: 1 }] }]);
+    expect(renderMutation(mutationReport(result))).toContain('\nvalidator host: 1 error(s), 2 warning(s) in the result (0 added, 0 resolved, 0 already in the file, 2 left out (the first reason; a check lists them), 1 left out (the second reason; a check lists it))\n');
+    expect(renderSummary(mutationSummary(mutationReport(result))).split('\n')).toContain('validator host: 2 left out (the first reason; a check lists them), 1 left out (the second reason; a check lists it)');
   });
 
   it('a finding the file had that is still in the result, now left out, is not resolved; one left out before and real after is added', async () => {
@@ -430,15 +430,15 @@ describe('host validators on validate (CheckOptions.validators)', () => {
     const file = await drawn('check.bpmn', DEAD_END);
     const plain = await checkFile(file);
     expect(plain.validation.errors).toEqual([]);
-    expect(plain.validation.warnings.map((w) => w.code)).toContain('W_DEAD_END');
+    expect(plain.validation.warnings.map((warning) => warning.code)).toContain('W_DEAD_END');
     expect(plain.validation.validators).toBeUndefined();
 
     const check = await checkFile(file, { validators: [gate()] });
-    expect(check.validation.errors.map((e) => [e.code, e.element, (e as { validator?: string }).validator])).toEqual([
+    expect(check.validation.errors.map((error) => [error.code, error.element, (error as { validator?: string }).validator])).toEqual([
       ['E_GATE_DEAD_END', 'A', 'gate'],
       ['E_GATE_UNREACHABLE', 'E', 'gate'],
     ]);
-    expect(check.validation.warnings.map((w) => w.code)).not.toContain('W_DEAD_END');
+    expect(check.validation.warnings.map((warning) => warning.code)).not.toContain('W_DEAD_END');
     expect(check.validation.validators).toEqual([expect.objectContaining({ name: 'gate', detail: 'the test host', counts: { errors: 2, warnings: 0 } })]);
     expect(check.layout.status).toBe('ok');
 
@@ -458,7 +458,7 @@ describe('host validators on validate (CheckOptions.validators)', () => {
     writeFileSync(file, LINE);
     const report = await checkFile(file, { validators: [shapes] });
     expect(report.layout.status).toBe('ok');
-    expect(report.validation.errors.map((e) => `${e.code} ${e.element}`)).toEqual(['E_NOT_DRAWN A', 'E_NOT_DRAWN F1', 'E_NOT_DRAWN F2']);
+    expect(report.validation.errors.map((error) => `${error.code} ${error.element}`)).toEqual(['E_NOT_DRAWN A', 'E_NOT_DRAWN F1', 'E_NOT_DRAWN F2']);
   });
 });
 
@@ -511,7 +511,7 @@ describe('the CLI takes no validators', () => {
 });
 
 /** The sentences of a text that name `bpmn validate` without saying that it does not show the refused errors. */
-const sendsToValidate = (text: string): string[] => text.split(/(?<=\.)\s+/).filter((s) => s.includes('bpmn validate') && !s.includes('does not show'));
+const sendsToValidate = (text: string): string[] => text.split(/(?<=\.)\s+/).filter((sentence) => sentence.includes('bpmn validate') && !sentence.includes('does not show'));
 
 describe('the E_VALIDATION advice: the refusal lists the errors, `bpmn validate` cannot', () => {
   const HINT = 'Fix the listed problems, make the edit in one transaction (`bpmn apply <file> ops.json`) so that it ends in a valid model, or pass --force to write anyway.';
@@ -545,7 +545,7 @@ describe('the E_VALIDATION advice: the refusal lists the errors, `bpmn validate`
   }, 60000);
 
   it('the catalogue (guide, kinds, kinds --json), the short guide and the plugin skill do not send the reader to `bpmn validate`', () => {
-    const entry = ERROR_CATALOGUE.find((e) => e.code === 'E_VALIDATION');
+    const entry = ERROR_CATALOGUE.find((catalogueEntry) => catalogueEntry.code === 'E_VALIDATION');
     expect(entry?.fix).toMatch(/^Read the errors in the refusal: /);
     expect(entry?.fix).toContain('The file is unchanged, so `bpmn validate <file>` does not show them.');
     expect(sendsToValidate(entry?.fix ?? '')).toEqual([]);
@@ -556,19 +556,19 @@ describe('the E_VALIDATION advice: the refusal lists the errors, `bpmn validate`
     expect(commands).toMatch(/\{ok: false, error: \{code, message,\n {2}element\?, related\?, candidates\?, hint\?, op\?, command\?, ops\?, errors\?\}\}/);
 
     const short = cli('guide', '--short').out;
-    const line = short.split('\n').find((l) => /^ {2}E_VALIDATION /.test(l)) ?? '';
+    const line = short.split('\n').find((textLine) => /^ {2}E_VALIDATION /.test(textLine)) ?? '';
     expect(line).toMatch(/the refusal lists the new errors \(file unchanged\)/);
     expect(line).not.toContain('bpmn validate');
     expect(Buffer.byteLength(short)).toBeLessThanOrEqual(5120);
 
     const skill = readFileSync(join(ROOT, 'plugins', 'bpmn-cli', 'skills', 'bpmn', 'SKILL.md'), 'utf8');
-    const row = skill.split('\n').find((l) => l.startsWith('| `E_VALIDATION` |')) ?? '';
+    const row = skill.split('\n').find((textLine) => textLine.startsWith('| `E_VALIDATION` |')) ?? '';
     expect(row).toContain('The refusal lists each one');
     expect(sendsToValidate(row)).toEqual([]);
   }, 60000);
 });
 
 function cli(...args: string[]): { code: number; out: string; err: string } {
-  const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }

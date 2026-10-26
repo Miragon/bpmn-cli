@@ -37,22 +37,22 @@ const OPS: Op[] = [
 
 /** The engine drawing moved by a few px: `auto` keeps it. */
 async function handXml(): Promise<string> {
-  const r = await mutateDoc(Doc.create({ processId: 'P' }), OPS, { dryRun: true });
-  const doc = await Doc.fromXml(r.xml);
+  const result = await mutateDoc(Doc.create({ processId: 'P' }), OPS, { dryRun: true });
+  const doc = await Doc.fromXml(result.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
-      for (const b of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (b) b.set('x', b.get<number>('x') + 11);
-      for (const w of pe.get<El[] | undefined>('waypoint') ?? []) w.set('x', w.get<number>('x') + 11);
+      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (bounds) bounds.set('x', bounds.get<number>('x') + 11);
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) waypoint.set('x', waypoint.get<number>('x') + 11);
     }
   }
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; after: Doc }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
-  const after = await Doc.fromXml(r.xml);
+async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; after: Doc }> {
+  const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
+  const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
-  return { r, after };
+  return { result, after };
 }
 
 async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; candidates?: string[] }> {
@@ -67,22 +67,22 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnShape of diagramPlane.shapes.values()) out.set(drawnShape.id, drawnShape);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnEdge of diagramPlane.edges.values()) out.set(drawnEdge.id, drawnEdge);
   return out;
 }
 
-const participants = (doc: Doc): string[] => doc.collaboration()!.get<El[]>('participants').map((p) => p.get<string>('id'));
+const participants = (doc: Doc): string[] => doc.collaboration()!.get<El[]>('participants').map((participant) => participant.get<string>('id'));
 const collabId = (doc: Doc): string => doc.collaboration()!.get<string>('id');
 const HARD = ['overlaps', 'frameIntrusion', 'frameOverlap', 'through', 'degenerateEdge', 'missing', 'outsideLane', 'outsidePool', 'outsideSub'];
-const hard = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
-const orthogonal = (e: DEdge): boolean => e.points.every((p, i) => i === 0 || p.x === e.points[i - 1]!.x || p.y === e.points[i - 1]!.y);
-const topToBottom = (doc: Doc, ids: string[]): string[] => [...ids].sort((a, b) => shapes(doc).get(a)!.bounds.y - shapes(doc).get(b)!.bounds.y);
+const hard = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((problem) => HARD.includes(problem.kind)).map((problem) => `${problem.kind} ${problem.ids.join(',')}`);
+const orthogonal = (drawnEdge: DEdge): boolean => drawnEdge.points.every((point, index) => index === 0 || point.x === drawnEdge.points[index - 1]!.x || point.y === drawnEdge.points[index - 1]!.y);
+const topToBottom = (doc: Doc, ids: string[]): string[] => [...ids].sort((firstId, secondId) => shapes(doc).get(firstId)!.bounds.y - shapes(doc).get(secondId)!.bounds.y);
 
 describe('pool order', () => {
   it('restacks the pool bands with their content; message flows are routed again', async () => {
@@ -91,7 +91,7 @@ describe('pool order', () => {
     const s0 = shapes(before);
     const order = topToBottom(before, ['Org', 'Customer', 'Bank']);
     const wanted = [...order].reverse();
-    const { r, after } = await run(hand, [{ op: 'order', id: collabId(before), pools: wanted }]);
+    const { result, after } = await run(hand, [{ op: 'order', id: collabId(before), pools: wanted }]);
     expect(participants(after).slice(0, 3)).toEqual(wanted);
     expect(topToBottom(after, ['Org', 'Customer', 'Bank'])).toEqual(wanted);
     const s1 = shapes(after);
@@ -105,12 +105,12 @@ describe('pool order', () => {
     // the stack starts where it started and keeps its gaps
     expect(Math.min(...['Org', 'Customer', 'Bank'].map((id) => s1.get(id)!.bounds.y))).toBe(Math.min(...['Org', 'Customer', 'Bank'].map((id) => s0.get(id)!.bounds.y)));
     for (const id of ['M1', 'M2']) {
-      const e = edges(after).get(id)!;
-      expect(orthogonal(e), id).toBe(true);
-      expect(r.layout.format![0]!.rerouted, id).toContain(id);
+      const drawnEdge = edges(after).get(id)!;
+      expect(orthogonal(drawnEdge), id).toBe(true);
+      expect(result.layout.format![0]!.rerouted, id).toContain(id);
     }
     expect(hard(after)).toEqual(hard(before));
-    expect(r.changes.changed.map((c) => c.detail)).toEqual([`pool order: ${wanted.join(', ')}`]);
+    expect(result.changes.changed.map((change) => change.detail)).toEqual([`pool order: ${wanted.join(', ')}`]);
   });
 
   it('takes the participant ids as `flows` too (the CLI form), unlisted pools follow in their old order', async () => {
@@ -125,17 +125,17 @@ describe('pool order', () => {
   it('refuses ids that are no participants of the collaboration, and notes an order that is already there', async () => {
     const hand = await handXml();
     const doc = await Doc.fromXml(hand);
-    const e = await failure(hand, [{ op: 'order', id: collabId(doc), pools: ['Bank', 'L1'] }]);
-    expect(e.code).toBe('E_WRONG_KIND');
+    const failed = await failure(hand, [{ op: 'order', id: collabId(doc), pools: ['Bank', 'L1'] }]);
+    expect(failed.code).toBe('E_WRONG_KIND');
     // the declared order (Org first) differs from the drawn one (the engine put the pools in message-flow order): the drawing follows it
     const declared = participants(doc);
     const first = await run(hand, [{ op: 'order', id: collabId(doc), pools: declared }]);
-    expect(first.r.unchanged).toBe(false);
+    expect(first.result.unchanged).toBe(false);
     expect(topToBottom(first.after, ['Org', 'Customer', 'Bank'])).toEqual(declared);
     const same = declared;
-    const { r } = await run(first.r.xml, [{ op: 'order', id: collabId(doc), pools: same }]);
-    expect(r.unchanged).toBe(true);
-    expect(r.changes.notes.join(' ')).toMatch(/pools already declared in this order/);
+    const { result } = await run(first.result.xml, [{ op: 'order', id: collabId(doc), pools: same }]);
+    expect(result.unchanged).toBe(true);
+    expect(result.changes.notes.join(' ')).toMatch(/pools already declared in this order/);
     expect(() => parseOps([{ op: 'order', id: 'C', pools: ['A'], lanes: ['B'] }])).toThrow(/give exactly one of "flows" .*, "lanes" .* or "pools"/);
   });
 
@@ -151,9 +151,9 @@ describe('pool order', () => {
       const placed = cli('place', file, last, '--above', 'Org');
       expect(placed.status).toBe(2);
       expect(placed.stderr).toMatch(/hint: Pools and lanes are bands: `bpmn order <file> <collaborationId> <participantIds...>` reorders pools/);
-      const r = cli('order', file, collabId(doc), last);
-      expect(r.status, r.stderr).toBe(0);
-      expect(r.stdout).toMatch(new RegExp(`^changed collaboration ${collabId(doc)} - pool order: ${last}, `, 'm'));
+      const result = cli('order', file, collabId(doc), last);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toMatch(new RegExp(`^changed collaboration ${collabId(doc)} - pool order: ${last}, `, 'm'));
       expect(topToBottom(await Doc.fromXml(readFileSync(file, 'utf8')), ['Org', 'Customer', 'Bank'])[0]).toBe(last);
     } finally {
       rmSync(dir, { recursive: true, force: true });

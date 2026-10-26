@@ -51,7 +51,7 @@ function codesInSource(): string[] {
   const codes = new Set<string>();
   for (const file of sourceFiles(SRC_DIR)) {
     if (GUIDE_TEXT_FILES.some((guide) => file.endsWith(guide))) continue;
-    for (const m of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(m[0].endsWith('_') ? `${m[0]}*` : m[0]);
+    for (const match of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(match[0].endsWith('_') ? `${match[0]}*` : match[0]);
   }
   return [...codes].sort();
 }
@@ -77,10 +77,10 @@ function commandsWithoutFile(text: string): string[] {
 
 /** Resolves the escapes of a string or template piece (`\n`, `\x41`, `\u{1F600}`, a line continuation, `\'`). */
 function cooked(raw: string): string {
-  return raw.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (_, e: string) => {
-    if (e[0] === 'u' || e[0] === 'x') return String.fromCodePoint(parseInt(e.replace(/[ux{}]/g, ''), 16));
+  return raw.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (unused, escape: string) => {
+    if (escape[0] === 'u' || escape[0] === 'x') return String.fromCodePoint(parseInt(escape.replace(/[ux{}]/g, ''), 16));
     const simple: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0', '\n': '', '\r\n': '', '\u2028': '', '\u2029': '' };
-    return simple[e] ?? e;
+    return simple[escape] ?? escape;
   });
 }
 
@@ -98,88 +98,88 @@ const BEFORE_REGEX = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new
  */
 function stringsIn(src: string): string[] {
   const out: string[] = [];
-  let i = 0;
+  let index = 0;
   // false after a value (a name, a number, a string, `)`, `]`, `}`): a `/` there divides
   let regexAllowed = true;
   /** Scans from `i` to the end, or (`inSubstitution`) to the `}` that closes a template's `${`, and returns its index. */
   const scan = (inSubstitution: boolean): number => {
     let depth = 0;
-    while (i < src.length) {
-      const c = src[i]!;
-      const next = src[i + 1];
-      if (c === '/' && next === '/') {
-        const end = src.indexOf('\n', i);
-        i = end === -1 ? src.length : end;
-      } else if (c === '/' && next === '*') {
-        const end = src.indexOf('*/', i + 2);
-        i = end === -1 ? src.length : end + 2;
-      } else if (c === "'" || c === '"') {
-        let j = i + 1;
-        while (j < src.length && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
-        out.push(cooked(src.slice(i + 1, j)));
-        i = j + 1;
+    while (index < src.length) {
+      const character = src[index]!;
+      const next = src[index + 1];
+      if (character === '/' && next === '/') {
+        const end = src.indexOf('\n', index);
+        index = end === -1 ? src.length : end;
+      } else if (character === '/' && next === '*') {
+        const end = src.indexOf('*/', index + 2);
+        index = end === -1 ? src.length : end + 2;
+      } else if (character === "'" || character === '"') {
+        let cursor = index + 1;
+        while (cursor < src.length && src[cursor] !== character && src[cursor] !== '\n') cursor += src[cursor] === '\\' ? 2 : 1;
+        out.push(cooked(src.slice(index + 1, cursor)));
+        index = cursor + 1;
         regexAllowed = false;
-      } else if (c === '`') {
+      } else if (character === '`') {
         out.push(template());
         regexAllowed = false;
-      } else if (c === '/' && regexAllowed) {
-        let j = i + 1;
+      } else if (character === '/' && regexAllowed) {
+        let cursor = index + 1;
         let inClass = false;
-        while (j < src.length && src[j] !== '\n' && (inClass || src[j] !== '/')) {
-          if (src[j] === '\\') j++;
-          else if (src[j] === '[') inClass = true;
-          else if (src[j] === ']') inClass = false;
-          j++;
+        while (cursor < src.length && src[cursor] !== '\n' && (inClass || src[cursor] !== '/')) {
+          if (src[cursor] === '\\') cursor++;
+          else if (src[cursor] === '[') inClass = true;
+          else if (src[cursor] === ']') inClass = false;
+          cursor++;
         }
-        i = j + 1;
-        while (i < src.length && /[a-z]/.test(src[i]!)) i++;
+        index = cursor + 1;
+        while (index < src.length && /[a-z]/.test(src[index]!)) index++;
         regexAllowed = false;
-      } else if (/[A-Za-z_$#]/.test(c)) {
-        const word = /^[#\w$]+/.exec(src.slice(i, i + 64))![0];
-        i += word.length;
+      } else if (/[A-Za-z_$#]/.test(character)) {
+        const word = /^[#\w$]+/.exec(src.slice(index, index + 64))![0];
+        index += word.length;
         regexAllowed = BEFORE_REGEX.has(word);
-      } else if (/[0-9]/.test(c)) {
-        i += /^[\w.]+/.exec(src.slice(i, i + 64))![0].length;
+      } else if (/[0-9]/.test(character)) {
+        index += /^[\w.]+/.exec(src.slice(index, index + 64))![0].length;
         regexAllowed = false;
-      } else if (/\s/.test(c)) {
-        i++;
+      } else if (/\s/.test(character)) {
+        index++;
       } else {
-        if (c === '{') depth++;
-        else if (c === '}') {
-          if (depth === 0 && inSubstitution) return i;
+        if (character === '{') depth++;
+        else if (character === '}') {
+          if (depth === 0 && inSubstitution) return index;
           depth--;
         }
-        regexAllowed = !')]}'.includes(c);
-        i++;
+        regexAllowed = !')]}'.includes(character);
+        index++;
       }
     }
-    return i;
+    return index;
   };
   /** Reads the template at `i` (a backtick) up to its closing backtick. */
   const template = (): string => {
     let text = '`';
     let raw = '';
-    i++;
-    while (i < src.length && src[i] !== '`') {
-      if (src[i] === '\\') {
-        raw += src.slice(i, i + 2);
-        i += 2;
-      } else if (src[i] === '$' && src[i + 1] === '{') {
+    index++;
+    while (index < src.length && src[index] !== '`') {
+      if (src[index] === '\\') {
+        raw += src.slice(index, index + 2);
+        index += 2;
+      } else if (src[index] === '$' && src[index + 1] === '{') {
         text += cooked(raw);
         raw = '';
-        i += 2;
-        const start = i;
+        index += 2;
+        const start = index;
         regexAllowed = true;
         const end = scan(true);
         const expr = src.slice(start, end).trim();
         text += `\${${/^[\w.]+$/.test(expr) ? expr : '…'}}`;
-        i = end + 1;
+        index = end + 1;
       } else {
-        raw += src[i];
-        i++;
+        raw += src[index];
+        index++;
       }
     }
-    i++;
+    index++;
     return `${text}${cooked(raw)}\``;
   };
   scan(false);
@@ -194,7 +194,7 @@ describe('parseOps: shapes', () => {
   it('accepts the example and returns typed ops in order', () => {
     const example = opsExample();
     const ops = parseOps(example);
-    expect(ops.map((o) => o.op)).toEqual(['split', 'add', 'add', 'add', 'connect', 'set', 'ext', 'ext']);
+    expect(ops.map((operation) => operation.op)).toEqual(['split', 'add', 'add', 'add', 'connect', 'set', 'ext', 'ext']);
     expect(ops).toEqual(example.ops);
   });
 
@@ -285,7 +285,7 @@ describe('parseOps: shapes', () => {
       },
     ];
     expect(parseOps(full)).toEqual(full);
-    const used = new Set(full.map((o) => o.op));
+    const used = new Set(full.map((operation) => operation.op));
     for (const name of OP_NAMES) expect(used.has(name), `no full-shape test for op ${name}`).toBe(true);
   });
 
@@ -311,18 +311,18 @@ describe('parseOps: rejections name the op index', () => {
   });
 
   it('rejects unknown and missing ops', () => {
-    const e = failure([{ op: 'add', kind: 'task' }, { op: 'addd', kind: 'task' }]);
-    expect(e.message).toMatch(/^ops\[1\]: unknown op "addd" \(did you mean "add"\?\)/);
-    expect(e.op).toBe(1);
-    expect(e.candidates).toEqual(['add']);
+    const error = failure([{ op: 'add', kind: 'task' }, { op: 'addd', kind: 'task' }]);
+    expect(error.message).toMatch(/^ops\[1\]: unknown op "addd" \(did you mean "add"\?\)/);
+    expect(error.op).toBe(1);
+    expect(error.candidates).toEqual(['add']);
     expect(failure([{ kind: 'task' }]).message).toMatch(/^ops\[0\]: missing "op"; one of: add, connect/);
     expect(failure(['add']).message).toMatch(/^ops\[0\]: expected an op object, got string/);
   });
 
   it('rejects unknown keys with the allowed keys and a spelling hint', () => {
-    const e = failure([{ op: 'remove', ids: ['a'] }, { op: 'add', kind: 'task', 'flow-name': 'x' }]);
-    expect(e.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, as, flowAs, outAs, refAs, after/);
-    expect(e.op).toBe(1);
+    const error = failure([{ op: 'remove', ids: ['a'] }, { op: 'add', kind: 'task', 'flow-name': 'x' }]);
+    expect(error.message).toMatch(/^ops\[1\] \(add\): unknown key "flow-name" \(did you mean "flowName"\?\); allowed keys: kind, name, id, as, flowAs, outAs, refAs, after/);
+    expect(error.op).toBe(1);
     expect(failure([{ op: 'connect', source: 'a', target: 'b', ifabsent: true }]).message).toMatch(/did you mean "ifAbsent"/);
     expect(failure([{ op: 'order', id: 'g', flows: ['f'], after: 'x' }]).message).toMatch(/^ops\[0\] \(order\): unknown key "after"; allowed keys: id, flows, lanes, pools$/);
   });
@@ -363,9 +363,9 @@ describe('parseOps: rejections name the op index', () => {
   });
 
   it('validates kinds and trigger options early', () => {
-    const e = failure([{ op: 'add', kind: 'usertask' }, { op: 'add', kind: 'userTsk' }]);
-    expect(e.message).toMatch(/^ops\[1\] \(add\): Unknown kind "userTsk"/);
-    expect(e.candidates).toContain('userTask');
+    const error = failure([{ op: 'add', kind: 'usertask' }, { op: 'add', kind: 'userTsk' }]);
+    expect(error.message).toMatch(/^ops\[1\] \(add\): Unknown kind "userTsk"/);
+    expect(error.candidates).toContain('userTask');
     expect(failure([{ op: 'add', kind: 'choreographyTask' }]).message).toMatch(/rejected/);
     expect(failure([{ op: 'add', kind: 'userTask:message' }]).message).toMatch(/not an event/);
     expect(failure([{ op: 'add', kind: 'userTask', timer: 'PT1M' }]).message).toMatch(/"timer" only apply to events, but "userTask" is a task/);
@@ -394,9 +394,9 @@ describe('parseOps: rejections name the op index', () => {
     expect(failure([{ op: 'split', after: 'a', branches: [{ nodes: [{ kind: 'task' }, { kind: 'task', after: 'x' }] }] }]).message).toMatch(
       /^ops\[0\] \(split\) branches\[0\].nodes\[1\]: unknown key "after"/,
     );
-    const e = failure([{ op: 'remove', ids: ['x'] }, { op: 'split', after: 'a', branches: [{ nodes: [{ name: 'no kind' }] }] }]);
-    expect(e.message).toMatch(/^ops\[1\] \(split\) branches\[0\].nodes\[0\]: missing required key "kind"/);
-    expect(e.op).toBe(1);
+    const error = failure([{ op: 'remove', ids: ['x'] }, { op: 'split', after: 'a', branches: [{ nodes: [{ name: 'no kind' }] }] }]);
+    expect(error.message).toMatch(/^ops\[1\] \(split\) branches\[0\].nodes\[0\]: missing required key "kind"/);
+    expect(error.op).toBe(1);
     expect(failure([{ op: 'split', after: 'a', branches: [{ nodes: [{ kind: 'task', timer: 'PT1M' }] }] }]).message).toMatch(/nodes\[0\]: "timer" only apply to events/);
   });
 });
@@ -434,10 +434,10 @@ describe('guide', () => {
   it('kindsJson has an entry for every kind, trigger, op and error', () => {
     const json = kindsJson();
     const kinds = json['kinds'] as Array<{ kind: string; aliases: string[]; prefix: string; description: string }>;
-    expect(kinds.map((k) => k.kind)).toEqual(KINDS.map((k) => k.kind));
-    for (const k of kinds) {
-      expect(k.prefix).toBeTruthy();
-      expect(k.description).toBeTruthy();
+    expect(kinds.map((kind) => kind.kind)).toEqual(KINDS.map((kind) => kind.kind));
+    for (const kind of kinds) {
+      expect(kind.prefix).toBeTruthy();
+      expect(kind.description).toBeTruthy();
     }
     const triggers = json['triggers'] as Record<string, { kinds: string[]; option: string }>;
     expect(Object.keys(triggers)).toEqual(['none', 'message', 'timer', 'error', 'signal', 'escalation', 'conditional', 'link', 'compensate', 'terminate', 'cancel']);
@@ -453,23 +453,23 @@ describe('guide', () => {
 
   it('kindsText mentions every kind, alias, trigger option and error code', () => {
     const text = kindsText();
-    for (const k of KINDS) {
-      expect(text).toContain(k.kind);
-      for (const a of k.aliases) expect(text).toContain(a);
+    for (const kind of KINDS) {
+      expect(text).toContain(kind.kind);
+      for (const alias of kind.aliases) expect(text).toContain(alias);
     }
     for (const opt of ['--timer', '--message', '--error-code', '--signal', '--escalation-code', '--when', '--link', '--non-interrupting']) expect(text).toContain(opt);
     for (const opt of ['--after', '--before', '--flow', '--in', '--on', '--to']) expect(text).toContain(opt);
-    for (const e of ERROR_CATALOGUE) expect(text).toContain(e.code);
+    for (const entry of ERROR_CATALOGUE) expect(text).toContain(entry.code);
   });
 
   it('the guide lists every command commander registers, and no other', () => {
-    const registered = new Cli('test').program.commands.map((c) => c.name());
-    expect([...COMMANDS.map((c) => c.name)].sort()).toEqual([...registered].sort());
+    const registered = new Cli('test').program.commands.map((registeredCommand) => registeredCommand.name());
+    expect([...COMMANDS.map((commandSpec) => commandSpec.name)].sort()).toEqual([...registered].sort());
   });
 
   it('guideText mentions every command with usage and an example', () => {
     const text = guideText();
-    const names = COMMANDS.map((c) => c.name);
+    const names = COMMANDS.map((commandSpec) => commandSpec.name);
     for (const name of names) {
       expect(text).toContain(`bpmn ${name}`);
       expect(text).toContain(`$ bpmn ${name}`);
@@ -481,22 +481,22 @@ describe('guide', () => {
   });
 
   it('ERROR_CATALOGUE has unique codes and covers every code used under src/', () => {
-    const codes = ERROR_CATALOGUE.map((e) => e.code);
+    const codes = ERROR_CATALOGUE.map((entry) => entry.code);
     expect(new Set(codes).size).toBe(codes.length);
-    for (const e of ERROR_CATALOGUE) {
-      expect(e.code).toMatch(/^[EW]_[A-Z][A-Z0-9_]*(\*)?$/);
-      expect(e.meaning.length).toBeGreaterThan(10);
-      expect(e.fix.length).toBeGreaterThan(10);
+    for (const entry of ERROR_CATALOGUE) {
+      expect(entry.code).toMatch(/^[EW]_[A-Z][A-Z0-9_]*(\*)?$/);
+      expect(entry.meaning.length).toBeGreaterThan(10);
+      expect(entry.fix.length).toBeGreaterThan(10);
     }
-    const missing = codesInSource().filter((c) => !codes.includes(c));
+    const missing = codesInSource().filter((code) => !codes.includes(code));
     expect(missing, `codes used in src/ but missing from ERROR_CATALOGUE: ${missing.join(', ')}`).toEqual([]);
   });
 
   it('every command the catalogue and the strings under src/ name with arguments names the file first', () => {
-    const problems = ERROR_CATALOGUE.flatMap((e) => commandsWithoutFile(`${e.meaning} ${e.fix}`).map((c) => `${e.code}: ${c}`));
+    const problems = ERROR_CATALOGUE.flatMap((entry) => commandsWithoutFile(`${entry.meaning} ${entry.fix}`).map((command) => `${entry.code}: ${command}`));
     for (const file of sourceFiles(SRC_DIR)) {
       // the strings only: comments describe commands, hints and notes reach the user
-      for (const text of stringsInSource(file)) problems.push(...commandsWithoutFile(text).map((c) => `${file.slice(SRC_DIR.length + 1)}: ${c}`));
+      for (const text of stringsInSource(file)) problems.push(...commandsWithoutFile(text).map((command) => `${file.slice(SRC_DIR.length + 1)}: ${command}`));
     }
     // the scanner: strings and templates with their escapes and substitutions, no comment, no regular expression
     expect(stringsIn("// 'no'\nconst a = 'it\\'s' + \"x\\ty\" + `bpmn set ${quoted} ${f(`in`)}` /* `no` */ / 2;\nconst r = /['`]/g.test(a) ? `\\u0041` : '';")).toEqual([
@@ -519,15 +519,15 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
   const README = repoFile('README.md');
   const DOCS = ['commands', 'reference', 'ops', 'layout', 'contract', 'camunda', 'walkthrough'].map((name) => repoFile(`docs/${name}.md`)).join('\n');
   const texts: Record<string, string> = { guide: guideText(), kinds: kindsText(), README, DOCS };
-  const command = (name: string) => COMMANDS.find((c) => c.name === name)!;
-  const catalogue = (code: string) => ERROR_CATALOGUE.find((e) => e.code === code)!;
+  const command = (name: string) => COMMANDS.find((commandSpec) => commandSpec.name === name)!;
+  const catalogue = (code: string) => ERROR_CATALOGUE.find((entry) => entry.code === code)!;
 
   it('documents ext sub-command first (bpmn ext add|remove|list <file> <id> ...)', () => {
     for (const line of [command('ext').usage, ...command('ext').examples]) expect(line).toMatch(/^bpmn ext (add|remove|list) /);
     for (const [name, text] of Object.entries(texts)) {
-      for (const m of text.matchAll(/bpmn ext (\S+) (\S+)/g)) {
-        expect(['add', 'remove', 'list'], `${name}: ${m[0]}`).toContain(m[1]);
-        expect(m[2], `${name}: ${m[0]}`).toMatch(/^(<file>|\w+\.bpmn)$/);
+      for (const match of text.matchAll(/bpmn ext (\S+) (\S+)/g)) {
+        expect(['add', 'remove', 'list'], `${name}: ${match[0]}`).toContain(match[1]);
+        expect(match[2], `${name}: ${match[0]}`).toMatch(/^(<file>|\w+\.bpmn)$/);
       }
     }
     expect(failure([{ op: 'ext', id: 'a', action: 'remove' }]).hint).toContain('`bpmn ext list <file> <id>`');
@@ -547,9 +547,9 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
   });
 
   it('documents keeping flow ids wherever renames are described (--keep-flow-ids, BPMN_KEEP_FLOW_IDS, W_FLOW_ID_STALE)', () => {
-    const keep = COMMON_OPTIONS.find((o) => o.option === '--keep-flow-ids')!;
+    const keep = COMMON_OPTIONS.find((option) => option.option === '--keep-flow-ids')!;
     expect(keep.description).toMatch(/W_FLOW_ID_STALE[\s\S]*BPMN_KEEP_FLOW_IDS=1/);
-    expect(COMMON_OPTIONS.map((o) => o.option)).toContain('--no-keep-flow-ids');
+    expect(COMMON_OPTIONS.map((option) => option.option)).toContain('--no-keep-flow-ids');
     for (const [name, text] of Object.entries({ guide: guideText(), DOCS, library: repoFile('docs/library.md') })) {
       for (const word of ['--keep-flow-ids', 'W_FLOW_ID_STALE']) expect(text, `${name}: ${word}`).toContain(word);
     }
@@ -578,7 +578,7 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
   it('keeps usages, options and the result description in sync with the CLI', () => {
     expect(command('validate').usage).toContain('[--strict]');
     expect(command('layout').summary).toMatch(/no --no-layout/);
-    expect(COMMON_OPTIONS.find((o) => o.option === '--no-layout')!.description).toMatch(/pruned/);
+    expect(COMMON_OPTIONS.find((option) => option.option === '--no-layout')!.description).toMatch(/pruned/);
     for (const key of ['written', 'importWarnings', 'written: <file>']) expect(guideText()).toContain(key);
     for (const key of ['"written": true', '"importWarnings": []']) expect(DOCS).toContain(key);
     expect(DOCS).toMatch(/`--target camunda7` the `camunda:` and `modeler:` namespaces/);
@@ -591,8 +591,8 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(catalogue('E_EVENT_SUBPROCESS_NO_START').fix).toMatch(/one `bpmn apply`/);
     expect(DOCS).toMatch(/`eventSubProcess`.*one `bpmn apply`/);
     expect(catalogue('E_INVALID_SCOPE').meaning).not.toMatch(/collaboration/);
-    const wrap = command('add').examples.findIndex((e) => e.includes('participant "Order handling"'));
-    const blackBox = command('add').examples.findIndex((e) => e.includes('--black-box'));
+    const wrap = command('add').examples.findIndex((example) => example.includes('participant "Order handling"'));
+    const blackBox = command('add').examples.findIndex((example) => example.includes('--black-box'));
     expect(wrap).toBeGreaterThanOrEqual(0);
     expect(blackBox).toBeGreaterThan(wrap);
     expect(DOCS).toMatch(/\$ bpmn add order\.bpmn participant "Order handling"\n[\s\S]*\$ bpmn add order\.bpmn participant "Customer" --black-box/);

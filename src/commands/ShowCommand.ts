@@ -27,38 +27,38 @@ export class ShowCommand extends CliCommand {
         // --lint-config before --no-lint-config: neither given leaves lintConfig undefined
         .option('--lint-config <path>', "with --conventions: the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file, up to the repository root, whoever owns it; outside one only in the file's directory; stdin: from the working directory)")
         .option('--no-lint-config', 'with --conventions: do not read the .bpmnlintrc (no id conventions from element-id-naming)'),
-    ).action((file: string, id: string | undefined, o: RawOpts) => this.cli.guarded(() => (o['conventions'] ? this.conventions(file, id, o) : this.view(file, id, o)), !!o['json']));
+    ).action((file: string, id: string | undefined, options: RawOpts) => this.cli.guarded(() => (options['conventions'] ? this.conventions(file, id, options) : this.view(file, id, options)), !!options['json']));
   }
 
-  private async conventions(file: string, id: string | undefined, o: RawOpts): Promise<void> {
-    const extra = [...(id !== undefined ? ['the element id'] : []), ...['scope', 'around', 'depth', 'inner', 'context', 'layout'].filter((k) => o[k] !== undefined && o[k] !== false).map((k) => `--${k}`)];
+  private async conventions(file: string, id: string | undefined, options: RawOpts): Promise<void> {
+    const extra = [...(id !== undefined ? ['the element id'] : []), ...['scope', 'around', 'depth', 'inner', 'context', 'layout'].filter((key) => options[key] !== undefined && options[key] !== false).map((key) => `--${key}`)];
     if (extra.length) throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
     // a file that does not exist yet: the conventions a new model there gets (before `bpmn new`)
     const doc = file === '-' || existsSync(file) ? await this.cli.readDocArg(file) : undefined;
-    const lookup = await ConventionsLookup.of(file === '-' ? undefined : file, this.lintOptions(o));
+    const lookup = await ConventionsLookup.of(file === '-' ? undefined : file, this.lintOptions(options));
     const { conventions, ...rest } = lookup.options(file === '-' ? undefined : file);
     const view = new ConventionsTable(doc, conventions).view(rest);
-    if (o['json']) this.cli.printJson(view, !!o['pretty']);
+    if (options['json']) this.cli.printJson(view, !!options['pretty']);
     else this.cli.print(renderConventions(view));
   }
 
-  private async view(file: string, id: string | undefined, o: RawOpts): Promise<void> {
+  private async view(file: string, id: string | undefined, options: RawOpts): Promise<void> {
     // the .bpmnlintrc only decides the id conventions here
-    if (o['lintConfig'] !== undefined) {
-      throw usageError(`${o['lintConfig'] === false ? '--no-lint-config' : '--lint-config'} goes only with --conventions`, { hint: 'Use `bpmn show <file> --conventions --lint-config <path>` (or --no-lint-config).' });
+    if (options['lintConfig'] !== undefined) {
+      throw usageError(`${options['lintConfig'] === false ? '--no-lint-config' : '--lint-config'} goes only with --conventions`, { hint: 'Use `bpmn show <file> --conventions --lint-config <path>` (or --no-lint-config).' });
     }
     const opts: ViewOptions = {
       ...(id !== undefined ? { id } : {}),
-      ...(o['context'] ? { context: true } : {}),
-      ...(o['around'] !== undefined ? { around: String(o['around']) } : {}),
-      ...(o['depth'] !== undefined ? { depth: o['depth'] as number } : {}),
-      ...(o['inner'] ? { inner: true } : {}),
-      ...(o['scope'] !== undefined ? { scope: String(o['scope']) } : {}),
-      ...(o['layout'] ? { layout: true } : {}),
+      ...(options['context'] ? { context: true } : {}),
+      ...(options['around'] !== undefined ? { around: String(options['around']) } : {}),
+      ...(options['depth'] !== undefined ? { depth: options['depth'] as number } : {}),
+      ...(options['inner'] ? { inner: true } : {}),
+      ...(options['scope'] !== undefined ? { scope: String(options['scope']) } : {}),
+      ...(options['layout'] ? { layout: true } : {}),
     };
     const doc = await this.cli.readDocArg(file);
     const shown = new ViewRequest(opts).of(doc);
-    if (o['json']) this.cli.printJson(shown.kind === 'layout' ? { file, ...shown.view } : shown.view, !!o['pretty']);
+    if (options['json']) this.cli.printJson(shown.kind === 'layout' ? { file, ...shown.view } : shown.view, !!options['pretty']);
     else this.cli.print(renderShown(shown));
   }
 }

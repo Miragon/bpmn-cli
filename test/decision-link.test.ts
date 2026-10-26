@@ -31,10 +31,10 @@ const OPERATON = 'xmlns:operaton="http://operaton.org/schema/1.0/bpmn"';
 const ZEEBE = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"';
 const MODELER = 'xmlns:modeler="http://camunda.org/schema/modeler/1.0"';
 
-function model(task: string, o: { ns?: string; attrs?: string; process?: string } = {}): string {
+function model(task: string, options: { ns?: string; attrs?: string; process?: string } = {}): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions ${BPMN} ${o.ns ?? ''} ${o.attrs ?? ''} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="P" isExecutable="true" ${o.process ?? ''}>
+<bpmn:definitions ${BPMN} ${options.ns ?? ''} ${options.attrs ?? ''} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P" isExecutable="true" ${options.process ?? ''}>
     <bpmn:startEvent id="S" />
     ${task}
     <bpmn:endEvent id="E" />
@@ -70,10 +70,10 @@ describe('reading the decision link', () => {
     ['Camunda 8: zeebe:calledDecision', '<bpmn:businessRuleTask id="R" name="Rate"><bpmn:extensionElements><zeebe:calledDecision decisionId="risk" resultVariable="r" /></bpmn:extensionElements></bpmn:businessRuleTask>', C8],
     ['hand-written: calledElement', '<bpmn:businessRuleTask id="R" name="Rate" calledElement="risk" />', {}],
   ];
-  for (const [name, task, o] of SPELLINGS) {
+  for (const [name, task, options] of SPELLINGS) {
     it(`${name}: show, show <id> and find`, async () => {
-      const doc = await Doc.fromXml(model(task, o));
-      const node = buildView(doc).processes[0]!.nodes.find((x) => x.id === 'R')!;
+      const doc = await Doc.fromXml(model(task, options));
+      const node = buildView(doc).processes[0]!.nodes.find((candidate) => candidate.id === 'R')!;
       expect(node.props).toEqual({ calledDecision: 'risk' });
       expect(elementDetail(doc, doc.require('R')).properties['calledDecision']).toBe('risk');
       expect(findElements(doc, 'risk')).toEqual([expect.objectContaining({ id: 'R', match: expect.stringMatching(/risk/) })]);
@@ -105,25 +105,25 @@ describe('set <id> calledDecision=<decision>', () => {
 
   it('Camunda 7: camunda:decisionRef; a hand-written unprefixed link is converted (W_C7_DEPLOY_SCHEMA resolved)', async () => {
     const source = model('<bpmn:businessRuleTask id="R" calledDecision="old" />', C7);
-    expect(runProfile(await Doc.fromXml(source)).findings.map((f) => f.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
+    expect(runProfile(await Doc.fromXml(source)).findings.map((finding) => finding.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
     const { doc, result } = await set(source, { calledDecision: 'risk' });
     expect(doc.require('R').$attrs).toEqual({ 'camunda:decisionRef': 'risk' });
     expect(result.changes.changed[0]!.detail).toBe('calledDecision=risk (camunda:decisionRef); removed calledDecision');
     expect(runProfile(doc).findings).toEqual([]);
-    expect(result.validation.platform?.resolved?.map((f) => f.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
+    expect(result.validation.platform?.resolved?.map((finding) => finding.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
   });
 
   it('Camunda 7: the schema finding\'s hint is that command, and following it deploys', async () => {
     const file = join(dir, 'c7-hint.bpmn');
     writeFileSync(file, model('<bpmn:businessRuleTask id="R" calledDecision="risk" />', C7));
-    const schema = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((f) => f.code === 'W_C7_DEPLOY_SCHEMA');
+    const schema = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((finding) => finding.code === 'W_C7_DEPLOY_SCHEMA');
     expect(schema!.hint).toBe("Write the decision link in the engines' spelling: `bpmn set <file> R calledDecision=risk` (camunda:decisionRef; the unprefixed calledDecision is removed).");
-    const r = cli('set', file, 'R', 'calledDecision=risk', '--no-layout');
-    expect(r.code, r.err).toBe(0);
+    const result = cli('set', file, 'R', 'calledDecision=risk', '--no-layout');
+    expect(result.code, result.err).toBe(0);
     expect(runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings).toEqual([]);
     // next to another implementation the attribute is only removed
     const withClass = runProfile(await Doc.fromXml(model('<bpmn:businessRuleTask id="R" calledDecision="risk" camunda:class="x.Rules" />', C7))).findings;
-    expect(withClass.filter((f) => f.code === 'W_C7_DEPLOY_SCHEMA').map((f) => f.hint)).toEqual(['Remove it: `bpmn set <file> R calledDecision=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
+    expect(withClass.filter((finding) => finding.code === 'W_C7_DEPLOY_SCHEMA').map((finding) => finding.hint)).toEqual(['Remove it: `bpmn set <file> R calledDecision=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
   }, 60000);
 
   it('Operaton-only file: operaton:decisionRef', async () => {
@@ -137,9 +137,9 @@ describe('set <id> calledDecision=<decision>', () => {
     expect(taskTag(xml)).toBe('<bpmn:businessRuleTask id="R">');
     // the Camunda 8 profile (step 3) reports the missing resultVariable itself; the op warning gives way to it
     expect(result.changes.warnings).toEqual([]);
-    expect(result.validation.warnings.filter((w) => w.code.startsWith('W_C8_')).map((w) => [w.code, w.element, w.hint])).toEqual([['W_C8_DEPLOY_IMPLEMENTATION', 'R', '`bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
+    expect(result.validation.warnings.filter((warning) => warning.code.startsWith('W_C8_')).map((warning) => [warning.code, warning.element, warning.hint])).toEqual([['W_C8_DEPLOY_IMPLEMENTATION', 'R', '`bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
     const op = runOps(await Doc.fromXml(model('<bpmn:businessRuleTask id="R" calledDecision="old" />', C8)), [{ op: 'set', id: 'R', values: { calledDecision: 'risk' } }]);
-    expect(op.warnings.map((w) => [w.code, w.hint])).toEqual([['W_DECISION_RESULT_VARIABLE', 'Name the variable that receives the result: `bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
+    expect(op.warnings.map((warning) => [warning.code, warning.hint])).toEqual([['W_DECISION_RESULT_VARIABLE', 'Name the variable that receives the result: `bpmn ext add <file> R zeebe:calledDecision decisionId=risk resultVariable=<variable> --replace`.']]);
     const kept = await set(model('<bpmn:businessRuleTask id="R"><bpmn:extensionElements><zeebe:calledDecision decisionId="old" resultVariable="score" /></bpmn:extensionElements></bpmn:businessRuleTask>', C8), { calledDecision: 'risk' });
     expect(taskXml(kept.xml)).toContain('<zeebe:calledDecision decisionId="risk" resultVariable="score" />');
     expect(kept.result.changes.warnings).toEqual([]);
@@ -170,16 +170,16 @@ describe('set <id> calledDecision=<decision>', () => {
     const doc = await Doc.fromXml(model('<bpmn:businessRuleTask id="R" />'));
     expect(new PropertyCoercer(doc).settableKeys(doc.require('R'))).toContain('calledDecision');
     expect(new PropertyCoercer(doc).settableKeys(doc.require('S'))).not.toContain('calledDecision');
-    const keys = (kindsJson()['setKeys'] as Array<{ key: string; appliesTo: string }>).filter((k) => k.key === 'calledDecision');
-    expect(keys.map((k) => k.appliesTo)).toEqual(['businessRuleTask']);
+    const keys = (kindsJson()['setKeys'] as Array<{ key: string; appliesTo: string }>).filter((setKey) => setKey.key === 'calledDecision');
+    expect(keys.map((setKey) => setKey.appliesTo)).toEqual(['businessRuleTask']);
   });
 });
 
 /** Two business rule tasks in a row: Activity_Rate (with `rate`) and Activity_Other (with `other`). */
-function pair(rate: string, other = '', o: { ns?: string; executable?: boolean } = {}): string {
+function pair(rate: string, other = '', options: { ns?: string; executable?: boolean } = {}): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions ${BPMN} ${o.ns ?? ''} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="Process_1" isExecutable="${o.executable ?? false}">
+<bpmn:definitions ${BPMN} ${options.ns ?? ''} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="${options.executable ?? false}">
     <bpmn:startEvent id="S" />
     <bpmn:businessRuleTask id="Activity_Rate" name="Rate"${rate ? ` ${rate}` : ''} />
     <bpmn:businessRuleTask id="Activity_Other" name="Other"${other ? ` ${other}` : ''} />
@@ -211,35 +211,35 @@ const BOTH = `<?xml version="1.0" encoding="UTF-8"?>
 
 async function setOn(source: string, id: string, calledDecision: string, opts: MutationOptions = { platform: 'none' }): Promise<{ xml: string; detail: string; warnings: string[] }> {
   const result = await mutateDoc(await Doc.fromXml(source), [{ op: 'set', id, values: { calledDecision } }], { layout: false, ...opts });
-  return { xml: result.xml, detail: result.changes.changed.map((c) => c.detail).join(' | '), warnings: [...result.changes.warnings, ...result.validation.warnings].map((w) => w.code) };
+  return { xml: result.xml, detail: result.changes.changed.map((change) => change.detail).join(' | '), warnings: [...result.changes.warnings, ...result.validation.warnings].map((warning) => warning.code) };
 }
 
 describe('a model without an engine keeps the file\'s spelling (issue #42)', () => {
   it('a task with camunda:decisionRef: that attribute is updated, no unprefixed one is added', async () => {
     const source = pair('camunda:decisionRef="d1"', '', { ns: CAMUNDA });
-    const r = await setOn(source, 'Activity_Rate', 'd2');
+    const result = await setOn(source, 'Activity_Rate', 'd2');
     // only the value changes: every other byte stays
-    expect(r.xml).toBe(source.replace('camunda:decisionRef="d1"', 'camunda:decisionRef="d2"'));
-    expect(r.detail).toBe('calledDecision=d2 (camunda:decisionRef)');
+    expect(result.xml).toBe(source.replace('camunda:decisionRef="d1"', 'camunda:decisionRef="d2"'));
+    expect(result.detail).toBe('calledDecision=d2 (camunda:decisionRef)');
   });
 
   it('a task with operaton:decisionRef: that attribute is updated', async () => {
     const source = pair('operaton:decisionRef="d1"', '', { ns: OPERATON });
-    const r = await setOn(source, 'Activity_Rate', 'd2');
-    expect(r.xml).toBe(source.replace('operaton:decisionRef="d1"', 'operaton:decisionRef="d2"'));
-    expect(r.detail).toBe('calledDecision=d2 (operaton:decisionRef)');
+    const result = await setOn(source, 'Activity_Rate', 'd2');
+    expect(result.xml).toBe(source.replace('operaton:decisionRef="d1"', 'operaton:decisionRef="d2"'));
+    expect(result.detail).toBe('calledDecision=d2 (operaton:decisionRef)');
   });
 
   it('a task with zeebe:calledDecision: its decisionId is updated and its resultVariable kept; no W_DECISION_RESULT_VARIABLE', async () => {
-    const r = await setOn(BOTH, 'Activity_Price', 'new-c8');
-    expect(r.xml).toBe(BOTH.replace('decisionId="old-c8"', 'decisionId="new-c8"'));
-    expect(r.detail).toBe('calledDecision=new-c8 (zeebe:calledDecision)');
-    expect(r.warnings).not.toContain('W_DECISION_RESULT_VARIABLE');
+    const result = await setOn(BOTH, 'Activity_Price', 'new-c8');
+    expect(result.xml).toBe(BOTH.replace('decisionId="old-c8"', 'decisionId="new-c8"'));
+    expect(result.detail).toBe('calledDecision=new-c8 (zeebe:calledDecision)');
+    expect(result.warnings).not.toContain('W_DECISION_RESULT_VARIABLE');
     // without a resultVariable: still none, no engine reads the file
     const bare = BOTH.replace(' resultVariable="price"', '');
-    const b = await setOn(bare, 'Activity_Price', 'new-c8');
-    expect(b.xml).toBe(bare.replace('decisionId="old-c8"', 'decisionId="new-c8"'));
-    expect(b.warnings).not.toContain('W_DECISION_RESULT_VARIABLE');
+    const bareResult = await setOn(bare, 'Activity_Price', 'new-c8');
+    expect(bareResult.xml).toBe(bare.replace('decisionId="old-c8"', 'decisionId="new-c8"'));
+    expect(bareResult.warnings).not.toContain('W_DECISION_RESULT_VARIABLE');
   });
 
   it('the file of the issue: camunda:decisionRef and zeebe:calledDecision are kept, a new link between them is unprefixed', async () => {
@@ -260,8 +260,8 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
     expect(operaton.xml).toContain('<bpmn:businessRuleTask id="Activity_Other" name="Other" operaton:decisionRef="d2" />');
     // a prefix of the file's own for the camunda namespace
     const own = pair('c:decisionRef="d1"', '', { ns: 'xmlns:c="http://camunda.org/schema/1.0/bpmn"' });
-    const c = await setOn(own, 'Activity_Other', 'd2');
-    expect(c.xml).toBe(own.replace('<bpmn:businessRuleTask id="Activity_Other" name="Other" />', '<bpmn:businessRuleTask id="Activity_Other" name="Other" c:decisionRef="d2" />'));
+    const ownResult = await setOn(own, 'Activity_Other', 'd2');
+    expect(ownResult.xml).toBe(own.replace('<bpmn:businessRuleTask id="Activity_Other" name="Other" />', '<bpmn:businessRuleTask id="Activity_Other" name="Other" c:decisionRef="d2" />'));
     // zeebe: a zeebe:calledDecision without resultVariable, and no warning about it
     const zeebe = await setOn(BOTH.replace(' camunda:decisionRef="old-c7"', ''), 'Activity_New', 'd2');
     expect(zeebe.xml).toMatch(/<bpmn:businessRuleTask id="Activity_New" name="New">\s*<bpmn:extensionElements>\s*<zeebe:calledDecision decisionId="d2" \/>\s*<\/bpmn:extensionElements>\s*<\/bpmn:businessRuleTask>/);
@@ -271,8 +271,8 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
 
   it('a link in a sub-process counts; tasks without a link do not', async () => {
     const source = model('<bpmn:businessRuleTask id="R" /><bpmn:businessRuleTask id="Q" /><bpmn:subProcess id="Sub"><bpmn:businessRuleTask id="Deep" camunda:decisionRef="d1" /></bpmn:subProcess>', { ns: CAMUNDA });
-    const r = await setOn(source, 'R', 'risk');
-    expect(taskTag(r.xml)).toBe('<bpmn:businessRuleTask id="R" camunda:decisionRef="risk" />');
+    const result = await setOn(source, 'R', 'risk');
+    expect(taskTag(result.xml)).toBe('<bpmn:businessRuleTask id="R" camunda:decisionRef="risk" />');
   });
 
   it('mixed spellings or none: the unprefixed calledDecision', async () => {
@@ -285,9 +285,9 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
     for (const [name, rate, ns] of cases) {
       const extra = name === 'camunda next to an unprefixed calledDecision' ? '<bpmn:businessRuleTask id="Activity_Third" calledDecision="d0" />' : '';
       const source = pair(rate, '', { ns }).replace('<bpmn:endEvent id="E" />', `${extra}<bpmn:endEvent id="E" />`);
-      const r = await setOn(source, 'Activity_Other', 'd2');
-      expect(r.xml, name).toContain('<bpmn:businessRuleTask id="Activity_Other" name="Other" calledDecision="d2" />');
-      expect(r.detail, name).toBe('calledDecision=d2 (calledDecision)');
+      const result = await setOn(source, 'Activity_Other', 'd2');
+      expect(result.xml, name).toContain('<bpmn:businessRuleTask id="Activity_Other" name="Other" calledDecision="d2" />');
+      expect(result.detail, name).toBe('calledDecision=d2 (calledDecision)');
     }
   });
 
@@ -300,9 +300,9 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
   });
 
   it('a task with two spellings keeps the one the readers read first and loses the other', async () => {
-    const r = await setOn(pair('calledDecision="d1" camunda:decisionRef="d1"', '', { ns: CAMUNDA }), 'Activity_Rate', 'd2');
-    expect(taskTag(r.xml)).toBe('<bpmn:businessRuleTask id="Activity_Rate" name="Rate" camunda:decisionRef="d2" />');
-    expect(r.detail).toBe('calledDecision=d2 (camunda:decisionRef); removed calledDecision');
+    const result = await setOn(pair('calledDecision="d1" camunda:decisionRef="d1"', '', { ns: CAMUNDA }), 'Activity_Rate', 'd2');
+    expect(taskTag(result.xml)).toBe('<bpmn:businessRuleTask id="Activity_Rate" name="Rate" camunda:decisionRef="d2" />');
+    expect(result.detail).toBe('calledDecision=d2 (camunda:decisionRef); removed calledDecision');
   });
 
   it('a zeebe:calledDecision without a decisionId is no link: the task follows the file, else gets the unprefixed spelling', async () => {
@@ -338,9 +338,9 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
   });
 
   it('an empty value still removes the link in every spelling', async () => {
-    const r = await setOn(BOTH, 'Activity_Price', '');
-    expect(taskXml(r.xml.slice(r.xml.indexOf('<bpmn:businessRuleTask id="Activity_Price"')))).toBe('<bpmn:businessRuleTask id="Activity_Price" name="Price" />');
-    expect(r.detail).toBe('calledDecision removed; removed zeebe:calledDecision');
+    const result = await setOn(BOTH, 'Activity_Price', '');
+    expect(taskXml(result.xml.slice(result.xml.indexOf('<bpmn:businessRuleTask id="Activity_Price"')))).toBe('<bpmn:businessRuleTask id="Activity_Price" name="Price" />');
+    expect(result.detail).toBe('calledDecision removed; removed zeebe:calledDecision');
     const c7 = await setOn(BOTH, 'Activity_RateRisk', '');
     expect(c7.xml).toContain('<bpmn:businessRuleTask id="Activity_RateRisk" name="Rate risk" />');
   });
@@ -370,18 +370,18 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
 
   it('no guide entry names design-iq as the reason for a spelling', () => {
     const texts = [
-      ...ERROR_CATALOGUE.map((e) => `${e.meaning} ${e.fix ?? ''}`),
-      ...COMMANDS.map((c) => c.summary),
-      ...(kindsJson()['setKeys'] as Array<{ description: string }>).map((k) => k.description),
+      ...ERROR_CATALOGUE.map((entry) => `${entry.meaning} ${entry.fix ?? ''}`),
+      ...COMMANDS.map((command) => command.summary),
+      ...(kindsJson()['setKeys'] as Array<{ description: string }>).map((setKey) => setKey.description),
       ...guideText().split('\n'),
     ];
-    const decision = texts.filter((t) => /calledDecision|decision link|decisionRef/.test(t));
+    const decision = texts.filter((text) => /calledDecision|decision link|decisionRef/.test(text));
     expect(decision.length).toBeGreaterThan(5);
-    expect(decision.filter((t) => /design-iq|design model/i.test(t))).toEqual([]);
+    expect(decision.filter((text) => /design-iq|design model/i.test(text))).toEqual([]);
   });
 });
 
 function cli(...args: string[]): { code: number; out: string; err: string } {
-  const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const result = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+  return { code: result.status ?? -1, out: result.stdout, err: result.stderr };
 }

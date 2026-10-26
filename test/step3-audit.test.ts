@@ -17,14 +17,14 @@ import { Semantics } from '../src/drawing/Semantics.js';
 import { Drawing } from '../src/layout/incremental/Drawing.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI"';
-const sh = (id: string, x: number, y: number, w: number, h: number, extra = ''): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${extra}><dc:Bounds x="${x}" y="${y}" width="${w}" height="${h}" /></bpmndi:BPMNShape>`;
-const ed = (id: string, pts: Array<[number, number]>): string => `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${pts.map(([x, y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
+const sh = (id: string, left: number, top: number, width: number, height: number, extra = ''): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${extra}><dc:Bounds x="${left}" y="${top}" width="${width}" height="${height}" /></bpmndi:BPMNShape>`;
+const ed = (id: string, pts: Array<[number, number]>): string => `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${pts.map(([left, top]) => `<di:waypoint x="${left}" y="${top}" />`).join('')}</bpmndi:BPMNEdge>`;
 const defs = (process: string, di: string, extraRoots = '', root = 'P'): string =>
   `<?xml version="1.0" encoding="UTF-8"?>\n<bpmn:definitions ${NS} id="Defs" targetNamespace="http://bpmn.io/schema/bpmn">\n${process}\n${extraRoots}\n<bpmndi:BPMNDiagram id="D"><bpmndi:BPMNPlane id="PL" bpmnElement="${root}">${di}</bpmndi:BPMNPlane></bpmndi:BPMNDiagram>\n</bpmn:definitions>`;
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) out.set(shape.id, shape);
   return out;
 }
 
@@ -76,10 +76,10 @@ describe('#42 closing a strip never puts a boundary event onto a shape', () => {
       ed('F3', [[580, 200], [740, 200]]),
       ed('F4', [[840, 200], [900, 200]]),
     ].join('');
-    const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'remove', ids: ['B'] }], { dryRun: true, layout: 'incremental' });
-    expect(r.layout.metrics!.added).toEqual([]);
-    const s = shapes(await Doc.fromXml(r.xml));
-    expect(s.get('T')!.bounds).toEqual({ x: 780, y: 282, width: 36, height: 36 });
+    const result = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'remove', ids: ['B'] }], { dryRun: true, layout: 'incremental' });
+    expect(result.layout.metrics!.added).toEqual([]);
+    const shapesAfter = shapes(await Doc.fromXml(result.xml));
+    expect(shapesAfter.get('T')!.bounds).toEqual({ x: 780, y: 282, width: 36, height: 36 });
   });
 });
 
@@ -90,13 +90,13 @@ describe('#71 a label moved past the right border of its pool widens the pool', 
     const label = '<bpmndi:BPMNLabel><dc:Bounds x="23" y="240" width="190" height="14" /></bpmndi:BPMNLabel>';
     const di = `${sh('Pool', 0, 0, 600, 300, ' isHorizontal="true"')}${sh('L', 30, 0, 570, 300, ' isHorizontal="true"')}${sh('A', 480, 40, 100, 80)}<bpmndi:BPMNShape id="E1_di" bpmnElement="E1"><dc:Bounds x="100" y="200" width="36" height="36" />${label}</bpmndi:BPMNShape>`;
     const xml = defs(process, di, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
-    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['E1'], to: 'A', axis: 'column' }], { dryRun: true });
-    const s = shapes(await Doc.fromXml(r.xml));
-    const labelRight = s.get('E1')!.label!.x + s.get('E1')!.label!.width;
+    const result = await mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['E1'], to: 'A', axis: 'column' }], { dryRun: true });
+    const shapesAfter = shapes(await Doc.fromXml(result.xml));
+    const labelRight = shapesAfter.get('E1')!.label!.x + shapesAfter.get('E1')!.label!.width;
     expect(labelRight).toBeGreaterThan(600);
-    expect(s.get('Pool')!.bounds.x + s.get('Pool')!.bounds.width).toBeGreaterThanOrEqual(labelRight + 5);
-    expect(s.get('L')!.bounds.x + s.get('L')!.bounds.width).toBe(s.get('Pool')!.bounds.x + s.get('Pool')!.bounds.width);
-    expect(r.layout.metrics!.added.filter((p) => p.kind === 'labelOutsideFrame')).toEqual([]);
+    expect(shapesAfter.get('Pool')!.bounds.x + shapesAfter.get('Pool')!.bounds.width).toBeGreaterThanOrEqual(labelRight + 5);
+    expect(shapesAfter.get('L')!.bounds.x + shapesAfter.get('L')!.bounds.width).toBe(shapesAfter.get('Pool')!.bounds.x + shapesAfter.get('Pool')!.bounds.width);
+    expect(result.layout.metrics!.added.filter((problem) => problem.kind === 'labelOutsideFrame')).toEqual([]);
   });
 });
 
@@ -106,8 +106,8 @@ describe('#69 a few px into a lane header do not refuse an alignment', () => {
       <bpmn:startEvent id="Ev" /><bpmn:startEvent id="Ev2" /><bpmn:task id="T" name="T" /></bpmn:process>`;
     const di = `${sh('Pool', 0, 0, 600, 300, ' isHorizontal="true"')}${sh('L', 30, 0, 570, 300, ' isHorizontal="true"')}${sh('Ev', 90, 40, 36, 36)}${sh('Ev2', 72, 220, 36, 36)}${sh('T', 300, 150, 100, 80)}`;
     const xml = defs(process, di, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
-    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev', axis: 'column' }], { dryRun: true });
-    expect(shapes(await Doc.fromXml(r.xml)).get('T')!.bounds.x).toBe(58);
+    const result = await mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev', axis: 'column' }], { dryRun: true });
+    expect(shapes(await Doc.fromXml(result.xml)).get('T')!.bounds.x).toBe(58);
     await expect(mutateDoc(await Doc.fromXml(xml), [{ op: 'align', ids: ['T'], to: 'Ev2', axis: 'column' }], { dryRun: true })).rejects.toMatchObject({ code: 'E_LEAVES_CONTAINER' });
   });
 
@@ -124,12 +124,12 @@ describe('#40 lane order keeps what hangs out of a band inside the pool', () => 
       <bpmn:task id="A" name="A" /><bpmn:boundaryEvent id="B" attachedToRef="A"><bpmn:timerEventDefinition id="BT" /></bpmn:boundaryEvent><bpmn:task id="X" name="X" /></bpmn:process>`;
     const di = `${sh('Pool', 0, 0, 600, 300, ' isHorizontal="true"')}${sh('L1', 30, 0, 570, 150, ' isHorizontal="true"')}${sh('L2', 30, 150, 570, 150, ' isHorizontal="true"')}${sh('A', 100, 60, 100, 80)}${sh('B', 160, 122, 36, 36)}${sh('X', 300, 190, 100, 80)}`;
     const xml = defs(process, di, '<bpmn:collaboration id="C"><bpmn:participant id="Pool" processRef="P" /></bpmn:collaboration>', 'C');
-    const r = await mutateDoc(await Doc.fromXml(xml), [{ op: 'order', id: 'Pool', lanes: ['L2', 'L1'] }], { dryRun: true });
-    const s = shapes(await Doc.fromXml(r.xml));
-    expect(s.get('L1')!.bounds.y).toBe(150);
-    expect(s.get('B')!.bounds.y + 36).toBeLessThanOrEqual(s.get('Pool')!.bounds.y + s.get('Pool')!.bounds.height);
-    expect(s.get('L1')!.bounds.y + s.get('L1')!.bounds.height).toBe(s.get('Pool')!.bounds.y + s.get('Pool')!.bounds.height);
-    expect(r.layout.metrics!.added.filter((p) => ['outsidePool', 'laneGap'].includes(p.kind))).toEqual([]);
+    const result = await mutateDoc(await Doc.fromXml(xml), [{ op: 'order', id: 'Pool', lanes: ['L2', 'L1'] }], { dryRun: true });
+    const shapesAfter = shapes(await Doc.fromXml(result.xml));
+    expect(shapesAfter.get('L1')!.bounds.y).toBe(150);
+    expect(shapesAfter.get('B')!.bounds.y + 36).toBeLessThanOrEqual(shapesAfter.get('Pool')!.bounds.y + shapesAfter.get('Pool')!.bounds.height);
+    expect(shapesAfter.get('L1')!.bounds.y + shapesAfter.get('L1')!.bounds.height).toBe(shapesAfter.get('Pool')!.bounds.y + shapesAfter.get('Pool')!.bounds.height);
+    expect(result.layout.metrics!.added.filter((problem) => ['outsidePool', 'laneGap'].includes(problem.kind))).toEqual([]);
   });
 });
 
@@ -156,7 +156,7 @@ describe('#12 a node is not placed beside its own sub-process', () => {
     }
     // centred on its own sub-process's column is fine: it stays inside
     const ok = await mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'place', ids: ['Wrap'], columnOf: 'Sub2' }], { dryRun: true });
-    expect(ok.layout.metrics!.added.filter((p) => p.kind.startsWith('outside'))).toEqual([]);
+    expect(ok.layout.metrics!.added.filter((problem) => problem.kind.startsWith('outside'))).toEqual([]);
   });
 });
 
@@ -174,8 +174,8 @@ describe('#39 removing the only lane keeps its pool', () => {
     );
     const height = shapes(await Doc.fromXml(r0.xml)).get('Partner')!.bounds.height;
     const withLane = await mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'add', kind: 'lane', id: 'Lane_Desk', name: 'Desk', in: 'Partner' }], { dryRun: true, layout: 'incremental' });
-    const r = await mutateDoc(await Doc.fromXml(withLane.xml), [{ op: 'remove', ids: ['Lane_Desk'] }], { dryRun: true, layout: 'incremental' });
-    expect(shapes(await Doc.fromXml(r.xml)).get('Partner')!.bounds.height).toBe(height);
+    const result = await mutateDoc(await Doc.fromXml(withLane.xml), [{ op: 'remove', ids: ['Lane_Desk'] }], { dryRun: true, layout: 'incremental' });
+    expect(shapes(await Doc.fromXml(result.xml)).get('Partner')!.bounds.height).toBe(height);
   });
 });
 
@@ -199,7 +199,7 @@ describe('#62 route refuses a side that points into a boundary event host', () =
       message: `--exit top would run ${flow} through A: TB sits on the bottom border of its host`,
     });
     const ok = await mutateDoc(await Doc.fromXml(r0.xml), [{ op: 'route', id: flow, exit: 'bottom' }], { dryRun: true });
-    expect(ok.layout.metrics!.added.filter((p) => p.kind === 'through')).toEqual([]);
+    expect(ok.layout.metrics!.added.filter((problem) => problem.kind === 'through')).toEqual([]);
   });
 });
 
@@ -208,8 +208,8 @@ describe('#61 connections the space tool reshapes are reported', () => {
     const process = `<bpmn:process id="P"><bpmn:startEvent id="S"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent><bpmn:task id="A" name="A"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:task><bpmn:endEvent id="E"><bpmn:incoming>F2</bpmn:incoming></bpmn:endEvent>
       <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="A" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="E" /></bpmn:process>`;
     const di = `${sh('S', 100, 182, 36, 36)}${sh('A', 196, 160, 100, 80)}${sh('E', 356, 182, 36, 36)}${ed('F1', [[136, 200], [196, 200]])}${ed('F2', [[296, 200], [356, 200]])}`;
-    const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'space', after: 'A', by: 100 }], { dryRun: true });
-    expect(r.layout.format![0]).toMatchObject({ moved: ['E'], rerouted: [], reshaped: ['F2'] });
+    const result = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'space', after: 'A', by: 100 }], { dryRun: true });
+    expect(result.layout.format![0]).toMatchObject({ moved: ['E'], rerouted: [], reshaped: ['F2'] });
   });
 
   it('the incremental layout lists a loop flow the space tool stretched', async () => {
@@ -221,11 +221,11 @@ describe('#61 connections the space tool reshapes are reported', () => {
       <bpmn:sequenceFlow id="F3" sourceRef="G" targetRef="E" /><bpmn:sequenceFlow id="F4" sourceRef="G" targetRef="A" /></bpmn:process>`;
     // F4 loops back over the top: G (beyond the insert) -> up -> left -> down into A
     const di = `${sh('S', 100, 182, 36, 36)}${sh('A', 196, 160, 100, 80)}${sh('G', 356, 175, 50, 50)}${sh('E', 466, 182, 36, 36)}${ed('F1', [[136, 200], [196, 200]])}${ed('F2', [[296, 200], [356, 200]])}${ed('F3', [[406, 200], [466, 200]])}${ed('F4', [[381, 175], [381, 120], [246, 120], [246, 160]])}`;
-    const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true, layout: 'incremental' });
-    const after = new Map([...new DiagramReader((await Doc.fromXml(r.xml)).definitions).planes()[0]!.edges.values()].map((e) => [e.id, e.points.map((p) => `${p.x},${p.y}`).join(' ')]));
+    const result = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true, layout: 'incremental' });
+    const after = new Map([...new DiagramReader((await Doc.fromXml(result.xml)).definitions).planes()[0]!.edges.values()].map((edge) => [edge.id, edge.points.map((plane) => `${plane.x},${plane.y}`).join(' ')]));
     expect(after.get('F4')).not.toBe('381,175 381,120 246,120 246,160');
-    expect(r.layout.rerouted ?? []).not.toContain('F4');
-    expect(r.layout.reshaped).toContain('F4');
+    expect(result.layout.rerouted ?? []).not.toContain('F4');
+    expect(result.layout.reshaped).toContain('F4');
   });
 });
 
@@ -252,13 +252,13 @@ describe('#77 a splice pushes only by the room that is missing', () => {
       ed('F3', [[568, 200], [628, 200]]),
       ed('F4', [[728, 200], [788, 200]]),
     ].join('');
-    const r = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true, layout: 'incremental' });
-    const s = shapes(await Doc.fromXml(r.xml));
-    const n = s.get('N')!.bounds;
-    expect(n.x).toBe(356);
+    const result = await mutateDoc(await Doc.fromXml(defs(process, di)), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true, layout: 'incremental' });
+    const shapesAfter = shapes(await Doc.fromXml(result.xml));
+    const newBounds = shapesAfter.get('N')!.bounds;
+    expect(newBounds.x).toBe(356);
     // B moves 48 px (to one gap right of N), not a whole column (160 px); its successors keep their distances
-    expect(s.get('B')!.bounds.x).toBe(n.x + n.width + 60);
-    expect(s.get('C')!.bounds.x - s.get('B')!.bounds.x).toBe(160);
-    expect(r.layout.metrics!.added).toEqual([]);
+    expect(shapesAfter.get('B')!.bounds.x).toBe(newBounds.x + newBounds.width + 60);
+    expect(shapesAfter.get('C')!.bounds.x - shapesAfter.get('B')!.bounds.x).toBe(160);
+    expect(result.layout.metrics!.added).toEqual([]);
   });
 });

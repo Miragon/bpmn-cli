@@ -88,7 +88,7 @@ describe('show --around', () => {
 
   it('depth 1 inside a sub-process: the sub-process is a heading, incoming flows from outside follow <-', async () => {
     const view = aroundView(await claims(), 'Activity_RateDamage', { depth: 1 });
-    expect(view.nodes.map((n) => [n.id, n.distance])).toEqual([
+    expect(view.nodes.map((node) => [node.id, node.distance])).toEqual([
       ['Activity_CheckPolicy', 1],
       ['Activity_RateDamage', 0],
       ['Event_AssessEnd', 1],
@@ -112,11 +112,11 @@ describe('show --around', () => {
 
   it('--inner enters a sub-process from outside; a sequence flow centres the window on both its ends', async () => {
     const inner = aroundView(await claims(), 'Activity_Assess', { depth: 1, inner: true });
-    expect(inner.nodes.map((n) => n.id)).toEqual(['Event_ClaimReceived', 'Activity_Assess', 'Event_FraudSuspected', 'Event_AssessStart', 'Event_AssessEnd', 'Gateway_Covered']);
+    expect(inner.nodes.map((node) => node.id)).toEqual(['Event_ClaimReceived', 'Activity_Assess', 'Event_FraudSuspected', 'Event_AssessStart', 'Event_AssessEnd', 'Gateway_Covered']);
     const outer = aroundView(await claims(), 'Activity_Assess', { depth: 1 });
-    expect(outer.nodes.map((n) => n.id)).toEqual(['Event_ClaimReceived', 'Activity_Assess', 'Event_FraudSuspected', 'Gateway_Covered']);
+    expect(outer.nodes.map((node) => node.id)).toEqual(['Event_ClaimReceived', 'Activity_Assess', 'Event_FraudSuspected', 'Gateway_Covered']);
     const flow = aroundView(await claims(), 'Flow_Covered', { depth: 0 });
-    expect(flow.nodes.map((n) => [n.id, n.distance])).toEqual([
+    expect(flow.nodes.map((node) => [node.id, node.distance])).toEqual([
       ['Gateway_Covered', 0],
       ['Activity_Pay', 0],
     ]);
@@ -124,8 +124,8 @@ describe('show --around', () => {
 
   it('lists the message flows, annotations and data of the window, and the counts add up', async () => {
     const view = aroundView(await claims(), 'Activity_Pay', { depth: 1 });
-    expect(view.nodes.map((n) => n.id)).toEqual(['Gateway_Covered', 'Activity_Pay', 'Activity_SendDecision']);
-    expect(view.messageFlows.map((m) => m.id)).toEqual(['Flow_Decision']);
+    expect(view.nodes.map((node) => node.id)).toEqual(['Gateway_Covered', 'Activity_Pay', 'Activity_SendDecision']);
+    expect(view.messageFlows.map((messageFlow) => messageFlow.id)).toEqual(['Flow_Decision']);
     expect(view.annotations).toEqual([
       { id: 'TextAnnotation_Pay', text: 'Paid by bank transfer', attachedTo: ['Activity_Pay'] },
       { id: 'TextAnnotation_Sla', text: 'Answer within 5 days', attachedTo: ['Activity_SendDecision'] },
@@ -186,11 +186,11 @@ describe('show <id> --context', () => {
 
   it('a boundary event: its host and the host lane; an event sub-process does not catch what is inside it', async () => {
     const doc = await claims();
-    const b = elementContext(doc, 'Event_FraudSuspected');
-    expect(b.host).toEqual({ id: 'Activity_Assess', kind: 'subProcess', name: 'Assess claim' });
-    expect(b.lane).toEqual({ id: 'Lane_Office', name: 'Office', via: 'Activity_Assess' });
+    const boundaryContext = elementContext(doc, 'Event_FraudSuspected');
+    expect(boundaryContext.host).toEqual({ id: 'Activity_Assess', kind: 'subProcess', name: 'Assess claim' });
+    expect(boundaryContext.lane).toEqual({ id: 'Lane_Office', name: 'Office', via: 'Activity_Assess' });
     const inside = elementContext(doc, 'Event_CancelRequested');
-    expect(inside.ancestors.map((a) => a.id)).toEqual(['Process_Claims', 'Activity_OnCancel']);
+    expect(inside.ancestors.map((ancestor) => ancestor.id)).toEqual(['Process_Claims', 'Activity_OnCancel']);
     expect(inside.eventSubProcesses).toEqual([]);
     expect(inside.lane).toEqual({ id: 'Lane_Fraud', name: 'Fraud team', via: 'Activity_OnCancel' });
     // the own boundary events of an activity
@@ -198,8 +198,8 @@ describe('show <id> --context', () => {
     expect(host.boundary).toEqual([{ id: 'Event_FraudSuspected', kind: 'boundaryEvent:error', name: 'Fraud suspected', trigger: 'error Fraud (FRAUD)', on: 'Activity_Assess', to: ['Activity_Investigate'] }]);
     // a sequence flow: its ends; a pool: where it is
     const flow = elementContext(doc, 'Flow_Covered');
-    expect([flow.from.map((f) => f.id), flow.to.map((f) => f.id)]).toEqual([['Gateway_Covered'], ['Activity_Pay']]);
-    expect(elementContext(doc, 'Participant_Customer').messageFlows.map((m) => m.id)).toEqual(['Flow_Claim', 'Flow_Decision']);
+    expect([flow.from.map((endpoint) => endpoint.id), flow.to.map((endpoint) => endpoint.id)]).toEqual([['Gateway_Covered'], ['Activity_Pay']]);
+    expect(elementContext(doc, 'Participant_Customer').messageFlows.map((messageFlow) => messageFlow.id)).toEqual(['Flow_Claim', 'Flow_Decision']);
     await expect(viewXml(CLAIMS, { context: true })).rejects.toMatchObject({ code: 'E_USAGE' });
   });
 });
@@ -231,7 +231,7 @@ describe('implementation summary', () => {
 /* ------------------------------------------------------------------ */
 
 /** A large synthetic model: `n` service tasks in a chain over three lanes, a gateway every tenth node, Camunda 7 attributes. */
-function largeModel(n: number): string {
+function largeModel(taskCount: number): string {
   const nodes: string[] = [];
   const flows: string[] = [];
   const lanes: string[][] = [[], [], []];
@@ -239,28 +239,28 @@ function largeModel(n: number): string {
   let prev = 'Event_Start';
   nodes.push('<bpmn:startEvent id="Event_Start" name="Started" />');
   lanes[0]!.push('Event_Start');
-  for (let i = 1; i <= n; i++) {
-    const id = `Activity_Step${i}`;
+  for (let index = 1; index <= taskCount; index++) {
+    const id = `Activity_Step${index}`;
     nodes.push(
-      `<bpmn:serviceTask id="${id}" name="Step ${i} of the order" camunda:type="external" camunda:topic="order.step${i}"><bpmn:extensionElements><camunda:inputOutput><camunda:inputParameter name="orderId">\${orderId}</camunda:inputParameter><camunda:outputParameter name="result${i}">\${r}</camunda:outputParameter></camunda:inputOutput></bpmn:extensionElements></bpmn:serviceTask>`,
+      `<bpmn:serviceTask id="${id}" name="Step ${index} of the order" camunda:type="external" camunda:topic="order.step${index}"><bpmn:extensionElements><camunda:inputOutput><camunda:inputParameter name="orderId">\${orderId}</camunda:inputParameter><camunda:outputParameter name="result${index}">\${r}</camunda:outputParameter></camunda:inputOutput></bpmn:extensionElements></bpmn:serviceTask>`,
     );
-    lanes[i % 3]!.push(id);
+    lanes[index % 3]!.push(id);
     flows.push(flow(prev, id, prev.startsWith('Gateway_') ? 'name="yes" ' : ''));
     prev = id;
-    if (i % 10 === 0 && i < n) {
+    if (index % 10 === 0 && index < taskCount) {
       // a check every tenth step: yes continues (default), no loops back five steps
-      const gw = `Gateway_Check${i}`;
-      nodes.push(`<bpmn:exclusiveGateway id="${gw}" name="Step ${i} ok?" default="Flow_${gw}_Activity_Step${i + 1}" />`);
-      lanes[i % 3]!.push(gw);
+      const gw = `Gateway_Check${index}`;
+      nodes.push(`<bpmn:exclusiveGateway id="${gw}" name="Step ${index} ok?" default="Flow_${gw}_Activity_Step${index + 1}" />`);
+      lanes[index % 3]!.push(gw);
       flows.push(flow(id, gw));
-      flows.push(flow(gw, `Activity_Step${i - 5}`, 'name="no" ', '<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!ok}</bpmn:conditionExpression>'));
+      flows.push(flow(gw, `Activity_Step${index - 5}`, 'name="no" ', '<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${!ok}</bpmn:conditionExpression>'));
       prev = gw;
     }
   }
   nodes.push('<bpmn:endEvent id="Event_End" name="Done" />');
   lanes[0]!.push('Event_End');
   const chain = [...flows, flow(prev, 'Event_End')];
-  const laneXml = lanes.map((members, i) => `<bpmn:lane id="Lane_${i}" name="Team ${i}">${members.map((m) => `<bpmn:flowNodeRef>${m}</bpmn:flowNodeRef>`).join('')}</bpmn:lane>`).join('');
+  const laneXml = lanes.map((members, laneIndex) => `<bpmn:lane id="Lane_${laneIndex}" name="Team ${laneIndex}">${members.map((member) => `<bpmn:flowNodeRef>${member}</bpmn:flowNodeRef>`).join('')}</bpmn:lane>`).join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="D" targetNamespace="x">
   <bpmn:process id="Process_Order" name="Order" isExecutable="true" camunda:historyTimeToLive="180">

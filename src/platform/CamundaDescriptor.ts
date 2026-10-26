@@ -70,11 +70,11 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
   attrAppliesTo(name: string, el: El | string): boolean | undefined {
     const attr = this.attr(name);
     if (!attr) return undefined;
-    return attr.owners.some((o) => this.elementIs(el, o));
+    return attr.owners.some((owner) => this.elementIs(el, owner));
   }
 
   attrsFor(el: El | string): VendorAttr[] {
-    return this.attrs().filter((a) => a.owners.some((o) => this.elementIs(el, o)));
+    return this.attrs().filter((attribute) => attribute.owners.some((owner) => this.elementIs(el, owner)));
   }
 
   /** [] when the type is unknown or only appears nested inside another vendor element */
@@ -83,9 +83,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
   }
 
   override allowedOn(name: string, el: El | string): boolean | undefined {
-    const t = this.type(name);
-    if (!t || !t.allowedIn.length) return undefined;
-    return t.allowedIn.some((a) => a === '*' || (a.startsWith('bpmn:') && this.elementIs(el, a)));
+    const type = this.type(name);
+    if (!type || !type.allowedIn.length) return undefined;
+    return type.allowedIn.some((allowed) => allowed === '*' || (allowed.startsWith('bpmn:') && this.elementIs(el, allowed)));
   }
 
   override containersOf(name: string): string[] {
@@ -96,19 +96,19 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     const accepted = new Set<string>([target.type]);
     const addSupers = (key: string): void => {
       for (const sup of types.get(key)?.superClass ?? []) {
-        const q = this.qualify(sup);
-        if (!q.startsWith(`${this.prefix}:`)) continue;
-        const k = this.typeKey(q);
-        if (!accepted.has(k)) {
-          accepted.add(k);
-          addSupers(k);
+        const qualified = this.qualify(sup);
+        if (!qualified.startsWith(`${this.prefix}:`)) continue;
+        const superKey = this.typeKey(qualified);
+        if (!accepted.has(superKey)) {
+          accepted.add(superKey);
+          addSupers(superKey);
         }
       }
     };
     addSupers(target.type);
     const out: string[] = [];
-    for (const e of elements.values()) {
-      if (e.properties.some((p) => !p.isAttr && !p.isReference && p.type.startsWith(`${this.prefix}:`) && accepted.has(this.typeKey(p.type)))) out.push(e.name);
+    for (const element of elements.values()) {
+      if (element.properties.some((property) => !property.isAttr && !property.isReference && property.type.startsWith(`${this.prefix}:`) && accepted.has(this.typeKey(property.type)))) out.push(element.name);
     }
     return out;
   }
@@ -121,20 +121,20 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     if (this.idRefs) return this.idRefs;
     const out: VendorIdRef[] = [];
     const probe = VendorDescriptor.probe();
-    for (const e of this.index().elements.values()) {
-      for (const p of e.properties) {
-        if (p.isReference && p.isAttr) out.push({ element: e.name, attr: p.name, target: p.type });
+    for (const element of this.index().elements.values()) {
+      for (const property of element.properties) {
+        if (property.isReference && property.isAttr) out.push({ element: element.name, attr: property.name, target: property.type });
       }
-      for (const sup of e.bpmnSuperTypes) {
+      for (const sup of element.bpmnSuperTypes) {
         let descriptor: { properties?: Array<{ name: string; type: string; isReference?: boolean; isAttr?: boolean }> } | undefined;
         try {
           descriptor = probe.getElementDescriptor(probe.getType(sup)) as typeof descriptor;
         } catch {
           descriptor = undefined;
         }
-        for (const p of descriptor?.properties ?? []) {
-          if (!p.isReference || !p.isAttr) continue;
-          if (!out.some((r) => r.element === e.name && r.attr === p.name)) out.push({ element: e.name, attr: p.name, target: p.type.includes(':') ? p.type : `bpmn:${p.type}` });
+        for (const superProperty of descriptor?.properties ?? []) {
+          if (!superProperty.isReference || !superProperty.isAttr) continue;
+          if (!out.some((idRef) => idRef.element === element.name && idRef.attr === superProperty.name)) out.push({ element: element.name, attr: superProperty.name, target: superProperty.type.includes(':') ? superProperty.type : `bpmn:${superProperty.type}` });
         }
       }
     }
@@ -146,16 +146,16 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     const prefix = this.prefix;
     const raw = CAMUNDA_DESCRIPTOR as unknown as { types: RawType[] };
     const types = new Map<string, RawType>();
-    for (const t of raw.types) types.set(this.typeKey(t.name), t);
+    for (const rawType of raw.types) types.set(this.typeKey(rawType.name), rawType);
 
     // camunda types that inherit from T (their hosts receive T's properties too)
     const subTypes = new Map<string, string[]>();
-    for (const [key, t] of types) {
-      for (const sup of t.superClass ?? []) {
-        const q = this.qualify(sup);
-        if (!q.startsWith(`${prefix}:`)) continue;
-        const k = this.typeKey(q);
-        subTypes.set(k, [...(subTypes.get(k) ?? []), key]);
+    for (const [key, rawType] of types) {
+      for (const sup of rawType.superClass ?? []) {
+        const qualified = this.qualify(sup);
+        if (!qualified.startsWith(`${prefix}:`)) continue;
+        const superKey = this.typeKey(qualified);
+        subTypes.set(superKey, [...(subTypes.get(superKey) ?? []), key]);
       }
     }
 
@@ -165,14 +165,14 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
       if (known) return known;
       if (seen.has(key)) return [];
       seen.add(key);
-      const t = types.get(key);
+      const rawType = types.get(key);
       const out = new Set<string>();
-      for (const ext of t?.extends ?? []) {
-        const q = this.qualify(ext);
-        if (q.startsWith('bpmn:')) out.add(q);
-        else if (q.startsWith(`${prefix}:`)) for (const h of hostsOf(this.typeKey(q), seen)) out.add(h);
+      for (const ext of rawType?.extends ?? []) {
+        const qualified = this.qualify(ext);
+        if (qualified.startsWith('bpmn:')) out.add(qualified);
+        else if (qualified.startsWith(`${prefix}:`)) for (const host of hostsOf(this.typeKey(qualified), seen)) out.add(host);
       }
-      for (const sub of subTypes.get(key) ?? []) for (const h of hostsOf(sub, seen)) out.add(h);
+      for (const sub of subTypes.get(key) ?? []) for (const host of hostsOf(sub, seen)) out.add(host);
       const list = [...out];
       hosts.set(key, list);
       return list;
@@ -180,17 +180,17 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     for (const key of types.keys()) hostsOf(key, new Set());
 
     const attrs = new Map<string, VendorAttr>();
-    for (const [key, t] of types) {
+    for (const [key, rawType] of types) {
       const owners = hosts.get(key) ?? [];
       if (!owners.length) continue;
-      for (const p of t.properties ?? []) {
-        if (!p.isAttr) continue;
-        const local = this.attrKey(p.name);
+      for (const property of rawType.properties ?? []) {
+        if (!property.isAttr) continue;
+        const local = this.attrKey(property.name);
         const prev = attrs.get(local);
         if (prev) {
-          for (const o of owners) if (!prev.owners.includes(o)) prev.owners.push(o);
+          for (const owner of owners) if (!prev.owners.includes(owner)) prev.owners.push(owner);
         } else {
-          attrs.set(local, { name: `${prefix}:${local}`, type: p.type ?? 'String', owners: [...owners] });
+          attrs.set(local, { name: `${prefix}:${local}`, type: property.type ?? 'String', owners: [...owners] });
         }
       }
     }
@@ -200,36 +200,36 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     const propsOf = (key: string, seen: Set<string>): CamundaProperty[] => {
       if (seen.has(key)) return [];
       seen.add(key);
-      const t = types.get(key);
-      if (!t) return [];
-      const inherited = (t.superClass ?? [])
-        .map((s) => this.qualify(s))
-        .filter((s) => s.startsWith(`${prefix}:`))
-        .flatMap((s) => propsOf(this.typeKey(s), seen));
-      const own = (t.properties ?? []).map((p) => ({
-        name: this.attrKey(p.name),
-        type: this.qualify(p.type ?? 'String'),
-        isAttr: !!p.isAttr,
-        isMany: !!p.isMany,
-        isReference: !!p.isReference,
-        isBody: !!p.isBody,
+      const rawType = types.get(key);
+      if (!rawType) return [];
+      const inherited = (rawType.superClass ?? [])
+        .map((superName) => this.qualify(superName))
+        .filter((superName) => superName.startsWith(`${prefix}:`))
+        .flatMap((superName) => propsOf(this.typeKey(superName), seen));
+      const own = (rawType.properties ?? []).map((property) => ({
+        name: this.attrKey(property.name),
+        type: this.qualify(property.type ?? 'String'),
+        isAttr: !!property.isAttr,
+        isMany: !!property.isMany,
+        isReference: !!property.isReference,
+        isBody: !!property.isBody,
       }));
       const byName = new Map<string, CamundaProperty>();
-      for (const p of [...inherited, ...own]) byName.set(p.name, p);
+      for (const property of [...inherited, ...own]) byName.set(property.name, property);
       return [...byName.values()];
     };
-    for (const [key, t] of types) {
-      if (t.extends?.length) continue; // mixin: its properties are attributes of BPMN elements
+    for (const [key, rawType] of types) {
+      if (rawType.extends?.length) continue; // mixin: its properties are attributes of BPMN elements
       const allowedIn: string[] = [];
-      for (const a of ALLOWED_IN_OVERRIDES[key] ?? t.meta?.allowedIn ?? []) {
-        const q = this.qualify(a);
-        if (q === '*' || a === '*') allowedIn.push('*');
-        else if (q.startsWith('bpmn:')) allowedIn.push(q);
+      for (const allowed of ALLOWED_IN_OVERRIDES[key] ?? rawType.meta?.allowedIn ?? []) {
+        const qualified = this.qualify(allowed);
+        if (qualified === '*' || allowed === '*') allowedIn.push('*');
+        else if (qualified.startsWith('bpmn:')) allowedIn.push(qualified);
         else {
-          const k = this.typeKey(q);
-          const h = hosts.get(k) ?? [];
-          if (h.length) allowedIn.push(...h);
-          else allowedIn.push(this.xmlName(k));
+          const allowedKey = this.typeKey(qualified);
+          const allowedHosts = hosts.get(allowedKey) ?? [];
+          if (allowedHosts.length) allowedIn.push(...allowedHosts);
+          else allowedIn.push(this.xmlName(allowedKey));
         }
       }
       elements.set(key, {
@@ -237,7 +237,7 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
         type: key,
         allowedIn: [...new Set(allowedIn)],
         properties: propsOf(key, new Set()),
-        bpmnSuperTypes: (t.superClass ?? []).map((s) => this.qualify(s)).filter((s) => s.startsWith('bpmn:')),
+        bpmnSuperTypes: (rawType.superClass ?? []).map((superName) => this.qualify(superName)).filter((superName) => superName.startsWith('bpmn:')),
       });
     }
     return { types, attrs, elements };

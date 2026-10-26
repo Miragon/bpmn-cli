@@ -1,4 +1,4 @@
-export function once<T>(fn: () => Promise<T>): () => Promise<T> {
-  let p: Promise<T> | undefined;
-  return () => (p ??= fn());
+export function once<TResult>(fn: () => Promise<TResult>): () => Promise<TResult> {
+  let pending: Promise<TResult> | undefined;
+  return () => (pending ??= fn());
 }

@@ -62,23 +62,23 @@ export async function makeExecutor({ exec = 'cli', via = 'commands', workDir, bi
 
 function walkDir(dir, out) {
   for (const name of readdirSync(dir).sort()) {
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) walkDir(p, out);
-    else if (name.endsWith('.bpmn')) out.push(p);
+    const entryPath = join(dir, name);
+    if (statSync(entryPath).isDirectory()) walkDir(entryPath, out);
+    else if (name.endsWith('.bpmn')) out.push(entryPath);
   }
 }
 
 export function corpusFiles(dirs, filter) {
   const out = [];
-  for (const d of dirs) {
-    if (!existsSync(d)) throw new Error(`corpus directory ${d} does not exist`);
-    if (statSync(d).isDirectory()) walkDir(resolve(d), out);
-    else out.push(resolve(d));
+  for (const dir of dirs) {
+    if (!existsSync(dir)) throw new Error(`corpus directory ${dir} does not exist`);
+    if (statSync(dir).isDirectory()) walkDir(resolve(dir), out);
+    else out.push(resolve(dir));
   }
-  return [...new Set(out)].filter((f) => !filter || f.includes(filter));
+  return [...new Set(out)].filter((file) => !filter || file.includes(filter));
 }
 
-export const envDirs = (name) => (process.env[name] ?? '').split(':').map((s) => s.trim()).filter(Boolean);
+export const envDirs = (name) => (process.env[name] ?? '').split(':').map((entry) => entry.trim()).filter(Boolean);
 
 export function defaultCorpus() {
   return [join(ROOT, 'test', 'fixtures'), join(ROOT, 'tools', 'scenarios'), ...envDirs('BPMN_FUZZ_CORPUS')];
@@ -86,15 +86,15 @@ export function defaultCorpus() {
 
 export function parseArgs(argv, spec) {
   const opts = { ...spec, _: [] };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith('--')) { opts._.push(a); continue; }
-    const key = a.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (!arg.startsWith('--')) { opts._.push(arg); continue; }
+    const key = arg.slice(2).replace(/-([a-z])/g, (wholeMatch, letter) => letter.toUpperCase());
     const negated = key.startsWith('no') && key.length > 2 ? key[2].toLowerCase() + key.slice(3) : undefined;
     if (negated && typeof spec[negated] === 'boolean') opts[negated] = false;
     else if (typeof spec[key] === 'boolean') opts[key] = true;
-    else if (key in spec) opts[key] = typeof spec[key] === 'number' ? Number(argv[++i]) : argv[++i];
-    else throw new Error(`unknown option ${a}`);
+    else if (key in spec) opts[key] = typeof spec[key] === 'number' ? Number(argv[++index]) : argv[++index];
+    else throw new Error(`unknown option ${arg}`);
   }
   return opts;
 }

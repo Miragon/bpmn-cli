@@ -47,20 +47,20 @@ const SPLIT: Op[] = [
 ];
 
 async function handXml(ops: Op[]): Promise<string> {
-  const r = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
-  const doc = await Doc.fromXml(r.xml);
+  const mutation = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
+  const doc = await Doc.fromXml(mutation.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
-      for (const b of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (b) b.set('y', b.get<number>('y') + 9);
-      for (const w of pe.get<El[] | undefined>('waypoint') ?? []) w.set('y', w.get<number>('y') + 9);
+      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (bounds) bounds.set('y', bounds.get<number>('y') + 9);
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) waypoint.set('y', waypoint.get<number>('y') + 9);
     }
   }
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; after: Doc }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
-  return { r, after: await Doc.fromXml(r.xml) };
+async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; after: Doc }> {
+  const mutation = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
+  return { result: mutation, after: await Doc.fromXml(mutation.xml) };
 }
 
 async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; hint?: string }> {
@@ -75,22 +75,22 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) out.set(shape.id, shape);
   return out;
 }
 
-const colored = (doc: Doc): string[] => layoutView(doc.definitions).colors.map((c) => c.id).sort();
-const cx = (s: DShape): number => s.bounds.x + s.bounds.width / 2;
-const cy = (s: DShape): number => s.bounds.y + s.bounds.height / 2;
+const colored = (doc: Doc): string[] => layoutView(doc.definitions).colors.map((color) => color.id).sort();
+const cx = (shape: DShape): number => shape.bounds.x + shape.bounds.width / 2;
+const cy = (shape: DShape): number => shape.bounds.y + shape.bounds.height / 2;
 
 describe('--path', () => {
   it('colours every node and flow on the shortest path, the first outgoing flow on ties', async () => {
     const hand = await handXml(BASE);
     const doc = await Doc.fromXml(hand);
     const flowInto = (id: string): string => doc.incoming(doc.get(id)!)[0]!.get<string>('id');
-    const { r, after } = await run(hand, [{ op: 'color', path: ['S', 'E'], color: 'green' }]);
+    const { result: mutation, after } = await run(hand, [{ op: 'color', path: ['S', 'E'], color: 'green' }]);
     expect(colored(after)).toEqual(['A', 'B', 'E', 'G', 'S', 'F_yes', flowInto('A'), flowInto('G'), flowInto('E')].sort());
-    expect(r.layout.format![0]!.colored![0]).toBe('S');
+    expect(mutation.layout.format![0]!.colored![0]).toBe('S');
   });
 
   it('follows --via flows in order and fails clearly when there is no path', async () => {
@@ -99,19 +99,19 @@ describe('--path', () => {
     expect(colored(after)).toContain('F_no');
     const via = await run(hand, [{ op: 'color', path: ['A', 'C'], via: ['F_no'], color: 'red' }]);
     expect(colored(via.after)).toEqual(expect.arrayContaining(['A', 'G', 'F_no', 'C']));
-    const e = await failure(hand, [{ op: 'color', path: ['E', 'S'], color: 'red' }]);
-    expect(e.code).toBe('E_NO_MATCH');
-    expect(e.message).toBe('No sequence-flow path leads from E to S');
-    const v = await failure(hand, [{ op: 'color', path: ['S', 'E'], via: ['F_no'], color: 'red' }]);
-    expect(v.message).toBe('No sequence-flow path leads from C to E');
+    const error = await failure(hand, [{ op: 'color', path: ['E', 'S'], color: 'red' }]);
+    expect(error.code).toBe('E_NO_MATCH');
+    expect(error.message).toBe('No sequence-flow path leads from E to S');
+    const viaError = await failure(hand, [{ op: 'color', path: ['S', 'E'], via: ['F_no'], color: 'red' }]);
+    expect(viaError.message).toBe('No sequence-flow path leads from C to E');
   });
 
   it('aligns the nodes of a path on the row of its first node (flows are left out for shape ops)', async () => {
     const hand = await handXml(BASE);
     const { after } = await run(hand, [{ op: 'align', path: ['G', 'E2'], axis: 'row' }]);
-    const s = shapes(after);
-    expect(cy(s.get('C')!)).toBe(cy(s.get('G')!));
-    expect(cy(s.get('E2')!)).toBe(cy(s.get('G')!));
+    const laidShapes = shapes(after);
+    expect(cy(laidShapes.get('C')!)).toBe(cy(laidShapes.get('G')!));
+    expect(cy(laidShapes.get('E2')!)).toBe(cy(laidShapes.get('G')!));
   });
 });
 
@@ -120,11 +120,11 @@ describe('--kind', () => {
     const hand = await handXml(BASE);
     const before = shapes(await Doc.fromXml(hand));
     const rightmost = cx(before.get('E')!) > cx(before.get('E2')!) ? 'E' : 'E2';
-    const { r, after } = await run(hand, [{ op: 'align', kind: 'endEvent', axis: 'column' }]);
-    const s = shapes(after);
-    expect(cx(s.get('E')!)).toBe(cx(s.get('E2')!));
-    expect(cx(s.get(rightmost)!)).toBe(cx(before.get(rightmost)!));
-    expect(r.layout.metrics!.added.filter((p) => p.kind === 'backwardFlow')).toEqual([]);
+    const { result: mutation, after } = await run(hand, [{ op: 'align', kind: 'endEvent', axis: 'column' }]);
+    const laidShapes = shapes(after);
+    expect(cx(laidShapes.get('E')!)).toBe(cx(laidShapes.get('E2')!));
+    expect(cx(laidShapes.get(rightmost)!)).toBe(cx(before.get(rightmost)!));
+    expect(mutation.layout.metrics!.added.filter((problem) => problem.kind === 'backwardFlow')).toEqual([]);
   });
 
   it('colours every sequence flow; a kind without elements is E_NO_MATCH, an unknown kind E_USAGE', async () => {
@@ -142,14 +142,14 @@ describe('--branch', () => {
     const before = shapes(await Doc.fromXml(hand));
     // the branches as the engine drew them: a on the main row, b below it
     expect(cy(before.get('B1')!)).toBeGreaterThan(cy(before.get('A1')!));
-    const { r, after } = await run(hand, [{ op: 'place', branch: 'F_b', above: 'A1' }]);
-    const s = shapes(after);
-    expect(cy(s.get('B1')!)).toBeLessThan(cy(s.get('A1')!));
-    const dy = s.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
-    expect(s.get('B2')!.bounds.y - before.get('B2')!.bounds.y).toBe(dy);
-    expect(s.get('B2')!.bounds.x - s.get('B1')!.bounds.x).toBe(before.get('B2')!.bounds.x - before.get('B1')!.bounds.x);
-    for (const id of ['G', 'J', 'End']) expect(s.get(id)!.bounds.y, id).toBe(before.get(id)!.bounds.y);
-    expect(r.layout.format![0]!.moved).toEqual(expect.arrayContaining(['B1', 'B2']));
+    const { result: mutation, after } = await run(hand, [{ op: 'place', branch: 'F_b', above: 'A1' }]);
+    const laidShapes = shapes(after);
+    expect(cy(laidShapes.get('B1')!)).toBeLessThan(cy(laidShapes.get('A1')!));
+    const dy = laidShapes.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
+    expect(laidShapes.get('B2')!.bounds.y - before.get('B2')!.bounds.y).toBe(dy);
+    expect(laidShapes.get('B2')!.bounds.x - laidShapes.get('B1')!.bounds.x).toBe(before.get('B2')!.bounds.x - before.get('B1')!.bounds.x);
+    for (const id of ['G', 'J', 'End']) expect(laidShapes.get(id)!.bounds.y, id).toBe(before.get(id)!.bounds.y);
+    expect(mutation.layout.format![0]!.moved).toEqual(expect.arrayContaining(['B1', 'B2']));
   });
 
   it('a branch with a boundary event moves with it (the event follows its host, its path goes along)', async () => {
@@ -159,12 +159,12 @@ describe('--branch', () => {
       { op: 'add', kind: 'endEvent', id: 'TE', name: 'Late', after: 'TB' },
     ]);
     const before = shapes(await Doc.fromXml(hand));
-    const { r, after } = await run(hand, [{ op: 'place', branch: 'F_b', above: 'A1' }]);
-    const s = shapes(after);
-    const dy = s.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
+    const { result: mutation, after } = await run(hand, [{ op: 'place', branch: 'F_b', above: 'A1' }]);
+    const laidShapes = shapes(after);
+    const dy = laidShapes.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
     expect(dy).toBeLessThan(0);
-    for (const id of ['B2', 'TB', 'TE']) expect(s.get(id)!.bounds.y - before.get(id)!.bounds.y, id).toBe(dy);
-    expect(r.layout.metrics!.added.filter((p) => ['overlaps', 'through', 'outsidePool'].includes(p.kind))).toEqual([]);
+    for (const id of ['B2', 'TB', 'TE']) expect(laidShapes.get(id)!.bounds.y - before.get(id)!.bounds.y, id).toBe(dy);
+    expect(mutation.layout.metrics!.added.filter((problem) => ['overlaps', 'through', 'outsidePool'].includes(problem.kind))).toEqual([]);
   });
 
   it('colours a branch with its flows; a branch straight to the join has nothing on it', async () => {
@@ -173,9 +173,9 @@ describe('--branch', () => {
     const doc = await Doc.fromXml(hand);
     const out = (id: string): string => doc.outgoing(doc.get(id)!)[0]!.get<string>('id');
     expect(colored(after)).toEqual(['A1', 'A2', 'F_a', out('A1'), out('A2')].sort());
-    const e = await failure(hand, [{ op: 'color', branch: 'F_c', color: 'orange' }]);
-    expect(e.code).toBe('E_NO_MATCH');
-    expect(e.message).toMatch(/^Nothing lies on the branch of F_c: it leads to J/);
+    const error = await failure(hand, [{ op: 'color', branch: 'F_c', color: 'orange' }]);
+    expect(error.code).toBe('E_NO_MATCH');
+    expect(error.message).toMatch(/^Nothing lies on the branch of F_c: it leads to J/);
   });
 });
 
@@ -204,9 +204,9 @@ describe('selectors in the ops JSON and on the command line', () => {
       const file = join(dir, 's.bpmn');
       writeFileSync(file, await handXml(BASE));
       const root = join(import.meta.dirname, '..');
-      const r = spawnSync(process.execPath, ['--import', 'tsx', join(root, 'src', 'cli.ts'), 'color', file, '--path', 'S', 'E', '--color', 'green'], { encoding: 'utf8', cwd: root, input: '' });
-      expect(r.status, r.stderr).toBe(0);
-      expect(r.stdout).toMatch(/format color #0: colored S, /);
+      const child = spawnSync(process.execPath, ['--import', 'tsx', join(root, 'src', 'cli.ts'), 'color', file, '--path', 'S', 'E', '--color', 'green'], { encoding: 'utf8', cwd: root, input: '' });
+      expect(child.status, child.stderr).toBe(0);
+      expect(child.stdout).toMatch(/format color #0: colored S, /);
       expect(colored(await Doc.fromXml(readFileSync(file, 'utf8')))).toContain('B');
       const bad = spawnSync(process.execPath, ['--import', 'tsx', join(root, 'src', 'cli.ts'), 'color', file, '--path', 'S', '--color', 'green'], { encoding: 'utf8', cwd: root, input: '' });
       expect(bad.status).toBe(1);

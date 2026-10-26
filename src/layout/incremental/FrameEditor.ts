@@ -20,57 +20,57 @@ export class FrameEditor {
     private readonly touched: Set<string>,
   ) {}
 
-  private record(r: SpaceResult | undefined): void {
-    if (!r) return;
-    r.moved.forEach((x) => this.touched.add(x));
-    r.resized.forEach((x) => this.touched.add(x));
+  private record(result: SpaceResult | undefined): void {
+    if (!result) return;
+    result.moved.forEach((id) => this.touched.add(id));
+    result.resized.forEach((id) => this.touched.add(id));
   }
 
   private pools(): DShape[] {
-    return [...this.plane.shapes.values()].filter((s) => s.kind === 'participant');
+    return [...this.plane.shapes.values()].filter((shape) => shape.kind === 'participant');
   }
 
   /** The first pool around a process diagram encloses all existing content. */
   wrapPool(pool: DShape): void {
     let box: Box | undefined;
-    for (const s of this.plane.shapes.values()) {
-      if (s === pool) continue;
-      const parts = [s.bounds, ...(s.label ? [s.label] : [])];
-      for (const b of parts) box = box ? union(box, b) : copyBox(b);
+    for (const shape of this.plane.shapes.values()) {
+      if (shape === pool) continue;
+      const parts = [shape.bounds, ...(shape.label ? [shape.label] : [])];
+      for (const part of parts) box = box ? union(box, part) : copyBox(part);
     }
-    for (const e of this.plane.edges.values()) for (const p of e.points) box = box ? union(box, { x: p.x, y: p.y, width: 0, height: 0 }) : { x: p.x, y: p.y, width: 0, height: 0 };
+    for (const edge of this.plane.edges.values()) for (const point of edge.points) box = box ? union(box, { x: point.x, y: point.y, width: 0, height: 0 }) : { x: point.x, y: point.y, width: 0, height: 0 };
     pool.bounds = box ? { x: Math.round(box.x - HEADER - PAD), y: Math.round(box.y - PAD), width: Math.round(box.width + HEADER + 2 * PAD), height: Math.round(box.height + 2 * PAD) } : { x: 100, y: 80, width: 600, height: 250 };
   }
 
   /** Below the last pool and as wide as the widest. */
   placePool(pool: DShape, blackBox: boolean, size?: { width: number; height: number }): void {
-    const others = this.pools().filter((p) => p !== pool);
+    const others = this.pools().filter((existing) => existing !== pool);
     const height = size?.height ?? (blackBox ? SIZES.blackBoxHeight : 200);
     if (!others.length) {
       let content: Box | undefined;
-      for (const s of this.plane.shapes.values()) if (s !== pool) content = content ? union(content, s.bounds) : copyBox(s.bounds);
-      const x = content ? content.x - HEADER - PAD : 100;
-      const y = content ? bottom(content) + 80 : 80;
-      pool.bounds = { x: Math.round(x), y: Math.round(y), width: Math.round(size?.width ?? Math.max(600, content ? content.width + HEADER + 2 * PAD : 600)), height };
+      for (const shape of this.plane.shapes.values()) if (shape !== pool) content = content ? union(content, shape.bounds) : copyBox(shape.bounds);
+      const left = content ? content.x - HEADER - PAD : 100;
+      const top = content ? bottom(content) + 80 : 80;
+      pool.bounds = { x: Math.round(left), y: Math.round(top), width: Math.round(size?.width ?? Math.max(600, content ? content.width + HEADER + 2 * PAD : 600)), height };
       return;
     }
-    const sorted = [...others].sort((a, b) => a.bounds.y - b.bounds.y);
+    const sorted = [...others].sort((upper, lower) => upper.bounds.y - lower.bounds.y);
     const gaps: number[] = [];
-    for (let i = 0; i + 1 < sorted.length; i++) gaps.push(sorted[i + 1]!.bounds.y - bottom(sorted[i]!.bounds));
-    const gap = Math.max(0, Math.round(median(gaps.filter((g) => g >= 0)) ?? 80));
-    const widest = [...others].sort((a, b) => b.bounds.width - a.bounds.width || a.bounds.x - b.bounds.x)[0]!;
-    const lowest = Math.max(...others.map((p) => bottom(p.bounds)));
+    for (let index = 0; index + 1 < sorted.length; index++) gaps.push(sorted[index + 1]!.bounds.y - bottom(sorted[index]!.bounds));
+    const gap = Math.max(0, Math.round(median(gaps.filter((spacing) => spacing >= 0)) ?? 80));
+    const widest = [...others].sort((first, second) => second.bounds.width - first.bounds.width || first.bounds.x - second.bounds.x)[0]!;
+    const lowest = Math.max(...others.map((existing) => bottom(existing.bounds)));
     pool.bounds = { x: widest.bounds.x, y: Math.round(lowest + gap), width: Math.max(widest.bounds.width, size?.width ?? 0), height };
   }
 
   private siblingLanes(poolId: string | undefined, parentId: string | undefined, except: string): DShape[] {
-    return [...this.plane.shapes.values()].filter((s) => s.kind === 'lane' && s.id !== except && s.poolId === poolId && s.laneId === parentId).sort((a, b) => a.bounds.y - b.bounds.y);
+    return [...this.plane.shapes.values()].filter((shape) => shape.kind === 'lane' && shape.id !== except && shape.poolId === poolId && shape.laneId === parentId).sort((upper, lower) => upper.bounds.y - lower.bounds.y);
   }
 
-  private containerChain(c: DShape): DShape[] {
+  private containerChain(container: DShape): DShape[] {
     const out: DShape[] = [];
-    let cur: DShape | undefined = c;
-    for (let i = 0; cur && i < 10; i++) {
+    let cur: DShape | undefined = container;
+    for (let depth = 0; cur && depth < 10; depth++) {
       out.push(cur);
       cur = cur.kind === 'lane' ? (cur.laneId ? this.plane.shapes.get(cur.laneId) : cur.poolId ? this.plane.shapes.get(cur.poolId) : undefined) : undefined;
     }
@@ -90,16 +90,16 @@ export class FrameEditor {
       lane.bounds = { x: cb.x + HEADER, y: cb.y, width: cb.width - HEADER, height: cb.height };
       return true;
     }
-    const height = Math.round(median(siblings.map((s) => s.bounds.height)) ?? 150) || 150;
+    const height = Math.round(median(siblings.map((sibling) => sibling.bounds.height)) ?? 150) || 150;
     const line = bottom(cb);
     const chain = this.containerChain(container);
-    const before = new Map(chain.map((c) => [c.id, bottom(c.bounds)]));
+    const before = new Map(chain.map((frame) => [frame.id, bottom(frame.bounds)]));
     const band = lane.poolId ? this.plane.shapes.get(lane.poolId)?.bounds : undefined;
     this.record(this.space.makeSpace({ axis: 'y', line, delta: height, ...(band ? { within: { ...band } } : {}) }));
-    for (const c of chain) {
-      if (Math.abs(before.get(c.id)! - line) <= 1 && bottom(c.bounds) < line + height - 0.5) {
-        c.bounds.height += height;
-        this.touched.add(c.id);
+    for (const frame of chain) {
+      if (Math.abs(before.get(frame.id)! - line) <= 1 && bottom(frame.bounds) < line + height - 0.5) {
+        frame.bounds.height += height;
+        this.touched.add(frame.id);
       }
     }
     const ref = siblings[siblings.length - 1]!;
@@ -110,7 +110,7 @@ export class FrameEditor {
   /** Closes the lane's band when empty, else lets a sibling take it over. */
   removedLane(box: Box, poolId: string | undefined, parentId: string | undefined): void {
     const pool = poolId ? this.plane.shapes.get(poolId) : undefined;
-    const occupied = [...this.plane.shapes.values()].some((s) => PlaneQuery.isLeaf(s) && s.kind !== 'boundary' && cy(s.bounds) > box.y && cy(s.bounds) < bottom(box) && (!pool || (s.bounds.x >= pool.bounds.x && s.bounds.x <= right(pool.bounds))));
+    const occupied = [...this.plane.shapes.values()].some((shape) => PlaneQuery.isLeaf(shape) && shape.kind !== 'boundary' && cy(shape.bounds) > box.y && cy(shape.bounds) < bottom(box) && (!pool || (shape.bounds.x >= pool.bounds.x && shape.bounds.x <= right(pool.bounds))));
     const siblings = this.siblingLanes(poolId, parentId, '');
     // the only lane: its band is the whole frame, which keeps its size (audit #39)
     if (!siblings.length) return;
@@ -118,8 +118,8 @@ export class FrameEditor {
       this.record(this.space.makeSpace({ axis: 'y', line: bottom(box) - 0.5, delta: -box.height, ...(pool ? { within: { ...pool.bounds } } : {}) }));
       return;
     }
-    const above = siblings.find((s) => Math.abs(bottom(s.bounds) - box.y) <= 1);
-    const below = siblings.find((s) => Math.abs(s.bounds.y - bottom(box)) <= 1);
+    const above = siblings.find((sibling) => Math.abs(bottom(sibling.bounds) - box.y) <= 1);
+    const below = siblings.find((sibling) => Math.abs(sibling.bounds.y - bottom(box)) <= 1);
     if (above) {
       above.bounds.height += box.height;
       this.touched.add(above.id);
@@ -131,31 +131,31 @@ export class FrameEditor {
   }
 
   removedPool(box: Box): void {
-    const below = this.pools().filter((p) => p.bounds.y >= bottom(box) - 1);
+    const below = this.pools().filter((pool) => pool.bounds.y >= bottom(box) - 1);
     if (!below.length) return;
-    const next = Math.min(...below.map((p) => p.bounds.y));
-    const occupied = [...this.plane.shapes.values()].some((s) => s.kind !== 'participant' && cy(s.bounds) > box.y && cy(s.bounds) < next);
+    const next = Math.min(...below.map((pool) => pool.bounds.y));
+    const occupied = [...this.plane.shapes.values()].some((shape) => shape.kind !== 'participant' && cy(shape.bounds) > box.y && cy(shape.bounds) < next);
     if (occupied) return;
     this.record(this.space.makeSpace({ axis: 'y', line: next - 0.5, delta: -(next - box.y) }));
   }
 
   private shiftAll(shapes: DShape[], edges: DEdge[], dx: number, dy: number): void {
-    for (const s of shapes) {
-      s.bounds.x += dx;
-      s.bounds.y += dy;
-      if (s.label) {
-        s.label.x += dx;
-        s.label.y += dy;
+    for (const shape of shapes) {
+      shape.bounds.x += dx;
+      shape.bounds.y += dy;
+      if (shape.label) {
+        shape.label.x += dx;
+        shape.label.y += dy;
       }
     }
-    for (const e of edges) {
-      for (const p of e.points) {
-        p.x += dx;
-        p.y += dy;
+    for (const edge of edges) {
+      for (const point of edge.points) {
+        point.x += dx;
+        point.y += dy;
       }
-      if (e.label) {
-        e.label.x += dx;
-        e.label.y += dy;
+      if (edge.label) {
+        edge.label.x += dx;
+        edge.label.y += dy;
       }
     }
   }
@@ -169,71 +169,71 @@ export class FrameEditor {
     if (!events.length) return;
     const nb = host.bounds;
     type Side = 'top' | 'bottom' | 'left' | 'right';
-    const sideOf = (b: Box): Side => {
-      const c = { x: cx(b), y: cy(b) };
-      const d: Array<[Side, number]> = [
-        ['bottom', Math.abs(c.y - bottom(old))],
-        ['right', Math.abs(c.x - right(old))],
-        ['top', Math.abs(c.y - old.y)],
-        ['left', Math.abs(c.x - old.x)],
+    const sideOf = (bounds: Box): Side => {
+      const center = { x: cx(bounds), y: cy(bounds) };
+      const distances: Array<[Side, number]> = [
+        ['bottom', Math.abs(center.y - bottom(old))],
+        ['right', Math.abs(center.x - right(old))],
+        ['top', Math.abs(center.y - old.y)],
+        ['left', Math.abs(center.x - old.x)],
       ];
-      return d.reduce((a, b2) => (b2[1] < a[1] ? b2 : a))[0];
+      return distances.reduce((closest, b2) => (b2[1] < closest[1] ? b2 : closest))[0];
     };
     const horizontal = (side: Side): boolean => side === 'top' || side === 'bottom';
     const opposite: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
-    const along = (b: Box, side: Side): number => (horizontal(side) ? cx(b) : cy(b));
+    const along = (bounds: Box, side: Side): number => (horizontal(side) ? cx(bounds) : cy(bounds));
     const span = (box: Box, side: Side): [number, number] => (horizontal(side) ? [box.x, right(box)] : [box.y, bottom(box)]);
     const bySide = new Map<Side, DShape[]>();
-    for (const e of events) {
-      const side = sideOf(e.bounds);
-      bySide.set(side, [...(bySide.get(side) ?? []), e]);
+    for (const event of events) {
+      const side = sideOf(event.bounds);
+      bySide.set(side, [...(bySide.get(side) ?? []), event]);
     }
-    const placed = new Map<DShape, { side: Side; c: number }>();
+    const placed = new Map<DShape, { side: Side; center: number }>();
     const overflow: Array<[Side, DShape]> = [];
     const fit = (side: Side, list: DShape[], keepOffsets: boolean): void => {
-      const sorted = [...list].sort((a, b) => along(a.bounds, side) - along(b.bounds, side));
+      const sorted = [...list].sort((first, second) => along(first.bounds, side) - along(second.bounds, side));
       const [lo, hi] = span(nb, side);
-      const size = (e: DShape): number => (horizontal(side) ? e.bounds.width : e.bounds.height);
-      const taken = [...placed.entries()].filter(([, p]) => p.side === side);
-      const free = (c: number, e: DShape): boolean => c - size(e) / 2 >= lo - 0.5 && c + size(e) / 2 <= hi + 0.5 && taken.every(([o, p]) => Math.abs(p.c - c) >= (size(o) + size(e)) / 2 + 4);
+      const size = (event: DShape): number => (horizontal(side) ? event.bounds.width : event.bounds.height);
+      const taken = [...placed.entries()].filter(([, placement]) => placement.side === side);
+      const free = (center: number, event: DShape): boolean => center - size(event) / 2 >= lo - 0.5 && center + size(event) / 2 <= hi + 0.5 && taken.every(([other, placement]) => Math.abs(placement.center - center) >= (size(other) + size(event)) / 2 + 4);
       if (keepOffsets) {
         const [, oldHi] = span(old, side);
-        const cs = sorted.map((e) => hi - (oldHi - along(e.bounds, side)));
-        const ok = sorted.every((e, i) => free(cs[i]!, e) && sorted.every((o, j) => j === i || Math.abs(cs[j]! - cs[i]!) >= (size(o) + size(e)) / 2 + 4));
+        const cs = sorted.map((event) => hi - (oldHi - along(event.bounds, side)));
+        const ok = sorted.every((event, index) => free(cs[index]!, event) && sorted.every((other, otherIndex) => otherIndex === index || Math.abs(cs[otherIndex]! - cs[index]!) >= (size(other) + size(event)) / 2 + 4));
         if (ok) {
-          sorted.forEach((e, i) => placed.set(e, { side, c: cs[i]! }));
+          sorted.forEach((event, index) => placed.set(event, { side, center: cs[index]! }));
           return;
         }
       }
-      let c = hi;
-      for (const e of [...sorted].reverse()) {
-        c = Math.min(c - size(e) / 2 - 7, hi - size(e) / 2 - 7);
-        while (!free(c, e) && c - size(e) / 2 >= lo) c -= 4;
-        if (free(c, e)) {
-          placed.set(e, { side, c });
-          taken.push([e, { side, c }]);
-          c -= size(e) / 2;
-        } else overflow.push([side, e]);
+      let center = hi;
+      for (const event of [...sorted].reverse()) {
+        center = Math.min(center - size(event) / 2 - 7, hi - size(event) / 2 - 7);
+        while (!free(center, event) && center - size(event) / 2 >= lo) center -= 4;
+        if (free(center, event)) {
+          placed.set(event, { side, center });
+          taken.push([event, { side, center }]);
+          center -= size(event) / 2;
+        } else overflow.push([side, event]);
       }
     };
     for (const [side, list] of bySide) fit(side, list, true);
-    for (const [side, e] of overflow.splice(0)) fit(opposite[side], [e], false);
-    for (const [side, e] of overflow) placed.set(e, { side, c: span(nb, side)[1] - (horizontal(side) ? e.bounds.width : e.bounds.height) / 2 });
-    for (const [e, { side, c }] of placed) {
-      const w = e.bounds.width;
-      const h = e.bounds.height;
-      const cx = horizontal(side) ? c : side === 'left' ? nb.x : right(nb);
-      const cyv = horizontal(side) ? (side === 'top' ? nb.y : bottom(nb)) : c;
-      const dx = Math.round(cx - w / 2) - e.bounds.x;
-      const dy = Math.round(cyv - h / 2) - e.bounds.y;
+    for (const [side, event] of overflow.splice(0)) fit(opposite[side], [event], false);
+    for (const [side, event] of overflow) placed.set(event, { side, center: span(nb, side)[1] - (horizontal(side) ? event.bounds.width : event.bounds.height) / 2 });
+    for (const [event, { side, center }] of placed) {
+      const width = event.bounds.width;
+      const height = event.bounds.height;
+      const cx = horizontal(side) ? center : side === 'left' ? nb.x : right(nb);
+      const cyv = horizontal(side) ? (side === 'top' ? nb.y : bottom(nb)) : center;
+      const dx = Math.round(cx - width / 2) - event.bounds.x;
+      const dy = Math.round(cyv - height / 2) - event.bounds.y;
       if (!dx && !dy) continue;
-      e.bounds.x += dx;
-      e.bounds.y += dy;
-      if (e.label) {
-        e.label.x += dx;
-        e.label.y += dy;
+      event.bounds.x += dx;
+      event.bounds.y += dy;
+      if (event.label) {
+        event.label.x += dx;
+        event.label.y += dy;
       }
-      this.touched.add(e.id);
+      this.touched.add(event.id);
     }
   }
 
@@ -242,14 +242,14 @@ export class FrameEditor {
     const { shapes, edges } = PlaneQuery.contentOf(this.plane, sub.id);
     const old = copyBox(sub.bounds);
     this.shiftAll(shapes, edges, 160 - (old.x + PAD), 80 - (old.y + 45));
-    for (const s of shapes) {
-      this.plane.shapes.delete(s.id);
-      if (s.parentId === sub.id) delete s.parentId;
-      child.shapes.set(s.id, s);
+    for (const shape of shapes) {
+      this.plane.shapes.delete(shape.id);
+      if (shape.parentId === sub.id) delete shape.parentId;
+      child.shapes.set(shape.id, shape);
     }
-    for (const e of edges) {
-      this.plane.edges.delete(e.id);
-      child.edges.set(e.id, e);
+    for (const edge of edges) {
+      this.plane.edges.delete(edge.id);
+      child.edges.set(edge.id, edge);
     }
     const size = SIZES.task;
     sub.bounds = { x: old.x, y: Math.round(cy(old) - size.height / 2), width: size.width, height: size.height };
@@ -265,8 +265,8 @@ export class FrameEditor {
   expand(sub: DShape, child: Plane | undefined, sem: Semantics): void {
     const content = child ? [...child.shapes.values()] : [];
     let box: Box | undefined;
-    for (const s of content) {
-      for (const b of [s.bounds, ...(s.label ? [s.label] : [])]) box = box ? union(box, b) : copyBox(b);
+    for (const shape of content) {
+      for (const part of [shape.bounds, ...(shape.label ? [shape.label] : [])]) box = box ? union(box, part) : copyBox(part);
     }
     const width = Math.max(350, box ? Math.round(box.width + 2 * PAD) : 0);
     const height = Math.max(200, box ? Math.round(box.height + 45 + PAD) : 0);
@@ -274,7 +274,7 @@ export class FrameEditor {
     // a frame from now on, so the space tool never grows it over foreign shapes
     sub.expanded = true;
     sub.container = true;
-    const keep = new Set(PlaneQuery.boundariesOf(this.plane, sub.id).map((b) => b.id));
+    const keep = new Set(PlaneQuery.boundariesOf(this.plane, sub.id).map((boundary) => boundary.id));
     const grow = (axis: 'x' | 'y', delta: number): void => {
       if (delta <= 0) return;
       const line = axis === 'x' ? right(sub.bounds) - 0.5 : bottom(sub.bounds) - 0.5;
@@ -288,16 +288,16 @@ export class FrameEditor {
     if (!child) return;
     const edges = [...child.edges.values()];
     if (box) this.shiftAll(content, edges, sub.bounds.x + PAD - box.x, sub.bounds.y + 45 - box.y);
-    for (const s of content) {
-      child.shapes.delete(s.id);
-      const scope = sem.scopeOf.get(s.id);
-      if (scope && (scope as { id?: string }).id === sub.id) s.parentId = sub.id;
-      if (s.poolId === undefined && sub.poolId) s.poolId = sub.poolId;
-      this.plane.shapes.set(s.id, s);
+    for (const shape of content) {
+      child.shapes.delete(shape.id);
+      const scope = sem.scopeOf.get(shape.id);
+      if (scope && (scope as { id?: string }).id === sub.id) shape.parentId = sub.id;
+      if (shape.poolId === undefined && sub.poolId) shape.poolId = sub.poolId;
+      this.plane.shapes.set(shape.id, shape);
     }
-    for (const e of edges) {
-      child.edges.delete(e.id);
-      this.plane.edges.set(e.id, e);
+    for (const edge of edges) {
+      child.edges.delete(edge.id);
+      this.plane.edges.set(edge.id, edge);
     }
     child.deleted = true;
   }

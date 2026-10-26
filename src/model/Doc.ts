@@ -107,7 +107,7 @@ export class Doc {
   }
 
   private static insideExtension(el: El): boolean {
-    for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (is(p, 'bpmn:ExtensionElements')) return true;
+    for (let ancestor = el.$parent as El | undefined; ancestor; ancestor = ancestor.$parent as El | undefined) if (is(ancestor, 'bpmn:ExtensionElements')) return true;
     return false;
   }
 
@@ -173,9 +173,9 @@ export class Doc {
     const camunda = KNOWN_NAMESPACES['camunda']!;
     const operaton = KNOWN_NAMESPACES['operaton']!;
     const uri = !this.prefixFor(camunda) && this.prefixFor(operaton) ? operaton : camunda;
-    for (const u of [camunda, operaton]) {
-      const p = this.prefixFor(u);
-      if (p && process.$attrs[`${p}:historyTimeToLive`] !== undefined) return;
+    for (const uri of [camunda, operaton]) {
+      const prefix = this.prefixFor(uri);
+      if (prefix && process.$attrs[`${prefix}:historyTimeToLive`] !== undefined) return;
     }
     const prefix = this.prefixFor(uri) ?? (uri === operaton ? 'operaton' : 'camunda');
     this.declareNamespace(prefix, uri);
@@ -203,7 +203,7 @@ export class Doc {
 
   /** Import warnings that mean bpmn-moddle dropped content (unsafe to write back). */
   get lossyImportWarnings(): ImportWarning[] {
-    return this.importWarnings.filter((w) => LOSSY_PATTERNS.some((p) => p.test(w.message)));
+    return this.importWarnings.filter((warning) => LOSSY_PATTERNS.some((pattern) => pattern.test(warning.message)));
   }
 
   assertLossless(opts: { force?: boolean } = {}): void {
@@ -211,7 +211,7 @@ export class Doc {
     if (!lossy.length || opts.force) return;
     throw ioError('E_IMPORT_LOSSY', `${this.file ?? 'The XML'} contains content bpmn-moddle cannot represent; writing it back would lose data`, {
       ...(this.file ? { file: this.file } : {}),
-      warnings: lossy.map((w) => w.message.split('\n')[0]),
+      warnings: lossy.map((warning) => warning.message.split('\n')[0]),
       hint: 'Fix the XML, or pass --force (MutationOptions.force) to write anyway (the reported content will be dropped).',
     });
   }
@@ -241,8 +241,8 @@ export class Doc {
     if (!el) {
       const vendor = this.vendorUses(id);
       if (vendor.length) {
-        const owners = [...new Set(vendor.map((v) => v.owner))];
-        throw modelError('E_NOT_FOUND', `"${id}" is not a BPMN element: it is the id of ${[...new Set(vendor.map((v) => v.type))].join(', ')} vendor extension data inside ${owners.join(', ')}`, {
+        const owners = [...new Set(vendor.map((vendorHit) => vendorHit.owner))];
+        throw modelError('E_NOT_FOUND', `"${id}" is not a BPMN element: it is the id of ${[...new Set(vendor.map((vendorHit) => vendorHit.type))].join(', ')} vendor extension data inside ${owners.join(', ')}`, {
           element: id,
           candidates: owners,
           hint: `Vendor extension elements are edited through their BPMN element: \`bpmn ext list <file> ${owners[0]}\`, then \`bpmn ext add|remove <file> ${owners[0]} ...\`.`,
@@ -251,8 +251,8 @@ export class Doc {
       const batch = this.edit.batch;
       const renamed = batch?.renamed.get(id);
       const candidates = this.suggest(id);
-      const alias = batch && Object.keys(batch.aliases()).find((a) => a.slice(1).toLowerCase() === id.toLowerCase());
-      const recent = (batch?.created ?? []).filter((c) => this.has(c));
+      const alias = batch && Object.keys(batch.aliases()).find((aliasKey) => aliasKey.slice(1).toLowerCase() === id.toLowerCase());
+      const recent = (batch?.created ?? []).filter((createdId) => this.has(createdId));
       const because = batch?.retyped?.has(id) ? 'a retype or a trigger change gave it the prefix of its new kind' : 'its id named its old ends';
       const why = renamed ? `: an op before this one renamed it to ${renamed} (${because})` : candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : '';
       throw modelError('E_NOT_FOUND', `No ${what} with id "${id}"${why}`, {
@@ -269,8 +269,8 @@ export class Doc {
     }
     if (expect) {
       const types = Array.isArray(expect) ? expect : [expect];
-      if (!types.some((t) => is(el, t))) {
-        throw modelError('E_WRONG_KIND', `"${id}" is a ${kindLabel(el)}, expected ${types.map((t) => t.replace('bpmn:', '')).join(' or ')}`, {
+      if (!types.some((type) => is(el, type))) {
+        throw modelError('E_WRONG_KIND', `"${id}" is a ${kindLabel(el)}, expected ${types.map((type) => type.replace('bpmn:', '')).join(' or ')}`, {
           element: id,
         });
       }
@@ -299,9 +299,9 @@ export class Doc {
     return this.declared;
   }
 
-  set conventions(c: IdConventions | undefined) {
-    if (c === this.declared) return;
-    this.declared = c;
+  set conventions(conventions: IdConventions | undefined) {
+    if (conventions === this.declared) return;
+    this.declared = conventions;
     this.style = undefined;
   }
 
@@ -384,22 +384,22 @@ export class Doc {
   }
 
   participantOf(process: El): El | undefined {
-    return this.participants().find((p) => p.get<El | undefined>('processRef') === process);
+    return this.participants().find((participant) => participant.get<El | undefined>('processRef') === process);
   }
 
   scopeOf(el: El): El | undefined {
-    let p = el.$parent as El | undefined;
-    while (p) {
-      if (is(p, 'bpmn:Process') || is(p, 'bpmn:SubProcess')) return p;
-      p = p.$parent as El | undefined;
+    let ancestor = el.$parent as El | undefined;
+    while (ancestor) {
+      if (is(ancestor, 'bpmn:Process') || is(ancestor, 'bpmn:SubProcess')) return ancestor;
+      ancestor = ancestor.$parent as El | undefined;
     }
     return undefined;
   }
 
   processOf(el: El): El | undefined {
-    let p: El | undefined = is(el, 'bpmn:Process') ? el : (el.$parent as El | undefined);
-    while (p && !is(p, 'bpmn:Process')) p = p.$parent as El | undefined;
-    return p;
+    let ancestor: El | undefined = is(el, 'bpmn:Process') ? el : (el.$parent as El | undefined);
+    while (ancestor && !is(ancestor, 'bpmn:Process')) ancestor = ancestor.$parent as El | undefined;
+    return ancestor;
   }
 
   defaultScope(): El {
@@ -407,7 +407,7 @@ export class Doc {
     if (procs.length === 1) return procs[0]!;
     if (!procs.length) throw modelError('E_NO_PROCESS', 'The file contains no process', { hint: 'Create one with `bpmn new`.' });
     throw modelError('E_AMBIGUOUS_SCOPE', `The file has ${procs.length} processes; specify the scope with --in <processId|subProcessId>`, {
-      candidates: procs.map((p) => p.get<string>('id')),
+      candidates: procs.map((proc) => proc.get<string>('id')),
     });
   }
 
@@ -428,29 +428,29 @@ export class Doc {
   }
 
   flowNodes(scope: El): El[] {
-    return this.flowElements(scope).filter((e) => is(e, 'bpmn:FlowNode'));
+    return this.flowElements(scope).filter((element) => is(element, 'bpmn:FlowNode'));
   }
 
   sequenceFlows(scope: El): El[] {
-    return this.flowElements(scope).filter((e) => is(e, 'bpmn:SequenceFlow'));
+    return this.flowElements(scope).filter((element) => is(element, 'bpmn:SequenceFlow'));
   }
 
   allSequenceFlows(): El[] {
-    return [...this.byId().values()].filter((e) => is(e, 'bpmn:SequenceFlow'));
+    return [...this.byId().values()].filter((element) => is(element, 'bpmn:SequenceFlow'));
   }
 
   incoming(node: El): El[] {
-    return (node.get<El[] | undefined>('incoming') ?? []).filter((f) => is(f, 'bpmn:SequenceFlow'));
+    return (node.get<El[] | undefined>('incoming') ?? []).filter((flow) => is(flow, 'bpmn:SequenceFlow'));
   }
 
   outgoing(node: El): El[] {
-    return (node.get<El[] | undefined>('outgoing') ?? []).filter((f) => is(f, 'bpmn:SequenceFlow'));
+    return (node.get<El[] | undefined>('outgoing') ?? []).filter((flow) => is(flow, 'bpmn:SequenceFlow'));
   }
 
   boundaryEventsOf(activity: El): El[] {
     const scope = this.scopeOf(activity);
     if (!scope) return [];
-    return this.flowElements(scope).filter((e) => is(e, 'bpmn:BoundaryEvent') && e.get<El | undefined>('attachedToRef') === activity);
+    return this.flowElements(scope).filter((element) => is(element, 'bpmn:BoundaryEvent') && element.get<El | undefined>('attachedToRef') === activity);
   }
 
   /** Nested lanes included, deepest last. */
@@ -479,6 +479,6 @@ export class Doc {
   }
 
   rootElementsOfType(type: string): El[] {
-    return many(this.definitions, 'rootElements').filter((e) => is(e, type));
+    return many(this.definitions, 'rootElements').filter((element) => is(element, type));
   }
 }

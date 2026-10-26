@@ -35,25 +35,25 @@ export class EngineDrawing {
   }
 
   block(rootId: string, pool: boolean): Block | undefined {
-    const plane = this.planes.find((p) => p.shapes.has(rootId));
+    const plane = this.planes.find((candidate) => candidate.shapes.has(rootId));
     const root = plane?.shapes.get(rootId);
     if (!plane || !root) return undefined;
     let shapes: DShape[];
     let edges: DEdge[];
     if (pool) {
-      shapes = [...plane.shapes.values()].filter((s) => s.id !== rootId && s.poolId === rootId);
-      const inside = new Set(shapes.map((s) => s.id));
-      edges = [...plane.edges.values()].filter((e) => e.kind !== 'messageFlow' && ((e.sourceId && inside.has(e.sourceId)) || (e.targetId && inside.has(e.targetId))));
+      shapes = [...plane.shapes.values()].filter((shape) => shape.id !== rootId && shape.poolId === rootId);
+      const inside = new Set(shapes.map((shape) => shape.id));
+      edges = [...plane.edges.values()].filter((edge) => edge.kind !== 'messageFlow' && ((edge.sourceId && inside.has(edge.sourceId)) || (edge.targetId && inside.has(edge.targetId))));
     } else {
       ({ shapes, edges } = PlaneQuery.contentOf(plane, rootId));
     }
-    const planes = this.planes.filter((p) => p !== plane && (pool ? this.sem.poolOfProcess.get(idOf(this.processOfScope(p.rootId)) ?? '') === rootId : this.descendantOf(p.rootId, rootId)));
+    const planes = this.planes.filter((otherPlane) => otherPlane !== plane && (pool ? this.sem.poolOfProcess.get(idOf(this.processOfScope(otherPlane.rootId)) ?? '') === rootId : this.descendantOf(otherPlane.rootId, rootId)));
     return { box: copyBox(root.bounds), shapes, edges, planes };
   }
 
   private descendantOf(id: string, ancestor: string): boolean {
     let scope = this.sem.scopeOf.get(id);
-    for (let i = 0; scope && i < 50; i++) {
+    for (let depth = 0; scope && depth < 50; depth++) {
       if (idOf(scope) === ancestor) return true;
       scope = this.sem.scopeOf.get(idOf(scope) ?? '');
     }
@@ -62,7 +62,7 @@ export class EngineDrawing {
 
   private processOfScope(id: string): El | undefined {
     let el: El | undefined = this.sem.byId.get(id);
-    for (let i = 0; el && i < 50 && !is(el, 'bpmn:Process'); i++) el = this.sem.scopeOf.get(idOf(el) ?? '');
+    for (let depth = 0; el && depth < 50 && !is(el, 'bpmn:Process'); depth++) el = this.sem.scopeOf.get(idOf(el) ?? '');
     return el;
   }
 }

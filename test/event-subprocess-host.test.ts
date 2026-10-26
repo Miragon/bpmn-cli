@@ -34,8 +34,8 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
   try {
     fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected an error');
 }
@@ -44,8 +44,8 @@ async function caughtAsync(fn: () => Promise<unknown>): Promise<{ code?: string;
   try {
     await fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected an error');
 }
@@ -67,7 +67,7 @@ describe('boundary events on an event sub-process (#75)', () => {
 
   it('validate reports E_INVALID_HOST for a loaded file', async () => {
     const doc = await Doc.fromXml(ORDER.replace('attachedToRef="Activity_Ship"', 'attachedToRef="Activity_CancelOrder"'));
-    const err = validateDoc(doc).errors.find((e) => e.code === 'E_INVALID_HOST');
+    const err = validateDoc(doc).errors.find((finding) => finding.code === 'E_INVALID_HOST');
     expect(err).toMatchObject({ element: 'Event_ShipTimeout', related: ['Activity_CancelOrder'] });
     expect(err!.message).toMatch(/event sub-process/);
   });

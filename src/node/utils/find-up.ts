@@ -17,7 +17,7 @@ export interface FoundUp {
  */
 export function findUp(startDir: string, names: readonly string[], opts: FindUpOptions = {}): FoundUp | undefined {
   for (let dir = resolve(startDir); ; dir = dirname(dir)) {
-    const name = names.find((n) => isFile(join(dir, n)));
+    const name = names.find((candidate) => isFile(join(dir, candidate)));
     if (name !== undefined) return { dir, name };
     if (opts.stopAtGitRoot && existsSync(join(dir, '.git'))) return undefined;
     if (dirname(dir) === dir) return undefined;

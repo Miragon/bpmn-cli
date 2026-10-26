@@ -111,7 +111,7 @@ export class AssociationEditor {
       if (is(association, 'bpmn:DataInputAssociation')) {
         removeFrom(node, 'dataInputAssociations', association);
         const property = association.get<El | undefined>('targetRef');
-        const stillUsed = many(node, 'dataInputAssociations').some((a) => a.get<El | undefined>('targetRef') === property);
+        const stillUsed = many(node, 'dataInputAssociations').some((inputAssociation) => inputAssociation.get<El | undefined>('targetRef') === property);
         if (property && !stillUsed && property.get<string | undefined>('name') === PLACEHOLDER_PROPERTY) {
           removeFrom(node, 'properties', property);
           doc.ids.release(idOf(property));
@@ -133,7 +133,7 @@ export class AssociationEditor {
   }
 
   private placeholderProperty(node: El): El {
-    const existing = many(node, 'properties').find((p) => p.get<string | undefined>('name') === PLACEHOLDER_PROPERTY);
+    const existing = many(node, 'properties').find((candidate) => candidate.get<string | undefined>('name') === PLACEHOLDER_PROPERTY);
     if (existing) return existing;
     const property = this.doc.create('bpmn:Property', { id: this.doc.allocateId(typeRequest('bpmn:Property', { context: new ElementLabels(node).label() })).id, name: PLACEHOLDER_PROPERTY });
     addTo(node, 'properties', property);

@@ -44,15 +44,15 @@ const STRAY: Record<string, string> = {
  * error costs a deploy round trip, a false one blocks a valid file.
  */
 export class FeelParser {
-  private i = 0;
+  private pos = 0;
   private rangeEnd = 0;
   /** if x then 1 reports the missing else, not "x" after a name if */
   private farthest: FeelError | undefined;
 
-  private t: Tok[];
+  private tokens: Tok[];
 
   constructor(private readonly src: string) {
-    this.t = FeelParser.tokenize(src);
+    this.tokens = FeelParser.tokenize(src);
   }
 
   run(): void {
@@ -65,27 +65,27 @@ export class FeelParser {
     }
   }
 
-  private peek(k = 0): Tok {
-    return this.t[Math.min(this.i + k, this.t.length - 1)]!;
+  private peek(offset = 0): Tok {
+    return this.tokens[Math.min(this.pos + offset, this.tokens.length - 1)]!;
   }
 
   private next(): Tok {
-    return this.t[Math.min(this.i++, this.t.length - 1)]!;
+    return this.tokens[Math.min(this.pos++, this.tokens.length - 1)]!;
   }
 
-  private isOp(text: string, k = 0): boolean {
-    const t = this.peek(k);
-    return t.kind === 'op' && t.text === text;
+  private isOp(text: string, offset = 0): boolean {
+    const token = this.peek(offset);
+    return token.kind === 'op' && token.text === text;
   }
 
-  private isWord(text?: string, k = 0): boolean {
-    const t = this.peek(k);
-    return t.kind === 'word' && (text === undefined || t.text === text);
+  private isWord(text?: string, offset = 0): boolean {
+    const token = this.peek(offset);
+    return token.kind === 'word' && (text === undefined || token.text === text);
   }
 
   private eatOp(text: string): boolean {
     if (!this.isOp(text)) return false;
-    this.i++;
+    this.pos++;
     return true;
   }
 
@@ -97,32 +97,32 @@ export class FeelParser {
    * Camunda's parser reads a keyword at the start of a longer word as the keyword:
    * `x andy` is `x and y`. The token is split then; either() undoes it.
    */
-  private kw(word: string, k = 0): boolean {
-    const t = this.peek(k);
-    if (t.kind !== 'word' || !t.text.startsWith(word)) return false;
-    if (t.text === word) return true;
+  private kw(word: string, offset = 0): boolean {
+    const token = this.peek(offset);
+    if (token.kind !== 'word' || !token.text.startsWith(word)) return false;
+    if (token.text === word) return true;
     let rest: Tok[];
     try {
-      rest = FeelParser.tokenize(t.text.slice(word.length)).slice(0, -1);
+      rest = FeelParser.tokenize(token.text.slice(word.length)).slice(0, -1);
     } catch {
       return false;
     }
-    const at = Math.min(this.i + k, this.t.length - 1);
-    this.t = [...this.t.slice(0, at), { ...t, text: word }, ...rest.map((r) => ({ ...r, pos: r.pos + t.pos + word.length, nl: false })), ...this.t.slice(at + 1)];
+    const at = Math.min(this.pos + offset, this.tokens.length - 1);
+    this.tokens = [...this.tokens.slice(0, at), { ...token, text: word }, ...rest.map((restToken) => ({ ...restToken, pos: restToken.pos + token.pos + word.length, nl: false })), ...this.tokens.slice(at + 1)];
     return true;
   }
 
   private expectKw(word: string, what: string): void {
     if (!this.kw(word)) this.unexpected(what);
-    this.i++;
+    this.pos++;
   }
 
   /** A hint starting with "expected" is added to the default message, any other replaces it. */
   private unexpected(hint?: string): never {
     const tok = this.peek();
-    const prev = this.i > 0 ? this.t[this.i - 1] : undefined;
+    const prev = this.pos > 0 ? this.tokens[this.pos - 1] : undefined;
     const sentence = hint !== undefined && !hint.startsWith('expected');
-    const glued = (a: string, b: string): boolean => !!prev && prev.text === a && tok.text === b && prev.pos + a.length === tok.pos;
+    const glued = (left: string, right: string): boolean => !!prev && prev.text === left && tok.text === right && prev.pos + left.length === tok.pos;
     if (glued('<', '>')) throw new FeelError(prev!.pos, '<> (FEEL: != for "not equal")');
     if (glued('>', '>') || glued('<', '<')) throw new FeelError(prev!.pos, `${prev!.text}${tok.text} (FEEL has no shift operators)`);
     if (tok.text === ':' && this.src[tok.pos + 1] === '=') throw new FeelError(tok.pos, ':= (FEEL has no assignment; = compares)');
@@ -140,27 +140,27 @@ export class FeelParser {
 
   private openBracket(): string | undefined {
     const stack: string[] = [];
-    for (let k = 0; k < this.i && k < this.t.length; k++) {
-      const x = this.t[k]!;
-      if (x.kind !== 'op') continue;
-      if (x.text === '(' || x.text === '[' || x.text === '{') stack.push(x.text);
-      else if (x.text === ')' || x.text === ']' || x.text === '}') stack.pop();
+    for (let index = 0; index < this.pos && index < this.tokens.length; index++) {
+      const token = this.tokens[index]!;
+      if (token.kind !== 'op') continue;
+      if (token.text === '(' || token.text === '[' || token.text === '{') stack.push(token.text);
+      else if (token.text === ')' || token.text === ']' || token.text === '}') stack.pop();
     }
     return stack[stack.length - 1];
   }
 
   /** When both readings fail, the error that got further wins. */
   private either(fn: () => void, fallback: () => void): void {
-    const start = this.i;
-    const tokens = this.t;
+    const start = this.pos;
+    const tokens = this.tokens;
     try {
       fn();
       return;
     } catch (first) {
       if (!(first instanceof FeelError)) throw first;
       if (!this.farthest || first.at > this.farthest.at) this.farthest = first;
-      this.i = start;
-      this.t = tokens;
+      this.pos = start;
+      this.tokens = tokens;
       try {
         fallback();
       } catch (second) {
@@ -171,16 +171,16 @@ export class FeelParser {
   }
 
   private textual(): void {
-    const w = this.peek();
+    const token = this.peek();
     // if / for / some / every are names where their form does not follow
-    if (w.kind === 'word') {
+    if (token.kind === 'word') {
       for (const [word, form] of [
         ['if', () => this.ifExpr()],
         ['for', () => this.forExpr()],
         ['some', () => this.quantified()],
         ['every', () => this.quantified()],
       ] as const) {
-        if (w.text.startsWith(word)) return this.either(() => (this.kw(word), form()), () => this.disjunction());
+        if (token.text.startsWith(word)) return this.either(() => (this.kw(word), form()), () => this.disjunction());
       }
     }
     this.disjunction();
@@ -212,8 +212,8 @@ export class FeelParser {
   }
 
   private iteration(): void {
-    const v = this.peek();
-    if (v.kind === 'tick' || (v.kind === 'word' && !RESERVED.has(v.text))) this.next();
+    const token = this.peek();
+    if (token.kind === 'tick' || (token.kind === 'word' && !RESERVED.has(token.text))) this.next();
     else this.unexpected('expected a variable name');
     this.expectKw('in', 'expected in');
     this.sum();
@@ -237,7 +237,7 @@ export class FeelParser {
   }
 
   private comparison(): void {
-    if (['<', '<=', '>', '>='].some((o) => this.isOp(o))) {
+    if (['<', '<=', '>', '>='].some((operator) => this.isOp(operator))) {
       this.next();
       this.sum();
       return;
@@ -247,7 +247,7 @@ export class FeelParser {
       return;
     }
     this.sum();
-    if (['=', '!=', '<', '<=', '>', '>='].some((o) => this.isOp(o))) {
+    if (['=', '!=', '<', '<=', '>', '>='].some((operator) => this.isOp(operator))) {
       this.next();
       this.sum();
     } else if (this.kw('between')) {
@@ -276,14 +276,14 @@ export class FeelParser {
     const open = this.peek();
     if (open.kind !== 'op' || !['[', '(', ']'].includes(open.text)) return false;
     let depth = 0;
-    for (let k = 1; ; k++) {
-      const x = this.peek(k);
-      if (x.kind === 'end') return false;
-      if (x.kind !== 'op') continue;
-      if (depth === 0 && x.text === '..') return true;
-      if (depth === 0 && (x.text === ',' || x.text === ')' || x.text === ']' || x.text === '}')) return false;
-      if (x.text === '(' || x.text === '[' || x.text === '{') depth++;
-      else if (x.text === ')' || x.text === ']' || x.text === '}') depth--;
+    for (let offset = 1; ; offset++) {
+      const token = this.peek(offset);
+      if (token.kind === 'end') return false;
+      if (token.kind !== 'op') continue;
+      if (depth === 0 && token.text === '..') return true;
+      if (depth === 0 && (token.text === ',' || token.text === ')' || token.text === ']' || token.text === '}')) return false;
+      if (token.text === '(' || token.text === '[' || token.text === '{') depth++;
+      else if (token.text === ')' || token.text === ']' || token.text === '}') depth--;
     }
   }
 
@@ -316,13 +316,13 @@ export class FeelParser {
 
   private typeName(): void {
     for (const words of MULTI_WORD_TYPES) {
-      if (words.every((w, k) => this.isWord(w, k) && (k === 0 || !this.peek(k).nl))) {
-        this.i += words.length;
+      if (words.every((word, offset) => this.isWord(word, offset) && (offset === 0 || !this.peek(offset).nl))) {
+        this.pos += words.length;
         return;
       }
     }
-    const t = this.peek();
-    if (t.kind === 'tick' || (t.kind === 'word' && (t.text === 'function' || !RESERVED.has(t.text)))) this.next();
+    const token = this.peek();
+    if (token.kind === 'tick' || (token.kind === 'word' && (token.text === 'function' || !RESERVED.has(token.text)))) this.next();
     else this.unexpected('expected a type name after instance of');
     while (this.isOp('.')) {
       this.next();
@@ -361,21 +361,21 @@ export class FeelParser {
 
   private bracketCloses(): boolean {
     let depth = 0;
-    for (let k = 0; ; k++) {
-      const x = this.peek(k);
-      if (x.kind === 'end') return false;
-      if (x.kind !== 'op') continue;
-      if (x.text === '(' || x.text === '[' || x.text === '{') depth++;
-      else if (x.text === ')' || x.text === ']' || x.text === '}') {
+    for (let offset = 0; ; offset++) {
+      const token = this.peek(offset);
+      if (token.kind === 'end') return false;
+      if (token.kind !== 'op') continue;
+      if (token.text === '(' || token.text === '[' || token.text === '{') depth++;
+      else if (token.text === ')' || token.text === ']' || token.text === '}') {
         depth--;
-        if (depth === 0) return x.text === ']';
+        if (depth === 0) return token.text === ']';
       }
     }
   }
 
   private pathName(): void {
-    const t = this.peek();
-    if (t.kind === 'tick' || (t.kind === 'word' && !RESERVED.has(t.text))) this.next();
+    const token = this.peek();
+    if (token.kind === 'tick' || (token.kind === 'word' && !RESERVED.has(token.text))) this.next();
     else this.unexpected('expected a name after .');
   }
 
@@ -400,19 +400,19 @@ export class FeelParser {
 
   /** true when a call may follow */
   private primary(): boolean {
-    const t = this.peek();
-    if (t.kind === 'num' || t.kind === 'str' || t.kind === 'temporal') {
+    const token = this.peek();
+    if (token.kind === 'num' || token.kind === 'str' || token.kind === 'temporal') {
       this.next();
       return false;
     }
-    if (t.kind === 'op') {
-      if (t.text === '(') {
+    if (token.kind === 'op') {
+      if (token.text === '(') {
         this.next();
         this.textual();
         this.expectOp(')', 'expected )');
         return false;
       }
-      if (t.text === '[') {
+      if (token.text === '[') {
         this.next();
         if (!this.eatOp(']')) {
           do this.textual();
@@ -421,13 +421,13 @@ export class FeelParser {
         }
         return false;
       }
-      if (t.text === '{') {
+      if (token.text === '{') {
         this.context();
         return false;
       }
       this.unexpected();
     }
-    if (t.kind === 'word' && t.text === 'function') {
+    if (token.kind === 'word' && token.text === 'function') {
       this.functionDefinition();
       return false;
     }
@@ -437,7 +437,7 @@ export class FeelParser {
     let callable = false;
     this.either(
       () => {
-        this.i += words;
+        this.pos += words;
         this.args();
       },
       () => {
@@ -449,37 +449,37 @@ export class FeelParser {
 
   /** true when a call may follow */
   private name(): boolean {
-    const t = this.peek();
-    if (t.kind === 'tick') {
+    const token = this.peek();
+    if (token.kind === 'tick') {
       this.next();
       return true;
     }
-    if (t.kind !== 'word') this.unexpected();
-    if (t.text === 'true' || t.text === 'false' || t.text === 'null') {
+    if (token.kind !== 'word') this.unexpected();
+    if (token.text === 'true' || token.text === 'false' || token.text === 'null') {
       this.next();
       return false;
     }
-    if ((t.text === 'and' || t.text === 'or') && this.isOp('(', 1)) {
+    if ((token.text === 'and' || token.text === 'or') && this.isOp('(', 1)) {
       this.next();
       return true;
     }
-    if (RESERVED.has(t.text)) this.unexpected(`${t.text} is a FEEL keyword, not a value`);
+    if (RESERVED.has(token.text)) this.unexpected(`${token.text} is a FEEL keyword, not a value`);
     this.next();
     return true;
   }
 
   private callWordsAhead(): number {
     for (const words of KEYWORD_CALLS) {
-      if (words.every((w, j) => this.isWord(w, j) && (j === 0 || !this.peek(j).nl)) && this.isOp('(', words.length)) return words.length;
+      if (words.every((word, offset) => this.isWord(word, offset) && (offset === 0 || !this.peek(offset).nl)) && this.isOp('(', words.length)) return words.length;
     }
-    let k = 0;
+    let wordCount = 0;
     for (;;) {
-      const w = this.peek(k);
-      if (k > 0 && w.nl) return 0;
-      if (w.kind === 'word' && w.text !== '?' && !RESERVED.has(w.text)) k++;
+      const token = this.peek(wordCount);
+      if (wordCount > 0 && token.nl) return 0;
+      if (token.kind === 'word' && token.text !== '?' && !RESERVED.has(token.text)) wordCount++;
       else break;
     }
-    return k >= 2 && this.isOp('(', k) ? k : 0;
+    return wordCount >= 2 && this.isOp('(', wordCount) ? wordCount : 0;
   }
 
   private args(): void {
@@ -498,21 +498,21 @@ export class FeelParser {
   }
 
   private namedArgAhead(): boolean {
-    let k = 0;
-    while (this.peek(k).kind === 'tick' || (this.peek(k).kind === 'word' && !RESERVED.has(this.peek(k).text))) k++;
-    return k > 0 && this.isOp(':', k);
+    let nameLength = 0;
+    while (this.peek(nameLength).kind === 'tick' || (this.peek(nameLength).kind === 'word' && !RESERVED.has(this.peek(nameLength).text))) nameLength++;
+    return nameLength > 0 && this.isOp(':', nameLength);
   }
 
   private context(): void {
     this.next();
     if (this.eatOp('}')) return;
     do {
-      let n = 0;
+      let keyTokens = 0;
       while (!this.isOp(':') && !this.isOp(',') && !this.isOp('{') && !this.isOp('}') && !this.isOp('(') && !this.isOp(')') && !this.isOp('[') && !this.isOp(']') && this.peek().kind !== 'end') {
         this.next();
-        n++;
+        keyTokens++;
       }
-      if (!n) this.unexpected('expected a key: {key: value}');
+      if (!keyTokens) this.unexpected('expected a key: {key: value}');
       this.expectOp(':', 'expected : after the key: {key: value}');
       this.textual();
     } while (this.eatOp(','));
@@ -524,12 +524,12 @@ export class FeelParser {
     this.expectOp('(', 'function needs parameters: function(a, b) a + b');
     if (!this.eatOp(')')) {
       do {
-        let n = 0;
+        let nameTokens = 0;
         while (this.peek().kind === 'tick' || this.peek().kind === 'word') {
           this.next();
-          n++;
+          nameTokens++;
         }
-        if (!n) this.unexpected('expected a parameter name');
+        if (!nameTokens) this.unexpected('expected a parameter name');
       } while (this.eatOp(','));
       this.expectOp(')', 'expected , or ) after the parameters');
     }
@@ -538,77 +538,77 @@ export class FeelParser {
 
   private static tokenize(src: string): Tok[] {
     const out: Tok[] = [];
-    let i = 0;
+    let index = 0;
     let nl = false;
     const push = (kind: Kind, text: string, pos: number): void => {
       out.push({ kind, text, pos, nl });
       nl = false;
     };
-    while (i < src.length) {
-      const c = src[i]!;
-      if (SPACE.test(c)) {
-        if (c === '\n' || c === '\r' || c === '\u2028' || c === '\u2029') nl = true;
-        i++;
+    while (index < src.length) {
+      const char = src[index]!;
+      if (SPACE.test(char)) {
+        if (char === '\n' || char === '\r' || char === '\u2028' || char === '\u2029') nl = true;
+        index++;
         continue;
       }
-      if (c === '/' && src[i + 1] === '/') {
-        while (i < src.length && src[i] !== '\n') i++;
+      if (char === '/' && src[index + 1] === '/') {
+        while (index < src.length && src[index] !== '\n') index++;
         continue;
       }
-      if (c === '/' && src[i + 1] === '*') {
-        const end = src.indexOf('*/', i + 2);
-        if (end === -1) throw new FeelError(i, 'an unterminated comment');
-        if (/[\n\r]/.test(src.slice(i, end))) nl = true;
-        i = end + 2;
+      if (char === '/' && src[index + 1] === '*') {
+        const end = src.indexOf('*/', index + 2);
+        if (end === -1) throw new FeelError(index, 'an unterminated comment');
+        if (/[\n\r]/.test(src.slice(index, end))) nl = true;
+        index = end + 2;
         continue;
       }
-      if (c === '"' || c === '`') {
-        let j = i + 1;
-        while (j < src.length && src[j] !== c) j += src[j] === '\\' && c === '"' ? 2 : 1;
-        if (j >= src.length) throw new FeelError(i, c === '"' ? 'an unterminated string' : 'an unterminated `name`');
-        if (c === '`' && j === i + 1) throw new FeelError(i, 'an empty `` name');
-        push(c === '"' ? 'str' : 'tick', src.slice(i, j + 1), i);
-        i = j + 1;
+      if (char === '"' || char === '`') {
+        let closing = index + 1;
+        while (closing < src.length && src[closing] !== char) closing += src[closing] === '\\' && char === '"' ? 2 : 1;
+        if (closing >= src.length) throw new FeelError(index, char === '"' ? 'an unterminated string' : 'an unterminated `name`');
+        if (char === '`' && closing === index + 1) throw new FeelError(index, 'an empty `` name');
+        push(char === '"' ? 'str' : 'tick', src.slice(index, closing + 1), index);
+        index = closing + 1;
         continue;
       }
-      if (c === '@') {
-        let j = i + 1;
-        while (j < src.length && SPACE.test(src[j]!)) j++;
-        if (src[j] !== '"') throw new FeelError(i, '@ without a "string" (a temporal literal is @"2030-01-01")');
-        let k = j + 1;
-        while (k < src.length && src[k] !== '"') k += src[k] === '\\' ? 2 : 1;
-        if (k >= src.length) throw new FeelError(j, 'an unterminated string');
-        push('temporal', src.slice(i, k + 1), i);
-        i = k + 1;
+      if (char === '@') {
+        let quote = index + 1;
+        while (quote < src.length && SPACE.test(src[quote]!)) quote++;
+        if (src[quote] !== '"') throw new FeelError(index, '@ without a "string" (a temporal literal is @"2030-01-01")');
+        let closing = quote + 1;
+        while (closing < src.length && src[closing] !== '"') closing += src[closing] === '\\' ? 2 : 1;
+        if (closing >= src.length) throw new FeelError(quote, 'an unterminated string');
+        push('temporal', src.slice(index, closing + 1), index);
+        index = closing + 1;
         continue;
       }
       const prev = out[out.length - 1];
       const afterValue = !!prev && (prev.kind !== 'op' || [')', ']', '}'].includes(prev.text));
-      if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] ?? '') && !afterValue)) {
-        const m = /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)/.exec(src.slice(i))!;
-        push('num', m[0], i);
-        i += m[0].length;
+      if (/[0-9]/.test(char) || (char === '.' && /[0-9]/.test(src[index + 1] ?? '') && !afterValue)) {
+        const match = /^(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)/.exec(src.slice(index))!;
+        push('num', match[0], index);
+        index += match[0].length;
         continue;
       }
-      if (c === '?') {
-        push('word', '?', i);
-        i++;
+      if (char === '?') {
+        push('word', '?', index);
+        index++;
         continue;
       }
-      if (NAME_START.test(c)) {
-        let j = i + 1;
-        while (j < src.length && NAME_PART.test(src[j]!)) j++;
-        push('word', src.slice(i, j), i);
-        i = j;
+      if (NAME_START.test(char)) {
+        let nameEnd = index + 1;
+        while (nameEnd < src.length && NAME_PART.test(src[nameEnd]!)) nameEnd++;
+        push('word', src.slice(index, nameEnd), index);
+        index = nameEnd;
         continue;
       }
-      const op = OPERATORS.find((o) => src.startsWith(o, i));
+      const op = OPERATORS.find((operator) => src.startsWith(operator, index));
       if (op) {
-        push('op', op, i);
-        i += op.length;
+        push('op', op, index);
+        index += op.length;
         continue;
       }
-      throw new FeelError(i, STRAY[c] ?? `the character ${JSON.stringify(c)}`);
+      throw new FeelError(index, STRAY[char] ?? `the character ${JSON.stringify(char)}`);
     }
     out.push({ kind: 'end', text: '', pos: src.length, nl });
     return out;

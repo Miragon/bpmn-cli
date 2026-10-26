@@ -41,15 +41,15 @@ export class ImageWriter {
    */
   async write(xml: string, opts: RenderOptions, format: ImageFormat, out: string | undefined, stem: string): Promise<Shot> {
     let parts: Array<{ bytes: string | Uint8Array; width: number; height: number; tokens: number; columns?: [number, number]; band?: number }>;
-    let r: { scale: number; plane: string; planes: string[]; notes: string[]; problems: RenderProblem[]; nodes?: string[] };
+    let rendered: { scale: number; plane: string; planes: string[]; notes: string[]; problems: RenderProblem[]; nodes?: string[] };
     if (format === 'svg') {
       const svg = await DocRenderer.renderXml(xml, opts);
-      parts = (svg.tiles ?? [svg]).map((t) => ({ bytes: t.svg, width: t.width, height: t.height, tokens: t.tokens, ...('columns' in t && t.columns ? { columns: t.columns } : {}), ...('band' in t && t.band ? { band: t.band } : {}) }));
-      r = svg;
+      parts = (svg.tiles ?? [svg]).map((tile) => ({ bytes: tile.svg, width: tile.width, height: tile.height, tokens: tile.tokens, ...('columns' in tile && tile.columns ? { columns: tile.columns } : {}), ...('band' in tile && tile.band ? { band: tile.band } : {}) }));
+      rendered = svg;
     } else {
       const png = await new PngRenderer().render(xml, opts);
-      parts = png.images.map((i) => ({ bytes: i.png, width: i.width, height: i.height, tokens: i.tokens, ...(i.columns ? { columns: i.columns } : {}), ...(i.band ? { band: i.band } : {}) }));
-      r = png;
+      parts = png.images.map((image) => ({ bytes: image.png, width: image.width, height: image.height, tokens: image.tokens, ...(image.columns ? { columns: image.columns } : {}), ...(image.band ? { band: image.band } : {}) }));
+      rendered = png;
     }
     const images: ShotImage[] = [];
     if (out === '-') {
@@ -58,15 +58,15 @@ export class ImageWriter {
     } else {
       const target = out ?? join(tmpdir(), 'bpmn-cli', `${stem}.${format}`);
       const ext = extname(target);
-      for (const [i, p] of parts.entries()) {
-        const file = parts.length > 1 ? `${target.slice(0, target.length - ext.length)}-${i + 1}${ext}` : target;
+      for (const [partIndex, part] of parts.entries()) {
+        const file = parts.length > 1 ? `${target.slice(0, target.length - ext.length)}-${partIndex + 1}${ext}` : target;
         try {
           await mkdir(dirname(file), { recursive: true });
-          await writeFile(file, p.bytes);
+          await writeFile(file, part.bytes);
         } catch (err) {
           throw ioError('E_IO', `Cannot write ${file}: ${(err as Error).message}`, { file, hint: 'Pass -o <file> in a writable directory.' });
         }
-        images.push({ out: file, width: p.width, height: p.height, tokens: p.tokens, ...(p.columns ? { columns: p.columns } : {}), ...(p.band ? { band: p.band } : {}) });
+        images.push({ out: file, width: part.width, height: part.height, tokens: part.tokens, ...(part.columns ? { columns: part.columns } : {}), ...(part.band ? { band: part.band } : {}) });
       }
     }
     const first = images[0]!;
@@ -76,12 +76,12 @@ export class ImageWriter {
       width: first.width,
       height: first.height,
       tokens: first.tokens,
-      scale: r.scale,
-      plane: r.plane,
-      planes: r.planes,
-      notes: r.notes,
-      problems: r.problems,
-      ...(r.nodes ? { nodes: r.nodes } : {}),
+      scale: rendered.scale,
+      plane: rendered.plane,
+      planes: rendered.planes,
+      notes: rendered.notes,
+      problems: rendered.problems,
+      ...(rendered.nodes ? { nodes: rendered.nodes } : {}),
       ...(images.length > 1 ? { images } : {}),
     };
   }

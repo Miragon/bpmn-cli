@@ -2,8 +2,8 @@ import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, sep } from 'node:path';
 
 export function inside(path: string, root: string): boolean {
-  const r = relative(root, path);
-  return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r));
+  const relativePath = relative(root, path);
+  return relativePath === '' || (relativePath !== '..' && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
 }
 
 export function real(path: string): string {
@@ -20,9 +20,9 @@ export function real(path: string): string {
  */
 export function shown(path: string, from?: string): string {
   if (from === undefined) return path;
-  let r: string;
-  if (inside(path, from)) r = relative(from, path);
-  else if (inside(real(path), real(from))) r = relative(real(from), real(path));
-  else r = path === real(path) && from !== real(from) ? relative(real(from), path) : relative(from, path);
-  return r === '' ? '.' : r;
+  let relativePath: string;
+  if (inside(path, from)) relativePath = relative(from, path);
+  else if (inside(real(path), real(from))) relativePath = relative(real(from), real(path));
+  else relativePath = path === real(path) && from !== real(from) ? relative(real(from), path) : relative(from, path);
+  return relativePath === '' ? '.' : relativePath;
 }

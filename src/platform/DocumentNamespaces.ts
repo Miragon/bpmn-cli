@@ -11,8 +11,8 @@ export class DocumentNamespaces {
   constructor(source: Doc | El) {
     this.definitions = (source as Doc).definitions ?? (source as El);
     const take = (attrs: Record<string, unknown> | undefined): void => {
-      for (const [k, v] of Object.entries(attrs ?? {})) {
-        if (k.startsWith('xmlns:') && typeof v === 'string' && !this.map.has(k.slice(6))) this.map.set(k.slice(6), v);
+      for (const [attrName, attrValue] of Object.entries(attrs ?? {})) {
+        if (attrName.startsWith('xmlns:') && typeof attrValue === 'string' && !this.map.has(attrName.slice(6))) this.map.set(attrName.slice(6), attrValue);
       }
     };
     take(this.definitions.$attrs as Record<string, unknown>);
@@ -23,7 +23,7 @@ export class DocumentNamespaces {
   }
 
   prefixOf(uri: string): string | undefined {
-    return [...this.map.entries()].find(([, u]) => u === uri)?.[0];
+    return [...this.map.entries()].find(([, mappedUri]) => mappedUri === uri)?.[0];
   }
 
   declares(uri: string): boolean {
@@ -32,16 +32,16 @@ export class DocumentNamespaces {
 
   /** Falls back to the well-known prefixes when the document declares none. */
   uriOfName(name: string): string | undefined {
-    const i = name.indexOf(':');
-    if (i <= 0) return undefined;
-    const prefix = name.slice(0, i);
+    const colon = name.indexOf(':');
+    if (colon <= 0) return undefined;
+    const prefix = name.slice(0, colon);
     if (prefix === 'xmlns') return undefined;
     return this.map.get(prefix) ?? KNOWN_NAMESPACES[prefix];
   }
 
   uriOfElement(el: El): string | undefined {
-    const d = el.$descriptor as { isGeneric?: boolean; ns?: { uri?: string } };
-    return d.ns?.uri ?? this.uriOfName(el.$type);
+    const descriptor = el.$descriptor as { isGeneric?: boolean; ns?: { uri?: string } };
+    return descriptor.ns?.uri ?? this.uriOfName(el.$type);
   }
 
   usage(): Map<string, number> {
@@ -51,7 +51,7 @@ export class DocumentNamespaces {
     };
     for (const el of walk(this.definitions)) {
       if (isBpmnElement(el)) {
-        for (const k of Object.keys(el.$attrs ?? {})) bump(this.uriOfName(k));
+        for (const attrName of Object.keys(el.$attrs ?? {})) bump(this.uriOfName(attrName));
       } else {
         bump(this.uriOfElement(el));
       }
@@ -61,11 +61,11 @@ export class DocumentNamespaces {
 
   /** Any prefix bound to the modeler namespace counts. */
   executionPlatform(): string | undefined {
-    for (const [k, v] of Object.entries(this.definitions.$attrs ?? {})) {
-      if (!k.endsWith(':executionPlatform') && k !== 'executionPlatform') continue;
-      const uri = this.uriOfName(k);
+    for (const [attrName, attrValue] of Object.entries(this.definitions.$attrs ?? {})) {
+      if (!attrName.endsWith(':executionPlatform') && attrName !== 'executionPlatform') continue;
+      const uri = this.uriOfName(attrName);
       if (uri && uri !== MODELER_URI) continue;
-      if (typeof v === 'string') return v;
+      if (typeof attrValue === 'string') return attrValue;
     }
     return undefined;
   }

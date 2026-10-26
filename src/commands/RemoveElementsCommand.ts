@@ -14,19 +14,19 @@ export class RemoveElementsCommand extends MutationCommand {
         .option('--bridge-all', 'a join (several incoming flows, one outgoing): connect every predecessor to the successor')
         .option('--with-branch', 'also remove the exclusive downstream path (every node only this one leads to, up to the next merge or the ends)')
         .option('--if-exists', 'ignore unknown ids'),
-    ).action((file: string, ids: string[], o: RawOpts) => this.run(file, ids, o));
+    ).action((file: string, ids: string[], options: RawOpts) => this.run(file, ids, options));
   }
 
-  private async run(file: string, ids: string[], o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, ids: string[], options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       const op: RemoveOp = {
         op: 'remove',
         ids,
-        bridge: o['bridge'] !== false,
-        ...(o['bridgeAll'] ? { bridgeAll: true } : {}),
-        ...(o['withBranch'] ? { withBranch: true } : {}),
-        ...(o['ifExists'] ? { ifExists: true } : {}),
+        bridge: options['bridge'] !== false,
+        ...(options['bridgeAll'] ? { bridgeAll: true } : {}),
+        ...(options['withBranch'] ? { withBranch: true } : {}),
+        ...(options['ifExists'] ? { ifExists: true } : {}),
       };
       await this.mutate(file, [op], opts);
     }, opts.json);

@@ -36,23 +36,23 @@ function bpmnFiles(dir: string): string[] {
 
 /** width and height from a PNG's IHDR chunk */
 function pngSize(png: Uint8Array): { width: number; height: number } {
-  const v = new DataView(png.buffer, png.byteOffset, png.byteLength);
-  expect([...png.subarray(1, 4)].map((c) => String.fromCharCode(c)).join('')).toBe('PNG');
-  return { width: v.getUint32(16), height: v.getUint32(20) };
+  const dataView = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  expect([...png.subarray(1, 4)].map((byte) => String.fromCharCode(byte)).join('')).toBe('PNG');
+  return { width: dataView.getUint32(16), height: dataView.getUint32(20) };
 }
 
 /** The `<g data-id="id">` of an element (shape or connection). */
 function group(svg: string, id: string): string {
-  const m = new RegExp(`<g data-id="${id}">(.*?)</g>\\n`).exec(svg);
-  if (!m) throw new Error(`no <g data-id="${id}"> in the SVG`);
-  return m[1]!;
+  const match = new RegExp(`<g data-id="${id}">(.*?)</g>\\n`).exec(svg);
+  if (!match) throw new Error(`no <g data-id="${id}"> in the SVG`);
+  return match[1]!;
 }
 
 /** The tspans (x, y, text) of an element's external label. */
 function labelOf(svg: string, id: string): Array<{ x: number; y: number; text: string }> {
-  const m = new RegExp(`<text data-label="${id}"[^>]*>(.*?)</text>`).exec(svg);
-  if (!m) throw new Error(`no label of ${id}`);
-  return [...m[1]!.matchAll(/<tspan x="([\d.-]+)" y="([\d.-]+)">(.*?)<\/tspan>/g)].map((t) => ({ x: Number(t[1]), y: Number(t[2]), text: t[3]! }));
+  const match = new RegExp(`<text data-label="${id}"[^>]*>(.*?)</text>`).exec(svg);
+  if (!match) throw new Error(`no label of ${id}`);
+  return [...match[1]!.matchAll(/<tspan x="([\d.-]+)" y="([\d.-]+)">(.*?)<\/tspan>/g)].map((tspan) => ({ x: Number(tspan[1]), y: Number(tspan[2]), text: tspan[3]! }));
 }
 
 const HEAD = `<?xml version="1.0" encoding="UTF-8"?>
@@ -86,7 +86,7 @@ describe('every scenario and fixture renders', () => {
   it('to SVG and PNG within the default size, the same bytes twice', async () => {
     expect(files.length).toBeGreaterThan(140);
     const stats = { files: 0, tokens: [] as number[] };
-    for (const [i, file] of files.entries()) {
+    for (const [index, file] of files.entries()) {
       const xml = readFileSync(file, 'utf8');
       const name = file.slice(ROOT.length + 1);
       const svg = await renderSvg(xml, { maxSize: RENDER_MAX_SIZE });
@@ -98,7 +98,7 @@ describe('every scenario and fixture renders', () => {
       expect(pngSize(image.png), name).toEqual({ width: svg.width, height: svg.height });
       expect({ width: image.width, height: image.height, tokens: image.tokens, scale: png.scale }, name).toEqual({ width: svg.width, height: svg.height, tokens: svg.tokens, scale: svg.scale });
       // the PNG bytes are deterministic too (every 10th file twice: the rasteriser is the slow part)
-      if (i % 10 === 0) expect(Buffer.from((await renderPng(xml)).images[0]!.png).equals(Buffer.from(image.png)), name).toBe(true);
+      if (index % 10 === 0) expect(Buffer.from((await renderPng(xml)).images[0]!.png).equals(Buffer.from(image.png)), name).toBe(true);
       // every other plane renders as well
       for (const plane of svg.planes) expect((await renderSvg(xml, { plane })).plane, `${name} ${plane}`).toBe(plane);
       stats.files++;
@@ -114,7 +114,7 @@ describe('the PNG rasteriser', () => {
     const { pixels, width, height } = await new PngRenderer().rasterize(svg, { pixels: true });
     expect({ width, height }).toEqual({ width: 200, height: 30 });
     let dark = 0;
-    for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
+    for (let index = 0; index < pixels!.length; index += 4) if (pixels![index]! < 128) dark++;
     expect(dark).toBeGreaterThan(150);
   });
 
@@ -124,7 +124,7 @@ describe('the PNG rasteriser', () => {
     const count = async (svg: string): Promise<number> => {
       const { pixels } = await new PngRenderer().rasterize(svg, { pixels: true });
       let dark = 0;
-      for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
+      for (let index = 0; index < pixels!.length; index += 4) if (pixels![index]! < 128) dark++;
       return dark;
     };
     expect(await count(named.svg)).toBeGreaterThan((await count(unnamed.svg)) + 200);
@@ -137,7 +137,7 @@ describe('the PNG rasteriser', () => {
     for (const svg of [trap, '<svg', 'not xml at all']) {
       const err = await new PngRenderer().rasterize(svg).then(
         () => undefined,
-        (e: unknown) => e,
+        (error: unknown) => error,
       );
       expect(err, svg.slice(0, 20)).toBeInstanceOf(CliError);
       expect((err as CliError).code).toBe('E_RENDER');
@@ -155,9 +155,9 @@ describe('renderSvg', () => {
     // (more cases of the two passes: test/render-fixes.test.ts)
     const expected = ['A rather long', 'start event name', 'that wraps'];
     const start = labelOf(svg, 'Event_Start');
-    expect(start.map((l) => l.text)).toEqual(expected);
-    expect(start.map((l) => l.x)).toEqual(expected.map(() => 118));
-    expect(start.map((l) => l.y)).toEqual(expected.map((_, i) => Math.round((143 + 9.9 + 13.2 * i) * 100) / 100));
+    expect(start.map((line) => line.text)).toEqual(expected);
+    expect(start.map((line) => line.x)).toEqual(expected.map(() => 118));
+    expect(start.map((line) => line.y)).toEqual(expected.map((_unused, index) => Math.round((143 + 9.9 + 13.2 * index) * 100) / 100));
     expect(svg).toMatch(/<text data-label="Event_Start" font-size="11"/);
     // the gateway has no label bounds: below the shape
     expect(labelOf(svg, 'Gateway_Ok')).toEqual([{ x: 225, y: 152.9, text: 'Ok?' }]);
@@ -182,10 +182,10 @@ describe('renderSvg', () => {
   });
 
   it('names the plane, the other planes and the elements without a shape', async () => {
-    const r = await renderSvg(LABELS);
-    expect(r.plane).toBe('Process_1');
-    expect(r.planes).toEqual([]);
-    expect(r.notes).toEqual(['1 element has no shape and is not drawn: Activity_Undrawn (`bpmn layout <file>` draws it)']);
+    const rendered = await renderSvg(LABELS);
+    expect(rendered.plane).toBe('Process_1');
+    expect(rendered.planes).toEqual([]);
+    expect(rendered.notes).toEqual(['1 element has no shape and is not drawn: Activity_Undrawn (`bpmn layout <file>` draws it)']);
     const gallery = readFileSync(GALLERY, 'utf8');
     const main = await renderSvg(gallery);
     expect(main.plane).toBe('Collaboration_RenderGallery');
@@ -199,9 +199,9 @@ describe('renderSvg', () => {
   it('draws every element of the gallery plane, each kind with its glyph', async () => {
     const xml = readFileSync(GALLERY, 'utf8');
     const { svg } = await renderSvg(xml);
-    const shapes = [...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="[^"]+" bpmnElement="([^"]+)"/g)].map((m) => m[1]!);
+    const shapes = [...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="[^"]+" bpmnElement="([^"]+)"/g)].map((match) => match[1]!);
     const main = xml.slice(0, xml.indexOf('<bpmndi:BPMNPlane id="BPMNPlane_Activity_CollapsedSubProcess"'));
-    for (const id of shapes.filter((s) => main.includes(`bpmnElement="${s}"`))) expect(svg, id).toContain(`<g data-id="${id}">`);
+    for (const id of shapes.filter((shapeId) => main.includes(`bpmnElement="${shapeId}"`))) expect(svg, id).toContain(`<g data-id="${id}">`);
     // a few glyphs: the call activity's thick border, the transaction's double border, the event sub-process's dots, the data store's ellipse
     expect(group(svg, 'Activity_CallActivity')).toContain('stroke-width="5"');
     expect(group(svg, 'Activity_Transaction').match(/<rect /g)).toHaveLength(2);
@@ -228,9 +228,9 @@ describe('renderSvg', () => {
   it('lays out a file without a diagram in memory and says so', async () => {
     const xml = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');
     expect(xml).not.toContain('BPMNDiagram');
-    const r = await renderSvg(xml);
-    expect(r.notes[0]).toMatch(/^the file has no diagram: it is drawn by the layout engine in memory/);
-    expect(r.svg).toContain('<g data-id="');
+    const rendered = await renderSvg(xml);
+    expect(rendered.notes[0]).toMatch(/^the file has no diagram: it is drawn by the layout engine in memory/);
+    expect(rendered.svg).toContain('<g data-id="');
   });
 
   it('wraps lines like innerLines counts them', () => {
@@ -242,10 +242,10 @@ describe('renderSvg', () => {
   it('is not part of an applyToXml-only bundle', async () => {
     const lean = await bundleCore({ stdin: { contents: "export { applyToXml } from './src/index.ts';", sourcefile: 'apply-only.ts' }, minify: false });
     // esbuild lists every module it reached; the output chunk lists only those that contribute code
-    expect(lean.chunks.flatMap((c: { inputs: string[] }) => c.inputs).filter((f: string) => /render/.test(f))).toEqual([]);
+    expect(lean.chunks.flatMap((chunk: { inputs: string[] }) => chunk.inputs).filter((input: string) => /render/.test(input))).toEqual([]);
     // (not vacuous: an entry that imports renderSvg has it)
     const render = await bundleCore({ stdin: { contents: "export { renderSvg } from './src/index.ts';", sourcefile: 'render-only.ts' }, minify: false });
-    expect(render.chunks.flatMap((c: { inputs: string[] }) => c.inputs)).toContain('src/render/DocRenderer.ts');
+    expect(render.chunks.flatMap((chunk: { inputs: string[] }) => chunk.inputs)).toContain('src/render/DocRenderer.ts');
   }, 60000);
 });
 
@@ -259,25 +259,25 @@ describe('bpmn render', () => {
   });
 
   function cli(args: string[], env: Record<string, string> = {}): { code: number; out: Buffer; err: string } {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { cwd: ROOT, input: '', env: { ...process.env, ...env } });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr.toString('utf8') };
+    const run = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { cwd: ROOT, input: '', env: { ...process.env, ...env } });
+    return { code: run.status ?? -1, out: run.stdout, err: run.stderr.toString('utf8') };
   }
 
   it('writes a PNG to -o and prints the size, the image tokens and the other planes', () => {
     const out = join(dir, 'gallery.png');
-    const r = cli(['render', GALLERY, '-o', out]);
-    expect(r.err).toBe('');
-    expect(r.code).toBe(0);
+    const result = cli(['render', GALLERY, '-o', out]);
+    expect(result.err).toBe('');
+    expect(result.code).toBe(0);
     const { width, height } = pngSize(readFileSync(out));
-    const text = r.out.toString('utf8');
+    const text = result.out.toString('utf8');
     expect(text).toMatch(new RegExp(`^wrote ${out.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}  ${width}x${height} px  ~[\\d,]+ image tokens  scale [\\d.]+  plane Collaboration_RenderGallery\\n`));
     expect(text).toContain('other planes (--plane <id>): Activity_CollapsedSubProcess, Activity_AdHocSubProcess\n');
   });
 
   it('defaults to bpmn-cli/<name>.png in the temp directory; --json reports it', () => {
-    const r = cli(['render', GALLERY, '--json'], { TMPDIR: dir, TMP: dir, TEMP: dir });
-    expect(r.code).toBe(0);
-    const json = JSON.parse(r.out.toString('utf8'));
+    const result = cli(['render', GALLERY, '--json'], { TMPDIR: dir, TMP: dir, TEMP: dir });
+    expect(result.code).toBe(0);
+    const json = JSON.parse(result.out.toString('utf8'));
     expect(json).toMatchObject({ file: GALLERY, out: join(dir, 'bpmn-cli', 'gallery.png'), format: 'png', plane: 'Collaboration_RenderGallery', planes: ['Activity_CollapsedSubProcess', 'Activity_AdHocSubProcess'] });
     expect(existsSync(json.out)).toBe(true);
     expect(pngSize(readFileSync(json.out))).toEqual({ width: json.width, height: json.height });
@@ -300,9 +300,9 @@ describe('bpmn render', () => {
   });
 
   it('notes labels below the minimum scale, naming the crop options', () => {
-    const r = cli(['render', GALLERY, '-o', join(dir, 'small.png'), '--max-size', '500']);
-    expect(r.code).toBe(0);
-    expect(r.out.toString('utf8')).toMatch(/\nnote: the labels are drawn at 0\.\d\d of their size \(below 0\.75: hard to read\); render a part instead: --around <id> \[--depth n\], --path <from> <to> or --tiles\n/);
+    const result = cli(['render', GALLERY, '-o', join(dir, 'small.png'), '--max-size', '500']);
+    expect(result.code).toBe(0);
+    expect(result.out.toString('utf8')).toMatch(/\nnote: the labels are drawn at 0\.\d\d of their size \(below 0\.75: hard to read\); render a part instead: --around <id> \[--depth n\], --path <from> <to> or --tiles\n/);
   });
 
   it('refuses bad options and unknown planes with the usual codes', () => {

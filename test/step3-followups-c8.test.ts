@@ -35,20 +35,20 @@ ${body}
   </bpmn:process>
 ${after}</bpmn:definitions>`;
 }
-const TIMER = (kind: string, v: string, id = 'TD1'): string => `<bpmn:timerEventDefinition id="${id}"><bpmn:${kind} xsi:type="bpmn:tFormalExpression">${v}</bpmn:${kind}></bpmn:timerEventDefinition>`;
+const TIMER = (kind: string, value: string, id = 'TD1'): string => `<bpmn:timerEventDefinition id="${id}"><bpmn:${kind} xsi:type="bpmn:tFormalExpression">${value}</bpmn:${kind}></bpmn:timerEventDefinition>`;
 /** start -> timer catch X (a date) -> end */
-const dateCatch = (v: string): string => `    <bpmn:startEvent id="Start" />
+const dateCatch = (value: string): string => `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
-    <bpmn:intermediateCatchEvent id="X">${TIMER('timeDate', v)}</bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="X">${TIMER('timeDate', value)}</bpmn:intermediateCatchEvent>
     <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
     <bpmn:endEvent id="End" />`;
 /** one timer start event per cycle, each to its own end */
 const cycleStarts = (cycles: string[]): string =>
   cycles
     .map(
-      (c, i) => `    <bpmn:startEvent id="S${i}">${TIMER('timeCycle', c, `TD${i}`)}</bpmn:startEvent>
-    <bpmn:sequenceFlow id="F${i}" sourceRef="S${i}" targetRef="E${i}" />
-    <bpmn:endEvent id="E${i}" />`,
+      (cycle, index) => `    <bpmn:startEvent id="S${index}">${TIMER('timeCycle', cycle, `TD${index}`)}</bpmn:startEvent>
+    <bpmn:sequenceFlow id="F${index}" sourceRef="S${index}" targetRef="E${index}" />
+    <bpmn:endEvent id="E${index}" />`,
     )
     .join('\n');
 /** start -> service task X with a boundary timer B (cancelActivity as given) -> ends */
@@ -61,28 +61,28 @@ const boundary = (cancel: string): string => `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="End2" />
     <bpmn:endEvent id="End2" />`;
 /** start -> collapsed sub-process X -> end, its shape with isExpanded as given */
-const expanded = (v: string): string =>
+const expanded = (value: string): string =>
   xml(
     `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
     <bpmn:subProcess id="X"><bpmn:startEvent id="IS" /><bpmn:sequenceFlow id="IF" sourceRef="IS" targetRef="IE" /><bpmn:endEvent id="IE" /></bpmn:subProcess>
     <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
     <bpmn:endEvent id="End" />`,
-    `  <bpmndi:BPMNDiagram id="D1"><bpmndi:BPMNPlane id="PL1" bpmnElement="P_Test"><bpmndi:BPMNShape id="X_di" bpmnElement="X" isExpanded="${v}"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>\n`,
+    `  <bpmndi:BPMNDiagram id="D1"><bpmndi:BPMNPlane id="PL1" bpmnElement="P_Test"><bpmndi:BPMNShape id="X_di" bpmnElement="X" isExpanded="${value}"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>\n`,
   );
 /** an event sub-process with a message start, isInterrupting as given */
-const eventSub = (v: string): string => `    <bpmn:startEvent id="Start" />
+const eventSub = (value: string): string => `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="End" />
     <bpmn:endEvent id="End" />
     <bpmn:subProcess id="ES" triggeredByEvent="true">
-      <bpmn:startEvent id="ESS" isInterrupting="${v}">${TIMER('timeDuration', 'PT1H')}</bpmn:startEvent>
+      <bpmn:startEvent id="ESS" isInterrupting="${value}">${TIMER('timeDuration', 'PT1H')}</bpmn:startEvent>
       <bpmn:sequenceFlow id="EF" sourceRef="ESS" targetRef="ESE" />
       <bpmn:endEvent id="ESE" />
     </bpmn:subProcess>`;
 /** a Camunda user task X with a static due date */
-const dueDate = (v: string): string => `    <bpmn:startEvent id="Start" />
+const dueDate = (value: string): string => `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
-    <bpmn:userTask id="X"><bpmn:extensionElements><zeebe:userTask /><zeebe:taskSchedule dueDate="${v}" /></bpmn:extensionElements></bpmn:userTask>
+    <bpmn:userTask id="X"><bpmn:extensionElements><zeebe:userTask /><zeebe:taskSchedule dueDate="${value}" /></bpmn:extensionElements></bpmn:userTask>
     <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
     <bpmn:endEvent id="End" />`;
 
@@ -137,15 +137,15 @@ async function deployCodes(text: string): Promise<string[]> {
   return [
     ...new Set(
       runProfile(await Doc.fromXml(text))
-        .findings.filter((f) => f.severity === 'deploy')
-        .map((f) => f.code),
+        .findings.filter((finding) => finding.severity === 'deploy')
+        .map((finding) => finding.code),
     ),
   ].sort();
 }
 
 describe('timer values and xsd:booleans Camunda 8 refuses', () => {
-  it.each(MODELS.map((m) => [m.name, m] as const))('%s', async (_name, m) => {
-    expect(await deployCodes(m.xml)).toEqual(m.codes);
+  it.each(MODELS.map((model) => [model.name, model] as const))('%s', async (_name, model) => {
+    expect(await deployCodes(model.xml)).toEqual(model.codes);
   });
 
   it('says what is out of range', () => {
@@ -160,12 +160,12 @@ describe('timer values and xsd:booleans Camunda 8 refuses', () => {
   });
 
   it('validate names the value and the reason', async () => {
-    const r = await validateXml(xml(boundary('maybe')));
-    const f = r.warnings.find((w) => w.code === 'W_C8_DEPLOY_SCHEMA')!;
-    expect(f.element).toBe('B');
-    expect(f.message).toContain('cancelActivity="maybe"');
-    const t = await validateXml(xml(dateCatch('2030-02-30T10:00:00Z')));
-    expect(t.warnings.find((w) => w.code === 'W_C8_DEPLOY_TIMER')!.message).toContain('February 2030 has no day 30');
+    const result = await validateXml(xml(boundary('maybe')));
+    const finding = result.warnings.find((warning) => warning.code === 'W_C8_DEPLOY_SCHEMA')!;
+    expect(finding.element).toBe('B');
+    expect(finding.message).toContain('cancelActivity="maybe"');
+    const invalidDate = await validateXml(xml(dateCatch('2030-02-30T10:00:00Z')));
+    expect(invalidDate.warnings.find((warning) => warning.code === 'W_C8_DEPLOY_TIMER')!.message).toContain('February 2030 has no day 30');
   });
 });
 
@@ -176,18 +176,18 @@ describe('a duplicate id is an error in validate', () => {
     <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="X" />`);
 
   it('E_DUPLICATE_ID with the element bpmn-moddle could not read', async () => {
-    const r = await validateXml(DUP);
-    const e = r.errors.find((x) => x.code === 'E_DUPLICATE_ID')!;
-    expect(e).toBeDefined();
-    expect(e.element).toBe('X');
-    expect(e.message).toContain('<bpmn:endEvent> at line 5');
+    const result = await validateXml(DUP);
+    const duplicate = result.errors.find((error) => error.code === 'E_DUPLICATE_ID')!;
+    expect(duplicate).toBeDefined();
+    expect(duplicate.element).toBe('X');
+    expect(duplicate.message).toContain('<bpmn:endEvent> at line 5');
   });
 
   it('also without a platform (a plain file)', async () => {
     const plain = DUP.replace(/modeler:executionPlatform="[^"]*"/, '').replace(/<zeebe:taskDefinition type="work" \/>/, '');
-    const r = await validateXml(plain);
-    expect(r.errors.map((x) => x.code)).toContain('E_DUPLICATE_ID');
-    expect(r.ok).toBe(false);
+    const result = await validateXml(plain);
+    expect(result.errors.map((error) => error.code)).toContain('E_DUPLICATE_ID');
+    expect(result.ok).toBe(false);
   });
 });
 
@@ -203,18 +203,18 @@ async function deploy(name: string, text: string): Promise<string | undefined> {
   const res = await fetch(`${ENGINE}/deployments`, { method: 'POST', body: form, headers: { accept: 'application/json' } });
   const json = (await res.json()) as { detail?: string; deployments?: Array<{ processDefinition?: { processDefinitionKey?: string } }> };
   if (!res.ok) return json.detail ?? String(res.status);
-  for (const d of json.deployments ?? []) {
-    const key = d.processDefinition?.processDefinitionKey;
+  for (const deployment of json.deployments ?? []) {
+    const key = deployment.processDefinition?.processDefinitionKey;
     if (key) await fetch(`${ENGINE}/resources/${key}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   }
   return undefined;
 }
 
 describe.skipIf(!ENGINE)('live engine: the verdicts hold', () => {
-  it.each(MODELS.map((m, i) => [m.name, m, i] as const))('%s', async (_name, m, i) => {
-    const pid = `P_bpmn_cli_c8_followup_${i}`;
-    const error = await deploy(pid, m.xml.replace(/"P_Test"/g, `"${pid}"`));
-    expect(error === undefined, error).toBe(m.engine === 'accept');
+  it.each(MODELS.map((model, index) => [model.name, model, index] as const))('%s', async (_name, model, index) => {
+    const pid = `P_bpmn_cli_c8_followup_${index}`;
+    const error = await deploy(pid, model.xml.replace(/"P_Test"/g, `"${pid}"`));
+    expect(error === undefined, error).toBe(model.engine === 'accept');
   });
 
   it('a duplicate id is refused', async () => {

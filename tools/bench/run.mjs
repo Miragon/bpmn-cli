@@ -67,41 +67,41 @@ function exec(argv, cwd) {
     const t0 = process.hrtime.bigint();
     const child = spawn(process.execPath, argv, { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: CLI_ENV });
     let stdout = '', stderr = '';
-    child.stdout.on('data', (d) => { stdout += d; });
-    child.stderr.on('data', (d) => { stderr += d; });
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
     const timer = setTimeout(() => child.kill('SIGKILL'), TIMEOUT_MS);
     child.on('close', (code, signal) => { clearTimeout(timer); done({ exit: code ?? (signal ? 124 : 1), ms: Number(process.hrtime.bigint() - t0) / 1e6, stdout, stderr }); });
   });
 }
 
 const resultFile = (out, track, arm) => join(out, `${track}-${arm.key}.jsonl`);
-const readJsonl = (f) => (existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+const readJsonl = (jsonlPath) => (existsSync(jsonlPath) ? readFileSync(jsonlPath, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)) : []);
 
 /** Keys already recorded; a primary record that asked for a --force rerun without one counts as not done. */
 function doneKeys(file) {
   const recs = readJsonl(file);
-  const keys = new Set(recs.filter((r) => !r.crash).map((r) => r.key));
-  for (const r of recs) {
-    const wantsForce = r.variant === 'primary' && (r.steps || []).some((s) => FORCEABLE.has(s.error?.code));
-    if (wantsForce && !keys.has(r.key.replace(/\/primary$/, '/force'))) keys.delete(r.key);
+  const keys = new Set(recs.filter((record) => !record.crash).map((record) => record.key));
+  for (const record of recs) {
+    const wantsForce = record.variant === 'primary' && (record.steps || []).some((stepRun) => FORCEABLE.has(stepRun.error?.code));
+    if (wantsForce && !keys.has(record.key.replace(/\/primary$/, '/force'))) keys.delete(record.key);
   }
   return keys;
 }
 
 function dropKeys(file, keys) {
   if (!existsSync(file)) return;
-  const kept = readFileSync(file, 'utf8').split('\n').filter(Boolean).filter((l) => !keys.has(JSON.parse(l).key));
-  writeFileSync(file, kept.map((l) => `${l}\n`).join(''));
+  const kept = readFileSync(file, 'utf8').split('\n').filter(Boolean).filter((line) => !keys.has(JSON.parse(line).key));
+  writeFileSync(file, kept.map((line) => `${line}\n`).join(''));
 }
 
 /* ------------------------------------------------------------------ */
 /* measurement                                                          */
 /* ------------------------------------------------------------------ */
 
-const strip = (q) => ({ harness: q.harness, pr: q.pr });
-const deltaOf = (b, a) => ({
-  harness: a.harness.score === null || b.harness.score === null ? null : a.harness.score - b.harness.score,
-  pr: a.pr.score === undefined || b.pr.score === undefined ? null : +(a.pr.score - b.pr.score).toFixed(2),
+const strip = (outcome) => ({ harness: outcome.harness, pr: outcome.pr });
+const deltaOf = (before, after) => ({
+  harness: after.harness.score === null || before.harness.score === null ? null : after.harness.score - before.harness.score,
+  pr: after.pr.score === undefined || before.pr.score === undefined ? null : +(after.pr.score - before.pr.score).toFixed(2),
 });
 
 function measurer(ctx) {
@@ -117,7 +117,7 @@ function measurer(ctx) {
     const base = await baseline(src);
     const xml = readFileSync(file, 'utf8');
     let model;
-    try { model = await readModel(xml); } catch (e) { return { error: `unreadable result: ${String(e.message).split('\n')[0]}` }; }
+    try { model = await readModel(xml); } catch (readError) { return { error: `unreadable result: ${String(readError.message).split('\n')[0]}` }; }
     const after = await quality(xml, ctx);
     return {
       model,
@@ -151,9 +151,9 @@ async function runSteps(env, spec, edit, steps, force) {
   for (const step of steps) {
     const ops = join(dir, `ops-${step}.json`);
     writeFileSync(ops, JSON.stringify(arm.kind === 'pr' ? spec.edits[step].pr : spec.edits[step].cli, null, 1));
-    const r = await exec(arm.edit(file, ops, force), dir);
-    const rec = { edit: step, exit: r.exit, ms: Math.round(r.ms), ...arm.info(r.stdout) };
-    if (r.exit !== 0) rec.error = arm.error(r.stderr);
+    const execution = await exec(arm.edit(file, ops, force), dir);
+    const rec = { edit: step, exit: execution.exit, ms: Math.round(execution.ms), ...arm.info(execution.stdout) };
+    if (execution.exit !== 0) rec.error = arm.error(execution.stderr);
     records.push(rec);
   }
   return { file, steps: records };
@@ -162,16 +162,16 @@ async function runSteps(env, spec, edit, steps, force) {
 async function editCase(env, spec, edit, force) {
   const steps = edit === 'E7' ? spec.edits.E7.steps : [edit];
   const run = await runSteps(env, spec, edit, steps, force);
-  const exclude = new Set(steps.flatMap((s) => spec.edits[s].touched || []));
+  const exclude = new Set(steps.flatMap((stepName) => spec.edits[stepName].touched || []));
   const { model, ...measured } = await env.measure(spec.file, run.file, exclude);
   const semantic = {};
-  if (model) for (const s of steps) semantic[s] = checkEdit(spec.edits[s].expect, model);
+  if (model) for (const stepName of steps) semantic[stepName] = checkEdit(spec.edits[stepName].expect, model);
   return {
     key: `${spec.corpus}/${spec.model}/${edit}/${force ? 'force' : 'primary'}`,
     track: 'edits', corpus: spec.corpus, model: spec.model, edit, arm: env.arm.key, variant: force ? 'force' : 'primary',
     target: edit === 'E7' ? steps : spec.edits[edit].target,
-    ok: run.steps.every((s) => s.exit === 0), steps: run.steps, ms: run.steps.reduce((a, s) => a + s.ms, 0),
-    semantic, semanticOk: Object.values(semantic).length === steps.length && Object.values(semantic).every((c) => c.ok),
+    ok: run.steps.every((stepRun) => stepRun.exit === 0), steps: run.steps, ms: run.steps.reduce((total, stepRun) => total + stepRun.ms, 0),
+    semantic, semanticOk: Object.values(semantic).length === steps.length && Object.values(semantic).every((check) => check.ok),
     ...measured,
   };
 }
@@ -183,7 +183,7 @@ function editJobs(env, spec, done) {
     key: `${spec.corpus}/${spec.model}/${edit}/primary`,
     run: async () => {
       const primary = await editCase(env, spec, edit, false);
-      const needForce = env.arm.forceable && primary.steps.some((s) => FORCEABLE.has(s.error?.code));
+      const needForce = env.arm.forceable && primary.steps.some((stepRun) => FORCEABLE.has(stepRun.error?.code));
       return needForce ? [primary, await editCase(env, spec, edit, true)] : [primary];
     },
   }));
@@ -197,12 +197,12 @@ function globalJobs(env, spec, done) {
       const dir = workDir(out, 'global', arm, spec, variant);
       const file = join(dir, 'model.bpmn');
       copyFileSync(spec.file, file);
-      const r = await exec(cmd(file), dir);
+      const execution = await exec(cmd(file), dir);
       const { model: _model, ...measured } = await env.measure(spec.file, file, new Set());
       return [{
         key: `${spec.corpus}/${spec.model}/global/${variant}`, track: 'global', corpus: spec.corpus, model: spec.model, edit: 'global',
-        arm: arm.key, variant, ok: r.exit === 0, exit: r.exit, ms: Math.round(r.ms), ...arm.info(r.stdout),
-        ...(r.exit !== 0 ? { error: arm.error(r.stderr) } : {}), ...measured,
+        arm: arm.key, variant, ok: execution.exit === 0, exit: execution.exit, ms: Math.round(execution.ms), ...arm.info(execution.stdout),
+        ...(execution.exit !== 0 ? { error: arm.error(execution.stderr) } : {}), ...measured,
       }];
     },
   }));
@@ -216,11 +216,11 @@ async function pool(jobs, env, track, jobsN) {
     while (next < jobs.length) {
       const job = jobs[next++];
       let recs;
-      try { recs = await job.run(); } catch (e) {
+      try { recs = await job.run(); } catch (error) {
         const [corpus, model, edit, variant] = job.key.split('/');
-        recs = [{ key: job.key, track, corpus, model, edit, arm: env.arm.key, variant, ok: false, crash: String(e.stack || e).slice(0, 500) }];
+        recs = [{ key: job.key, track, corpus, model, edit, arm: env.arm.key, variant, ok: false, crash: String(error.stack || error).slice(0, 500) }];
       }
-      for (const r of recs) appendFileSync(file, `${JSON.stringify(r)}\n`);
+      for (const record of recs) appendFileSync(file, `${JSON.stringify(record)}\n`);
       finished++;
       if (finished % 50 === 0 || finished === jobs.length) console.log(`[${track}/${env.arm.key}] ${finished}/${jobs.length} (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
     }
@@ -233,69 +233,69 @@ async function pool(jobs, env, track, jobsN) {
 /* ------------------------------------------------------------------ */
 
 function printCommands(arms) {
-  const f = '<work>/model.bpmn', ops = '<work>/ops-E1.json';
+  const modelPath = '<work>/model.bpmn', ops = '<work>/ops-E1.json';
   for (const arm of arms) {
     console.log(`[${arm.key}] ${arm.path}`);
-    console.log(`  edit:  node ${arm.edit(f, ops, false).join(' ')}`);
-    if (arm.forceable) console.log(`  force: node ${arm.edit(f, ops, true).join(' ')}`);
-    for (const [variant, cmd] of Object.entries(arm.global)) console.log(`  global ${variant}: node ${cmd(f).join(' ')}`);
+    console.log(`  edit:  node ${arm.edit(modelPath, ops, false).join(' ')}`);
+    if (arm.forceable) console.log(`  force: node ${arm.edit(modelPath, ops, true).join(' ')}`);
+    for (const [variant, cmd] of Object.entries(arm.global)) console.log(`  global ${variant}: node ${cmd(modelPath).join(' ')}`);
   }
 }
 
-async function runArm(arm, specs, o, ctx) {
-  const env = { arm, out: o.out, measure: measurer(ctx) };
-  for (const track of o.track === 'all' ? ['edits', 'global'] : [o.track]) {
-    const file = resultFile(o.out, track, arm);
-    if (!o.resume) rmSync(file, { force: true });
+async function runArm(arm, specs, options, ctx) {
+  const env = { arm, out: options.out, measure: measurer(ctx) };
+  for (const track of options.track === 'all' ? ['edits', 'global'] : [options.track]) {
+    const file = resultFile(options.out, track, arm);
+    if (!options.resume) rmSync(file, { force: true });
     const done = doneKeys(file);
-    const jobs = specs.flatMap((s) => (track === 'edits' ? editJobs(env, s, done) : globalJobs(env, s, done)));
-    dropKeys(file, new Set(jobs.flatMap((j) => [j.key, j.key.replace(/\/primary$/, '/force')])));
+    const jobs = specs.flatMap((spec) => (track === 'edits' ? editJobs(env, spec, done) : globalJobs(env, spec, done)));
+    dropKeys(file, new Set(jobs.flatMap((queuedJob) => [queuedJob.key, queuedJob.key.replace(/\/primary$/, '/force')])));
     console.log(`[${track}/${arm.key}] ${jobs.length} job(s), ${done.size} record(s) already present`);
-    await pool(jobs, env, track, o.jobs);
+    await pool(jobs, env, track, options.jobs);
   }
 }
 
-function writeMeta(o, arms, corpora, metrics, pr) {
+function writeMeta(options, arms, corpora, metrics, pr) {
   const meta = {
-    created: new Date().toISOString(), node: process.version, layout: o.layout,
-    arms: Object.fromEntries(arms.map((a) => [a.key, { name: a.name, kind: a.kind, features: a.features }])),
-    corpora: Object.fromEntries(corpora.map((c) => [c.name, c.files.length])),
+    created: new Date().toISOString(), node: process.version, layout: options.layout,
+    arms: Object.fromEntries(arms.map((benchArm) => [benchArm.key, { name: benchArm.name, kind: benchArm.kind, features: benchArm.features }])),
+    corpora: Object.fromEntries(corpora.map((corpus) => [corpus.name, corpus.files.length])),
     metricKeys: metrics.keys, weights: metrics.weights, hardKinds: metrics.hard, newKinds: metrics.newKinds, prScore: !!pr,
   };
-  writeFileSync(join(o.out, 'meta.json'), JSON.stringify(meta, null, 1));
+  writeFileSync(join(options.out, 'meta.json'), JSON.stringify(meta, null, 1));
 }
 
-async function bench(o) {
-  const arms = resolveArms(o.arms ? o.arms.split(',') : defaultArmNames(), { layout: o.layout });
-  if (o.print) return printCommands(arms);
-  mkdirSync(o.out, { recursive: true });
+async function bench(options) {
+  const arms = resolveArms(options.arms ? options.arms.split(',') : defaultArmNames(), { layout: options.layout });
+  if (options.print) return printCommands(arms);
+  mkdirSync(options.out, { recursive: true });
   const metrics = await loadMetrics();
   const pr = await loadPrMetrics();
   const refBin = process.env.BASELINE_BIN ?? join(ROOT, 'bin', 'bpmn.js');
-  const only = o.corpus?.split(',').filter(Boolean);
-  const corpora = resolveCorpora({ only, engine: o.engine || !!only?.includes('engine'), out: o.out, refBin });
-  const specs = (await writeSpecs(corpora, o.out, o.filter)).filter((s) => !s.unreadable);
-  writeMeta(o, arms, corpora, metrics, pr);
-  console.log(`bench: ${specs.length} model(s) in ${corpora.map((c) => `${c.name} (${c.files.length})`).join(', ')}; arms ${arms.map((a) => a.key).join(', ')}; hard kinds ${metrics.hard.join(' ')} -> ${o.out}`);
-  for (const arm of arms) await runArm(arm, specs, o, { metrics, pr });
+  const only = options.corpus?.split(',').filter(Boolean);
+  const corpora = resolveCorpora({ only, engine: options.engine || !!only?.includes('engine'), out: options.out, refBin });
+  const specs = (await writeSpecs(corpora, options.out, options.filter)).filter((spec) => !spec.unreadable);
+  writeMeta(options, arms, corpora, metrics, pr);
+  console.log(`bench: ${specs.length} model(s) in ${corpora.map((corpus) => `${corpus.name} (${corpus.files.length})`).join(', ')}; arms ${arms.map((benchArm) => benchArm.key).join(', ')}; hard kinds ${metrics.hard.join(' ')} -> ${options.out}`);
+  for (const arm of arms) await runArm(arm, specs, options, { metrics, pr });
 }
 
 async function main() {
-  let o;
+  let options;
   try {
-    o = parseArgs(process.argv.slice(2), SPEC);
-  } catch (e) {
-    console.error(e.message);
+    options = parseArgs(process.argv.slice(2), SPEC);
+  } catch (error) {
+    console.error(error.message);
     process.exit(2);
   }
-  o.out = resolve(o.out ?? join(ROOT, 'tools', 'bench', 'results', 'latest'));
-  if (o.compare && resolve(o.compare) === o.out) {
+  options.out = resolve(options.out ?? join(ROOT, 'tools', 'bench', 'results', 'latest'));
+  if (options.compare && resolve(options.compare) === options.out) {
     console.error('--compare needs another results directory than --out');
     process.exit(2);
   }
-  if (o.run) await bench(o);
-  if (!o.compare) return;
-  const cmp = compareResults(resolve(o.compare), o.out);
+  if (options.run) await bench(options);
+  if (!options.compare) return;
+  const cmp = compareResults(resolve(options.compare), options.out);
   console.log(formatComparison(cmp));
   process.exit(cmp.regressed ? 1 : 0);
 }

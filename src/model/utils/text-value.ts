@@ -1,5 +1,5 @@
-export function textValue(v: unknown): string | undefined {
-  if (v === undefined || v === null || typeof v === 'object') return undefined;
-  const s = String(v).trim();
-  return s ? s : undefined;
+export function textValue(value: unknown): string | undefined {
+  if (value === undefined || value === null || typeof value === 'object') return undefined;
+  const text = String(value).trim();
+  return text ? text : undefined;
 }

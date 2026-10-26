@@ -15,18 +15,18 @@ export class ElementFinder {
   constructor(private readonly doc: Doc) {}
 
   find(text: string, kind?: string): FindHit[] {
-    const q = text.trim().toLowerCase();
+    const query = text.trim().toLowerCase();
     const filter = kind ? kindFilter(kind) : undefined;
     const out: FindHit[] = [];
     for (const el of walk(this.doc.definitions)) {
-      const nested = !ElementFinder.isSearchable(el) && !!q && ElementFinder.isNestedSearchable(el);
+      const nested = !ElementFinder.isSearchable(el) && !!query && ElementFinder.isNestedSearchable(el);
       if (!ElementFinder.isSearchable(el) && !nested) continue;
       const id = peek<string>(el, 'id');
       if (!id) continue;
       const name = nameOf(el) ?? (is(el, 'bpmn:TextAnnotation') ? peek<string>(el, 'text') : undefined);
       let match: string | undefined;
-      if (q && !id.toLowerCase().includes(q) && !(name ?? '').toLowerCase().includes(q)) {
-        match = nested ? undefined : ElementFinder.vendorMatch(el, q);
+      if (query && !id.toLowerCase().includes(query) && !(name ?? '').toLowerCase().includes(query)) {
+        match = nested ? undefined : ElementFinder.vendorMatch(el, query);
         if (!match) continue;
       }
       if (filter && !filter(el)) continue;
@@ -59,15 +59,15 @@ export class ElementFinder {
     );
   }
 
-  private static vendorMatch(el: El, q: string): string | undefined {
-    for (const [k, v] of Object.entries(new ElementFacts(el).vendorValues() ?? {})) if (v.toLowerCase().includes(q)) return `${k}=${v}`;
+  private static vendorMatch(el: El, query: string): string | undefined {
+    for (const [key, value] of Object.entries(new ElementFacts(el).vendorValues() ?? {})) if (value.toLowerCase().includes(query)) return `${key}=${value}`;
     const decision = new DecisionLinkReader().linkOf(el);
-    if (decision && decision.value.toLowerCase().includes(q)) return `calledDecision=${decision.value}`;
+    if (decision && decision.value.toLowerCase().includes(query)) return `calledDecision=${decision.value}`;
     const visit = (exts: ExtensionInfo[] | undefined, path: string): string | undefined => {
-      for (const e of exts ?? []) {
-        for (const [k, v] of Object.entries(e.attrs ?? {})) if (String(v).toLowerCase().includes(q)) return `${path}${e.type} ${k}=${v}`;
-        if (e.body && e.body.toLowerCase().includes(q)) return `${path}${e.type} ${truncate(e.body, 60)}`;
-        const hit = visit(e.children as ExtensionInfo[] | undefined, path);
+      for (const extension of exts ?? []) {
+        for (const [key, value] of Object.entries(extension.attrs ?? {})) if (String(value).toLowerCase().includes(query)) return `${path}${extension.type} ${key}=${value}`;
+        if (extension.body && extension.body.toLowerCase().includes(query)) return `${path}${extension.type} ${truncate(extension.body, 60)}`;
+        const hit = visit(extension.children as ExtensionInfo[] | undefined, path);
         if (hit) return hit;
       }
       return undefined;

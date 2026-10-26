@@ -21,7 +21,7 @@ export class CompactAction {
       this.ops.doc.require(id);
       if (!this.ops.planes.length) throw this.ops.noDiagram();
       // a diagram's own root (a process without pool, a drill-down): the whole diagram
-      const root = this.ops.planes.find((p) => p.rootId === id);
+      const root = this.ops.planes.find((plane) => plane.rootId === id);
       if (root && !root.shapes.has(id)) {
         out.set(root, undefined);
         continue;
@@ -41,25 +41,25 @@ export class CompactAction {
 
   run(): string[] {
     if (!this.ops.planes.length) throw this.ops.noDiagram();
-    const targets = this.op.ids ? this.compactTargets(this.op.ids) : new Map(this.ops.planes.map((p) => [p, undefined] as const));
+    const targets = this.op.ids ? this.compactTargets(this.op.ids) : new Map(this.ops.planes.map((plane) => [plane, undefined] as const));
     const rerouted: string[] = [];
     const total = { strips: { x: 0, y: 0 }, px: { x: 0, y: 0 }, refused: 0 };
     const rejected: LayoutProblem[] = [];
     for (const [plane, only] of targets) {
-      const g = this.ops.guard(plane);
-      const st = new Compaction(this.ops.drawing(plane)).compact({ ...(only ? { only } : {}), attempt: g.attempt });
+      const guard = this.ops.guard(plane);
+      const stats = new Compaction(this.ops.drawing(plane)).compact({ ...(only ? { only } : {}), attempt: guard.attempt });
       for (const axis of ['x', 'y'] as const) {
-        total.strips[axis] += st.strips[axis];
-        total.px[axis] += st.px[axis];
+        total.strips[axis] += stats.strips[axis];
+        total.px[axis] += stats.px[axis];
       }
-      total.refused += st.refused;
-      rejected.push(...g.rejected);
+      total.refused += stats.refused;
+      rejected.push(...guard.rejected);
       rerouted.push(...this.ops.drawing(plane).settle(this.snap));
     }
-    const n = total.strips.x + total.strips.y;
-    if (!n) this.notes.push('nothing to compact: no empty row or column to close');
+    const closedStrips = total.strips.x + total.strips.y;
+    if (!closedStrips) this.notes.push('nothing to compact: no empty row or column to close');
     else {
-      const part = (k: number, px: number, what: string): string[] => (k ? [`${k} empty ${what}${k > 1 ? 's' : ''} (${px} px)`] : []);
+      const part = (count: number, px: number, what: string): string[] => (count ? [`${count} empty ${what}${count > 1 ? 's' : ''} (${px} px)`] : []);
       this.notes.push(`closed ${[...part(total.strips.x, total.px.x, 'column'), ...part(total.strips.y, total.px.y, 'row')].join(' and ')}`);
     }
     if (rejected.length) this.notes.push(`left ${total.refused} gap${total.refused > 1 ? 's' : ''} open: closing ${total.refused > 1 ? 'them' : 'it'} would add ${problemWords(rejected)}`);

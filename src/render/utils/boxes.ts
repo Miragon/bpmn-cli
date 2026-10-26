@@ -1,9 +1,9 @@
 import { unionAll, type Box, type Point } from '../../drawing/utils/geom.js';
 
-export function meets(a: Box, b: Box): boolean {
-  return a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
+export function meets(first: Box, second: Box): boolean {
+  return first.x <= second.x + second.width && second.x <= first.x + first.width && first.y <= second.y + second.height && second.y <= first.y + first.height;
 }
 
 export function pointsBox(points: readonly Point[]): Box {
-  return unionAll(points.map((p) => ({ x: p.x, y: p.y, width: 0, height: 0 })))!;
+  return unionAll(points.map((point) => ({ x: point.x, y: point.y, width: 0, height: 0 })))!;
 }

@@ -9,18 +9,18 @@ import { mutationSummary, renderSummary } from '../src/index.js';
 
 /** The bounds of an element's shape. */
 function bounds(xml: string, id: string): { x: number; y: number; width: number; height: number } {
-  const m = new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([\\d.-]+)" y="([\\d.-]+)" width="([\\d.]+)" height="([\\d.]+)"`).exec(xml);
-  if (!m) throw new Error(`no shape for ${id}`);
-  return { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]) };
+  const match = new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([\\d.-]+)" y="([\\d.-]+)" width="([\\d.]+)" height="([\\d.]+)"`).exec(xml);
+  if (!match) throw new Error(`no shape for ${id}`);
+  return { x: Number(match[1]), y: Number(match[2]), width: Number(match[3]), height: Number(match[4]) };
 }
 
-function overlap(a: ReturnType<typeof bounds>, b: ReturnType<typeof bounds>): boolean {
-  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+function overlap(first: ReturnType<typeof bounds>, second: ReturnType<typeof bounds>): boolean {
+  return first.x < second.x + second.width && second.x < first.x + first.width && first.y < second.y + second.height && second.y < first.y + first.height;
 }
 
-async function rejection(p: Promise<unknown>): Promise<CliError> {
+async function rejection(pending: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await pending;
   } catch (err) {
     if (err instanceof CliError) return err;
     throw err;
@@ -61,8 +61,8 @@ async function orderModel(): Promise<string> {
 describe('apply batches: aliases, speaking ids and the format selectors together', () => {
   it('every alias names a speaking id; selectors, pool order and compact take aliases', async () => {
     const base = await newXml({ processName: 'Order handling' });
-    const r = await applyToXml(base.xml, ORDER_BATCH);
-    expect(r.result.aliases).toEqual({
+    const result = await applyToXml(base.xml, ORDER_BATCH);
+    expect(result.result.aliases).toEqual({
       $org: 'Participant_OrderHandling',
       $customer: 'Participant_Customer',
       $start: 'Event_OrderReceived',
@@ -76,14 +76,14 @@ describe('apply batches: aliases, speaking ids and the format selectors together
       $end: 'Event_OrderHandled',
       $msg: 'Flow_ShipOrderToCustomer',
     });
-    const color = r.result.layout.format?.find((f) => f.op === 'color');
+    const color = result.result.layout.format?.find((format) => format.op === 'color');
     // the path through the "no" branch, flows included; the "yes" branch is not on it
     expect(color?.colored).toEqual(expect.arrayContaining(['Event_OrderReceived', 'Flow_OrderOkToClarifyOrder', 'Activity_ClarifyOrder', 'Activity_Wait', 'Event_OrderHandled']));
     expect(color?.colored).not.toContain('Activity_ShipOrder');
-    expect(r.result.changed.map((c) => c.id)).toContain('Collaboration_OrderHandling');
-    const layout = await showXml(r.xml, { layout: true });
+    expect(result.result.changed.map((change) => change.id)).toContain('Collaboration_OrderHandling');
+    const layout = await showXml(result.xml, { layout: true });
     expect(layout.indexOf('participant Participant_Customer')).toBeLessThan(layout.indexOf('participant Participant_OrderHandling'));
-    expect(r.result.layout.format?.map((f) => f.op)).toEqual(['color', 'order', 'compact']);
+    expect(result.result.layout.format?.map((format) => format.op)).toEqual(['color', 'order', 'compact']);
   });
 
   it('an unknown alias in a selector is refused before anything runs', async () => {
@@ -98,12 +98,12 @@ describe('apply batches: aliases, speaking ids and the format selectors together
   it('a flow renamed after its new ends is followed by its alias into a format op', async () => {
     const xml = await orderModel();
     // the splice renames Flow_OrderOkToClarifyOrder (its id named its old ends); flowAs is that flow
-    const r = await applyToXml(xml, [
+    const result = await applyToXml(xml, [
       { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder', as: '$log', flowAs: '$in' },
       { op: 'color', ids: ['$in', '$log'], color: 'red' },
     ]);
-    expect(r.result.aliases).toEqual({ $log: 'Activity_LogReason', $in: 'Flow_OrderOkToLogReason' });
-    expect(r.result.layout.format?.[0]?.colored).toEqual(['Flow_OrderOkToLogReason', 'Activity_LogReason']);
+    expect(result.result.aliases).toEqual({ $log: 'Activity_LogReason', $in: 'Flow_OrderOkToLogReason' });
+    expect(result.result.layout.format?.[0]?.colored).toEqual(['Flow_OrderOkToLogReason', 'Activity_LogReason']);
     // the old id names the new one
     const err = await rejection(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' }, { op: 'color', ids: ['Flow_OrderOkToClarifyOrder'], color: 'red' }]));
     expect(err.code).toBe('E_NOT_FOUND');
@@ -116,14 +116,14 @@ describe('apply batches: aliases, speaking ids and the format selectors together
 describe('--summary: aliases and format ops', () => {
   it('lists the aliases and one line per format op (text and JSON)', async () => {
     const xml = await orderModel();
-    const r = await applyToXml(xml, [
+    const result = await applyToXml(xml, [
       { op: 'add', kind: 'task', name: 'Archive', after: 'Event_OrderReceived', as: '$archive' },
       { op: 'place', ids: ['Activity_Wait'], below: 'Activity_ShipOrder' },
       { op: 'color', ids: ['$archive'], color: 'blue' },
     ]);
-    const summary = mutationSummary(r.result);
+    const summary = mutationSummary(result.result);
     expect(summary.aliases).toEqual({ $archive: 'Activity_Archive' });
-    expect(summary.format?.map((f) => f.op)).toEqual(['place', 'color']);
+    expect(summary.format?.map((format) => format.op)).toEqual(['place', 'color']);
     const text = renderSummary(summary);
     expect(text).toMatch(/^aliases: \$archive = Activity_Archive$/m);
     expect(text).toMatch(/^format color #2: colored Activity_Archive$/m);
@@ -132,13 +132,13 @@ describe('--summary: aliases and format ops', () => {
 
   it('names the old id of a flow the change renamed after its new ends (text and JSON)', async () => {
     const xml = await orderModel();
-    const r = await applyToXml(xml, [
+    const result = await applyToXml(xml, [
       { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' },
       { op: 'add', kind: 'task', name: 'Notify', after: 'Activity_LogReason' },
     ]);
     // Flow_OrderOkToClarifyOrder -> Flow_OrderOkToLogReason (splice); Flow_LogReasonToClarifyOrder (new) -> Flow_LogReasonToNotify (second splice)
-    expect(r.result.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
-    const summary = mutationSummary(r.result);
+    expect(result.result.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
+    const summary = mutationSummary(result.result);
     expect(summary.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
     expect(renderSummary(summary)).toMatch(/^renamed: Flow_OrderOkToClarifyOrder -> Flow_OrderOkToLogReason$/m);
     const chain = await applyToXml(xml, [
@@ -150,8 +150,8 @@ describe('--summary: aliases and format ops', () => {
 
   it('a format-only change is not "no changes": the line says what moved, or why nothing did', async () => {
     const xml = await orderModel();
-    const r = await applyToXml(xml, [{ op: 'compact' }]);
-    const text = renderSummary(mutationSummary(r.result));
+    const result = await applyToXml(xml, [{ op: 'compact' }]);
+    const text = renderSummary(mutationSummary(result.result));
     expect(text).not.toMatch(/^no changes$/m);
     expect(text).toMatch(/^format compact #0: /m);
   });
@@ -183,27 +183,27 @@ const C8_MODELER = `<?xml version="1.0" encoding="UTF-8"?>
 
 describe('Camunda 8 with speaking ids and the reading views', () => {
   it('a new event definition gets a speaking id in the file\'s style, never the hash of its event', async () => {
-    const r = await applyToXml(C8_MODELER, [{ op: 'retype', id: 'Event_1q2w3e4', kind: 'intermediateCatchEvent:conditional', when: '= stock > 0' }], { layout: false });
-    expect(r.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReady">');
-    expect(r.xml).not.toContain('ConditionalEventDefinition_1q2w3e4');
+    const result = await applyToXml(C8_MODELER, [{ op: 'retype', id: 'Event_1q2w3e4', kind: 'intermediateCatchEvent:conditional', when: '= stock > 0' }], { layout: false });
+    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReady">');
+    expect(result.xml).not.toContain('ConditionalEventDefinition_1q2w3e4');
   });
 
   it('a taken definition id gets _2 and W_ID_SUFFIXED like every generated id', async () => {
-    const r = await applyToXml(
+    const result = await applyToXml(
       C8_MODELER,
       [
         { op: 'add', kind: 'intermediateCatchEvent:conditional', name: 'Stock ready again', after: 'Event_1q2w3e4', when: '= stock > 10', id: 'Event_StockReadyAgain' },
       ],
       { layout: false },
     );
-    expect(r.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReadyAgain_2">');
-    const w = r.result.warnings.added.find((x) => x.code === 'W_ID_SUFFIXED');
-    expect(w?.element).toBe('ConditionalEventDefinition_StockReadyAgain_2');
+    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReadyAgain_2">');
+    const warning = result.result.warnings.added.find((warning) => warning.code === 'W_ID_SUFFIXED');
+    expect(warning?.element).toBe('ConditionalEventDefinition_StockReadyAgain_2');
   });
 
   it('show --around and show <id> --context print each zeebe setting once', async () => {
     const base = await newXml({ processName: 'Order', target: 'camunda8' });
-    const r = await applyToXml(base.xml, [
+    const result = await applyToXml(base.xml, [
       { op: 'add', kind: 'start', name: 'Received', as: '$start' },
       { op: 'add', kind: 'serviceTask', name: 'Charge', after: '$start', as: '$charge' },
       { op: 'add', kind: 'userTask', name: 'Review', after: '$charge', as: '$review' },
@@ -211,21 +211,21 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
       { op: 'ext', id: '$charge', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'charge-card', retries: '3' } },
       { op: 'ext', id: '$review', action: 'add', type: 'zeebe:assignmentDefinition', attrs: { candidateGroups: 'sales' } },
     ]);
-    const around = await showXml(r.xml, { around: 'Activity_Charge' });
+    const around = await showXml(result.xml, { around: 'Activity_Charge' });
     expect(around).toContain('serviceTask Activity_Charge "Charge" [zeebe:taskDefinition type=charge-card retries=3]');
     expect(around).toContain('userTask Activity_Review "Review" [zeebe:userTask, zeebe:assignmentDefinition candidateGroups=sales]');
     expect(around).not.toContain('job=');
-    const context = await showXml(r.xml, { id: 'Activity_Review', context: true });
+    const context = await showXml(result.xml, { id: 'Activity_Review', context: true });
     expect(context).toMatch(/^userTask Activity_Review "Review"$/m);
     expect(context).toContain('implementation: zeebe:userTask, zeebe:assignmentDefinition candidateGroups=sales');
     // the full show keeps the short facts (it has no extension summary)
-    expect(await showXml(r.xml)).toContain('[job=charge-card, ext: zeebe:taskDefinition]');
+    expect(await showXml(result.xml)).toContain('[job=charge-card, ext: zeebe:taskDefinition]');
   });
 
   it('a missing start the edit fixes is resolved once, as the platform finding', async () => {
     const base = await newXml({ processName: 'Order', target: 'camunda8' });
-    const r = await applyToXml(base.xml, [{ op: 'add', kind: 'start', name: 'Received' }]);
-    expect(r.result.warnings.resolved.map((w) => w.code)).toEqual(['W_C8_DEPLOY_START_EVENT']);
+    const result = await applyToXml(base.xml, [{ op: 'add', kind: 'start', name: 'Received' }]);
+    expect(result.result.warnings.resolved.map((warning) => warning.code)).toEqual(['W_C8_DEPLOY_START_EVENT']);
   });
 
   it('the Camunda 8 profile reports as a delta: added by the edit, resolved by the fix', async () => {
@@ -235,10 +235,10 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
       { op: 'add', kind: 'serviceTask', name: 'Charge', after: '$start' },
       { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Charge' },
     ]);
-    expect(one.result.warnings.added.map((w) => w.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
+    expect(one.result.warnings.added.map((warning) => warning.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
     const two = await applyToXml(one.xml, [{ op: 'ext', id: 'Activity_Charge', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'charge-card' } }]);
     expect(two.result.warnings.added).toEqual([]);
-    expect(two.result.warnings.resolved.map((w) => w.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
+    expect(two.result.warnings.resolved.map((warning) => warning.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
     expect(renderSummary(mutationSummary(two.result))).toMatch(/^warnings: 0 added, 1 resolved, 0 already in the file$/m);
   });
 });
@@ -302,8 +302,8 @@ const ROW_CLOSE = `<?xml version="1.0" encoding="UTF-8"?>
 
 describe('closing the strip of a removed node', () => {
   it('does not pull an expanded sub-process over a shape of another row', async () => {
-    const r = await applyToXml(ROW_CLOSE, [{ op: 'remove', ids: ['Activity_Label'] }], { layout: 'incremental' });
-    expect(overlap(bounds(r.xml, 'Activity_Sub'), bounds(r.xml, 'Gateway_Par'))).toBe(false);
-    expect(bounds(r.xml, 'Gateway_Par')).toEqual(bounds(ROW_CLOSE, 'Gateway_Par'));
+    const result = await applyToXml(ROW_CLOSE, [{ op: 'remove', ids: ['Activity_Label'] }], { layout: 'incremental' });
+    expect(overlap(bounds(result.xml, 'Activity_Sub'), bounds(result.xml, 'Gateway_Par'))).toBe(false);
+    expect(bounds(result.xml, 'Gateway_Par')).toEqual(bounds(ROW_CLOSE, 'Gateway_Par'));
   });
 });

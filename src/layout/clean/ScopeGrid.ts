@@ -22,17 +22,17 @@ export class ScopeGrid {
   ) {}
 
   arrange(shifts: ReadonlyMap<GNode, number> = new Map()): void {
-    for (const e of this.layout.edges) {
-      delete e.bandRow;
-      delete e.bandY;
+    for (const edge of this.layout.edges) {
+      delete edge.bandRow;
+      delete edge.bandY;
     }
     new RowAssigner(this.layout, this.groups, this.assignLayers(shifts)).assign();
     this.positionNodes();
   }
 
   /** Rows are made before TopBorderTrial moves an event up, so every event hangs below. */
-  static boundaryExtra(n: GNode): number {
-    return n.boundary.length ? SIZES.event.height / 2 + 20 : 0;
+  static boundaryExtra(node: GNode): number {
+    return node.boundary.length ? SIZES.event.height / 2 + 20 : 0;
   }
 
   /**
@@ -40,16 +40,16 @@ export class ScopeGrid {
    * the drill-down marker). Top-border events start at the right end, off the type icon, ordered
    * by their nearest target so the ways over the top nest; they never move a bottom-border event.
    */
-  static placeBoundaryEvents(n: GNode): void {
-    const collapsed = n.kind === 'subProcess' && !n.child;
-    const reach = (b: GNode): number => Math.min(...b.out.map((e) => center(e.target.box).x));
-    const tops = n.boundary.filter((b) => b.onTop).sort((a, b) => reach(a) - reach(b));
-    n.boundary.forEach((b, i) => {
-      const k = b.onTop ? tops.indexOf(b) : i;
-      const step = k * (SIZES.event.width + 8);
-      const cx = collapsed && !b.onTop ? n.box.x + METRICS.boundaryOffset + step : n.box.x + n.box.width - METRICS.boundaryOffset - step;
-      const y = b.onTop ? n.box.y - SIZES.event.height / 2 : n.box.y + n.box.height - SIZES.event.height / 2;
-      b.box = { x: Math.round(cx - SIZES.event.width / 2), y, width: SIZES.event.width, height: SIZES.event.height };
+  static placeBoundaryEvents(host: GNode): void {
+    const collapsed = host.kind === 'subProcess' && !host.child;
+    const reach = (event: GNode): number => Math.min(...event.out.map((flow) => center(flow.target.box).x));
+    const tops = host.boundary.filter((event) => event.onTop).sort((first, second) => reach(first) - reach(second));
+    host.boundary.forEach((event, index) => {
+      const slot = event.onTop ? tops.indexOf(event) : index;
+      const step = slot * (SIZES.event.width + 8);
+      const centerX = collapsed && !event.onTop ? host.box.x + METRICS.boundaryOffset + step : host.box.x + host.box.width - METRICS.boundaryOffset - step;
+      const top = event.onTop ? host.box.y - SIZES.event.height / 2 : host.box.y + host.box.height - SIZES.event.height / 2;
+      event.box = { x: Math.round(centerX - SIZES.event.width / 2), y: top, width: SIZES.event.width, height: SIZES.event.height };
     });
   }
 
@@ -59,71 +59,71 @@ export class ScopeGrid {
     // stable once the loops are marked, so computed once per scope
     const layers = (moves: ReadonlyMap<GNode, number>): Map<GNode, number> => {
       const memo = new Map<GNode, number>();
-      const layerOf = (n: GNode): number => {
-        const known = memo.get(n);
+      const layerOf = (node: GNode): number => {
+        const known = memo.get(node);
         if (known !== undefined) return known;
-        memo.set(n, 0); // guard against unexpected cycles
+        memo.set(node, 0); // guard against unexpected cycles
         let layer = 0;
-        for (const e of n.in) {
-          if (e.back) continue;
-          const src = e.source.host ?? e.source;
+        for (const edge of node.in) {
+          if (edge.back) continue;
+          const src = edge.source.host ?? edge.source;
           layer = Math.max(layer, layerOf(src) + 1);
         }
-        layer += moves.get(n) ?? 0;
-        memo.set(n, layer);
+        layer += moves.get(node) ?? 0;
+        memo.set(node, layer);
         return layer;
       };
-      for (const n of nodes) layerOf(n);
+      for (const node of nodes) layerOf(node);
       return memo;
     };
     let natural = naturalLayers.get(this.layout);
     if (!natural) naturalLayers.set(this.layout, (natural = layers(new Map())));
     const moved = shifts.size ? layers(shifts) : natural;
-    for (const n of nodes) n.layer = moved.get(n)!;
+    for (const node of nodes) node.layer = moved.get(node)!;
     // handler under its host
-    for (const n of nodes) if (n.compensatedBy?.host) n.layer = n.compensatedBy.host.layer;
-    for (const n of nodes) for (const b of n.boundary) b.layer = n.layer;
+    for (const node of nodes) if (node.compensatedBy?.host) node.layer = node.compensatedBy.host.layer;
+    for (const node of nodes) for (const event of node.boundary) event.layer = node.layer;
     return natural;
   }
 
-  private hostWidthFor(n: GNode): number {
-    const count = n.boundary.length;
-    if (count < 3) return n.width;
-    return Math.max(n.width, 2 * METRICS.boundaryOffset + (count - 1) * (SIZES.event.width + 8) + 10);
+  private hostWidthFor(node: GNode): number {
+    const count = node.boundary.length;
+    if (count < 3) return node.width;
+    return Math.max(node.width, 2 * METRICS.boundaryOffset + (count - 1) * (SIZES.event.width + 8) + 10);
   }
 
   private layerGapFor(edges: GEdge[], layer: number): number {
     let gap = METRICS.hGap;
-    for (const e of edges) {
-      if (e.back) continue;
-      const s = e.source.host ?? e.source;
-      if (s.layer !== layer || e.target.layer !== layer + 1) continue;
-      const name = nameOf(e);
+    for (const edge of edges) {
+      if (edge.back) continue;
+      const source = edge.source.host ?? edge.source;
+      if (source.layer !== layer || edge.target.layer !== layer + 1) continue;
+      const name = nameOf(edge);
       if (!name) continue;
       const lbl = labelSize(name);
       let need = lbl.width + 16;
-      const gwName = s.kind === 'gateway' ? nameOf(s) : undefined;
-      if (gwName && lbl.lines > 1) need = Math.max(need, labelSize(gwName).width / 2 - s.width / 2 + lbl.width + 12);
+      const gwName = source.kind === 'gateway' ? nameOf(source) : undefined;
+      if (gwName && lbl.lines > 1) need = Math.max(need, labelSize(gwName).width / 2 - source.width / 2 + lbl.width + 12);
       gap = Math.max(gap, need);
     }
     return gap;
   }
 
-  private labelSide(n: GNode): 'above' | 'below' | undefined {
-    if (n.child || n.kind === 'subProcess' || n.kind === 'eventSubProcess' || !nameOf(n)) return undefined;
-    return n.kind === 'gateway' ? 'above' : isEvent(n) ? 'below' : undefined;
+  private labelSide(node: GNode): 'above' | 'below' | undefined {
+    if (node.child || node.kind === 'subProcess' || node.kind === 'eventSubProcess' || !nameOf(node)) return undefined;
+    return node.kind === 'gateway' ? 'above' : isEvent(node) ? 'below' : undefined;
   }
 
   /** Keeps the labels of two same-row neighbours on the same side 4 px apart. */
   private labelGapFor(here: GNode[], next: GNode[], colWidth: number[], layer: number, sides: ReadonlyMap<GNode, 'above' | 'below' | undefined>): number {
     let gap = 0;
-    const width = (n: GNode): number => labelSize(nameOf(n)!).width;
-    for (const a of here) {
-      const side = sides.get(a);
+    const width = (node: GNode): number => labelSize(nameOf(node)!).width;
+    for (const node of here) {
+      const side = sides.get(node);
       if (!side) continue;
-      for (const b of next) {
-        if (b.row !== a.row || sides.get(b) !== side) continue;
-        gap = Math.max(gap, (width(a) - colWidth[layer]!) / 2 + (width(b) - colWidth[layer + 1]!) / 2 + 4);
+      for (const neighbour of next) {
+        if (neighbour.row !== node.row || sides.get(neighbour) !== side) continue;
+        gap = Math.max(gap, (width(node) - colWidth[layer]!) / 2 + (width(neighbour) - colWidth[layer + 1]!) / 2 + 4);
       }
     }
     return Math.ceil(gap);
@@ -137,56 +137,56 @@ export class ScopeGrid {
       layout.height = 0;
       return;
     }
-    for (const n of nodes) n.width = this.hostWidthFor(n);
-    const layers = Math.max(...nodes.map((n) => n.layer)) + 1;
-    const rows = Math.max(...nodes.map((n) => n.row), ...layout.edges.map((e) => e.bandRow ?? 0)) + 1;
+    for (const node of nodes) node.width = this.hostWidthFor(node);
+    const layers = Math.max(...nodes.map((node) => node.layer)) + 1;
+    const rows = Math.max(...nodes.map((node) => node.row), ...layout.edges.map((edge) => edge.bandRow ?? 0)) + 1;
     const colWidth = new Array<number>(layers).fill(0);
     const rowHeight = new Array<number>(rows).fill(0);
     const rowExtra = new Array<number>(rows).fill(0);
-    for (const n of nodes) {
-      colWidth[n.layer] = Math.max(colWidth[n.layer]!, n.width);
-      rowHeight[n.row] = Math.max(rowHeight[n.row]!, n.height + ScopeGrid.boundaryExtra(n));
+    for (const node of nodes) {
+      colWidth[node.layer] = Math.max(colWidth[node.layer]!, node.width);
+      rowHeight[node.row] = Math.max(rowHeight[node.row]!, node.height + ScopeGrid.boundaryExtra(node));
     }
-    for (const a of layout.artifacts) {
-      if (a.kind !== 'annotation' && a.anchorNode) rowExtra[a.anchorNode.row] = DATA_ROW_EXTRA;
+    for (const artifact of layout.artifacts) {
+      if (artifact.kind !== 'annotation' && artifact.anchorNode) rowExtra[artifact.anchorNode.row] = DATA_ROW_EXTRA;
     }
     const outOf = colWidth.map((): GEdge[] => []);
-    for (const e of layout.edges) outOf[(e.source.host ?? e.source).layer]?.push(e);
+    for (const edge of layout.edges) outOf[(edge.source.host ?? edge.source).layer]?.push(edge);
     const inColumn = colWidth.map((): GNode[] => []);
-    for (const n of nodes) inColumn[n.layer]!.push(n);
-    const sides = new Map(nodes.map((n) => [n, this.labelSide(n)]));
-    const gaps = colWidth.map((_, l) => Math.max(this.layerGapFor(outOf[l]!, l), this.labelGapFor(inColumn[l]!, inColumn[l + 1] ?? [], colWidth, l, sides)));
+    for (const node of nodes) inColumn[node.layer]!.push(node);
+    const sides = new Map(nodes.map((node) => [node, this.labelSide(node)]));
+    const gaps = colWidth.map((_width, column) => Math.max(this.layerGapFor(outOf[column]!, column), this.labelGapFor(inColumn[column]!, inColumn[column + 1] ?? [], colWidth, column, sides)));
     const colX: number[] = [];
-    let x = 0;
-    for (let l = 0; l < layers; l++) {
-      colX.push(x);
-      x += colWidth[l]! + gaps[l]!;
+    let left = 0;
+    for (let column = 0; column < layers; column++) {
+      colX.push(left);
+      left += colWidth[column]! + gaps[column]!;
     }
     const rowY: number[] = [];
-    let y = 0;
-    for (let r = 0; r < rows; r++) {
-      rowY.push(y);
-      y += rowHeight[r]! + METRICS.vGap + rowExtra[r]!;
+    let top = 0;
+    for (let row = 0; row < rows; row++) {
+      rowY.push(top);
+      top += rowHeight[row]! + METRICS.vGap + rowExtra[row]!;
     }
-    for (const n of nodes) {
-      const cw = colWidth[n.layer]!;
-      const rh = rowHeight[n.row]!;
-      const bx = colX[n.layer]! + (cw - n.width) / 2;
+    for (const node of nodes) {
+      const cw = colWidth[node.layer]!;
+      const rh = rowHeight[node.row]!;
+      const bx = colX[node.layer]! + (cw - node.width) / 2;
       // every node is centred on the row centre so same-row flows are straight
-      const by = rowY[n.row]! + rh / 2 - n.height / 2;
-      n.box = { x: Math.round(bx), y: Math.round(by), width: n.width, height: n.height };
-      ScopeGrid.placeBoundaryEvents(n);
+      const by = rowY[node.row]! + rh / 2 - node.height / 2;
+      node.box = { x: Math.round(bx), y: Math.round(by), width: node.width, height: node.height };
+      ScopeGrid.placeBoundaryEvents(node);
     }
-    for (const e of layout.edges) if (e.bandRow !== undefined) e.bandY = rowY[e.bandRow]! + rowHeight[e.bandRow]! / 2;
+    for (const edge of layout.edges) if (edge.bandRow !== undefined) edge.bandY = rowY[edge.bandRow]! + rowHeight[edge.bandRow]! / 2;
     // compensation handlers sit centred under their boundary event
-    for (const n of nodes) {
-      const ev = n.compensatedBy;
+    for (const node of nodes) {
+      const ev = node.compensatedBy;
       if (ev) {
-        n.box.x = Math.round(cx(ev.box) - n.box.width / 2);
-        ScopeGrid.placeBoundaryEvents(n);
+        node.box.x = Math.round(cx(ev.box) - node.box.width / 2);
+        ScopeGrid.placeBoundaryEvents(node);
       }
     }
-    layout.width = x - gaps[layers - 1]!;
-    layout.height = y - METRICS.vGap - rowExtra[rows - 1]!;
+    layout.width = left - gaps[layers - 1]!;
+    layout.height = top - METRICS.vGap - rowExtra[rows - 1]!;
   }
 }

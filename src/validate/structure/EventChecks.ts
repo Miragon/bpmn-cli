@@ -110,18 +110,18 @@ export class EventChecks {
   }
 
   checkEventSubProcess(sub: El): void {
-    const starts = this.doc.flowNodes(sub).filter((n) => is(n, 'bpmn:StartEvent'));
+    const starts = this.doc.flowNodes(sub).filter((node) => is(node, 'bpmn:StartEvent'));
     if (!starts.length) {
       this.findings.error('E_EVENT_SUBPROCESS_NO_START', `Event sub-process ${shownId(sub)} has no start event`, shownId(sub), {
         hint: `Create it with its trigger in one command: \`bpmn add <file> eventSubProcess:<message|timer|signal|conditional|error|escalation|compensate> "<Name>" --in <scope>\` (the start event is created inside), or add the sub-process and its startEvent:<trigger> together in one batch: \`bpmn apply <file> ops.json\`.`,
       });
       return;
     }
-    for (const s of starts) {
-      if (triggerOf(s) === 'none') {
-        this.findings.error('E_EVENT_SUBPROCESS_PLAIN_START', `Start event ${shownId(s)} of event sub-process ${shownId(sub)} has no trigger`, shownId(s), {
+    for (const start of starts) {
+      if (triggerOf(start) === 'none') {
+        this.findings.error('E_EVENT_SUBPROCESS_PLAIN_START', `Start event ${shownId(start)} of event sub-process ${shownId(sub)} has no trigger`, shownId(start), {
           related: [shownId(sub)],
-          hint: `Event sub-processes start on a trigger: \`bpmn set <file> ${shownId(s)} trigger=message|timer|error|signal|escalation|conditional|compensate\`.`,
+          hint: `Event sub-processes start on a trigger: \`bpmn set <file> ${shownId(start)} trigger=message|timer|error|signal|escalation|conditional|compensate\`.`,
         });
       }
     }

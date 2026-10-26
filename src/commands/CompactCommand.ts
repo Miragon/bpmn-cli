@@ -9,9 +9,9 @@ import { FormatCommand } from './FormatCommand.js';
  */
 export class CompactCommand extends FormatCommand {
   register(program: CommandType): void {
-    this.withMutationOptions(this.define(program, 'compact')).action((file: string, ids: string[], o: RawOpts) => {
+    this.withMutationOptions(this.define(program, 'compact')).action((file: string, ids: string[], options: RawOpts) => {
       const op: CompactOp = { op: 'compact', ...(ids.length ? { ids } : {}) };
-      return this.runFormat(file, op, o);
+      return this.runFormat(file, op, options);
     });
   }
 }

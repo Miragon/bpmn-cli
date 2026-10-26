@@ -22,7 +22,7 @@ const BARE = declared();
 const REQUIRED = declared({ eventDefinitionQualifier: 'required' });
 
 /** The ids a change created, in order. */
-const createdIds = (r: MutationResult): string[] => r.changes.created.map((c) => c.id);
+const createdIds = (mutation: MutationResult): string[] => mutation.changes.created.map((created) => created.id);
 
 /** `ops` on `xml` with the declared conventions (null: none). */
 async function run(xml: string, ops: unknown[], conventions: IdConventions | null = BARE, opts: { keepFlowIds?: boolean } = {}): Promise<MutationResult> {
@@ -54,48 +54,48 @@ const CONFORMING = definitionsXml(`
 
 describe('new ids take the declared prefix and case', () => {
   it('a kind the rule names takes its prefix; the rest of the file keeps its own style', async () => {
-    const r = await run(PASCAL, [
+    const result = await run(PASCAL, [
       { op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' },
       { op: 'add', kind: 'lane', name: 'Warehouse', in: 'Process_1' },
       { op: 'add', kind: 'dataObject', name: 'Delivery note', in: 'Process_1' },
     ]);
-    expect(createdIds(r)).toEqual(['serviceTask_bookOrder', 'flow_bookOrderToShipOrder', 'Lane_Warehouse', 'DataObjectReference_DeliveryNote']);
-    expect(r.xml).toContain('<bpmn:dataObject id="DataObject_DeliveryNote"/>');
+    expect(createdIds(result)).toEqual(['serviceTask_bookOrder', 'flow_bookOrderToShipOrder', 'Lane_Warehouse', 'DataObjectReference_DeliveryNote']);
+    expect(result.xml).toContain('<bpmn:dataObject id="DataObject_DeliveryNote"/>');
     // the spliced flow named its ends: renamed after its new ones, in the declared form
-    expect(r.changes.renames).toEqual([expect.objectContaining({ from: 'Flow_CheckOrderToShipOrder', to: 'flow_checkOrderToBookOrder' })]);
+    expect(result.changes.renames).toEqual([expect.objectContaining({ from: 'Flow_CheckOrderToShipOrder', to: 'flow_checkOrderToBookOrder' })]);
     // the ids the conventions made other than the file's style would
-    expect(r.conventions).toEqual({ ids: ['serviceTask_bookOrder', 'flow_checkOrderToBookOrder', 'flow_bookOrderToShipOrder'], source: '.bpmnlintrc in .' });
+    expect(result.conventions).toEqual({ ids: ['serviceTask_bookOrder', 'flow_checkOrderToBookOrder', 'flow_bookOrderToShipOrder'], source: '.bpmnlintrc in .' });
   });
 
   it('the ids bpmn-cli writes from the table never vote on the rest: lanes and data objects stay PascalCase over many writes', async () => {
     let xml = PASCAL;
     const lanes: string[] = [];
     for (const team of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) {
-      const r = await run(xml, [
+      const result = await run(xml, [
         { op: 'add', kind: 'task', name: `Check ${team}`, after: 'Activity_CheckOrder' },
         { op: 'add', kind: 'userTask', name: `Approve ${team}`, in: 'Process_1' },
         { op: 'add', kind: 'lane', name: `Team ${team}`, in: 'Process_1' },
         { op: 'add', kind: 'dataObject', name: `Doc ${team}`, in: 'Process_1' },
       ]);
-      lanes.push(...createdIds(r).filter((id) => /^(Lane|DataObjectReference)_/.test(id) || id.startsWith('lane')));
-      xml = r.xml;
+      lanes.push(...createdIds(result).filter((id) => /^(Lane|DataObjectReference)_/.test(id) || id.startsWith('lane')));
+      xml = result.xml;
     }
-    expect(lanes).toEqual(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].flatMap((t) => [`Lane_Team${t}`, `DataObjectReference_Doc${t}`]));
+    expect(lanes).toEqual(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].flatMap((letter) => [`Lane_Team${letter}`, `DataObjectReference_Doc${letter}`]));
   });
 
   it('a new file: what the rule does not name takes its case and prefix shape, stable over many writes', async () => {
     let xml = definitionsXml('');
     const ids: string[] = [];
     for (const team of ['A', 'B', 'C', 'D', 'E', 'F']) {
-      const r = await run(xml, [
+      const result = await run(xml, [
         { op: 'add', kind: 'lane', name: `Team ${team}`, in: 'Process_1' },
         { op: 'add', kind: 'task', name: `Work ${team}`, in: 'Process_1' },
       ]);
-      ids.push(...createdIds(r));
-      xml = r.xml;
+      ids.push(...createdIds(result));
+      xml = result.xml;
     }
-    expect(ids.filter((id) => id.startsWith('lane'))).toEqual(['A', 'B', 'C', 'D', 'E', 'F'].map((t) => `lane_team${t}`));
-    expect(ids.filter((id) => id.startsWith('task_'))).toEqual(['A', 'B', 'C', 'D', 'E', 'F'].map((t) => `task_work${t}`));
+    expect(ids.filter((id) => id.startsWith('lane'))).toEqual(['A', 'B', 'C', 'D', 'E', 'F'].map((letter) => `lane_team${letter}`));
+    expect(ids.filter((id) => id.startsWith('task_'))).toEqual(['A', 'B', 'C', 'D', 'E', 'F'].map((letter) => `task_work${letter}`));
   });
 
   it('what the rule does not name keeps the file\'s style: its own ids vote unless they already follow the rule (one Lane_, hashes, only covered ids)', async () => {
@@ -133,7 +133,7 @@ describe('new ids take the declared prefix and case', () => {
     ]);
     expect(createdIds(rest)).toEqual(['Collaboration_Process', 'Participant_Customer', 'Lane_Sales', 'DataObjectReference_InvoiceCopy']);
     // none of them follows the rule: no conventions line
-    for (const r of [lane, pools, rest]) expect(r.conventions).toBeUndefined();
+    for (const outcome of [lane, pools, rest]) expect(outcome.conventions).toBeUndefined();
   });
 
   it('single lower-case words show no case: a new file\'s lanes stay in the declared case; a file that writes snake_case keeps it', async () => {
@@ -144,9 +144,9 @@ describe('new ids take the declared prefix and case', () => {
       let xml = definitionsXml('');
       const lanes: string[] = [];
       for (const name of ['Sales', 'Invoice', 'Back office', 'Order archive']) {
-        const r = await run(xml, [{ op: 'add', kind: 'lane', name, in: 'Process_1' }], conventions);
-        lanes.push(...createdIds(r).filter((id) => id.startsWith('lane_')));
-        xml = r.xml;
+        const result = await run(xml, [{ op: 'add', kind: 'lane', name, in: 'Process_1' }], conventions);
+        lanes.push(...createdIds(result).filter((id) => id.startsWith('lane_')));
+        xml = result.xml;
       }
       expect(lanes).toEqual(expected);
     }
@@ -201,7 +201,7 @@ describe('new ids take the declared prefix and case', () => {
     ];
     const camel = await run(definitionsXml(''), ops('gateway_afterCheckOrderJoin'));
     expect(createdIds(camel)).toEqual(expect.arrayContaining(['serviceTask_checkOrder', 'serviceTask_checkOrder2', 'gateway_afterCheckOrder', 'gateway_afterCheckOrderJoin2']));
-    expect(camel.changes.warnings.filter((w) => w.code === 'W_ID_SUFFIXED').map((w) => w.element)).toEqual(['serviceTask_checkOrder2', 'gateway_afterCheckOrderJoin2']);
+    expect(camel.changes.warnings.filter((warning) => warning.code === 'W_ID_SUFFIXED').map((warning) => warning.element)).toEqual(['serviceTask_checkOrder2', 'gateway_afterCheckOrderJoin2']);
     const snake = await run(definitionsXml(''), ops('gateway_after_check_order_join'), declared({ case: 'snake_case' }));
     expect(createdIds(snake)).toEqual(expect.arrayContaining(['serviceTask_check_order', 'serviceTask_check_order_2', 'gateway_after_check_order', 'gateway_after_check_order_join_2']));
   });
@@ -219,7 +219,7 @@ describe('new ids take the declared prefix and case', () => {
       { op: 'add', kind: 'serviceTask', name: 'Check order', in: 'Process_1' },
     ]);
     expect(createdIds(camel)).toEqual(['serviceTask_step1', 'serviceTask_step1No2', 'serviceTask_step12', 'serviceTask_step1No3', 'serviceTask_checkOrder', 'flow_checkOrderToStep1', 'flow_checkOrderToStep1No2', 'serviceTask_checkOrder2']);
-    expect(camel.changes.warnings.filter((w) => w.code === 'W_ID_SUFFIXED').map((w) => w.message)).toEqual([
+    expect(camel.changes.warnings.filter((warning) => warning.code === 'W_ID_SUFFIXED').map((warning) => warning.message)).toEqual([
       'Id serviceTask_step1 is already taken; using serviceTask_step1No2',
       'Id serviceTask_step1 is already taken; using serviceTask_step1No3',
       'Id flow_checkOrderToStep1 is already taken; using flow_checkOrderToStep1No2',
@@ -237,7 +237,7 @@ describe('new ids take the declared prefix and case', () => {
     const retyped = await run(definitionsXml('<bpmn:serviceTask id="serviceTask_step1" name="Step 1"/>'), [{ op: 'add', kind: 'task', name: 'Step 1', in: 'Process_1', as: '$t' }, { op: 'retype', id: '$t', kind: 'serviceTask' }]);
     expect(createdIds(retyped)).toEqual(['serviceTask_step1No2']);
     const hinted = await run(definitionsXml('<bpmn:serviceTask id="serviceTask_step1" name="Step 1"/><bpmn:userTask id="userTask_step1" name="Step 1"/>'), [{ op: 'retype', id: 'serviceTask_step1', kind: 'userTask' }]);
-    expect(hinted.changes.warnings.find((w) => w.code === 'W_ID_PREFIX_STALE')?.hint).toContain('`bpmn set <file> serviceTask_step1 id=userTask_step1No2`');
+    expect(hinted.changes.warnings.find((warning) => warning.code === 'W_ID_PREFIX_STALE')?.hint).toContain('`bpmn set <file> serviceTask_step1 id=userTask_step1No2`');
   });
 
   it('the join follows the declared case also in a file of bare ids, and the declared prefix after a split id without it', async () => {
@@ -252,9 +252,9 @@ describe('new ids take the declared prefix and case', () => {
     expect(await joins(bare, split({ name: 'Approved' }), declared({ case: 'snake_case', prefixes: { 'bpmn:Gateway': 'gw' } }))).toEqual(['gwapproved_join']);
     expect(await joins(bare, split({ name: 'Approved' }), declared({ prefixes: { 'bpmn:Gateway': 'gw' } }))).toEqual(['gwapprovedJoin']);
     // an explicit split id the declared prefix does not start: the join takes the prefix and the gateway's label
-    const r = await run(bare, split({ id: 'Gateway_Check' }), declared({ case: 'snake_case' }));
-    expect(createdIds(r)).toEqual(expect.arrayContaining(['Gateway_Check', 'gateway_check_join']));
-    expect(r.conventions?.ids).toContain('gateway_check_join');
+    const result = await run(bare, split({ id: 'Gateway_Check' }), declared({ case: 'snake_case' }));
+    expect(createdIds(result)).toEqual(expect.arrayContaining(['Gateway_Check', 'gateway_check_join']));
+    expect(result.conventions?.ids).toContain('gateway_check_join');
     expect(await joins(bare, split({ id: 'Gateway_Check' }), BARE)).toEqual(['gateway_checkJoin']);
     expect(await joins(bare, split({ id: 'Gateway_0abc123', name: 'Invoice ok?' }), BARE)).toEqual(['gateway_invoiceOkJoin']);
     // one the prefix starts keeps <id>Join; without declared conventions the file's join
@@ -278,8 +278,8 @@ describe('new ids take the declared prefix and case', () => {
     <bpmn:task id="Activity_KotO_Book" name="Book"><bpmn:incoming>Flow_KotO_CheckInvoiceToBook</bpmn:incoming></bpmn:task>
     <bpmn:sequenceFlow id="Flow_KotO_StartToCheckInvoice" sourceRef="Event_KotO_Start" targetRef="Activity_KotO_CheckInvoice"/>
     <bpmn:sequenceFlow id="Flow_KotO_CheckInvoiceToBook" sourceRef="Activity_KotO_CheckInvoice" targetRef="Activity_KotO_Book"/>`);
-    const r = await run(scoped, [{ op: 'add', kind: 'task', name: 'Archive', after: 'Activity_KotO_Book' }]);
-    expect(createdIds(r)).toEqual(['task_archive', 'flow_bookToArchive']);
+    const result = await run(scoped, [{ op: 'add', kind: 'task', name: 'Archive', after: 'Activity_KotO_Book' }]);
+    expect(createdIds(result)).toEqual(['task_archive', 'flow_bookToArchive']);
     const pools = await run(definitionsXml('<bpmn:task id="Activity_A" name="Send offer"/>'), [
       { op: 'add', kind: 'participant', name: 'Supplier' },
       { op: 'add', kind: 'participant', name: 'Customer', as: '$c' },
@@ -300,14 +300,14 @@ describe('new ids take the declared prefix and case', () => {
     ] as const) {
       let xml = PASCAL;
       const flows: string[] = [];
-      for (const [i, word] of ['One', 'Two', 'Three'].entries()) {
-        const r = await run(xml, [
-          ...(i ? [] : pools),
+      for (const [wordIndex, word] of ['One', 'Two', 'Three'].entries()) {
+        const result = await run(xml, [
+          ...(wordIndex ? [] : pools),
           { op: 'add', kind: 'intermediateThrowEvent:message', name: `Send ${word}`, in: 'Process_1', message: word, as: '$e' },
           { op: 'connect', source: '$e', target: 'Participant_Customer' },
         ], conventions);
-        flows.push(createdIds(r).at(-1)!);
-        xml = r.xml;
+        flows.push(createdIds(result).at(-1)!);
+        xml = result.xml;
       }
       expect(flows).toEqual(expected);
       // the view still names the borrowed prefix
@@ -329,12 +329,12 @@ describe('new ids take the declared prefix and case', () => {
     let doc = Doc.create({ processName: 'Order', conventions: BARE });
     const processes: string[] = [];
     for (const name of ['Main', 'Customer', 'Supplier', 'Back office', 'Tax office']) {
-      const r = await mutateDoc(doc, [{ op: 'add', kind: 'participant', name }] as Op[], { layout: false, conventions: BARE });
-      processes.push(...r.changes.created.filter((c) => c.kind === 'process').map((c) => c.id));
-      doc = await Doc.fromXml(r.xml);
+      const result = await mutateDoc(doc, [{ op: 'add', kind: 'participant', name }] as Op[], { layout: false, conventions: BARE });
+      processes.push(...result.changes.created.filter((created) => created.kind === 'process').map((created) => created.id));
+      doc = await Doc.fromXml(result.xml);
     }
     expect(processes).toEqual(['Process_Customer', 'Process_Supplier', 'Process_BackOffice', 'Process_TaxOffice']);
-    expect(doc.processes().map((p) => p.get('id'))).toEqual(['Process_Order', ...processes]);
+    expect(doc.processes().map((processElement) => processElement.get('id'))).toEqual(['Process_Order', ...processes]);
   });
 
   it('a new pool\'s process follows the file\'s own process ids where two share a prefix, with and without the rule; never the participants\'', async () => {
@@ -348,8 +348,8 @@ describe('new ids take the declared prefix and case', () => {
   <bpmn:process id="${procs[1]}" isExecutable="true"><bpmn:userTask id="${task}" name="Check order"/><bpmn:userTask id="userTask_shipOrder" name="Ship order"/></bpmn:process>
 </bpmn:definitions>`;
     const newProcess = async (xml: string, conventions: IdConventions | null): Promise<string> => {
-      const r = await run(xml, [{ op: 'add', kind: 'participant', name: 'Bank account' }], conventions);
-      return r.changes.created.find((c) => c.kind === 'process')!.id;
+      const result = await run(xml, [{ op: 'add', kind: 'participant', name: 'Bank account' }], conventions);
+      return result.changes.created.find((created) => created.kind === 'process')!.id;
     };
     // the prefix the processes share, the file's case (single lower-case words show none), whatever the pools' prefixes
     for (const part of ['participant_', 'Participant_', 'Pool_']) {
@@ -361,7 +361,7 @@ describe('new ids take the declared prefix and case', () => {
     const snakeFile = pools(['process_customer', 'process_shop'], 'participant_', 'userTask_check_order').replace('userTask_shipOrder', 'userTask_ship_order');
     expect([await newProcess(snakeFile, null), await newProcess(snakeFile, declared({ case: 'snake_case' })), await newProcess(snakeFile, BARE)]).toEqual(['process_bank_account', 'process_bank_account', 'process_bankAccount']);
     const snakePool = await run(snakeFile, [{ op: 'add', kind: 'participant', name: 'Bank account' }]);
-    expect(snakePool.changes.created.find((c) => c.kind === 'participant')?.id).toBe('participant_bankAccount');
+    expect(snakePool.changes.created.find((created) => created.kind === 'participant')?.id).toBe('participant_bankAccount');
     // bodies that show a case: theirs; a tie between prefixes: the alphabetically first
     expect(await newProcess(pools(['Process_Customer', 'Process_Shop'], 'participant_', 'userTask_checkOrder'), BARE)).toBe('Process_BankAccount');
     const four = pools(['proc_customer', 'proc_shop'], 'participant_', 'userTask_checkOrder').replace('</bpmn:definitions>', '<bpmn:process id="flow_a"/><bpmn:process id="flow_b"/></bpmn:definitions>');
@@ -391,29 +391,29 @@ describe('new ids take the declared prefix and case', () => {
   <bpmn:process id="Process_0k3x9qa" isExecutable="true"><bpmn:userTask id="userTask_checkOrder" name="Check order"/><bpmn:userTask id="userTask_shipOrder" name="Ship order"/></bpmn:process>
 </bpmn:definitions>`;
     const pool = async (conventions: IdConventions | null): Promise<string[]> => {
-      const r = await run(modeler, [{ op: 'add', kind: 'participant', name: 'Bank account' }], conventions);
-      return r.changes.created.filter((c) => c.kind === 'process' || c.kind === 'participant').map((c) => c.id);
+      const result = await run(modeler, [{ op: 'add', kind: 'participant', name: 'Bank account' }], conventions);
+      return result.changes.created.filter((created) => created.kind === 'process' || created.kind === 'participant').map((created) => created.id);
     };
     expect(await pool(BARE)).toEqual(['Process_BankAccount', 'Participant_BankAccount']);
     expect(await pool(null)).toEqual(['Process_bankAccount', 'Participant_bankAccount']);
   });
 
   it('explicit ids are taken as given; the process and the definitions keep theirs', async () => {
-    const r = await run(definitionsXml(''), [
+    const result = await run(definitionsXml(''), [
       { op: 'add', kind: 'serviceTask', name: 'Book', id: 'Activity_Book', in: 'Process_1' },
       { op: 'add', kind: 'participant', name: 'Billing' },
     ]);
-    expect(createdIds(r)).toEqual(['Activity_Book', 'collaboration_process', 'participant_billing']);
-    expect(r.xml).toContain('<bpmn:process id="Process_1"');
+    expect(createdIds(result)).toEqual(['Activity_Book', 'collaboration_process', 'participant_billing']);
+    expect(result.xml).toContain('<bpmn:process id="Process_1"');
   });
 
   it('a flow the file named in its own style still names its ends: renamed into the declared form, or kept with keepFlowIds and named stale', async () => {
     const ops = [{ op: 'add', kind: 'task', name: 'Pack order', flow: 'Flow_CheckOrderToShipOrder' }];
     const renamed = await run(PASCAL, ops);
-    expect(renamed.changes.renames.map((x) => `${x.from} -> ${x.to}`)).toEqual(['Flow_CheckOrderToShipOrder -> flow_checkOrderToPackOrder']);
+    expect(renamed.changes.renames.map((rename) => `${rename.from} -> ${rename.to}`)).toEqual(['Flow_CheckOrderToShipOrder -> flow_checkOrderToPackOrder']);
     const kept = await run(PASCAL, ops, BARE, { keepFlowIds: true });
     expect(kept.changes.renames).toEqual([]);
-    expect(kept.changes.warnings.find((w) => w.code === 'W_FLOW_ID_STALE')?.hint).toContain('`bpmn set <file> Flow_CheckOrderToShipOrder id=flow_checkOrderToPackOrder`');
+    expect(kept.changes.warnings.find((warning) => warning.code === 'W_FLOW_ID_STALE')?.hint).toContain('`bpmn set <file> Flow_CheckOrderToShipOrder id=flow_checkOrderToPackOrder`');
   });
 
   it('a flow earlier versions named in a file of another flow form (#31) follows its ends too: into the declared form, or the file\'s where no flow prefix is declared', async () => {
@@ -421,11 +421,11 @@ describe('new ids take the declared prefix and case', () => {
     const tasks = ['check', 'ship', 'bill', 'pay', 'done'];
     const flows = ['Flow_Task_check_to_Task_ship', 'Flow_Task_ship_to_Task_bill', 'Flow_Task_bill_to_Task_pay', 'Flow_pay_to_done'];
     const xml = definitionsXml(
-      tasks.map((t, i) => `<bpmn:task id="Task_${t}" name="${t}">${i ? `<bpmn:incoming>${flows[i - 1]}</bpmn:incoming>` : ''}${i < flows.length ? `<bpmn:outgoing>${flows[i]}</bpmn:outgoing>` : ''}</bpmn:task>`).join('\n') +
-        flows.map((f, i) => `<bpmn:sequenceFlow id="${f}" sourceRef="Task_${tasks[i]}" targetRef="Task_${tasks[i + 1]}"/>`).join('\n'),
+      tasks.map((task, taskIndex) => `<bpmn:task id="Task_${task}" name="${task}">${taskIndex ? `<bpmn:incoming>${flows[taskIndex - 1]}</bpmn:incoming>` : ''}${taskIndex < flows.length ? `<bpmn:outgoing>${flows[taskIndex]}</bpmn:outgoing>` : ''}</bpmn:task>`).join('\n') +
+        flows.map((flow, flowIndex) => `<bpmn:sequenceFlow id="${flow}" sourceRef="Task_${tasks[flowIndex]}" targetRef="Task_${tasks[flowIndex + 1]}"/>`).join('\n'),
     );
     const ops = [{ op: 'add', kind: 'task', name: 'Log', flow: 'Flow_pay_to_done' }];
-    const renames = (r: MutationResult): string[] => r.changes.renames.map((x) => `${x.from} -> ${x.to}`);
+    const renames = (mutation: MutationResult): string[] => mutation.changes.renames.map((rename) => `${rename.from} -> ${rename.to}`);
     expect(renames(await run(xml, ops, null))).toEqual(['Flow_pay_to_done -> Flow_Task_pay_to_Task_log']);
     const lint = await run(xml, ops);
     expect(createdIds(lint)).toEqual(['task_log', 'flow_logToDone']);
@@ -435,8 +435,8 @@ describe('new ids take the declared prefix and case', () => {
 
   it('a host passes its own table (no plugin); unusable prefixes are left out; none declared: the file\'s style', async () => {
     const host: IdConventions = { prefixes: { 'bpmn:ServiceTask': 'svc_', 'bpmn:SequenceFlow': 'sf_', 'bpmn:UserTask': 'user task_' }, case: 'camelCase' };
-    const r = await applyToXml(PASCAL, [{ op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' }, { op: 'add', kind: 'userTask', name: 'Approve', after: 'Activity_ShipOrder' }], { layout: false, conventions: host });
-    expect(r.result.created.map((c) => c.id)).toEqual(['svc_bookOrder', 'sf_bookOrderToShipOrder', 'Activity_Approve', 'sf_approveToDone']);
+    const result = await applyToXml(PASCAL, [{ op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' }, { op: 'add', kind: 'userTask', name: 'Approve', after: 'Activity_ShipOrder' }], { layout: false, conventions: host });
+    expect(result.result.created.map((created) => created.id)).toEqual(['svc_bookOrder', 'sf_bookOrderToShipOrder', 'Activity_Approve', 'sf_approveToDone']);
     const none = await applyToXml(PASCAL, [{ op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' }], { layout: false, conventions: { prefixes: { 'bpmn:ServiceTask': '1_' } } });
     const plain = await applyToXml(PASCAL, [{ op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' }], { layout: false });
     expect(none.xml).toBe(plain.xml);
@@ -446,8 +446,8 @@ describe('new ids take the declared prefix and case', () => {
 
 describe('the conventions of a result', () => {
   it('name the new ids that differ from the file\'s own style, in text, --summary and JSON; none in a file whose checked ids all follow the rule', async () => {
-    const r = await run(PASCAL, [{ op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' }]);
-    const report = mutationReport(r);
+    const result = await run(PASCAL, [{ op: 'add', kind: 'serviceTask', name: 'Book order', after: 'Activity_CheckOrder' }]);
+    const report = mutationReport(result);
     expect(report.conventions).toEqual({ ids: ['serviceTask_bookOrder', 'flow_checkOrderToBookOrder', 'flow_bookOrderToShipOrder'], source: '.bpmnlintrc in .' });
     const line = "conventions: serviceTask_bookOrder, flow_checkOrderToBookOrder, flow_bookOrderToShipOrder follow element-id-naming (.bpmnlintrc in .), not the file's own id style  (`bpmn show <file> --conventions`)";
     expect(renderMutation(report).split('\n')).toContain(line);
@@ -502,13 +502,13 @@ describe('the conventions of a result', () => {
       [{ op: 'add', kind: 'xor', name: 'Approved?', after: 'serviceTask_bookOrder' }],
       [{ op: 'split', after: 'gateway_approved', kind: 'and', branches: [{ nodes: [{ kind: 'userTask', name: 'Pack' }] }, { nodes: [{ kind: 'userTask', name: 'Bill' }] }] }],
     ]) {
-      const r = await mutateDoc(doc, ops as Op[], { layout: false, conventions: BARE });
-      lines.push(r.conventions);
-      expect(renderSummary(mutationSummary(mutationReport(r)))).not.toContain('conventions:');
-      doc = await Doc.fromXml(r.xml);
+      const result = await mutateDoc(doc, ops as Op[], { layout: false, conventions: BARE });
+      lines.push(result.conventions);
+      expect(renderSummary(mutationSummary(mutationReport(result)))).not.toContain('conventions:');
+      doc = await Doc.fromXml(result.xml);
     }
     expect(lines).toEqual([undefined, undefined, undefined, undefined, undefined]);
-    expect(doc.flowElements(doc.processes()[0]!).map((e) => e.get('id'))).toEqual(expect.arrayContaining(['gateway_approved', 'gateway_afterApproved', 'gateway_afterApprovedJoin', 'userTask_pack', 'userTask_bill']));
+    expect(doc.flowElements(doc.processes()[0]!).map((element) => element.get('id'))).toEqual(expect.arrayContaining(['gateway_approved', 'gateway_afterApproved', 'gateway_afterApprovedJoin', 'userTask_pack', 'userTask_bill']));
   });
 
   it('only ids under a prefix the rule declares: not what it does not name (a new file\'s lane, a pool, a message flow), nor a type whose prefix it cannot use', async () => {
@@ -535,11 +535,11 @@ describe('W_ID_PREFIX_STALE', () => {
     <bpmn:task id="Activity_Legacy" name="Legacy"/>
     <bpmn:intermediateCatchEvent id="timerEvent_wait" name="Wait"><bpmn:timerEventDefinition id="T1"/></bpmn:intermediateCatchEvent>
     <bpmn:intermediateCatchEvent id="event_pause" name="Pause"><bpmn:timerEventDefinition id="T2"/></bpmn:intermediateCatchEvent>`);
-  const stale = (r: MutationResult) => r.changes.warnings.filter((w) => w.code === 'W_ID_PREFIX_STALE');
+  const stale = (mutation: MutationResult) => mutation.changes.warnings.filter((warning) => warning.code === 'W_ID_PREFIX_STALE');
 
   it('a retype keeps the id and names the `bpmn set` that follows the convention (free in the file)', async () => {
-    const r = await run(EVENTS, [{ op: 'retype', id: 'serviceTask_checkInvoice', kind: 'userTask' }]);
-    expect(stale(r)).toEqual([
+    const result = await run(EVENTS, [{ op: 'retype', id: 'serviceTask_checkInvoice', kind: 'userTask' }]);
+    expect(stale(result)).toEqual([
       {
         code: 'W_ID_PREFIX_STALE',
         element: 'serviceTask_checkInvoice',
@@ -547,7 +547,7 @@ describe('W_ID_PREFIX_STALE', () => {
         hint: 'Code, tests and links that use the id keep working; to follow the convention: `bpmn set <file> serviceTask_checkInvoice id=userTask_checkInvoice2`.',
       },
     ]);
-    expect(r.xml).toContain('id="serviceTask_checkInvoice"');
+    expect(result.xml).toContain('id="serviceTask_checkInvoice"');
   });
 
   it('a trigger change: the qualified prefix of the old trigger is stale (optional: the plain prefix, required: the new qualified one)', async () => {
@@ -573,8 +573,8 @@ describe('W_ID_PREFIX_STALE', () => {
     // a body not in the declared case: serviceTask_shipGoods under PascalCase (scriptTask_shipGoods fails it too)
     const pascal = declared({ case: 'PascalCase' });
     const shipping = definitionsXml('<bpmn:startEvent id="startEvent_Start" name="Start"/><bpmn:serviceTask id="serviceTask_shipGoods" name="Ship goods"/><bpmn:serviceTask id="serviceTask_afterStart"/>');
-    const r = await run(shipping, [{ op: 'retype', id: 'serviceTask_shipGoods', kind: 'scriptTask' }], pascal);
-    expect(stale(r)).toEqual([
+    const result = await run(shipping, [{ op: 'retype', id: 'serviceTask_shipGoods', kind: 'scriptTask' }], pascal);
+    expect(stale(result)).toEqual([
       {
         code: 'W_ID_PREFIX_STALE',
         element: 'serviceTask_shipGoods',
@@ -606,7 +606,7 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'retype', id: 'userTask_checkOrder', kind: 'manualTask' },
       { op: 'retype', id: 'userTask_reviewIt', kind: 'manualTask' },
     ], any);
-    expect(stale(anyCase).map((w) => w.hint.match(/id=(\S+)`/)?.[1])).toEqual(['manualTask_checkOrder', 'manualTask_reviewIt']);
+    expect(stale(anyCase).map((warning) => warning.hint.match(/id=(\S+)`/)?.[1])).toEqual(['manualTask_checkOrder', 'manualTask_reviewIt']);
     // a rest whose own prefix does not complete `was` into the old type's name is a body that passed: the head swapped
     const glued = declared({ case: 'snake_case', prefixes: { 'bpmn:UserTask': 'ut', 'bpmn:ManualTask': 'mt' } });
     expect(stale(await run(definitionsXml('<bpmn:userTask id="utcheck_order"/>'), [{ op: 'retype', id: 'utcheck_order', kind: 'manualTask' }], glued))[0]?.hint).toContain('`bpmn set <file> utcheck_order id=mtcheck_order`');
@@ -623,7 +623,7 @@ describe('W_ID_PREFIX_STALE', () => {
       ],
       REQUIRED,
     );
-    expect(stale(twice).map((w) => [w.message, w.hint])).toEqual([
+    expect(stale(twice).map((warning) => [warning.message, warning.hint])).toEqual([
       [
         'serviceTask_checkInvoice keeps its id, whose prefix serviceTask_ is that of a serviceTask; element-id-naming (.bpmnlintrc in .) expects scriptTask_ for a scriptTask',
         'Code, tests and links that use the id keep working; to follow the convention: `bpmn set <file> serviceTask_checkInvoice id=scriptTask_checkInvoice`.',
@@ -639,7 +639,7 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'retype', id: 'serviceTask_checkInvoice', kind: 'scriptTask' },
       { op: 'add', kind: 'scriptTask', id: 'scriptTask_checkInvoice', in: 'Process_1' },
     ]);
-    expect(stale(taken).map((w) => w.hint)).toEqual(['Code, tests and links that use the id keep working; to follow the convention: `bpmn set <file> serviceTask_checkInvoice id=scriptTask_checkInvoice2`.']);
+    expect(stale(taken).map((warning) => warning.hint)).toEqual(['Code, tests and links that use the id keep working; to follow the convention: `bpmn set <file> serviceTask_checkInvoice id=scriptTask_checkInvoice2`.']);
   });
 
   it('an element the batch created is nobody\'s API yet: a retype or a trigger change gives it the new prefix, no warning', async () => {
@@ -649,12 +649,12 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'retype', id: '$t', kind: 'userTask' },
     ]);
     expect(stale(retyped)).toEqual([]);
-    expect(retyped.changes.created.map((c) => [c.id, c.detail])).toEqual([
+    expect(retyped.changes.created.map((created) => [created.id, created.detail])).toEqual([
       ['userTask_checkInvoice', 'after startEvent_start'],
       // the flow's detail names the end by its final id too
       ['flow_startToCheckInvoice', 'startEvent_start -> userTask_checkInvoice'],
     ]);
-    expect(retyped.changes.changed.map((c) => c.id)).toEqual(['userTask_checkInvoice']);
+    expect(retyped.changes.changed.map((changed) => changed.id)).toEqual(['userTask_checkInvoice']);
     expect(retyped.changes.renames).toEqual([{ from: 'serviceTask_checkInvoice', to: 'userTask_checkInvoice', regenerated: true }]);
     expect(mutationReport(retyped).renamed).toBeUndefined();
     // the file follows the rule: no `conventions:` line; in a file of its own style next to it (Activity_Legacy) the
@@ -680,10 +680,10 @@ describe('W_ID_PREFIX_STALE', () => {
     ]);
     // from the id it wanted: userTask_checkInvoice was taken, scriptTask_checkInvoice is not (its W_ID_SUFFIXED goes)
     expect(createdIds(twice)).toEqual(['scriptTask_checkInvoice']);
-    expect(twice.changes.warnings.filter((w) => w.code === 'W_ID_SUFFIXED')).toEqual([]);
+    expect(twice.changes.warnings.filter((warning) => warning.code === 'W_ID_SUFFIXED')).toEqual([]);
     const suffixed = await run(EVENTS, [{ op: 'add', kind: 'task', name: 'Check invoice', in: 'Process_1', as: '$t' }, { op: 'retype', id: '$t', kind: 'serviceTask' }]);
     expect(createdIds(suffixed)).toEqual(['serviceTask_checkInvoice2']);
-    expect(suffixed.changes.warnings.filter((w) => w.code === 'W_ID_SUFFIXED').map((w) => w.message)).toEqual(['Id serviceTask_checkInvoice is already taken; using serviceTask_checkInvoice2']);
+    expect(suffixed.changes.warnings.filter((warning) => warning.code === 'W_ID_SUFFIXED').map((warning) => warning.message)).toEqual(['Id serviceTask_checkInvoice is already taken; using serviceTask_checkInvoice2']);
     // a trigger change under required: the qualified prefix of the new trigger
     const trigger = await run(EVENTS, [
       { op: 'add', kind: 'intermediateCatchEvent:timer', name: 'Wait long', in: 'Process_1', timer: 'P1D', as: '$e' },
@@ -696,7 +696,7 @@ describe('W_ID_PREFIX_STALE', () => {
     // an explicit id is the caller's: kept, with the warning
     const explicit = await run(start, [{ op: 'add', kind: 'serviceTask', name: 'Check invoice', id: 'serviceTask_mine', in: 'Process_1' }, { op: 'retype', id: 'serviceTask_mine', kind: 'userTask' }]);
     expect(createdIds(explicit)).toEqual(['serviceTask_mine']);
-    expect(stale(explicit).map((w) => w.element)).toEqual(['serviceTask_mine']);
+    expect(stale(explicit).map((warning) => warning.element)).toEqual(['serviceTask_mine']);
   });
 
   it('an op of the batch that changed the element before its retype (a new element of the new type): every entry names the final id', async () => {
@@ -707,11 +707,11 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'move', ids: ['$t'], in: 'Process_1' },
     ];
     for (const change of changes) {
-      const r = await run(start, [{ op: 'add', kind: 'serviceTask', name: 'Check invoice', after: 'startEvent_start', as: '$t' }, change, { op: 'retype', id: '$t', kind: 'userTask' }]);
-      const ids = new Set([...r.xml.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
-      expect([...r.changes.created, ...r.changes.changed].map((c) => c.id).filter((id) => !ids.has(id)), change.op).toEqual([]);
-      expect(r.changes.changed.map((c) => c.id), change.op).toContain('userTask_checkInvoice');
-      const summary = mutationSummary(mutationReport(r));
+      const result = await run(start, [{ op: 'add', kind: 'serviceTask', name: 'Check invoice', after: 'startEvent_start', as: '$t' }, change, { op: 'retype', id: '$t', kind: 'userTask' }]);
+      const ids = new Set([...result.xml.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]));
+      expect([...result.changes.created, ...result.changes.changed].map((entry) => entry.id).filter((id) => !ids.has(id)), change.op).toEqual([]);
+      expect(result.changes.changed.map((changed) => changed.id), change.op).toContain('userTask_checkInvoice');
+      const summary = mutationSummary(mutationReport(result));
       expect(summary.changed.filter((id) => !ids.has(id)), change.op).toEqual([]);
     }
   });
@@ -720,18 +720,18 @@ describe('W_ID_PREFIX_STALE', () => {
     const glued = declared({ case: 'PascalCase', prefixes: { 'bpmn:ServiceTask': 'ST', 'bpmn:UserTask': 'UT', 'bpmn:SendTask': 'SN', 'bpmn:ReceiveTask': 'RT', 'bpmn:SequenceFlow': 'SF' } });
     const start = definitionsXml('<bpmn:startEvent id="startEvent_Go" name="Go"/>');
     // a task of the file's own style next to the rule: the result's `conventions:` line names the new ids
-    const r = await run(start.replace('</bpmn:process>', '<bpmn:task id="Activity_Legacy" name="Legacy"/></bpmn:process>'), [
+    const result = await run(start.replace('</bpmn:process>', '<bpmn:task id="Activity_Legacy" name="Legacy"/></bpmn:process>'), [
       { op: 'add', kind: 'serviceTask', name: 'Check', after: 'startEvent_Go', as: '$t' },
       { op: 'retype', id: '$t', kind: 'userTask' },
     ], glued);
-    expect(r.changes.created.map((c) => [c.id, c.detail])).toEqual([['UTCheck', 'after startEvent_Go'], ['SFGoToUTCheck', 'startEvent_Go -> UTCheck']]);
-    expect(r.changes.renames).toEqual([
+    expect(result.changes.created.map((created) => [created.id, created.detail])).toEqual([['UTCheck', 'after startEvent_Go'], ['SFGoToUTCheck', 'startEvent_Go -> UTCheck']]);
+    expect(result.changes.renames).toEqual([
       { from: 'STCheck', to: 'UTCheck', regenerated: true },
       { from: 'SFGoToSTCheck', to: 'SFGoToUTCheck', was: 'startEvent_Go -> STCheck', regenerated: true },
     ]);
-    expect(r.conventions?.ids).toEqual(['UTCheck', 'SFGoToUTCheck']);
+    expect(result.conventions?.ids).toEqual(['UTCheck', 'SFGoToUTCheck']);
     // it names its ends, so a later write renames it after its new ones
-    const later = await run(r.xml, [{ op: 'add', kind: 'task', name: 'Prepare', flow: 'SFGoToUTCheck' }], glued);
+    const later = await run(result.xml, [{ op: 'add', kind: 'task', name: 'Prepare', flow: 'SFGoToUTCheck' }], glued);
     expect(later.changes.renames).toEqual([expect.objectContaining({ from: 'SFGoToUTCheck', to: 'SFGoToPrepare' })]);
     // a later op of the batch that names the flow's old id learns why it is gone
     await expect(run(start, [
@@ -761,7 +761,7 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'retype', id: 'serviceTask_check', kind: 'userTask' },
     ], declared({ case: 'any' }));
     expect(createdIds(pair)).toEqual(['userTask_check', 'flow_userTask_check_endEvent_done']);
-    expect(pair.changes.changed.map((c) => [c.id, c.detail])).toEqual([
+    expect(pair.changes.changed.map((changed) => [changed.id, changed.detail])).toEqual([
       ['flow_task_b_userTask_check', 'task_b -> userTask_check (was -> endEvent_done) (renamed from flow_task_b_endEvent_done: its id named its old ends)'],
       ['userTask_check', 'retyped from serviceTask to userTask'],
     ]);
@@ -772,7 +772,7 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'add', kind: 'serviceTask', name: 'Check', after: '$a' },
       { op: 'retype', id: 'serviceTask_check2', kind: 'userTask' },
     ]);
-    expect(twice.changes.created.map((c) => [c.id, c.detail])).toEqual([
+    expect(twice.changes.created.map((created) => [created.id, created.detail])).toEqual([
       ['serviceTask_check', 'in Process_1'],
       ['userTask_check', 'after serviceTask_check'],
       ['flow_checkToCheck', 'serviceTask_check -> userTask_check'],
@@ -782,20 +782,20 @@ describe('W_ID_PREFIX_STALE', () => {
 
   it('a split\'s join is generated too: a retype in the batch gives it the new prefix, the notes name the final ids', async () => {
     const gateways = declared({ prefixes: { 'bpmn:ExclusiveGateway': 'xor_', 'bpmn:ParallelGateway': 'and_' } });
-    const r = await run(definitionsXml('<bpmn:startEvent id="startEvent_go" name="Go"/>'), [
+    const result = await run(definitionsXml('<bpmn:startEvent id="startEvent_go" name="Go"/>'), [
       { op: 'split', after: 'startEvent_go', kind: 'xor', name: 'Ok?', branches: [{ nodes: [{ kind: 'task', name: 'A' }] }, { nodes: [{ kind: 'task', name: 'B' }] }] },
       { op: 'retype', id: 'xor_ok', kind: 'and' },
       { op: 'retype', id: 'xor_okJoin', kind: 'and' },
     ], gateways);
-    expect(createdIds(r)).toEqual(expect.arrayContaining(['and_ok', 'and_okJoin']));
-    expect(stale(r)).toEqual([]);
-    expect(r.changes.notes).toContain('split and_ok: 2 branch(es) ending at task_a, task_b, joined at and_okJoin');
+    expect(createdIds(result)).toEqual(expect.arrayContaining(['and_ok', 'and_okJoin']));
+    expect(stale(result)).toEqual([]);
+    expect(result.changes.notes).toContain('split and_ok: 2 branch(es) ending at task_a, task_b, joined at and_okJoin');
     // an explicit joinId is the caller's
     const explicit = await run(definitionsXml('<bpmn:startEvent id="startEvent_go" name="Go"/>'), [
       { op: 'split', after: 'startEvent_go', kind: 'xor', name: 'Ok?', joinId: 'xor_mine', branches: [{ nodes: [{ kind: 'task', name: 'A' }] }, { nodes: [{ kind: 'task', name: 'B' }] }] },
       { op: 'retype', id: 'xor_mine', kind: 'and' },
     ], gateways);
-    expect(stale(explicit).map((w) => w.element)).toEqual(['xor_mine']);
+    expect(stale(explicit).map((warning) => warning.element)).toEqual(['xor_mine']);
     // a note that names an element the batch then gave a new id
     const timer = await run(definitionsXml(''), [
       { op: 'add', kind: 'intermediateCatchEvent:timer', name: 'Two days', in: 'Process_1', timer: 'P2D', as: '$e' },
@@ -839,14 +839,14 @@ describe('W_ID_PREFIX_STALE', () => {
       { op: 'add', kind: 'serviceTask', name: 'Check', id: 'serviceTask_check', in: 'Process_1' },
       { op: 'set', id: 'serviceTask_existing', values: { id: 'serviceTask_check' } },
     ]) {
-      const r = await run(existing, [
+      const result = await run(existing, [
         { op: 'add', kind: 'serviceTask', name: 'Check', in: 'Process_1' },
         { op: 'remove', ids: ['serviceTask_check'] },
         claim,
         { op: 'retype', id: 'serviceTask_check', kind: 'userTask' },
       ]);
-      expect(r.xml, claim.op).toContain('<bpmn:userTask id="serviceTask_check"');
-      expect(stale(r).map((w) => w.element), claim.op).toEqual(['serviceTask_check']);
+      expect(result.xml, claim.op).toContain('<bpmn:userTask id="serviceTask_check"');
+      expect(stale(result).map((warning) => warning.element), claim.op).toEqual(['serviceTask_check']);
     }
   });
 });
@@ -855,7 +855,7 @@ describe('bpmn show --conventions (the view)', () => {
   it('groups the patterns by source; a pattern of one kind reads as it is; the qualified prefixes in one line', async () => {
     const view = conventionsView(await Doc.fromXml(PASCAL), BARE, { file: 'x.bpmn', severity: 'warn' });
     expect(view).toMatchObject({ file: 'x.bpmn', exists: true, source: '.bpmnlintrc in .', rule: { severity: 'warn', case: 'camelCase', qualifier: 'optional' }, qualified: { mode: 'optional', examples: ['timerStartEvent_', 'messageEvent_', 'errorEndEvent_'] } });
-    const row = (kind: string) => view.rows.find((r) => r.kinds.includes(kind));
+    const row = (kind: string) => view.rows.find((conventionRow) => conventionRow.kinds.includes(kind));
     expect(row('serviceTask')).toEqual({ pattern: '<kind>_{name:camel}', source: 'lint', kinds: ['task', 'userTask', 'serviceTask', 'scriptTask', 'sendTask', 'receiveTask', 'manualTask', 'businessRuleTask', 'subProcess', 'callActivity', 'startEvent', 'endEvent'] });
     // what the rule does not name follows the file: its type-named PascalCase prefixes; the process bpmn-cli's own
     expect(row('lane')).toEqual({ pattern: '<Kind>_{name:pascal}', source: 'file', kinds: ['participant', 'lane', 'textAnnotation', 'group', 'collaboration', 'message'], note: 'not checked' });
@@ -874,12 +874,12 @@ describe('bpmn show --conventions (the view)', () => {
   it('a new file, and no conventions declared', async () => {
     const fresh = await conventionsXml(undefined, { conventions: BARE, file: 'new.bpmn' });
     expect(fresh.exists).toBe(false);
-    expect(fresh.rows.find((r) => r.kinds.includes('lane'))).toMatchObject({ pattern: '<kind>_{name:camel}', source: 'lint shape' });
-    expect(fresh.rows.find((r) => r.kinds.includes('process'))).toMatchObject({ pattern: 'Process_{name:pascal}', source: 'default' });
+    expect(fresh.rows.find((conventionRow) => conventionRow.kinds.includes('lane'))).toMatchObject({ pattern: '<kind>_{name:camel}', source: 'lint shape' });
+    expect(fresh.rows.find((conventionRow) => conventionRow.kinds.includes('process'))).toMatchObject({ pattern: 'Process_{name:pascal}', source: 'default' });
     expect(renderConventions(fresh).split('\n')[0]).toBe('conventions of new.bpmn (no file yet: a new model)');
     const none = await conventionsXml(PASCAL);
     expect(none.rule).toBeUndefined();
-    expect(none.rows.find((r) => r.kinds.includes('serviceTask'))).toEqual({ pattern: 'Activity_{name:pascal}', source: 'file', kinds: ['task', 'userTask', 'serviceTask', 'scriptTask', 'sendTask', 'receiveTask', 'manualTask', 'businessRuleTask', 'subProcess', 'eventSubProcess', 'adHocSubProcess', 'transaction', 'callActivity'] });
+    expect(none.rows.find((conventionRow) => conventionRow.kinds.includes('serviceTask'))).toEqual({ pattern: 'Activity_{name:pascal}', source: 'file', kinds: ['task', 'userTask', 'serviceTask', 'scriptTask', 'sendTask', 'receiveTask', 'manualTask', 'businessRuleTask', 'subProcess', 'eventSubProcess', 'adHocSubProcess', 'transaction', 'callActivity'] });
     expect(renderConventions(none).split('\n')[1]).toBe("no id conventions declared: new ids follow the file's id style");
   });
 
@@ -904,13 +904,13 @@ describe('bpmn show --conventions (the view)', () => {
 
   it('a type the rule checks with a prefix new ids cannot follow is marked so, not `not checked`', async () => {
     const view = conventionsView(await Doc.fromXml(PASCAL), declared({ prefixes: { 'bpmn:UserTask': 'user task_', 'bpmn:Gateway': 'a gate_' } }));
-    const row = (kind: string) => view.rows.find((r) => r.kinds.includes(kind));
+    const row = (kind: string) => view.rows.find((conventionRow) => conventionRow.kinds.includes(kind));
     expect(row('userTask')).toMatchObject({ source: 'file', note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
     expect(row('exclusiveGateway')).toMatchObject({ source: 'file', kinds: ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'complexGateway', 'eventBasedGateway'], note: 'checked; prefix ignored (W_CONFIG_IGNORED)' });
     expect(row('lane')?.note).toBe('not checked');
     // under required, the triggers whose qualified prefix is too long for new ids: they follow the file's style
     const long = conventionsView(undefined, declared({ case: 'snake_case', eventDefinitionQualifier: 'required', prefixes: { 'bpmn:EndEvent': 'endEventWithAVeryLongPrefixThatIsFiftyCharactersX_' } }));
-    expect(long.rows.find((r) => r.kinds.includes('endEvent'))).toEqual({
+    expect(long.rows.find((conventionRow) => conventionRow.kinds.includes('endEvent'))).toEqual({
       pattern: 'endEventWithAVeryLongPrefixThatIsFiftyCharactersX_{name:snake}',
       source: 'lint',
       kinds: ['endEvent'],
@@ -936,7 +936,7 @@ describe('bpmn show --conventions (the view)', () => {
       [['Q'.repeat(60) + '_1', 'Q'.repeat(60) + '_2', 'Q'.repeat(60) + '_3'], 'Flow_{source}To{target}', 'Flow_PackGoodsToEnd'],
     ] as const) {
       const xml = numbered([...ids]);
-      const row = conventionsView(await Doc.fromXml(xml), undefined).rows.find((r) => r.kinds.includes('sequenceFlow'));
+      const row = conventionsView(await Doc.fromXml(xml), undefined).rows.find((conventionRow) => conventionRow.kinds.includes('sequenceFlow'));
       expect(row?.pattern, ids[0]).toBe(pattern);
       expect(row?.note, ids[0]).toBe(ids[0].length === 49 ? 'Flow_ where the ends do not fit' : undefined);
       expect(createdIds(await run(xml, [{ op: 'connect', source: 'Activity_PackGoods', target: 'EndEvent_End' }], null))).toEqual([id]);

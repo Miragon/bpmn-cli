@@ -8,23 +8,23 @@ export class FeelExpression {
   problem(): string | undefined {
     const expression = this.expression;
     let code = '';
-    for (let i = 0; i < expression.length; i++) {
-      const c = expression[i]!;
-      if (c === '"' || c === '`') {
-        let j = i + 1;
-        while (j < expression.length && expression[j] !== c) j += expression[j] === '\\' && c === '"' ? 2 : 1;
-        if (j >= expression.length) break;
-        code += c === '"' ? ' "s" ' : ' n ';
-        i = j;
-      } else if (c === '/' && expression[i + 1] === '/') {
-        const end = expression.indexOf('\n', i);
-        i = end === -1 ? expression.length : end;
-      } else if (c === '/' && expression[i + 1] === '*') {
-        const end = expression.indexOf('*/', i + 2);
+    for (let index = 0; index < expression.length; index++) {
+      const char = expression[index]!;
+      if (char === '"' || char === '`') {
+        let closing = index + 1;
+        while (closing < expression.length && expression[closing] !== char) closing += expression[closing] === '\\' && char === '"' ? 2 : 1;
+        if (closing >= expression.length) break;
+        code += char === '"' ? ' "s" ' : ' n ';
+        index = closing;
+      } else if (char === '/' && expression[index + 1] === '/') {
+        const end = expression.indexOf('\n', index);
+        index = end === -1 ? expression.length : end;
+      } else if (char === '/' && expression[index + 1] === '*') {
+        const end = expression.indexOf('*/', index + 2);
         if (end === -1) break;
-        i = end + 1;
+        index = end + 1;
       } else {
-        code += c;
+        code += char;
       }
     }
     if (/[$#]\{/.test(code)) return '${...} (JUEL; FEEL writes the expression itself: = amount > 100)';

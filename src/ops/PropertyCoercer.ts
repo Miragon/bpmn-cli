@@ -89,31 +89,31 @@ export class PropertyCoercer {
     } catch {
       return undefined;
     }
-    const found = pkg?.enumerations?.find((e) => e.name === local);
-    return found?.literalValues?.map((l) => l.name);
+    const found = pkg?.enumerations?.find((enumeration) => enumeration.name === local);
+    return found?.literalValues?.map((literal) => literal.name);
   }
 
   blockedReason(key: string): string | undefined {
     return BLOCKED_PROPS[key];
   }
 
-  isSettable(p: PropDescriptor): boolean {
-    if (p.isMany || BLOCKED_PROPS[p.name]) return false;
-    if (p.isReference) return !!p.isAttr;
-    return PRIMITIVE_TYPES.has(p.type) || !!this.enumLiterals(p.type);
+  isSettable(property: PropDescriptor): boolean {
+    if (property.isMany || BLOCKED_PROPS[property.name]) return false;
+    if (property.isReference) return !!property.isAttr;
+    return PRIMITIVE_TYPES.has(property.type) || !!this.enumLiterals(property.type);
   }
 
   genericKeys(el: El): string[] {
-    return (descriptorOf(el).properties ?? []).filter((p) => p.name !== 'id' && this.isSettable(p)).map((p) => p.name);
+    return (descriptorOf(el).properties ?? []).filter((property) => property.name !== 'id' && this.isSettable(property)).map((property) => property.name);
   }
 
   settableKeys(el: El): string[] {
     const keys = new Set<string>();
-    for (const k of SET_KEYS) {
-      if (k.key.startsWith('<')) continue;
-      if (APPLIES_TO[k.appliesTo]?.(el)) keys.add(k.key);
+    for (const setKey of SET_KEYS) {
+      if (setKey.key.startsWith('<')) continue;
+      if (APPLIES_TO[setKey.appliesTo]?.(el)) keys.add(setKey.key);
     }
-    for (const k of this.genericKeys(el)) keys.add(k);
+    for (const genericKey of this.genericKeys(el)) keys.add(genericKey);
     keys.add('<prefix>:<attr>');
     return [...keys];
   }
@@ -123,16 +123,16 @@ export class PropertyCoercer {
   }
 
   static bool(el: El, key: string, value: string): boolean {
-    const v = value.trim().toLowerCase();
-    if (['true', 'yes', '1', 'on'].includes(v)) return true;
-    if (['false', 'no', '0', 'off'].includes(v)) return false;
+    const normalized = value.trim().toLowerCase();
+    if (['true', 'yes', '1', 'on'].includes(normalized)) return true;
+    if (['false', 'no', '0', 'off'].includes(normalized)) return false;
     throw PropertyCoercer.invalid(el, key, `"${value}" is not a boolean`, `Use ${key}=true or ${key}=false.`);
   }
 
   /** Errors name `label`, the key as given. */
-  coerce(el: El, p: PropDescriptor, value: string, label: string = p.name): unknown {
-    if (p.isReference) return this.doc.require(value, p.type, p.name);
-    switch (p.type) {
+  coerce(el: El, property: PropDescriptor, value: string, label: string = property.name): unknown {
+    if (property.isReference) return this.doc.require(value, property.type, property.name);
+    switch (property.type) {
       case 'String':
         return value;
       case 'Boolean':
@@ -142,13 +142,13 @@ export class PropertyCoercer {
         return Number(value);
       }
       case 'Real': {
-        const n = Number(value);
-        if (!value.trim() || Number.isNaN(n)) throw PropertyCoercer.invalid(el, label, `"${value}" is not a number`);
-        return n;
+        const numeric = Number(value);
+        if (!value.trim() || Number.isNaN(numeric)) throw PropertyCoercer.invalid(el, label, `"${value}" is not a number`);
+        return numeric;
       }
       default: {
-        const literals = this.enumLiterals(p.type) ?? [];
-        const hit = literals.find((l) => l.toLowerCase() === value.trim().toLowerCase());
+        const literals = this.enumLiterals(property.type) ?? [];
+        const hit = literals.find((literal) => literal.toLowerCase() === value.trim().toLowerCase());
         if (!hit) throw PropertyCoercer.invalid(el, label, `"${value}" is not one of ${literals.join('|')}`);
         return hit;
       }
@@ -207,7 +207,7 @@ export class PropertyCoercer {
 
   resourceKeyOf(expr: El | undefined): string | undefined {
     if (!expr) return undefined;
-    return Object.keys(expr.$attrs ?? {}).find((k) => this.isResourceKey(k) && expr.$attrs[k] !== undefined && expr.$attrs[k] !== '');
+    return Object.keys(expr.$attrs ?? {}).find((attrKey) => this.isResourceKey(attrKey) && expr.$attrs[attrKey] !== undefined && expr.$attrs[attrKey] !== '');
   }
 
   /** Operaton's namespace holds the same attributes: the descriptor's rules apply by local name. */

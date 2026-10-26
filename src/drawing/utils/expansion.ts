@@ -4,7 +4,7 @@ import { is, many, walk, type El, type Model, idOf } from '../../model/utils/mod
 export const SUB_PROCESS_TYPES = ['bpmn:SubProcess', 'bpmn:AdHocSubProcess', 'bpmn:Transaction'];
 
 export function subProcesses(root: El): El[] {
-  return [...walk(root)].filter((e) => SUB_PROCESS_TYPES.some((t) => is(e, t)) && !!e.get('id'));
+  return [...walk(root)].filter((element) => SUB_PROCESS_TYPES.some((type) => is(element, type)) && !!element.get('id'));
 }
 
 export function diExpansionState(defs: El): Map<string, boolean> {
@@ -17,7 +17,7 @@ export function diExpansionState(defs: El): Map<string, boolean> {
       const target = shape.get<El | undefined>('bpmnElement');
       const id = target?.get<string | undefined>('id');
       if (!id) continue;
-      if (SUB_PROCESS_TYPES.some((t) => is(target, t))) {
+      if (SUB_PROCESS_TYPES.some((type) => is(target, type))) {
         state.set(id, shape.get<boolean | undefined>('isExpanded') === true);
       }
     }

@@ -39,7 +39,7 @@ export class ExtensionSnippetReader {
       throw err;
     }
     if (!roots.length) throw modelError('E_INVALID_XML', 'The extension snippet contains no elements', { element: this.hosts.idOf(el) });
-    return roots.map((r) => this.toAny(el, r, {}, nested));
+    return roots.map((root) => this.toAny(el, root, {}, nested));
   }
 
   private read(xml: string): RawNode[] {
@@ -48,14 +48,14 @@ export class ExtensionSnippetReader {
     const nameRe = /[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?/y;
     const attrRe = /\s*([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
     const wsRe = /\s*/y;
-    const push = (n: RawNode): void => {
+    const push = (node: RawNode): void => {
       const top = stack[stack.length - 1];
-      (top ? top.children : roots).push(n);
+      (top ? top.children : roots).push(node);
     };
-    let i = 0;
-    while (i < xml.length) {
-      const lt = xml.indexOf('<', i);
-      const text = xml.slice(i, lt === -1 ? xml.length : lt);
+    let cursor = 0;
+    while (cursor < xml.length) {
+      const lt = xml.indexOf('<', cursor);
+      const text = xml.slice(cursor, lt === -1 ? xml.length : lt);
       const top = stack[stack.length - 1];
       if (top) top.text += decodeXml(text);
       else if (text.trim()) throw new SnippetError(`text "${text.trim().slice(0, 20)}" outside of an element`);
@@ -63,7 +63,7 @@ export class ExtensionSnippetReader {
       if (xml.startsWith('<!--', lt)) {
         const end = xml.indexOf('-->', lt + 4);
         if (end === -1) throw new SnippetError('unterminated comment');
-        i = end + 3;
+        cursor = end + 3;
         continue;
       }
       if (xml.startsWith('<![CDATA[', lt)) {
@@ -71,13 +71,13 @@ export class ExtensionSnippetReader {
         if (end === -1) throw new SnippetError('unterminated CDATA section');
         if (!top) throw new SnippetError('CDATA outside of an element');
         top.text += xml.slice(lt + 9, end);
-        i = end + 3;
+        cursor = end + 3;
         continue;
       }
       if (xml.startsWith('<?', lt)) {
         const end = xml.indexOf('?>', lt + 2);
         if (end === -1) throw new SnippetError('unterminated processing instruction');
-        i = end + 2;
+        cursor = end + 2;
         continue;
       }
       if (xml.startsWith('<!', lt)) throw new SnippetError('declarations (<!DOCTYPE ...>) are not allowed in a snippet');
@@ -87,34 +87,34 @@ export class ExtensionSnippetReader {
         const name = xml.slice(lt + 2, end).trim();
         const open = stack.pop();
         if (!open || open.name !== name) throw new SnippetError(`unexpected closing tag </${name}>${open ? `, expected </${open.name}>` : ''}`);
-        i = end + 1;
+        cursor = end + 1;
         continue;
       }
       nameRe.lastIndex = lt + 1;
       const nm = nameRe.exec(xml);
       if (!nm || nm.index !== lt + 1) throw new SnippetError(`invalid tag at offset ${lt}`);
       const node: RawNode = { name: nm[0], attrs: {}, children: [], text: '' };
-      let j = nameRe.lastIndex;
+      let nameEnd = nameRe.lastIndex;
       for (;;) {
-        attrRe.lastIndex = j;
+        attrRe.lastIndex = nameEnd;
         const am = attrRe.exec(xml);
-        if (am && am.index === j) {
+        if (am && am.index === nameEnd) {
           node.attrs[am[1]!] = decodeXml(am[2] ?? am[3] ?? '');
-          j = attrRe.lastIndex;
+          nameEnd = attrRe.lastIndex;
           continue;
         }
-        wsRe.lastIndex = j;
+        wsRe.lastIndex = nameEnd;
         wsRe.exec(xml);
-        j = wsRe.lastIndex;
-        if (xml.startsWith('/>', j)) {
+        nameEnd = wsRe.lastIndex;
+        if (xml.startsWith('/>', nameEnd)) {
           push(node);
-          i = j + 2;
+          cursor = nameEnd + 2;
           break;
         }
-        if (xml[j] === '>') {
+        if (xml[nameEnd] === '>') {
           push(node);
           stack.push(node);
-          i = j + 1;
+          cursor = nameEnd + 1;
           break;
         }
         throw new SnippetError(`invalid attribute syntax in <${node.name}>`);
@@ -128,16 +128,16 @@ export class ExtensionSnippetReader {
   private toAny(el: El, node: RawNode, scope: Record<string, string>, nested: boolean): El {
     const local = { ...scope };
     const attrs: Record<string, string> = {};
-    for (const [k, v] of Object.entries(node.attrs)) {
-      if (k === 'xmlns') throw modelError('E_INVALID_XML', `<${node.name}> declares a default namespace; extension elements must use a prefix`, { element: this.hosts.idOf(el) });
-      if (k.startsWith('xmlns:')) local[k.slice(6)] = v;
-      else attrs[k] = v;
+    for (const [attrName, attrValue] of Object.entries(node.attrs)) {
+      if (attrName === 'xmlns') throw modelError('E_INVALID_XML', `<${node.name}> declares a default namespace; extension elements must use a prefix`, { element: this.hosts.idOf(el) });
+      if (attrName.startsWith('xmlns:')) local[attrName.slice(6)] = attrValue;
+      else attrs[attrName] = attrValue;
     }
     const any = this.names.createGeneric(el, node.name, attrs, node.text.trim() ? node.text : undefined, local, nested);
-    const children = node.children.map((c) => this.toAny(el, c, local, true));
+    const children = node.children.map((child) => this.toAny(el, child, local, true));
     if (children.length) {
       (any as unknown as Raw)['$children'] = children;
-      for (const c of children) c.$parent = any;
+      for (const child of children) child.$parent = any;
     }
     return any;
   }

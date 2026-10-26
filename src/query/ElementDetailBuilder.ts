@@ -35,20 +35,20 @@ export class ElementDetailBuilder {
     const { doc, el } = this;
     new StructuralValidator(doc).repairFlowLinks();
     const isNode = is(el, 'bpmn:FlowNode');
-    const incoming = doc.incoming(el).map((f) => {
-      const source = peek<El>(f, 'sourceRef');
+    const incoming = doc.incoming(el).map((flow) => {
+      const source = peek<El>(flow, 'sourceRef');
       return compact({
-        id: shownId(f),
+        id: shownId(flow),
         source: shownId(source),
-        name: nameOf(f),
-        condition: bodyOf(peek<El>(f, 'conditionExpression')),
-        conditionResource: resourceOf(peek<El>(f, 'conditionExpression'))?.value,
-        default: source && peek<El>(source, 'default') === f ? true : undefined,
+        name: nameOf(flow),
+        condition: bodyOf(peek<El>(flow, 'conditionExpression')),
+        conditionResource: resourceOf(peek<El>(flow, 'conditionExpression'))?.value,
+        default: source && peek<El>(source, 'default') === flow ? true : undefined,
       });
     });
     const nested: Record<string, NestedDetail> = {};
-    for (const { prefix, el: n } of nestedEntries(el)) {
-      nested[prefix] = compact<NestedDetail>({ type: n.$type, id: peek<string>(n, 'id') || undefined, attrs: vendorAttributes(n), extensions: new ExtensionLister().list(n) });
+    for (const { prefix, el: nestedElement } of nestedEntries(el)) {
+      nested[prefix] = compact<NestedDetail>({ type: nestedElement.$type, id: peek<string>(nestedElement, 'id') || undefined, attrs: vendorAttributes(nestedElement), extensions: new ExtensionLister().list(nestedElement) });
     }
     const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map(shownId) : [];
     const children = is(el, 'bpmn:SubProcess') ? new FlowOrder(doc, el).ordered.map(shownId) : [];
@@ -59,9 +59,9 @@ export class ElementDetailBuilder {
     const messageFlows = is(el, 'bpmn:MessageFlow') ? [] : this.links.messageFlowsOf(el);
     const annotations = is(el, 'bpmn:TextAnnotation') ? [] : this.links.annotationsOf(el);
     const attachedTo = is(el, 'bpmn:TextAnnotation')
-      ? associations.flatMap((a) => {
-          const source = peek<El>(a, 'sourceRef');
-          const target = peek<El>(a, 'targetRef');
+      ? associations.flatMap((association) => {
+          const source = peek<El>(association, 'sourceRef');
+          const target = peek<El>(association, 'targetRef');
           return source === el && target ? [shownId(target)] : target === el && source ? [shownId(source)] : [];
         })
       : [];
@@ -76,7 +76,7 @@ export class ElementDetailBuilder {
       host: host ? shownId(host) : undefined,
       properties: { ...this.baseProperties(), ...new ElementProperties(doc).read(el) },
       incoming,
-      outgoing: doc.outgoing(el).map((f) => new ElementFacts(f).flow()),
+      outgoing: doc.outgoing(el).map((flow) => new ElementFacts(flow).flow()),
       boundary: boundary.length ? boundary : undefined,
       children: children.length ? children : undefined,
       extensions,
