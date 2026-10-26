@@ -1,10 +1,8 @@
 import type { Doc } from '../../model/Doc.js';
 import type { ChangeSet } from '../../model/ChangeSet.js';
-import { triggerOf } from '../../model/utils/kinds.js';
+import { EVENT_GATEWAY_TRIGGERS, triggerOf } from '../../model/utils/kinds.js';
 import { is, type El, idOf } from '../../model/utils/moddle.js';
 import { labelOf } from '../../model/utils/elements.js';
-
-const EVENT_GATEWAY_TRIGGERS = ['message', 'timer', 'signal', 'conditional'];
 
 /**
  * Which targets an event-based gateway may lead to. Camunda 7 files follow the engines

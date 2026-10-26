@@ -36,63 +36,107 @@ export class C7EventRules extends C7Rules {
   }
 
   checkEvent(el: El): void {
-    const id = idOf(el)!;
-    const label = this.describe(el, undefined);
-    const host = this.kit.is(el, 'bpmn:BoundaryEvent') ? peek<El>(el, 'attachedToRef') : undefined;
-    if (host && peek<boolean>(host, 'isForCompensation') === true) {
-      this.push('deploy', 'W_C7_DEPLOY_BOUNDARY_HOST', el, undefined, 'compensationHost', `Boundary event ${id} is attached to the compensation handler ${idOf(host)}; the engines refuse boundary events on compensation handlers`, `Remove it: \`bpmn remove <file> ${id}\` (or attach it to a normal activity: \`bpmn move <file> ${id} --on <activityId>\`).`, [idOf(host)!]);
-    }
-    const catching = this.kit.is(el, 'bpmn:StartEvent') || this.kit.is(el, 'bpmn:IntermediateCatchEvent') || this.kit.is(el, 'bpmn:BoundaryEvent');
-    const throwing = this.kit.is(el, 'bpmn:IntermediateThrowEvent') || this.kit.is(el, 'bpmn:EndEvent');
+    this.checkCompensationHost(el);
     this.checkMultipleDefinitions(el);
     // of several definitions the engines parse only the one they act on
-    for (const def of this.actedOn(el)) {
-      if (this.kit.is(def, 'bpmn:MessageEventDefinition')) {
-        if (catching) {
-          const msg = peek<El>(def, 'messageRef');
-          if (!msg) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageRef', `${label} has no message; the engines refuse the file`, `\`bpmn set <file> ${id} message=<MessageName>\` (creates the bpmn:Message).`);
-          else if (!nameOf(msg)) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
-        } else if (throwing) {
-          this.implementation.checkImplementation(def, el, label, { event: el });
-        }
-      } else if (this.kit.is(def, 'bpmn:SignalEventDefinition')) {
-        const sig = peek<El>(def, 'signalRef');
-        if (!sig) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; the engines refuse the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
-        else if (!nameOf(sig)) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
-      } else if (this.kit.is(def, 'bpmn:ErrorEventDefinition') && this.kit.is(el, 'bpmn:EndEvent')) {
-        const err = peek<El>(def, 'errorRef');
-        if (!err) this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); the engines refuse the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
-        else if (!nonEmpty(peek<string>(err, 'errorCode'))) this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; the engines refuse the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
-      } else if (this.kit.is(def, 'bpmn:EscalationEventDefinition')) {
-        if (throwing) {
-          const esc = peek<El>(def, 'escalationRef');
-          if (!esc) this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); the engines refuse the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
-          else if (!nonEmpty(peek<string>(esc, 'escalationCode'))) this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; the engines refuse the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
-        } else if (this.kit.is(el, 'bpmn:BoundaryEvent')) {
-          const host = peek<El>(el, 'attachedToRef');
-          if (host && !this.kit.is(host, 'bpmn:SubProcess') && !this.kit.is(host, 'bpmn:CallActivity') && !this.kit.is(host, 'bpmn:UserTask')) {
-            this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationHost', `Escalation boundary event ${id} is attached to ${this.describe(host, undefined)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, `Attach it elsewhere (\`bpmn move <file> ${id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${id}\`.`, [idOf(host)!]);
-          }
-        }
-      } else if (this.kit.is(def, 'bpmn:CompensateEventDefinition')) {
-        if (throwing) this.checkCompensationRef(el, def);
-      } else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) {
-        if (!TIMER_ELEMENTS.some((k) => peek<El>(def, k))) {
-          this.push('deploy', 'W_C7_DEPLOY_EVENT_DEFINITION', el, undefined, 'timer', `Timer of ${label} has no date, cycle or duration; the engines refuse the file`, `\`bpmn set <file> ${id} timer=PT1H\` (or R/PT1H, or a date).`);
-        }
-      } else if (this.kit.is(def, 'bpmn:ConditionalEventDefinition')) {
-        // a missing condition element is a schema error
-        const cond = peek<El>(def, 'condition');
-        if (cond && this.emptyCondition(cond)) {
-          this.push('runtime', 'W_C7_EMPTY_CONDITION', el, undefined, 'emptyCondition', `Conditional event ${id} has an empty condition (no expression and no ${this.p}:resource): it deploys, but evaluating it fails when the process runs`, `\`bpmn set <file> ${id} ${sh('when=${expression}')}\` (or a script: \`bpmn set <file> ${id} condition.${this.p}:resource=deployment://<script>.groovy condition.language=groovy\`).`);
-        }
-        const events = this.c7(def, 'variableEvents');
-        if (events !== undefined) {
-          const bad = events.split(',').map((e) => e.trim()).filter((e) => e && !VARIABLE_EVENTS.includes(e));
-          if (bad.length) this.push('runtime', 'W_C7_BAD_VALUE', def, el, 'attr:variableEvents', `${this.p}:variableEvents="${events}" of ${label} lists ${bad.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, `\`bpmn set <file> ${id} ${sh(`${this.addressOf(def, el)?.prefix ?? 'definition.'}${this.p}:variableEvents=create, update`)}\`.`);
-        }
-      }
+    for (const def of this.actedOn(el)) this.checkDefinition(el, def);
+  }
+
+  private checkCompensationHost(el: El): void {
+    const host = this.kit.is(el, 'bpmn:BoundaryEvent') ? peek<El>(el, 'attachedToRef') : undefined;
+    if (!host || peek<boolean>(host, 'isForCompensation') !== true) return;
+    const id = idOf(el)!;
+    this.push('deploy', 'W_C7_DEPLOY_BOUNDARY_HOST', el, undefined, 'compensationHost', `Boundary event ${id} is attached to the compensation handler ${idOf(host)}; the engines refuse boundary events on compensation handlers`, `Remove it: \`bpmn remove <file> ${id}\` (or attach it to a normal activity: \`bpmn move <file> ${id} --on <activityId>\`).`, [idOf(host)!]);
+  }
+
+  private checkDefinition(el: El, def: El): void {
+    if (this.kit.is(def, 'bpmn:MessageEventDefinition')) this.checkMessageDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:SignalEventDefinition')) this.checkSignalDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:ErrorEventDefinition') && this.kit.is(el, 'bpmn:EndEvent')) this.checkErrorDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:EscalationEventDefinition')) this.checkEscalationDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:CompensateEventDefinition') && this.isThrowing(el)) this.checkCompensationRef(el, def);
+    else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) this.checkTimerDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:ConditionalEventDefinition')) this.checkConditionalDefinition(el, def);
+  }
+
+  private isCatching(el: El): boolean {
+    return this.kit.is(el, 'bpmn:StartEvent') || this.kit.is(el, 'bpmn:IntermediateCatchEvent') || this.kit.is(el, 'bpmn:BoundaryEvent');
+  }
+
+  private isThrowing(el: El): boolean {
+    return this.kit.is(el, 'bpmn:IntermediateThrowEvent') || this.kit.is(el, 'bpmn:EndEvent');
+  }
+
+  private checkMessageDefinition(el: El, def: El): void {
+    if (this.isThrowing(el)) {
+      this.implementation.checkImplementation(def, el, this.describe(el, undefined), { event: el });
+      return;
     }
+    if (!this.isCatching(el)) return;
+    const id = idOf(el)!;
+    const label = this.describe(el, undefined);
+    const msg = peek<El>(def, 'messageRef');
+    if (!msg) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageRef', `${label} has no message; the engines refuse the file`, `\`bpmn set <file> ${id} message=<MessageName>\` (creates the bpmn:Message).`);
+    else if (!nameOf(msg)) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+  }
+
+  private checkSignalDefinition(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el, undefined);
+    const sig = peek<El>(def, 'signalRef');
+    if (!sig) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; the engines refuse the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
+    else if (!nameOf(sig)) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
+  }
+
+  private checkErrorDefinition(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el, undefined);
+    const err = peek<El>(def, 'errorRef');
+    if (!err) this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); the engines refuse the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
+    else if (!nonEmpty(peek<string>(err, 'errorCode'))) this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; the engines refuse the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
+  }
+
+  private checkEscalationDefinition(el: El, def: El): void {
+    if (this.isThrowing(el)) this.checkThrownEscalation(el, def);
+    else if (this.kit.is(el, 'bpmn:BoundaryEvent')) this.checkEscalationHost(el);
+  }
+
+  private checkThrownEscalation(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el, undefined);
+    const esc = peek<El>(def, 'escalationRef');
+    if (!esc) this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); the engines refuse the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
+    else if (!nonEmpty(peek<string>(esc, 'escalationCode'))) this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; the engines refuse the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
+  }
+
+  private checkEscalationHost(el: El): void {
+    const host = peek<El>(el, 'attachedToRef');
+    if (!host || this.kit.is(host, 'bpmn:SubProcess') || this.kit.is(host, 'bpmn:CallActivity') || this.kit.is(host, 'bpmn:UserTask')) return;
+    const id = idOf(el)!;
+    this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationHost', `Escalation boundary event ${id} is attached to ${this.describe(host, undefined)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, `Attach it elsewhere (\`bpmn move <file> ${id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${id}\`.`, [idOf(host)!]);
+  }
+
+  private checkTimerDefinition(el: El, def: El): void {
+    if (TIMER_ELEMENTS.some((k) => peek<El>(def, k))) return;
+    this.push('deploy', 'W_C7_DEPLOY_EVENT_DEFINITION', el, undefined, 'timer', `Timer of ${this.describe(el, undefined)} has no date, cycle or duration; the engines refuse the file`, `\`bpmn set <file> ${idOf(el)} timer=PT1H\` (or R/PT1H, or a date).`);
+  }
+
+  private checkConditionalDefinition(el: El, def: El): void {
+    const id = idOf(el)!;
+    // a missing condition element is a schema error
+    const cond = peek<El>(def, 'condition');
+    if (cond && this.emptyCondition(cond)) {
+      this.push('runtime', 'W_C7_EMPTY_CONDITION', el, undefined, 'emptyCondition', `Conditional event ${id} has an empty condition (no expression and no ${this.p}:resource): it deploys, but evaluating it fails when the process runs`, `\`bpmn set <file> ${id} ${sh('when=${expression}')}\` (or a script: \`bpmn set <file> ${id} condition.${this.p}:resource=deployment://<script>.groovy condition.language=groovy\`).`);
+    }
+    this.checkVariableEvents(el, def);
+  }
+
+  private checkVariableEvents(el: El, def: El): void {
+    const events = this.c7(def, 'variableEvents');
+    if (events === undefined) return;
+    const bad = events.split(',').map((e) => e.trim()).filter((e) => e && !VARIABLE_EVENTS.includes(e));
+    if (!bad.length) return;
+    this.push('runtime', 'W_C7_BAD_VALUE', def, el, 'attr:variableEvents', `${this.p}:variableEvents="${events}" of ${this.describe(el, undefined)} lists ${bad.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, `\`bpmn set <file> ${idOf(el)} ${sh(`${this.addressOf(def, el)?.prefix ?? 'definition.'}${this.p}:variableEvents=create, update`)}\`.`);
   }
 
   /**
@@ -105,13 +149,13 @@ export class C7EventRules extends C7Rules {
     const scope = this.doc.scopeOf(el);
     if (!scope) return;
     const allowed: Array<El | undefined> = [scope];
-    if (this.isEventSubProcess(scope)) allowed.push(this.doc.scopeOf(scope));
+    if (this.kit.isEventSubProcess(scope)) allowed.push(this.doc.scopeOf(scope));
     if (this.kit.is(ref, 'bpmn:FlowNode') && allowed.includes(this.doc.scopeOf(ref))) return;
     const id = idOf(el)!;
     const sid = idOf(scope) ?? '<scopeId>';
     const candidates = this.doc
       .flowNodes(scope)
-      .filter((n) => this.kit.is(n, 'bpmn:Activity') && !this.isEventSubProcess(n))
+      .filter((n) => this.kit.is(n, 'bpmn:Activity') && !this.kit.isEventSubProcess(n))
       .map(idOf)
       .filter((x): x is string => !!x)
       .slice(0, 5);
@@ -153,7 +197,7 @@ export class C7EventRules extends C7Rules {
       if (this.kit.is(node, 'bpmn:StartEvent')) {
         const parent = this.doc.scopeOf(node);
         if (parent && this.kit.is(parent, 'bpmn:Process')) scope = `start:${idOf(parent)}`;
-        else if (parent && this.isEventSubProcess(parent)) scope = `scope:${idOf(this.doc.scopeOf(parent))}`;
+        else if (parent && this.kit.isEventSubProcess(parent)) scope = `scope:${idOf(this.doc.scopeOf(parent))}`;
       } else if (this.kit.is(node, 'bpmn:BoundaryEvent')) {
         const host = peek<El>(node, 'attachedToRef');
         if (host) scope = `${this.isMultiInstance(host) ? 'body' : 'scope'}:${idOf(host)}`;
@@ -234,9 +278,9 @@ export class C7EventRules extends C7Rules {
     const starts = nodes.filter((n) => this.kit.is(n, 'bpmn:StartEvent'));
     const isProcess = this.kit.is(scope, 'bpmn:Process');
     const transaction = this.kit.is(scope, 'bpmn:Transaction');
-    const kind = isProcess ? 'Process' : this.isEventSubProcess(scope) ? 'Event sub-process' : transaction ? 'Transaction' : 'Sub-process';
+    const kind = isProcess ? 'Process' : this.kit.isEventSubProcess(scope) ? 'Event sub-process' : transaction ? 'Transaction' : 'Sub-process';
     if (!starts.length) {
-      if (this.isEventSubProcess(scope)) return;
+      if (this.kit.isEventSubProcess(scope)) return;
       const what = nodes.length ? 'has no start event' : 'is empty, without a start event';
       const add = nodes.length
         ? `Add one: \`bpmn add <file> startEvent "<Name>" --before <firstNodeId>\` (or --in ${id}, then connect it)`
@@ -312,7 +356,7 @@ export class C7EventRules extends C7Rules {
       parts.push(`Start its branch from ${fid}: ${moves}, then ${remove}${notes.length ? ` (${notes.join('; ')})` : ''}`);
     }
     if (this.kit.is(scope, 'bpmn:Process')) parts.push(`give it another trigger, which keeps it as a second way into the process: \`bpmn set <file> ${sid} trigger=message message=<Name>\``);
-    const again = this.isEventSubProcess(scope) ? this.ownEventSubProcess(scope, extra) : '';
+    const again = this.kit.isEventSubProcess(scope) ? this.ownEventSubProcess(scope, extra) : '';
     return `${parts.join(', or ')}${again ? `; ${again}` : ''}.`;
   }
 

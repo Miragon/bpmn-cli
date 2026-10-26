@@ -1,7 +1,7 @@
 import type { Doc } from '../../model/Doc.js';
 import { modelError } from '../../shared/utils/errors.js';
 import { type Warning } from '../../shared/CliError.js';
-import { kindOf, TRIGGER_TYPES, type Trigger } from '../../model/utils/kinds.js';
+import { isEventSubProcess, kindOf, TRIGGER_TYPES, type Trigger } from '../../model/utils/kinds.js';
 import { addTo, is, walk, type El, idOf } from '../../model/utils/moddle.js';
 import { Camunda8Defaults } from '../../platform/Camunda8Defaults.js';
 import { CAMUNDA } from '../../platform/CamundaDescriptor.js';
@@ -52,7 +52,7 @@ export class EventDefinitions {
         candidates: allowed,
       });
     }
-    if (is(this.event, 'bpmn:StartEvent') && EVENT_SUBPROCESS_ONLY.includes(trigger) && !EventDefinitions.isEventSubProcess(this.doc.scopeOf(this.event))) {
+    if (is(this.event, 'bpmn:StartEvent') && EVENT_SUBPROCESS_ONLY.includes(trigger) && !isEventSubProcess(this.doc.scopeOf(this.event))) {
       throw modelError('E_INVALID_TRIGGER', `A startEvent:${trigger} is only allowed inside an event sub-process (${idOf(this.event)} is not)`, {
         element: idOf(this.event),
         hint: `Create the event sub-process together with its start in one command: \`add eventSubProcess "Handle errors" --${trigger === 'compensate' ? 'error <Name>' : `${trigger} <Name>`}\` (or eventSubProcess:${trigger}); or add the start with --in <eventSubProcessId> in the same \`apply\` batch as the eventSubProcess.`,
@@ -98,10 +98,6 @@ export class EventDefinitions {
 
   private static isRefTrigger(trigger: Trigger): trigger is RefTrigger {
     return trigger in REF_TRIGGERS;
-  }
-
-  private static isEventSubProcess(el: El | undefined): boolean {
-    return !!el && is(el, 'bpmn:SubProcess') && !!el.get<boolean | undefined>('triggeredByEvent');
   }
 
   private expression(body: string): El {
@@ -290,7 +286,7 @@ export class EventDefinitions {
     }
     if (is(this.event, 'bpmn:StartEvent')) {
       if (want === true) {
-        if (!EventDefinitions.isEventSubProcess(this.doc.scopeOf(this.event))) {
+        if (!isEventSubProcess(this.doc.scopeOf(this.event))) {
           throw modelError('E_INVALID_TRIGGER', `Start event ${idOf(this.event)} is not inside an event sub-process and cannot be non-interrupting`, {
             element: idOf(this.event),
             hint: 'Only start events of an eventSubProcess can be non-interrupting.',

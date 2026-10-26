@@ -46,7 +46,7 @@ export class C8EventRules extends C8Rules {
       this.push('deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer:cycle', `Timer catch event ${id} has a cycle; Camunda 8 allows only a duration or a date on intermediate timer catch events and refuses the file`, `\`bpmn set <file> ${id} timer=PT1H\` (a duration, or a date-time).`);
       return;
     }
-    if (kind === 'timeCycle' && (this.kit.is(el, 'bpmn:BoundaryEvent') || (this.kit.is(el, 'bpmn:StartEvent') && this.isEventSubProcess(el.$parent as El))) && !this.nonInterrupting(el)) {
+    if (kind === 'timeCycle' && (this.kit.is(el, 'bpmn:BoundaryEvent') || (this.kit.is(el, 'bpmn:StartEvent') && this.kit.isEventSubProcess(el.$parent as El))) && !this.nonInterrupting(el)) {
       this.push('deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer:interruptingCycle', `${label} is an interrupting timer with a cycle; Camunda 8 refuses interrupting cycles`, `Make it non-interrupting (\`bpmn set <file> ${id} nonInterrupting=true\`) or use a duration (\`bpmn set <file> ${id} timer=PT1H\`).`);
     }
     if (isFeel(value) || value === '') {
@@ -67,84 +67,139 @@ export class C8EventRules extends C8Rules {
   }
 
   checkEvent(el: El): void {
-    const id = idOf(el)!;
-    const label = this.describe(el);
     const defs = list(el, 'eventDefinitions');
-    const parent = el.$parent as El | undefined;
     if (defs.length > 1) {
-      this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'definitions', `${label} has ${defs.length} event definitions (${defs.map(triggerName).join(', ')}); Camunda 8 allows one and refuses the file`, `Keep one: \`bpmn set <file> ${id} trigger=<${defs.map(triggerName).join('|')}>\` (keeps that definition, drops the others), and model each other trigger as its own event.`);
+      const id = idOf(el)!;
+      this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'definitions', `${this.describe(el)} has ${defs.length} event definitions (${defs.map(triggerName).join(', ')}); Camunda 8 allows one and refuses the file`, `Keep one: \`bpmn set <file> ${id} trigger=<${defs.map(triggerName).join('|')}>\` (keeps that definition, drops the others), and model each other trigger as its own event.`);
       return;
     }
     const def = defs[0];
     if (!def) {
-      if (this.kit.is(el, 'bpmn:IntermediateCatchEvent') || this.kit.is(el, 'bpmn:BoundaryEvent')) {
-        this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'none', `${label} has no event definition; Camunda 8 refuses ${this.kit.is(el, 'bpmn:BoundaryEvent') ? 'boundary' : 'intermediate catch'} events without a trigger`, `Give it one: \`bpmn set <file> ${id} trigger=timer timer=PT1H\` (or message, signal, ...).`);
-      }
-      if (this.kit.is(el, 'bpmn:StartEvent') && this.isEventSubProcess(parent)) {
-        this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'eventSubStart', `Start event ${id} of event sub-process ${idOf(parent)} has no trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file`, `\`bpmn set <file> ${id} trigger=message message=<MessageName>\` (or timer, error, signal, escalation, conditional).`);
-      }
+      this.checkMissingDefinition(el);
       return;
     }
+    if (this.reportUnsupportedPosition(el, def)) return;
+    this.checkDefinitionId(el, def);
+    this.checkDefinition(el, def);
+  }
+
+  private checkMissingDefinition(el: El): void {
+    const id = idOf(el)!;
+    const parent = el.$parent as El | undefined;
+    if (this.kit.is(el, 'bpmn:IntermediateCatchEvent') || this.kit.is(el, 'bpmn:BoundaryEvent')) {
+      this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'none', `${this.describe(el)} has no event definition; Camunda 8 refuses ${this.kit.is(el, 'bpmn:BoundaryEvent') ? 'boundary' : 'intermediate catch'} events without a trigger`, `Give it one: \`bpmn set <file> ${id} trigger=timer timer=PT1H\` (or message, signal, ...).`);
+    }
+    if (this.kit.is(el, 'bpmn:StartEvent') && this.kit.isEventSubProcess(parent)) {
+      this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'eventSubStart', `Start event ${id} of event sub-process ${idOf(parent)} has no trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file`, `\`bpmn set <file> ${id} trigger=message message=<MessageName>\` (or timer, error, signal, escalation, conditional).`);
+    }
+  }
+
+  /** Definition kinds a position does not support; true when one was reported. */
+  private reportUnsupportedPosition(el: El, def: El): boolean {
+    const id = idOf(el)!;
+    const parent = el.$parent as El | undefined;
     const trigger = triggerName(def);
-    // definition kinds a position does not support
     if (this.kit.is(def, 'bpmn:CancelEventDefinition')) {
-      this.push('deploy', 'W_C8_DEPLOY_UNSUPPORTED', el, undefined, 'cancel', `${label} is a cancel event; Camunda 8 does not support cancel events (nor transactions) and refuses the file`, `\`bpmn set <file> ${id} trigger=${this.kit.is(el, 'bpmn:BoundaryEvent') ? 'error' : 'none'}\`${this.kit.is(el, 'bpmn:BoundaryEvent') ? ' (an error boundary event)' : ''}.`);
-      return;
+      this.push('deploy', 'W_C8_DEPLOY_UNSUPPORTED', el, undefined, 'cancel', `${this.describe(el)} is a cancel event; Camunda 8 does not support cancel events (nor transactions) and refuses the file`, `\`bpmn set <file> ${id} trigger=${this.kit.is(el, 'bpmn:BoundaryEvent') ? 'error' : 'none'}\`${this.kit.is(el, 'bpmn:BoundaryEvent') ? ' (an error boundary event)' : ''}.`);
+      return true;
     }
-    if (this.kit.is(el, 'bpmn:StartEvent') && parent && this.kit.is(parent, 'bpmn:SubProcess') && !this.isEventSubProcess(parent) && !this.kit.is(parent, 'bpmn:AdHocSubProcess')) {
+    if (!this.kit.is(el, 'bpmn:StartEvent')) return false;
+    if (parent && this.kit.is(parent, 'bpmn:SubProcess') && !this.kit.isEventSubProcess(parent) && !this.kit.is(parent, 'bpmn:AdHocSubProcess')) {
       this.push('deploy', 'W_C8_DEPLOY_START_EVENT', el, undefined, 'subStartType', `Start event ${id} of sub-process ${idOf(parent)} has a ${trigger} trigger; Camunda 8 allows only a none start event in an embedded sub-process and refuses the file`, `\`bpmn set <file> ${id} trigger=none\` (an event sub-process takes triggered starts: \`bpmn add <file> eventSubProcess:${trigger} ... --in ${idOf(parent)}\`).`);
-      return;
+      return true;
     }
-    if (this.kit.is(el, 'bpmn:StartEvent') && this.isEventSubProcess(parent) && this.kit.is(def, 'bpmn:CompensateEventDefinition')) {
+    if (this.kit.isEventSubProcess(parent) && this.kit.is(def, 'bpmn:CompensateEventDefinition')) {
       this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'eventSubStart', `Start event ${id} of event sub-process ${idOf(parent)} has a compensation trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file`, `\`bpmn set <file> ${id} trigger=<message|timer|error|signal|escalation|conditional>\`.`);
-      return;
+      return true;
     }
-    // definitions the engine needs an id on (8.9 fails on them otherwise)
+    return false;
+  }
+
+  /** Definitions the engine needs an id on (8.9 fails on them otherwise). */
+  private checkDefinitionId(el: El, def: El): void {
     const needsId = this.kit.is(def, 'bpmn:ConditionalEventDefinition') || this.kit.is(def, 'bpmn:CompensateEventDefinition') || (this.kit.is(def, 'bpmn:LinkEventDefinition') && this.kit.is(el, 'bpmn:CatchEvent'));
-    if (needsId && !idOf(def)) {
-      this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'definitionId', `The ${trigger} event definition of ${label} has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")`, `\`bpmn set <file> ${id} definition.id=${localName(def.$type)}_${id.replace(/^[A-Za-z]+_/, '')}\` (Camunda Modeler gives every event definition an id).`);
-    }
-    if (this.kit.is(def, 'bpmn:MessageEventDefinition')) {
-      if (this.kit.is(el, 'bpmn:ThrowEvent')) this.tasks.checkMessageThrow(el, def);
-      else this.checkMessageCatch(el);
-    } else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) {
-      this.checkTimer(el, def);
-    } else if (this.kit.is(def, 'bpmn:SignalEventDefinition')) {
-      const sig = peek<El>(def, 'signalRef');
-      if (!sig) this.push('deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
-      else if (!nameAttr(sig)) this.push('deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
-      else if (this.kit.is(el, 'bpmn:StartEvent') && isFeel(nameOf(sig))) this.push('deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Start event ${id} catches the signal "${nameOf(sig)}", a FEEL expression; Camunda 8 needs a static signal name on start events and refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
-    } else if (this.kit.is(def, 'bpmn:ErrorEventDefinition')) {
-      const err = peek<El>(def, 'errorRef');
-      const code = peek<string>(err, 'errorCode');
-      if (this.kit.is(el, 'bpmn:ThrowEvent')) {
-        if (!err) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
-        else if (missing(code)) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
-      } else {
-        if (isFeel(code)) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `${label} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\` (or no code: it catches every error).`, err ? [idOf(err)!] : []);
-        if (this.nonInterrupting(el)) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'nonInterrupting', `${label} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, `\`bpmn set <file> ${id} nonInterrupting=false\`.`);
-      }
-    } else if (this.kit.is(def, 'bpmn:EscalationEventDefinition')) {
-      if (this.kit.is(el, 'bpmn:ThrowEvent')) {
-        const esc = peek<El>(def, 'escalationRef');
-        if (!esc) this.push('deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
-        else if (missing(peek<string>(esc, 'escalationCode'))) this.push('deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
-      } else if (this.kit.is(el, 'bpmn:BoundaryEvent')) {
-        const host = peek<El>(el, 'attachedToRef');
-        if (host && !this.kit.is(host, 'bpmn:SubProcess') && !this.kit.is(host, 'bpmn:CallActivity')) {
-          this.push('deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationHost', `Escalation boundary event ${id} is attached to ${this.describe(host)}; Camunda 8 allows it only on sub-processes and call activities and refuses the file`, `Attach it elsewhere (\`bpmn move <file> ${id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${id}\`.`, [idOf(host)!]);
-        }
-      }
-    } else if (this.kit.is(def, 'bpmn:CompensateEventDefinition')) {
-      if (this.kit.is(el, 'bpmn:ThrowEvent')) this.checkCompensationRef(el, def);
-      if (this.kit.is(el, 'bpmn:BoundaryEvent')) this.checkCompensationBoundary(el);
-    } else if (this.kit.is(def, 'bpmn:ConditionalEventDefinition')) {
-      const body = peek<string>(peek<El>(def, 'condition'), 'body');
-      this.checkFeel(el, undefined, 'condition', `The condition of conditional event ${id}`, body, `\`bpmn set <file> ${id} ${sh(`when==${feelOf((body ?? '').trim().slice(1))}`)}\` (check the FEEL syntax).`);
-      if (peek<El>(def, 'condition') && !isFeel(body)) {
-        this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'condition', `The condition "${(body ?? '').trim()}" of conditional event ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, `\`bpmn set <file> ${id} ${sh(`when==${feelOf(body ?? '')}`)}\` (check the FEEL syntax).`);
-      }
-    }
+    if (!needsId || idOf(def)) return;
+    const id = idOf(el)!;
+    this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', el, undefined, 'definitionId', `The ${triggerName(def)} event definition of ${this.describe(el)} has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")`, `\`bpmn set <file> ${id} definition.id=${localName(def.$type)}_${id.replace(/^[A-Za-z]+_/, '')}\` (Camunda Modeler gives every event definition an id).`);
+  }
+
+  private checkDefinition(el: El, def: El): void {
+    if (this.kit.is(def, 'bpmn:MessageEventDefinition')) this.checkMessageDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) this.checkTimer(el, def);
+    else if (this.kit.is(def, 'bpmn:SignalEventDefinition')) this.checkSignalDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:ErrorEventDefinition')) this.checkErrorDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:EscalationEventDefinition')) this.checkEscalationDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:CompensateEventDefinition')) this.checkCompensateDefinition(el, def);
+    else if (this.kit.is(def, 'bpmn:ConditionalEventDefinition')) this.checkConditionalDefinition(el, def);
+  }
+
+  private checkMessageDefinition(el: El, def: El): void {
+    if (this.kit.is(el, 'bpmn:ThrowEvent')) this.tasks.checkMessageThrow(el, def);
+    else this.checkMessageCatch(el);
+  }
+
+  private checkSignalDefinition(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el);
+    const sig = peek<El>(def, 'signalRef');
+    if (!sig) this.push('deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
+    else if (!nameAttr(sig)) this.push('deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
+    else if (this.kit.is(el, 'bpmn:StartEvent') && isFeel(nameOf(sig))) this.push('deploy', 'W_C8_DEPLOY_SIGNAL', el, undefined, 'signalName', `Start event ${id} catches the signal "${nameOf(sig)}", a FEEL expression; Camunda 8 needs a static signal name on start events and refuses the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
+  }
+
+  private checkErrorDefinition(el: El, def: El): void {
+    if (this.kit.is(el, 'bpmn:ThrowEvent')) this.checkThrownError(el, def);
+    else this.checkCaughtError(el, def);
+  }
+
+  private checkThrownError(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el);
+    const err = peek<El>(def, 'errorRef');
+    if (!err) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
+    else if (missing(peek<string>(err, 'errorCode'))) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
+  }
+
+  private checkCaughtError(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el);
+    const err = peek<El>(def, 'errorRef');
+    const code = peek<string>(err, 'errorCode');
+    if (isFeel(code)) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'errorCode', `${label} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\` (or no code: it catches every error).`, err ? [idOf(err)!] : []);
+    if (this.nonInterrupting(el)) this.push('deploy', 'W_C8_DEPLOY_ERROR', el, undefined, 'nonInterrupting', `${label} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, `\`bpmn set <file> ${id} nonInterrupting=false\`.`);
+  }
+
+  private checkEscalationDefinition(el: El, def: El): void {
+    if (this.kit.is(el, 'bpmn:ThrowEvent')) this.checkThrownEscalation(el, def);
+    else if (this.kit.is(el, 'bpmn:BoundaryEvent')) this.checkEscalationHost(el);
+  }
+
+  private checkThrownEscalation(el: El, def: El): void {
+    const id = idOf(el)!;
+    const label = this.describe(el);
+    const esc = peek<El>(def, 'escalationRef');
+    if (!esc) this.push('deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
+    else if (missing(peek<string>(esc, 'escalationCode'))) this.push('deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
+  }
+
+  private checkEscalationHost(el: El): void {
+    const host = peek<El>(el, 'attachedToRef');
+    if (!host || this.kit.is(host, 'bpmn:SubProcess') || this.kit.is(host, 'bpmn:CallActivity')) return;
+    const id = idOf(el)!;
+    this.push('deploy', 'W_C8_DEPLOY_ESCALATION', el, undefined, 'escalationHost', `Escalation boundary event ${id} is attached to ${this.describe(host)}; Camunda 8 allows it only on sub-processes and call activities and refuses the file`, `Attach it elsewhere (\`bpmn move <file> ${id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${id}\`.`, [idOf(host)!]);
+  }
+
+  private checkCompensateDefinition(el: El, def: El): void {
+    if (this.kit.is(el, 'bpmn:ThrowEvent')) this.checkCompensationRef(el, def);
+    if (this.kit.is(el, 'bpmn:BoundaryEvent')) this.checkCompensationBoundary(el);
+  }
+
+  private checkConditionalDefinition(el: El, def: El): void {
+    const id = idOf(el)!;
+    const body = peek<string>(peek<El>(def, 'condition'), 'body');
+    this.checkFeel(el, undefined, 'condition', `The condition of conditional event ${id}`, body, `\`bpmn set <file> ${id} ${sh(`when==${feelOf((body ?? '').trim().slice(1))}`)}\` (check the FEEL syntax).`);
+    if (!peek<El>(def, 'condition') || isFeel(body)) return;
+    this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'condition', `The condition "${(body ?? '').trim()}" of conditional event ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, `\`bpmn set <file> ${id} ${sh(`when==${feelOf(body ?? '')}`)}\` (check the FEEL syntax).`);
   }
 
   checkMessageCatch(el: El): void {
@@ -213,7 +268,7 @@ export class C8EventRules extends C8Rules {
       return;
     }
     if (this.kit.is(scope, 'bpmn:AdHocSubProcess') || this.kit.is(scope, 'bpmn:Transaction')) return;
-    const event = this.isEventSubProcess(scope);
+    const event = this.kit.isEventSubProcess(scope);
     if (starts.length !== 1) {
       this.push('deploy', 'W_C8_DEPLOY_START_EVENT', scope, undefined, 'startCount', `${event ? 'Event sub-process' : 'Sub-process'} ${id} has ${starts.length ? `${starts.length} start events` : 'no start event'}; Camunda 8 needs exactly one and refuses the file`, starts.length ? `Keep one: \`bpmn remove <file> ${idOf(starts[1])}\`.` : event ? `\`bpmn add <file> startEvent:message "<Name>" --in ${id} --message <MessageName>\` (or timer, error, signal, escalation, conditional).` : `\`bpmn add <file> startEvent "<Name>" --in ${id}\`, then connect it to the first node.`);
     }
@@ -260,7 +315,7 @@ export class C8EventRules extends C8Rules {
       group(targets, 'message', `after event-based gateway ${idOf(gw)}`, 'W_C8_DEPLOY_MESSAGE', `gatewayMessage:${idOf(gw)}`);
     }
     // start events of the event sub-processes of this scope
-    const eventSubStarts = nodes.filter((n) => this.isEventSubProcess(n)).flatMap((sp) => this.doc.flowNodes(sp).filter((n) => this.kit.is(n, 'bpmn:StartEvent')));
+    const eventSubStarts = nodes.filter((n) => this.kit.isEventSubProcess(n)).flatMap((sp) => this.doc.flowNodes(sp).filter((n) => this.kit.is(n, 'bpmn:StartEvent')));
     group(eventSubStarts, 'message', `in the event sub-processes of ${idOf(scope)}`, 'W_C8_DEPLOY_MESSAGE', `eventSubMessage:${idOf(scope)}`);
     this.checkErrorCodes(eventSubStarts, `the event sub-processes of ${idOf(scope)}`);
     // process start events

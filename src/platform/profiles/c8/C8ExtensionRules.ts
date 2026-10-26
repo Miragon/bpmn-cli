@@ -94,15 +94,8 @@ export class C8ExtensionRules extends C8Rules {
 
   /** The messages the catch events of the executable processes read: their subscription content. */
   checkCaughtMessages(executable: El[]): void {
-    const caught = new Set<El>();
-    for (const proc of executable) {
-      for (const el of this.kit.walk(proc, { bpmnOnly: true })) {
-        if (this.kit.is(el, 'bpmn:Event') || this.kit.is(el, 'bpmn:ReceiveTask')) {
-          const m = this.messageOf(el);
-          if (m) caught.add(m);
-        }
-      }
-    }
+    const catching = executable.flatMap((proc) => [...this.kit.walk(proc, { bpmnOnly: true })]).filter((el) => this.kit.is(el, 'bpmn:Event') || this.kit.is(el, 'bpmn:ReceiveTask'));
+    const caught = new Set(catching.map((el) => this.messageOf(el)).filter((m): m is El => !!m));
     for (const m of caught) {
       this.checkAttributes(m, undefined);
       this.checkExtensions(m, undefined);
@@ -219,109 +212,128 @@ export class C8ExtensionRules extends C8Rules {
 
   /** Engine rules on the content of one top-level zeebe element. */
   private checkContent(host: El, owner: El | undefined, v: El, local: string): void {
+    this.checkBinding(host, owner, v, local);
+    this.contentChecks[local]?.(host, owner, v);
+  }
+
+  private readonly contentChecks: Record<string, (host: El, owner: El | undefined, v: El) => void> = {
+    ioMapping: (host, owner, v) => this.checkIoMapping(host, owner, v),
+    taskHeaders: (host, owner, v) => this.checkHeaders(host, owner, v, ''),
+    executionListeners: (host, owner, v) => this.checkExecutionListeners(host, owner, v),
+    taskListeners: (host, owner, v) => this.checkTaskListeners(host, owner, v),
+    linkedResources: (host, owner, v) => this.checkLinkedResources(host, owner, v),
+    adHoc: (host, owner, v) => this.checkAdHoc(host, owner, v),
+    conditionalFilter: (host, owner, v) => this.checkConditionalFilter(host, owner, v),
+    priorityDefinition: (host, owner, v) => this.checkPriority(host, owner, v),
+    taskSchedule: (host, owner, v) => this.checkTaskSchedule(host, owner, v),
+  };
+
+  private checkBinding(host: El, owner: El | undefined, v: El, local: string): void {
     const where = this.describe(host, owner);
-    const rebuild = (): string => this.rebuildHint(host, owner, this.z(local));
-    const addr = this.addressOf(host, owner);
-    // bindingType / versionTag
     const binding = attr(v, 'bindingType');
-    if (binding !== undefined && ['calledDecision', 'calledElement', 'formDefinition'].includes(local)) {
-      if (!BINDING_TYPES.includes(binding)) {
-        this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${local}:bindingType`, `${this.z(local)} of ${where} has bindingType="${binding}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, this.fixHint(host, owner, v, { bindingType: 'latest' }));
-      } else if (binding === 'versionTag' && blank(attr(v, 'versionTag'))) {
-        this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${local}:versionTag`, `${this.z(local)} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, this.fixHint(host, owner, v, { versionTag: '<versionTag>' }));
-      }
+    if (binding === undefined || !['calledDecision', 'calledElement', 'formDefinition'].includes(local)) return;
+    if (!BINDING_TYPES.includes(binding)) {
+      this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${local}:bindingType`, `${this.z(local)} of ${where} has bindingType="${binding}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, this.fixHint(host, owner, v, { bindingType: 'latest' }));
+    } else if (binding === 'versionTag' && blank(attr(v, 'versionTag'))) {
+      this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${local}:versionTag`, `${this.z(local)} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, this.fixHint(host, owner, v, { versionTag: '<versionTag>' }));
     }
-    if (local === 'ioMapping') {
-      for (const [kind, label] of [
-        ['input', 'input'],
-        ['output', 'output'],
-      ] as const) {
-        this.kids(v, kind).forEach((m, i) => {
-          const target = attr(m, 'target');
-          const sel = target ? `${this.z(kind)}[target=${target}]` : `${this.z('ioMapping')}/${this.z(kind)}[${i}]`;
-          if (blank(target)) {
-            this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${kind}#${i}:target`, `The ${label} mapping ${i + 1} of ${where} has no target; Camunda 8 refuses the file`, addr ? `Remove it (\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${sel}`)}\`) and add it with a target: ${this.extAdd(host, owner, `${this.z(kind)} source==<expression> target=<variable>`)}.` : 'Fix it in the XML.');
-          } else if (!PATH.test(target!.trim())) {
-            this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${kind}:${target}:target`, `The ${label} mapping target "${target}" of ${where} is not a variable name or path (a.b.c); Camunda 8 refuses the file`, addr ? `Remove it (\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${sel}`)}\`) and add it with a valid target: ${this.extAdd(host, owner, `${this.z(kind)} source=${sh(attr(m, 'source') ?? '=<expression>')} target=<variable>`)}.` : 'Fix it in the XML.');
-          }
-          if (kind === 'output' && blank(attr(m, 'source'))) {
-            this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `output:${target ?? i}:source`, `The output mapping ${target ? `to ${target} ` : ''}of ${where} has no source; Camunda 8 refuses the file`, `${this.extAdd(host, owner, `${this.z('output')} source==<expression> target=${target ?? '<variable>'}`)} (replaces the mapping of that target).`);
-          }
-        });
-      }
-      return;
-    }
-    if (local === 'taskHeaders') {
-      this.checkHeaders(host, owner, v, '');
-      return;
-    }
-    if (local === 'executionListeners') {
-      this.kids(v, 'executionListener').forEach((l, i) => {
-        const ev = attr(l, 'eventType');
-        const label = `Execution listener ${i + 1}${ev ? ` (${ev})` : ''} of ${where}`;
-        const sel = addr ? `\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${this.z('executionListeners')}/${this.z('executionListener')}[${i}]`)}\`` : 'remove it from the XML';
-        const again = (fix: string): string => `${sel}, then ${this.extAdd(host, owner, `${this.z('executionListeners')}/${this.z('executionListener')} ${fix}`)}`;
-        if (missing(attr(l, 'type'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<start|end>'} type=<jobType>`)}.`);
-        if (ev === undefined || ev.trim() === '') this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
-        else if (ev !== 'start' && ev !== 'end') this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:eventType`, `${label}: eventType "${ev}" is not start or end; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
-        else if (ev === 'start' && (this.kit.is(host, 'bpmn:StartEvent') || this.kit.is(host, 'bpmn:BoundaryEvent'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:start`, `${label}: Camunda 8 does not support start listeners on ${this.kit.is(host, 'bpmn:StartEvent') ? 'start' : 'boundary'} events and refuses the file`, `Make it an end listener or remove it: ${again(`eventType=end type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
-        else if (ev === 'end' && this.kit.is(host, 'bpmn:Gateway')) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:end`, `${label}: Camunda 8 does not support end listeners on gateways and refuses the file`, `Make it a start listener or remove it: ${again(`eventType=start type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
-        for (const h of this.kids(l, 'taskHeaders')) this.checkHeaders(host, owner, h, `execution listener ${i + 1}`);
-      });
-      return;
-    }
-    if (local === 'taskListeners') {
-      if (!this.zeebe(host, 'userTask').length) {
-        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, 'taskListeners:job', `${where} has task listeners but is a job worker user task (no ${this.z('userTask')}); Camunda 8 allows task listeners on Camunda user tasks only and refuses the file`, `Make it a Camunda user task: ${this.extAdd(host, owner, this.z('userTask'))} (or remove the listeners: \`bpmn ext remove <file> ${idOf(host)} ${this.z('taskListeners')}\`).`);
-      }
-      this.kids(v, 'taskListener').forEach((l, i) => {
-        const ev = attr(l, 'eventType');
-        const label = `Task listener ${i + 1}${ev ? ` (${ev})` : ''} of ${where}`;
-        const again = (fix: string): string => `\`bpmn ext remove <file> ${idOf(host)} ${sh(`${this.z('taskListeners')}/${this.z('taskListener')}[${i}]`)}\`, then ${this.extAdd(host, owner, `${this.z('taskListeners')}/${this.z('taskListener')} ${fix}`)}`;
-        if (missing(attr(l, 'type'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<event>'} type=<jobType>`)}.`);
-        if (blank(ev)) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
-        else if (!TASK_LISTENER_EVENTS.includes(ev!)) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:eventType`, `${label}: eventType "${ev}" is not one of creating, assigning, updating, completing, canceling; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
-      });
-      return;
-    }
-    if (local === 'linkedResources') {
-      this.kids(v, 'linkedResource').forEach((r, i) => {
-        if (missing(attr(r, 'resourceType'))) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:resourceType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has no resourceType; Camunda 8 refuses the file`, rebuild());
-        const b = attr(r, 'bindingType');
-        if (b !== undefined && !BINDING_TYPES.includes(b)) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:bindingType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has bindingType="${b}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, rebuild());
-        else if (b === 'versionTag' && blank(attr(r, 'versionTag'))) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:versionTag`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, rebuild());
-      });
-      return;
-    }
-    if (local === 'adHoc') {
-      const oc = attr(v, 'outputCollection');
-      const oe = attr(v, 'outputElement');
-      if ((oc === undefined) !== (oe === undefined)) {
-        this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, 'adHoc:output', `${this.z('adHoc')} of ${where} has ${oc !== undefined ? 'an outputCollection without outputElement' : 'an outputElement without outputCollection'}; Camunda 8 refuses the file`, `${this.extAdd(host, owner, `${this.z('adHoc')} ${oc !== undefined ? 'outputElement==<expression>' : 'outputCollection=<variable>'}`)}.`);
-      }
-      return;
-    }
-    if (local === 'conditionalFilter') {
-      const events = attr(v, 'variableEvents');
-      if (events !== undefined) {
-        const bad = events.split(',').map((e) => e.trim()).filter((e) => e && e !== 'create' && e !== 'update');
-        if (bad.length) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, 'conditionalFilter:variableEvents', `${this.z('conditionalFilter')} of ${where} lists the variable events ${bad.join(', ')}; Camunda 8 knows create and update only and refuses the file`, `${rebuild()} (variableEvents=create,update)`);
-      }
-      return;
-    }
-    if (local === 'priorityDefinition') {
-      const prio = attr(v, 'priority');
-      if (prio !== undefined && prio !== '' && !isFeel(prio) && (!/^\s*\d+\s*$/.test(prio) || Number(prio) > 100)) {
-        this.push('deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, 'priority', `${this.z('priorityDefinition')} of ${where} has priority "${prio}"; Camunda 8 needs a number from 0 to 100 (or an expression) and refuses the file`, this.fixHint(host, owner, v, { priority: '50' }));
-      }
-      return;
-    }
-    if (local === 'taskSchedule') {
-      for (const a of ['dueDate', 'followUpDate']) {
-        const d = attr(v, a);
-        if (d !== undefined && !isFeel(d) && d.trim() !== '' && !new TimerValue(d).isDateTime()) {
-          this.push('deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, `taskSchedule:${a}`, `${this.z('taskSchedule')} of ${where} has ${a}="${d}", which is no ISO 8601 date-time with offset (2030-03-02T15:35+02:00); Camunda 8 refuses the file`, this.fixHint(host, owner, v, { [a]: '2030-03-02T15:35+02:00' }).replace(/\.$/, ' (or an expression: =<FEEL>).'));
+  }
+
+  private checkIoMapping(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    const addr = this.addressOf(host, owner);
+    for (const [kind, label] of [
+      ['input', 'input'],
+      ['output', 'output'],
+    ] as const) {
+      this.kids(v, kind).forEach((m, i) => {
+        const target = attr(m, 'target');
+        const sel = target ? `${this.z(kind)}[target=${target}]` : `${this.z('ioMapping')}/${this.z(kind)}[${i}]`;
+        if (blank(target)) {
+          this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${kind}#${i}:target`, `The ${label} mapping ${i + 1} of ${where} has no target; Camunda 8 refuses the file`, addr ? `Remove it (\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${sel}`)}\`) and add it with a target: ${this.extAdd(host, owner, `${this.z(kind)} source==<expression> target=<variable>`)}.` : 'Fix it in the XML.');
+        } else if (!PATH.test(target!.trim())) {
+          this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${kind}:${target}:target`, `The ${label} mapping target "${target}" of ${where} is not a variable name or path (a.b.c); Camunda 8 refuses the file`, addr ? `Remove it (\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${sel}`)}\`) and add it with a valid target: ${this.extAdd(host, owner, `${this.z(kind)} source=${sh(attr(m, 'source') ?? '=<expression>')} target=<variable>`)}.` : 'Fix it in the XML.');
         }
+        if (kind === 'output' && blank(attr(m, 'source'))) {
+          this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `output:${target ?? i}:source`, `The output mapping ${target ? `to ${target} ` : ''}of ${where} has no source; Camunda 8 refuses the file`, `${this.extAdd(host, owner, `${this.z('output')} source==<expression> target=${target ?? '<variable>'}`)} (replaces the mapping of that target).`);
+        }
+      });
+    }
+  }
+
+  private checkExecutionListeners(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    const addr = this.addressOf(host, owner);
+    this.kids(v, 'executionListener').forEach((l, i) => {
+      const ev = attr(l, 'eventType');
+      const label = `Execution listener ${i + 1}${ev ? ` (${ev})` : ''} of ${where}`;
+      const sel = addr ? `\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${this.z('executionListeners')}/${this.z('executionListener')}[${i}]`)}\`` : 'remove it from the XML';
+      const again = (fix: string): string => `${sel}, then ${this.extAdd(host, owner, `${this.z('executionListeners')}/${this.z('executionListener')} ${fix}`)}`;
+      if (missing(attr(l, 'type'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<start|end>'} type=<jobType>`)}.`);
+      if (ev === undefined || ev.trim() === '') this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
+      else if (ev !== 'start' && ev !== 'end') this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:eventType`, `${label}: eventType "${ev}" is not start or end; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
+      else if (ev === 'start' && (this.kit.is(host, 'bpmn:StartEvent') || this.kit.is(host, 'bpmn:BoundaryEvent'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:start`, `${label}: Camunda 8 does not support start listeners on ${this.kit.is(host, 'bpmn:StartEvent') ? 'start' : 'boundary'} events and refuses the file`, `Make it an end listener or remove it: ${again(`eventType=end type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
+      else if (ev === 'end' && this.kit.is(host, 'bpmn:Gateway')) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${i}:end`, `${label}: Camunda 8 does not support end listeners on gateways and refuses the file`, `Make it a start listener or remove it: ${again(`eventType=start type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
+      for (const h of this.kids(l, 'taskHeaders')) this.checkHeaders(host, owner, h, `execution listener ${i + 1}`);
+    });
+  }
+
+  private checkTaskListeners(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    if (!this.zeebe(host, 'userTask').length) {
+      this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, 'taskListeners:job', `${where} has task listeners but is a job worker user task (no ${this.z('userTask')}); Camunda 8 allows task listeners on Camunda user tasks only and refuses the file`, `Make it a Camunda user task: ${this.extAdd(host, owner, this.z('userTask'))} (or remove the listeners: \`bpmn ext remove <file> ${idOf(host)} ${this.z('taskListeners')}\`).`);
+    }
+    this.kids(v, 'taskListener').forEach((l, i) => {
+      const ev = attr(l, 'eventType');
+      const label = `Task listener ${i + 1}${ev ? ` (${ev})` : ''} of ${where}`;
+      const again = (fix: string): string => `\`bpmn ext remove <file> ${idOf(host)} ${sh(`${this.z('taskListeners')}/${this.z('taskListener')}[${i}]`)}\`, then ${this.extAdd(host, owner, `${this.z('taskListeners')}/${this.z('taskListener')} ${fix}`)}`;
+      if (missing(attr(l, 'type'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<event>'} type=<jobType>`)}.`);
+      if (blank(ev)) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
+      else if (!TASK_LISTENER_EVENTS.includes(ev!)) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${i}:eventType`, `${label}: eventType "${ev}" is not one of creating, assigning, updating, completing, canceling; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(l, 'type') ?? '<jobType>'}`)}.`);
+    });
+  }
+
+  private checkLinkedResources(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    const rebuild = (): string => this.rebuildHint(host, owner, this.z('linkedResources'));
+    this.kids(v, 'linkedResource').forEach((r, i) => {
+      if (missing(attr(r, 'resourceType'))) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:resourceType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has no resourceType; Camunda 8 refuses the file`, rebuild());
+      const b = attr(r, 'bindingType');
+      if (b !== undefined && !BINDING_TYPES.includes(b)) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:bindingType`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has bindingType="${b}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, rebuild());
+      else if (b === 'versionTag' && blank(attr(r, 'versionTag'))) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${i}:versionTag`, `Linked resource ${attr(r, 'linkName') ?? i + 1} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, rebuild());
+    });
+  }
+
+  private checkAdHoc(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    const oc = attr(v, 'outputCollection');
+    const oe = attr(v, 'outputElement');
+    if ((oc === undefined) === (oe === undefined)) return;
+    this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, 'adHoc:output', `${this.z('adHoc')} of ${where} has ${oc !== undefined ? 'an outputCollection without outputElement' : 'an outputElement without outputCollection'}; Camunda 8 refuses the file`, `${this.extAdd(host, owner, `${this.z('adHoc')} ${oc !== undefined ? 'outputElement==<expression>' : 'outputCollection=<variable>'}`)}.`);
+  }
+
+  private checkConditionalFilter(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    const rebuild = (): string => this.rebuildHint(host, owner, this.z('conditionalFilter'));
+    const events = attr(v, 'variableEvents');
+    if (events === undefined) return;
+    const bad = events.split(',').map((e) => e.trim()).filter((e) => e && e !== 'create' && e !== 'update');
+    if (bad.length) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, 'conditionalFilter:variableEvents', `${this.z('conditionalFilter')} of ${where} lists the variable events ${bad.join(', ')}; Camunda 8 knows create and update only and refuses the file`, `${rebuild()} (variableEvents=create,update)`);
+  }
+
+  private checkPriority(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    const prio = attr(v, 'priority');
+    if (prio === undefined || prio === '' || isFeel(prio) || (/^\s*\d+\s*$/.test(prio) && Number(prio) <= 100)) return;
+    this.push('deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, 'priority', `${this.z('priorityDefinition')} of ${where} has priority "${prio}"; Camunda 8 needs a number from 0 to 100 (or an expression) and refuses the file`, this.fixHint(host, owner, v, { priority: '50' }));
+  }
+
+  private checkTaskSchedule(host: El, owner: El | undefined, v: El): void {
+    const where = this.describe(host, owner);
+    for (const a of ['dueDate', 'followUpDate']) {
+      const d = attr(v, a);
+      if (d !== undefined && !isFeel(d) && d.trim() !== '' && !new TimerValue(d).isDateTime()) {
+        this.push('deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, `taskSchedule:${a}`, `${this.z('taskSchedule')} of ${where} has ${a}="${d}", which is no ISO 8601 date-time with offset (2030-03-02T15:35+02:00); Camunda 8 refuses the file`, this.fixHint(host, owner, v, { [a]: '2030-03-02T15:35+02:00' }).replace(/\.$/, ' (or an expression: =<FEEL>).'));
       }
     }
   }

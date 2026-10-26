@@ -81,10 +81,6 @@ export abstract class EngineRules {
     return list(ext, 'values').map((v, index) => ({ el: v, uri: isGeneric(v) ? this.ns.uriOfElement(v) : undefined, local: localName(v.$type), index }));
   }
 
-  protected isEventSubProcess(el: El | undefined): boolean {
-    return !!el && this.kit.is(el, 'bpmn:SubProcess') && peek<boolean>(el, 'triggeredByEvent') === true;
-  }
-
   /** The attributes without namespace prefix of every BPMN element (refused by the schema). */
   protected unprefixedAttributes(): UnprefixedAttributes[] {
     const found: UnprefixedAttributes[] = [];

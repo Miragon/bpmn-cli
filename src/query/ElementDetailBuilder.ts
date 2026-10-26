@@ -1,5 +1,5 @@
 import type { Doc } from '../model/Doc.js';
-import { triggerOf } from '../model/utils/kinds.js';
+import { isEventSubProcess, triggerOf } from '../model/utils/kinds.js';
 import { diExpansionState } from '../drawing/utils/expansion.js';
 import { Groups } from '../drawing/Groups.js';
 import { is, list, peek, shownId, type El } from '../model/utils/moddle.js';
@@ -13,7 +13,7 @@ import { StructuralValidator } from '../validate/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { ElementDetail, NestedDetail } from './model-view.js';
-import { bodyOf, compact, isEventSubProcess, labelOf, nameOf, nonEmpty, refLabel, resourceOf } from './utils/view.js';
+import { bodyOf, compact, labelOf, nameOf, nonEmpty, refLabel, resourceOf } from './utils/view.js';
 
 /**
  * `bpmn show <id>`: everything about one element. Missing incoming / outgoing mirror entries

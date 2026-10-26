@@ -4,7 +4,7 @@
     "applyToXml only": { "minified": 784, "gzip": 245 }
   },
   "onDemand": {
-    "c7": { "minified": 63, "gzip": 19 },
-    "c8": { "minified": 86, "gzip": 25 }
+    "c7": { "minified": 65, "gzip": 19 },
+    "c8": { "minified": 89, "gzip": 25 }
   }
 }

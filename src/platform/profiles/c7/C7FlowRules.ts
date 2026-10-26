@@ -1,6 +1,6 @@
 import type { El } from '../../../model/utils/moddle.js';
 import type { RuleRun } from '../RuleRun.js';
-import { EVENT_GATEWAY_TRIGGERS, idOf, nameOf, peek } from '../utils/element.js';
+import { idOf, nameOf, peek, triggerName } from '../utils/element.js';
 import { sh } from '../utils/hint.js';
 import type { C7ImplementationRules } from './C7ImplementationRules.js';
 import { C7Rules } from './C7Rules.js';
@@ -25,7 +25,7 @@ export class C7FlowRules extends C7Rules {
     const cond = peek<El>(flow, 'conditionExpression');
     if (!cond || !this.emptyCondition(cond)) return;
     const source = peek<El>(flow, 'sourceRef');
-    if (source && (this.kit.is(source, 'bpmn:ParallelGateway') || this.kit.is(source, 'bpmn:EventBasedGateway') || peek<El>(source, 'default') === flow)) return;
+    if (source && (this.kit.ignoresConditions(source) || peek<El>(source, 'default') === flow)) return;
     const id = idOf(flow)!;
     this.push('runtime', 'W_C7_EMPTY_CONDITION', flow, undefined, 'emptyCondition', `Sequence flow ${id} has an empty condition (no expression and no ${this.p}:resource): it deploys, but the engines fail when they evaluate it`, `Give it one: \`bpmn set <file> ${id} ${sh('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${id} condition=\`.`);
   }
@@ -45,7 +45,8 @@ export class C7FlowRules extends C7Rules {
       }
       // of several definitions the engines act on one (a link is refused only when it wins)
       const defs = this.actedOn(t);
-      const kind = defs.length === 1 ? (EVENT_GATEWAY_TRIGGERS.find((k) => this.kit.is(defs[0], `bpmn:${k}EventDefinition`)) ?? '') : '';
+      const trigger = defs.length === 1 ? triggerName(defs[0]!) : '';
+      const kind = this.kit.EVENT_GATEWAY_TRIGGERS.find((k) => k === trigger) ?? '';
       if (!kind) {
         this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `target:${tid}`, `${leadsTo}; after an event-based gateway the engines accept only message, timer, signal and conditional catch events and refuse the file`, `\`bpmn set <file> ${tid} trigger=message message=<MessageName>\` (or trigger=timer timer=PT1H).`, [tid, fid]);
         continue;
@@ -53,13 +54,13 @@ export class C7FlowRules extends C7Rules {
       if ((this.incoming.get(t) ?? []).length > 1) {
         this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `incoming:${tid}`, `${this.describe(t, undefined)} after event-based gateway ${id} has other incoming flows; the engines refuse the file`, `Join before the gateway instead, and keep only ${fid} into ${tid} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).`, [tid, fid]);
       }
-      const ref = kind === 'Message' ? peek<El>(defs[0], 'messageRef') : kind === 'Signal' ? peek<El>(defs[0], 'signalRef') : undefined;
+      const ref = kind === 'message' ? peek<El>(defs[0], 'messageRef') : kind === 'signal' ? peek<El>(defs[0], 'signalRef') : undefined;
       const name = nameOf(ref);
       if (!name) continue;
       const key = `${kind}\u0000${name}`;
       const first = names.get(key);
       if (first) {
-        this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `dup:${kind}:${name}`, `Branches ${idOf(first)} and ${tid} of event-based gateway ${id} wait for the same ${kind.toLowerCase()} "${name}"; the engines refuse the file`, `\`bpmn set <file> ${tid} ${kind.toLowerCase()}=<OtherName>\`, or remove one branch.`, [idOf(first)!, tid]);
+        this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `dup:${kind}:${name}`, `Branches ${idOf(first)} and ${tid} of event-based gateway ${id} wait for the same ${kind} "${name}"; the engines refuse the file`, `\`bpmn set <file> ${tid} ${kind}=<OtherName>\`, or remove one branch.`, [idOf(first)!, tid]);
       } else names.set(key, t);
     }
   }
