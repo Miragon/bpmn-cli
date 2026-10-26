@@ -15,8 +15,8 @@ export class ColorAction {
     for (const id of unique(this.op.ids ?? [])) {
       const el = this.ops.doc.require(id);
       if (!this.ops.planes.length) throw this.ops.noDiagram();
-      const shape = this.ops.planes.map((p) => p.shapes.get(id)).find((s) => !!s);
-      const edge = shape ? undefined : this.ops.planes.map((p) => p.edges.get(id)).find((e) => !!e);
+      const shape = this.ops.planes.map((plane) => plane.shapes.get(id)).find((found) => !!found);
+      const edge = shape ? undefined : this.ops.planes.map((plane) => plane.edges.get(id)).find((found) => !!found);
       const di = shape?.di ?? edge?.di;
       if (!di) throw this.ops.noShape(el, id, 'shape or connection');
       if (setSwatch(di, swatch)) colored.push(id);

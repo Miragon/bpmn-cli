@@ -24,9 +24,9 @@ export abstract class C7Rules extends EngineRules {
   protected describe(el: El, owner: El | undefined): string {
     const id = idOf(el);
     const kind = this.kit.isBpmnElement(el) ? this.kit.kindLabel(el).replace(/^bpmn:/, '') : el.$type;
-    const k = lowerFirst(kind);
-    if (id) return `${k} ${id}`;
-    return owner ? `the ${k} of ${this.describe(owner, undefined)}` : k;
+    const kindName = lowerFirst(kind);
+    if (id) return `${kindName} ${id}`;
+    return owner ? `the ${kindName} of ${this.describe(owner, undefined)}` : kindName;
   }
 
   /**
@@ -36,11 +36,11 @@ export abstract class C7Rules extends EngineRules {
   protected c7(el: El | undefined, local: string): string | undefined {
     if (!el) return undefined;
     let fallback: string | undefined;
-    for (const [k, v] of Object.entries(el.$attrs ?? {})) {
-      if (k.slice(k.indexOf(':') + 1) !== local) continue;
-      const uri = this.ns.uriOfName(k);
+    for (const [key, rawValue] of Object.entries(el.$attrs ?? {})) {
+      if (key.slice(key.indexOf(':') + 1) !== local) continue;
+      const uri = this.ns.uriOfName(key);
       if (!this.kit.camunda.reads(uri)) continue;
-      const value = v === undefined || v === null ? undefined : String(v);
+      const value = rawValue === undefined || rawValue === null ? undefined : String(rawValue);
       if (uri === this.kit.OPERATON_URI) return value;
       fallback ??= value;
     }
@@ -50,17 +50,17 @@ export abstract class C7Rules extends EngineRules {
   /** Top-level camunda extension elements of type `local`. */
   protected camundaExt(el: El, local: string): El[] {
     return this.extensionValues(el)
-      .filter((v) => v.uri && this.kit.camunda.reads(v.uri) && v.local === local)
-      .map((v) => v.el);
+      .filter((extValue) => extValue.uri && this.kit.camunda.reads(extValue.uri) && extValue.local === local)
+      .map((extValue) => extValue.el);
   }
 
   protected children(el: El, local?: string): El[] {
     const kids = peek<unknown[]>(el, '$children');
     if (!Array.isArray(kids)) return [];
-    return (kids as El[]).filter((c) => {
-      if (!c || typeof c !== 'object' || typeof c.$type !== 'string' || !isGeneric(c)) return false;
-      const uri = this.ns.uriOfElement(c);
-      return this.kit.camunda.reads(uri) && (local === undefined || localName(c.$type) === local);
+    return (kids as El[]).filter((child) => {
+      if (!child || typeof child !== 'object' || typeof child.$type !== 'string' || !isGeneric(child)) return false;
+      const uri = this.ns.uriOfElement(child);
+      return this.kit.camunda.reads(uri) && (local === undefined || localName(child.$type) === local);
     });
   }
 
@@ -69,16 +69,16 @@ export abstract class C7Rules extends EngineRules {
   }
 
   /** `ext remove` selector of a top-level extension element: a unique attribute, else its index. */
-  protected selectorOf(host: El, v: El): string {
+  protected selectorOf(host: El, vendorElement: El): string {
     const same = this.extensionValues(host)
-      .map((x) => x.el)
-      .filter((x) => x.$type === v.$type);
-    for (const k of SELECTOR_KEYS) {
-      const val = attr(v, k);
-      if (val === undefined || val === '' || same.filter((o) => attr(o, k) === val).length !== 1) continue;
-      return `${v.$type}[${k}=${/^[\w.:-]+$/.test(val) ? val : `"${val.replace(/"/g, '\\"')}"`}]`;
+      .map((extValue) => extValue.el)
+      .filter((element) => element.$type === vendorElement.$type);
+    for (const key of SELECTOR_KEYS) {
+      const val = attr(vendorElement, key);
+      if (val === undefined || val === '' || same.filter((sibling) => attr(sibling, key) === val).length !== 1) continue;
+      return `${vendorElement.$type}[${key}=${/^[\w.:-]+$/.test(val) ? val : `"${val.replace(/"/g, '\\"')}"`}]`;
     }
-    return `${v.$type}[${Math.max(0, same.indexOf(v))}]`;
+    return `${vendorElement.$type}[${Math.max(0, same.indexOf(vendorElement))}]`;
   }
 
   /**
@@ -86,17 +86,17 @@ export abstract class C7Rules extends EngineRules {
    * replaced as a whole (`--replace`); a repeatable one is removed by its own selector and added
    * again, as `--replace` would remove its siblings. `fix` puts placeholders in for attributes.
    */
-  protected extHint(host: El, owner: El | undefined, v: El, local: string, fix: Record<string, string> = {}): string {
+  protected extHint(host: El, owner: El | undefined, vendorElement: El, local: string, fix: Record<string, string> = {}): string {
     const addr = this.addressOf(host, owner);
     if (!addr) return 'Fix it in the XML.';
     const slot = addr.prefix;
-    const type = v.$type;
+    const type = vendorElement.$type;
     if (this.kit.camunda.isSingle(local)) {
       return `See it with \`bpmn ext list <file> ${addr.id} --json\`, then rebuild it: \`bpmn ext add <file> ${addr.id} ${slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
     }
-    const flat = extAddArgs(v, type, fix);
+    const flat = extAddArgs(vendorElement, type, fix);
     const again = flat ? `\`bpmn ext add <file> ${addr.id} ${slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${addr.id} ${slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn ext list <file> ${addr.id} --json\` shows it)`;
-    return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${addr.id} ${sh(`${slot}${this.selectorOf(host, v)}`)}\`, then ${again}.`;
+    return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${addr.id} ${sh(`${slot}${this.selectorOf(host, vendorElement)}`)}\`, then ${again}.`;
   }
 
   /**
@@ -122,8 +122,8 @@ export abstract class C7Rules extends EngineRules {
     const defs = list(el, 'eventDefinitions');
     const order = defs.length > 1 ? this.actingOrder(el) : undefined;
     if (!order) return undefined;
-    const kinds = defs.map((d) => order.findIndex((k) => this.kit.is(d, `bpmn:${k}EventDefinition`)));
-    if (kinds.some((k) => k === -1)) return undefined;
+    const kinds = defs.map((definition) => order.findIndex((kind) => this.kit.is(definition, `bpmn:${kind}EventDefinition`)));
+    if (kinds.some((kind) => kind === -1)) return undefined;
     return defs[kinds.indexOf(Math.min(...kinds))];
   }
 
@@ -134,7 +134,7 @@ export abstract class C7Rules extends EngineRules {
   }
 
   protected definitionOf(el: El, type: string): El | undefined {
-    return this.actedOn(el).find((d) => this.kit.is(d, type));
+    return this.actedOn(el).find((definition) => this.kit.is(definition, type));
   }
 
   /**

@@ -19,13 +19,13 @@ export class Style {
 
   private static colorAttr(el: El | undefined, key: string): string | undefined {
     if (!el) return undefined;
-    const get = (el as { get?: (k: string) => unknown }).get;
+    const get = (el as { get?: (attributeKey: string) => unknown }).get;
     return Style.safeColor(typeof get === 'function' ? get.call(el, key) : undefined);
   }
 
-  private static safeColor(v: unknown): string | undefined {
-    if (typeof v !== 'string') return undefined;
-    const c = v.trim();
-    return /^#[0-9a-f]{3,8}$/i.test(c) || /^(rgb|rgba|hsl|hsla)\([0-9.,%\s]+\)$/i.test(c) || /^[a-z]{3,30}$/i.test(c) ? c : undefined;
+  private static safeColor(candidate: unknown): string | undefined {
+    if (typeof candidate !== 'string') return undefined;
+    const color = candidate.trim();
+    return /^#[0-9a-f]{3,8}$/i.test(color) || /^(rgb|rgba|hsl|hsla)\([0-9.,%\s]+\)$/i.test(color) || /^[a-z]{3,30}$/i.test(color) ? color : undefined;
   }
 }

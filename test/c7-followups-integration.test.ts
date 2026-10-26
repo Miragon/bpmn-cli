@@ -54,11 +54,11 @@ const OPERATON = 'xmlns:operaton="http://operaton.org/schema/1.0/bpmn"';
 const MODELER = 'xmlns:modeler="http://camunda.org/schema/modeler/1.0"';
 const C7 = `${CAMUNDA} ${MODELER} modeler:executionPlatform="Camunda Platform"`;
 
-function xml(body: string, o: { ns?: string; roots?: string; attrs?: string } = {}): string {
+function xml(body: string, options: { ns?: string; roots?: string; attrs?: string } = {}): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions ${BPMN} ${o.ns ?? C7} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-${o.roots ?? ''}
-  <bpmn:process id="P_Integration" isExecutable="true" ${o.attrs ?? 'camunda:historyTimeToLive="180"'}>
+<bpmn:definitions ${BPMN} ${options.ns ?? C7} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+${options.roots ?? ''}
+  <bpmn:process id="P_Integration" isExecutable="true" ${options.attrs ?? 'camunda:historyTimeToLive="180"'}>
 ${body}
   </bpmn:process>
 </bpmn:definitions>`;
@@ -67,8 +67,8 @@ ${body}
 /** start -> nodes -> end */
 function chain(nodes: Array<[string, string]>, extra = '', start = '<bpmn:startEvent id="Start" />'): string {
   const ids = ['Start', ...nodes.map(([id]) => id), 'End'];
-  const flows = ids.slice(1).map((id, i) => `<bpmn:sequenceFlow id="F${i}" sourceRef="${ids[i]}" targetRef="${id}" />`);
-  return [start, ...nodes.map(([, x]) => x), '<bpmn:endEvent id="End" />', ...flows, extra].join('\n');
+  const flows = ids.slice(1).map((id, flowIndex) => `<bpmn:sequenceFlow id="F${flowIndex}" sourceRef="${ids[flowIndex]}" targetRef="${id}" />`);
+  return [start, ...nodes.map(([, nodeXml]) => nodeXml), '<bpmn:endEvent id="End" />', ...flows, extra].join('\n');
 }
 
 const ROOTS = '<bpmn:message id="M" name="Pay" /><bpmn:signal id="Sig" name="Go" />';
@@ -124,19 +124,19 @@ const CASES: Case[] = [
 ];
 
 describe('integration follow-ups: one synthetic model per rule', () => {
-  it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
-    const findings = runProfile(await Doc.fromXml(c.xml)).findings;
-    expect(findings.map((f) => f.code).sort()).toEqual([...c.codes].sort());
-    expect(findings.some((f) => f.severity === 'deploy')).toBe(c.engine === 'reject');
-    for (const f of findings) expect(f.hint, `${f.code}: ${f.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
+  it.each(CASES.map((testCase) => [testCase.name, testCase] as const))('%s', async (_name, testCase) => {
+    const findings = runProfile(await Doc.fromXml(testCase.xml)).findings;
+    expect(findings.map((finding) => finding.code).sort()).toEqual([...testCase.codes].sort());
+    expect(findings.some((finding) => finding.severity === 'deploy')).toBe(testCase.engine === 'reject');
+    for (const finding of findings) expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
   });
 
   it('names the definition the engines act on and how to keep only it', async () => {
-    const [f] = runProfile(await Doc.fromXml(xml(chain([catchEvent('W', MSG + TIMER)]), { roots: ROOTS }))).findings;
-    expect(f).toMatchObject({ code: MULTIPLE, element: 'W', severity: 'runtime' });
-    expect(f!.message).toContain('the engines act on the timer only and ignore the message');
-    expect(f!.hint).toContain('`bpmn set <file> W trigger=timer`');
-    const end = runProfile(await Doc.fromXml(CASES.find((c) => c.name.startsWith('end event'))!.xml)).findings[0]!;
+    const [finding] = runProfile(await Doc.fromXml(xml(chain([catchEvent('W', MSG + TIMER)]), { roots: ROOTS }))).findings;
+    expect(finding).toMatchObject({ code: MULTIPLE, element: 'W', severity: 'runtime' });
+    expect(finding!.message).toContain('the engines act on the timer only and ignore the message');
+    expect(finding!.hint).toContain('`bpmn set <file> W trigger=timer`');
+    const end = runProfile(await Doc.fromXml(CASES.find((testCase) => testCase.name.startsWith('end event'))!.xml)).findings[0]!;
     expect(end.message).toContain('the engines act on the message only and ignore the signal');
   });
 });
@@ -146,19 +146,19 @@ describe('integration follow-ups: one synthetic model per rule', () => {
 /* ------------------------------------------------------------------ */
 
 function cli(...args: string[]): { code: number; out: string; err: string } {
-  const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
 /** The `bpmn ...` command lines of a hint, as argv (single quotes honoured, `bpmn` dropped). */
 function commandsOf(hint: string): string[][] {
-  return [...hint.matchAll(/`(bpmn [^`]+)`/g)].map((m) => {
+  return [...hint.matchAll(/`(bpmn [^`]+)`/g)].map((match) => {
     const out: string[] = [];
     const re = /'((?:[^']|'\\'')*)'|(\S+)/g;
     let cur: RegExpExecArray | null;
     let arg = '';
     let last = -1;
-    while ((cur = re.exec(m[1]!))) {
+    while ((cur = re.exec(match[1]!))) {
       const piece = cur[1] !== undefined ? cur[1].replace(/'\\''/g, "'") : cur[2]!;
       if (cur.index === last) arg += piece;
       else {
@@ -188,17 +188,17 @@ describe('hints name one of several event definitions with definition[<n>].', ()
     const defs = `<bpmn:messageEventDefinition id="MDef" messageRef="M" camunda:asyncc="true" />${TIMER.replace('<bpmn:timerEventDefinition id="TDef">', '<bpmn:timerEventDefinition id="TDef" camunda:jobPriority="high">')}`;
     writeFileSync(file, xml(chain([catchEvent('W', defs)]), { roots: ROOTS }));
     const findings = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings;
-    const unknown = findings.find((f) => f.code === 'W_C7_UNKNOWN_ATTRIBUTE')!;
-    const priority = findings.find((f) => f.code === 'W_C7_MISPLACED_ATTRIBUTE')!;
+    const unknown = findings.find((finding) => finding.code === 'W_C7_UNKNOWN_ATTRIBUTE')!;
+    const priority = findings.find((finding) => finding.code === 'W_C7_MISPLACED_ATTRIBUTE')!;
     expect(unknown.hint).toContain("`bpmn set <file> W 'definition[0].camunda:asyncc='`");
     expect(priority.hint).toContain("`bpmn set <file> W 'definition[1].camunda:jobPriority='`");
-    for (const f of [unknown, priority]) {
-      for (const argv of commandsOf(f.hint!)) {
-        const r = cli(...argv.map((a) => (a === '<file>' ? file : a)), '--no-layout');
-        expect(r.code, `${argv.join(' ')}\n${r.out}\n${r.err}`).toBe(0);
+    for (const finding of [unknown, priority]) {
+      for (const argv of commandsOf(finding.hint!)) {
+        const result = cli(...argv.map((argument) => (argument === '<file>' ? file : argument)), '--no-layout');
+        expect(result.code, `${argv.join(' ')}\n${result.out}\n${result.err}`).toBe(0);
       }
     }
-    expect(runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.map((f) => f.code)).toEqual([MULTIPLE]);
+    expect(runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.map((finding) => finding.code)).toEqual([MULTIPLE]);
   }, 60000);
 });
 
@@ -218,12 +218,12 @@ describe('a boundary event on a compensation handler is reported once', () => {
   );
 
   it('validate: E_INVALID_HOST, no W_C7_DEPLOY_BOUNDARY_HOST (neither listed nor counted)', async () => {
-    const r = validateDoc(await Doc.fromXml(XML), { platform: 'auto' });
-    expect(r.errors.map((e) => `${e.code} ${e.element}`)).toContain('E_INVALID_HOST BT');
-    expect(r.warnings.map((w) => w.code)).not.toContain('W_C7_DEPLOY_BOUNDARY_HOST');
-    expect(r.platform!.counts.deploy).toBe(0);
+    const report = validateDoc(await Doc.fromXml(XML), { platform: 'auto' });
+    expect(report.errors.map((validationError) => `${validationError.code} ${validationError.element}`)).toContain('E_INVALID_HOST BT');
+    expect(report.warnings.map((warning) => warning.code)).not.toContain('W_C7_DEPLOY_BOUNDARY_HOST');
+    expect(report.platform!.counts.deploy).toBe(0);
     // the profile on its own (library) still knows the engine rule
-    expect(runProfile(await Doc.fromXml(XML)).findings.map((f) => f.code)).toEqual(['W_C7_DEPLOY_BOUNDARY_HOST']);
+    expect(runProfile(await Doc.fromXml(XML)).findings.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_BOUNDARY_HOST']);
   });
 });
 
@@ -244,8 +244,8 @@ describe("Operaton's namespace in the ops", () => {
     try {
       fn();
     } catch (err) {
-      const e = err as { code?: string; message: string; details?: { hint?: string } };
-      return { code: e.code, message: e.message, hint: e.details?.hint };
+      const thrown = err as { code?: string; message: string; details?: { hint?: string } };
+      return { code: thrown.code, message: thrown.message, hint: thrown.details?.hint };
     }
     throw new Error('expected an error');
   };
@@ -256,11 +256,11 @@ describe("Operaton's namespace in the ops", () => {
       { op: 'ext', id: 'Activity_Host', action: 'add', type: 'operaton:inputParameter', attrs: { name: 'a' }, body: '1' },
       { op: 'ext', id: 'Activity_Host', action: 'add', xml: '<operaton:inputOutput><operaton:outputParameter name="c">3</operaton:outputParameter></operaton:inputOutput>' },
     ]);
-    expect(cs.warnings.map((w) => w.code)).toEqual([]);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual([]);
     const list = listAllExtensions(doc.require('Activity_Host'));
-    expect(list.map((e) => e.type)).toEqual(['operaton:inputOutput']);
-    expect(list[0]!.children!.map((c) => `${c.type} ${c.attrs['name']}`)).toEqual(['operaton:inputParameter a', 'operaton:outputParameter c']);
-    expect(runProfile(doc).findings.map((f) => f.code)).toEqual([]);
+    expect(list.map((extension) => extension.type)).toEqual(['operaton:inputOutput']);
+    expect(list[0]!.children!.map((child) => `${child.type} ${child.attrs['name']}`)).toEqual(['operaton:inputParameter a', 'operaton:outputParameter c']);
+    expect(runProfile(doc).findings.map((finding) => finding.code)).toEqual([]);
     // the file does not get the camunda namespace on the way
     expect(await doc.toXml()).not.toContain('xmlns:camunda');
   });
@@ -269,7 +269,7 @@ describe("Operaton's namespace in the ops", () => {
     const doc = await fresh();
     runOps(doc, [{ op: 'ext', id: 'Activity_Host', action: 'add', type: 'operaton:inputParameter', attrs: { name: 'a' }, body: '1' }]);
     runOps(doc, [{ op: 'ext', id: 'Activity_Host', action: 'add', type: 'operaton:inputParameter', attrs: { name: 'a' }, body: '2' }]);
-    expect(listAllExtensions(doc.require('Activity_Host'))[0]!.children!.map((c) => c.body)).toEqual(['2']);
+    expect(listAllExtensions(doc.require('Activity_Host'))[0]!.children!.map((child) => child.body)).toEqual(['2']);
     runOps(doc, [{ op: 'ext', id: 'Activity_Review', action: 'add', type: 'operaton:failedJobRetryTimeCycle', body: 'R3/PT1M' }]);
     expect(error(() => runOps(doc, [{ op: 'ext', id: 'Activity_Review', action: 'add', type: 'operaton:failedJobRetryTimeCycle', body: 'R5/PT1M' }])).code).toBe('E_DUPLICATE_EXTENSION');
   });
@@ -280,7 +280,7 @@ describe("Operaton's namespace in the ops", () => {
       { op: 'ext', id: 'Activity_Host', action: 'add', type: 'camunda:inputParameter', attrs: { name: 'x' }, body: '1' },
       { op: 'ext', id: 'Activity_Host', action: 'add', type: 'operaton:inputParameter', attrs: { name: 'y' }, body: '2' },
     ]);
-    expect(listAllExtensions(doc.require('Activity_Host')).map((e) => `${e.type}: ${e.children!.map((c) => c.attrs['name']).join(',')}`)).toEqual(['camunda:inputOutput: x', 'operaton:inputOutput: y']);
+    expect(listAllExtensions(doc.require('Activity_Host')).map((extension) => `${extension.type}: ${extension.children!.map((child) => child.attrs['name']).join(',')}`)).toEqual(['camunda:inputOutput: x', 'operaton:inputOutput: y']);
   });
 
   it('a rename re-points operaton:errorEventDefinition errorRef', async () => {
@@ -288,22 +288,22 @@ describe("Operaton's namespace in the ops", () => {
     runOps(doc, [{ op: 'ext', id: 'Activity_Host', action: 'add', type: 'operaton:errorEventDefinition', attrs: { id: 'OEED_1', errorRef: 'Error_Biz', expression: '${true}' } }]);
     runOps(doc, [{ op: 'set', id: 'Error_Biz', values: { id: 'Error_New' } }]);
     expect(listAllExtensions(doc.require('Activity_Host'))[0]!.attrs['errorRef']).toBe('Error_New');
-    expect(runProfile(doc).findings.map((f) => f.code)).not.toContain('W_C7_DANGLING_REF');
+    expect(runProfile(doc).findings.map((finding) => finding.code)).not.toContain('W_C7_DANGLING_REF');
   });
 
   it('Booleans are written as true / false, misplaced attributes are E_WRONG_HOST, a resource condition is a condition', async () => {
     const doc = await fresh();
     runOps(doc, [{ op: 'set', id: 'Activity_Host', values: { 'operaton:asyncBefore': 'yes' } }]);
     expect(doc.require('Activity_Host').$attrs['operaton:asyncBefore']).toBe('true');
-    const e = error(() => runOps(doc, [{ op: 'set', id: 'Activity_Review', values: { 'operaton:collection': '${items}' } }]));
-    expect(e.code).toBe('E_WRONG_HOST');
-    expect(e.hint).toContain("'loop.operaton:collection=${items}'");
+    const failure = error(() => runOps(doc, [{ op: 'set', id: 'Activity_Review', values: { 'operaton:collection': '${items}' } }]));
+    expect(failure.code).toBe('E_WRONG_HOST');
+    expect(failure.hint).toContain("'loop.operaton:collection=${items}'");
     // a conditional event whose script resource is operaton:resource: when= drops it (reported), it is not left behind
     const cond = await Doc.fromXml(
       xml(chain([['W', '<bpmn:intermediateCatchEvent id="W"><bpmn:conditionalEventDefinition><bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" operaton:resource="deployment://c.groovy" /></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent>']]), { ns: OPERATON, attrs: 'operaton:historyTimeToLive="180"' }),
     );
     const cs = runOps(cond, [{ op: 'set', id: 'W', values: { when: '${x > 1}' } }]);
-    expect(cs.warnings.map((w) => w.message).join(' ')).toContain('operaton:resource');
+    expect(cs.warnings.map((warning) => warning.message).join(' ')).toContain('operaton:resource');
     expect(await cond.toXml()).not.toContain('operaton:resource');
     expect(error(() => runOps(cond, [{ op: 'set', id: 'W', values: { 'condition.operaton:resource': 'deployment://c.groovy' } }, { op: 'set', id: 'W', values: { 'condition.operaton:resource': '' } }])).code).toBe('E_INVALID_VALUE');
   });
@@ -311,12 +311,12 @@ describe("Operaton's namespace in the ops", () => {
   it('retype names the operaton content the new kind cannot use (once, through the profile, in a write)', async () => {
     const retype: Op[] = [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }];
     const cs = runOps(await fresh(), retype);
-    const w = cs.warnings.find((x) => x.code === 'W_PROPERTY_INAPPLICABLE');
-    expect(w?.message).toMatch(/operaton:assignee/);
-    expect(w?.message).toMatch(/operaton:taskListener/);
-    const r = await mutateDoc(await fresh(), retype, { dryRun: true, layout: false });
-    expect(r.changes.warnings.map((x) => x.code)).not.toContain('W_PROPERTY_INAPPLICABLE');
-    expect(r.validation.platform!.added!.map((f) => f.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION']);
+    const warning = cs.warnings.find((candidate) => candidate.code === 'W_PROPERTY_INAPPLICABLE');
+    expect(warning?.message).toMatch(/operaton:assignee/);
+    expect(warning?.message).toMatch(/operaton:taskListener/);
+    const result = await mutateDoc(await fresh(), retype, { dryRun: true, layout: false });
+    expect(result.changes.warnings.map((warning) => warning.code)).not.toContain('W_PROPERTY_INAPPLICABLE');
+    expect(result.validation.platform!.added!.map((finding) => finding.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION']);
   });
 
   it('a new process of an Operaton file gets operaton:historyTimeToLive (camunda files keep camunda:)', async () => {
@@ -339,23 +339,23 @@ describe("Operaton's namespace in the ops", () => {
 describe('W_C7_DEPLOY_SCHEMA: `set <id> <attr>=` removes the attribute', () => {
   it('on the element and on a nested element; following the hints leaves a file the engines deploy', async () => {
     const file = join(dir, 'schema.bpmn');
-    writeFileSync(file, CASES.find((c) => c.name.startsWith('unprefixed'))!.xml.replace('<bpmn:userTask', '<bpmn:userTask'));
+    writeFileSync(file, CASES.find((testCase) => testCase.name.startsWith('unprefixed'))!.xml.replace('<bpmn:userTask', '<bpmn:userTask'));
     const findings = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings;
     // a business rule task's unprefixed calledDecision is a decision link (bpmn-cli's spelling for a model without an engine): `set calledDecision=` writes the engines' spelling
-    expect(findings.map((f) => f.hint)).toEqual(["Write the decision link in the engines' spelling: `bpmn set <file> R calledDecision=d1` (camunda:decisionRef; the unprefixed calledDecision is removed).", 'Remove it: `bpmn set <file> W definition.foo=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
-    for (const f of findings) {
-      for (const argv of commandsOf(f.hint!)) {
-        const r = cli(...argv.map((a) => (a === '<file>' ? file : a)), '--no-layout');
-        expect(r.code, `${argv.join(' ')}\n${r.out}\n${r.err}`).toBe(0);
+    expect(findings.map((finding) => finding.hint)).toEqual(["Write the decision link in the engines' spelling: `bpmn set <file> R calledDecision=d1` (camunda:decisionRef; the unprefixed calledDecision is removed).", 'Remove it: `bpmn set <file> W definition.foo=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
+    for (const finding of findings) {
+      for (const argv of commandsOf(finding.hint!)) {
+        const result = cli(...argv.map((argument) => (argument === '<file>' ? file : argument)), '--no-layout');
+        expect(result.code, `${argv.join(' ')}\n${result.out}\n${result.err}`).toBe(0);
       }
     }
     expect(runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings).toEqual([]);
   }, 60000);
 
   it('in the diagram `set` cannot reach it: the hint says so; on bpmn:definitions it can', async () => {
-    const x = xml(chain([])).replace('<bpmn:definitions ', '<bpmn:definitions bar="2" ').replace('</bpmn:process>', '</bpmn:process><bpmndi:BPMNDiagram id="Diagram_1"><bpmndi:BPMNPlane id="Plane_1" bpmnElement="P_Integration" foo="1" /></bpmndi:BPMNDiagram>').replace(BPMN, `${BPMN} xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"`);
-    const findings = runProfile(await Doc.fromXml(x)).findings;
-    expect(findings.map((f) => [f.element, f.hint])).toEqual([
+    const model = xml(chain([])).replace('<bpmn:definitions ', '<bpmn:definitions bar="2" ').replace('</bpmn:process>', '</bpmn:process><bpmndi:BPMNDiagram id="Diagram_1"><bpmndi:BPMNPlane id="Plane_1" bpmnElement="P_Integration" foo="1" /></bpmndi:BPMNDiagram>').replace(BPMN, `${BPMN} xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"`);
+    const findings = runProfile(await Doc.fromXml(model)).findings;
+    expect(findings.map((finding) => [finding.element, finding.hint])).toEqual([
       ['Definitions_1', 'Remove it: `bpmn set <file> Definitions_1 bar=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).'],
       ['Plane_1', 'Remove foo="..." from the XML of Plane_1, or redraw the diagram, which writes new diagram elements: `bpmn layout <file>` (the hand-made layout is lost).'],
     ]);
@@ -363,8 +363,8 @@ describe('W_C7_DEPLOY_SCHEMA: `set <id> <attr>=` removes the attribute', () => {
 
   it('a misspelt vendor attribute is moved in one command; a defined key still cannot be set to an unknown one', async () => {
     const doc = await Doc.fromXml(xml(chain([['T', '<bpmn:userTask id="T" assignee="demo" />']])));
-    const [f] = runProfile(doc).findings;
-    expect(f!.hint).toContain('`bpmn set <file> T assignee= camunda:assignee=demo`');
+    const [finding] = runProfile(doc).findings;
+    expect(finding!.hint).toContain('`bpmn set <file> T assignee= camunda:assignee=demo`');
     runOps(doc, [{ op: 'set', id: 'T', values: { assignee: '', 'camunda:assignee': 'demo' } }]);
     expect(doc.require('T').$attrs).toEqual({ 'camunda:assignee': 'demo' });
     expect(() => runOps(doc, [{ op: 'set', id: 'T', values: { assignee: 'x' } }])).toThrow(/Unknown key "assignee"/);
@@ -379,18 +379,18 @@ describe('CLI output', () => {
   it('validate: a Camunda 8 file counts the findings of the Camunda 8 profile (step 3; before: "no Camunda 8 engine rules yet")', () => {
     const file = join(dir, 'c8.bpmn');
     writeFileSync(file, xml(chain([['T', '<bpmn:serviceTask id="T"><bpmn:extensionElements><zeebe:taskDefinition type="t" /></bpmn:extensionElements></bpmn:serviceTask>']]), { ns: 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"', attrs: '' }));
-    const r = cli('validate', file);
-    expect(r.out).toContain('platform: c8 (1 zeebe attribute(s)/element(s)) - 0 refused at deploy, 0 runtime, 0 practice finding(s)');
-    expect(r.out).not.toContain('no Camunda 8 engine rules yet');
+    const result = cli('validate', file);
+    expect(result.out).toContain('platform: c8 (1 zeebe attribute(s)/element(s)) - 0 refused at deploy, 0 runtime, 0 practice finding(s)');
+    expect(result.out).not.toContain('no Camunda 8 engine rules yet');
   });
 
   it('validate: import warnings are counted, and --strict fails on them', () => {
     const file = join(dir, 'twoloops.bpmn');
     writeFileSync(file, xml(chain([['T', '<bpmn:userTask id="T"><bpmn:standardLoopCharacteristics id="SL" /><bpmn:multiInstanceLoopCharacteristics id="MI" camunda:collection="${items}" /></bpmn:userTask>']])));
-    const r = cli('validate', file);
-    expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^import: duplicate element/m);
-    expect(r.out).toMatch(/valid, 0 warning\(s\), 1 import warning\(s\)$/m);
+    const result = cli('validate', file);
+    expect(result.code).toBe(0);
+    expect(result.out).toMatch(/^import: duplicate element/m);
+    expect(result.out).toMatch(/valid, 0 warning\(s\), 1 import warning\(s\)$/m);
     expect(cli('validate', file, '--strict').code).toBe(5);
   });
 
@@ -409,16 +409,16 @@ describe('CLI output', () => {
     // lint: G -> U (a user task, already in the file: counted, not repeated); op: G -> R (a receive task mixed with a message catch event)
     const text = cli('connect', file, 'G', 'R', '--no-layout', '--dry-run');
     expect(text.code, text.err).toBe(0);
-    const lines = text.out.split('\n').filter((l) => l.includes('W_EVENT_GATEWAY_TARGET'));
-    expect(lines.filter((l) => l.includes('now leads to R'))).toHaveLength(1);
-    expect(lines.filter((l) => l.includes('leads to userTask U'))).toHaveLength(0);
+    const lines = text.out.split('\n').filter((line) => line.includes('W_EVENT_GATEWAY_TARGET'));
+    expect(lines.filter((line) => line.includes('now leads to R'))).toHaveLength(1);
+    expect(lines.filter((line) => line.includes('leads to userTask U'))).toHaveLength(0);
     expect(text.out).toMatch(/^\d+ warnings? already in the file/m);
-    const r = cli('connect', file, 'G', 'R', '--no-layout', '--json');
-    expect(r.code, r.err).toBe(0);
-    const warnings = JSON.parse(r.out).warnings as { added: Array<{ code: string; message: string }>; preexistingCount: number };
-    const added = warnings.added.filter((w) => w.code === 'W_EVENT_GATEWAY_TARGET');
-    expect(added.filter((w) => w.message.includes('now leads to R'))).toHaveLength(1);
-    expect(added.filter((w) => w.message.includes('leads to userTask U'))).toHaveLength(0);
+    const result = cli('connect', file, 'G', 'R', '--no-layout', '--json');
+    expect(result.code, result.err).toBe(0);
+    const warnings = JSON.parse(result.out).warnings as { added: Array<{ code: string; message: string }>; preexistingCount: number };
+    const added = warnings.added.filter((warning) => warning.code === 'W_EVENT_GATEWAY_TARGET');
+    expect(added.filter((warning) => warning.message.includes('now leads to R'))).toHaveLength(1);
+    expect(added.filter((warning) => warning.message.includes('leads to userTask U'))).toHaveLength(0);
     expect(warnings.preexistingCount).toBeGreaterThan(0);
   }, 30000);
 });
@@ -434,9 +434,9 @@ describe('an explicit mutation platform decides the engine rules of the ops', ()
       { ns, attrs, roots: `${ROOTS}<bpmn:message id="M2" name="Ship" />` },
     );
   const remove: Op[] = [{ op: 'remove', ids: ['Catch'] }];
-  const code = async (x: string, platform?: 'c7' | 'none'): Promise<string> => {
+  const code = async (model: string, platform?: 'c7' | 'none'): Promise<string> => {
     try {
-      await mutateDoc(await Doc.fromXml(x), remove, { dryRun: true, layout: false, ...(platform ? { platform } : {}) });
+      await mutateDoc(await Doc.fromXml(model), remove, { dryRun: true, layout: false, ...(platform ? { platform } : {}) });
       return 'ok';
     } catch (err) {
       return (err as { code: string }).code;
@@ -460,7 +460,7 @@ describe('self-description', () => {
     expect(Object.keys(json.nestedSelectors)).toEqual(['definition[<n>].<key>', 'definition[<trigger>].<key>']);
     expect(kindsText()).toContain('definition[<n>].<key>: one of several event definitions');
     for (const code of ['E_AMBIGUOUS_NESTED', 'W_C7_DEPLOY_START_EVENT', 'W_C7_DEPLOY_LINK', 'W_C7_DEPLOY_SCHEMA', 'W_C7_EMPTY_CONDITION', MULTIPLE]) {
-      expect(json.errors.map((e) => e.code)).toContain(code);
+      expect(json.errors.map((validationError) => validationError.code)).toContain(code);
     }
   });
 });
@@ -471,7 +471,7 @@ describe('self-description', () => {
 
 const ENGINES = (process.env['BPMN_C7_ENGINES'] ?? '')
   .split(',')
-  .map((s) => s.trim().replace(/\/$/, ''))
+  .map((url) => url.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 async function deploy(engine: string, name: string, bpmn: string): Promise<{ ok: boolean; message: string }> {
@@ -491,9 +491,9 @@ async function deploy(engine: string, name: string, bpmn: string): Promise<{ ok:
 
 describe.skipIf(!ENGINES.length)('live engines: the engines agree with CASES', () => {
   for (const engine of ENGINES) {
-    it.each(CASES.map((c, i) => [c.name, c, i] as const))(`${engine}: %s`, async (_name, c, i) => {
-      const result = await deploy(engine, `bpmn-cli-c7-integration-${i}`, c.xml);
-      expect(result.ok, result.message).toBe(c.engine === 'accept');
+    it.each(CASES.map((testCase, caseIndex) => [testCase.name, testCase, caseIndex] as const))(`${engine}: %s`, async (_name, testCase, caseIndex) => {
+      const result = await deploy(engine, `bpmn-cli-c7-integration-${caseIndex}`, testCase.xml);
+      expect(result.ok, result.message).toBe(testCase.engine === 'accept');
     }, 30000);
   }
 });

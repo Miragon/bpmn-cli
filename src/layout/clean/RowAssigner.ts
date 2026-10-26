@@ -47,47 +47,47 @@ export class RowAssigner {
   assign(): void {
     const { nodes } = this.layout;
     const { placed, queue } = this;
-    const starts = nodes.filter((n) => n.kind === 'start');
-    const sources = nodes.filter((n) => n.in.length === 0 && n.kind !== 'start');
+    const starts = nodes.filter((node) => node.kind === 'start');
+    const sources = nodes.filter((node) => node.in.length === 0 && node.kind !== 'start');
     const roots = [...this.groupedOrder([...starts, ...sources], nodes, this.groups), ...nodes];
-    const maxLayer = Math.max(0, ...nodes.map((n) => n.layer));
+    const maxLayer = Math.max(0, ...nodes.map((node) => node.layer));
     let first = true;
     for (const root of roots) {
       if (placed.has(root)) continue;
-      const c = this.chain(root);
+      const rootChain = this.chain(root);
       if (first) {
-        this.commit({ owner: '#spine', from: 0, to: maxLayer, row: 0, originRow: -1, dropColumn: -1, nodes: c.nodes }, 0);
+        this.commit({ owner: '#spine', from: 0, to: maxLayer, row: 0, originRow: -1, dropColumn: -1, nodes: rootChain.nodes }, 0);
         first = false;
       } else {
-        const from = Math.min(...c.nodes.map((n) => n.layer));
-        const to = Math.max(...c.nodes.map((n) => n.layer), c.join?.layer ?? 0);
-        this.place({ owner: `#comp-${root.id}`, from, to, row: 0, originRow: -1, dropColumn: -1, nodes: c.nodes });
+        const from = Math.min(...rootChain.nodes.map((node) => node.layer));
+        const to = Math.max(...rootChain.nodes.map((node) => node.layer), rootChain.join?.layer ?? 0);
+        this.place({ owner: `#comp-${root.id}`, from, to, row: 0, originRow: -1, dropColumn: -1, nodes: rootChain.nodes });
       }
-      this.enqueueBranches(c.nodes);
+      this.enqueueBranches(rootChain.nodes);
       while (queue.length) {
         const { origin, first: firstNode } = queue.shift()!;
         if (placed.has(firstNode)) continue;
         const c2 = this.chain(firstNode);
         const from = origin.layer;
-        const to = Math.max(...c2.nodes.map((n) => n.layer), c2.join?.layer ?? 0);
+        const to = Math.max(...c2.nodes.map((node) => node.layer), c2.join?.layer ?? 0);
         this.place({ owner: origin.id, from, to, row: 0, originRow: origin.row, dropColumn: origin.layer, nodes: c2.nodes });
         this.enqueueBranches(c2.nodes);
       }
     }
-    for (const n of nodes) for (const b of n.boundary) b.row = n.row;
+    for (const node of nodes) for (const boundaryEvent of node.boundary) boundaryEvent.row = node.row;
   }
 
   private debug(msg: string): void {
     if (LayoutDebug.on()) LayoutDebug.log(`[rows] ${msg}`);
   }
 
-  private overlapsRange(a: { from: number; to: number }, b: { from: number; to: number }): boolean {
-    return a.from <= b.to && b.from <= a.to;
+  private overlapsRange(range: { from: number; to: number }, other: { from: number; to: number }): boolean {
+    return range.from <= other.to && other.from <= range.to;
   }
 
-  private loopsBackOnly(n: GNode): boolean {
-    const out = outgoingOf(n);
-    return out.length > 0 && out.every((e) => e.back);
+  private loopsBackOnly(node: GNode): boolean {
+    const out = outgoingOf(node);
+    return out.length > 0 && out.every((edge) => edge.back);
   }
 
   private inRow(row: number): Branch[] {
@@ -98,24 +98,24 @@ export class RowAssigner {
     return this.lowest;
   }
 
-  private dropPasses(b: Branch, row: number): boolean {
-    return b.originRow < row && row < b.row;
+  private dropPasses(branch: Branch, row: number): boolean {
+    return branch.originRow < row && row < branch.row;
   }
 
   private intervalFree(row: number, iv: Branch): boolean {
-    return !this.inRow(row).some((o) => this.overlapsRange(o, iv));
+    return !this.inRow(row).some((other) => this.overlapsRange(other, iv));
   }
 
   private dropFree(row: number, iv: Branch): boolean {
-    for (let r = iv.originRow + 1; r < row; r++) {
-      if (this.inRow(r).some((o) => o.owner !== iv.owner && o.from <= iv.dropColumn && iv.dropColumn <= o.to)) return false;
+    for (let passedRow = iv.originRow + 1; passedRow < row; passedRow++) {
+      if (this.inRow(passedRow).some((other) => other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) return false;
     }
     return true;
   }
 
   private setRow(iv: Branch, row: number): void {
     iv.row = row;
-    for (const n of iv.nodes) n.row = row;
+    for (const node of iv.nodes) node.row = row;
     if (iv.edge) iv.edge.bandRow = row;
   }
 
@@ -135,7 +135,7 @@ export class RowAssigner {
 
   private commit(iv: Branch, row: number): void {
     this.setRow(iv, row);
-    for (const n of iv.nodes) n.band = this.branches.length;
+    for (const node of iv.nodes) node.band = this.branches.length;
     this.branches.push(iv);
     const list = this.byDrop.get(iv.dropColumn);
     if (list) list.push(iv);
@@ -146,29 +146,29 @@ export class RowAssigner {
   /** Shifts only the colliding bands down (transitively); false when a drop line would be cut. */
   private tryInsert(at: number, iv: Branch): boolean {
     const moving = new Map<Branch, number>(); // branch -> new row
-    const queue: Branch[] = this.inRow(at).filter((o) => this.overlapsRange(o, iv));
-    for (const o of queue) moving.set(o, at + 1);
+    const queue: Branch[] = this.inRow(at).filter((other) => this.overlapsRange(other, iv));
+    for (const other of queue) moving.set(other, at + 1);
     while (queue.length) {
-      const m = queue.shift()!;
-      const newRow = moving.get(m)!;
-      for (const o of this.inRow(newRow)) {
-        if (moving.has(o) || !this.overlapsRange(o, m)) continue;
-        moving.set(o, newRow + 1);
-        queue.push(o);
+      const moved = queue.shift()!;
+      const newRow = moving.get(moved)!;
+      for (const other of this.inRow(newRow)) {
+        if (moving.has(other) || !this.overlapsRange(other, moved)) continue;
+        moving.set(other, newRow + 1);
+        queue.push(other);
       }
     }
-    const cuts = (b: Branch): boolean => !moving.has(b) && this.dropPasses(b, at) && iv.from <= b.dropColumn && b.dropColumn <= iv.to;
+    const cuts = (branch: Branch): boolean => !moving.has(branch) && this.dropPasses(branch, at) && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to;
     if (iv.to - iv.from < this.branches.length) {
-      for (let c = iv.from; c <= iv.to; c++) if (this.byDrop.get(c)?.some(cuts)) return false;
+      for (let column = iv.from; column <= iv.to; column++) if (this.byDrop.get(column)?.some(cuts)) return false;
     } else if (this.branches.some(cuts)) return false;
     // a moved band's drop line now also passes row `at`
-    for (const [b] of moving) {
-      if (b.originRow < at && iv.from <= b.dropColumn && b.dropColumn <= iv.to) return false;
+    for (const [branch] of moving) {
+      if (branch.originRow < at && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to) return false;
     }
-    for (let r = iv.originRow + 1; r < at; r++) {
-      if (this.inRow(r).some((o) => !moving.has(o) && o.owner !== iv.owner && o.from <= iv.dropColumn && iv.dropColumn <= o.to)) return false;
+    for (let passedRow = iv.originRow + 1; passedRow < at; passedRow++) {
+      if (this.inRow(passedRow).some((other) => !moving.has(other) && other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) return false;
     }
-    for (const [b, newRow] of moving) this.move(b, newRow);
+    for (const [branch, newRow] of moving) this.move(branch, newRow);
     this.commit(iv, at);
     return true;
   }
@@ -197,14 +197,14 @@ export class RowAssigner {
     }
   }
 
-  private reach(n: GNode): number {
-    const known = this.reachMemo.get(n);
+  private reach(node: GNode): number {
+    const known = this.reachMemo.get(node);
     if (known !== undefined) return known;
-    const layer = this.natural.get(n) ?? n.layer;
-    this.reachMemo.set(n, layer);
+    const layer = this.natural.get(node) ?? node.layer;
+    this.reachMemo.set(node, layer);
     let best = layer;
-    for (const e of outgoingOf(n)) if (!e.back) best = Math.max(best, this.reach(e.target));
-    this.reachMemo.set(n, best);
+    for (const edge of outgoingOf(node)) if (!edge.back) best = Math.max(best, this.reach(edge.target));
+    this.reachMemo.set(node, best);
     return best;
   }
 
@@ -217,18 +217,18 @@ export class RowAssigner {
       out.push(cur);
       placed.add(cur);
       // only the node's own flows continue the chain: boundary handlers are bands below the host
-      const candidates: GEdge[] = cur.out.filter((e) => !e.back && !placed.has(e.target));
+      const candidates: GEdge[] = cur.out.filter((edge) => !edge.back && !placed.has(edge.target));
       let next: GNode | undefined;
       let bestReach = -1;
-      for (const e of candidates) {
-        const r = this.loopsBackOnly(e.target) ? -0.5 : this.reach(e.target);
-        if (r > bestReach) {
-          bestReach = r;
-          next = e.target;
+      for (const edge of candidates) {
+        const targetReach = this.loopsBackOnly(edge.target) ? -0.5 : this.reach(edge.target);
+        if (targetReach > bestReach) {
+          bestReach = targetReach;
+          next = edge.target;
         }
       }
       if (!next) {
-        const join = cur.out.find((e) => !e.back && placed.has(e.target))?.target;
+        const join = cur.out.find((edge) => !edge.back && placed.has(edge.target))?.target;
         if (join) chainNext.set(cur, join);
         return { nodes: out, join };
       }
@@ -241,57 +241,57 @@ export class RowAssigner {
   private enqueueBranches(chainNodes: GNode[]): void {
     const { placed, queue } = this;
     // regular branches first, so they get the rows right below the chain
-    for (const n of chainNodes) {
-      for (const e of n.out) {
-        if (e.back) continue;
-        if (!placed.has(e.target)) queue.push({ origin: n, first: e.target });
-        else if (e.target !== this.chainNext.get(n) && e.target.row === n.row && e.target.layer > n.layer + 1 && n.out.length > 1) {
+    for (const node of chainNodes) {
+      for (const edge of node.out) {
+        if (edge.back) continue;
+        if (!placed.has(edge.target)) queue.push({ origin: node, first: edge.target });
+        else if (edge.target !== this.chainNext.get(node) && edge.target.row === node.row && edge.target.layer > node.layer + 1 && node.out.length > 1) {
           // empty branch / skip: a band of its own, entering the join from below
-          const iv: Branch = { owner: n.id, from: n.layer, to: e.target.layer, row: 0, originRow: n.row, dropColumn: n.layer, nodes: [], edge: e };
+          const iv: Branch = { owner: node.id, from: node.layer, to: edge.target.layer, row: 0, originRow: node.row, dropColumn: node.layer, nodes: [], edge };
           this.place(iv);
         }
       }
     }
-    for (const n of chainNodes) {
-      for (const e of n.boundary.flatMap((b) => b.out)) {
-        if (e.back || placed.has(e.target)) continue;
-        queue.push({ origin: n, first: e.target });
+    for (const node of chainNodes) {
+      for (const edge of node.boundary.flatMap((boundaryEvent) => boundaryEvent.out)) {
+        if (edge.back || placed.has(edge.target)) continue;
+        queue.push({ origin: node, first: edge.target });
       }
-      for (const b of n.boundary) {
-        if (b.compensationHandler && !placed.has(b.compensationHandler)) queue.push({ origin: n, first: b.compensationHandler });
+      for (const boundaryEvent of node.boundary) {
+        if (boundaryEvent.compensationHandler && !placed.has(boundaryEvent.compensationHandler)) queue.push({ origin: node, first: boundaryEvent.compensationHandler });
       }
     }
   }
 
   /** Each weakly connected part takes the groups of its first node a group box held. */
   private partGroups(nodes: GNode[], groups: ReadonlyMap<string, readonly string[]>): Map<GNode, readonly string[]> {
-    const unit = (n: GNode): GNode => n.host ?? n;
+    const unit = (node: GNode): GNode => node.host ?? node;
     const partOf = new Map<GNode, GNode[]>();
-    for (const n of nodes) {
-      if (partOf.has(n)) continue;
-      const part: GNode[] = [n];
-      partOf.set(n, part);
-      for (let i = 0; i < part.length; i++) {
-        const m = part[i]!;
-        const next = [...m.out.map((e) => e.target), ...m.in.map((e) => e.source)];
-        for (const b of m.boundary) next.push(...b.out.map((e) => e.target), ...(b.compensationHandler ? [b.compensationHandler] : []));
-        if (m.compensatedBy) next.push(m.compensatedBy);
-        for (const o of next.map(unit)) {
-          if (partOf.has(o)) continue;
-          partOf.set(o, part);
-          part.push(o);
+    for (const node of nodes) {
+      if (partOf.has(node)) continue;
+      const part: GNode[] = [node];
+      partOf.set(node, part);
+      for (let index = 0; index < part.length; index++) {
+        const member = part[index]!;
+        const next = [...member.out.map((edge) => edge.target), ...member.in.map((edge) => edge.source)];
+        for (const boundaryEvent of member.boundary) next.push(...boundaryEvent.out.map((edge) => edge.target), ...(boundaryEvent.compensationHandler ? [boundaryEvent.compensationHandler] : []));
+        if (member.compensatedBy) next.push(member.compensatedBy);
+        for (const neighbour of next.map(unit)) {
+          if (partOf.has(neighbour)) continue;
+          partOf.set(neighbour, part);
+          part.push(neighbour);
         }
       }
     }
     const out = new Map<GNode, readonly string[]>();
     const found = new Set<GNode[]>();
-    for (const n of nodes) {
-      const part = partOf.get(n)!;
+    for (const node of nodes) {
+      const part = partOf.get(node)!;
       if (found.has(part)) continue;
-      const path = [n, ...n.boundary].map((m) => groups.get(m.id)).find((p) => p?.length);
+      const path = [node, ...node.boundary].map((member) => groups.get(member.id)).find((groupPath) => groupPath?.length);
       if (!path) continue;
       found.add(part);
-      for (const m of part) out.set(m, path);
+      for (const member of part) out.set(member, path);
     }
     return out;
   }
@@ -302,20 +302,20 @@ export class RowAssigner {
     const pathOf = this.partGroups(nodes, groups);
     const first = new Map<string, number>();
     const keys = new Map<GNode, number[]>();
-    list.forEach((n, i) => {
+    list.forEach((node, index) => {
       let path = '';
       const key: number[] = [];
-      for (const g of pathOf.get(n.host ?? n) ?? []) {
-        path += `/${g}`;
-        if (!first.has(path)) first.set(path, i);
+      for (const group of pathOf.get(node.host ?? node) ?? []) {
+        path += `/${group}`;
+        if (!first.has(path)) first.set(path, index);
         key.push(first.get(path)!);
       }
-      keys.set(n, [...key, i]);
+      keys.set(node, [...key, index]);
     });
-    const compare = (a: number[], b: number[]): number => {
-      for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i]! - b[i]!;
-      return a.length - b.length;
+    const compare = (leftKey: number[], rightKey: number[]): number => {
+      for (let index = 0; index < Math.min(leftKey.length, rightKey.length); index++) if (leftKey[index] !== rightKey[index]) return leftKey[index]! - rightKey[index]!;
+      return leftKey.length - rightKey.length;
     };
-    return [...list].sort((a, b) => compare(keys.get(a)!, keys.get(b)!));
+    return [...list].sort((leftNode, rightNode) => compare(keys.get(leftNode)!, keys.get(rightNode)!));
   }
 }

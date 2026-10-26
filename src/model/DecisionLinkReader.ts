@@ -36,9 +36,9 @@ export class DecisionLinkReader {
   }
 
   uriOf(el: El, prefix: string): string | undefined {
-    for (let p: El | undefined = el; p; p = p.$parent as El | undefined) {
-      const v = (p.$attrs as Record<string, unknown> | undefined)?.[`xmlns:${prefix}`];
-      if (typeof v === 'string') return v;
+    for (let ancestor: El | undefined = el; ancestor; ancestor = ancestor.$parent as El | undefined) {
+      const uri = (ancestor.$attrs as Record<string, unknown> | undefined)?.[`xmlns:${prefix}`];
+      if (typeof uri === 'string') return uri;
     }
     return this.doc?.namespaceUri(prefix);
   }
@@ -46,24 +46,24 @@ export class DecisionLinkReader {
   /** Any prefix bound to a Camunda 7 namespace counts, camunda first. */
   c7DecisionRefs(el: El): Array<[string, string]> {
     const out: Array<[string, string]> = [];
-    for (const [k, v] of Object.entries(el.$attrs ?? {})) {
-      const i = k.indexOf(':');
-      if (i <= 0 || k.slice(i + 1) !== 'decisionRef') continue;
-      const uri = this.uriOf(el, k.slice(0, i));
-      const value = textValue(v);
-      if (value && (!uri || C7_URIS.has(uri))) out.push([k, value]);
+    for (const [attrName, attrValue] of Object.entries(el.$attrs ?? {})) {
+      const colon = attrName.indexOf(':');
+      if (colon <= 0 || attrName.slice(colon + 1) !== 'decisionRef') continue;
+      const uri = this.uriOf(el, attrName.slice(0, colon));
+      const value = textValue(attrValue);
+      if (value && (!uri || C7_URIS.has(uri))) out.push([attrName, value]);
     }
-    return out.sort((a, b) => Number(this.uriOf(el, a[0].split(':')[0]!) === OPERATON_URI) - Number(this.uriOf(el, b[0].split(':')[0]!) === OPERATON_URI));
+    return out.sort((left, right) => Number(this.uriOf(el, left[0].split(':')[0]!) === OPERATON_URI) - Number(this.uriOf(el, right[0].split(':')[0]!) === OPERATON_URI));
   }
 
   zeebeCalls(el: El): El[] {
     // read without creating the lazy collection (views and profiles read the live document)
     const values = (el.get<El | undefined>('extensionElements') as unknown as { values?: El[] } | undefined)?.values;
     if (!Array.isArray(values)) return [];
-    return values.filter((v) => {
-      const [prefix, local] = v.$type.split(':');
+    return values.filter((value) => {
+      const [prefix, local] = value.$type.split(':');
       if (local !== 'calledDecision' || !prefix) return false;
-      const uri = (v.$descriptor as { ns?: { uri?: string } }).ns?.uri ?? this.uriOf(el, prefix);
+      const uri = (value.$descriptor as { ns?: { uri?: string } }).ns?.uri ?? this.uriOf(el, prefix);
       return !uri || uri === ZEEBE_URI;
     });
   }

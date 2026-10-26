@@ -10,11 +10,11 @@ interface FlowEnds {
 
 /** Rules that read the incoming / outgoing lists, and when the node's flows contradict them. */
 const LIST_RULES: Record<string, (id: string, ends: FlowEnds) => boolean> = {
-  'no-implicit-end': (id, e) => e.outgoing.has(id),
-  'no-implicit-start': (id, e) => e.incoming.has(id),
-  'no-disconnected': (id, e) => e.outgoing.has(id) || e.incoming.has(id),
+  'no-implicit-end': (id, ends) => ends.outgoing.has(id),
+  'no-implicit-start': (id, ends) => ends.incoming.has(id),
+  'no-disconnected': (id, ends) => ends.outgoing.has(id) || ends.incoming.has(id),
   // its other finding is about a conditional flow, which the lists never contradict
-  'event-based-gateway': (id, e) => (e.outgoing.get(id) ?? 0) >= 2,
+  'event-based-gateway': (id, ends) => (ends.outgoing.get(id) ?? 0) >= 2,
 };
 
 const LISTS_LEFT_OUT = 'incoming / outgoing lists the file does not keep';
@@ -51,12 +51,12 @@ export class LintRun {
     if (this.pending.length) await Promise.race([Promise.all(this.pending), new Promise<void>((done) => (typeof setTimeout === 'function' ? setTimeout(done, 0) : done()))]);
     for (const [rule, reports] of Object.entries(results)) {
       if (this.failures.has(rule)) continue;
-      for (const r of reports) {
-        if (r.category === 'rule-error') {
-          this.failures.set(rule, firstLine(r.message));
+      for (const report of reports) {
+        if (report.category === 'rule-error') {
+          this.failures.set(rule, firstLine(report.message));
           continue;
         }
-        const id = r.id === undefined || r.id === null ? undefined : String(r.id);
+        const id = report.id === undefined || report.id === null ? undefined : String(report.id);
         let hint: string | undefined;
         let leftOut: string | undefined;
         const list = LIST_RULES[rule];
@@ -68,8 +68,8 @@ export class LintRun {
             if (this.ctx.phase !== 'check') leftOut = LISTS_LEFT_OUT;
           }
         }
-        const path = (r.path ?? []).filter((p) => typeof p !== 'number').join('.');
-        this.out.push({ severity: r.category === 'error' ? 'error' : 'warning', code: rule, message: String(r.message), ...(id ? { element: id } : {}), key: `${id ?? ''}|${path}|${r.message}`, ...(hint ? { hint } : {}), ...(leftOut ? { leftOut } : {}) });
+        const path = (report.path ?? []).filter((segment) => typeof segment !== 'number').join('.');
+        this.out.push({ severity: report.category === 'error' ? 'error' : 'warning', code: rule, message: String(report.message), ...(id ? { element: id } : {}), key: `${id ?? ''}|${path}|${report.message}`, ...(hint ? { hint } : {}), ...(leftOut ? { leftOut } : {}) });
       }
     }
     for (const [rule, msg] of this.failures) {
@@ -87,7 +87,7 @@ export class LintRun {
         if (typeof factory !== 'function') return factory;
         return (options: unknown): BpmnlintRule => {
           try {
-            const rule = (factory as (o: unknown) => BpmnlintRule)(options);
+            const rule = (factory as (ruleOptions: unknown) => BpmnlintRule)(options);
             if (!this.isThenable(rule)) return rule;
             Promise.resolve(rule).then(undefined, () => undefined);
             this.failures.set(this.ruleKey(pkg, ruleName), 'the rule factory returned a promise (bpmnlint rules are synchronous)');

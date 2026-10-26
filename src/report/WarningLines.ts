@@ -16,25 +16,25 @@ export class WarningLines {
    * an advisory validator's findings group by code and message.
    */
   lines(warnings: readonly Warning[]): string[] {
-    const keyOf = (w: Warning): string => {
-      const v = validatorOf(w);
-      return v && this.advisory.has(v) ? `${warningTag(w)}${w.code}\n${w.message}` : floodKey(w);
+    const keyOf = (warning: Warning): string => {
+      const validator = validatorOf(warning);
+      return validator && this.advisory.has(validator) ? `${warningTag(warning)}${warning.code}\n${warning.message}` : floodKey(warning);
     };
     const groups = new Map<string, Warning[]>();
-    for (const w of warnings) groups.set(keyOf(w), [...(groups.get(keyOf(w)) ?? []), w]);
+    for (const warning of warnings) groups.set(keyOf(warning), [...(groups.get(keyOf(warning)) ?? []), warning]);
     const out: string[] = [];
     const done = new Set<string>();
-    for (const w of warnings) {
-      const key = keyOf(w);
+    for (const warning of warnings) {
+      const key = keyOf(warning);
       const group = groups.get(key)!;
-      if (group.length < FLOOD_MIN || NEVER_FLOOD.has(w.code)) {
-        out.push(WarningLines.warningLine(w));
+      if (group.length < FLOOD_MIN || NEVER_FLOOD.has(warning.code)) {
+        out.push(WarningLines.warningLine(warning));
         continue;
       }
       if (done.has(key)) continue;
       done.add(key);
-      const ids = group.map((g) => g.element ?? '?');
-      out.push(`warning ${warningTag(w)}${w.code} x${group.length} [${idsText(ids)}]: ${w.message}${w.hint ? `  (${w.hint})` : ''}`);
+      const ids = group.map((member) => member.element ?? '?');
+      out.push(`warning ${warningTag(warning)}${warning.code} x${group.length} [${idsText(ids)}]: ${warning.message}${warning.hint ? `  (${warning.hint})` : ''}`);
     }
     return out;
   }
@@ -44,44 +44,44 @@ export class WarningLines {
    * line naming the most common message.
    */
   problems(problems: readonly Warning[]): string {
-    const isAdvisory = (p: Warning): boolean => {
-      const v = validatorOf(p);
-      return !!v && this.advisory.has(v);
+    const isAdvisory = (problem: Warning): boolean => {
+      const validator = validatorOf(problem);
+      return !!validator && this.advisory.has(validator);
     };
-    const keyOf = (p: Warning): string | undefined => {
-      if (!isAdvisory(p) || NO_RULE.has(p.code)) return undefined;
-      return `${validatorOf(p)}\n${p.code}\n${p.hint ?? ''}`;
+    const keyOf = (problem: Warning): string | undefined => {
+      if (!isAdvisory(problem) || NO_RULE.has(problem.code)) return undefined;
+      return `${validatorOf(problem)}\n${problem.code}\n${problem.hint ?? ''}`;
     };
-    const tag = (p: Warning): string => (isAdvisory(p) ? warningTag(p) : validatorTag(p));
+    const tag = (problem: Warning): string => (isAdvisory(problem) ? warningTag(problem) : validatorTag(problem));
     const groups = new Map<string, Warning[]>();
-    for (const p of problems) {
-      const key = keyOf(p);
-      if (key) groups.set(key, [...(groups.get(key) ?? []), p]);
+    for (const problem of problems) {
+      const key = keyOf(problem);
+      if (key) groups.set(key, [...(groups.get(key) ?? []), problem]);
     }
     const out: string[] = [];
     const done = new Set<string>();
-    for (const p of problems) {
-      const key = keyOf(p);
-      const group = key ? groups.get(key)! : [p];
+    for (const problem of problems) {
+      const key = keyOf(problem);
+      const group = key ? groups.get(key)! : [problem];
       if (group.length < FLOOD_MIN) {
         // advisory rule names carry no E_ / W_, so their errors read `[bpmnlint error]`
-        out.push(isAdvisory(p) ? renderProblems([p]).replace(validatorTag(p), tag(p)) : renderProblems([p]));
+        out.push(isAdvisory(problem) ? renderProblems([problem]).replace(validatorTag(problem), tag(problem)) : renderProblems([problem]));
         continue;
       }
       if (done.has(key!)) continue;
       done.add(key!);
       const byMessage = new Map<string, Warning[]>();
-      for (const g of group) byMessage.set(g.message, [...(byMessage.get(g.message) ?? []), g]);
-      const [message, same] = [...byMessage].reduce((a, b) => (b[1].length > a[1].length ? b : a));
+      for (const member of group) byMessage.set(member.message, [...(byMessage.get(member.message) ?? []), member]);
+      const [message, same] = [...byMessage].reduce((best, candidate) => (candidate[1].length > best[1].length ? candidate : best));
       const others = byMessage.size - 1;
       const rest = group.length - same.length;
       const note = others ? ` (${same.length} of ${group.length}; ${rest} other${rest === 1 ? '' : 's'} with ${others} other message${others === 1 ? '' : 's'}, --json lists them)` : '';
-      out.push(`${tag(p)}${p.code} x${group.length} [${idsText(same.map((g) => g.element ?? '?'))}]: ${message}${note}${p.hint ? `  (${p.hint})` : ''}`);
+      out.push(`${tag(problem)}${problem.code} x${group.length} [${idsText(same.map((member) => member.element ?? '?'))}]: ${message}${note}${problem.hint ? `  (${problem.hint})` : ''}`);
     }
     return out.join('\n');
   }
 
-  private static warningLine(w: Warning): string {
-    return `warning ${warningTag(w)}${w.code}${w.element ? ` ${w.element}` : ''}: ${w.message}${w.hint ? `  (${w.hint})` : ''}`;
+  private static warningLine(warning: Warning): string {
+    return `warning ${warningTag(warning)}${warning.code}${warning.element ? ` ${warning.element}` : ''}: ${warning.message}${warning.hint ? `  (${warning.hint})` : ''}`;
   }
 }

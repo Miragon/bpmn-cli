@@ -27,14 +27,14 @@ export function makeFinding(
   element: string | undefined,
   extra: { related?: string[]; hint?: string; subject?: string } = {},
 ): ProfileFinding {
-  const f: WithSubject = { code, message, severity };
-  if (element) f.element = element;
-  if (extra.related?.length) f.related = extra.related;
-  if (extra.hint) f.hint = extra.hint;
-  Object.defineProperty(f, SUBJECT, { value: extra.subject ?? '', enumerable: false });
-  return f;
+  const finding: WithSubject = { code, message, severity };
+  if (element) finding.element = element;
+  if (extra.related?.length) finding.related = extra.related;
+  if (extra.hint) finding.hint = extra.hint;
+  Object.defineProperty(finding, SUBJECT, { value: extra.subject ?? '', enumerable: false });
+  return finding;
 }
 
-export function subjectOf(f: ProfileFinding): string {
-  return (f as WithSubject)[SUBJECT] ?? '';
+export function subjectOf(finding: ProfileFinding): string {
+  return (finding as WithSubject)[SUBJECT] ?? '';
 }

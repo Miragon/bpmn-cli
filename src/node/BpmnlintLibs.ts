@@ -55,12 +55,12 @@ export class BpmnlintLibs {
   }
 
   static engine(): BpmnlintEngine & { plugin: BpmnlintPlugin; bpmnlintVersion: string } {
-    const l = BpmnlintLibs.load();
-    if (!(l instanceof BpmnlintLibs)) {
-      const u = engineUnavailable(l);
-      throw new Error(`${u.reason} (${u.hint})`);
+    const libs = BpmnlintLibs.load();
+    if (!(libs instanceof BpmnlintLibs)) {
+      const unavailable = engineUnavailable(libs);
+      throw new Error(`${unavailable.reason} (${unavailable.hint})`);
     }
-    return { Linter: l.Linter, resolver: l.offlineResolver(), plugin: l.plugin, bpmnlintVersion: l.bpmnlint.version };
+    return { Linter: libs.Linter, resolver: libs.offlineResolver(), plugin: libs.plugin, bpmnlintVersion: libs.bpmnlint.version };
   }
 
   bundledResolver(): BpmnlintResolver {
@@ -83,7 +83,7 @@ export class BpmnlintLibs {
     const bundled = this.bundledResolver();
     const shipped = lazy(() => this.shippedResolver());
     const ask = (kind: 'rule' | 'config', pkg: string, name: string): unknown => {
-      const of = (r: BpmnlintResolver) => (kind === 'rule' ? r.resolveRule(pkg, name) : r.resolveConfig(pkg, name));
+      const of = (resolver: BpmnlintResolver) => (kind === 'rule' ? resolver.resolveRule(pkg, name) : resolver.resolveConfig(pkg, name));
       try {
         return of(bundled);
       } catch (err) {

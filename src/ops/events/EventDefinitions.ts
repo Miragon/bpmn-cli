@@ -61,7 +61,7 @@ export class EventDefinitions {
     this.applyInterrupting(trigger, opts);
     const defs = this.event.get<El[] | undefined>('eventDefinitions') ?? [];
     // the one definition of that trigger is kept, the event's other definitions go
-    const matching = trigger !== 'none' ? defs.filter((d) => is(d, TRIGGER_TYPES[trigger])) : [];
+    const matching = trigger !== 'none' ? defs.filter((definition) => is(definition, TRIGGER_TYPES[trigger])) : [];
     const same = matching.length === 1 ? matching[0] : undefined;
     if (same && trigger !== 'none') {
       const others = defs.length > 1 ? this.dropOtherDefinitions(same, trigger) : [];
@@ -90,9 +90,9 @@ export class EventDefinitions {
       }
       return override as TimerKind;
     }
-    const v = value.trim();
-    if (/^R/i.test(v)) return 'cycle';
-    if (/^P/i.test(v)) return 'duration';
+    const trimmed = value.trim();
+    if (/^R/i.test(trimmed)) return 'cycle';
+    if (/^P/i.test(trimmed)) return 'duration';
     return 'date';
   }
 
@@ -171,9 +171,9 @@ export class EventDefinitions {
     const value = opts.timer.trim();
     if (!value) throw modelError('E_INVALID_VALUE', 'The timer value is empty', { hint: 'Use ISO 8601: PT5M (duration), R/PT1H (cycle) or 2030-01-01T00:00:00Z (date).' });
     const prop = TIMER_PROPS[EventDefinitions.classifyTimer(value, opts.timerKind)];
-    const current = Object.values(TIMER_PROPS).find((p) => def.get<El | undefined>(p)) ?? prop;
+    const current = Object.values(TIMER_PROPS).find((timerProp) => def.get<El | undefined>(timerProp)) ?? prop;
     this.updateExpression(def, prop, value, current);
-    for (const p of Object.values(TIMER_PROPS)) if (p !== prop && def.get<El | undefined>(p)) def.set(p, undefined);
+    for (const timerProp of Object.values(TIMER_PROPS)) if (timerProp !== prop && def.get<El | undefined>(timerProp)) def.set(timerProp, undefined);
   }
 
   /**
@@ -188,7 +188,7 @@ export class EventDefinitions {
     const expr = def.get<El | undefined>('condition');
     const dropped: string[] = [];
     if (expr && expr.get<string | undefined>('body') !== opts.when) {
-      const resourceKey = Object.keys(expr.$attrs ?? {}).find((k) => /^[^:]+:resource$/.test(k) && CAMUNDA.reads(this.doc.namespaceUri(k.split(':')[0]!)));
+      const resourceKey = Object.keys(expr.$attrs ?? {}).find((attrKey) => /^[^:]+:resource$/.test(attrKey) && CAMUNDA.reads(this.doc.namespaceUri(attrKey.split(':')[0]!)));
       const language = expr.get<string | undefined>('language');
       if (resourceKey) {
         dropped.push(`${resourceKey} ${String(expr.$attrs[resourceKey])}`);
@@ -224,8 +224,8 @@ export class EventDefinitions {
     this.event.set('eventDefinitions', undefined);
     const warnings: Warning[] = [];
     for (const def of defs) {
-      for (const e of walk(def, { bpmnOnly: true })) {
-        const id = e.get<string | undefined>('id');
+      for (const element of walk(def, { bpmnOnly: true })) {
+        const id = element.get<string | undefined>('id');
         if (id) this.doc.ids.release(id);
       }
       const lost = vendorContent(def);
@@ -243,18 +243,18 @@ export class EventDefinitions {
 
   private dropOtherDefinitions(keep: El, trigger: Trigger): Warning[] {
     const defs = [...(this.event.get<El[] | undefined>('eventDefinitions') ?? [])];
-    const others = defs.filter((d) => d !== keep);
+    const others = defs.filter((definition) => definition !== keep);
     this.event.set('eventDefinitions', [keep]);
     for (const def of others) {
-      for (const e of walk(def, { bpmnOnly: true })) {
-        const id = e.get<string | undefined>('id');
+      for (const element of walk(def, { bpmnOnly: true })) {
+        const id = element.get<string | undefined>('id');
         if (id) this.doc.ids.release(id);
       }
     }
-    const text = (d: El): string => {
-      const local = d.$type.replace('bpmn:', '');
-      const id = d.get<string | undefined>('id');
-      const lost = vendorContent(d);
+    const text = (definition: El): string => {
+      const local = definition.$type.replace('bpmn:', '');
+      const id = definition.get<string | undefined>('id');
+      const lost = vendorContent(definition);
       return `${local.charAt(0).toLowerCase()}${local.slice(1)}${id ? ` ${id}` : ''}${lost.length ? ` (with ${lost.join(', ')})` : ''}`;
     };
     return [

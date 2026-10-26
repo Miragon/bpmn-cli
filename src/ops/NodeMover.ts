@@ -47,9 +47,9 @@ export class NodeMover {
         this.optionsOnInFlow(this.doc.incoming(nodes[0]!)[0], placement, cs);
       } else {
         const moved = new MovedFlows(this.doc, cs, nodes);
-        nodes.forEach((node, i) => {
-          const prev = nodes[i - 1];
-          this.moveNode(node, prev ? { after: idOf(prev) } : placement, cs, hasLane, moved, { prev, next: nodes[i + 1] });
+        nodes.forEach((node, index) => {
+          const prev = nodes[index - 1];
+          this.moveNode(node, prev ? { after: idOf(prev) } : placement, cs, hasLane, moved, { prev, next: nodes[index + 1] });
         });
         moved.finish();
       }
@@ -63,39 +63,39 @@ export class NodeMover {
   }
 
   private static placementOf(op: MoveOp): PlacementOptions {
-    const p: PlacementOptions = {};
-    if (op.after) p.after = op.after;
-    if (op.before) p.before = op.before;
-    if (op.flow) p.flow = op.flow;
-    if (op.in) p.in = op.in;
-    if (op.on) p.on = op.on;
-    if (op.flowName !== undefined) p.flowName = op.flowName;
-    if (op.flowId) p.flowId = op.flowId;
-    if (op.condition !== undefined) p.condition = op.condition;
-    if (op.language) p.language = op.language;
-    if (op.default) p.default = true;
-    return p;
+    const placement: PlacementOptions = {};
+    if (op.after) placement.after = op.after;
+    if (op.before) placement.before = op.before;
+    if (op.flow) placement.flow = op.flow;
+    if (op.in) placement.in = op.in;
+    if (op.on) placement.on = op.on;
+    if (op.flowName !== undefined) placement.flowName = op.flowName;
+    if (op.flowId) placement.flowId = op.flowId;
+    if (op.condition !== undefined) placement.condition = op.condition;
+    if (op.language) placement.language = op.language;
+    if (op.default) placement.default = true;
+    return placement;
   }
 
-  private static describePlacement(p: PlacementOptions): string {
-    if (p.after && p.before) return `between ${p.after} and ${p.before}`;
-    if (p.after) return `after ${p.after}`;
-    if (p.before) return `before ${p.before}`;
-    if (p.flow) return `into flow ${p.flow}`;
-    if (p.on) return `onto ${p.on}`;
-    return `into ${p.in ?? 'the process'}`;
+  private static describePlacement(placement: PlacementOptions): string {
+    if (placement.after && placement.before) return `between ${placement.after} and ${placement.before}`;
+    if (placement.after) return `after ${placement.after}`;
+    if (placement.before) return `before ${placement.before}`;
+    if (placement.flow) return `into flow ${placement.flow}`;
+    if (placement.on) return `onto ${placement.on}`;
+    return `into ${placement.in ?? 'the process'}`;
   }
 
-  private anchorsOf(p: PlacementOptions): El[] {
+  private anchorsOf(placement: PlacementOptions): El[] {
     const out: El[] = [];
-    if (p.after) out.push(this.doc.require(p.after, 'bpmn:FlowNode'));
-    if (p.before) out.push(this.doc.require(p.before, 'bpmn:FlowNode'));
-    if (p.flow) {
-      const flow = this.doc.require(p.flow, 'bpmn:SequenceFlow', 'sequence flow');
+    if (placement.after) out.push(this.doc.require(placement.after, 'bpmn:FlowNode'));
+    if (placement.before) out.push(this.doc.require(placement.before, 'bpmn:FlowNode'));
+    if (placement.flow) {
+      const flow = this.doc.require(placement.flow, 'bpmn:SequenceFlow', 'sequence flow');
       out.push(flow.get<El>('sourceRef'), flow.get<El>('targetRef'));
     }
-    if (p.on) out.push(this.doc.require(p.on, 'bpmn:Activity', 'activity'));
-    if (p.in) out.push(this.doc.requireScope(p.in));
+    if (placement.on) out.push(this.doc.require(placement.on, 'bpmn:Activity', 'activity'));
+    if (placement.in) out.push(this.doc.requireScope(placement.in));
     return out;
   }
 
@@ -118,9 +118,9 @@ export class NodeMover {
     }
   }
 
-  private assertFirstPlacement(node: El, p: PlacementOptions): void {
+  private assertFirstPlacement(node: El, placement: PlacementOptions): void {
     NodeMover.assertNotBoundary(node);
-    for (const a of this.anchorsOf(p)) NodeMover.assertNotInside(node, a);
+    for (const anchor of this.anchorsOf(placement)) NodeMover.assertNotInside(node, anchor);
   }
 
   private static assertNotBoundary(node: El): void {
@@ -133,28 +133,28 @@ export class NodeMover {
    * The chain must not start after a later node of itself. A --before anchor that is a later
    * node is fine (`move A Join --before Join` ends A -> Join).
    */
-  private assertChainAnchor(nodes: El[], p: PlacementOptions): void {
-    const mode = NodePlacement.modeOf(p);
+  private assertChainAnchor(nodes: El[], placementOptions: PlacementOptions): void {
+    const mode = NodePlacement.modeOf(placementOptions);
     const later = nodes.slice(1);
-    const flow = mode === 'flow' ? this.doc.require(p.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
-    const after = mode === 'after' || mode === 'between' ? this.doc.require(p.after!, 'bpmn:FlowNode') : flow?.get<El>('sourceRef');
-    const before = mode === 'before' || mode === 'between' ? this.doc.require(p.before!, 'bpmn:FlowNode') : undefined;
+    const flow = mode === 'flow' ? this.doc.require(placementOptions.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
+    const after = mode === 'after' || mode === 'between' ? this.doc.require(placementOptions.after!, 'bpmn:FlowNode') : flow?.get<El>('sourceRef');
+    const before = mode === 'before' || mode === 'between' ? this.doc.require(placementOptions.before!, 'bpmn:FlowNode') : undefined;
     let anchor = after;
-    let holder = after && later.find((n) => NodeMover.isInside(n, after));
+    let holder = after && later.find((laterNode) => NodeMover.isInside(laterNode, after));
     if (!holder && before) {
       anchor = before;
-      holder = later.find((n) => n !== before && NodeMover.isInside(n, before));
+      holder = later.find((laterNode) => laterNode !== before && NodeMover.isInside(laterNode, before));
     }
     if (!anchor || !holder) return;
     const ids = nodes.map(idOf);
     const first = ids[0]!;
     const what = anchor === holder ? 'is one of the moved nodes' : `is ${NodeMover.isBoundaryOf(holder, anchor) ? 'a boundary event of' : 'inside'} ${idOf(holder)}, one of the moved nodes`;
-    const placement = flow ? `--flow ${idOf(flow)}` : [...(p.after ? [`--after ${p.after}`] : []), ...(p.before ? [`--before ${p.before}`] : [])].join(' ');
+    const placement = flow ? `--flow ${idOf(flow)}` : [...(placementOptions.after ? [`--after ${placementOptions.after}`] : []), ...(placementOptions.before ? [`--before ${placementOptions.before}`] : [])].join(' ');
     const itself = `The chain would be placed ${anchor === before ? 'inside' : 'after'} itself.`;
     let hint = `${itself} Pick an anchor outside the moved nodes, or move ${first} alone: \`bpmn move <file> ${first} ${placement}\`.`;
-    if (this.inPlace(nodes.slice(0, 1), p)) {
+    if (this.inPlace(nodes.slice(0, 1), placementOptions)) {
       const reorder = mode === 'after' && this.doc.incoming(anchor).length === 1;
-      hint = `${itself} ${first} is already ${NodeMover.describePlacement(p)}. Pick an anchor outside the moved nodes${reorder ? `, or put ${first} before ${idOf(anchor)}: \`bpmn move <file> ${first} --before ${idOf(anchor)}\`` : ''}.`;
+      hint = `${itself} ${first} is already ${NodeMover.describePlacement(placementOptions)}. Pick an anchor outside the moved nodes${reorder ? `, or put ${first} before ${idOf(anchor)}: \`bpmn move <file> ${first} --before ${idOf(anchor)}\`` : ''}.`;
     }
     throw modelError('E_INVALID_PLACEMENT', `${flow ? `${idOf(flow)} cannot anchor the move of ${ids.join(', ')}: its source ${idOf(anchor)}` : `${idOf(anchor)} cannot anchor the move of ${ids.join(', ')}: it`} ${what}`, {
       element: flow ? idOf(flow) : idOf(anchor),
@@ -164,13 +164,13 @@ export class NodeMover {
   }
 
   /** A move in place: flow options apply to the flow into the first node; a flowId renames it. */
-  private optionsOnInFlow(flow: El | undefined, p: PlacementOptions, cs: ChangeSet): void {
+  private optionsOnInFlow(flow: El | undefined, placement: PlacementOptions, cs: ChangeSet): void {
     if (!flow) return;
     const old = idOf(flow);
-    const renamed = p.flowId !== undefined && p.flowId !== old;
-    if (renamed) new IdRenamer(this.doc).rename(flow, p.flowId!);
+    const renamed = placement.flowId !== undefined && placement.flowId !== old;
+    if (renamed) new IdRenamer(this.doc).rename(flow, placement.flowId!);
     const options = new ChangeSet();
-    new FlowOptions(p).apply(this.doc, flow, options);
+    new FlowOptions(placement).apply(this.doc, flow, options);
     if (!renamed && !options.changed.length) return;
     cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${renamed ? ` (renamed from ${old})` : ''}`));
   }
@@ -179,30 +179,30 @@ export class NodeMover {
    * Whether the placement leaves every node where it is. After a gateway the chain would be a
    * new branch, before a join a prepend, so neither counts as in place.
    */
-  private inPlace(nodes: El[], p: PlacementOptions): boolean {
-    if (nodes.some((n) => is(n, 'bpmn:BoundaryEvent')) || new Set(nodes).size !== nodes.length) return false;
-    if (new FlowOptions(p).flags.length && this.doc.incoming(nodes[0]!).length !== 1) return false;
-    const onlyIn = (n: El): El | undefined => {
-      const flows = this.doc.incoming(n);
+  private inPlace(nodes: El[], placement: PlacementOptions): boolean {
+    if (nodes.some((node) => is(node, 'bpmn:BoundaryEvent')) || new Set(nodes).size !== nodes.length) return false;
+    if (new FlowOptions(placement).flags.length && this.doc.incoming(nodes[0]!).length !== 1) return false;
+    const onlyIn = (node: El): El | undefined => {
+      const flows = this.doc.incoming(node);
       return flows.length === 1 ? flows[0]!.get<El>('sourceRef') : undefined;
     };
-    const onlyOut = (n: El): El | undefined => {
-      const flows = this.doc.outgoing(n);
+    const onlyOut = (node: El): El | undefined => {
+      const flows = this.doc.outgoing(node);
       return flows.length === 1 ? flows[0]!.get<El>('targetRef') : undefined;
     };
-    for (let i = 1; i < nodes.length; i++) if (is(nodes[i - 1]!, 'bpmn:Gateway') || onlyIn(nodes[i]!) !== nodes[i - 1]) return false;
+    for (let index = 1; index < nodes.length; index++) if (is(nodes[index - 1]!, 'bpmn:Gateway') || onlyIn(nodes[index]!) !== nodes[index - 1]) return false;
     const first = nodes[0]!;
     const last = nodes[nodes.length - 1]!;
-    const mode = NodePlacement.modeOf(p);
+    const mode = NodePlacement.modeOf(placement);
     if (mode === 'after') {
-      const x = this.doc.require(p.after!, 'bpmn:FlowNode');
-      return !is(x, 'bpmn:Gateway') && onlyIn(first) === x;
+      const afterNode = this.doc.require(placement.after!, 'bpmn:FlowNode');
+      return !is(afterNode, 'bpmn:Gateway') && onlyIn(first) === afterNode;
     }
     if (mode === 'before') {
-      const y = this.doc.require(p.before!, 'bpmn:FlowNode');
-      return !(is(y, 'bpmn:Gateway') && this.doc.incoming(y).length >= 2) && onlyOut(last) === y;
+      const beforeNode = this.doc.require(placement.before!, 'bpmn:FlowNode');
+      return !(is(beforeNode, 'bpmn:Gateway') && this.doc.incoming(beforeNode).length >= 2) && onlyOut(last) === beforeNode;
     }
-    if (mode === 'between') return onlyIn(first) === this.doc.require(p.after!, 'bpmn:FlowNode') && onlyOut(last) === this.doc.require(p.before!, 'bpmn:FlowNode');
+    if (mode === 'between') return onlyIn(first) === this.doc.require(placement.after!, 'bpmn:FlowNode') && onlyOut(last) === this.doc.require(placement.before!, 'bpmn:FlowNode');
     return false;
   }
 
@@ -215,22 +215,22 @@ export class NodeMover {
   private leaveScope(moved: El[], oldScope: El | undefined, targetScope: El, cs: ChangeSet): void {
     const processChanged = !oldScope || this.doc.processOf(oldScope) !== this.doc.processOf(targetScope);
     const dropLanes = oldScope !== targetScope && (processChanged || !is(targetScope, 'bpmn:Process'));
-    for (const n of moved) {
+    for (const movedNode of moved) {
       if (dropLanes) {
-        for (const lane of this.doc.lanesOf(n)) {
-          removeFrom(lane, 'flowNodeRef', n);
-          cs.change(ChangeSet.entryOf(lane, `member ${idOf(n)} removed`));
+        for (const lane of this.doc.lanesOf(movedNode)) {
+          removeFrom(lane, 'flowNodeRef', movedNode);
+          cs.change(ChangeSet.entryOf(lane, `member ${idOf(movedNode)} removed`));
         }
       }
-      if (oldScope) removeFrom(oldScope, 'flowElements', n);
+      if (oldScope) removeFrom(oldScope, 'flowElements', movedNode);
     }
   }
 
   /** Re-declares flows within `scope`; flows that would cross scopes are removed and reported. */
   private fixFlows(moved: El[], scope: El, cs: ChangeSet): void {
     const seen = new Set<El>();
-    for (const n of moved) {
-      for (const flow of [...this.doc.incoming(n), ...this.doc.outgoing(n)]) {
+    for (const movedNode of moved) {
+      for (const flow of [...this.doc.incoming(movedNode), ...this.doc.outgoing(movedNode)]) {
         if (seen.has(flow)) continue;
         seen.add(flow);
         const src = flow.get<El>('sourceRef');
@@ -265,7 +265,7 @@ export class NodeMover {
 
   private joinLane(lane: El, node: El, boundaries: El[]): void {
     addTo(lane, 'flowNodeRef', node);
-    for (const b of boundaries) if (!this.doc.lanesOf(b).length) addTo(lane, 'flowNodeRef', b);
+    for (const boundary of boundaries) if (!this.doc.lanesOf(boundary).length) addTo(lane, 'flowNodeRef', boundary);
   }
 
   /** A reused id would show up as both removed and created in the result. */
@@ -273,13 +273,13 @@ export class NodeMover {
     for (const id of ids) if (id && !this.doc.has(id)) this.doc.ids.claim(id);
   }
 
-  private moveNode(node: El, p: PlacementOptions, cs: ChangeSet, explicitLane: boolean, moved: MovedFlows, chain: { prev?: El; next?: El } = {}): void {
+  private moveNode(node: El, placement: PlacementOptions, cs: ChangeSet, explicitLane: boolean, moved: MovedFlows, chain: { prev?: El; next?: El } = {}): void {
     const { prev, next } = chain;
     NodeMover.assertNotBoundary(node);
-    const anchors = this.anchorsOf(p);
-    for (const a of anchors) NodeMover.assertNotInside(node, a);
+    const anchors = this.anchorsOf(placement);
+    for (const anchor of anchors) NodeMover.assertNotInside(node, anchor);
     const oldScope = this.doc.scopeOf(node);
-    const targetScope = new NodePlacement(this.doc, p).scope();
+    const targetScope = new NodePlacement(this.doc, placement).scope();
     const boundaries = is(node, 'bpmn:Activity') ? this.doc.boundaryEventsOf(node) : [];
     const incoming = this.doc.incoming(node);
     const outgoing = this.doc.outgoing(node);
@@ -288,7 +288,7 @@ export class NodeMover {
     const oldTarget = oldOut?.get<El>('targetRef');
     const outLabel = oldOut && MovedFlows.labelOf(oldOut, node);
     // a -> b of `move a b`: when b is not bridged, the append after a puts the flow back as it was
-    const fromPrev = prev && incoming.find((f) => f.get<El>('sourceRef') === prev && this.doc.edit.keepsFlowId(f));
+    const fromPrev = prev && incoming.find((flow) => flow.get<El>('sourceRef') === prev && this.doc.edit.keepsFlowId(flow));
     const prevLabel = fromPrev && MovedFlows.labelOf(fromPrev, prev!);
     const bridge = new Bridge(this.doc, cs, 'move').single(node, true);
     if (bridge) moved.bridged(node, bridge);
@@ -300,12 +300,12 @@ export class NodeMover {
     this.doc.invalidate();
     // decided before the placement: a splice may rename the flow
     const own = laneBefore && (laneBefore.get<El[] | undefined>('flowNodeRef') ?? []).includes(node) ? laneBefore : undefined;
-    const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? LaneInheritance.of(this.doc, p) : LaneInheritance.NONE;
+    const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? LaneInheritance.of(this.doc, placement) : LaneInheritance.NONE;
     // the gateway's out-flow waits for the append of the next node (a new branch)
     const holdOwn = !!next && is(node, 'bpmn:Gateway');
-    new NodePlacement(this.doc, p).place(node, cs, (source) => (source === node && holdOwn ? undefined : moved.spareOf(source)));
+    new NodePlacement(this.doc, placement).place(node, cs, (source) => (source === node && holdOwn ? undefined : moved.spareOf(source)));
     moved.putBack();
-    for (const f of new Set([...this.doc.incoming(node), ...this.doc.outgoing(node)])) new EventGatewayRule(this.doc).warnFlow(f, cs);
+    for (const flow of new Set([...this.doc.incoming(node), ...this.doc.outgoing(node)])) new EventGatewayRule(this.doc).warnFlow(flow, cs);
     if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
     this.fixFlows(boundaries, targetScope, cs);
     if (own) {
@@ -316,14 +316,14 @@ export class NodeMover {
       const warning = inherited.warning(idOf(node));
       if (warning) cs.warn(warning);
     }
-    cs.change(ChangeSet.entryOf(node, `moved ${NodeMover.describePlacement(p)}`));
+    cs.change(ChangeSet.entryOf(node, `moved ${NodeMover.describePlacement(placement)}`));
     cs.relocated.push(idOf(node));
     this.doc.invalidate();
   }
 
 
-  private moveInto(nodes: El[], p: PlacementOptions, cs: ChangeSet): void {
-    const scope = new NodePlacement(this.doc, p).scope();
+  private moveInto(nodes: El[], placement: PlacementOptions, cs: ChangeSet): void {
+    const scope = new NodePlacement(this.doc, placement).scope();
     const relocating: El[] = [];
     for (const node of nodes) {
       if (is(node, 'bpmn:BoundaryEvent')) {
@@ -351,13 +351,13 @@ export class NodeMover {
     this.doc.invalidate();
   }
 
-  private moveOnto(node: El, p: PlacementOptions, cs: ChangeSet): void {
+  private moveOnto(node: El, placement: PlacementOptions, cs: ChangeSet): void {
     if (!is(node, 'bpmn:BoundaryEvent')) {
       throw modelError('E_INVALID_PLACEMENT', `--on attaches boundary events only; ${kindLabel(node)} ${idOf(node)} is moved with --after/--before/--flow/--in`, {
         element: idOf(node),
       });
     }
-    const host = this.doc.require(p.on!, 'bpmn:Activity', 'activity');
+    const host = this.doc.require(placement.on!, 'bpmn:Activity', 'activity');
     const oldHost = node.get<El | undefined>('attachedToRef');
     if (oldHost === host) {
       cs.note(`${idOf(node)} is already attached to ${idOf(host)}`);
@@ -366,7 +366,7 @@ export class NodeMover {
     const oldScope = this.doc.scopeOf(node);
     const scope = this.doc.scopeOf(host) ?? this.doc.defaultScope();
     this.leaveScope([node], oldScope, scope, cs);
-    new NodePlacement(this.doc, { on: p.on! }).place(node, cs);
+    new NodePlacement(this.doc, { on: placement.on! }).place(node, cs);
     this.fixFlows([node], scope, cs);
     this.inheritLane(node, [], host, scope);
     cs.change(ChangeSet.entryOf(node, `moved onto ${idOf(host)}${oldHost ? ` (was ${idOf(oldHost)})` : ''}`));

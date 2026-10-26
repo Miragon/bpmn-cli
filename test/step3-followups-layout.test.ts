@@ -15,7 +15,7 @@ import { applyToXml, metricsXml, newXml, viewXml } from '../src/api.js';
 
 /** start -> check -> gateway -(yes)-> order -> end, -(no)-> notify -> end: drawn once, then kept */
 async function purchase(): Promise<string> {
-  const r = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
+  const result = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
     { op: 'add', kind: 'startEvent', name: 'Request submitted', in: 'Process_Purchase', as: '$s' },
     { op: 'add', kind: 'userTask', name: 'Check budget', after: '$s', as: '$c' },
     { op: 'add', kind: 'exclusiveGateway', name: 'Budget available?', after: '$c', as: '$g' },
@@ -24,12 +24,12 @@ async function purchase(): Promise<string> {
     { op: 'add', kind: 'sendTask', name: 'Notify requester', after: '$g', default: true, flowName: 'no', as: '$n' },
     { op: 'add', kind: 'endEvent', name: 'Request rejected', after: '$n' },
   ]);
-  return r.xml;
+  return result.xml;
 }
 
 const rows = async (xml: string): Promise<string[][]> => {
-  const v = await viewXml(xml, { layout: true });
-  return v.diagrams.flatMap((d) => d.groups.flatMap((g) => g.rows));
+  const view = await viewXml(xml, { layout: true });
+  return view.diagrams.flatMap((diagram) => diagram.groups.flatMap((group) => group.rows));
 };
 
 describe('batch splices place like separate commands', () => {
@@ -48,14 +48,14 @@ describe('batch splices place like separate commands', () => {
     expect(batchRows).toEqual(await rows(seq));
     expect((await metricsXml(batch.xml)).score).toBe(0);
     // the same geometry as two commands
-    const shapes = (x: string): string[] => [...x.matchAll(/bpmnElement="([^"]+)"[^>]*>\s*<dc:Bounds ([^/]+)\/>/g)].map((m) => `${m[1]} ${m[2]}`).sort();
+    const shapes = (sourceXml: string): string[] => [...sourceXml.matchAll(/bpmnElement="([^"]+)"[^>]*>\s*<dc:Bounds ([^/]+)\/>/g)].map((match) => `${match[1]} ${match[2]}`).sort();
     expect(shapes(batch.xml)).toEqual(shapes(seq));
   });
 
   it('three new nodes in one flow: one chain in the row', async () => {
     const xml = await purchase();
     const flow = /<bpmn:sequenceFlow id="([^"]+)" name="yes"/.exec(xml)![1]!;
-    const r = await applyToXml(
+    const result = await applyToXml(
       xml,
       [
         { op: 'add', kind: 'userTask', name: 'Approve purchase', flow, as: '$a' },
@@ -64,14 +64,14 @@ describe('batch splices place like separate commands', () => {
       ],
       { layout: 'incremental' },
     );
-    expect((await rows(r.xml))[0]).toEqual(['Event_RequestSubmitted', 'Activity_CheckBudget', 'Gateway_BudgetAvailable', 'Activity_ApprovePurchase', 'Activity_ReserveBudget', 'Gateway_Reserved', 'Activity_OrderGoods', 'Event_GoodsOrdered']);
-    expect((await metricsXml(r.xml)).score).toBe(0);
+    expect((await rows(result.xml))[0]).toEqual(['Event_RequestSubmitted', 'Activity_CheckBudget', 'Gateway_BudgetAvailable', 'Activity_ApprovePurchase', 'Activity_ReserveBudget', 'Gateway_Reserved', 'Activity_OrderGoods', 'Event_GoodsOrdered']);
+    expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
 
 describe('full layout: labels inside their pool', () => {
   it('an end event with a long name at the right edge of the bottom lane', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Order to cash' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Order to cash' })).xml, [
       { op: 'add', kind: 'participant', name: 'Company', id: 'Participant_Company' },
       { op: 'add', kind: 'lane', name: 'Sales', id: 'Lane_Sales', in: 'Participant_Company' },
       { op: 'add', kind: 'lane', name: 'Accounting', id: 'Lane_Accounting', in: 'Participant_Company' },
@@ -81,11 +81,11 @@ describe('full layout: labels inside their pool', () => {
       { op: 'add', kind: 'receiveTask', name: 'Receive payment', after: '$i', lane: 'Lane_Accounting', as: '$p' },
       { op: 'add', kind: 'endEvent', name: 'Bestellung abgeschlossen und bezahlt', after: '$p', lane: 'Lane_Accounting' },
     ]);
-    expect(r.result.layout.mode).toBe('full');
-    const m = await metricsXml(r.xml);
-    expect(m.problems.filter((p) => p.kind === 'labelOutsideFrame')).toEqual([]);
-    const pool = /bpmnElement="Participant_Company"[^>]*>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(r.xml)!;
-    const label = /bpmnElement="Event_BestellungAbgeschlossenUndBezahlt"[\s\S]*?<bpmndi:BPMNLabel>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(r.xml)!;
+    expect(result.result.layout.mode).toBe('full');
+    const metrics = await metricsXml(result.xml);
+    expect(metrics.problems.filter((problem) => problem.kind === 'labelOutsideFrame')).toEqual([]);
+    const pool = /bpmnElement="Participant_Company"[^>]*>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(result.xml)!;
+    const label = /bpmnElement="Event_BestellungAbgeschlossenUndBezahlt"[\s\S]*?<bpmndi:BPMNLabel>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(result.xml)!;
     expect(Number(label[1]) + Number(label[2])).toBeLessThanOrEqual(Number(pool[1]) + Number(pool[2]));
   });
 });

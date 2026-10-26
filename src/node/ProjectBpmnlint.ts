@@ -56,7 +56,7 @@ export class ProjectBpmnlint {
 
   /** Nothing when `validators` already hold a bpmnlint: that host passes its own conventions. */
   async lint(): Promise<{ validator?: NamedValidator; conventions?: IdConventions }> {
-    if (this.opts.validators?.some((v) => (typeof v === 'function' ? v.name : v?.name) === BPMNLINT_VALIDATOR)) return {};
+    if (this.opts.validators?.some((validator) => (typeof validator === 'function' ? validator.name : validator?.name) === BPMNLINT_VALIDATOR)) return {};
     const loaded = await this.loaded();
     if (!loaded) return {};
     const blocks = this.opts.lintBlocks ?? false;
@@ -113,9 +113,9 @@ export class ProjectBpmnlint {
     const hit = ProjectBpmnlint.conventionsCache.get(loaded.resolved);
     if (hit) return hit;
     const setting = loaded.resolved.rules[ID_NAMING_RULE];
-    const l = BpmnlintLibs.load();
+    const libs = BpmnlintLibs.load();
     const out: ProjectIdConventions = { notes: [], where: loaded.where, ...(setting ? { setting } : {}) };
-    if (setting && setting.severity !== 'off' && l instanceof BpmnlintLibs) Object.assign(out, new IdConventionsReader(l.plugin.naming, loaded.where).read(setting));
+    if (setting && setting.severity !== 'off' && libs instanceof BpmnlintLibs) Object.assign(out, new IdConventionsReader(libs.plugin.naming, loaded.where).read(setting));
     ProjectBpmnlint.conventionsCache.set(loaded.resolved, out);
     return out;
   }

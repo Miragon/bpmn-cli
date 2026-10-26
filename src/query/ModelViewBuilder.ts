@@ -45,11 +45,11 @@ export class ModelViewBuilder {
         namespaces: this.vendorNamespaces(),
       }),
       collaboration: this.collaboration(),
-      processes: doc.processes().map((p) => this.process(p)),
+      processes: doc.processes().map((process) => this.process(process)),
       groups: nonEmpty(this.groups()),
       rootElements: this.rootElements(),
       problems: [...errors, ...warnings],
-      importWarnings: nonEmpty(doc.lossyImportWarnings.map((w) => w.message.split('\n')[0]!)),
+      importWarnings: nonEmpty(doc.lossyImportWarnings.map((warning) => warning.message.split('\n')[0]!)),
     });
   }
 
@@ -59,24 +59,24 @@ export class ModelViewBuilder {
     const scope = doc.requireScope(scopeId);
     const id = scope.get<string>('id');
     const processId = doc.processOf(scope)?.get<string>('id');
-    view.processes = view.processes.filter((p) => p.id === processId);
+    view.processes = view.processes.filter((process) => process.id === processId);
     const inScope = (id: string): boolean => {
       for (let el = doc.get(id); el; el = el.$parent as El | undefined) if (el === scope) return true;
       return false;
     };
-    view.groups = nonEmpty((view.groups ?? []).filter((g) => g.members.some(inScope)));
+    view.groups = nonEmpty((view.groups ?? []).filter((group) => group.members.some(inScope)));
     if (id !== processId) {
       const findNode = (nodes: ViewNode[]): ViewNode | undefined => {
-        for (const n of nodes) {
-          if (n.id === id) return n;
-          const inner = n.children ? findNode(n.children) : undefined;
+        for (const node of nodes) {
+          if (node.id === id) return node;
+          const inner = node.children ? findNode(node.children) : undefined;
           if (inner) return inner;
         }
         return undefined;
       };
-      for (const p of view.processes) {
-        const sub = findNode(p.nodes);
-        p.nodes = sub ? [sub] : [];
+      for (const process of view.processes) {
+        const sub = findNode(process.nodes);
+        process.nodes = sub ? [sub] : [];
       }
     }
     return view;
@@ -92,7 +92,7 @@ export class ModelViewBuilder {
     const facts = new ElementFacts(el);
     const id = shownId(el);
     const isSub = is(el, 'bpmn:SubProcess');
-    const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((b) => this.node(b, unreachable)) : [];
+    const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((boundaryEvent) => this.node(boundaryEvent, unreachable)) : [];
     return compact<ViewNode>({
       id,
       kind: kindLabel(el),
@@ -101,7 +101,7 @@ export class ModelViewBuilder {
       trigger: is(el, 'bpmn:Event') ? facts.trigger() : undefined,
       nonInterrupting: facts.nonInterrupting(),
       documentation: facts.documentation(),
-      outgoing: doc.outgoing(el).map((f) => new ElementFacts(f).flow()),
+      outgoing: doc.outgoing(el).map((flow) => new ElementFacts(flow).flow()),
       incoming: doc.incoming(el).map(shownId),
       lane: is(el, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, el)?.get<string>('id'),
       boundary: boundary.length ? boundary : undefined,
@@ -130,7 +130,7 @@ export class ModelViewBuilder {
 
   private data(process: El): ViewData[] {
     const scopes = scopesWithin(process);
-    const nodes = scopes.flatMap((s) => this.doc.flowNodes(s));
+    const nodes = scopes.flatMap((scope) => this.doc.flowNodes(scope));
     const out: ViewData[] = [];
     for (const scope of scopes) {
       for (const el of this.doc.flowElements(scope)) {
@@ -139,8 +139,8 @@ export class ModelViewBuilder {
         const from: string[] = [];
         const to: string[] = [];
         for (const node of nodes) {
-          if (list(node, 'dataOutputAssociations').some((a) => peek<El>(a, 'targetRef') === el)) from.push(shownId(node));
-          if (list(node, 'dataInputAssociations').some((a) => list(a, 'sourceRef').includes(el))) to.push(shownId(node));
+          if (list(node, 'dataOutputAssociations').some((association) => peek<El>(association, 'targetRef') === el)) from.push(shownId(node));
+          if (list(node, 'dataInputAssociations').some((association) => list(association, 'sourceRef').includes(el))) to.push(shownId(node));
         }
         out.push(compact<ViewData>({ id: shownId(el), kind, name: nameOf(el), from, to }));
       }
@@ -183,7 +183,7 @@ export class ModelViewBuilder {
     const annotations = this.links.annotationsIn([collab]);
     return compact({
       id: shownId(collab),
-      participants: doc.participants().map((p) => compact({ id: shownId(p), name: nameOf(p), process: peek<El>(p, 'processRef')?.get<string>('id') })),
+      participants: doc.participants().map((participant) => compact({ id: shownId(participant), name: nameOf(participant), process: peek<El>(participant, 'processRef')?.get<string>('id') })),
       messageFlows: doc.messageFlows().map((mf) => {
         const source = peek<El>(mf, 'sourceRef');
         const target = peek<El>(mf, 'targetRef');
@@ -204,8 +204,8 @@ export class ModelViewBuilder {
   private vendorNamespaces(): string[] {
     const attrs = (this.doc.definitions.$attrs ?? {}) as Record<string, unknown>;
     return Object.keys(attrs)
-      .filter((k) => k.startsWith('xmlns:'))
-      .map((k) => k.slice('xmlns:'.length))
+      .filter((attributeName) => attributeName.startsWith('xmlns:'))
+      .map((attributeName) => attributeName.slice('xmlns:'.length))
       .filter((prefix) => !STANDARD_NS.has(prefix));
   }
 

@@ -26,14 +26,14 @@ interface Run {
 
 function cli(args: string[], input = ''): Run {
   // from the repository root (tsx resolves from there); every file argument is absolute
-  const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT, input });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT, input });
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
 function ok(args: string[], input = ''): Run {
-  const r = cli(args, input);
-  if (r.code !== 0) throw new Error(`bpmn ${args.join(' ')} failed (${r.code}):\n${r.err}\n${r.out}`);
-  return r;
+  const cliRun = cli(args, input);
+  if (cliRun.code !== 0) throw new Error(`bpmn ${args.join(' ')} failed (${cliRun.code}):\n${cliRun.err}\n${cliRun.out}`);
+  return cliRun;
 }
 
 function copy(name: string): string {
@@ -71,9 +71,9 @@ describe('show --around / --context on the command line', () => {
       ['show', CLAIMS, '--context'],
       ['show', CLAIMS, '--layout', '--around', 'Activity_Pay'],
     ]) {
-      const r = cli(args);
-      expect(r.code, args.join(' ')).toBe(1);
-      expect(r.err).toMatch(/^error E_USAGE: /);
+      const cliRun = cli(args);
+      expect(cliRun.code, args.join(' ')).toBe(1);
+      expect(cliRun.err).toMatch(/^error E_USAGE: /);
     }
     const byName = cli(['show', CLAIMS, '--around', 'Pay claim']);
     expect(byName.code).toBe(2);
@@ -84,8 +84,8 @@ describe('show --around / --context on the command line', () => {
 describe('mutation output on the command line', () => {
   it('--summary prints created ids by kind and one layout line; --json --summary the summary', () => {
     const file = copy('summary.bpmn');
-    const r = ok(['add', file, 'userTask', 'Double-check', '--after', 'Activity_RateDamage', '--id', 'Activity_DoubleCheck', '--summary', '--no-layout']);
-    const lines = r.out.trimEnd().split('\n');
+    const cliRun = ok(['add', file, 'userTask', 'Double-check', '--after', 'Activity_RateDamage', '--id', 'Activity_DoubleCheck', '--summary', '--no-layout']);
+    const lines = cliRun.out.trimEnd().split('\n');
     expect(lines[0]).toBe('created userTask: Activity_DoubleCheck');
     expect(lines[1]).toMatch(/^created sequenceFlow: \S+$/);
     expect(lines).toContain('warnings: 0 added, 0 resolved, 1 already in the file');
@@ -98,9 +98,9 @@ describe('mutation output on the command line', () => {
 
   it('a full result lists only the added warnings and counts the others; --json carries the delta', () => {
     const file = copy('delta.bpmn');
-    const r = ok(['set', file, 'Activity_Pay', 'name=Pay the claim', '--no-layout']);
-    expect(r.out).not.toContain('W_IMPLICIT_JOIN');
-    expect(r.out).toContain('1 warning already in the file (not repeated: `bpmn validate <file>` lists them)');
+    const cliRun = ok(['set', file, 'Activity_Pay', 'name=Pay the claim', '--no-layout']);
+    expect(cliRun.out).not.toContain('W_IMPLICIT_JOIN');
+    expect(cliRun.out).toContain('1 warning already in the file (not repeated: `bpmn validate <file>` lists them)');
     const json = JSON.parse(ok(['set', file, 'Activity_Pay', 'name=Pay', '--no-layout', '--json']).out);
     expect(json.warnings).toEqual({ added: [], resolved: [], preexistingCount: 1 });
     expect(json.validation).not.toHaveProperty('warnings');
@@ -122,11 +122,11 @@ describe('stdin and stdout', () => {
 
   it('a change to a model from stdin goes to stdout, the report to stderr', async () => {
     writeFileSync(join(dir, 'ops.json'), JSON.stringify([{ op: 'set', id: 'Activity_Pay', values: { name: 'Pay the claim' } }]));
-    const r = ok(['apply', '-', join(dir, 'ops.json'), '--no-layout'], MODEL);
-    expect(r.out).toContain('name="Pay the claim"');
-    expect((await Doc.fromXml(r.out)).require('Activity_Pay').get('name')).toBe('Pay the claim');
-    expect(r.err).toContain('changed serviceTask Activity_Pay "Pay the claim"');
-    expect(r.err).toContain('written: -');
+    const cliRun = ok(['apply', '-', join(dir, 'ops.json'), '--no-layout'], MODEL);
+    expect(cliRun.out).toContain('name="Pay the claim"');
+    expect((await Doc.fromXml(cliRun.out)).require('Activity_Pay').get('name')).toBe('Pay the claim');
+    expect(cliRun.err).toContain('changed serviceTask Activity_Pay "Pay the claim"');
+    expect(cliRun.err).toContain('written: -');
     // --json: the report as JSON on stderr
     const json = ok(['set', '-', 'Activity_Pay', 'name=X', '--no-layout', '--json'], MODEL);
     expect(JSON.parse(json.err)).toMatchObject({ ok: true, written: true, file: '-' });
@@ -139,12 +139,12 @@ describe('stdin and stdout', () => {
   it('-o - writes the result to stdout and leaves the file as it was; new - prints a new model', async () => {
     const file = copy('stdout.bpmn');
     const before = readFileSync(file, 'utf8');
-    const r = ok(['set', file, 'Activity_Pay', 'name=Pay out', '-o', '-', '--no-layout']);
+    const cliRun = ok(['set', file, 'Activity_Pay', 'name=Pay out', '-o', '-', '--no-layout']);
     expect(readFileSync(file, 'utf8')).toBe(before);
-    expect(r.out).toContain('name="Pay out"');
-    expect(r.err).toContain('written: -');
+    expect(cliRun.out).toContain('name="Pay out"');
+    expect(cliRun.err).toContain('written: -');
     const created = ok(['new', '-', '--name', 'Fresh']);
-    expect((await Doc.fromXml(created.out)).processes().map((p) => p.get('id'))).toEqual(['Process_Fresh']);
+    expect((await Doc.fromXml(created.out)).processes().map((processElement) => processElement.get('id'))).toEqual(['Process_Fresh']);
     expect(created.err).toContain('created process Process_Fresh "Fresh"');
     // a dry run on stdin writes nothing: the report stays on stdout
     const dry = ok(['set', '-', 'Activity_Pay', 'name=Y', '--dry-run', '--no-layout'], MODEL);
@@ -167,7 +167,7 @@ describe('guide --short, guide <topic>, kinds --section', () => {
   it('every topic prints its sections; an unknown topic is a usage error', () => {
     for (const [topic, { sections }] of Object.entries(GUIDE_TOPICS)) {
       const text = guideTopic(topic);
-      for (const s of sections) expect(text, topic).toContain(`${s}`);
+      for (const section of sections) expect(text, topic).toContain(`${section}`);
       expect(text.length, topic).toBeGreaterThan(200);
     }
     expect(ok(['guide', 'camunda8']).out).toMatch(/^CAMUNDA 8/);
@@ -185,7 +185,7 @@ describe('guide --short, guide <topic>, kinds --section', () => {
     expect(bad.code).toBe(1);
     expect(bad.err).toMatch(/^error E_USAGE: Unknown kinds section "bogus"/);
     // the kinds command documents the section names it accepts
-    expect(COMMANDS.find((c) => c.name === 'kinds')?.summary).toContain(KINDS_SECTION_NAMES);
+    expect(COMMANDS.find((command) => command.name === 'kinds')?.summary).toContain(KINDS_SECTION_NAMES);
     // compact by default
     expect(ok(['kinds', '--json']).out.trimEnd().split('\n')).toHaveLength(1);
   }, 60000);
@@ -203,13 +203,13 @@ describe('guide --short, guide <topic>, kinds --section', () => {
     ok(['add', file, 'end', 'Done', '--after', 'Activity_Inform']);
     const recipe = guideTopic('camunda8')
       .split('\n')
-      .map((l) => /^ {4}bpmn ((?:ext add|set) f\.bpmn .*?)(?: {2,}.*)?$/.exec(l)?.[1])
-      .filter((c): c is string => !!c);
+      .map((line) => /^ {4}bpmn ((?:ext add|set) f\.bpmn .*?)(?: {2,}.*)?$/.exec(line)?.[1])
+      .filter((command): command is string => !!command);
     expect(recipe.length).toBeGreaterThanOrEqual(12);
     for (const command of recipe) {
       // the shell's single quotes: `source='=order.total'` is one word
-      const words = [...command.matchAll(/(?:[^\s']+|'[^']*')+/g)].map((m) => m[0].replace(/'/g, ''));
-      ok(words.map((w) => (w === 'f.bpmn' ? file : w)));
+      const words = [...command.matchAll(/(?:[^\s']+|'[^']*')+/g)].map((match) => match[0].replace(/'/g, ''));
+      ok(words.map((word) => (word === 'f.bpmn' ? file : word)));
     }
     const around = ok(['show', file, '--around', 'Activity_Charge', '--depth', '0']).out;
     expect(around).toContain('zeebe:taskDefinition type=charge-card retries=3, io: in amount; out receipt, zeebe:taskHeaders: channel');

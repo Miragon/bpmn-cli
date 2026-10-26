@@ -38,8 +38,8 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
   try {
     fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected an error');
 }
@@ -48,15 +48,15 @@ async function caughtAsync(fn: () => Promise<unknown>): Promise<{ code?: string;
   try {
     await fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected an error');
 }
 
 function cli(...args: string[]): { code: number; out: string; err: string } {
-  const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
 let dir: string;
@@ -84,10 +84,10 @@ async function nestedDoc(): Promise<Doc> {
 describe('new --target accepts only known platforms (#17)', () => {
   it.each(['camunda-7', 'operaton', 'c7'])('--target %s fails with E_USAGE and writes nothing', (target) => {
     const file = join(dir, `t-${target}.bpmn`);
-    const r = cli('new', file, '--target', target);
-    expect(r.code).toBe(1);
-    expect(r.err).toMatch(/E_USAGE/);
-    expect(r.err).toMatch(/camunda8 or camunda7/);
+    const cliRun = cli('new', file, '--target', target);
+    expect(cliRun.code).toBe(1);
+    expect(cliRun.err).toMatch(/E_USAGE/);
+    expect(cliRun.err).toMatch(/camunda8 or camunda7/);
     expect(existsSync(file)).toBe(false);
   });
 
@@ -129,17 +129,17 @@ describe('show <id> and ext list print extension content as an indented tree (#1
   it('show <id>: one line per element, children two spaces deeper', async () => {
     const doc = await Doc.fromXml(definitionsXml(IO_TREE, { nsDecl: CAMUNDA }));
     const text = renderDetail(elementDetail(doc, doc.require('Activity_Call')));
-    expect(text).toContain(['extensions:', ...expected.map((l) => `  ${l}`)].join('\n'));
+    expect(text).toContain(['extensions:', ...expected.map((line) => `  ${line}`)].join('\n'));
   });
 
   it('ext list: the same tree under the index (text), the full tree in --json', async () => {
     const file = join(dir, 'io.bpmn');
     writeFileSync(file, definitionsXml(IO_TREE, { nsDecl: CAMUNDA }));
-    const r = cli('ext', 'list', file, 'Activity_Call');
-    expect(r.code).toBe(0);
-    expect(r.out.trimEnd()).toBe([`0: ${expected[0]}`, ...expected.slice(1).map((l) => `   ${l}`)].join('\n'));
+    const cliRun = cli('ext', 'list', file, 'Activity_Call');
+    expect(cliRun.code).toBe(0);
+    expect(cliRun.out.trimEnd()).toBe([`0: ${expected[0]}`, ...expected.slice(1).map((line) => `   ${line}`)].join('\n'));
     const json = JSON.parse(cli('ext', 'list', file, 'Activity_Call', '--json').out);
-    expect(json[0].children[0].children[0].children.map((c: { body: string }) => c.body)).toEqual(['a', 'b']);
+    expect(json[0].children[0].children[0].children.map((child: { body: string }) => child.body)).toEqual(['a', 'b']);
   });
 });
 
@@ -236,7 +236,7 @@ const COMPENSATION = definitionsXml(
 describe('a boundary event on a compensation handler is a structural error (#14)', () => {
   it('validate reports E_INVALID_HOST for a loaded file', async () => {
     const doc = await Doc.fromXml(COMPENSATION.replace('attachedToRef="Activity_Audit"', 'attachedToRef="Activity_Revoke"'));
-    const err = validateDoc(doc).errors.find((e) => e.code === 'E_INVALID_HOST');
+    const err = validateDoc(doc).errors.find((finding) => finding.code === 'E_INVALID_HOST');
     expect(err).toMatchObject({ element: 'Event_AuditTimeout', related: ['Activity_Revoke'] });
     expect(err!.hint).toMatch(/isForCompensation=false/);
   });
@@ -306,7 +306,7 @@ describe('apply: "message" on add ops for send and receive tasks (#11)', () => {
     ]);
     const doc = Doc.create({ target: 'camunda7' });
     const cs = runOps(doc, ops);
-    expect(cs.warnings.map((w) => w.code)).not.toContain('W_OPTION_IGNORED');
+    expect(cs.warnings.map((warning) => warning.code)).not.toContain('W_OPTION_IGNORED');
     expect(doc.require('Activity_WaitPayment').get<El>('messageRef').get('name')).toBe('PaymentReceived');
     expect(doc.require('Activity_SendInvoice').get<El>('messageRef').get('name')).toBe('Invoice');
     expect(() => parseOps([{ op: 'add', kind: 'userTask', message: 'X' }])).toThrow(/only apply to events/);
@@ -321,7 +321,7 @@ describe('camunda Boolean attributes are written as exactly true / false (#9)', 
   it('normalises yes / 1 / TRUE and refuses other values', async () => {
     const doc = await nestedDoc();
     const cs = runOps(doc, [{ op: 'set', id: 'Activity_Review', values: { 'camunda:asyncBefore': 'yes', 'camunda:exclusive': 'FALSE', 'loop.camunda:asyncAfter': '1' } }]);
-    expect(cs.changed.map((c) => c.detail)).toEqual(['camunda:asyncBefore=true', 'camunda:exclusive=false', 'loop.camunda:asyncAfter=true']);
+    expect(cs.changed.map((change) => change.detail)).toEqual(['camunda:asyncBefore=true', 'camunda:exclusive=false', 'loop.camunda:asyncAfter=true']);
     const task = doc.require('Activity_Review');
     expect(task.$attrs['camunda:asyncBefore']).toBe('true');
     expect(task.get<El>('loopCharacteristics').$attrs['camunda:asyncAfter']).toBe('true');
@@ -345,9 +345,9 @@ describe('find shows the matched vendor value; kinds documents the C7 keys (#8, 
     ] as Op[]);
     const file = join(dir, 'find.bpmn');
     writeFileSync(file, await doc.toXml());
-    const r = cli('find', file, 'charge-card');
-    expect(r.code).toBe(0);
-    expect(r.out.trim()).toBe('serviceTask Activity_Charge "Charge"  (in p)  [camunda:topic=charge-card]');
+    const cliRun = cli('find', file, 'charge-card');
+    expect(cliRun.code).toBe(0);
+    expect(cliRun.out.trim()).toBe('serviceTask Activity_Charge "Charge"  (in p)  [camunda:topic=charge-card]');
   });
 
   it('kinds: --message on send / receive tasks, the set key groups and the nested keys', () => {

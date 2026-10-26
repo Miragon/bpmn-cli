@@ -64,35 +64,35 @@ export class OpRunner {
       this.edit.begin();
       this.edit.batch = context;
       try {
-        ops.forEach((op, i) =>
-          this.atOp(i, () => {
+        ops.forEach((op, opIndex) =>
+          this.atOp(opIndex, () => {
             if (isFormatOp(op)) {
               // checked now (an alias defined later is an error), resolved at the end
-              for (const { key, alias } of new OpAliases(op).references()) table.idOf(alias, i, op, key);
+              for (const { key, alias } of new OpAliases(op).references()) table.idOf(alias, opIndex, op, key);
               resolved.push(op);
-              deferred.push(i);
+              deferred.push(opIndex);
               return;
             }
-            const ready = new OpAliases(op).resolve(table, i);
+            const ready = new OpAliases(op).resolve(table, opIndex);
             resolved.push(ready);
             const cs = this.step(ready);
             all.merge(cs);
-            for (const r of cs.replaced) table.rebind(r.from, r.to);
-            for (const b of cs.bindings) table.define(b.alias, b.el, i);
-            context.created.push(...cs.created.map((c) => c.id));
-            for (const r of cs.renames) {
-              for (const [old, now] of context.renamed) if (now === r.from) context.renamed.set(old, r.to);
-              context.renamed.set(r.from, r.to);
+            for (const replacement of cs.replaced) table.rebind(replacement.from, replacement.to);
+            for (const binding of cs.bindings) table.define(binding.alias, binding.el, opIndex);
+            context.created.push(...cs.created.map((change) => change.id));
+            for (const rename of cs.renames) {
+              for (const [old, now] of context.renamed) if (now === rename.from) context.renamed.set(old, rename.to);
+              context.renamed.set(rename.from, rename.to);
               // created and retyped in the batch: E_NOT_FOUND lists it under its new id
-              if (!r.regenerated) continue;
-              if (!r.was) context.retyped!.add(r.from);
-              context.created = context.created.map((c) => (c === r.from ? r.to : c));
+              if (!rename.regenerated) continue;
+              if (!rename.was) context.retyped!.add(rename.from);
+              context.created = context.created.map((createdId) => (createdId === rename.from ? rename.to : createdId));
             }
           }),
         );
-        for (const i of deferred) {
-          this.atOp(i, () => {
-            const ready = (resolved[i] = new OpAliases(ops[i]!).resolve(table, i));
+        for (const deferredIndex of deferred) {
+          this.atOp(deferredIndex, () => {
+            const ready = (resolved[deferredIndex] = new OpAliases(ops[deferredIndex]!).resolve(table, deferredIndex));
             // the format phase runs outside the batch: E_NOT_FOUND can explain a lost id only now
             for (const id of new OpAliases(ready).referencedIds()) if (!this.doc.get(id)) this.doc.require(id);
           });
@@ -103,14 +103,14 @@ export class OpRunner {
       all.bindings = [];
       all.replaced = [];
       // model-state warnings describe the final state (a lane added before its pool)
-      all.warnings = all.warnings.filter((w) => this.stillHolds(w));
+      all.warnings = all.warnings.filter((warning) => this.stillHolds(warning));
       new StaleFlowReport(this.doc).report(all, this.edit.flowsBefore);
       new IdRenamer(this.doc).reportStalePrefixes(all);
       return { changes: all, ops: resolved, aliases: table.toRecord() };
     });
   }
 
-  private within<T>(run: () => T): T {
+  private within<TResult>(run: () => TResult): TResult {
     const outer = this.doc.edit;
     this.doc.edit = this.edit;
     try {
@@ -165,10 +165,10 @@ export class OpRunner {
   }
 
   /** A later op may have added the pool or put a gateway in between. */
-  private stillHolds(w: Warning): boolean {
+  private stillHolds(warning: Warning): boolean {
     const doc = this.doc;
-    const el = w.element ? doc.get(w.element) : undefined;
-    switch (w.code) {
+    const el = warning.element ? doc.get(warning.element) : undefined;
+    switch (warning.code) {
       case 'W_LANES_WITHOUT_POOL': {
         let process = el?.$parent as El | undefined;
         while (process && !is(process, 'bpmn:Process')) process = process.$parent as El | undefined;
@@ -184,12 +184,12 @@ export class OpRunner {
   }
 
   /** An error thrown by op `i` names the op. */
-  private atOp(i: number, fn: () => unknown): void {
+  private atOp(opIndex: number, fn: () => unknown): void {
     try {
       fn();
     } catch (err) {
       if (err && typeof err === 'object' && 'details' in err) {
-        (err as { details: Record<string, unknown> }).details['op'] = i;
+        (err as { details: Record<string, unknown> }).details['op'] = opIndex;
       }
       throw err;
     }

@@ -64,10 +64,10 @@ export function wrapLines(text: string, maxWidth: number): string[] {
   while (lines.length && out.length < 500) {
     const original = lines.shift()!;
     let fit = original;
-    for (let k = 0; k < 200; k++) {
-      const w = textWidth(fit);
-      if (fit === ' ' || fit === '' || w <= maxWidth || fit.length < 2) break;
-      fit = shortenLine(fit, w, maxWidth);
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const width = textWidth(fit);
+      if (fit === ' ' || fit === '' || width <= maxWidth || fit.length < 2) break;
+      fit = shortenLine(fit, width, maxWidth);
     }
     if (fit.length < original.length) lines.unshift(original.slice(fit.length).trim());
     out.push(fit);
@@ -83,7 +83,7 @@ export const innerLines = (name: string, width: number): number => wrapLines(nam
 export function titleBox(bounds: Box, name: string | undefined): Box | undefined {
   if (!name || !name.trim()) return undefined;
   const lines = wrapLines(name, bounds.width - 2 * PADDING);
-  const width = Math.max(...lines.map((l) => textWidth(l)));
+  const width = Math.max(...lines.map((line) => textWidth(line)));
   return { x: bounds.x + (bounds.width - width) / 2, y: bounds.y + PADDING, width, height: lines.length * LINE_HEIGHT };
 }
 
@@ -109,16 +109,16 @@ const MAX_HEIGHT_STEPS = 5;
 export function activitySize(name: string, size: { width: number; height: number }, bottomRoom = 0): { width: number; height: number } | undefined {
   if (!name.trim() || fitsInside(name, size, bottomRoom)) return undefined;
   const widths: number[] = [];
-  for (let w = size.width + STEP; w <= Math.max(MAX_WIDTH, size.width); w += STEP) {
-    if (fitsInside(name, { width: w, height: size.height }, bottomRoom)) return { width: w, height: size.height };
-    widths.push(w);
+  for (let candidateWidth = size.width + STEP; candidateWidth <= Math.max(MAX_WIDTH, size.width); candidateWidth += STEP) {
+    if (fitsInside(name, { width: candidateWidth, height: size.height }, bottomRoom)) return { width: candidateWidth, height: size.height };
+    widths.push(candidateWidth);
   }
   // as narrow as still gives the line count of the widest step
   const fewest = innerLines(name, widths.at(-1) ?? size.width);
-  const width = [size.width, ...widths].find((w) => innerLines(name, w) <= fewest) ?? size.width;
+  const width = [size.width, ...widths].find((width) => innerLines(name, width) <= fewest) ?? size.width;
   let height = size.height;
-  for (let k = 1; k <= MAX_HEIGHT_STEPS; k++) {
-    height = size.height + k * STEP;
+  for (let step = 1; step <= MAX_HEIGHT_STEPS; step++) {
+    height = size.height + step * STEP;
     if (fitsInside(name, { width, height }, bottomRoom)) break;
   }
   return { width, height };
@@ -143,12 +143,12 @@ function measureLabel(name: string, maxWidth: number): { width: number; height: 
   const words = name.split(/\s+/).filter(Boolean);
   const charW = 7;
   const pad = 12;
-  const longest = Math.max(0, ...words.map((w) => w.length * charW + pad));
+  const longest = Math.max(0, ...words.map((word) => word.length * charW + pad));
   const limit = Math.max(maxWidth, longest); // never break inside a word
   const lines: number[] = [];
   let cur = 0;
-  for (const w of words) {
-    const ww = w.length * charW;
+  for (const word of words) {
+    const ww = word.length * charW;
     if (cur === 0) cur = ww;
     else if (cur + charW + ww + pad <= limit) cur += charW + ww;
     else {

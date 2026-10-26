@@ -100,7 +100,7 @@ const FULL = `<?xml version="1.0" encoding="UTF-8"?>
 const fullDoc = (): Promise<Doc> => docFromXml(FULL);
 
 function ids(els: El[] | undefined): string[] {
-  return (els ?? []).map((e) => e.get<string>('id'));
+  return (els ?? []).map((element) => element.get<string>('id'));
 }
 
 function flowElementIds(scope: El): string[] {
@@ -111,7 +111,7 @@ function flowElementIds(scope: El): string[] {
 async function expectRoundTrip(doc: Doc): Promise<Doc> {
   const xml = await doc.toXml();
   const again = await Doc.fromXml(xml);
-  expect(again.importWarnings.map((w) => w.message)).toEqual([]);
+  expect(again.importWarnings.map((warning) => warning.message)).toEqual([]);
   return again;
 }
 
@@ -165,7 +165,7 @@ describe('set: generic keys', () => {
     const task = doc.require('Task_A');
     expect(task.get('name')).toBe('Check invoice');
     expect(many(task, 'documentation')[0]!.get('text')).toBe('Look at it carefully');
-    expect(cs.changed.map((c) => c.detail)).toEqual(['name=Check invoice', 'doc=Look at it carefully']);
+    expect(cs.changed.map((change) => change.detail)).toEqual(['name=Check invoice', 'doc=Look at it carefully']);
     expect(cs.changed[0]!.kind).toBe('userTask');
     const xml = await doc.toXml();
     expect(xml).toContain('<bpmn:documentation>Look at it carefully</bpmn:documentation>');
@@ -236,7 +236,7 @@ describe('set: generic keys', () => {
     expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { condition: 'x' } }))).toBe('E_UNKNOWN_KEY');
     expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: { attachedToRef: 'Task_B' } }))).toBe('E_UNKNOWN_KEY');
     expect(errorCode(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values: {} }))).toBe('E_USAGE');
-    expect(SET_KEYS.some((k) => k.key === 'loop' && k.appliesTo === 'activity')).toBe(true);
+    expect(SET_KEYS.some((setKey) => setKey.key === 'loop' && setKey.appliesTo === 'activity')).toBe(true);
   });
 });
 
@@ -418,7 +418,7 @@ describe('set: readProperties', () => {
     // every read key is accepted by set again (round trip)
     const again = new ElementProperties(doc).read(doc.require('Task_A'));
     const values: Record<string, string> = {};
-    for (const [k, v] of Object.entries(again)) if (k !== 'id' && k !== 'lane') values[k] = String(v);
+    for (const [key, value] of Object.entries(again)) if (key !== 'id' && key !== 'lane') values[key] = String(value);
     expect(() => new PropertySetter(doc).set({ op: 'set', id: 'Task_A', values })).not.toThrow();
     expect(new ElementProperties(doc).read(doc.require('Task_A'))).toEqual(again);
   });
@@ -446,10 +446,10 @@ describe('remove', () => {
     expect(doc.get('DOA1')).toBeUndefined();
     expect(doc.get('DOR_Order')).toBeDefined();
     expect(ids(doc.require('Lane_Sales').get<El[]>('flowNodeRef'))).toEqual(['Start', 'Gw']);
-    expect(cs.removed.map((c) => c.id).sort()).toEqual(['Assoc_1', 'DOA1', 'F2', 'F_T', 'Task_A', 'Timer_A'].sort());
-    expect(cs.removed.find((c) => c.id === 'Task_A')).toMatchObject({ kind: 'userTask', name: 'Do A' });
-    expect(cs.removed.find((c) => c.id === 'Assoc_1')?.kind).toBe('association');
-    expect(cs.removed.find((c) => c.id === 'DOA1')?.kind).toBe('dataAssociation');
+    expect(cs.removed.map((change) => change.id).sort()).toEqual(['Assoc_1', 'DOA1', 'F2', 'F_T', 'Task_A', 'Timer_A'].sort());
+    expect(cs.removed.find((change) => change.id === 'Task_A')).toMatchObject({ kind: 'userTask', name: 'Do A' });
+    expect(cs.removed.find((change) => change.id === 'Assoc_1')?.kind).toBe('association');
+    expect(cs.removed.find((change) => change.id === 'DOA1')?.kind).toBe('dataAssociation');
     expect(cs.notes).toContain('bridged: Start -> Gw');
     expect(flowElementIds(doc.require('Process_1'))).not.toContain('Task_A');
     const xml = await doc.toXml();
@@ -464,7 +464,7 @@ describe('remove', () => {
     expect(doc.get('F2')).toBeUndefined();
     expect(ids(doc.outgoing(doc.require('Start')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('End')))).toEqual([]);
-    expect(cs.removed.map((c) => c.id).sort()).toEqual(['F1', 'F2', 'Task_A']);
+    expect(cs.removed.map((change) => change.id).sort()).toEqual(['F1', 'F2', 'Task_A']);
     expect(cs.notes).toEqual([]);
     await expectRoundTrip(doc);
   });
@@ -477,8 +477,8 @@ describe('remove', () => {
       expect(doc.get(id), id).toBeUndefined();
       expect(doc.ids.has(id), id).toBe(false);
     }
-    expect(cs.removed.map((c) => c.id)).toEqual(expect.arrayContaining(['Sub', 'SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2', 'F3', 'F4', 'F5']));
-    expect(cs.removed.find((c) => c.id === 'Sub')?.kind).toBe('subProcess');
+    expect(cs.removed.map((change) => change.id)).toEqual(expect.arrayContaining(['Sub', 'SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2', 'F3', 'F4', 'F5']));
+    expect(cs.removed.find((change) => change.id === 'Sub')?.kind).toBe('subProcess');
     expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Call')))).toEqual([]);
     expect(ids(doc.require('Lane_Ops').get<El[]>('flowNodeRef'))).not.toContain('Sub');
@@ -512,17 +512,17 @@ describe('remove', () => {
     expect(doc.get('Collab')).toBeDefined();
     expect(ids(doc.participants())).toEqual(['P_Shop']);
     expect(doc.messageFlows()).toHaveLength(0);
-    expect(cs.removed.find((c) => c.id === 'P_Customer')?.kind).toBe('participant');
-    expect(cs.removed.find((c) => c.id === 'MF1')?.kind).toBe('messageFlow');
-    expect(cs.removed.find((c) => c.id === 'Process_2')?.kind).toBe('process');
-    expect(cs.warnings.map((w) => w.code)).toContain('W_DANGLING_CALLED_ELEMENT');
+    expect(cs.removed.find((change) => change.id === 'P_Customer')?.kind).toBe('participant');
+    expect(cs.removed.find((change) => change.id === 'MF1')?.kind).toBe('messageFlow');
+    expect(cs.removed.find((change) => change.id === 'Process_2')?.kind).toBe('process');
+    expect(cs.warnings.map((warning) => warning.code)).toContain('W_DANGLING_CALLED_ELEMENT');
     await expectRoundTrip(doc);
 
     const cs2 = new ElementRemover(doc).remove({ op: 'remove', ids: ['P_Shop'] });
     expect(doc.collaboration()).toBeUndefined();
     expect(doc.get('Process_1')).toBeUndefined();
     expect(doc.processes()).toHaveLength(0);
-    expect(cs2.notes.some((n) => /collaboration Collab removed/.test(n))).toBe(true);
+    expect(cs2.notes.some((note) => /collaboration Collab removed/.test(note))).toBe(true);
     await expectRoundTrip(doc);
   });
 
@@ -537,8 +537,8 @@ describe('remove', () => {
     expect(many(doc.require('Task_B'), 'properties')).toHaveLength(0);
     expect(many(doc.require('Task_B'), 'dataInputAssociations')).toHaveLength(0);
     expect(many(doc.require('Task_A'), 'dataOutputAssociations')).toHaveLength(0);
-    expect(cs.removed.map((c) => c.id).sort()).toEqual(['DIA1', 'DOA1', 'DOR_Order', 'DO_Order'].sort());
-    expect(cs.removed.find((c) => c.id === 'DOR_Order')?.kind).toBe('dataObject');
+    expect(cs.removed.map((change) => change.id).sort()).toEqual(['DIA1', 'DOA1', 'DOR_Order', 'DO_Order'].sort());
+    expect(cs.removed.find((change) => change.id === 'DOR_Order')?.kind).toBe('dataObject');
     const xml = await doc.toXml();
     expect(xml).not.toContain('__targetRef_placeholder');
     await expectRoundTrip(doc);
@@ -554,7 +554,7 @@ describe('remove', () => {
     expect(ids(doc.outgoing(doc.require('Gw')))).toEqual(['F_no']);
     expect(ids(doc.incoming(doc.require('Task_B')))).toEqual([]);
     expect(ids(doc.messageFlows())).toEqual(['MF1']);
-    expect(cs.removed.map((c) => c.kind)).toEqual(['sequenceFlow', 'messageFlow']);
+    expect(cs.removed.map((change) => change.kind)).toEqual(['sequenceFlow', 'messageFlow']);
     await expectRoundTrip(doc);
   });
 
@@ -569,7 +569,7 @@ describe('remove', () => {
     expect(doc.get('Message_1')).toBeUndefined();
     expect(doc.require('Start').get<El[]>('eventDefinitions')[0]!.get('messageRef')).toBeUndefined();
     expect(cs.removed[0]).toEqual({ id: 'Message_1', kind: 'message', name: 'Msg' });
-    expect(cs.changed.find((c) => c.id === 'Start')?.detail).toMatch(/messageRef cleared/);
+    expect(cs.changed.find((change) => change.id === 'Start')?.detail).toMatch(/messageRef cleared/);
     await expectRoundTrip(doc);
   });
 
@@ -597,8 +597,8 @@ describe('remove', () => {
     // message flows end at the participant (now a black box), so they survive
     expect(ids(doc.messageFlows())).toEqual(['MF1', 'MF2']);
     expect(doc.require('P_Customer').get('processRef')).toBeUndefined();
-    expect(cs.warnings.map((w) => w.code)).toContain('W_BLACK_BOX');
-    expect(cs.removed.find((c) => c.id === 'Process_2')?.kind).toBe('process');
+    expect(cs.warnings.map((warning) => warning.code)).toContain('W_BLACK_BOX');
+    expect(cs.removed.find((change) => change.id === 'Process_2')?.kind).toBe('process');
     await expectRoundTrip(doc);
   });
 });
@@ -624,7 +624,7 @@ describe('retype', () => {
     expect(doc.require('F1').get<El>('targetRef')).toBe(task);
     expect(doc.require('F2').get<El>('sourceRef')).toBe(task);
     expect(doc.require('Timer_A').get<El>('attachedToRef')).toBe(task);
-    expect(doc.boundaryEventsOf(task).map((b) => b.get('id'))).toEqual(['Timer_A']);
+    expect(doc.boundaryEventsOf(task).map((boundary) => boundary.get('id'))).toEqual(['Timer_A']);
     expect(doc.require('Lane_Sales').get<El[]>('flowNodeRef')).toContain(task);
     expect(doc.require('Assoc_1').get<El>('sourceRef')).toBe(task);
     expect(many(task, 'dataOutputAssociations')[0]!.get('id')).toBe('DOA1');
@@ -634,7 +634,7 @@ describe('retype', () => {
     expect(order.indexOf('Task_A')).toBe(order.indexOf('F1') + 1);
     expect(cs.changed).toEqual([{ id: 'Task_A', kind: 'serviceTask', name: 'Do A', detail: 'retyped from userTask to serviceTask' }]);
     // camunda:assignee is kept but has no effect on a serviceTask (see test/c7-semantic.test.ts)
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_INAPPLICABLE']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_PROPERTY_INAPPLICABLE']);
     const xml = await doc.toXml();
     expect(xml).toContain('<bpmn:serviceTask id="Task_A" name="Do A" camunda:assignee="alice">');
     expect(xml).not.toContain('bpmn:userTask');
@@ -663,8 +663,8 @@ describe('retype', () => {
   it('reports dropped children / attributes as W_PROPERTY_DROPPED', async () => {
     const doc = await fullDoc();
     const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Sub', kind: 'userTask' });
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED']);
-    expect(cs.removed.map((c) => c.id)).toEqual(expect.arrayContaining(['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']));
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_PROPERTY_DROPPED']);
+    expect(cs.removed.map((change) => change.id)).toEqual(expect.arrayContaining(['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']));
     const cs2 = new ElementRetyper(doc).retype({ op: 'retype', id: 'Call', kind: 'task' });
     expect(cs2.warnings[0]).toMatchObject({ code: 'W_PROPERTY_DROPPED', element: 'Call' });
     expect(cs2.warnings[0]!.message).toMatch(/calledElement/);
@@ -678,7 +678,7 @@ describe('retype', () => {
     expect(gw.$type).toBe('bpmn:ParallelGateway');
     expect(ids(doc.outgoing(gw))).toEqual(['F_yes', 'F_no']);
     expect(doc.require('F_no').get<El>('sourceRef')).toBe(gw);
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED', 'W_CONDITION_DROPPED']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_PROPERTY_DROPPED', 'W_CONDITION_DROPPED']);
     expect(cs.warnings[0]!.message).toMatch(/default/);
     expect(cs.warnings[1]!.element).toBe('F_yes');
     expect(doc.require('F_yes').get('conditionExpression')).toBeUndefined();
@@ -752,7 +752,7 @@ describe('retype', () => {
     expect(ev.$type).toBe('bpmn:BoundaryEvent');
     expect(new ElementProperties(doc).read(ev)).toMatchObject({ trigger: 'message', message: 'Reminder' });
     expect(cs.changed[0]).toMatchObject({ kind: 'boundaryEvent:message', detail: 'retyped from boundaryEvent:timer to boundaryEvent:message' });
-    expect(doc.rootElementsOfType('bpmn:Message').some((m) => m.get('name') === 'Reminder')).toBe(true);
+    expect(doc.rootElementsOfType('bpmn:Message').some((message) => message.get('name') === 'Reminder')).toBe(true);
     new ElementRetyper(doc).retype({ op: 'retype', id: 'Start', kind: 'start:timer', timer: 'R/PT1H' });
     expect(new ElementProperties(doc).read(doc.require('Start'))).toMatchObject({ trigger: 'timer', timer: 'R/PT1H' });
     await expectRoundTrip(doc);
@@ -773,8 +773,8 @@ describe('move', () => {
     expect(doc.require('F3').get<El>('targetRef')).toBe(remind);
     expect(doc.outgoing(remind)[0]!.get<El>('targetRef').get('id')).toBe('Sub');
     expect(ids(doc.incoming(doc.require('Sub')))).toEqual(['F4', doc.outgoing(remind)[0]!.get('id')]);
-    expect(cs.changed.find((c) => c.id === 'Task_Remind')?.detail).toBe('moved after Task_B');
-    expect(cs.removed.map((c) => c.id)).toEqual(['F_T']);
+    expect(cs.changed.find((change) => change.id === 'Task_Remind')?.detail).toBe('moved after Task_B');
+    expect(cs.removed.map((change) => change.id)).toEqual(['F_T']);
     expect(cs.notes).toContain('inserted between Task_B and Sub');
     const order = flowElementIds(doc.require('Process_1'));
     expect(order.indexOf('Task_Remind')).toBeGreaterThan(order.indexOf('Task_B'));
@@ -817,9 +817,9 @@ describe('move', () => {
     expect(ids(doc.outgoing(doc.require('Start')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Task_Remind')))).toEqual([]);
     expect(ids(doc.require('Lane_Sales').get<El[]>('flowNodeRef'))).toEqual(['Start']);
-    expect(cs.warnings.filter((w) => w.code === 'W_FLOW_DROPPED').map((w) => w.element).sort()).toEqual(['F1', 'F_T', 'F_no', 'F_yes'].sort());
-    expect(cs.removed.map((c) => c.id).sort()).toEqual(['F1', 'F_T', 'F_no', 'F_yes'].sort());
-    expect(cs.changed.filter((c) => /moved into Sub/.test(c.detail ?? '')).map((c) => c.id)).toEqual(['Task_A', 'Gw']);
+    expect(cs.warnings.filter((warning) => warning.code === 'W_FLOW_DROPPED').map((warning) => warning.element).sort()).toEqual(['F1', 'F_T', 'F_no', 'F_yes'].sort());
+    expect(cs.removed.map((change) => change.id).sort()).toEqual(['F1', 'F_T', 'F_no', 'F_yes'].sort());
+    expect(cs.changed.filter((change) => /moved into Sub/.test(change.detail ?? '')).map((change) => change.id)).toEqual(['Task_A', 'Gw']);
     await expectRoundTrip(doc);
     // moving out again into the other pool
     new NodeMover(doc).move({ op: 'move', ids: ['Task_A'], in: 'P_Customer' });
@@ -853,7 +853,7 @@ describe('move', () => {
     const ev = doc.require('Timer_A');
     expect(ev.get<El>('attachedToRef').get('id')).toBe('Task_B');
     expect(doc.boundaryEventsOf(doc.require('Task_A'))).toHaveLength(0);
-    expect(doc.boundaryEventsOf(doc.require('Task_B')).map((b) => b.get('id'))).toEqual(['Timer_A']);
+    expect(doc.boundaryEventsOf(doc.require('Task_B')).map((boundary) => boundary.get('id'))).toEqual(['Timer_A']);
     expect(doc.get('F_T')).toBeDefined();
     expect(ids(doc.outgoing(ev))).toEqual(['F_T']);
     const order = flowElementIds(doc.require('Process_1'));
@@ -864,7 +864,7 @@ describe('move', () => {
     const cs2 = new NodeMover(doc).move({ op: 'move', ids: ['Timer_A'], on: 'SubTask' });
     expect(doc.scopeOf(ev).get('id')).toBe('Sub');
     expect(doc.get('F_T')).toBeUndefined();
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_FLOW_DROPPED']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_FLOW_DROPPED']);
     await expectRoundTrip(doc);
   });
 
@@ -979,7 +979,7 @@ describe('ext', () => {
 
     new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:formDefinition', attrs: { formKey: 'f' } });
     new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'other' }, replace: true });
-    expect(listExtensions(task).map((e) => [e.index, e.type, e.attrs['type'] ?? e.attrs['formKey']])).toEqual([
+    expect(listExtensions(task).map((extension) => [extension.index, extension.type, extension.attrs['type'] ?? extension.attrs['formKey']])).toEqual([
       [0, 'zeebe:formDefinition', 'f'],
       [1, 'zeebe:taskDefinition', 'other'],
     ]);
@@ -991,9 +991,9 @@ describe('ext', () => {
 
     const rm = new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:taskDefinition' });
     expect(rm.changed[0]!.detail).toBe('ext removed zeebe:taskDefinition');
-    expect(listExtensions(task).map((e) => e.type)).toEqual(['zeebe:formDefinition', 'camunda:script']);
+    expect(listExtensions(task).map((extension) => extension.type)).toEqual(['zeebe:formDefinition', 'camunda:script']);
     new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 0 });
-    expect(listExtensions(task).map((e) => e.type)).toEqual(['camunda:script']);
+    expect(listExtensions(task).map((extension) => extension.type)).toEqual(['camunda:script']);
     expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 5 }))).toBe('E_NO_EXTENSION');
     expect(errorCode(() => new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:nope' }))).toBe('E_NO_EXTENSION');
     new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' });
@@ -1047,8 +1047,8 @@ describe('ext', () => {
 
     // replace by type when adding from a snippet
     new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:taskHeaders><zeebe:header key="k2" value="v2"/></zeebe:taskHeaders>', replace: true });
-    expect(listExtensions(task).filter((e) => e.type === 'zeebe:taskHeaders')).toHaveLength(1);
-    expect(listExtensions(task).find((e) => e.type === 'zeebe:taskHeaders')?.children?.[0]?.attrs).toEqual({ key: 'k2', value: 'v2' });
+    expect(listExtensions(task).filter((extension) => extension.type === 'zeebe:taskHeaders')).toHaveLength(1);
+    expect(listExtensions(task).find((extension) => extension.type === 'zeebe:taskHeaders')?.children?.[0]?.attrs).toEqual({ key: 'k2', value: 'v2' });
     // inline xmlns declarations are honoured and declared on the definitions
     new ExtensionEditor(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<acme:thing xmlns:acme="http://acme.example/ns" a="1"/>' });
     expect(doc.definitions.$attrs['xmlns:acme']).toBe('http://acme.example/ns');
@@ -1179,7 +1179,7 @@ describe('set: non-interrupting rules match add/retype', () => {
     const cs2 = new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { trigger: 'error', error: 'Fail' } });
     expect(full.require('Timer_A').get('cancelActivity')).not.toBe(false);
     expect((await full.toXml()).includes('cancelActivity')).toBe(false);
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_PROPERTY_DROPPED']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_PROPERTY_DROPPED']);
     expect(cs2.changed[0]).toMatchObject({ id: 'Timer_A', kind: 'boundaryEvent:error' });
     // a trigger that allows non-interrupting keeps the flag silently
     new PropertySetter(full).set({ op: 'set', id: 'Timer_A', values: { trigger: 'message', message: 'Late' } });
@@ -1286,13 +1286,13 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
     const doc = await fullDoc();
     const cs = new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
     // (W_PROPERTY_INAPPLICABLE for the camunda:assignee the serviceTask keeps is covered in test/c7-semantic.test.ts)
-    expect(cs.warnings.filter((w) => w.code !== 'W_PROPERTY_INAPPLICABLE')).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'Task_A' })]);
+    expect(cs.warnings.filter((warning) => warning.code !== 'W_PROPERTY_INAPPLICABLE')).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'Task_A' })]);
     expect(cs.warnings[0]!.message).toMatch(/timer/);
     expect(cs.changed[0]!.detail).toBe('retyped from userTask to serviceTask');
     const again = new ElementRetyper(doc).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
     expect(again.isEmpty).toBe(true);
     expect(again.notes[0]).toMatch(/already/);
-    expect(again.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(again.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
   });
 
   it('a sub-process that becomes a task loses its child diagram (no BPMNPlane rooted at a task)', async () => {
@@ -1329,7 +1329,7 @@ describe('move: bridging with --in, no id recycling', () => {
     expect(ids(doc.outgoing(call))).toEqual([]);
     expect(cs.notes).toContain('bridged: Sub -> End');
     expect(cs.changed).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'F5', detail: 'Sub -> End (bridged Call)' }), expect.objectContaining({ id: 'Call', detail: 'moved into Sub' })]));
-    expect(cs.removed.map((c) => c.id)).toEqual(['F6']);
+    expect(cs.removed.map((change) => change.id)).toEqual(['F6']);
     expect(cs.warnings).toEqual([]);
     await expectRoundTrip(doc);
   });
@@ -1373,8 +1373,8 @@ describe('move: bridging with --in, no id recycling', () => {
     <bpmn:task id="C"><bpmn:incoming>Flow_3</bpmn:incoming></bpmn:task>`),
     );
     const cs = new NodeMover(doc).move({ op: 'move', ids: ['X'], after: 'B' });
-    expect(cs.removed.map((c) => c.id)).toEqual(['Flow_4']);
-    expect(cs.created.map((c) => c.id)).toEqual(['Flow_XToC']);
+    expect(cs.removed.map((change) => change.id)).toEqual(['Flow_4']);
+    expect(cs.created.map((change) => change.id)).toEqual(['Flow_XToC']);
     expect(doc.get('Flow_4')).toBeUndefined();
     expect(doc.require('Flow_XToC').get<El>('sourceRef').get('id')).toBe('X');
     expect(doc.require('Flow_XToC').get<El>('targetRef').get('id')).toBe('C');
@@ -1401,7 +1401,7 @@ describe('remove / move: bridging policy', () => {
     const cs2 = new NodeMover(doc2).move({ op: 'move', ids: ['Task_Send'], after: 'Start' });
     expect(doc2.require('F_no').get('conditionExpression')).toBeUndefined();
     expect(doc2.require('Gw').get<El>('default').get('id')).toBe('F_no');
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_CONDITION_DROPPED']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_CONDITION_DROPPED']);
   });
 
   it('bridges into a self-loop only where connect allows one (activities), never on a gateway', async () => {
@@ -1419,13 +1419,13 @@ describe('remove / move: bridging policy', () => {
     expect(doc.get('F3')).toBeUndefined();
     expect(ids(doc.outgoing(doc.require('Gw')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Gw')))).toEqual(['F1']);
-    expect(cs.removed.map((c) => c.id).sort()).toEqual(['B', 'F2', 'F3']);
+    expect(cs.removed.map((change) => change.id).sort()).toEqual(['B', 'F2', 'F3']);
     expect(cs.notes).toEqual(['not bridged: Gw is both predecessor and successor of B and cannot loop back to itself']);
     await expectRoundTrip(doc);
 
     const doc2 = await docFromXml(viaGateway);
     new NodeMover(doc2).move({ op: 'move', ids: ['B'], after: 'S' });
-    expect(doc2.outgoing(doc2.require('Gw')).some((f) => f.get<El>('targetRef').get('id') === 'Gw')).toBe(false);
+    expect(doc2.outgoing(doc2.require('Gw')).some((flow) => flow.get<El>('targetRef').get('id') === 'Gw')).toBe(false);
     expect(doc2.require('F1').get<El>('targetRef').get('id')).toBe('B');
     await expectRoundTrip(doc2);
 

@@ -69,23 +69,23 @@ const SPELLABLE = new Set([
  */
 export class IdStyle {
   private constructor(
-    private readonly l: LearnedStyle,
-    private readonly d?: DeclaredConventions,
-    /** with declared conventions `l` leaves out the ids a declared prefix covers; this does not */
-    private readonly all: LearnedStyle = l,
+    private readonly learned: LearnedStyle,
+    private readonly declaredConventions?: DeclaredConventions,
+    /** with declared conventions `learned` leaves out the ids a declared prefix covers; this does not */
+    private readonly all: LearnedStyle = learned,
   ) {}
 
   static readonly DEFAULT = new IdStyle(new LearnedStyle(undefined));
 
   static infer(defs: El, conventions?: IdConventions): IdStyle {
-    const d = DeclaredConventions.of(conventions);
-    if (!d) return new IdStyle(new LearnedStyle(defs));
-    return new IdStyle(new LearnedStyle(defs, d), d, new LearnedStyle(defs));
+    const declared = DeclaredConventions.of(conventions);
+    if (!declared) return new IdStyle(new LearnedStyle(defs));
+    return new IdStyle(new LearnedStyle(defs, declared), declared, new LearnedStyle(defs));
   }
 
   static of(conventions?: IdConventions): IdStyle {
-    const d = DeclaredConventions.of(conventions);
-    return d ? new IdStyle(new LearnedStyle(undefined), d) : IdStyle.DEFAULT;
+    const declared = DeclaredConventions.of(conventions);
+    return declared ? new IdStyle(new LearnedStyle(undefined), declared) : IdStyle.DEFAULT;
   }
 
   static keyRequest(key: string): IdRequest {
@@ -94,7 +94,7 @@ export class IdStyle {
   }
 
   get declared(): boolean {
-    return this.d !== undefined;
+    return this.declaredConventions !== undefined;
   }
 
   /**
@@ -102,24 +102,24 @@ export class IdStyle {
    * under a declared prefix one the file's own style would give otherwise.
    */
   get ownStyleDiffers(): boolean {
-    return this.l.unconforming;
+    return this.learned.unconforming;
   }
 
   private processMemo: { prefix: string; body: Body } | null | undefined;
 
   private processStyle(): { prefix: string; body: Body } | undefined {
-    if (this.processMemo === undefined) this.processMemo = this.l.processStyle(() => this.caseFor()) ?? null;
+    if (this.processMemo === undefined) this.processMemo = this.learned.processStyle(() => this.caseFor()) ?? null;
     return this.processMemo ?? undefined;
   }
 
   private fileLevel(req: IdRequest): boolean {
-    return !!this.d && FILE_LEVEL.has(req.key) && this.declaredHead(req) === undefined && !(req.key === 'bpmn:Process' && this.processStyle());
+    return !!this.declaredConventions && FILE_LEVEL.has(req.key) && this.declaredHead(req) === undefined && !(req.key === 'bpmn:Process' && this.processStyle());
   }
 
   private own: IdStyle | undefined;
 
   learnedOnly(): IdStyle {
-    return this.d ? (this.own ??= new IdStyle(this.all)) : this;
+    return this.declaredConventions ? (this.own ??= new IdStyle(this.all)) : this;
   }
 
   info(): IdStyleInfo {
@@ -132,37 +132,37 @@ export class IdStyle {
    * form whose body passes it). Message flows borrow the sequence flows' until they show a style.
    */
   private flowOf(type: string): FlowStyle {
-    const d = this.d;
-    if (!d) return this.l.flowOf(type);
-    const borrowed = this.l.showsFlowStyle(type) ? undefined : d.borrowedHead(type);
-    const learned = this.l.flowOf(borrowed === undefined ? type : 'bpmn:SequenceFlow');
-    const head = d.prefixes[type] ?? borrowed;
+    const declared = this.declaredConventions;
+    if (!declared) return this.learned.flowOf(type);
+    const borrowed = this.learned.showsFlowStyle(type) ? undefined : declared.borrowedHead(type);
+    const learned = this.learned.flowOf(borrowed === undefined ? type : 'bpmn:SequenceFlow');
+    const head = declared.prefixes[type] ?? borrowed;
     if (head === undefined) return learned;
-    return { ...learned, form: d.case ? 'named' : learned.form, head };
+    return { ...learned, form: declared.case ? 'named' : learned.form, head };
   }
 
   private declaredHead(req: IdRequest): string | undefined {
-    return this.d?.headFor(this.typeOf(req.key), req.trigger);
+    return this.declaredConventions?.headFor(this.typeOf(req.key), req.trigger);
   }
 
   private declares(req: IdRequest): boolean {
-    if (!this.d) return false;
+    if (!this.declaredConventions) return false;
     return CONNECTIONS.has(req.key) ? this.flowOf(req.key).head !== undefined : this.declaredHead(req) !== undefined;
   }
 
   private caseFor(req?: IdRequest): Body {
     const own = req?.key === 'bpmn:Process' && !this.declares(req) ? this.processStyle() : undefined;
     if (own) return own.body;
-    if (!this.d) return this.l.body;
-    if (req && this.declares(req)) return this.d.case ?? this.all.body;
-    if (this.l.bodyVoted) return this.l.body;
-    if (!this.d.case) return this.all.body;
-    return this.l.otherShape(this.d) ? this.l.body : this.d.case;
+    if (!this.declaredConventions) return this.learned.body;
+    if (req && this.declares(req)) return this.declaredConventions.case ?? this.all.body;
+    if (this.learned.bodyVoted) return this.learned.body;
+    if (!this.declaredConventions.case) return this.all.body;
+    return this.learned.otherShape(this.declaredConventions) ? this.learned.body : this.declaredConventions.case;
   }
 
   /** No `_` in the body and a letter first: a glued suffix, `<id>Join`, a kind word first. */
   private lettersOnly(req: IdRequest): boolean {
-    return this.declares(req) && (this.d!.case === 'camel' || this.d!.case === 'pascal');
+    return this.declares(req) && (this.declaredConventions!.case === 'camel' || this.declaredConventions!.case === 'pascal');
   }
 
   private sepFor(req: IdRequest): string {
@@ -181,11 +181,11 @@ export class IdStyle {
   private learnedPrefix(req: IdRequest, bare = true): { prefix: string; source: PrefixSource } {
     const processes = req.key === 'bpmn:Process' ? this.processStyle() : undefined;
     if (processes) return { prefix: processes.prefix, source: 'file' };
-    return this.l.prefixOf(req, bare, this.d);
+    return this.learned.prefixOf(req, bare, this.declaredConventions);
   }
 
-  private bodyOf(text: string | undefined, c: Body = this.l.body): string {
-    switch (c) {
+  private bodyOf(text: string | undefined, bodyCase: Body = this.learned.body): string {
+    switch (bodyCase) {
       case 'camel':
         return camelSlug(text);
       case 'snake':
@@ -199,7 +199,7 @@ export class IdStyle {
 
   /** Never snake_case: it would read as a prefix. */
   private bareBody(name: string | undefined): string {
-    const body = this.l.bareBody === 'pascal' ? slugify(name) : camelSlug(name);
+    const body = this.learned.bareBody === 'pascal' ? slugify(name) : camelSlug(name);
     return body && isValidId(body) && !PREFIXED.test(body) ? body : '';
   }
 
@@ -216,48 +216,48 @@ export class IdStyle {
   /** `qualified`: the context ends with the anchor's kind, which a cut leaves in place. */
   private derived(req: IdRequest, spelled = false, qualified = false, max = MAX_ID): string {
     const named = hasIdWords(req.name);
-    const c = this.caseFor(req);
+    const bodyCase = this.caseFor(req);
     const head = this.declaredHead(req);
     if (head !== undefined) {
       const room = max - head.length;
-      const body = this.declaredBody(named ? req.name! : this.unnamedText(req, spelled, head), req, head, c);
-      if (qualified && !named && req.anchorKind) return `${head}${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG), c)}`;
-      if (req.tailWord) return `${head}${this.withWord(body, req.tailWord, room, c)}`;
-      return `${head}${this.cutBody(body, room, c)}`;
+      const body = this.declaredBody(named ? req.name! : this.unnamedText(req, spelled, head), req, head, bodyCase);
+      if (qualified && !named && req.anchorKind) return `${head}${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG), bodyCase)}`;
+      if (req.tailWord) return `${head}${this.withWord(body, req.tailWord, room, bodyCase)}`;
+      return `${head}${this.cutBody(body, room, bodyCase)}`;
     }
     const prefix = this.prefixFor(req);
     if (prefix === '' && named) {
       const bare = this.bareBody(req.name);
-      if (bare) return req.tailWord ? this.withWord(bare, req.tailWord, max, this.l.bareBody) : this.cutBody(bare, max, this.l.bareBody);
+      if (bare) return req.tailWord ? this.withWord(bare, req.tailWord, max, this.learned.bareBody) : this.cutBody(bare, max, this.learned.bareBody);
     }
     // an unnamed element keeps a prefix in a file whose named ids have none
-    let p = prefix === '' ? this.prefixFor(req, false) : prefix;
-    const body = this.bodyOf(named ? req.name : this.unnamedText(req, spelled), c) || this.bodyOf(kindWord(req.key, req.trigger), c);
+    let chosenPrefix = prefix === '' ? this.prefixFor(req, false) : prefix;
+    const body = this.bodyOf(named ? req.name : this.unnamedText(req, spelled), bodyCase) || this.bodyOf(kindWord(req.key, req.trigger), bodyCase);
     /**
      * A prefix that leaves under 8 characters beside `_99` stays where the body's lead fits beside
      * it whole, else the bpmn-cli prefix takes its place (activity_auftrag).
      */
-    if (MAX_ID - p.length - 1 - 3 < 8 && this.leadOf(body, !named).length > max - p.length - 1) p = caseLike(req.prefix, /^[a-z]/.test(p));
-    const room = max - p.length - 1;
-    if (qualified && !named && req.anchorKind) return `${p}_${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG), c)}`;
-    if (req.tailWord) return `${p}_${this.withWord(body, req.tailWord, room, c)}`;
-    return `${p}_${this.cutBody(body, room, c)}`;
+    if (MAX_ID - chosenPrefix.length - 1 - 3 < 8 && this.leadOf(body, !named).length > max - chosenPrefix.length - 1) chosenPrefix = caseLike(req.prefix, /^[a-z]/.test(chosenPrefix));
+    const room = max - chosenPrefix.length - 1;
+    if (qualified && !named && req.anchorKind) return `${chosenPrefix}_${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG), bodyCase)}`;
+    if (req.tailWord) return `${chosenPrefix}_${this.withWord(body, req.tailWord, room, bodyCase)}`;
+    return `${chosenPrefix}_${this.cutBody(body, room, bodyCase)}`;
   }
 
   /**
    * A body that would begin with a number under camelCase / PascalCase begins with the kind word,
    * minus what the prefix says (startEvent_timer1stOfMonth, scriptTask_scriptTask4Augen).
    */
-  private declaredBody(text: string, req: IdRequest, head: string, c: Body): string {
-    const body = this.bodyOf(text, c);
+  private declaredBody(text: string, req: IdRequest, head: string, bodyCase: Body): string {
+    const body = this.bodyOf(text, bodyCase);
     if (body && !(this.lettersOnly(req) && /^[0-9]/.test(body))) return body;
     const word = kindWord(req.key, req.trigger);
-    return this.bodyOf(`${this.unsaid(word, head) || word} ${text}`, c);
+    return this.bodyOf(`${this.unsaid(word, head) || word} ${text}`, bodyCase);
   }
 
   /** The body is cut so the word stays; under 8 characters left, both are cut as one. */
-  private withWord(body: string, word: string, max: number, c: Body): string {
-    const tail = c === 'snake' ? `_${snakeSlug(word)}` : c === 'pascalSnake' ? `_${pascalSnakeSlug(word)}` : slugify(word);
+  private withWord(body: string, word: string, max: number, bodyCase: Body): string {
+    const tail = bodyCase === 'snake' ? `_${snakeSlug(word)}` : bodyCase === 'pascalSnake' ? `_${pascalSnakeSlug(word)}` : slugify(word);
     return max - tail.length >= 8 ? `${cutName(body, max - tail.length)}${tail}` : cutName(`${body}${tail}`, max);
   }
 
@@ -287,7 +287,7 @@ export class IdStyle {
    */
   derivedBases(req: IdRequest, id?: string): string[] {
     const own = this.basesOf(req, id);
-    return this.d ? [...new Set([...own, ...this.learnedOnly().basesOf(req, id)])] : own;
+    return this.declaredConventions ? [...new Set([...own, ...this.learnedOnly().basesOf(req, id)])] : own;
   }
 
   private basesOf(req: IdRequest, id?: string): string[] {
@@ -297,7 +297,7 @@ export class IdStyle {
     }
     const style = this.flowOf(req.key);
     const bases = this.connectionBases(req, style);
-    if (style.head === undefined) for (const other of this.l.otherFlowStyles(req.key)) if (id === undefined || this.mayBeOf(id, other)) bases.push(...this.connectionBases(req, other));
+    if (style.head === undefined) for (const other of this.learned.otherFlowStyles(req.key)) if (id === undefined || this.mayBeOf(id, other)) bases.push(...this.connectionBases(req, other));
     return [...new Set(bases)];
   }
 
@@ -325,7 +325,7 @@ export class IdStyle {
   /** `fallback`: Flow_ where a long head leaves the ends too little room. */
   explainFlow(type: 'bpmn:SequenceFlow' | 'bpmn:MessageFlow'): { style: FlowStyle; head: string; form: FlowForm; fallback?: string; source: PrefixSource; body: Body } {
     const style = this.flowOf(type);
-    const source: PrefixSource = style.head !== undefined ? 'lint' : this.l.hasFlows(type) ? 'file' : 'default';
+    const source: PrefixSource = style.head !== undefined ? 'lint' : this.learned.hasFlows(type) ? 'file' : 'default';
     const body = this.caseFor(connectionRequest(type, '', ''));
     return { style, ...this.effectiveHead(style, body), source, body };
   }
@@ -336,23 +336,23 @@ export class IdStyle {
    * else the id `now` wants (never the old kind's words). Ids are never renamed for this.
    */
   stalePrefix(id: string, from: IdState, to: IdState, now?: IdRequest): { was?: string; heads: string[]; suggested: string } | undefined {
-    const d = this.d;
-    if (!d) return undefined;
-    const heads = d.headsOf(to);
-    if (!heads.length || d.acceptsId(id, to)) return undefined;
-    const was = d.headOf(id, from);
-    if (was === undefined && d.headsOf(from).length) return undefined;
+    const declared = this.declaredConventions;
+    if (!declared) return undefined;
+    const heads = declared.headsOf(to);
+    if (!heads.length || declared.acceptsId(id, to)) return undefined;
+    const was = declared.headOf(id, from);
+    if (was === undefined && declared.headsOf(from).length) return undefined;
     // userTask_checkOrder under the prefix `user` starts with it by accident (Task_ completes it)
     const rest = was === undefined ? undefined : id.slice(was.length);
     const own = rest !== undefined && /[A-Za-z0-9]$/.test(was!) ? PREFIXED.exec(rest) : null;
     const accidental = own && `${was}${own[1]}`.toLowerCase() === from.type.slice(from.type.indexOf(':') + 1).toLowerCase() ? own : null;
-    if (now && (rest === undefined || accidental || !d.inDeclaredCase(id, from))) {
+    if (now && (rest === undefined || accidental || !declared.inDeclaredCase(id, from))) {
       const words = rest === undefined ? (speakingStem(id) ?? '') : accidental ? accidental[2]! : rest;
       const suggested = this.derivedBase(hasIdWords(now.name) ? now : { ...now, context: stemWords(words).join(' ') });
       return isValidId(suggested) ? { ...(was !== undefined ? { was } : {}), heads, suggested } : undefined;
     }
     if (was === undefined) return undefined;
-    const head = d.headFor(to.type, to.trigger)!;
+    const head = declared.headFor(to.type, to.trigger)!;
     const suggested = `${head}${id.slice(was.length)}`;
     return isValidId(suggested) ? { was, heads, suggested } : undefined;
   }
@@ -365,15 +365,15 @@ export class IdStyle {
     const req = IdStyle.keyRequest(key);
     const head = this.declaredHead(req);
     const state = { type: this.typeOf(key) };
-    if (head !== undefined && !this.d!.inDeclaredCase(gatewayId, state)) {
-      const c = this.caseFor(req);
-      const own = this.d!.headOf(gatewayId, state);
+    if (head !== undefined && !this.declaredConventions!.inDeclaredCase(gatewayId, state)) {
+      const bodyCase = this.caseFor(req);
+      const own = this.declaredConventions!.headOf(gatewayId, state);
       const body = own === undefined ? '' : stemWords(gatewayId.slice(own.length)).join(' ');
-      return `${head}${this.withWord(this.declaredBody(hasIdWords(body) ? body : label, req, head, c), 'Join', MAX_ID - head.length, c)}`;
+      return `${head}${this.withWord(this.declaredBody(hasIdWords(body) ? body : label, req, head, bodyCase), 'Join', MAX_ID - head.length, bodyCase)}`;
     }
     const base = cutAt(gatewayId, MAX_ID - '_join'.length);
-    if (head !== undefined && this.d!.case) return this.d!.case === 'snake' ? `${base}_join` : `${base}Join`;
-    if (!gatewayId.includes('_') && this.l.hasBareNodes) return `${base}Join`;
+    if (head !== undefined && this.declaredConventions!.case) return this.declaredConventions!.case === 'snake' ? `${base}_join` : `${base}Join`;
+    if (!gatewayId.includes('_') && this.learned.hasBareNodes) return `${base}Join`;
     switch (this.caseFor(req)) {
       case 'camel':
         return `${base}Join`;
@@ -394,30 +394,30 @@ export class IdStyle {
     const { sep } = wanted;
     let { base } = wanted;
     const qualified = CONNECTIONS.has(req.key) ? undefined : this.qualifiedBase(req);
-    const others = CONNECTIONS.has(req.key) ? [] : [this.spelledBase(req), qualified].filter((x): x is string => !!x && x !== base);
+    const others = CONNECTIONS.has(req.key) ? [] : [this.spelledBase(req), qualified].filter((candidate): candidate is string => !!candidate && candidate !== base);
     const clash = (id: string): boolean => ids.has(id) || ids.bodyTaken(id);
     if (others.length && clash(base)) {
-      const pick = others.find((x) => !clash(x)) ?? others.find((x) => !ids.has(x));
+      const pick = others.find((candidate) => !clash(candidate)) ?? others.find((candidate) => !ids.has(candidate));
       if (pick) return { id: pick, base: pick };
       // the base is taken only by its body: suffix the form that names the anchor
       if (qualified && !ids.has(base)) base = qualified;
     }
     let id = base;
     const recut = (max: number): { base: string; sep: string } => (base === qualified ? { base: this.derived(req, false, true, max), sep } : this.wanted(req, max));
-    const suffixed = (n: number): string => {
+    const suffixed = (suffixNumber: number): string => {
       let given: { base: string; sep: string } | undefined;
-      const out = withSuffix(base, sep, n, (max) => {
-        const c = recut(max);
-        if (c.sep !== sep) given ??= c;
-        return c.base;
+      const out = withSuffix(base, sep, suffixNumber, (max) => {
+        const recutBase = recut(max);
+        if (recutBase.sep !== sep) given ??= recutBase;
+        return recutBase.base;
       });
       if (!given) return out;
       // a long head that gives way to Flow_ in the cut for the suffix: the whole id takes that form
-      const suffix = `${given.sep}${n}`;
+      const suffix = `${given.sep}${suffixNumber}`;
       const room = recut(MAX_ID - suffix.length);
       return `${room.sep === given.sep ? room.base : given.base}${suffix}`;
     };
-    for (let n = 2; ids.has(id); n++) id = suffixed(n);
+    for (let suffixNumber = 2; ids.has(id); suffixNumber++) id = suffixed(suffixNumber);
     return { id, base };
   }
 
@@ -431,15 +431,15 @@ export class IdStyle {
     if (form === 'named') return { base: this.namedBase(req, max, prefix, sep, legacy), sep: '_' };
     const long = (head: string, join: string): boolean => !legacy && MAX_ID - head.length - join.length < 16;
     if (form === 'scopedTo') {
-      const s = req.source!;
-      const t = req.target!;
+      const sourceId = req.source!;
+      const targetId = req.target!;
       const own = this.scopeOf(req, scope!);
       const head = `${prefix}_${own}_`;
       const fitter = new IdFitter({ legacy, suffixSep: '' });
-      const [a, b] = [fitter.endWord(s, own, 'Start'), fitter.endWord(t, own, 'End')];
-      if (legacy) return { base: cutAt(`${head}${a}To${b}`, max, true), sep: '' };
-      const base = long(head, 'To') ? fitter.whole(head, a, 'To', b, max) : fitter.pair(head, a, 'To', b, max);
-      return base !== undefined ? { base, sep: '' } : { base: this.namedBase({ ...req, sourceLabel: a, targetLabel: b }, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
+      const [sourceWord, targetWord] = [fitter.endWord(sourceId, own, 'Start'), fitter.endWord(targetId, own, 'End')];
+      if (legacy) return { base: cutAt(`${head}${sourceWord}To${targetWord}`, max, true), sep: '' };
+      const base = long(head, 'To') ? fitter.whole(head, sourceWord, 'To', targetWord, max) : fitter.pair(head, sourceWord, 'To', targetWord, max);
+      return base !== undefined ? { base, sep: '' } : { base: this.namedBase({ ...req, sourceLabel: sourceWord, targetLabel: targetWord }, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
     }
     const own = form === 'stemTo' ? '' : '_';
     const fitter = new IdFitter({ legacy });
@@ -450,8 +450,8 @@ export class IdStyle {
 
   /** The scope an end names in its id (KotO in serviceTask_KotO_Validate), else the most used. */
   private scopeOf(req: IdRequest, scope: string): string {
-    const scopes = this.l.scopesOf(req.key) ?? [scope];
-    return scopes.find((x) => req.source!.split('_').includes(x) || req.target!.split('_').includes(x)) ?? scope;
+    const scopes = this.learned.scopesOf(req.key) ?? [scope];
+    return scopes.find((candidateScope) => req.source!.split('_').includes(candidateScope) || req.target!.split('_').includes(candidateScope)) ?? scope;
   }
 
   /**
@@ -461,37 +461,37 @@ export class IdStyle {
   private declaredFlowBase(req: IdRequest, max: number, form: FlowForm, head: string, legacy: boolean): { base: string; sep: string } {
     const sep = this.sepFor(req);
     if (form === 'named') {
-      const c = this.caseFor(req);
-      const scopes = this.l.scopesOf(req.key) ?? [];
+      const bodyCase = this.caseFor(req);
+      const scopes = this.learned.scopesOf(req.key) ?? [];
       const label = (id: string, given: string | undefined): string => {
         const text = given && nameWords(given).length ? given : (speakingStem(id) ?? id);
-        return (scopes.length && text.split('_').filter((x) => !scopes.includes(x)).join('_')) || text;
+        return (scopes.length && text.split('_').filter((segment) => !scopes.includes(segment)).join('_')) || text;
       };
       const source = label(req.source!, req.sourceLabel);
       const target = label(req.target!, req.targetLabel);
-      const fitter = new IdFitter({ body: c, legacy, suffixSep: sep, ...(c === 'camel' ? { names: nameWords(source) } : {}) });
-      let [a, join, b] = fitter.ends(source, target, false);
-      if (this.lettersOnly(req) && /^[0-9]/.test(a)) a = fitter.ends(`From ${source}`, target, false)[0];
-      return { base: fitter.pair(head, a, join, b, max), sep };
+      const fitter = new IdFitter({ body: bodyCase, legacy, suffixSep: sep, ...(bodyCase === 'camel' ? { names: nameWords(source) } : {}) });
+      let [sourceEnd, join, targetEnd] = fitter.ends(source, target, false);
+      if (this.lettersOnly(req) && /^[0-9]/.test(sourceEnd)) sourceEnd = fitter.ends(`From ${source}`, target, false)[0];
+      return { base: fitter.pair(head, sourceEnd, join, targetEnd, max), sep };
     }
     if (form === 'scopedTo') {
       const own = this.scopeOf(req, this.flowOf(req.key).scope!);
       const fitter = new IdFitter({ legacy, suffixSep: sep });
-      const [a, b] = [fitter.endWord(req.source!, own, 'Start'), fitter.endWord(req.target!, own, 'End')];
-      return { base: legacy ? cutAt(`${head}${own}_${a}To${b}`, max, true) : fitter.pair(`${head}${own}_`, a, 'To', b, max), sep };
+      const [sourceWord, targetWord] = [fitter.endWord(req.source!, own, 'Start'), fitter.endWord(req.target!, own, 'End')];
+      return { base: legacy ? cutAt(`${head}${own}_${sourceWord}To${targetWord}`, max, true) : fitter.pair(`${head}${own}_`, sourceWord, 'To', targetWord, max), sep };
     }
     return { base: new IdFitter({ legacy }).idForm(form, head, req, max), sep };
   }
 
   private namedBase(req: IdRequest, max: number, prefix: string, sep: string | undefined, legacy: boolean): string {
     const label = (id: string, given: string | undefined): string => (given && nameWords(given).length ? given : (speakingStem(id) ?? id));
-    const c = this.caseFor(req);
-    const { head, glued, long } = new IdFitter({ body: c, legacy }).namedHead(prefix, sep);
+    const bodyCase = this.caseFor(req);
+    const { head, glued, long } = new IdFitter({ body: bodyCase, legacy }).namedHead(prefix, sep);
     const source = label(req.source!, req.sourceLabel);
-    const fitter = new IdFitter({ body: c, legacy, ...(c === 'camel' && !glued ? { names: nameWords(source) } : {}) });
-    const [a, join, b] = fitter.ends(source, label(req.target!, req.targetLabel), glued);
-    if (!long) return fitter.pair(head, a, join, b, max);
-    return fitter.whole(head, a, join, b, max) ?? this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, legacy);
+    const fitter = new IdFitter({ body: bodyCase, legacy, ...(bodyCase === 'camel' && !glued ? { names: nameWords(source) } : {}) });
+    const [sourceEnd, join, targetEnd] = fitter.ends(source, label(req.target!, req.targetLabel), glued);
+    if (!long) return fitter.pair(head, sourceEnd, join, targetEnd, max);
+    return fitter.whole(head, sourceEnd, join, targetEnd, max) ?? this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, legacy);
   }
 
   private isConnection(req: IdRequest): boolean {
@@ -513,21 +513,21 @@ export class IdStyle {
 
   /** `TimerStart` after `startEvent_`: Timer. */
   private unsaid(word: string, head: string): string {
-    const said = new Set(stemWords(head).map((w) => w.toLowerCase()));
+    const said = new Set(stemWords(head).map((word) => word.toLowerCase()));
     return stemWords(word)
-      .filter((w) => !said.has(w.toLowerCase()))
+      .filter((word) => !said.has(word.toLowerCase()))
       .join('');
   }
 
-  private effectiveHead(style: FlowStyle, c: Body): { head: string; form: FlowForm; fallback?: string } {
+  private effectiveHead(style: FlowStyle, bodyCase: Body): { head: string; form: FlowForm; fallback?: string } {
     const { form, prefix, sep, scope, head } = style;
     if (head !== undefined) return { head, form };
-    const fitter = new IdFitter({ body: c });
+    const fitter = new IdFitter({ body: bodyCase });
     const fallback = fitter.namedHead(DEFAULT_FLOW.prefix, undefined).head;
     if (form === 'named') {
       const own = fitter.namedHead(prefix, sep);
       if (!own.long) return { head: own.head, form };
-      return MAX_ID - own.head.length - (c === 'snake' || c === 'pascalSnake' ? 4 : 2) < 2 ? { head: fallback, form } : { head: own.head, form, fallback };
+      return MAX_ID - own.head.length - (bodyCase === 'snake' || bodyCase === 'pascalSnake' ? 4 : 2) < 2 ? { head: fallback, form } : { head: own.head, form, fallback };
     }
     const room = form === 'scopedTo' ? MAX_ID - `${prefix}_${scope}_`.length - 'To'.length : MAX_ID - prefix.length - 1 - FORM_JOIN[form].length;
     if (room >= 16) return { head: `${prefix}_`, form };
@@ -535,9 +535,9 @@ export class IdStyle {
   }
 
   /** A camelCase body that lost its leading number to the cut begins in lower case (`rechnung`). */
-  private cutBody(body: string, max: number, c: Body): string {
+  private cutBody(body: string, max: number, bodyCase: Body): string {
     const cut = cutName(body, max);
-    return c === 'camel' && /^[0-9]/.test(body) && /^[A-Z]/.test(cut) ? cut.replace(/^[A-Z]+(?![a-z])|^[A-Z]/, (m) => m.toLowerCase()) : cut;
+    return bodyCase === 'camel' && /^[0-9]/.test(body) && /^[A-Z]/.test(cut) ? cut.replace(/^[A-Z]+(?![a-z])|^[A-Z]/, (capitals) => capitals.toLowerCase()) : cut;
   }
 
   /**
@@ -546,8 +546,8 @@ export class IdStyle {
    */
   private leadOf(body: string, unnamed = false): string {
     const words = idWords(body);
-    const from = unnamed ? words.slice(0, 3).findIndex((w) => CONTEXT_WORDS.has(w.replace(/^[_.-]+/, '').toLowerCase())) + 1 : 0;
-    const at = words.findIndex((w, i) => i >= from && /[A-Za-z]/.test(w) && !isFiller(w));
+    const from = unnamed ? words.slice(0, 3).findIndex((word) => CONTEXT_WORDS.has(word.replace(/^[_.-]+/, '').toLowerCase())) + 1 : 0;
+    const at = words.findIndex((word, index) => index >= from && /[A-Za-z]/.test(word) && !isFiller(word));
     return (at === -1 ? words : words.slice(0, at + 1)).join('');
   }
 }

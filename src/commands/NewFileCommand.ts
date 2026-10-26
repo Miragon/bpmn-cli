@@ -17,24 +17,24 @@ export class NewFileCommand extends MutationCommand {
         .option('--name <text>', 'process name')
         .option('--id <processId>', "process id (default: Process_<Name> or Process_1; a bpmn:Process prefix the .bpmnlintrc's element-id-naming names: that prefix and the name, process_main without one)")
         .option('--no-executable', 'isExecutable=false')
-        .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (v: string) => {
+        .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (raw: string) => {
           try {
-            Doc.assertTarget(v);
+            Doc.assertTarget(raw);
           } catch {
             throw new InvalidArgumentError('expected camunda8 or camunda7 (camunda7 also covers CIB seven and Operaton)');
           }
-          return v;
+          return raw;
         }),
-    ).action((file: string, o: RawOpts) => this.run(file, o));
+    ).action((file: string, options: RawOpts) => this.run(file, options));
   }
 
-  private async run(file: string, o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       // `new -` (or -o -) writes the new model to stdout
       const stdout = file === '-' || opts.out === '-';
       // fail before the .bpmnlintrc is read: an invalid --id, a file that exists
-      const processId = o['id'] as string | undefined;
+      const processId = options['id'] as string | undefined;
       if (processId !== undefined) Doc.assertProcessId(processId);
       if (!stdout) await assertNewFile(opts.out ?? file, opts);
       // the id conventions of the .bpmnlintrc that applies to the file written
@@ -42,16 +42,16 @@ export class NewFileCommand extends MutationCommand {
       const conventions = (await ConventionsLookup.of(target, opts)).conventions;
       const doc = Doc.create(
         {
-          processName: o['name'] as string | undefined,
+          processName: options['name'] as string | undefined,
           processId,
-          executable: o['executable'] !== false,
-          target: o['target'] as 'camunda8' | 'camunda7' | undefined,
+          executable: options['executable'] !== false,
+          target: options['target'] as 'camunda8' | 'camunda7' | undefined,
           ...(conventions ? { conventions } : {}),
         },
         file === '-' ? undefined : file,
       );
       const result = await new DocFile(doc).mutate([], { ...opts, mustNotExist: true, ...(stdout ? { out: undefined, dryRun: true } : {}) });
-      result.changes.create(newProcessChange(doc, o['name'] as string | undefined));
+      result.changes.create(newProcessChange(doc, options['name'] as string | undefined));
       await this.emit(result, opts, stdout);
     }, opts.json);
   }

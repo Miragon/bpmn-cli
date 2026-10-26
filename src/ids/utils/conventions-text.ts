@@ -28,16 +28,16 @@ export function renderConventions(view: ConventionsView): string {
   if (view.rule) lines.push(`element-id-naming (${view.source ?? 'the host'}): ${view.rule.severity}, case ${view.rule.case}, eventDefinitionQualifier ${view.rule.qualifier}`);
   else if (view.undeclared) lines.push(`no id conventions: ${UNDECLARED_WORDS[view.undeclared](view.source)}; new ids follow the file's id style`);
   else lines.push("no id conventions declared: new ids follow the file's id style");
-  const width = Math.max(...view.rows.map((r) => r.pattern.length));
-  const sourceWidth = Math.max(...view.rows.map((r) => r.source.length));
-  for (const r of view.rows) lines.push(`  ${r.pattern.padEnd(width)}  ${r.source.padEnd(sourceWidth)}  ${r.kinds.join(' ')}${r.note ? ` (${r.note})` : ''}`);
+  const width = Math.max(...view.rows.map((row) => row.pattern.length));
+  const sourceWidth = Math.max(...view.rows.map((row) => row.source.length));
+  for (const row of view.rows) lines.push(`  ${row.pattern.padEnd(width)}  ${row.source.padEnd(sourceWidth)}  ${row.kinds.join(' ')}${row.note ? ` (${row.note})` : ''}`);
   if (view.qualified) {
-    const except = view.rows.some((r) => r.note?.endsWith(UNQUALIFIED_NOTE)) ? ' (not the triggers marked above)' : '';
+    const except = view.rows.some((row) => row.note?.endsWith(UNQUALIFIED_NOTE)) ? ' (not the triggers marked above)' : '';
     const how = view.qualified.mode === 'required' ? `required, new ids take it${except}` : 'also accepted, new ids take the plain prefix';
     lines.push(`  events with a trigger: <trigger><Prefix> (${view.qualified.examples.join(', ')}) ${how}`);
   }
-  const used = [...new Set(view.rows.map((r) => r.source))];
-  lines.push(`sources: ${used.map((s) => `${s} = ${SOURCE_WORDS[s]}`).join('; ')}`);
-  for (const n of view.notes) lines.push(`warning ${n.code}: ${n.message}${n.hint ? `  (${n.hint})` : ''}`);
+  const used = [...new Set(view.rows.map((row) => row.source))];
+  lines.push(`sources: ${used.map((source) => `${source} = ${SOURCE_WORDS[source]}`).join('; ')}`);
+  for (const note of view.notes) lines.push(`warning ${note.code}: ${note.message}${note.hint ? `  (${note.hint})` : ''}`);
   return lines.join('\n');
 }

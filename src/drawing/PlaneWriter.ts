@@ -12,8 +12,8 @@ export class PlaneWriter {
     private readonly defs: El,
   ) {}
 
-  private rounded(b: Box): Box {
-    return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+  private rounded(box: Box): Box {
+    return { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) };
   }
 
   private readBox(bounds: unknown): Box | undefined {
@@ -21,17 +21,17 @@ export class PlaneWriter {
     return { x: raw<number>(bounds, 'x') ?? NaN, y: raw<number>(bounds, 'y') ?? NaN, width: raw<number>(bounds, 'width') ?? NaN, height: raw<number>(bounds, 'height') ?? NaN };
   }
 
-  private setBounds(owner: El, b: Box): void {
+  private setBounds(owner: El, box: Box): void {
     const current = raw<El>(owner, 'bounds');
-    if (current && sameBox(this.readBox(current), b)) return;
-    const r = this.rounded(b);
+    if (current && sameBox(this.readBox(current), box)) return;
+    const rounded = this.rounded(box);
     if (current) {
-      current.set('x', r.x);
-      current.set('y', r.y);
-      current.set('width', r.width);
-      current.set('height', r.height);
+      current.set('x', rounded.x);
+      current.set('y', rounded.y);
+      current.set('width', rounded.width);
+      current.set('height', rounded.height);
     } else {
-      const created = this.moddle.create('dc:Bounds', r);
+      const created = this.moddle.create('dc:Bounds', rounded);
       owner.set('bounds', created);
       created.$parent = owner;
     }
@@ -57,12 +57,12 @@ export class PlaneWriter {
   }
 
   private setWaypoints(di: El, points: Point[]): void {
-    const current = rawList(di, 'waypoint').map((w) => ({ x: raw<number>(w, 'x') ?? NaN, y: raw<number>(w, 'y') ?? NaN }));
+    const current = rawList(di, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x') ?? NaN, y: raw<number>(waypoint, 'y') ?? NaN }));
     if (samePoints(current, points)) return;
-    const pts = this.writablePoints(points).map((p) => {
-      const w = this.moddle.create('dc:Point', p);
-      w.$parent = di;
-      return w;
+    const pts = this.writablePoints(points).map((point) => {
+      const waypoint = this.moddle.create('dc:Point', point);
+      waypoint.$parent = di;
+      return waypoint;
     });
     di.set('waypoint', pts);
   }
@@ -74,31 +74,31 @@ export class PlaneWriter {
     addTo(planeDi, 'planeElement', di);
   }
 
-  private writeShape(ids: DiIds, planeDi: El, s: DShape): void {
-    if (!s.di) {
-      const attrs: Record<string, unknown> = { id: ids.shape(s.id), bpmnElement: s.el };
-      if (s.kind === 'participant' || s.kind === 'lane') attrs['isHorizontal'] = true;
-      if (s.kind === 'subProcess') attrs['isExpanded'] = s.expanded === true;
-      if (is(s.el, 'bpmn:ExclusiveGateway')) attrs['isMarkerVisible'] = true;
-      s.di = this.moddle.create('bpmndi:BPMNShape', attrs);
-      addTo(planeDi, 'planeElement', s.di);
+  private writeShape(ids: DiIds, planeDi: El, shape: DShape): void {
+    if (!shape.di) {
+      const attrs: Record<string, unknown> = { id: ids.shape(shape.id), bpmnElement: shape.el };
+      if (shape.kind === 'participant' || shape.kind === 'lane') attrs['isHorizontal'] = true;
+      if (shape.kind === 'subProcess') attrs['isExpanded'] = shape.expanded === true;
+      if (is(shape.el, 'bpmn:ExclusiveGateway')) attrs['isMarkerVisible'] = true;
+      shape.di = this.moddle.create('bpmndi:BPMNShape', attrs);
+      addTo(planeDi, 'planeElement', shape.di);
     } else {
-      this.adopt(planeDi, s.di);
-      if (s.kind === 'subProcess' && s.expanded !== undefined && (raw<boolean>(s.di, 'isExpanded') === true) !== s.expanded) s.di.set('isExpanded', s.expanded);
+      this.adopt(planeDi, shape.di);
+      if (shape.kind === 'subProcess' && shape.expanded !== undefined && (raw<boolean>(shape.di, 'isExpanded') === true) !== shape.expanded) shape.di.set('isExpanded', shape.expanded);
     }
-    this.setBounds(s.di, s.bounds);
-    this.setLabel(s.di, s.label);
+    this.setBounds(shape.di, shape.bounds);
+    this.setLabel(shape.di, shape.label);
   }
 
-  private writeEdge(ids: DiIds, planeDi: El, e: DEdge): void {
-    if (!e.di) {
-      e.di = this.moddle.create('bpmndi:BPMNEdge', { id: ids.edge(e.id), bpmnElement: e.el });
-      addTo(planeDi, 'planeElement', e.di);
+  private writeEdge(ids: DiIds, planeDi: El, edge: DEdge): void {
+    if (!edge.di) {
+      edge.di = this.moddle.create('bpmndi:BPMNEdge', { id: ids.edge(edge.id), bpmnElement: edge.el });
+      addTo(planeDi, 'planeElement', edge.di);
     } else {
-      this.adopt(planeDi, e.di);
+      this.adopt(planeDi, edge.di);
     }
-    this.setWaypoints(e.di, e.points);
-    this.setLabel(e.di, e.label);
+    this.setWaypoints(edge.di, edge.points);
+    this.setLabel(edge.di, edge.label);
   }
 
   private ensurePlaneDi(ids: DiIds, plane: Plane): El {
@@ -128,13 +128,13 @@ export class PlaneWriter {
         continue;
       }
       const planeDi = this.ensurePlaneDi(ids, plane);
-      for (const d of plane.dropped) {
-        const parent = d.$parent as El | undefined;
-        if (parent) removeFrom(parent, 'planeElement', d);
+      for (const droppedElement of plane.dropped) {
+        const parent = droppedElement.$parent as El | undefined;
+        if (parent) removeFrom(parent, 'planeElement', droppedElement);
       }
       plane.dropped = [];
-      for (const s of plane.shapes.values()) this.writeShape(ids, planeDi, s);
-      for (const e of plane.edges.values()) this.writeEdge(ids, planeDi, e);
+      for (const shape of plane.shapes.values()) this.writeShape(ids, planeDi, shape);
+      for (const edge of plane.edges.values()) this.writeEdge(ids, planeDi, edge);
     }
   }
 }

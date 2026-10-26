@@ -39,12 +39,12 @@ export class DeclaredConventions {
     this.case = body;
   }
 
-  static of(c: IdConventions | undefined): DeclaredConventions | undefined {
+  static of(conventions: IdConventions | undefined): DeclaredConventions | undefined {
     const prefixes: Record<string, string> = {};
-    for (const [key, prefix] of Object.entries(c?.prefixes ?? {})) if (isUsablePrefix(prefix)) prefixes[key] = prefix;
+    for (const [key, prefix] of Object.entries(conventions?.prefixes ?? {})) if (isUsablePrefix(prefix)) prefixes[key] = prefix;
     if (!Object.keys(prefixes).length) return undefined;
-    const body = c?.case ? BODY_OF_CASE[c.case] : undefined;
-    return new DeclaredConventions(prefixes, c?.qualifier ?? 'optional', body, new Set(c?.ignored));
+    const body = conventions?.case ? BODY_OF_CASE[conventions.case] : undefined;
+    return new DeclaredConventions(prefixes, conventions?.qualifier ?? 'optional', body, new Set(conventions?.ignored));
   }
 
   /**
@@ -90,13 +90,13 @@ export class DeclaredConventions {
 
   acceptsId(id: string, state: IdState): boolean {
     const heads = this.headsOf(state);
-    return !heads.length || heads.some((h) => id.startsWith(h));
+    return !heads.length || heads.some((head) => id.startsWith(head));
   }
 
   headOf(id: string, state: IdState): string | undefined {
     return this.headsOf(state)
-      .filter((h) => id.startsWith(h))
-      .sort((a, b) => b.length - a.length)[0];
+      .filter((head) => id.startsWith(head))
+      .sort((first, second) => second.length - first.length)[0];
   }
 
   /** acceptsId, and the body is in the declared case too. */
@@ -108,22 +108,22 @@ export class DeclaredConventions {
   /** A prefix several kinds share (gateway_) votes once. */
   get votes(): Votes {
     if (this.shapeVotes) return this.shapeVotes;
-    const v = { kind: 0, literal: 0, lower: 0, upper: 0 };
+    const votes = { kind: 0, literal: 0, lower: 0, upper: 0 };
     const voted = new Set<string>();
     for (const def of KINDS) {
-      const m = PREFIXED.exec(`${this.prefixes[def.type] ?? ''}x`);
-      if (!m || voted.has(m[1]!)) continue;
-      voted.add(m[1]!);
-      if (prefixClass(m[1]!, kindTypeNames(def), undefined, def.prefix) === 'literal') v.literal++;
-      else v.kind++;
-      if (/^[a-z]/.test(m[1]!)) v.lower++;
-      else v.upper++;
+      const match = PREFIXED.exec(`${this.prefixes[def.type] ?? ''}x`);
+      if (!match || voted.has(match[1]!)) continue;
+      voted.add(match[1]!);
+      if (prefixClass(match[1]!, kindTypeNames(def), undefined, def.prefix) === 'literal') votes.literal++;
+      else votes.kind++;
+      if (/^[a-z]/.test(match[1]!)) votes.lower++;
+      else votes.upper++;
     }
-    return (this.shapeVotes = v);
+    return (this.shapeVotes = votes);
   }
 
   private passes(heads: string[], id: string): boolean {
-    const head = heads.filter((h) => id.startsWith(h)).sort((a, b) => b.length - a.length)[0];
+    const head = heads.filter((candidate) => id.startsWith(candidate)).sort((first, second) => second.length - first.length)[0];
     if (head === undefined) return false;
     const pattern = this.case && CASE_BODY[this.case];
     return !pattern || pattern.test(id.slice(head.length));

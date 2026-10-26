@@ -1,7 +1,7 @@
 import type { ModelView, ViewLane, ViewNode } from '../query/model-view.js';
 import { truncate } from '../query/utils/view.js';
 import { renderProblems } from './utils/result-lines.js';
-import { annotationLine, DOC_MAX, flagValue, flowText, INDENT, messageFlowLine, q, scalar, vendorFlags } from './utils/view-lines.js';
+import { annotationLine, DOC_MAX, flagValue, flowText, INDENT, messageFlowLine, quote, scalar, vendorFlags } from './utils/view-lines.js';
 
 /**
  * The model view as text, the default output of `show`: one line per node with its flows inline
@@ -15,46 +15,46 @@ export class ModelViewText {
 
   text(): string {
     const { view, out } = this;
-    for (const w of view.importWarnings ?? []) out.push(`import: ${w}`);
+    for (const warning of view.importWarnings ?? []) out.push(`import: ${warning}`);
     if (view.definitions.namespaces.length) out.push(`namespaces: ${view.definitions.namespaces.join(', ')}`);
     if (view.collaboration) {
       out.push(`collaboration ${view.collaboration.id}`);
-      for (const p of view.collaboration.participants) {
-        out.push(`${INDENT}participant ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.process ? `= ${p.process}` : '(black box)'}`);
+      for (const participant of view.collaboration.participants) {
+        out.push(`${INDENT}participant ${participant.id}${participant.name ? ` ${quote(participant.name)}` : ''} ${participant.process ? `= ${participant.process}` : '(black box)'}`);
       }
       for (const mf of view.collaboration.messageFlows) out.push(INDENT + messageFlowLine(mf));
       if (view.collaboration.annotations?.length) {
         out.push(`${INDENT}annotations:`);
-        for (const a of view.collaboration.annotations) out.push(`${INDENT}${INDENT}${annotationLine(a)}`);
+        for (const annotation of view.collaboration.annotations) out.push(`${INDENT}${INDENT}${annotationLine(annotation)}`);
       }
     }
-    for (const p of view.processes) {
-      const flags = vendorFlags(p);
-      out.push(`process ${p.id}${p.name ? ` ${q(p.name)}` : ''} ${p.executable ? 'executable' : 'non-executable'}${p.participant ? ` in ${p.participant}` : ''}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
-      if (p.nodes.length) this.nodes(p.nodes, 1);
+    for (const process of view.processes) {
+      const flags = vendorFlags(process);
+      out.push(`process ${process.id}${process.name ? ` ${quote(process.name)}` : ''} ${process.executable ? 'executable' : 'non-executable'}${process.participant ? ` in ${process.participant}` : ''}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
+      if (process.nodes.length) this.nodes(process.nodes, 1);
       else out.push(`${INDENT}(empty)`);
-      if (p.lanes.length) {
+      if (process.lanes.length) {
         out.push(`${INDENT}lanes:`);
-        this.lanes(p.lanes, 2);
+        this.lanes(process.lanes, 2);
       }
-      if (p.data.length) {
+      if (process.data.length) {
         out.push(`${INDENT}data:`);
-        for (const d of p.data) {
-          const links = [d.from.length ? `from ${d.from.join(', ')}` : '', d.to.length ? `to ${d.to.join(', ')}` : ''].filter(Boolean).join('; ');
-          out.push(`${INDENT}${INDENT}${d.kind} ${d.id}${d.name ? ` ${q(d.name)}` : ''}${links ? ` (${links})` : ''}`);
+        for (const data of process.data) {
+          const links = [data.from.length ? `from ${data.from.join(', ')}` : '', data.to.length ? `to ${data.to.join(', ')}` : ''].filter(Boolean).join('; ');
+          out.push(`${INDENT}${INDENT}${data.kind} ${data.id}${data.name ? ` ${quote(data.name)}` : ''}${links ? ` (${links})` : ''}`);
         }
       }
-      if (p.annotations.length) {
+      if (process.annotations.length) {
         out.push(`${INDENT}annotations:`);
-        for (const a of p.annotations) out.push(`${INDENT}${INDENT}${annotationLine(a)}`);
+        for (const annotation of process.annotations) out.push(`${INDENT}${INDENT}${annotationLine(annotation)}`);
       }
     }
     if (view.groups?.length) {
       out.push('groups:');
-      for (const g of view.groups) out.push(`${INDENT}${g.id}${g.name ? ` ${q(g.name)}` : ''}: ${g.members.join(', ') || '(empty)'}`);
+      for (const group of view.groups) out.push(`${INDENT}${group.id}${group.name ? ` ${quote(group.name)}` : ''}: ${group.members.join(', ') || '(empty)'}`);
     }
     if (view.rootElements.length) {
-      out.push(`root: ${view.rootElements.map((r) => `${r.kind} ${r.id}${r.name ? ` ${q(r.name)}` : ''}${r.code ? ` (${r.code})` : ''}${r.correlationKey !== undefined ? ` [correlationKey=${flagValue(r.correlationKey)}]` : ''}`).join(', ')}`);
+      out.push(`root: ${view.rootElements.map((root) => `${root.kind} ${root.id}${root.name ? ` ${quote(root.name)}` : ''}${root.code ? ` (${root.code})` : ''}${root.correlationKey !== undefined ? ` [correlationKey=${flagValue(root.correlationKey)}]` : ''}`).join(', ')}`);
     }
     if (view.problems.length) {
       out.push('problems:');
@@ -67,10 +67,10 @@ export class ModelViewText {
 
   private nodes(nodes: ViewNode[], depth: number): void {
     const pad = INDENT.repeat(depth);
-    for (const n of nodes) {
-      this.out.push(pad + ModelViewText.nodeLine(n));
-      if (n.boundary?.length) this.nodes(n.boundary, depth + 1);
-      if (n.children?.length) this.nodes(n.children, depth + 1);
+    for (const node of nodes) {
+      this.out.push(pad + ModelViewText.nodeLine(node));
+      if (node.boundary?.length) this.nodes(node.boundary, depth + 1);
+      if (node.children?.length) this.nodes(node.children, depth + 1);
     }
   }
 
@@ -79,30 +79,30 @@ export class ModelViewText {
     const pad = INDENT.repeat(depth);
     for (const lane of lanes) {
       const empty = !lane.members.length && !lane.lanes?.length ? ' (empty)' : '';
-      this.out.push(`${pad}${lane.id}${lane.name ? ` ${q(lane.name)}` : ''}${empty}`);
+      this.out.push(`${pad}${lane.id}${lane.name ? ` ${quote(lane.name)}` : ''}${empty}`);
       if (lane.lanes?.length) this.lanes(lane.lanes, depth + 1);
     }
   }
 
-  private static nodeLine(n: ViewNode): string {
-    const parts = [n.kind, n.id];
-    if (n.name) parts.push(q(n.name));
-    const flags = ModelViewText.nodeFlags(n);
+  private static nodeLine(node: ViewNode): string {
+    const parts = [node.kind, node.id];
+    if (node.name) parts.push(quote(node.name));
+    const flags = ModelViewText.nodeFlags(node);
     if (flags.length) parts.push(`[${flags.join(', ')}]`);
     let line = parts.join(' ');
-    if (n.outgoing.length) line += ` -> ${n.outgoing.map(flowText).join(', ')}`;
-    return n.unreachable ? `! unreachable: ${line}` : line;
+    if (node.outgoing.length) line += ` -> ${node.outgoing.map(flowText).join(', ')}`;
+    return node.unreachable ? `! unreachable: ${line}` : line;
   }
 
-  private static nodeFlags(n: ViewNode): string[] {
+  private static nodeFlags(node: ViewNode): string[] {
     const flags: string[] = [];
-    if (n.lane) flags.push(`lane=${n.lane}`);
-    if (n.trigger) flags.push(n.trigger);
-    if (n.nonInterrupting) flags.push('non-interrupting');
-    if (n.expanded !== undefined) flags.push(n.expanded ? 'expanded' : 'collapsed');
-    for (const [k, v] of Object.entries(n.props ?? {})) flags.push(`${k}=${scalar(v)}`);
-    flags.push(...vendorFlags(n));
-    if (n.documentation) flags.push(`doc: ${q(truncate(n.documentation, DOC_MAX))}`);
+    if (node.lane) flags.push(`lane=${node.lane}`);
+    if (node.trigger) flags.push(node.trigger);
+    if (node.nonInterrupting) flags.push('non-interrupting');
+    if (node.expanded !== undefined) flags.push(node.expanded ? 'expanded' : 'collapsed');
+    for (const [key, value] of Object.entries(node.props ?? {})) flags.push(`${key}=${scalar(value)}`);
+    flags.push(...vendorFlags(node));
+    if (node.documentation) flags.push(`doc: ${quote(truncate(node.documentation, DOC_MAX))}`);
     return flags;
   }
 }

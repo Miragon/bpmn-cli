@@ -13,9 +13,9 @@ import { LINEAR } from './helpers.js';
 
 const fixture = (name: string): string => readFileSync(join(import.meta.dirname, 'fixtures', 'incremental', name), 'utf8');
 
-async function rejected(p: Promise<unknown>): Promise<CliError> {
+async function rejected(pending: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await pending;
   } catch (err) {
     return err as CliError;
   }
@@ -31,8 +31,8 @@ interface Box {
 
 async function boundsOf(xml: string, id: string): Promise<Box | undefined> {
   const doc = await Doc.fromXml(xml);
-  for (const d of doc.definitions.get<Array<{ plane: { planeElement?: Array<{ bpmnElement?: { id: string }; bounds?: Box }> } }>>('diagrams')) {
-    const shape = (d.plane.planeElement ?? []).find((pe) => pe.bpmnElement?.id === id);
+  for (const diagram of doc.definitions.get<Array<{ plane: { planeElement?: Array<{ bpmnElement?: { id: string }; bounds?: Box }> } }>>('diagrams')) {
+    const shape = (diagram.plane.planeElement ?? []).find((pe) => pe.bpmnElement?.id === id);
     if (shape?.bounds) return { x: shape.bounds.x, y: shape.bounds.y, width: shape.bounds.width, height: shape.bounds.height };
   }
   return undefined;
@@ -45,7 +45,7 @@ describe('add group', () => {
     const xml = fixture('groups.bpmn');
     const { xml: out, result } = await applyToXml(xml, [{ op: 'add', kind: 'group', name: 'Payment', members: ['C', 'D'] }]);
     expect(result.layout?.mode).toBe('incremental');
-    expect(result.created.map((c) => c.kind)).toEqual(['group']);
+    expect(result.created.map((change) => change.kind)).toEqual(['group']);
     const id = result.created[0]!.id;
     expect(out).toMatch(new RegExp(`<bpmn:group id="${id}" categoryValueRef="(\\w+)" />`));
     const value = out.match(new RegExp(`<bpmn:group id="${id}" categoryValueRef="(\\w+)" />`))![1]!;
@@ -65,8 +65,8 @@ describe('add group', () => {
       { op: 'add', kind: 'group', name: 'Payment', members: ['Task_A', '$pay'] },
     ]);
     expect(result.layout?.mode).toBe('full');
-    const group = result.created.find((c) => c.kind === 'group')!.id;
-    const pay = result.created.find((c) => c.kind === 'userTask')!.id;
+    const group = result.created.find((change) => change.kind === 'group')!.id;
+    const pay = result.created.find((change) => change.kind === 'userTask')!.id;
     const box = (await boundsOf(out, group))!;
     expect(holds(box, (await boundsOf(out, 'Task_A'))!)).toBe(true);
     expect(holds(box, (await boundsOf(out, pay))!)).toBe(true);

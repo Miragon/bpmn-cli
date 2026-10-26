@@ -36,8 +36,8 @@ export type ShownView =
 
 export class ViewRequest {
   constructor(private readonly opts: ViewOptions = {}) {
-    const used = (keys: Array<keyof ViewOptions>) => keys.filter((k) => opts[k] !== undefined && opts[k] !== false);
-    const flag = (k: string) => (k === 'id' ? 'the element id' : `--${k}`);
+    const used = (keys: Array<keyof ViewOptions>) => keys.filter((option) => opts[option] !== undefined && opts[option] !== false);
+    const flag = (option: string) => (option === 'id' ? 'the element id' : `--${option}`);
     if (opts.layout) {
       const extra = used(['id', 'scope', 'around', 'context']);
       if (extra.length) throw usageError(`--layout shows the whole drawing; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });

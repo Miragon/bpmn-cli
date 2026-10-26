@@ -75,7 +75,7 @@ export class Cli {
       .version(version)
       // parser errors (unknown command / option, missing argument) go through printError too
       .exitOverride()
-      .configureOutput({ writeOut: (s) => io.stdout.write(s), writeErr: (s) => io.stderr.write(s), outputError: () => undefined });
+      .configureOutput({ writeOut: (text) => io.stdout.write(text), writeErr: (text) => io.stderr.write(text), outputError: () => undefined });
     const commands = [
       NewFileCommand,
       ShowCommand,
@@ -174,22 +174,22 @@ export class Cli {
         stderr.write(`${JSON.stringify({ ok: false, error: err.toJSON() })}\n`);
       } else {
         const lines = [`error ${err.code}: ${err.message}`];
-        const d = err.details;
-        if (d.element) lines.push(`  element: ${String(d.element)}`);
-        if (Array.isArray(d.related) && d.related.length) lines.push(`  related: ${d.related.join(', ')}`);
-        if (Array.isArray(d.candidates) && d.candidates.length) lines.push(`  candidates: ${d.candidates.join(', ')}`);
-        if (Array.isArray(d.errors)) for (const e of d.errors as Warning[]) lines.push(`  ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}${e.hint ? `  (${e.hint})` : ''}`);
-        if (Array.isArray(d.warnings)) for (const w of d.warnings as string[]) lines.push(`  ${w}`);
-        if (d.op !== undefined) lines.push(`  op: #${String(d.op)}`);
-        if (d.hint) lines.push(`  hint: ${String(d.hint)}`);
+        const details = err.details;
+        if (details.element) lines.push(`  element: ${String(details.element)}`);
+        if (Array.isArray(details.related) && details.related.length) lines.push(`  related: ${details.related.join(', ')}`);
+        if (Array.isArray(details.candidates) && details.candidates.length) lines.push(`  candidates: ${details.candidates.join(', ')}`);
+        if (Array.isArray(details.errors)) for (const issue of details.errors as Warning[]) lines.push(`  ${validatorTag(issue)}${issue.code}${issue.element ? ` ${issue.element}` : ''}: ${issue.message}${issue.hint ? `  (${issue.hint})` : ''}`);
+        if (Array.isArray(details.warnings)) for (const warning of details.warnings as string[]) lines.push(`  ${warning}`);
+        if (details.op !== undefined) lines.push(`  op: #${String(details.op)}`);
+        if (details.hint) lines.push(`  hint: ${String(details.hint)}`);
         stderr.write(`${lines.join('\n')}\n`);
       }
       this.exitCode = err.exitCode;
       return;
     }
-    const e = err as Error;
-    if (json) stderr.write(`${JSON.stringify({ ok: false, error: { code: 'E_INTERNAL', message: e.message } })}\n`);
-    else stderr.write(`error E_INTERNAL: ${e.message}\n${this.io.env['BPMN_DEBUG'] ? (e.stack ?? '') : ''}\n`);
+    const error = err as Error;
+    if (json) stderr.write(`${JSON.stringify({ ok: false, error: { code: 'E_INTERNAL', message: error.message } })}\n`);
+    else stderr.write(`error E_INTERNAL: ${error.message}\n${this.io.env['BPMN_DEBUG'] ? (error.stack ?? '') : ''}\n`);
     this.exitCode = 70;
   }
 }

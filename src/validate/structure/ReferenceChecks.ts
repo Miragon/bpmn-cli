@@ -22,22 +22,22 @@ export class ReferenceChecks {
       const id = peek<string>(el, 'id');
       if (typeof id === 'string' && id) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
-    for (const [id, n] of counts) {
-      if (n > 1) {
-        this.findings.error('E_DUPLICATE_ID', `Id "${id}" is used by ${n} elements`, id, {
+    for (const [id, count] of counts) {
+      if (count > 1) {
+        this.findings.error('E_DUPLICATE_ID', `Id "${id}" is used by ${count} elements`, id, {
           hint: 'Ids must be unique. Edit the XML or remove one of the elements with `bpmn remove <file> <id>` and re-create it with another --id.',
         });
       }
     }
     // bpmn-moddle keeps the first of a duplicate in the text and drops the later one
     const seen = new Set<string>();
-    for (const w of this.doc.importWarnings) {
-      const m = /duplicate ID <([^>]*)>/.exec(w.message);
-      if (!m || seen.has(m[1]!) || (counts.get(m[1]!) ?? 0) > 1) continue;
-      seen.add(m[1]!);
-      const dropped = /^unparsable content <([^>]+)>/.exec(w.message)?.[1];
-      const line = /\bline: (\d+)/.exec(w.message)?.[1];
-      this.findings.error('E_DUPLICATE_ID', `Id "${m[1]}" is used by more than one element of the file${dropped ? ` (the later <${dropped}>${line ? ` at line ${line}` : ''} cannot be read)` : ''}; the engines refuse the file`, m[1], {
+    for (const warning of this.doc.importWarnings) {
+      const match = /duplicate ID <([^>]*)>/.exec(warning.message);
+      if (!match || seen.has(match[1]!) || (counts.get(match[1]!) ?? 0) > 1) continue;
+      seen.add(match[1]!);
+      const dropped = /^unparsable content <([^>]+)>/.exec(warning.message)?.[1];
+      const line = /\bline: (\d+)/.exec(warning.message)?.[1];
+      this.findings.error('E_DUPLICATE_ID', `Id "${match[1]}" is used by more than one element of the file${dropped ? ` (the later <${dropped}>${line ? ` at line ${line}` : ''} cannot be read)` : ''}; the engines refuse the file`, match[1], {
         hint: 'Ids must be unique: give one of the elements another id in the XML (the model holds only the first, so a write would drop the other).',
       });
     }
@@ -52,11 +52,11 @@ export class ReferenceChecks {
     const descriptor = holder.$descriptor as { isGeneric?: boolean; properties?: ReferenceProperty[] };
     if (descriptor.isGeneric || this.isDi(holder)) return;
     const index = this.doc.byId();
-    for (const p of (descriptor.properties ?? []).filter((p) => p.isReference)) {
-      for (const target of this.referencedBy(holder, p)) {
+    for (const property of (descriptor.properties ?? []).filter((candidate) => candidate.isReference)) {
+      for (const target of this.referencedBy(holder, property)) {
         const tid = peek<string>(target, 'id');
         if (!tid || index.get(tid) === target) continue;
-        this.findings.error('E_DANGLING_REF', `${this.findings.describe(holder)} references ${p.name}="${tid}", which is not in the model`, shownId(holder), {
+        this.findings.error('E_DANGLING_REF', `${this.findings.describe(holder)} references ${property.name}="${tid}", which is not in the model`, shownId(holder), {
           related: [tid],
           hint: `Remove ${shownId(holder)} with \`bpmn remove <file> ${shownId(holder)}\` or re-create the missing element "${tid}".`,
         });
@@ -64,10 +64,10 @@ export class ReferenceChecks {
     }
   }
 
-  private referencedBy(holder: El, p: ReferenceProperty): El[] {
-    const v = peek<unknown>(holder, p.name);
-    if (p.isMany) return Array.isArray(v) ? (v as El[]) : [];
-    return v ? [v as El] : [];
+  private referencedBy(holder: El, property: ReferenceProperty): El[] {
+    const value = peek<unknown>(holder, property.name);
+    if (property.isMany) return Array.isArray(value) ? (value as El[]) : [];
+    return value ? [value as El] : [];
   }
 
   private checkConnectionEnds(el: El): void {
@@ -90,16 +90,16 @@ export class ReferenceChecks {
       });
     }
     if (!collab) return;
-    const bound = doc.participants().filter((p) => !!peek<El>(p, 'processRef'));
+    const bound = doc.participants().filter((participant) => !!peek<El>(participant, 'processRef'));
     if (!bound.length) {
       this.findings.error('E_EMPTY_COLLABORATION', `Collaboration ${shownId(collab)} has no participant with a process (only black boxes or none at all)`, shownId(collab), {
         hint: 'Add a participant with a process: `bpmn add <file> participant "<Name>" --process <processId>`.',
       });
     }
-    for (const p of processes) {
-      if (!doc.participantOf(p)) {
-        this.findings.error('E_ORPHAN_PROCESS', `Process ${shownId(p)} is not referenced by any participant of ${shownId(collab)}`, shownId(p), {
-          hint: `Bind it to a pool: \`bpmn add <file> participant "<Name>" --process ${shownId(p)}\`, or remove it.`,
+    for (const process of processes) {
+      if (!doc.participantOf(process)) {
+        this.findings.error('E_ORPHAN_PROCESS', `Process ${shownId(process)} is not referenced by any participant of ${shownId(collab)}`, shownId(process), {
+          hint: `Bind it to a pool: \`bpmn add <file> participant "<Name>" --process ${shownId(process)}\`, or remove it.`,
         });
       }
     }

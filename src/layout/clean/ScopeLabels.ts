@@ -19,24 +19,24 @@ export class ScopeLabels {
 
   all(): Box[] {
     const out = this.shapes();
-    for (const e of this.layout.edges) if (e.label) out.push(e.label);
+    for (const edge of this.layout.edges) if (edge.label) out.push(edge.label);
     return out;
   }
 
   shapes(): Box[] {
-    return this.ownShapes().map(([b]) => b);
+    return this.ownShapes().map(([box]) => box);
   }
 
   /** a boundary event's node is its host */
   ownShapes(): Array<[Box, GNode]> {
     const out: Array<[Box, GNode]> = [];
-    for (const n of this.layout.nodes) {
-      const kind = n.child || n.kind === 'subProcess' || n.kind === 'eventSubProcess' ? undefined : n.kind === 'gateway' ? 'gateway' : isEvent(n) ? 'event' : undefined;
-      const label = kind ? ScopeLabels.of(n, kind) : undefined;
-      if (label) out.push([label, n]);
-      for (const b of n.boundary) {
-        const bl = ScopeLabels.of(b, 'boundary');
-        if (bl) out.push([bl, n]);
+    for (const node of this.layout.nodes) {
+      const kind = node.child || node.kind === 'subProcess' || node.kind === 'eventSubProcess' ? undefined : node.kind === 'gateway' ? 'gateway' : isEvent(node) ? 'event' : undefined;
+      const label = kind ? ScopeLabels.of(node, kind) : undefined;
+      if (label) out.push([label, node]);
+      for (const boundaryEvent of node.boundary) {
+        const bl = ScopeLabels.of(boundaryEvent, 'boundary');
+        if (bl) out.push([bl, node]);
       }
     }
     return out;
@@ -47,16 +47,16 @@ export class ScopeLabels {
    * takes the first free spot below its shape that LabelDeclutter would try.
    */
   data(): Box[] {
-    return this.placedData().map(([b]) => b);
+    return this.placedData().map(([box]) => box);
   }
 
   placedData(): Array<[Box, GArtifact]> {
     const out: Array<[Box, GArtifact]> = [];
-    for (const a of this.layout.artifacts) {
-      const label = a.kind === 'annotation' ? undefined : ScopeLabels.of(a, 'data');
+    for (const artifact of this.layout.artifacts) {
+      const label = artifact.kind === 'annotation' ? undefined : ScopeLabels.of(artifact, 'data');
       if (!label) continue;
       const spots = [...[0, -0.6, 0.6, -1.2, 1.2].map((dx) => ({ ...label, x: Math.round(label.x + dx * label.width) })), ...[1, 2, 3].map((step) => ({ ...label, y: label.y + step * (label.height + 4) }))];
-      out.push([spots.find((b) => !out.some(([o]) => boxesOverlap(o, b, 2))) ?? label, a]);
+      out.push([spots.find((spot) => !out.some(([placed]) => boxesOverlap(placed, spot, 2))) ?? label, artifact]);
     }
     return out;
   }
@@ -65,49 +65,49 @@ export class ScopeLabels {
    * A boundary event's label hangs beside the event below its host (above it on the top border);
    * a second event's goes left, more step outwards. Matches the incremental layout's placement.
    */
-  static of(n: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean; onTop?: boolean; labelLeft?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
-    const name = nameOf(n);
+  static of(element: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean; onTop?: boolean; labelLeft?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
+    const name = nameOf(element);
     if (!name) return undefined;
-    const b = n.box;
-    const cx = b.x + b.width / 2;
+    const box = element.box;
+    const cx = box.x + box.width / 2;
     switch (kind) {
       case 'gateway': {
-        if ('topUsed' in n && n.topUsed) {
+        if ('topUsed' in element && element.topUsed) {
           /**
            * bpmn-js centres the text and wraps it at 90 px, so a short line can be wider than the
            * estimated box; the label goes upper left, clear of the flow leaving through the top.
            */
           const { width, height } = labelSize(name, 80);
           const drawn = Math.max(width, Math.min(90, name.length * 6));
-          return { x: Math.round(cx - 8 - drawn / 2 - width / 2), y: b.y - height - 2, width, height };
+          return { x: Math.round(cx - 8 - drawn / 2 - width / 2), y: box.y - height - 2, width, height };
         }
         const { width, height } = labelSize(name);
-        return { x: Math.round(cx - width / 2), y: b.y - height - 6, width, height };
+        return { x: Math.round(cx - width / 2), y: box.y - height - 6, width, height };
       }
       case 'boundary': {
         const { width, height } = labelSize(name);
-        const host = 'host' in n ? n.host : undefined;
-        const top = !!host && 'onTop' in n && !!n.onTop;
-        const siblings = (host?.boundary ?? []).filter((s) => !!s.onTop === top);
+        const host = 'host' in element ? element.host : undefined;
+        const top = !!host && 'onTop' in element && !!element.onTop;
+        const siblings = (host?.boundary ?? []).filter((sibling) => !!sibling.onTop === top);
         if (top) {
           // the top border's events run right to left
-          const j = siblings.filter((s) => s.box.x > b.x).length;
-          const y = host.box.y - 2 - height;
-          if ((siblings.length === 2 && j === 1) || ('labelLeft' in n && n.labelLeft)) return { x: b.x - 4 - width, y, width, height };
-          return { x: b.x + b.width + 4, y: y - (siblings.length >= 3 ? j * (LABEL_LINE + 2) : 0), width, height };
+          const rightward = siblings.filter((sibling) => sibling.box.x > box.x).length;
+          const labelY = host.box.y - 2 - height;
+          if ((siblings.length === 2 && rightward === 1) || ('labelLeft' in element && element.labelLeft)) return { x: box.x - 4 - width, y: labelY, width, height };
+          return { x: box.x + box.width + 4, y: labelY - (siblings.length >= 3 ? rightward * (LABEL_LINE + 2) : 0), width, height };
         }
-        const k = Math.max(0, siblings.findIndex((s) => s.box === b));
-        const hostBottom = host ? bottom(host.box) : b.y + b.height / 2;
+        const position = Math.max(0, siblings.findIndex((sibling) => sibling.box === box));
+        const hostBottom = host ? bottom(host.box) : box.y + box.height / 2;
         // a collapsed sub-process has its events left to right
-        const i = host && boundaryLeft(host) ? siblings.length - 1 - k : k;
-        if (siblings.length === 2 && i === 1) return { x: b.x - 4 - width, y: hostBottom + 2, width, height };
-        const stagger = siblings.length >= 3 ? i * (LABEL_LINE + 2) : 0;
-        return { x: b.x + b.width + 4, y: hostBottom + 2 + stagger, width, height };
+        const order = host && boundaryLeft(host) ? siblings.length - 1 - position : position;
+        if (siblings.length === 2 && order === 1) return { x: box.x - 4 - width, y: hostBottom + 2, width, height };
+        const stagger = siblings.length >= 3 ? order * (LABEL_LINE + 2) : 0;
+        return { x: box.x + box.width + 4, y: hostBottom + 2 + stagger, width, height };
       }
       default: {
         const { width, height } = labelSize(name);
-        if (opts.above) return { x: Math.round(cx - width / 2), y: b.y - height - 6, width, height };
-        return { x: Math.round(cx - width / 2), y: b.y + b.height + 6, width, height };
+        if (opts.above) return { x: Math.round(cx - width / 2), y: box.y - height - 6, width, height };
+        return { x: Math.round(cx - width / 2), y: box.y + box.height + 6, width, height };
       }
     }
   }

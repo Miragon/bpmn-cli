@@ -18,19 +18,19 @@ export class DrawingCheckpoint {
   }
 
   keepPlane(plane: Plane): void {
-    plane.shapes.forEach((s) => this.keepShape(s));
-    plane.edges.forEach((e) => this.keepEdge(e));
+    plane.shapes.forEach((shape) => this.keepShape(shape));
+    plane.edges.forEach((edge) => this.keepEdge(edge));
   }
 
   /** The first state kept of a shape wins. */
-  keepShape(s: DShape): void {
-    if (!this.shapes.has(s)) this.shapes.set(s, { bounds: copyBox(s.bounds), ...(s.label ? { label: copyBox(s.label) } : {}) });
+  keepShape(shape: DShape): void {
+    if (!this.shapes.has(shape)) this.shapes.set(shape, { bounds: copyBox(shape.bounds), ...(shape.label ? { label: copyBox(shape.label) } : {}) });
   }
 
   /** The first state kept of an edge wins. */
-  keepEdge(e: DEdge): void {
-    if (this.edges.has(e)) return;
-    this.edges.set(e, { points: copyPoints(e.points), ...(e.label ? { label: copyBox(e.label) } : {}), ...(e.sourceId ? { sourceId: e.sourceId } : {}), ...(e.targetId ? { targetId: e.targetId } : {}) });
+  keepEdge(edge: DEdge): void {
+    if (this.edges.has(edge)) return;
+    this.edges.set(edge, { points: copyPoints(edge.points), ...(edge.label ? { label: copyBox(edge.label) } : {}), ...(edge.sourceId ? { sourceId: edge.sourceId } : {}), ...(edge.targetId ? { targetId: edge.targetId } : {}) });
   }
 
   boundsOf(shape: DShape): Box {
@@ -39,19 +39,19 @@ export class DrawingCheckpoint {
 
   /** A label or end added since is dropped. Can be called more than once. */
   restore(): void {
-    for (const [s, v] of this.shapes) {
-      s.bounds = copyBox(v.bounds);
-      if (v.label) s.label = copyBox(v.label);
-      else delete s.label;
+    for (const [shape, saved] of this.shapes) {
+      shape.bounds = copyBox(saved.bounds);
+      if (saved.label) shape.label = copyBox(saved.label);
+      else delete shape.label;
     }
-    for (const [e, v] of this.edges) {
-      e.points = copyPoints(v.points);
-      if (v.label) e.label = copyBox(v.label);
-      else delete e.label;
-      if (v.sourceId) e.sourceId = v.sourceId;
-      else delete e.sourceId;
-      if (v.targetId) e.targetId = v.targetId;
-      else delete e.targetId;
+    for (const [edge, saved] of this.edges) {
+      edge.points = copyPoints(saved.points);
+      if (saved.label) edge.label = copyBox(saved.label);
+      else delete edge.label;
+      if (saved.sourceId) edge.sourceId = saved.sourceId;
+      else delete edge.sourceId;
+      if (saved.targetId) edge.targetId = saved.targetId;
+      else delete edge.targetId;
     }
   }
 }

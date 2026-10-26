@@ -82,8 +82,8 @@ export class ExtensionStructure {
   }
 
   nestedOnly(type: string): boolean {
-    const t = ruleName(type);
-    return isCamunda(t) && !this.camunda.allowedParents(t).some((p) => p === '*' || p.startsWith('bpmn:')) && this.camunda.containersOf(t).length > 0;
+    const typeName = ruleName(type);
+    return isCamunda(typeName) && !this.camunda.allowedParents(typeName).some((allowedParent) => allowedParent === '*' || allowedParent.startsWith('bpmn:')) && this.camunda.containersOf(typeName).length > 0;
   }
 
   homeAt(type: string, levelType: string | undefined): string | undefined {
@@ -96,8 +96,8 @@ export class ExtensionStructure {
 
   /** A container that needs no attributes of its own, so `ext add` may create it. */
   creatable(type: string): boolean {
-    const t = ruleName(type);
-    return PURE_CONTAINERS.has(t) || this.singleTop.has(t) || Object.values(SINGLE_CHILD).some((c) => c.includes(t));
+    const typeName = ruleName(type);
+    return PURE_CONTAINERS.has(typeName) || this.singleTop.has(typeName) || Object.values(SINGLE_CHILD).some((children) => children.includes(typeName));
   }
 
   isSingle(type: string, levelType: string | undefined): boolean {
@@ -119,8 +119,8 @@ export class ExtensionStructure {
   containersOf(type: string): string[] {
     return this.camunda
       .containersOf(ruleName(type))
-      .filter((c) => !c.endsWith('inputOutputParameter'))
-      .map((c) => inFamily(c, type));
+      .filter((containerName) => !containerName.endsWith('inputOutputParameter'))
+      .map((containerName) => inFamily(containerName, type));
   }
 
   examplePath(type: string, containers: string[]): string {
@@ -128,36 +128,36 @@ export class ExtensionStructure {
   }
 
   private holds(parent: string, child: string): boolean {
-    const p = ruleName(parent);
-    const c = ruleName(child);
-    if (SINGLE_CHILD[p]?.includes(c)) return true;
-    if (this.staticHomes[c] === p) return true;
-    return isCamunda(c) && this.camunda.containersOf(c).includes(p);
+    const parentName = ruleName(parent);
+    const childName = ruleName(child);
+    if (SINGLE_CHILD[parentName]?.includes(childName)) return true;
+    if (this.staticHomes[childName] === parentName) return true;
+    return isCamunda(childName) && this.camunda.containersOf(childName).includes(parentName);
   }
 
   private containerOf(type: string): string | undefined {
-    const t = ruleName(type);
-    const fixed = this.staticHomes[t];
+    const typeName = ruleName(type);
+    const fixed = this.staticHomes[typeName];
     if (fixed) return inFamily(fixed, type);
-    if (!this.nestedOnly(t)) return undefined;
-    const all = this.camunda.containersOf(t);
+    if (!this.nestedOnly(typeName)) return undefined;
+    const all = this.camunda.containersOf(typeName);
     return all.length === 1 ? inFamily(all[0]!, type) : undefined;
   }
 
   /** camunda:constraint -> 'camunda:formField[id=<id>]/camunda:validation/camunda:constraint' */
   private pathTo(type: string, container: string): string {
     const chain = [type];
-    let c: string | undefined = container;
-    for (let i = 0; c && this.nestedOnly(c) && i < 6; i++) {
-      chain.unshift(c);
-      const up: string[] = this.camunda.containersOf(c).filter((x) => !x.endsWith('inputOutputParameter'));
-      c = up.length === 1 ? up[0] : undefined;
+    let current: string | undefined = container;
+    for (let depth = 0; current && this.nestedOnly(current) && depth < 6; depth++) {
+      chain.unshift(current);
+      const up: string[] = this.camunda.containersOf(current).filter((upper) => !upper.endsWith('inputOutputParameter'));
+      current = up.length === 1 ? up[0] : undefined;
     }
-    if (c && !this.nestedOnly(c) && chain.length === 1) chain.unshift(c);
+    if (current && !this.nestedOnly(current) && chain.length === 1) chain.unshift(current);
     return chain
-      .map((t, i) => {
-        const key = i < chain.length - 1 ? KEYS[t]?.[0] : undefined;
-        return key ? `${t}[${key}=<${key}>]` : t;
+      .map((typeName, index) => {
+        const key = index < chain.length - 1 ? KEYS[typeName]?.[0] : undefined;
+        return key ? `${typeName}[${key}=<${key}>]` : typeName;
       })
       .join('/');
   }

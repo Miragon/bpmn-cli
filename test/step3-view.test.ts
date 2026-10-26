@@ -21,8 +21,8 @@ const BASE: Op[] = [
 ];
 
 async function engineDoc(ops: Op[]): Promise<Doc> {
-  const r = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
-  return Doc.fromXml(r.xml);
+  const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
+  return Doc.fromXml(result.xml);
 }
 
 /** Moves the shapes (and their labels and the waypoints right of `fromX`) of the plane by dx. */
@@ -30,7 +30,7 @@ function shiftRight(doc: Doc, ids: string[], dx: number): void {
   for (const pe of doc.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement')) {
     const id = pe.get<El>('bpmnElement').get<string>('id');
     if (!ids.includes(id)) continue;
-    for (const b of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (b) b.set('x', b.get<number>('x') + dx);
+    for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (bounds) bounds.set('x', bounds.get<number>('x') + dx);
   }
 }
 
@@ -40,14 +40,14 @@ describe('show --layout: columns and gaps', () => {
     // E (end of the upper row) far to the right: a wide gap in row 1 only, and an empty strip of columns
     shiftRight(doc, ['E'], 600);
     const view = layoutView(doc.definitions);
-    const d = view.diagrams[0]!;
-    const group = d.groups.find((g) => g.id === 'P')!;
+    const diagram = view.diagrams[0]!;
+    const group = diagram.groups.find((group) => group.id === 'P')!;
     expect(group.rows).toEqual([['S', 'A', 'G', 'B', 'E'], ['C', 'E2']]);
     expect(group.columns).toEqual([[0, 1, 2, 3, 5], [3, 4]]);
     expect(group.gaps).toEqual([{ row: 0, before: [4] }]);
-    expect(d.columns).toBe(6);
-    expect(d.gaps).toEqual([{ after: 4, width: expect.any(Number) }]);
-    expect(d.gaps[0]!.width).toBeGreaterThan(500);
+    expect(diagram.columns).toBe(6);
+    expect(diagram.gaps).toEqual([{ after: 4, width: expect.any(Number) }]);
+    expect(diagram.gaps[0]!.width).toBeGreaterThan(500);
     const text = renderLayoutView(view);
     expect(text).toMatch(/^ {2}columns: c0\.\.c5; wide gaps: c4\|c5 \d+px$/m);
     expect(text).toMatch(/^ {4}row 1: c0 S, c1 A, c2 G, c3 B … c5 E$/m);

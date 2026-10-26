@@ -21,73 +21,73 @@ export class LayoutViewBuilder {
     const colors: LayoutColor[] = [];
     const labels: LayoutLabel[] = [];
     for (const plane of planes) {
-      for (const s of plane.shapes.values()) {
-        const c = s.di ? swatchOf(s.di) : undefined;
-        if (c) colors.push({ id: s.id, ...c });
-        if (!s.label || !hasExternalLabel(s) || !LayoutViewBuilder.nameOf(s.el)) continue;
-        const host = s.hostId ? plane.shapes.get(s.hostId)?.bounds : undefined;
-        const side = labelSideOf(s, host);
-        const def = defaultLabelSide(s.kind);
-        if (side && side !== def) labels.push({ id: s.id, side, default: def });
+      for (const shape of plane.shapes.values()) {
+        const swatch = shape.di ? swatchOf(shape.di) : undefined;
+        if (swatch) colors.push({ id: shape.id, ...swatch });
+        if (!shape.label || !hasExternalLabel(shape) || !LayoutViewBuilder.nameOf(shape.el)) continue;
+        const host = shape.hostId ? plane.shapes.get(shape.hostId)?.bounds : undefined;
+        const side = labelSideOf(shape, host);
+        const def = defaultLabelSide(shape.kind);
+        if (side && side !== def) labels.push({ id: shape.id, side, default: def });
       }
-      for (const e of plane.edges.values()) {
-        const c = e.di ? swatchOf(e.di) : undefined;
-        if (c) colors.push({ id: e.id, ...c });
-        if (!e.label || !LayoutViewBuilder.nameOf(e.el)) continue;
-        const side = edgeLabelSideOf(e);
-        if (side && side !== 'above') labels.push({ id: e.id, side, default: 'above' });
+      for (const edge of plane.edges.values()) {
+        const swatch = edge.di ? swatchOf(edge.di) : undefined;
+        if (swatch) colors.push({ id: edge.id, ...swatch });
+        if (!edge.label || !LayoutViewBuilder.nameOf(edge.el)) continue;
+        const side = edgeLabelSideOf(edge);
+        if (side && side !== 'above') labels.push({ id: edge.id, side, default: 'above' });
       }
     }
-    return { diagrams: planes.map((p) => LayoutViewBuilder.diagramOf(p, sem.laneParent)), colors, labels, metrics: LayoutAnalysis.of(this.defs) };
+    return { diagrams: planes.map((plane) => LayoutViewBuilder.diagramOf(plane, sem.laneParent)), colors, labels, metrics: LayoutAnalysis.of(this.defs) };
   }
 
   private static diagramOf(plane: Plane, laneParent: Map<string, string>): LayoutDiagram {
-    const frames = [...plane.shapes.values()].filter((s) => s.kind === 'participant' || s.kind === 'lane' || (s.kind === 'subProcess' && s.container));
+    const frames = [...plane.shapes.values()].filter((shape) => shape.kind === 'participant' || shape.kind === 'lane' || (shape.kind === 'subProcess' && shape.container));
     const drawn = (id: string | undefined): string | undefined => (id && plane.shapes.has(id) ? id : undefined);
-    const parentOf = (s: DShape): string => {
-      if (s.kind === 'participant') return plane.rootId;
-      if (s.kind === 'lane') return drawn(laneParent.get(s.id)) ?? drawn(s.poolId) ?? plane.rootId;
-      return drawn(s.parentId) ?? drawn(s.laneId) ?? drawn(s.poolId) ?? plane.rootId;
+    const parentOf = (shape: DShape): string => {
+      if (shape.kind === 'participant') return plane.rootId;
+      if (shape.kind === 'lane') return drawn(laneParent.get(shape.id)) ?? drawn(shape.poolId) ?? plane.rootId;
+      return drawn(shape.parentId) ?? drawn(shape.laneId) ?? drawn(shape.poolId) ?? plane.rootId;
     };
-    const members = new Map<string, DShape[]>([[plane.rootId, []], ...frames.map((f) => [f.id, []] as [string, DShape[]])]);
+    const members = new Map<string, DShape[]>([[plane.rootId, []], ...frames.map((frame) => [frame.id, []] as [string, DShape[]])]);
     const cols = new DiagramColumns(plane);
-    for (const s of cols.nodes) members.get(parentOf(s))?.push(s);
+    for (const shape of cols.nodes) members.get(parentOf(shape))?.push(shape);
     const tol = PlaneQuery.spacingOf(plane).rowTol;
     const children = new Map<string, DShape[]>();
-    for (const f of frames) {
-      const p = parentOf(f);
-      children.set(p, [...(children.get(p) ?? []), f]);
+    for (const frame of frames) {
+      const parentId = parentOf(frame);
+      children.set(parentId, [...(children.get(parentId) ?? []), frame]);
     }
     const groups: LayoutGroup[] = [];
     const visit = (id: string, kind: LayoutGroup['kind'], el: El, parent?: string): void => {
       const name = LayoutViewBuilder.nameOf(el);
       const rows = LayoutViewBuilder.rowsOf(members.get(id) ?? [], tol);
-      const columns = rows.map((r) => r.map((n) => cols.of.get(n) ?? 0));
-      const gaps = rows.flatMap((r, i) => {
-        const before = r.flatMap((n, k) => (k > 0 && plane.shapes.get(n)!.bounds.x - right(plane.shapes.get(r[k - 1]!)!.bounds) > cols.wide ? [k] : []));
-        return before.length ? [{ row: i, before }] : [];
+      const columns = rows.map((row) => row.map((nodeId) => cols.of.get(nodeId) ?? 0));
+      const gaps = rows.flatMap((row, rowIndex) => {
+        const before = row.flatMap((nodeId, position) => (position > 0 && plane.shapes.get(nodeId)!.bounds.x - right(plane.shapes.get(row[position - 1]!)!.bounds) > cols.wide ? [position] : []));
+        return before.length ? [{ row: rowIndex, before }] : [];
       });
       groups.push({ id, kind, ...(name ? { name } : {}), ...(parent ? { parent } : {}), rows, columns, ...(gaps.length ? { gaps } : {}) });
-      const kids = (children.get(id) ?? []).sort((a, b) => a.bounds.y - b.bounds.y || a.bounds.x - b.bounds.x);
-      for (const k of kids) visit(k.id, k.kind === 'participant' ? 'participant' : k.kind === 'lane' ? 'lane' : 'subProcess', k.el, id);
+      const kids = (children.get(id) ?? []).sort((first, second) => first.bounds.y - second.bounds.y || first.bounds.x - second.bounds.x);
+      for (const kid of kids) visit(kid.id, kid.kind === 'participant' ? 'participant' : kid.kind === 'lane' ? 'lane' : 'subProcess', kid.el, id);
     };
     visit(plane.rootId, LayoutViewBuilder.rootKind(plane.root), plane.root);
     // an empty collaboration root says nothing
-    const out = groups.filter((g) => !(g.kind === 'collaboration' && !g.rows.length));
-    for (const g of out) if (g.parent && !out.some((o) => o.id === g.parent)) delete g.parent;
+    const out = groups.filter((group) => !(group.kind === 'collaboration' && !group.rows.length));
+    for (const group of out) if (group.parent && !out.some((other) => other.id === group.parent)) delete group.parent;
     return { id: plane.id, root: plane.rootId, columns: cols.count, gaps: cols.gaps, groups: out };
   }
 
   /** Rows of shapes: centres within `tol` of a row's first shape share it. */
   private static rowsOf(shapes: DShape[], tol: number): string[][] {
-    const sorted = [...shapes].sort((a, b) => cy(a.bounds) - cy(b.bounds) || cx(a.bounds) - cx(b.bounds));
+    const sorted = [...shapes].sort((first, second) => cy(first.bounds) - cy(second.bounds) || cx(first.bounds) - cx(second.bounds));
     const rows: DShape[][] = [];
-    for (const s of sorted) {
+    for (const shape of sorted) {
       const row = rows[rows.length - 1];
-      if (row && cy(s.bounds) - cy(row[0]!.bounds) <= tol) row.push(s);
-      else rows.push([s]);
+      if (row && cy(shape.bounds) - cy(row[0]!.bounds) <= tol) row.push(shape);
+      else rows.push([shape]);
     }
-    return rows.map((r) => r.sort((a, b) => cx(a.bounds) - cx(b.bounds)).map((s) => s.id));
+    return rows.map((row) => row.sort((first, second) => cx(first.bounds) - cx(second.bounds)).map((shape) => shape.id));
   }
 
   private static rootKind(root: El): LayoutGroup['kind'] {
@@ -97,7 +97,7 @@ export class LayoutViewBuilder {
   }
 
   private static nameOf(el: El): string | undefined {
-    const n = raw<string>(el, 'name');
-    return n && n.trim() ? n.replace(/\s+/g, ' ').trim() : undefined;
+    const name = raw<string>(el, 'name');
+    return name && name.trim() ? name.replace(/\s+/g, ' ').trim() : undefined;
   }
 }

@@ -15,15 +15,15 @@ interface EndpointRule {
 export class FlowRules {
   /** In the order `assertRoles` reports them when both ends are refused. */
   private static readonly ENDPOINT_RULES: EndpointRule[] = [
-    { role: 'source', refuses: (n) => !is(n, 'bpmn:FlowNode'), message: (n) => `${FlowRules.label(n)} cannot be the source of a sequence flow` },
-    { role: 'target', refuses: (n) => !is(n, 'bpmn:FlowNode'), message: (n) => `${FlowRules.label(n)} cannot be the target of a sequence flow` },
-    { role: 'source', refuses: (n) => is(n, 'bpmn:EndEvent'), message: (n) => `End event ${idOf(n)} cannot have outgoing sequence flows` },
-    { role: 'target', refuses: (n) => is(n, 'bpmn:StartEvent'), message: (n) => `Start event ${idOf(n)} cannot have incoming sequence flows` },
-    { role: 'source', refuses: isLinkThrow, message: (n) => `Link throw event ${idOf(n)} cannot have outgoing sequence flows` },
-    { role: 'target', refuses: isLinkCatch, message: (n) => `Link catch event ${idOf(n)} cannot have incoming sequence flows` },
-    { role: 'target', refuses: (n) => is(n, 'bpmn:BoundaryEvent'), message: (n) => `Boundary event ${idOf(n)} cannot have incoming sequence flows` },
-    { role: 'source', refuses: isEventSubProcess, message: (n) => `Event sub-process ${idOf(n)} cannot have sequence flows` },
-    { role: 'target', refuses: isEventSubProcess, message: (n) => `Event sub-process ${idOf(n)} cannot have sequence flows` },
+    { role: 'source', refuses: (node) => !is(node, 'bpmn:FlowNode'), message: (node) => `${FlowRules.label(node)} cannot be the source of a sequence flow` },
+    { role: 'target', refuses: (node) => !is(node, 'bpmn:FlowNode'), message: (node) => `${FlowRules.label(node)} cannot be the target of a sequence flow` },
+    { role: 'source', refuses: (node) => is(node, 'bpmn:EndEvent'), message: (node) => `End event ${idOf(node)} cannot have outgoing sequence flows` },
+    { role: 'target', refuses: (node) => is(node, 'bpmn:StartEvent'), message: (node) => `Start event ${idOf(node)} cannot have incoming sequence flows` },
+    { role: 'source', refuses: isLinkThrow, message: (node) => `Link throw event ${idOf(node)} cannot have outgoing sequence flows` },
+    { role: 'target', refuses: isLinkCatch, message: (node) => `Link catch event ${idOf(node)} cannot have incoming sequence flows` },
+    { role: 'target', refuses: (node) => is(node, 'bpmn:BoundaryEvent'), message: (node) => `Boundary event ${idOf(node)} cannot have incoming sequence flows` },
+    { role: 'source', refuses: isEventSubProcess, message: (node) => `Event sub-process ${idOf(node)} cannot have sequence flows` },
+    { role: 'target', refuses: isEventSubProcess, message: (node) => `Event sub-process ${idOf(node)} cannot have sequence flows` },
   ];
 
   constructor(private readonly doc: Doc) {}

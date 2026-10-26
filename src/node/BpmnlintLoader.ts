@@ -76,28 +76,28 @@ export class BpmnlintLoader {
   private async resolve(config: BpmnlintConfig, repo: Repo | undefined): Promise<{ loaded: LoadedBpmnlint; deps: LoadDeps }> {
     const { abs, where, opts } = this;
     const notRun = `${where}; bpmnlint did not run (bpmn validate lists why)`;
-    const l = BpmnlintLibs.load();
-    if (!(l instanceof BpmnlintLibs)) return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable(l, opts.from)], detail: notRun }, deps: [] };
+    const libs = BpmnlintLibs.load();
+    if (!(libs instanceof BpmnlintLibs)) return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable(libs, opts.from)], detail: notRun }, deps: [] };
     // whatever throws here, the write goes ahead with one W_LINT_UNAVAILABLE
     try {
       const rcDir = dirname(abs);
       const root = real(gitRoot(rcDir) ?? rcDir);
-      const chain = new ChainResolver(l, rcDir, root, opts, repo);
-      const engine = { Linter: l.Linter, resolver: chain };
-      const moddle = new ModdleExtensions(config, rcDir, root, l, opts.from);
+      const chain = new ChainResolver(libs, rcDir, root, opts, repo);
+      const engine = { Linter: libs.Linter, resolver: chain };
+      const moddle = new ModdleExtensions(config, rcDir, root, libs, opts.from);
       const resolved = await new BpmnlintConfigResolution(engine, config, { moddleExtensions: moddle.found }).resolve();
       const project = chain.projectPackages().map((pkg) => {
-        const v = chain.projectVersion(pkg);
-        return v ? `${pkg}@${v}` : pkg;
+        const version = chain.projectVersion(pkg);
+        return version ? `${pkg}@${version}` : pkg;
       });
       const parts = [where];
       if (project.length) parts.push(`project plugins: ${project.join(', ')}`);
       const left = bpmnlintUnavailableFindings([...resolved.unavailable, ...moddle.unavailable]).length;
       if (left) parts.push(`${left} left out (W_LINT_UNAVAILABLE; bpmn validate lists ${left === 1 ? 'it' : 'them'})`);
-      if (l.bpmnlint.version !== l.pinned) parts.push(`bpmnlint ${l.bpmnlint.version} from ${shown(l.bpmnlint.dir, opts.from)} (bpmn-cli pins ${l.pinned})`);
+      if (libs.bpmnlint.version !== libs.pinned) parts.push(`bpmnlint ${libs.bpmnlint.version} from ${shown(libs.bpmnlint.dir, opts.from)} (bpmn-cli pins ${libs.pinned})`);
       return { loaded: { ok: true, path: abs, where, engine, resolved, notes: moddle.unavailable, project, detail: parts.join('; ') }, deps: [...chain.projectDeps(), ...moddle.deps] };
     } catch (err) {
-      return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable({ message: firstLine(err), bpmnlint: l.bpmnlint, pinned: l.pinned }, opts.from)], detail: notRun }, deps: [] };
+      return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable({ message: firstLine(err), bpmnlint: libs.bpmnlint, pinned: libs.pinned }, opts.from)], detail: notRun }, deps: [] };
     }
   }
 }

@@ -14,16 +14,16 @@ export class InsertSpaceCommand extends FormatCommand {
       this.define(program, 'space')
         .option('--after <id>', 'horizontal space right of this element')
         .option('--below <id>', 'vertical space below this element')
-        .option('--by <amount>', 'column (default for --after), row (default for --below), <n>col / <n>row (n of them) or pixels (<n>, <n>px); -column, -<n>col, -row or -<px> closes that much empty space instead', (v: string) => {
-          if (!parseSpaceAmount(v)) throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
-          return /^\s*-?\d+\s*$/.test(v) ? Number(v) : v;
+        .option('--by <amount>', 'column (default for --after), row (default for --below), <n>col / <n>row (n of them) or pixels (<n>, <n>px); -column, -<n>col, -row or -<px> closes that much empty space instead', (raw: string) => {
+          if (!parseSpaceAmount(raw)) throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
+          return /^\s*-?\d+\s*$/.test(raw) ? Number(raw) : raw;
         }),
-    ).action((file: string, o: RawOpts) =>
+    ).action((file: string, options: RawOpts) =>
       this.cli.guarded(async () => {
-        this.checkFlagGroups(o, [['after', 'below']], 'space needs --after <id> (horizontal space) or --below <id> (vertical space)');
-        const op: SpaceOp = { op: 'space', ...this.pick(o, ['after', 'below'] as const), ...(o['by'] !== undefined ? { by: o['by'] as SpaceOp['by'] } : {}) };
-        await this.runFormat(file, op, o);
-      }, !!o['json']),
+        this.checkFlagGroups(options, [['after', 'below']], 'space needs --after <id> (horizontal space) or --below <id> (vertical space)');
+        const op: SpaceOp = { op: 'space', ...this.pick(options, ['after', 'below'] as const), ...(options['by'] !== undefined ? { by: options['by'] as SpaceOp['by'] } : {}) };
+        await this.runFormat(file, op, options);
+      }, !!options['json']),
     );
   }
 }

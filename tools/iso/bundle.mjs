@@ -46,7 +46,7 @@ export const NODE_GLOBALS = ['process', 'Buffer', 'global', 'require', '__dirnam
 const SENTINEL = '__ISO_NODE_GLOBAL_';
 
 function esbuildOptions(opts, minify) {
-  const define = Object.fromEntries(NODE_GLOBALS.map((g) => [g, `${SENTINEL}${g}`]));
+  const define = Object.fromEntries(NODE_GLOBALS.map((globalName) => [globalName, `${SENTINEL}${globalName}`]));
   return {
     ...(opts.stdin ? { stdin: { loader: 'ts', resolveDir: ROOT, ...opts.stdin } } : { entryPoints: [join(ROOT, opts.entry ?? join('src', 'index.ts'))] }),
     bundle: true,
@@ -67,7 +67,7 @@ function esbuildOptions(opts, minify) {
 /** The module comments (`// src/model/utils/moddle.ts`) of an unminified bundle with their offsets. */
 function moduleMarks(code) {
   const marks = [];
-  for (const m of code.matchAll(/^\s*\/\/ (\S+\.(?:[cm]?[jt]s|json))$/gm)) marks.push({ at: m.index, file: m[1] });
+  for (const marker of code.matchAll(/^\s*\/\/ (\S+\.(?:[cm]?[jt]s|json))$/gm)) marks.push({ at: marker.index, file: marker[1] });
   return marks;
 }
 
@@ -75,12 +75,12 @@ function globalViolations(code) {
   const marks = moduleMarks(code);
   const seen = new Set();
   const out = [];
-  for (const m of code.matchAll(new RegExp(`${SENTINEL}(\\w+)`, 'g'))) {
-    const file = [...marks].reverse().find((k) => k.at < m.index)?.file ?? '?';
-    const key = `${m[1]}|${file}`;
+  for (const match of code.matchAll(new RegExp(`${SENTINEL}(\\w+)`, 'g'))) {
+    const file = [...marks].reverse().find((mark) => mark.at < match.index)?.file ?? '?';
+    const key = `${match[1]}|${file}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ kind: 'global', what: m[1], file });
+    out.push({ kind: 'global', what: match[1], file });
   }
   return out;
 }
@@ -92,33 +92,33 @@ export async function bundleCore(opts = {}) {
     result = await build(esbuildOptions(opts, minify));
   } catch (err) {
     if (!err.errors) throw err;
-    const violations = err.errors.map((e) => ({
-      kind: /Could not resolve/.test(e.text) ? 'builtin' : 'error',
-      what: (/"([^"]+)"/.exec(e.text) ?? [])[1] ?? e.text,
-      file: e.location?.file ?? '?',
-      line: e.location?.line,
-      text: e.text,
+    const violations = err.errors.map((message) => ({
+      kind: /Could not resolve/.test(message.text) ? 'builtin' : 'error',
+      what: (/"([^"]+)"/.exec(message.text) ?? [])[1] ?? message.text,
+      file: message.location?.file ?? '?',
+      line: message.location?.line,
+      text: message.text,
     }));
     return { code: '', bytes: 0, gzip: 0, chunks: [], entry: undefined, inputs: [], graph: {}, violations };
   }
   // the requested entry as the metafile names it (an `import()` target is an entryPoint too)
   const requested = opts.stdin ? (opts.stdin.sourcefile ?? '<stdin>') : relative(ROOT, join(ROOT, opts.entry ?? join('src', 'index.ts')));
-  const chunks = result.outputFiles.map((f) => {
-    const meta = result.metafile.outputs[relative(ROOT, f.path)] ?? Object.values(result.metafile.outputs)[0];
+  const chunks = result.outputFiles.map((outputFile) => {
+    const meta = result.metafile.outputs[relative(ROOT, outputFile.path)] ?? Object.values(result.metafile.outputs)[0];
     // static imports load with the chunk, dynamic ones on demand
-    const imports = (meta?.imports ?? []).filter((i) => i.kind === 'import-statement').map((i) => i.path);
-    return { path: relative(ROOT, f.path), bytes: f.contents.length, gzip: gzipSync(f.contents).length, entry: meta?.entryPoint === requested, entryPoint: meta?.entryPoint, imports, inputs: Object.keys(meta?.inputs ?? {}), text: f.text };
+    const imports = (meta?.imports ?? []).filter((importRecord) => importRecord.kind === 'import-statement').map((importRecord) => importRecord.path);
+    return { path: relative(ROOT, outputFile.path), bytes: outputFile.contents.length, gzip: gzipSync(outputFile.contents).length, entry: meta?.entryPoint === requested, entryPoint: meta?.entryPoint, imports, inputs: Object.keys(meta?.inputs ?? {}), text: outputFile.text };
   });
-  const entries = chunks.filter((c) => c.entry);
-  if (entries.length !== 1) throw new Error(`bundleCore: ${entries.length} output chunks have the entry point ${requested} (${chunks.map((c) => `${c.path}: ${c.entryPoint ?? '-'}`).join(', ')})`);
+  const entries = chunks.filter((chunk) => chunk.entry);
+  if (entries.length !== 1) throw new Error(`bundleCore: ${entries.length} output chunks have the entry point ${requested} (${chunks.map((chunk) => `${chunk.path}: ${chunk.entryPoint ?? '-'}`).join(', ')})`);
   const entry = entries[0];
-  const graph = Object.fromEntries(Object.entries(result.metafile.inputs).map(([file, i]) => [file, i.imports.filter((x) => x.kind === 'import-statement').map((x) => x.path)]));
+  const graph = Object.fromEntries(Object.entries(result.metafile.inputs).map(([file, input]) => [file, input.imports.filter((importRecord) => importRecord.kind === 'import-statement').map((importRecord) => importRecord.path)]));
   // the sentinels are located in an unminified build (minified output has no module comments)
-  const plain = minify ? (await build(esbuildOptions(opts, false))).outputFiles.map((f) => f.text) : chunks.map((c) => c.text);
+  const plain = minify ? (await build(esbuildOptions(opts, false))).outputFiles.map((outputFile) => outputFile.text) : chunks.map((chunk) => chunk.text);
   return {
     code: entry.text,
-    bytes: chunks.reduce((n, c) => n + c.bytes, 0),
-    gzip: chunks.reduce((n, c) => n + c.gzip, 0),
+    bytes: chunks.reduce((total, chunk) => total + chunk.bytes, 0),
+    gzip: chunks.reduce((total, chunk) => total + chunk.gzip, 0),
     chunks,
     entry,
     inputs: Object.keys(result.metafile.inputs),

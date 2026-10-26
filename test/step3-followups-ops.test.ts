@@ -30,9 +30,9 @@ const ROOT = join(import.meta.dirname, '..');
 const BIN = join(ROOT, 'dist', 'cli.js');
 const CLAIM = readFileSync(join(ROOT, 'tools', 'scenarios', 'agent__claim.bpmn'), 'utf8');
 
-async function rejected(p: Promise<unknown>): Promise<CliError> {
+async function rejected(promise: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await promise;
   } catch (err) {
     if (err instanceof CliError) return err;
     throw err;
@@ -53,27 +53,27 @@ describe('split: a join only where two branches reach it', () => {
   const rejectBranch = { flowName: 'no', default: true, nodes: [{ kind: 'endEvent', name: 'Rejected' }] };
 
   it('the other branch ends in an end event: no pass-through join, the branch runs on to the successor', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'task', name: 'Book' }] }, rejectBranch] }], { layout: false });
-    expect(r.xml).not.toContain('Gateway_Ok_join');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_BookToDone" sourceRef="Activity_Book" targetRef="Event_Done" />');
-    expect(r.result.notes).toContain('only the branch ending at Activity_Book continues; no join gateway created (it runs on to Event_Done)');
-    expect(r.result.notes).toContain('split Gateway_Ok: 2 branch(es) ending at Activity_Book, Event_Rejected (end event), continues to Event_Done');
-    expect(r.result.validation.errors).toEqual([]);
+    const result = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'task', name: 'Book' }] }, rejectBranch] }], { layout: false });
+    expect(result.xml).not.toContain('Gateway_Ok_join');
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_BookToDone" sourceRef="Activity_Book" targetRef="Event_Done" />');
+    expect(result.result.notes).toContain('only the branch ending at Activity_Book continues; no join gateway created (it runs on to Event_Done)');
+    expect(result.result.notes).toContain('split Gateway_Ok: 2 branch(es) ending at Activity_Book, Event_Rejected (end event), continues to Event_Done');
+    expect(result.result.validation.errors).toEqual([]);
   });
 
   it('a direct branch next to a terminating one: the gateway runs on to the successor', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [] }, rejectBranch] }], { layout: false });
-    expect(r.xml).not.toMatch(/_join/);
-    expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_OkToDone" name="yes" sourceRef="Gateway_Ok" targetRef="Event_Done">/);
+    const result = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [] }, rejectBranch] }], { layout: false });
+    expect(result.xml).not.toMatch(/_join/);
+    expect(result.xml).toMatch(/<bpmn:sequenceFlow id="Flow_OkToDone" name="yes" sourceRef="Gateway_Ok" targetRef="Event_Done">/);
   });
 
   it('two continuing branches and a terminating one keep their join; joinAs with one continuing branch is refused', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'a', condition: '${a}', nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'b', condition: '${b}', nodes: [{ kind: 'task', name: 'B' }] }, rejectBranch] }], { layout: false });
-    expect(r.xml).toContain('id="Gateway_Ok_join"');
-    expect([...r.xml.matchAll(/targetRef="Gateway_Ok_join"/g)].length).toBe(2);
-    const e = await rejected(applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', joinAs: '$j', branches: [{ condition: '${ok}', nodes: [{ kind: 'task', name: 'Book' }] }, rejectBranch] }], { layout: false }));
-    expect(e.code).toBe('E_USAGE');
-    expect(e.message).toContain('only one branch continues');
+    const result = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'a', condition: '${a}', nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'b', condition: '${b}', nodes: [{ kind: 'task', name: 'B' }] }, rejectBranch] }], { layout: false });
+    expect(result.xml).toContain('id="Gateway_Ok_join"');
+    expect([...result.xml.matchAll(/targetRef="Gateway_Ok_join"/g)].length).toBe(2);
+    const failure = await rejected(applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', joinAs: '$j', branches: [{ condition: '${ok}', nodes: [{ kind: 'task', name: 'Book' }] }, rejectBranch] }], { layout: false }));
+    expect(failure.code).toBe('E_USAGE');
+    expect(failure.message).toContain('only one branch continues');
   });
 });
 
@@ -95,8 +95,8 @@ describe('space --by: columns, rows and pixels, the distance noted', () => {
   });
 
   const spaceNote = async (by: string | number): Promise<string> => {
-    const r = await applyToXml(CLAIM, [{ op: 'space', after: 'Activity_RegisterClaim', by }]);
-    return r.result.layout.format![0]!.notes!.join(' | ');
+    const result = await applyToXml(CLAIM, [{ op: 'space', after: 'Activity_RegisterClaim', by }]);
+    return result.result.layout.format![0]!.notes!.join(' | ');
   };
 
   it('2col moves by two columns, 2 by two pixels and says how to ask for columns', async () => {
@@ -120,12 +120,12 @@ describe('space --by: columns, rows and pixels, the distance noted', () => {
 
 describe('E_NOT_FOUND: ids with the query prefix first', () => {
   it('a mistyped flow id suggests the flow, not the gateway its words contain', async () => {
-    const r = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
+    const result = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
       { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Purchase', as: '$s' },
       { op: 'add', kind: 'userTask', name: 'Approve purchase', after: '$s', as: '$a' },
       { op: 'split', after: '$a', name: 'Purchase approved?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'task', name: 'Order goods' }] }, { flowName: 'no', default: true, nodes: [{ kind: 'endEvent', name: 'Rejected' }] }] },
     ]);
-    const doc = await Doc.fromXml(r.xml);
+    const doc = await Doc.fromXml(result.xml);
     expect(doc.has('Flow_PurchaseApprovedToOrderGoods')).toBe(true);
     expect(doc.suggest('Flow_GatewayPurchaseApprovedToOrderGoods')[0]).toBe('Flow_PurchaseApprovedToOrderGoods');
     // a query with another prefix still finds the element
@@ -143,22 +143,22 @@ describe('wrong op shapes: a hint with the right one', () => {
     try {
       parseOps(ops);
     } catch (err) {
-      const e = err as CliError;
-      return { message: e.message, hint: e.details.hint as string | undefined };
+      const failure = err as CliError;
+      return { message: failure.message, hint: failure.details.hint as string | undefined };
     }
     throw new Error('expected E_USAGE');
   };
 
   it('route with "flowId"', () => {
-    const e = hintOf([{ op: 'route', flowId: 'Flow_2', exit: 'bottom' }]);
-    expect(e.message).toContain('unknown key "flowId" (did you mean "id"?)');
-    expect(e.hint).toBe('route names its flow with "id": {"op":"route","id":"Flow_2","exit":"bottom"}.');
+    const failure = hintOf([{ op: 'route', flowId: 'Flow_2', exit: 'bottom' }]);
+    expect(failure.message).toContain('unknown key "flowId" (did you mean "id"?)');
+    expect(failure.hint).toBe('route names its flow with "id": {"op":"route","id":"Flow_2","exit":"bottom"}.');
   });
 
   it('set with the properties at the top level', () => {
-    const e = hintOf([{ op: 'set', id: 'Activity_RegisterClaim', name: 'Register', documentation: 'x' }]);
-    expect(e.message).toContain('unknown key "name" (did you mean "values"?)');
-    expect(e.hint).toBe('set takes the properties to set in "values" (an object): {"op":"set","id":"Activity_RegisterClaim","values":{"name":"Register","documentation":"x"}}.');
+    const failure = hintOf([{ op: 'set', id: 'Activity_RegisterClaim', name: 'Register', documentation: 'x' }]);
+    expect(failure.message).toContain('unknown key "name" (did you mean "values"?)');
+    expect(failure.hint).toBe('set takes the properties to set in "values" (an object): {"op":"set","id":"Activity_RegisterClaim","values":{"name":"Register","documentation":"x"}}.');
   });
 });
 
@@ -170,20 +170,20 @@ describe('CLI: options that are positional arguments', () => {
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
   const bpmn = (...args: string[]): { code: number; err: string } => {
-    const r = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: dir, input: '' });
-    return { code: r.status ?? -1, err: r.stderr };
+    const spawned = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: dir, input: '' });
+    return { code: spawned.status ?? -1, err: spawned.stderr };
   };
 
   it('add --kind userTask --name X', () => {
-    const r = bpmn('add', 'claim.bpmn', '--kind', 'userTask', '--name', 'Check it', '--after', 'Activity_RegisterClaim');
-    expect(r.code).toBe(1);
-    expect(r.err).toContain("unknown option '--kind'");
-    expect(r.err).toContain('hint: --kind and --name are not options of `bpmn add` (<file> <kind> [name] [keyValues...]): write them as arguments: `bpmn add claim.bpmn userTask "Check it" --after Activity_RegisterClaim`.');
+    const result = bpmn('add', 'claim.bpmn', '--kind', 'userTask', '--name', 'Check it', '--after', 'Activity_RegisterClaim');
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("unknown option '--kind'");
+    expect(result.err).toContain('hint: --kind and --name are not options of `bpmn add` (<file> <kind> [name] [keyValues...]): write them as arguments: `bpmn add claim.bpmn userTask "Check it" --after Activity_RegisterClaim`.');
   });
 
   it('set <id> --name X', () => {
-    const r = bpmn('set', 'claim.bpmn', 'Activity_RegisterClaim', '--name', 'Register it');
-    expect(r.err).toContain('hint: --name is not an option of `bpmn set` (<file> <id> [keyValues...]): write it as a key=value pair: `bpmn set claim.bpmn Activity_RegisterClaim name="Register it"`.');
+    const result = bpmn('set', 'claim.bpmn', 'Activity_RegisterClaim', '--name', 'Register it');
+    expect(result.err).toContain('hint: --name is not an option of `bpmn set` (<file> <id> [keyValues...]): write it as a key=value pair: `bpmn set claim.bpmn Activity_RegisterClaim name="Register it"`.');
   });
 
   it('a misspelt option keeps the generic hint', () => {

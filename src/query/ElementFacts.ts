@@ -52,8 +52,8 @@ export class ElementFacts {
 
   documentation(): string | undefined {
     const texts = list(this.el, 'documentation')
-      .map((d) => peek<string>(d, 'text'))
-      .filter((t): t is string => typeof t === 'string' && !!t.trim());
+      .map((documentation) => peek<string>(documentation, 'text'))
+      .filter((text): text is string => typeof text === 'string' && !!text.trim());
     return texts.length ? texts.join(' ') : undefined;
   }
 
@@ -80,7 +80,7 @@ export class ElementFacts {
     if (scriptFormat) props['scriptFormat'] = scriptFormat;
     // the label shows only the first trigger of several event definitions
     const defs = definitionsOf(el);
-    if (defs.length > 1) props['definitions'] = defs.map((d) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, t]) => is(d, t))?.[0] ?? d.$type).join('+');
+    if (defs.length > 1) props['definitions'] = defs.map((definition) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, triggerType]) => is(definition, triggerType))?.[0] ?? definition.$type).join('+');
     if (opts.zeebe !== false) this.zeebeProps(props);
     return Object.keys(props).length ? props : undefined;
   }
@@ -89,14 +89,14 @@ export class ElementFacts {
   vendorValues(skip: (slot: string, key: string) => boolean = () => false): Record<string, string> | undefined {
     const out: Record<string, string> = { ...vendorAttributes(this.el) };
     for (const { prefix, el: nested } of nestedEntries(this.el)) {
-      for (const [k, v] of Object.entries(vendorAttributes(nested))) if (!skip(prefix, k)) out[`${prefix}.${k}`] = v;
+      for (const [key, value] of Object.entries(vendorAttributes(nested))) if (!skip(prefix, key)) out[`${prefix}.${key}`] = value;
     }
     return Object.keys(out).length ? out : undefined;
   }
 
   extensionTypes(): string[] {
     const container = peek<El>(this.el, 'extensionElements');
-    return container ? list(container, 'values').map((v) => v.$type) : [];
+    return container ? list(container, 'values').map((extensionValue) => extensionValue.$type) : [];
   }
 
   extensionMentions(): string[] | undefined {
@@ -132,9 +132,9 @@ export class ElementFacts {
     const attrs = this.vendorValues();
     const all = new ExtensionLister().listAll(this.el);
     const groups = new Map<string, ExtensionInfo[]>();
-    for (const e of all) {
-      const key = `${e.slot ? `${e.slot}.` : ''}${e.type}`;
-      groups.set(key, [...(groups.get(key) ?? []), e]);
+    for (const extension of all) {
+      const key = `${extension.slot ? `${extension.slot}.` : ''}${extension.type}`;
+      groups.set(key, [...(groups.get(key) ?? []), extension]);
     }
     const ext = [...groups].map(([key, items]) => (items.length > 1 ? `${key} x${items.length}` : this.extensionItem(items[0]!)));
     return attrs || ext.length ? compact<Implementation>({ attrs, ext: nonEmpty(ext) }) : undefined;
@@ -153,46 +153,46 @@ export class ElementFacts {
     const formRef = form ? (peek<string>(form, 'formId') ?? peek<string>(form, 'externalReference') ?? peek<string>(form, 'formKey')) : undefined;
     if (formRef !== undefined) props['form'] = formRef;
     const assignment = ElementFacts.zeebeExt(el, 'assignmentDefinition');
-    for (const k of ['assignee', 'candidateGroups', 'candidateUsers']) {
-      const v = assignment ? peek<string>(assignment, k) : undefined;
-      if (v !== undefined) props[k] = v;
+    for (const key of ['assignee', 'candidateGroups', 'candidateUsers']) {
+      const value = assignment ? peek<string>(assignment, key) : undefined;
+      if (value !== undefined) props[key] = value;
     }
     const loop = ElementFacts.zeebeExt(peek<El>(el, 'loopCharacteristics'), 'loopCharacteristics');
-    for (const k of ['inputCollection', 'inputElement', 'outputCollection', 'outputElement']) {
-      const v = loop ? peek<string>(loop, k) : undefined;
-      if (v !== undefined) props[k] = v;
+    for (const key of ['inputCollection', 'inputElement', 'outputCollection', 'outputElement']) {
+      const value = loop ? peek<string>(loop, key) : undefined;
+      if (value !== undefined) props[key] = value;
     }
   }
 
   /** Any prefix bound to the zeebe namespace counts. */
   private static zeebeExt(el: El | undefined, local: string): El | undefined {
     const container = el ? peek<El>(el, 'extensionElements') : undefined;
-    return container ? list(container, 'values').find((v) => (v.$descriptor as { ns?: { uri?: string } }).ns?.uri === ZEEBE_URI && v.$type.endsWith(`:${local}`)) : undefined;
+    return container ? list(container, 'values').find((extensionValue) => (extensionValue.$descriptor as { ns?: { uri?: string } }).ns?.uri === ZEEBE_URI && extensionValue.$type.endsWith(`:${local}`)) : undefined;
   }
 
-  private extensionItem(e: ExtensionInfo): string {
-    const prefix = e.slot ? `${e.slot}.` : '';
-    const io = ElementFacts.ioItem(e);
+  private extensionItem(extension: ExtensionInfo): string {
+    const prefix = extension.slot ? `${extension.slot}.` : '';
+    const io = ElementFacts.ioItem(extension);
     if (io) return `${prefix}${io}`;
-    const children = e.children ?? [];
+    const children = extension.children ?? [];
     if (!children.length) {
-      const attrs = Object.entries(e.attrs).map(([k, v]) => `${k}=${ElementFacts.itemValue(v)}`);
-      const body = e.body?.trim() ? [`body=${ElementFacts.itemValue(e.body)}`] : [];
-      return [`${prefix}${e.type}`, ...attrs, ...body].join(' ');
+      const attrs = Object.entries(extension.attrs).map(([key, value]) => `${key}=${ElementFacts.itemValue(value)}`);
+      const body = extension.body?.trim() ? [`body=${ElementFacts.itemValue(extension.body)}`] : [];
+      return [`${prefix}${extension.type}`, ...attrs, ...body].join(' ');
     }
     const keys = children.slice(0, MAX_CHILDREN).map(ElementFacts.childKey);
-    return `${prefix}${e.type}: ${keys.join(', ')}${children.length > MAX_CHILDREN ? `, +${children.length - MAX_CHILDREN} more` : ''}`;
+    return `${prefix}${extension.type}: ${keys.join(', ')}${children.length > MAX_CHILDREN ? `, +${children.length - MAX_CHILDREN} more` : ''}`;
   }
 
-  private static ioItem(e: ExtensionInfo | Omit<ExtensionInfo, 'index'>): string | undefined {
-    const local = e.type.split(':')[1] ?? e.type;
-    const isIo = local === 'inputOutput' || e.type === 'zeebe:ioMapping';
+  private static ioItem(extension: ExtensionInfo | Omit<ExtensionInfo, 'index'>): string | undefined {
+    const local = extension.type.split(':')[1] ?? extension.type;
+    const isIo = local === 'inputOutput' || extension.type === 'zeebe:ioMapping';
     if (!isIo) return undefined;
     const ins: string[] = [];
     const outs: string[] = [];
-    for (const c of e.children ?? []) {
-      const cl = c.type.split(':')[1] ?? c.type;
-      const name = c.attrs['name'] ?? c.attrs['target'] ?? '?';
+    for (const child of extension.children ?? []) {
+      const cl = child.type.split(':')[1] ?? child.type;
+      const name = child.attrs['name'] ?? child.attrs['target'] ?? '?';
       if (cl === 'inputParameter' || cl === 'input') ins.push(name);
       else if (cl === 'outputParameter' || cl === 'output') outs.push(name);
     }
@@ -200,8 +200,8 @@ export class ElementFacts {
     return `io: ${parts.length ? parts.join('; ') : 'empty'}`;
   }
 
-  private static childKey(c: Omit<ExtensionInfo, 'index'>): string {
-    return c.attrs['name'] ?? c.attrs['id'] ?? c.attrs['key'] ?? c.attrs['target'] ?? c.attrs['event'] ?? (c.type.split(':')[1] ?? c.type);
+  private static childKey(child: Omit<ExtensionInfo, 'index'>): string {
+    return child.attrs['name'] ?? child.attrs['id'] ?? child.attrs['key'] ?? child.attrs['target'] ?? child.attrs['event'] ?? (child.type.split(':')[1] ?? child.type);
   }
 
   private static itemValue(value: string, max = 40): string {

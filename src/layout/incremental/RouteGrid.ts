@@ -34,96 +34,96 @@ export class RouteGrid {
     this.turn = new Float64Array(nx * ny);
   }
 
-  private static upper(arr: number[], v: number): number {
+  private static upper(arr: number[], target: number): number {
     let lo = 0, hi = arr.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (arr[mid]! > v) hi = mid;
+      if (arr[mid]! > target) hi = mid;
       else lo = mid + 1;
     }
     return lo;
   }
 
-  private static lower(arr: number[], v: number): number {
+  private static lower(arr: number[], target: number): number {
     let lo = 0, hi = arr.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (arr[mid]! >= v) hi = mid;
+      if (arr[mid]! >= target) hi = mid;
       else lo = mid + 1;
     }
     return lo;
   }
 
-  private static bump(arr: Float64Array, i: number, v: number): void {
-    arr[i] = arr[i]! + v;
+  private static bump(arr: Float64Array, index: number, amount: number): void {
+    arr[index] = arr[index]! + amount;
   }
 
-  addInside(b: Box, perEdge: number, perPx: number): void {
+  addInside(box: Box, perEdge: number, perPx: number): void {
     const { xs, ys, nx, ny } = this;
-    for (let j = RouteGrid.upper(ys, b.y); j < ny && ys[j]! < bottom(b); j++) {
-      for (let i = Math.max(0, RouteGrid.upper(xs, b.x) - 1); i < nx - 1 && xs[i]! < right(b); i++) {
-        RouteGrid.bump(this.hCost, j * (nx - 1) + i, perEdge + perPx * (xs[i + 1]! - xs[i]!));
+    for (let row = RouteGrid.upper(ys, box.y); row < ny && ys[row]! < bottom(box); row++) {
+      for (let column = Math.max(0, RouteGrid.upper(xs, box.x) - 1); column < nx - 1 && xs[column]! < right(box); column++) {
+        RouteGrid.bump(this.hCost, row * (nx - 1) + column, perEdge + perPx * (xs[column + 1]! - xs[column]!));
       }
     }
-    for (let i = RouteGrid.upper(xs, b.x); i < nx && xs[i]! < right(b); i++) {
-      for (let j = Math.max(0, RouteGrid.upper(ys, b.y) - 1); j < ny - 1 && ys[j]! < bottom(b); j++) {
-        RouteGrid.bump(this.vCost, j * nx + i, perEdge + perPx * (ys[j + 1]! - ys[j]!));
+    for (let column = RouteGrid.upper(xs, box.x); column < nx && xs[column]! < right(box); column++) {
+      for (let row = Math.max(0, RouteGrid.upper(ys, box.y) - 1); row < ny - 1 && ys[row]! < bottom(box); row++) {
+        RouteGrid.bump(this.vCost, row * nx + column, perEdge + perPx * (ys[row + 1]! - ys[row]!));
       }
     }
   }
 
-  addOutline(b: Box, cost: number): void {
+  addOutline(box: Box, cost: number): void {
     const { xs, ys, nx, ny } = this;
-    for (const y of [b.y, bottom(b)]) {
-      const j = RouteGrid.lower(ys, y - EPS);
-      if (j >= ny || Math.abs(ys[j]! - y) > EPS) continue;
-      for (let i = Math.max(0, RouteGrid.upper(xs, b.x) - 1); i < nx - 1 && xs[i]! < right(b); i++) {
-        if (Math.min(xs[i + 1]!, right(b)) - Math.max(xs[i]!, b.x) > 1) RouteGrid.bump(this.hCost, j * (nx - 1) + i, cost);
+    for (const edgeY of [box.y, bottom(box)]) {
+      const row = RouteGrid.lower(ys, edgeY - EPS);
+      if (row >= ny || Math.abs(ys[row]! - edgeY) > EPS) continue;
+      for (let column = Math.max(0, RouteGrid.upper(xs, box.x) - 1); column < nx - 1 && xs[column]! < right(box); column++) {
+        if (Math.min(xs[column + 1]!, right(box)) - Math.max(xs[column]!, box.x) > 1) RouteGrid.bump(this.hCost, row * (nx - 1) + column, cost);
       }
     }
-    for (const x of [b.x, right(b)]) {
-      const i = RouteGrid.lower(xs, x - EPS);
-      if (i >= nx || Math.abs(xs[i]! - x) > EPS) continue;
-      for (let j = Math.max(0, RouteGrid.upper(ys, b.y) - 1); j < ny - 1 && ys[j]! < bottom(b); j++) {
-        if (Math.min(ys[j + 1]!, bottom(b)) - Math.max(ys[j]!, b.y) > 1) RouteGrid.bump(this.vCost, j * nx + i, cost);
+    for (const edgeX of [box.x, right(box)]) {
+      const column = RouteGrid.lower(xs, edgeX - EPS);
+      if (column >= nx || Math.abs(xs[column]! - edgeX) > EPS) continue;
+      for (let row = Math.max(0, RouteGrid.upper(ys, box.y) - 1); row < ny - 1 && ys[row]! < bottom(box); row++) {
+        if (Math.min(ys[row + 1]!, bottom(box)) - Math.max(ys[row]!, box.y) > 1) RouteGrid.bump(this.vCost, row * nx + column, cost);
       }
     }
   }
 
   /** A crossing exactly at a node is split between the two edges. */
-  private crossRow(j: number, x: number, cost = CROSS): void {
+  private crossRow(row: number, crossX: number, cost = CROSS): void {
     const { xs, nx } = this;
-    const k = RouteGrid.lower(xs, x);
-    if (k < nx && Math.abs(xs[k]! - x) < EPS) {
-      if (k > 0) RouteGrid.bump(this.hCost, j * (nx - 1) + k - 1, cost / 2);
-      if (k < nx - 1) RouteGrid.bump(this.hCost, j * (nx - 1) + k, cost / 2);
-    } else if (k > 0 && k < nx) RouteGrid.bump(this.hCost, j * (nx - 1) + k - 1, cost);
+    const column = RouteGrid.lower(xs, crossX);
+    if (column < nx && Math.abs(xs[column]! - crossX) < EPS) {
+      if (column > 0) RouteGrid.bump(this.hCost, row * (nx - 1) + column - 1, cost / 2);
+      if (column < nx - 1) RouteGrid.bump(this.hCost, row * (nx - 1) + column, cost / 2);
+    } else if (column > 0 && column < nx) RouteGrid.bump(this.hCost, row * (nx - 1) + column - 1, cost);
   }
 
-  private crossColumn(i: number, y: number, cost = CROSS): void {
+  private crossColumn(column: number, crossY: number, cost = CROSS): void {
     const { ys, nx, ny } = this;
-    const k = RouteGrid.lower(ys, y);
-    if (k < ny && Math.abs(ys[k]! - y) < EPS) {
-      if (k > 0) RouteGrid.bump(this.vCost, (k - 1) * nx + i, cost / 2);
-      if (k < ny - 1) RouteGrid.bump(this.vCost, k * nx + i, cost / 2);
-    } else if (k > 0 && k < ny) RouteGrid.bump(this.vCost, (k - 1) * nx + i, cost);
+    const row = RouteGrid.lower(ys, crossY);
+    if (row < ny && Math.abs(ys[row]! - crossY) < EPS) {
+      if (row > 0) RouteGrid.bump(this.vCost, (row - 1) * nx + column, cost / 2);
+      if (row < ny - 1) RouteGrid.bump(this.vCost, row * nx + column, cost / 2);
+    } else if (row > 0 && row < ny) RouteGrid.bump(this.vCost, (row - 1) * nx + column, cost);
   }
 
   markLine(seg: Seg): void {
     const { xs, ys, nx, ny } = this;
-    const { a, b } = seg;
-    const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x), y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
-    const cost = (p: Point): number => (seg.ends?.some((e) => Math.abs(e.x - p.x) + Math.abs(e.y - p.y) < END_ZONE) ? 2 * CROSS : CROSS);
+    const { start, end } = seg;
+    const x1 = Math.min(start.x, end.x), x2 = Math.max(start.x, end.x), y1 = Math.min(start.y, end.y), y2 = Math.max(start.y, end.y);
+    const cost = (point: Point): number => (seg.ends?.some((endPoint) => Math.abs(endPoint.x - point.x) + Math.abs(endPoint.y - point.y) < END_ZONE) ? 2 * CROSS : CROSS);
     if (seg.kind !== 'h') {
-      for (let j = RouteGrid.upper(ys, y1); j < ny && ys[j]! < y2; j++) {
-        const x = seg.kind === 'v' ? a.x : a.x + ((ys[j]! - a.y) * (b.x - a.x)) / (b.y - a.y);
-        this.crossRow(j, x, cost({ x, y: ys[j]! }));
+      for (let row = RouteGrid.upper(ys, y1); row < ny && ys[row]! < y2; row++) {
+        const crossX = seg.kind === 'v' ? start.x : start.x + ((ys[row]! - start.y) * (end.x - start.x)) / (end.y - start.y);
+        this.crossRow(row, crossX, cost({ x: crossX, y: ys[row]! }));
       }
     }
     if (seg.kind !== 'v') {
-      for (let i = RouteGrid.upper(xs, x1); i < nx && xs[i]! < x2; i++) {
-        const y = seg.kind === 'h' ? a.y : a.y + ((xs[i]! - a.x) * (b.y - a.y)) / (b.x - a.x);
-        this.crossColumn(i, y, cost({ x: xs[i]!, y }));
+      for (let column = RouteGrid.upper(xs, x1); column < nx && xs[column]! < x2; column++) {
+        const crossY = seg.kind === 'h' ? start.y : start.y + ((xs[column]! - start.x) * (end.y - start.y)) / (end.x - start.x);
+        this.crossColumn(column, crossY, cost({ x: xs[column]!, y: crossY }));
       }
     }
     /**
@@ -133,60 +133,60 @@ export class RouteGrid {
     const hFlag = seg.merge ? this.hMg : this.hOv, vFlag = seg.merge ? this.vMg : this.vOv;
     const least = (len: number): number => (seg.merge ? Math.min(1, len - EPS) : 1);
     if (seg.kind === 'h') {
-      for (let j = RouteGrid.lower(ys, a.y - OVERLAP_TOL); j < ny && ys[j]! <= a.y + OVERLAP_TOL; j++) {
-        for (let i = Math.max(0, RouteGrid.upper(xs, x1) - 1); i < nx - 1 && xs[i]! < x2; i++) {
-          if (Math.min(xs[i + 1]!, x2) - Math.max(xs[i]!, x1) > least(xs[i + 1]! - xs[i]!)) hFlag[j * (nx - 1) + i] = 1;
+      for (let row = RouteGrid.lower(ys, start.y - OVERLAP_TOL); row < ny && ys[row]! <= start.y + OVERLAP_TOL; row++) {
+        for (let column = Math.max(0, RouteGrid.upper(xs, x1) - 1); column < nx - 1 && xs[column]! < x2; column++) {
+          if (Math.min(xs[column + 1]!, x2) - Math.max(xs[column]!, x1) > least(xs[column + 1]! - xs[column]!)) hFlag[row * (nx - 1) + column] = 1;
         }
       }
     } else if (seg.kind === 'v') {
-      for (let i = RouteGrid.lower(xs, a.x - OVERLAP_TOL); i < nx && xs[i]! <= a.x + OVERLAP_TOL; i++) {
-        for (let j = Math.max(0, RouteGrid.upper(ys, y1) - 1); j < ny - 1 && ys[j]! < y2; j++) {
-          if (Math.min(ys[j + 1]!, y2) - Math.max(ys[j]!, y1) > least(ys[j + 1]! - ys[j]!)) vFlag[j * nx + i] = 1;
+      for (let column = RouteGrid.lower(xs, start.x - OVERLAP_TOL); column < nx && xs[column]! <= start.x + OVERLAP_TOL; column++) {
+        for (let row = Math.max(0, RouteGrid.upper(ys, y1) - 1); row < ny - 1 && ys[row]! < y2; row++) {
+          if (Math.min(ys[row + 1]!, y2) - Math.max(ys[row]!, y1) > least(ys[row + 1]! - ys[row]!)) vFlag[row * nx + column] = 1;
         }
       }
     }
   }
 
   /** A gateway target is touched only at its port: other vertices of the diamond cost HIT. */
-  guardVertices(b: Box): void {
+  guardVertices(box: Box): void {
     const { xs, ys, nx, ny } = this;
-    const at = (arr: number[], v: number): number => {
-      const k = RouteGrid.lower(arr, v - EPS);
-      return k < arr.length && Math.abs(arr[k]! - v) < EPS ? k : -1;
+    const at = (arr: number[], coordinate: number): number => {
+      const index = RouteGrid.lower(arr, coordinate - EPS);
+      return index < arr.length && Math.abs(arr[index]! - coordinate) < EPS ? index : -1;
     };
     for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-      const [lo, hi] = span(b, side);
-      const v = pointOn(b, side, Math.round(lo + (hi - lo) / 2));
-      const d = OUTWARD[side];
-      const i = at(xs, v.x), j = at(ys, v.y);
-      if (j >= 0) for (let k = 0; k + 1 < nx; k++) if (xs[k]! <= v.x + EPS && xs[k + 1]! >= v.x - EPS && !(d === 0 && k === i) && !(d === 2 && k + 1 === i)) RouteGrid.bump(this.hCost, j * (nx - 1) + k, HIT);
-      if (i >= 0) for (let k = 0; k + 1 < ny; k++) if (ys[k]! <= v.y + EPS && ys[k + 1]! >= v.y - EPS && !(d === 1 && k === j) && !(d === 3 && k + 1 === j)) RouteGrid.bump(this.vCost, k * nx + i, HIT);
+      const [lo, hi] = span(box, side);
+      const vertex = pointOn(box, side, Math.round(lo + (hi - lo) / 2));
+      const outward = OUTWARD[side];
+      const column = at(xs, vertex.x), row = at(ys, vertex.y);
+      if (row >= 0) for (let cell = 0; cell + 1 < nx; cell++) if (xs[cell]! <= vertex.x + EPS && xs[cell + 1]! >= vertex.x - EPS && !(outward === 0 && cell === column) && !(outward === 2 && cell + 1 === column)) RouteGrid.bump(this.hCost, row * (nx - 1) + cell, HIT);
+      if (column >= 0) for (let cell = 0; cell + 1 < ny; cell++) if (ys[cell]! <= vertex.y + EPS && ys[cell + 1]! >= vertex.y - EPS && !(outward === 1 && cell === row) && !(outward === 3 && cell + 1 === row)) RouteGrid.bump(this.vCost, cell * nx + column, HIT);
     }
   }
 
-  markStubZones(b: Box, stub: number): void {
+  markStubZones(box: Box, stub: number): void {
     const { xs, ys, nx } = this;
     const zones: Array<{ x1: number; x2: number; y1: number; y2: number }> = [
-      { x1: right(b), x2: right(b) + stub, y1: b.y, y2: bottom(b) },
-      { x1: b.x - stub, x2: b.x, y1: b.y, y2: bottom(b) },
-      { x1: b.x, x2: right(b), y1: bottom(b), y2: bottom(b) + stub },
-      { x1: b.x, x2: right(b), y1: b.y - stub, y2: b.y },
+      { x1: right(box), x2: right(box) + stub, y1: box.y, y2: bottom(box) },
+      { x1: box.x - stub, x2: box.x, y1: box.y, y2: bottom(box) },
+      { x1: box.x, x2: right(box), y1: bottom(box), y2: bottom(box) + stub },
+      { x1: box.x, x2: right(box), y1: box.y - stub, y2: box.y },
     ];
-    zones.forEach((z, k) => {
-      for (let i = RouteGrid.lower(xs, z.x1); i < nx && xs[i]! <= z.x2; i++) {
-        for (let j = RouteGrid.lower(ys, z.y1); j < ys.length && ys[j]! <= z.y2; j++) {
-          const x = xs[i]!, y = ys[j]!;
-          const inside = k === 0 ? x < z.x2 : k === 1 ? x > z.x1 : k === 2 ? y < z.y2 : y > z.y1;
-          if (inside) this.turn[j * nx + i] = STUB_TURN;
+    zones.forEach((zone, zoneIndex) => {
+      for (let column = RouteGrid.lower(xs, zone.x1); column < nx && xs[column]! <= zone.x2; column++) {
+        for (let row = RouteGrid.lower(ys, zone.y1); row < ys.length && ys[row]! <= zone.y2; row++) {
+          const pointX = xs[column]!, pointY = ys[row]!;
+          const inside = zoneIndex === 0 ? pointX < zone.x2 : zoneIndex === 1 ? pointX > zone.x1 : zoneIndex === 2 ? pointY < zone.y2 : pointY > zone.y1;
+          if (inside) this.turn[row * nx + column] = STUB_TURN;
         }
       }
     });
   }
 
-  nodeOf(p: Point): number | undefined {
-    const i = RouteGrid.lower(this.xs, p.x), j = RouteGrid.lower(this.ys, p.y);
-    if (i >= this.nx || j >= this.ny || Math.abs(this.xs[i]! - p.x) > EPS || Math.abs(this.ys[j]! - p.y) > EPS) return undefined;
-    return j * this.nx + i;
+  nodeOf(point: Point): number | undefined {
+    const column = RouteGrid.lower(this.xs, point.x), row = RouteGrid.lower(this.ys, point.y);
+    if (column >= this.nx || row >= this.ny || Math.abs(this.xs[column]! - point.x) > EPS || Math.abs(this.ys[row]! - point.y) > EPS) return undefined;
+    return row * this.nx + column;
   }
 
   trace(goal: number, parent: Int32Array, nOv: number): Point[] {

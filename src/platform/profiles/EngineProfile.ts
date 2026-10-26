@@ -24,19 +24,19 @@ export abstract class EngineProfile {
   protected visit(el: El, owner: El | undefined, executable: boolean): void {
     if (this.checkElement(el, owner, executable) === 'stop') return;
     const next = idOf(el) ? el : owner;
-    for (const c of this.bpmnChildren(el)) this.visit(c, next, executable);
+    for (const child of this.bpmnChildren(el)) this.visit(child, next, executable);
   }
 
   /** BPMN containment children (no references, no DI, no vendor content). */
   private bpmnChildren(el: El): El[] {
-    const d = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
-    if (d.isGeneric) return [];
+    const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
+    if (descriptor.isGeneric) return [];
     const out: El[] = [];
-    for (const p of d.properties ?? []) {
-      if (p.isReference || p.name === 'extensionElements' || p.name === 'diagrams') continue;
-      const v = peek<unknown>(el, p.name);
-      for (const c of Array.isArray(v) ? v : [v]) {
-        if (c && typeof c === 'object' && typeof (c as El).$type === 'string' && '$descriptor' in (c as object) && this.kit.isBpmnElement(c as El) && !this.kit.isDiElement(c as El)) out.push(c as El);
+    for (const property of descriptor.properties ?? []) {
+      if (property.isReference || property.name === 'extensionElements' || property.name === 'diagrams') continue;
+      const propertyValue = peek<unknown>(el, property.name);
+      for (const child of Array.isArray(propertyValue) ? propertyValue : [propertyValue]) {
+        if (child && typeof child === 'object' && typeof (child as El).$type === 'string' && '$descriptor' in (child as object) && this.kit.isBpmnElement(child as El) && !this.kit.isDiElement(child as El)) out.push(child as El);
       }
     }
     return out;

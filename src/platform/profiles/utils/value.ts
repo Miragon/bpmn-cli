@@ -1,3 +1,3 @@
-export function nonEmpty(v: string | undefined): v is string {
-  return typeof v === 'string' && v.trim() !== '';
+export function nonEmpty(text: string | undefined): text is string {
+  return typeof text === 'string' && text.trim() !== '';
 }

@@ -18,36 +18,36 @@ export class LabelRefresh {
   labels(routed: ReadonlySet<string>): void {
     for (const plane of this.run.planes) {
       // segments of connections drawn in this run: an existing label they run over steps aside
-      const fresh = [...plane.edges.values()].filter((e) => routed.has(e.id)).flatMap((e) => e.points.slice(1).map((q, i) => [e.points[i]!, q] as const));
-      const grown = [...this.run.grown].map((id) => plane.shapes.get(id)).filter((g): g is DShape => !!g);
-      for (const s of plane.shapes.values()) {
-        if (this.run.fromEngine.has(s.id)) continue;
-        if ((this.run.place.placed.has(s.id) && !s.label) || (this.run.place.relabel?.has(s.id) && hasExternalLabel(s))) {
-          this.run.drawing(plane).placeShapeLabel(s);
+      const fresh = [...plane.edges.values()].filter((edge) => routed.has(edge.id)).flatMap((edge) => edge.points.slice(1).map((end, index) => [edge.points[index]!, end] as const));
+      const grown = [...this.run.grown].map((id) => plane.shapes.get(id)).filter((shape): shape is DShape => !!shape);
+      for (const shape of plane.shapes.values()) {
+        if (this.run.fromEngine.has(shape.id)) continue;
+        if ((this.run.place.placed.has(shape.id) && !shape.label) || (this.run.place.relabel?.has(shape.id) && hasExternalLabel(shape))) {
+          this.run.drawing(plane).placeShapeLabel(shape);
           continue;
         }
-        if (s.label && hasExternalLabel(s) && fresh.some(([p, q]) => segmentHits(p, q, s.label!, 1))) {
-          this.run.drawing(plane).placeShapeLabel(s);
-          this.run.notes.push(`label of ${s.id} moved off a new line`);
+        if (shape.label && hasExternalLabel(shape) && fresh.some(([start, end]) => segmentHits(start, end, shape.label!, 1))) {
+          this.run.drawing(plane).placeShapeLabel(shape);
+          this.run.notes.push(`label of ${shape.id} moved off a new line`);
           continue;
         }
-        if (s.label && hasExternalLabel(s) && grown.some((g) => g !== s && overlaps(s.label!, g.bounds))) {
-          this.run.drawing(plane).placeShapeLabel(s);
-          this.run.notes.push(`label of ${s.id} moved off a grown shape`);
+        if (shape.label && hasExternalLabel(shape) && grown.some((grownShape) => grownShape !== shape && overlaps(shape.label!, grownShape.bounds))) {
+          this.run.drawing(plane).placeShapeLabel(shape);
+          this.run.notes.push(`label of ${shape.id} moved off a grown shape`);
           continue;
         }
-        const before = this.snap.names.get(this.run.oldId(s));
-        const now = raw<string>(s.el, 'name');
-        if (now && now !== before) this.run.drawing(plane).refitLabel(s);
+        const before = this.snap.names.get(this.run.oldId(shape));
+        const now = raw<string>(shape.el, 'name');
+        if (now && now !== before) this.run.drawing(plane).refitLabel(shape);
       }
-      for (const e of plane.edges.values()) {
-        if (this.run.fromEngine.has(e.id) || this.run.reroute.has(e.id)) continue;
-        const before = this.snap.names.get(this.run.oldId(e));
-        const now = raw<string>(e.el, 'name');
-        if (now && now !== before) this.run.drawing(plane).refitLabel(e);
+      for (const edge of plane.edges.values()) {
+        if (this.run.fromEngine.has(edge.id) || this.run.reroute.has(edge.id)) continue;
+        const before = this.snap.names.get(this.run.oldId(edge));
+        const now = raw<string>(edge.el, 'name');
+        if (now && now !== before) this.run.drawing(plane).refitLabel(edge);
       }
       // a label now on the title of an expanded sub-process that it was clear of before the ops
-      for (const [id, sub] of this.run.drawing(plane).clearTitles((o, sub) => !this.run.fromEngine.has(o.id) && this.clearOfOldTitle(o, sub))) this.run.notes.push(`label of ${id} moved off the name of ${sub}`);
+      for (const [id, sub] of this.run.drawing(plane).clearTitles((element, sub) => !this.run.fromEngine.has(element.id) && this.clearOfOldTitle(element, sub))) this.run.notes.push(`label of ${id} moved off the name of ${sub}`);
     }
   }
 

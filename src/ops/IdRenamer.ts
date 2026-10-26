@@ -38,19 +38,19 @@ export class IdRenamer {
       followDiIds(doc.definitions, el, old, newId, doc.ids);
     }
     // id-valued attributes of vendor extension elements are plain strings in the model
-    const vendorRefs = CAMUNDA.idReferenceAttrs().filter((r) => is(el, r.target));
-    for (const e of walk(doc.definitions)) {
-      if (is(e, 'bpmn:CallActivity') && e.get<string | undefined>('calledElement') === old) e.set('calledElement', newId);
-      if (!descriptorOf(e).isGeneric) continue;
-      const any = e as unknown as Record<string, unknown>;
-      if (e.$type === 'zeebe:calledElement' && any['processId'] === old) any['processId'] = newId;
+    const vendorRefs = CAMUNDA.idReferenceAttrs().filter((reference) => is(el, reference.target));
+    for (const element of walk(doc.definitions)) {
+      if (is(element, 'bpmn:CallActivity') && element.get<string | undefined>('calledElement') === old) element.set('calledElement', newId);
+      if (!descriptorOf(element).isGeneric) continue;
+      const any = element as unknown as Record<string, unknown>;
+      if (element.$type === 'zeebe:calledElement' && any['processId'] === old) any['processId'] = newId;
       if (!vendorRefs.length) continue;
-      const [prefix, local] = e.$type.split(':');
+      const [prefix, local] = element.$type.split(':');
       if (!prefix || !local || !CAMUNDA.reads(doc.namespaceUri(prefix))) continue;
       for (const ref of vendorRefs) {
         if (ref.element !== `camunda:${local}`) continue;
         if (any[ref.attr] === old) any[ref.attr] = newId;
-        if (e.$attrs?.[ref.attr] === old) e.$attrs[ref.attr] = newId;
+        if (element.$attrs?.[ref.attr] === old) element.$attrs[ref.attr] = newId;
       }
     }
     doc.invalidate();
@@ -78,7 +78,7 @@ export class IdRenamer {
     const wanted = cutAt(stale.suggested, MAX_ID);
     const next = allocator.regenerated(id, wanted, style.suffixSep(kindOf(el)?.kind ?? el.$type));
     const follower = new FlowIdFollower(doc);
-    const flows = follower.namedAfter(el).map((f) => ({ flow: f, was: `${idOf(f.get<El>('sourceRef'))} -> ${idOf(f.get<El>('targetRef'))}` }));
+    const flows = follower.namedAfter(el).map((flow) => ({ flow, was: `${idOf(flow.get<El>('sourceRef'))} -> ${idOf(flow.get<El>('targetRef'))}` }));
     this.rename(el, next);
     allocator.markGenerated(next, wanted);
     doc.edit.recordRegenerated(id, next, undefined, el);

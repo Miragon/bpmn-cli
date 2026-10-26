@@ -23,8 +23,8 @@ export class TidyAction {
     } else for (const plane of this.ops.planes) byPlane.set(plane, []);
     const rerouted: string[] = [];
     for (const [plane, ids] of byPlane) {
-      const r = this.ops.drawing(plane).tidy(ids.length ? { ids } : {});
-      if (r.unresolved.length) this.notes.push(`overlap left: ${r.unresolved.map(([a, b]) => `${a}~${b}`).join(', ')}`);
+      const tidied = this.ops.drawing(plane).tidy(ids.length ? { ids } : {});
+      if (tidied.unresolved.length) this.notes.push(`overlap left: ${tidied.unresolved.map(([first, second]) => `${first}~${second}`).join(', ')}`);
       rerouted.push(...this.ops.drawing(plane).settle(this.snap));
     }
     return rerouted;

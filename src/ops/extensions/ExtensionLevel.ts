@@ -17,7 +17,7 @@ export class ExtensionLevel {
   ) {}
 
   static present(levels: ExtensionLevel[]): string[] {
-    return [...new Set(levels.flatMap((lv) => lv.items().map((e) => lv.names.itemLabel(e))))];
+    return [...new Set(levels.flatMap((lv) => lv.items().map((item) => lv.names.itemLabel(item))))];
   }
 
   get type(): string | undefined {
@@ -34,8 +34,8 @@ export class ExtensionLevel {
 
   items(): El[] {
     if (this.parent) return this.names.kidsOf(this.parent);
-    const c = this.host.get<El | undefined>('extensionElements');
-    return c ? [...many(c, 'values')] : [];
+    const container = this.host.get<El | undefined>('extensionElements');
+    return container ? [...many(container, 'values')] : [];
   }
 
   /** Keeps the child order of containers whose schema is a sequence. */
@@ -44,9 +44,9 @@ export class ExtensionLevel {
       const raw = this.parent as unknown as Raw;
       const kids = Array.isArray(raw['$children']) ? (raw['$children'] as El[]) : [];
       const order = EXTENSION_STRUCTURE.childOrder(this.type!);
-      const rank = (e: El): number => (order ? order.indexOf(ruleName(this.names.typeOf(e))) : -1);
+      const rank = (item: El): number => (order ? order.indexOf(ruleName(this.names.typeOf(item))) : -1);
       const mine = rank(el);
-      const at = mine === -1 ? -1 : kids.findIndex((k) => rank(k) > mine);
+      const at = mine === -1 ? -1 : kids.findIndex((kid) => rank(kid) > mine);
       if (at === -1) kids.push(el);
       else kids.splice(at, 0, el);
       raw['$children'] = kids;
@@ -58,8 +58,8 @@ export class ExtensionLevel {
 
   replace(old: El, el: El): void {
     const list = this.parent ? ((this.parent as unknown as Raw)['$children'] as El[]) : many(this.host.get<El>('extensionElements'), 'values');
-    const i = list.indexOf(old);
-    list[i] = el;
+    const index = list.indexOf(old);
+    list[index] = el;
     el.$parent = this.parent ?? this.host.get<El>('extensionElements');
   }
 
@@ -68,42 +68,42 @@ export class ExtensionLevel {
       const raw = this.parent as unknown as Raw;
       const kids = raw['$children'] as El[] | undefined;
       if (!kids) return;
-      const i = kids.indexOf(el);
-      if (i !== -1) kids.splice(i, 1);
+      const index = kids.indexOf(el);
+      if (index !== -1) kids.splice(index, 1);
       if (!kids.length) delete raw['$children'];
       return;
     }
-    const c = this.host.get<El | undefined>('extensionElements');
-    if (c) removeFrom(c, 'values', el);
+    const container = this.host.get<El | undefined>('extensionElements');
+    if (container) removeFrom(container, 'values', el);
   }
 
   /** A child type absent at this level is looked up in its container. */
   select(step: Step): Array<{ el: El; level: ExtensionLevel }> {
     const wanted = this.names.canonicalName(step.name);
     const pick = (lv: ExtensionLevel): Array<{ el: El; level: ExtensionLevel }> => {
-      const hits = lv.items().filter((e) => this.matches(e, step, wanted));
+      const hits = lv.items().filter((item) => this.matches(item, step, wanted));
       if (step.index !== undefined) {
         const hit = hits[step.index];
         return hit ? [{ el: hit, level: lv }] : [];
       }
-      return hits.map((e) => ({ el: e, level: lv }));
+      return hits.map((item) => ({ el: item, level: lv }));
     };
     const direct = pick(this);
     if (direct.length) return direct;
     const home = EXTENSION_STRUCTURE.homeAt(wanted, this.type);
     if (!home) return [];
     return this.items()
-      .filter((e) => this.names.typeOf(e) === home)
-      .flatMap((c) => pick(this.inside(c)));
+      .filter((item) => this.names.typeOf(item) === home)
+      .flatMap((container) => pick(this.inside(container)));
   }
 
   selectDeep(step: Step): Array<{ el: El; level: ExtensionLevel }> {
     const out: Array<{ el: El; level: ExtensionLevel }> = [];
     const wanted = this.names.canonicalName(step.name);
     const visit = (lv: ExtensionLevel): void => {
-      for (const e of lv.items()) {
-        if (this.matches(e, step, wanted)) out.push({ el: e, level: lv });
-        if (this.names.isGeneric(e)) visit(lv.inside(e));
+      for (const item of lv.items()) {
+        if (this.matches(item, step, wanted)) out.push({ el: item, level: lv });
+        if (this.names.isGeneric(item)) visit(lv.inside(item));
       }
     };
     visit(this);

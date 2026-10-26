@@ -36,9 +36,9 @@ export class PlaneAnalysis {
     const { shapes, edges } = readDrawnPlane(plane, seen);
     this.shapes = shapes;
     this.edges = edges;
-    this.leaf = shapes.filter((s) => !s.container && !is(s.el, 'bpmn:Group'));
-    this.byId = new Map(shapes.map((s) => [s.id, s]));
-    this.pools = shapes.filter((s) => is(s.el, 'bpmn:Participant'));
+    this.leaf = shapes.filter((shape) => !shape.container && !is(shape.el, 'bpmn:Group'));
+    this.byId = new Map(shapes.map((shape) => [shape.id, shape]));
+    this.pools = shapes.filter((shape) => is(shape.el, 'bpmn:Participant'));
   }
 
   run(): void {
@@ -67,12 +67,12 @@ export class PlaneAnalysis {
 
   private checkOverlaps(): void {
     const { leaf, add } = this;
-    for (let i = 0; i < leaf.length; i++) {
-      for (let j = i + 1; j < leaf.length; j++) {
-        const a = leaf[i]!;
-        const b = leaf[j]!;
-        const attached = (is(a.el, 'bpmn:BoundaryEvent') && this.hostOf(a.el) === b.id) || (is(b.el, 'bpmn:BoundaryEvent') && this.hostOf(b.el) === a.id);
-        if (!attached && overlap(a.b, b.b)) add('overlaps', `${a.id}~${b.id}`, [a.id, b.id]);
+    for (let firstIndex = 0; firstIndex < leaf.length; firstIndex++) {
+      for (let secondIndex = firstIndex + 1; secondIndex < leaf.length; secondIndex++) {
+        const first = leaf[firstIndex]!;
+        const second = leaf[secondIndex]!;
+        const attached = (is(first.el, 'bpmn:BoundaryEvent') && this.hostOf(first.el) === second.id) || (is(second.el, 'bpmn:BoundaryEvent') && this.hostOf(second.el) === first.id);
+        if (!attached && overlap(first.bounds, second.bounds)) add('overlaps', `${first.id}~${second.id}`, [first.id, second.id]);
       }
     }
   }
@@ -80,14 +80,14 @@ export class PlaneAnalysis {
   /** diagonal segments of flows, edge segments through shapes they do not connect */
   private checkEdgeSegments(): void {
     const { edges, leaf, add } = this;
-    for (const e of edges) {
-      const flow = is(e.el, 'bpmn:SequenceFlow') || is(e.el, 'bpmn:MessageFlow');
-      for (const s of e.segs) {
-        if (flow && s[0].x !== s[1].x && s[0].y !== s[1].y) add('diagonal', e.id, [e.id]);
+    for (const edge of edges) {
+      const flow = is(edge.el, 'bpmn:SequenceFlow') || is(edge.el, 'bpmn:MessageFlow');
+      for (const segment of edge.segs) {
+        if (flow && segment[0].x !== segment[1].x && segment[0].y !== segment[1].y) add('diagonal', edge.id, [edge.id]);
         for (const sh of leaf) {
-          if (e.ends.has(sh.id)) continue;
-          if (is(sh.el, 'bpmn:BoundaryEvent') && e.ends.has(this.hostOf(sh.el))) continue;
-          if (cuts(s, sh.b)) add('through', `${e.id}->${sh.id}`, [e.id, sh.id]);
+          if (edge.ends.has(sh.id)) continue;
+          if (is(sh.el, 'bpmn:BoundaryEvent') && edge.ends.has(this.hostOf(sh.el))) continue;
+          if (cuts(segment, sh.bounds)) add('through', `${edge.id}->${sh.id}`, [edge.id, sh.id]);
         }
       }
     }
@@ -96,16 +96,16 @@ export class PlaneAnalysis {
   /** crossings of any two edges, collinear runs of unrelated edges */
   private checkEdgePairs(): void {
     const { edges, add } = this;
-    for (let i = 0; i < edges.length; i++) {
-      for (let j = i + 1; j < edges.length; j++) {
-        const a = edges[i]!;
-        const b = edges[j]!;
-        if (a.segs.some((sa) => b.segs.some((sb) => segmentsCross(...sa, ...sb)))) add('crossings', `${a.id}x${b.id}`, [a.id, b.id]);
-        const related = [...a.ends].some((x) => b.ends.has(x));
+    for (let firstIndex = 0; firstIndex < edges.length; firstIndex++) {
+      for (let secondIndex = firstIndex + 1; secondIndex < edges.length; secondIndex++) {
+        const first = edges[firstIndex]!;
+        const second = edges[secondIndex]!;
+        if (first.segs.some((sa) => second.segs.some((sb) => segmentsCross(...sa, ...sb)))) add('crossings', `${first.id}x${second.id}`, [first.id, second.id]);
+        const related = [...first.ends].some((end) => second.ends.has(end));
         if (related) continue;
         let len = 0;
-        for (const sa of a.segs) for (const sb of b.segs) len += Math.max(0, collinear(sa, sb));
-        if (len > 20) add('parallelRun', `${a.id}=${b.id}(${len})`, [a.id, b.id], `${len}px`);
+        for (const sa of first.segs) for (const sb of second.segs) len += Math.max(0, collinear(sa, sb));
+        if (len > 20) add('parallelRun', `${first.id}=${second.id}(${len})`, [first.id, second.id], `${len}px`);
       }
     }
   }
@@ -113,32 +113,32 @@ export class PlaneAnalysis {
   private checkLabels(): void {
     const { shapes, edges, leaf, add } = this;
     const labels: Array<{ owner: string; box: Box; text: Box }> = [];
-    for (const o of [...shapes, ...edges]) {
-      if (o.label) labels.push({ owner: o.id, box: o.label, text: glyph(o.label, raw<string>(o.el, 'name') || '') });
+    for (const drawn of [...shapes, ...edges]) {
+      if (drawn.label) labels.push({ owner: drawn.id, box: drawn.label, text: glyph(drawn.label, raw<string>(drawn.el, 'name') || '') });
     }
-    for (let i = 0; i < labels.length; i++) {
-      const l = labels[i]!;
-      for (const s of leaf) {
-        if (s.id !== l.owner && overlap(l.box, s.b)) add('labelClash', `${l.owner}#L~${s.id}`, [l.owner, s.id], 'label on shape');
+    for (let labelIndex = 0; labelIndex < labels.length; labelIndex++) {
+      const label = labels[labelIndex]!;
+      for (const shape of leaf) {
+        if (shape.id !== label.owner && overlap(label.box, shape.bounds)) add('labelClash', `${label.owner}#L~${shape.id}`, [label.owner, shape.id], 'label on shape');
       }
-      for (let j = i + 1; j < labels.length; j++) {
-        const other = labels[j]!;
-        if (overlap(l.box, other.box)) add('labelClash', `${l.owner}#L~${other.owner}#L`, [l.owner, other.owner], 'label on label');
+      for (let otherIndex = labelIndex + 1; otherIndex < labels.length; otherIndex++) {
+        const other = labels[otherIndex]!;
+        if (overlap(label.box, other.box)) add('labelClash', `${label.owner}#L~${other.owner}#L`, [label.owner, other.owner], 'label on label');
       }
-      for (const e of edges) if (e.segs.some((s) => hits(s, l.text, 0))) add('labelOnLine', `${l.owner}#L~${e.id}`, [l.owner, e.id]);
+      for (const edge of edges) if (edge.segs.some((segment) => hits(segment, label.text, 0))) add('labelOnLine', `${label.owner}#L~${edge.id}`, [label.owner, edge.id]);
     }
   }
 
   /** an incoming and an outgoing sequence flow of one node sharing a line */
   private checkInOut(): void {
     const { shapes, edges, add } = this;
-    const flows = edges.filter((e) => is(e.el, 'bpmn:SequenceFlow'));
-    for (const s of shapes) {
-      const into = flows.filter((e) => idOf(raw(e.el, 'targetRef')) === s.id);
-      const outOf = flows.filter((e) => idOf(raw(e.el, 'sourceRef')) === s.id);
-      for (const i of into) {
-        for (const o of outOf) {
-          if (i !== o && i.segs.some((a) => o.segs.some((b) => collinear(a, b) > 0))) add('inOut', `${i.id}|${o.id}@${s.id}`, [i.id, o.id, s.id]);
+    const flows = edges.filter((edge) => is(edge.el, 'bpmn:SequenceFlow'));
+    for (const shape of shapes) {
+      const into = flows.filter((edge) => idOf(raw(edge.el, 'targetRef')) === shape.id);
+      const outOf = flows.filter((edge) => idOf(raw(edge.el, 'sourceRef')) === shape.id);
+      for (const incoming of into) {
+        for (const outgoing of outOf) {
+          if (incoming !== outgoing && incoming.segs.some((incomingSegment) => outgoing.segs.some((outgoingSegment) => collinear(incomingSegment, outgoingSegment) > 0))) add('inOut', `${incoming.id}|${outgoing.id}@${shape.id}`, [incoming.id, outgoing.id, shape.id]);
         }
       }
     }
@@ -146,26 +146,26 @@ export class PlaneAnalysis {
 
   private checkContainment(): void {
     const { sem, shapes, byId, add } = this;
-    for (const s of shapes) {
-      if (is(s.el, 'bpmn:Participant') || is(s.el, 'bpmn:Lane')) continue;
-      const parent = sem.parentOf.get(s.id);
+    for (const shape of shapes) {
+      if (is(shape.el, 'bpmn:Participant') || is(shape.el, 'bpmn:Lane')) continue;
+      const parent = sem.parentOf.get(shape.id);
       if (parent && is(parent, 'bpmn:SubProcess')) {
         const sub = lookup(byId, idOf(parent));
-        if (sub?.expanded && !inside(s.b, sub.b)) add('outsideSub', s.id, [s.id, sub.id]);
+        if (sub?.expanded && !inside(shape.bounds, sub.bounds)) add('outsideSub', shape.id, [shape.id, sub.id]);
       }
-      const lane = lookup(byId, idOf(sem.laneOf.get(s.id)));
-      if (lane && !is(s.el, 'bpmn:BoundaryEvent') && !inside(s.b, lane.b)) add('outsideLane', s.id, [s.id, lane.id]);
+      const lane = lookup(byId, idOf(sem.laneOf.get(shape.id)));
+      if (lane && !is(shape.el, 'bpmn:BoundaryEvent') && !inside(shape.bounds, lane.bounds)) add('outsideLane', shape.id, [shape.id, lane.id]);
       const participant = parent && is(parent, 'bpmn:Process') ? lookup(sem.poolOf, idOf(parent)) : undefined;
       const pool = lookup(byId, idOf(participant));
-      if (pool && !inside(s.b, pool.b)) add('outsidePool', s.id, [s.id, pool.id]);
+      if (pool && !inside(shape.bounds, pool.bounds)) add('outsidePool', shape.id, [shape.id, pool.id]);
     }
   }
 
   /** top-level lanes not reaching the top / bottom border of their pool */
   private checkLaneGaps(): void {
     const { pools, byId, add } = this;
-    for (const p of pools) {
-      const proc = raw<El>(p.el, 'processRef');
+    for (const pool of pools) {
+      const proc = raw<El>(pool.el, 'processRef');
       if (!proc) continue;
       for (const ls of rawList(proc, 'laneSets')) {
         const top = rawList(ls, 'lanes');
@@ -173,8 +173,8 @@ export class PlaneAnalysis {
         const lastId = idOf(top[top.length - 1]);
         const first = lookup(byId, firstId);
         const last = lookup(byId, lastId);
-        if (first && Math.abs(first.b.y - p.b.y) > 1) add('laneGap', `${first.id}:top`, [first.id, p.id], 'top');
-        if (last && Math.abs(last.b.y + last.b.height - (p.b.y + p.b.height)) > 1) add('laneGap', `${last.id}:bottom`, [last.id, p.id], 'bottom');
+        if (first && Math.abs(first.bounds.y - pool.bounds.y) > 1) add('laneGap', `${first.id}:top`, [first.id, pool.id], 'top');
+        if (last && Math.abs(last.bounds.y + last.bounds.height - (pool.bounds.y + pool.bounds.height)) > 1) add('laneGap', `${last.id}:bottom`, [last.id, pool.id], 'bottom');
       }
     }
   }
@@ -190,33 +190,33 @@ export class PlaneAnalysis {
     return lookup(byId, idOf(lookup(sem.poolOf, idOf(parent))));
   }
 
-  private checkSequenceFlow(e: Edge): void {
+  private checkSequenceFlow(edge: Edge): void {
     const { sem, byId, add } = this;
-    const frame = this.flowFrame(e.id);
-    if (frame && e.pts.some((p) => !ptIn(p, frame.b))) add('edgeOutside', e.id, [e.id, frame.id]);
-    const sl = lookup(sem.laneOf, idOf(raw(e.el, 'sourceRef')));
-    const tl = lookup(sem.laneOf, idOf(raw(e.el, 'targetRef')));
+    const frame = this.flowFrame(edge.id);
+    if (frame && edge.pts.some((point) => !ptIn(point, frame.bounds))) add('edgeOutside', edge.id, [edge.id, frame.id]);
+    const sl = lookup(sem.laneOf, idOf(raw(edge.el, 'sourceRef')));
+    const tl = lookup(sem.laneOf, idOf(raw(edge.el, 'targetRef')));
     const lane = sl && sl === tl ? lookup(byId, idOf(sl)) : undefined;
-    if (lane && e.pts.some((p) => !ptIn(p, lane.b))) add('edgeLeavesLane', e.id, [e.id, lane.id]);
+    if (lane && edge.pts.some((point) => !ptIn(point, lane.bounds))) add('edgeLeavesLane', edge.id, [edge.id, lane.id]);
   }
 
-  private checkMessageFlow(e: Edge): void {
+  private checkMessageFlow(edge: Edge): void {
     const { sem, pools, add } = this;
-    const ends = new Set<string | undefined>([idOf(raw(e.el, 'sourceRef')), idOf(raw(e.el, 'targetRef'))]);
+    const ends = new Set<string | undefined>([idOf(raw(edge.el, 'sourceRef')), idOf(raw(edge.el, 'targetRef'))]);
     for (const id of [...ends]) {
       const proc = enclosingProcess(lookup(sem.parentOf, id));
       const participant = lookup(sem.poolOf, idOf(proc));
       if (participant) ends.add(idOf(participant));
     }
-    for (const s of e.segs) {
-      for (const p of pools) if (!ends.has(p.id) && hits(s, p.b)) add('msgThroughPool', `${e.id}->${p.id}`, [e.id, p.id]);
+    for (const segment of edge.segs) {
+      for (const pool of pools) if (!ends.has(pool.id) && hits(segment, pool.bounds)) add('msgThroughPool', `${edge.id}->${pool.id}`, [edge.id, pool.id]);
     }
   }
 
   private checkFlows(): void {
-    for (const e of this.edges) {
-      if (is(e.el, 'bpmn:SequenceFlow')) this.checkSequenceFlow(e);
-      if (is(e.el, 'bpmn:MessageFlow')) this.checkMessageFlow(e);
+    for (const edge of this.edges) {
+      if (is(edge.el, 'bpmn:SequenceFlow')) this.checkSequenceFlow(edge);
+      if (is(edge.el, 'bpmn:MessageFlow')) this.checkMessageFlow(edge);
     }
   }
 
@@ -231,7 +231,7 @@ export class PlaneAnalysis {
   private scopesOf(el: El): El[] {
     const out: El[] = [];
     let cur = el.$parent as El | undefined;
-    for (let i = 0; cur && i < 50; i++) {
+    for (let depth = 0; cur && depth < 50; depth++) {
       if (this.isScope(cur)) out.push(cur);
       if (is(cur, 'bpmn:Process')) break;
       cur = cur.$parent as El | undefined;
@@ -242,7 +242,7 @@ export class PlaneAnalysis {
   private laneChain(lane: El): El[] {
     const out: El[] = [];
     let cur: El | undefined = lane;
-    for (let i = 0; cur && i < 50; i++) {
+    for (let depth = 0; cur && depth < 50; depth++) {
       if (is(cur, 'bpmn:Lane')) out.push(cur);
       if (is(cur, 'bpmn:Process')) break;
       cur = cur.$parent as El | undefined;
@@ -252,106 +252,106 @@ export class PlaneAnalysis {
 
   private laneProcess(lane: El): El | undefined {
     let cur = lane.$parent as El | undefined;
-    for (let i = 0; cur && !is(cur, 'bpmn:Process') && i < 50; i++) cur = cur.$parent as El | undefined;
+    for (let depth = 0; cur && !is(cur, 'bpmn:Process') && depth < 50; depth++) cur = cur.$parent as El | undefined;
     return cur;
   }
 
-  private homeOf(s: Shape): Home | undefined {
-    if (is(s.el, 'bpmn:Participant') || is(s.el, 'bpmn:Lane') || is(s.el, 'bpmn:Group')) return undefined;
-    const scopes = this.scopesOf(s.el);
+  private homeOf(shape: Shape): Home | undefined {
+    if (is(shape.el, 'bpmn:Participant') || is(shape.el, 'bpmn:Lane') || is(shape.el, 'bpmn:Group')) return undefined;
+    const scopes = this.scopesOf(shape.el);
     const process = scopes[scopes.length - 1];
     if (!process || !is(process, 'bpmn:Process')) return undefined;
-    const host = raw<El>(s.el, 'attachedToRef');
-    return { el: s.el, scopes, process, ...(host ? { host } : {}) };
+    const host = raw<El>(shape.el, 'attachedToRef');
+    return { el: shape.el, scopes, process, ...(host ? { host } : {}) };
   }
 
-  private laneIsHome(sem: MetricIndex, h: Home, lane: El): boolean {
+  private laneIsHome(sem: MetricIndex, home: Home, lane: El): boolean {
     let listed = false;
-    for (const x of [h.el, h.host, ...h.scopes.filter(this.isSub)]) {
-      const own = lookup(sem.laneOf, idOf(x));
+    for (const candidate of [home.el, home.host, ...home.scopes.filter(this.isSub)]) {
+      const own = lookup(sem.laneOf, idOf(candidate));
       if (!own) continue;
       listed = true;
       if (this.laneChain(own).includes(lane)) return true;
     }
-    return !listed && this.laneProcess(lane) === h.process;
+    return !listed && this.laneProcess(lane) === home.process;
   }
 
-  private frameIsHome(sem: MetricIndex, h: Home, frame: Shape): boolean {
-    if (is(frame.el, 'bpmn:Participant')) return raw<El>(frame.el, 'processRef') === h.process;
-    if (is(frame.el, 'bpmn:Lane')) return this.laneIsHome(sem, h, frame.el);
-    return frame.el === h.host || h.scopes.includes(frame.el) || (!!h.host && this.scopesOf(h.host).includes(frame.el));
+  private frameIsHome(sem: MetricIndex, home: Home, frame: Shape): boolean {
+    if (is(frame.el, 'bpmn:Participant')) return raw<El>(frame.el, 'processRef') === home.process;
+    if (is(frame.el, 'bpmn:Lane')) return this.laneIsHome(sem, home, frame.el);
+    return frame.el === home.host || home.scopes.includes(frame.el) || (!!home.host && this.scopesOf(home.host).includes(frame.el));
   }
 
-  private centreInside(b: Box, f: Box): boolean {
-    const c = { x: cx(b), y: cy(b) };
-    return c.x > f.x && c.x < f.x + f.width && c.y > f.y && c.y < f.y + f.height;
+  private centreInside(box: Box, frame: Box): boolean {
+    const middle = { x: cx(box), y: cy(box) };
+    return middle.x > frame.x && middle.x < frame.x + frame.width && middle.y > frame.y && middle.y < frame.y + frame.height;
   }
 
   /** shapes whose centre lies in a frame that is not theirs */
   private checkIntrusions(): void {
     const { sem, shapes, add } = this;
-    const frames = shapes.filter((f) => f.container);
-    for (const s of shapes) {
-      const home = this.homeOf(s);
+    const frames = shapes.filter((frame) => frame.container);
+    for (const shape of shapes) {
+      const home = this.homeOf(shape);
       if (!home) continue;
-      for (const f of frames) {
-        if (f === s || !this.centreInside(s.b, f.b) || this.frameIsHome(sem, home, f)) continue;
-        if (this.scopesOf(f.el).includes(s.el)) continue; // a frame inside the shape itself
-        add('frameIntrusion', `${s.id}@${f.id}`, [s.id, f.id]);
+      for (const frame of frames) {
+        if (frame === shape || !this.centreInside(shape.bounds, frame.bounds) || this.frameIsHome(sem, home, frame)) continue;
+        if (this.scopesOf(frame.el).includes(shape.el)) continue; // a frame inside the shape itself
+        add('frameIntrusion', `${shape.id}@${frame.id}`, [shape.id, frame.id]);
       }
     }
   }
 
   /** pools are compared all together, lanes and sub-processes per process */
-  private frameFamily(f: Shape): string | undefined {
-    if (is(f.el, 'bpmn:Participant')) return 'pools';
-    const proc = is(f.el, 'bpmn:Lane') ? this.laneProcess(f.el) : this.scopesOf(f.el).find((x) => is(x, 'bpmn:Process'));
-    return proc ? `${is(f.el, 'bpmn:Lane') ? 'lanes' : 'subs'}:${idOf(proc) ?? ''}` : undefined;
+  private frameFamily(frame: Shape): string | undefined {
+    if (is(frame.el, 'bpmn:Participant')) return 'pools';
+    const proc = is(frame.el, 'bpmn:Lane') ? this.laneProcess(frame.el) : this.scopesOf(frame.el).find((scope) => is(scope, 'bpmn:Process'));
+    return proc ? `${is(frame.el, 'bpmn:Lane') ? 'lanes' : 'subs'}:${idOf(proc) ?? ''}` : undefined;
   }
 
-  private nestedFrames(a: Shape, b: Shape): boolean {
-    if (is(a.el, 'bpmn:Lane')) return this.laneChain(a.el).includes(b.el) || this.laneChain(b.el).includes(a.el);
-    return this.scopesOf(a.el).includes(b.el) || this.scopesOf(b.el).includes(a.el);
+  private nestedFrames(first: Shape, second: Shape): boolean {
+    if (is(first.el, 'bpmn:Lane')) return this.laneChain(first.el).includes(second.el) || this.laneChain(second.el).includes(first.el);
+    return this.scopesOf(first.el).includes(second.el) || this.scopesOf(second.el).includes(first.el);
   }
 
   /** two frames of one family overlapping, neither inside the other */
   private checkFrameOverlaps(): void {
     const { shapes, add } = this;
-    const frames = shapes.filter((f) => f.container).map((f) => ({ f, family: this.frameFamily(f) }));
-    for (let i = 0; i < frames.length; i++) {
-      for (let j = i + 1; j < frames.length; j++) {
-        const { f: a, family } = frames[i]!;
-        const b = frames[j]!.f;
-        if (!family || family !== frames[j]!.family || this.nestedFrames(a, b)) continue;
-        const w = Math.min(a.b.x + a.b.width, b.b.x + b.b.width) - Math.max(a.b.x, b.b.x);
-        const h = Math.min(a.b.y + a.b.height, b.b.y + b.b.height) - Math.max(a.b.y, b.b.y);
-        if (w > 1 && h > 1) add('frameOverlap', `${a.id}&${b.id}`, [a.id, b.id]);
+    const frames = shapes.filter((shape) => shape.container).map((frame) => ({ frame, family: this.frameFamily(frame) }));
+    for (let firstIndex = 0; firstIndex < frames.length; firstIndex++) {
+      for (let secondIndex = firstIndex + 1; secondIndex < frames.length; secondIndex++) {
+        const { frame: first, family } = frames[firstIndex]!;
+        const second = frames[secondIndex]!.frame;
+        if (!family || family !== frames[secondIndex]!.family || this.nestedFrames(first, second)) continue;
+        const overlapWidth = Math.min(first.bounds.x + first.bounds.width, second.bounds.x + second.bounds.width) - Math.max(first.bounds.x, second.bounds.x);
+        const overlapHeight = Math.min(first.bounds.y + first.bounds.height, second.bounds.y + second.bounds.height) - Math.max(first.bounds.y, second.bounds.y);
+        if (overlapWidth > 1 && overlapHeight > 1) add('frameOverlap', `${first.id}&${second.id}`, [first.id, second.id]);
       }
     }
   }
 
   private checkDegenerate(): void {
     const { edges, add } = this;
-    for (const e of edges) {
-      const length = e.segs.reduce((sum, [p, q]) => sum + Math.abs(q.x - p.x) + Math.abs(q.y - p.y), 0);
-      if (e.pts.length < 2 || !(length > 0)) add('degenerateEdge', e.id, [e.id]);
+    for (const edge of edges) {
+      const length = edge.segs.reduce((sum, [start, end]) => sum + Math.abs(end.x - start.x) + Math.abs(end.y - start.y), 0);
+      if (edge.pts.length < 2 || !(length > 0)) add('degenerateEdge', edge.id, [edge.id]);
     }
   }
 
   private checkDetached(): void {
     const { edges, byId, add } = this;
-    for (const e of edges) {
-      if (e.pts.length < 2) continue;
-      const [sid, tid] = drawnEnds(e.el);
+    for (const edge of edges) {
+      if (edge.pts.length < 2) continue;
+      const [sid, tid] = drawnEnds(edge.el);
       const missed: string[] = [];
-      for (const [id, p] of [
-        [sid, e.pts[0]!],
-        [tid, e.pts[e.pts.length - 1]!],
+      for (const [id, endPoint] of [
+        [sid, edge.pts[0]!],
+        [tid, edge.pts[edge.pts.length - 1]!],
       ] as const) {
-        const s = lookup(byId, id);
-        if (s && (p.x < s.b.x - DETACHED_GAP || p.x > s.b.x + s.b.width + DETACHED_GAP || p.y < s.b.y - DETACHED_GAP || p.y > s.b.y + s.b.height + DETACHED_GAP)) missed.push(s.id);
+        const endShape = lookup(byId, id);
+        if (endShape && (endPoint.x < endShape.bounds.x - DETACHED_GAP || endPoint.x > endShape.bounds.x + endShape.bounds.width + DETACHED_GAP || endPoint.y < endShape.bounds.y - DETACHED_GAP || endPoint.y > endShape.bounds.y + endShape.bounds.height + DETACHED_GAP)) missed.push(endShape.id);
       }
-      if (missed.length) add('detachedEdge', e.id, [e.id, ...missed]);
+      if (missed.length) add('detachedEdge', edge.id, [edge.id, ...missed]);
     }
   }
 
@@ -361,10 +361,10 @@ export class PlaneAnalysis {
     while (stack.length) {
       const cur = stack.pop()!;
       if (cur === to) return true;
-      for (const n of sem.next.get(cur) ?? []) {
-        if (seen.has(n)) continue;
-        seen.add(n);
-        stack.push(n);
+      for (const next of sem.next.get(cur) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        stack.push(next);
       }
     }
     return false;
@@ -373,16 +373,16 @@ export class PlaneAnalysis {
   /** sequence flows running backwards (target left of the source) that are not loop returns */
   private checkBackwardFlows(): void {
     const { sem, edges, byId, add } = this;
-    for (const e of edges) {
-      if (!is(e.el, 'bpmn:SequenceFlow')) continue;
-      const sid = idOf(raw(e.el, 'sourceRef'));
-      const tid = idOf(raw(e.el, 'targetRef'));
-      const s = lookup(byId, sid);
-      const t = lookup(byId, tid);
-      if (!s || !t || !sid || !tid) continue;
-      if (cx(t.b) >= s.b.x) continue;
+    for (const edge of edges) {
+      if (!is(edge.el, 'bpmn:SequenceFlow')) continue;
+      const sid = idOf(raw(edge.el, 'sourceRef'));
+      const tid = idOf(raw(edge.el, 'targetRef'));
+      const source = lookup(byId, sid);
+      const target = lookup(byId, tid);
+      if (!source || !target || !sid || !tid) continue;
+      if (cx(target.bounds) >= source.bounds.x) continue;
       if (this.reaches(sem, tid, sid)) continue;
-      add('backwardFlow', e.id, [e.id, sid, tid]);
+      add('backwardFlow', edge.id, [edge.id, sid, tid]);
     }
   }
 
@@ -393,22 +393,22 @@ export class PlaneAnalysis {
   private checkSegmentOverlaps(): void {
     const { edges, byId, add } = this;
     const byTarget = new Map<string, Edge[]>();
-    for (const e of edges) {
-      const target = is(e.el, 'bpmn:SequenceFlow') ? idOf(raw(e.el, 'targetRef')) : undefined;
+    for (const edge of edges) {
+      const target = is(edge.el, 'bpmn:SequenceFlow') ? idOf(raw(edge.el, 'targetRef')) : undefined;
       if (!target) continue;
       const list = byTarget.get(target);
-      if (list) list.push(e);
-      else byTarget.set(target, [e]);
+      if (list) list.push(edge);
+      else byTarget.set(target, [edge]);
     }
     for (const [target, list] of byTarget) {
-      for (let i = 0; i < list.length; i++) {
-        for (let j = i + 1; j < list.length; j++) {
-          const a = list[i]!;
-          const b = list[j]!;
-          const tail = joinTail(a, b, byId.get(target));
+      for (let firstIndex = 0; firstIndex < list.length; firstIndex++) {
+        for (let secondIndex = firstIndex + 1; secondIndex < list.length; secondIndex++) {
+          const first = list[firstIndex]!;
+          const second = list[secondIndex]!;
+          const tail = joinTail(first, second, byId.get(target));
           let len = 0;
-          for (const [k, sa] of a.segs.entries()) for (const [l, sb] of b.segs.entries()) if (!tail.has(`${k},${l}`)) len += Math.max(0, collinear(sa, sb));
-          if (len > 20) add('segmentOverlap', `${a.id}=${b.id}`, [a.id, b.id, target], `${len}px`);
+          for (const [firstSegmentIndex, sa] of first.segs.entries()) for (const [secondSegmentIndex, sb] of second.segs.entries()) if (!tail.has(`${firstSegmentIndex},${secondSegmentIndex}`)) len += Math.max(0, collinear(sa, sb));
+          if (len > 20) add('segmentOverlap', `${first.id}=${second.id}`, [first.id, second.id, target], `${len}px`);
         }
       }
     }
@@ -431,57 +431,57 @@ export class PlaneAnalysis {
 
   /** named labels reaching out of their sub-process / pool */
   private checkLabelFrames(): void {
-    const owners: Array<{ id: string; el: El; label?: Box }> = [...this.shapes.filter((s) => this.externallyLabelled(s.el)), ...this.edges.filter((e) => is(e.el, 'bpmn:SequenceFlow'))];
-    for (const o of owners) {
-      if (!o.label || !raw<string>(o.el, 'name')?.trim()) continue;
-      const frame = this.labelHome(o.id);
-      if (!frame || inside(o.label, { x: frame.b.x - 2, y: frame.b.y - 2, width: frame.b.width + 4, height: frame.b.height + 4 })) continue;
-      this.add('labelOutsideFrame', `${o.id}#L@${frame.id}`, [o.id, frame.id]);
+    const owners: Array<{ id: string; el: El; label?: Box }> = [...this.shapes.filter((shape) => this.externallyLabelled(shape.el)), ...this.edges.filter((edge) => is(edge.el, 'bpmn:SequenceFlow'))];
+    for (const owner of owners) {
+      if (!owner.label || !raw<string>(owner.el, 'name')?.trim()) continue;
+      const frame = this.labelHome(owner.id);
+      if (!frame || inside(owner.label, { x: frame.bounds.x - 2, y: frame.bounds.y - 2, width: frame.bounds.width + 4, height: frame.bounds.height + 4 })) continue;
+      this.add('labelOutsideFrame', `${owner.id}#L@${frame.id}`, [owner.id, frame.id]);
     }
   }
 
   /** named external labels on the title of an expanded sub-process */
   private checkLabelTitles(): void {
     const { shapes, edges, add } = this;
-    const titles = shapes.flatMap((s) => {
-      const box = subTitleOf(s);
-      return box ? [{ id: s.id, box }] : [];
+    const titles = shapes.flatMap((shape) => {
+      const box = subTitleOf(shape);
+      return box ? [{ id: shape.id, box }] : [];
     });
     if (!titles.length) return;
-    const owners: Array<{ id: string; el: El; label?: Box }> = [...shapes.filter((s) => this.externallyLabelled(s.el)), ...edges.filter((e) => is(e.el, 'bpmn:SequenceFlow') || is(e.el, 'bpmn:MessageFlow'))];
-    for (const o of owners) {
-      if (!o.label || !raw<string>(o.el, 'name')?.trim()) continue;
-      for (const t of titles) if (overlap(o.label, t.box)) add('labelOnTitle', `${o.id}#L^${t.id}`, [o.id, t.id]);
+    const owners: Array<{ id: string; el: El; label?: Box }> = [...shapes.filter((shape) => this.externallyLabelled(shape.el)), ...edges.filter((edge) => is(edge.el, 'bpmn:SequenceFlow') || is(edge.el, 'bpmn:MessageFlow'))];
+    for (const owner of owners) {
+      if (!owner.label || !raw<string>(owner.el, 'name')?.trim()) continue;
+      for (const title of titles) if (overlap(owner.label, title.box)) add('labelOnTitle', `${owner.id}#L^${title.id}`, [owner.id, title.id]);
     }
   }
 
-  private segmentBoxDistance([p, q]: Seg, b: Box): number {
-    if (ptIn(p, b) || ptIn(q, b) || cuts([p, q], b, 0)) return 0;
-    const pointBox = (r: Point): number => Math.hypot(Math.max(b.x - r.x, 0, r.x - b.x - b.width), Math.max(b.y - r.y, 0, r.y - b.y - b.height));
-    const pointSeg = (r: Point): number => {
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
+  private segmentBoxDistance([start, end]: Seg, box: Box): number {
+    if (ptIn(start, box) || ptIn(end, box) || cuts([start, end], box, 0)) return 0;
+    const pointBox = (point: Point): number => Math.hypot(Math.max(box.x - point.x, 0, point.x - box.x - box.width), Math.max(box.y - point.y, 0, point.y - box.y - box.height));
+    const pointSeg = (point: Point): number => {
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
       const len = dx * dx + dy * dy;
-      const t = len ? Math.max(0, Math.min(1, ((r.x - p.x) * dx + (r.y - p.y) * dy) / len)) : 0;
-      return Math.hypot(r.x - (p.x + t * dx), r.y - (p.y + t * dy));
+      const progress = len ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / len)) : 0;
+      return Math.hypot(point.x - (start.x + progress * dx), point.y - (start.y + progress * dy));
     };
     const corners: Point[] = [
-      { x: b.x, y: b.y },
-      { x: b.x + b.width, y: b.y },
-      { x: b.x, y: b.y + b.height },
-      { x: b.x + b.width, y: b.y + b.height },
+      { x: box.x, y: box.y },
+      { x: box.x + box.width, y: box.y },
+      { x: box.x, y: box.y + box.height },
+      { x: box.x + box.width, y: box.y + box.height },
     ];
-    return Math.min(pointBox(p), pointBox(q), ...corners.map(pointSeg));
+    return Math.min(pointBox(start), pointBox(end), ...corners.map(pointSeg));
   }
 
   /** named message flows whose label is far from their line */
   private checkMessageLabels(): void {
     const { edges, add } = this;
-    for (const e of edges) {
-      const label = e.label;
-      if (!is(e.el, 'bpmn:MessageFlow') || !label || !e.segs.length || !raw<string>(e.el, 'name')?.trim()) continue;
-      const d = Math.min(...e.segs.map((s) => this.segmentBoxDistance(s, label)));
-      if (d > 50) add('messageLabelFar', e.id, [e.id], `${Math.round(d)}px`);
+    for (const edge of edges) {
+      const label = edge.label;
+      if (!is(edge.el, 'bpmn:MessageFlow') || !label || !edge.segs.length || !raw<string>(edge.el, 'name')?.trim()) continue;
+      const distance = Math.min(...edge.segs.map((segment) => this.segmentBoxDistance(segment, label)));
+      if (distance > 50) add('messageLabelFar', edge.id, [edge.id], `${Math.round(distance)}px`);
     }
   }
 }

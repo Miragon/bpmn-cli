@@ -25,7 +25,7 @@ import { FlowSplitter } from '../src/ops/flows/FlowSplitter.js';
 async function roundTrip(doc: Doc): Promise<{ xml: string; doc: Doc }> {
   const xml = await doc.toXml();
   const re = await Doc.fromXml(xml);
-  expect(re.importWarnings.map((w) => w.message)).toEqual([]);
+  expect(re.importWarnings.map((warning) => warning.message)).toEqual([]);
   return { xml, doc: re };
 }
 
@@ -38,7 +38,7 @@ function connect(doc: Doc, op: Omit<ConnectOp, 'op'>): ChangeSet {
 }
 
 function ids(els: El[]): string[] {
-  return els.map((e) => e.get<string>('id'));
+  return els.map((element) => element.get<string>('id'));
 }
 
 function flowIds(doc: Doc, scopeId = 'Process_1'): string[] {
@@ -46,8 +46,8 @@ function flowIds(doc: Doc, scopeId = 'Process_1'): string[] {
 }
 
 function edge(doc: Doc, flowId: string): string {
-  const f = doc.require(flowId);
-  return `${f.get<El>('sourceRef').get('id')}->${f.get<El>('targetRef').get('id')}`;
+  const flow = doc.require(flowId);
+  return `${flow.get<El>('sourceRef').get('id')}->${flow.get<El>('targetRef').get('id')}`;
 }
 
 function codeOf(fn: () => unknown): string {
@@ -106,17 +106,17 @@ describe('add: placement modes', () => {
     const cs = add(doc, { kind: 'userTask', name: 'Do B', after: 'Task_A' });
     expect(cs.created[0]).toMatchObject({ id: 'Activity_DoB', kind: 'userTask', name: 'Do B', detail: 'after Task_A' });
     expect(edge(doc, 'F2')).toBe('Task_A->Activity_DoB');
-    const second = cs.created.find((c) => c.kind === 'sequenceFlow')!;
+    const second = cs.created.find((change) => change.kind === 'sequenceFlow')!;
     expect(edge(doc, second.id)).toBe('Activity_DoB->End');
     expect(flowIds(doc)).toEqual(['Start', 'Task_A', 'End', 'F1', 'F2', 'Activity_DoB', second.id]);
-    expect(cs.notes.some((n) => n.includes('inserted between Task_A and End'))).toBe(true);
+    expect(cs.notes.some((note) => note.includes('inserted between Task_A and End'))).toBe(true);
     await roundTrip(doc);
   });
 
   it('after a gateway or an unconnected node appends a new branch', async () => {
     const doc = await docFromXml(WITH_GATEWAY);
     const cs = add(doc, { kind: 'serviceTask', name: 'Reject', after: 'GW', flowName: 'no', default: true });
-    const flow = cs.created.find((c) => c.kind === 'sequenceFlow')!;
+    const flow = cs.created.find((change) => change.kind === 'sequenceFlow')!;
     expect(edge(doc, flow.id)).toBe('GW->Activity_Reject');
     expect(doc.require('GW').get<El>('default').get('id')).toBe(flow.id);
     expect(ids(doc.outgoing(doc.require('GW')))).toEqual(['F2', flow.id]);
@@ -124,7 +124,7 @@ describe('add: placement modes', () => {
     expect(flowIds(doc).indexOf('Activity_Reject')).toBe(flowIds(doc).indexOf('F2') + 1);
 
     const cs2 = add(doc, { kind: 'task', name: 'After loose', after: 'Loose' });
-    const f2 = cs2.created.find((c) => c.kind === 'sequenceFlow')!;
+    const f2 = cs2.created.find((change) => change.kind === 'sequenceFlow')!;
     expect(edge(doc, f2.id)).toBe('Loose->Activity_AfterLoose');
     await roundTrip(doc);
   });
@@ -137,8 +137,8 @@ describe('add: placement modes', () => {
     let err: { code?: string; details?: { candidates?: string[] } } | undefined;
     try {
       add(doc, { kind: 'task', name: 'Y', after: 'Task_A' });
-    } catch (e) {
-      err = e as typeof err;
+    } catch (error) {
+      err = error as typeof err;
     }
     expect(err?.code).toBe('E_HAS_SUCCESSOR');
     expect(err?.details?.candidates?.length).toBe(2);
@@ -159,12 +159,12 @@ describe('add: placement modes', () => {
   it('before a join gateway or an unconnected node prepends a new incoming flow', async () => {
     const doc = await docFromXml(WITH_JOIN);
     const cs = add(doc, { kind: 'task', name: 'Third', before: 'Join' });
-    const flow = cs.created.find((c) => c.kind === 'sequenceFlow')!;
+    const flow = cs.created.find((change) => change.kind === 'sequenceFlow')!;
     expect(edge(doc, flow.id)).toBe('Activity_Third->Join');
     expect(ids(doc.incoming(doc.require('Join')))).toEqual(['F3', 'F4', flow.id]);
     expect(edge(doc, 'F3')).toBe('A->Join');
     const cs2 = add(doc, { kind: 'task', name: 'Pre loose', before: 'Loose' });
-    expect(edge(doc, cs2.created.find((c) => c.kind === 'sequenceFlow')!.id)).toBe('Activity_PreLoose->Loose');
+    expect(edge(doc, cs2.created.find((change) => change.kind === 'sequenceFlow')!.id)).toBe('Activity_PreLoose->Loose');
     await roundTrip(doc);
   });
 
@@ -206,8 +206,8 @@ describe('add: placement modes', () => {
   it('to connects the new node onward and warns about implicit joins', async () => {
     const doc = await docFromXml(WITH_GATEWAY);
     const cs = add(doc, { kind: 'task', name: 'Alt', after: 'GW', to: 'End' });
-    expect(cs.created.filter((c) => c.kind === 'sequenceFlow')).toHaveLength(2);
-    expect(cs.warnings.map((w) => w.code)).toContain('W_IMPLICIT_JOIN');
+    expect(cs.created.filter((change) => change.kind === 'sequenceFlow')).toHaveLength(2);
+    expect(cs.warnings.map((warning) => warning.code)).toContain('W_IMPLICIT_JOIN');
     await roundTrip(doc);
   });
 
@@ -220,7 +220,7 @@ describe('add: placement modes', () => {
     expect(ids(doc.boundaryEventsOf(doc.require('Task_A')))).toEqual(['Event_TooLate']);
     expect(laneOf(doc, be)?.get('id')).toBe('Lane_Sales');
     expect(flowIds(doc).indexOf('Event_TooLate')).toBe(flowIds(doc).indexOf('Task_A') + 1);
-    expect(cs.changed.some((c) => c.id === 'Event_TooLate' && c.detail === 'lane Lane_Sales')).toBe(true);
+    expect(cs.changed.some((change) => change.id === 'Event_TooLate' && change.detail === 'lane Lane_Sales')).toBe(true);
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:boundaryEvent id="Event_TooLate" name="Too late" attachedToRef="Task_A">/);
     expect(xml).toMatch(/<bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2D<\/bpmn:timeDuration>/);
@@ -254,7 +254,7 @@ describe('add: ids and options', () => {
     expect(add(doc, { kind: 'task', name: 'Check invoice', in: 'Process_1' }).created[0]!.id).toBe('Activity_CheckInvoice');
     const cs = add(doc, { kind: 'task', name: 'Check invoice', in: 'Process_1' });
     expect(cs.created[0]!.id).toBe('Activity_CheckInvoice_2');
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_ID_SUFFIXED']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_ID_SUFFIXED']);
     expect(add(doc, { kind: 'task', in: 'Process_1' }).created[0]!.id).toBe('Activity_Task');
     expect(add(doc, { kind: 'parallelGateway', after: 'Activity_CheckInvoice' }).created[0]!.id).toBe('Gateway_AfterCheckInvoice');
     // after an unnamed anchor placed after a named one: the nearest named anchor, once (never EndAfterAfterCheckInvoice)
@@ -278,7 +278,7 @@ describe('add: ids and options', () => {
     expect(cs.notes[0]).toMatch(/already exists/);
     expect(cs.warnings).toHaveLength(0);
     const cs2 = add(doc, { kind: 'serviceTask', id: 'Task_A', ifAbsent: true });
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_KIND_MISMATCH']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_KIND_MISMATCH']);
     const cs3 = add(doc, { kind: 'task', id: 'Task_B', name: 'B', ifAbsent: true, after: 'Task_A' });
     expect(cs3.created[0]!.id).toBe('Task_B');
   });
@@ -296,7 +296,7 @@ describe('add: ids and options', () => {
     expect(doc.layoutRequests.expansion().collapse).toEqual(['Activity_Details']);
     expect(many(doc.require('Activity_Details'), 'documentation')[0]!.get('text')).toBe('Explains it');
     const cs = add(doc, { kind: 'task', name: 'T', in: 'Process_1', collapsed: true });
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:documentation>Explains it<\/bpmn:documentation>/);
   });
@@ -319,7 +319,7 @@ describe('triggers', () => {
   it('creates root messages by name and reuses them', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'startEvent:message', name: 'Order received', message: 'Order received', in: 'Process_1' });
-    expect(cs.created.map((c) => c.id)).toEqual(['Event_OrderReceived', 'Message_OrderReceived']);
+    expect(cs.created.map((change) => change.id)).toEqual(['Event_OrderReceived', 'Message_OrderReceived']);
     expect(cs.created[1]).toMatchObject({ kind: 'message', name: 'Order received' });
     add(doc, { kind: 'intermediateCatchEvent:message', name: 'Wait', message: 'Order received', after: 'Task_A' });
     add(doc, { kind: 'endEvent:message', name: 'Notify', message: 'Message_OrderReceived', in: 'Process_1' });
@@ -341,7 +341,7 @@ describe('triggers', () => {
 
     add(doc, { kind: 'endEvent:signal', name: 'Sig', signal: 'Done', in: 'Process_1' });
     add(doc, { kind: 'startEvent:signal', name: 'Sig start', signal: 'Done', in: 'Process_1' });
-    expect(doc.rootElementsOfType('bpmn:Signal').map((s) => s.get('id'))).toEqual(['Signal_Done']);
+    expect(doc.rootElementsOfType('bpmn:Signal').map((signal) => signal.get('id'))).toEqual(['Signal_Done']);
     expect(new EventTrigger(doc.require('Event_SigStart')).describe()).toBe('signal Done');
 
     add(doc, { kind: 'endEvent:escalation', name: 'Esc', escalation: 'Too slow', escalationCode: 'SLOW', in: 'Process_1' });
@@ -424,7 +424,7 @@ describe('triggers', () => {
     expect(codeOf(() => add(doc, { kind: 'startEvent', in: 'Activity_OnError' }))).toBe('E_TRIGGER_REQUIRED');
     expect(codeOf(() => add(doc, { kind: 'boundaryEvent', on: 'Task_A' }))).toBe('E_TRIGGER_REQUIRED');
     const cs = add(doc, { kind: 'startEvent:error', name: 'Err', error: 'Boom', errorCode: 'B1', in: 'Activity_OnError' });
-    expect(cs.created.map((c) => c.id)).toEqual(['Event_Err', 'Error_Boom']);
+    expect(cs.created.map((change) => change.id)).toEqual(['Event_Err', 'Error_Boom']);
     add(doc, { kind: 'startEvent:message', name: 'Msg', message: 'Ping', nonInterrupting: true, in: 'Activity_OnError' });
     expect(doc.require('Event_Msg').get('isInterrupting')).toBe(false);
     expect(new EventTrigger(doc.require('Event_Msg')).details()?.nonInterrupting).toBe(true);
@@ -442,7 +442,7 @@ describe('triggers', () => {
   it('warns about trigger options on non-events and switches triggers to none', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'userTask', name: 'T', in: 'Process_1', timer: 'PT1H' });
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     add(doc, { kind: 'startEvent:message', name: 'M', message: 'X', in: 'Process_1' });
     new EventDefinitions(doc, doc.require('Event_M')).apply('none');
     expect(many(doc.require('Event_M'), 'eventDefinitions')).toHaveLength(0);
@@ -464,7 +464,7 @@ describe('participants', () => {
     const collab = cs.created[0]!.id;
     // named after the process it wraps (Process_1 says nothing, and the process has no name: its kind)
     expect(collab).toBe('Collaboration_Process');
-    expect(cs.created.map((c) => [c.id, c.kind])).toEqual([
+    expect(cs.created.map((change) => [change.id, change.kind])).toEqual([
       [collab, 'collaboration'],
       ['Participant_Shop', 'participant'],
     ]);
@@ -473,14 +473,14 @@ describe('participants', () => {
     expect(doc.require('Participant_Shop').get<El>('processRef').get('id')).toBe('Process_1');
 
     const cs2 = add(doc, { kind: 'pool', name: 'Customer' });
-    expect(cs2.created.map((c) => c.id)).toEqual(['Process_Customer', 'Participant_Customer']);
+    expect(cs2.created.map((change) => change.id)).toEqual(['Process_Customer', 'Participant_Customer']);
     const proc = doc.require('Process_Customer');
     expect(proc.get('isExecutable')).toBe(false);
     expect(doc.participantOf(proc)?.get('id')).toBe('Participant_Customer');
     expect(ids(many(doc.definitions, 'rootElements'))).toEqual([collab, 'Process_1', 'Process_Customer']);
 
     const cs3 = add(doc, { kind: 'participant', name: 'Bank', blackBox: true });
-    expect(cs3.created.map((c) => c.id)).toEqual(['Participant_Bank']);
+    expect(cs3.created.map((change) => change.id)).toEqual(['Participant_Bank']);
     expect(doc.require('Participant_Bank').get('processRef')).toBeUndefined();
     expect(ids(doc.participants())).toEqual(['Participant_Shop', 'Participant_Customer', 'Participant_Bank']);
 
@@ -514,8 +514,8 @@ describe('lanes', () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'lane', name: 'Sales', members: ['Start', 'Task_A'] });
     expect(cs.created[0]).toMatchObject({ id: 'Lane_Sales', kind: 'lane', name: 'Sales', detail: 'in Process_1' });
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_LANES_WITHOUT_POOL']);
-    expect(cs.changed.map((c) => `${c.id}:${c.detail}`)).toEqual(['Start:lane Lane_Sales', 'Task_A:lane Lane_Sales']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_LANES_WITHOUT_POOL']);
+    expect(cs.changed.map((change) => `${change.id}:${change.detail}`)).toEqual(['Start:lane Lane_Sales', 'Task_A:lane Lane_Sales']);
     const laneSet = ids(many(doc.require('Process_1'), 'laneSets'));
     expect(laneSet).toHaveLength(1);
     expect(laneSet[0]).toBe('LaneSet_Process');
@@ -536,7 +536,7 @@ describe('lanes', () => {
     add(doc, { kind: 'participant', name: 'Shop' });
     const cs = add(doc, { kind: 'lane', name: 'Inbound', in: 'Lane_Sales' });
     expect(cs.created[0]!.detail).toBe('in lane Lane_Sales');
-    expect(cs.notes.some((n) => n.includes('moved 2 member(s)'))).toBe(true);
+    expect(cs.notes.some((note) => note.includes('moved 2 member(s)'))).toBe(true);
     expect(ids(many(doc.require('Lane_Sales'), 'flowNodeRef'))).toEqual([]);
     expect(ids(many(doc.require('Lane_Inbound'), 'flowNodeRef'))).toEqual(['Start', 'Task_A']);
     add(doc, { kind: 'lane', name: 'Outbound', in: 'Lane_Sales', members: ['Task_A'] });
@@ -562,7 +562,7 @@ describe('lanes', () => {
     new LaneEditor(doc).assign(doc.require('Task_A'), undefined, cs);
     expect(doc.lanesOf(doc.require('Task_A'))).toHaveLength(0);
     expect(doc.lanesOf(doc.require('Event_BE'))).toHaveLength(0);
-    expect(cs.changed.some((c) => c.id === 'Task_A' && c.detail === 'removed from lanes')).toBe(true);
+    expect(cs.changed.some((change) => change.id === 'Task_A' && change.detail === 'removed from lanes')).toBe(true);
 
     add(doc, { kind: 'subProcess', name: 'Sub', after: 'Task_A' });
     add(doc, { kind: 'task', name: 'Inner', in: 'Task_Sub' });
@@ -625,8 +625,8 @@ describe('data objects, stores and annotations', () => {
   it('creates data stores with a root bpmn:DataStore and --to wiring', async () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'dataStore', name: 'Order DB', to: 'Task_A' });
-    expect(cs.created.map((c) => c.id)).toEqual(['DataStoreReference_OrderDB', 'DataInputAssociation_OrderDBToDoA']);
-    expect(doc.rootElementsOfType('bpmn:DataStore').map((s) => s.get('id'))).toEqual(['DataStore_OrderDB']);
+    expect(cs.created.map((change) => change.id)).toEqual(['DataStoreReference_OrderDB', 'DataInputAssociation_OrderDBToDoA']);
+    expect(doc.rootElementsOfType('bpmn:DataStore').map((store) => store.get('id'))).toEqual(['DataStore_OrderDB']);
     expect(doc.require('DataStoreReference_OrderDB').get<El>('dataStoreRef').get('id')).toBe('DataStore_OrderDB');
     expect(codeOf(() => connect(doc, { source: 'Start', target: 'DataStoreReference_OrderDB' }))).toBe('NO_ERROR');
     expect(codeOf(() => connect(doc, { source: 'DataStoreReference_OrderDB', target: 'Start' }))).toBe('E_INVALID_ENDPOINT');
@@ -654,7 +654,7 @@ describe('data objects, stores and annotations', () => {
     // the positional name gives the id (Prefix_Slug like every other kind) and, without --text, the text
     const cs2 = add(doc, { kind: 'note', name: 'Note via name', to: 'End' });
     const assoc2 = cs2.created[1]!.id;
-    expect(cs2.created.map((c) => c.id)).toEqual(['TextAnnotation_NoteViaName', assoc2]);
+    expect(cs2.created.map((change) => change.id)).toEqual(['TextAnnotation_NoteViaName', assoc2]);
     expect(assoc2).toBe('Association_EndToNoteViaName');
     expect(doc.require('TextAnnotation_NoteViaName').get('text')).toBe('Note via name');
     expect(edge(doc, assoc2)).toBe('End->TextAnnotation_NoteViaName');
@@ -699,10 +699,10 @@ describe('connect', () => {
     add(doc, { kind: 'task', name: 'B', in: 'Process_1' });
     const cs = connect(doc, { source: 'Task_A', target: 'Activity_B', name: 'again', condition: '${retry}', id: 'Flow_Retry' });
     expect(cs.created[0]).toMatchObject({ id: 'Flow_Retry', kind: 'sequenceFlow', name: 'again', detail: 'Task_A -> Activity_B' });
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_IMPLICIT_SPLIT']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_IMPLICIT_SPLIT']);
     expect(doc.require('Flow_Retry').get<El>('conditionExpression').get('body')).toBe('${retry}');
     const cs2 = connect(doc, { source: 'Activity_B', target: 'End' });
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_IMPLICIT_JOIN']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_IMPLICIT_JOIN']);
     expect(connect(doc, { source: 'Activity_B', target: 'End', ifAbsent: true }).isEmpty).toBe(true);
     expect(codeOf(() => connect(doc, { source: 'End', target: 'Task_A' }))).toBe('E_INVALID_SOURCE');
     expect(codeOf(() => connect(doc, { source: 'Start', target: 'Start' }))).toBe('E_INVALID_ENDPOINT');
@@ -748,7 +748,7 @@ describe('connect', () => {
 
     const cs2 = connect(doc, { source: 'Participant_Bank', target: 'Task_A', message: 'Statement' });
     const statement = cs2.created[1]!.id;
-    expect(cs2.created.map((c) => c.id)).toEqual(['Message_Statement', statement]);
+    expect(cs2.created.map((change) => change.id)).toEqual(['Message_Statement', statement]);
     const cs3 = connect(doc, { source: 'Activity_Send', target: 'Participant_Bank' });
     expect(cs3.created[0]!.kind).toBe('messageFlow');
     expect(connect(doc, { source: 'Activity_Send', target: 'Participant_Bank', ifAbsent: true }).isEmpty).toBe(true);
@@ -792,28 +792,28 @@ describe('split', () => {
       ],
     };
     const cs = new FlowSplitter(doc).split(op);
-    const created = cs.created.filter((c) => c.kind !== 'sequenceFlow').map((c) => c.id);
+    const created = cs.created.filter((change) => change.kind !== 'sequenceFlow').map((change) => change.id);
     expect(created).toEqual(['Gateway_InvoiceOk', 'Activity_Book', 'Activity_Archive', 'Activity_Clarify', 'Gateway_InvoiceOk_join']);
-    expect(cs.created.find((c) => c.id === 'Gateway_InvoiceOk')!.detail).toBe('between Task_A and End');
-    expect(cs.created.find((c) => c.id === 'Gateway_InvoiceOk_join')!.detail).toBe('join of Gateway_InvoiceOk');
+    expect(cs.created.find((change) => change.id === 'Gateway_InvoiceOk')!.detail).toBe('between Task_A and End');
+    expect(cs.created.find((change) => change.id === 'Gateway_InvoiceOk_join')!.detail).toBe('join of Gateway_InvoiceOk');
     expect(cs.warnings).toHaveLength(0);
 
     const gw = doc.require('Gateway_InvoiceOk');
     const join = doc.require('Gateway_InvoiceOk_join');
     expect(edge(doc, 'F2')).toBe('Task_A->Gateway_InvoiceOk');
     const out = doc.outgoing(gw);
-    expect(out.map((f) => `${f.get('name')}:${f.get<El>('targetRef').get('id')}`)).toEqual(['yes:Activity_Book', 'no:Activity_Clarify']);
+    expect(out.map((flow) => `${flow.get('name')}:${flow.get<El>('targetRef').get('id')}`)).toEqual(['yes:Activity_Book', 'no:Activity_Clarify']);
     expect(out[0]!.get<El>('conditionExpression').get('body')).toBe('${ok}');
     expect(gw.get<El>('default')).toBe(out[1]);
     expect(edge(doc, ids(doc.outgoing(doc.require('Activity_Book')))[0]!)).toBe('Activity_Book->Activity_Archive');
-    expect(doc.incoming(join).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_Archive', 'Activity_Clarify']);
-    expect(doc.outgoing(join).map((f) => f.get<El>('targetRef').get('id'))).toEqual(['End']);
+    expect(doc.incoming(join).map((flow) => flow.get<El>('sourceRef').get('id'))).toEqual(['Activity_Archive', 'Activity_Clarify']);
+    expect(doc.outgoing(join).map((flow) => flow.get<El>('targetRef').get('id'))).toEqual(['End']);
     expect(doc.incoming(doc.require('End'))).toHaveLength(1);
     // declaration order: gateway right after its incoming flow, branches in order
     const order = flowIds(doc);
     expect(order.indexOf('Gateway_InvoiceOk')).toBe(order.indexOf('F2') + 1);
     expect(order.indexOf('Activity_Book')).toBeLessThan(order.indexOf('Activity_Clarify'));
-    expect(cs.notes.some((n) => n.startsWith('split Gateway_InvoiceOk'))).toBe(true);
+    expect(cs.notes.some((note) => note.startsWith('split Gateway_InvoiceOk'))).toBe(true);
     await roundTrip(doc);
   });
 
@@ -826,12 +826,12 @@ describe('split', () => {
       join: false,
       branches: [{ nodes: [{ kind: 'task', name: 'P1' }] }, { nodes: [{ kind: 'task', name: 'P2' }] }],
     });
-    const gateway = cs.created.find((c) => c.kind === 'parallelGateway')!.id;
+    const gateway = cs.created.find((change) => change.kind === 'parallelGateway')!.id;
     expect(gateway).toBe('Gateway_AfterDoA');
     expect(is(doc.require(gateway), 'bpmn:ParallelGateway')).toBe(true);
     expect(doc.has(`${gateway}_join`)).toBe(false);
-    expect(doc.incoming(doc.require('End')).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_P1', 'Activity_P2']);
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_IMPLICIT_JOIN']);
+    expect(doc.incoming(doc.require('End')).map((flow) => flow.get<El>('sourceRef').get('id'))).toEqual(['Activity_P1', 'Activity_P2']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_IMPLICIT_JOIN']);
     await roundTrip(doc);
   });
 
@@ -845,10 +845,10 @@ describe('split', () => {
       joinName: 'merge',
       branches: [{ nodes: [{ kind: 'task', name: 'Work' }] }, { flowName: 'skip', nodes: [] }],
     });
-    expect(cs.created.find((c) => c.id === 'Gateway_Split')!.detail).toBe('after Loose');
+    expect(cs.created.find((change) => change.id === 'Gateway_Split')!.detail).toBe('after Loose');
     expect(edge(doc, ids(doc.outgoing(doc.require('Loose')))[0]!)).toBe('Loose->Gateway_Split');
     const gwOut = doc.outgoing(doc.require('Gateway_Split'));
-    expect(gwOut.map((f) => f.get<El>('targetRef').get('id'))).toEqual(['Activity_Work', 'Gateway_Merge']);
+    expect(gwOut.map((flow) => flow.get<El>('targetRef').get('id'))).toEqual(['Activity_Work', 'Gateway_Merge']);
     expect(gwOut[1]!.get('name')).toBe('skip');
     expect(doc.outgoing(doc.require('Gateway_Merge'))).toHaveLength(0);
     expect(doc.require('Gateway_Merge').get('name')).toBe('merge');
@@ -878,8 +878,8 @@ describe('split', () => {
       try {
         parseOps([{ op: 'split', after: 'Task_A', branches }]);
       } catch (err) {
-        const e = err as CliError;
-        return [e.message.replace(/^ops\[0\] \(split\)/, 'split'), e.details?.hint];
+        const cliError = err as CliError;
+        return [cliError.message.replace(/^ops\[0\] \(split\)/, 'split'), cliError.details?.hint];
       }
       return ['NO_ERROR', undefined];
     };
@@ -887,9 +887,9 @@ describe('split', () => {
       try {
         await mutateDoc(doc, [{ op: 'split', after: 'Task_A', branches } as unknown as SplitOp]);
       } catch (err) {
-        const e = err as CliError;
-        expect([e.message, e.details?.hint]).toEqual(cli(branches));
-        return [e.code, e.message, e.details?.op];
+        const cliError = err as CliError;
+        expect([cliError.message, cliError.details?.hint]).toEqual(cli(branches));
+        return [cliError.code, cliError.message, cliError.details?.op];
       }
       return ['NO_ERROR', '', undefined];
     };
@@ -911,8 +911,8 @@ describe('split', () => {
     expect(await refused([{ nodes: [{ kind: 5 }] }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0].nodes[0]: "kind" must be a string, got number 5', 0]);
     expect(await doc.toXml()).toBe(before);
     // an empty nodes array is still a direct gateway -> join flow
-    const r = await mutateDoc(doc, [{ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: [] }] }], { layout: false });
-    expect(r.changes.created.map((c) => c.id)).toContain('Gateway_AfterDoA_join');
+    const result = await mutateDoc(doc, [{ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: [] }] }], { layout: false });
+    expect(result.changes.created.map((change) => change.id)).toContain('Gateway_AfterDoA_join');
     expect(flowBetween(doc, 'Gateway_AfterDoA', 'Gateway_AfterDoA_join')).toBeTruthy();
   });
 
@@ -928,7 +928,7 @@ describe('split', () => {
         { nodes: [{ kind: 'intermediateCatchEvent:message', name: 'Reply', message: 'Reply' }] },
       ],
     });
-    expect(laneOf(doc, doc.require(cs.created.find((c) => c.kind === 'eventBasedGateway')!.id))?.get('id')).toBe('Lane_Sales');
+    expect(laneOf(doc, doc.require(cs.created.find((change) => change.kind === 'eventBasedGateway')!.id))?.get('id')).toBe('Lane_Sales');
     expect(laneOf(doc, doc.require('Event_Timeout'))?.get('id')).toBe('Lane_Sales');
     expect(new EventTrigger(doc.require('Event_Reply')).describe()).toBe('message Reply');
     await roundTrip(doc);
@@ -954,7 +954,7 @@ describe('add: event sub-processes with a trigger', () => {
     const cs = add(doc, { kind: 'eventSubProcess', name: 'Handle errors', error: 'PaymentFailed', errorCode: 'PAY-1' });
     const start = cs.created[1]!.id;
     expect(start).toBe('Event_ErrorStartInHandleErrors');
-    expect(cs.created.map((c) => [c.id, c.kind])).toEqual([
+    expect(cs.created.map((change) => [change.id, change.kind])).toEqual([
       ['Activity_HandleErrors', 'eventSubProcess'],
       [start, 'startEvent:error'],
       ['Error_PaymentFailed', 'error'],
@@ -965,7 +965,7 @@ describe('add: event sub-processes with a trigger', () => {
     expect(new EventTrigger(doc.require(start)).describe()).toBe('error PaymentFailed (PAY-1)');
 
     const cs2 = add(doc, { kind: 'eventSubProcess:message', name: 'On cancel', message: 'Cancel', nonInterrupting: true, in: 'Process_1' });
-    expect(cs2.created.map((c) => c.kind)).toEqual(['eventSubProcess', 'startEvent:message', 'message']);
+    expect(cs2.created.map((change) => change.kind)).toEqual(['eventSubProcess', 'startEvent:message', 'message']);
     const start2 = cs2.created[1]!.id;
     expect(start2).not.toBe(start);
     expect(doc.require(start2).get('isInterrupting')).toBe(false);
@@ -984,8 +984,8 @@ describe('add: event sub-processes with a trigger', () => {
     expect(caught(() => add(doc, { kind: 'eventSubProcess:terminate', name: 'X' }))?.details?.candidates).toContain('error');
     expect(doc.has('Activity_X')).toBe(false);
     const cs = add(doc, { kind: 'eventSubProcess', name: 'Plain', nonInterrupting: true });
-    expect(cs.created.map((c) => c.id)).toEqual(['Activity_Plain']);
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs.created.map((change) => change.id)).toEqual(['Activity_Plain']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     expect(add(doc, { kind: 'eventSubProcess', name: 'Empty' }).warnings).toHaveLength(0);
     expect(doc.flowNodes(doc.require('Activity_Empty'))).toHaveLength(0);
   });
@@ -1046,13 +1046,13 @@ describe('add: option validation', () => {
     const cs = add(doc, { kind: 'task', name: 'Mid', flow: 'F1', flowId: 'Flow_custom', flowName: 'go' });
     expect(doc.has('Flow_custom')).toBe(false);
     expect(doc.require('F1').get('name')).toBe('go');
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     expect(cs.warnings[0]!.message).toContain('--flow-id Flow_custom');
     expect(cs.warnings[0]!.related).toEqual(['F1']);
     expect(cs.warnings[0]!.hint).toContain('bpmn set <file> F1 id=Flow_custom');
     // after a node with a successor splices too
     const cs2 = add(doc, { kind: 'task', name: 'Mid2', after: 'Activity_Mid', flowId: 'Flow_custom2' });
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     expect(doc.has('Flow_custom2')).toBe(false);
     // append / prepend create the flow with that id: no warning
     add(doc, { kind: 'task', name: 'Loose', in: 'Process_1' });
@@ -1064,7 +1064,7 @@ describe('add: option validation', () => {
     expect(edge(doc, 'Flow_custom4')).toBe('Activity_Head->Activity_Loose');
     // --in creates no flow into the node
     const cs5 = add(doc, { kind: 'task', name: 'Alone', in: 'Process_1', flowName: 'x', condition: '${y}' });
-    expect(cs5.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs5.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     expect(cs5.warnings[0]!.message).toContain('--flow-name, --condition');
     expect(add(doc, { kind: 'task', name: 'Quiet', in: 'Process_1' }).warnings).toHaveLength(0);
     await roundTrip(doc);
@@ -1088,7 +1088,7 @@ describe('add: option validation', () => {
     expect(cs.warnings).toHaveLength(0);
     const cs2 = add(doc, { kind: 'note', name: 'Approval note' });
     expect(cs2.created[0]!.id).toBe('TextAnnotation_ApprovalNote_2');
-    expect(cs2.warnings.map((w) => w.code)).toEqual(['W_ID_SUFFIXED']);
+    expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_ID_SUFFIXED']);
     const cs3 = add(doc, { kind: 'note', text: 'only text' });
     expect(cs3.created[0]!.id).toBe('TextAnnotation_OnlyText');
     expect(cs3.warnings).toHaveLength(0);
@@ -1101,8 +1101,8 @@ describe('connect: self-loops', () => {
     const doc = await linearDoc();
     const cs = connect(doc, { source: 'Task_A', target: 'Task_A', name: 'again' });
     expect(cs.created[0]).toMatchObject({ kind: 'sequenceFlow', name: 'again', detail: 'Task_A -> Task_A' });
-    expect(cs.notes.some((n) => n.includes('bpmn set <file> Task_A loop=standard'))).toBe(true);
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_IMPLICIT_SPLIT', 'W_IMPLICIT_JOIN']);
+    expect(cs.notes.some((note) => note.includes('bpmn set <file> Task_A loop=standard'))).toBe(true);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_IMPLICIT_SPLIT', 'W_IMPLICIT_JOIN']);
     expect(connect(doc, { source: 'Task_A', target: 'Task_A', ifAbsent: true }).isEmpty).toBe(true);
     add(doc, { kind: 'exclusiveGateway', name: 'G', in: 'Process_1' });
     expect(codeOf(() => connect(doc, { source: 'Gateway_G', target: 'Gateway_G' }))).toBe('E_INVALID_ENDPOINT');
@@ -1132,11 +1132,11 @@ describe('split: terminating branches', () => {
     });
     // a join only Activity_Book would reach is no join: none is created
     expect(doc.has('Gateway_Ok_join')).toBe(false);
-    expect(doc.outgoing(doc.require('Activity_Book')).map((f) => edge(doc, f.get<string>('id')))).toEqual(['Activity_Book->End']);
+    expect(doc.outgoing(doc.require('Activity_Book')).map((flow) => edge(doc, flow.get<string>('id')))).toEqual(['Activity_Book->End']);
     expect(doc.outgoing(doc.require('Event_Rejected'))).toHaveLength(0);
     expect(doc.require('Gateway_Ok').get<El>('default').get<El>('targetRef').get('id')).toBe('Event_Rejected');
-    expect(cs.notes.some((n) => n.includes('Event_Rejected terminates'))).toBe(true);
-    expect(cs.notes.some((n) => n.includes('no join gateway created'))).toBe(true);
+    expect(cs.notes.some((note) => note.includes('Event_Rejected terminates'))).toBe(true);
+    expect(cs.notes.some((note) => note.includes('no join gateway created'))).toBe(true);
     expect(cs.warnings).toHaveLength(0);
     await roundTrip(doc);
   });
@@ -1146,12 +1146,12 @@ describe('split: terminating branches', () => {
     const cs = new FlowSplitter(doc).split({ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
     expect(doc.has('Gateway_1_join')).toBe(false);
     expect(doc.incoming(doc.require('End'))).toHaveLength(0);
-    expect(cs.notes.some((n) => n.includes('no join gateway created'))).toBe(true);
-    expect(cs.notes.some((n) => n.includes('End is no longer reached'))).toBe(true);
+    expect(cs.notes.some((note) => note.includes('no join gateway created'))).toBe(true);
+    expect(cs.notes.some((note) => note.includes('End is no longer reached'))).toBe(true);
 
     const doc2 = await linearDoc();
     const cs2 = new FlowSplitter(doc2).split({ op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
-    expect(doc2.incoming(doc2.require('End')).map((f) => f.get<El>('sourceRef').get('id'))).toEqual(['Activity_Go']);
+    expect(doc2.incoming(doc2.require('End')).map((flow) => flow.get<El>('sourceRef').get('id'))).toEqual(['Activity_Go']);
     expect(doc2.outgoing(doc2.require('Event_Stop'))).toHaveLength(0);
     expect(cs2.warnings).toHaveLength(0);
     await roundTrip(doc2);
@@ -1164,7 +1164,7 @@ describe('lanes: nested --members', () => {
     add(doc, { kind: 'participant', name: 'Shop' });
     const cs = add(doc, { kind: 'lane', name: 'Inbound', in: 'Lane_Sales', members: ['Task_A'] });
     expect(ids(many(doc.require('Lane_Inbound'), 'flowNodeRef'))).toEqual(['Start', 'Task_A']);
-    expect(cs.warnings.map((w) => w.code)).toEqual(['W_OPTION_IGNORED']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     expect(cs.warnings[0]!.related).toEqual(['Start']);
     expect(cs.warnings[0]!.hint).toContain('--in Lane_Sales --members Start');
     // the sibling lane the hint suggests takes exactly its members, no warning

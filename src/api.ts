@@ -144,9 +144,9 @@ export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
 }
 
 /** The text of a view as `bpmn show` prints it, without the final newline. */
-export function renderShown(v: ShownView): string {
+export function renderShown(shown: ShownView): string {
   const text =
-    v.kind === 'layout' ? new LayoutText(v.view).text() : v.kind === 'detail' ? new DetailText(v.view).text() : v.kind === 'context' ? new ContextText(v.view).text() : v.kind === 'around' ? new AroundText(v.view).text() : new ModelViewText(v.view).text();
+    shown.kind === 'layout' ? new LayoutText(shown.view).text() : shown.kind === 'detail' ? new DetailText(shown.view).text() : shown.kind === 'context' ? new ContextText(shown.view).text() : shown.kind === 'around' ? new AroundText(shown.view).text() : new ModelViewText(shown.view).text();
   return text.replace(/\n$/, '');
 }
 

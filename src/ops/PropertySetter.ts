@@ -24,7 +24,7 @@ import { FlowRules } from '../model/FlowRules.js';
 import { RootElements } from './events/RootElements.js';
 
 // timerKind is left out: set classifies a timer value itself
-const EVENT_KEYS = new Set<string>(['trigger', ...TRIGGER_OPTION_KEYS.filter((k) => k !== 'timerKind')]);
+const EVENT_KEYS = new Set<string>(['trigger', ...TRIGGER_OPTION_KEYS.filter((optionKey) => optionKey !== 'timerKind')]);
 
 const TRIGGER_OF_KEY: Record<string, Trigger> = {
   timer: 'timer',
@@ -53,10 +53,10 @@ export class PropertySetter {
   }
 
   private static normalizeKey(key: string): string {
-    const k = key.trim();
-    if (k === 'documentation') return 'doc';
-    if (k.toLowerCase().startsWith('bpmn:')) return k.slice(5);
-    return k;
+    const trimmed = key.trim();
+    if (trimmed === 'documentation') return 'doc';
+    if (trimmed.toLowerCase().startsWith('bpmn:')) return trimmed.slice(5);
+    return trimmed;
   }
 
   private expression(body: string, parent: El, language?: string): El {
@@ -69,8 +69,8 @@ export class PropertySetter {
     const cs = new ChangeSet();
     const el = this.doc.require(op.id);
     const entries: Array<[string, string]> = [
-      ...Object.entries(op.values ?? {}).map(([k, v]) => [PropertySetter.normalizeKey(k), v === undefined || v === null ? '' : String(v)] as [string, string]),
-      ...(op.unset ?? []).map((k) => [PropertySetter.normalizeKey(k), ''] as [string, string]),
+      ...Object.entries(op.values ?? {}).map(([entryKey, entryValue]) => [PropertySetter.normalizeKey(entryKey), entryValue === undefined || entryValue === null ? '' : String(entryValue)] as [string, string]),
+      ...(op.unset ?? []).map((unsetKey) => [PropertySetter.normalizeKey(unsetKey), ''] as [string, string]),
     ];
     if (!entries.length) {
       throw usageError('Nothing to set: pass key=value pairs (or --unset <key>)', { element: op.id, hint: `Settable keys: ${this.coercer.settableKeys(el).join(', ')}` });
@@ -79,8 +79,8 @@ export class PropertySetter {
     const conditionKeys = new Map<string, string>();
     const nested: Array<{ slot: string; key: string; value: string }> = [];
     if (is(el, 'bpmn:SequenceFlow')) {
-      const wantsDefault = entries.some(([k, v]) => k === 'default' && v && PropertyCoercer.bool(el, k, v));
-      const wantsCondition = entries.some(([k, v]) => k === 'condition' && v);
+      const wantsDefault = entries.some(([entryKey, entryValue]) => entryKey === 'default' && entryValue && PropertyCoercer.bool(el, entryKey, entryValue));
+      const wantsCondition = entries.some(([entryKey, entryValue]) => entryKey === 'condition' && entryValue);
       if (wantsDefault && wantsCondition) {
         throw PropertyCoercer.invalid(el, 'default', 'default=true and condition cannot be combined: a default flow has no condition', 'Set one of them, or condition= (empty) together with default=true.');
       }
@@ -105,8 +105,8 @@ export class PropertySetter {
      * Nested keys run after the keys that create their element (loop=, trigger=, when=);
      * a flow's condition.* keys run first, so that a script resource condition can take a language=
      */
-    const flowCondition = is(el, 'bpmn:SequenceFlow') ? nested.filter((n) => n.slot === 'condition') : [];
-    const newResource = flowCondition.some((n) => n.value && this.coercer.isResourceKey(n.key));
+    const flowCondition = is(el, 'bpmn:SequenceFlow') ? nested.filter((nestedEntry) => nestedEntry.slot === 'condition') : [];
+    const newResource = flowCondition.some((nestedEntry) => nestedEntry.value && this.coercer.isResourceKey(nestedEntry.key));
     if (conditionKeys.get('condition') && newResource) {
       throw PropertyCoercer.invalid(el, 'condition', 'a condition is either an inline expression (condition=) or a script resource (condition.camunda:resource=), not both', 'Pass one of them; a script resource also needs language=<script language>.');
     }
@@ -114,13 +114,13 @@ export class PropertySetter {
       conditionKeys.delete('condition');
       el.get<El | undefined>('conditionExpression')?.set('body', undefined);
     }
-    for (const n of flowCondition) this.slots.apply(el, n.slot, n.key, n.value, cs, conditionKeys.has('condition'));
+    for (const nestedEntry of flowCondition) this.slots.apply(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, cs, conditionKeys.has('condition'));
     if (conditionKeys.size) this.applyCondition(el, conditionKeys, cs);
     // a conditional event's script resource goes first, so that when= fills the condition
-    const resourceRemoval = is(el, 'bpmn:Event') ? nested.filter((n) => n.slot === 'condition' && !n.value && this.coercer.isResourceKey(n.key)) : [];
-    for (const n of resourceRemoval) this.slots.apply(el, n.slot, n.key, n.value, cs, eventKeys.has('when'));
+    const resourceRemoval = is(el, 'bpmn:Event') ? nested.filter((nestedEntry) => nestedEntry.slot === 'condition' && !nestedEntry.value && this.coercer.isResourceKey(nestedEntry.key)) : [];
+    for (const nestedEntry of resourceRemoval) this.slots.apply(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, cs, eventKeys.has('when'));
     if (eventKeys.size) this.applyEventKeys(el, eventKeys, cs);
-    for (const n of nested) if (!flowCondition.includes(n) && !resourceRemoval.includes(n)) this.slots.apply(el, n.slot, n.key, n.value, cs);
+    for (const nestedEntry of nested) if (!flowCondition.includes(nestedEntry) && !resourceRemoval.includes(nestedEntry)) this.slots.apply(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, cs);
     this.doc.invalidate();
     new RootElements(this.doc).bindRefAs(cs, op.refAs, el);
     return cs;
@@ -317,8 +317,8 @@ export class PropertySetter {
   }
 
   private dropLoop(el: El, old: El, mode: string, cs: ChangeSet): void {
-    for (const e of walk(old, { bpmnOnly: true })) {
-      const id = e.get<string | undefined>('id');
+    for (const element of walk(old, { bpmnOnly: true })) {
+      const id = element.get<string | undefined>('id');
       if (id) this.doc.ids.release(id);
     }
     const lost = vendorContent(old);
@@ -334,16 +334,16 @@ export class PropertySetter {
 
   private setModelProperty(el: El, key: string, value: string): void {
     if (PropertyCoercer.removeUndefined(el, key, value)) return;
-    const p = descriptorOf(el).propertiesByName?.[key];
-    if (!p || key === 'id') throw this.coercer.unknownKey(el, key);
+    const property = descriptorOf(el).propertiesByName?.[key];
+    if (!property || key === 'id') throw this.coercer.unknownKey(el, key);
     const blocked = this.coercer.blockedReason(key);
     if (blocked) throw this.coercer.unknownKey(el, key, blocked);
-    if (!this.coercer.isSettable(p)) throw this.coercer.unknownKey(el, key, `${key} is not an attribute`);
+    if (!this.coercer.isSettable(property)) throw this.coercer.unknownKey(el, key, `${key} is not an attribute`);
     if (!value) {
       el.set(key, undefined);
       return;
     }
-    el.set(key, this.coercer.coerce(el, p, value));
+    el.set(key, this.coercer.coerce(el, property, value));
   }
 
   private static isJuel(body: string): boolean {
@@ -418,13 +418,13 @@ export class PropertySetter {
   private static placeFor(el: El, name: string): { slot?: NestedSlot; prefix?: string; trigger?: Exclude<Trigger, 'none'>; element?: El } | undefined {
     if (is(el, 'bpmn:Event')) {
       const defs = definitionsOf(el);
-      const fit = defs.findIndex((d) => CAMUNDA.attrAppliesTo(name, d));
+      const fit = defs.findIndex((definition) => CAMUNDA.attrAppliesTo(name, definition));
       if (fit !== -1) return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
       if (slotsOf(el).includes('condition') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
       const current = triggerOf(el);
-      for (const t of kindOf(el)?.triggers ?? []) {
-        if (t === 'none' || t === current) continue;
-        if (CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[t])) return { slot: 'definition', trigger: t };
+      for (const trigger of kindOf(el)?.triggers ?? []) {
+        if (trigger === 'none' || trigger === current) continue;
+        if (CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[trigger])) return { slot: 'definition', trigger };
       }
     }
     if (is(el, 'bpmn:Activity') && CAMUNDA.attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) return { slot: 'loop' };
@@ -470,8 +470,8 @@ export class PropertySetter {
     const prefix = key.slice(0, idx);
     const id = idOf(el);
     const pair = PropertySetter.shellPair(local, value);
-    const owners = ZEEBE.typeNames().filter((t) => ZEEBE.type(t)!.attributes.some((a) => a.name === local));
-    const here = owners.filter((t) => ZEEBE.allowedOn(t, el) === true);
+    const owners = ZEEBE.typeNames().filter((typeName) => ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
+    const here = owners.filter((typeName) => ZEEBE.allowedOn(typeName, el) === true);
     const loop = is(el, 'bpmn:Activity') && owners.includes('zeebe:loopCharacteristics');
     const message = owners.includes('zeebe:subscription') && (is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:Event'));
     if (!here.length && !loop && !message) return;
@@ -481,7 +481,7 @@ export class PropertySetter {
       ? `\`bpmn ext add <file> ${id} ${type} ${pair}\``
       : loop
         ? `\`bpmn ext add <file> ${id} loop.${type} ${pair}\` (creates a parallel multi-instance loop when there is none)`
-        : is(el, 'bpmn:ReceiveTask') || definitionsOf(el).some((d) => is(d, 'bpmn:MessageEventDefinition'))
+        : is(el, 'bpmn:ReceiveTask') || definitionsOf(el).some((definition) => is(definition, 'bpmn:MessageEventDefinition'))
           ? `\`bpmn set <file> ${id} message=<MessageName>\` first (the correlation key belongs to the message the element waits for), then \`bpmn set <file> ${id} ${PropertySetter.shellPair(key, value)}\``
           : `\`bpmn ext add <file> <messageId> ${type} ${pair}\` on a bpmn:Message (${kindLabel(el)} ${id} waits for no message)`;
     throw modelError('E_WRONG_HOST', `${key} is not an attribute of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on the ${type} extension element`, {
@@ -531,8 +531,8 @@ export class PropertySetter {
     }
     change.change(trigger, { ...given, ...(nonInterrupting !== undefined ? { nonInterrupting } : {}) } as TriggerOptions, cs, { strict: true });
     const details = Object.entries(given)
-      .filter(([, v]) => v !== undefined)
-      .map(([k, v]) => `${k}=${String(v)}`);
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .map(([entryKey, entryValue]) => `${entryKey}=${String(entryValue)}`);
     cs.change(ChangeSet.entryOf(el, [`trigger=${trigger}`, ...details, ...(nonInterrupting !== undefined ? [`nonInterrupting=${nonInterrupting}`] : [])].join(' ')));
   }
 }

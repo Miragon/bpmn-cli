@@ -47,29 +47,29 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
   try {
     fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected an error');
 }
 
-async function rejected(p: Promise<unknown>): Promise<{ code?: string; message: string; details: Record<string, unknown> }> {
+async function rejected(pending: Promise<unknown>): Promise<{ code?: string; message: string; details: Record<string, unknown> }> {
   try {
-    await p;
+    await pending;
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected a rejection');
 }
 
 /** Adds the incoming / outgoing entries the XML snippets leave out (Doc.fromXml completes them in memory already). */
 function withMirrors(doc: Doc): Doc {
-  for (const f of doc.byId().values()) {
-    if (!is(f, 'bpmn:SequenceFlow')) continue;
+  for (const element of doc.byId().values()) {
+    if (!is(element, 'bpmn:SequenceFlow')) continue;
     for (const [end, list] of [['sourceRef', 'outgoing'], ['targetRef', 'incoming']] as const) {
-      const entries = many(f.get<El>(end), list);
-      if (!entries.includes(f)) entries.push(f);
+      const entries = many(element.get<El>(end), list);
+      if (!entries.includes(element)) entries.push(element);
     }
   }
   return doc;
@@ -80,7 +80,7 @@ async function load(body: string, opts: { nsDecl?: string; extraRoots?: string }
 }
 
 const run = (doc: Doc, ops: Op[]) => runOps(doc, ops);
-const codes = (ws: Array<{ code: string }>) => ws.map((w) => w.code);
+const codes = (ws: Array<{ code: string }>) => ws.map((warning) => warning.code);
 
 /* ------------------------------------------------------------------ */
 /* 1. removing a condition's script resource                            */
@@ -130,7 +130,7 @@ describe('1. removing the script resource of a condition never leaves an empty c
     expect(expr.$attrs['camunda:resource']).toBeUndefined();
     expect(expr.get('language')).toBeUndefined();
     // the groovy language does not fit a ${...} body: reported, the resource itself is not (it was asked for)
-    expect(cs.warnings.map((w) => w.message)).toEqual([expect.stringMatching(/^language groovy of the condition of Flow_yes was dropped/)]);
+    expect(cs.warnings.map((warning) => warning.message)).toEqual([expect.stringMatching(/^language groovy of the condition of Flow_yes was dropped/)]);
   });
 
   it('a flow: together with condition= (empty) the whole condition goes', async () => {
@@ -155,7 +155,7 @@ describe('1. removing the script resource of a condition never leaves an empty c
     expect(def.get<El>('condition').get('body')).toBe('${x > 1}');
     expect(def.get<El>('condition').$attrs['camunda:resource']).toBeUndefined();
     expect(def.$attrs['camunda:variableName']).toBe('x');
-    expect(cs.warnings.map((w) => w.message)).toEqual([expect.stringMatching(/^language groovy of the condition of Event_Wait was dropped/)]);
+    expect(cs.warnings.map((warning) => warning.message)).toEqual([expect.stringMatching(/^language groovy of the condition of Event_Wait was dropped/)]);
   });
 
   it('the hint of a resource replacing an inline body names the one command back', async () => {
@@ -239,7 +239,7 @@ describe('2. definition.<key> on an event with several event definitions', () =>
     const doc = await load(MULTI, { nsDecl: CAMUNDA, extraRoots: MULTI_ROOTS });
     const cs = run(doc, [{ op: 'set', id: 'Event_Wait', values: { trigger: 'timer' } }]);
     const defs = doc.require('Event_Wait').get<El[]>('eventDefinitions');
-    expect(defs.map((d) => d.get('id'))).toEqual(['TDef']);
+    expect(defs.map((definition) => definition.get('id'))).toEqual(['TDef']);
     expect(defs[0]!.get<El>('timeDuration').get('body')).toBe('PT1H');
     expect(doc.has('MDef')).toBe(false);
     expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_PROPERTY_DROPPED', message: 'messageEventDefinition MDef of Event_Wait was dropped: trigger=timer keeps only its timerEventDefinition TDef (an event acts on one event definition)' })]);
@@ -334,15 +334,15 @@ describe('4. ext add replacing a keyed item names what the old one held', () => 
   it('W_PROPERTY_DROPPED lists the lost attribute and children; its --xml keeps them', async () => {
     const doc = await load(FORM, { nsDecl: CAMUNDA });
     const cs = run(doc, [{ op: 'ext', id: 'Activity_Inner', action: 'add', type: 'camunda:formField', attrs: { id: 'amount', type: 'string' } }]);
-    const w = cs.warnings.find((x) => x.code === 'W_PROPERTY_DROPPED')!;
-    expect(w.message).toBe(
+    const dropped = cs.warnings.find((candidate) => candidate.code === 'W_PROPERTY_DROPPED')!;
+    expect(dropped.message).toBe(
       'label="Amount", camunda:properties (camunda:property[id=p1]), camunda:validation (camunda:constraint[name=min]) of the replaced camunda:formField[id=amount] in camunda:formData of Activity_Inner were dropped: ext add replaces an item with the same id as a whole',
     );
-    const xml = /--xml '(.*)'`\.$/.exec(w.hint!)![1]!;
+    const xml = /--xml '(.*)'`\.$/.exec(dropped.hint!)![1]!;
     expect(xml).toBe(
       '<camunda:formField id="amount" type="string" label="Amount"><camunda:properties><camunda:property id="p1" value="v1" /></camunda:properties><camunda:validation><camunda:constraint name="min" config="1" /></camunda:validation></camunda:formField>',
     );
-    expect(w.hint).toContain('`bpmn ext add <file> Activity_Inner camunda:formField --xml');
+    expect(dropped.hint).toContain('`bpmn ext add <file> Activity_Inner camunda:formField --xml');
     // following the hint restores everything, with the new type, and drops nothing
     const again = run(doc, [{ op: 'ext', id: 'Activity_Inner', action: 'add', type: 'camunda:formField', xml }]);
     expect(codes(again.warnings)).toEqual([]);
@@ -418,8 +418,8 @@ describe('6. ops JSON ext remove takes the `ext list` index like the CLI', () =>
   it('"type": "loop.0" removes the loop characteristics’ first extension element', async () => {
     const doc = await load(LOOP, { nsDecl: CAMUNDA });
     const ops = parseOps([{ op: 'ext', id: 'Activity_Inner', action: 'remove', type: 'loop.0' }]);
-    const r = await mutateDoc(doc, ops, { dryRun: true, layout: false });
-    expect(r.changes.changed[0]!.detail).toBe('ext removed loop.camunda:failedJobRetryTimeCycle');
+    const outcome = await mutateDoc(doc, ops, { dryRun: true, layout: false });
+    expect(outcome.changes.changed[0]!.detail).toBe('ext removed loop.camunda:failedJobRetryTimeCycle');
     expect(doc.require('Activity_Inner').get<El>('loopCharacteristics').get('extensionElements')).toBeUndefined();
   });
 
@@ -463,8 +463,8 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
     const doc = await load(GATEWAY, { extraRoots: GW_ROOTS });
     const cs = new ElementRemover(doc).remove({ op: 'remove', ids: ['Event_M'] });
     expect(cs.notes).toContain('bridged: Gateway_G -> Activity_R');
-    const r = await mutateDoc(doc, [], { dryRun: true, layout: false });
-    expect(codes(r.validation.warnings)).not.toContain('W_EVENT_GATEWAY_TARGET');
+    const outcome = await mutateDoc(doc, [], { dryRun: true, layout: false });
+    expect(codes(outcome.validation.warnings)).not.toContain('W_EVENT_GATEWAY_TARGET');
   });
 
   it('a C7 file refuses the same bridge (the engines reject receive tasks there)', async () => {
@@ -487,8 +487,8 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
       { extraRoots: GW_ROOTS },
     );
     expect(caught(() => new ElementRemover(mixed).remove({ op: 'remove', ids: ['Event_M'] })).message).toMatch(/Event_X on another branch of Gateway_G is a message catch event; BPMN 2\.0 does not mix receive tasks and message catch events/);
-    const g = mixed.require('Gateway_G');
-    expect(new EventGatewayRule(mixed).targetProblem(g, mixed.require('Event_T'))).toMatch(/already has the incoming flow F_T/);
+    const gateway = mixed.require('Gateway_G');
+    expect(new EventGatewayRule(mixed).targetProblem(gateway, mixed.require('Event_T'))).toMatch(/already has the incoming flow F_T/);
   });
 
   it('connect and add warn about the targets a bridge refuses (plain file: W_EVENT_GATEWAY_TARGET from the op)', async () => {
@@ -513,9 +513,9 @@ describe('7. bridges next to an event-based gateway: the engines’ rule in C7 f
 
   it('in a C7 file connect leaves the report to the profile (W_C7_DEPLOY_EVENT_GATEWAY), no op warning', async () => {
     const doc = await load(`${GATEWAY}<bpmn:receiveTask id="Activity_R2" messageRef="Message_X" />`, { nsDecl: CAMUNDA, extraRoots: GW_ROOTS });
-    const r = await mutateDoc(doc, [{ op: 'connect', source: 'Gateway_G', target: 'Activity_R2' }], { dryRun: true, layout: false });
-    expect(codes(r.changes.warnings)).not.toContain('W_EVENT_GATEWAY_TARGET');
-    expect(codes(r.validation.warnings)).toContain('W_C7_DEPLOY_EVENT_GATEWAY');
+    const outcome = await mutateDoc(doc, [{ op: 'connect', source: 'Gateway_G', target: 'Activity_R2' }], { dryRun: true, layout: false });
+    expect(codes(outcome.changes.warnings)).not.toContain('W_EVENT_GATEWAY_TARGET');
+    expect(codes(outcome.validation.warnings)).toContain('W_C7_DEPLOY_EVENT_GATEWAY');
   });
 });
 
@@ -533,7 +533,7 @@ describe('8. an element that appears twice where the schema allows one is not dr
   it('loading reports it (lossy import warning), show prints it', async () => {
     const doc = await Doc.fromXml(definitionsXml(BOTH, { nsDecl: CAMUNDA }));
     const msg = 'duplicate element: <bpmn:userTask id="Activity_Inner"> has more than one loopCharacteristics (the schema allows one); only the last one, multiInstanceLoopCharacteristics MI, can be kept, standardLoopCharacteristics SL would be dropped';
-    expect(doc.lossyImportWarnings.map((w) => w.message)).toEqual([msg]);
+    expect(doc.lossyImportWarnings.map((warning) => warning.message)).toEqual([msg]);
     expect(renderView(buildView(doc)).split('\n')[0]).toBe(`import: ${msg}`);
   });
 
@@ -541,9 +541,9 @@ describe('8. an element that appears twice where the schema allows one is not dr
     const doc = await Doc.fromXml(definitionsXml(BOTH, { nsDecl: CAMUNDA }));
     const err = await rejected(mutateDoc(doc, [{ op: 'set', id: 'Activity_Inner', values: { name: 'Renamed' } }], { dryRun: true, layout: false }));
     expect(err.code).toBe('E_IMPORT_LOSSY');
-    const r = await mutateDoc(doc, [{ op: 'set', id: 'Activity_Inner', values: { name: 'Renamed' } }], { dryRun: true, layout: false, force: true });
-    expect(r.xml).toContain('<bpmn:multiInstanceLoopCharacteristics id="MI"');
-    expect(r.xml).not.toContain('standardLoopCharacteristics');
+    const outcome = await mutateDoc(doc, [{ op: 'set', id: 'Activity_Inner', values: { name: 'Renamed' } }], { dryRun: true, layout: false, force: true });
+    expect(outcome.xml).toContain('<bpmn:multiInstanceLoopCharacteristics id="MI"');
+    expect(outcome.xml).not.toContain('standardLoopCharacteristics');
   });
 
   it('other single elements are watched too (two conditionExpressions); valid files raise nothing', async () => {
@@ -552,7 +552,7 @@ describe('8. an element that appears twice where the schema allows one is not dr
     <bpmn:task id="A" /><bpmn:task id="B" />
     <bpmn:sequenceFlow id="F" sourceRef="A" targetRef="B"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${a}</bpmn:conditionExpression><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${b}</bpmn:conditionExpression></bpmn:sequenceFlow>`),
     );
-    expect(two.lossyImportWarnings.map((w) => w.message)).toEqual([expect.stringMatching(/^duplicate element: <bpmn:sequenceFlow id="F"> has more than one conditionExpression/)]);
+    expect(two.lossyImportWarnings.map((warning) => warning.message)).toEqual([expect.stringMatching(/^duplicate element: <bpmn:sequenceFlow id="F"> has more than one conditionExpression/)]);
     const fine = await Doc.fromXml(definitionsXml(BOTH.replace(/<bpmn:standardLoopCharacteristics[^>]*\/>/, ''), { nsDecl: CAMUNDA }));
     expect(fine.importWarnings).toEqual([]);
   });
@@ -577,13 +577,13 @@ describe('9. retype in a C7 file: the profile findings replace W_PROPERTY_INAPPL
   const retype: Op[] = [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }];
 
   it('drops the summary when the added W_C7_MISPLACED_* findings name every item (mutateDoc reports each item once)', async () => {
-    const r = await mutateDoc(withMirrors(await Doc.fromXml(XML)), retype, { dryRun: true, layout: false });
-    expect(codes(r.changes.warnings)).toEqual([]);
-    expect(codes(r.validation.warnings).filter((c) => c.startsWith('W_C7_MISPLACED'))).toEqual(['W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION']);
+    const outcome = await mutateDoc(withMirrors(await Doc.fromXml(XML)), retype, { dryRun: true, layout: false });
+    expect(codes(outcome.changes.warnings)).toEqual([]);
+    expect(codes(outcome.validation.warnings).filter((code) => code.startsWith('W_C7_MISPLACED'))).toEqual(['W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_ATTRIBUTE', 'W_C7_MISPLACED_EXTENSION']);
     // the op itself still reports the summary; the filter decides
     const cs = runOps(withMirrors(await Doc.fromXml(XML)), retype);
     expect(codes(cs.warnings)).toEqual(['W_PROPERTY_INAPPLICABLE']);
-    expect(withoutProfileDuplicates(cs.warnings, r.validation.warnings)).toEqual([]);
+    expect(withoutProfileDuplicates(cs.warnings, outcome.validation.warnings)).toEqual([]);
     // the hidden list of covered items is not serialised
     expect(JSON.stringify(cs.warnings[0])).not.toContain('attr:');
   });
@@ -591,9 +591,9 @@ describe('9. retype in a C7 file: the profile findings replace W_PROPERTY_INAPPL
   it('keeps it without the profile (platform none) or when the profile does not cover an item', async () => {
     const off = await mutateDoc(withMirrors(await Doc.fromXml(XML)), retype, { dryRun: true, layout: false, platform: 'none' });
     expect(codes(off.changes.warnings)).toEqual(['W_PROPERTY_INAPPLICABLE']);
-    const r = await mutateDoc(withMirrors(await Doc.fromXml(XML)), retype, { dryRun: true, layout: false });
+    const outcome = await mutateDoc(withMirrors(await Doc.fromXml(XML)), retype, { dryRun: true, layout: false });
     const cs = runOps(withMirrors(await Doc.fromXml(XML)), retype);
-    const partial = r.validation.warnings.filter((w) => !(w.code === 'W_C7_MISPLACED_EXTENSION'));
+    const partial = outcome.validation.warnings.filter((warning) => !(warning.code === 'W_C7_MISPLACED_EXTENSION'));
     expect(codes(withoutProfileDuplicates(cs.warnings, partial))).toEqual(['W_PROPERTY_INAPPLICABLE']);
   });
 });

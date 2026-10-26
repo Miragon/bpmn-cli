@@ -23,8 +23,8 @@ const DI_NS =
 
 type Rect = [x: number, y: number, width: number, height: number];
 
-function bounds([x, y, width, height]: Rect, tag = 'dc:Bounds'): string {
-  return `<${tag} x="${x}" y="${y}" width="${width}" height="${height}" />`;
+function bounds([left, top, width, height]: Rect, tag = 'dc:Bounds'): string {
+  return `<${tag} x="${left}" y="${top}" width="${width}" height="${height}" />`;
 }
 
 function shape(id: string, rect: Rect, opts: { expanded?: boolean; label?: Rect } = {}): string {
@@ -34,7 +34,7 @@ function shape(id: string, rect: Rect, opts: { expanded?: boolean; label?: Rect 
 }
 
 function edge(id: string, points: Array<[number, number]>): string {
-  const wps = points.map(([x, y]) => `<di:waypoint x="${x}" y="${y}" />`).join('');
+  const wps = points.map(([pointX, pointY]) => `<di:waypoint x="${pointX}" y="${pointY}" />`).join('');
   return `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${wps}</bpmndi:BPMNEdge>`;
 }
 
@@ -75,26 +75,26 @@ async function measure(xml: string) {
   return LayoutAnalysis.ofXml(xml);
 }
 
-const only = (problems: LayoutProblem[], kind: MetricKey): LayoutProblem[] => problems.filter((p) => p.kind === kind);
+const only = (problems: LayoutProblem[], kind: MetricKey): LayoutProblem[] => problems.filter((problem) => problem.kind === kind);
 
 function nonZero(counts: Record<MetricKey, number>): Partial<Record<MetricKey, number>> {
-  return Object.fromEntries(Object.entries(counts).filter(([, n]) => n > 0));
+  return Object.fromEntries(Object.entries(counts).filter(([, count]) => count > 0));
 }
 
 describe('layoutProblems', () => {
   it('reports nothing for a clean diagram', async () => {
-    const m = await measure(processXml(LINEAR_BODY, Object.values(LINEAR_DI)));
-    expect(m.problems).toEqual([]);
-    expect(m.score).toBe(0);
-    expect(Object.keys(m.counts)).toEqual([...KEYS]);
+    const metrics = await measure(processXml(LINEAR_BODY, Object.values(LINEAR_DI)));
+    expect(metrics.problems).toEqual([]);
+    expect(metrics.score).toBe(0);
+    expect(Object.keys(metrics.counts)).toEqual([...KEYS]);
   });
 
   it('finds overlapping shapes, but not a boundary event on its host', async () => {
     const body = `${task('Task_A')}${task('Task_B')}<bpmn:boundaryEvent id="Timer" attachedToRef="Task_A"><bpmn:timerEventDefinition /></bpmn:boundaryEvent>`;
     const di = [shape('Task_A', [100, 100, 100, 80]), shape('Task_B', [180, 100, 100, 80]), shape('Timer', [110, 162, 36, 36])];
-    const m = await measure(processXml(body, di));
-    expect(m.problems).toEqual([{ kind: 'overlaps', ids: ['Task_A', 'Task_B'] }]);
-    expect(m.score).toBe(WEIGHTS.overlaps);
+    const metrics = await measure(processXml(body, di));
+    expect(metrics.problems).toEqual([{ kind: 'overlaps', ids: ['Task_A', 'Task_B'] }]);
+    expect(metrics.score).toBe(WEIGHTS.overlaps);
   });
 
   it('a group is no leaf: it never overlaps its members, lies on a line or has a label on it; its own label still clashes', async () => {
@@ -104,9 +104,9 @@ describe('layoutProblems', () => {
       shape('Task_B', [240, 240, 100, 80]),
       shape('Group_1', [130, 80, 250, 120], { label: [200, 250, 90, 20] }),
     ];
-    const m = await measure(processXml(body, di, '<bpmn:category id="Cat_1"><bpmn:categoryValue id="CV_1" value="Group" /></bpmn:category>'));
-    expect(m.problems).toEqual([{ kind: 'labelClash', ids: ['Group_1', 'Task_B'], detail: 'label on shape' }]);
-    expect(m.score).toBe(WEIGHTS.labelClash);
+    const metrics = await measure(processXml(body, di, '<bpmn:category id="Cat_1"><bpmn:categoryValue id="CV_1" value="Group" /></bpmn:category>'));
+    expect(metrics.problems).toEqual([{ kind: 'labelClash', ids: ['Group_1', 'Task_B'], detail: 'label on shape' }]);
+    expect(metrics.score).toBe(WEIGHTS.labelClash);
   });
 
   it('finds crossing flows', async () => {
@@ -129,9 +129,9 @@ describe('layoutProblems', () => {
         [450, 180],
       ]),
     ];
-    const m = await measure(processXml(body, di));
-    expect(m.problems).toEqual([{ kind: 'crossings', ids: ['F1', 'F2'] }]);
-    expect(m.score).toBe(WEIGHTS.crossings);
+    const metrics = await measure(processXml(body, di));
+    expect(metrics.problems).toEqual([{ kind: 'crossings', ids: ['F1', 'F2'] }]);
+    expect(metrics.score).toBe(WEIGHTS.crossings);
   });
 
   it('finds a flow running through a shape it does not connect (once per pair)', async () => {
@@ -147,9 +147,9 @@ describe('layoutProblems', () => {
         [400, 150],
       ]),
     ];
-    const m = await measure(processXml(body, di));
-    expect(m.problems).toEqual([{ kind: 'through', ids: ['F1', 'B'] }]);
-    expect(m.counts.through).toBe(1);
+    const metrics = await measure(processXml(body, di));
+    expect(metrics.problems).toEqual([{ kind: 'through', ids: ['F1', 'B'] }]);
+    expect(metrics.counts.through).toBe(1);
   });
 
   it('finds diagonal flows (one problem per flow)', async () => {
@@ -161,28 +161,28 @@ describe('layoutProblems', () => {
         [400, 160],
       ]),
     };
-    const m = await measure(processXml(LINEAR_BODY, Object.values(di)));
-    expect(only(m.problems, 'diagonal')).toEqual([{ kind: 'diagonal', ids: ['F2'] }]);
-    expect(m.counts.diagonal).toBe(1);
+    const metrics = await measure(processXml(LINEAR_BODY, Object.values(di)));
+    expect(only(metrics.problems, 'diagonal')).toEqual([{ kind: 'diagonal', ids: ['F2'] }]);
+    expect(metrics.counts.diagonal).toBe(1);
   });
 
   it('lists elements without DI in model order, ignoring processes that are not laid out', async () => {
     const second = `<bpmn:process id="Process_2"><bpmn:task id="Other" /></bpmn:process>`;
     const { End: _end, F2: _f2, ...rest } = LINEAR_DI;
-    const m = await measure(processXml(LINEAR_BODY, Object.values(rest), second));
-    expect(m.problems).toEqual([
+    const metrics = await measure(processXml(LINEAR_BODY, Object.values(rest), second));
+    expect(metrics.problems).toEqual([
       { kind: 'missing', ids: ['End'] },
       { kind: 'missing', ids: ['F2'] },
     ]);
-    expect(m.score).toBe(2 * WEIGHTS.missing);
+    expect(metrics.score).toBe(2 * WEIGHTS.missing);
   });
 
   it('finds labels on shapes and text crossed by a line', async () => {
     const di = { ...LINEAR_DI, Start: shape('Start', [150, 122, 36, 36], { label: [200, 130, 50, 14] }) };
     const body = LINEAR_BODY.replace('<bpmn:startEvent id="Start" />', '<bpmn:startEvent id="Start" name="Go" />');
-    const m = await measure(processXml(body, Object.values(di)));
-    expect(only(m.problems, 'labelClash')).toEqual([{ kind: 'labelClash', ids: ['Start', 'Task_A'], detail: 'label on shape' }]);
-    expect(only(m.problems, 'labelOnLine')).toEqual([{ kind: 'labelOnLine', ids: ['Start', 'F1'] }]);
+    const metrics = await measure(processXml(body, Object.values(di)));
+    expect(only(metrics.problems, 'labelClash')).toEqual([{ kind: 'labelClash', ids: ['Start', 'Task_A'], detail: 'label on shape' }]);
+    expect(only(metrics.problems, 'labelOnLine')).toEqual([{ kind: 'labelOnLine', ids: ['Start', 'F1'] }]);
   });
 
   describe('pools and lanes', () => {
@@ -215,17 +215,17 @@ describe('layoutProblems', () => {
     ];
 
     it('is clean when everything sits in its lane and pool', async () => {
-      const m = await measure(lanedXml([130, 175, 670, 125], [200, 80, 100, 80], straight));
-      expect(m.problems).toEqual([]);
+      const metrics = await measure(lanedXml([130, 175, 670, 125], [200, 80, 100, 80], straight));
+      expect(metrics.problems).toEqual([]);
     });
 
     it('finds a node outside its lane (its centre in the other lane: also an intrusion there)', async () => {
-      const m = await measure(lanedXml([130, 175, 670, 125], [600, 190, 100, 80], straight));
-      expect(m.problems).toEqual([
+      const metrics = await measure(lanedXml([130, 175, 670, 125], [600, 190, 100, 80], straight));
+      expect(metrics.problems).toEqual([
         { kind: 'frameIntrusion', ids: ['Task_A', 'Lane_2'] },
         { kind: 'outsideLane', ids: ['Task_A', 'Lane_1'] },
       ]);
-      expect(m.score).toBe(WEIGHTS.outsideLane + WEIGHTS.frameIntrusion);
+      expect(metrics.score).toBe(WEIGHTS.outsideLane + WEIGHTS.frameIntrusion);
     });
 
     it('finds a node outside its pool and a flow leaving its lane and pool', async () => {
@@ -236,16 +236,16 @@ describe('layoutProblems', () => {
         [450, 320],
         [450, 280],
       ];
-      const m = await measure(lanedXml([130, 175, 670, 125], [200, 310, 100, 80], detour));
-      expect(nonZero(m.counts)).toEqual({ outsideLane: 1, outsidePool: 1, edgeLeavesLane: 1, edgeOutside: 1 });
-      expect(only(m.problems, 'outsidePool')).toEqual([{ kind: 'outsidePool', ids: ['Task_A', 'Pool'] }]);
-      expect(only(m.problems, 'edgeLeavesLane')).toEqual([{ kind: 'edgeLeavesLane', ids: ['F1', 'Lane_2'] }]);
-      expect(only(m.problems, 'edgeOutside')).toEqual([{ kind: 'edgeOutside', ids: ['F1', 'Pool'] }]);
+      const metrics = await measure(lanedXml([130, 175, 670, 125], [200, 310, 100, 80], detour));
+      expect(nonZero(metrics.counts)).toEqual({ outsideLane: 1, outsidePool: 1, edgeLeavesLane: 1, edgeOutside: 1 });
+      expect(only(metrics.problems, 'outsidePool')).toEqual([{ kind: 'outsidePool', ids: ['Task_A', 'Pool'] }]);
+      expect(only(metrics.problems, 'edgeLeavesLane')).toEqual([{ kind: 'edgeLeavesLane', ids: ['F1', 'Lane_2'] }]);
+      expect(only(metrics.problems, 'edgeOutside')).toEqual([{ kind: 'edgeOutside', ids: ['F1', 'Pool'] }]);
     });
 
     it('finds lanes not filling their pool', async () => {
-      const m = await measure(lanedXml([130, 175, 670, 110], [200, 80, 100, 80], straight));
-      expect(m.problems).toEqual([{ kind: 'laneGap', ids: ['Lane_2', 'Pool'], detail: 'bottom' }]);
+      const metrics = await measure(lanedXml([130, 175, 670, 110], [200, 80, 100, 80], straight));
+      expect(metrics.problems).toEqual([{ kind: 'laneGap', ids: ['Lane_2', 'Pool'], detail: 'bottom' }]);
     });
   });
 
@@ -259,25 +259,25 @@ describe('layoutProblems', () => {
 
   it('reports import warnings as one failed problem', async () => {
     const xml = processXml(LINEAR_BODY.replace('targetRef="End"', 'targetRef="Nowhere"'), Object.values(LINEAR_DI));
-    const m = await measure(xml);
-    expect(only(m.problems, 'failed')).toEqual([{ kind: 'failed', ids: [], detail: 'import warnings: 1' }]);
-    expect(m.score).toBeGreaterThanOrEqual(WEIGHTS.failed);
+    const metrics = await measure(xml);
+    expect(only(metrics.problems, 'failed')).toEqual([{ kind: 'failed', ids: [], detail: 'import warnings: 1' }]);
+    expect(metrics.score).toBeGreaterThanOrEqual(WEIGHTS.failed);
   });
 
   it('works on a parsed definitions element without touching the model', async () => {
     const { definitions } = await parseXml(processXml(LINEAR_BODY, Object.values(LINEAR_DI)));
     const proc = definitions.rootElements[0];
-    const m = LayoutAnalysis.of(definitions);
-    expect(m.score).toBe(0);
+    const metrics = LayoutAnalysis.of(definitions);
+    expect(metrics.score).toBe(0);
     expect(Object.hasOwn(proc, 'laneSets')).toBe(false);
     expect(Object.hasOwn(proc, 'artifacts')).toBe(false);
   });
 
   it('scores counts with the weights', async () => {
     const { End: _end, ...rest } = LINEAR_DI;
-    const m = await measure(processXml(LINEAR_BODY, Object.values(rest)));
-    expect(m.score).toBe(scoreOf(m.counts));
-    expect(m.score).toBe(WEIGHTS.missing);
+    const metrics = await measure(processXml(LINEAR_BODY, Object.values(rest)));
+    expect(metrics.score).toBe(scoreOf(metrics.counts));
+    expect(metrics.score).toBe(WEIGHTS.missing);
   });
 });
 
@@ -304,9 +304,9 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
         [200, 160],
       ]),
     ];
-    const m = await measure(processXml(body, di));
-    expect(only(m.problems, 'backwardFlow')).toEqual([{ kind: 'backwardFlow', ids: ['F1', 'A', 'B'] }]);
-    expect(m.score).toBe(WEIGHTS.backwardFlow + scoreOf({ ...m.counts, backwardFlow: 0 }));
+    const metrics = await measure(processXml(body, di));
+    expect(only(metrics.problems, 'backwardFlow')).toEqual([{ kind: 'backwardFlow', ids: ['F1', 'A', 'B'] }]);
+    expect(metrics.score).toBe(WEIGHTS.backwardFlow + scoreOf({ ...metrics.counts, backwardFlow: 0 }));
   });
 
   it('segmentOverlap: two flows merging on one line before their target, not a fork', async () => {
@@ -340,20 +340,20 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
         [600, 490],
       ]),
     ];
-    const m = await measure(processXml(body, di));
-    expect(only(m.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['F1', 'F2', 'J'], detail: '100px' }]);
+    const metrics = await measure(processXml(body, di));
+    expect(only(metrics.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['F1', 'F2', 'J'], detail: '100px' }]);
   });
 
   describe('segmentOverlap into a gateway: a join\'s entries share its bottom / top vertex', () => {
     type Line = Array<[number, number]>;
     // A, B, C left of the target J (one above the other), J -> E
-    const J: Rect = [300, 115, 50, 50]; // vertices: left 300,140  top 325,115  bottom 325,165
-    const scene = (kind: string, j: Rect, lines: { FA: Line; FB: Line; FC: Line; FE?: Line }, extra: { body?: string; di?: string[] } = {}): string =>
+    const joinBounds: Rect = [300, 115, 50, 50]; // vertices: left 300,140  top 325,115  bottom 325,165
+    const scene = (kind: string, gatewayBounds: Rect, lines: { FA: Line; FB: Line; FC: Line; FE?: Line }, extra: { body?: string; di?: string[] } = {}): string =>
       processXml(`${task('A')}${task('B')}${task('C')}<bpmn:${kind} id="J" />${task('E')}${flow('FA', 'A', 'J')}${flow('FB', 'B', 'J')}${flow('FC', 'C', 'J')}${flow('FE', 'J', 'E')}${extra.body ?? ''}`, [
         shape('A', [100, 100, 100, 80]),
         shape('B', [100, 250, 100, 80]),
         shape('C', [100, 400, 100, 80]),
-        shape('J', j),
+        shape('J', gatewayBounds),
         shape('E', [450, 100, 100, 80]),
         edge('FA', lines.FA),
         edge('FB', lines.FB),
@@ -368,15 +368,15 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
 
     for (const kind of ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'complexGateway', 'eventBasedGateway']) {
       it(`a shared rise into the bottom vertex of a join is not reported (${kind})`, async () => {
-        const m = await measure(scene(kind, J, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_C }));
-        expect(m.problems).toEqual([]);
-        expect(m.score).toBe(0);
+        const metrics = await measure(scene(kind, joinBounds, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_C }));
+        expect(metrics.problems).toEqual([]);
+        expect(metrics.score).toBe(0);
       });
     }
 
     it('a shared descent into the top vertex is not reported', async () => {
       // J below its entries: A and B come down into the top vertex 325,480 (110 px on one line), C enters the left vertex
-      const m = await measure(
+      const metrics = await measure(
         scene('parallelGateway', [300, 480, 50, 50], {
           FA: [[200, 140], [325, 140], [325, 480]],
           FB: [[200, 290], [325, 290], [325, 480]],
@@ -384,32 +384,32 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
           FE: [[350, 505], [400, 505], [400, 140], [450, 140]],
         }),
       );
-      expect(m.problems).toEqual([]);
+      expect(metrics.problems).toEqual([]);
     });
 
     it('a hook bundle is not reported: up the column gap, the hook and the rise, back to where the flows part', async () => {
       // B and C share the gap at x 400 (110 px), the hook at y 180 (75 px) and the rise (15 px)
-      const m = await measure(
-        scene('exclusiveGateway', J, {
+      const metrics = await measure(
+        scene('exclusiveGateway', joinBounds, {
           FA: INTO_LEFT,
           FB: [[200, 290], [400, 290], [400, 180], [325, 180], [325, 165]],
           FC: [[200, 440], [400, 440], [400, 180], [325, 180], [325, 165]],
         }),
       );
-      expect(only(m.problems, 'segmentOverlap')).toEqual([]);
+      expect(only(metrics.problems, 'segmentOverlap')).toEqual([]);
     });
 
     it('still reported: a merge onto a line into the left vertex, two flows drawn on top of each other, a task as the target', async () => {
       // B joins A's line 40 px before the left vertex; C rises into the bottom vertex alone
-      const left = await measure(scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: [[200, 290], [260, 290], [260, 140], [300, 140]], FC: RISE_C }));
+      const left = await measure(scene('exclusiveGateway', joinBounds, { FA: INTO_LEFT, FB: [[200, 290], [260, 290], [260, 140], [300, 140]], FC: RISE_C }));
       expect(only(left.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FA', 'FB', 'J'], detail: '40px' }]);
       // B and C on one line from start to end: one flow hides the other
-      const hidden = await measure(scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_B }));
+      const hidden = await measure(scene('exclusiveGateway', joinBounds, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_B }));
       expect(only(hidden.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '250px' }]);
       // the same with a duplicate first waypoint on one or both of them (a zero-length first segment)
       const dup = (line: Line): Line => [line[0]!, ...line];
       for (const [fb, fc] of [[dup(RISE_B), RISE_B], [RISE_B, dup(RISE_B)], [dup(RISE_B), dup(RISE_B)]]) {
-        const twin = await measure(scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: fb!, FC: fc! }));
+        const twin = await measure(scene('exclusiveGateway', joinBounds, { FA: INTO_LEFT, FB: fb!, FC: fc! }));
         expect(only(twin.problems, 'segmentOverlap')).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '250px' }]);
       }
       // the same rise into the bottom of a task: an implicit join, the flows merge before it
@@ -419,11 +419,11 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
 
     it('a gateway that also splits: entries sharing the bottom vertex with its outgoing drop are inOut', async () => {
       // J -> X drops from the bottom vertex the entries of B and C rise into
-      const m = await measure(
-        scene('exclusiveGateway', J, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_C }, { body: `${task('X')}${flow('FX', 'J', 'X')}`, di: [shape('X', [450, 300, 100, 80]), edge('FX', [[325, 165], [325, 340], [450, 340]])] }),
+      const metrics = await measure(
+        scene('exclusiveGateway', joinBounds, { FA: INTO_LEFT, FB: RISE_B, FC: RISE_C }, { body: `${task('X')}${flow('FX', 'J', 'X')}`, di: [shape('X', [450, 300, 100, 80]), edge('FX', [[325, 165], [325, 340], [450, 340]])] }),
       );
-      expect(only(m.problems, 'segmentOverlap')).toEqual([]);
-      expect(only(m.problems, 'inOut')).toEqual([
+      expect(only(metrics.problems, 'segmentOverlap')).toEqual([]);
+      expect(only(metrics.problems, 'inOut')).toEqual([
         { kind: 'inOut', ids: ['FB', 'FX', 'J'] },
         { kind: 'inOut', ids: ['FC', 'FX', 'J'] },
       ]);
@@ -431,16 +431,16 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
 
     it('a pair still reported counts only what it shares outside the common tail, and shows its badge there', async () => {
       // B and C form a hook bundle into the bottom vertex (gap at x 400, hook at y 230, rise); C first runs 35 px along the hook's line
-      const xml = scene('exclusiveGateway', J, {
+      const xml = scene('exclusiveGateway', joinBounds, {
         FA: INTO_LEFT,
         FB: [[200, 290], [400, 290], [400, 230], [325, 230], [325, 165]],
         FC: [[200, 440], [230, 440], [230, 230], [360, 230], [360, 300], [400, 300], [400, 230], [325, 230], [325, 165]],
       });
-      const m = await measure(xml);
-      const found = only(m.problems, 'segmentOverlap');
+      const metrics = await measure(xml);
+      const found = only(metrics.problems, 'segmentOverlap');
       expect(found).toEqual([{ kind: 'segmentOverlap', ids: ['FB', 'FC', 'J'], detail: '35px' }]);
       const { definitions } = await parseXml(xml);
-      expect(new ProblemLocator(definitions).locate(found).map((p) => p.at)).toEqual([{ plane: 'Process_1', x: 342.5, y: 230 }]);
+      expect(new ProblemLocator(definitions).locate(found).map((problem) => problem.at)).toEqual([{ plane: 'Process_1', x: 342.5, y: 230 }]);
     });
   });
 
@@ -486,9 +486,9 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
         processXml(`<bpmn:subProcess id="Sub"${name ? ` name="${name}"` : ''} /><bpmn:startEvent id="E" name="Order in" />`, [shape('Sub', [100, 100, 300, 200], { expanded }), shape('E', [40, 40, 36, 36], { label })]);
 
       it('a label on the title of a named expanded sub-process', async () => {
-        const m = await measure(titled('Handle order', true, [230, 105, 60, 14]));
-        expect(m.problems).toEqual([{ kind: 'labelOnTitle', ids: ['E', 'Sub'] }]);
-        expect(m.score).toBe(WEIGHTS.labelOnTitle);
+        const metrics = await measure(titled('Handle order', true, [230, 105, 60, 14]));
+        expect(metrics.problems).toEqual([{ kind: 'labelOnTitle', ids: ['E', 'Sub'] }]);
+        expect(metrics.score).toBe(WEIGHTS.labelOnTitle);
       });
 
       it('a label below the title, or beside it, is none', async () => {
@@ -501,8 +501,8 @@ describe('drawing-quality kinds (QUALITY_KEYS)', () => {
       });
 
       it('a collapsed sub-process is a leaf: a label on it is a labelClash, not on a title', async () => {
-        const m = await measure(titled('Handle order', false, [230, 105, 60, 14]));
-        expect(m.problems).toEqual([{ kind: 'labelClash', ids: ['E', 'Sub'], detail: 'label on shape' }]);
+        const metrics = await measure(titled('Handle order', false, [230, 105, 60, 14]));
+        expect(metrics.problems).toEqual([{ kind: 'labelClash', ids: ['E', 'Sub'], detail: 'label on shape' }]);
       });
     });
   });
@@ -514,38 +514,38 @@ describe('KEYS and WEIGHTS', () => {
     const keys = /const KEYS = (\[[^\]]*\]);/.exec(src)?.[1];
     const weights = /const WEIGHTS = \{([^}]*)\};/.exec(src)?.[1];
     expect(JSON.parse((keys ?? '').replaceAll("'", '"'))).toEqual([...HARNESS_KEYS]);
-    expect(KEYS.filter((k) => !HARNESS_KEYS.includes(k))).toEqual([...EXTRA_KEYS, ...QUALITY_KEYS]);
-    const pairs = Object.fromEntries((weights ?? '').split(',').map((kv) => kv.split(':').map((s) => s.trim())).map(([k, v]) => [k, Number(v)]));
-    expect(pairs).toEqual(Object.fromEntries(HARNESS_KEYS.map((k) => [k, WEIGHTS[k]])));
-    for (const k of EXTRA_KEYS) expect(WEIGHTS[k]).toBe(WEIGHTS.overlaps);
+    expect(KEYS.filter((key) => !HARNESS_KEYS.includes(key))).toEqual([...EXTRA_KEYS, ...QUALITY_KEYS]);
+    const pairs = Object.fromEntries((weights ?? '').split(',').map((kv) => kv.split(':').map((part) => part.trim())).map(([key, weight]) => [key, Number(weight)]));
+    expect(pairs).toEqual(Object.fromEntries(HARNESS_KEYS.map((key) => [key, WEIGHTS[key]])));
+    for (const key of EXTRA_KEYS) expect(WEIGHTS[key]).toBe(WEIGHTS.overlaps);
     // the quality kinds are soft: the bench and the fuzzer count weights >= 6 as hard
-    for (const k of QUALITY_KEYS) expect(WEIGHTS[k]).toBeLessThan(6);
+    for (const key of QUALITY_KEYS) expect(WEIGHTS[key]).toBeLessThan(6);
   });
 });
 
 describe('diffProblems', () => {
-  const p = (kind: MetricKey, ids: string[], detail?: string): LayoutProblem => (detail === undefined ? { kind, ids } : { kind, ids, detail });
+  const makeProblem = (kind: MetricKey, ids: string[], detail?: string): LayoutProblem => (detail === undefined ? { kind, ids } : { kind, ids, detail });
 
   it('reports added and resolved problems by kind and ids', () => {
-    const before = [p('overlaps', ['A', 'B']), p('missing', ['X'])];
-    const after = [p('missing', ['X']), p('through', ['F1', 'C'])];
-    expect(diffProblems(before, after)).toEqual({ added: [p('through', ['F1', 'C'])], resolved: [p('overlaps', ['A', 'B'])] });
+    const before = [makeProblem('overlaps', ['A', 'B']), makeProblem('missing', ['X'])];
+    const after = [makeProblem('missing', ['X']), makeProblem('through', ['F1', 'C'])];
+    expect(diffProblems(before, after)).toEqual({ added: [makeProblem('through', ['F1', 'C'])], resolved: [makeProblem('overlaps', ['A', 'B'])] });
   });
 
   it('ignores the order of symmetric pairs and measured details', () => {
-    const before = [p('crossings', ['F1', 'F2']), p('parallelRun', ['F3', 'F4'], '30px')];
-    const after = [p('crossings', ['F2', 'F1']), p('parallelRun', ['F4', 'F3'], '45px')];
+    const before = [makeProblem('crossings', ['F1', 'F2']), makeProblem('parallelRun', ['F3', 'F4'], '30px')];
+    const after = [makeProblem('crossings', ['F2', 'F1']), makeProblem('parallelRun', ['F4', 'F3'], '45px')];
     expect(diffProblems(before, after)).toEqual({ added: [], resolved: [] });
   });
 
   it('keeps order and categorical details where they matter', () => {
-    expect(problemKey(p('through', ['F1', 'A']))).not.toBe(problemKey(p('through', ['A', 'F1'])));
-    expect(problemKey(p('laneGap', ['L', 'P'], 'top'))).not.toBe(problemKey(p('laneGap', ['L', 'P'], 'bottom')));
-    expect(problemKey(p('labelClash', ['A', 'B'], 'label on shape'))).not.toBe(problemKey(p('labelClash', ['A', 'B'], 'label on label')));
+    expect(problemKey(makeProblem('through', ['F1', 'A']))).not.toBe(problemKey(makeProblem('through', ['A', 'F1'])));
+    expect(problemKey(makeProblem('laneGap', ['L', 'P'], 'top'))).not.toBe(problemKey(makeProblem('laneGap', ['L', 'P'], 'bottom')));
+    expect(problemKey(makeProblem('labelClash', ['A', 'B'], 'label on shape'))).not.toBe(problemKey(makeProblem('labelClash', ['A', 'B'], 'label on label')));
   });
 
   it('matches duplicates one to one', () => {
-    const dup = p('missing', ['X']);
+    const dup = makeProblem('missing', ['X']);
     expect(diffProblems([dup, dup], [dup])).toEqual({ added: [], resolved: [dup] });
   });
 
@@ -556,7 +556,7 @@ describe('diffProblems', () => {
     const delta = metricsDelta(before, after);
     expect(delta.before).toEqual({ counts: before.counts, score: 0 });
     expect(delta.after.score).toBe(WEIGHTS.missing);
-    expect(delta.added).toEqual([p('missing', ['End'])]);
+    expect(delta.added).toEqual([makeProblem('missing', ['End'])]);
     expect(delta.resolved).toEqual([]);
     expect(metricsDelta(undefined, after)).not.toHaveProperty('before');
   });

@@ -26,14 +26,14 @@ export class RoomHint {
     const cols = (after: string): void => {
       for (const by of ['1col', '2col', '3col'] as const) out.push({ op: 'space', after, by });
     };
-    const shapeOf = (id: string | undefined): DShape | undefined => (id ? this.ops.planes.map((p) => p.shapes.get(id)).find((x) => !!x) : undefined);
+    const shapeOf = (id: string | undefined): DShape | undefined => (id ? this.ops.planes.map((plane) => plane.shapes.get(id)).find((found) => !!found) : undefined);
     if (this.op.op === 'place') {
       if (this.op.after) cols(this.op.after);
       if (this.op.before) {
-        const b = shapeOf(this.op.before);
-        for (const f of rawList(this.ops.sem.byId.get(this.op.before), 'incoming')) {
-          const p = shapeOf(idOf(raw(f, 'sourceRef')));
-          if (b && p && right(p.bounds) <= b.bounds.x) cols(p.id);
+        const beforeShape = shapeOf(this.op.before);
+        for (const flow of rawList(this.ops.sem.byId.get(this.op.before), 'incoming')) {
+          const source = shapeOf(idOf(raw(flow, 'sourceRef')));
+          if (beforeShape && source && right(source.bounds) <= beforeShape.bounds.x) cols(source.id);
         }
       }
       if (this.op.below) for (const by of ['1row', '2row'] as const) out.push({ op: 'space', below: this.op.below, by });
@@ -43,15 +43,15 @@ export class RoomHint {
       const ref = shapeOf(this.op.op === 'place' ? this.op.rowOf : (this.op.to ?? this.op.ids?.[0]));
       const first = shapeOf(this.op.ids?.[0]);
       if (ref && first) {
-        const left = [...this.ops.planes.find((p) => p.shapes.has(ref.id))!.shapes.values()].filter((s) => PlaneQuery.isLeaf(s) && s.kind !== 'boundary' && !this.op.ids?.includes(s.id) && right(s.bounds) <= first.bounds.x && Math.abs(cy(s.bounds) - cy(ref.bounds)) <= s.bounds.height / 2).sort((a, b) => right(b.bounds) - right(a.bounds))[0];
+        const left = [...this.ops.planes.find((plane) => plane.shapes.has(ref.id))!.shapes.values()].filter((shape) => PlaneQuery.isLeaf(shape) && shape.kind !== 'boundary' && !this.op.ids?.includes(shape.id) && right(shape.bounds) <= first.bounds.x && Math.abs(cy(shape.bounds) - cy(ref.bounds)) <= shape.bounds.height / 2).sort((one, other) => right(other.bounds) - right(one.bounds))[0];
         if (left) cols(left.id);
       }
     }
-    return out.filter((c, i) => out.findIndex((d) => d.after === c.after && d.below === c.below && d.by === c.by) === i);
+    return out.filter((candidate, index) => out.findIndex((other) => other.after === candidate.after && other.below === candidate.below && other.by === candidate.by) === index);
   }
 
-  private spaceCommand(c: SpaceOp): string {
-    return `bpmn space <file> ${c.after ? `--after ${c.after}` : `--below ${c.below}`} --by ${String(c.by)}`;
+  private spaceCommand(candidate: SpaceOp): string {
+    return `bpmn space <file> ${candidate.after ? `--after ${candidate.after}` : `--below ${candidate.below}`} --by ${String(candidate.by)}`;
   }
 
   /**
@@ -59,17 +59,17 @@ export class RoomHint {
    * the file lacks their changes, so only the batch op is named.
    */
   run(attempt: () => string[]): string[] {
-    const states = this.ops.planes.map((p) => new DrawingCheckpoint(p));
+    const states = this.ops.planes.map((plane) => new DrawingCheckpoint(plane));
     try {
       return attempt();
     } catch (err) {
       if (!(err instanceof CliError) || err.code !== 'E_NO_ROOM') throw err;
       let found: SpaceOp | undefined;
       let best = Infinity;
-      for (const c of this.candidates()) {
-        states.forEach((st) => st.restore());
+      for (const candidate of this.candidates()) {
+        states.forEach((state) => state.restore());
         try {
-          new SpaceAction(this.ops, c, this.ops.snapshot(), []).run();
+          new SpaceAction(this.ops, candidate, this.ops.snapshot(), []).run();
           if (this.op.op === 'place') new PlaceAction(this.ops, this.op, this.ops.snapshot(), []).run();
           else new AlignAction(this.ops, this.op, this.ops.snapshot(), []).run();
         } catch {
@@ -78,10 +78,10 @@ export class RoomHint {
         const score = this.ops.measure().score;
         if (score < best) {
           best = score;
-          found = c;
+          found = candidate;
         }
       }
-      states.forEach((st) => st.restore());
+      states.forEach((state) => state.restore());
       const again = this.op.op === 'place' ? 'place' : 'align';
       if (found && this.asFile) {
         err.details['command'] = this.spaceCommand(found);
@@ -92,7 +92,7 @@ export class RoomHint {
         err.details.hint = `Make room first: in this batch, put ${JSON.stringify(found)} before this op (checked on the drawing the batch's earlier ops leave: the ${again} fits then).`;
       } else {
         const inWay = (err.details.related ?? []).filter((id) => !(this.op.ids ?? []).includes(id));
-        const tried = this.candidates().map((c) => `--${c.after ? 'after' : 'below'} ${c.after ?? c.below} --by ${String(c.by)}`);
+        const tried = this.candidates().map((candidate) => `--${candidate.after ? 'after' : 'below'} ${candidate.after ?? candidate.below} --by ${String(candidate.by)}`);
         err.details.hint = `No space-tool run makes this room (${tried.length ? `tried ${tried.join(', ')}` : 'the request names no column or row to make room at'}). ${inWay.length ? `Move ${inWay.join(', ')} out of the way first (\`bpmn place <file> ${inWay[0]} --below <id>\`), or use` : 'Use'} a reference inside the same lane / sub-process.`;
       }
       throw err;

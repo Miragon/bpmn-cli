@@ -33,7 +33,7 @@ export class GatewayLint {
   }
 
   private lintBranchNames(node: El, outgoing: El[]): void {
-    const unnamed = outgoing.filter((f) => !this.findings.nameOf(f));
+    const unnamed = outgoing.filter((flow) => !this.findings.nameOf(flow));
     if (!unnamed.length) return;
     this.findings.warning('W_BRANCH_NAME', `Branches ${unnamed.map(shownId).join(', ')} of ${this.findings.describe(node)} have no name`, shownId(node), {
       related: unnamed.map(shownId),
@@ -57,7 +57,7 @@ export class GatewayLint {
 
   private lintIgnoredConditions(node: El, outgoing: El[]): void {
     if (!ignoresConditions(node)) return;
-    const conditional = outgoing.filter((f) => peek<El | undefined>(f, 'conditionExpression'));
+    const conditional = outgoing.filter((flow) => peek<El | undefined>(flow, 'conditionExpression'));
     if (!conditional.length) return;
     this.findings.warning('W_CONDITION_IGNORED', `Flows ${conditional.map(shownId).join(', ')} out of ${this.findings.describe(node)} have a condition, which the gateway never evaluates`, shownId(node), {
       related: conditional.map(shownId),
@@ -67,10 +67,10 @@ export class GatewayLint {
 
   private lintEventGatewayTargets(node: El, outgoing: El[]): void {
     if (!is(node, 'bpmn:EventBasedGateway')) return;
-    const targets = outgoing.map((f) => peek<El>(f, 'targetRef')).filter((t): t is El => !!t);
-    for (const t of targets.filter((t) => !is(t, 'bpmn:IntermediateCatchEvent') && !is(t, 'bpmn:ReceiveTask'))) {
-      this.findings.warning('W_EVENT_GATEWAY_TARGET', `Event-based gateway ${shownId(node)} leads to ${this.findings.describe(t)}, which is not a catching event or receive task`, shownId(node), {
-        related: [shownId(t)],
+    const targets = outgoing.map((flow) => peek<El>(flow, 'targetRef')).filter((target): target is El => !!target);
+    for (const target of targets.filter((candidate) => !is(candidate, 'bpmn:IntermediateCatchEvent') && !is(candidate, 'bpmn:ReceiveTask'))) {
+      this.findings.warning('W_EVENT_GATEWAY_TARGET', `Event-based gateway ${shownId(node)} leads to ${this.findings.describe(target)}, which is not a catching event or receive task`, shownId(node), {
+        related: [shownId(target)],
         hint: 'Every branch of an event-based gateway must start with an intermediateCatchEvent (message/timer/signal/conditional) or a receiveTask.',
       });
     }

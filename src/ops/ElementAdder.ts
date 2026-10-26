@@ -27,7 +27,7 @@ import { EventDefinitions } from './events/EventDefinitions.js';
 import { RootElements } from './events/RootElements.js';
 import { PropertySetter } from './PropertySetter.js';
 
-const EVENT_SUBPROCESS_TRIGGERS: Trigger[] = (kindByName('startEvent')?.triggers ?? []).filter((t) => t !== 'none');
+const EVENT_SUBPROCESS_TRIGGERS: Trigger[] = (kindByName('startEvent')?.triggers ?? []).filter((trigger) => trigger !== 'none');
 
 const PLACEMENT_KEYS = ['after', 'before', 'flow', 'on', 'in'] as const;
 
@@ -123,7 +123,7 @@ export class ElementAdder {
         hint: 'outAs names the flow an add creates out of the new node: a splice, a prepend or "to" creates one. Otherwise connect the node with a connect op that has "as".',
       });
     }
-    const ends = out.map((f) => `${idOf(f)} to ${idOf(f.get<El>('targetRef'))}`).join(', ');
+    const ends = out.map((flow) => `${idOf(flow)} to ${idOf(flow.get<El>('targetRef'))}`).join(', ');
     throw usageError(`outAs ${alias}: ${id} gets ${out.length} flows out of it from this placement (${ends})`, {
       element: id,
       related: out.map(idOf),
@@ -156,7 +156,7 @@ export class ElementAdder {
     for (const key of [...PLACEMENT_KEYS, 'to'] as const) {
       if (op[key] !== undefined && !allowed.includes(key)) {
         throw modelError('E_INVALID_PLACEMENT', `--${key} does not apply to ${kind}`, {
-          hint: allowed.length ? `${kind} accepts ${allowed.map((k) => `--${k}`).join(', ')} only.` : `${kind} takes no placement options.`,
+          hint: allowed.length ? `${kind} accepts ${allowed.map((option) => `--${option}`).join(', ')} only.` : `${kind} takes no placement options.`,
         });
       }
     }
@@ -208,8 +208,8 @@ export class ElementAdder {
       return;
     }
     // a spliced flow without id takes op.flowId too
-    const named = (c: Change): boolean => c.kind === 'sequenceFlow' && c.id === op.flowId;
-    if (op.flowId && !cs.created.some(named) && !cs.changed.some((c) => named(c) && !!c.detail?.endsWith(renamedNote('')))) {
+    const named = (change: Change): boolean => change.kind === 'sequenceFlow' && change.id === op.flowId;
+    if (op.flowId && !cs.created.some(named) && !cs.changed.some((change) => named(change) && !!change.detail?.endsWith(renamedNote('')))) {
       const entry = entryFlow ?? this.doc.incoming(node)[0];
       const kept = !!entry && this.doc.edit.preferFlowId(entry, op.flowId, node);
       cs.warn({
@@ -318,7 +318,7 @@ export class ElementAdder {
         if (is(el, 'bpmn:StartEvent') && isEventSubProcess(scope)) {
           throw modelError('E_TRIGGER_REQUIRED', `Start event ${id} inside event sub-process ${idOf(scope!)} needs a trigger`, {
             element: id,
-            candidates: (def.triggers ?? []).filter((t) => t !== 'none'),
+            candidates: (def.triggers ?? []).filter((kindTrigger) => kindTrigger !== 'none'),
             hint: 'Use startEvent:<trigger>, e.g. startEvent:error --error PaymentFailed or startEvent:timer --timer R/PT1H.',
           });
         }
@@ -330,7 +330,7 @@ export class ElementAdder {
     if (messageTask) new PropertySetter(this.doc).setTaskMessage(el, op.message ?? '', cs);
     if (new Camunda8Defaults(this.doc).userTask(el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
     // checked once the trigger is set
-    for (const f of new Set([...this.doc.incoming(el), ...this.doc.outgoing(el)])) new EventGatewayRule(this.doc).warnFlow(f, cs);
+    for (const flow of new Set([...this.doc.incoming(el), ...this.doc.outgoing(el)])) new EventGatewayRule(this.doc).warnFlow(flow, cs);
     if (op.collapsed && def.family === 'subProcess') {
       this.doc.layoutRequests.collapse(id);
       cs.note(`${id} will be laid out collapsed`);
@@ -396,7 +396,7 @@ export class ElementAdder {
         ElementAdder.rejectPlacement(op, [], 'participant');
         const before = new Set(this.doc.processes());
         el = new PoolEditor(this.doc).createParticipant(op, cs);
-        for (const p of this.doc.processes()) if (!before.has(p)) this.doc.initProcess(p);
+        for (const process of this.doc.processes()) if (!before.has(process)) this.doc.initProcess(process);
         break;
       }
       case 'lane':

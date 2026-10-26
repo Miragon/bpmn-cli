@@ -31,7 +31,7 @@ export class AliasTable {
 
   idOf(alias: string, index: number, op: Op, key: string): string {
     const entry = this.map.get(alias);
-    if (!entry) throw unknownAlias(index, op, key, alias, new Map([...this.map].map(([a, e]) => [a, e.op])));
+    if (!entry) throw unknownAlias(index, op, key, alias, new Map([...this.map].map(([aliasName, aliasEntry]) => [aliasName, aliasEntry.op])));
     const id = entry.el.get<string | undefined>('id');
     if (!id || this.doc.get(id) !== entry.el) {
       throw new CliError('E_NOT_FOUND', `ops[${index}] (${op.op}): "${key}": ${alias} named ${id ?? 'an element'}, which an op before this one removed`, 'model', { op: index, element: id, hint: 'Refer to an element that still exists.' });

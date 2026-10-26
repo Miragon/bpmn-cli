@@ -29,7 +29,7 @@ export class TriggerChange {
   ) {
     this.before = is(el, 'bpmn:Event') ? new EventTrigger(el).read() : { trigger: 'none', opts: {} };
     this.was = triggerOf(el);
-    this.conflicts = new Set(TriggerChange.messageFlowConflicts(doc, el).map((c) => idOf(c.flow)));
+    this.conflicts = new Set(TriggerChange.messageFlowConflicts(doc, el).map((conflict) => idOf(conflict.flow)));
     this.state = IdRenamer.stateOf(el);
     this.label = kindLabel(el);
   }
@@ -54,7 +54,7 @@ export class TriggerChange {
         } else if (strict) merged.nonInterrupting = true;
       }
       if (strict && merged.nonInterrupting) this.assertNonInterruptingAllowed(on, trigger);
-      for (const w of new EventDefinitions(this.doc, on).apply(trigger, merged)) cs.warn(w);
+      for (const warning of new EventDefinitions(this.doc, on).apply(trigger, merged)) cs.warn(warning);
     }
     this.assertMessageFlowsFit(on);
     if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(cs, on, trigger);
@@ -89,7 +89,7 @@ export class TriggerChange {
 
   /** So the model never ends up with a message flow `connect` would refuse. */
   private assertMessageFlowsFit(event: El): void {
-    const broken = TriggerChange.messageFlowConflicts(this.doc, event).filter((c) => !this.conflicts.has(idOf(c.flow)));
+    const broken = TriggerChange.messageFlowConflicts(this.doc, event).filter((conflict) => !this.conflicts.has(idOf(conflict.flow)));
     const first = broken[0];
     if (!first) return;
     const src = first.flow.get<El | undefined>('sourceRef');
@@ -99,8 +99,8 @@ export class TriggerChange {
       `${kindLabel(event)} ${idOf(event)} would break message flow ${idOf(first.flow)} (${src ? idOf(src) : '?'} -> ${tgt ? idOf(tgt) : '?'}): ${first.why}`,
       {
         element: idOf(event),
-        related: broken.map((c) => idOf(c.flow)),
-        hint: `Remove the message flow first (\`bpmn remove <file> ${broken.map((c) => idOf(c.flow)).join(' ')}\`) or keep a message / untyped event.`,
+        related: broken.map((conflict) => idOf(conflict.flow)),
+        hint: `Remove the message flow first (\`bpmn remove <file> ${broken.map((conflict) => idOf(conflict.flow)).join(' ')}\`) or keep a message / untyped event.`,
       },
     );
   }

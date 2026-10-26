@@ -73,15 +73,15 @@ export class MessageFlowRouter {
       return { up: this.straightHits(box, own, inside, true), down: this.straightHits(box, own, inside, false) };
     };
     const ends = jobs
-      .filter((j) => j.sourcePool && j.targetPool && j.sourcePool !== j.targetPool)
-      .map((j) => ({ a: j.sourcePool!, b: j.targetPool!, source: endCost(j.sourceBox, j.sourceOwn, j.source, j.sourcePool), target: endCost(j.targetBox, j.targetOwn, j.target, j.targetPool) }));
+      .filter((job) => job.sourcePool && job.targetPool && job.sourcePool !== job.targetPool)
+      .map((job) => ({ sourcePool: job.sourcePool!, targetPool: job.targetPool!, source: endCost(job.sourceBox, job.sourceOwn, job.source, job.sourcePool), target: endCost(job.targetBox, job.targetOwn, job.target, job.targetPool) }));
     if (!ends.length) return pools;
     const cost = (order: MessagePool[]): number => {
       let total = 0;
-      for (const e of ends) {
-        const ia = order.indexOf(e.a), ib = order.indexOf(e.b);
+      for (const end of ends) {
+        const ia = order.indexOf(end.sourcePool), ib = order.indexOf(end.targetPool);
         const down = ia < ib;
-        total += (down ? e.source.down : e.source.up) + (down ? e.target.up : e.target.down);
+        total += (down ? end.source.down : end.source.up) + (down ? end.target.up : end.target.down);
         total += SKIP * Math.max(0, Math.abs(ia - ib) - 1);
       }
       return total;
@@ -90,10 +90,10 @@ export class MessageFlowRouter {
     let bestCost = cost(pools);
     for (const order of this.permutations(pools)) {
       if (bestCost === 0) break;
-      const c = cost(order);
-      if (c < bestCost) {
+      const orderCost = cost(order);
+      if (orderCost < bestCost) {
         best = order;
-        bestCost = c;
+        bestCost = orderCost;
       }
     }
     return best;
@@ -102,9 +102,9 @@ export class MessageFlowRouter {
   /** Expects the pools in their final top-to-bottom order. */
   route(): Array<{ el: El; points: Point[]; channelY?: number }> {
     const { pools, jobs } = this;
-    const rightEdge = Math.max(0, ...pools.map((p) => p.box.x + p.box.width));
-    const gapRange = (i: number): { top: number; bottom: number } => {
-      const upper = pools[i], lower = pools[i + 1];
+    const rightEdge = Math.max(0, ...pools.map((pool) => pool.box.x + pool.box.width));
+    const gapRange = (gapIndex: number): { top: number; bottom: number } => {
+      const upper = pools[gapIndex], lower = pools[gapIndex + 1];
       const top = upper ? upper.box.y + upper.box.height : (lower?.box.y ?? 0) - SIZES.poolGap;
       const bottom = lower ? lower.box.y : (upper ? upper.box.y + upper.box.height : 0) + SIZES.poolGap;
       return { top, bottom };
@@ -113,14 +113,14 @@ export class MessageFlowRouter {
     // one channel per flow and gap: flows that start further left get the upper channel
     const channels = new Map<string, number>();
     const byGap = new Map<number, Plan[]>();
-    for (const plan of plans) for (const g of new Set(plan.gaps)) byGap.set(g, [...(byGap.get(g) ?? []), plan]);
-    for (const [g, list] of byGap) {
-      const range = gapRange(g);
-      const level = (i: number, n: number): number => Math.round(range.top + ((i + 1) * (range.bottom - range.top)) / (n + 1));
-      const sorted = [...list].sort((p, q) => Math.min(p.sx, p.tx) - Math.min(q.sx, q.tx));
+    for (const plan of plans) for (const gap of new Set(plan.gaps)) byGap.set(gap, [...(byGap.get(gap) ?? []), plan]);
+    for (const [gap, list] of byGap) {
+      const range = gapRange(gap);
+      const level = (channelIndex: number, channelCount: number): number => Math.round(range.top + ((channelIndex + 1) * (range.bottom - range.top)) / (channelCount + 1));
+      const sorted = [...list].sort((left, right) => Math.min(left.sx, left.tx) - Math.min(right.sx, right.tx));
       // pick the channel order with the fewest crossings (few flows per gap, so try them all)
       const order = sorted.length <= 5 ? this.bestChannelOrder(sorted, level, range) : sorted;
-      order.forEach((plan, i) => channels.set(`${g}|${plans.indexOf(plan)}`, level(i, order.length)));
+      order.forEach((plan, channelIndex) => channels.set(`${gap}|${plans.indexOf(plan)}`, level(channelIndex, order.length)));
     }
     return plans.map((plan, index) => {
       const { job, sx, tx, sourceLeg, targetLeg } = plan;
@@ -130,11 +130,11 @@ export class MessageFlowRouter {
       let middle: Point[];
       let channelY: number | undefined;
       if (!plan.outside) {
-        const y = channels.get(`${plan.gaps[0]}|${index}`) ?? Math.round((sy + ty) / 2);
-        middle = Math.abs(sx - tx) < 1 ? [] : [{ x: sx, y }, { x: tx, y }];
+        const channelHeight = channels.get(`${plan.gaps[0]}|${index}`) ?? Math.round((sy + ty) / 2);
+        middle = Math.abs(sx - tx) < 1 ? [] : [{ x: sx, y: channelHeight }, { x: tx, y: channelHeight }];
         // a straight flow carries its label in the middle of the gap
         const range = gapRange(plan.gaps[0]!);
-        channelY = middle.length ? y : Math.round((range.top + range.bottom) / 2);
+        channelY = middle.length ? channelHeight : Math.round((range.top + range.bottom) / 2);
       } else {
         const outX = Math.round(rightEdge + 30 + index * 25);
         const y1 = channels.get(`${plan.gaps[0]}|${index}`) ?? sy;
@@ -150,24 +150,24 @@ export class MessageFlowRouter {
   static label(pts: Point[], name: string, channelY?: number): Box {
     const width = Math.min(90, name.length * 7 + 4);
     const height = 14 * Math.max(1, Math.ceil((name.length * 7) / 90));
-    const i = channelY === undefined ? -1 : pts.findIndex((p, k) => k + 1 < pts.length && p.y === channelY && pts[k + 1]!.y === channelY);
-    const horizontal = i >= 0 ? [pts[i]!, pts[i + 1]!] : pts.length >= 3 ? [pts[1]!, pts[2]!] : [pts[0]!, pts[1]!];
+    const segmentIndex = channelY === undefined ? -1 : pts.findIndex((point, pointIndex) => pointIndex + 1 < pts.length && point.y === channelY && pts[pointIndex + 1]!.y === channelY);
+    const horizontal = segmentIndex >= 0 ? [pts[segmentIndex]!, pts[segmentIndex + 1]!] : pts.length >= 3 ? [pts[1]!, pts[2]!] : [pts[0]!, pts[1]!];
     if (horizontal[0]!.y === horizontal[1]!.y) {
       return { x: Math.min(horizontal[0]!.x, horizontal[1]!.x) + 8, y: horizontal[0]!.y - height - 4, width, height };
     }
-    const a = pts[0]!, b = pts[1]!;
-    const y = channelY !== undefined && pts.length === 2 ? channelY : (a.y + b.y) / 2;
-    return { x: a.x + 6, y: y - height / 2, width, height };
+    const first = pts[0]!, second = pts[1]!;
+    const labelCenterY = channelY !== undefined && pts.length === 2 ? channelY : (first.y + second.y) / 2;
+    return { x: first.x + 6, y: labelCenterY - height / 2, width, height };
   }
 
-  private cuts([p, q]: Segment, b: Box): boolean {
-    return Math.min(p.x, q.x) < b.x + b.width - 1 && Math.max(p.x, q.x) > b.x + 1 && Math.min(p.y, q.y) < b.y + b.height - 1 && Math.max(p.y, q.y) > b.y + 1;
+  private cuts([start, end]: Segment, box: Box): boolean {
+    return Math.min(start.x, end.x) < box.x + box.width - 1 && Math.max(start.x, end.x) > box.x + 1 && Math.min(start.y, end.y) < box.y + box.height - 1 && Math.max(start.y, end.y) > box.y + 1;
   }
 
   private hits(points: Point[], boxes: Box[]): number {
-    let n = 0;
-    for (const b of boxes) if (toSegments(points).some((s) => this.cuts(s, b))) n++;
-    return n;
+    let hitCount = 0;
+    for (const box of boxes) if (toSegments(points).some((segment) => this.cuts(segment, box))) hitCount++;
+    return hitCount;
   }
 
   private overlapLength(a1: number, a2: number, b1: number, b2: number): number {
@@ -177,13 +177,13 @@ export class MessageFlowRouter {
   /** 300 per segment on top of a parallel line, 30 per one closer than NEAR (hard to tell apart) */
   private alongCost(points: Point[], lines: Segment[]): number {
     let cost = 0;
-    for (const [p, q] of toSegments(points)) {
-      const vertical = p.x === q.x;
-      for (const [a, b] of lines) {
-        if (vertical ? a.x !== b.x : a.y !== b.y) continue;
-        const off = vertical ? Math.abs(a.x - p.x) : Math.abs(a.y - p.y);
+    for (const [start, end] of toSegments(points)) {
+      const vertical = start.x === end.x;
+      for (const [lineStart, lineEnd] of lines) {
+        if (vertical ? lineStart.x !== lineEnd.x : lineStart.y !== lineEnd.y) continue;
+        const off = vertical ? Math.abs(lineStart.x - start.x) : Math.abs(lineStart.y - start.y);
         if (off >= NEAR) continue;
-        const len = vertical ? this.overlapLength(p.y, q.y, a.y, b.y) : this.overlapLength(p.x, q.x, a.x, b.x);
+        const len = vertical ? this.overlapLength(start.y, end.y, lineStart.y, lineEnd.y) : this.overlapLength(start.x, end.x, lineStart.x, lineEnd.x);
         if (len > 0) cost += off < 1 ? 300 : 30;
       }
     }
@@ -192,42 +192,42 @@ export class MessageFlowRouter {
 
   /** The pool's obstacles are the same box objects as the ends, so identity filters them. */
   private obstaclesFor(pool: MessagePool, box: Box, own: Box[], up = false): Box[] {
-    const mine = up ? own.filter((o) => !this.onTop(o, box)) : own;
-    return pool.obstacles.filter((o) => o !== box && !mine.includes(o));
+    const mine = up ? own.filter((obstacle) => !this.onTop(obstacle, box)) : own;
+    return pool.obstacles.filter((obstacle) => obstacle !== box && !mine.includes(obstacle));
   }
 
-  private onTop(o: Box, box: Box): boolean {
-    return center(o).y < center(box).y;
+  private onTop(obstacle: Box, box: Box): boolean {
+    return center(obstacle).y < center(box).y;
   }
 
   /** Running on top of a drawn line counts as one more cut. */
   private straightHits(box: Box, own: Box[], pool: MessagePool | undefined, up: boolean): number {
     if (!pool) return 0;
-    const x = Math.round(box.x + box.width / 2);
+    const centerX = Math.round(box.x + box.width / 2);
     const from = up ? box.y : box.y + box.height;
     const to = up ? pool.box.y : pool.box.y + pool.box.height;
-    const line = [{ x, y: from }, { x, y: to }];
+    const line = [{ x: centerX, y: from }, { x: centerX, y: to }];
     return this.hits(line, this.obstaclesFor(pool, box, own, up)) + (this.alongCost(line, pool.lines) >= 300 ? 1 : 0);
   }
 
   private corridorXs(pool: MessagePool, obstacles: Box[], y1: number, y2: number, near: number): number[] {
     const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
     const spans = obstacles
-      .filter((o) => o.y < hi && o.y + o.height > lo)
-      .map((o) => [o.x - CLEAR, o.x + o.width + CLEAR] as [number, number])
-      .sort((a, b) => a[0] - b[0]);
+      .filter((obstacle) => obstacle.y < hi && obstacle.y + obstacle.height > lo)
+      .map((obstacle) => [obstacle.x - CLEAR, obstacle.x + obstacle.width + CLEAR] as [number, number])
+      .sort((first, second) => first[0] - second[0]);
     const left = pool.contentLeft + CLEAR, right = pool.box.x + pool.box.width - CLEAR;
     const out: number[] = [];
     let cursor = left;
-    const gap = (a: number, b: number): void => {
-      if (b < a) return;
+    const gap = (gapStart: number, gapEnd: number): void => {
+      if (gapEnd < gapStart) return;
       // narrow gap: the middle or beside it (sequence flows use the middle); wide: near `near`
-      if (b - a > 120) out.push(Math.round(Math.min(Math.max(near, a + 20), b - 20)));
-      else out.push(Math.round((a + b) / 2), Math.round((a + b) / 2 - Math.min(10, (b - a) / 2)), Math.round((a + b) / 2 + Math.min(10, (b - a) / 2)));
+      if (gapEnd - gapStart > 120) out.push(Math.round(Math.min(Math.max(near, gapStart + 20), gapEnd - 20)));
+      else out.push(Math.round((gapStart + gapEnd) / 2), Math.round((gapStart + gapEnd) / 2 - Math.min(10, (gapEnd - gapStart) / 2)), Math.round((gapStart + gapEnd) / 2 + Math.min(10, (gapEnd - gapStart) / 2)));
     };
-    for (const [a, b] of spans) {
-      gap(cursor, Math.min(a, right));
-      cursor = Math.max(cursor, b);
+    for (const [spanStart, spanEnd] of spans) {
+      gap(cursor, Math.min(spanStart, right));
+      cursor = Math.max(cursor, spanEnd);
     }
     gap(cursor, right);
     return out;
@@ -242,68 +242,68 @@ export class MessageFlowRouter {
   private legOf(box: Box, own: Box[], pool: MessagePool | undefined, up: boolean, el: El): Leg {
     const edge = up ? box.y : box.y + box.height;
     const exits = this.exitXs(box);
-    const straight = (x: number): Leg => ({ points: [{ x, y: edge }], x });
+    const straight = (exitX: number): Leg => ({ points: [{ x: exitX, y: edge }], x: exitX });
     if (!pool || is(el, 'bpmn:Participant')) return straight(exits[0]!);
     const border = up ? pool.box.y : pool.box.y + pool.box.height;
     const obstacles = this.obstaclesFor(pool, box, own, up);
     const score = (pts: Point[]): number => this.hits(pts, obstacles) * 1000 + crossings(pts, pool.lines) * 5 + this.alongCost(pts, pool.lines);
     // clean straight lines: the middle first, else the one crossing the fewest lines
     const clean = exits
-      .map((x, i) => ({ x, line: [{ x, y: edge }, { x, y: border }], i }))
+      .map((exitX, exitIndex) => ({ x: exitX, line: [{ x: exitX, y: edge }, { x: exitX, y: border }], exitIndex }))
       .filter(({ line }) => !this.hits(line, obstacles) && this.alongCost(line, pool.lines) < 300)
-      .map(({ x, line, i }) => ({ x, score: i === 0 ? -1 : crossings(line, pool.lines) * 5 + i }));
-    if (clean.length) return straight(clean.reduce((a, b) => (b.score < a.score ? b : a)).x);
+      .map(({ x: exitX, line, exitIndex }) => ({ x: exitX, score: exitIndex === 0 ? -1 : crossings(line, pool.lines) * 5 + exitIndex }));
+    if (clean.length) return straight(clean.reduce((bestExit, candidate) => (candidate.score < bestExit.score ? candidate : bestExit)).x);
     // the jog clears the boundary events hanging out of the border it leaves
-    const reach = up ? Math.min(box.y, ...own.filter((o) => this.onTop(o, box)).map((o) => o.y)) : Math.max(box.y + box.height, ...own.map((o) => o.y + o.height));
+    const reach = up ? Math.min(box.y, ...own.filter((boundaryEvent) => this.onTop(boundaryEvent, box)).map((boundaryEvent) => boundaryEvent.y)) : Math.max(box.y + box.height, ...own.map((boundaryEvent) => boundaryEvent.y + boundaryEvent.height));
     const jy = Math.round(up ? reach - JOG : reach + JOG);
     let best: { leg: Leg; score: number } = { leg: straight(exits[0]!), score: score([{ x: exits[0]!, y: edge }, { x: exits[0]!, y: border }]) };
-    exits.forEach((ex, i) => {
-      for (const x of this.corridorXs(pool, obstacles, jy, border, ex)) {
-        const points = [{ x: ex, y: edge }, { x: ex, y: jy }, { x, y: jy }];
-        const total = score([...points, { x, y: border }]) + Math.abs(x - ex) * 0.01 + i;
-        if (total < best.score) best = { leg: { points, x }, score: total };
+    exits.forEach((ex, exitIndex) => {
+      for (const corridorX of this.corridorXs(pool, obstacles, jy, border, ex)) {
+        const points = [{ x: ex, y: edge }, { x: ex, y: jy }, { x: corridorX, y: jy }];
+        const total = score([...points, { x: corridorX, y: border }]) + Math.abs(corridorX - ex) * 0.01 + exitIndex;
+        if (total < best.score) best = { leg: { points, x: corridorX }, score: total };
       }
     });
     return best.leg;
   }
 
-  private permutations<T>(list: T[]): T[][] {
+  private permutations<TItem>(list: TItem[]): TItem[][] {
     if (list.length <= 1) return [list];
-    const out: T[][] = [];
-    list.forEach((item, i) => {
-      for (const rest of this.permutations([...list.slice(0, i), ...list.slice(i + 1)])) out.push([item, ...rest]);
+    const out: TItem[][] = [];
+    list.forEach((item, index) => {
+      for (const rest of this.permutations([...list.slice(0, index), ...list.slice(index + 1)])) out.push([item, ...rest]);
     });
     return out;
   }
 
-  private gapPolyline(sx: number, tx: number, y: number, above: number, below: number): Point[] {
-    return [{ x: sx, y: above }, { x: sx, y }, { x: tx, y }, { x: tx, y: below }];
+  private gapPolyline(sx: number, tx: number, channelHeight: number, above: number, below: number): Point[] {
+    return [{ x: sx, y: above }, { x: sx, y: channelHeight }, { x: tx, y: channelHeight }, { x: tx, y: below }];
   }
 
-  private bestChannelOrder<T extends { sx: number; tx: number; down: boolean }>(list: T[], level: (i: number, n: number) => number, range: { top: number; bottom: number }): T[] {
-    const crossingsOf = (order: T[]): number => {
-      const lines = order.map((p, i) => this.gapPolyline(p.sx, p.tx, level(i, order.length), p.down ? range.top - 1 : range.bottom + 1, p.down ? range.bottom + 1 : range.top - 1));
-      let n = 0;
-      for (let i = 0; i < lines.length; i++) {
-        for (let j = i + 1; j < lines.length; j++) {
-          for (const a of toSegments(lines[i]!)) for (const b of toSegments(lines[j]!)) if (properCross(a, b)) n++;
+  private bestChannelOrder<TPlan extends { sx: number; tx: number; down: boolean }>(list: TPlan[], level: (channelIndex: number, channelCount: number) => number, range: { top: number; bottom: number }): TPlan[] {
+    const crossingsOf = (order: TPlan[]): number => {
+      const lines = order.map((plan, index) => this.gapPolyline(plan.sx, plan.tx, level(index, order.length), plan.down ? range.top - 1 : range.bottom + 1, plan.down ? range.bottom + 1 : range.top - 1));
+      let crossingCount = 0;
+      for (let index = 0; index < lines.length; index++) {
+        for (let otherIndex = index + 1; otherIndex < lines.length; otherIndex++) {
+          for (const segment of toSegments(lines[index]!)) for (const otherSegment of toSegments(lines[otherIndex]!)) if (properCross(segment, otherSegment)) crossingCount++;
         }
       }
-      return n;
+      return crossingCount;
     };
     let best = list;
     let bestCount = crossingsOf(list);
-    const permute = (rest: T[], acc: T[]): void => {
+    const permute = (rest: TPlan[], acc: TPlan[]): void => {
       if (bestCount === 0) return;
       if (!rest.length) {
-        const n = crossingsOf(acc);
-        if (n < bestCount) {
-          bestCount = n;
+        const crossingCount = crossingsOf(acc);
+        if (crossingCount < bestCount) {
+          bestCount = crossingCount;
           best = acc;
         }
         return;
       }
-      rest.forEach((item, i) => permute([...rest.slice(0, i), ...rest.slice(i + 1)], [...acc, item]));
+      rest.forEach((item, index) => permute([...rest.slice(0, index), ...rest.slice(index + 1)], [...acc, item]));
     };
     permute(list, []);
     return best;
@@ -314,9 +314,9 @@ export class MessageFlowRouter {
   }
 
   private planOf(job: MessageFlowJob): Plan {
-    const indexOf = (p?: MessagePool): number => (p ? this.pools.indexOf(p) : -1);
-    const a = indexOf(job.sourcePool), b = indexOf(job.targetPool);
-    const down = a < b || (a === b && center(job.sourceBox).y < center(job.targetBox).y) || b < 0;
+    const indexOf = (pool?: MessagePool): number => (pool ? this.pools.indexOf(pool) : -1);
+    const sourceIndex = indexOf(job.sourcePool), targetIndex = indexOf(job.targetPool);
+    const down = sourceIndex < targetIndex || (sourceIndex === targetIndex && center(job.sourceBox).y < center(job.targetBox).y) || targetIndex < 0;
     const sourcePool = is(job.source, 'bpmn:Participant');
     const targetPool = is(job.target, 'bpmn:Participant');
     let sourceLeg = this.legOf(job.sourceBox, job.sourceOwn, job.sourcePool, !down, job.source);
@@ -328,24 +328,24 @@ export class MessageFlowRouter {
       targetLeg = this.dockLeg(job.targetBox, center(job.sourceBox).x, down);
     }
     const sx = sourceLeg.x, tx = targetLeg.x;
-    if (a < 0 || b < 0 || Math.abs(a - b) === 1) return { job, sourceLeg, targetLeg, sx, tx, gaps: [Math.min(a, b) < 0 ? 0 : Math.min(a, b)], outside: false, down };
-    return { job, sourceLeg, targetLeg, sx, tx, gaps: [a < b ? a : a - 1, a < b ? b - 1 : b], outside: true, down };
+    if (sourceIndex < 0 || targetIndex < 0 || Math.abs(sourceIndex - targetIndex) === 1) return { job, sourceLeg, targetLeg, sx, tx, gaps: [Math.min(sourceIndex, targetIndex) < 0 ? 0 : Math.min(sourceIndex, targetIndex)], outside: false, down };
+    return { job, sourceLeg, targetLeg, sx, tx, gaps: [sourceIndex < targetIndex ? sourceIndex : sourceIndex - 1, sourceIndex < targetIndex ? targetIndex - 1 : targetIndex], outside: true, down };
   }
 
   private dockLeg(box: Box, otherX: number, up: boolean): Leg {
-    const x = this.poolDockX(box, otherX);
-    return { points: [{ x, y: up ? box.y : box.y + box.height }], x };
+    const dockX = this.poolDockX(box, otherX);
+    return { points: [{ x: dockX, y: up ? box.y : box.y + box.height }], x: dockX };
   }
 
   private simplify(points: Point[]): Point[] {
     const out: Point[] = [];
-    for (const p of points) {
-      const q = { x: Math.round(p.x), y: Math.round(p.y) };
+    for (const point of points) {
+      const rounded = { x: Math.round(point.x), y: Math.round(point.y) };
       const last = out[out.length - 1];
-      if (last && last.x === q.x && last.y === q.y) continue;
+      if (last && last.x === rounded.x && last.y === rounded.y) continue;
       const prev = out[out.length - 2];
-      if (last && prev && ((prev.x === last.x && last.x === q.x) || (prev.y === last.y && last.y === q.y))) out.pop();
-      out.push(q);
+      if (last && prev && ((prev.x === last.x && last.x === rounded.x) || (prev.y === last.y && last.y === rounded.y))) out.pop();
+      out.push(rounded);
     }
     return out;
   }

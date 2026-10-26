@@ -25,12 +25,12 @@ export class C8Profile extends EngineProfile {
 
   protected override checkDocument(run: RuleRun): void {
     const { doc } = run;
-    const p = run.ns.prefixOf(this.kit.zeebe.uri) ?? 'zeebe';
-    this.extensions = new C8ExtensionRules(run, p);
-    this.tasks = new C8TaskRules(run, p);
-    this.events = new C8EventRules(run, p, this.tasks);
-    this.flows = new C8FlowRules(run, p);
-    const schema = new C8SchemaRules(run, p);
+    const prefix = run.ns.prefixOf(this.kit.zeebe.uri) ?? 'zeebe';
+    this.extensions = new C8ExtensionRules(run, prefix);
+    this.tasks = new C8TaskRules(run, prefix);
+    this.events = new C8EventRules(run, prefix, this.tasks);
+    this.flows = new C8FlowRules(run, prefix);
+    const schema = new C8SchemaRules(run, prefix);
     const processes = doc.processes();
     const executable = processes.filter((proc) => peek<boolean>(proc, 'isExecutable') === true);
     schema.checkExecutable(processes, executable);

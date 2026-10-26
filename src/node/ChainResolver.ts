@@ -78,7 +78,7 @@ export class ChainResolver implements BpmnlintChain {
   }
 
   projectDeps(): Dep[] {
-    return [...[...this.leftOut].map((pkg) => ({ ids: [pkg], state: this.before.get(pkg)! })), ...[...this.loadFailures].map(([file, f]) => ({ ids: [file], state: f.state }))];
+    return [...[...this.leftOut].map((pkg) => ({ ids: [pkg], state: this.before.get(pkg)! })), ...[...this.loadFailures].map(([file, failure]) => ({ ids: [file], state: failure.state }))];
   }
 
   private async first(kind: 'rule' | 'config', pkg: string, name: string): Promise<unknown> {
@@ -86,7 +86,7 @@ export class ChainResolver implements BpmnlintChain {
     if (this.answers.has(key)) return this.answers.get(key);
     // recorded before any tier looks, so an install landing meanwhile still invalidates the cache
     if (pkg !== 'bpmnlint' && !this.before.has(pkg)) this.before.set(pkg, depState(this.rcDir, [pkg]));
-    const tiers = this.pinned.has(pkg) ? [...this.tiers.filter((t) => t.name === 'project'), ...this.tiers.filter((t) => t.name !== 'project')] : this.tiers;
+    const tiers = this.pinned.has(pkg) ? [...this.tiers.filter((tier) => tier.name === 'project'), ...this.tiers.filter((tier) => tier.name !== 'project')] : this.tiers;
     for (const tier of tiers) {
       if (!tier.accepts(pkg)) continue;
       try {
@@ -107,8 +107,8 @@ export class ChainResolver implements BpmnlintChain {
     const fail = (message: string, hint: string) => Object.assign(new Error(message), { hint });
     const where = shown(this.rcDir, this.opts.from);
     if (pkg === 'bpmnlint') {
-      const v = this.libs.bpmnlint.version;
-      return fail(`bpmnlint ${v} has no ${kind} ${name}`, `bpmn-cli runs bpmnlint ${v}; update bpmn-cli or remove the ${kind}.`);
+      const version = this.libs.bpmnlint.version;
+      return fail(`bpmnlint ${version} has no ${kind} ${name}`, `bpmn-cli runs bpmnlint ${version}; update bpmn-cli or remove the ${kind}.`);
     }
     this.leftOut.add(pkg);
     // resolved only to tell "not installed" from "outside the repository"; nothing is loaded
@@ -120,8 +120,8 @@ export class ChainResolver implements BpmnlintChain {
     }
     const projectRuns = !!this.opts.projectCode && !this.off && path !== undefined && inside(path, this.root);
     if (SHIPPED.has(pkg) && !projectRuns) {
-      const v = this.libs.shippedVersion(pkg);
-      const bundled = `${pkg}${v ? ` ${v}` : ''} (bundled with bpmn-cli) has no ${kind} ${name}`;
+      const version = this.libs.shippedVersion(pkg);
+      const bundled = `${pkg}${version ? ` ${version}` : ''} (bundled with bpmn-cli) has no ${kind} ${name}`;
       if (path !== undefined && inside(path, this.root)) {
         if (this.off) return fail(`${bundled}, and ${this.off.why}`, this.off.hint);
         return fail(`${bundled}, and this host does not run project plugins (lintProjectCode)`, this.repoOff ? `Check the name; lintProjectCode: true would not load the ${pkg} installed next to the .bpmnlintrc either: ${this.repoOff.why}.` : `Check the name, or let the host pass lintProjectCode: true to use the ${pkg} installed in the repository.`);
@@ -180,7 +180,7 @@ export class ChainResolver implements BpmnlintChain {
   }
 
   private bundledName(pkg: string, name: string): string | undefined {
-    const key = Object.keys(this.libs.plugin.bundledResolverEntries).find((k) => k.startsWith('rule:') && k.endsWith(`/${name}`) && k !== `rule:${pkg}/${name}`);
+    const key = Object.keys(this.libs.plugin.bundledResolverEntries).find((entryKey) => entryKey.startsWith('rule:') && entryKey.endsWith(`/${name}`) && entryKey !== `rule:${pkg}/${name}`);
     if (!key) return undefined;
     const owner = key.slice('rule:'.length, key.length - name.length - 1);
     return owner === 'bpmnlint' ? name : `${owner.replace(/(^|\/)bpmnlint-plugin-/, '$1')}/${name}`;

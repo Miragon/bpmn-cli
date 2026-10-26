@@ -6,10 +6,10 @@ export function isDataReference(el: El): boolean {
 }
 
 export function artifactContainerOf(el: El): El | undefined {
-  let p: El | undefined = el;
-  while (p) {
-    if (is(p, 'bpmn:Process') || is(p, 'bpmn:SubProcess') || is(p, 'bpmn:Collaboration')) return p;
-    p = p.$parent as El | undefined;
+  let ancestor: El | undefined = el;
+  while (ancestor) {
+    if (is(ancestor, 'bpmn:Process') || is(ancestor, 'bpmn:SubProcess') || is(ancestor, 'bpmn:Collaboration')) return ancestor;
+    ancestor = ancestor.$parent as El | undefined;
   }
   return undefined;
 }

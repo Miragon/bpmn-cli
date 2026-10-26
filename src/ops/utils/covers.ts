@@ -9,16 +9,16 @@ import { subjectOf, type ProfileFinding } from '../../platform/utils/finding.js'
 const COVERS: unique symbol = Symbol('covered-profile-subjects');
 
 /** The warning is dropped when the profile reports all `subjects` on its element. */
-export function coversProfileSubjects<W extends Warning>(warning: W, subjects: string[]): W {
+export function coversProfileSubjects<TWarning extends Warning>(warning: TWarning, subjects: string[]): TWarning {
   Object.defineProperty(warning, COVERS, { value: subjects, enumerable: false });
   return warning;
 }
 
 export function withoutProfileDuplicates(warnings: Warning[], validation: readonly Warning[]): Warning[] {
-  return warnings.filter((w) => {
-    const covers = (w as Warning & { [COVERS]?: string[] })[COVERS];
+  return warnings.filter((warning) => {
+    const covers = (warning as Warning & { [COVERS]?: string[] })[COVERS];
     if (!covers?.length) return true;
-    const reported = new Set(validation.filter((v) => v.element === w.element && 'severity' in v).map((v) => subjectOf(v as ProfileFinding)));
-    return !covers.every((s) => reported.has(s));
+    const reported = new Set(validation.filter((finding) => finding.element === warning.element && 'severity' in finding).map((finding) => subjectOf(finding as ProfileFinding)));
+    return !covers.every((subject) => reported.has(subject));
   });
 }

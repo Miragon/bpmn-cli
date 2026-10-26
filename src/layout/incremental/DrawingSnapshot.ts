@@ -13,22 +13,22 @@ export class DrawingSnapshot {
   readonly labels = new Map<string, Box>();
 
   constructor(private readonly drawings: readonly Drawing[]) {
-    for (const d of drawings) {
-      for (const s of d.plane.shapes.values()) {
-        this.bounds.set(s.id, copyBox(s.bounds));
-        if (s.label) this.labels.set(s.id, copyBox(s.label));
+    for (const drawing of drawings) {
+      for (const shape of drawing.plane.shapes.values()) {
+        this.bounds.set(shape.id, copyBox(shape.bounds));
+        if (shape.label) this.labels.set(shape.id, copyBox(shape.label));
       }
-      for (const e of d.plane.edges.values()) {
-        this.points.set(e.id, copyPoints(e.points));
-        this.edges.set(e, d.edgeBefore(e));
-        if (e.label) this.labels.set(e.id, copyBox(e.label));
+      for (const edge of drawing.plane.edges.values()) {
+        this.points.set(edge.id, copyPoints(edge.points));
+        this.edges.set(edge, drawing.edgeBefore(edge));
+        if (edge.label) this.labels.set(edge.id, copyBox(edge.label));
       }
     }
   }
 
-  unchanged(e: DEdge): boolean {
-    const old = this.points.get(e.id);
-    return !!old && samePoints(old, e.points);
+  unchanged(edge: DEdge): boolean {
+    const old = this.points.get(edge.id);
+    return !!old && samePoints(old, edge.points);
   }
 
   /** Uses the current name with the old bounds: a format op renames nothing. */
@@ -41,10 +41,10 @@ export class DrawingSnapshot {
 
   changedShapes(): string[] {
     const out: string[] = [];
-    for (const d of this.drawings) {
-      for (const s of d.plane.shapes.values()) {
-        const b = this.bounds.get(s.id);
-        if (b && !sameBox(b, s.bounds)) out.push(s.id);
+    for (const drawing of this.drawings) {
+      for (const shape of drawing.plane.shapes.values()) {
+        const box = this.bounds.get(shape.id);
+        if (box && !sameBox(box, shape.bounds)) out.push(shape.id);
       }
     }
     return out;
@@ -52,10 +52,10 @@ export class DrawingSnapshot {
 
   changedEdges(): string[] {
     const out: string[] = [];
-    for (const d of this.drawings) {
-      for (const e of d.plane.edges.values()) {
-        const p = this.points.get(e.id);
-        if (p && !samePoints(p, e.points)) out.push(e.id);
+    for (const drawing of this.drawings) {
+      for (const edge of drawing.plane.edges.values()) {
+        const points = this.points.get(edge.id);
+        if (points && !samePoints(points, edge.points)) out.push(edge.id);
       }
     }
     return out;

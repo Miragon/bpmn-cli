@@ -31,19 +31,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function parseArgs(argv) {
   const opts = { inputs: [], lib: join(ROOT, 'dist', 'index.js'), baseline: undefined, json: undefined, list: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--lib') opts.lib = argv[++i];
-    else if (a === '--baseline') opts.baseline = argv[++i];
-    else if (a === '--json') opts.json = argv[++i];
-    else if (a === '--list') opts.list = true;
-    else if (a === '-h' || a === '--help') {
+  for (let argIndex = 0; argIndex < argv.length; argIndex++) {
+    const arg = argv[argIndex];
+    if (arg === '--lib') opts.lib = argv[++argIndex];
+    else if (arg === '--baseline') opts.baseline = argv[++argIndex];
+    else if (arg === '--json') opts.json = argv[++argIndex];
+    else if (arg === '--list') opts.list = true;
+    else if (arg === '-h' || arg === '--help') {
       console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace(/^#!.*\n\/\*\*\n?/, '').replace(/^ \* ?/gm, ''));
       process.exit(0);
-    } else if (a.startsWith('--')) {
-      console.error(`unknown option ${a}`);
+    } else if (arg.startsWith('--')) {
+      console.error(`unknown option ${arg}`);
       process.exit(2);
-    } else opts.inputs.push(a);
+    } else opts.inputs.push(arg);
   }
   return opts;
 }
@@ -52,17 +52,17 @@ function bpmnFiles(path) {
   if (!statSync(path).isDirectory()) return [path];
   const out = [];
   for (const name of readdirSync(path).sort()) {
-    const p = join(path, name);
-    if (statSync(p).isDirectory()) out.push(...bpmnFiles(p));
-    else if (name.endsWith('.bpmn')) out.push(p);
+    const entryPath = join(path, name);
+    if (statSync(entryPath).isDirectory()) out.push(...bpmnFiles(entryPath));
+    else if (name.endsWith('.bpmn')) out.push(entryPath);
   }
   return out;
 }
 
 function corpusFiles(inputs) {
-  const env = (process.env.BPMN_BENCH_CORPUS ?? '').split(':').map((s) => s.trim()).filter(Boolean).map((e) => (e.includes('=') ? e.split('=')[1] : e));
+  const env = (process.env.BPMN_BENCH_CORPUS ?? '').split(':').map((rawEntry) => rawEntry.trim()).filter(Boolean).map((entry) => (entry.includes('=') ? entry.split('=')[1] : entry));
   const roots = inputs.length ? inputs : env.length ? env : [join(ROOT, 'tools', 'scenarios'), join(ROOT, 'test', 'fixtures')];
-  return roots.flatMap((r) => bpmnFiles(resolve(r)));
+  return roots.flatMap((root) => bpmnFiles(resolve(root)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -70,45 +70,45 @@ function corpusFiles(inputs) {
 /* ------------------------------------------------------------------ */
 
 /** Lines removed + added (longest common subsequence of the lines between the common head and tail). */
-function changedLines(a, b) {
-  const x = a.split('\n');
-  const y = b.split('\n');
+function changedLines(before, after) {
+  const beforeLines = before.split('\n');
+  const afterLines = after.split('\n');
   let head = 0;
-  while (head < x.length && head < y.length && x[head] === y[head]) head++;
+  while (head < beforeLines.length && head < afterLines.length && beforeLines[head] === afterLines[head]) head++;
   let tail = 0;
-  while (tail < x.length - head && tail < y.length - head && x[x.length - 1 - tail] === y[y.length - 1 - tail]) tail++;
-  const xs = x.slice(head, x.length - tail);
-  const ys = y.slice(head, y.length - tail);
+  while (tail < beforeLines.length - head && tail < afterLines.length - head && beforeLines[beforeLines.length - 1 - tail] === afterLines[afterLines.length - 1 - tail]) tail++;
+  const xs = beforeLines.slice(head, beforeLines.length - tail);
+  const ys = afterLines.slice(head, afterLines.length - tail);
   if (!xs.length || !ys.length) return xs.length + ys.length;
   if (xs.length * ys.length > 25_000_000) return xs.length + ys.length;
-  const w = ys.length + 1;
-  const dp = new Uint32Array((xs.length + 1) * w);
-  for (let i = xs.length - 1; i >= 0; i--) {
-    for (let j = ys.length - 1; j >= 0; j--) dp[i * w + j] = xs[i] === ys[j] ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+  const rowWidth = ys.length + 1;
+  const dp = new Uint32Array((xs.length + 1) * rowWidth);
+  for (let beforeIndex = xs.length - 1; beforeIndex >= 0; beforeIndex--) {
+    for (let afterIndex = ys.length - 1; afterIndex >= 0; afterIndex--) dp[beforeIndex * rowWidth + afterIndex] = xs[beforeIndex] === ys[afterIndex] ? dp[(beforeIndex + 1) * rowWidth + afterIndex + 1] + 1 : Math.max(dp[(beforeIndex + 1) * rowWidth + afterIndex], dp[beforeIndex * rowWidth + afterIndex + 1]);
   }
   return xs.length + ys.length - 2 * dp[0];
 }
 
 /** The share of the file (deleted characters) one region between the common prefix and suffix replaces. */
-function regionShare(a, b) {
+function regionShare(before, after) {
   let start = 0;
-  const min = Math.min(a.length, b.length);
-  while (start < min && a[start] === b[start]) start++;
-  let endA = a.length;
-  let endB = b.length;
-  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+  const min = Math.min(before.length, after.length);
+  while (start < min && before[start] === after[start]) start++;
+  let endA = before.length;
+  let endB = after.length;
+  while (endA > start && endB > start && before[endA - 1] === after[endB - 1]) {
     endA--;
     endB--;
   }
-  return a.length ? (100 * (endA - start)) / a.length : 0;
+  return before.length ? (100 * (endA - start)) / before.length : 0;
 }
 
-const quantile = (values, p) => {
+const quantile = (values, fraction) => {
   if (!values.length) return '-';
-  const s = [...values].sort((m, n) => m - n);
-  return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.floor(fraction * sorted.length))];
 };
-const fmt = (v) => (typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(1)) : v);
+const fmt = (value) => (typeof value === 'number' ? (Number.isInteger(value) ? String(value) : value.toFixed(1)) : value);
 
 /* ------------------------------------------------------------------ */
 /* running                                                              */
@@ -119,17 +119,17 @@ function targetsOf(api, doc) {
   const nodes = [...doc.byId().values()].filter((el) => is(el, 'bpmn:FlowNode'));
   const rename = nodes.find((el) => is(el, 'bpmn:Activity') && el.get('name')) ?? nodes.find((el) => el.get('name'));
   const drawn = new Set();
-  for (const d of doc.definitions.get('diagrams') ?? []) for (const s of d.get('plane')?.get('planeElement') ?? []) if (s.get('bpmnElement')) drawn.add(s.get('bpmnElement'));
+  for (const diagram of doc.definitions.get('diagrams') ?? []) for (const diShape of diagram.get('plane')?.get('planeElement') ?? []) if (diShape.get('bpmnElement')) drawn.add(diShape.get('bpmnElement'));
   const insert = nodes.find((el) => is(el, 'bpmn:Task') && drawn.has(el) && doc.outgoing(el).length === 1);
   return { rename: rename && { id: rename.get('id'), name: rename.get('name') }, insert: insert && { id: insert.get('id') } };
 }
 
 const VARIANTS = [
-  { name: 'noop', target: 'rename', ops: (t) => [{ op: 'set', id: t.id, values: { name: t.name } }], layout: 'auto' },
-  { name: 'noop-nl', target: 'rename', ops: (t) => [{ op: 'set', id: t.id, values: { name: t.name } }], layout: false },
-  { name: 'rename', target: 'rename', ops: (t) => [{ op: 'set', id: t.id, values: { name: `${t.name} X` } }], layout: false },
-  { name: 'rename-a', target: 'rename', ops: (t) => [{ op: 'set', id: t.id, values: { name: `${t.name} X` } }], layout: 'auto' },
-  { name: 'insert', target: 'insert', ops: (t) => [{ op: 'add', kind: 'task', name: 'Audit step', after: t.id }], layout: 'auto' },
+  { name: 'noop', target: 'rename', ops: (element) => [{ op: 'set', id: element.id, values: { name: element.name } }], layout: 'auto' },
+  { name: 'noop-nl', target: 'rename', ops: (element) => [{ op: 'set', id: element.id, values: { name: element.name } }], layout: false },
+  { name: 'rename', target: 'rename', ops: (element) => [{ op: 'set', id: element.id, values: { name: `${element.name} X` } }], layout: false },
+  { name: 'rename-a', target: 'rename', ops: (element) => [{ op: 'set', id: element.id, values: { name: `${element.name} X` } }], layout: 'auto' },
+  { name: 'insert', target: 'insert', ops: (element) => [{ op: 'add', kind: 'task', name: 'Audit step', after: element.id }], layout: 'auto' },
 ];
 
 async function runBuild(lib, files) {
@@ -147,28 +147,28 @@ async function runBuild(lib, files) {
         continue;
       }
       targets = targetsOf(api, doc);
-    } catch (e) {
-      rec.refused = e.code ?? 'E_PARSE';
+    } catch (error) {
+      rec.refused = error.code ?? 'E_PARSE';
       continue;
     }
-    for (const v of VARIANTS) {
-      const t = targets[v.target];
-      if (!t) continue;
+    for (const variant of VARIANTS) {
+      const element = targets[variant.target];
+      if (!element) continue;
       try {
-        const r = await api.mutateDoc(await api.Doc.fromXml(xml, file), v.ops(t), { dryRun: true, layout: v.layout });
-        const out = r.xml;
-        const notes = r.changes.notes ?? [];
-        const lay = r.layout ?? {};
-        rec.variants[v.name] = {
+        const result = await api.mutateDoc(await api.Doc.fromXml(xml, file), variant.ops(element), { dryRun: true, layout: variant.layout });
+        const out = result.xml;
+        const notes = result.changes.notes ?? [];
+        const lay = result.layout ?? {};
+        rec.variants[variant.name] = {
           identical: out === xml,
           lines: out === xml ? 0 : changedLines(xml, out),
           region: regionShare(xml, out),
-          fallback: notes.some((n) => /formatting was not kept/.test(n)),
-          comments: notes.some((n) => /comment\(s\) dropped/.test(n)),
+          fallback: notes.some((note) => /formatting was not kept/.test(note)),
+          comments: notes.some((note) => /comment\(s\) dropped/.test(note)),
           drew: lay.mode === 'full' || !!(lay.placed?.length || lay.moved?.length || lay.rerouted?.length || lay.pruned?.length),
         };
-      } catch (e) {
-        rec.variants[v.name] = { refused: e.code ?? 'E_EXCEPTION' };
+      } catch (error) {
+        rec.variants[variant.name] = { refused: error.code ?? 'E_EXCEPTION' };
       }
     }
   }
@@ -176,31 +176,31 @@ async function runBuild(lib, files) {
 }
 
 function summarise(label, records, list) {
-  const lines = [`${label}: ${records.length} file(s)${records.filter((r) => r.refused).length ? `, ${records.filter((r) => r.refused).length} not loaded` : ''}`];
-  for (const v of VARIANTS) {
-    const rows = records.map((r) => [r, r.variants[v.name]]).filter(([, x]) => x);
+  const lines = [`${label}: ${records.length} file(s)${records.filter((record) => record.refused).length ? `, ${records.filter((record) => record.refused).length} not loaded` : ''}`];
+  for (const variant of VARIANTS) {
+    const rows = records.map((record) => [record, record.variants[variant.name]]).filter(([, outcome]) => outcome);
     if (!rows.length) continue;
-    const ok = rows.filter(([, x]) => !x.refused);
+    const ok = rows.filter(([, outcome]) => !outcome.refused);
     const refused = {};
-    for (const [, x] of rows) if (x.refused) refused[x.refused] = (refused[x.refused] ?? 0) + 1;
-    const same = ok.filter(([, x]) => x.identical).length;
-    const lineVals = ok.map(([, x]) => x.lines);
-    const regions = ok.map(([, x]) => x.region);
+    for (const [, outcome] of rows) if (outcome.refused) refused[outcome.refused] = (refused[outcome.refused] ?? 0) + 1;
+    const same = ok.filter(([, outcome]) => outcome.identical).length;
+    const lineVals = ok.map(([, outcome]) => outcome.lines);
+    const regions = ok.map(([, outcome]) => outcome.region);
     const parts = [
-      `  ${v.name.padEnd(9)} run ${String(rows.length).padStart(4)}`,
+      `  ${variant.name.padEnd(9)} run ${String(rows.length).padStart(4)}`,
       Object.keys(refused).length ? ` refused ${JSON.stringify(refused)}` : '',
       ` | identical ${same}/${ok.length} (${ok.length ? ((100 * same) / ok.length).toFixed(1) : '-'}%)`,
       ` | lines median ${fmt(quantile(lineVals, 0.5))} p90 ${fmt(quantile(lineVals, 0.9))} max ${fmt(quantile(lineVals, 1))}`,
-      ` | region % median ${fmt(quantile(regions, 0.5))} p90 ${fmt(quantile(regions, 0.9))}, >=50%: ${regions.filter((x) => x >= 50).length}`,
-      ` | fall-backs ${ok.filter(([, x]) => x.fallback).length}, comment notes ${ok.filter(([, x]) => x.comments).length}`,
+      ` | region % median ${fmt(quantile(regions, 0.5))} p90 ${fmt(quantile(regions, 0.9))}, >=50%: ${regions.filter((regionPercent) => regionPercent >= 50).length}`,
+      ` | fall-backs ${ok.filter(([, outcome]) => outcome.fallback).length}, comment notes ${ok.filter(([, outcome]) => outcome.comments).length}`,
     ];
     lines.push(parts.join(''));
-    if (v.name.startsWith('noop')) {
+    if (variant.name.startsWith('noop')) {
       const causes = {};
-      for (const [r, x] of ok) {
-        if (x.identical) continue;
-        const cause = x.fallback ? 'fall-back to the plain serialisation' : x.drew ? 'the layout drew or moved something' : 'other';
-        (causes[cause] ??= []).push(basename(r.file));
+      for (const [record, outcome] of ok) {
+        if (outcome.identical) continue;
+        const cause = outcome.fallback ? 'fall-back to the plain serialisation' : outcome.drew ? 'the layout drew or moved something' : 'other';
+        (causes[cause] ??= []).push(basename(record.file));
       }
       for (const [cause, names] of Object.entries(causes)) lines.push(`      not identical: ${names.length} ${cause}${list ? `: ${names.join(' ')}` : ''}`);
     }

@@ -1,46 +1,46 @@
 /** Optimal string alignment (adjacent transpositions count once); small strings only. */
-export function editDistance(a: string, b: string): number {
-  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let v = Math.min(d[i - 1]![j]! + 1, d[i]![j - 1]! + 1, d[i - 1]![j - 1]! + cost);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, d[i - 2]![j - 2]! + 1);
-      d[i]![j] = v;
+export function editDistance(left: string, right: string): number {
+  const distances: number[][] = Array.from({ length: left.length + 1 }, (_row, rowIndex) => Array.from({ length: right.length + 1 }, (_column, columnIndex) => (rowIndex === 0 ? columnIndex : columnIndex === 0 ? rowIndex : 0)));
+  for (let row = 1; row <= left.length; row++) {
+    for (let column = 1; column <= right.length; column++) {
+      const cost = left[row - 1] === right[column - 1] ? 0 : 1;
+      let distance = Math.min(distances[row - 1]![column]! + 1, distances[row]![column - 1]! + 1, distances[row - 1]![column - 1]! + cost);
+      if (row > 1 && column > 1 && left[row - 1] === right[column - 2] && left[row - 2] === right[column - 1]) distance = Math.min(distance, distances[row - 2]![column - 2]! + 1);
+      distances[row]![column] = distance;
     }
   }
-  return d[a.length]![b.length]!;
+  return distances[left.length]![right.length]!;
 }
 
 export function typoTolerance(length: number): number {
   return length >= 12 ? 2 : length >= 5 ? 1 : 0;
 }
 
-export function levenshtein(a: string, b: string): number {
-  const dp: number[][] = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) dp[0]![j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      dp[i]![j] = Math.min(dp[i - 1]![j]! + 1, dp[i]![j - 1]! + 1, dp[i - 1]![j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+export function levenshtein(left: string, right: string): number {
+  const dp: number[][] = Array.from({ length: left.length + 1 }, (_row, rowIndex) => [rowIndex, ...Array<number>(right.length).fill(0)]);
+  for (let column = 1; column <= right.length; column++) dp[0]![column] = column;
+  for (let row = 1; row <= left.length; row++) {
+    for (let column = 1; column <= right.length; column++) {
+      dp[row]![column] = Math.min(dp[row - 1]![column]! + 1, dp[row]![column - 1]! + 1, dp[row - 1]![column - 1]! + (left[row - 1] === right[column - 1] ? 0 : 1));
     }
   }
-  return dp[a.length]![b.length]!;
+  return dp[left.length]![right.length]!;
 }
 
 /** kebab-case / snake_case / wrong-case spellings and small typos of an allowed key. */
 export function closestKey(key: string, allowed: readonly string[]): string | undefined {
-  const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const n = norm(key);
-  const exact = allowed.find((k) => norm(k) === n) ?? allowed.find((k) => norm(k).startsWith(n) || n.startsWith(norm(k)));
-  if (exact || !n) return exact;
+  const norm = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedKey = norm(key);
+  const exact = allowed.find((candidate) => norm(candidate) === normalizedKey) ?? allowed.find((candidate) => norm(candidate).startsWith(normalizedKey) || normalizedKey.startsWith(norm(candidate)));
+  if (exact || !normalizedKey) return exact;
   let best: string | undefined;
   let bestD = Infinity;
-  for (const k of allowed) {
-    const d = editDistance(n, norm(k));
-    if (d < bestD) {
-      best = k;
-      bestD = d;
+  for (const candidate of allowed) {
+    const distance = editDistance(normalizedKey, norm(candidate));
+    if (distance < bestD) {
+      best = candidate;
+      bestD = distance;
     }
   }
-  return bestD <= (n.length >= 5 ? 2 : 1) ? best : undefined;
+  return bestD <= (normalizedKey.length >= 5 ? 2 : 1) ? best : undefined;
 }

@@ -24,14 +24,14 @@ function quotedLiteralsOutsideGuide(pattern: RegExp): Set<string> {
     if (!entry.isFile() || !entry.name.endsWith('.ts')) continue;
     const file = join(entry.parentPath, entry.name);
     if (file.endsWith(join('report', 'guide.ts'))) continue;
-    for (const m of readFileSync(file, 'utf8').matchAll(pattern)) literals.add(m[1]!);
+    for (const match of readFileSync(file, 'utf8').matchAll(pattern)) literals.add(match[1]!);
   }
   return literals;
 }
 
 const covers = (entry: string, code: string) => (entry.endsWith('*') ? code.startsWith(entry.slice(0, -1)) : entry === code);
 
-const sourceFiles = (readdirSync('src', { recursive: true }) as string[]).filter((f) => f.endsWith('.ts')).map((f) => join('src', f));
+const sourceFiles = (readdirSync('src', { recursive: true }) as string[]).filter((relativePath) => relativePath.endsWith('.ts')).map((relativePath) => join('src', relativePath));
 
 describe('architecture', () => {
   it('the root of src/ holds only the entries', async () => {
@@ -45,14 +45,14 @@ describe('architecture', () => {
     const ownedElsewhere = (file: string) => file === join('src', 'model', 'utils', 'kinds.ts') || file.startsWith(join('src', 'platform', 'profiles'));
     const offenders = sourceFiles
       .filter((file) => !ownedElsewhere(file))
-      .flatMap((file) => readFileSync(file, 'utf8').split('\n').map((line, i) => (groupedGatewayTypes.test(line) ? `${file}:${i + 1}` : undefined)))
+      .flatMap((file) => readFileSync(file, 'utf8').split('\n').map((line, lineIndex) => (groupedGatewayTypes.test(line) ? `${file}:${lineIndex + 1}` : undefined)))
       .filter(Boolean);
     expect(offenders).toEqual([]);
   });
 
   it('the error catalogue documents exactly the codes src/ emits', () => {
     const emitted = [...quotedLiteralsOutsideGuide(/'([EW]_[A-Z0-9_]+)'/g)];
-    const catalogued = ERROR_CATALOGUE.map((e) => e.code);
+    const catalogued = ERROR_CATALOGUE.map((entry) => entry.code);
 
     const undocumented = emitted.filter((code) => !catalogued.some((entry) => covers(entry, code)));
     expect(undocumented, 'emitted in src/ but missing from ERROR_CATALOGUE').toEqual([]);

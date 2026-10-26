@@ -33,32 +33,32 @@ function files(dir: string): string[] {
   return out;
 }
 
-const repoFiles = files(ROOT).map((f) => relative(ROOT, f)).filter((f) => f !== 'package-lock.json');
+const repoFiles = files(ROOT).map((file) => relative(ROOT, file)).filter((file) => file !== 'package-lock.json');
 // built from parts, so this file does not match itself
-const LOCAL_PATHS = [['/', 'Users/'], ['/private', '/tmp'], ['/', 'home/'], ['scratch', 'pad'], ['claude', '-501']].map((p) => p.join(''));
+const LOCAL_PATHS = [['/', 'Users/'], ['/private', '/tmp'], ['/', 'home/'], ['scratch', 'pad'], ['claude', '-501']].map((localPath) => localPath.join(''));
 
 describe('repository hygiene', () => {
   it('scans the repository (sanity check of the file walk)', () => {
     expect(repoFiles).toContain('README.md');
     expect(repoFiles).toContain(join('src', 'cli.ts'));
-    expect(repoFiles.some((f) => f.startsWith(join('tools', 'scenarios')))).toBe(true);
+    expect(repoFiles.some((file) => file.startsWith(join('tools', 'scenarios')))).toBe(true);
   });
 
   it('text files contain no control characters (only tab, newline, carriage return)', () => {
     const bad: string[] = [];
-    for (const f of repoFiles) {
-      const bytes = readFileSync(join(ROOT, f));
-      const i = bytes.findIndex((b) => (b < 32 && b !== 9 && b !== 10 && b !== 13) || b === 127);
-      if (i >= 0) bad.push(`${f} (byte ${i})`);
+    for (const file of repoFiles) {
+      const bytes = readFileSync(join(ROOT, file));
+      const controlIndex = bytes.findIndex((byte) => (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) || byte === 127);
+      if (controlIndex >= 0) bad.push(`${file} (byte ${controlIndex})`);
     }
     expect(bad).toEqual([]);
   });
 
   it('no file names a local home, temporary or session scratch directory', () => {
     const bad: string[] = [];
-    for (const f of repoFiles) {
-      const text = readFileSync(join(ROOT, f), 'utf8');
-      for (const p of LOCAL_PATHS) if (text.includes(p)) bad.push(`${f}: ${p}`);
+    for (const file of repoFiles) {
+      const text = readFileSync(join(ROOT, file), 'utf8');
+      for (const localPath of LOCAL_PATHS) if (text.includes(localPath)) bad.push(`${file}: ${localPath}`);
     }
     expect(bad).toEqual([]);
   });

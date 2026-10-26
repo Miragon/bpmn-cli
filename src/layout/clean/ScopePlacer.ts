@@ -72,12 +72,12 @@ export class ScopePlacer {
 
   private placeEventSubs(layout: ScopeLayout): void {
     if (!layout.eventSubs.length) return;
-    let y = layout.height ? layout.height + METRICS.vGap : 0;
+    let top = layout.height ? layout.height + METRICS.vGap : 0;
     for (const es of layout.eventSubs) {
-      es.box = { x: 0, y, width: es.width, height: es.height };
-      y += es.height + METRICS.vGap;
+      es.box = { x: 0, y: top, width: es.width, height: es.height };
+      top += es.height + METRICS.vGap;
       layout.width = Math.max(layout.width, es.width);
     }
-    layout.height = y - METRICS.vGap;
+    layout.height = top - METRICS.vGap;
   }
 }

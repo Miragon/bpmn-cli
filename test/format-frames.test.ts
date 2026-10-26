@@ -39,9 +39,9 @@ async function model(): Promise<string> {
   return (await mutateDoc(Doc.create({ processId: 'P' }), MODEL, { dryRun: true })).xml;
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; doc: Doc }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental' });
-  return { r, doc: await Doc.fromXml(r.xml) };
+async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; doc: Doc }> {
+  const outcome = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental' });
+  return { result: outcome, doc: await Doc.fromXml(outcome.xml) };
 }
 
 async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; element?: string; related?: string[]; hint?: string }> {
@@ -59,57 +59,57 @@ function outsideSub(doc: Doc): string[] {
   const sem = Semantics.of(doc.definitions);
   const out: string[] = [];
   for (const plane of new DiagramReader(doc.definitions, sem).planes()) {
-    for (const s of plane.shapes.values()) {
-      const parent = s.parentId ? plane.shapes.get(s.parentId) : undefined;
-      if (parent?.container && !inside(s.bounds, parent.bounds)) out.push(`${s.id} outside ${parent.id}`);
+    for (const shape of plane.shapes.values()) {
+      const parent = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
+      if (parent?.container && !inside(shape.bounds, parent.bounds)) out.push(`${shape.id} outside ${parent.id}`);
     }
   }
   return out;
 }
 
 const centreX = (doc: Doc, id: string): number => {
-  const s = new DiagramReader(doc.definitions, Semantics.of(doc.definitions)).planes()
-    .map((p) => p.shapes.get(id))
-    .find((x) => !!x)!;
-  return s.bounds.x + s.bounds.width / 2;
+  const shape = new DiagramReader(doc.definitions, Semantics.of(doc.definitions)).planes()
+    .map((plane) => plane.shapes.get(id))
+    .find((found) => !!found)!;
+  return shape.bounds.x + shape.bounds.width / 2;
 };
 
 describe('format ops with selector sets keep shapes in their sub-process', () => {
   it('align --kind leaves out a member whose sub-process the line lies outside, and says so', async () => {
     const xml = await model();
-    const { r, doc } = await run(xml, [{ op: 'align', kind: 'endEvent', axis: 'column' }]);
-    const entry = r.layout.format?.[0];
+    const { result: outcome, doc } = await run(xml, [{ op: 'align', kind: 'endEvent', axis: 'column' }]);
+    const entry = outcome.layout.format?.[0];
     expect(entry?.notes).toContain('left out E1 (sub-process Sub): on the column of E2 it would leave its frame');
     expect(entry?.moved).not.toContain('E1');
     expect(entry?.moved).not.toContain('Sub');
     expect(centreX(doc, 'E')).toBe(centreX(doc, 'E2'));
     expect(outsideSub(doc)).toEqual([]);
-    expect((r.layout.metrics?.added ?? []).filter((p) => p.kind.startsWith('outside'))).toEqual([]);
+    expect((outcome.layout.metrics?.added ?? []).filter((problem) => problem.kind.startsWith('outside'))).toEqual([]);
   });
 
   it('align with explicit ids and a reference outside the sub-process is refused (E_LEAVES_CONTAINER), naming the sub-process', async () => {
     const xml = await model();
-    const e = await failure(xml, [{ op: 'align', ids: ['E1', 'E'], axis: 'column', to: 'E2' }]);
-    expect(e).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'E1', related: ['Sub'] });
-    expect(e.message).toBe('Placing E1 in the column of E2 would move it out of its sub-process Sub');
-    expect(e.hint).toMatch(/^The reference lies outside sub-process Sub, which would have to grow out to it/);
+    const cliError = await failure(xml, [{ op: 'align', ids: ['E1', 'E'], axis: 'column', to: 'E2' }]);
+    expect(cliError).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'E1', related: ['Sub'] });
+    expect(cliError.message).toBe('Placing E1 in the column of E2 would move it out of its sub-process Sub');
+    expect(cliError.hint).toMatch(/^The reference lies outside sub-process Sub, which would have to grow out to it/);
   });
 
   it('place --kind moves the selected set as one group: a member that would leave its sub-process refuses the op', async () => {
     const xml = await model();
-    const e = await failure(xml, [{ op: 'place', kind: 'endEvent', below: 'C2' }]);
-    expect(e).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'E1', related: ['Sub'] });
+    const cliError = await failure(xml, [{ op: 'place', kind: 'endEvent', below: 'C2' }]);
+    expect(cliError).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'E1', related: ['Sub'] });
   });
 
   it('a reference inside the sub-process still lets it grow; the members of one frame align', async () => {
     const xml = await model();
     // the end event inside, on the row of the task inside: fine
-    const { r, doc } = await run(xml, [{ op: 'align', ids: ['T1', 'E1'], axis: 'row' }]);
-    expect(r.layout.format?.[0]?.notes ?? []).not.toContainEqual(expect.stringMatching(/left out/));
+    const { result: outcome, doc } = await run(xml, [{ op: 'align', ids: ['T1', 'E1'], axis: 'row' }]);
+    expect(outcome.layout.format?.[0]?.notes ?? []).not.toContainEqual(expect.stringMatching(/left out/));
     expect(outsideSub(doc)).toEqual([]);
     // place after a node inside it: the sub-process grows to the right
     const grown = await run(xml, [{ op: 'place', ids: ['T1'], after: 'E1' }]);
-    expect(grown.r.layout.format?.[0]?.moved).toContain('Sub');
+    expect(grown.result.layout.format?.[0]?.moved).toContain('Sub');
     expect(outsideSub(grown.doc)).toEqual([]);
   });
 
@@ -117,15 +117,15 @@ describe('format ops with selector sets keep shapes in their sub-process', () =>
     const scenario = (name: string): string => readFileSync(join(import.meta.dirname, '..', 'tools', 'scenarios', name), 'utf8');
     // align --kind serviceTask --axis column: the service task of the assessment sub-process stayed behind its moved frame
     const anno = await run(scenario('agent__anno2.bpmn'), [{ op: 'align', kind: 'serviceTask', axis: 'column' }]);
-    expect(anno.r.layout.format?.[0]?.notes).toContainEqual(expect.stringMatching(/^left out Activity_CheckCoverage \(sub-process Activity_AssessClaim\)/));
+    expect(anno.result.layout.format?.[0]?.notes).toContainEqual(expect.stringMatching(/^left out Activity_CheckCoverage \(sub-process Activity_AssessClaim\)/));
     expect(outsideSub(anno.doc)).toEqual([]);
-    expect((anno.r.layout.metrics?.added ?? []).filter((p) => p.kind.startsWith('outside'))).toEqual([]);
+    expect((anno.result.layout.metrics?.added ?? []).filter((problem) => problem.kind.startsWith('outside'))).toEqual([]);
     // every end event onto the column of an outer one, named explicitly
     const claim = scenario('agent__claim.noanno.bpmn');
-    const e = await failure(claim, [{ op: 'align', ids: ['Event_AssessmentDone', 'Event_NotCovered', 'Event_ClaimRejected', 'Event_ManagerInformed', 'Event_ClaimSettled', 'Event_2', 'Event_Reminded'], axis: 'column', to: 'Event_Reminded' }]);
-    expect(e).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'Event_AssessmentDone', related: ['Activity_AssessClaim'] });
+    const cliError = await failure(claim, [{ op: 'align', ids: ['Event_AssessmentDone', 'Event_NotCovered', 'Event_ClaimRejected', 'Event_ManagerInformed', 'Event_ClaimSettled', 'Event_2', 'Event_Reminded'], axis: 'column', to: 'Event_Reminded' }]);
+    expect(cliError).toMatchObject({ code: 'E_LEAVES_CONTAINER', element: 'Event_AssessmentDone', related: ['Activity_AssessClaim'] });
     const kind = await run(claim, [{ op: 'align', kind: 'endEvent', axis: 'column' }]);
     expect(outsideSub(kind.doc)).toEqual([]);
-    expect((kind.r.layout.metrics?.added ?? []).filter((p) => p.kind.startsWith('outside'))).toEqual([]);
+    expect((kind.result.layout.metrics?.added ?? []).filter((problem) => problem.kind.startsWith('outside'))).toEqual([]);
   });
 });

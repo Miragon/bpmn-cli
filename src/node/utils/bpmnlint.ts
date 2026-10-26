@@ -25,8 +25,8 @@ export function versionOf(req: Require, pkg: string): { version: string; dir: st
   }
 }
 
-export function lazy<T>(make: () => T): () => T {
-  let value: T | undefined;
+export function lazy<TValue>(make: () => TValue): () => TValue {
+  let value: TValue | undefined;
   return () => (value ??= make());
 }
 

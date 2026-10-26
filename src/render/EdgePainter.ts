@@ -7,10 +7,10 @@ import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';
 import { HALO_COLORS, type Item } from './types.js';
 import { pointsBox } from './utils/boxes.js';
-import { attr, FILL, n } from './utils/svg.js';
+import { attr, FILL, formatNumber } from './utils/svg.js';
 
 interface Dir {
-  p: Point;
+  tip: Point;
   /** unit vector pointing out of the end */
   ux: number;
   uy: number;
@@ -24,45 +24,45 @@ export class EdgePainter {
   }
 
   svg(): string {
-    const e = this.edge;
+    const edge = this.edge;
     const st = this.style;
     const ink = st.stroke;
-    const d = this.roundedPath();
+    const pathData = this.roundedPath();
     const end = this.endDir(false);
     const start = this.endDir(true);
-    const path = (extra: string): string => `<path d="${d}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"${extra}/>`;
-    if (e.kind === 'sequenceFlow') {
+    const path = (extra: string): string => `<path d="${pathData}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"${extra}/>`;
+    if (edge.kind === 'sequenceFlow') {
       let out = path('');
       if (end) out += this.arrow(end, 'filled');
-      const source = raw<El>(e.el, 'sourceRef');
-      if (start && source && raw(source, 'default') === e.el) {
+      const source = raw<El>(edge.el, 'sourceRef');
+      if (start && source && raw(source, 'default') === edge.el) {
         // the default slash, 10 px from the source, at 45 degrees to the line
-        const cx = start.p.x - start.ux * 10;
-        const cy = start.p.y - start.uy * 10;
+        const cx = start.tip.x - start.ux * 10;
+        const cy = start.tip.y - start.uy * 10;
         const vx = (-start.ux - start.uy) * 4.5;
         const vy = (-start.uy + start.ux) * 4.5;
-        out += `<path d="M${n(cx - vx)} ${n(cy - vy)}L${n(cx + vx)} ${n(cy + vy)}" stroke="${ink}" stroke-width="1.5"/>`;
-      } else if (start && source && raw(e.el, 'conditionExpression') && is(source, 'bpmn:Activity')) {
+        out += `<path d="M${formatNumber(cx - vx)} ${formatNumber(cy - vy)}L${formatNumber(cx + vx)} ${formatNumber(cy + vy)}" stroke="${ink}" stroke-width="1.5"/>`;
+      } else if (start && source && raw(edge.el, 'conditionExpression') && is(source, 'bpmn:Activity')) {
         // the conditional diamond at the source
         const ux = -start.ux;
         const uy = -start.uy;
-        const p = start.p;
-        const pt = (k: number, side: number): string => `${n(p.x + ux * k - uy * side)} ${n(p.y + uy * k + ux * side)}`;
+        const origin = start.tip;
+        const pt = (along: number, side: number): string => `${formatNumber(origin.x + ux * along - uy * side)} ${formatNumber(origin.y + uy * along + ux * side)}`;
         out += `<path d="M${pt(0, 0)}L${pt(8, 5)}L${pt(16, 0)}L${pt(8, -5)}Z" fill="${FILL}" stroke="${ink}" stroke-width="1.2"/>`;
       }
       return out;
     }
-    if (e.kind === 'messageFlow') {
+    if (edge.kind === 'messageFlow') {
       let out = path(' stroke-dasharray="10 6"');
-      if (start) out += `<circle cx="${n(start.p.x)}" cy="${n(start.p.y)}" r="4" fill="${FILL}" stroke="${ink}" stroke-width="1.2"/>`;
+      if (start) out += `<circle cx="${formatNumber(start.tip.x)}" cy="${formatNumber(start.tip.y)}" r="4" fill="${FILL}" stroke="${ink}" stroke-width="1.2"/>`;
       if (end) out += this.arrow(end, 'white');
       if (this.carriesMessage()) out += this.envelope();
       return out;
     }
     const dotted = path(' stroke-dasharray="0.5 4.5" stroke-linecap="round"');
-    if (e.kind === 'dataAssociation') return dotted + (end ? this.arrow(end, 'open') : '');
-    if (e.kind === 'association') {
-      const direction = raw<string>(e.el, 'associationDirection');
+    if (edge.kind === 'dataAssociation') return dotted + (end ? this.arrow(end, 'open') : '');
+    if (edge.kind === 'association') {
+      const direction = raw<string>(edge.el, 'associationDirection');
       let out = dotted;
       if (end && (direction === 'One' || direction === 'Both')) out += this.arrow(end, 'open');
       if (start && direction === 'Both') out += this.arrow(start, 'open');
@@ -79,19 +79,19 @@ export class EdgePainter {
   box(): Box {
     const box = pointsBox(this.edge.points);
     if (!this.carriesMessage()) return box;
-    const m = this.halfway();
-    return unionAll([box, { x: m.x - 10.5, y: m.y - 7, width: 21, height: 14 }])!;
+    const middle = this.halfway();
+    return unionAll([box, { x: middle.x - 10.5, y: middle.y - 7, width: 21, height: 14 }])!;
   }
 
   label(): Item | undefined {
-    const e = this.edge;
-    if (e.kind !== 'sequenceFlow' && e.kind !== 'messageFlow') return undefined;
-    const value = raw<string>(e.el, 'name');
+    const edge = this.edge;
+    if (edge.kind !== 'sequenceFlow' && edge.kind !== 'messageFlow') return undefined;
+    const value = raw<string>(edge.el, 'name');
     if (!value || !value.trim()) return undefined;
     const text = new LabelPainter(this.style.label);
-    if (e.label) return text.external(e.id, value, cx(e.label), Math.round(e.label.y), e.label.width);
+    if (edge.label) return text.external(edge.id, value, cx(edge.label), Math.round(edge.label.y), edge.label.width);
     const mid = this.flowLabelMid();
-    return text.external(e.id, value, mid.x, Math.round(mid.y - 10));
+    return text.external(edge.id, value, mid.x, Math.round(mid.y - 10));
   }
 
   /**
@@ -106,33 +106,33 @@ export class EdgePainter {
   }
 
   private carriesMessage(): boolean {
-    const e = this.edge;
-    return e.kind === 'messageFlow' && !!raw(e.el, 'messageRef') && e.points.length >= 2;
+    const edge = this.edge;
+    return edge.kind === 'messageFlow' && !!raw(edge.el, 'messageRef') && edge.points.length >= 2;
   }
 
   /** Outlined for messageVisibleKind "initiating" (the DI default), filled for "non_initiating". */
   private envelope(): string {
-    const e = this.edge;
+    const edge = this.edge;
     const st = this.style;
-    const m = this.halfway();
-    const initiating = raw(e.di, 'messageVisibleKind') === 'initiating';
-    const x = m.x - 10.5;
-    const y = m.y - 7;
-    return `<path data-message="${attr(e.id)}" d="M${n(x)} ${n(y)}v14h21v-14ZL${n(m.x)} ${n(y + 6)}L${n(x + 21)} ${n(y)}" fill="${initiating ? st.fill : st.stroke}" stroke="${initiating ? st.stroke : st.fill}" stroke-width="1" stroke-linejoin="round"/>`;
+    const middle = this.halfway();
+    const initiating = raw(edge.di, 'messageVisibleKind') === 'initiating';
+    const left = middle.x - 10.5;
+    const top = middle.y - 7;
+    return `<path data-message="${attr(edge.id)}" d="M${formatNumber(left)} ${formatNumber(top)}v14h21v-14ZL${formatNumber(middle.x)} ${formatNumber(top + 6)}L${formatNumber(left + 21)} ${formatNumber(top)}" fill="${initiating ? st.fill : st.stroke}" stroke="${initiating ? st.stroke : st.fill}" stroke-width="1" stroke-linejoin="round"/>`;
   }
 
   private halfway(): Point {
     const points = this.edge.points;
-    const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i]!.x, p.y - points[i]!.y));
-    let rest = lengths.reduce((a, b) => a + b, 0) / 2;
-    for (let i = 0; i < lengths.length; i++) {
-      const d = lengths[i]!;
-      if (rest <= d && d > 0) {
-        const a = points[i]!;
-        const b = points[i + 1]!;
-        return { x: a.x + ((b.x - a.x) * rest) / d, y: a.y + ((b.y - a.y) * rest) / d };
+    const lengths = points.slice(1).map((point, index) => Math.hypot(point.x - points[index]!.x, point.y - points[index]!.y));
+    let rest = lengths.reduce((total, length) => total + length, 0) / 2;
+    for (let index = 0; index < lengths.length; index++) {
+      const segmentLength = lengths[index]!;
+      if (rest <= segmentLength && segmentLength > 0) {
+        const start = points[index]!;
+        const end = points[index + 1]!;
+        return { x: start.x + ((end.x - start.x) * rest) / segmentLength, y: start.y + ((end.y - start.y) * rest) / segmentLength };
       }
-      rest -= d;
+      rest -= segmentLength;
     }
     return points[points.length - 1]!;
   }
@@ -140,57 +140,57 @@ export class EdgePainter {
   /** bpmn-js: the middle of the middle segment, 15 px above it (right of a vertical one). */
   private flowLabelMid(): Point {
     const points = this.edge.points;
-    const m = points.length / 2 - 1;
-    const a = points[Math.max(0, Math.floor(m))]!;
-    const b = points[Math.min(points.length - 1, Math.ceil(m + 0.01))]!;
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const angle = Math.atan((b.y - a.y) / (b.x - a.x));
+    const middleIndex = points.length / 2 - 1;
+    const start = points[Math.max(0, Math.floor(middleIndex))]!;
+    const end = points[Math.min(points.length - 1, Math.ceil(middleIndex + 0.01))]!;
+    const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const angle = Math.atan((end.y - start.y) / (end.x - start.x));
     return Math.abs(angle) < Math.PI / 2 ? { x: mid.x, y: mid.y - 15 } : { x: mid.x + 15, y: mid.y };
   }
 
   private endDir(atStart: boolean): Dir | undefined {
     const points = this.edge.points;
     const pts = atStart ? [...points].reverse() : points;
-    const p = pts[pts.length - 1]!;
-    for (let i = pts.length - 2; i >= 0; i--) {
-      const q = pts[i]!;
-      const len = Math.hypot(p.x - q.x, p.y - q.y);
-      if (len > 0.01) return { p, ux: (p.x - q.x) / len, uy: (p.y - q.y) / len };
+    const tip = pts[pts.length - 1]!;
+    for (let index = pts.length - 2; index >= 0; index--) {
+      const previous = pts[index]!;
+      const len = Math.hypot(tip.x - previous.x, tip.y - previous.y);
+      if (len > 0.01) return { tip, ux: (tip.x - previous.x) / len, uy: (tip.y - previous.y) / len };
     }
     return undefined;
   }
 
-  private arrow(d: Dir, kind: 'filled' | 'white' | 'open'): string {
+  private arrow(direction: Dir, kind: 'filled' | 'white' | 'open'): string {
     const ink = this.style.stroke;
     const len = kind === 'open' ? 10 : 11;
     const half = kind === 'open' ? 5 : 4;
-    const bx = d.p.x - d.ux * len;
-    const by = d.p.y - d.uy * len;
-    const a = `${n(bx - d.uy * half)} ${n(by + d.ux * half)}`;
-    const c = `${n(bx + d.uy * half)} ${n(by - d.ux * half)}`;
-    const tip = `${n(d.p.x)} ${n(d.p.y)}`;
-    if (kind === 'open') return `<path d="M${a}L${tip}L${c}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-    return `<path d="M${a}L${tip}L${c}Z" fill="${kind === 'filled' ? ink : FILL}" stroke="${ink}" stroke-width="1" stroke-linejoin="round"/>`;
+    const bx = direction.tip.x - direction.ux * len;
+    const by = direction.tip.y - direction.uy * len;
+    const leftWing = `${formatNumber(bx - direction.uy * half)} ${formatNumber(by + direction.ux * half)}`;
+    const rightWing = `${formatNumber(bx + direction.uy * half)} ${formatNumber(by - direction.ux * half)}`;
+    const tip = `${formatNumber(direction.tip.x)} ${formatNumber(direction.tip.y)}`;
+    if (kind === 'open') return `<path d="M${leftWing}L${tip}L${rightWing}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    return `<path d="M${leftWing}L${tip}L${rightWing}Z" fill="${kind === 'filled' ? ink : FILL}" stroke="${ink}" stroke-width="1" stroke-linejoin="round"/>`;
   }
 
   private roundedPath(): string {
     const points = this.edge.points;
     const first = points[0]!;
-    let d = `M${n(first.x)} ${n(first.y)}`;
-    for (let i = 1; i < points.length - 1; i++) {
-      const prev = points[i - 1]!;
-      const p = points[i]!;
-      const next = points[i + 1]!;
-      const lin = Math.hypot(p.x - prev.x, p.y - prev.y);
-      const lout = Math.hypot(next.x - p.x, next.y - p.y);
-      const r = Math.min(5, lin / 2, lout / 2);
-      if (r < 0.5) {
-        d += `L${n(p.x)} ${n(p.y)}`;
+    let pathData = `M${formatNumber(first.x)} ${formatNumber(first.y)}`;
+    for (let index = 1; index < points.length - 1; index++) {
+      const prev = points[index - 1]!;
+      const corner = points[index]!;
+      const next = points[index + 1]!;
+      const lin = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+      const lout = Math.hypot(next.x - corner.x, next.y - corner.y);
+      const radius = Math.min(5, lin / 2, lout / 2);
+      if (radius < 0.5) {
+        pathData += `L${formatNumber(corner.x)} ${formatNumber(corner.y)}`;
         continue;
       }
-      d += `L${n(p.x - ((p.x - prev.x) / lin) * r)} ${n(p.y - ((p.y - prev.y) / lin) * r)}Q${n(p.x)} ${n(p.y)} ${n(p.x + ((next.x - p.x) / lout) * r)} ${n(p.y + ((next.y - p.y) / lout) * r)}`;
+      pathData += `L${formatNumber(corner.x - ((corner.x - prev.x) / lin) * radius)} ${formatNumber(corner.y - ((corner.y - prev.y) / lin) * radius)}Q${formatNumber(corner.x)} ${formatNumber(corner.y)} ${formatNumber(corner.x + ((next.x - corner.x) / lout) * radius)} ${formatNumber(corner.y + ((next.y - corner.y) / lout) * radius)}`;
     }
     const last = points[points.length - 1]!;
-    return `${d}L${n(last.x)} ${n(last.y)}`;
+    return `${pathData}L${formatNumber(last.x)} ${formatNumber(last.y)}`;
   }
 }

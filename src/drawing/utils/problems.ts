@@ -37,7 +37,7 @@ export const KEYS = [
 export type MetricKey = (typeof KEYS)[number];
 
 /** the regression harness's kinds, in its order */
-export const HARNESS_KEYS: readonly MetricKey[] = KEYS.filter((k) => !(EXTRA_KEYS as readonly string[]).includes(k) && !(QUALITY_KEYS as readonly string[]).includes(k));
+export const HARNESS_KEYS: readonly MetricKey[] = KEYS.filter((key) => !(EXTRA_KEYS as readonly string[]).includes(key) && !(QUALITY_KEYS as readonly string[]).includes(key));
 
 export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
   crossings: 5,
@@ -69,7 +69,7 @@ export const WEIGHTS: Readonly<Record<MetricKey, number>> = {
 };
 
 /** A hard layout defect: weighted like an outside-lane node or more (import warnings aside). */
-export const isHardProblem = (p: LayoutProblem): boolean => p.kind !== 'failed' && WEIGHTS[p.kind] >= 6;
+export const isHardProblem = (problem: LayoutProblem): boolean => problem.kind !== 'failed' && WEIGHTS[problem.kind] >= 6;
 
 export interface ProblemLocation {
   /** the element the plane shows */
@@ -104,12 +104,12 @@ export interface MetricsDelta {
   resolved: LayoutProblem[];
 }
 
-export function perKey<T>(make: () => T): Record<MetricKey, T> {
-  return Object.fromEntries(KEYS.map((k) => [k, make()])) as Record<MetricKey, T>;
+export function perKey<TValue>(make: () => TValue): Record<MetricKey, TValue> {
+  return Object.fromEntries(KEYS.map((key) => [key, make()])) as Record<MetricKey, TValue>;
 }
 
 export function scoreOf(counts: Record<MetricKey, number>): number {
-  return KEYS.reduce((sum, k) => sum + counts[k] * WEIGHTS[k], 0);
+  return KEYS.reduce((sum, key) => sum + counts[key] * WEIGHTS[key], 0);
 }
 
 const SYMMETRIC = new Set<MetricKey>(['crossings', 'overlaps', 'frameOverlap', 'parallelRun', 'segmentOverlap']);
@@ -117,21 +117,21 @@ const SYMMETRIC = new Set<MetricKey>(['crossings', 'overlaps', 'frameOverlap', '
 const MEASURED = new Set<MetricKey>(['parallelRun', 'segmentOverlap', 'messageLabelFar']);
 
 /** Ids are order-free for symmetric kinds; a measured detail is no part of the identity. */
-export function problemKey(p: LayoutProblem): string {
-  const unordered = SYMMETRIC.has(p.kind) || (p.kind === 'labelClash' && p.detail === 'label on label');
-  const ids = unordered ? [...p.ids].sort() : p.ids;
-  const detail = p.detail !== undefined && !MEASURED.has(p.kind) ? `#${p.detail}` : '';
-  return `${p.kind}:${ids.join(',')}${detail}`;
+export function problemKey(problem: LayoutProblem): string {
+  const unordered = SYMMETRIC.has(problem.kind) || (problem.kind === 'labelClash' && problem.detail === 'label on label');
+  const ids = unordered ? [...problem.ids].sort() : problem.ids;
+  const detail = problem.detail !== undefined && !MEASURED.has(problem.kind) ? `#${problem.detail}` : '';
+  return `${problem.kind}:${ids.join(',')}${detail}`;
 }
 
 function unmatched(list: readonly LayoutProblem[], other: readonly LayoutProblem[]): LayoutProblem[] {
   const pool = new Map<string, number>();
-  for (const p of other) pool.set(problemKey(p), (pool.get(problemKey(p)) ?? 0) + 1);
-  return list.filter((p) => {
-    const k = problemKey(p);
-    const n = pool.get(k) ?? 0;
-    if (n === 0) return true;
-    pool.set(k, n - 1);
+  for (const problem of other) pool.set(problemKey(problem), (pool.get(problemKey(problem)) ?? 0) + 1);
+  return list.filter((problem) => {
+    const key = problemKey(problem);
+    const count = pool.get(key) ?? 0;
+    if (count === 0) return true;
+    pool.set(key, count - 1);
     return false;
   });
 }

@@ -37,8 +37,8 @@ export class IdFitter {
     const legacy = this.legacy;
     switch (this.body) {
       case 'camel': {
-        const a = camelSlug(source, legacy);
-        return [glued ? ucfirst(a) : a, 'To', slugify(target, legacy)];
+        const sourceSlug = camelSlug(source, legacy);
+        return [glued ? ucfirst(sourceSlug) : sourceSlug, 'To', slugify(target, legacy)];
       }
       case 'snake':
         return [snakeSlug(source, legacy), '_to_', snakeSlug(target, legacy)];
@@ -60,14 +60,14 @@ export class IdFitter {
     return { head: `${prefix}${glued ? '' : '_'}`, glued, long: !this.legacy && MAX_ID - prefix.length - (glued ? 0 : 1) - joined < 16 };
   }
 
-  pair(head: string, a: string, join: string, b: string, max: number): string {
+  pair(head: string, sourceEnd: string, join: string, targetEnd: string, max: number): string {
     const room = max - head.length - join.length;
-    const [x, y] = this.legacy ? this.legacyFitPair(a, b, room) : this.fitPair(a, b, Math.max(room, 0));
-    return `${head}${x}${join}${y}`;
+    const [fittedSource, fittedTarget] = this.legacy ? this.legacyFitPair(sourceEnd, targetEnd, room) : this.fitPair(sourceEnd, targetEnd, Math.max(room, 0));
+    return `${head}${fittedSource}${join}${fittedTarget}`;
   }
 
-  whole(head: string, a: string, join: string, b: string, max: number): string | undefined {
-    const pair = this.wholePair(a, b, max - head.length - join.length);
+  whole(head: string, sourceEnd: string, join: string, targetEnd: string, max: number): string | undefined {
+    const pair = this.wholePair(sourceEnd, targetEnd, max - head.length - join.length);
     return pair && `${head}${pair[0]}${join}${pair[1]}`;
   }
 
@@ -76,43 +76,43 @@ export class IdFitter {
    * characters the whole ids share it.
    */
   idForm(form: IdForm, head: string, req: IdRequest, max: number): string {
-    const s = req.source!;
-    const t = req.target!;
+    const sourceId = req.source!;
+    const targetId = req.target!;
     const join = FORM_JOIN[form];
     if (form === 'idPair' || form === 'idSnake') {
-      const pa = s.length - stem(s).length;
-      const pb = t.length - stem(t).length;
+      const pa = sourceId.length - stem(sourceId).length;
+      const pb = targetId.length - stem(targetId).length;
       const room = max - head.length - join.length - pa - pb;
       const fitter = this.ofForm(form);
-      if (this.legacy || room < 16) return fitter.pair(head, s, join, t, max);
-      const [x, y] = fitter.fitPair(stem(s), stem(t), room);
-      return `${head}${s.slice(0, pa)}${x}${join}${t.slice(0, pb)}${y}`;
+      if (this.legacy || room < 16) return fitter.pair(head, sourceId, join, targetId, max);
+      const [fittedSource, fittedTarget] = fitter.fitPair(stem(sourceId), stem(targetId), room);
+      return `${head}${sourceId.slice(0, pa)}${fittedSource}${join}${targetId.slice(0, pb)}${fittedTarget}`;
     }
-    const { a, b, names } = this.stemEnds(form, req);
-    return this.ofForm(form, names).pair(head, a, join, b, max);
+    const { sourceEnd, targetEnd, names } = this.stemEnds(form, req);
+    return this.ofForm(form, names).pair(head, sourceEnd, join, targetEnd, max);
   }
 
   wholeIdForm(form: IdForm, head: string, req: IdRequest, max: number): string | undefined {
-    const s = req.source!;
-    const t = req.target!;
+    const sourceId = req.source!;
+    const targetId = req.target!;
     const join = FORM_JOIN[form];
     if (form === 'idPair' || form === 'idSnake') {
-      const [pa, pb] = [s.length - stem(s).length, t.length - stem(t).length];
-      const pair = this.ofForm(form).wholePair(stem(s), stem(t), max - head.length - join.length - pa - pb);
-      return pair && `${head}${s.slice(0, pa)}${pair[0]}${join}${t.slice(0, pb)}${pair[1]}`;
+      const [pa, pb] = [sourceId.length - stem(sourceId).length, targetId.length - stem(targetId).length];
+      const pair = this.ofForm(form).wholePair(stem(sourceId), stem(targetId), max - head.length - join.length - pa - pb);
+      return pair && `${head}${sourceId.slice(0, pa)}${pair[0]}${join}${targetId.slice(0, pb)}${pair[1]}`;
     }
-    const { a, b, names } = this.stemEnds(form, req);
-    return this.ofForm(form, names).whole(head, a, join, b, max);
+    const { sourceEnd, targetEnd, names } = this.stemEnds(form, req);
+    return this.ofForm(form, names).whole(head, sourceEnd, join, targetEnd, max);
   }
 
   /** An end's id stem when that says something, else its label. */
-  stemEnds(form: 'stemTo' | 'stemSnake', req: IdRequest): { a: string; b: string; names?: string[] } {
+  stemEnds(form: 'stemTo' | 'stemSnake', req: IdRequest): { sourceEnd: string; targetEnd: string; names?: string[] } {
     const slug = (text: string): string => (form === 'stemTo' ? camelSlug(text, this.legacy) : snakeSlug(text, this.legacy));
     const byLabel = (id: string, label: string | undefined): label is string => speakingStem(id) === undefined && !!label && !!slug(label);
     const end = (id: string, label: string | undefined): string => speakingStem(id) ?? (byLabel(id, label) ? slug(label) : stem(id));
-    const [a, b] = [end(req.source!, req.sourceLabel), end(req.target!, req.targetLabel)];
-    if (form === 'stemSnake') return { a, b };
-    return { a: lcfirst(a), b: ucfirst(b), ...(byLabel(req.source!, req.sourceLabel) ? { names: nameWords(req.sourceLabel) } : {}) };
+    const [sourceEnd, targetEnd] = [end(req.source!, req.sourceLabel), end(req.target!, req.targetLabel)];
+    if (form === 'stemSnake') return { sourceEnd, targetEnd };
+    return { sourceEnd: lcfirst(sourceEnd), targetEnd: ucfirst(targetEnd), ...(byLabel(req.source!, req.sourceLabel) ? { names: nameWords(req.sourceLabel) } : {}) };
   }
 
   /**
@@ -122,8 +122,8 @@ export class IdFitter {
   endWord(id: string, scope: string, terminal: 'Start' | 'End'): string {
     const segments = id.split('_');
     if (segments.length > 1 && new RegExp(`^${terminal}(Event)?$`, 'i').test(segments[0]!)) return terminal;
-    const rest = segments.length > 1 ? segments.slice(1).filter((x) => x !== scope) : segments;
-    const word = (words: string[]): string | undefined => (this.legacy ? words[0] : words.find((w) => /[A-Za-z]/.test(w)));
+    const rest = segments.length > 1 ? segments.slice(1).filter((segment) => segment !== scope) : segments;
+    const word = (words: string[]): string | undefined => (this.legacy ? words[0] : words.find((candidate) => /[A-Za-z]/.test(candidate)));
     return ucfirst(word(nameWords(rest.join(' '))) ?? word(nameWords(id)) ?? terminal);
   }
 
@@ -136,71 +136,71 @@ export class IdFitter {
    * word between two numbers (`Stufe23`); of the pairs that fit, most words, then most
    * characters, then the more even wins. Only when nothing fits is a word cut inside.
    */
-  private fitPair(a: string, b: string, room: number): [string, string] {
-    if (a.length + b.length <= room) return [a, b];
-    const { best, fa, fb } = this.bestPair(a, b, room);
+  private fitPair(sourceEnd: string, targetEnd: string, room: number): [string, string] {
+    if (sourceEnd.length + targetEnd.length <= room) return [sourceEnd, targetEnd];
+    const { best, fa, fb } = this.bestPair(sourceEnd, targetEnd, room);
     if (best) return best;
-    const [x, y] = [fa[fa.length - 1]!.text, fb[fb.length - 1]!.text];
-    const long = x.length >= y.length ? 0 : 1;
-    const keep = room - (long ? x : y).length;
-    if (keep < 8) return this.sharePair(x, y, room, (slug, max) => this.cutInside(slug, max));
-    const cut = this.cutInside(long ? y : x, keep);
+    const [shortestSource, shortestTarget] = [fa[fa.length - 1]!.text, fb[fb.length - 1]!.text];
+    const long = shortestSource.length >= shortestTarget.length ? 0 : 1;
+    const keep = room - (long ? shortestSource : shortestTarget).length;
+    if (keep < 8) return this.sharePair(shortestSource, shortestTarget, room, (slug, max) => this.cutInside(slug, max));
+    const cut = this.cutInside(long ? shortestTarget : shortestSource, keep);
     // the other end takes back what fits beside the cut
-    const other = (long ? fa : fb).find((f) => f.text.length + cut.length <= room)!.text;
+    const other = (long ? fa : fb).find((form) => form.text.length + cut.length <= room)!.text;
     return long ? [other, cut] : [cut, other];
   }
 
-  private wholePair(a: string, b: string, room: number): [string, string] | undefined {
-    if (a.length + b.length <= room) return [a, b];
-    return this.bestPair(a, b, room).best;
+  private wholePair(sourceEnd: string, targetEnd: string, room: number): [string, string] | undefined {
+    if (sourceEnd.length + targetEnd.length <= room) return [sourceEnd, targetEnd];
+    return this.bestPair(sourceEnd, targetEnd, room).best;
   }
 
-  private bestPair(a: string, b: string, room: number): { best?: [string, string]; fa: EndForm[]; fb: EndForm[] } {
-    const keepLast = beginAlike(a, b);
-    const [fa, fb] = [this.endForms(a, keepLast, room, this.names), this.endForms(b, keepLast, room, undefined, this.closes)];
+  private bestPair(sourceEnd: string, targetEnd: string, room: number): { best?: [string, string]; fa: EndForm[]; fb: EndForm[] } {
+    const keepLast = beginAlike(sourceEnd, targetEnd);
+    const [fa, fb] = [this.endForms(sourceEnd, keepLast, room, this.names), this.endForms(targetEnd, keepLast, room, undefined, this.closes)];
     // later pairs win a full tie: the source has given up more
-    const score = (x: EndForm, y: EndForm): number[] => [x.words + y.words, x.text.length + y.text.length, -Math.abs(x.text.length - y.text.length)];
+    const score = (sourceForm: EndForm, targetForm: EndForm): number[] => [sourceForm.words + targetForm.words, sourceForm.text.length + targetForm.text.length, -Math.abs(sourceForm.text.length - targetForm.text.length)];
     let best: { x: EndForm; y: EndForm; score: number[] } | undefined;
-    for (const x of fa) {
-      for (const y of fb) {
-        if (x.text.length + y.text.length > room) continue;
-        const s = score(x, y);
-        const n = best ? s.findIndex((v, i) => v !== best!.score[i]) : 0;
-        if (!best || n === -1 || s[n]! > best.score[n]!) best = { x, y, score: s };
+    for (const sourceForm of fa) {
+      for (const targetForm of fb) {
+        if (sourceForm.text.length + targetForm.text.length > room) continue;
+        const candidateScore = score(sourceForm, targetForm);
+        const firstDifference = best ? candidateScore.findIndex((component, index) => component !== best!.score[index]) : 0;
+        if (!best || firstDifference === -1 || candidateScore[firstDifference]! > best.score[firstDifference]!) best = { x: sourceForm, y: targetForm, score: candidateScore };
       }
     }
     return { ...(best ? { best: [best.x.text, best.y.text] as [string, string] } : {}), fa, fb };
   }
 
   /** An end after each word it gives up, shortest last; of the forms over `room` only the last. */
-  private endForms(x: string, keepLast: boolean, room: number, names?: string[], closes?: RegExp): EndForm[] {
-    const words = idWords(x);
-    const tail = idWords(keptTail(x)).length;
+  private endForms(end: string, keepLast: boolean, room: number, names?: string[], closes?: RegExp): EndForm[] {
+    const words = idWords(end);
+    const tail = idWords(keptTail(end)).length;
     const kept = keepLast ? Math.max(tail, 1) : tail;
-    const letter = (w: string): boolean => /[A-Za-z]/.test(w);
-    const number = (w: string): boolean => /^[_.-]*\d+$/.test(w);
+    const letter = (word: string): boolean => /[A-Za-z]/.test(word);
+    const number = (word: string): boolean => /^[_.-]*\d+$/.test(word);
     const filler = (): number => {
-      const i = words.length - tail - 1;
-      if (i < 1 || i > words.length - 1 - kept || !isFiller(words[i]!)) return -1;
-      if (!words.some((w, n) => n !== i && n < words.length - tail && letter(w))) return -1;
-      return /\d$/.test(words[i - 1]!) && /^[_.-]*\d/.test(words[i + 1] ?? '') ? -1 : i;
+      const index = words.length - tail - 1;
+      if (index < 1 || index > words.length - 1 - kept || !isFiller(words[index]!)) return -1;
+      if (!words.some((other, otherIndex) => otherIndex !== index && otherIndex < words.length - tail && letter(other))) return -1;
+      return /\d$/.test(words[index - 1]!) && /^[_.-]*\d/.test(words[index + 1] ?? '') ? -1 : index;
     };
     const victim = (): number => {
       const head = words.length - tail;
-      for (let i = words.length - 1 - kept; i >= (keepLast ? 0 : 1); i--) {
-        if (letter(words[i]!) && !words.some((w, n) => n !== i && n < head && letter(w))) continue;
+      for (let index = words.length - 1 - kept; index >= (keepLast ? 0 : 1); index--) {
+        if (letter(words[index]!) && !words.some((other, otherIndex) => otherIndex !== index && otherIndex < head && letter(other))) continue;
         // zahlungseingang_2_2 never shrinks to zahlungseingang_2, another element's id
-        if (number(words[i]!) && i + 1 < words.length && words.slice(i + 1).every(number)) continue;
-        if (i === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[i - 1]!) && /^[_.-]*\d/.test(words[i + 1] ?? ''))) return i;
+        if (number(words[index]!) && index + 1 < words.length && words.slice(index + 1).every(number)) continue;
+        if (index === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[index - 1]!) && /^[_.-]*\d/.test(words[index + 1] ?? ''))) return index;
       }
       return -1;
     };
-    const out: EndForm[] = x.length <= room ? [{ text: x, words: words.length }] : [];
-    let length = x.length;
-    for (let i = victim(); i >= 0; i = victim()) {
-      const [dropped] = words.splice(i, 1);
+    const out: EndForm[] = end.length <= room ? [{ text: end, words: words.length }] : [];
+    let length = end.length;
+    for (let index = victim(); index >= 0; index = victim()) {
+      const [dropped] = words.splice(index, 1);
       length -= dropped!.length;
-      if (i === 0) {
+      if (index === 0) {
         const next = words[0]!.replace(/^[_.-]+/, '');
         length -= words[0]!.length - next.length;
         words[0] = /^[a-z]/.test(dropped!) ? this.lowerFirst(next, words.slice(1).join(''), names) : next;
@@ -212,9 +212,9 @@ export class IdFitter {
           length -= words.pop()!.length;
           more = true;
         }
-        const f = filler();
-        if (f >= 0) {
-          length -= words.splice(f, 1)[0]!.length;
+        const fillerIndex = filler();
+        if (fillerIndex >= 0) {
+          length -= words.splice(fillerIndex, 1)[0]!.length;
           more = true;
         }
       }
@@ -230,10 +230,10 @@ export class IdFitter {
    */
   private lowerFirst(word: string, rest: string, names?: string[]): string {
     const end = `${word}${rest}`.toLowerCase();
-    const tails = (names ?? []).map((_, k) => camelSlug(names!.slice(k).join(' '))).reverse();
-    const own = tails.find((t) => t.toLowerCase() === end) ?? tails.find((t) => t.toLowerCase().startsWith(end));
+    const tails = (names ?? []).map((_name, start) => camelSlug(names!.slice(start).join(' '))).reverse();
+    const own = tails.find((tail) => tail.toLowerCase() === end) ?? tails.find((tail) => tail.toLowerCase().startsWith(end));
     if (own) return own.slice(0, word.length);
-    return word.replace(/^[A-Z]+(?![a-z])|^[A-Z]/, (m) => m.toLowerCase());
+    return word.replace(/^[A-Z]+(?![a-z])|^[A-Z]/, (capitals) => capitals.toLowerCase());
   }
 
   /** Keeps the join or number tail (`3Zahlungseingangsbest2024`) where the two read apart. */
@@ -246,24 +246,24 @@ export class IdFitter {
   }
 
   /** fitPair as 0.6 cut the ends, to recognise the flows it named. */
-  private legacyFitPair(a: string, b: string, room: number): [string, string] {
-    if (a.length + b.length <= room) return [a, b];
+  private legacyFitPair(sourceEnd: string, targetEnd: string, room: number): [string, string] {
+    if (sourceEnd.length + targetEnd.length <= room) return [sourceEnd, targetEnd];
     // ends that begin alike differ at their ends, so each keeps its last word
-    return this.sharePair(a, b, room, beginAlike(a, b) ? (slug, max) => this.cutKeepingLast(slug, max) : (slug, max) => this.legacyCut(slug, max));
+    return this.sharePair(sourceEnd, targetEnd, room, beginAlike(sourceEnd, targetEnd) ? (slug, max) => this.cutKeepingLast(slug, max) : (slug, max) => this.legacyCut(slug, max));
   }
 
   /** The first end gets at least half, the second the rest, the first what the second leaves. */
-  private sharePair(a: string, b: string, room: number, cut: (slug: string, max: number) => string): [string, string] {
-    const first = cut(a, Math.max(Math.floor(room / 2), room - b.length));
-    const second = cut(b, room - first.length);
-    return [cut(a, room - second.length), second];
+  private sharePair(sourceEnd: string, targetEnd: string, room: number, cut: (slug: string, max: number) => string): [string, string] {
+    const first = cut(sourceEnd, Math.max(Math.floor(room / 2), room - targetEnd.length));
+    const second = cut(targetEnd, room - first.length);
+    return [cut(sourceEnd, room - second.length), second];
   }
 
   private cutKeepingLast(slug: string, max: number): string {
     if (slug.length <= max) return slug;
-    const m = /^(.*[a-z0-9])([_.-][A-Za-z0-9]+|[A-Z][a-z0-9]+)$/.exec(slug);
-    if (!m || m[2]!.length + 8 > max) return this.legacyCut(slug, max);
-    return `${this.legacyCut(m[1]!, max - m[2]!.length)}${m[2]}`;
+    const match = /^(.*[a-z0-9])([_.-][A-Za-z0-9]+|[A-Z][a-z0-9]+)$/.exec(slug);
+    if (!match || match[2]!.length + 8 > max) return this.legacyCut(slug, max);
+    return `${this.legacyCut(match[1]!, max - match[2]!.length)}${match[2]}`;
   }
 
   private legacyCut(slug: string, max: number): string {

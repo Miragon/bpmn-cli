@@ -39,7 +39,7 @@ export class BpmnlintConfigResolution {
         continue;
       }
       if (stack.includes(name)) {
-        if (!this.unavailable.some((u) => u.name === name && u.reason === CYCLE)) this.unavailable.push({ kind: 'config', name, pkg: '', reason: CYCLE });
+        if (!this.unavailable.some((entry) => entry.name === name && entry.reason === CYCLE)) this.unavailable.push({ kind: 'config', name, pkg: '', reason: CYCLE });
         continue;
       }
       if (stack.length >= MAX_DEPTH) {
@@ -103,7 +103,7 @@ export class BpmnlintConfigResolution {
     }
     // a descriptor BpmnModdle rejects would stop every rule: it alone is left out
     for (const [prefix, why] of this.rejectedDescriptors(moddleExtensions)) {
-      const value = moddleEntries(this.config).find(([p]) => p === prefix)?.[1];
+      const value = moddleEntries(this.config).find(([entryPrefix]) => entryPrefix === prefix)?.[1];
       delete moddleExtensions[prefix];
       this.unavailable.push({ kind: 'moddle', name: prefix, pkg: typeof value === 'string' ? value : 'descriptor object', reason: `BpmnModdle rejects it (${why})`, hint: 'Fix the descriptor, or remove the moddleExtensions entry; bpmnlint in CI fails on the whole file with it.' });
     }

@@ -12,35 +12,35 @@ export function rng(seed) {
   let state = seed >>> 0;
   const next = () => {
     state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    let mixed = state;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
   };
   return {
     next,
     /** integer in [0, n) */
-    int: (n) => Math.floor(next() * n),
+    int: (bound) => Math.floor(next() * bound),
     /** one element of the list, undefined for an empty list */
     pick: (list) => list[Math.floor(next() * list.length)],
-    chance: (p) => next() < p,
+    chance: (probability) => next() < probability,
     shuffle: (list) => {
-      const a = [...list];
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(next() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
+      const shuffled = [...list];
+      for (let index = shuffled.length - 1; index > 0; index--) {
+        const swapIndex = Math.floor(next() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
       }
-      return a;
+      return shuffled;
     },
   };
 }
 
 /** FNV-1a over the string forms of the parts. */
 export function seedOf(...parts) {
-  let h = 0x811c9dc5;
+  let hash = 0x811c9dc5;
   for (const ch of parts.map(String).join('\u0000')) {
-    h ^= ch.charCodeAt(0);
-    h = Math.imul(h, 0x01000193) >>> 0;
+    hash ^= ch.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return h >>> 0;
+  return hash >>> 0;
 }

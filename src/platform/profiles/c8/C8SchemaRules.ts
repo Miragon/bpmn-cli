@@ -23,18 +23,18 @@ export class C8SchemaRules extends C8Rules {
       this.push('deploy', 'W_C8_DEPLOY_SCHEMA', this.doc.definitions, undefined, 'definitions', `bpmn:definitions carries bpmn:extensionElements, which the BPMN schema does not allow there; Camunda 8 refuses the file`, `Move the content to the process: \`bpmn ext remove <file> ${idOf(this.doc.definitions) ?? '<definitionsId>'} <type>\`, then \`bpmn ext add <file> <processId> <type> ...\`.`);
     }
     for (const { el, owner, id, di, addr, keys } of this.unprefixedAttributes()) {
-      for (const k of keys) {
+      for (const key of keys) {
         const where = el === owner ? this.describe(el) : `${el.$type}${id ? ` in ${id}` : ''}`;
-        const link = el === owner && !!id && this.kit.is(el, 'bpmn:BusinessRuleTask') && (k === 'calledDecision' || k === 'calledElement') ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
-        const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${k}=`)}\`` : undefined;
+        const link = el === owner && !!id && this.kit.is(el, 'bpmn:BusinessRuleTask') && (key === 'calledDecision' || key === 'calledElement') ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
+        const remove = addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${key}=`)}\`` : undefined;
         const hint = link
-          ? `Write the decision link the Camunda 8 way: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.z('calledDecision')}; the unprefixed ${k} is removed; give it a resultVariable).`
+          ? `Write the decision link the Camunda 8 way: \`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\` (${this.zeebeName('calledDecision')}; the unprefixed ${key} is removed; give it a resultVariable).`
           : remove
-            ? `Remove it: ${remove} (vendor attributes need their namespace prefix; Camunda 8 settings are mostly ${this.p}: extension elements).`
+            ? `Remove it: ${remove} (vendor attributes need their namespace prefix; Camunda 8 settings are mostly ${this.prefix}: extension elements).`
             : di
-              ? `Remove ${k}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).`
-              : `Remove ${k}="..." from the XML${id ? ` of ${id}` : ''}.`;
-        this.push('deploy', 'W_C8_DEPLOY_SCHEMA', el, owner, `schema:${k}`, `${where} has the attribute ${k}, which the BPMN schema does not define; Camunda 8 validates the file against the schema and refuses it`, hint);
+              ? `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).`
+              : `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''}.`;
+        this.push('deploy', 'W_C8_DEPLOY_SCHEMA', el, owner, `schema:${key}`, `${where} has the attribute ${key}, which the BPMN schema does not define; Camunda 8 validates the file against the schema and refuses it`, hint);
       }
     }
   }
@@ -70,12 +70,12 @@ export class C8SchemaRules extends C8Rules {
       if (issue.owner !== undefined && !owner) continue;
       const where = owner ? this.describe(owner) : `<${issue.element}>`;
       if (issue.kind === 'boolean') {
-        const what = owner && issue.element !== localName(owner.$type).replace(/^./, (c) => c.toLowerCase()) ? `<${issue.element.startsWith('BPMN') ? 'bpmndi' : 'bpmn'}:${issue.element}> of ${where}` : where;
+        const what = owner && issue.element !== localName(owner.$type).replace(/^./, (firstLetter) => firstLetter.toLowerCase()) ? `<${issue.element.startsWith('BPMN') ? 'bpmndi' : 'bpmn'}:${issue.element}> of ${where}` : where;
         this.push('deploy', 'W_C8_DEPLOY_SCHEMA', owner ?? this.doc.definitions, undefined, `boolean:${issue.element}:${issue.ref}`, `${what[0]!.toUpperCase()}${what.slice(1)} has ${issue.ref}="${issue.value}", which is no xsd:boolean (true or false; bpmn-moddle reads it as false); Camunda 8 validates the file against the BPMN schema and refuses it`, `Write ${issue.ref}="true" or ${issue.ref}="false" in the XML of ${owner ? idOf(owner) : `<${issue.element}>`}.`);
         continue;
       }
       if (issue.kind === 'order') {
-        const what = owner && issue.element !== localName(owner.$type).replace(/^./, (c) => c.toLowerCase()) ? `<bpmn:${issue.element}> of ${where}` : where;
+        const what = owner && issue.element !== localName(owner.$type).replace(/^./, (firstLetter) => firstLetter.toLowerCase()) ? `<bpmn:${issue.element}> of ${where}` : where;
         this.push('deploy', 'W_C8_DEPLOY_SCHEMA', owner ?? this.doc.definitions, undefined, `order:${issue.element}/${issue.child}`, `In ${what}, <bpmn:${issue.child}> comes after <bpmn:${issue.before}>; the BPMN schema puts ${issue.child} before ${issue.before}, and Camunda 8 validates the file against the schema and refuses it`, `Move <bpmn:${issue.child}> before <bpmn:${issue.before}> in the XML of ${owner ? idOf(owner) : `<${issue.element}>`} (Camunda Modeler and \`bpmn\` write that order for the elements they create or change).`);
       } else {
         const ref = issue.attribute ? `${issue.ref}="${issue.value}"` : `<bpmn:${issue.ref}>${issue.value}</bpmn:${issue.ref}>`;

@@ -50,19 +50,19 @@ export class FlowChecks {
   }
 
   checkFlowLinks(node: El): void {
-    for (const f of this.incomingOf(node)) {
-      if (is(f, 'bpmn:SequenceFlow') && peek<El>(f, 'targetRef') !== node) {
-        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${shownId(f)} as incoming, but the flow targets ${shownId(peek<El>(f, 'targetRef'))}`, shownId(node), {
-          related: [shownId(f)],
-          hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:incoming>${shownId(f)}</bpmn:incoming> entry from ${shownId(node)} in the XML (missing entries are added automatically).`,
+    for (const flow of this.incomingOf(node)) {
+      if (is(flow, 'bpmn:SequenceFlow') && peek<El>(flow, 'targetRef') !== node) {
+        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${shownId(flow)} as incoming, but the flow targets ${shownId(peek<El>(flow, 'targetRef'))}`, shownId(node), {
+          related: [shownId(flow)],
+          hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:incoming>${shownId(flow)}</bpmn:incoming> entry from ${shownId(node)} in the XML (missing entries are added automatically).`,
         });
       }
     }
-    for (const f of this.outgoingOf(node)) {
-      if (is(f, 'bpmn:SequenceFlow') && peek<El>(f, 'sourceRef') !== node) {
-        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${shownId(f)} as outgoing, but the flow starts at ${shownId(peek<El>(f, 'sourceRef'))}`, shownId(node), {
-          related: [shownId(f)],
-          hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:outgoing>${shownId(f)}</bpmn:outgoing> entry from ${shownId(node)} in the XML (missing entries are added automatically).`,
+    for (const flow of this.outgoingOf(node)) {
+      if (is(flow, 'bpmn:SequenceFlow') && peek<El>(flow, 'sourceRef') !== node) {
+        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${shownId(flow)} as outgoing, but the flow starts at ${shownId(peek<El>(flow, 'sourceRef'))}`, shownId(node), {
+          related: [shownId(flow)],
+          hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:outgoing>${shownId(flow)}</bpmn:outgoing> entry from ${shownId(node)} in the XML (missing entries are added automatically).`,
         });
       }
     }

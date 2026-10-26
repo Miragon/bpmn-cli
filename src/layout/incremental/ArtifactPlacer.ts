@@ -26,12 +26,12 @@ export class ArtifactPlacer {
     if (!el) return out;
     for (const other of this.placer.sem.byId.values()) {
       if (is(other, 'bpmn:Association')) {
-        const s = idOf(raw(other, 'sourceRef'));
-        const t = idOf(raw(other, 'targetRef'));
-        if (s === id && t) out.push(t);
-        else if (t === id && s) out.push(s);
+        const sourceId = idOf(raw(other, 'sourceRef'));
+        const targetId = idOf(raw(other, 'targetRef'));
+        if (sourceId === id && targetId) out.push(targetId);
+        else if (targetId === id && sourceId) out.push(sourceId);
       } else if (is(other, 'bpmn:DataInputAssociation')) {
-        if (rawList(other, 'sourceRef').some((r) => idOf(r) === id) && idOf(other.$parent)) out.push(idOf(other.$parent)!);
+        if (rawList(other, 'sourceRef').some((ref) => idOf(ref) === id) && idOf(other.$parent)) out.push(idOf(other.$parent)!);
       } else if (is(other, 'bpmn:DataOutputAssociation')) {
         if (idOf(raw(other, 'targetRef')) === id && idOf(other.$parent)) out.push(idOf(other.$parent)!);
       }
@@ -43,8 +43,8 @@ export class ArtifactPlacer {
     const el = this.placer.sem.byId.get(id)!;
     const size = this.placer.sizeFor(plane, id);
     const anchor = this.artifactAnchors(id)
-      .map((a) => plane.shapes.get(a))
-      .find((s): s is DShape => !!s);
+      .map((anchorId) => plane.shapes.get(anchorId))
+      .find((shape): shape is DShape => !!shape);
     if (!anchor) {
       this.neighbours.placeUnconnected(plane, id);
       return;
@@ -53,24 +53,24 @@ export class ArtifactPlacer {
     const frame = Frames.of(plane, probe);
     const obs = this.obstacles.of(plane, frame, new Set([id, ...this.obstacles.homeGroups(plane, [anchor])]));
     const segs = this.obstacles.edgeBoxes(plane);
-    const a = this.placer.drawing(plane).unitBox(anchor);
+    const anchorBox = this.placer.drawing(plane).unitBox(anchor);
     const annotation = is(el, 'bpmn:TextAnnotation');
     const candidates: Box[] = [];
     const steps = [0, 1, 2, 3, 4];
-    for (const k of steps) {
+    for (const step of steps) {
       if (annotation) {
-        candidates.push({ x: right(a) + 20 + k * 30, y: a.y - 30 - size.height - k * 20, ...size });
-        candidates.push({ x: cx(a) + k * 40, y: a.y - 40 - size.height - k * 30, ...size });
+        candidates.push({ x: right(anchorBox) + 20 + step * 30, y: anchorBox.y - 30 - size.height - step * 20, ...size });
+        candidates.push({ x: cx(anchorBox) + step * 40, y: anchorBox.y - 40 - size.height - step * 30, ...size });
       } else {
-        candidates.push({ x: right(a) + 10 + k * (size.width + 20), y: bottom(a) + 30, ...size });
-        candidates.push({ x: right(a) + 10, y: bottom(a) + 30 + k * (size.height + 20), ...size });
+        candidates.push({ x: right(anchorBox) + 10 + step * (size.width + 20), y: bottom(anchorBox) + 30, ...size });
+        candidates.push({ x: right(anchorBox) + 10, y: bottom(anchorBox) + 30 + step * (size.height + 20), ...size });
       }
     }
-    if (annotation) for (const k of steps) candidates.push({ x: right(a) + 30 + k * (size.width + 20), y: a.y - size.height / 2, ...size }, { x: right(a) + 20, y: bottom(a) + 30 + k * (size.height + 20), ...size });
+    if (annotation) for (const step of steps) candidates.push({ x: right(anchorBox) + 30 + step * (size.width + 20), y: anchorBox.y - size.height / 2, ...size }, { x: right(anchorBox) + 20, y: bottom(anchorBox) + 30 + step * (size.height + 20), ...size });
     const inner = frame ? Frames.interior(frame, 5) : undefined;
-    const ok = (b: Box): boolean => this.obstacles.isFree(b, obs, 15) && !segs.some((s) => overlaps(s, b, 2)) && (!inner || (b.x >= inner.x && b.y >= inner.y));
-    const box = candidates.find(ok) ?? candidates.find((b) => this.obstacles.isFree(b, obs, 10) && (!inner || (b.x >= inner.x && b.y >= inner.y))) ?? candidates[0]!;
-    const s = this.placer.newShape(plane, id, { ...box, x: Math.round(box.x), y: Math.round(box.y) });
-    this.placer.commit(plane, s);
+    const ok = (box: Box): boolean => this.obstacles.isFree(box, obs, 15) && !segs.some((segment) => overlaps(segment, box, 2)) && (!inner || (box.x >= inner.x && box.y >= inner.y));
+    const box = candidates.find(ok) ?? candidates.find((candidate) => this.obstacles.isFree(candidate, obs, 10) && (!inner || (candidate.x >= inner.x && candidate.y >= inner.y))) ?? candidates[0]!;
+    const shape = this.placer.newShape(plane, id, { ...box, x: Math.round(box.x), y: Math.round(box.y) });
+    this.placer.commit(plane, shape);
   }
 }

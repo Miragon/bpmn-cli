@@ -29,14 +29,14 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
   try {
     fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: Record<string, unknown> };
-    return { code: e.code, message: e.message, details: e.details ?? {} };
+    const thrown = err as { code?: string; message: string; details?: Record<string, unknown> };
+    return { code: thrown.code, message: thrown.message, details: thrown.details ?? {} };
   }
   throw new Error('expected an error');
 }
 
 function codes(cs: { warnings: Array<{ code: string }> }): string[] {
-  return cs.warnings.map((w) => w.code);
+  return cs.warnings.map((warning) => warning.code);
 }
 
 /** The C7 model of the audit (b02): external task, error boundary, message throw, conditional catch, user task. */
@@ -87,7 +87,7 @@ describe('C7 target: history time to live and platform version', () => {
       { op: 'add', kind: 'participant', name: 'Shop' },
       { op: 'add', kind: 'participant', name: 'Customer' },
     ]);
-    const created = cs.created.filter((c) => c.kind === 'process').map((c) => c.id);
+    const created = cs.created.filter((change) => change.kind === 'process').map((change) => change.id);
     expect(created).toHaveLength(1);
     const proc = doc.require(created[0]!);
     expect(proc.$attrs['camunda:historyTimeToLive']).toBe('180');
@@ -104,8 +104,8 @@ describe('C7 target: history time to live and platform version', () => {
     const doc = await Doc.fromXml(xml);
     expect(new PlatformDetection(doc.definitions).target()).toBe('camunda7');
     const cs = runOps(doc, [{ op: 'add', kind: 'participant', name: 'Other' }, { op: 'add', kind: 'participant', name: 'Third' }]);
-    const p = doc.require(cs.created.find((c) => c.kind === 'process')!.id);
-    expect(p.$attrs['camunda:historyTimeToLive']).toBe('180');
+    const processElement = doc.require(cs.created.find((change) => change.kind === 'process')!.id);
+    expect(processElement.$attrs['camunda:historyTimeToLive']).toBe('180');
     expect(doc.require('Process_1').$attrs['camunda:historyTimeToLive']).toBeUndefined();
   });
 });
@@ -277,10 +277,10 @@ describe('set <flow> condition= keeps / reports camunda:resource and the languag
     const cs = set(doc, 'Flow_yes', { condition: '${ok}' });
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" id="Cond_1">\$\{ok\}<\/bpmn:conditionExpression>/);
-    const w = cs.warnings.filter((x) => x.code === 'W_PROPERTY_DROPPED');
-    expect(w).toHaveLength(1);
-    expect(w[0]!.message).toContain('camunda:resource');
-    expect(w[0]!.message).toContain('language groovy');
+    const dropped = cs.warnings.filter((candidate) => candidate.code === 'W_PROPERTY_DROPPED');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]!.message).toContain('camunda:resource');
+    expect(dropped[0]!.message).toContain('language groovy');
   });
 
   it('a new script body keeps the script language; an explicit language wins', async () => {
@@ -330,12 +330,12 @@ describe('loop changes report dropped multi-instance vendor content', () => {
   it.each(['none', 'standard'])('loop=%s', async (mode) => {
     const doc = await Doc.fromXml(MI_VENDOR);
     const cs = set(doc, 'Activity_ReviewItem', { loop: mode });
-    const w = cs.warnings.find((x) => x.code === 'W_PROPERTY_DROPPED');
-    expect(w?.message).toContain('camunda:collection');
-    expect(w?.message).toContain('camunda:elementVariable');
-    expect(w?.message).toContain('camunda:asyncBefore');
-    expect(w?.message).toContain('camunda:failedJobRetryTimeCycle');
-    expect(w?.message).toContain('MI_Review');
+    const dropped = cs.warnings.find((candidate) => candidate.code === 'W_PROPERTY_DROPPED');
+    expect(dropped?.message).toContain('camunda:collection');
+    expect(dropped?.message).toContain('camunda:elementVariable');
+    expect(dropped?.message).toContain('camunda:asyncBefore');
+    expect(dropped?.message).toContain('camunda:failedJobRetryTimeCycle');
+    expect(dropped?.message).toContain('MI_Review');
   });
 
   it('parallel <-> sequential keeps the loop and its vendor content', async () => {
@@ -360,11 +360,11 @@ describe('retype warns about camunda content the new kind cannot use (W_PROPERTY
   it('userTask -> serviceTask names assignee, candidateGroups, formKey and the task listener, and keeps them', async () => {
     const doc = await Doc.fromXml(RETYPE);
     const cs = runOps(doc, [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }]);
-    const w = cs.warnings.filter((x) => x.code === 'W_PROPERTY_INAPPLICABLE');
-    expect(w).toHaveLength(1);
-    for (const name of ['camunda:assignee', 'camunda:candidateGroups', 'camunda:formKey', 'camunda:taskListener']) expect(w[0]!.message).toContain(name);
-    expect(w[0]!.message).not.toContain('camunda:asyncBefore');
-    expect(w[0]!.message).not.toContain('camunda:inputOutput');
+    const dropped = cs.warnings.filter((candidate) => candidate.code === 'W_PROPERTY_INAPPLICABLE');
+    expect(dropped).toHaveLength(1);
+    for (const name of ['camunda:assignee', 'camunda:candidateGroups', 'camunda:formKey', 'camunda:taskListener']) expect(dropped[0]!.message).toContain(name);
+    expect(dropped[0]!.message).not.toContain('camunda:asyncBefore');
+    expect(dropped[0]!.message).not.toContain('camunda:inputOutput');
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:serviceTask id="Activity_Review" camunda:assignee="demo"/);
     expect(xml).toContain('<camunda:taskListener');
@@ -373,7 +373,7 @@ describe('retype warns about camunda content the new kind cannot use (W_PROPERTY
   it('serviceTask -> userTask names type and topic; task -> userTask warns about nothing', async () => {
     const doc = await Doc.fromXml(RETYPE);
     const cs = runOps(doc, [{ op: 'retype', id: 'Activity_Compute', kind: 'userTask' }]);
-    expect(cs.warnings.find((x) => x.code === 'W_PROPERTY_INAPPLICABLE')?.message).toMatch(/camunda:type, camunda:topic/);
+    expect(cs.warnings.find((candidate) => candidate.code === 'W_PROPERTY_INAPPLICABLE')?.message).toMatch(/camunda:type, camunda:topic/);
     const cs2 = runOps(doc, [{ op: 'retype', id: 'Activity_Plain', kind: 'userTask' }]);
     expect(codes(cs2)).not.toContain('W_PROPERTY_INAPPLICABLE');
   });
@@ -420,11 +420,11 @@ describe('show: vendor attribute values, process / flow / nested vendor content'
 
   it('--json carries the values', async () => {
     const { view } = await viewOf(SHOW);
-    const p = view.processes[0]!;
-    expect(p.attrs).toEqual({ 'camunda:historyTimeToLive': '180', 'camunda:candidateStarterGroups': 'sales' });
-    expect(p.extensionElements).toEqual(['camunda:executionListener']);
-    expect(p.extensions).toEqual(['camunda:executionListener', 'camunda:historyTimeToLive', 'camunda:candidateStarterGroups']);
-    const review = p.nodes[1]!;
+    const firstProcess = view.processes[0]!;
+    expect(firstProcess.attrs).toEqual({ 'camunda:historyTimeToLive': '180', 'camunda:candidateStarterGroups': 'sales' });
+    expect(firstProcess.extensionElements).toEqual(['camunda:executionListener']);
+    expect(firstProcess.extensions).toEqual(['camunda:executionListener', 'camunda:historyTimeToLive', 'camunda:candidateStarterGroups']);
+    const review = firstProcess.nodes[1]!;
     expect(review.attrs).toEqual({ 'camunda:assignee': 'demo', 'camunda:candidateGroups': 'sales, back office', 'loop.camunda:collection': '${items}', 'loop.camunda:elementVariable': 'item' });
     expect(review.extensionElements).toEqual(['camunda:taskListener', 'camunda:taskListener', 'camunda:taskListener']);
     expect(review.outgoing[0]).toMatchObject({ id: 'F2', extensionElements: ['camunda:executionListener'] });
@@ -432,15 +432,15 @@ describe('show: vendor attribute values, process / flow / nested vendor content'
 
   it('show <id> lists the nested element with its id, attributes and extensions under the set keys', async () => {
     const { doc } = await viewOf(SHOW);
-    const d = elementDetail(doc, doc.require('Declined'));
-    expect(d.properties['definition.camunda:errorCodeVariable']).toBe('errCode');
-    expect(d.nested?.definition).toMatchObject({ id: 'ErrDef_1', type: 'bpmn:ErrorEventDefinition', attrs: { 'camunda:errorCodeVariable': 'errCode' } });
-    const text = renderDetail(d);
+    const declinedDetail = elementDetail(doc, doc.require('Declined'));
+    expect(declinedDetail.properties['definition.camunda:errorCodeVariable']).toBe('errCode');
+    expect(declinedDetail.nested?.definition).toMatchObject({ id: 'ErrDef_1', type: 'bpmn:ErrorEventDefinition', attrs: { 'camunda:errorCodeVariable': 'errCode' } });
+    const text = renderDetail(declinedDetail);
     expect(text).toContain('definition.id: ErrDef_1');
     expect(text).toContain('definition.camunda:errorCodeVariable: errCode');
-    const r = elementDetail(doc, doc.require('Review'));
-    expect(renderDetail(r)).toContain('loop.id: MI_Review');
-    expect(r.properties['loop.camunda:collection']).toBe('${items}');
+    const reviewDetail = elementDetail(doc, doc.require('Review'));
+    expect(renderDetail(reviewDetail)).toContain('loop.id: MI_Review');
+    expect(reviewDetail.properties['loop.camunda:collection']).toBe('${items}');
   });
 
   it('show <processId> lists the process attributes', async () => {
@@ -453,14 +453,14 @@ describe('show: vendor attribute values, process / flow / nested vendor content'
 describe('find matches vendor attribute values and nested ids', () => {
   it('finds by topic, assignee, candidate group, listener class and nested ids', async () => {
     const doc = await Doc.fromXml(SHOW);
-    expect(findElements(doc, 'charge-card').map((h) => h.id)).toEqual(['Charge']);
+    expect(findElements(doc, 'charge-card').map((hit) => hit.id)).toEqual(['Charge']);
     expect(findElements(doc, 'charge-card')[0]).toMatchObject({ match: 'camunda:topic=charge-card' });
-    expect(findElements(doc, 'demo').map((h) => h.id)).toEqual(['Review']);
-    expect(findElements(doc, 'back office').map((h) => h.id)).toEqual(['Review']);
-    expect(findElements(doc, 'a.Take').map((h) => h.id)).toEqual(['F2']);
-    expect(findElements(doc, 'errCode').map((h) => h.id)).toEqual(['Declined']);
-    expect(findElements(doc, 'ErrDef').map((h) => h.id)).toEqual(['ErrDef_1']);
-    expect(findElements(doc, 'MI_').map((h) => h.id)).toEqual(['MI_Review']);
+    expect(findElements(doc, 'demo').map((hit) => hit.id)).toEqual(['Review']);
+    expect(findElements(doc, 'back office').map((hit) => hit.id)).toEqual(['Review']);
+    expect(findElements(doc, 'a.Take').map((hit) => hit.id)).toEqual(['F2']);
+    expect(findElements(doc, 'errCode').map((hit) => hit.id)).toEqual(['Declined']);
+    expect(findElements(doc, 'ErrDef').map((hit) => hit.id)).toEqual(['ErrDef_1']);
+    expect(findElements(doc, 'MI_').map((hit) => hit.id)).toEqual(['MI_Review']);
     // a name / id match carries no `match`
     expect(findElements(doc, 'Review')[0]).not.toHaveProperty('match');
   });
@@ -514,7 +514,7 @@ describe('platform/CamundaDescriptor', () => {
     expect(C7_DESCRIPTOR.attrAppliesTo('camunda:assignee', 'bpmn:ServiceTask')).toBe(false);
     expect(C7_DESCRIPTOR.attrAppliesTo('camunda:asyncBefore', 'bpmn:UserTask')).toBe(true);
     expect(C7_DESCRIPTOR.attrAppliesTo('camunda:nope', 'bpmn:UserTask')).toBeUndefined();
-    expect(C7_DESCRIPTOR.attrsFor('bpmn:Process').map((a) => a.name)).toContain('camunda:historyTimeToLive');
+    expect(C7_DESCRIPTOR.attrsFor('bpmn:Process').map((attribute) => attribute.name)).toContain('camunda:historyTimeToLive');
     expect(VendorDescriptor.typeIs('bpmn:UserTask', 'bpmn:Activity')).toBe(true);
     expect(VendorDescriptor.typeIs('bpmn:UserTask', 'bpmn:Gateway')).toBe(false);
   });
@@ -542,9 +542,9 @@ describe('platform/CamundaDescriptor', () => {
 describe('pipeline: the C7 model writes and re-imports cleanly', () => {
   it('nested keys survive a dry-run write without import warnings', async () => {
     const doc = await c7Doc();
-    const r = await mutateDoc(doc, [{ op: 'set', id: 'Activity_Review', values: { 'loop.camunda:collection': '${items}', 'loop.camunda:elementVariable': 'item' } }], { dryRun: true, layout: false });
-    expect(r.xml).toContain('camunda:collection="${items}"');
-    const again = await Doc.fromXml(r.xml);
+    const outcome = await mutateDoc(doc, [{ op: 'set', id: 'Activity_Review', values: { 'loop.camunda:collection': '${items}', 'loop.camunda:elementVariable': 'item' } }], { dryRun: true, layout: false });
+    expect(outcome.xml).toContain('camunda:collection="${items}"');
+    const again = await Doc.fromXml(outcome.xml);
     expect(again.importWarnings).toEqual([]);
   });
 });
@@ -567,7 +567,7 @@ describe('a script resource replaces an inline condition body', () => {
     const doc = await Doc.fromXml(RESOURCE_CONDITION);
     const cs = set(doc, 'Flow_no', { 'condition.camunda:resource': 'deployment://x.groovy', language: 'groovy' });
     expect(doc.require('G').get('default')).toBeUndefined();
-    expect(cs.changed.map((c) => c.detail)).toContain('no longer the default flow of G');
+    expect(cs.changed.map((change) => change.detail)).toContain('no longer the default flow of G');
   });
 });
 
@@ -575,7 +575,7 @@ describe('set E_WRONG_HOST: a process attribute on its participant', () => {
   it('camunda:historyTimeToLive on a participant points at the process', async () => {
     const doc = Doc.create({ target: 'camunda7', processId: 'P1' });
     const cs = runOps(doc, [{ op: 'add', kind: 'participant', name: 'Shop' }]);
-    const participant = cs.created.find((c) => c.kind === 'participant')!.id;
+    const participant = cs.created.find((change) => change.kind === 'participant')!.id;
     const err = caught(() => set(doc, participant, { 'camunda:historyTimeToLive': '30' }));
     expect(err.code).toBe('E_WRONG_HOST');
     expect(String(err.details['hint'])).toContain('bpmn set <file> P1 camunda:historyTimeToLive=30');
@@ -627,6 +627,6 @@ describe('default=true on a script resource condition', () => {
   it('reports the dropped resource condition (W_CONDITION_DROPPED)', async () => {
     const doc = await Doc.fromXml(RESOURCE_CONDITION);
     const cs = set(doc, 'Flow_yes', { default: 'true' });
-    expect(cs.warnings.find((w) => w.code === 'W_CONDITION_DROPPED')?.message).toContain('camunda:resource=deployment://cond.groovy');
+    expect(cs.warnings.find((warning) => warning.code === 'W_CONDITION_DROPPED')?.message).toContain('camunda:resource=deployment://cond.groovy');
   });
 });

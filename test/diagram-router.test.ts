@@ -14,41 +14,41 @@ import { OrthogonalRouter, type RouteRequest } from '../src/layout/incremental/O
 import { type Side } from '../src/drawing/types.js';
 import type { Box, Point } from '../src/drawing/types.js';
 
-const box = (x: number, y: number, width = 100, height = 80): Box => ({ x, y, width, height });
+const box = (left: number, top: number, width = 100, height = 80): Box => ({ x: left, y: top, width, height });
 const TASK_OUT = defaultSides('task', 'source');
 const TASK_IN = defaultSides('task', 'target');
 
-function sideOf(p: Point, b: Box): Side | undefined {
-  const inX = p.x >= b.x && p.x <= b.x + b.width;
-  const inY = p.y >= b.y && p.y <= b.y + b.height;
-  if (inY && p.x === b.x) return 'left';
-  if (inY && p.x === b.x + b.width) return 'right';
-  if (inX && p.y === b.y) return 'top';
-  if (inX && p.y === b.y + b.height) return 'bottom';
+function sideOf(point: Point, rect: Box): Side | undefined {
+  const inX = point.x >= rect.x && point.x <= rect.x + rect.width;
+  const inY = point.y >= rect.y && point.y <= rect.y + rect.height;
+  if (inY && point.x === rect.x) return 'left';
+  if (inY && point.x === rect.x + rect.width) return 'right';
+  if (inX && point.y === rect.y) return 'top';
+  if (inX && point.y === rect.y + rect.height) return 'bottom';
   return undefined;
 }
 
-function hits(points: Point[], b: Box): boolean {
-  for (let i = 0; i + 1 < points.length; i++) {
-    const a = points[i]!, c = points[i + 1]!;
-    if (Math.min(a.x, c.x) < b.x + b.width && Math.max(a.x, c.x) > b.x && Math.min(a.y, c.y) < b.y + b.height && Math.max(a.y, c.y) > b.y) return true;
+function hits(points: Point[], rect: Box): boolean {
+  for (let index = 0; index + 1 < points.length; index++) {
+    const segmentStart = points[index]!, segmentEnd = points[index + 1]!;
+    if (Math.min(segmentStart.x, segmentEnd.x) < rect.x + rect.width && Math.max(segmentStart.x, segmentEnd.x) > rect.x && Math.min(segmentStart.y, segmentEnd.y) < rect.y + rect.height && Math.max(segmentStart.y, segmentEnd.y) > rect.y) return true;
   }
   return false;
 }
 
 function crossings(points: Point[], line: Point[]): number {
-  const orient = (a: Point, b: Point, c: Point): number => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
-  let n = 0;
-  for (let i = 0; i + 1 < points.length; i++) {
-    for (let k = 0; k + 1 < line.length; k++) {
-      const a = points[i]!, b = points[i + 1]!, c = line[k]!, d = line[k + 1]!;
-      if (orient(a, b, c) * orient(a, b, d) < 0 && orient(c, d, a) * orient(c, d, b) < 0) n++;
+  const orient = (origin: Point, towards: Point, probe: Point): number => Math.sign((towards.x - origin.x) * (probe.y - origin.y) - (towards.y - origin.y) * (probe.x - origin.x));
+  let crossingCount = 0;
+  for (let routeIndex = 0; routeIndex + 1 < points.length; routeIndex++) {
+    for (let lineIndex = 0; lineIndex + 1 < line.length; lineIndex++) {
+      const routeStart = points[routeIndex]!, routeEnd = points[routeIndex + 1]!, lineStart = line[lineIndex]!, lineEnd = line[lineIndex + 1]!;
+      if (orient(routeStart, routeEnd, lineStart) * orient(routeStart, routeEnd, lineEnd) < 0 && orient(lineStart, lineEnd, routeStart) * orient(lineStart, lineEnd, routeEnd) < 0) crossingCount++;
     }
   }
-  return n;
+  return crossingCount;
 }
 
-const segLen = (a: Point, b: Point): number => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+const segLen = (from: Point, to: Point): number => Math.abs(from.x - to.x) + Math.abs(from.y - to.y);
 
 interface Expect {
   /** the route may cut obstacles (no free route exists) */
@@ -59,14 +59,14 @@ interface Expect {
 
 function expectValid(req: RouteRequest, points: Point[], opts: Expect = {}): void {
   expect(points.length).toBeGreaterThanOrEqual(2);
-  for (let i = 0; i + 1 < points.length; i++) {
-    const a = points[i]!, b = points[i + 1]!;
-    expect(a.x === b.x || a.y === b.y, `segment ${i} orthogonal`).toBe(true);
-    expect(segLen(a, b), `segment ${i} not empty`).toBeGreaterThan(0);
-    const c = points[i + 2];
-    if (c) expect((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y), `point ${i + 1} is a bend`).toBe(false);
+  for (let segmentIndex = 0; segmentIndex + 1 < points.length; segmentIndex++) {
+    const segmentStart = points[segmentIndex]!, segmentEnd = points[segmentIndex + 1]!;
+    expect(segmentStart.x === segmentEnd.x || segmentStart.y === segmentEnd.y, `segment ${segmentIndex} orthogonal`).toBe(true);
+    expect(segLen(segmentStart, segmentEnd), `segment ${segmentIndex} not empty`).toBeGreaterThan(0);
+    const nextEnd = points[segmentIndex + 2];
+    if (nextEnd) expect((segmentStart.x === segmentEnd.x && segmentEnd.x === nextEnd.x) || (segmentStart.y === segmentEnd.y && segmentEnd.y === nextEnd.y), `point ${segmentIndex + 1} is a bend`).toBe(false);
   }
-  for (const p of points) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
+  for (const point of points) expect(Number.isFinite(point.x) && Number.isFinite(point.y)).toBe(true);
   const first = sideOf(points[0]!, req.source), last = sideOf(points[points.length - 1]!, req.target);
   expect(first, 'first point on the source border').toBeDefined();
   expect(last, 'last point on the target border').toBeDefined();
@@ -77,14 +77,14 @@ function expectValid(req: RouteRequest, points: Point[], opts: Expect = {}): voi
     expect(segLen(points[points.length - 2]!, points[points.length - 1]!), 'target stub').toBeGreaterThanOrEqual(15);
   }
   if (!opts.mayHit) {
-    for (const o of req.obstacles) expect(hits(points, o), `cuts obstacle ${JSON.stringify(o)}`).toBe(false);
+    for (const obstacle of req.obstacles) expect(hits(points, obstacle), `cuts obstacle ${JSON.stringify(obstacle)}`).toBe(false);
     expect(hits(points, req.source), 'cuts the source').toBe(false);
     expect(hits(points, req.target), 'cuts the target').toBe(false);
   }
   if (req.frame && !opts.mayLeaveFrame) {
-    const f = req.frame;
-    for (const p of points) {
-      expect(p.x >= f.x && p.x <= f.x + f.width && p.y >= f.y && p.y <= f.y + f.height, `${JSON.stringify(p)} inside the frame`).toBe(true);
+    const frame = req.frame;
+    for (const point of points) {
+      expect(point.x >= frame.x && point.x <= frame.x + frame.width && point.y >= frame.y && point.y <= frame.y + frame.height, `${JSON.stringify(point)} inside the frame`).toBe(true);
     }
   }
 }
@@ -97,13 +97,13 @@ function route(req: RouteRequest, opts: Expect = {}): Point[] {
 
 /** deterministic pseudo random numbers (mulberry32) */
 function rng(seed: number): () => number {
-  let a = seed >>> 0;
+  let state = seed >>> 0;
   return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    state = (state + 0x6d2b79f5) >>> 0;
+    let mixed = state;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
   };
 }
 
@@ -167,7 +167,7 @@ describe('OrthogonalRouter: obstacles', () => {
     const pts = route({ source, target, obstacles: [between], sourceSides: TASK_OUT, targetSides: TASK_IN });
     expect(sideOf(pts[0]!, source)).toBe('bottom');
     expect(sideOf(pts[pts.length - 1]!, target)).toBe('bottom');
-    expect(Math.min(...pts.map((p) => p.y))).toBeGreaterThanOrEqual(80);
+    expect(Math.min(...pts.map((point) => point.y))).toBeGreaterThanOrEqual(80);
     expect(pts).toEqual([{ x: 450, y: 80 }, { x: 450, y: 95 }, { x: 50, y: 95 }, { x: 50, y: 80 }]);
   });
 
@@ -199,7 +199,7 @@ describe('OrthogonalRouter: obstacles', () => {
     const upper = box(200, 0, 40, 164), lower = box(200, 176, 40, 104);
     const frame = box(-20, 0, 540, 280);
     const pts = route({ source: box(0, 100), target: box(400, 100), obstacles: [upper, lower], frame, sourceSides: TASK_OUT, targetSides: TASK_IN });
-    expect(pts.some((p) => p.y > 164 && p.y < 176)).toBe(true);
+    expect(pts.some((point) => point.y > 164 && point.y < 176)).toBe(true);
   });
 
   it('never cuts an obstacle when a free route exists (random scenes)', () => {
@@ -207,13 +207,13 @@ describe('OrthogonalRouter: obstacles', () => {
     for (let scene = 0; scene < 40; scene++) {
       const source = box(Math.round(rand() * 800), Math.round(rand() * 600));
       let target = box(Math.round(rand() * 800), Math.round(rand() * 600));
-      const clear = (b: Box, others: Box[], gap: number): boolean =>
-        others.every((o) => b.x + b.width + gap <= o.x || o.x + o.width + gap <= b.x || b.y + b.height + gap <= o.y || o.y + o.height + gap <= b.y);
+      const clear = (candidate: Box, others: Box[], gap: number): boolean =>
+        others.every((other) => candidate.x + candidate.width + gap <= other.x || other.x + other.width + gap <= candidate.x || candidate.y + candidate.height + gap <= other.y || other.y + other.height + gap <= candidate.y);
       if (!clear(target, [source], 40)) target = box(source.x + 300, source.y + 200);
       const obstacles: Box[] = [];
-      for (let k = 0; k < 200 && obstacles.length < 25; k++) {
-        const o = box(Math.round(rand() * 900 - 50), Math.round(rand() * 700 - 50), 36 + Math.round(rand() * 80), 36 + Math.round(rand() * 50));
-        if (clear(o, [source, target], 40) && clear(o, obstacles, 20)) obstacles.push(o);
+      for (let attempt = 0; attempt < 200 && obstacles.length < 25; attempt++) {
+        const obstacle = box(Math.round(rand() * 900 - 50), Math.round(rand() * 700 - 50), 36 + Math.round(rand() * 80), 36 + Math.round(rand() * 50));
+        if (clear(obstacle, [source, target], 40) && clear(obstacle, obstacles, 20)) obstacles.push(obstacle);
       }
       route({ source, target, obstacles, sourceSides: TASK_OUT, targetSides: TASK_IN });
     }
@@ -241,9 +241,9 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     const pts = route({ source: box(0, 0), target: box(300, 200), obstacles: [], lines: [line], sourceSides: TASK_OUT, targetSides: TASK_IN });
     // it docks elsewhere (another side, or another point of the left side) and shares no stretch with the line
     expect(pts[pts.length - 1]).not.toEqual({ x: 300, y: 240 });
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const [p, q] = [pts[i]!, pts[i + 1]!];
-      const onLine = p.y === 240 && q.y === 240 && Math.min(Math.max(p.x, q.x), 300) - Math.max(Math.min(p.x, q.x), 150) > 0;
+    for (let index = 0; index + 1 < pts.length; index++) {
+      const [segmentStart, segmentEnd] = [pts[index]!, pts[index + 1]!];
+      const onLine = segmentStart.y === 240 && segmentEnd.y === 240 && Math.min(Math.max(segmentStart.x, segmentEnd.x), 300) - Math.max(Math.min(segmentStart.x, segmentEnd.x), 150) > 0;
       expect(onLine, JSON.stringify(pts)).toBe(false);
     }
   });
@@ -255,9 +255,9 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     expect(route({ ...req, targetMerge: true })).toEqual([{ x: 100, y: 240 }, { x: 325, y: 240 }, { x: 325, y: 50 }]);
     const apart = route(req);
     expect(apart[apart.length - 1]).not.toEqual({ x: 325, y: 50 });
-    for (let i = 0; i + 1 < apart.length; i++) {
-      const [p, q] = [apart[i]!, apart[i + 1]!];
-      expect(p.x === 325 && q.x === 325, JSON.stringify(apart)).toBe(false);
+    for (let index = 0; index + 1 < apart.length; index++) {
+      const [segmentStart, segmentEnd] = [apart[index]!, apart[index + 1]!];
+      expect(segmentStart.x === 325 && segmentEnd.x === 325, JSON.stringify(apart)).toBe(false);
     }
   });
 
@@ -266,9 +266,9 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     // line bottom + margin, 1 or 0.5 px below it: the tail from y 240 up runs over that short grid edge into the vertex
     const rise = [{ x: 325, y: 400 }, { x: 325, y: 50 }];
     const req = { source: box(0, 200), target: box(300, 0, 50, 50), lines: [rise], sourceSides: ['right', 'top'] as Side[], targetSides: ['bottom'] as Side[], targetMiddle: true, targetMerge: true };
-    for (const y of [31, 30.5]) {
+    for (const obstacleTop of [31, 30.5]) {
       // leaving the tail at the short edge would cost the overlap: the route would turn up out of the source's top and join the tail above it
-      expect(route({ ...req, obstacles: [box(400, y, 40, 80)] }), `grid line ${y + 95}`).toEqual([{ x: 100, y: 240 }, { x: 325, y: 240 }, { x: 325, y: 50 }]);
+      expect(route({ ...req, obstacles: [box(400, obstacleTop, 40, 80)] }), `grid line ${obstacleTop + 95}`).toEqual([{ x: 100, y: 240 }, { x: 325, y: 240 }, { x: 325, y: 50 }]);
     }
   });
 
@@ -276,7 +276,7 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     // a join (box 300,0 50x50, bottom vertex 325,50) with an end event right below it: its entries rise in the
     // column gap right of it (x 385) and hook left into the bottom vertex, as the engine draws them (hookFromBelow)
     const JOIN = box(300, 0, 50, 50);
-    const hook = (y: number): Point[] => [{ x: 200, y }, { x: 385, y }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }];
+    const hook = (startY: number): Point[] => [{ x: 200, y: startY }, { x: 385, y: startY }, { x: 385, y: 65 }, { x: 325, y: 65 }, { x: 325, y: 50 }];
     const BUNDLE = [hook(160), hook(260), hook(360)];
     const SOURCES = [box(100, 120), box(100, 220), box(100, 320)];
     const BELOW = box(307, 90, 36, 36);
@@ -294,10 +294,10 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     });
     /** the route runs through a vertex of the join other than its last point */
     const touchesVertex = (pts: Point[]): boolean => {
-      const vertices = [{ x: 325, y: 0 }, { x: 350, y: 25 }, { x: 325, y: 50 }, { x: 300, y: 25 }].filter((v) => v.x !== pts.at(-1)!.x || v.y !== pts.at(-1)!.y);
-      return pts.slice(1).some((q, i) => {
-        const p = pts[i]!;
-        return vertices.some((v) => (p.x === q.x ? v.x === p.x && v.y >= Math.min(p.y, q.y) && v.y <= Math.max(p.y, q.y) : v.y === p.y && v.x >= Math.min(p.x, q.x) && v.x <= Math.max(p.x, q.x)));
+      const vertices = [{ x: 325, y: 0 }, { x: 350, y: 25 }, { x: 325, y: 50 }, { x: 300, y: 25 }].filter((vertex) => vertex.x !== pts.at(-1)!.x || vertex.y !== pts.at(-1)!.y);
+      return pts.slice(1).some((segmentEnd, segmentIndex) => {
+        const segmentStart = pts[segmentIndex]!;
+        return vertices.some((vertex) => (segmentStart.x === segmentEnd.x ? vertex.x === segmentStart.x && vertex.y >= Math.min(segmentStart.y, segmentEnd.y) && vertex.y <= Math.max(segmentStart.y, segmentEnd.y) : vertex.y === segmentStart.y && vertex.x >= Math.min(segmentStart.x, segmentEnd.x) && vertex.x <= Math.max(segmentStart.x, segmentEnd.x)));
       });
     };
 
@@ -336,10 +336,10 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     const wall = box(200, 80, 40, 180);
     const base = { source: box(0, 100), target: box(400, 100), obstacles: [wall], sourceSides: TASK_OUT, targetSides: TASK_IN };
     const free = route(base);
-    expect(Math.min(...free.map((p) => p.y))).toBeLessThan(80);
+    expect(Math.min(...free.map((point) => point.y))).toBeLessThan(80);
     const frame = box(-50, 90, 600, 230);
     const framed = route({ ...base, frame });
-    expect(Math.max(...framed.map((p) => p.y))).toBeGreaterThan(260);
+    expect(Math.max(...framed.map((point) => point.y))).toBeGreaterThan(260);
   });
 
   it('leaves the frame only when nothing obstacle-free fits inside it', () => {
@@ -347,7 +347,7 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     const frame = box(-50, 60, 600, 260);
     const pts = route({ source: box(0, 100), target: box(400, 100), obstacles: [wall], frame, sourceSides: TASK_OUT, targetSides: TASK_IN }, { mayLeaveFrame: true });
     expect(hits(pts, wall)).toBe(false);
-    expect(pts.some((p) => p.y < frame.y || p.y > frame.y + frame.height)).toBe(true);
+    expect(pts.some((point) => point.y < frame.y || point.y > frame.y + frame.height)).toBe(true);
   });
 
   it('still returns a route when the target is walled in (fallback through an obstacle)', () => {
@@ -355,7 +355,7 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     const ring = [box(370, 60, 20, 160), box(510, 60, 20, 160), box(370, 60, 160, 20), box(370, 200, 160, 20)];
     const req = { source: box(0, 100), target, obstacles: ring, sourceSides: TASK_OUT, targetSides: TASK_IN };
     const pts = route(req, { mayHit: true });
-    expect(ring.filter((o) => hits(pts, o)).length).toBe(1);
+    expect(ring.filter((obstacle) => hits(pts, obstacle)).length).toBe(1);
   });
 
   it('is deterministic and independent of the order of obstacles and lines', () => {
@@ -364,7 +364,7 @@ describe('OrthogonalRouter: lines, frame, fallback', () => {
     const lines = Array.from({ length: 10 }, () => [
       { x: Math.round(rand() * 1200), y: Math.round(rand() * 600) },
       { x: Math.round(rand() * 1200), y: Math.round(rand() * 600) },
-    ]).map(([a, b]) => [a!, { x: b!.x, y: a!.y }, b!]);
+    ]).map(([from, to]) => [from!, { x: to!.x, y: from!.y }, to!]);
     const req = { source: box(0, 0), target: box(1500, 300), obstacles, lines, sourceSides: TASK_OUT, targetSides: TASK_IN };
     const first = OrthogonalRouter.route(req);
     expectValid(req, first, { mayHit: true });
@@ -384,15 +384,15 @@ describe('OrthogonalRouter: performance', () => {
     }
     const pairs: Array<[number, number]> = [[0, 1], [21, 42], [5, 25], [60, 3], [0, 199], [150, 10], [99, 100], [33, 87]];
     const times: number[] = [];
-    for (const [a, b] of pairs) {
-      const source = shapes[a]!, target = shapes[b]!;
-      const req = { source, target, obstacles: shapes.filter((s) => s !== source && s !== target), sourceSides: TASK_OUT, targetSides: TASK_IN };
+    for (const [sourceIndex, targetIndex] of pairs) {
+      const source = shapes[sourceIndex]!, target = shapes[targetIndex]!;
+      const req = { source, target, obstacles: shapes.filter((shape) => shape !== source && shape !== target), sourceSides: TASK_OUT, targetSides: TASK_IN };
       const t0 = performance.now();
       const pts = OrthogonalRouter.route(req);
       times.push(performance.now() - t0);
       expectValid(req, pts);
     }
-    times.sort((x, y) => x - y);
+    times.sort((earlier, later) => earlier - later);
     const median = times[Math.floor(times.length / 2)]!;
     expect(median).toBeLessThan(50);
     expect(times[times.length - 1]!).toBeLessThan(250);
@@ -412,8 +412,8 @@ describe('defaultSides / attachedSide', () => {
   });
 
   it('returns fresh arrays', () => {
-    const a = defaultSides('event', 'source');
-    a.pop();
+    const sides = defaultSides('event', 'source');
+    sides.pop();
     expect(defaultSides('event', 'source')).toHaveLength(4);
   });
 

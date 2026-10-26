@@ -41,7 +41,7 @@ export class ElementContextBuilder {
     }
     const process = doc.processOf(el);
     if (process && !chain.includes(process) && process !== el) chain.push(process);
-    const ancestors = [...chain].reverse().map((s) => (is(s, 'bpmn:Process') ? compact<ContextRef>({ id: shownId(s), kind: 'process', name: ownNameOf(s) }) : ElementContextBuilder.refOf(s)));
+    const ancestors = [...chain].reverse().map((scope) => (is(scope, 'bpmn:Process') ? compact<ContextRef>({ id: shownId(scope), kind: 'process', name: ownNameOf(scope) }) : ElementContextBuilder.refOf(scope)));
     const isMessageFlow = is(el, 'bpmn:MessageFlow');
     // a message flow lives in the collaboration
     const collaboration = isMessageFlow ? (el.$parent as El | undefined) : undefined;
@@ -53,36 +53,36 @@ export class ElementContextBuilder {
     let from: ContextLink[] = [];
     let to: ContextLink[] = [];
     if (isFlow) {
-      const s = peek<El>(el, 'sourceRef');
-      const t = peek<El>(el, 'targetRef');
-      if (s) from = [ElementContextBuilder.linkOf(s, el)];
-      if (t) to = [ElementContextBuilder.linkOf(t, el)];
+      const source = peek<El>(el, 'sourceRef');
+      const target = peek<El>(el, 'targetRef');
+      if (source) from = [ElementContextBuilder.linkOf(source, el)];
+      if (target) to = [ElementContextBuilder.linkOf(target, el)];
     } else if (isMessageFlow) {
-      const s = peek<El>(el, 'sourceRef');
-      const t = peek<El>(el, 'targetRef');
-      if (s) from = [this.messageEndOf(s, el)];
-      if (t) to = [this.messageEndOf(t, el)];
+      const source = peek<El>(el, 'sourceRef');
+      const target = peek<El>(el, 'targetRef');
+      if (source) from = [this.messageEndOf(source, el)];
+      if (target) to = [this.messageEndOf(target, el)];
     } else if (is(el, 'bpmn:FlowNode')) {
-      from = doc.incoming(el).flatMap((f) => (peek<El>(f, 'sourceRef') ? [ElementContextBuilder.linkOf(peek<El>(f, 'sourceRef')!, f)] : []));
-      to = doc.outgoing(el).flatMap((f) => (peek<El>(f, 'targetRef') ? [ElementContextBuilder.linkOf(peek<El>(f, 'targetRef')!, f)] : []));
+      from = doc.incoming(el).flatMap((flow) => (peek<El>(flow, 'sourceRef') ? [ElementContextBuilder.linkOf(peek<El>(flow, 'sourceRef')!, flow)] : []));
+      to = doc.outgoing(el).flatMap((flow) => (peek<El>(flow, 'targetRef') ? [ElementContextBuilder.linkOf(peek<El>(flow, 'targetRef')!, flow)] : []));
     }
 
-    const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((b) => this.catchOf(b)) : [];
+    const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((boundaryEvent) => this.catchOf(boundaryEvent)) : [];
     const caughtBy: ContextCatch[] = [];
-    for (const s of chain) if (is(s, 'bpmn:SubProcess')) for (const b of doc.boundaryEventsOf(s)) caughtBy.push(this.catchOf(b));
+    for (const scope of chain) if (is(scope, 'bpmn:SubProcess')) for (const boundaryEvent of doc.boundaryEventsOf(scope)) caughtBy.push(this.catchOf(boundaryEvent));
     const message = ElementContextBuilder.messageOf(el);
     const eventSubProcesses: ContextEventSubProcess[] = [];
-    for (const s of chain) {
-      for (const n of doc.flowNodes(s)) {
+    for (const scope of chain) {
+      for (const node of doc.flowNodes(scope)) {
         // the element itself, or an event sub-process it is inside of, does not catch it
-        if (!isEventSubProcess(n) || n === el || chain.includes(n)) continue;
-        const start = doc.flowNodes(n).find((c) => is(c, 'bpmn:StartEvent'));
-        eventSubProcesses.push(compact<ContextEventSubProcess>({ ...ElementContextBuilder.refOf(n), in: shownId(s), start: start ? this.catchOf(start) : undefined }));
+        if (!isEventSubProcess(node) || node === el || chain.includes(node)) continue;
+        const start = doc.flowNodes(node).find((child) => is(child, 'bpmn:StartEvent'));
+        eventSubProcesses.push(compact<ContextEventSubProcess>({ ...ElementContextBuilder.refOf(node), in: shownId(scope), start: start ? this.catchOf(start) : undefined }));
       }
     }
 
     const laneEl = lane?.lane;
-    const parents = laneEl ? ElementContextBuilder.parentLanes(laneEl).map((l) => compact({ id: shownId(l), name: ownNameOf(l) })) : [];
+    const parents = laneEl ? ElementContextBuilder.parentLanes(laneEl).map((parentLane) => compact({ id: shownId(parentLane), name: ownNameOf(parentLane) })) : [];
     return compact<ElementContext>({
       id: shownId(el),
       kind: labelOf(el),
@@ -113,7 +113,7 @@ export class ElementContextBuilder {
   private catchOf(ev: El): ContextCatch {
     const facts = new ElementFacts(ev);
     const host = is(ev, 'bpmn:BoundaryEvent') ? peek<El>(ev, 'attachedToRef') : undefined;
-    const to = this.doc.outgoing(ev).map((f) => shownId(peek<El>(f, 'targetRef')));
+    const to = this.doc.outgoing(ev).map((flow) => shownId(peek<El>(flow, 'targetRef')));
     return compact<ContextCatch>({ ...ElementContextBuilder.refOf(ev), trigger: facts.trigger(), nonInterrupting: facts.nonInterrupting(), on: host ? shownId(host) : undefined, to: nonEmpty(to) });
   }
 
@@ -147,9 +147,9 @@ export class ElementContextBuilder {
     const prop = USER_PROPS.find(([type]) => is(root, type))?.[1];
     if (!prop) return undefined;
     const users: El[] = [];
-    for (const e of walk(this.doc.definitions, { bpmnOnly: true })) {
-      if (peek<El>(e, prop) !== root) continue;
-      const user = is(e, 'bpmn:EventDefinition') ? (e.$parent as El | undefined) : e;
+    for (const element of walk(this.doc.definitions, { bpmnOnly: true })) {
+      if (peek<El>(element, prop) !== root) continue;
+      const user = is(element, 'bpmn:EventDefinition') ? (element.$parent as El | undefined) : element;
       if (user && !users.includes(user)) users.push(user);
     }
     return users.map(ElementContextBuilder.refOf);
@@ -177,32 +177,32 @@ export class ElementContextBuilder {
 
   private static messageOf(el: El): El | undefined {
     if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) return peek<El>(el, 'messageRef');
-    const def = list(el, 'eventDefinitions').find((d) => is(d, 'bpmn:MessageEventDefinition'));
+    const def = list(el, 'eventDefinitions').find((definition) => is(definition, 'bpmn:MessageEventDefinition'));
     return def ? peek<El>(def, 'messageRef') : undefined;
   }
 
   private static messageDirection(el: El): 'in' | 'out' | undefined {
     if (is(el, 'bpmn:ReceiveTask')) return 'in';
     if (is(el, 'bpmn:SendTask')) return 'out';
-    if (!list(el, 'eventDefinitions').some((d) => is(d, 'bpmn:MessageEventDefinition'))) return undefined;
+    if (!list(el, 'eventDefinitions').some((definition) => is(definition, 'bpmn:MessageEventDefinition'))) return undefined;
     return is(el, 'bpmn:CatchEvent') ? 'in' : is(el, 'bpmn:ThrowEvent') ? 'out' : undefined;
   }
 
   private static parentLanes(lane: El): El[] {
     const out: El[] = [];
-    let p = lane.$parent as El | undefined; // a laneSet
-    while (p) {
-      const owner = p.$parent as El | undefined;
+    let parent = lane.$parent as El | undefined; // a laneSet
+    while (parent) {
+      const owner = parent.$parent as El | undefined;
       if (!owner || !is(owner, 'bpmn:Lane')) break;
       out.unshift(owner);
-      p = owner.$parent as El | undefined;
+      parent = owner.$parent as El | undefined;
     }
     return out;
   }
 
   private static withoutKey(obj: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
     if (!obj || !(key in obj)) return obj;
-    const { [key]: _, ...rest } = obj;
+    const { [key]: _omitted, ...rest } = obj;
     return Object.keys(rest).length ? rest : undefined;
   }
 }

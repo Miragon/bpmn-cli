@@ -48,11 +48,11 @@ const SPELLED_RE = new RegExp(`[${Object.keys(SPELLED).join('')}]`, 'g');
 export function transliterate(name: string): string {
   return name
     .normalize('NFC')
-    .replace(SPELLED_RE, (c, at: number, all: string) => {
-      const out = SPELLED[c]!;
+    .replace(SPELLED_RE, (character, at: number, all: string) => {
+      const out = SPELLED[character]!;
       // Ä in an upper-case word (ÄNDERUNG) -> AE, Ø in ØRE -> OE
       const next = all.charAt(at + 1);
-      return out.length === 2 && c === c.toUpperCase() && next && next !== next.toLowerCase() ? out.toUpperCase() : out;
+      return out.length === 2 && character === character.toUpperCase() && next && next !== next.toLowerCase() ? out.toUpperCase() : out;
     })
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '');
@@ -69,10 +69,10 @@ export function nameWords(name: string | undefined): string[] {
 
 /** An id is never a bare number: `123` or `✓✓✓` give no id words. */
 export function hasIdWords(name: string | undefined): boolean {
-  return nameWords(name).some((w) => /[A-Za-z]/.test(w));
+  return nameWords(name).some((word) => /[A-Za-z]/.test(word));
 }
 
-const cap = (w: string): string => w.charAt(0).toUpperCase() + w.slice(1);
+const cap = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** A join and / or number tells a slug apart from its neighbours, so it survives a cut. */
 const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|_[Jj]oin)?(?:(?<=[A-Za-z])\d+|_\d+)?$/;
@@ -114,12 +114,12 @@ function cutWords(slug: string, max: number, legacy = false, names = false): str
   if (legacy) return legacyCutWords(slug, max);
   const words: string[] = [];
   let length = 0;
-  for (const w of idWords(slug)) {
-    if (length + w.length > max) break;
-    words.push(w);
-    length += w.length;
+  for (const word of idWords(slug)) {
+    if (length + word.length > max) break;
+    words.push(word);
+    length += word.length;
   }
-  if (names) while (words.length > 1 && isFiller(words[words.length - 1]!) && words.slice(0, -1).some((w) => /[A-Za-z]/.test(w))) words.pop();
+  if (names) while (words.length > 1 && isFiller(words[words.length - 1]!) && words.slice(0, -1).some((word) => /[A-Za-z]/.test(word))) words.pop();
   const out = words.join('');
   if (out && /[A-Za-z]/.test(out)) return trimSeparators(out);
   return trimSeparators(withLetter(slug, slug.slice(0, Math.max(max, 0)), (rest) => cutWords(rest, max, false, names)));
@@ -129,18 +129,18 @@ function cutWords(slug: string, max: number, legacy = false, names = false): str
 export function withLetter(slug: string, cut: string, again: (rest: string) => string): string {
   if (/[A-Za-z]/.test(cut)) return cut;
   const words = idWords(slug);
-  const at = words.findIndex((w) => /[A-Za-z]/.test(w));
+  const at = words.findIndex((word) => /[A-Za-z]/.test(word));
   return at > 0 ? again(words.slice(at).join('').replace(/^[_.-]+/, '')) : cut;
 }
 
 /** cutWords as 0.6 cut: also at the boundary right after a separator. */
 function legacyCutWords(slug: string, max: number): string {
   let best = 0;
-  for (let i = 1; i <= max; i++) {
-    const prev = slug.charAt(i - 1);
-    const c = slug.charAt(i);
-    const boundary = /[_.-]/.test(c) || (/[A-Z]/.test(c) && /[a-z0-9]/.test(prev)) || (/[0-9]/.test(c) && /[A-Za-z]/.test(prev)) || /[_.-]/.test(prev);
-    if (boundary) best = i;
+  for (let index = 1; index <= max; index++) {
+    const prev = slug.charAt(index - 1);
+    const character = slug.charAt(index);
+    const boundary = /[_.-]/.test(character) || (/[A-Z]/.test(character) && /[a-z0-9]/.test(prev)) || (/[0-9]/.test(character) && /[A-Za-z]/.test(prev)) || /[_.-]/.test(prev);
+    if (boundary) best = index;
   }
   return trimSeparators(best > 0 ? slug.slice(0, best) : slug.slice(0, max));
 }
@@ -149,14 +149,14 @@ function legacyCutWords(slug: string, max: number): string {
 export function idWords(slug: string): string[] {
   const out: string[] = [];
   let start = 0;
-  for (let i = 1; i < slug.length; i++) {
-    const prev = slug.charAt(i - 1);
-    const c = slug.charAt(i);
+  for (let index = 1; index < slug.length; index++) {
+    const prev = slug.charAt(index - 1);
+    const character = slug.charAt(index);
     if (/[_.-]/.test(prev)) continue;
-    const boundary = /[_.-]/.test(c) || (/[A-Z]/.test(c) && /[a-z0-9]/.test(prev)) || (/[0-9]/.test(c) && /[A-Za-z]/.test(prev));
+    const boundary = /[_.-]/.test(character) || (/[A-Z]/.test(character) && /[a-z0-9]/.test(prev)) || (/[0-9]/.test(character) && /[A-Za-z]/.test(prev));
     if (boundary) {
-      out.push(slug.slice(start, i));
-      start = i;
+      out.push(slug.slice(start, index));
+      start = index;
     }
   }
   if (slug) out.push(slug.slice(start));
@@ -187,7 +187,7 @@ export function camelSlug(name: string | undefined, legacy = false): string {
 export function snakeSlug(name: string | undefined, legacy = false): string {
   return cut(
     nameWords(name)
-      .map((w) => w.toLowerCase())
+      .map((word) => word.toLowerCase())
       .join('_'),
     legacy,
   );
@@ -200,13 +200,13 @@ export function pascalSnakeSlug(name: string | undefined, legacy = false): strin
 /** `step1No2`, never `step12`, which reads as the id of Step 12. */
 export const SUFFIX_WORD = 'No';
 
-export function withSuffix(base: string, sep: string, n: number, cut: (max: number) => string = (max) => cutAt(base, max)): string {
+export function withSuffix(base: string, sep: string, suffixNumber: number, cut: (max: number) => string = (max) => cutAt(base, max)): string {
   const fit = (suffix: string): string => (base.length + suffix.length <= MAX_ID ? base : cut(MAX_ID - suffix.length));
-  if (sep !== '') return `${fit(`${sep}${n}`)}${sep}${n}`;
-  const glued = fit(`${n}`);
-  if (!/\d$/.test(glued)) return `${glued}${n}`;
-  const worded = fit(`${SUFFIX_WORD}${n}`);
-  return /\d$/.test(worded) ? `${worded}${SUFFIX_WORD}${n}` : `${worded}${n}`;
+  if (sep !== '') return `${fit(`${sep}${suffixNumber}`)}${sep}${suffixNumber}`;
+  const glued = fit(`${suffixNumber}`);
+  if (!/\d$/.test(glued)) return `${glued}${suffixNumber}`;
+  const worded = fit(`${SUFFIX_WORD}${suffixNumber}`);
+  return /\d$/.test(worded) ? `${worded}${SUFFIX_WORD}${suffixNumber}` : `${worded}${suffixNumber}`;
 }
 
 /** `either`: a flow's id, whose separator the reader does not know. */

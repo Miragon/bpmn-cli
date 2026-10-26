@@ -23,14 +23,14 @@ afterAll(() => {
 });
 
 function file(name: string, xml = LINEAR): string {
-  const f = join(dir, name);
-  writeFileSync(f, xml);
-  return f;
+  const path = join(dir, name);
+  writeFileSync(path, xml);
+  return path;
 }
 
-async function rejected(p: Promise<unknown>): Promise<{ code: string; category: string }> {
+async function rejected(pending: Promise<unknown>): Promise<{ code: string; category: string }> {
   try {
-    await p;
+    await pending;
   } catch (err) {
     return err as { code: string; category: string };
   }
@@ -41,12 +41,12 @@ const rename = [{ op: 'set' as const, id: 'Task_A', values: { name: 'Renamed' } 
 
 describe('the core never writes', () => {
   it('mutateDoc on a document loaded from a file returns the XML and leaves the file alone', async () => {
-    const f = file('core.bpmn');
-    const r = await mutateDoc(await readDoc(f), rename);
-    expect(r.written).toBe(false);
-    expect(r.file).toBe(f);
-    expect(r.xml).toContain('Renamed');
-    expect(readFileSync(f, 'utf8')).toBe(LINEAR);
+    const path = file('core.bpmn');
+    const result = await mutateDoc(await readDoc(path), rename);
+    expect(result.written).toBe(false);
+    expect(result.file).toBe(path);
+    expect(result.xml).toContain('Renamed');
+    expect(readFileSync(path, 'utf8')).toBe(LINEAR);
   });
 });
 
@@ -71,26 +71,26 @@ describe('the node layer', () => {
   });
 
   it('mutateFile writes atomically, or elsewhere, or not at all, and backs up', async () => {
-    const f = file('m.bpmn');
-    const dry = await mutateFile(f, rename, { dryRun: true });
-    expect(dry).toMatchObject({ written: false, file: f });
-    expect(readFileSync(f, 'utf8')).toBe(LINEAR);
+    const path = file('m.bpmn');
+    const dry = await mutateFile(path, rename, { dryRun: true });
+    expect(dry).toMatchObject({ written: false, file: path });
+    expect(readFileSync(path, 'utf8')).toBe(LINEAR);
     const out = join(dir, 'sub', 'out.bpmn');
-    expect(await mutateFile(f, rename, { out, show: true })).toMatchObject({ written: true, file: out, view: { file: out } });
+    expect(await mutateFile(path, rename, { out, show: true })).toMatchObject({ written: true, file: out, view: { file: out } });
     expect(readFileSync(out, 'utf8')).toContain('Renamed');
-    expect(readFileSync(f, 'utf8')).toBe(LINEAR);
-    const r = await mutateFile(f, rename, { backup: true });
-    expect(r).toMatchObject({ written: true, file: f });
-    expect(readFileSync(f, 'utf8')).toBe(r.xml);
-    expect(readFileSync(`${f}.bak`, 'utf8')).toBe(LINEAR);
-    expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+    expect(readFileSync(path, 'utf8')).toBe(LINEAR);
+    const result = await mutateFile(path, rename, { backup: true });
+    expect(result).toMatchObject({ written: true, file: path });
+    expect(readFileSync(path, 'utf8')).toBe(result.xml);
+    expect(readFileSync(`${path}.bak`, 'utf8')).toBe(LINEAR);
+    expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });
 
   it('writeAtomic onto a directory is E_IO and leaves no temp file', async () => {
     const target = join(dir, 'is-a-dir.bpmn');
     mkdirSync(target);
     expect(await rejected(writeAtomic(target, LINEAR))).toMatchObject({ code: 'E_IO', category: 'io', message: `Cannot write ${target}: it is a directory`, details: { file: target } });
-    expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+    expect(readdirSync(dir).filter((name) => name.endsWith('.tmp'))).toEqual([]);
   });
 
   it('mutateDocToFile needs a target and refuses an existing one with mustNotExist (unless force)', async () => {
@@ -105,13 +105,13 @@ describe('the node layer', () => {
   });
 
   it('layoutFile and checkFile', async () => {
-    const f = file('l.bpmn');
+    const path = file('l.bpmn');
     expect(await rejected(layoutFile(join(dir, 'missing.bpmn'), { tidy: true, expand: [] }))).toMatchObject({ code: 'E_USAGE' });
-    const r = await layoutFile(f);
-    expect(r).toMatchObject({ written: true, layout: { mode: 'full' } });
-    expect((await checkFile(f)).validation.errors).toEqual([]);
-    await writeAtomic(f, LINEAR);
-    expect(readFileSync(f, 'utf8')).toBe(LINEAR);
+    const result = await layoutFile(path);
+    expect(result).toMatchObject({ written: true, layout: { mode: 'full' } });
+    expect((await checkFile(path)).validation.errors).toEqual([]);
+    await writeAtomic(path, LINEAR);
+    expect(readFileSync(path, 'utf8')).toBe(LINEAR);
   });
 });
 
@@ -128,38 +128,38 @@ describe('encodings: every write is UTF-8, and says so', () => {
 
   it('in memory: a changed result declares UTF-8 (with a note); a no-op keeps the input and its declaration', async () => {
     const xml = latin1('Größe');
-    const r = await node.applyToXml(xml, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
-    expect(r.xml.split('\n')[0]).toBe('<?xml version="1.0" encoding="UTF-8"?>');
-    expect(r.xml).toContain('name="Prüfung ß"');
-    expect(r.result.notes).toContain('the XML declaration named the encoding ISO-8859-1; the text is written as UTF-8, so it now says UTF-8');
+    const result = await node.applyToXml(xml, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
+    expect(result.xml.split('\n')[0]).toBe('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(result.xml).toContain('name="Prüfung ß"');
+    expect(result.result.notes).toContain('the XML declaration named the encoding ISO-8859-1; the text is written as UTF-8, so it now says UTF-8');
     // only the declaration and the changed element differ
-    expect(r.xml.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"').replace('Prüfung ß', 'Check order')).toBe(xml);
+    expect(result.xml.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"').replace('Prüfung ß', 'Check order')).toBe(xml);
     const noop = await node.applyToXml(xml, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Check order' } }], { layout: false });
     expect(noop.unchanged).toBe(true);
     expect(noop.xml).toBe(xml);
   });
 
   it('a file is read in the encoding it declares, so its characters survive a write (ISO-8859-1 bytes)', async () => {
-    const f = join(dir, 'latin1.bpmn');
-    writeFileSync(f, Buffer.from(latin1('Größe'), 'latin1'));
-    expect(await readXml(f)).toBe(latin1('Größe'));
-    expect((await readDoc(f)).get('Start')?.get('name')).toBe('Größe');
-    const r = await mutateFile(f, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
-    expect(r.written).toBe(true);
-    const text = readFileSync(f, 'utf8');
+    const path = join(dir, 'latin1.bpmn');
+    writeFileSync(path, Buffer.from(latin1('Größe'), 'latin1'));
+    expect(await readXml(path)).toBe(latin1('Größe'));
+    expect((await readDoc(path)).get('Start')?.get('name')).toBe('Größe');
+    const result = await mutateFile(path, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
+    expect(result.written).toBe(true);
+    const text = readFileSync(path, 'utf8');
     expect(text).toBe(latin1('Größe').replace('encoding="ISO-8859-1"', 'encoding="UTF-8"').replace('Check order', 'Prüfung ß'));
     // a no-op on the Latin-1 file is not written (the bytes stay)
-    const g = join(dir, 'latin1-noop.bpmn');
-    writeFileSync(g, Buffer.from(latin1('Größe'), 'latin1'));
-    expect((await mutateFile(g, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Check order' } }], { layout: false })).written).toBe(false);
-    expect(readFileSync(g).equals(Buffer.from(latin1('Größe'), 'latin1'))).toBe(true);
+    const noopPath = join(dir, 'latin1-noop.bpmn');
+    writeFileSync(noopPath, Buffer.from(latin1('Größe'), 'latin1'));
+    expect((await mutateFile(noopPath, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Check order' } }], { layout: false })).written).toBe(false);
+    expect(readFileSync(noopPath).equals(Buffer.from(latin1('Größe'), 'latin1'))).toBe(true);
   });
 
   it('UTF-8 bytes under an ISO-8859-1 declaration read as the declaration says; the write keeps those characters and declares UTF-8', async () => {
-    const f = join(dir, 'mislabelled.bpmn');
-    writeFileSync(f, latin1('Check'), 'utf8');
-    await mutateFile(f, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
-    const bytes = readFileSync(f);
+    const path = join(dir, 'mislabelled.bpmn');
+    writeFileSync(path, latin1('Check'), 'utf8');
+    await mutateFile(path, [{ op: 'set', id: 'Task_CheckOrder', values: { name: 'Prüfung ß' } }], { layout: false });
+    const bytes = readFileSync(path);
     expect(bytes.toString('utf8').split('\n')[0]).toBe('<?xml version="1.0" encoding="UTF-8"?>');
     expect(bytes.includes(Buffer.from('Prüfung ß', 'utf8'))).toBe(true);
   });

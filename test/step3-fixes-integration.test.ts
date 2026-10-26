@@ -9,9 +9,9 @@ import { applyToXml, newXml } from '../src/api.js';
 import { CliError } from '../src/shared/CliError.js';
 import { mutationSummary, renderSummary } from '../src/index.js';
 
-async function rejection(p: Promise<unknown>): Promise<CliError> {
+async function rejection(pending: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await pending;
   } catch (err) {
     if (err instanceof CliError) return err;
     throw err;
@@ -19,7 +19,7 @@ async function rejection(p: Promise<unknown>): Promise<CliError> {
   throw new Error('expected a failure');
 }
 
-const flowIds = (xml: string): string[] => [...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1]!);
+const flowIds = (xml: string): string[] => [...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1]!);
 
 /** Start -> Check -> exclusive split (Fix in Billing, Skip) -> join -> Ship -> Done, in two lanes of a pool. */
 const LANES_BATCH: unknown[] = [
@@ -46,7 +46,7 @@ const LANES_BATCH: unknown[] = [
 describe('--summary with aliases, refAs, renamed ids and speaking ids', () => {
   it('lists the message of refAs among the aliases; an element the batch created is not also "changed"', async () => {
     const base = await newXml({ processName: 'Order', target: 'camunda8' });
-    const r = await applyToXml(base.xml, [
+    const result = await applyToXml(base.xml, [
       { op: 'add', kind: 'startEvent', name: 'Order received', in: 'Process_Order', as: '$s' },
       { op: 'add', kind: 'serviceTask', name: 'Check order', after: '$s', as: '$c' },
       { op: 'add', kind: 'intermediateCatchEvent:message', name: 'Payment received', after: '$c', message: 'Payment received', refAs: '$msg', as: '$w' },
@@ -54,8 +54,8 @@ describe('--summary with aliases, refAs, renamed ids and speaking ids', () => {
       { op: 'add', kind: 'exclusiveGateway', after: '$w', as: '$g' },
       { op: 'add', kind: 'endEvent', after: '$g', as: '$e' },
     ]);
-    expect(r.result.aliases).toMatchObject({ $msg: 'Message_PaymentReceived', $w: 'Event_PaymentReceived', $g: 'Gateway_AfterPaymentReceived', $e: 'Event_EndAfterPaymentReceived' });
-    const summary = mutationSummary(r.result);
+    expect(result.result.aliases).toMatchObject({ $msg: 'Message_PaymentReceived', $w: 'Event_PaymentReceived', $g: 'Gateway_AfterPaymentReceived', $e: 'Event_EndAfterPaymentReceived' });
+    const summary = mutationSummary(result.result);
     // before: `changed:` listed the message the batch created (and the ext op then changed)
     expect(summary.changed).toEqual([]);
     const text = renderSummary(summary);
@@ -68,7 +68,7 @@ describe('--summary with aliases, refAs, renamed ids and speaking ids', () => {
     const built = await applyToXml(base.xml, LANES_BATCH);
     // before: every node of the batch was listed under changed too ("- lane Lane_Sales")
     expect(mutationSummary(built.result).changed).toEqual([]);
-    expect(built.result.changed.some((c) => c.id === 'Activity_Check' && /lane/.test(c.detail ?? ''))).toBe(true);
+    expect(built.result.changed.some((change) => change.id === 'Activity_Check' && /lane/.test(change.detail ?? ''))).toBe(true);
     const moved = await applyToXml(built.xml, [{ op: 'set', id: 'Activity_Skip', values: { lane: 'Lane_Billing' } }]);
     expect(mutationSummary(moved.result).changed).toContain('Activity_Skip');
   });
@@ -82,13 +82,13 @@ describe('Camunda 8: the subscription redirect and the warnings delta', () => {
       { op: 'add', kind: 'receiveTask', name: 'Wait for invoice', after: '$s', message: 'Invoice received', as: '$w' },
       { op: 'add', kind: 'endEvent', name: 'Done', after: '$w' },
     ]);
-    expect(built.result.warnings.added.map((w) => w.code)).toEqual(['W_C8_DEPLOY_MESSAGE']);
-    const r = await applyToXml(built.xml, [{ op: 'ext', id: 'Activity_WaitForInvoice', action: 'add', type: 'zeebe:subscription', attrs: { correlationKey: '=invoiceId' } }]);
-    expect(r.result.notes.join('\n')).toContain('zeebe:subscription goes to message Message_InvoiceReceived, which Activity_WaitForInvoice waits for');
-    expect(r.result.warnings.added).toEqual([]);
-    expect(r.result.warnings.resolved.map((w) => w.code)).toEqual(['W_C8_DEPLOY_MESSAGE']);
-    expect(r.result.warnings.preexistingCount).toBe(0);
-    expect(mutationSummary(r.result).changed).toEqual(['Message_InvoiceReceived']);
+    expect(built.result.warnings.added.map((warning) => warning.code)).toEqual(['W_C8_DEPLOY_MESSAGE']);
+    const result = await applyToXml(built.xml, [{ op: 'ext', id: 'Activity_WaitForInvoice', action: 'add', type: 'zeebe:subscription', attrs: { correlationKey: '=invoiceId' } }]);
+    expect(result.result.notes.join('\n')).toContain('zeebe:subscription goes to message Message_InvoiceReceived, which Activity_WaitForInvoice waits for');
+    expect(result.result.warnings.added).toEqual([]);
+    expect(result.result.warnings.resolved.map((warning) => warning.code)).toEqual(['W_C8_DEPLOY_MESSAGE']);
+    expect(result.result.warnings.preexistingCount).toBe(0);
+    expect(mutationSummary(result.result).changed).toEqual(['Message_InvoiceReceived']);
   });
 });
 
@@ -97,11 +97,11 @@ describe('remove and move with speaking flow ids', () => {
     const base = await newXml({ processName: 'Shop' });
     const built = await applyToXml(base.xml, LANES_BATCH);
     expect(built.result.aliases?.['$j']).toBe('Gateway_Ok_join');
-    const r = await applyToXml(built.xml, [{ op: 'remove', ids: ['Gateway_Ok_join'] }]);
-    expect(r.result.renamed).toEqual({ Flow_FixToOkJoin: 'Flow_FixToShip', Flow_SkipToOkJoin: 'Flow_SkipToShip' });
-    expect(flowIds(r.xml)).toEqual(expect.arrayContaining(['Flow_FixToShip', 'Flow_SkipToShip']));
-    expect(r.result.warnings.added.map((w) => w.code)).not.toContain('W_UNREACHABLE');
-    expect(renderSummary(mutationSummary(r.result))).toContain('renamed: Flow_FixToOkJoin -> Flow_FixToShip, Flow_SkipToOkJoin -> Flow_SkipToShip');
+    const result = await applyToXml(built.xml, [{ op: 'remove', ids: ['Gateway_Ok_join'] }]);
+    expect(result.result.renamed).toEqual({ Flow_FixToOkJoin: 'Flow_FixToShip', Flow_SkipToOkJoin: 'Flow_SkipToShip' });
+    expect(flowIds(result.xml)).toEqual(expect.arrayContaining(['Flow_FixToShip', 'Flow_SkipToShip']));
+    expect(result.result.warnings.added.map((warning) => warning.code)).not.toContain('W_UNREACHABLE');
+    expect(renderSummary(mutationSummary(result.result))).toContain('renamed: Flow_FixToOkJoin -> Flow_FixToShip, Flow_SkipToOkJoin -> Flow_SkipToShip');
   });
 
   it('a plain remove of a parallel join is refused with both commands', async () => {
@@ -127,11 +127,11 @@ describe('remove and move with speaking flow ids', () => {
       { op: 'add', kind: 'task', name: 'Scan', in: '$sub', as: '$scan' },
     ]);
     expect(flowIds(built.xml)).toContain('Flow_OkToFix');
-    const r = await applyToXml(built.xml, [{ op: 'move', ids: ['Activity_Scan'], flow: 'Flow_OkToFix' }]);
+    const result = await applyToXml(built.xml, [{ op: 'move', ids: ['Activity_Scan'], flow: 'Flow_OkToFix' }]);
     // the node had no lane (it was in a sub-process): the lane of the row it is drawn on, W_LANE_INHERITED
-    expect(r.result.warnings.added.map((w) => w.code)).toContain('W_LANE_INHERITED');
-    expect(r.xml).toMatch(/<bpmn:lane id="Lane_Billing"[^>]*>\s*<bpmn:flowNodeRef>Activity_Fix<\/bpmn:flowNodeRef>\s*<bpmn:flowNodeRef>Activity_Scan<\/bpmn:flowNodeRef>/);
-    expect(r.result.renamed).toEqual({ Flow_OkToFix: 'Flow_OkToScan' });
-    expect(flowIds(r.xml)).toEqual(expect.arrayContaining(['Flow_OkToScan', 'Flow_ScanToFix']));
+    expect(result.result.warnings.added.map((warning) => warning.code)).toContain('W_LANE_INHERITED');
+    expect(result.xml).toMatch(/<bpmn:lane id="Lane_Billing"[^>]*>\s*<bpmn:flowNodeRef>Activity_Fix<\/bpmn:flowNodeRef>\s*<bpmn:flowNodeRef>Activity_Scan<\/bpmn:flowNodeRef>/);
+    expect(result.result.renamed).toEqual({ Flow_OkToFix: 'Flow_OkToScan' });
+    expect(flowIds(result.xml)).toEqual(expect.arrayContaining(['Flow_OkToScan', 'Flow_ScanToFix']));
   });
 });

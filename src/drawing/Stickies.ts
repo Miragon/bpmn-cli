@@ -50,16 +50,16 @@ export class Stickies {
     return out;
   }
 
-  private num(v: unknown): number | undefined {
-    const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
-    return Number.isFinite(n) ? n : undefined;
+  private num(input: unknown): number | undefined {
+    const parsed = typeof input === 'number' ? input : typeof input === 'string' && input.trim() !== '' ? Number(input) : NaN;
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   private boxOfSticky(sticky: El): Box | undefined {
-    const x = this.num(raw(sticky, 'x'));
-    const y = this.num(raw(sticky, 'y'));
-    if (x === undefined || y === undefined) return undefined;
-    return { x, y, width: this.num(raw(sticky, 'width')) ?? DEFAULT_SIZE, height: this.num(raw(sticky, 'height')) ?? DEFAULT_SIZE };
+    const left = this.num(raw(sticky, 'x'));
+    const top = this.num(raw(sticky, 'y'));
+    if (left === undefined || top === undefined) return undefined;
+    return { x: left, y: top, width: this.num(raw(sticky, 'width')) ?? DEFAULT_SIZE, height: this.num(raw(sticky, 'height')) ?? DEFAULT_SIZE };
   }
 
   /** The main diagram is the first BPMNDiagram. */
@@ -69,17 +69,17 @@ export class Stickies {
     for (const pe of rawList(plane, 'planeElement')) {
       if (!is(pe, 'bpmndi:BPMNShape')) continue;
       const el = raw<El>(pe, 'bpmnElement');
-      const b = raw(pe, 'bounds');
-      const box = { x: this.num(raw(b, 'x')), y: this.num(raw(b, 'y')), width: this.num(raw(b, 'width')), height: this.num(raw(b, 'height')) };
+      const bounds = raw(pe, 'bounds');
+      const box = { x: this.num(raw(bounds, 'x')), y: this.num(raw(bounds, 'y')), width: this.num(raw(bounds, 'width')), height: this.num(raw(bounds, 'height')) };
       if (!el || !is(el, 'bpmn:FlowNode') || box.x === undefined || box.y === undefined || box.width === undefined || box.height === undefined) continue;
       out.set(el, box as Box);
     }
     return out;
   }
 
-  private distance(p: Point, r: Box): number {
-    const dx = Math.max(r.x - p.x, 0, p.x - (r.x + r.width));
-    const dy = Math.max(r.y - p.y, 0, p.y - (r.y + r.height));
+  private distance(point: Point, box: Box): number {
+    const dx = Math.max(box.x - point.x, 0, point.x - (box.x + box.width));
+    const dy = Math.max(box.y - point.y, 0, point.y - (box.y + box.height));
     return Math.hypot(dx, dy);
   }
 
@@ -97,11 +97,11 @@ export class Stickies {
       stickies.forEach((sticky, index) => {
         const box = this.boxOfSticky(sticky);
         if (!box) return;
-        const c = center(box);
-        let best: { el: El; box: Box; d: number } | undefined;
-        for (const [el, b] of shapes) {
-          const d = this.distance(c, b);
-          if (!best || d < best.d || (d === best.d && b.width * b.height < best.box.width * best.box.height)) best = { el, box: b, d };
+        const boxCenter = center(box);
+        let best: { el: El; box: Box; gap: number } | undefined;
+        for (const [el, shapeBounds] of shapes) {
+          const gap = this.distance(boxCenter, shapeBounds);
+          if (!best || gap < best.gap || (gap === best.gap && shapeBounds.width * shapeBounds.height < best.box.width * best.box.height)) best = { el, box: shapeBounds, gap };
         }
         if (best) out.push({ process, index, ...(idOf(sticky) ? { stickyId: idOf(sticky) } : {}), node: best.el, centre: center(best.box) });
       });
@@ -120,24 +120,24 @@ export class Stickies {
       const id = idOf(el);
       if (id) byId.set(id, box);
     }
-    const groups = new Map(this.stickiesOf().map((g) => [idOf(g.process), g.stickies] as const));
+    const groups = new Map(this.stickiesOf().map((group) => [idOf(group.process), group.stickies] as const));
     const moved: Array<{ sticky: string; node: string }> = [];
-    for (const a of anchors) {
-      const now = byId.get(a.nodeId);
-      const stickies = groups.get(a.processId);
+    for (const anchor of anchors) {
+      const now = byId.get(anchor.nodeId);
+      const stickies = groups.get(anchor.processId);
       if (!now || !stickies) continue;
-      const sticky = a.stickyId !== undefined ? stickies.find((s) => idOf(s) === a.stickyId) : stickies[a.index];
+      const sticky = anchor.stickyId !== undefined ? stickies.find((candidate) => idOf(candidate) === anchor.stickyId) : stickies[anchor.index];
       const box = sticky ? this.boxOfSticky(sticky) : undefined;
       if (!sticky || !box) continue;
-      const c = center(now);
-      const dx = Math.round(c.x - a.centre.x);
-      const dy = Math.round(c.y - a.centre.y);
+      const nowCenter = center(now);
+      const dx = Math.round(nowCenter.x - anchor.centre.x);
+      const dy = Math.round(nowCenter.y - anchor.centre.y);
       if (!dx && !dy) continue;
       // a generic (untyped) element: its attributes are plain string properties
       const attrs = sticky as unknown as Record<string, unknown>;
       if (dx) attrs['x'] = String(Math.round(box.x + dx));
       if (dy) attrs['y'] = String(Math.round(box.y + dy));
-      moved.push({ sticky: a.stickyId ?? `${a.processId}#${a.index}`, node: a.nodeId });
+      moved.push({ sticky: anchor.stickyId ?? `${anchor.processId}#${anchor.index}`, node: anchor.nodeId });
     }
     return moved;
   }

@@ -17,24 +17,24 @@ export class ConnectCommand extends MutationCommand {
         .option('--default', 'default flow of the source gateway / activity')
         .option('--message <name>', 'message flows: message name')
         .option('--if-absent', 'succeed silently when the connection exists'),
-    ).action((file: string, source: string, target: string, o: RawOpts) => this.run(file, source, target, o));
+    ).action((file: string, source: string, target: string, options: RawOpts) => this.run(file, source, target, options));
   }
 
-  private async run(file: string, source: string, target: string, o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, source: string, target: string, options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
-      this.checkFlowFlags(o, false);
+      this.checkFlowFlags(options, false);
       const op: ConnectOp = {
         op: 'connect',
         source,
         target,
-        ...(o['name'] ? { name: String(o['name']) } : {}),
-        ...(o['id'] ? { id: String(o['id']) } : {}),
-        ...(o['condition'] !== undefined ? { condition: String(o['condition']) } : {}),
-        ...(o['language'] ? { language: String(o['language']) } : {}),
-        ...(o['default'] ? { default: true } : {}),
-        ...(o['message'] ? { message: String(o['message']) } : {}),
-        ...(o['ifAbsent'] ? { ifAbsent: true } : {}),
+        ...(options['name'] ? { name: String(options['name']) } : {}),
+        ...(options['id'] ? { id: String(options['id']) } : {}),
+        ...(options['condition'] !== undefined ? { condition: String(options['condition']) } : {}),
+        ...(options['language'] ? { language: String(options['language']) } : {}),
+        ...(options['default'] ? { default: true } : {}),
+        ...(options['message'] ? { message: String(options['message']) } : {}),
+        ...(options['ifAbsent'] ? { ifAbsent: true } : {}),
       };
       await this.mutate(file, [op], opts);
     }, opts.json);

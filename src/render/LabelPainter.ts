@@ -17,12 +17,12 @@ export class LabelPainter {
    * widest line, which can break it differently.
    */
   external(id: string, value: string, cx: number, top: number, labelWidth = EXT_WIDTH): Item {
-    const k = SIZE / EXT_SIZE;
-    const first = wrapLines(value, Math.max(EXT_WIDTH, labelWidth) * k);
-    const widest = Math.ceil(Math.max(...first.map((l) => textWidth(l) / k)) - 1e-9);
+    const scale = SIZE / EXT_SIZE;
+    const first = wrapLines(value, Math.max(EXT_WIDTH, labelWidth) * scale);
+    const widest = Math.ceil(Math.max(...first.map((line) => textWidth(line) / scale)) - 1e-9);
     // (a hair of slack: the widest line fits its own width despite rounding)
-    const ls = wrapLines(value, widest * k + 1e-6);
-    const width = Math.max(...ls.map((l) => textWidth(l) / k), 1);
+    const ls = wrapLines(value, widest * scale + 1e-6);
+    const width = Math.max(...ls.map((line) => textWidth(line) / scale), 1);
     return {
       box: { x: cx - width / 2, y: top, width, height: ls.length * EXT_LINE },
       layer: LAYER.label,
@@ -30,24 +30,24 @@ export class LabelPainter {
     };
   }
 
-  message(id: string, value: string, m: Point): Item {
+  message(id: string, value: string, anchor: Point): Item {
     const ls = wrapLines(value, 150);
-    const width = Math.max(...ls.map((l) => textWidth(l)), 1);
-    const top = m.y + 10;
+    const width = Math.max(...ls.map((line) => textWidth(line)), 1);
+    const top = anchor.y + 10;
     return {
-      box: { x: m.x, y: top, width, height: ls.length * SIZE * 1.2 },
+      box: { x: anchor.x, y: top, width, height: ls.length * SIZE * 1.2 },
       layer: LAYER.label,
-      svg: lines(ls, m.x + width / 2, top + SIZE * 1.2 * 0.75, SIZE, this.color, 'middle', ` data-message="${attr(id)}"`),
+      svg: lines(ls, anchor.x + width / 2, top + SIZE * 1.2 * 0.75, SIZE, this.color, 'middle', ` data-message="${attr(id)}"`),
     };
   }
 
   /** Like diagram-js Text: the first baseline 3/4 of a line below the text's top. */
-  inBox(value: string, box: Box, h: 'center' | 'left', v: 'top' | 'middle', padding: number, transform = ''): string {
+  inBox(value: string, box: Box, horizontal: 'center' | 'left', vertical: 'top' | 'middle', padding: number, transform = ''): string {
     const ls = wrapLines(value, box.width - 2 * padding);
     const step = SIZE * 1.2;
-    const pad = v === 'middle' ? 0 : padding;
-    const top = pad + (v === 'middle' ? (box.height - ls.length * step) / 2 : 0);
-    const x = h === 'left' ? box.x + padding : cx(box);
-    return lines(ls, x, box.y + top + step * 0.75, SIZE, this.color, h === 'left' ? 'start' : 'middle', transform);
+    const pad = vertical === 'middle' ? 0 : padding;
+    const top = pad + (vertical === 'middle' ? (box.height - ls.length * step) / 2 : 0);
+    const left = horizontal === 'left' ? box.x + padding : cx(box);
+    return lines(ls, left, box.y + top + step * 0.75, SIZE, this.color, horizontal === 'left' ? 'start' : 'middle', transform);
   }
 }

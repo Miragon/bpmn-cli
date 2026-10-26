@@ -9,13 +9,13 @@ import { renderFind } from '../report/utils/view-lines.js';
  */
 export class FindCommand extends CliCommand {
   register(program: CommandType): void {
-    this.withJsonOptions(this.define(program, 'find').option('--kind <kind>', 'restrict to a kind', (v: string) => this.kindArg(v))).action((file: string, text: string, o: RawOpts) =>
+    this.withJsonOptions(this.define(program, 'find').option('--kind <kind>', 'restrict to a kind', (raw: string) => this.kindArg(raw))).action((file: string, text: string, options: RawOpts) =>
       this.cli.guarded(async () => {
         const doc = await this.cli.readDocArg(file);
-        const hits = new ElementFinder(doc).find(text, o['kind'] as string | undefined);
-        if (o['json']) this.cli.printJson(hits, !!o['pretty']);
+        const hits = new ElementFinder(doc).find(text, options['kind'] as string | undefined);
+        if (options['json']) this.cli.printJson(hits, !!options['pretty']);
         else this.cli.print(renderFind(hits));
-      }, !!o['json']),
+      }, !!options['json']),
     );
   }
 

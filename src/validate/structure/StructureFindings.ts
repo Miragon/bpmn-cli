@@ -18,8 +18,8 @@ export class StructureFindings {
   }
 
   nameOf(el: El): string | undefined {
-    const n = peek<string>(el, 'name');
-    return n ? String(n) : undefined;
+    const name = peek<string>(el, 'name');
+    return name ? String(name) : undefined;
   }
 
   /** `userTask Activity_X "name"` */

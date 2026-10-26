@@ -36,24 +36,24 @@ export class BpmnSchema {
     private readonly bpmnNs: string,
   ) {
     this.registry = (moddle as unknown as { registry: Registry }).registry;
-    this.bpmnTypes = Object.keys(this.registry.typeMap).filter((t) => t.startsWith('bpmn:'));
+    this.bpmnTypes = Object.keys(this.registry.typeMap).filter((typeName) => typeName.startsWith('bpmn:'));
   }
 
   descriptor(type: string): Descriptor | undefined {
     if (!this.descriptors.has(type)) {
-      let d: Descriptor | undefined;
+      let descriptor: Descriptor | undefined;
       try {
-        d = this.registry.typeMap[type] ? this.registry.getEffectiveDescriptor(type) : undefined;
+        descriptor = this.registry.typeMap[type] ? this.registry.getEffectiveDescriptor(type) : undefined;
       } catch {
-        d = undefined;
+        descriptor = undefined;
       }
-      this.descriptors.set(type, d);
+      this.descriptors.set(type, descriptor);
     }
     return this.descriptors.get(type);
   }
 
   isA(type: string, base: string): boolean {
-    return type === base || !!this.descriptor(type)?.allTypes?.some((a) => a.name === base);
+    return type === base || !!this.descriptor(type)?.allTypes?.some((ancestor) => ancestor.name === base);
   }
 
   /** A child's own type name, else the type of the parent's property of that name. */
@@ -62,14 +62,14 @@ export class BpmnSchema {
     if (!prefix) return undefined;
     const own = `${prefix}:${local.charAt(0).toUpperCase()}${local.slice(1)}`;
     if (this.descriptor(own)) return own;
-    const p = parentType ? this.descriptor(parentType)?.properties.find((x) => x.name === local) : undefined;
-    return p && !p.isReference && this.descriptor(p.type) ? p.type : undefined;
+    const property = parentType ? this.descriptor(parentType)?.properties.find((candidate) => candidate.name === local) : undefined;
+    return property && !property.isReference && this.descriptor(property.type) ? property.type : undefined;
   }
 
   booleanAttrs(type: string): Set<string> {
     let out = this.booleans.get(type);
     if (!out) {
-      out = new Set((this.descriptor(type)?.properties ?? []).filter((p) => p.isAttr && p.type === 'Boolean' && !p.name.includes(':')).map((p) => p.name));
+      out = new Set((this.descriptor(type)?.properties ?? []).filter((property) => property.isAttr && property.type === 'Boolean' && !property.name.includes(':')).map((property) => property.name));
       this.booleans.set(type, out);
     }
     return out;
@@ -80,21 +80,21 @@ export class BpmnSchema {
     let out = this.slots.get(type);
     if (out) return out;
     out = new Map();
-    const d = this.descriptor(type);
-    d?.properties.forEach((p, i) => {
-      if (p.isAttr || p.isBody || p.isVirtual) return;
-      const names = new Set([p.name]);
-      if (!p.isReference && p.type.startsWith('bpmn:')) {
-        for (const t of this.bpmnTypes) if (this.isA(t, p.type)) names.add(t.charAt(5).toLowerCase() + t.slice(6));
+    const descriptor = this.descriptor(type);
+    descriptor?.properties.forEach((property, slot) => {
+      if (property.isAttr || property.isBody || property.isVirtual) return;
+      const names = new Set([property.name]);
+      if (!property.isReference && property.type.startsWith('bpmn:')) {
+        for (const bpmnType of this.bpmnTypes) if (this.isA(bpmnType, property.type)) names.add(bpmnType.charAt(5).toLowerCase() + bpmnType.slice(6));
       }
-      if (!p.isReference && p.type.startsWith('bpmndi:')) names.add(p.type.slice('bpmndi:'.length));
-      for (const n of names) out!.set(n, out!.has(n) && out!.get(n) !== i ? -1 : i);
+      if (!property.isReference && property.type.startsWith('bpmndi:')) names.add(property.type.slice('bpmndi:'.length));
+      for (const name of names) out!.set(name, out!.has(name) && out!.get(name) !== slot ? -1 : slot);
     });
     for (const group of SAME_SLOT) {
-      const at = group.map((n) => out!.get(n)).filter((s): s is number => s !== undefined && s >= 0);
+      const at = group.map((name) => out!.get(name)).filter((slot): slot is number => slot !== undefined && slot >= 0);
       if (at.length < 2) continue;
       const first = Math.min(...at);
-      for (const n of group) if ((out.get(n) ?? -1) >= 0) out.set(n, first);
+      for (const name of group) if ((out.get(name) ?? -1) >= 0) out.set(name, first);
     }
     this.slots.set(type, out);
     return out;

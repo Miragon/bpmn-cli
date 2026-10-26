@@ -26,15 +26,15 @@ function budget() {
 const run = spawnSync(process.execPath, [join(ROOT, 'tools', 'layout-regress.mjs')], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 process.stdout.write(run.stdout ?? '');
 process.stderr.write(run.stderr ?? '');
-const m = /FILES\s+(\d+)\s+SCORE\s+(\d+)/.exec(run.stdout ?? '');
-if (run.status !== 0 || !m) {
+const scoreMatch = /FILES\s+(\d+)\s+SCORE\s+(\d+)/.exec(run.stdout ?? '');
+if (run.status !== 0 || !scoreMatch) {
   console.error(`regress-gate: the harness failed (exit ${run.status}) or printed no score`);
   process.exit(1);
 }
-const [files, score] = [Number(m[1]), Number(m[2])];
-const b = budget();
-if (score > b.maxScore) {
-  console.error(`regress-gate: FAIL score ${score} > budget ${b.maxScore} (${b.from}) on ${files} files`);
+const [files, score] = [Number(scoreMatch[1]), Number(scoreMatch[2])];
+const scoreBudget = budget();
+if (score > scoreBudget.maxScore) {
+  console.error(`regress-gate: FAIL score ${score} > budget ${scoreBudget.maxScore} (${scoreBudget.from}) on ${files} files`);
   process.exit(1);
 }
-console.log(`regress-gate: ok, score ${score} <= budget ${b.maxScore} (${b.from}) on ${files} files${score < b.maxScore ? `; lower the budget to ${score} to keep the improvement` : ''}`);
+console.log(`regress-gate: ok, score ${score} <= budget ${scoreBudget.maxScore} (${scoreBudget.from}) on ${files} files${score < scoreBudget.maxScore ? `; lower the budget to ${score} to keep the improvement` : ''}`);

@@ -32,8 +32,8 @@ export class FlowIdFollower {
     if (!id) return false;
     const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: this.endLabels(el) }, ...this.doc.edit.formerEndsOf(el)];
     const targets = names(target);
-    return names(source).some((s) =>
-      targets.some((t) => s.labels.some((a) => t.labels.some((b) => this.doc.edit.allocator.isDerived(id, connectionRequest('bpmn:SequenceFlow', s.id, t.id, { sourceLabel: a, targetLabel: b }))))),
+    return names(source).some((sourceName) =>
+      targets.some((targetName) => sourceName.labels.some((sourceLabel) => targetName.labels.some((targetLabel) => this.doc.edit.allocator.isDerived(id, connectionRequest('bpmn:SequenceFlow', sourceName.id, targetName.id, { sourceLabel, targetLabel }))))),
     );
   }
 
@@ -77,9 +77,9 @@ export class FlowIdFollower {
     const flows = new Set([...many(node, 'incoming'), ...many(node, 'outgoing')]);
     for (const root of many(doc.definitions, 'rootElements')) {
       if (!is(root, 'bpmn:Collaboration')) continue;
-      for (const f of many(root, 'messageFlows')) if (f.get<El | undefined>('sourceRef') === node || f.get<El | undefined>('targetRef') === node) flows.add(f);
+      for (const flow of many(root, 'messageFlows')) if (flow.get<El | undefined>('sourceRef') === node || flow.get<El | undefined>('targetRef') === node) flows.add(flow);
     }
-    return [...flows].filter((f) => !!f.get<El | undefined>('sourceRef') && !!f.get<El | undefined>('targetRef') && doc.edit.allocator.generatedFrom(idOf(f), FlowIdFollower.connectionRequestOf(f)));
+    return [...flows].filter((flow) => !!flow.get<El | undefined>('sourceRef') && !!flow.get<El | undefined>('targetRef') && doc.edit.allocator.generatedFrom(idOf(flow), FlowIdFollower.connectionRequestOf(flow)));
   }
 
   /** `was`: the ends before the rename (`A -> B`). */
@@ -101,9 +101,9 @@ export class FlowIdFollower {
    * speaks too, and how earlier versions named an unnamed end.
    */
   private endLabels(el: El): string[] {
-    const labels = [new ElementLabels(el).label(), speakingStem(idOf(el)), ...new ElementLabels(el).formerLabels()].filter((l): l is string => !!l);
+    const labels = [new ElementLabels(el).label(), speakingStem(idOf(el)), ...new ElementLabels(el).formerLabels()].filter((label): label is string => !!label);
     const name = el.get<string | undefined>('name');
-    if (hasIdWords(name) && !labels.some((l) => l === name || (!l.includes('_') && slugify(l) === slugify(name)))) labels.push(name!);
+    if (hasIdWords(name) && !labels.some((label) => label === name || (!label.includes('_') && slugify(label) === slugify(name)))) labels.push(name!);
     return [...new Set(labels)];
   }
 

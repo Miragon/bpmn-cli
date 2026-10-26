@@ -72,33 +72,33 @@ export class Snapshot {
     }
     const planes = new DiagramReader(defs, sem).planes();
     for (const plane of planes) {
-      for (const s of plane.shapes.values()) {
-        if (!s.di) continue;
-        if (is(s.el, 'bpmn:FlowNode')) snap.flowNodeShapes++;
-        snap.byDi.set(s.di, {
-          id: s.id,
+      for (const shape of plane.shapes.values()) {
+        if (!shape.di) continue;
+        if (is(shape.el, 'bpmn:FlowNode')) snap.flowNodeShapes++;
+        snap.byDi.set(shape.di, {
+          id: shape.id,
           ...(plane.di ? { planeDi: plane.di } : {}),
-          type: s.el.$type,
-          kind: s.kind,
-          bounds: copyBox(s.bounds),
-          ...(s.label ? { label: copyBox(s.label) } : {}),
-          ...(s.expanded !== undefined ? { expanded: s.expanded } : {}),
-          ...(s.laneId ? { laneId: s.laneId } : {}),
-          ...(s.poolId ? { poolId: s.poolId } : {}),
-          ...(s.parentId ? { parentId: s.parentId } : {}),
+          type: shape.el.$type,
+          kind: shape.kind,
+          bounds: copyBox(shape.bounds),
+          ...(shape.label ? { label: copyBox(shape.label) } : {}),
+          ...(shape.expanded !== undefined ? { expanded: shape.expanded } : {}),
+          ...(shape.laneId ? { laneId: shape.laneId } : {}),
+          ...(shape.poolId ? { poolId: shape.poolId } : {}),
+          ...(shape.parentId ? { parentId: shape.parentId } : {}),
         });
       }
-      for (const e of plane.edges.values()) {
-        if (!e.di) continue;
-        snap.byDi.set(e.di, {
-          id: e.id,
+      for (const edge of plane.edges.values()) {
+        if (!edge.di) continue;
+        snap.byDi.set(edge.di, {
+          id: edge.id,
           ...(plane.di ? { planeDi: plane.di } : {}),
-          type: e.el.$type,
-          kind: e.kind,
-          points: copyPoints(e.points),
-          ...(e.label ? { label: copyBox(e.label) } : {}),
-          ...(e.sourceId ? { sourceId: e.sourceId } : {}),
-          ...(e.targetId ? { targetId: e.targetId } : {}),
+          type: edge.el.$type,
+          kind: edge.kind,
+          points: copyPoints(edge.points),
+          ...(edge.label ? { label: copyBox(edge.label) } : {}),
+          ...(edge.sourceId ? { sourceId: edge.sourceId } : {}),
+          ...(edge.targetId ? { targetId: edge.targetId } : {}),
         });
       }
     }
@@ -150,8 +150,8 @@ export class Snapshot {
         drawn.set(plane, (shapes = new Map()));
         for (const pe of rawList(plane, 'planeElement')) {
           const id = is(pe, 'bpmndi:BPMNShape') ? idOf(raw(pe, 'bpmnElement')) : undefined;
-          const b = id ? boxOf(raw(pe, 'bounds')) : undefined;
-          if (id && b && !shapes.has(id)) shapes.set(id, b);
+          const box = id ? boxOf(raw(pe, 'bounds')) : undefined;
+          if (id && box && !shapes.has(id)) shapes.set(id, box);
         }
       }
       return shapes;
@@ -161,12 +161,12 @@ export class Snapshot {
       const ends = this.changedEnds(edge);
       if (!ends.length) return false;
       const shapes = boundsOn(plane);
-      if (!further && ends.some((c) => c.id && !shapes.has(c.id))) return false;
-      const pts = rawList(edge, 'waypoint').map((w) => ({ x: raw<number>(w, 'x') ?? 0, y: raw<number>(w, 'y') ?? 0 }));
-      const reached = (c: ChangedEnd): boolean => {
-        const b = c.id ? shapes.get(c.id) : undefined;
-        const p = c.end === 'source' ? pts[0] : pts[pts.length - 1];
-        return !!b && !!p && pts.length >= 2 && containsPoint(b, p, DETACHED_GAP);
+      if (!further && ends.some((end) => end.id && !shapes.has(end.id))) return false;
+      const pts = rawList(edge, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x') ?? 0, y: raw<number>(waypoint, 'y') ?? 0 }));
+      const reached = (end: ChangedEnd): boolean => {
+        const box = end.id ? shapes.get(end.id) : undefined;
+        const point = end.end === 'source' ? pts[0] : pts[pts.length - 1];
+        return !!box && !!point && pts.length >= 2 && containsPoint(box, point, DETACHED_GAP);
       };
       return !ends.every(reached);
     });

@@ -52,9 +52,9 @@ export class EventTrigger {
     const trigger = triggerOf(el) ?? 'none';
     const opts: TriggerOptions = {};
     const def = (el.get<El[] | undefined>('eventDefinitions') ?? [])[0];
-    const body = (p: string): string | undefined => def?.get<El | undefined>(p)?.get<string | undefined>('body');
-    const ref = (p: string): El | undefined => def?.get<El | undefined>(p);
-    const named = (p: string): string | undefined => ref(p)?.get<string | undefined>('name') ?? ref(p)?.get<string | undefined>('id');
+    const body = (propName: string): string | undefined => def?.get<El | undefined>(propName)?.get<string | undefined>('body');
+    const ref = (propName: string): El | undefined => def?.get<El | undefined>(propName);
+    const named = (propName: string): string | undefined => ref(propName)?.get<string | undefined>('name') ?? ref(propName)?.get<string | undefined>('id');
     if (def) {
       switch (trigger) {
         case 'timer': {
@@ -92,7 +92,7 @@ export class EventTrigger {
     }
     if (is(el, 'bpmn:BoundaryEvent') && el.get<boolean | undefined>('cancelActivity') === false) opts.nonInterrupting = true;
     if (is(el, 'bpmn:StartEvent') && el.get<boolean | undefined>('isInterrupting') === false) opts.nonInterrupting = true;
-    for (const k of Object.keys(opts) as Array<keyof TriggerOptions>) if (opts[k] === undefined) delete opts[k];
+    for (const optionKey of Object.keys(opts) as Array<keyof TriggerOptions>) if (opts[optionKey] === undefined) delete opts[optionKey];
     return { trigger, opts };
   }
 
@@ -151,25 +151,25 @@ export class EventTrigger {
   }
 
   describe(): string {
-    const d = this.details();
-    if (!d || d.trigger === 'none') return '';
-    switch (d.trigger) {
+    const details = this.details();
+    if (!details || details.trigger === 'none') return '';
+    switch (details.trigger) {
       case 'timer':
-        return d.timer ? d.timer.value : 'timer';
+        return details.timer ? details.timer.value : 'timer';
       case 'message':
-        return EventTrigger.named(d.message, 'message');
+        return EventTrigger.named(details.message, 'message');
       case 'error':
-        return EventTrigger.named(d.error, 'error');
+        return EventTrigger.named(details.error, 'error');
       case 'signal':
-        return EventTrigger.named(d.signal, 'signal');
+        return EventTrigger.named(details.signal, 'signal');
       case 'escalation':
-        return EventTrigger.named(d.escalation, 'escalation');
+        return EventTrigger.named(details.escalation, 'escalation');
       case 'conditional':
-        return d.condition ? `condition ${d.condition}` : 'conditional';
+        return details.condition ? `condition ${details.condition}` : 'conditional';
       case 'link':
-        return d.link ? `link ${d.link}` : 'link';
+        return details.link ? `link ${details.link}` : 'link';
       default:
-        return d.trigger;
+        return details.trigger;
     }
   }
 

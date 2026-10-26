@@ -42,8 +42,8 @@ export class LayoutAnalysis {
     for (const diagram of rawList(this.defs, 'diagrams')) new PlaneAnalysis(raw(diagram, 'plane'), this.index, seen, this.add).run();
     for (const id of this.index.need) if (!seen.has(id)) this.add('missing', id, [id]);
     const counts = perKey(() => 0);
-    for (const k of KEYS) counts[k] = this.found[k].length;
-    return { counts, problems: KEYS.flatMap((k) => this.found[k]), score: scoreOf(counts) };
+    for (const metricKey of KEYS) counts[metricKey] = this.found[metricKey].length;
+    return { counts, problems: KEYS.flatMap((metricKey) => this.found[metricKey]), score: scoreOf(counts) };
   }
 
   private indexDefinitions(): void {
@@ -51,14 +51,14 @@ export class LayoutAnalysis {
     for (const root of roots) {
       if (is(root, 'bpmn:Process')) this.collectScope(root);
       if (is(root, 'bpmn:Collaboration')) {
-        for (const p of rawList(root, 'participants')) {
-          const id = idOf(p);
+        for (const participant of rawList(root, 'participants')) {
+          const id = idOf(participant);
           if (id) this.index.need.add(id);
-          const procId = idOf(raw<El>(p, 'processRef'));
-          if (procId) this.index.poolOf.set(procId, p);
+          const procId = idOf(raw<El>(participant, 'processRef'));
+          if (procId) this.index.poolOf.set(procId, participant);
         }
-        for (const m of rawList(root, 'messageFlows')) {
-          const id = idOf(m);
+        for (const messageFlow of rawList(root, 'messageFlows')) {
+          const id = idOf(messageFlow);
           if (id) this.index.need.add(id);
         }
       }
@@ -100,26 +100,26 @@ export class LayoutAnalysis {
         if (daId) this.index.need.add(daId);
       }
     }
-    for (const a of rawList(scope, 'artifacts')) {
-      const id = idOf(a);
+    for (const artifact of rawList(scope, 'artifacts')) {
+      const id = idOf(artifact);
       if (!id) continue;
       this.index.parentOf.set(id, scope);
-      if (is(a, 'bpmn:TextAnnotation') || is(a, 'bpmn:Association')) this.index.need.add(id);
+      if (is(artifact, 'bpmn:TextAnnotation') || is(artifact, 'bpmn:Association')) this.index.need.add(id);
     }
     for (const ls of rawList(scope, 'laneSets')) this.collectLanes(rawList(ls, 'lanes'), this.index.laneOf);
   }
 
   /** only the laid-out root needs DI: further root processes are a documented limitation */
   private dropUnlaidProcesses(roots: El[]): void {
-    const collab = roots.find((e) => is(e, 'bpmn:Collaboration'));
+    const collab = roots.find((element) => is(element, 'bpmn:Collaboration'));
     const laid = new Set<string>();
     if (collab) {
-      for (const p of rawList(collab, 'participants')) {
-        const id = idOf(raw<El>(p, 'processRef'));
+      for (const participant of rawList(collab, 'participants')) {
+        const id = idOf(raw<El>(participant, 'processRef'));
         if (id) laid.add(id);
       }
     } else {
-      const id = idOf(roots.find((e) => is(e, 'bpmn:Process')));
+      const id = idOf(roots.find((element) => is(element, 'bpmn:Process')));
       if (id) laid.add(id);
     }
     for (const id of [...this.index.need]) {

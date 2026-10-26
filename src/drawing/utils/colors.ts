@@ -20,9 +20,9 @@ export interface ColorAttrs {
 function pick(el: El | undefined, keys: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   if (!el) return out;
-  for (const k of keys) {
-    const v = el.get<string | undefined>(k);
-    if (typeof v === 'string' && v) out[k] = v;
+  for (const key of keys) {
+    const value = el.get<string | undefined>(key);
+    if (typeof value === 'string' && value) out[key] = value;
   }
   return out;
 }
@@ -55,7 +55,7 @@ export type SwatchName = keyof typeof SWATCHES;
 export function setSwatch(di: El, swatch: SwatchName | undefined): boolean {
   const edge = is(di, 'bpmndi:BPMNEdge');
   const before = JSON.stringify([pick(di, SHAPE_COLORS.concat(EDGE_COLORS)), pick(raw<El>(di, 'label'), LABEL_COLORS)]);
-  for (const k of new Set([...SHAPE_COLORS, ...EDGE_COLORS])) di.set(k, undefined);
+  for (const key of new Set([...SHAPE_COLORS, ...EDGE_COLORS])) di.set(key, undefined);
   const label = raw<El>(di, 'label');
   if (label) label.set('color:color', undefined);
   if (swatch) {
@@ -78,29 +78,29 @@ export function swatchOf(di: El): { color: SwatchName | 'custom'; fill?: string;
   const fill = own['bioc:fill'] ?? own['color:background-color'];
   if (!stroke && !fill) return undefined;
   const edge = is(di, 'bpmndi:BPMNEdge');
-  const name = (Object.keys(SWATCHES) as SwatchName[]).find((n) => SWATCHES[n].stroke === stroke?.toLowerCase() && (edge || SWATCHES[n].fill === fill?.toLowerCase()));
+  const name = (Object.keys(SWATCHES) as SwatchName[]).find((swatch) => SWATCHES[swatch].stroke === stroke?.toLowerCase() && (edge || SWATCHES[swatch].fill === fill?.toLowerCase()));
   return { color: name ?? 'custom', ...(fill ? { fill } : {}), ...(stroke ? { stroke } : {}) };
 }
 
 export function applyColors(moddle: BpmnModdle, defs: El, colors: Map<string, ColorAttrs>): number {
   if (!colors.size) return 0;
-  let n = 0;
+  let count = 0;
   for (const diagram of rawList(defs, 'diagrams')) {
     for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
-      const c = colors.get(idOf(raw(pe, 'bpmnElement')) ?? '');
-      if (!c) continue;
-      for (const [k, v] of Object.entries(c.own)) pe.set(k, v);
-      if (Object.keys(c.label).length) {
+      const elementColors = colors.get(idOf(raw(pe, 'bpmnElement')) ?? '');
+      if (!elementColors) continue;
+      for (const [key, value] of Object.entries(elementColors.own)) pe.set(key, value);
+      if (Object.keys(elementColors.label).length) {
         let lbl = raw<El>(pe, 'label');
         if (!lbl) {
           lbl = moddle.create('bpmndi:BPMNLabel', {});
           pe.set('label', lbl);
           lbl.$parent = pe;
         }
-        for (const [k, v] of Object.entries(c.label)) lbl.set(k, v);
+        for (const [key, value] of Object.entries(elementColors.label)) lbl.set(key, value);
       }
-      n++;
+      count++;
     }
   }
-  return n;
+  return count;
 }

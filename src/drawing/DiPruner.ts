@@ -12,22 +12,22 @@ export class DiPruner {
   static prune(defs: El, sem: Semantics): string[] {
     const pruned: string[] = [];
     const diagrams = rawList(defs, 'diagrams');
-    for (let d = diagrams.length - 1; d >= 0; d--) {
-      const plane = raw<El>(diagrams[d], 'plane');
+    for (let diagramIndex = diagrams.length - 1; diagramIndex >= 0; diagramIndex--) {
+      const plane = raw<El>(diagrams[diagramIndex], 'plane');
       // bpmn-js shows the first process / collaboration on a plane without bpmnElement: keep it
       const root = raw<El>(plane, 'bpmnElement') ?? (plane ? DiagramReader.displayRoot(defs) : undefined);
       const rootId = idOf(root);
       if (!plane || !root || !rootId || sem.byId.get(rootId) !== root) {
-        diagrams.splice(d, 1);
+        diagrams.splice(diagramIndex, 1);
         continue;
       }
       const elements = rawList(plane, 'planeElement');
-      for (let i = elements.length - 1; i >= 0; i--) {
-        const pe = elements[i];
+      for (let index = elements.length - 1; index >= 0; index--) {
+        const pe = elements[index];
         const target = raw<El>(pe, 'bpmnElement');
         const id = idOf(target);
         if (target && id && sem.byId.get(id) === target) continue;
-        elements.splice(i, 1);
+        elements.splice(index, 1);
         pruned.push(id ?? idOf(pe) ?? '?');
       }
     }
@@ -48,10 +48,10 @@ export class DiPruner {
       const further = shown.has(rootId);
       shown.add(rootId);
       const elements = rawList(plane, 'planeElement');
-      for (let i = 0; i < elements.length; i++) {
-        const pe = elements[i]!;
+      for (let index = 0; index < elements.length; index++) {
+        const pe = elements[index]!;
         if (!is(pe, 'bpmndi:BPMNEdge') || !stale(pe, plane, further)) continue;
-        elements.splice(i--, 1);
+        elements.splice(index--, 1);
         pruned.push(idOf(raw(pe, 'bpmnElement')) ?? idOf(pe) ?? '?');
       }
     }

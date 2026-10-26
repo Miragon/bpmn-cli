@@ -52,29 +52,29 @@ const WITH_SUB: Op[] = [
 ];
 
 async function handXml(ops: Op[], dx = 13, dy = 7): Promise<string> {
-  const r = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
-  const doc = await Doc.fromXml(r.xml);
+  const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
+  const doc = await Doc.fromXml(result.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
-      for (const b of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) {
-        if (!b) continue;
-        b.set('x', b.get<number>('x') + dx);
-        b.set('y', b.get<number>('y') + dy);
+      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) {
+        if (!bounds) continue;
+        bounds.set('x', bounds.get<number>('x') + dx);
+        bounds.set('y', bounds.get<number>('y') + dy);
       }
-      for (const w of pe.get<El[] | undefined>('waypoint') ?? []) {
-        w.set('x', w.get<number>('x') + dx);
-        w.set('y', w.get<number>('y') + dy);
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) {
+        waypoint.set('x', waypoint.get<number>('x') + dx);
+        waypoint.set('y', waypoint.get<number>('y') + dy);
       }
     }
   }
   return doc.toXml();
 }
 
-async function run(xml: string, ops: Op[]): Promise<{ r: MutationResult; after: Doc; xml: string }> {
-  const r = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
-  const after = await Doc.fromXml(r.xml);
+async function run(xml: string, ops: Op[]): Promise<{ result: MutationResult; after: Doc; xml: string }> {
+  const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
+  const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
-  return { r, after, xml: r.xml };
+  return { result, after, xml: result.xml };
 }
 
 async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; hint?: string }> {
@@ -89,37 +89,37 @@ async function failure(xml: string, ops: Op[]): Promise<{ code: string; message:
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const s of p.shapes.values()) out.set(s.id, s);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) out.set(shape.id, shape);
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const p of new DiagramReader(doc.definitions).planes()) for (const e of p.edges.values()) out.set(e.id, e);
+  for (const plane of new DiagramReader(doc.definitions).planes()) for (const edge of plane.edges.values()) out.set(edge.id, edge);
   return out;
 }
 
 const HARD = ['overlaps', 'frameIntrusion', 'frameOverlap', 'through', 'degenerateEdge', 'missing', 'outsideLane', 'outsidePool', 'outsideSub'];
-const hardOf = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((p) => HARD.includes(p.kind)).map((p) => `${p.kind} ${p.ids.join(',')}`);
-const notesOf = (r: MutationResult): string[] => r.layout.format?.flatMap((f) => f.notes ?? []) ?? [];
-const orthogonal = (e: DEdge): boolean => e.points.every((p, i) => i === 0 || p.x === e.points[i - 1]!.x || p.y === e.points[i - 1]!.y);
+const hardOf = (doc: Doc): string[] => LayoutAnalysis.of(doc.definitions).problems.filter((problem) => HARD.includes(problem.kind)).map((problem) => `${problem.kind} ${problem.ids.join(',')}`);
+const notesOf = (mutation: MutationResult): string[] => mutation.layout.format?.flatMap((format) => format.notes ?? []) ?? [];
+const orthogonal = (edge: DEdge): boolean => edge.points.every((point, index) => index === 0 || point.x === edge.points[index - 1]!.x || point.y === edge.points[index - 1]!.y);
 
 describe('compact', () => {
   it('shrinks a lane that grew empty rows back to its content; the lanes and pools below move up', async () => {
     const hand = await handXml(POOLED);
     const original = shapes(await Doc.fromXml(hand));
     const grown = await run(hand, [{ op: 'space', below: 'L1', by: 300 }]);
-    const g = shapes(grown.after);
-    expect(g.get('L1')!.bounds.height).toBe(original.get('L1')!.bounds.height + 300);
-    const { r, after } = await run(grown.xml, [{ op: 'compact' }]);
+    const grownShapes = shapes(grown.after);
+    expect(grownShapes.get('L1')!.bounds.height).toBe(original.get('L1')!.bounds.height + 300);
+    const { result, after } = await run(grown.xml, [{ op: 'compact' }]);
     const now = shapes(after);
-    expect(now.get('L1')!.bounds.height).toBeLessThan(g.get('L1')!.bounds.height - 250);
+    expect(now.get('L1')!.bounds.height).toBeLessThan(grownShapes.get('L1')!.bounds.height - 250);
     // the content keeps its place and its order; the lane below follows the shrunk lane
-    for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds.y, id).toBe(g.get(id)!.bounds.y);
+    for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds.y, id).toBe(grownShapes.get(id)!.bounds.y);
     expect(now.get('L2')!.bounds.y).toBe(now.get('L1')!.bounds.y + now.get('L1')!.bounds.height);
     expect(now.get('Pool')!.bounds.height).toBe(now.get('L1')!.bounds.height + now.get('L2')!.bounds.height);
-    expect(r.layout.metrics!.added).toEqual([]);
-    expect(notesOf(r).join(' ')).toMatch(/closed .*empty rows? \(\d+ px\)/);
+    expect(result.layout.metrics!.added).toEqual([]);
+    expect(notesOf(result).join(' ')).toMatch(/closed .*empty rows? \(\d+ px\)/);
   });
 
   it('closes an empty column in a process without pools, keeping the order', async () => {
@@ -127,31 +127,31 @@ describe('compact', () => {
     const original = shapes(await Doc.fromXml(hand));
     const spaced = await run(hand, [{ op: 'space', after: 'A', by: 300 }]);
     expect(shapes(spaced.after).get('G')!.bounds.x).toBe(original.get('G')!.bounds.x + 300);
-    const { r, after } = await run(spaced.xml, [{ op: 'compact' }]);
+    const { result, after } = await run(spaced.xml, [{ op: 'compact' }]);
     const now = shapes(after);
     // back to the drawing's gap: everything right of A moves by one offset (relative positions kept)
     const dx = now.get('G')!.bounds.x - original.get('G')!.bounds.x;
     expect(Math.abs(dx)).toBeLessThanOrEqual(5);
     for (const id of ['B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds.x - original.get(id)!.bounds.x, id).toBe(dx);
     for (const id of ['S', 'A']) expect(now.get(id)!.bounds, id).toEqual(original.get(id)!.bounds);
-    for (const e of edges(after).values()) expect(orthogonal(e), e.id).toBe(true);
-    expect(r.layout.metrics!.added).toEqual([]);
-    expect(notesOf(r)).toEqual(expect.arrayContaining([expect.stringMatching(/^closed 1 empty column \(\d+ px\)$/)]));
+    for (const edge of edges(after).values()) expect(orthogonal(edge), edge.id).toBe(true);
+    expect(result.layout.metrics!.added).toEqual([]);
+    expect(notesOf(result)).toEqual(expect.arrayContaining([expect.stringMatching(/^closed 1 empty column \(\d+ px\)$/)]));
   });
 
   it('compact <subProcess> shrinks only that sub-process; compact without ids closes the room it freed', async () => {
     const hand = await handXml(WITH_SUB);
     const original = shapes(await Doc.fromXml(hand));
     const spaced = await run(hand, [{ op: 'space', after: 'ST', by: 300 }]);
-    const s = shapes(spaced.after);
-    expect(s.get('Sub')!.bounds.width).toBe(original.get('Sub')!.bounds.width + 300);
+    const spacedShapes = shapes(spaced.after);
+    expect(spacedShapes.get('Sub')!.bounds.width).toBe(original.get('Sub')!.bounds.width + 300);
     const one = await run(spaced.xml, [{ op: 'compact', ids: ['Sub'] }]);
-    const o = shapes(one.after);
-    expect(o.get('Sub')!.bounds.width).toBeLessThan(s.get('Sub')!.bounds.width - 250);
+    const oneShapes = shapes(one.after);
+    expect(oneShapes.get('Sub')!.bounds.width).toBeLessThan(spacedShapes.get('Sub')!.bounds.width - 250);
     // what is outside the sub-process stays where it was
-    for (const id of ['S', 'A', 'G', 'B', 'C', 'E2']) expect(o.get(id)!.bounds, id).toEqual(s.get(id)!.bounds);
+    for (const id of ['S', 'A', 'G', 'B', 'C', 'E2']) expect(oneShapes.get(id)!.bounds, id).toEqual(spacedShapes.get(id)!.bounds);
     const all = await run(one.xml, [{ op: 'compact' }]);
-    expect(shapes(all.after).get('E')!.bounds.x).toBeLessThan(o.get('E')!.bounds.x);
+    expect(shapes(all.after).get('E')!.bounds.x).toBeLessThan(oneShapes.get('E')!.bounds.x);
     expect(hardOf(all.after)).toEqual(hardOf(await Doc.fromXml(hand)));
   });
 
@@ -163,17 +163,17 @@ describe('compact', () => {
     ]);
     const grown = await run(hand, [{ op: 'space', below: 'L1', by: 300 }]);
     const before = edges(grown.after).get('M1')!;
-    const { r, after } = await run(grown.xml, [{ op: 'compact' }]);
+    const { result, after } = await run(grown.xml, [{ op: 'compact' }]);
     const m1 = edges(after).get('M1')!;
     expect(orthogonal(m1)).toBe(true);
     expect(shapes(after).get('L1')!.bounds.height).toBeLessThan(shapes(grown.after).get('L1')!.bounds.height - 250);
     expect(m1.points.length).toBe(before.points.length);
-    expect(r.layout.metrics!.added).toEqual([]);
+    expect(result.layout.metrics!.added).toEqual([]);
   });
 
   it('leaves a gap open when closing it would add a layout problem (pools side by side)', async () => {
     const body = `<bpmn:task id="A" name="A" /><bpmn:task id="B" name="B" />`;
-    const shape = (id: string, [x, y, w, h]: number[]): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}" isHorizontal="true"><dc:Bounds x="${x}" y="${y}" width="${w}" height="${h}" /></bpmndi:BPMNShape>`;
+    const shape = (id: string, [left, top, width, height]: number[]): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}" isHorizontal="true"><dc:Bounds x="${left}" y="${top}" width="${width}" height="${height}" /></bpmndi:BPMNShape>`;
     const xml = definitionsXml(body, {
       nsDecl: 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"',
       extraRoots: `<bpmn:process id="Process_2"><bpmn:task id="X" name="X" /></bpmn:process>
@@ -184,21 +184,21 @@ describe('compact', () => {
           ${shape('Below', [0, 540, 720, 60])}
         </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>`,
     });
-    const { r, after } = await run(xml, [{ op: 'compact' }]);
+    const { result, after } = await run(xml, [{ op: 'compact' }]);
     // the empty rows of Left would pull Below up onto Right: refused, with a note
-    expect(notesOf(r).join(" ")).toMatch(/left \d+ gaps? open: closing (it|them) would add frameOverlap \[(Right, Below|Below, Right)\]/);
+    expect(notesOf(result).join(" ")).toMatch(/left \d+ gaps? open: closing (it|them) would add frameOverlap \[(Right, Below|Below, Right)\]/);
     expect(hardOf(after)).toEqual([]);
     expect(shapes(after).get('Below')!.bounds.y).toBeGreaterThanOrEqual(500);
   });
 
   it('refuses ids that are no frames and says when there is nothing to do', async () => {
     const hand = await handXml(POOLED);
-    const e = await failure(hand, [{ op: 'compact', ids: ['A'] }]);
-    expect(e.code).toBe('E_WRONG_KIND');
-    expect(e.message).toMatch(/"A" is not a pool, lane or expanded sub-process/);
-    expect(e.hint).toMatch(/space <file> --after <id> --by -column/);
-    const { r } = await run(hand, [{ op: 'compact', ids: ['L1'] }]);
-    expect(r.layout.format![0]!.op).toBe('compact');
+    const failureError = await failure(hand, [{ op: 'compact', ids: ['A'] }]);
+    expect(failureError.code).toBe('E_WRONG_KIND');
+    expect(failureError.message).toMatch(/"A" is not a pool, lane or expanded sub-process/);
+    expect(failureError.hint).toMatch(/space <file> --after <id> --by -column/);
+    const { result } = await run(hand, [{ op: 'compact', ids: ['L1'] }]);
+    expect(result.layout.format![0]!.op).toBe('compact');
   });
 });
 
@@ -207,30 +207,30 @@ describe('space with a negative amount', () => {
     const hand = await handXml(BASE);
     const original = shapes(await Doc.fromXml(hand));
     const spaced = await run(hand, [{ op: 'space', after: 'A', by: 300 }]);
-    const s = shapes(spaced.after);
+    const spacedShapes = shapes(spaced.after);
     const one = await run(spaced.xml, [{ op: 'space', after: 'A', by: '-column' }]);
-    const o = shapes(one.after);
-    const column = s.get('G')!.bounds.x - o.get('G')!.bounds.x;
+    const oneShapes = shapes(one.after);
+    const column = spacedShapes.get('G')!.bounds.x - oneShapes.get('G')!.bounds.x;
     expect(column).toBeGreaterThan(100);
     expect(column).toBeLessThan(300);
     const rest = await run(one.xml, [{ op: 'space', after: 'A', by: -1000 }]);
     expect(Math.abs(shapes(rest.after).get('G')!.bounds.x - original.get('G')!.bounds.x)).toBeLessThanOrEqual(5);
-    expect(notesOf(rest.r).join(' ')).toMatch(/closed \d+ px right of A \(of 1000 px asked for\): the rest is not empty/);
+    expect(notesOf(rest.result).join(' ')).toMatch(/closed \d+ px right of A \(of 1000 px asked for\): the rest is not empty/);
     const none = await run(rest.xml, [{ op: 'space', after: 'A', by: '-column' }]);
-    expect(none.r.unchanged).toBe(true);
-    expect(notesOf(none.r).join(' ')).toMatch(/nothing to close right of A: no empty space there/);
+    expect(none.result.unchanged).toBe(true);
+    expect(notesOf(none.result).join(' ')).toMatch(/nothing to close right of A: no empty space there/);
   });
 
   it('shrinks a lane from the bottom (`space --below <lane> --by -row`), the pool with it', async () => {
     const hand = await handXml(POOLED);
     const grown = await run(hand, [{ op: 'space', below: 'L1', by: 300 }]);
-    const g = shapes(grown.after);
-    const { r, after } = await run(grown.xml, [{ op: 'space', below: 'L1', by: '-row' }]);
+    const grownShapes = shapes(grown.after);
+    const { result, after } = await run(grown.xml, [{ op: 'space', below: 'L1', by: '-row' }]);
     const now = shapes(after);
-    const shrunk = g.get('L1')!.bounds.height - now.get('L1')!.bounds.height;
+    const shrunk = grownShapes.get('L1')!.bounds.height - now.get('L1')!.bounds.height;
     expect(shrunk).toBeGreaterThan(50);
-    expect(g.get('Pool')!.bounds.height - now.get('Pool')!.bounds.height).toBe(shrunk);
-    expect(now.get('L2')!.bounds.y).toBe(g.get('L2')!.bounds.y - shrunk);
-    expect(r.layout.metrics!.added).toEqual([]);
+    expect(grownShapes.get('Pool')!.bounds.height - now.get('Pool')!.bounds.height).toBe(shrunk);
+    expect(now.get('L2')!.bounds.y).toBe(grownShapes.get('L2')!.bounds.y - shrunk);
+    expect(result.layout.metrics!.added).toEqual([]);
   });
 });

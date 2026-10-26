@@ -59,8 +59,8 @@ describe('the core bundles for the browser', () => {
   });
 
   it('without the node layer or the CLI', () => {
-    expect(bundle.inputs.some((f) => f.startsWith('src/'))).toBe(true);
-    expect(bundle.inputs.filter((f) => /^src\/(node\/|commands\/|cli\.ts$)/.test(f))).toEqual([]);
+    expect(bundle.inputs.some((file) => file.startsWith('src/'))).toBe(true);
+    expect(bundle.inputs.filter((file) => /^src\/(node\/|commands\/|cli\.ts$)/.test(file))).toEqual([]);
   });
 
   it('the check sees a builtin import and a process read (it is not vacuous)', async () => {
@@ -69,7 +69,7 @@ describe('the core bundles for the browser', () => {
     const globals: Bundle = await bundleCore({
       stdin: { contents: "export * from './src/index.ts';\nexport const debug = () => process.env['X'] ?? Buffer.from('x');\nexport const local = (process: { a: number }) => process.a;", sourcefile: 'probe.ts' },
     });
-    expect(globals.violations.map((v) => `${v.what} ${v.file}`).sort()).toEqual(['Buffer probe.ts', 'process probe.ts']);
+    expect(globals.violations.map((validator) => `${validator.what} ${validator.file}`).sort()).toEqual(['Buffer probe.ts', 'process probe.ts']);
   }, 60000);
 });
 
@@ -85,22 +85,22 @@ describe('the browser bundle in a context without Node globals', () => {
   }, 60000);
 
   it('has no Node globals', () => {
-    for (const g of [...NODE_GLOBALS, 'setTimeout', 'module', 'exports']) expect(vm.runInContext(`typeof ${g}`, ctx), g).toBe('undefined');
+    for (const global of [...NODE_GLOBALS, 'setTimeout', 'module', 'exports']) expect(vm.runInContext(`typeof ${global}`, ctx), global).toBe('undefined');
   });
 
   it('applyToXml places an element on a hand-made drawing exactly like Node', async () => {
     const xml = fixture('orders.bpmn');
     const ops = [{ op: 'add', kind: 'userTask', name: 'Ship goods', after: 'Task_A' }];
     const lines: string[] = [];
-    const there = await browser.applyToXml(xml, JSON.stringify(ops), { debug: (l) => lines.push(l) });
+    const there = await browser.applyToXml(xml, JSON.stringify(ops), { debug: (line) => lines.push(line) });
     const here = await core.applyToXml(xml, ops);
     expect(there.result.layout.mode).toBe('incremental');
-    expect(there.result.created.map((c) => c.id)).toContain('Task_ShipGoods'); // the file's id style (Task_)
+    expect(there.result.created.map((change) => change.id)).toContain('Task_ShipGoods'); // the file's id style (Task_)
     expect(there.unchanged).toBe(false);
     expect(there.xml).toBe(here.xml);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));
     // the debug hook works without process.env
-    expect(lines.some((l) => l.startsWith('[route] '))).toBe(true);
+    expect(lines.some((line) => line.startsWith('[route] '))).toBe(true);
   });
 
   it('keeps flow ids (keepFlowIds) and reports the stale one like Node', async () => {
@@ -112,7 +112,7 @@ describe('the browser bundle in a context without Node globals', () => {
     const xml = (await core.applyToXml((await core.newXml({ processName: 'Order' })).xml, ops)).xml;
     const splice = [{ op: 'add', kind: 'task', name: 'Book', after: 'Activity_Check' }];
     const there = await browser.applyToXml(xml, splice, { keepFlowIds: true });
-    expect(there.result.warnings.added.map((w) => `${w.code} ${w.element}`)).toEqual(['W_FLOW_ID_STALE Flow_CheckToDone']);
+    expect(there.result.warnings.added.map((warning) => `${warning.code} ${warning.element}`)).toEqual(['W_FLOW_ID_STALE Flow_CheckToDone']);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify((await core.applyToXml(xml, splice, { keepFlowIds: true })).result));
   });
 
@@ -188,18 +188,18 @@ describe('the browser bundle in a context without Node globals', () => {
     };
     /** every task is reached by a sequence flow */
     const reached = (xml: string): Array<{ severity: string; ruleId: string; message: string; element: string }> =>
-      [...xml.matchAll(/<bpmn:\w*[tT]ask id="([^"]+)"/g)].filter((m) => !xml.includes(`targetRef="${m[1]}"`)).map((m) => ({ severity: 'ERROR', ruleId: 'flow/unreachable', message: `${m[1]} is never reached`, element: m[1]! }));
+      [...xml.matchAll(/<bpmn:\w*[tT]ask id="([^"]+)"/g)].filter((match) => !xml.includes(`targetRef="${match[1]}"`)).map((match) => ({ severity: 'ERROR', ruleId: 'flow/unreachable', message: `${match[1]} is never reached`, element: match[1]! }));
     const ops = [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }];
     const opts = { validators: [host, reached] };
     const there = await browser.applyToXml(styled, ops, opts);
     expect(phases).toEqual(['before:true', 'after:true']);
-    expect(there.result.created.map((c) => c.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
-    expect(there.result.validation.validators?.map((v) => v.name)).toEqual(['host', 'reached']);
+    expect(there.result.created.map((change) => change.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
+    expect(there.result.validation.validators?.map((validator) => validator.name)).toEqual(['host', 'reached']);
     const here = await core.applyToXml(styled, ops, opts);
     expect(there.xml).toBe(here.xml);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));
     const report = await browser.validateXml(here.xml, { validators: [reached] });
-    expect(report.validators?.map((v) => v.name)).toEqual(['reached']);
+    expect(report.validators?.map((validator) => validator.name)).toEqual(['reached']);
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(here.xml, { validators: [reached] })));
     await expect(browser.applyToXml(styled, [{ op: 'add', kind: 'task', name: 'Loose', in: 'Process_Styled' }], { validators: [reached] })).rejects.toMatchObject({ code: 'E_VALIDATION', name: 'CliError' });
   });
@@ -262,21 +262,21 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   beforeAll(async () => {
     bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
     expect(bundle.violations).toEqual([]);
-    const profileOf = (c: Chunk): 'c7' | 'c8' | undefined => (c.inputs.includes('src/platform/profiles/C7Profile.ts') ? 'c7' : c.inputs.includes('src/platform/profiles/C8Profile.ts') ? 'c8' : undefined);
-    files = bundle.chunks.map((c) => {
-      const text = c.text.replace(/(["'])\.\/([\w.-]+)\.js\1/g, (_m, q: string, name: string) => `${q}./${name}.mjs${q}`);
-      return { name: basename(c.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(c) };
+    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes('src/platform/profiles/C7Profile.ts') ? 'c7' : chunk.inputs.includes('src/platform/profiles/C8Profile.ts') ? 'c8' : undefined);
+    files = bundle.chunks.map((chunk) => {
+      const text = chunk.text.replace(/(["'])\.\/([\w.-]+)\.js\1/g, (_m, quote: string, name: string) => `${quote}./${name}.mjs${quote}`);
+      return { name: basename(chunk.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(chunk) };
     });
     // the rule modules are chunks of their own, apart from what the entry loads statically
-    const visit = (c: Chunk | undefined): void => {
-      if (!c || initial.has(c.path)) return;
-      initial.add(c.path);
-      for (const p of c.imports) visit(bundle.chunks.find((x) => x.path === p));
+    const visit = (chunk: Chunk | undefined): void => {
+      if (!chunk || initial.has(chunk.path)) return;
+      initial.add(chunk.path);
+      for (const importPath of chunk.imports) visit(bundle.chunks.find((candidate) => candidate.path === importPath));
     };
     visit(bundle.entry);
-    const initialInputs = bundle.chunks.filter((c) => initial.has(c.path)).flatMap((c) => c.inputs);
-    expect(initialInputs.filter((f) => /^src\/platform\/profiles\/(EngineProfile|EngineRules|RuleRun|C7Profile|C8Profile|FeelExpression|FeelParser|FeelError|TimerValue|SchemaText|BpmnSchema|utils\/\w+|c[78]\/\w+|c[78]\/utils\/\w+)\.ts$/.test(f))).toEqual([]);
-    expect(files.filter((f) => f.profile).map((f) => f.profile).sort()).toEqual(['c7', 'c8']);
+    const initialInputs = bundle.chunks.filter((chunk) => initial.has(chunk.path)).flatMap((chunk) => chunk.inputs);
+    expect(initialInputs.filter((file) => /^src\/platform\/profiles\/(EngineProfile|EngineRules|RuleRun|C7Profile|C8Profile|FeelExpression|FeelParser|FeelError|TimerValue|SchemaText|BpmnSchema|utils\/\w+|c[78]\/\w+|c[78]\/utils\/\w+)\.ts$/.test(file))).toEqual([]);
+    expect(files.filter((file) => file.profile).map((file) => file.profile).sort()).toEqual(['c7', 'c8']);
     dir = realpathSync(mkdtempSync(join(tmpdir(), 'bpmn-lazy-profiles-')));
     writeFileSync(join(dir, 'import.cjs'), 'module.exports = (url) => import(url);\n');
     nativeImport = createRequire(import.meta.url)(join(dir, 'import.cjs')) as typeof nativeImport;
@@ -292,18 +292,18 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   async function fresh(): Promise<{ lib: typeof core; at: string; profiles: () => string[] }> {
     const at = join(dir, `i${count++}`);
     mkdirSync(at);
-    for (const f of files) writeFileSync(join(at, f.name), f.text);
+    for (const file of files) writeFileSync(join(at, file.name), file.text);
     const base = `${pathToFileURL(at).href}/`;
     const lib = (await nativeImport(`${base}index.mjs`)) as typeof core;
-    const byName = new Map(files.map((f) => [f.name, f.profile]));
-    const profiles = (): string[] => loads().filter((u) => u.startsWith(base)).flatMap((u) => byName.get(u.slice(base.length)) ?? []);
+    const byName = new Map(files.map((file) => [file.name, file.profile]));
+    const profiles = (): string[] => loads().filter((url) => url.startsWith(base)).flatMap((url) => byName.get(url.slice(base.length)) ?? []);
     return { lib, at, profiles };
   }
 
   it('the entry chunk is the one of the requested entry, though esbuild makes every import() target an entry point', () => {
-    expect(bundle.chunks.filter((c) => c.entry).map((c) => c.entryPoint)).toEqual(['src/index.ts']);
+    expect(bundle.chunks.filter((chunk) => chunk.entry).map((chunk) => chunk.entryPoint)).toEqual(['src/index.ts']);
     expect(bundle.entry.entryPoint).toBe('src/index.ts');
-    expect(bundle.chunks.map((c) => c.entryPoint)).toEqual(expect.arrayContaining(['src/platform/profiles/C7Profile.ts', 'src/platform/profiles/C8Profile.ts']));
+    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining(['src/platform/profiles/C7Profile.ts', 'src/platform/profiles/C8Profile.ts']));
   });
 
   it('the rule chunks import nothing the entry loads (a host whose entry module awaits a call at top level does not wait for itself)', () => {
@@ -312,10 +312,10 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     // with a top-level await in the host's entry module that never settles.
     const reach = (start: string): Set<string> => {
       const seen = new Set<string>();
-      const visit = (f: string): void => {
-        if (seen.has(f) || !bundle.graph[f]) return;
-        seen.add(f);
-        for (const g of bundle.graph[f]) visit(g);
+      const visit = (module: string): void => {
+        if (seen.has(module) || !bundle.graph[module]) return;
+        seen.add(module);
+        for (const dependency of bundle.graph[module]) visit(dependency);
       };
       visit(start);
       return seen;
@@ -324,12 +324,12 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     expect(core.has('src/model/utils/moddle.ts') && core.has('src/platform/profiles/PlatformProfiles.ts')).toBe(true);
     for (const rules of ['src/platform/profiles/C7Profile.ts', 'src/platform/profiles/C8Profile.ts']) {
       const own = [...reach(rules)];
-      expect(own.filter((f) => core.has(f)), rules).toEqual([]);
-      expect(own.flatMap((f) => bundle.graph[f] ?? []).filter((g) => core.has(g)), rules).toEqual([]);
-      const chunk = bundle.chunks.find((c) => c.inputs.includes(rules))!;
-      expect(chunk.imports.filter((p) => initial.has(p)), rules).toEqual([]);
+      expect(own.filter((module) => core.has(module)), rules).toEqual([]);
+      expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency)), rules).toEqual([]);
+      const chunk = bundle.chunks.find((chunk) => chunk.inputs.includes(rules))!;
+      expect(chunk.imports.filter((importPath) => initial.has(importPath)), rules).toEqual([]);
     }
-    expect(bundle.chunks.find((c) => c.inputs.includes('src/platform/profiles/C8Profile.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/profiles/FeelParser.ts', 'src/platform/profiles/FeelExpression.ts', 'src/platform/profiles/TimerValue.ts', 'src/platform/profiles/SchemaText.ts', 'src/platform/profiles/BpmnSchema.ts']));
+    expect(bundle.chunks.find((chunk) => chunk.inputs.includes('src/platform/profiles/C8Profile.ts'))!.inputs).toEqual(expect.arrayContaining(['src/platform/profiles/FeelParser.ts', 'src/platform/profiles/FeelExpression.ts', 'src/platform/profiles/TimerValue.ts', 'src/platform/profiles/SchemaText.ts', 'src/platform/profiles/BpmnSchema.ts']));
   });
 
   it('the instances load natively and record what they evaluate', async () => {
@@ -353,10 +353,10 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     const report = await lib.validateXml(plain, hosted);
     expect(report.ok).toBe(false);
     expect(report.errors).toEqual([expect.objectContaining({ code: 'E_HOST_LOOSE', validator: 'host', severity: 'error', element: 'Task_Recv' })]);
-    expect(report.warnings.map((w) => w.code)).not.toContain('W_DEAD_END');
+    expect(report.warnings.map((warning) => warning.code)).not.toContain('W_DEAD_END');
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(plain, hosted)));
     const edited = await lib.applyToXml(plain, rename, hosted);
-    expect(edited.result.validation.validators?.[0]?.preexisting.map((i) => i.code)).toEqual(['E_HOST_LOOSE']);
+    expect(edited.result.validation.validators?.[0]?.preexisting.map((finding) => finding.code)).toEqual(['E_HOST_LOOSE']);
     expect(JSON.stringify(edited.result)).toBe(JSON.stringify((await core.applyToXml(plain, rename, hosted)).result));
     // the library's MutationResult keeps the pre-existing error among the warnings
     const mutated = await lib.mutateDoc(await lib.Doc.fromXml(plain), rename as core.Op[], hosted);
@@ -395,7 +395,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   });
 
   it('a batch that turns a plain file into a Camunda 7 / 8 file loads the rules after the ops and reports the added findings like 0.4.0', async () => {
-    const brief = (findings: Array<{ code: string; element?: string; related?: string[] }> | undefined): string[] => (findings ?? []).map((f) => [f.code, f.element, ...(f.related ?? [])].join(' '));
+    const brief = (findings: Array<{ code: string; element?: string; related?: string[] }> | undefined): string[] => (findings ?? []).map((finding) => [finding.code, finding.element, ...(finding.related ?? [])].join(' '));
     const first = await fresh();
     const toSeven = await first.lib.applyToXml(plain, toC7);
     expect(first.profiles()).toEqual(['c7']);
@@ -445,7 +445,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
 
   it('a profile chunk that fails to load rejects with E_PROFILE_LOAD before a result exists; a later call imports it again (Node loads it)', async () => {
     const { lib, at, profiles } = await fresh();
-    const chunk = join(at, files.find((f) => f.profile === 'c8')!.name);
+    const chunk = join(at, files.find((file) => file.profile === 'c8')!.name);
     renameSync(chunk, `${chunk}.gone`);
     // a browser may keep the failed module fetch until the page reloads: the hint says so
     await expect(lib.validateXml(c8)).rejects.toMatchObject({ code: 'E_PROFILE_LOAD', category: 'io', details: { platform: 'c8', hint: expect.stringContaining('until the page reloads') } });

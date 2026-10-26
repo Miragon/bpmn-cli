@@ -39,7 +39,7 @@ export class EditTransaction {
         await this.guard();
         const diagram = await DiagramUpdate.capture(this.doc, this.ops, this.opts);
         const findings = await FindingBaseline.capture(this.doc, { platform: this.opts.platform, force: this.opts.force, validators: this.opts.validators, file: this.opts.file ?? this.doc.file, ops: this.ops });
-        const importWarnings = reportedImportWarnings(this.doc).map((w) => w.message.split('\n')[0]!);
+        const importWarnings = reportedImportWarnings(this.doc).map((warning) => warning.message.split('\n')[0]!);
         const batch = this.runOps();
         await this.validate(findings, batch);
         const { xml, layout } = await diagram.apply(this.edit, batch.ops, batch.changes);
@@ -73,7 +73,7 @@ export class EditTransaction {
     const drops = this.edit.droppedContent;
     const first = drops[0];
     if (!first) return;
-    const removed = drops.flatMap((d) => d.removed);
+    const removed = drops.flatMap((drop) => drop.removed);
     const shown = removed.slice(0, 8).join(', ') + (removed.length > 8 ? ` and ${removed.length - 8} more` : '');
     throw modelError('E_WOULD_DROP_CONTENT', `Retyping ${first.element} to ${first.kind} would delete its content (${shown}); nothing was written`, {
       element: first.element,

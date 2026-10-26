@@ -76,11 +76,11 @@ export class ElementConnector {
     ElementConnector.assertMessageEndpoint(target, 'target');
     const ps = this.participantFor(source);
     const pt = this.participantFor(target);
-    for (const [el, p] of [
+    for (const [el, property] of [
       [source, ps],
       [target, pt],
     ] as const) {
-      if (!p) {
+      if (!property) {
         throw modelError('E_NO_PARTICIPANT', `${ElementConnector.describe(el)} is not inside a participant; message flows only connect pools`, {
           element: idOf(el),
           hint: 'Bind its process to a participant with `add participant "<name>" --process <processId>`.',
@@ -116,17 +116,17 @@ export class ElementConnector {
   private existingConnection(kind: ConnectionKind, source: El, target: El): El | undefined {
     switch (kind) {
       case 'sequenceFlow':
-        return this.doc.outgoing(source).find((f) => f.get<El | undefined>('targetRef') === target);
+        return this.doc.outgoing(source).find((flow) => flow.get<El | undefined>('targetRef') === target);
       case 'messageFlow':
-        return this.doc.messageFlows().find((f) => f.get<El | undefined>('sourceRef') === source && f.get<El | undefined>('targetRef') === target);
+        return this.doc.messageFlows().find((flow) => flow.get<El | undefined>('sourceRef') === source && flow.get<El | undefined>('targetRef') === target);
       case 'association': {
-        const containers = [artifactContainerOf(source), artifactContainerOf(target)].filter((c): c is El => !!c);
-        for (const c of containers) {
-          const hit = many(c, 'artifacts').find((a) => {
-            if (!is(a, 'bpmn:Association')) return false;
-            const s = a.get<El | undefined>('sourceRef');
-            const t = a.get<El | undefined>('targetRef');
-            return (s === source && t === target) || (s === target && t === source);
+        const containers = [artifactContainerOf(source), artifactContainerOf(target)].filter((container): container is El => !!container);
+        for (const container of containers) {
+          const hit = many(container, 'artifacts').find((artifact) => {
+            if (!is(artifact, 'bpmn:Association')) return false;
+            const artifactSource = artifact.get<El | undefined>('sourceRef');
+            const artifactTarget = artifact.get<El | undefined>('targetRef');
+            return (artifactSource === source && artifactTarget === target) || (artifactSource === target && artifactTarget === source);
           });
           if (hit) return hit;
         }
@@ -134,9 +134,9 @@ export class ElementConnector {
       }
       case 'dataAssociation':
         if (isDataReference(source)) {
-          return (target.get<El[] | undefined>('dataInputAssociations') ?? []).find((a) => many(a, 'sourceRef').includes(source));
+          return (target.get<El[] | undefined>('dataInputAssociations') ?? []).find((association) => many(association, 'sourceRef').includes(source));
         }
-        return (source.get<El[] | undefined>('dataOutputAssociations') ?? []).find((a) => a.get<El | undefined>('targetRef') === target);
+        return (source.get<El[] | undefined>('dataOutputAssociations') ?? []).find((association) => association.get<El | undefined>('targetRef') === target);
       default:
         return undefined;
     }
@@ -184,7 +184,7 @@ export class ElementConnector {
     }
     if (existing) {
       const all = (kind === 'sequenceFlow' ? this.doc.outgoing(source) : this.doc.messageFlows()).filter(
-        (f) => f.get<El | undefined>('sourceRef') === source && f.get<El | undefined>('targetRef') === target,
+        (flow) => flow.get<El | undefined>('sourceRef') === source && flow.get<El | undefined>('targetRef') === target,
       );
       cs.warn({
         code: 'W_DUPLICATE_FLOW',

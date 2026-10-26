@@ -10,13 +10,13 @@ import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';
 /* tiny XML builder: nodes + flows with incoming/outgoing maintained   */
 /* ------------------------------------------------------------------ */
 
-interface N {
+interface NodeSpec {
   tag: string;
   id: string;
   attrs?: string;
   inner?: string;
 }
-interface F {
+interface FlowSpec {
   id: string;
   from: string;
   to: string;
@@ -24,21 +24,21 @@ interface F {
   inner?: string;
 }
 
-function body(nodes: N[], flows: F[] = [], extra = ''): string {
+function body(nodes: NodeSpec[], flows: FlowSpec[] = [], extra = ''): string {
   const inc = new Map<string, string[]>();
   const out = new Map<string, string[]>();
-  for (const f of flows) {
-    out.set(f.from, [...(out.get(f.from) ?? []), f.id]);
-    inc.set(f.to, [...(inc.get(f.to) ?? []), f.id]);
+  for (const flow of flows) {
+    out.set(flow.from, [...(out.get(flow.from) ?? []), flow.id]);
+    inc.set(flow.to, [...(inc.get(flow.to) ?? []), flow.id]);
   }
-  const nodeXml = nodes.map((n) => {
+  const nodeXml = nodes.map((node) => {
     const links = [
-      ...(inc.get(n.id) ?? []).map((i) => `<bpmn:incoming>${i}</bpmn:incoming>`),
-      ...(out.get(n.id) ?? []).map((o) => `<bpmn:outgoing>${o}</bpmn:outgoing>`),
+      ...(inc.get(node.id) ?? []).map((incoming) => `<bpmn:incoming>${incoming}</bpmn:incoming>`),
+      ...(out.get(node.id) ?? []).map((outgoing) => `<bpmn:outgoing>${outgoing}</bpmn:outgoing>`),
     ].join('');
-    return `<bpmn:${n.tag} id="${n.id}" ${n.attrs ?? ''}>${links}${n.inner ?? ''}</bpmn:${n.tag}>`;
+    return `<bpmn:${node.tag} id="${node.id}" ${node.attrs ?? ''}>${links}${node.inner ?? ''}</bpmn:${node.tag}>`;
   });
-  const flowXml = flows.map((f) => `<bpmn:sequenceFlow id="${f.id}" sourceRef="${f.from}" targetRef="${f.to}" ${f.attrs ?? ''}>${f.inner ?? ''}</bpmn:sequenceFlow>`);
+  const flowXml = flows.map((flow) => `<bpmn:sequenceFlow id="${flow.id}" sourceRef="${flow.from}" targetRef="${flow.to}" ${flow.attrs ?? ''}>${flow.inner ?? ''}</bpmn:sequenceFlow>`);
   return [...nodeXml, ...flowXml, extra].join('\n');
 }
 
@@ -46,7 +46,7 @@ const DI_NS = 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc=
 
 function diagram(root: string, shapes: Array<{ id: string; expanded?: boolean }>): string {
   const shapeXml = shapes
-    .map((s) => `<bpmndi:BPMNShape id="Shape_${s.id}" bpmnElement="${s.id}"${s.expanded ? ' isExpanded="true"' : ''}><dc:Bounds x="0" y="0" width="100" height="80" /></bpmndi:BPMNShape>`)
+    .map((shape) => `<bpmndi:BPMNShape id="Shape_${shape.id}" bpmnElement="${shape.id}"${shape.expanded ? ' isExpanded="true"' : ''}><dc:Bounds x="0" y="0" width="100" height="80" /></bpmndi:BPMNShape>`)
     .join('');
   return `<bpmndi:BPMNDiagram id="Diagram_1"><bpmndi:BPMNPlane id="Plane_1" bpmnElement="${root}">${shapeXml}</bpmndi:BPMNPlane></bpmndi:BPMNDiagram>`;
 }
@@ -55,7 +55,7 @@ const timer = (value: string) => `<bpmn:timerEventDefinition><bpmn:timeDuration 
 const condition = (expr: string) => `<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${expr}</bpmn:conditionExpression>`;
 
 function ids(nodes: ViewNode[]): string[] {
-  return nodes.map((n) => n.id);
+  return nodes.map((node) => node.id);
 }
 
 /* ------------------------------------------------------------------ */
@@ -67,13 +67,13 @@ describe('buildView / renderView', () => {
     const doc = await linearDoc();
     const view = buildView(doc);
     expect(view.processes).toHaveLength(1);
-    const p = view.processes[0]!;
-    expect(p.id).toBe('Process_1');
-    expect(p.executable).toBe(true);
-    expect(ids(p.nodes)).toEqual(['Start', 'Task_A', 'End']);
-    expect(p.nodes.map((n) => n.kind)).toEqual(['startEvent', 'userTask', 'endEvent']);
-    expect(p.nodes[0]!.outgoing).toEqual([{ id: 'F1', target: 'Task_A' }]);
-    expect(p.nodes[1]!.incoming).toEqual(['F1']);
+    const mainProcess = view.processes[0]!;
+    expect(mainProcess.id).toBe('Process_1');
+    expect(mainProcess.executable).toBe(true);
+    expect(ids(mainProcess.nodes)).toEqual(['Start', 'Task_A', 'End']);
+    expect(mainProcess.nodes.map((node) => node.kind)).toEqual(['startEvent', 'userTask', 'endEvent']);
+    expect(mainProcess.nodes[0]!.outgoing).toEqual([{ id: 'F1', target: 'Task_A' }]);
+    expect(mainProcess.nodes[1]!.incoming).toEqual(['F1']);
     expect(view.problems).toEqual([]);
     expect(renderView(view)).toBe(
       ['process Process_1 executable', '  startEvent Start "Started" -> Task_A (F1)', '  userTask Task_A "Do A" -> End (F2)', '  endEvent End "Done"', 'problems: none'].join('\n'),
@@ -82,10 +82,10 @@ describe('buildView / renderView', () => {
 
   it('is deterministic, contains no coordinates and no undefined keys', async () => {
     const doc = await linearDoc();
-    const a = renderView(buildView(doc));
-    const b = renderView(buildView(doc));
-    expect(a).toBe(b);
-    expect(a).not.toMatch(/\b[xy]=\d/);
+    const firstRender = renderView(buildView(doc));
+    const secondRender = renderView(buildView(doc));
+    expect(firstRender).toBe(secondRender);
+    expect(firstRender).not.toMatch(/\b[xy]=\d/);
     expect(JSON.stringify(buildView(doc))).not.toContain('undefined');
   });
 
@@ -160,11 +160,11 @@ describe('buildView / renderView', () => {
     const view = buildView(doc);
     const nodes = view.processes[0]!.nodes;
     expect(ids(nodes)).toEqual(['Start', 'A', 'End', 'Old', 'Loop1', 'Loop2']);
-    expect(nodes.map((n) => !!n.unreachable)).toEqual([false, false, false, true, true, true]);
+    expect(nodes.map((node) => !!node.unreachable)).toEqual([false, false, false, true, true, true]);
     const text = renderView(view);
     expect(text).toContain('  ! unreachable: task Old "Old step"');
     expect(text).toContain('  ! unreachable: task Loop1 -> Loop2 (L1)');
-    expect(view.problems.filter((p) => p.code === 'W_UNREACHABLE').map((p) => p.element)).toEqual(['Old', 'Loop1', 'Loop2']);
+    expect(view.problems.filter((problem) => problem.code === 'W_UNREACHABLE').map((problem) => problem.element)).toEqual(['Old', 'Loop1', 'Loop2']);
   });
 
   it('nests boundary events under their host and follows their flows', async () => {
@@ -195,11 +195,11 @@ describe('buildView / renderView', () => {
     const nodes = view.processes[0]!.nodes;
     expect(ids(nodes)).toEqual(['Start', 'A', 'End', 'Remind', 'Failed']);
     const host = nodes[1]!;
-    expect(host.boundary!.map((b) => [b.id, b.kind, b.trigger, b.nonInterrupting])).toEqual([
+    expect(host.boundary!.map((boundary) => [boundary.id, boundary.kind, boundary.trigger, boundary.nonInterrupting])).toEqual([
       ['Timeout', 'boundaryEvent:timer', 'PT2D', true],
       ['Err', 'boundaryEvent:error', 'error PaymentFailed (PAY-001)', undefined],
     ]);
-    expect(nodes.some((n) => n.unreachable)).toBe(false);
+    expect(nodes.some((node) => node.unreachable)).toBe(false);
     const text = renderView(view);
     expect(text).toContain('  userTask A "Check" -> End (F2)\n    boundaryEvent:timer Timeout "2 days" [PT2D, non-interrupting] -> Remind (F3)\n    boundaryEvent:error Err [error PaymentFailed (PAY-001)] -> Failed (F5)');
     expect(text).toContain('root: error Error_1 "PaymentFailed" (PAY-001)');
@@ -321,7 +321,7 @@ describe('buildView / renderView', () => {
       { id: 'Lane_Sales', name: 'Sales', members: ['Start'], lanes: [{ id: 'Lane_Inner', name: 'Inner', members: ['A'] }] },
       { id: 'Lane_IT', name: 'IT', members: ['End'] },
     ]);
-    expect(view.processes[0]!.nodes.map((n) => n.lane)).toEqual(['Lane_Sales', 'Lane_Inner', 'Lane_IT']);
+    expect(view.processes[0]!.nodes.map((node) => node.lane)).toEqual(['Lane_Sales', 'Lane_Inner', 'Lane_IT']);
     // every node carries its (deepest) lane; the lanes section is the tree of names
     const text = renderView(view);
     expect(text).toContain('  startEvent Start [lane=Lane_Sales] -> A (F1)\n  task A [lane=Lane_Inner] -> End (F2)\n  endEvent End [lane=Lane_IT]');
@@ -381,7 +381,7 @@ describe('buildView / renderView', () => {
         { id: 'Flow_M2', source: 'Pay', target: 'Receive', message: 'Payment', sourceName: 'Pay', targetName: 'Receive payment' },
       ],
     });
-    expect(view.processes.map((p) => [p.id, p.executable, p.participant])).toEqual([
+    expect(view.processes.map((viewProcess) => [viewProcess.id, viewProcess.executable, viewProcess.participant])).toEqual([
       ['Process_Shop', true, 'Participant_Shop'],
       ['Process_Bank', false, 'Participant_Bank'],
     ]);
@@ -545,26 +545,26 @@ describe('elementDetail / renderDetail', () => {
 
   it('describes a task with lane, flows, boundary events, extensions and vendor attrs', async () => {
     const doc = await docFromXml(XML);
-    const d = elementDetail(doc, doc.require('A'));
-    expect(d).toMatchObject({ id: 'A', kind: 'userTask', type: 'bpmn:UserTask', name: 'Check', scope: 'Process_1', process: 'Process_1', lane: 'Lane_1', boundary: ['Timeout'] });
-    expect(d.incoming).toEqual([{ id: 'F1', source: 'Start' }]);
-    expect(d.outgoing).toEqual([{ id: 'F2', target: 'Gw' }]);
-    expect(d.attrs).toEqual({ 'camunda:assignee': 'bob' });
-    expect(d.extensions.map((e) => (e as { type: string }).type)).toEqual(['zeebe:taskDefinition']);
-    const text = renderDetail(d);
+    const detail = elementDetail(doc, doc.require('A'));
+    expect(detail).toMatchObject({ id: 'A', kind: 'userTask', type: 'bpmn:UserTask', name: 'Check', scope: 'Process_1', process: 'Process_1', lane: 'Lane_1', boundary: ['Timeout'] });
+    expect(detail.incoming).toEqual([{ id: 'F1', source: 'Start' }]);
+    expect(detail.outgoing).toEqual([{ id: 'F2', target: 'Gw' }]);
+    expect(detail.attrs).toEqual({ 'camunda:assignee': 'bob' });
+    expect(detail.extensions.map((extension) => (extension as { type: string }).type)).toEqual(['zeebe:taskDefinition']);
+    const text = renderDetail(detail);
     expect(text).toContain('id: A\nkind: userTask\ntype: bpmn:UserTask\nname: Check\nscope: Process_1\nprocess: Process_1\nlane: Lane_1');
     expect(text).toContain('incoming: F1 from Start\noutgoing: F2 to Gw\nboundary: Timeout\nextensions:\n  zeebe:taskDefinition type="check"\ncamunda:assignee: bob');
   });
 
   it('describes a gateway with its default flow and conditional branches', async () => {
     const doc = await docFromXml(XML);
-    const d = elementDetail(doc, doc.require('Gw'));
-    expect(d.properties['default']).toBe('Flow_no');
-    expect(d.outgoing).toEqual([
+    const detail = elementDetail(doc, doc.require('Gw'));
+    expect(detail.properties['default']).toBe('Flow_no');
+    expect(detail.outgoing).toEqual([
       { id: 'Flow_yes', target: 'Sub', name: 'yes', condition: '${ok}' },
       { id: 'Flow_no', target: 'End', name: 'no', default: true },
     ]);
-    expect(renderDetail(d)).toContain('outgoing: Flow_yes to Sub "yes" if ${ok}; Flow_no to End "no" default');
+    expect(renderDetail(detail)).toContain('outgoing: Flow_yes to Sub "yes" if ${ok}; Flow_no to End "no" default');
   });
 
   it('describes a sequence flow, a boundary event, a sub-process and a lane', async () => {
@@ -599,14 +599,14 @@ describe('findElements', () => {
   it('matches ids and names case-insensitively and filters by kind', async () => {
     const doc = await linearDoc();
     expect(findElements(doc, 'do a')).toEqual([{ id: 'Task_A', kind: 'userTask', name: 'Do A', scope: 'Process_1' }]);
-    expect(findElements(doc, 'START').map((e) => e.id)).toEqual(['Start']);
-    expect(findElements(doc, '', 'user').map((e) => e.id)).toEqual(['Task_A']);
-    expect(findElements(doc, '', 'bpmn:EndEvent').map((e) => e.id)).toEqual(['End']);
-    expect(findElements(doc, '', 'sequenceFlow').map((e) => e.id)).toEqual(['F1', 'F2']);
+    expect(findElements(doc, 'START').map((element) => element.id)).toEqual(['Start']);
+    expect(findElements(doc, '', 'user').map((element) => element.id)).toEqual(['Task_A']);
+    expect(findElements(doc, '', 'bpmn:EndEvent').map((element) => element.id)).toEqual(['End']);
+    expect(findElements(doc, '', 'sequenceFlow').map((element) => element.id)).toEqual(['F1', 'F2']);
     expect(findElements(doc, 'nothing-like-this')).toEqual([]);
     expect(findElements(doc, '', 'startEvent:message')).toEqual([]);
-    expect(findElements(doc, '', 'startEvent:none').map((e) => e.id)).toEqual(['Start']);
-    expect(findElements(doc, '').map((e) => e.id)).toEqual(['Process_1', 'Start', 'Task_A', 'End', 'F1', 'F2']);
+    expect(findElements(doc, '', 'startEvent:none').map((element) => element.id)).toEqual(['Start']);
+    expect(findElements(doc, '').map((element) => element.id)).toEqual(['Process_1', 'Start', 'Task_A', 'End', 'F1', 'F2']);
   });
 
   it('rejects unknown kinds with a usage error', async () => {
@@ -693,7 +693,7 @@ describe('reachability in the view', () => {
     const view = buildView(doc);
     expect(view.problems).toEqual([]);
     expect(ids(view.processes[0]!.nodes)).toEqual(['Start', 'Throw', 'Catch', 'AdHoc', 'End']);
-    expect(view.processes[0]!.nodes.every((n) => !n.unreachable)).toBe(true);
+    expect(view.processes[0]!.nodes.every((node) => !node.unreachable)).toBe(true);
     const text = renderView(view);
     expect(text).not.toContain('unreachable');
     expect(text).toContain('  intermediateThrowEvent:link Throw [link L1]\n  intermediateCatchEvent:link Catch [link L1] -> AdHoc (F2)\n  adHocSubProcess AdHoc [expanded] -> End (F3)\n    task T1 "Free"\n    task T2\n');

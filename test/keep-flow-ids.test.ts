@@ -125,9 +125,9 @@ const MODELER = definitionsXml(`
     <bpmn:sequenceFlow id="Flow_0a1b2c3" sourceRef="StartEvent_1" targetRef="Activity_0k3x9qa" />
     <bpmn:sequenceFlow id="Flow_1q2w3e4" sourceRef="Activity_0k3x9qa" targetRef="Event_0zz81aa" />`);
 
-const stale = (ws: readonly Warning[]): Warning[] => ws.filter((w) => w.code === 'W_FLOW_ID_STALE');
+const stale = (ws: readonly Warning[]): Warning[] => ws.filter((warning) => warning.code === 'W_FLOW_ID_STALE');
 /** `<flow> <source>-><target> => <suggested id>` of each W_FLOW_ID_STALE. */
-const staleLines = (ws: readonly Warning[]): string[] => stale(ws).map((w) => `${w.element} ${w.related!.join('->')} => ${/ id=(\S+)`/.exec(w.hint!)![1]}`);
+const staleLines = (ws: readonly Warning[]): string[] => stale(ws).map((warning) => `${warning.element} ${warning.related!.join('->')} => ${/ id=(\S+)`/.exec(warning.hint!)![1]}`);
 
 /** Runs ops on CHAIN (or `xml`) with ids kept, without the pipeline. */
 async function kept(ops: Op[], xml = CHAIN): Promise<{ doc: Doc; warnings: Warning[]; renames: number; cs: ChangeSet }> {
@@ -138,20 +138,20 @@ async function kept(ops: Op[], xml = CHAIN): Promise<{ doc: Doc; warnings: Warni
 }
 
 /** The sequence flows of a change set: `created` / `removed` ids. */
-const flowIds = (changes: ChangeSet['created']): string[] => changes.filter((c) => c.kind === 'sequenceFlow').map((c) => c.id);
+const flowIds = (changes: ChangeSet['created']): string[] => changes.filter((change) => change.kind === 'sequenceFlow').map((change) => change.id);
 
 describe('keepFlowIds: a flow the file had keeps its id and the change names it', () => {
   it('a splice keeps the flow id, its DI edge and the default reference; one W_FLOW_ID_STALE with the rename command, no renamed', async () => {
     const xml = await drawnDefault();
-    const r = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook' }], { keepFlowIds: true });
-    expect(r.result.created.map((c) => c.id)).toEqual(['Activity_Review', 'Flow_ReviewToBook']);
-    expect(r.result.changed.map((c) => `${c.id}: ${c.detail}`)).toContain('Flow_OkToBook: Gateway_Ok -> Activity_Review (was -> Activity_Book)');
-    expect(r.result.changed.some((c) => c.detail?.includes('renamed from'))).toBe(false);
-    expect(r.result.renamed).toBeUndefined();
-    expect(r.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Ok?" default="Flow_OkToBook">');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_OkToBook" sourceRef="Gateway_Ok" targetRef="Activity_Review" />');
-    expect(r.xml).toContain('<bpmndi:BPMNEdge id="Flow_OkToBook_di" bpmnElement="Flow_OkToBook">');
-    expect(stale(r.result.warnings.added)).toEqual([
+    const result = await applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Review', flow: 'Flow_OkToBook' }], { keepFlowIds: true });
+    expect(result.result.created.map((change) => change.id)).toEqual(['Activity_Review', 'Flow_ReviewToBook']);
+    expect(result.result.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('Flow_OkToBook: Gateway_Ok -> Activity_Review (was -> Activity_Book)');
+    expect(result.result.changed.some((change) => change.detail?.includes('renamed from'))).toBe(false);
+    expect(result.result.renamed).toBeUndefined();
+    expect(result.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Ok?" default="Flow_OkToBook">');
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_OkToBook" sourceRef="Gateway_Ok" targetRef="Activity_Review" />');
+    expect(result.xml).toContain('<bpmndi:BPMNEdge id="Flow_OkToBook_di" bpmnElement="Flow_OkToBook">');
+    expect(stale(result.result.warnings.added)).toEqual([
       {
         code: 'W_FLOW_ID_STALE',
         message: 'Flow Flow_OkToBook kept its id, which names its old ends Gateway_Ok -> Activity_Book; it now runs Gateway_Ok -> Activity_Review',
@@ -161,7 +161,7 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
       },
     ]);
     // the hint's command renames it deliberately; nothing is stale any more
-    const renamed = await applyToXml(r.xml, [{ op: 'set', id: 'Flow_OkToBook', values: { id: 'Flow_OkToReview' } }], { keepFlowIds: true });
+    const renamed = await applyToXml(result.xml, [{ op: 'set', id: 'Flow_OkToBook', values: { id: 'Flow_OkToReview' } }], { keepFlowIds: true });
     expect(renamed.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Ok?" default="Flow_OkToReview">');
     expect(stale(renamed.result.warnings.added)).toEqual([]);
   });
@@ -178,12 +178,12 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
       [{ op: 'set', id: 'Flow_BookToDone', values: { source: 'Activity_Check' } }, 'Flow_BookToDone Activity_Check->Event_Done => Flow_CheckToDone'],
     ];
     for (const [op, line] of cases) {
-      const r = await kept([op]);
-      expect(staleLines(r.warnings), JSON.stringify(op)).toEqual([line]);
-      expect(r.renames, JSON.stringify(op)).toBe(0);
+      const result = await kept([op]);
+      expect(staleLines(result.warnings), JSON.stringify(op)).toEqual([line]);
+      expect(result.renames, JSON.stringify(op)).toBe(0);
       const flow = line.split(' ')[0]!;
       const [source, target] = line.split(' ')[1]!.split('->');
-      expect(flowBetween(r.doc, source!, target!)).toBe(flow);
+      expect(flowBetween(result.doc, source!, target!)).toBe(flow);
     }
   });
 
@@ -197,20 +197,20 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
     // Book's out-flow is its out-flow at the new place: changed, neither removed nor created
     expect(flowBetween(moved.doc, 'Activity_Book', 'Activity_Check')).toBe('Flow_BookToDone');
     expect([flowIds(moved.cs.created), flowIds(moved.cs.removed)]).toEqual([[], []]);
-    expect(moved.cs.changed.map((c) => `${c.id}: ${c.detail}`)).toContain('Flow_BookToDone: Activity_Book -> Activity_Check (was -> Event_Done)');
+    expect(moved.cs.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('Flow_BookToDone: Activity_Book -> Activity_Check (was -> Event_Done)');
     const bridged = await kept([{ op: 'remove', ids: ['Gateway_Join'], bridgeAll: true }], JOINED);
     expect(staleLines(bridged.warnings)).toEqual(['Flow_AToJoin Activity_A->Event_Done => Flow_AToDone', 'Flow_BToJoin Activity_B->Event_Done => Flow_BToDone']);
   });
 
   it('nodes moved together keep the flow between them, also when they are appended; later ops of the batch use every id', async () => {
-    const r = await applyToXml(LINE, [
+    const result = await applyToXml(LINE, [
       { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Event_Start' },
       { op: 'set', id: 'Flow_BToC', values: { name: 'go' } },
     ], { keepFlowIds: true, layout: false });
-    expect([flowIds(r.result.created), flowIds(r.result.removed)]).toEqual([[], []]);
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" name="go" sourceRef="Activity_B" targetRef="Activity_C" />');
+    expect([flowIds(result.result.created), flowIds(result.result.removed)]).toEqual([[], []]);
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" name="go" sourceRef="Activity_B" targetRef="Activity_C" />');
     // B -> C runs between its old ends again: no warning for it
-    expect(staleLines(r.result.warnings.added).sort()).toEqual([
+    expect(staleLines(result.result.warnings.added).sort()).toEqual([
       'Flow_AToB Activity_A->Event_Done => Flow_AToDone',
       'Flow_CToDone Activity_C->Activity_A => Flow_CToA',
       'Flow_StartToA Event_Start->Activity_B => Flow_StartToB',
@@ -226,13 +226,13 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
     // C is put back where it was, then Done: Done has no flow out, so C -> Done is taken out and put back by the append
     const tail = await applyToXml(LINE, [{ op: 'move', ids: ['Activity_C', 'Event_Done'], after: 'Activity_B' }], { keepFlowIds: true, layout: false });
     expect([flowIds(tail.result.created), flowIds(tail.result.removed)]).toEqual([[], []]);
-    expect(tail.result.warnings.added.map((w) => w.code)).toEqual([]);
+    expect(tail.result.warnings.added.map((warning) => warning.code)).toEqual([]);
     expect(tail.xml).toContain('<bpmn:sequenceFlow id="Flow_CToDone" sourceRef="Activity_C" targetRef="Event_Done" />');
     // Done has two flows in: B -> Done is removed like every other flow of a node that is not bridged, A -> Done stays A's
     const shared = await kept([{ op: 'move', ids: ['Activity_A', 'Event_Done'], after: 'Activity_B' }], SHARED_END);
     expect(flowBetween(shared.doc, 'Activity_A', 'Event_Done')).toBe('Flow_AToDone');
     expect([flowIds(shared.cs.created), flowIds(shared.cs.removed)]).toEqual([[], ['Flow_OkToA']]);
-    expect(shared.warnings.map((w) => w.code)).not.toContain('W_ID_SUFFIXED');
+    expect(shared.warnings.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
     // a gateway first: the next node is appended to it (a new branch), so its out-flow waits for that append
     const gateway = await kept([{ op: 'move', ids: ['Gateway_Ok', 'Activity_Book'], after: 'Event_Start' }]);
     expect(flowBetween(gateway.doc, 'Gateway_Ok', 'Activity_Book')).toBe('Flow_OkToBook');
@@ -245,46 +245,46 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
   });
 
   it('a moved node that is not bridged puts its out-flow back without the label and condition no bridge took, and says so; between its old ends it keeps them', async () => {
-    const r = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { keepFlowIds: true, layout: false });
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" sourceRef="Activity_B" targetRef="Event_Done" />');
-    const dropped = r.result.warnings.added.filter((w) => w.code === 'W_LABEL_DROPPED' || w.code === 'W_CONDITION_DROPPED');
-    expect(dropped.map((w) => `${w.code} ${w.element}: ${w.message}`)).toEqual([
+    const result = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { keepFlowIds: true, layout: false });
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" sourceRef="Activity_B" targetRef="Event_Done" />');
+    const dropped = result.result.warnings.added.filter((warning) => warning.code === 'W_LABEL_DROPPED' || warning.code === 'W_CONDITION_DROPPED');
+    expect(dropped.map((warning) => `${warning.code} ${warning.element}: ${warning.message}`)).toEqual([
       'W_LABEL_DROPPED Flow_BToC: Flow label "approved" of Flow_BToC was dropped while moving Activity_B: Activity_B was not bridged, so nothing at its old place took it, and Flow_BToC was put back at its new place without it',
       'W_CONDITION_DROPPED Flow_BToC: Condition of Flow_BToC was dropped while moving Activity_B: Activity_B was not bridged, so nothing at its old place took it, and Flow_BToC was put back at its new place without it',
     ]);
     // B before C: Flow_BToC is put back between its old ends, with its label and condition
     const same = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], before: 'Activity_C' }], { keepFlowIds: true, layout: false });
     expect(same.xml).toMatch(/<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C">\s*<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\$\{approved\}<\/bpmn:conditionExpression>/);
-    expect(same.result.warnings.added.map((w) => w.code)).not.toContain('W_LABEL_DROPPED');
+    expect(same.result.warnings.added.map((warning) => warning.code)).not.toContain('W_LABEL_DROPPED');
     // a bridged node: the bridge takes both (A -> C), nothing is dropped
     const bridged = await applyToXml(LINE.replace('id="Flow_BToC" sourceRef', 'id="Flow_BToC" name="approved" sourceRef'), [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { keepFlowIds: true, layout: false });
     expect(bridged.xml).toContain('<bpmn:sequenceFlow id="Flow_AToB" name="approved" sourceRef="Activity_A" targetRef="Activity_C" />');
-    expect(bridged.result.warnings.added.map((w) => w.code)).not.toContain('W_LABEL_DROPPED');
+    expect(bridged.result.warnings.added.map((warning) => warning.code)).not.toContain('W_LABEL_DROPPED');
     // by default the flow is removed and the change names it with its label, as before
     const renamed = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { layout: false });
     expect(renamed.result.removed).toContainEqual({ id: 'Flow_BToC', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_B -> Activity_C' });
-    expect(renamed.result.warnings.added.map((w) => w.code)).not.toContain('W_LABEL_DROPPED');
+    expect(renamed.result.warnings.added.map((warning) => warning.code)).not.toContain('W_LABEL_DROPPED');
   });
 
   it('a chain whose first node is not bridged: the flow to the next node, put back elsewhere and then between its old ends again, gets its label back', async () => {
     // A's splice puts A -> B back as A -> Done, B's splice after A ends it at B again
-    const r = await applyToXml(APART, [{ op: 'move', ids: ['Activity_A', 'Activity_B'], after: 'Activity_X' }], { keepFlowIds: true, layout: false });
-    expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_AToB" name="approved" sourceRef="Activity_A" targetRef="Activity_B">\s*<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\$\{approved\}<\/bpmn:conditionExpression>/);
-    expect(r.result.warnings.added.map((w) => w.code)).toEqual(['W_FLOW_ID_STALE']);
-    expect(r.result.changed.filter((c) => c.id === 'Flow_AToB')).toEqual([{ id: 'Flow_AToB', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_A -> Activity_B' }]);
+    const result = await applyToXml(APART, [{ op: 'move', ids: ['Activity_A', 'Activity_B'], after: 'Activity_X' }], { keepFlowIds: true, layout: false });
+    expect(result.xml).toMatch(/<bpmn:sequenceFlow id="Flow_AToB" name="approved" sourceRef="Activity_A" targetRef="Activity_B">\s*<bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\$\{approved\}<\/bpmn:conditionExpression>/);
+    expect(result.result.warnings.added.map((warning) => warning.code)).toEqual(['W_FLOW_ID_STALE']);
+    expect(result.result.changed.filter((change) => change.id === 'Flow_AToB')).toEqual([{ id: 'Flow_AToB', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_A -> Activity_B' }]);
     // its default marker comes back the same way
     const marked = APART.replace('<bpmn:task id="Activity_A" name="A">', '<bpmn:task id="Activity_A" name="A" default="Flow_AToB">').replace(/<bpmn:conditionExpression.*?<\/bpmn:conditionExpression>/, '');
     const def = await kept([{ op: 'move', ids: ['Activity_A', 'Activity_B'], after: 'Activity_X' }], marked);
     expect(def.doc.get('Activity_A')!.get<El>('default')).toBe(def.doc.get('Flow_AToB'));
-    expect(def.warnings.map((w) => w.code)).toEqual(['W_FLOW_ID_STALE']);
+    expect(def.warnings.map((warning) => warning.code)).toEqual(['W_FLOW_ID_STALE']);
   });
 
   it('a put-back default flow never carries a condition, and a default the placement gave wins over the marker the flow had', async () => {
     // B (two flows in, not bridged) before C, its old target: the prepend makes Flow_BToC the default flow, so its condition stays dropped
-    const r = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], before: 'Activity_C', default: true }], { keepFlowIds: true, layout: false });
-    expect(r.xml).toContain('<bpmn:task id="Activity_B" name="B" default="Flow_BToC">');
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C" />');
-    expect(r.result.warnings.added.filter((w) => w.code === 'W_CONDITION_DROPPED').map((w) => w.message)).toEqual([
+    const result = await applyToXml(JOIN_B, [{ op: 'move', ids: ['Activity_B'], before: 'Activity_C', default: true }], { keepFlowIds: true, layout: false });
+    expect(result.xml).toContain('<bpmn:task id="Activity_B" name="B" default="Flow_BToC">');
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C" />');
+    expect(result.result.warnings.added.filter((warning) => warning.code === 'W_CONDITION_DROPPED').map((warning) => warning.message)).toEqual([
       'Condition of Flow_BToC was dropped while moving Activity_B: Flow_BToC is now the default flow of Activity_B',
     ]);
     // the join's default flow comes back to Done, but the prepend made Join -> Archive the default, as asked (as by default)
@@ -294,7 +294,7 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
     const wins = await kept(ops, archive);
     expect(flowBetween(wins.doc, 'Gateway_Join', 'Event_Done')).toBe('Flow_JoinToDone');
     expect(wins.doc.get('Gateway_Join')!.get<El>('default')).toBe(wins.doc.get('Flow_JoinToArchive'));
-    expect(wins.cs.changed.filter((c) => c.id === 'Flow_JoinToDone').map((c) => c.detail)).toEqual(['Gateway_Join -> Event_Done (no longer the default flow of Gateway_Join)']);
+    expect(wins.cs.changed.filter((change) => change.id === 'Flow_JoinToDone').map((change) => change.detail)).toEqual(['Gateway_Join -> Event_Done (no longer the default flow of Gateway_Join)']);
     expect((await applyToXml(archive, ops, { layout: false })).xml).toContain('<bpmn:exclusiveGateway id="Gateway_Join" default="Flow_JoinToArchive">');
   });
 
@@ -323,16 +323,16 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
   });
 
   it('a flow created earlier in the same change follows its ends; one warning per flow, against its final ends', async () => {
-    const r = await applyToXml(await drawnDefault(), [
+    const result = await applyToXml(await drawnDefault(), [
       { op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' },
       { op: 'add', kind: 'task', name: 'Approve', after: 'Activity_Review' },
       { op: 'add', kind: 'task', name: 'Archive', before: 'Activity_Review' },
     ], { keepFlowIds: true });
     // Flow_ReviewToOk (made by the first op) was spliced by the second: renamed after its new ends, listed under its final id
-    expect(r.result.created.map((c) => c.id)).toEqual(['Activity_Review', 'Flow_ReviewToApprove', 'Activity_Approve', 'Flow_ApproveToOk', 'Activity_Archive', 'Flow_ArchiveToReview']);
-    expect(r.result.renamed).toBeUndefined();
+    expect(result.result.created.map((change) => change.id)).toEqual(['Activity_Review', 'Flow_ReviewToApprove', 'Activity_Approve', 'Flow_ApproveToOk', 'Activity_Archive', 'Flow_ArchiveToReview']);
+    expect(result.result.renamed).toBeUndefined();
     // Flow_CheckToOk was spliced twice (Check -> Review, then Check -> Archive): one warning, its first ends and its last
-    expect(stale(r.result.warnings.added).map((w) => w.message)).toEqual(['Flow Flow_CheckToOk kept its id, which names its old ends Activity_Check -> Gateway_Ok; it now runs Activity_Check -> Activity_Archive']);
+    expect(stale(result.result.warnings.added).map((warning) => warning.message)).toEqual(['Flow Flow_CheckToOk kept its id, which names its old ends Activity_Check -> Gateway_Ok; it now runs Activity_Check -> Activity_Archive']);
   });
 
   it('a flow the same change renames with `set id=` takes that id; a later splice names the ends that id named', async () => {
@@ -346,13 +346,13 @@ describe('keepFlowIds: a flow the file had keeps its id and the change names it'
       { op: 'set', id: 'Flow_CheckToOk', values: { id: 'Flow_CheckToReview' } },
       { op: 'add', kind: 'task', name: 'Archive', after: 'Activity_Check' },
     ]);
-    expect(stale(spliced.warnings).map((w) => w.message)).toEqual(['Flow Flow_CheckToReview kept its id, which names its old ends Activity_Check -> Activity_Review; it now runs Activity_Check -> Activity_Archive']);
+    expect(stale(spliced.warnings).map((warning) => warning.message)).toEqual(['Flow Flow_CheckToReview kept its id, which names its old ends Activity_Check -> Activity_Review; it now runs Activity_Check -> Activity_Archive']);
   });
 
   it('the default renames as before and never warns', async () => {
-    const r = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' }]);
-    expect(r.result.renamed).toEqual({ Flow_CheckToOk: 'Flow_CheckToReview' });
-    expect(stale(r.result.warnings.added)).toEqual([]);
+    const result = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' }]);
+    expect(result.result.renamed).toEqual({ Flow_CheckToOk: 'Flow_CheckToReview' });
+    expect(stale(result.result.warnings.added)).toEqual([]);
     const off = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' }], { keepFlowIds: false });
     expect(off.result.renamed).toEqual({ Flow_CheckToOk: 'Flow_CheckToReview' });
   });
@@ -363,13 +363,13 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
     const doc = await Doc.fromXml(CHAIN);
     doc.followFlowEnds = false;
     const renamed = await mutateDoc(doc, [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' }], { keepFlowIds: false, layout: false });
-    expect(renamed.changes.renames.map((r) => `${r.from} -> ${r.to}`)).toEqual(['Flow_CheckToOk -> Flow_CheckToReview']);
+    expect(renamed.changes.renames.map((result) => `${result.from} -> ${result.to}`)).toEqual(['Flow_CheckToOk -> Flow_CheckToReview']);
     expect(doc.followFlowEnds).toBe(false);
     // undefined: the field decides
     const keptDoc = await Doc.fromXml(CHAIN);
     keptDoc.followFlowEnds = false;
     const kept = await mutateDoc(keptDoc, [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' }], { layout: false });
-    expect(stale(kept.changes.warnings).map((w) => w.element)).toEqual(['Flow_CheckToOk']);
+    expect(stale(kept.changes.warnings).map((warning) => warning.element)).toEqual(['Flow_CheckToOk']);
     const fresh = await Doc.fromXml(CHAIN);
     await expect(mutateDoc(fresh, [{ op: 'add', kind: 'task', name: 'Review', after: 'Activity_Nope' }], { keepFlowIds: true, layout: false })).rejects.toMatchObject({ code: 'E_NOT_FOUND' });
     expect(fresh.followFlowEnds).toBe(true);
@@ -388,7 +388,7 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
     alone.followFlowEnds = false;
     const single = runOp(alone, move);
     // B had two out-flows (not bridged, removed): the move made Flow_BToA, then spliced it to B -> C
-    expect(single.renames.map((r) => `${r.from} -> ${r.to}`)).toEqual(['Flow_BToA -> Flow_BToC_2']);
+    expect(single.renames.map((result) => `${result.from} -> ${result.to}`)).toEqual(['Flow_BToA -> Flow_BToC_2']);
     expect(staleLines(single.warnings).sort()).toEqual(['Flow_CToDone Activity_C->Activity_A => Flow_CToA', 'Flow_StartToA Event_Start->Activity_B => Flow_StartToB']);
     const batch = await kept([move], TWO_OUT);
     expect(staleLines(batch.warnings).sort()).toEqual(staleLines(single.warnings).sort());
@@ -399,27 +399,27 @@ describe('keepFlowIds in the library: the option, Doc.followFlowEnds and the rep
       { op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' },
       { op: 'add', kind: 'task', name: 'Approve', after: 'Activity_Review' },
     ]);
-    expect(cs.renames.map((r) => `${r.from} -> ${r.to}`)).toEqual(['Flow_ReviewToOk -> Flow_ReviewToApprove']);
-    expect(cs.created.map((c) => c.id)).toContain('Flow_ReviewToApprove');
+    expect(cs.renames.map((result) => `${result.from} -> ${result.to}`)).toEqual(['Flow_ReviewToOk -> Flow_ReviewToApprove']);
+    expect(cs.created.map((change) => change.id)).toContain('Flow_ReviewToApprove');
   });
 
   it('only the change reports it (warnings.added, never counted as the file\'s); text gives each stale flow its own line', async () => {
-    const r = await applyToXml(await drawnDefault(), [
+    const result = await applyToXml(await drawnDefault(), [
       { op: 'add', kind: 'task', name: 'Review', after: 'Activity_Check' },
       { op: 'add', kind: 'task', name: 'Prepare', before: 'Activity_Check' },
       { op: 'add', kind: 'task', name: 'Pay', after: 'Activity_Book' },
     ], { keepFlowIds: true });
-    expect(staleLines(r.result.warnings.added).sort()).toEqual([
+    expect(staleLines(result.result.warnings.added).sort()).toEqual([
       'Flow_BookToDone Activity_Book->Activity_Pay => Flow_BookToPay',
       'Flow_CheckToOk Activity_Check->Activity_Review => Flow_CheckToReview',
       'Flow_StartToCheck Event_Start->Activity_Prepare => Flow_StartToPrepare',
     ]);
-    expect(r.result.warnings.preexistingCount).toBe(0);
-    const text = renderMutation(r.result);
+    expect(result.result.warnings.preexistingCount).toBe(0);
+    const text = renderMutation(result.result);
     expect(text.match(/^warning W_FLOW_ID_STALE /gm)).toHaveLength(3);
     for (const cmd of ['id=Flow_BookToPay', 'id=Flow_CheckToReview', 'id=Flow_StartToPrepare']) expect(text).toContain(cmd);
     // the next, unrelated change does not repeat it
-    const next = await applyToXml(r.xml, [{ op: 'set', id: 'Activity_Pay', values: { name: 'Pay invoice' } }], { keepFlowIds: true });
+    const next = await applyToXml(result.xml, [{ op: 'set', id: 'Activity_Pay', values: { name: 'Pay invoice' } }], { keepFlowIds: true });
     expect(stale(next.result.warnings.added)).toEqual([]);
     expect(next.result.warnings.preexistingCount).toBe(0);
   });
@@ -447,7 +447,7 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
   /** `old -> new` of the renames by default, and `flow source->target => suggested id` of each W_FLOW_ID_STALE with ids kept. */
   async function bothModes(xml: string, ops: Op[]): Promise<{ renamed: string[]; stale: string[] }> {
     const follow = await Doc.fromXml(xml);
-    const renamed = runOps(follow, ops).renames.map((r) => `${r.from} -> ${r.to}`);
+    const renamed = runOps(follow, ops).renames.map((result) => `${result.from} -> ${result.to}`);
     const keep = await kept(ops, xml);
     expect(keep.renames).toBe(0);
     return { renamed, stale: staleLines(keep.warnings) };
@@ -506,11 +506,11 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
 
   it('a renamed end changes nothing else: flows whose ends stay keep their ids, and a flow whose id names no ends stays', async () => {
     // Book is renamed, the splice is after Check: Flow_CheckToOk follows as always, Flow_OkToBook and Flow_BookToDone keep their ids
-    const r = await bothModes(CHAIN, [
+    const result = await bothModes(CHAIN, [
       { op: 'set', id: 'Activity_Book', values: { id: 'Activity_Post', name: 'Post' } },
       { op: 'add', kind: 'task', name: 'Log', after: 'Activity_Check' },
     ]);
-    expect(r).toEqual({ renamed: ['Flow_CheckToOk -> Flow_CheckToLog'], stale: ['Flow_CheckToOk Activity_Check->Activity_Log => Flow_CheckToLog'] });
+    expect(result).toEqual({ renamed: ['Flow_CheckToOk -> Flow_CheckToLog'], stale: ['Flow_CheckToOk Activity_Check->Activity_Log => Flow_CheckToLog'] });
     const own = await bothModes(CHAIN.replace(/Flow_CheckToOk/g, 'Flow_Review'), [
       { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Verify' } },
       { op: 'add', kind: 'task', name: 'Log', after: 'Activity_Verify' },
@@ -520,19 +520,19 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
 
   it('--flow-id on a splice with ids kept: W_FLOW_ID_STALE suggests it, W_OPTION_IGNORED names no second command, and every hint can be followed', async () => {
     for (const placement of [{ flow: 'Flow_CheckToOk' }, { after: 'Activity_Check' }]) {
-      const r = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Audit', ...placement, flowId: 'Flow_IntoAudit' }], { keepFlowIds: true });
-      const ignored = r.result.warnings.added.filter((w) => w.code === 'W_OPTION_IGNORED');
-      expect(ignored.map((w) => w.hint)).toEqual(['--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); W_FLOW_ID_STALE names the command that renames Flow_CheckToOk.']);
-      expect(staleLines(r.result.warnings.added)).toEqual(['Flow_CheckToOk Activity_Check->Activity_Audit => Flow_IntoAudit']);
+      const result = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Audit', ...placement, flowId: 'Flow_IntoAudit' }], { keepFlowIds: true });
+      const ignored = result.result.warnings.added.filter((warning) => warning.code === 'W_OPTION_IGNORED');
+      expect(ignored.map((warning) => warning.hint)).toEqual(['--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); W_FLOW_ID_STALE names the command that renames Flow_CheckToOk.']);
+      expect(staleLines(result.result.warnings.added)).toEqual(['Flow_CheckToOk Activity_Check->Activity_Audit => Flow_IntoAudit']);
       // every command the warnings name, in order: one per flow, none fails
-      const commands = r.result.warnings.added.flatMap((w) => [...(w.hint ?? '').matchAll(/`bpmn set <file> (\S+) id=(\S+)`/g)]);
-      expect(commands.map((m) => `${m[1]} -> ${m[2]}`)).toEqual(['Flow_CheckToOk -> Flow_IntoAudit']);
-      const followed = await applyToXml(r.xml, commands.map((m) => ({ op: 'set', id: m[1]!, values: { id: m[2]! } })), { keepFlowIds: true });
+      const commands = result.result.warnings.added.flatMap((warning) => [...(warning.hint ?? '').matchAll(/`bpmn set <file> (\S+) id=(\S+)`/g)]);
+      expect(commands.map((command) => `${command[1]} -> ${command[2]}`)).toEqual(['Flow_CheckToOk -> Flow_IntoAudit']);
+      const followed = await applyToXml(result.xml, commands.map((command) => ({ op: 'set', id: command[1]!, values: { id: command[2]! } })), { keepFlowIds: true });
       expect(followed.xml).toContain('<bpmn:sequenceFlow id="Flow_IntoAudit" sourceRef="Activity_Check" targetRef="Activity_Audit" />');
     }
     // by default the flow follows its ends and W_OPTION_IGNORED names the one rename, as before
     const renamed = await applyToXml(await drawnDefault(), [{ op: 'add', kind: 'task', name: 'Audit', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoAudit' }]);
-    expect(renamed.result.warnings.added.map((w) => `${w.code}: ${w.hint}`)).toEqual([
+    expect(renamed.result.warnings.added.map((warning) => `${warning.code}: ${warning.hint}`)).toEqual([
       'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with `bpmn set <file> Flow_CheckToAudit id=Flow_IntoAudit`.',
     ]);
   });
@@ -549,13 +549,13 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
     expect(staleLines(later.warnings)).toEqual(['Flow_CheckToOk Activity_Check->Activity_Log => Flow_CheckToLog']);
     // a hashed flow keeps its id without going stale: W_OPTION_IGNORED keeps its own command
     const hashed = await kept([{ op: 'add', kind: 'task', name: 'Pack', after: 'Activity_0k3x9qa', flowId: 'Flow_IntoPack' }], MODELER);
-    expect(hashed.warnings.map((w) => `${w.code}: ${w.hint}`)).toEqual([
+    expect(hashed.warnings.map((warning) => `${warning.code}: ${warning.hint}`)).toEqual([
       'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with `bpmn set <file> Flow_1q2w3e4 id=Flow_IntoPack`.',
     ]);
   });
 
   it('--flow-id with ids kept where no W_FLOW_ID_STALE comes: W_OPTION_IGNORED names its own command, or none where it could not be followed', async () => {
-    const hints = (ws: readonly Warning[]): string[] => ws.map((w) => `${w.code}: ${w.hint}`);
+    const hints = (ws: readonly Warning[]): string[] => ws.map((warning) => `${warning.code}: ${warning.hint}`);
     const own = (flow: string, id: string): string =>
       `W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with \`bpmn set <file> ${flow} id=${id}\`.`;
     const none = 'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node).';
@@ -579,7 +579,7 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
       { op: 'add', kind: 'task', name: 'Ok', flow: 'Flow_CheckToOk', flowId: 'Flow_IntoOk' },
       { op: 'add', kind: 'task', id: 'Flow_IntoOk', name: 'X', in: 'Process_1' },
     ]);
-    expect(hints(taken.warnings).filter((h) => h.startsWith('W_OPTION_IGNORED'))).toEqual([none]);
+    expect(hints(taken.warnings).filter((hint) => hint.startsWith('W_OPTION_IGNORED'))).toEqual([none]);
   });
 });
 
@@ -621,7 +621,7 @@ const WITH_TIMER = definitionsXml(`
     <bpmn:sequenceFlow id="Flow_RemindToLate" sourceRef="Activity_Remind" targetRef="Event_Late" />`);
 
 /** `<flow>: <detail>` of the changed sequence flows. */
-const changedFlows = (cs: Pick<ChangeSet, 'changed'>): string[] => cs.changed.filter((c) => c.kind === 'sequenceFlow').map((c) => `${c.id}: ${c.detail}`);
+const changedFlows = (cs: Pick<ChangeSet, 'changed'>): string[] => cs.changed.filter((change) => change.kind === 'sequenceFlow').map((change) => `${change.id}: ${change.detail}`);
 
 describe('move: a chain anchored on its own nodes, nodes already in place, what the bridge took', () => {
   it('a chain whose --after anchor or --flow source is one of its later nodes, or inside one, is refused before anything changes, in both modes', async () => {
@@ -642,15 +642,15 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
     for (const [xml, op, message, command] of cases) {
       for (const keepFlowIds of [true, false]) {
         const what = `${JSON.stringify(op)} keep=${keepFlowIds}`;
-        const err = await applyToXml(xml, [op], { keepFlowIds, layout: false }).then(() => undefined, (e: unknown) => e as { code: string; message: string; details: { hint?: string } });
+        const err = await applyToXml(xml, [op], { keepFlowIds, layout: false }).then(() => undefined, (error: unknown) => error as { code: string; message: string; details: { hint?: string } });
         expect(err, what).toMatchObject({ code: 'E_INVALID_PLACEMENT', message });
         expect(err!.details.hint, what).toContain(command);
         // refused before the first node moved: the document is as it was
         const doc = await Doc.fromXml(xml);
         doc.followFlowEnds = !keepFlowIds;
-        const flowsBefore = [...doc.byId().values()].filter((e) => e.$type === 'bpmn:SequenceFlow').map((f) => `${f.get<string>('id')} ${f.get<El>('sourceRef').get<string>('id')}->${f.get<El>('targetRef').get<string>('id')}`);
+        const flowsBefore = [...doc.byId().values()].filter((element) => element.$type === 'bpmn:SequenceFlow').map((flow) => `${flow.get<string>('id')} ${flow.get<El>('sourceRef').get<string>('id')}->${flow.get<El>('targetRef').get<string>('id')}`);
         expect(() => runOp(doc, op), what).toThrow(message);
-        expect([...doc.byId().values()].filter((e) => e.$type === 'bpmn:SequenceFlow').map((f) => `${f.get<string>('id')} ${f.get<El>('sourceRef').get<string>('id')}->${f.get<El>('targetRef').get<string>('id')}`), what).toEqual(flowsBefore);
+        expect([...doc.byId().values()].filter((element) => element.$type === 'bpmn:SequenceFlow').map((flow) => `${flow.get<string>('id')} ${flow.get<El>('sourceRef').get<string>('id')}->${flow.get<El>('targetRef').get<string>('id')}`), what).toEqual(flowsBefore);
       }
     }
     // the node itself as the anchor keeps its own message, and so does its own boundary event; a --before anchor in the chain is fine (it ends A -> Join)
@@ -674,32 +674,32 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
     for (const [op, note] of cases) {
       for (const keepFlowIds of [true, false]) {
         const what = `${JSON.stringify(op)} keep=${keepFlowIds}`;
-        const r = await applyToXml(NAMED_LINE, [op], { keepFlowIds, layout: false });
-        expect(r.unchanged, what).toBe(true);
-        expect([r.result.created, r.result.changed, r.result.removed, r.result.renamed], what).toEqual([[], [], [], undefined]);
-        expect(r.result.warnings.added, what).toEqual([]);
-        expect(r.result.notes, what).toEqual([note]);
+        const result = await applyToXml(NAMED_LINE, [op], { keepFlowIds, layout: false });
+        expect(result.unchanged, what).toBe(true);
+        expect([result.result.created, result.result.changed, result.result.removed, result.result.renamed], what).toEqual([[], [], [], undefined]);
+        expect(result.result.warnings.added, what).toEqual([]);
+        expect(result.result.notes, what).toEqual([note]);
       }
     }
     // a drawn file with its layout: nothing to write either
     const drawn = await drawnDefault();
     for (const keepFlowIds of [true, false]) {
-      const r = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_Check'], after: 'Event_Start' }], { keepFlowIds });
-      expect(r.unchanged).toBe(true);
-      expect(r.result.notes).toContain('Activity_Check is already after Event_Start');
+      const result = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_Check'], after: 'Event_Start' }], { keepFlowIds });
+      expect(result.unchanged).toBe(true);
+      expect(result.result.notes).toContain('Activity_Check is already after Event_Start');
     }
     // a hand-made drawing keeps every shape: the incremental layout places no node a move left where it was (--in its own scope too)
     const hand = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'step1', 'far-label.bpmn'), 'utf8');
     for (const op of [{ op: 'move', ids: ['ST', 'SE'], after: 'SS' }, { op: 'move', ids: ['ST'], in: 'SUB' }] satisfies Op[]) {
-      const r = await applyToXml(hand, [op]);
-      expect([r.unchanged, r.result.layout?.mode, r.result.layout?.moved], JSON.stringify(op)).toEqual([true, 'incremental', []]);
+      const result = await applyToXml(hand, [op]);
+      expect([result.unchanged, result.result.layout?.mode, result.result.layout?.moved], JSON.stringify(op)).toEqual([true, 'incremental', []]);
     }
     // flow options describe the flow into the first node, as on a splice: only that flow changes
     for (const keepFlowIds of [true, false]) {
-      const r = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', flowName: 'start' }], { keepFlowIds, layout: false });
-      expect(changedFlows(r.result)).toEqual(['Flow_AToB: Activity_A -> Activity_B']);
-      expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_AToB" name="start" sourceRef="Activity_A" targetRef="Activity_B" />');
-      expect(r.xml).toMatch(/<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C">\s*<bpmn:conditionExpression/);
+      const result = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', flowName: 'start' }], { keepFlowIds, layout: false });
+      expect(changedFlows(result.result)).toEqual(['Flow_AToB: Activity_A -> Activity_B']);
+      expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_AToB" name="start" sourceRef="Activity_A" targetRef="Activity_B" />');
+      expect(result.xml).toMatch(/<bpmn:sequenceFlow id="Flow_BToC" name="approved" sourceRef="Activity_B" targetRef="Activity_C">\s*<bpmn:conditionExpression/);
     }
     // after a gateway the node is appended as a new branch: that move still runs
     const forked = await applyToXml(FORKED, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A' }], { layout: false });
@@ -708,12 +708,12 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
 
   it('a "flowId" on a move in place renames the flow into the first node, in both modes', async () => {
     for (const keepFlowIds of [true, false]) {
-      const r = await applyToXml(LINE, [{ op: 'move', ids: ['Event_Done'], after: 'Activity_C', flowId: 'Flow_CToEnd' }], { keepFlowIds, layout: false });
-      expect([r.result.created, r.result.removed, r.result.warnings.added], `keep=${keepFlowIds}`).toEqual([[], [], []]);
-      expect(changedFlows(r.result)).toEqual(['Flow_CToEnd: Activity_C -> Event_Done (renamed from Flow_CToDone)']);
-      expect(r.result.notes).toEqual(['Event_Done is already after Activity_C']);
-      expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_CToEnd" sourceRef="Activity_C" targetRef="Event_Done" />');
-      expect(r.xml).not.toContain('Flow_CToDone');
+      const result = await applyToXml(LINE, [{ op: 'move', ids: ['Event_Done'], after: 'Activity_C', flowId: 'Flow_CToEnd' }], { keepFlowIds, layout: false });
+      expect([result.result.created, result.result.removed, result.result.warnings.added], `keep=${keepFlowIds}`).toEqual([[], [], []]);
+      expect(changedFlows(result.result)).toEqual(['Flow_CToEnd: Activity_C -> Event_Done (renamed from Flow_CToDone)']);
+      expect(result.result.notes).toEqual(['Event_Done is already after Activity_C']);
+      expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_CToEnd" sourceRef="Activity_C" targetRef="Event_Done" />');
+      expect(result.xml).not.toContain('Flow_CToDone');
       // with a name: one entry; the id of another element is refused
       const named = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_A', flowId: 'Flow_Start', flowName: 'start' }], { keepFlowIds, layout: false });
       expect(changedFlows(named.result)).toEqual(['Flow_Start: Activity_A -> Activity_B (renamed from Flow_AToB)']);
@@ -737,7 +737,7 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
       .replace('<bpmn:sequenceFlow id="Flow_CToDone"', '<bpmn:textAnnotation id="TextAnnotation_Note"><bpmn:text>note</bpmn:text></bpmn:textAnnotation>\n    <bpmn:association id="Association_Note" sourceRef="Flow_BToC" targetRef="TextAnnotation_Note" />\n    <bpmn:sequenceFlow id="Flow_CToDone"');
     const some = await applyToXml(annotated, move, { keepFlowIds: true, layout: false });
     expect(changedFlows(some.result)).toContain('Flow_BToC: Activity_B -> Event_Done (was -> Activity_C; its condition and annotation stay with the bridge Flow_AToB)');
-    expect(some.result.warnings.added.map((w) => w.code)).toContain('W_LABEL_DROPPED');
+    expect(some.result.warnings.added.map((warning) => warning.code)).toContain('W_LABEL_DROPPED');
     // the bridge is the default flow of A: the condition is dropped there (W_CONDITION_DROPPED), so only the name is named
     const byDefault = NAMED_LINE.replace('<bpmn:task id="Activity_A" name="A">', '<bpmn:task id="Activity_A" name="A" default="Flow_AToB">');
     const named = await applyToXml(byDefault, move, { keepFlowIds: true, layout: false });
@@ -747,7 +747,7 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
     const back = await applyToXml(join, [{ op: 'move', ids: ['Activity_A'], before: 'Gateway_Join' }], { keepFlowIds: true, layout: false });
     expect(changedFlows(back.result)).toContain('Flow_AToJoin: Activity_A -> Gateway_Join (its name stays with the bridge Flow_OkToA)');
     // nothing to name: as before; by default the out-flow is removed with its label, as before
-    expect(changedFlows(await applyToXml(LINE, move, { keepFlowIds: true, layout: false }).then((r) => r.result))).toContain('Flow_BToC: Activity_B -> Event_Done (was -> Activity_C)');
+    expect(changedFlows(await applyToXml(LINE, move, { keepFlowIds: true, layout: false }).then((result) => result.result))).toContain('Flow_BToC: Activity_B -> Event_Done (was -> Activity_C)');
     const renamed = await applyToXml(NAMED_LINE, move, { layout: false });
     expect(renamed.result.removed).toContainEqual({ id: 'Flow_BToC', kind: 'sequenceFlow', name: 'approved', detail: 'Activity_B -> Activity_C' });
     expect(changedFlows(renamed.result).join('\n')).not.toContain('stay');
@@ -772,13 +772,13 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
     const removed = await applyToXml(branched, [{ op: 'move', ids: ['Activity_A', 'Event_Done'], after: 'Gateway_Ok' }], { keepFlowIds: true, layout: false });
     expect(removed.xml).toMatch(/<bpmn:sequenceFlow id="Flow_AToDone" name="done" sourceRef="Activity_A" targetRef="Event_Done">\s*<bpmn:conditionExpression/);
     expect(changedFlows(removed.result)).toEqual(['Flow_TToA: Activity_T -> Event_Done (bridged Activity_A)', 'Flow_AToDone: Activity_A -> Event_Done']);
-    expect(removed.result.removed.map((c) => c.id)).toEqual(['Flow_TToA']);
-    expect(removed.result.warnings.added.filter((w) => w.code.endsWith('_DROPPED'))).toEqual([]);
+    expect(removed.result.removed.map((change) => change.id)).toEqual(['Flow_TToA']);
+    expect(removed.result.warnings.added.filter((warning) => warning.code.endsWith('_DROPPED'))).toEqual([]);
     // T's bridge Ok -> A takes "next", then Ok's detach (a split: not bridged) removes it, and T -> A ends at Ok now: the label is dropped, and said so
     const named = branched.replace('id="Flow_TToA" sourceRef', 'id="Flow_TToA" name="next" sourceRef');
     const lost = await applyToXml(named, [{ op: 'move', ids: ['Activity_T', 'Gateway_Ok'], after: 'Activity_U' }], { keepFlowIds: true, layout: false });
     expect(lost.xml).not.toContain('"next"');
-    expect(lost.result.warnings.added.filter((w) => w.code === 'W_LABEL_DROPPED').map((w) => w.message)).toEqual([
+    expect(lost.result.warnings.added.filter((warning) => warning.code === 'W_LABEL_DROPPED').map((warning) => warning.message)).toEqual([
       'Flow label "next" of Flow_TToA was dropped while moving Activity_T: the bridge Flow_OkToT took it, and a later node of the move removed Flow_OkToT',
     ]);
     expect(changedFlows(lost.result).join('\n')).not.toContain('stay');
@@ -788,7 +788,7 @@ describe('move: a chain anchored on its own nodes, nodes already in place, what 
       .replace('<bpmn:sequenceFlow id="Flow_CToDone" sourceRef="Activity_C" targetRef="Event_Done" />', '<bpmn:sequenceFlow id="Flow_CToD" sourceRef="Activity_C" targetRef="Activity_D" />\n    <bpmn:sequenceFlow id="Flow_DToDone" sourceRef="Activity_D" targetRef="Event_Done" />');
     const batch = await applyToXml(long, [{ op: 'add', kind: 'task', name: 'X', after: 'Activity_A' }, { op: 'move', ids: ['Activity_B', 'Activity_C'], after: 'Activity_D' }], { keepFlowIds: true, layout: false });
     expect(batch.xml).toMatch(/<bpmn:sequenceFlow id="Flow_XToD" name="approved" sourceRef="Activity_X" targetRef="Activity_D">/);
-    expect(changedFlows(batch.result).filter((c) => c.includes('stay'))).toEqual(['Flow_BToC: Activity_B -> Activity_C (was -> Event_Done; its name and condition stay with the bridge Flow_XToD)']);
+    expect(changedFlows(batch.result).filter((flowLine) => flowLine.includes('stay'))).toEqual(['Flow_BToC: Activity_B -> Activity_C (was -> Event_Done; its name and condition stay with the bridge Flow_XToD)']);
     // B and A swap places: the second bridge takes the label back to Flow_BToC, so nothing is said, and each entry is listed once
     const swap = await applyToXml(NAMED_LINE, [{ op: 'move', ids: ['Activity_B', 'Activity_A'], after: 'Event_Start' }], { keepFlowIds: true, layout: false });
     expect(changedFlows(swap.result)).toEqual([
@@ -807,15 +807,15 @@ describe('mixed id styles: a followed hint still names its ends on the next read
 
   /** Follows every W_FLOW_ID_STALE hint of `res` (`bpmn set <file> <flow> id=<suggested>`) and reads the result again. */
   async function follow(xml: string, warnings: readonly Warning[]): Promise<{ followed: string[]; naming: string[]; before: unknown; after: unknown }> {
-    const ops: Op[] = stale(warnings).map((w) => ({ op: 'set', id: w.element!, values: { id: / id=(\S+)`/.exec(w.hint!)![1]! } }));
+    const ops: Op[] = stale(warnings).map((warning) => ({ op: 'set', id: warning.element!, values: { id: / id=(\S+)`/.exec(warning.hint!)![1]! } }));
     const done = await applyToXml(xml, ops, { keepFlowIds: true, layout: false });
     const doc = await Doc.fromXml(done.xml);
-    const naming = ops.flatMap((o) => {
-      const id = (o as { values: { id: string } }).values.id;
+    const naming = ops.flatMap((op) => {
+      const id = (op as { values: { id: string } }).values.id;
       const flow = doc.get(id)!;
       return new FlowIdFollower(doc).namesEnds(id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
     });
-    return { followed: ops.map((o) => (o as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).idStyle.info().sequenceFlow, after: doc.idStyle.info().sequenceFlow };
+    return { followed: ops.map((op) => (op as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).idStyle.info().sequenceFlow, after: doc.idStyle.info().sequenceFlow };
   }
 
   // the five 'follow hints' violations of the keep-mode fuzz campaigns (seeds 1003, 9456, 9473, 7392, 7922): each followed
@@ -865,13 +865,13 @@ describe('mixed id styles: a followed hint still names its ends on the next read
     // before: the next read learned Flow_, created Flow_Fz7FileToFz3Pay and kept fFz6ArchiveToFz3Pay on Fz6Archive -> Fz7File
     const second = await applyToXml(first.xml, [{ op: 'add', kind: 'task', name: 'Fz7 file', after: 'Activity_Fz6Archive' }], { layout: false });
     expect(second.result.renamed).toEqual({ fFz6ArchiveToFz3Pay: 'fFz6ArchiveToFz7File' });
-    expect(second.result.created.map((c) => c.id)).toEqual(['Activity_Fz7File', 'fFz7FileToFz3Pay']);
+    expect(second.result.created.map((change) => change.id)).toEqual(['Activity_Fz7File', 'fFz7FileToFz3Pay']);
   });
 });
 
 describe('`set id=` takes a DI id derived from the old id along', () => {
   /** DI id by element id. */
-  const diOf = (xml: string): Map<string, string> => new Map([...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)].map((m) => [m[2]!, m[1]!]));
+  const diOf = (xml: string): Map<string, string> => new Map([...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)].map((match) => [match[2]!, match[1]!]));
   const RENAMES: Op[] = [
     { op: 'set', id: 'Flow_CheckToOk', values: { id: 'Flow_CheckToAudit' } },
     { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } },
@@ -880,23 +880,23 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
   it('on a flow and a task, in the `<id>_di` and `BPMN<Kind>_` styles, with ids kept too; the result is unchanged', async () => {
     for (const style of ['suffix', 'bpmn'] as const) {
       for (const keepFlowIds of [false, true]) {
-        const r = await applyToXml(await drawnDefault(style), RENAMES, { keepFlowIds });
-        const di = diOf(r.xml);
+        const result = await applyToXml(await drawnDefault(style), RENAMES, { keepFlowIds });
+        const di = diOf(result.xml);
         expect(di.get('Flow_CheckToAudit')).toBe(style === 'suffix' ? 'Flow_CheckToAudit_di' : 'BPMNEdge_Flow_CheckToAudit');
         expect(di.get('Activity_Audit')).toBe(style === 'suffix' ? 'Activity_Audit_di' : 'BPMNShape_Activity_Audit');
-        expect(r.xml).not.toMatch(/Activity_Check|Flow_CheckToOk/);
-        expect(r.result.changed.map((c) => `${c.id}: ${c.detail}`)).toEqual(['Flow_CheckToAudit: renamed from Flow_CheckToOk', 'Activity_Audit: renamed from Activity_Check']);
+        expect(result.xml).not.toMatch(/Activity_Check|Flow_CheckToOk/);
+        expect(result.result.changed.map((change) => `${change.id}: ${change.detail}`)).toEqual(['Flow_CheckToAudit: renamed from Flow_CheckToOk', 'Activity_Audit: renamed from Activity_Check']);
       }
     }
   });
 
   it('a DI id not derived from the old id stays; one whose new id is taken gets _2', async () => {
     const xml = (await drawnDefault()).replace('id="Activity_Check_di"', 'id="Shape_0abc123"').replace('id="Activity_Book_di"', 'id="Event_Archive_di"');
-    const r = await applyToXml(xml, [
+    const result = await applyToXml(xml, [
       { op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } },
       { op: 'set', id: 'Event_Done', values: { id: 'Event_Archive' } },
     ]);
-    const di = diOf(r.xml);
+    const di = diOf(result.xml);
     expect(di.get('Activity_Audit')).toBe('Shape_0abc123');
     expect(di.get('Event_Archive')).toBe('Event_Archive_di_2');
     expect(di.get('Activity_Book')).toBe('Event_Archive_di');
@@ -904,9 +904,9 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
 
   it('a derived DI id with a collision suffix (_2) follows too', async () => {
     const xml = (await drawnDefault('bpmn')).replace('id="BPMNShape_Activity_Book"', 'id="BPMNShape_Activity_Book_2"').replace('id="BPMNEdge_Flow_CheckToOk"', 'id="BPMNEdge_Flow_CheckToOk_3"');
-    const r = await applyToXml(xml, RENAMES);
-    expect(diOf(r.xml).get('Activity_Audit')).toBe('BPMNShape_Activity_Audit');
-    expect(diOf(r.xml).get('Flow_CheckToAudit')).toBe('BPMNEdge_Flow_CheckToAudit');
+    const result = await applyToXml(xml, RENAMES);
+    expect(diOf(result.xml).get('Activity_Audit')).toBe('BPMNShape_Activity_Audit');
+    expect(diOf(result.xml).get('Flow_CheckToAudit')).toBe('BPMNEdge_Flow_CheckToAudit');
     const book = await applyToXml(xml, [{ op: 'set', id: 'Activity_Book', values: { id: 'Activity_Post' } }]);
     expect(diOf(book.xml).get('Activity_Post')).toBe('BPMNShape_Activity_Post');
   });
@@ -932,10 +932,10 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
     const xml = (await drawnDefault()).replace(/(<bpmndi:BPMNShape id="Activity_Check_di" bpmnElement="Activity_Check">)/, '$1\n        <!-- reviewed -->');
     expect(xml).toContain('<!-- reviewed -->');
     for (const layout of [undefined, false] as const) {
-      const r = await applyToXml(xml, [{ op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } }], layout === false ? { layout } : {});
-      expect(diOf(r.xml).get('Activity_Audit')).toBe('Activity_Audit_di');
-      expect(r.xml).not.toContain('<!-- reviewed -->');
-      expect(r.result.notes).toContain('1 XML comment(s) dropped: they were inside or next to elements the change removed or rewrote');
+      const result = await applyToXml(xml, [{ op: 'set', id: 'Activity_Check', values: { id: 'Activity_Audit' } }], layout === false ? { layout } : {});
+      expect(diOf(result.xml).get('Activity_Audit')).toBe('Activity_Audit_di');
+      expect(result.xml).not.toContain('<!-- reviewed -->');
+      expect(result.result.notes).toContain('1 XML comment(s) dropped: they were inside or next to elements the change removed or rewrote');
     }
   });
 
@@ -954,20 +954,20 @@ describe('`set id=` takes a DI id derived from the old id along', () => {
 
 describe('--no-layout with ids kept: a flow whose ends changed loses its stale edge', () => {
   /** The flows a drawing has a BPMNEdge for. */
-  const drawnFlows = (xml: string): string[] => [...xml.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((m) => m[1]!).sort();
+  const drawnFlows = (xml: string): string[] => [...xml.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((match) => match[1]!).sort();
 
   it('a move: every flow whose ends changed loses its edge and the note names them, like in the default mode; the next write draws them at their new ends', async () => {
     const drawn = (await layoutXml(LINE)).xml;
     expect(drawnFlows(drawn)).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone', 'Flow_StartToA']);
-    const r = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { keepFlowIds: true, layout: false });
-    expect(drawnFlows(r.xml)).toEqual(['Flow_StartToA']);
-    expect(r.result.notes.filter((n) => n.startsWith('removed'))).toEqual(['removed 3 stale diagram element(s), among them the edge(s) of Flow_AToB, Flow_BToC, Flow_CToDone (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)']);
-    expect(r.result.layout?.metrics?.added.filter((p) => p.kind === 'missing').map((p) => p.ids[0]).sort()).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone']);
+    const result = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { keepFlowIds: true, layout: false });
+    expect(drawnFlows(result.xml)).toEqual(['Flow_StartToA']);
+    expect(result.result.notes.filter((note) => note.startsWith('removed'))).toEqual(['removed 3 stale diagram element(s), among them the edge(s) of Flow_AToB, Flow_BToC, Flow_CToDone (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)']);
+    expect(result.result.layout?.metrics?.added.filter((problem) => problem.kind === 'missing').map((problem) => problem.ids[0]).sort()).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone']);
     // the default mode: the bridge and the flow into B lose theirs, the removed flow's edge goes with it
     const followed = await applyToXml(drawn, [{ op: 'move', ids: ['Activity_B'], after: 'Activity_C' }], { layout: false });
     expect(drawnFlows(followed.xml)).toEqual(['Flow_StartToA']);
-    expect(followed.result.notes.filter((n) => n.startsWith('removed'))).toEqual(['removed 3 stale diagram element(s), among them the edge(s) of Flow_AToC, Flow_CToB (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)']);
-    const next = await applyToXml(r.xml, [{ op: 'set', id: 'Activity_A', values: { name: 'A2' } }], { keepFlowIds: true });
+    expect(followed.result.notes.filter((note) => note.startsWith('removed'))).toEqual(['removed 3 stale diagram element(s), among them the edge(s) of Flow_AToC, Flow_CToB (their ends changed; the next model edit without --no-layout draws them, or `bpmn route <file> <flowId>`)']);
+    const next = await applyToXml(result.xml, [{ op: 'set', id: 'Activity_A', values: { name: 'A2' } }], { keepFlowIds: true });
     expect(next.result.layout?.mode).toBe('incremental');
     expect([...(next.result.layout?.placed ?? [])].sort()).toEqual(['Flow_AToB', 'Flow_BToC', 'Flow_CToDone']);
     expect(next.result.layout?.metrics?.after.counts.missing).toBe(0);

@@ -22,174 +22,174 @@ export class LabelPlacer {
   constructor(private readonly plane: Plane) {}
 
   private nameOf(el: unknown): string | undefined {
-    const n = raw<string>(el, 'name');
-    return n && n.trim() ? n : undefined;
+    const name = raw<string>(el, 'name');
+    return name && name.trim() ? name : undefined;
   }
 
   private clutter(ownerId: string, ignoreShapes: ReadonlySet<string>): Clutter {
     const shapes: Box[] = [];
     const labels: Box[] = [];
     const segments: Clutter['segments'] = [];
-    for (const s of this.plane.shapes.values()) {
-      if (!s.container && s.kind !== 'group' && !ignoreShapes.has(s.id)) shapes.push(s.bounds);
-      if (s.label && s.id !== ownerId) labels.push(s.label);
-      const title = Frames.title(s);
+    for (const shape of this.plane.shapes.values()) {
+      if (!shape.container && shape.kind !== 'group' && !ignoreShapes.has(shape.id)) shapes.push(shape.bounds);
+      if (shape.label && shape.id !== ownerId) labels.push(shape.label);
+      const title = Frames.title(shape);
       if (title) shapes.push(title);
-      if (s.container) {
-        const b = s.bounds;
-        const tl = { x: b.x, y: b.y };
-        const tr = { x: right(b), y: b.y };
-        const br = { x: right(b), y: bottom(b) };
-        const bl = { x: b.x, y: bottom(b) };
+      if (shape.container) {
+        const bounds = shape.bounds;
+        const tl = { x: bounds.x, y: bounds.y };
+        const tr = { x: right(bounds), y: bounds.y };
+        const br = { x: right(bounds), y: bottom(bounds) };
+        const bl = { x: bounds.x, y: bottom(bounds) };
         segments.push([tl, tr], [tr, br], [br, bl], [bl, tl]);
       }
     }
-    for (const e of this.plane.edges.values()) {
-      if (e.label && e.id !== ownerId) labels.push(e.label);
-      for (let i = 0; i + 1 < e.points.length; i++) segments.push([e.points[i]!, e.points[i + 1]!]);
+    for (const edge of this.plane.edges.values()) {
+      if (edge.label && edge.id !== ownerId) labels.push(edge.label);
+      for (let index = 0; index + 1 < edge.points.length; index++) segments.push([edge.points[index]!, edge.points[index + 1]!]);
     }
     return { shapes, labels, segments };
   }
 
-  private collides(b: Box, c: Clutter): boolean {
-    return c.shapes.some((s) => overlaps(s, b, 2)) || c.labels.some((l) => overlaps(l, b, 2)) || c.segments.some(([p, q]) => segmentHits(p, q, b, 1));
+  private collides(candidate: Box, clutter: Clutter): boolean {
+    return clutter.shapes.some((shape) => overlaps(shape, candidate, 2)) || clutter.labels.some((label) => overlaps(label, candidate, 2)) || clutter.segments.some(([start, end]) => segmentHits(start, end, candidate, 1));
   }
 
   /**
    * Per list: a free spot in the frame's label area, else in the home frame;
    * only then any free spot of all lists (a boundary event's label hangs outside its host).
    */
-  private firstFree(s: DShape, c: Clutter, ...lists: Array<readonly Box[]>): Box | undefined {
-    const frame = s.kind === 'boundary' ? undefined : Frames.of(this.plane, s);
-    const home = frame ? this.homeOf(s) : undefined;
+  private firstFree(shape: DShape, clutter: Clutter, ...lists: Array<readonly Box[]>): Box | undefined {
+    const frame = shape.kind === 'boundary' ? undefined : Frames.of(this.plane, shape);
+    const home = frame ? this.homeOf(shape) : undefined;
     const area = frame ? Frames.labelArea(frame) : undefined;
     for (const cands of lists) {
-      const free = cands.filter((b) => !this.collides(b, c));
-      const win = (area ? free.find((b) => inside(b, area)) : undefined) ?? free.find((b) => !home || inside(b, home.bounds));
+      const free = cands.filter((candidate) => !this.collides(candidate, clutter));
+      const win = (area ? free.find((candidate) => inside(candidate, area)) : undefined) ?? free.find((candidate) => !home || inside(candidate, home.bounds));
       if (win) return win;
     }
-    return lists.flat().find((b) => !this.collides(b, c));
+    return lists.flat().find((candidate) => !this.collides(candidate, clutter));
   }
 
   /** The sub-process a shape lives in, else its pool; a flow's only when both ends share it. */
-  private homeOf(o: DShape | DEdge): DShape | undefined {
-    const of = (s: DShape | undefined): DShape | undefined => (s?.parentId ? this.plane.shapes.get(s.parentId) : undefined) ?? (s?.poolId ? this.plane.shapes.get(s.poolId) : undefined);
-    if ('bounds' in o) return of(o);
-    const source = of(o.sourceId ? this.plane.shapes.get(o.sourceId) : undefined);
-    return source && source === of(o.targetId ? this.plane.shapes.get(o.targetId) : undefined) ? source : undefined;
+  private homeOf(owner: DShape | DEdge): DShape | undefined {
+    const of = (shape: DShape | undefined): DShape | undefined => (shape?.parentId ? this.plane.shapes.get(shape.parentId) : undefined) ?? (shape?.poolId ? this.plane.shapes.get(shape.poolId) : undefined);
+    if ('bounds' in owner) return of(owner);
+    const source = of(owner.sourceId ? this.plane.shapes.get(owner.sourceId) : undefined);
+    return source && source === of(owner.targetId ? this.plane.shapes.get(owner.targetId) : undefined) ? source : undefined;
   }
 
   /** Centred, then shifted off a line leaving the shape on that side, at three steps out. */
-  private sideSpots(s: DShape, side: LabelSide, size: { width: number; height: number }, host?: DShape): Box[] {
+  private sideSpots(shape: DShape, side: LabelSide, size: { width: number; height: number }, host?: DShape): Box[] {
     const cands: Box[] = [];
     for (let step = 0; step < 3; step++) {
-      const base = labelAt(s, size, side, host, step);
+      const base = labelAt(shape, size, side, host, step);
       cands.push(base);
-      if (side === 'below' || side === 'above') cands.push({ ...base, x: Math.round(cx(s.bounds) + 6) }, { ...base, x: Math.round(cx(s.bounds) - 6 - size.width) });
-      else cands.push({ ...base, y: Math.round(cy(s.bounds) + 6) }, { ...base, y: Math.round(cy(s.bounds) - 6 - size.height) });
+      if (side === 'below' || side === 'above') cands.push({ ...base, x: Math.round(cx(shape.bounds) + 6) }, { ...base, x: Math.round(cx(shape.bounds) - 6 - size.width) });
+      else cands.push({ ...base, y: Math.round(cy(shape.bounds) + 6) }, { ...base, y: Math.round(cy(shape.bounds) - 6 - size.height) });
     }
     return cands;
   }
 
-  labelOnSide(s: DShape, side: LabelSide, size: { width: number; height: number }): Box {
-    const host = s.hostId ? this.plane.shapes.get(s.hostId) : undefined;
-    const c = this.clutter(s.id, new Set([s.id, ...(host ? [host.id] : [])]));
-    if (host) c.shapes.push(host.bounds);
-    const cands = this.sideSpots(s, side, size, host);
-    return this.firstFree(s, c, cands) ?? cands[0]!;
+  labelOnSide(shape: DShape, side: LabelSide, size: { width: number; height: number }): Box {
+    const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
+    const clutter = this.clutter(shape.id, new Set([shape.id, ...(host ? [host.id] : [])]));
+    if (host) clutter.shapes.push(host.bounds);
+    const cands = this.sideSpots(shape, side, size, host);
+    return this.firstFree(shape, clutter, cands) ?? cands[0]!;
   }
 
-  private boundaryLabelCandidates(b: Box, host: Box, size: { width: number; height: number }, step: number): Box[] {
-    const box = (x: number, y: number): Box => ({ x: Math.round(x), y: Math.round(y), ...size });
-    switch (attachedSide(b, host)) {
+  private boundaryLabelCandidates(boundary: Box, host: Box, size: { width: number; height: number }, step: number): Box[] {
+    const box = (left: number, top: number): Box => ({ x: Math.round(left), y: Math.round(top), ...size });
+    switch (attachedSide(boundary, host)) {
       case 'top': {
-        const y = host.y - 2 - size.height - step * (size.height + 4);
-        return [box(right(b) + 4, y), box(b.x - 4 - size.width, y), box(cx(b) - size.width / 2, Math.min(y, b.y - 4 - size.height))];
+        const top = host.y - 2 - size.height - step * (size.height + 4);
+        return [box(right(boundary) + 4, top), box(boundary.x - 4 - size.width, top), box(cx(boundary) - size.width / 2, Math.min(top, boundary.y - 4 - size.height))];
       }
       case 'right': {
-        const x = right(host) + 2 + step * 10;
-        return [box(Math.max(x, right(b) + 4), bottom(b) + 4 + step * (size.height + 4)), box(Math.max(x, right(b) + 4), b.y - 4 - size.height - step * (size.height + 4)), box(Math.max(x, right(b) + 4), cy(b) - size.height / 2)];
+        const left = right(host) + 2 + step * 10;
+        return [box(Math.max(left, right(boundary) + 4), bottom(boundary) + 4 + step * (size.height + 4)), box(Math.max(left, right(boundary) + 4), boundary.y - 4 - size.height - step * (size.height + 4)), box(Math.max(left, right(boundary) + 4), cy(boundary) - size.height / 2)];
       }
       case 'left': {
-        const x = host.x - 2 - size.width - step * 10;
-        return [box(Math.min(x, b.x - 4 - size.width), bottom(b) + 4 + step * (size.height + 4)), box(Math.min(x, b.x - 4 - size.width), b.y - 4 - size.height - step * (size.height + 4)), box(Math.min(x, b.x - 4 - size.width), cy(b) - size.height / 2)];
+        const left = host.x - 2 - size.width - step * 10;
+        return [box(Math.min(left, boundary.x - 4 - size.width), bottom(boundary) + 4 + step * (size.height + 4)), box(Math.min(left, boundary.x - 4 - size.width), boundary.y - 4 - size.height - step * (size.height + 4)), box(Math.min(left, boundary.x - 4 - size.width), cy(boundary) - size.height / 2)];
       }
       default: {
         // hanging below the host
-        const y = bottom(host) + 2 + step * (size.height + 4);
-        return [box(right(b) + 4, y), box(b.x - 4 - size.width, y), box(cx(b) - size.width / 2, Math.max(y, bottom(b) + 4))];
+        const top = bottom(host) + 2 + step * (size.height + 4);
+        return [box(right(boundary) + 4, top), box(boundary.x - 4 - size.width, top), box(cx(boundary) - size.width / 2, Math.max(top, bottom(boundary) + 4))];
       }
     }
   }
 
   /** `prefer` first, then the kind's conventional sides, then further out and shifted spots. */
-  placeShapeLabel(s: DShape, prefer?: LabelSide): Box | undefined {
-    const name = this.nameOf(s.el);
-    if (!name || !hasExternalLabel(s)) return undefined;
+  placeShapeLabel(shape: DShape, prefer?: LabelSide): Box | undefined {
+    const name = this.nameOf(shape.el);
+    if (!name || !hasExternalLabel(shape)) return undefined;
     const { width, height } = labelSize(name);
     const size = { width, height };
-    const host = s.hostId ? this.plane.shapes.get(s.hostId) : undefined;
-    const ignore = new Set([s.id, ...(host ? [host.id] : [])]);
-    const c = this.clutter(s.id, ignore);
+    const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
+    const ignore = new Set([shape.id, ...(host ? [host.id] : [])]);
+    const clutter = this.clutter(shape.id, ignore);
     // the host blocks a boundary label too, except where the label hangs below it
-    if (host) c.shapes.push(host.bounds);
-    const order = ORDER[s.kind] ?? ORDER['event']!;
-    const sides = prefer ? [prefer, ...order.filter((x) => x !== prefer)] : order;
+    if (host) clutter.shapes.push(host.bounds);
+    const order = ORDER[shape.kind] ?? ORDER['event']!;
+    const sides = prefer ? [prefer, ...order.filter((side) => side !== prefer)] : order;
     const cands: Box[] = [];
     for (let step = 0; step < 3; step++) {
-      if (s.kind === 'boundary' && host && !prefer) {
-        cands.push(...this.boundaryLabelCandidates(s.bounds, host.bounds, size, step));
+      if (shape.kind === 'boundary' && host && !prefer) {
+        cands.push(...this.boundaryLabelCandidates(shape.bounds, host.bounds, size, step));
         continue;
       }
-      for (const side of sides) cands.push(labelAt(s, size, side, host, step));
+      for (const side of sides) cands.push(labelAt(shape, size, side, host, step));
     }
     const first = cands[0];
     /**
      * shifted spots help when every side is taken in its middle (a gateway with a flow on
      * each vertex); a shifted one inside the frame beats a centred one outside
      */
-    const shifted = s.kind !== 'boundary' || prefer ? sides.map((side) => this.sideSpots(s, side, size, host)) : [];
-    const free = this.firstFree(s, c, cands, ...shifted);
-    s.label = free ?? (prefer ? labelAt(s, size, prefer, host) : first!);
-    return s.label;
+    const shifted = shape.kind !== 'boundary' || prefer ? sides.map((side) => this.sideSpots(shape, side, size, host)) : [];
+    const free = this.firstFree(shape, clutter, cands, ...shifted);
+    shape.label = free ?? (prefer ? labelAt(shape, size, prefer, host) : first!);
+    return shape.label;
   }
 
   /** Above or below the first long enough horizontal segment, else beside a vertical one. */
-  placeEdgeLabel(e: DEdge): Box | undefined {
-    const name = this.nameOf(e.el);
-    if (!name || e.points.length < 2 || !(is(e.el, 'bpmn:SequenceFlow') || is(e.el, 'bpmn:MessageFlow'))) return undefined;
+  placeEdgeLabel(edge: DEdge): Box | undefined {
+    const name = this.nameOf(edge.el);
+    if (!name || edge.points.length < 2 || !(is(edge.el, 'bpmn:SequenceFlow') || is(edge.el, 'bpmn:MessageFlow'))) return undefined;
     const { width, height } = labelSize(name);
     const size = { width, height };
     // the edge's own segments count too: bpmn-js text must not sit on its own line either
-    const c = this.clutter(e.id, new Set());
+    const clutter = this.clutter(edge.id, new Set());
     const cands: Box[] = [];
-    const pts = e.points;
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const p = pts[i]!;
-      const q = pts[i + 1]!;
-      if (Math.abs(p.y - q.y) < 0.5) {
-        const lo = Math.min(p.x, q.x);
-        const hi = Math.max(p.x, q.x);
+    const pts = edge.points;
+    for (let index = 0; index + 1 < pts.length; index++) {
+      const start = pts[index]!;
+      const end = pts[index + 1]!;
+      if (Math.abs(start.y - end.y) < 0.5) {
+        const lo = Math.min(start.x, end.x);
+        const hi = Math.max(start.x, end.x);
         if (hi - lo < size.width / 2) continue;
         // near the start first (BPMN convention), then the middle and the end of the segment
         const xs = [Math.min(lo + 8, Math.max(lo + 2, hi - size.width - 4)), (lo + hi) / 2 - size.width / 2, hi - size.width - 8];
-        for (const x of xs) cands.push({ x: Math.round(x), y: Math.round(p.y - size.height - 4), ...size }, { x: Math.round(x), y: Math.round(p.y + 4), ...size });
+        for (const left of xs) cands.push({ x: Math.round(left), y: Math.round(start.y - size.height - 4), ...size }, { x: Math.round(left), y: Math.round(start.y + 4), ...size });
       }
     }
-    for (let i = 0; i + 1 < pts.length; i++) {
-      const p = pts[i]!;
-      const q = pts[i + 1]!;
-      if (Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) >= size.height) {
-        const y = Math.round(Math.min(p.y, q.y) + Math.abs(p.y - q.y) / 2 - size.height / 2);
-        cands.push({ x: Math.round(p.x + 6), y, ...size }, { x: Math.round(p.x - size.width - 6), y, ...size });
+    for (let index = 0; index + 1 < pts.length; index++) {
+      const start = pts[index]!;
+      const end = pts[index + 1]!;
+      if (Math.abs(start.x - end.x) < 0.5 && Math.abs(start.y - end.y) >= size.height) {
+        const top = Math.round(Math.min(start.y, end.y) + Math.abs(start.y - end.y) / 2 - size.height / 2);
+        cands.push({ x: Math.round(start.x + 6), y: top, ...size }, { x: Math.round(start.x - size.width - 6), y: top, ...size });
       }
     }
     if (!cands.length) {
-      const p = pts[0]!;
-      cands.push({ x: Math.round(p.x + 6), y: Math.round(p.y - size.height - 4), ...size });
+      const start = pts[0]!;
+      cands.push({ x: Math.round(start.x + 6), y: Math.round(start.y - size.height - 4), ...size });
     }
-    e.label = cands.find((b) => !this.collides(b, c)) ?? cands[0]!;
-    return e.label;
+    edge.label = cands.find((candidate) => !this.collides(candidate, clutter)) ?? cands[0]!;
+    return edge.label;
   }
 
   /**
@@ -198,26 +198,26 @@ export class LabelPlacer {
    */
   clearTitles(wasClear: (owner: DShape | DEdge, sub: DShape) => boolean): Array<[string, string]> {
     const titles: Array<[DShape, Box]> = [];
-    for (const s of this.plane.shapes.values()) {
-      const title = Frames.title(s);
-      if (title) titles.push([s, title]);
+    for (const shape of this.plane.shapes.values()) {
+      const title = Frames.title(shape);
+      if (title) titles.push([shape, title]);
     }
     if (!titles.length) return [];
-    const onTitle = (b: Box): DShape | undefined => titles.find(([, t]) => overlaps(b, t))?.[0];
+    const onTitle = (box: Box): DShape | undefined => titles.find(([, title]) => overlaps(box, title))?.[0];
     const out: Array<[string, string]> = [];
-    for (const o of [...this.plane.shapes.values(), ...this.plane.edges.values()]) {
-      const old = o.label;
-      const sub = old && this.nameOf(o.el) ? onTitle(old) : undefined;
-      if (!old || !sub || !wasClear(o, sub)) continue;
-      if ('bounds' in o) {
-        if (!hasExternalLabel(o)) continue;
-        const host = o.hostId ? this.plane.shapes.get(o.hostId) : undefined;
-        const side = labelSideOf(o, host?.bounds);
-        this.placeShapeLabel(o, side === 'inside' ? undefined : side);
-      } else this.placeEdgeLabel(o);
-      const home = this.homeOf(o);
-      if (o.label && !onTitle(o.label) && (!home || inside(o.label, home.bounds))) out.push([o.id, sub.id]);
-      else o.label = old;
+    for (const owner of [...this.plane.shapes.values(), ...this.plane.edges.values()]) {
+      const old = owner.label;
+      const sub = old && this.nameOf(owner.el) ? onTitle(old) : undefined;
+      if (!old || !sub || !wasClear(owner, sub)) continue;
+      if ('bounds' in owner) {
+        if (!hasExternalLabel(owner)) continue;
+        const host = owner.hostId ? this.plane.shapes.get(owner.hostId) : undefined;
+        const side = labelSideOf(owner, host?.bounds);
+        this.placeShapeLabel(owner, side === 'inside' ? undefined : side);
+      } else this.placeEdgeLabel(owner);
+      const home = this.homeOf(owner);
+      if (owner.label && !onTitle(owner.label) && (!home || inside(owner.label, home.bounds))) out.push([owner.id, sub.id]);
+      else owner.label = old;
     }
     return out;
   }
@@ -227,22 +227,22 @@ export class LabelPlacer {
     const name = this.nameOf(owner.el);
     if (!name) return undefined;
     if ('bounds' in owner) {
-      const s = owner as DShape;
-      if (!hasExternalLabel(s)) return undefined;
-      if (!s.label) return this.placeShapeLabel(s);
+      const shape = owner as DShape;
+      if (!hasExternalLabel(shape)) return undefined;
+      if (!shape.label) return this.placeShapeLabel(shape);
       const { width, height } = labelSize(name);
       const size = { width, height };
-      const old = s.label;
-      const b = s.bounds;
+      const old = shape.label;
+      const bounds = shape.bounds;
       let box: Box;
-      if (old.y >= bottom(b) - 2) box = { x: Math.round(cx(old) - size.width / 2), y: old.y, ...size };
-      else if (bottom(old) <= b.y + 2) box = { x: Math.round(cx(old) - size.width / 2), y: Math.round(bottom(old) - size.height), ...size };
-      else if (old.x >= right(b) - 2) box = { x: old.x, y: Math.round(cy(old) - size.height / 2), ...size };
+      if (old.y >= bottom(bounds) - 2) box = { x: Math.round(cx(old) - size.width / 2), y: old.y, ...size };
+      else if (bottom(old) <= bounds.y + 2) box = { x: Math.round(cx(old) - size.width / 2), y: Math.round(bottom(old) - size.height), ...size };
+      else if (old.x >= right(bounds) - 2) box = { x: old.x, y: Math.round(cy(old) - size.height / 2), ...size };
       else box = { x: Math.round(right(old) - size.width), y: Math.round(cy(old) - size.height / 2), ...size };
-      const host = s.hostId ? this.plane.shapes.get(s.hostId) : undefined;
-      const c = this.clutter(s.id, new Set([s.id, ...(host ? [host.id] : [])]));
-      if (this.collides(box, c)) return this.placeShapeLabel(s);
-      s.label = box;
+      const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
+      const clutter = this.clutter(shape.id, new Set([shape.id, ...(host ? [host.id] : [])]));
+      if (this.collides(box, clutter)) return this.placeShapeLabel(shape);
+      shape.label = box;
       return box;
     }
     return this.placeEdgeLabel(owner as DEdge);

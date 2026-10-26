@@ -50,8 +50,8 @@ export class Reordering {
     const participants = many(collab, 'participants');
     const listed: El[] = [];
     for (const id of ids) {
-      const p = doc.require(id, 'bpmn:Participant', 'participant (pool)');
-      if (!participants.includes(p)) {
+      const participant = doc.require(id, 'bpmn:Participant', 'participant (pool)');
+      if (!participants.includes(participant)) {
         throw modelError('E_NOT_PARTICIPANT', `${id} is not a participant of ${idOf(collab)}`, {
           element: idOf(collab),
           related: [id],
@@ -59,11 +59,11 @@ export class Reordering {
           hint: `Pools of ${idOf(collab)} (in declaration order): ${participants.map(idOf).join(', ')}.`,
         });
       }
-      if (listed.includes(p)) throw usageError(`Participant ${id} is listed twice`, { element: idOf(collab) });
-      listed.push(p);
+      if (listed.includes(participant)) throw usageError(`Participant ${id} is listed twice`, { element: idOf(collab) });
+      listed.push(participant);
     }
-    const ordered = [...listed, ...participants.filter((p) => !listed.includes(p))];
-    if (ordered.every((p, i) => participants[i] === p)) {
+    const ordered = [...listed, ...participants.filter((participant) => !listed.includes(participant))];
+    if (ordered.every((participant, index) => participants[index] === participant)) {
       cs.note(`${idOf(collab)}: pools already declared in this order (the drawing follows it)`);
       return cs;
     }
@@ -96,8 +96,8 @@ export class Reordering {
       if (listed.includes(lane)) throw usageError(`Lane ${id} is listed twice`, { element: idOf(owner) });
       listed.push(lane);
     }
-    const ordered = [...listed, ...lanes.filter((l) => !listed.includes(l))];
-    if (ordered.every((l, i) => lanes[i] === l)) {
+    const ordered = [...listed, ...lanes.filter((lane) => !listed.includes(lane))];
+    if (ordered.every((lane, index) => lanes[index] === lane)) {
       cs.note(`${idOf(owner)}: lanes already in this order`);
       return cs;
     }
@@ -127,8 +127,8 @@ export class Reordering {
       if (listed.includes(flow)) throw usageError(`Flow ${flowId} is listed twice`, { element: idOf(node) });
       listed.push(flow);
     }
-    const ordered = [...listed, ...outgoing.filter((f) => !listed.includes(f))];
-    const unchanged = ordered.every((f, i) => outgoing[i] === f);
+    const ordered = [...listed, ...outgoing.filter((flow) => !listed.includes(flow))];
+    const unchanged = ordered.every((flow, index) => outgoing[index] === flow);
     if (unchanged) {
       cs.note(`${idOf(node)}: outgoing flows already in this order`);
       return cs;
@@ -143,7 +143,7 @@ export class Reordering {
   /** Non-sequence-flow entries, if any, stay last. */
   private rewriteOutgoing(node: El, ordered: El[]): void {
     const list = many(node, 'outgoing');
-    const others = list.filter((f) => !is(f, 'bpmn:SequenceFlow'));
+    const others = list.filter((flowElement) => !is(flowElement, 'bpmn:SequenceFlow'));
     list.splice(0, list.length, ...ordered, ...others);
   }
 
@@ -152,10 +152,10 @@ export class Reordering {
     const scope = this.doc.scopeOf(node) ?? (node.$parent as El | undefined);
     if (!scope) return;
     const list = many(scope, 'flowElements');
-    const positions = ordered.map((f) => list.indexOf(f)).filter((i) => i >= 0);
+    const positions = ordered.map((flow) => list.indexOf(flow)).filter((position) => position >= 0);
     const nodeIndex = list.indexOf(node);
     let at = positions.length ? Math.min(...positions) : list.length;
-    for (const f of ordered) removeFrom(scope, 'flowElements', f);
+    for (const flow of ordered) removeFrom(scope, 'flowElements', flow);
     const nodeIndexAfter = list.indexOf(node);
     if (nodeIndex !== -1 && at <= nodeIndex) at = nodeIndexAfter + 1;
     insertInto(scope, 'flowElements', Math.min(at, list.length), ...ordered);

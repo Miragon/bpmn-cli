@@ -31,49 +31,49 @@ export class JoinColumnTrial extends ArrangementTrial {
     const shifts = new Map<GNode, number>();
     const tried = new Set<GNode>();
     const route = (): Routes => this.routesOf();
-    const show = (r: Routes): string => this.showRoutes(r);
+    const show = (candidateRoutes: Routes): string => this.showRoutes(candidateRoutes);
     let routed: Routes | undefined;
     let taken: Map<GNode, Array<GNode | undefined>> | undefined;
     for (;;) {
       const blocked = (taken ??= this.takenColumns());
       // joins first: a node entered from below may then move under a join already in place
-      const open = layout.nodes.filter((n) => blocked.has(n) && !tried.has(n));
-      const j = open.find((n) => ChannelRouter.entriesFromBelow(n).length) ?? open[0];
-      if (!j) break;
-      tried.add(j);
+      const open = layout.nodes.filter((node) => blocked.has(node) && !tried.has(node));
+      const candidate = open.find((node) => ChannelRouter.entriesFromBelow(node).length) ?? open[0];
+      if (!candidate) break;
+      tried.add(candidate);
       const before = routed ?? route();
       // an entry drawn over the top enters the node's top and needs no column below
-      if (before.above.size && !this.takenColumns(before.above).has(j)) {
-        if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${j.id} stays: entered over the top`);
+      if (before.above.size && !this.takenColumns(before.above).has(candidate)) {
+        if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${candidate.id} stays: entered over the top`);
         routed = before;
         continue;
       }
       const checkpoint = new ArrangementCheckpoint(layout);
       const kept = new Map(shifts);
-      const step = (n: GNode): number => (shifts.get(n) ?? 0) - (kept.get(n) ?? 0);
+      const step = (node: GNode): number => (shifts.get(node) ?? 0) - (kept.get(node) ?? 0);
       const reset = (to: ReadonlyMap<GNode, number>): void => {
         shifts.clear();
-        for (const [n, k] of to) shifts.set(n, k);
+        for (const [node, shift] of to) shifts.set(node, shift);
       };
       /**
        * Better and nothing worse: more rises, fewer labels, or fewer crossings / cuts at as many
        * rises; or fewer cuts, each paying for at most one more crossing.
        */
-      const keeps = (r: Routes): boolean =>
-        ((r.rises.size > before.rises.size || r.labels < before.labels || ((r.crossings < before.crossings || r.hits < before.hits) && r.rises.size >= before.rises.size)) && r.crossings <= before.crossings && r.hits <= before.hits && r.labels <= before.labels) ||
-        (r.hits < before.hits && r.labels <= before.labels && r.crossings - before.crossings <= before.hits - r.hits);
-      const xs = new Map(layout.nodes.map((n) => [n, n.box.x]));
-      const dx = (n: GNode): number => n.box.x - xs.get(n)!;
+      const keeps = (candidateRoutes: Routes): boolean =>
+        ((candidateRoutes.rises.size > before.rises.size || candidateRoutes.labels < before.labels || ((candidateRoutes.crossings < before.crossings || candidateRoutes.hits < before.hits) && candidateRoutes.rises.size >= before.rises.size)) && candidateRoutes.crossings <= before.crossings && candidateRoutes.hits <= before.hits && candidateRoutes.labels <= before.labels) ||
+        (candidateRoutes.hits < before.hits && candidateRoutes.labels <= before.labels && candidateRoutes.crossings - before.crossings <= before.hits - candidateRoutes.hits);
+      const xs = new Map(layout.nodes.map((node) => [node, node.box.x]));
+      const dx = (node: GNode): number => node.box.x - xs.get(node)!;
       /** The columns this trial took (something new or moved is there) whose nodes can move on. */
       const took = (cols: ReadonlyMap<GNode, Array<GNode | undefined>>): GNode[] =>
-        [...cols].filter(([n, owners]) => (n === j || owners.some((o) => !blocked.get(n)?.includes(o) || (!!o && dx(o) !== dx(n)))) && step(n) < MAX_JOIN_SHIFT).map(([n]) => n);
+        [...cols].filter(([node, owners]) => (node === candidate || owners.some((owner) => !blocked.get(node)?.includes(owner) || (!!owner && dx(owner) !== dx(node)))) && step(node) < MAX_JOIN_SHIFT).map(([node]) => node);
       // right until the column is free (the chain that blocks it may go on)
       let now: Map<GNode, Array<GNode | undefined>>;
       do {
-        shifts.set(j, (shifts.get(j) ?? 0) + 1);
+        shifts.set(candidate, (shifts.get(candidate) ?? 0) + 1);
         arrange(shifts);
         now = this.takenColumns();
-      } while (step(j) < MAX_JOIN_SHIFT && now.has(j));
+      } while (step(candidate) < MAX_JOIN_SHIFT && now.has(candidate));
       const alone = new Map(shifts);
       const first = took(now);
       // a kept trial's taken columns are the next trial's
@@ -84,17 +84,17 @@ export class JoinColumnTrial extends ArrangementTrial {
       const push = (): boolean => {
         let next = first;
         for (let round = 0; next.length && round < 3 * MAX_JOIN_SHIFT; round++, next = took((last = this.takenColumns()))) {
-          for (const n of next) shifts.set(n, (shifts.get(n) ?? 0) + 1);
+          for (const node of next) shifts.set(node, (shifts.get(node) ?? 0) + 1);
           // larger pushes never drew better, and each costs a routing
-          if ([...shifts.keys()].filter((n) => n !== j && step(n)).length > MAX_PUSHED) {
+          if ([...shifts.keys()].filter((node) => node !== candidate && step(node)).length > MAX_PUSHED) {
             if (round) back();
             else reset(alone);
             return false;
           }
           arrange(shifts);
         }
-        if (LayoutDebug.on()) others = layout.nodes.filter((n) => n !== j && step(n)).map((n) => `${n.id} ${step(n)}`).join(', ');
-        return [...shifts].some(([n, k]) => k !== alone.get(n));
+        if (LayoutDebug.on()) others = layout.nodes.filter((node) => node !== candidate && step(node)).map((node) => `${node.id} ${step(node)}`).join(', ');
+        return [...shifts].some(([node, shift]) => shift !== alone.get(node));
       };
       const back = (): void => {
         reset(alone);
@@ -105,7 +105,7 @@ export class JoinColumnTrial extends ArrangementTrial {
        * Push the others first when the move breaks a straight rise; else only when the move alone
        * is not kept or loses a rise.
        */
-      const breaks = first.some((n) => ChannelRouter.risesInto(n).some((e) => before.rises.has(e)));
+      const breaks = first.some((node) => ChannelRouter.risesInto(node).some((edge) => before.rises.has(edge)));
       let after = before;
       let keep = false;
       if (breaks && push()) {
@@ -117,7 +117,7 @@ export class JoinColumnTrial extends ArrangementTrial {
         const single = route();
         after = single;
         keep = keeps(single);
-        if ((!keep || [...before.rises].some((e) => !single.rises.has(e))) && !breaks && push()) {
+        if ((!keep || [...before.rises].some((edge) => !single.rises.has(edge))) && !breaks && push()) {
           together = route();
           if (keeps(together)) {
             after = together;
@@ -125,7 +125,7 @@ export class JoinColumnTrial extends ArrangementTrial {
           } else back();
         }
       }
-      if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${j.id} ${keep ? `moves ${step(j)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
+      if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${candidate.id} ${keep ? `moves ${step(candidate)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
       if (keep) {
         routed = after;
         taken = last;
@@ -144,24 +144,24 @@ export class JoinColumnTrial extends ArrangementTrial {
   private takenColumns(over?: ReadonlySet<GEdge>): Map<GNode, Array<GNode | undefined>> {
     const { layout } = this;
     const out = new Map<GNode, Array<GNode | undefined>>();
-    const entries = (n: GNode): GEdge[] => (over ? ChannelRouter.risesInto(n).filter((e) => !over.has(e)) : ChannelRouter.risesInto(n));
-    const rising = layout.nodes.filter((n) => entries(n).length);
+    const entries = (node: GNode): GEdge[] => (over ? ChannelRouter.risesInto(node).filter((edge) => !over.has(edge)) : ChannelRouter.risesInto(node));
+    const rising = layout.nodes.filter((node) => entries(node).length);
     if (!rising.length) return out;
     const index = new XIndex<[Box, GNode | undefined]>();
-    const add = (b: Box, owner: GNode | undefined): void => index.add([b, owner], b.x, b.x + b.width);
-    for (const n of layout.nodes) {
-      add(n.box, n);
-      for (const b of n.boundary) add(b.box, n);
+    const add = (box: Box, owner: GNode | undefined): void => index.add([box, owner], box.x, box.x + box.width);
+    for (const node of layout.nodes) {
+      add(node.box, node);
+      for (const boundaryEvent of node.boundary) add(boundaryEvent.box, node);
     }
-    const ownerOf = (a: GArtifact): GNode | undefined => a.anchorNode?.host ?? a.anchorNode;
-    for (const a of routedArtifacts(layout)) add(a.box, ownerOf(a));
+    const ownerOf = (artifact: GArtifact): GNode | undefined => artifact.anchorNode?.host ?? artifact.anchorNode;
+    for (const artifact of routedArtifacts(layout)) add(artifact.box, ownerOf(artifact));
     const labels = new ScopeLabels(layout);
-    for (const [b, n] of labels.ownShapes()) add(b, n);
-    for (const [b, a] of labels.placedData()) add(b, ownerOf(a));
-    for (const j of rising) {
-      const x = ChannelRouter.riseX(j), top = j.box.y + j.box.height, low = Math.max(...entries(j).map(ChannelRouter.riseFrom));
-      const owners = index.near(x - RISE_KEEP, x + RISE_KEEP).filter(([b, owner]) => owner !== j && b.x - RISE_KEEP < x && x < b.x + b.width + RISE_KEEP && b.y < low && top < b.y + b.height).map(([, owner]) => owner);
-      if (owners.length) out.set(j, owners);
+    for (const [box, node] of labels.ownShapes()) add(box, node);
+    for (const [box, artifact] of labels.placedData()) add(box, ownerOf(artifact));
+    for (const riser of rising) {
+      const riseX = ChannelRouter.riseX(riser), top = riser.box.y + riser.box.height, low = Math.max(...entries(riser).map(ChannelRouter.riseFrom));
+      const owners = index.near(riseX - RISE_KEEP, riseX + RISE_KEEP).filter(([box, owner]) => owner !== riser && box.x - RISE_KEEP < riseX && riseX < box.x + box.width + RISE_KEEP && box.y < low && top < box.y + box.height).map(([, owner]) => owner);
+      if (owners.length) out.set(riser, owners);
     }
     return out;
   }

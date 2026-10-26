@@ -121,11 +121,11 @@ const REJECTED_TYPES: Record<string, string> = {
 const byToken = new Map<string, KindDef>();
 for (const def of KINDS) {
   const tokens = [def.kind, def.type, def.type.split(':')[1] ?? '', ...def.aliases];
-  for (const t of tokens) if (t) byToken.set(t.toLowerCase(), def);
+  for (const token of tokens) if (token) byToken.set(token.toLowerCase(), def);
 }
 // eventSubProcess shares its type with subProcess: keep subProcess for 'bpmn:SubProcess'
-byToken.set('bpmn:subprocess', KINDS.find((k) => k.kind === 'subProcess')!);
-byToken.set('subprocess', KINDS.find((k) => k.kind === 'subProcess')!);
+byToken.set('bpmn:subprocess', KINDS.find((kindDef) => kindDef.kind === 'subProcess')!);
+byToken.set('subprocess', KINDS.find((kindDef) => kindDef.kind === 'subProcess')!);
 
 export interface ParsedKind {
   def: KindDef;
@@ -133,12 +133,12 @@ export interface ParsedKind {
 }
 
 export function normalizeTrigger(raw: string): Trigger | undefined {
-  const t = raw.trim().toLowerCase();
-  if (!t) return undefined;
-  const alias = TRIGGER_ALIASES[t];
+  const token = raw.trim().toLowerCase();
+  if (!token) return undefined;
+  const alias = TRIGGER_ALIASES[token];
   if (alias) return alias;
-  if (t === 'none') return 'none';
-  return (Object.keys(TRIGGER_TYPES) as Trigger[]).find((k) => k === t);
+  if (token === 'none') return 'none';
+  return (Object.keys(TRIGGER_TYPES) as Trigger[]).find((trigger) => trigger === token);
 }
 
 /** Resolves `kind[:trigger]`. Throws KindError with candidates on failure. */
@@ -153,10 +153,10 @@ export function parseKind(token: string): ParsedKind {
   }
   const def = byToken.get(kindToken.toLowerCase());
   if (!def) {
-    const rejected = Object.entries(REJECTED_TYPES).find(([t]) => {
-      const local = t.split(':')[1]!.toLowerCase();
-      const k = kindToken.toLowerCase().replace(/^bpmn:/, '');
-      return local === k || local === `${k}gateway` || local === `${k}event`;
+    const rejected = Object.entries(REJECTED_TYPES).find(([rejectedType]) => {
+      const local = rejectedType.split(':')[1]!.toLowerCase();
+      const kind = kindToken.toLowerCase().replace(/^bpmn:/, '');
+      return local === kind || local === `${kind}gateway` || local === `${kind}event`;
     });
     if (rejected) throw new KindError(`Kind "${kindToken}" is rejected: ${rejected[1]}`);
     const candidates = suggestKinds(kindToken);
@@ -191,32 +191,32 @@ export function assertKindToken(value: string): void {
 }
 
 export function suggestKinds(token: string, max = 4): string[] {
-  const t = token.toLowerCase().replace(/^bpmn:/, '');
+  const lowerToken = token.toLowerCase().replace(/^bpmn:/, '');
   const scored = KINDS.map((def) => {
-    const names = [def.kind, ...def.aliases].map((n) => n.toLowerCase());
+    const names = [def.kind, ...def.aliases].map((name) => name.toLowerCase());
     let best = Infinity;
-    for (const n of names) {
-      if (n.includes(t) || t.includes(n)) best = Math.min(best, 1);
-      best = Math.min(best, levenshtein(n, t));
+    for (const name of names) {
+      if (name.includes(lowerToken) || lowerToken.includes(name)) best = Math.min(best, 1);
+      best = Math.min(best, levenshtein(name, lowerToken));
     }
     return { kind: def.kind, score: best };
   });
   return scored
-    .filter((s) => s.score <= Math.max(2, Math.floor(t.length / 3)))
-    .sort((a, b) => a.score - b.score)
+    .filter((scored) => scored.score <= Math.max(2, Math.floor(lowerToken.length / 3)))
+    .sort((left, right) => left.score - right.score)
     .slice(0, max)
-    .map((s) => s.kind);
+    .map((scored) => scored.kind);
 }
 
 export function kindByName(kind: string): KindDef | undefined {
-  return KINDS.find((k) => k.kind === kind);
+  return KINDS.find((kindDef) => kindDef.kind === kind);
 }
 
 export function kindOf(el: El): KindDef | undefined {
   if (is(el, 'bpmn:SubProcess') && !is(el, 'bpmn:AdHocSubProcess') && !is(el, 'bpmn:Transaction')) {
     return el.get<boolean | undefined>('triggeredByEvent') ? kindByName('eventSubProcess') : kindByName('subProcess');
   }
-  return KINDS.find((k) => k.type === el.$type);
+  return KINDS.find((kindDef) => kindDef.type === el.$type);
 }
 
 export function branchesByCondition(el: El): boolean {
@@ -237,7 +237,7 @@ export function namedAsQuestion(el: El): boolean {
 
 /** `exclusiveGateway (xor), parallelGateway (and), ...` for hints. */
 export function gatewayKindList(): string {
-  const gateways = KINDS.filter((k) => k.family === 'gateway').map((k) => (k.aliases[0] ? `${k.kind} (${k.aliases[0]})` : k.kind));
+  const gateways = KINDS.filter((kindDef) => kindDef.family === 'gateway').map((kindDef) => (kindDef.aliases[0] ? `${kindDef.kind} (${kindDef.aliases[0]})` : kindDef.kind));
   return `${gateways.slice(0, -1).join(', ')} or ${gateways.at(-1)}`;
 }
 

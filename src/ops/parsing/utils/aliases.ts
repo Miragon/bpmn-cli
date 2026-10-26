@@ -10,13 +10,13 @@ export function isAlias(value: unknown): value is string {
 }
 
 function listing(defined: ReadonlyMap<string, number>): string {
-  return defined.size ? `defined so far: ${[...defined].map(([a, i]) => `${a} (ops[${i}])`).join(', ')}` : 'no op before it defines one';
+  return defined.size ? `defined so far: ${[...defined].map(([aliasName, opIndex]) => `${aliasName} (ops[${opIndex}])`).join(', ')}` : 'no op before it defines one';
 }
 
 export function unknownAlias(index: number, op: Op, key: string, alias: string, defined: ReadonlyMap<string, number>, later?: number): CliError {
   const where = later === undefined ? '' : later === index ? ' yet (this op defines it: only the ops after it can use it)' : later > index ? ` before this op (ops[${later}] defines it)` : '';
-  const distance = (a: string): number => editDistance(a.toLowerCase(), alias.toLowerCase());
-  const candidates = [...defined.keys()].sort((a, b) => distance(a) - distance(b));
+  const distance = (candidate: string): number => editDistance(candidate.toLowerCase(), alias.toLowerCase());
+  const candidates = [...defined.keys()].sort((left, right) => distance(left) - distance(right));
   const close = candidates[0] !== undefined && later === undefined && distance(candidates[0]) <= Math.max(1, typoTolerance(alias.length)) ? ` (did you mean ${candidates[0]}?)` : '';
   return new CliError('E_UNKNOWN_ALIAS', `ops[${index}] (${op.op}): "${key}": alias ${alias} is not defined${where}${close}; ${listing(defined)}`, 'usage', {
     op: index,

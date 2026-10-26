@@ -37,8 +37,8 @@ export function labelOf(el: El): string {
   return `${kindLabel(el)} ${el.get<string>('id')}${name ? ` "${name}"` : ''}`;
 }
 
-export function isEl(v: unknown): v is El {
-  return !!v && typeof v === 'object' && typeof (v as El).$type === 'string';
+export function isEl(value: unknown): value is El {
+  return !!value && typeof value === 'object' && typeof (value as El).$type === 'string';
 }
 
 /** `multiInstanceLoopCharacteristics` */
@@ -49,16 +49,16 @@ export function typeLabel(el: El): string {
 
 export function vendorAttributes(el: El): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(el.$attrs ?? {})) {
-    if (!k.includes(':') || k.startsWith('xmlns') || k.startsWith('xsi:') || k.startsWith('xml:') || v === undefined || v === null || typeof v === 'object') continue;
-    out[k] = String(v);
+  for (const [attrName, attrValue] of Object.entries(el.$attrs ?? {})) {
+    if (!attrName.includes(':') || attrName.startsWith('xmlns') || attrName.startsWith('xsi:') || attrName.startsWith('xml:') || attrValue === undefined || attrValue === null || typeof attrValue === 'object') continue;
+    out[attrName] = String(attrValue);
   }
   return out;
 }
 
 export function vendorContent(def: El): string[] {
   const out: string[] = [];
-  for (const [k, v] of Object.entries(def.$attrs ?? {})) if (!k.startsWith('xmlns') && !k.startsWith('xsi:') && typeof v !== 'object') out.push(k);
+  for (const [attrName, attrValue] of Object.entries(def.$attrs ?? {})) if (!attrName.startsWith('xmlns') && !attrName.startsWith('xsi:') && typeof attrValue !== 'object') out.push(attrName);
   for (const ext of def.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) out.push(ext.$type);
   if ((def.get<El[] | undefined>('documentation') ?? []).length) out.push('documentation');
   return out;

@@ -93,7 +93,7 @@ export class IncrementalLayout implements PlacementHooks {
   private readonly growth: FrameGrowth;
   private readonly labelRefresh: LabelRefresh;
   private readonly checkpoints: RunCheckpoint;
-  afterPlace?: (plane: Plane, s: DShape) => void;
+  afterPlace?: (plane: Plane, shape: DShape) => void;
   afterNode?: (plane: Plane, id: string) => void;
 
   /** Incremental layout of a document after its ops ran. */
@@ -115,7 +115,7 @@ export class IncrementalLayout implements PlacementHooks {
   ) {
     this.sem = sem;
     // a further diagram of a root another diagram shows is a second view: left as it is
-    this.planes = new DiagramReader(doc.definitions, sem).planes().filter((p, i, all) => all.findIndex((q) => q.rootId === p.rootId) === i);
+    this.planes = new DiagramReader(doc.definitions, sem).planes().filter((plane, index, all) => all.findIndex((other) => other.rootId === plane.rootId) === index);
     for (const [oldFlowId, ends] of snap.flowEnds) {
       const id = snap.currentId(oldFlowId);
       const el = sem.byId.get(id);
@@ -128,7 +128,7 @@ export class IncrementalLayout implements PlacementHooks {
       if (target && now.targetId !== target) this.oldTarget.set(id, target);
     }
     if (stale.length) this.notes.push(`edge(s) of ${[...new Set(stale)].join(', ')} removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out`);
-    const baseline = new Map(this.planes.flatMap((p) => [...p.shapes.values()].map((x) => [x.id, copyBox(x.bounds)] as [string, Box])));
+    const baseline = new Map(this.planes.flatMap((plane) => [...plane.shapes.values()].map((shape) => [shape.id, copyBox(shape.bounds)] as [string, Box])));
     this.created = opts.created ?? [];
     this.place = new NodePlacer(this.planes, sem, this.oldSource, this.oldTarget, new Set(opts.collapse ?? []), this.notes, this);
     this.diff = new DrawingDiff(this, snap);
@@ -149,10 +149,10 @@ export class IncrementalLayout implements PlacementHooks {
     const detached = new Map<string, string[]>();
     for (const plane of this.planes) {
       const vertical = !!PlaneQuery.verticalBand(plane);
-      for (const e of plane.edges.values()) {
-        before.set(e, this.drawing(plane).edgeBefore(e));
-        const ends = vertical ? [] : this.drawing(plane).detachedEnds(e);
-        if (ends.length && !(e.di && this.snap.changedEnds(e.di).length)) detached.set(e.id, ends);
+      for (const edge of plane.edges.values()) {
+        before.set(edge, this.drawing(plane).edgeBefore(edge));
+        const ends = vertical ? [] : this.drawing(plane).detachedEnds(edge);
+        if (ends.length && !(edge.di && this.snap.changedEnds(edge.di).length)) detached.set(edge.id, ends);
       }
     }
 
@@ -175,19 +175,19 @@ export class IncrementalLayout implements PlacementHooks {
     duplicates.assertNone(defs);
 
     const live = new Set<El>();
-    for (const p of this.planes) for (const x of [...p.shapes.values(), ...p.edges.values()]) if (x.di) live.add(x.di);
+    for (const plane of this.planes) for (const element of [...plane.shapes.values(), ...plane.edges.values()]) if (element.di) live.add(element.di);
     const pruned = new Set(prunedNow);
     for (const [di, entry] of this.snap.byDi) if (!live.has(di) && !this.sem.byId.has(entry.id)) pruned.add(entry.id);
     // connections the space tool stretched or shortened without routing them again (audit #61)
     const routed = new Set([...rerouted, ...this.newEdges]);
     const reshaped: string[] = [];
-    for (const [e, b] of before) if (!routed.has(e.id) && !pruned.has(e.id) && !samePoints(b.points, e.points)) reshaped.push(e.id);
+    for (const [edge, edgeBefore] of before) if (!routed.has(edge.id) && !pruned.has(edge.id) && !samePoints(edgeBefore.points, edge.points)) reshaped.push(edge.id);
     return {
       mode: 'incremental',
-      placed: [...this.place.placed, ...this.newEdges].filter((id, i, all) => all.indexOf(id) === i && !this.relocated.has(id)),
+      placed: [...this.place.placed, ...this.newEdges].filter((id, index, all) => all.indexOf(id) === index && !this.relocated.has(id)),
       moved: this.movedShapes(),
       rerouted,
-      reshaped: reshaped.filter((id, i) => reshaped.indexOf(id) === i),
+      reshaped: reshaped.filter((id, index) => reshaped.indexOf(id) === index),
       pruned: [...pruned],
       notes: this.notes,
     };
@@ -200,12 +200,12 @@ export class IncrementalLayout implements PlacementHooks {
     this.growth.separateAll();
     this.growth.growGroups();
     this.routing.collectEdges(this.edgesBefore);
-    const r = this.routing.routeAll();
+    const rerouted = this.routing.routeAll();
     // existing connections routed when an end was placed and kept since count as rerouted
-    for (const id of this.routedNow.keys()) if (!this.newEdges.has(id) && !r.includes(id) && this.planes.some((p) => p.edges.has(id))) r.push(id);
-    this.labelRefresh.labels(new Set([...r, ...this.newEdges]));
-    this.assertHorizontal(r);
-    return r;
+    for (const id of this.routedNow.keys()) if (!this.newEdges.has(id) && !rerouted.includes(id) && this.planes.some((plane) => plane.edges.has(id))) rerouted.push(id);
+    this.labelRefresh.labels(new Set([...rerouted, ...this.newEdges]));
+    this.assertHorizontal(rerouted);
+    return rerouted;
   }
 
   /** Flow nodes, artifacts and connections of the model, parents before children. */
@@ -217,13 +217,13 @@ export class IncrementalLayout implements PlacementHooks {
         for (const da of [...rawList(fe, 'dataInputAssociations'), ...rawList(fe, 'dataOutputAssociations')]) out.push(da);
         if (Semantics.isSubProcess(fe)) visitScope(fe);
       }
-      for (const a of rawList(scope, 'artifacts')) out.push(a);
+      for (const artifact of rawList(scope, 'artifacts')) out.push(artifact);
     };
     for (const root of rawList(defs, 'rootElements')) {
       if (is(root, 'bpmn:Collaboration')) {
-        for (const p of rawList(root, 'participants')) out.push(p);
-        for (const m of rawList(root, 'messageFlows')) out.push(m);
-        for (const a of rawList(root, 'artifacts')) out.push(a);
+        for (const participant of rawList(root, 'participants')) out.push(participant);
+        for (const messageFlow of rawList(root, 'messageFlows')) out.push(messageFlow);
+        for (const artifact of rawList(root, 'artifacts')) out.push(artifact);
       }
     }
     for (const root of rawList(defs, 'rootElements')) {
@@ -245,7 +245,7 @@ export class IncrementalLayout implements PlacementHooks {
 
   private shapeIndex(planes: readonly Plane[]): Map<string, { plane: Plane; shape: DShape }> {
     const out = new Map<string, { plane: Plane; shape: DShape }>();
-    for (const plane of planes) for (const s of plane.shapes.values()) out.set(s.id, { plane, shape: s });
+    for (const plane of planes) for (const shape of plane.shapes.values()) out.set(shape.id, { plane, shape });
     return out;
   }
 
@@ -259,44 +259,44 @@ export class IncrementalLayout implements PlacementHooks {
 
   /** Copies engine geometry onto `plane` (shifted by dx/dy), bound to the document's elements. */
   private adoptBlock(plane: Plane, block: Block, dx: number, dy: number): void {
-    const rebindShape = (s: DShape, target: Plane, ox: number, oy: number): void => {
-      const el = this.sem.byId.get(s.id);
-      if (!el || target.shapes.has(s.id)) return;
-      const copy = this.place.newShape(target, s.id, { x: s.bounds.x + ox, y: s.bounds.y + oy, width: s.bounds.width, height: s.bounds.height });
-      if (s.label) copy.label = { ...s.label, x: s.label.x + ox, y: s.label.y + oy };
-      if (s.kind === 'subProcess') {
-        copy.expanded = s.expanded === true;
-        copy.container = s.expanded === true;
+    const rebindShape = (shape: DShape, target: Plane, ox: number, oy: number): void => {
+      const el = this.sem.byId.get(shape.id);
+      if (!el || target.shapes.has(shape.id)) return;
+      const copy = this.place.newShape(target, shape.id, { x: shape.bounds.x + ox, y: shape.bounds.y + oy, width: shape.bounds.width, height: shape.bounds.height });
+      if (shape.label) copy.label = { ...shape.label, x: shape.label.x + ox, y: shape.label.y + oy };
+      if (shape.kind === 'subProcess') {
+        copy.expanded = shape.expanded === true;
+        copy.container = shape.expanded === true;
       }
-      target.shapes.set(s.id, copy);
-      this.place.placed.add(s.id);
-      this.fromEngine.add(s.id);
+      target.shapes.set(shape.id, copy);
+      this.place.placed.add(shape.id);
+      this.fromEngine.add(shape.id);
     };
-    const rebindEdge = (e: DEdge, target: Plane, ox: number, oy: number): void => {
-      const el = this.sem.byId.get(e.id);
-      if (!el || target.edges.has(e.id)) return;
-      const copy: DEdge = { id: e.id, el, kind: DiagramReader.edgeKind(el), ...DiagramReader.edgeEnds(el), points: e.points.map((p) => ({ x: p.x + ox, y: p.y + oy })) };
-      if (e.label) copy.label = { ...e.label, x: e.label.x + ox, y: e.label.y + oy };
-      target.edges.set(e.id, copy);
-      this.fromEngine.add(e.id);
-      this.newEdges.add(e.id);
+    const rebindEdge = (edge: DEdge, target: Plane, ox: number, oy: number): void => {
+      const el = this.sem.byId.get(edge.id);
+      if (!el || target.edges.has(edge.id)) return;
+      const copy: DEdge = { id: edge.id, el, kind: DiagramReader.edgeKind(el), ...DiagramReader.edgeEnds(el), points: edge.points.map((point) => ({ x: point.x + ox, y: point.y + oy })) };
+      if (edge.label) copy.label = { ...edge.label, x: edge.label.x + ox, y: edge.label.y + oy };
+      target.edges.set(edge.id, copy);
+      this.fromEngine.add(edge.id);
+      this.newEdges.add(edge.id);
     };
     // containers first so the content's membership (parentId) resolves
-    for (const s of [...block.shapes].sort((a, b) => Number(b.container) - Number(a.container))) rebindShape(s, plane, dx, dy);
-    for (const s of plane.shapes.values()) {
-      if (!this.fromEngine.has(s.id)) continue;
-      const scope = this.sem.scopeOf.get(s.id);
+    for (const shape of [...block.shapes].sort((first, second) => Number(second.container) - Number(first.container))) rebindShape(shape, plane, dx, dy);
+    for (const shape of plane.shapes.values()) {
+      if (!this.fromEngine.has(shape.id)) continue;
+      const scope = this.sem.scopeOf.get(shape.id);
       const sid = idOf(scope);
-      if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) s.parentId = sid;
+      if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) shape.parentId = sid;
     }
-    for (const e of block.edges) rebindEdge(e, plane, dx, dy);
-    for (const p of block.planes) {
-      const root = this.sem.byId.get(p.rootId);
-      if (!root || this.planes.some((q) => q.rootId === p.rootId)) continue;
-      const target: Plane = { id: `BPMNPlane_${p.rootId}`, rootId: p.rootId, root, shapes: new Map(), edges: new Map(), dropped: [] };
+    for (const edge of block.edges) rebindEdge(edge, plane, dx, dy);
+    for (const blockPlane of block.planes) {
+      const root = this.sem.byId.get(blockPlane.rootId);
+      if (!root || this.planes.some((existing) => existing.rootId === blockPlane.rootId)) continue;
+      const target: Plane = { id: `BPMNPlane_${blockPlane.rootId}`, rootId: blockPlane.rootId, root, shapes: new Map(), edges: new Map(), dropped: [] };
       this.planes.push(target);
-      for (const s of p.shapes.values()) rebindShape(s, target, 0, 0);
-      for (const e of p.edges.values()) rebindEdge(e, target, 0, 0);
+      for (const shape of blockPlane.shapes.values()) rebindShape(shape, target, 0, 0);
+      for (const edge of blockPlane.edges.values()) rebindEdge(edge, target, 0, 0);
     }
   }
 
@@ -311,8 +311,8 @@ export class IncrementalLayout implements PlacementHooks {
   }
 
   /** The id an element had before the ops (its DI object survives a `set id=` rename). */
-  oldId(x: DShape | DEdge): string {
-    return (x.di && this.snap.byDi.get(x.di)?.id) || x.id;
+  oldId(element: DShape | DEdge): string {
+    return (element.di && this.snap.byDi.get(element.di)?.id) || element.id;
   }
 
   /** The id now of an element known by its id before the ops. */
@@ -321,8 +321,8 @@ export class IncrementalLayout implements PlacementHooks {
   }
 
   /** The title an expanded sub-process had before the ops; undefined without one. */
-  oldTitle(s: DShape): Box | undefined {
-    const was = s.di ? this.snap.byDi.get(s.di) : undefined;
+  oldTitle(shape: DShape): Box | undefined {
+    const was = shape.di ? this.snap.byDi.get(shape.di) : undefined;
     return was?.bounds && was.kind === 'subProcess' && was.expanded === true ? titleBox(was.bounds, this.snap.names.get(was.id)) : undefined;
   }
 
@@ -337,7 +337,7 @@ export class IncrementalLayout implements PlacementHooks {
     const sid = idOf(scope);
     if (!scope || !sid || !Semantics.isSubProcess(scope)) return undefined;
     // only for a sub-process drawn collapsed (one still to be expanded gets its content later)
-    const shape = this.planes.map((p) => p.shapes.get(sid)).find((x) => !!x);
+    const shape = this.planes.map((plane) => plane.shapes.get(sid)).find((candidate) => !!candidate);
     if (shape?.expanded) return undefined;
     if (!shape && !(this.place.collapsed.has(sid) && this.planeFor(sid))) return undefined;
     const plane: Plane = { id: `BPMNPlane_${sid}`, rootId: sid, root: scope, shapes: new Map(), edges: new Map(), dropped: [] };
@@ -350,14 +350,14 @@ export class IncrementalLayout implements PlacementHooks {
     const root = layoutRoot(this.doc.definitions);
     const rootId = idOf(root);
     if (!root || !rootId || rootId === this.snap.rootId || !is(root, 'bpmn:Collaboration')) return undefined;
-    const old = this.planes.find((p) => p.rootId === this.snap.rootId);
-    if (!old || this.planes.some((p) => p.rootId === rootId)) return undefined;
+    const old = this.planes.find((plane) => plane.rootId === this.snap.rootId);
+    if (!old || this.planes.some((plane) => plane.rootId === rootId)) return undefined;
     old.root = root;
     old.rootId = rootId;
-    const wrapper = rawList(root, 'participants').find((p) => idOf(raw(p, 'processRef')) === this.snap.rootId);
+    const wrapper = rawList(root, 'participants').find((participant) => idOf(raw(participant, 'processRef')) === this.snap.rootId);
     // the content now belongs to a pool: refresh membership
     const poolId = idOf(wrapper);
-    if (poolId) for (const s of old.shapes.values()) if (!s.poolId && s.kind !== 'participant') s.poolId = poolId;
+    if (poolId) for (const shape of old.shapes.values()) if (!shape.poolId && shape.kind !== 'participant') shape.poolId = poolId;
     return poolId;
   }
 
@@ -369,28 +369,28 @@ export class IncrementalLayout implements PlacementHooks {
       if (is(el, 'bpmn:Participant')) {
         const plane = this.sem.homePlane(this.planes, id);
         if (!plane) continue;
-        const s = this.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
+        const shape = this.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
         const proc = raw<El>(el, 'processRef');
         // a new pool whose process has content: the engine lays that content out as one block
         const content = id !== wrapped && proc ? rawList(proc, 'flowElements').filter(this.isFlowNode) : [];
         const block = content.length ? (await this.engineDrawing()).block(id, true) : undefined;
-        if (id === wrapped) this.drawing(plane).wrapPool(s);
-        else this.drawing(plane).placePool(s, !proc, block ? { width: block.box.width, height: block.box.height } : undefined);
-        plane.shapes.set(id, s);
-        if (block) this.adoptBlock(plane, block, s.bounds.x - block.box.x, s.bounds.y - block.box.y);
+        if (id === wrapped) this.drawing(plane).wrapPool(shape);
+        else this.drawing(plane).placePool(shape, !proc, block ? { width: block.box.width, height: block.box.height } : undefined);
+        plane.shapes.set(id, shape);
+        if (block) this.adoptBlock(plane, block, shape.bounds.x - block.box.x, shape.bounds.y - block.box.y);
         this.place.placed.add(id);
-        shapes.set(id, { plane, shape: s });
+        shapes.set(id, { plane, shape });
       } else if (is(el, 'bpmn:Lane')) {
         const plane = this.sem.homePlane(this.planes, id);
         if (!plane) continue;
-        const s = this.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
-        if (!this.drawing(plane).placeLane(s)) {
+        const shape = this.place.newShape(plane, id, { x: 0, y: 0, width: 0, height: 0 });
+        if (!this.drawing(plane).placeLane(shape)) {
           this.notes.push(`lane ${id} not drawn: its process has no pool in the diagram`);
           continue;
         }
-        plane.shapes.set(id, s);
+        plane.shapes.set(id, shape);
         this.place.placed.add(id);
-        shapes.set(id, { plane, shape: s });
+        shapes.set(id, { plane, shape });
       }
     }
   }
@@ -400,16 +400,16 @@ export class IncrementalLayout implements PlacementHooks {
    * collapsed ones whose content has no DI) come from the engine as one block.
    */
   private async placeNodes(): Promise<void> {
-    const drawn = (id: string): boolean => this.planes.some((p) => p.shapes.has(id));
+    const drawn = (id: string): boolean => this.planes.some((plane) => plane.shapes.has(id));
     const order = this.modelOrder(this.doc.definitions);
     // new nodes in op order (the model lists an inserted node next to its anchor), then model order
-    const rank = new Map(this.created.map((id, i) => [id, i]));
+    const rank = new Map(this.created.map((id, index) => [id, index]));
     const pendingNodes = order
       .filter((el) => this.isFlowNode(el) && idOf(el) && !drawn(idOf(el)!))
       .map((el) => idOf(el)!)
-      .map((id, i) => ({ id, key: rank.get(id) ?? this.created.length + i }))
-      .sort((a, b) => a.key - b.key)
-      .map((x) => x.id);
+      .map((id, index) => ({ id, key: rank.get(id) ?? this.created.length + index }))
+      .sort((first, second) => first.key - second.key)
+      .map((entry) => entry.id);
     const blockRoots = pendingNodes.filter((id) => {
       const el = this.sem.byId.get(id)!;
       return Semantics.isSubProcess(el) && !this.place.collapsed.has(id) && rawList(el, 'flowElements').some(this.isFlowNode) && !this.place.reuse.has(id);
@@ -423,26 +423,26 @@ export class IncrementalLayout implements PlacementHooks {
         const block = engine.block(root, false);
         if (!block) continue;
         this.place.blockSize.set(root, { width: block.box.width, height: block.box.height });
-        for (const s of block.shapes) inBlock.add(s.id);
-        for (const p of block.planes) for (const s of p.shapes.values()) inBlock.add(s.id);
+        for (const shape of block.shapes) inBlock.add(shape.id);
+        for (const blockPlane of block.planes) for (const shape of blockPlane.shapes.values()) inBlock.add(shape.id);
         blocksByRoot.set(root, block);
       }
     }
     for (const id of pendingNodes) {
       const scope = this.sem.scopeOf.get(id);
       const sid = idOf(scope);
-      if (!scope || !sid || !Semantics.isSubProcess(scope) || inBlock.has(id) || this.planes.some((p) => p.rootId === sid)) continue;
-      const shape = this.planes.map((p) => p.shapes.get(sid)).find((x) => !!x);
+      if (!scope || !sid || !Semantics.isSubProcess(scope) || inBlock.has(id) || this.planes.some((plane) => plane.rootId === sid)) continue;
+      const shape = this.planes.map((plane) => plane.shapes.get(sid)).find((candidate) => !!candidate);
       if (shape ? shape.expanded : !this.place.collapsed.has(sid)) continue;
       if (rawList(scope, 'flowElements').some((fe) => this.isFlowNode(fe) && drawn(idOf(fe) ?? ''))) continue;
-      const enginePlane = (await this.engineDrawing()).planes.find((p) => p.rootId === sid);
+      const enginePlane = (await this.engineDrawing()).planes.find((plane) => plane.rootId === sid);
       if (!enginePlane) continue;
       this.adoptBlock(this.planes[0]!, { box: { x: 0, y: 0, width: 0, height: 0 }, shapes: [], edges: [], planes: [enginePlane] }, 0, 0);
-      for (const s of enginePlane.shapes.values()) inBlock.add(s.id);
+      for (const shape of enginePlane.shapes.values()) inBlock.add(shape.id);
     }
-    this.afterPlace = (plane: Plane, s: DShape): void => {
-      const block = blocksByRoot.get(s.id);
-      if (block) this.adoptBlock(plane, block, s.bounds.x - block.box.x, s.bounds.y - block.box.y);
+    this.afterPlace = (plane: Plane, shape: DShape): void => {
+      const block = blocksByRoot.get(shape.id);
+      if (block) this.adoptBlock(plane, block, shape.bounds.x - block.box.x, shape.bounds.y - block.box.y);
     };
     this.afterNode = (plane: Plane, id: string): void => this.routing.routeNow(plane, id);
     const skipped = this.place.placeFlowNodes(
@@ -470,10 +470,10 @@ export class IncrementalLayout implements PlacementHooks {
   private movedShapes(): string[] {
     const out: string[] = [];
     for (const plane of this.planes) {
-      for (const s of plane.shapes.values()) {
-        if (!s.di || (this.place.placed.has(s.id) && !this.relocated.has(s.id))) continue;
-        const old = this.snap.byDi.get(s.di);
-        if (old?.bounds && !sameBox(old.bounds, s.bounds)) out.push(s.id);
+      for (const shape of plane.shapes.values()) {
+        if (!shape.di || (this.place.placed.has(shape.id) && !this.relocated.has(shape.id))) continue;
+        const old = this.snap.byDi.get(shape.di);
+        if (old?.bounds && !sameBox(old.bounds, shape.bounds)) out.push(shape.id);
       }
     }
     for (const id of this.relocated) if (!out.includes(id)) out.push(id);

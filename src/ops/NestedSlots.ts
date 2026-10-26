@@ -30,8 +30,8 @@ export class NestedSlots {
 
   /** Other vendors' attributes are accepted too, unchecked. */
   keysOf(slot: NestedSlot, target: El): string[] {
-    const keys = ['id', ...this.coercer.genericKeys(target).filter((k) => !NESTED_BLOCKED[k]), ...CAMUNDA.attrsFor(target).map((a) => a.name)];
-    return [...new Set(keys)].map((k) => `${slot}.${k}`);
+    const keys = ['id', ...this.coercer.genericKeys(target).filter((genericKey) => !NESTED_BLOCKED[genericKey]), ...CAMUNDA.attrsFor(target).map((attr) => attr.name)];
+    return [...new Set(keys)].map((slotKey) => `${slot}.${slotKey}`);
   }
 
   private create(el: El, slot: NestedSlot, key: string, cs: ChangeSet): El {
@@ -58,7 +58,7 @@ export class NestedSlots {
     }
     if (slot === 'definition') {
       const name = local ? `camunda:${local}` : undefined;
-      const trigger = name ? (kindOf(el)?.triggers ?? []).find((t) => t !== 'none' && CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[t])) : undefined;
+      const trigger = name ? (kindOf(el)?.triggers ?? []).find((candidate) => candidate !== 'none' && CAMUNDA.attrAppliesTo(name, TRIGGER_TYPES[candidate])) : undefined;
       throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition to set ${slot}.${key} on (it has no trigger)`, {
         element: id,
         hint: `Give it a trigger first: \`bpmn set <file> ${id} trigger=${trigger ?? '<trigger>'}\` (or in the same command, e.g. trigger=${trigger ?? 'message'} ${slot}.${key}=<value>).`,
@@ -79,7 +79,7 @@ export class NestedSlots {
     if (zi > 0 && this.doc.namespaceUri(key.slice(0, zi)) === ZEEBE_URI && !ZEEBE.attr(key.slice(zi + 1))) {
       // a zeebe setting of a nested element is its extension element (loop.zeebe:...)
       const local = key.slice(zi + 1);
-      const owner = ZEEBE.typeNames().find((t) => ZEEBE.allowedOn(t, target) === true && ZEEBE.type(t)!.attributes.some((a) => a.name === local));
+      const owner = ZEEBE.typeNames().find((typeName) => ZEEBE.allowedOn(typeName, target) === true && ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
       if (owner) {
         throw modelError('E_WRONG_HOST', `${key} is not an attribute of the ${typeLabel(target)} of ${kindLabel(el)} ${id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
           element: id,
@@ -92,21 +92,21 @@ export class NestedSlots {
       if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) return;
       const owners = CAMUNDA.attr(local)?.owners ?? [];
       const onElement = CAMUNDA.attrAppliesTo(`camunda:${local}`, el);
-      const multi = slot === 'loop' && owners.some((o) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', o));
+      const multi = slot === 'loop' && owners.some((owner) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', owner));
       throw modelError('E_WRONG_HOST', `${key} cannot be set on the ${typeLabel(target)} of ${kindLabel(el)} ${id}${multi ? ': it needs a multi-instance loop' : ''}`, {
         element: id,
         hint: multi
           ? `Set loop=parallel or loop=sequential first (\`bpmn set <file> ${id} loop=parallel ${full}=<value>\`).`
           : onElement
             ? `It is an attribute of ${id} itself: \`bpmn set <file> ${id} ${key}=<value>\`.`
-            : `${key} belongs on ${owners.map((o) => o.replace('bpmn:', '')).join(', ')}.`,
+            : `${key} belongs on ${owners.map((owner) => owner.replace('bpmn:', '')).join(', ')}.`,
       });
     }
     if (key === 'id') return;
-    const p = descriptorOf(target).propertiesByName?.[key];
+    const property = descriptorOf(target).propertiesByName?.[key];
     const blocked = NESTED_BLOCKED[key];
-    if (!p || blocked || !this.coercer.isSettable(p)) {
-      const keys = ['id', ...this.coercer.genericKeys(target).filter((k) => !NESTED_BLOCKED[k])].map((k) => `${prefix}.${k}`);
+    if (!property || blocked || !this.coercer.isSettable(property)) {
+      const keys = ['id', ...this.coercer.genericKeys(target).filter((genericKey) => !NESTED_BLOCKED[genericKey])].map((slotKey) => `${prefix}.${slotKey}`);
       throw modelError('E_UNKNOWN_KEY', `Unknown key "${full}" for ${kindLabel(el)} ${id}: a ${typeLabel(target)} has no settable attribute ${key}${blocked ? ` (${blocked})` : ''}`, {
         element: id,
         candidates: keys,
@@ -154,17 +154,17 @@ export class NestedSlots {
     const slots = slotsOf(el);
     const ref = parseSlotRef(slot);
     if (!ref || !slots.includes(ref.slot) || !key) {
-      throw this.coercer.unknownKey(el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((s) => `${s}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
+      throw this.coercer.unknownKey(el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((slotName) => `${slotName}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
     }
-    const s = ref.slot;
+    const refSlot = ref.slot;
     let target = resolveNested(el, ref, full);
     if (!target) {
       if (!value) return; // nothing to remove
-      target = this.create(el, s, key, cs);
+      target = this.create(el, refSlot, key, cs);
     }
-    if (value) this.checkKey(el, s, target, key, ref.text);
-    if (s === 'condition' && value && this.coercer.isResourceKey(key)) NestedSlots.dropConditionBody(el, target, cs, key);
-    if (s === 'condition' && !value && !replacing) this.assertConditionKept(el, target, key, full);
+    if (value) this.checkKey(el, refSlot, target, key, ref.text);
+    if (refSlot === 'condition' && value && this.coercer.isResourceKey(key)) NestedSlots.dropConditionBody(el, target, cs, key);
+    if (refSlot === 'condition' && !value && !replacing) this.assertConditionKept(el, target, key, full);
     if (key.includes(':')) {
       this.coercer.setVendorAttribute(target, key, value);
     } else if (key === 'id') {
@@ -175,9 +175,9 @@ export class NestedSlots {
         target.set('id', value);
       }
     } else if (!PropertyCoercer.removeUndefined(target, key, value)) {
-      this.checkKey(el, s, target, key, ref.text);
-      const p = descriptorOf(target).propertiesByName![key]!;
-      const coerced = value ? this.coercer.coerce(el, p, value, full) : undefined;
+      this.checkKey(el, refSlot, target, key, ref.text);
+      const property = descriptorOf(target).propertiesByName![key]!;
+      const coerced = value ? this.coercer.coerce(el, property, value, full) : undefined;
       if (is(target, 'bpmn:CompensateEventDefinition') && key === 'activityRef' && isEl(coerced)) this.assertCompensationInScope(el, coerced, full);
       target.set(key, coerced);
     }
@@ -199,7 +199,7 @@ export class NestedSlots {
     }
     const actual = this.doc.scopeOf(activity);
     if (actual && scopes.includes(actual)) return;
-    const candidates = scopes.flatMap((sc) => many(sc, 'flowElements').filter((e) => is(e, 'bpmn:Activity') && !(is(e, 'bpmn:SubProcess') && e.get<boolean | undefined>('triggeredByEvent'))).map(idOf));
+    const candidates = scopes.flatMap((sc) => many(sc, 'flowElements').filter((flowElement) => is(flowElement, 'bpmn:Activity') && !(is(flowElement, 'bpmn:SubProcess') && flowElement.get<boolean | undefined>('triggeredByEvent'))).map(idOf));
     const id = idOf(event);
     throw modelError('E_CROSS_SCOPE', `${full}=${idOf(activity)}: ${idOf(activity)} is in ${actual ? idOf(actual) : '?'}, not in the scope of ${id} (${scopes.map(idOf).join(' / ')}); a compensation event can only compensate activities of its own scope`, {
       element: id,

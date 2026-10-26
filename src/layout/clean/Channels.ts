@@ -12,22 +12,22 @@ export class Channels {
   /** The first height from `base`, `step` apart, that no channel over the same span holds. */
   free(fromX: number, toX: number, base: number, step: number): number {
     const lo = Math.min(fromX, toX), hi = Math.max(fromX, toX);
-    let y = base;
-    while (this.list.some((c) => c.y === y && c.from <= hi && lo <= c.to)) y += step;
-    return y;
+    let height = base;
+    while (this.list.some((channel) => channel.y === height && channel.from <= hi && lo <= channel.to)) height += step;
+    return height;
   }
 
-  take(y: number, fromX: number, toX: number): void {
-    this.list.push({ y, from: Math.min(fromX, toX), to: Math.max(fromX, toX) });
+  take(height: number, fromX: number, toX: number): void {
+    this.list.push({ y: height, from: Math.min(fromX, toX), to: Math.max(fromX, toX) });
   }
 
   claim(fromX: number, toX: number, base: number, step: number): number {
-    const y = this.free(fromX, toX, base, step);
-    this.take(y, fromX, toX);
-    return y;
+    const height = this.free(fromX, toX, base, step);
+    this.take(height, fromX, toX);
+    return height;
   }
 
   lowest(): number {
-    return Math.max(0, ...this.list.map((c) => c.y));
+    return Math.max(0, ...this.list.map((channel) => channel.y));
   }
 }

@@ -29,7 +29,7 @@ import { runWalk } from '../tools/fuzz/lib/walk.mjs';
 interface Violation { step: number; op: string; kind: string; detail?: string; severity: 'error' | 'warn' }
 interface Summary { steps: number; ok: number; violations: Violation[]; errors: number; ops: Array<{ name: string; ops: unknown[] }> }
 interface ExecResult { status: string; xml?: string; layout?: Record<string, unknown> }
-interface Executor { label: string; run(xml: string, ops: unknown[], o: { mode: string }): Promise<ExecResult> }
+interface Executor { label: string; run(xml: string, ops: unknown[], options: { mode: string }): Promise<ExecResult> }
 
 const ROOT = join(__dirname, '..');
 const FIXTURES = join(ROOT, 'test', 'fixtures', 'incremental');
@@ -70,34 +70,34 @@ const WALKS = [
 const KNOWN: Array<{ file: string; mode: Mode; seed: number; steps?: number; bug: string }> = [];
 const STEPS = 15;
 
-const walk = (file: string, o: { mode: string; seed: number; steps?: number; exec?: Executor; detEvery?: number }): Promise<Summary> =>
-  runWalk({ xml: readFileSync(file, 'utf8'), model: file, seed: o.seed, mode: o.mode, steps: o.steps ?? STEPS, exec: o.exec ?? exec, metrics, detEvery: o.detEvery ?? 4 });
+const walk = (file: string, options: { mode: string; seed: number; steps?: number; exec?: Executor; detEvery?: number }): Promise<Summary> =>
+  runWalk({ xml: readFileSync(file, 'utf8'), model: file, seed: options.seed, mode: options.mode, steps: options.steps ?? STEPS, exec: options.exec ?? exec, metrics, detEvery: options.detEvery ?? 4 });
 
-const errorsOf = (s: Summary) => s.violations.filter((v) => v.severity === 'error').map((v) => `step ${v.step} ${v.op}: ${v.kind} ${v.detail ?? ''}`);
+const errorsOf = (summary: Summary) => summary.violations.filter((violation) => violation.severity === 'error').map((violation) => `step ${violation.step} ${violation.op}: ${violation.kind} ${violation.detail ?? ''}`);
 
 describe('fuzz: seeded random walks keep the invariants', () => {
-  for (const w of WALKS) {
-    const name = w.file.split('/').pop();
-    it(`${name} ${w.mode} seed ${w.seed}`, async () => {
-      const s = await walk(w.file, w);
-      expect(errorsOf(s)).toEqual([]);
-      expect(s.ok).toBeGreaterThan(STEPS / 2);
+  for (const walkCase of WALKS) {
+    const name = walkCase.file.split('/').pop();
+    it(`${name} ${walkCase.mode} seed ${walkCase.seed}`, async () => {
+      const summary = await walk(walkCase.file, walkCase);
+      expect(errorsOf(summary)).toEqual([]);
+      expect(summary.ok).toBeGreaterThan(STEPS / 2);
     });
   }
 
-  for (const w of KNOWN) {
-    it.fails(`known bug ${w.bug}: ${w.file.split('/').pop()} ${w.mode} seed ${w.seed}`, async () => {
-      const s = await walk(w.file, w);
-      expect(errorsOf(s)).toEqual([]);
+  for (const walkCase of KNOWN) {
+    it.fails(`known bug ${walkCase.bug}: ${walkCase.file.split('/').pop()} ${walkCase.mode} seed ${walkCase.seed}`, async () => {
+      const summary = await walk(walkCase.file, walkCase);
+      expect(errorsOf(summary)).toEqual([]);
     });
   }
 
   it('the same seed gives the same steps and the same result', async () => {
     const file = join(FIXTURES, 'orders.bpmn');
-    const a = await walk(file, { mode: 'incremental', seed: 7, steps: 6, detEvery: 0 });
-    const b = await walk(file, { mode: 'incremental', seed: 7, steps: 6, detEvery: 0 });
-    expect(JSON.stringify(b.ops)).toBe(JSON.stringify(a.ops));
-    expect(b.violations).toEqual(a.violations);
+    const firstSummary = await walk(file, { mode: 'incremental', seed: 7, steps: 6, detEvery: 0 });
+    const secondSummary = await walk(file, { mode: 'incremental', seed: 7, steps: 6, detEvery: 0 });
+    expect(JSON.stringify(secondSummary.ops)).toBe(JSON.stringify(firstSummary.ops));
+    expect(secondSummary.violations).toEqual(firstSummary.violations);
   });
 });
 
@@ -108,30 +108,30 @@ describe('fuzz: seeded random walks keep the invariants', () => {
 /** Runs the real step, then rewrites the written XML. */
 const sabotage = (edit: (xml: string) => string): Executor => ({
   label: 'sabotage',
-  async run(xml, ops, o) {
-    const r = await exec.run(xml, ops, o);
-    return r.status === 'ok' && r.xml ? { ...r, xml: edit(r.xml) } : r;
+  async run(xml, ops, options) {
+    const executed = await exec.run(xml, ops, options);
+    return executed.status === 'ok' && executed.xml ? { ...executed, xml: edit(executed.xml) } : executed;
   },
 });
 
 /** Shifts the first BPMNShape's bounds by `dx` (an unreported move or, far enough, an overlap). */
-const shiftFirstShape = (dx: number) => (xml: string) => xml.replace(/(<bpmndi:BPMNShape\b[\s\S]*?<dc:Bounds x=")(-?[\d.]+)/, (_m, pre: string, x: string) => `${pre}${Number(x) + dx}`);
+const shiftFirstShape = (dx: number) => (xml: string) => xml.replace(/(<bpmndi:BPMNShape\b[\s\S]*?<dc:Bounds x=")(-?[\d.]+)/, (_m, pre: string, left: string) => `${pre}${Number(left) + dx}`);
 
-const kindsOf = (s: Summary) => new Set(s.violations.map((v) => v.kind));
+const kindsOf = (summary: Summary) => new Set(summary.violations.map((violation) => violation.kind));
 
 describe('fuzz oracles detect planted defects', () => {
   const file = join(FIXTURES, 'orders.bpmn');
 
   it('an unreported shape move', async () => {
-    const s = await walk(file, { mode: 'incremental', seed: 11, steps: 2, exec: sabotage(shiftFirstShape(7)), detEvery: 0 });
-    expect(kindsOf(s)).toContain('unreportedMove');
+    const summary = await walk(file, { mode: 'incremental', seed: 11, steps: 2, exec: sabotage(shiftFirstShape(7)), detEvery: 0 });
+    expect(kindsOf(summary)).toContain('unreportedMove');
   });
 
   it('a flow node without DI', async () => {
     const dropTaskShape = (xml: string) => xml.replace(/<bpmndi:BPMNShape\b[^>]*bpmnElement="Task_[^"]*"[\s\S]*?<\/bpmndi:BPMNShape>/, '');
-    const s = await walk(file, { mode: 'incremental', seed: 11, steps: 2, exec: sabotage(dropTaskShape), detEvery: 0 });
-    expect([...kindsOf(s)].some((k) => k === 'di:noDi')).toBe(true);
-    expect([...kindsOf(s)].some((k) => k === 'hard:missing')).toBe(true);
+    const summary = await walk(file, { mode: 'incremental', seed: 11, steps: 2, exec: sabotage(dropTaskShape), detEvery: 0 });
+    expect([...kindsOf(summary)].some((kind) => kind === 'di:noDi')).toBe(true);
+    expect([...kindsOf(summary)].some((kind) => kind === 'hard:missing')).toBe(true);
   });
 
   it('a new overlap of two shapes', async () => {
@@ -141,21 +141,21 @@ describe('fuzz oracles detect planted defects', () => {
       if (!first || !second) return xml;
       return xml.replace(second[0], second[0].replace(/x="(-?[\d.]+)" y="(-?[\d.]+)"$/, `x="${first[2]}" y="${first[3]}"`));
     };
-    const s = await walk(file, { mode: 'incremental', seed: 11, steps: 2, exec: sabotage(stack), detEvery: 0 });
-    expect(kindsOf(s)).toContain('hard:overlaps');
+    const summary = await walk(file, { mode: 'incremental', seed: 11, steps: 2, exec: sabotage(stack), detEvery: 0 });
+    expect(kindsOf(summary)).toContain('hard:overlaps');
   });
 
   it('a step that gives other bytes on a re-run', async () => {
-    let n = 0;
-    const flaky = sabotage((xml) => (n++ % 2 ? xml.replace('</bpmn:definitions>', '<!-- x --></bpmn:definitions>') : xml));
-    const s = await walk(file, { mode: 'incremental', seed: 11, steps: 1, exec: flaky, detEvery: 1 });
-    expect(kindsOf(s)).toContain('nondeterministic');
+    let calls = 0;
+    const flaky = sabotage((xml) => (calls++ % 2 ? xml.replace('</bpmn:definitions>', '<!-- x --></bpmn:definitions>') : xml));
+    const summary = await walk(file, { mode: 'incremental', seed: 11, steps: 1, exec: flaky, detEvery: 1 });
+    expect(kindsOf(summary)).toContain('nondeterministic');
   });
 
   it('a crash and a write on failure', async () => {
     const crashing: Executor = { label: 'crash', run: async () => ({ status: 'crash', code: 'E_INTERNAL', message: 'boom', readBack: 'changed' } as ExecResult) };
-    const s = await walk(file, { mode: 'incremental', seed: 11, steps: 1, exec: crashing, detEvery: 0 });
-    expect(kindsOf(s)).toContain('crash');
-    expect(kindsOf(s)).toContain('writtenOnFailure');
+    const summary = await walk(file, { mode: 'incremental', seed: 11, steps: 1, exec: crashing, detEvery: 0 });
+    expect(kindsOf(summary)).toContain('crash');
+    expect(kindsOf(summary)).toContain('writtenOnFailure');
   });
 });

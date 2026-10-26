@@ -23,12 +23,12 @@ const OPS: Op[] = [
 
 /** The engine's drawing of OPS with DI ids in a given style and every shape moved (a hand-made drawing). */
 async function drawn(style: (kind: 'Shape' | 'Edge', id: string) => string, names = { diagram: 'BPMNDiagram_1', plane: 'BPMNPlane_1' }): Promise<string> {
-  const r = await mutateDoc(Doc.create({ processId: 'P' }), OPS, { dryRun: true });
-  return r.xml
+  const outcome = await mutateDoc(Doc.create({ processId: 'P' }), OPS, { dryRun: true });
+  return outcome.xml
     .replace(/<bpmndi:BPMN(Shape|Edge) id="BPMN(?:Shape|Edge)_([^"]+)"/g, (_m, kind: 'Shape' | 'Edge', id: string) => `<bpmndi:BPMN${kind} id="${style(kind, id)}"`)
     .replace(/id="BPMNDiagram_P"/, `id="${names.diagram}"`)
     .replace(/id="BPMNPlane_P"/, `id="${names.plane}"`)
-    .replace(/<dc:Bounds x="(\d+)"/g, (_m, x: string) => `<dc:Bounds x="${Number(x) + 7}"`);
+    .replace(/<dc:Bounds x="(\d+)"/g, (_m, left: string) => `<dc:Bounds x="${Number(left) + 7}"`);
 }
 
 const suffix = (_k: string, id: string): string => `${id}_di`;
@@ -36,11 +36,11 @@ const suffix = (_k: string, id: string): string => `${id}_di`;
 /** DI ids by element id, and the plane / diagram ids. */
 function diOf(xml: string): { shapes: Map<string, string>; planes: string[]; diagrams: string[] } {
   const shapes = new Map<string, string>();
-  for (const m of xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)) shapes.set(m[2]!, m[1]!);
+  for (const match of xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)) shapes.set(match[2]!, match[1]!);
   return {
     shapes,
-    planes: [...xml.matchAll(/<bpmndi:BPMNPlane id="([^"]+)"/g)].map((m) => m[1]!),
-    diagrams: [...xml.matchAll(/<bpmndi:BPMNDiagram id="([^"]+)"/g)].map((m) => m[1]!),
+    planes: [...xml.matchAll(/<bpmndi:BPMNPlane id="([^"]+)"/g)].map((match) => match[1]!),
+    diagrams: [...xml.matchAll(/<bpmndi:BPMNDiagram id="([^"]+)"/g)].map((match) => match[1]!),
   };
 }
 
@@ -56,7 +56,7 @@ describe('a full redraw keeps the DI ids', () => {
     const after = await write(xml, [], { layout: 'full' });
     expect(diOf(after)).toEqual(before);
     // only geometry changed
-    const strip = (s: string): string => s.replace(/ (x|y|width|height)="[^"]*"/g, '');
+    const strip = (source: string): string => source.replace(/ (x|y|width|height)="[^"]*"/g, '');
     expect(strip(after)).toBe(strip(xml));
   });
 
@@ -81,10 +81,10 @@ describe('a full redraw keeps the DI ids', () => {
   it('an engine-owned drawing redrawn by auto keeps its ids too', async () => {
     const engine = (await mutateDoc(Doc.create({ processId: 'P' }), OPS, { dryRun: true })).xml;
     const renamed = engine.replace(/id="BPMNShape_A"/, 'id="Mine_A"');
-    const r = await mutateDoc(await Doc.fromXml(renamed, 'x.bpmn'), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true });
-    expect(r.layout.mode).toBe('full');
-    expect(diOf(r.xml).shapes.get('A')).toBe('Mine_A');
-    expect(diOf(r.xml).shapes.get('N')).toBe('BPMNShape_N');
+    const outcome = await mutateDoc(await Doc.fromXml(renamed, 'x.bpmn'), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }], { dryRun: true });
+    expect(outcome.layout.mode).toBe('full');
+    expect(diOf(outcome.xml).shapes.get('A')).toBe('Mine_A');
+    expect(diOf(outcome.xml).shapes.get('N')).toBe('BPMNShape_N');
   });
 
   it('a new pool keeps a modeler plane id; a plane named after the old root follows the new root', async () => {
@@ -102,7 +102,7 @@ describe('a full redraw keeps the DI ids', () => {
   it('keeps the plane and diagram ids of a collapsed sub-process', async () => {
     const ops: Op[] = [...OPS, { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'C', collapsed: true }, { op: 'add', kind: 'task', id: 'In', name: 'Inner', in: 'Sub' }];
     const engine = (await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true })).xml;
-    const custom = engine.replace('id="BPMNPlane_Sub"', 'id="Sub_plane"').replace('id="BPMNDiagram_Sub"', 'id="Sub_diagram"').replace(/<dc:Bounds x="(\d+)"/, (_m, x: string) => `<dc:Bounds x="${Number(x) + 3}"`);
+    const custom = engine.replace('id="BPMNPlane_Sub"', 'id="Sub_plane"').replace('id="BPMNDiagram_Sub"', 'id="Sub_diagram"').replace(/<dc:Bounds x="(\d+)"/, (_m, left: string) => `<dc:Bounds x="${Number(left) + 3}"`);
     const after = diOf(await write(custom, [], { layout: 'full' }));
     expect(after.planes).toContain('Sub_plane');
     expect(after.diagrams).toContain('Sub_diagram');
@@ -127,7 +127,7 @@ describe('a full redraw keeps the DI ids', () => {
 });
 
 /** The ids of every BPMNShape, BPMNEdge, BPMNPlane and BPMNDiagram. */
-const allDi = (xml: string): string[] => [...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge|Plane|Diagram) id="([^"]+)"/g)].map((m) => m[1]!);
+const allDi = (xml: string): string[] => [...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge|Plane|Diagram) id="([^"]+)"/g)].map((match) => match[1]!);
 
 const LONG_PROCESS = 'Process_SupplierInvoicesOfTheAccountsPayableDepartment';
 const APPROVE = 'Activity_ApproveTheIncomingSupplierInvoiceForPaymentInTheLedger';
@@ -147,14 +147,14 @@ const LONG_OPS: Op[] = [
 describe('every DI id bpmn-cli writes stays within 64 characters', () => {
   for (const engine of ['clean', 'auto'] as const) {
     it(`a fresh drawing cuts the DI ids of long element, flow, sub-process and process ids at whole words; two alike take _2 (${engine})`, async () => {
-      const r = await mutateDoc(Doc.create({ processId: LONG_PROCESS }), LONG_OPS, { dryRun: true, engine });
-      const ids = allDi(r.xml);
+      const outcome = await mutateDoc(Doc.create({ processId: LONG_PROCESS }), LONG_OPS, { dryRun: true, engine });
+      const ids = allDi(outcome.xml);
       expect(ids.filter((id) => id.length > 64)).toEqual([]);
       expect(new Set(ids).size).toBe(ids.length);
-      const { shapes, planes, diagrams } = diOf(r.xml);
-      const flows = [...r.xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((m) => m[1]!);
-      expect(flows.some((f) => f.length > 52)).toBe(true);
-      for (const f of flows) expect(shapes.get(f)).toBe(styledId('bpmn', 'Edge', f));
+      const { shapes, planes, diagrams } = diOf(outcome.xml);
+      const flows = [...outcome.xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1]!);
+      expect(flows.some((flowId) => flowId.length > 52)).toBe(true);
+      for (const flowId of flows) expect(shapes.get(flowId)).toBe(styledId('bpmn', 'Edge', flowId));
       // the engine's form, cut like the element ids themselves
       expect(shapes.get(`${APPROVE}A`)).toBe('BPMNShape_Activity_ApproveTheIncomingSupplierInvoiceFor');
       expect(shapes.get(`${APPROVE}B`)).toBe('BPMNShape_Activity_ApproveTheIncomingSupplierInvoiceFor_2');
@@ -164,7 +164,7 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
       expect(planes).toEqual([`BPMNPlane_${cutAt(LONG_PROCESS, 51)}`, `BPMNPlane_${cutAt(SUB, 51)}`]);
       expect(diagrams).toEqual([`BPMNDiagram_${cutAt(LONG_PROCESS, 49)}`, `BPMNDiagram_${cutAt(SUB, 49)}`]);
       // a full redraw keeps them
-      const again = await write(r.xml, [], { layout: 'full', engine });
+      const again = await write(outcome.xml, [], { layout: 'full', engine });
       expect(allDi(again)).toEqual(ids);
     });
   }
@@ -222,9 +222,9 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
   });
 
   it('a sub-process collapsed without a drawing (--no-layout) records it under a plane and diagram id within 64 characters', async () => {
-    const r = await mutateDoc(Doc.create({ processId: LONG_PROCESS }), [{ op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', collapsed: true }], { dryRun: true, layout: false });
-    expect(diOf(r.xml).planes).toEqual([`BPMNPlane_${cutAt(LONG_PROCESS, 51)}`]);
-    expect(diOf(r.xml).diagrams).toEqual([`BPMNDiagram_${cutAt(LONG_PROCESS, 49)}`]);
+    const outcome = await mutateDoc(Doc.create({ processId: LONG_PROCESS }), [{ op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', collapsed: true }], { dryRun: true, layout: false });
+    expect(diOf(outcome.xml).planes).toEqual([`BPMNPlane_${cutAt(LONG_PROCESS, 51)}`]);
+    expect(diOf(outcome.xml).diagrams).toEqual([`BPMNDiagram_${cutAt(LONG_PROCESS, 49)}`]);
   });
 
   it('a DI edge id 0.6 cut to bare numbers (BPMNEdge_Flow_Pruefung10To2030) follows its flow renamed after new ends', async () => {
@@ -237,9 +237,9 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
     // as 0.6 cut it (now: BPMNEdge_Flow_Pruefung10To20Lieferantenbestellungsuebersich30)
     const old = drawn.replace(/id="BPMNEdge_Flow_Pruefung10To[^"]+"/, 'id="BPMNEdge_Flow_Pruefung10To2030"');
     expect(diOf(old).shapes.get(flow)).toBe('BPMNEdge_Flow_Pruefung10To2030');
-    const r = await mutateDoc(await Doc.fromXml(old, 'x.bpmn'), [{ op: 'add', kind: 'task', name: 'Freigabe', flow }], { dryRun: true });
-    expect(r.xml).toContain('<bpmn:sequenceFlow id="Flow_Pruefung10ToFreigabe" sourceRef="Activity_Pruefung10" targetRef="Activity_Freigabe" />');
-    expect(diOf(r.xml).shapes.get('Flow_Pruefung10ToFreigabe')).toBe('BPMNEdge_Flow_Pruefung10ToFreigabe');
+    const outcome = await mutateDoc(await Doc.fromXml(old, 'x.bpmn'), [{ op: 'add', kind: 'task', name: 'Freigabe', flow }], { dryRun: true });
+    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_Pruefung10ToFreigabe" sourceRef="Activity_Pruefung10" targetRef="Activity_Freigabe" />');
+    expect(diOf(outcome.xml).shapes.get('Flow_Pruefung10ToFreigabe')).toBe('BPMNEdge_Flow_Pruefung10ToFreigabe');
     // and with `set id=`
     const set = await mutateDoc(await Doc.fromXml(old, 'x.bpmn'), [{ op: 'set', id: flow, values: { id: 'Flow_Check' } }], { dryRun: true });
     expect(diOf(set.xml).shapes.get('Flow_Check')).toBe('BPMNEdge_Flow_Check');

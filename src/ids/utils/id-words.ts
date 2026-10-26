@@ -1,7 +1,7 @@
 import { nameWords } from './slug.js';
 
-export const lcfirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
-export const ucfirst = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+export const lcfirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+export const ucfirst = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 export const localName = (type: string): string => type.slice(type.indexOf(':') + 1);
 
 export const PREFIXED = /^([A-Za-z][A-Za-z0-9]*)_(.+)$/;
@@ -12,8 +12,8 @@ export const TOOL_DEFAULTS = new Set(['StartEvent_1']);
 export const HASH = /^[01][0-9a-z]{6}$/;
 
 export function stem(id: string): string {
-  const i = id.indexOf('_');
-  return i === -1 ? id : id.slice(i + 1);
+  const underscoreIndex = id.indexOf('_');
+  return underscoreIndex === -1 ? id : id.slice(underscoreIndex + 1);
 }
 
 /**
@@ -28,19 +28,19 @@ export function speakingStem(id: string): string | undefined {
     const base = speakingStem(suffixed[1]!);
     return base ? `${base}_${suffixed[2]}` : undefined;
   }
-  const s = stem(id);
-  if (HASH.test(s) || /^\d+$/.test(s) || !/[A-Za-z]/.test(s)) return undefined;
-  const digits = s.replace(/[^0-9]/g, '').length;
-  if (digits >= 3 && digits * 4 >= s.length && !hasWord(s)) return undefined;
-  return s;
+  const idStem = stem(id);
+  if (HASH.test(idStem) || /^\d+$/.test(idStem) || !/[A-Za-z]/.test(idStem)) return undefined;
+  const digits = idStem.replace(/[^0-9]/g, '').length;
+  if (digits >= 3 && digits * 4 >= idStem.length && !hasWord(idStem)) return undefined;
+  return idStem;
 }
 
 /**
  * A run of four or more letters with one that is no hex digit (`AfterCheck2024`);
  * machine ids have none (`sid-6F1C3A2B-...`, `a3f2c1de`).
  */
-function hasWord(s: string): boolean {
-  return (s.match(/[A-Za-z]{4,}/g) ?? []).some((run) => /[g-z]/i.test(run));
+function hasWord(text: string): boolean {
+  return (text.match(/[A-Za-z]{4,}/g) ?? []).some((run) => /[g-z]/i.test(run));
 }
 
 /** The words that tie an unnamed element's id to its place (Gateway_AfterCheckInvoice). */
@@ -56,9 +56,9 @@ export function stemWords(stem: string): string[] {
     .filter(Boolean);
 }
 
-export function beginAlike(a: string, b: string): boolean {
-  const first = (x: string): string => (stemWords(x)[0] ?? '').toLowerCase();
-  return first(a) === first(b);
+export function beginAlike(one: string, other: string): boolean {
+  const first = (slug: string): string => (stemWords(slug)[0] ?? '').toLowerCase();
+  return first(one) === first(other);
 }
 
 export type PrefixClass = 'kind' | 'triggerKind' | 'literal';
@@ -74,10 +74,10 @@ export const GENERIC = new Set(['task']);
  * Message_): it says nothing about type-named prefixes.
  */
 export function prefixClass(prefix: string, typeNames: string[], trigger: string | undefined, family: string): PrefixClass {
-  const p = prefix.toLowerCase();
-  if (p === family.toLowerCase() || GENERIC.has(p)) return 'literal';
-  if (typeNames.some((n) => n.toLowerCase() === p)) return 'kind';
-  if (trigger && typeNames.some((n) => `${trigger}${n}`.toLowerCase() === p)) return 'triggerKind';
+  const lowerPrefix = prefix.toLowerCase();
+  if (lowerPrefix === family.toLowerCase() || GENERIC.has(lowerPrefix)) return 'literal';
+  if (typeNames.some((typeName) => typeName.toLowerCase() === lowerPrefix)) return 'kind';
+  if (trigger && typeNames.some((typeName) => `${trigger}${typeName}`.toLowerCase() === lowerPrefix)) return 'triggerKind';
   return 'literal';
 }
 
@@ -86,18 +86,18 @@ export function prefixClass(prefix: string, typeNames: string[], trigger: string
  * context the prefix says enough for every kind but the events, so it is ''.
  */
 export function kindWord(key: string, trigger: string | undefined, withContext = false): string {
-  const t = trigger && trigger !== 'none' ? ucfirst(trigger) : '';
+  const triggerWord = trigger && trigger !== 'none' ? ucfirst(trigger) : '';
   switch (key) {
     case 'startEvent':
-      return `${t}Start`;
+      return `${triggerWord}Start`;
     case 'endEvent':
-      return `${t}End`;
+      return `${triggerWord}End`;
     case 'boundaryEvent':
-      return t || 'Boundary';
+      return triggerWord || 'Boundary';
     case 'intermediateCatchEvent':
-      return t || 'Catch';
+      return triggerWord || 'Catch';
     case 'intermediateThrowEvent':
-      return t ? `${t}Throw` : 'Intermediate';
+      return triggerWord ? `${triggerWord}Throw` : 'Intermediate';
   }
   if (withContext) return '';
   if (/^[a-z]+Gateway$/.test(key)) return ucfirst(key.slice(0, -'Gateway'.length));

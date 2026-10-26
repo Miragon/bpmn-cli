@@ -50,7 +50,7 @@ export class BpmnlintValidator {
     private readonly resolved: ResolvedBpmnlintConfig,
     private readonly opts: BpmnlintValidatorOptions = {},
   ) {
-    for (const [name, s] of Object.entries(resolved.rules)) if (s.severity !== 'off') this.rules[name] = [s.severity, s.config];
+    for (const [name, setting] of Object.entries(resolved.rules)) if (setting.severity !== 'off') this.rules[name] = [setting.severity, setting.config];
     this.notes = [...bpmnlintUnavailableFindings([...resolved.unavailable, ...(opts.unavailable ?? [])]), ...(opts.notes ?? [])];
   }
 
@@ -83,12 +83,12 @@ export class BpmnlintValidator {
   /** bpmnlint's CLI reports the lint parse's import warnings as errors. */
   private async importWarnings(warnings: ImportWarning[], ctx: ValidatorContext, out: ValidatorFinding[]): Promise<void> {
     const doc = await ctx.doc();
-    const own = new Set(reportedImportWarnings(doc).map((w) => w.message.split('\n')[0]));
-    for (const w of warnings) {
-      const msg = w.message.split('\n')[0]!;
+    const own = new Set(reportedImportWarnings(doc).map((warning) => warning.message.split('\n')[0]));
+    for (const warning of warnings) {
+      const msg = warning.message.split('\n')[0]!;
       if (own.has(msg)) continue;
-      const id = (w.element as { id?: string } | undefined)?.id;
-      const hint = isDecisionLinkWarning(w) && doc.platform() === undefined ? DECISION_LINK_HINT : IMPORT_HINT;
+      const id = (warning.element as { id?: string } | undefined)?.id;
+      const hint = isDecisionLinkWarning(warning) && doc.platform() === undefined ? DECISION_LINK_HINT : IMPORT_HINT;
       out.push({ severity: 'error', code: 'import-warning', message: `Import warning: ${msg}`, ...(id ? { element: id } : {}), key: `import|${id ?? ''}|${msg}`, hint });
     }
   }

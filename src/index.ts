@@ -80,9 +80,9 @@ export { renderProblems } from './report/utils/result-lines.js';
 export function renderView(view: ModelView): string { return new ModelViewText(view).text(); }
 export function renderDetail(detail: ElementDetail): string { return new DetailText(detail).text(); }
 export function renderAround(view: AroundView): string { return new AroundText(view).text(); }
-export function renderContext(c: ElementContext): string { return new ContextText(c).text(); }
+export function renderContext(context: ElementContext): string { return new ContextText(context).text(); }
 export function renderLayoutView(view: LayoutView): string { return new LayoutText(view).text(); }
-export function renderMetrics(m: LayoutMetrics): string { return new MetricsText(m).text(); }
+export function renderMetrics(metrics: LayoutMetrics): string { return new MetricsText(metrics).text(); }
 export { setLayoutDebug } from './api.js';
 export { type DebugSink } from './layout/LayoutDebug.js';
 export { GUIDE_TOPICS } from './report/AgentGuide.js';

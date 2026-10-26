@@ -49,8 +49,8 @@ interface Run {
 }
 
 function cli(...args: string[]): Run {
-  const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT, input: '' });
-  return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+  const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT, input: '' });
+  return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
 }
 
 /** A copy of a fixture (or of XML) in the temp directory, for the CLI to write. */
@@ -62,15 +62,15 @@ function copy(name: string, xml?: string): string {
 }
 
 /** The CLI's --json output of a mutation without file and written (what EditResult.result holds). */
-function cliReport(r: Run): Record<string, unknown> {
-  expect(r.code, r.err).toBe(0);
-  const { file: _file, written: _written, ...rest } = JSON.parse(r.out) as Record<string, unknown>;
+function cliReport(cliRun: Run): Record<string, unknown> {
+  expect(cliRun.code, cliRun.err).toBe(0);
+  const { file: _file, written: _written, ...rest } = JSON.parse(cliRun.out) as Record<string, unknown>;
   return rest;
 }
 
-async function rejected(p: Promise<unknown>): Promise<CliError> {
+async function rejected(pending: Promise<unknown>): Promise<CliError> {
   try {
-    await p;
+    await pending;
   } catch (err) {
     return err as CliError;
   }
@@ -91,8 +91,8 @@ describe('the docs/library.md example (Library use)', () => {
     ]);
     expect(example).toContain("{ op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },");
     if (!edit.unchanged) xml = edit.xml;
-    const quote = (v: unknown): string => JSON.stringify(v).replaceAll('"', "'").replaceAll(',', ', ');
-    expect(example).toContain(`// ${quote(edit.result.created.map((c) => c.id))}`);
+    const quote = (data: unknown): string => JSON.stringify(data).replaceAll('"', "'").replaceAll(',', ', ');
+    expect(example).toContain(`// ${quote(edit.result.created.map((change) => change.id))}`);
     expect(example).toContain(`// '${edit.result.layout.mode}' (${edit.result.layout.reason})`);
     expect(renderMutation(edit.result)).toMatch(/^created startEvent [\s\S]*\nlayout: ok - full \(/m);
     const quickStart = /\$ bpmn show order\.bpmn\n([\s\S]*?)\n```/.exec(readme)?.[1];
@@ -123,10 +123,10 @@ describe('applyToXml = bpmn apply', () => {
 
   it('renderMutation prints what the CLI prints (but the file line)', async () => {
     const file = copy('orders.bpmn');
-    const r = cli('add', file, 'userTask', 'Ship goods', '--after', 'Task_A', '--show');
-    expect(r.code, r.err).toBe(0);
+    const cliRun = cli('add', file, 'userTask', 'Ship goods', '--after', 'Task_A', '--show');
+    expect(cliRun.code, cliRun.err).toBe(0);
     const api = await applyToXml(fixture('orders.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Ship goods', after: 'Task_A' }], { show: true });
-    expect(r.out.replace(/^written: .*\n/m, '')).toBe(`${renderMutation(api.result)}\n`);
+    expect(cliRun.out.replace(/^written: .*\n/m, '')).toBe(`${renderMutation(api.result)}\n`);
     expect(api.result.view?.processes.length).toBe(2);
     // the in-memory pipeline renders the same (a document without a file has no file line)
     const doc = await Doc.fromXml(fixture('orders.bpmn'));
@@ -155,9 +155,9 @@ describe('applyToXml = bpmn apply', () => {
   it('takes {ops} and JSON text, and checks ops like `bpmn apply` (E_USAGE naming the op)', async () => {
     const xml = fixture('sub.bpmn');
     const op = { op: 'set', id: 'T', values: { name: 'Later' } };
-    const a = await applyToXml(xml, [op]);
-    expect((await applyToXml(xml, { ops: [op] })).xml).toBe(a.xml);
-    expect((await applyToXml(xml, JSON.stringify([op]))).xml).toBe(a.xml);
+    const applied = await applyToXml(xml, [op]);
+    expect((await applyToXml(xml, { ops: [op] })).xml).toBe(applied.xml);
+    expect((await applyToXml(xml, JSON.stringify([op]))).xml).toBe(applied.xml);
     const bad = await rejected(applyToXml(xml, [op, { op: 'space', after: 'T', by: 'lots' }]));
     expect(bad).toMatchObject({ code: 'E_USAGE', category: 'usage' });
     expect(bad.message).toContain('ops[1]');
@@ -166,19 +166,19 @@ describe('applyToXml = bpmn apply', () => {
     // the same refusal as the CLI
     const file = copy('sub.bpmn');
     const opsFile = copy('ops.json', JSON.stringify([op, { op: 'space', after: 'T', by: 'lots' }]));
-    const r = cli('apply', file, opsFile, '--json');
-    expect(r.code).toBe(1);
-    expect(JSON.parse(r.err).error.message).toBe(bad.message);
+    const cliRun = cli('apply', file, opsFile, '--json');
+    expect(cliRun.code).toBe(1);
+    expect(JSON.parse(cliRun.err).error.message).toBe(bad.message);
   });
 
   it('normalises op values like `bpmn apply` (audit #49: a pixel count given as text moves by that many pixels)', async () => {
     const file = copy('sub.bpmn');
-    const r = cli('space', file, '--after', 'SP', '--by', '80', '--json');
-    expect(r.code, r.err).toBe(0);
+    const cliRun = cli('space', file, '--after', 'SP', '--by', '80', '--json');
+    expect(cliRun.code, cliRun.err).toBe(0);
     const api = await applyToXml(fixture('sub.bpmn'), [{ op: 'space', after: 'SP', by: '80' }]);
     expect(api.xml).toBe(readFileSync(file, 'utf8'));
-    const x = (xml: string, id: string): number => Number(new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([\\d.]+)"`).exec(xml)![1]);
-    expect(x(api.xml, 'T') - x(fixture('sub.bpmn'), 'T')).toBe(80);
+    const shapeX = (xml: string, id: string): number => Number(new RegExp(`bpmnElement="${id}"[^>]*>\\s*<dc:Bounds x="([\\d.]+)"`).exec(xml)![1]);
+    expect(shapeX(api.xml, 'T') - shapeX(fixture('sub.bpmn'), 'T')).toBe(80);
   });
 
   it('refuses a lossy import (E_IMPORT_LOSSY) and new validation errors (E_VALIDATION) unless force', async () => {
@@ -193,7 +193,7 @@ describe('applyToXml = bpmn apply', () => {
     const esp = [{ op: 'add', kind: 'subProcess', id: 'Esp2', in: 'Process_1', set: { triggeredByEvent: 'true' } }];
     const err = await rejected(applyToXml(LINEAR, esp));
     expect(err.code).toBe('E_VALIDATION');
-    expect((await applyToXml(LINEAR, esp, { force: true })).result.validation.errors.map((e) => e.element)).toEqual(['Esp2']);
+    expect((await applyToXml(LINEAR, esp, { force: true })).result.validation.errors.map((finding) => finding.element)).toEqual(['Esp2']);
   });
 
   it('says unchanged (and returns the input itself) when the result is byte-identical', async () => {
@@ -211,8 +211,8 @@ describe('the debug hook (BPMN_LAYOUT_DEBUG of the CLI)', () => {
 
   it('the debug option receives the lines of its call only', async () => {
     const lines: string[] = [];
-    await applyToXml(fixture('orders.bpmn'), add, { debug: (l) => lines.push(l) });
-    expect(lines.some((l) => l.startsWith('[route] F2'))).toBe(true);
+    await applyToXml(fixture('orders.bpmn'), add, { debug: (line) => lines.push(line) });
+    expect(lines.some((line) => line.startsWith('[route] F2'))).toBe(true);
     const count = lines.length;
     await applyToXml(fixture('orders.bpmn'), add);
     expect(lines.length).toBe(count);
@@ -220,20 +220,20 @@ describe('the debug hook (BPMN_LAYOUT_DEBUG of the CLI)', () => {
 
   it('setLayoutDebug sets one sink for the process; the CLI maps BPMN_LAYOUT_DEBUG to it (stderr)', async () => {
     const lines: string[] = [];
-    setLayoutDebug((l) => lines.push(l));
+    setLayoutDebug((line) => lines.push(line));
     try {
       await applyToXml(fixture('orders.bpmn'), add);
     } finally {
       setLayoutDebug();
     }
-    expect(lines.some((l) => l.startsWith('[route] F2'))).toBe(true);
+    expect(lines.some((line) => line.startsWith('[route] F2'))).toBe(true);
     const file = copy('orders.bpmn');
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), 'add', file, 'userTask', 'Ship goods', '--after', 'Task_A', '--dry-run'], {
+    const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), 'add', file, 'userTask', 'Ship goods', '--after', 'Task_A', '--dry-run'], {
       encoding: 'utf8',
       cwd: ROOT,
       env: { ...process.env, BPMN_LAYOUT_DEBUG: '1' },
     });
-    expect(r.stderr.split('\n').filter((l) => l.startsWith('['))).toEqual(lines);
+    expect(spawned.stderr.split('\n').filter((line) => line.startsWith('['))).toEqual(lines);
     expect(cli('add', copy('orders.bpmn'), 'userTask', 'Ship goods', '--after', 'Task_A', '--dry-run').err).toBe('');
   });
 });
@@ -272,8 +272,8 @@ describe('layoutXml = bpmn layout', () => {
     expect(await rejected(layoutXml(xml, { tidy: true, expand: ['SP'] }))).toMatchObject({ code: 'E_USAGE' });
     expect(await rejected(layoutXml(xml, { expand: ['SP'], collapse: ['SP'] }))).toMatchObject({ code: 'E_USAGE' });
     const wrong = await rejected(layoutXml(xml, { expand: ['T'] }));
-    const r = cli('layout', copy('sub.bpmn'), '--expand', 'T', '--json');
-    expect(wrong.code).toBe(JSON.parse(r.err).error.code);
+    const cliRun = cli('layout', copy('sub.bpmn'), '--expand', 'T', '--json');
+    expect(wrong.code).toBe(JSON.parse(cliRun.err).error.code);
   });
 });
 
@@ -281,8 +281,8 @@ describe('validateXml = bpmn validate', () => {
   it('reports what `validate --json` reports (without file), and renderValidation prints its text', async () => {
     for (const name of ['orders.bpmn', 'sub.bpmn']) {
       const file = copy(name);
-      const r = cli('validate', file, '--json');
-      const { file: _file, ...report } = JSON.parse(r.out) as Record<string, unknown>;
+      const cliRun = cli('validate', file, '--json');
+      const { file: _file, ...report } = JSON.parse(cliRun.out) as Record<string, unknown>;
       const api = await validateXml(fixture(name));
       expect(api, name).toEqual(report);
       expect(`${renderValidation(api)}\n`, name).toBe(cli('validate', file).out);
@@ -294,7 +294,7 @@ describe('validateXml = bpmn validate', () => {
     expect((await validateXml(c7)).platform?.platform).toBe('c7');
     const none = await validateXml(c7, { platform: 'none' });
     expect(none.platform?.platform).toBe('none');
-    expect(none.warnings.filter((w) => w.code.startsWith('W_C7_'))).toEqual([]);
+    expect(none.warnings.filter((warning) => warning.code.startsWith('W_C7_'))).toEqual([]);
   });
 });
 
@@ -352,6 +352,6 @@ describe('metricsXml / findXml / extensionsXml = bpmn metrics / find / ext list'
     const file = copy('ext.bpmn', xml);
     const api = await extensionsXml(xml, 'Task_A');
     expect(api).toEqual(JSON.parse(cli('ext', 'list', file, 'Task_A', '--json').out));
-    expect(api.map((e) => e.type)).toEqual(['camunda:properties']);
+    expect(api.map((extension) => extension.type)).toEqual(['camunda:properties']);
   });
 });

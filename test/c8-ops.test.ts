@@ -24,10 +24,10 @@ await loadProfiles();
 const ROOT = join(import.meta.dirname, '..');
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud"';
 
-function xml(body: string, o: { ns?: string; roots?: string } = {}): string {
+function xml(body: string, options: { ns?: string; roots?: string } = {}): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ${o.ns ?? C8} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-${o.roots ?? ''}
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ${options.ns ?? C8} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+${options.roots ?? ''}
   <bpmn:process id="P" isExecutable="true">
     <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
@@ -43,8 +43,8 @@ function caught(fn: () => unknown): { code?: string; message: string; hint?: str
   try {
     fn();
   } catch (err) {
-    const e = err as { code?: string; message: string; details?: { hint?: string } };
-    return { code: e.code, message: e.message, hint: e.details?.hint };
+    const thrown = err as { code?: string; message: string; details?: { hint?: string } };
+    return { code: thrown.code, message: thrown.message, hint: thrown.details?.hint };
   }
   throw new Error('expected an error');
 }
@@ -52,10 +52,10 @@ function caught(fn: () => unknown): { code?: string; message: string; hint?: str
 describe('set: zeebe settings are extension elements', () => {
   it('refuses a zeebe attribute Camunda 8 reads on an extension element, the hint is the ext add', async () => {
     const doc = await Doc.fromXml(xml(`<bpmn:userTask id="X">${ext('<zeebe:userTask />')}</bpmn:userTask>`));
-    const e = caught(() => runOps(doc, [{ op: 'set', id: 'X', values: { 'zeebe:assignee': 'demo' } }]));
-    expect(e.code).toBe('E_WRONG_HOST');
-    expect(e.message).toBe('zeebe:assignee is not an attribute of userTask X: Camunda 8 reads assignee on the zeebe:assignmentDefinition extension element');
-    expect(e.hint).toBe('Use `bpmn ext add <file> X zeebe:assignmentDefinition assignee=demo`.');
+    const element = caught(() => runOps(doc, [{ op: 'set', id: 'X', values: { 'zeebe:assignee': 'demo' } }]));
+    expect(element.code).toBe('E_WRONG_HOST');
+    expect(element.message).toBe('zeebe:assignee is not an attribute of userTask X: Camunda 8 reads assignee on the zeebe:assignmentDefinition extension element');
+    expect(element.hint).toBe('Use `bpmn ext add <file> X zeebe:assignmentDefinition assignee=demo`.');
     const st = await Doc.fromXml(xml('<bpmn:serviceTask id="X" />'));
     expect(caught(() => runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:type': 'charge' } }])).hint).toBe('Use `bpmn ext add <file> X zeebe:taskDefinition type=charge`.');
     expect(caught(() => runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:inputCollection': '=items' } }])).hint).toBe("Use `bpmn ext add <file> X loop.zeebe:loopCharacteristics 'inputCollection==items'` (creates a parallel multi-instance loop when there is none).");
@@ -68,17 +68,17 @@ describe('set: zeebe settings are extension elements', () => {
     // the attributes the descriptor puts on BPMN elements, unknown names and other vendors pass
     runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:modelerTemplate': 'io.example.charge', 'zeebe:typo': 'x' } }]);
     expect(st.require('X').$attrs).toMatchObject({ 'zeebe:modelerTemplate': 'io.example.charge', 'zeebe:typo': 'x' });
-    expect(runProfile(st).findings.map((f) => f.code)).toEqual(['W_C8_UNKNOWN_ATTRIBUTE', 'W_C8_DEPLOY_IMPLEMENTATION']);
+    expect(runProfile(st).findings.map((finding) => finding.code)).toEqual(['W_C8_UNKNOWN_ATTRIBUTE', 'W_C8_DEPLOY_IMPLEMENTATION']);
   });
 });
 
 describe('ext add: Zeebe structure', () => {
   it('loop.zeebe:loopCharacteristics creates the parallel multi-instance loop it configures (CLI type and ops JSON)', async () => {
     const doc = await Doc.fromXml(xml(`<bpmn:serviceTask id="X">${ext('<zeebe:taskDefinition type="w" />')}</bpmn:serviceTask>`));
-    const r = await mutateDoc(doc, [{ op: 'ext', id: 'X', action: 'add', type: 'loop.zeebe:loopCharacteristics', attrs: { inputCollection: '=items', inputElement: 'item' } }], { layout: false, dryRun: true });
-    expect(r.changes.notes.join('\n')).toMatch(/X: created a parallel multi-instance loop for loop.zeebe:loopCharacteristics/);
-    expect(r.xml).toMatch(/<bpmn:multiInstanceLoopCharacteristics>\s*<bpmn:extensionElements>\s*<zeebe:loopCharacteristics inputCollection="=items" inputElement="item" \/>/);
-    expect(r.validation.platform).toMatchObject({ counts: { deploy: 0, runtime: 0, practice: 0 } });
+    const outcome = await mutateDoc(doc, [{ op: 'ext', id: 'X', action: 'add', type: 'loop.zeebe:loopCharacteristics', attrs: { inputCollection: '=items', inputElement: 'item' } }], { layout: false, dryRun: true });
+    expect(outcome.changes.notes.join('\n')).toMatch(/X: created a parallel multi-instance loop for loop.zeebe:loopCharacteristics/);
+    expect(outcome.xml).toMatch(/<bpmn:multiInstanceLoopCharacteristics>\s*<bpmn:extensionElements>\s*<zeebe:loopCharacteristics inputCollection="=items" inputElement="item" \/>/);
+    expect(outcome.validation.platform).toMatchObject({ counts: { deploy: 0, runtime: 0, practice: 0 } });
     const other = await Doc.fromXml(xml(`<bpmn:serviceTask id="X">${ext('<zeebe:taskDefinition type="w" />')}</bpmn:serviceTask>`));
     runOps(other, [{ op: 'ext', id: 'X', action: 'add', slot: 'loop', type: 'zeebe:loopCharacteristics', attrs: { inputCollection: '=items' } }]);
     expect(other.require('X').get<{ $type: string }>('loopCharacteristics').$type).toBe('bpmn:MultiInstanceLoopCharacteristics');
@@ -90,11 +90,11 @@ describe('ext add: Zeebe structure', () => {
   it('a zeebe element where Camunda 8 does not read it: W_MISPLACED_EXTENSION, replaced by the profile finding on a write', async () => {
     const plain = await Doc.fromXml(xml('<bpmn:userTask id="X" />', { ns: 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"' }));
     const cs = runOps(plain, [{ op: 'ext', id: 'X', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' } }]);
-    expect(cs.warnings.map((w) => [w.code, w.message])).toEqual([['W_MISPLACED_EXTENSION', 'zeebe:taskDefinition on X (bpmn:UserTask) is not read by Camunda 8: it belongs on serviceTask, businessRuleTask, scriptTask, sendTask, endEvent, ...']]);
+    expect(cs.warnings.map((warning) => [warning.code, warning.message])).toEqual([['W_MISPLACED_EXTENSION', 'zeebe:taskDefinition on X (bpmn:UserTask) is not read by Camunda 8: it belongs on serviceTask, businessRuleTask, scriptTask, sendTask, endEvent, ...']]);
     const doc = await Doc.fromXml(xml(`<bpmn:userTask id="X">${ext('<zeebe:userTask />')}</bpmn:userTask>`));
-    const r = await mutateDoc(doc, [{ op: 'ext', id: 'X', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' } }], { layout: false, dryRun: true });
-    expect(r.changes.warnings).toEqual([]);
-    expect(r.validation.warnings.filter((w) => w.code.startsWith('W_C8_')).map((w) => w.code)).toEqual(['W_C8_MISPLACED_EXTENSION']);
+    const outcome = await mutateDoc(doc, [{ op: 'ext', id: 'X', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' } }], { layout: false, dryRun: true });
+    expect(outcome.changes.warnings).toEqual([]);
+    expect(outcome.validation.warnings.filter((warning) => warning.code.startsWith('W_C8_')).map((warning) => warning.code)).toEqual(['W_C8_MISPLACED_EXTENSION']);
   });
 
   it('a second zeebe:adHoc / conditionalFilter / publishMessage is merged (Camunda 8.9 refuses two)', async () => {
@@ -107,14 +107,14 @@ describe('ext add: Zeebe structure', () => {
 describe('retype in a Camunda 8 file', () => {
   it('a task retyped to a user task gets zeebe:userTask; stale zeebe content is reported item by item', async () => {
     const doc = await Doc.fromXml(xml(`<bpmn:serviceTask id="X">${ext('<zeebe:taskDefinition type="w" />')}</bpmn:serviceTask>`));
-    const r = await mutateDoc(doc, [{ op: 'retype', id: 'X', kind: 'userTask' }], { layout: false, dryRun: true });
-    expect(r.xml).toMatch(/<bpmn:userTask id="X">\s*<bpmn:extensionElements>\s*<zeebe:taskDefinition type="w" \/>\s*<zeebe:userTask \/>/);
-    expect(r.changes.notes).toContain('X is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)');
-    expect(r.changes.warnings.map((w) => w.code)).toEqual([]);
-    expect(r.validation.platform!.added!.map((f) => [f.code, f.element])).toEqual([['W_C8_MISPLACED_EXTENSION', 'X']]);
+    const outcome = await mutateDoc(doc, [{ op: 'retype', id: 'X', kind: 'userTask' }], { layout: false, dryRun: true });
+    expect(outcome.xml).toMatch(/<bpmn:userTask id="X">\s*<bpmn:extensionElements>\s*<zeebe:taskDefinition type="w" \/>\s*<zeebe:userTask \/>/);
+    expect(outcome.changes.notes).toContain('X is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)');
+    expect(outcome.changes.warnings.map((warning) => warning.code)).toEqual([]);
+    expect(outcome.validation.platform!.added!.map((finding) => [finding.code, finding.element])).toEqual([['W_C8_MISPLACED_EXTENSION', 'X']]);
     const back = await Doc.fromXml(xml(`<bpmn:userTask id="X">${ext('<zeebe:userTask /><zeebe:assignmentDefinition assignee="demo" />')}</bpmn:userTask>`));
     const ops = runOps(back, [{ op: 'retype', id: 'X', kind: 'serviceTask' }]);
-    expect(ops.warnings.find((w) => w.code === 'W_PROPERTY_INAPPLICABLE')).toMatchObject({
+    expect(ops.warnings.find((warning) => warning.code === 'W_PROPERTY_INAPPLICABLE')).toMatchObject({
       message: 'zeebe:userTask, zeebe:assignmentDefinition of X have no effect on a serviceTask (kept as they are)',
       hint: 'The Zeebe (Camunda 8) descriptor does not allow them on a serviceTask; remove with `bpmn ext remove <file> X zeebe:userTask` and `bpmn ext remove <file> X zeebe:assignmentDefinition`, or retype back.',
     });
@@ -148,7 +148,7 @@ describe('show: what a Camunda 8 node does', () => {
 describe('the ops example', () => {
   it('is a valid Camunda 8 model on the file it describes', async () => {
     const doc = Doc.create({ target: 'camunda8', processName: 'Order handling' });
-    const r = await mutateDoc(
+    const outcome = await mutateDoc(
       doc,
       [
         { op: 'add', kind: 'start', name: 'Order received' },
@@ -158,7 +158,7 @@ describe('the ops example', () => {
       ],
       { dryRun: true },
     );
-    expect(r.validation.platform).toMatchObject({ platform: 'c8', counts: { deploy: 0, runtime: 0, practice: 0 } });
+    expect(outcome.validation.platform).toMatchObject({ platform: 'c8', counts: { deploy: 0, runtime: 0, practice: 0 } });
   });
 });
 
@@ -187,15 +187,15 @@ function shellSplit(line: string): string[] {
   let cur = '';
   let quote: string | undefined;
   let quoted = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!;
+  for (let charIndex = 0; charIndex < line.length; charIndex++) {
+    const ch = line[charIndex]!;
     if (quote) {
       if (ch === quote) quote = undefined;
       else cur += ch;
-    } else if (ch === "'" && line.startsWith("\\''", i + 1)) {
+    } else if (ch === "'" && line.startsWith("\\''", charIndex + 1)) {
       // '\'' inside a single-quoted argument: a literal quote
       cur += "'";
-      i += 3;
+      charIndex += 3;
     } else if (ch === "'" || ch === '"') {
       quote = ch;
       quoted = true;
@@ -225,37 +225,37 @@ describe('the hints of the Camunda 8 profile, run through the CLI', () => {
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   const cli = (...args: string[]): { code: number; out: string; err: string } => {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+    const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+    return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
   };
 
-  it.each(REFUSED.map(([name, model], i) => [name, model, i] as const))('%s: following the first command of every deploy hint leaves no deploy finding', async (_name, model, i) => {
-    const file = join(dir, `m${i}.bpmn`);
+  it.each(REFUSED.map(([name, model], caseIndex) => [name, model, caseIndex] as const))('%s: following the first command of every deploy hint leaves no deploy finding', async (_name, model, caseIndex) => {
+    const file = join(dir, `m${caseIndex}.bpmn`);
     writeFileSync(file, model);
-    const deployFindings = async (): Promise<Array<{ code: string; element?: string; hint?: string; message: string }>> => runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.filter((f) => f.severity === 'deploy');
+    const deployFindings = async (): Promise<Array<{ code: string; element?: string; hint?: string; message: string }>> => runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.filter((finding) => finding.severity === 'deploy');
     const before = await deployFindings();
     expect(before.length).toBeGreaterThan(0);
     const tried = new Set<string>();
     for (let round = 0; round < 12; round++) {
-      const left = (await deployFindings()).filter((f) => !tried.has(`${f.code}|${f.element}|${f.message}`));
-      const f = left[0];
-      if (!f) break;
-      tried.add(`${f.code}|${f.element}|${f.message}`);
-      const command = /`(bpmn [^`]+)`/.exec(f.hint ?? '')?.[1];
-      expect(command, `${f.code}: ${f.hint}`).toBeDefined();
+      const left = (await deployFindings()).filter((finding) => !tried.has(`${finding.code}|${finding.element}|${finding.message}`));
+      const nextFinding = left[0];
+      if (!nextFinding) break;
+      tried.add(`${nextFinding.code}|${nextFinding.element}|${nextFinding.message}`);
+      const command = /`(bpmn [^`]+)`/.exec(nextFinding.hint ?? '')?.[1];
+      expect(command, `${nextFinding.code}: ${nextFinding.hint}`).toBeDefined();
       let line = command!.replace(/<file>/g, file);
-      for (const [k, v] of Object.entries(FILL)) line = line.split(k).join(v);
-      const r = cli(...shellSplit(line.replace(/^bpmn\s+/, '')), '--no-layout');
-      expect([0, 5], `${line}\n${r.err}${r.out}`).toContain(r.code);
+      for (const [placeholder, violation] of Object.entries(FILL)) line = line.split(placeholder).join(violation);
+      const cliRun = cli(...shellSplit(line.replace(/^bpmn\s+/, '')), '--no-layout');
+      expect([0, 5], `${line}\n${cliRun.err}${cliRun.out}`).toContain(cliRun.code);
     }
-    expect((await deployFindings()).map((f) => `${f.code} ${f.element}`)).toEqual([]);
+    expect((await deployFindings()).map((finding) => `${finding.code} ${finding.element}`)).toEqual([]);
     if (ENGINE) {
       const form = new FormData();
-      form.append('resources', new Blob([readFileSync(file, 'utf8').replace(/id="P"/g, `id="P_bpmn_cli_c8_hints_${i}"`)], { type: 'application/octet-stream' }), `hints-${i}.bpmn`);
+      form.append('resources', new Blob([readFileSync(file, 'utf8').replace(/id="P"/g, `id="P_bpmn_cli_c8_hints_${caseIndex}"`)], { type: 'application/octet-stream' }), `hints-${caseIndex}.bpmn`);
       const res = await fetch(`${ENGINE}/deployments`, { method: 'POST', body: form, headers: { accept: 'application/json' } });
       const json = (await res.json()) as { detail?: string; deployments?: Array<{ processDefinition?: { processDefinitionKey: string } }> };
       expect(res.ok, json.detail).toBe(true);
-      for (const d of json.deployments ?? []) if (d.processDefinition) await fetch(`${ENGINE}/resources/${d.processDefinition.processDefinitionKey}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      for (const deployment of json.deployments ?? []) if (deployment.processDefinition) await fetch(`${ENGINE}/resources/${deployment.processDefinition.processDefinitionKey}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     }
   }, 60000);
 });

@@ -37,11 +37,11 @@ const ZEEBE = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"';
 const MODELER = 'xmlns:modeler="http://camunda.org/schema/modeler/1.0"';
 const C7 = `${CAMUNDA} ${MODELER} modeler:executionPlatform="Camunda Platform"`;
 
-function xml(body: string, o: { ns?: string; roots?: string; attrs?: string; id?: string } = {}): string {
+function xml(body: string, options: { ns?: string; roots?: string; attrs?: string; id?: string } = {}): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions ${BPMN} ${o.ns ?? C7} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-${o.roots ?? ''}
-  <bpmn:process id="${o.id ?? 'P_FollowUp'}" isExecutable="true" ${o.attrs ?? 'camunda:historyTimeToLive="180"'}>
+<bpmn:definitions ${BPMN} ${options.ns ?? C7} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+${options.roots ?? ''}
+  <bpmn:process id="${options.id ?? 'P_FollowUp'}" isExecutable="true" ${options.attrs ?? 'camunda:historyTimeToLive="180"'}>
 ${body}
   </bpmn:process>
 </bpmn:definitions>`;
@@ -50,8 +50,8 @@ ${body}
 /** start -> nodes (each [id, xml]) -> end */
 function chain(nodes: Array<[string, string]>, extra = '', start = '<bpmn:startEvent id="Start" />'): string {
   const ids = ['Start', ...nodes.map(([id]) => id), 'End'];
-  const flows = ids.slice(1).map((id, i) => `<bpmn:sequenceFlow id="F${i}" sourceRef="${ids[i]}" targetRef="${id}" />`);
-  return [start, ...nodes.map(([, x]) => x), '<bpmn:endEvent id="End" />', ...flows, extra].join('\n');
+  const flows = ids.slice(1).map((id, index) => `<bpmn:sequenceFlow id="F${index}" sourceRef="${ids[index]}" targetRef="${id}" />`);
+  return [start, ...nodes.map(([, nodeXml]) => nodeXml), '<bpmn:endEvent id="End" />', ...flows, extra].join('\n');
 }
 
 const UT = (id = 'T', inner = ''): [string, string] => [id, `<bpmn:userTask id="${id}">${inner}</bpmn:userTask>`];
@@ -65,10 +65,10 @@ const boundary = (id: string, host: string, def: string, attrs = ''): string => 
 const eventSub = (id: string, start: string, attrs = 'isInterrupting="false"'): string =>
   `<bpmn:subProcess id="${id}" triggeredByEvent="true"><bpmn:startEvent id="${id}_S" ${attrs}>${start}</bpmn:startEvent><bpmn:sequenceFlow id="${id}_F" sourceRef="${id}_S" targetRef="${id}_E" /><bpmn:endEvent id="${id}_E" /></bpmn:subProcess>`;
 const sub = (id: string, inner: string, attrs = ''): [string, string] => [id, `<bpmn:subProcess id="${id}" ${attrs}>${inner}</bpmn:subProcess>`];
-const subChain = (p: string, nodes: string[] = [], starts = 1): string => {
-  const s = Array.from({ length: starts }, (_, i) => `<bpmn:startEvent id="${p}_S${i}" />`).join('');
-  const flows = Array.from({ length: starts }, (_, i) => `<bpmn:sequenceFlow id="${p}_f${i}" sourceRef="${p}_S${i}" targetRef="${p}_E" />`).join('');
-  return `${s}${nodes.join('')}<bpmn:endEvent id="${p}_E" />${flows}`;
+const subChain = (prefix: string, nodes: string[] = [], starts = 1): string => {
+  const startEvents = Array.from({ length: starts }, (unused, index) => `<bpmn:startEvent id="${prefix}_S${index}" />`).join('');
+  const flows = Array.from({ length: starts }, (unused, index) => `<bpmn:sequenceFlow id="${prefix}_f${index}" sourceRef="${prefix}_S${index}" targetRef="${prefix}_E" />`).join('');
+  return `${startEvents}${nodes.join('')}<bpmn:endEvent id="${prefix}_E" />${flows}`;
 };
 const LINK_T = (id: string, name?: string): [string, string] => [id, `<bpmn:intermediateThrowEvent id="${id}"><bpmn:linkEventDefinition${name === undefined ? '' : ` name="${name}"`} /></bpmn:intermediateThrowEvent>`];
 const LINK_C = (id: string, name?: string, to = 'End'): string =>
@@ -169,7 +169,7 @@ const CASES: Case[] = [
     name: 'link catch events with one name in two sub-processes',
     xml: xml(
       chain(
-        ['1', '2'].map((k): [string, string] => [`Sub${k}`, `<bpmn:subProcess id="Sub${k}"><bpmn:startEvent id="SS${k}" /><bpmn:sequenceFlow id="s${k}" sourceRef="SS${k}" targetRef="LT${k}" />${LINK_T(`LT${k}`, 'L1')[1]}${LINK_C(`C${k}`, 'L1', `SE${k}`)}<bpmn:endEvent id="SE${k}" /></bpmn:subProcess>`]),
+        ['1', '2'].map((suffix): [string, string] => [`Sub${suffix}`, `<bpmn:subProcess id="Sub${suffix}"><bpmn:startEvent id="SS${suffix}" /><bpmn:sequenceFlow id="s${suffix}" sourceRef="SS${suffix}" targetRef="LT${suffix}" />${LINK_T(`LT${suffix}`, 'L1')[1]}${LINK_C(`C${suffix}`, 'L1', `SE${suffix}`)}<bpmn:endEvent id="SE${suffix}" /></bpmn:subProcess>`]),
       ),
     ),
     codes: ['W_C7_DEPLOY_LINK'],
@@ -211,42 +211,42 @@ const CASES: Case[] = [
 ];
 
 describe('profile follow-ups: one synthetic model per rule', () => {
-  it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
-    const findings = runProfile(await Doc.fromXml(c.xml)).findings;
-    expect(findings.map((f) => f.code).sort(), JSON.stringify(findings, null, 1)).toEqual([...c.codes].sort());
+  it.each(CASES.map((testCase) => [testCase.name, testCase] as const))('%s', async (_name, testCase) => {
+    const findings = runProfile(await Doc.fromXml(testCase.xml)).findings;
+    expect(findings.map((finding) => finding.code).sort(), JSON.stringify(findings, null, 1)).toEqual([...testCase.codes].sort());
     // deploy findings exactly where the engine that reads the file refuses it
-    const operatonFile = detectPlatform(await Doc.fromXml(c.xml)).operaton === true;
-    expect(findings.some((f) => f.severity === 'deploy')).toBe((operatonFile ? (c.operaton ?? c.engine) : c.engine) === 'reject');
-    expect(findings.every((f) => f.code.startsWith('W_C7_DEPLOY_') === (f.severity === 'deploy'))).toBe(true);
-    for (const f of findings) expect(f.hint, `${f.code}: ${f.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
+    const operatonFile = detectPlatform(await Doc.fromXml(testCase.xml)).operaton === true;
+    expect(findings.some((finding) => finding.severity === 'deploy')).toBe((operatonFile ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'reject');
+    expect(findings.every((finding) => finding.code.startsWith('W_C7_DEPLOY_') === (finding.severity === 'deploy'))).toBe(true);
+    for (const finding of findings) expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
   });
 
   it('an empty process (bpmn new) and an empty sub-process need a start event too (engine-checked)', async () => {
-    expect(runProfile(Doc.create({ target: 'camunda7' })).findings.map((f) => f.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
-    expect(runProfile(await Doc.fromXml(xml(chain([sub('Sub', '')])))).findings.map((f) => `${f.code} ${f.element}`)).toEqual(['W_C7_DEPLOY_START_EVENT Sub']);
+    expect(runProfile(Doc.create({ target: 'camunda7' })).findings.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
+    expect(runProfile(await Doc.fromXml(xml(chain([sub('Sub', '')])))).findings.map((finding) => `${finding.code} ${finding.element}`)).toEqual(['W_C7_DEPLOY_START_EVENT Sub']);
   });
 
   it('names what to fix', async () => {
-    const two = runProfile(await Doc.fromXml(CASES.find((c) => c.name === 'two none start events')!.xml)).findings[0]!;
+    const two = runProfile(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'two none start events')!.xml)).findings[0]!;
     expect(two).toMatchObject({ element: 'S2', related: ['Start'] });
     expect(two.message).toContain('second none or timer start event of process P_FollowUp');
-    const link = runProfile(await Doc.fromXml(CASES.find((c) => c.name === 'link throw event in the process, catch event in a sub-process')!.xml)).findings[0]!;
+    const link = runProfile(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'link throw event in the process, catch event in a sub-process')!.xml)).findings[0]!;
     expect(link).toMatchObject({ element: 'L', related: ['C1'] });
     expect(link.hint).toContain('--in P_FollowUp --link L1');
     const comp = runProfile(await Doc.fromXml(compensation('Inner'))).findings[0]!;
     expect(comp).toMatchObject({ element: 'Th', related: ['Inner'] });
     expect(comp.hint).toContain('(in P_FollowUp: Host, Sub)');
-    const recv = runProfile(await Doc.fromXml(CASES.find((c) => c.name.startsWith('receive task and a boundary'))!.xml)).findings[0]!;
+    const recv = runProfile(await Doc.fromXml(CASES.find((testCase) => testCase.name.startsWith('receive task and a boundary'))!.xml)).findings[0]!;
     expect(recv).toMatchObject({ element: 'B1', related: ['T'] });
-    const side = runProfile(await Doc.fromXml(CASES.find((c) => c.name.startsWith('throw-only'))!.xml)).findings.find((f) => f.element === 'W')!;
+    const side = runProfile(await Doc.fromXml(CASES.find((testCase) => testCase.name.startsWith('throw-only'))!.xml)).findings.find((finding) => finding.element === 'W')!;
     expect(side.message).toContain('read it on message throw and end events only');
     expect(side.hint).toContain('`bpmn set <file> W definition.camunda:type=`');
   });
 
   it('W_NO_START gives way to the engine finding about the same process', async () => {
-    const doc = await Doc.fromXml(CASES.find((c) => c.name === 'process with nodes but no start event')!.xml);
-    expect(validateDoc(doc).warnings.map((w) => w.code)).toContain('W_NO_START');
-    const codes = validateDoc(doc, { platform: 'auto' }).warnings.map((w) => w.code);
+    const doc = await Doc.fromXml(CASES.find((testCase) => testCase.name === 'process with nodes but no start event')!.xml);
+    expect(validateDoc(doc).warnings.map((warning) => warning.code)).toContain('W_NO_START');
+    const codes = validateDoc(doc, { platform: 'auto' }).warnings.map((warning) => warning.code);
     expect(codes).toContain('W_C7_DEPLOY_START_EVENT');
     expect(codes).not.toContain('W_NO_START');
   });
@@ -263,9 +263,9 @@ describe('one platform detector', () => {
   ];
   it.each(cases)('Doc.platform() follows detectPlatform: %s', async (_name, ns, body, expected) => {
     const doc = await Doc.fromXml(xml(body, { ns, attrs: '' }));
-    const p = detectPlatform(doc).platform;
+    const platform = detectPlatform(doc).platform;
     expect(new PlatformDetection(doc.definitions).target()).toBe(expected);
-    expect(doc.platform()).toBe(p === 'c7' ? 'camunda7' : p === 'c8' ? 'camunda8' : undefined);
+    expect(doc.platform()).toBe(platform === 'c7' ? 'camunda7' : platform === 'c8' ? 'camunda8' : undefined);
   });
 
   it('says when the file is read as Operaton reads it, and names both declared namespaces', async () => {
@@ -283,9 +283,9 @@ describe('one platform detector', () => {
   });
 
   it('hints use the operaton prefix in an Operaton file', async () => {
-    const [f] = runProfile(await Doc.fromXml(xml(chain([['X', '<bpmn:serviceTask id="X" />']]), { ns: OPERATON, attrs: 'operaton:historyTimeToLive="180"' }))).findings;
-    expect(f).toMatchObject({ code: 'W_C7_DEPLOY_IMPLEMENTATION', element: 'X' });
-    expect(f!.hint).toContain('operaton:type=external operaton:topic=<topic>');
+    const [finding] = runProfile(await Doc.fromXml(xml(chain([['X', '<bpmn:serviceTask id="X" />']]), { ns: OPERATON, attrs: 'operaton:historyTimeToLive="180"' }))).findings;
+    expect(finding).toMatchObject({ code: 'W_C7_DEPLOY_IMPLEMENTATION', element: 'X' });
+    expect(finding!.hint).toContain('operaton:type=external operaton:topic=<topic>');
   });
 });
 
@@ -295,13 +295,13 @@ describe('one platform detector', () => {
 
 /** The `bpmn ...` command lines of a hint, as argv (single quotes like a POSIX shell). */
 function commandsOf(hint: string): string[][] {
-  return [...hint.matchAll(/`(bpmn [^`]+)`/g)].map((m) => {
+  return [...hint.matchAll(/`(bpmn [^`]+)`/g)].map((match) => {
     const out: string[] = [];
     const re = /'((?:[^']|'\\'')*)'|(\S+)/g;
     let cur: RegExpExecArray | null;
     let arg = '';
     let last = -1;
-    while ((cur = re.exec(m[1]!))) {
+    while ((cur = re.exec(match[1]!))) {
       const piece = cur[1] !== undefined ? cur[1].replace(/'\\''/g, "'") : cur[2]!;
       if (cur.index === last) arg += piece;
       else {
@@ -323,8 +323,8 @@ describe('validate hints keep the siblings of a repeatable extension type', () =
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   function cli(...args: string[]): { code: number; out: string; err: string } {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+    return { code: result.status ?? -1, out: result.stdout, err: result.stderr };
   }
 
   /** runs every command of the hint on `file`, filling the placeholders */
@@ -333,9 +333,9 @@ describe('validate hints keep the siblings of a repeatable extension type', () =
     expect(cmds.length).toBeGreaterThan(0);
     for (const argv of cmds) {
       expect(argv.join(' ')).not.toContain('--replace');
-      const args = argv.map((a) => Object.entries(fill).reduce((s, [k, v]) => s.split(k).join(v), a.replace('<file>', file)));
-      const r = cli(...args);
-      expect(r.code, `${args.join(' ')}\n${r.out}\n${r.err}`).toBe(0);
+      const args = argv.map((argument) => Object.entries(fill).reduce((command, [placeholder, replacement]) => command.split(placeholder).join(replacement), argument.replace('<file>', file)));
+      const result = cli(...args);
+      expect(result.code, `${args.join(' ')}\n${result.out}\n${result.err}`).toBe(0);
     }
   }
 
@@ -343,25 +343,25 @@ describe('validate hints keep the siblings of a repeatable extension type', () =
     const file = join(dir, 'dangling.bpmn');
     const task = `<bpmn:serviceTask id="X" camunda:type="external" camunda:topic="t">${ext('<camunda:errorEventDefinition id="CEED_1" errorRef="Error_Gone" expression="${true}" /><camunda:errorEventDefinition id="CEED_2" errorRef="Err" expression="${false}" />')}</bpmn:serviceTask>`;
     writeFileSync(file, xml(chain([['X', task]]), { roots: '<bpmn:error id="Err" name="Err" errorCode="E1" />' }));
-    const f = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((x) => x.code === 'W_C7_DANGLING_REF')!;
-    expect(f.hint).toContain("`bpmn ext remove <file> X 'camunda:errorEventDefinition[id=CEED_1]'`");
-    follow(f.hint!, file, { '<errorId>': 'Err' });
+    const finding = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((candidate) => candidate.code === 'W_C7_DANGLING_REF')!;
+    expect(finding.hint).toContain("`bpmn ext remove <file> X 'camunda:errorEventDefinition[id=CEED_1]'`");
+    follow(finding.hint!, file, { '<errorId>': 'Err' });
     const after = await Doc.fromXml(readFileSync(file, 'utf8'));
     expect(runProfile(after).findings).toEqual([]);
-    const ids = (after.get('X') as unknown as { extensionElements: { values: Array<{ id: string; errorRef: string }> } }).extensionElements.values.map((v) => `${v.id}:${v.errorRef}`);
+    const ids = (after.get('X') as unknown as { extensionElements: { values: Array<{ id: string; errorRef: string }> } }).extensionElements.values.map((entry) => `${entry.id}:${entry.errorRef}`);
     expect(ids.sort()).toEqual(['CEED_1:Err', 'CEED_2:Err']);
   }, 60000);
 
   it('W_C7_DEPLOY_LISTENER: one listener is rebuilt, the others stay; "take" only for take', async () => {
     const file = join(dir, 'listener.bpmn');
     writeFileSync(file, xml(chain([UT('T', ext('<camunda:executionListener event="end" expression="${a}" /><camunda:executionListener event="finish" expression="${b}" />'))])));
-    const f = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((x) => x.code === 'W_C7_DEPLOY_LISTENER')!;
-    expect(f.hint).not.toContain('take');
-    expect(f.hint).toContain("'camunda:executionListener[event=finish]'");
-    follow(f.hint!, file, { '<start|end>': 'start' });
+    const finding = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((candidate) => candidate.code === 'W_C7_DEPLOY_LISTENER')!;
+    expect(finding.hint).not.toContain('take');
+    expect(finding.hint).toContain("'camunda:executionListener[event=finish]'");
+    follow(finding.hint!, file, { '<start|end>': 'start' });
     const after = await Doc.fromXml(readFileSync(file, 'utf8'));
     expect(runProfile(after).findings).toEqual([]);
-    const events = (after.get('T') as unknown as { extensionElements: { values: Array<{ event: string; expression: string }> } }).extensionElements.values.map((v) => `${v.event}:${v.expression}`);
+    const events = (after.get('T') as unknown as { extensionElements: { values: Array<{ event: string; expression: string }> } }).extensionElements.values.map((listener) => `${listener.event}:${listener.expression}`);
     expect(events.sort()).toEqual(['end:${a}', 'start:${b}']);
     const take = runProfile(await Doc.fromXml(xml(chain([UT('T', ext('<camunda:executionListener event="take" expression="${a}" />'))])))).findings[0]!;
     expect(take.hint).toMatch(/^take is only read on sequence flows/);
@@ -370,16 +370,16 @@ describe('validate hints keep the siblings of a repeatable extension type', () =
   it('W_C7_DEPLOY_EXTENSION on camunda:in of a signal event definition: the definition. slot', async () => {
     const file = join(dir, 'in.bpmn');
     writeFileSync(file, xml(chain([['Th', `<bpmn:intermediateThrowEvent id="Th"><bpmn:signalEventDefinition signalRef="Sig">${ext('<camunda:in source="a" target="a" /><camunda:in source="b" />')}</bpmn:signalEventDefinition></bpmn:intermediateThrowEvent>`]]), { roots: ROOTS }));
-    const f = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((x) => x.code === 'W_C7_DEPLOY_EXTENSION')!;
-    expect(f.hint).toContain("'definition.camunda:in[source=b]'");
-    follow(f.hint!.replace(/ \(or with variables=all.*$/, ''), file, { '<var>': 'b' });
+    const finding = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((candidate) => candidate.code === 'W_C7_DEPLOY_EXTENSION')!;
+    expect(finding.hint).toContain("'definition.camunda:in[source=b]'");
+    follow(finding.hint!.replace(/ \(or with variables=all.*$/, ''), file, { '<var>': 'b' });
     expect(runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings).toEqual([]);
   }, 60000);
 
   it('a single-instance container is still rebuilt as a whole', async () => {
     const doc = await Doc.fromXml(xml(chain([UT('T', ext('<camunda:inputOutput><camunda:inputParameter name="a" foo="1">1</camunda:inputParameter></camunda:inputOutput>'))])));
-    const f = runProfile(doc).findings.find((x) => x.code === 'W_C7_UNKNOWN_ATTRIBUTE')!;
-    expect(f.hint).toContain('camunda:inputOutput --replace --xml');
+    const finding = runProfile(doc).findings.find((candidate) => candidate.code === 'W_C7_UNKNOWN_ATTRIBUTE')!;
+    expect(finding.hint).toContain('camunda:inputOutput --replace --xml');
   });
 });
 
@@ -389,7 +389,7 @@ describe('validate hints keep the siblings of a repeatable extension type', () =
 
 const ENGINES = (process.env['BPMN_C7_ENGINES'] ?? '')
   .split(',')
-  .map((s) => s.trim().replace(/\/$/, ''))
+  .map((line) => line.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 async function isOperaton(engine: string): Promise<boolean> {
@@ -419,10 +419,10 @@ async function deploy(engine: string, name: string, bpmn: string): Promise<{ ok:
 
 describe.skipIf(!ENGINES.length)('live engines: the engines agree with CASES', () => {
   for (const engine of ENGINES) {
-    it.each(CASES.map((c, i) => [c.name, c, i] as const))(`${engine}: %s`, async (_name, c, i) => {
+    it.each(CASES.map((testCase, caseIndex) => [testCase.name, testCase, caseIndex] as const))(`${engine}: %s`, async (_name, testCase, caseIndex) => {
       const operaton = await isOperaton(engine);
-      const result = await deploy(engine, `bpmn-cli-c7-followups-${i}`, c.xml);
-      expect(result.ok, result.message).toBe((operaton ? (c.operaton ?? c.engine) : c.engine) === 'accept');
+      const result = await deploy(engine, `bpmn-cli-c7-followups-${caseIndex}`, testCase.xml);
+      expect(result.ok, result.message).toBe((operaton ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'accept');
     }, 30000);
   }
 });

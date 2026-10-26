@@ -5,22 +5,22 @@ import { usageError } from '../../shared/utils/errors.js';
 
 export function nameOf(el: El): string | undefined {
   if (is(el, 'bpmn:Group')) return groupName(el);
-  const n = peek<unknown>(el, 'name');
-  return typeof n === 'string' && n ? n : undefined;
+  const rawName = peek<unknown>(el, 'name');
+  return typeof rawName === 'string' && rawName ? rawName : undefined;
 }
 
 export function ownNameOf(el: El | undefined): string | undefined {
-  const n = el ? peek<unknown>(el, 'name') : undefined;
-  return typeof n === 'string' && n ? n : undefined;
+  const rawName = el ? peek<unknown>(el, 'name') : undefined;
+  return typeof rawName === 'string' && rawName ? rawName : undefined;
 }
 
 /** Drops undefined-valued keys so JSON output stays compact. */
-export function compact<T extends object>(obj: T): T {
-  for (const key of Object.keys(obj) as Array<keyof T>) if (obj[key] === undefined) delete obj[key];
+export function compact<TObject extends object>(obj: TObject): TObject {
+  for (const key of Object.keys(obj) as Array<keyof TObject>) if (obj[key] === undefined) delete obj[key];
   return obj;
 }
 
-export function nonEmpty<T>(items: T[]): T[] | undefined {
+export function nonEmpty<TItem>(items: TItem[]): TItem[] | undefined {
   return items.length ? items : undefined;
 }
 
@@ -51,13 +51,13 @@ export function bodyOf(expr: El | undefined): string | undefined {
 /** camunda:resource under any prefix. */
 export function resourceOf(expr: El | undefined): { key: string; value: string } | undefined {
   if (!expr) return undefined;
-  const key = Object.keys(expr.$attrs ?? {}).find((k) => /:resource$/.test(k) && !k.startsWith('xmlns'));
+  const key = Object.keys(expr.$attrs ?? {}).find((attributeName) => /:resource$/.test(attributeName) && !attributeName.startsWith('xmlns'));
   const value = key ? expr.$attrs[key] : undefined;
   return key && typeof value === 'string' && value ? { key, value } : undefined;
 }
 
 export function scopesWithin(process: El): El[] {
-  return [...walk(process)].filter((e) => is(e, 'bpmn:Process') || is(e, 'bpmn:SubProcess'));
+  return [...walk(process)].filter((element) => is(element, 'bpmn:Process') || is(element, 'bpmn:SubProcess'));
 }
 
 /** Non-kind labels `find --kind` also accepts. */
@@ -70,8 +70,8 @@ export function kindFilter(kind: string): (el: El) => boolean {
   } catch (err) {
     if (!(err instanceof KindError)) throw err;
     const token = kind.trim().toLowerCase();
-    const extra = EXTRA_KINDS.find((k) => k.toLowerCase() === token);
+    const extra = EXTRA_KINDS.find((kind) => kind.toLowerCase() === token);
     if (extra) return (el) => labelOf(el) === extra;
-    throw usageError(err.message, { candidates: [...err.candidates, ...EXTRA_KINDS.filter((k) => k.toLowerCase().includes(token))] });
+    throw usageError(err.message, { candidates: [...err.candidates, ...EXTRA_KINDS.filter((kind) => kind.toLowerCase().includes(token))] });
   }
 }

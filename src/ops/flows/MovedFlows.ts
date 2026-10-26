@@ -100,15 +100,15 @@ export class MovedFlows {
       const id = idOf(flow);
       const back = flow.get<El>('targetRef') === target;
       const lost = label && back ? MovedFlows.giveBack(node, flow, label, cs) : '';
-      cs.removed = cs.removed.filter((c) => c.id !== id);
-      cs.created = cs.created.filter((c) => c.id !== id);
+      cs.removed = cs.removed.filter((change) => change.id !== id);
+      cs.created = cs.created.filter((change) => change.id !== id);
       cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${back ? lost : ` (was -> ${idOf(target)})`}`));
       if (!label || back) continue;
       const why = `while moving ${idOf(node)}: ${idOf(node)} was not bridged, so nothing at its old place took it, and ${id} was put back at its new place without it`;
       const warnings: Warning[] = [];
       if (label.name) warnings.push({ code: 'W_LABEL_DROPPED', message: `Flow label "${label.name}" of ${id} was dropped ${why}`, element: id });
       if (label.condition) warnings.push({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id });
-      for (const w of warnings) cs.warn(w);
+      for (const warning of warnings) cs.warn(warning);
       this.dropped.push({ node, flow, target, label, warnings });
     }
   }
@@ -143,23 +143,23 @@ export class MovedFlows {
     const cs = this.cs;
     for (const { node, flow, target, label, warnings } of this.dropped) {
       if (this.doc.get(idOf(flow)) !== flow || flow.get<El>('sourceRef') !== node || flow.get<El>('targetRef') !== target) continue;
-      cs.warnings = cs.warnings.filter((w) => !warnings.includes(w));
+      cs.warnings = cs.warnings.filter((warning) => !warnings.includes(warning));
       const lost = MovedFlows.giveBack(node, flow, label, cs);
       const change = ChangeSet.flowEntryOf(flow);
-      cs.changed = cs.changed.filter((c) => c.id !== change.id);
+      cs.changed = cs.changed.filter((entry) => entry.id !== change.id);
       cs.change(ChangeSet.flowEntryOf(flow, `${change.detail}${lost}`));
     }
   }
 
   private static labelsBefore(doc: Doc, nodes: El[]): Map<El, LabelBefore> {
     const out = new Map<El, LabelBefore>();
-    for (const n of nodes) {
-      for (const f of doc.outgoing(n)) if (doc.edit.keepsFlowId(f)) out.set(f, { name: f.get<string | undefined>('name'), condition: f.get<El | undefined>('conditionExpression'), associations: [] });
+    for (const movedNode of nodes) {
+      for (const flow of doc.outgoing(movedNode)) if (doc.edit.keepsFlowId(flow)) out.set(flow, { name: flow.get<string | undefined>('name'), condition: flow.get<El | undefined>('conditionExpression'), associations: [] });
     }
     if (!out.size) return out;
-    for (const a of doc.byId().values()) {
-      if (!is(a, 'bpmn:Association')) continue;
-      for (const end of ['sourceRef', 'targetRef']) out.get(a.get<El>(end))?.associations.push(a);
+    for (const element of doc.byId().values()) {
+      if (!is(element, 'bpmn:Association')) continue;
+      for (const end of ['sourceRef', 'targetRef']) out.get(element.get<El>(end))?.associations.push(element);
     }
     return out;
   }
@@ -172,13 +172,13 @@ export class MovedFlows {
     const cs = this.cs;
     const made = this.bridges;
     const alive = (el: El): boolean => this.doc.get(idOf(el)) === el;
-    made.forEach(({ node, target, bridge }, i) => {
+    made.forEach(({ node, target, bridge }, index) => {
       const flow = bridge.from;
       const had = before.get(flow);
       if (!had || !alive(flow)) return;
-      const holder = (took: (b: BridgedFlow) => boolean): El | undefined => {
+      const holder = (took: (bridged: BridgedFlow) => boolean): El | undefined => {
         let at = bridge.flow;
-        for (const later of made.slice(i + 1)) {
+        for (const later of made.slice(index + 1)) {
           if (later.bridge.from !== at) continue;
           if (!took(later.bridge)) return undefined;
           at = later.bridge.flow;
@@ -192,41 +192,41 @@ export class MovedFlows {
       const lost: Array<{ what: 'name' | 'condition'; at: El }> = [];
       const { name, condition, associations } = bridge.took;
       if (name !== undefined && name === had.name && flow.get<string | undefined>('name') !== name) {
-        const at = holder((b) => b.took.name === name);
+        const at = holder((bridged) => bridged.took.name === name);
         if (at && !alive(at)) lost.push({ what: 'name', at });
         else if (at?.get<string | undefined>('name') === name) keep(at, 'name');
       }
       if (condition && condition === had.condition && flow.get<El | undefined>('conditionExpression') !== condition) {
-        const at = holder((b) => b.took.condition === condition);
+        const at = holder((bridged) => bridged.took.condition === condition);
         if (at && !alive(at)) lost.push({ what: 'condition', at });
         else if (at?.get<El | undefined>('conditionExpression') === condition) keep(at, 'condition');
       }
-      for (const a of associations) {
-        if (!had.associations.includes(a) || !alive(a)) continue;
-        const at = holder((b) => b.took.associations.includes(a));
-        if (at && alive(at) && (a.get<El>('sourceRef') === at || a.get<El>('targetRef') === at)) keep(at, 'annotation');
+      for (const association of associations) {
+        if (!had.associations.includes(association) || !alive(association)) continue;
+        const at = holder((bridged) => bridged.took.associations.includes(association));
+        if (at && alive(at) && (association.get<El>('sourceRef') === at || association.get<El>('targetRef') === at)) keep(at, 'annotation');
       }
       const id = idOf(flow);
       const back = flow.get<El>('sourceRef') === node && flow.get<El>('targetRef') === target;
       const returned = lost.filter(({ what }) => back && !flow.get(what === 'name' ? 'name' : 'conditionExpression'));
       if (returned.length) {
-        MovedFlows.giveBack(node, flow, { name: returned.some((l) => l.what === 'name') ? name : undefined, condition: returned.some((l) => l.what === 'condition') ? condition : undefined, isDefault: false }, cs);
-        cs.changed = cs.changed.filter((c) => c.id !== id);
+        MovedFlows.giveBack(node, flow, { name: returned.some((loss) => loss.what === 'name') ? name : undefined, condition: returned.some((loss) => loss.what === 'condition') ? condition : undefined, isDefault: false }, cs);
+        cs.changed = cs.changed.filter((change) => change.id !== id);
         cs.change(ChangeSet.flowEntryOf(flow));
       }
-      for (const { what, at } of lost.filter((l) => !returned.includes(l))) {
+      for (const { what, at } of lost.filter((loss) => !returned.includes(loss))) {
         const why = `while moving ${idOf(node)}: the bridge ${idOf(at)} took it, and a later node of the move removed ${idOf(at)}`;
         if (what === 'name') cs.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${name}" of ${id} was dropped ${why}`, element: id, related: [idOf(at)] });
         else cs.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${id} was dropped ${why}`, element: id, related: [idOf(at)] });
       }
       if (!kept.size) return;
       const clause = [...kept].map(([at, what]) => {
-        const notes = what.filter((w) => w === 'annotation').length;
-        const items = [...what.filter((w) => w !== 'annotation'), ...(notes ? [notes > 1 ? 'annotations' : 'annotation'] : [])];
+        const notes = what.filter((kind) => kind === 'annotation').length;
+        const items = [...what.filter((kind) => kind !== 'annotation'), ...(notes ? [notes > 1 ? 'annotations' : 'annotation'] : [])];
         const list = items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0]!;
         return `its ${list} ${items.length > 1 || notes > 1 ? 'stay' : 'stays'} with the bridge ${idOf(at)}`;
       }).join('; ');
-      const last = cs.changed.map((c) => c.id).lastIndexOf(id);
+      const last = cs.changed.map((change) => change.id).lastIndexOf(id);
       const entry = last === -1 ? ChangeSet.flowEntryOf(flow) : cs.changed[last]!;
       const detail = entry.detail ?? '';
       const said = /\(was -> [^()]*\)$/.test(detail) ? `${detail.slice(0, -1)}; ${clause})` : `${detail}${detail ? ' ' : ''}(${clause})`;

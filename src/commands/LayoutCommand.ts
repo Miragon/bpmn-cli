@@ -16,16 +16,16 @@ export class LayoutCommand extends MutationCommand {
         .option('--collapse <ids>', 'comma-separated sub-process ids to collapse')
         .option('--tidy', 'keep the drawing: remove overlaps and gaps < 20 px with minimal moves (= bpmn tidy)'),
       { layoutToggle: false },
-    ).action((file: string, o: RawOpts) => this.run(file, o));
+    ).action((file: string, options: RawOpts) => this.run(file, options));
   }
 
-  private async run(file: string, o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       // validated like `set <id> expanded=`: unknown ids and non-sub-processes are errors
-      const expand = splitList(o['expand'] as string | undefined);
-      const collapse = splitList(o['collapse'] as string | undefined);
-      const layoutOpts = { tidy: !!o['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) };
+      const expand = splitList(options['expand'] as string | undefined);
+      const collapse = splitList(options['collapse'] as string | undefined);
+      const layoutOpts = { tidy: !!options['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) };
       await this.runMutation(
         file,
         opts,

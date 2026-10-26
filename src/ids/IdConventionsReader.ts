@@ -137,9 +137,9 @@ export class IdConventionsReader {
   private typePrefixes(moddle: Moddle, prefixes: Prefixes, ignored: string[]): Record<string, string> {
     const table: Record<string, string> = {};
     const registry = (moddle as unknown as { registry: { packageMap: Record<string, { types: Array<{ name: string; isAbstract?: boolean }> }> } }).registry;
-    for (const t of registry.packageMap['bpmn']!.types) {
-      if (t.isAbstract) continue;
-      const type = `bpmn:${t.name}`;
+    for (const moddleType of registry.packageMap['bpmn']!.types) {
+      if (moddleType.isAbstract) continue;
+      const type = `bpmn:${moddleType.name}`;
       const hit = this.naming.resolvePrefix(moddle.create(type, { id: 'x' }), prefixes);
       if (hit && this.usable(hit)) table[type] = hit.prefix;
       else if (hit) ignored.push(type);
@@ -154,7 +154,7 @@ export class IdConventionsReader {
       for (const trigger of def.triggers) {
         if (trigger === 'none') continue;
         const event = moddle.create(def.type, { id: 'x', eventDefinitions: [moddle.create(TRIGGER_TYPES[trigger])] });
-        const qualified = this.naming.acceptedPrefixes(event, plain, qualifier).find((p) => p !== plain);
+        const qualified = this.naming.acceptedPrefixes(event, plain, qualifier).find((candidate) => candidate !== plain);
         const key = `${def.type}:${trigger}`;
         if (isUsablePrefix(qualified)) table[key] = qualified;
         else if (qualified !== undefined && qualifier === 'required' && !this.noted.has(key)) {

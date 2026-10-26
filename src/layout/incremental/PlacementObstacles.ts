@@ -10,8 +10,8 @@ export class PlacementObstacles {
   constructor(private readonly placer: NodePlacer) {}
 
   /** True when `frame` is `s`'s frame or an ancestor of it. */
-  within(plane: Plane, s: DShape, frame: DShape | undefined): boolean {
-    return Frames.within(plane, s, frame);
+  within(plane: Plane, shape: DShape, frame: DShape | undefined): boolean {
+    return Frames.within(plane, shape, frame);
   }
 
   /**
@@ -21,59 +21,59 @@ export class PlacementObstacles {
   of(plane: Plane, frame: DShape | undefined, exclude: ReadonlySet<string>, plain = true): { boxes: Box[]; labels: Box[] } {
     const boxes: Box[] = [];
     const labels: Box[] = [];
-    for (const s of plane.shapes.values()) {
-      if (exclude.has(s.id) || s === frame) continue;
-      if (s.kind === 'group') {
-        if (plain) boxes.push(s.bounds);
+    for (const shape of plane.shapes.values()) {
+      if (exclude.has(shape.id) || shape === frame) continue;
+      if (shape.kind === 'group') {
+        if (plain) boxes.push(shape.bounds);
         continue;
       }
-      const solid = PlaneQuery.isLeaf(s) || (s.kind === 'subProcess' && s.container);
-      const member = this.within(plane, s, frame);
-      const drawnIn = !member && !!frame && solid && overlaps(s.bounds, frame.bounds) && !Frames.within(plane, frame, s);
+      const solid = PlaneQuery.isLeaf(shape) || (shape.kind === 'subProcess' && shape.container);
+      const member = this.within(plane, shape, frame);
+      const drawnIn = !member && !!frame && solid && overlaps(shape.bounds, frame.bounds) && !Frames.within(plane, frame, shape);
       if (!member && !drawnIn) {
-        if (frame && s.label && overlaps(s.label, frame.bounds)) labels.push(s.label);
+        if (frame && shape.label && overlaps(shape.label, frame.bounds)) labels.push(shape.label);
         continue;
       }
-      if (solid) boxes.push(PlaneQuery.isLeaf(s) && !s.hostId ? this.placer.drawing(plane).unitBox(s) : s.bounds);
-      if (s.label) labels.push(s.label);
+      if (solid) boxes.push(PlaneQuery.isLeaf(shape) && !shape.hostId ? this.placer.drawing(plane).unitBox(shape) : shape.bounds);
+      if (shape.label) labels.push(shape.label);
     }
-    if (plain) for (const e of plane.edges.values()) if (e.label) labels.push(e.label);
+    if (plain) for (const edge of plane.edges.values()) if (edge.label) labels.push(edge.label);
     return { boxes, labels };
   }
 
   /** Groups drawn around one of the anchors: a node placed next to it may go inside them. */
   homeGroups(plane: Plane, anchors: ReadonlyArray<DShape | undefined>): string[] {
     const out: string[] = [];
-    for (const g of plane.shapes.values()) {
-      if (g.kind !== 'group') continue;
-      if (anchors.some((a) => !!a && cx(a.bounds) > g.bounds.x && cx(a.bounds) < right(g.bounds) && cy(a.bounds) > g.bounds.y && cy(a.bounds) < bottom(g.bounds))) out.push(g.id);
+    for (const group of plane.shapes.values()) {
+      if (group.kind !== 'group') continue;
+      if (anchors.some((anchor) => !!anchor && cx(anchor.bounds) > group.bounds.x && cx(anchor.bounds) < right(group.bounds) && cy(anchor.bounds) > group.bounds.y && cy(anchor.bounds) < bottom(group.bounds))) out.push(group.id);
     }
     return out;
   }
 
   isFree(box: Box, obs: { boxes: Box[]; labels: Box[] }, clearance = 20): boolean {
-    return !obs.boxes.some((b) => overlaps(b, box, clearance)) && !obs.labels.some((l) => overlaps(l, box, 4));
+    return !obs.boxes.some((obstacle) => overlaps(obstacle, box, clearance)) && !obs.labels.some((label) => overlaps(label, box, 4));
   }
 
   /**
    * Where a space-tool run for a node goes: inside its expanded sub-process (frame mode: it never
    * grows over foreign shapes), else within its pool.
    */
-  spaceBand(plane: Plane, s: Pick<DShape, 'parentId' | 'poolId'>, anchor?: DShape): { within?: Box; frame?: string } {
-    const sub = s.parentId ? plane.shapes.get(s.parentId) : undefined;
+  spaceBand(plane: Plane, shape: Pick<DShape, 'parentId' | 'poolId'>, anchor?: DShape): { within?: Box; frame?: string } {
+    const sub = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
     if (sub) return { within: { ...sub.bounds }, frame: sub.id };
-    const pool = s.poolId ? plane.shapes.get(s.poolId) : undefined;
+    const pool = shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
     if (pool) return { within: { ...pool.bounds } };
     // no pool: a group around the anchor confines the space tool like a pool would
-    const group = anchor ? this.homeGroups(plane, [anchor]).map((id) => plane.shapes.get(id)!).sort((a, b) => a.bounds.width * a.bounds.height - b.bounds.width * b.bounds.height)[0] : undefined;
+    const group = anchor ? this.homeGroups(plane, [anchor]).map((id) => plane.shapes.get(id)!).sort((first, second) => first.bounds.width * first.bounds.height - second.bounds.width * second.bounds.height)[0] : undefined;
     return group ? { within: { ...group.bounds } } : {};
   }
 
   /** The centre of `b` lies inside `frame` (the plane: always). */
-  private centreIn(b: Box, frame: DShape | undefined): boolean {
+  private centreIn(box: Box, frame: DShape | undefined): boolean {
     if (!frame) return true;
-    const f = frame.bounds;
-    return cx(b) > f.x && cx(b) < right(f) && cy(b) > f.y && cy(b) < bottom(f);
+    const frameBox = frame.bounds;
+    return cx(box) > frameBox.x && cx(box) < right(frameBox) && cy(box) > frameBox.y && cy(box) < bottom(frameBox);
   }
 
   /**
@@ -83,11 +83,11 @@ export class PlacementObstacles {
   contentBottom(plane: Plane, frame: DShape | undefined, exclude: ReadonlySet<string>): number | undefined {
     const obs = this.of(plane, frame, exclude, false);
     const member = (id: string | undefined): boolean => {
-      const s = id ? plane.shapes.get(id) : undefined;
-      return !!s && s !== frame && this.within(plane, s, frame);
+      const shape = id ? plane.shapes.get(id) : undefined;
+      return !!shape && shape !== frame && this.within(plane, shape, frame);
     };
-    const edgeLabels = [...plane.edges.values()].filter((e) => e.label && ((member(e.sourceId) && member(e.targetId)) || this.centreIn(e.label, frame))).map((e) => e.label!);
-    const groups = [...plane.shapes.values()].filter((g) => g.kind === 'group' && !exclude.has(g.id) && this.centreIn(g.bounds, frame)).map((g) => g.bounds);
+    const edgeLabels = [...plane.edges.values()].filter((edge) => edge.label && ((member(edge.sourceId) && member(edge.targetId)) || this.centreIn(edge.label, frame))).map((edge) => edge.label!);
+    const groups = [...plane.shapes.values()].filter((group) => group.kind === 'group' && !exclude.has(group.id) && this.centreIn(group.bounds, frame)).map((group) => group.bounds);
     const all = [...obs.boxes, ...obs.labels, ...edgeLabels, ...groups];
     return all.length ? Math.max(...all.map(bottom)) : undefined;
   }
@@ -95,11 +95,11 @@ export class PlacementObstacles {
   /** Thin boxes of all edge segments (to keep new rows off existing lines). */
   edgeBoxes(plane: Plane): Box[] {
     const out: Box[] = [];
-    for (const e of plane.edges.values()) {
-      for (let i = 0; i + 1 < e.points.length; i++) {
-        const p = e.points[i]!;
-        const q = e.points[i + 1]!;
-        out.push({ x: Math.min(p.x, q.x), y: Math.min(p.y, q.y), width: Math.abs(p.x - q.x), height: Math.abs(p.y - q.y) });
+    for (const edge of plane.edges.values()) {
+      for (let index = 0; index + 1 < edge.points.length; index++) {
+        const start = edge.points[index]!;
+        const end = edge.points[index + 1]!;
+        out.push({ x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), width: Math.abs(start.x - end.x), height: Math.abs(start.y - end.y) });
       }
     }
     return out;

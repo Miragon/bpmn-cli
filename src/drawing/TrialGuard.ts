@@ -2,7 +2,7 @@ import { diffProblems, type LayoutMetrics, type LayoutProblem } from './utils/pr
 
 export interface TrialPolicy {
   /** undefined: not guarded; a trial must not raise any guarded count */
-  key(p: LayoutProblem): string | undefined;
+  key(problem: LayoutProblem): string | undefined;
   /** else a trial only must not raise it */
   lower: boolean;
   /** else the guarded counts stay those of the start */
@@ -40,31 +40,31 @@ export class TrialGuard {
   }
 
   judge(): Verdict {
-    const m = this.measure();
+    const metrics = this.measure();
     const left = new Map(this.counts);
-    const added = m.problems.filter((p) => {
-      const key = this.policy.key(p);
+    const added = metrics.problems.filter((problem) => {
+      const key = this.policy.key(problem);
       if (key === undefined) return false;
-      const n = left.get(key) ?? 0;
-      left.set(key, n - 1);
-      return n <= 0;
+      const count = left.get(key) ?? 0;
+      left.set(key, count - 1);
+      return count <= 0;
     });
-    const now = this.countsOf(m);
-    const addedKeys = [...now].filter(([k, c]) => c > (this.counts.get(k) ?? 0)).map(([k]) => k);
+    const now = this.countsOf(metrics);
+    const addedKeys = [...now].filter(([key, count]) => count > (this.counts.get(key) ?? 0)).map(([key]) => key);
     const before = this.base.score;
-    const ok = !added.length && (this.policy.lower ? m.score < before : m.score <= before);
-    if (!ok) this.rejected.push(...(added.length ? added : diffProblems(this.base.problems, m.problems).added));
+    const ok = !added.length && (this.policy.lower ? metrics.score < before : metrics.score <= before);
+    if (!ok) this.rejected.push(...(added.length ? added : diffProblems(this.base.problems, metrics.problems).added));
     else {
-      this.base = m;
+      this.base = metrics;
       if (this.policy.rebase) this.counts = now;
     }
-    return { ok, before, after: m.score, added, addedKeys };
+    return { ok, before, after: metrics.score, added, addedKeys };
   }
 
-  private countsOf(m: LayoutMetrics): Map<string, number> {
+  private countsOf(metrics: LayoutMetrics): Map<string, number> {
     const out = new Map<string, number>();
-    for (const p of m.problems) {
-      const key = this.policy.key(p);
+    for (const problem of metrics.problems) {
+      const key = this.policy.key(problem);
       if (key !== undefined) out.set(key, (out.get(key) ?? 0) + 1);
     }
     return out;

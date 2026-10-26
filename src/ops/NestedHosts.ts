@@ -25,21 +25,21 @@ export class NestedHosts {
 
   /** `loop.` (`definition[1].`) for a nested host, '' otherwise. */
   slotPrefix(host: El): string {
-    const n = this.nested.get(host);
-    return n ? `${n.prefix}.` : '';
+    const nestedHost = this.nested.get(host);
+    return nestedHost ? `${nestedHost.prefix}.` : '';
   }
 
   /** Its id, or `the loop characteristics of Activity_X`. */
   labelOf(host: El): string {
-    const n = this.nested.get(host);
-    return n ? `the ${SLOT_TEXT[n.slot]}${n.prefix !== n.slot ? ` ${n.prefix}` : ''} of ${idOf(n.owner)}` : idOf(host);
+    const nestedHost = this.nested.get(host);
+    return nestedHost ? `the ${SLOT_TEXT[nestedHost.slot]}${nestedHost.prefix !== nestedHost.slot ? ` ${nestedHost.prefix}` : ''} of ${idOf(nestedHost.owner)}` : idOf(host);
   }
 
   /** `loop.camunda:x` -> { slot: 'loop', rest: 'camunda:x' } for the known slots. */
   splitSlot(text: string): { slot: string; rest: string } | undefined {
-    const m = /^(\w+(?:\[[^\]]*\])?)\.(.+)$/.exec(text.trim());
-    if (!m || !parseSlotRef(m[1]!)) return undefined;
-    return { slot: m[1]!, rest: m[2]! };
+    const match = /^(\w+(?:\[[^\]]*\])?)\.(.+)$/.exec(text.trim());
+    if (!match || !parseSlotRef(match[1]!)) return undefined;
+    return { slot: match[1]!, rest: match[2]! };
   }
 
   /** The ops JSON may give the `ext list` index of a remove (`loop.2`) as "type". */
@@ -108,9 +108,9 @@ export class NestedHosts {
 
   /** `2`, `loop.2`, `definition[1].0`: an index from `ext list`. */
   private indexRef(text: string): { slot?: string; index: number } | undefined {
-    const m = /^(?:(\w+(?:\[[^\]]*\])?)\.)?(\d+)$/.exec(text.trim());
-    if (!m || (m[1] !== undefined && !parseSlotRef(m[1]))) return undefined;
-    return { ...(m[1] !== undefined ? { slot: m[1] } : {}), index: Number(m[2]) };
+    const match = /^(?:(\w+(?:\[[^\]]*\])?)\.)?(\d+)$/.exec(text.trim());
+    if (!match || (match[1] !== undefined && !parseSlotRef(match[1]))) return undefined;
+    return { ...(match[1] !== undefined ? { slot: match[1] } : {}), index: Number(match[2]) };
   }
 }
 

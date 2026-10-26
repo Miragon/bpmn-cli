@@ -49,15 +49,15 @@ const C7 = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="ht
 
 const OPERATON = 'xmlns:operaton="http://operaton.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform"';
 
-function xml(body: string, o: { roots?: string; id?: string; extra?: string; operaton?: boolean } = {}): string {
-  const p = o.operaton ? 'operaton' : 'camunda';
+function xml(body: string, options: { roots?: string; id?: string; extra?: string; operaton?: boolean } = {}): string {
+  const prefix = options.operaton ? 'operaton' : 'camunda';
   return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions ${BPMN} ${o.operaton ? OPERATON : C7} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-${o.roots ?? ''}
-  <bpmn:process id="${o.id ?? 'P_Verify'}" isExecutable="true" ${p}:historyTimeToLive="180">
+<bpmn:definitions ${BPMN} ${options.operaton ? OPERATON : C7} id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+${options.roots ?? ''}
+  <bpmn:process id="${options.id ?? 'P_Verify'}" isExecutable="true" ${prefix}:historyTimeToLive="180">
 ${body}
   </bpmn:process>
-${o.extra ?? ''}
+${options.extra ?? ''}
 </bpmn:definitions>`;
 }
 
@@ -170,22 +170,22 @@ const CASES: Case[] = [
 ];
 
 describe('verifier follow-ups: one synthetic model per rule', () => {
-  it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
-    const report = runProfile(await Doc.fromXml(c.xml));
+  it.each(CASES.map((testCase) => [testCase.name, testCase] as const))('%s', async (_name, testCase) => {
+    const report = runProfile(await Doc.fromXml(testCase.xml));
     const findings = report.findings;
-    expect(findings.map((f) => f.code).sort(), JSON.stringify(findings, null, 1)).toEqual([...c.codes].sort());
+    expect(findings.map((finding) => finding.code).sort(), JSON.stringify(findings, null, 1)).toEqual([...testCase.codes].sort());
     // deploy findings exactly where the engine that reads the file refuses it
-    expect(findings.some((f) => f.severity === 'deploy')).toBe((report.operaton ? (c.operaton ?? c.engine) : c.engine) === 'reject');
-    expect(findings.every((f) => f.code.startsWith('W_C7_DEPLOY_') === (f.severity === 'deploy'))).toBe(true);
-    for (const f of findings) expect(f.hint, `${f.code}: ${f.hint}`).toMatch(/`bpmn (set|add|remove|move|retype|ext (add|remove|list)) <file> /);
+    expect(findings.some((finding) => finding.severity === 'deploy')).toBe((report.operaton ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'reject');
+    expect(findings.every((finding) => finding.code.startsWith('W_C7_DEPLOY_') === (finding.severity === 'deploy'))).toBe(true);
+    for (const finding of findings) expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|retype|ext (add|remove|list)) <file> /);
   });
 
   it('a schema finding on an ignored definition names the acting one and both ways out', async () => {
-    const f = runProfile(await Doc.fromXml(CASES[0]!.xml)).findings.find((x) => x.code === 'W_C7_DEPLOY_EVENT_DEFINITION')!;
-    expect(f).toMatchObject({ element: 'W', severity: 'deploy' });
-    expect(f.message).toBe('The conditional definition of intermediateCatchEvent:timer W has no condition element, which the BPMN schema requires; the engines refuse the file');
-    expect(f.hint).toContain('`bpmn set <file> W trigger=timer` (keeps only the timer)');
-    expect(f.hint).toContain("`bpmn set <file> W 'when=${expression}'` (keeps only the conditional definition)");
+    const finding = runProfile(await Doc.fromXml(CASES[0]!.xml)).findings.find((candidate) => candidate.code === 'W_C7_DEPLOY_EVENT_DEFINITION')!;
+    expect(finding).toMatchObject({ element: 'W', severity: 'deploy' });
+    expect(finding.message).toBe('The conditional definition of intermediateCatchEvent:timer W has no condition element, which the BPMN schema requires; the engines refuse the file');
+    expect(finding.hint).toContain('`bpmn set <file> W trigger=timer` (keeps only the timer)');
+    expect(finding.hint).toContain("`bpmn set <file> W 'when=${expression}'` (keeps only the conditional definition)");
     // a single definition keeps the message and the subject of before (a write does not report it as new)
     const single = runProfile(await Doc.fromXml(xml(catchWith(COND_NONE)))).findings[0]!;
     expect(single.message).toBe('Conditional event W has no condition element, which the BPMN schema requires; the engines refuse the file');
@@ -193,18 +193,18 @@ describe('verifier follow-ups: one synthetic model per rule', () => {
   });
 
   it('the start-event and empty-sub-process lint gives way to the engine finding about the same scope', async () => {
-    const empty = validateDoc(await Doc.fromXml(CASES.find((c) => c.name === 'empty embedded sub-process')!.xml), { platform: 'auto' });
-    expect(empty.warnings.map((w) => w.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
+    const empty = validateDoc(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml), { platform: 'auto' });
+    expect(empty.warnings.map((warning) => warning.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
     expect(empty.warnings[0]!.message).toBe('Sub-process SP is empty, without a start event; the engines refuse the file (subProcess must define a startEvent element)');
-    const tx = validateDoc(await Doc.fromXml(CASES.find((c) => c.name === 'transaction with a task but no start event')!.xml), { platform: 'auto' });
-    expect(tx.warnings.map((w) => w.code)).not.toContain('W_NO_START');
+    const tx = validateDoc(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'transaction with a task but no start event')!.xml), { platform: 'auto' });
+    expect(tx.warnings.map((warning) => warning.code)).not.toContain('W_NO_START');
     expect(tx.platform).toMatchObject({ counts: { deploy: 0, runtime: 1 } });
     // without the profile the lint stays
-    expect(validateDoc(await Doc.fromXml(CASES.find((c) => c.name === 'empty embedded sub-process')!.xml)).warnings.map((w) => w.code)).toContain('W_EMPTY_SUBPROCESS');
+    expect(validateDoc(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml)).warnings.map((warning) => warning.code)).toContain('W_EMPTY_SUBPROCESS');
   });
 
   it('second start events: removed when the first one reaches where they lead, never two flows into one node', async () => {
-    const hint = async (body: string, o: { roots?: string } = {}): Promise<string> => runProfile(await Doc.fromXml(xml(body, o))).findings.find((f) => f.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
+    const hint = async (body: string, options: { roots?: string } = {}): Promise<string> => runProfile(await Doc.fromXml(xml(body, options))).findings.find((finding) => finding.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
     const same = await hint(twoStarts.same);
     expect(same).toMatch(/^Remove it: `bpmn remove <file> B` \(A already leads to U; F3 goes with it\), or give it another trigger/);
     expect(same).not.toContain('source=');
@@ -224,13 +224,13 @@ describe('verifier follow-ups: one synthetic model per rule', () => {
 
 /** The `bpmn ...` command lines of a hint, as argv (single quotes like a POSIX shell). */
 function commandsOf(hint: string): string[][] {
-  return [...hint.matchAll(/`(bpmn [^`]+)`/g)].map((m) => {
+  return [...hint.matchAll(/`(bpmn [^`]+)`/g)].map((match) => {
     const out: string[] = [];
     const re = /'((?:[^']|'\\'')*)'|(\S+)/g;
     let cur: RegExpExecArray | null;
     let arg = '';
     let last = -1;
-    while ((cur = re.exec(m[1]!))) {
+    while ((cur = re.exec(match[1]!))) {
       const piece = cur[1] !== undefined ? cur[1].replace(/'\\''/g, "'") : cur[2]!;
       if (cur.index === last) arg += piece;
       else {
@@ -252,28 +252,28 @@ describe('hints run through the CLI', () => {
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   function cli(...args: string[]): { code: number; out: string; err: string } {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+    const result = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT });
+    return { code: result.status ?? -1, out: result.stdout, err: result.stderr };
   }
 
   /** writes `content`, runs the commands `pick` selects from the hint of the finding `code` on `element` (placeholders filled), and returns the profile after */
   async function follow(name: string, content: string, code: string, element: string, opts: { pick?: (cmds: string[][]) => string[][]; fill?: Record<string, string> } = {}): Promise<{ file: string; hint: string; after: Doc }> {
     const file = join(dir, `${name}.bpmn`);
     writeFileSync(file, content);
-    const f = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((x) => x.code === code && x.element === element);
-    expect(f, `${code} on ${element}`).toBeDefined();
-    const all = commandsOf(f!.hint!);
+    const finding = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((candidate) => candidate.code === code && candidate.element === element);
+    expect(finding, `${code} on ${element}`).toBeDefined();
+    const all = commandsOf(finding!.hint!);
     const cmds = opts.pick ? opts.pick(all) : all;
     expect(cmds.length).toBeGreaterThan(0);
     for (const argv of cmds) {
-      const args = argv.map((a) => Object.entries(opts.fill ?? {}).reduce((s, [k, v]) => s.split(k).join(v), a.replace('<file>', file)));
-      const r = cli(...args);
-      expect(r.code, `${args.join(' ')}\n${r.out}\n${r.err}`).toBe(0);
+      const args = argv.map((argument) => Object.entries(opts.fill ?? {}).reduce((line, [placeholder, replacement]) => line.split(placeholder).join(replacement), argument.replace('<file>', file)));
+      const result = cli(...args);
+      expect(result.code, `${args.join(' ')}\n${result.out}\n${result.err}`).toBe(0);
     }
-    return { file, hint: f!.hint!, after: await Doc.fromXml(readFileSync(file, 'utf8')) };
+    return { file, hint: finding!.hint!, after: await Doc.fromXml(readFileSync(file, 'utf8')) };
   }
 
-  const remaining = (doc: Doc, code: string): string[] => runProfile(doc).findings.filter((f) => f.code === code).map((f) => f.element ?? '');
+  const remaining = (doc: Doc, code: string): string[] => runProfile(doc).findings.filter((finding) => finding.code === code).map((finding) => finding.element ?? '');
   const ext = (inner: string): string => `<bpmn:extensionElements>${inner}</bpmn:extensionElements>`;
   /** a timer catch event W whose definition holds `inner`, with or without an id of its own */
   const timerHost = (inner: string, defId: boolean): string => xml(catchWith(`<bpmn:timerEventDefinition${defId ? ' id="Def_T"' : ''}>${ext(inner)}<bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>`));
@@ -290,11 +290,11 @@ describe('hints run through the CLI', () => {
       const { hint, after } = await follow(`mis-def-${tag}`, timerHost('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle>', ownId), 'W_C7_MISPLACED_EXTENSION', 'W');
       expect(hint).toContain('`bpmn ext remove <file> W definition.0`');
       expect(runProfile(after).findings).toEqual([]);
-      expect(after.require('W').get<{ values: Array<{ $type: string; $body: string }> }>('extensionElements').values.map((v) => `${v.$type}:${v.$body}`)).toEqual(['camunda:failedJobRetryTimeCycle:R3/PT1M']);
+      expect(after.require('W').get<{ values: Array<{ $type: string; $body: string }> }>('extensionElements').values.map((extension) => `${extension.$type}:${extension.$body}`)).toEqual(['camunda:failedJobRetryTimeCycle:R3/PT1M']);
     }, 60000);
 
     it('W_C7_UNKNOWN_ELEMENT on a timer definition: the remove command works', async () => {
-      const { hint, after } = await follow(`unknown-def-${tag}`, timerHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'W', { pick: (c) => c.slice(0, 1) });
+      const { hint, after } = await follow(`unknown-def-${tag}`, timerHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'W', { pick: (testCase) => testCase.slice(0, 1) });
       expect(hint).toContain('`bpmn ext remove <file> W definition.0`');
       expect(runProfile(after).findings).toEqual([]);
     }, 60000);
@@ -306,7 +306,7 @@ describe('hints run through the CLI', () => {
     }, 60000);
 
     it('W_C7_UNKNOWN_ELEMENT on a multi-instance loop: the remove command works', async () => {
-      const { hint, after } = await follow(`unknown-loop-${tag}`, loopHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'SP', { pick: (c) => c.slice(0, 1) });
+      const { hint, after } = await follow(`unknown-loop-${tag}`, loopHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'SP', { pick: (testCase) => testCase.slice(0, 1) });
       expect(hint).toContain('`bpmn ext remove <file> SP loop.0`');
       expect(runProfile(after).findings).toEqual([]);
     }, 60000);
@@ -321,12 +321,12 @@ describe('hints run through the CLI', () => {
 
   it('schema findings on an ignored definition: both ways out deploy-clean', async () => {
     const content = CASES[0]!.xml;
-    const keep = await follow('schema-keep', content, 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { pick: (c) => c.slice(0, 1) });
+    const keep = await follow('schema-keep', content, 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { pick: (testCase) => testCase.slice(0, 1) });
     expect(runProfile(keep.after).findings).toEqual([]);
     expect(keep.after.require('W').get<unknown[]>('eventDefinitions').length).toBe(1);
-    const cond = await follow('schema-cond', content, 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { pick: (c) => c.slice(1, 2), fill: { '${expression}': '${ready}' } });
+    const cond = await follow('schema-cond', content, 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { pick: (testCase) => testCase.slice(1, 2), fill: { '${expression}': '${ready}' } });
     expect(runProfile(cond.after).findings).toEqual([]);
-    const link = await follow('schema-link', xml(catchWith(TIMER + LINK_NONAME)), 'W_C7_DEPLOY_LINK', 'W', { pick: (c) => c.slice(0, 1) });
+    const link = await follow('schema-link', xml(catchWith(TIMER + LINK_NONAME)), 'W_C7_DEPLOY_LINK', 'W', { pick: (testCase) => testCase.slice(0, 1) });
     expect(runProfile(link.after).findings).toEqual([]);
     const times = await follow('schema-times', xml(catchWith(TWO_TIMES)), 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { fill: { '<value>': 'PT2H' } });
     expect(runProfile(times.after).findings).toEqual([]);
@@ -339,16 +339,16 @@ describe('hints run through the CLI', () => {
     ['meet', twoStarts.meet, 'X'],
     ['mixed', twoStarts.mixed, 'U,V'],
   ])('a second start event (%s): following the first way out leaves no doubled branch', async (name, body, targets) => {
-    const { after } = await follow(`two-${name}`, xml(body), 'W_C7_DEPLOY_START_EVENT', 'B', { pick: (c) => c.filter((argv) => !argv.includes('trigger=message')) });
+    const { after } = await follow(`two-${name}`, xml(body), 'W_C7_DEPLOY_START_EVENT', 'B', { pick: (testCase) => testCase.filter((argv) => !argv.includes('trigger=message')) });
     expect(runProfile(after).findings).toEqual([]);
     expect(after.get('B')).toBeUndefined();
-    const out = after.outgoing(after.require('A')).map((f) => f.get<{ id: string }>('targetRef').id);
+    const out = after.outgoing(after.require('A')).map((flow) => flow.get<{ id: string }>('targetRef').id);
     expect(new Set(out).size).toBe(out.length);
     expect(out.sort().join(',')).toBe(targets);
   }, 60000);
 
   it('a second start event: another trigger keeps both ways in', async () => {
-    const { after } = await follow('two-trigger', xml(twoStarts.same), 'W_C7_DEPLOY_START_EVENT', 'B', { pick: (c) => c.filter((argv) => argv.includes('trigger=message')), fill: { '<Name>': 'Other' } });
+    const { after } = await follow('two-trigger', xml(twoStarts.same), 'W_C7_DEPLOY_START_EVENT', 'B', { pick: (testCase) => testCase.filter((argv) => argv.includes('trigger=message')), fill: { '<Name>': 'Other' } });
     expect(runProfile(after).findings).toEqual([]);
   }, 60000);
 
@@ -358,11 +358,11 @@ describe('hints run through the CLI', () => {
   }, 60000);
 
   it('an empty sub-process, a transaction without start, a connected ad-hoc sub-process: the hints lead to a clean file', async () => {
-    const sp = await follow('empty-sub', CASES.find((c) => c.name === 'empty embedded sub-process')!.xml, 'W_C7_DEPLOY_START_EVENT', 'SP', { pick: (c) => c.slice(0, 1), fill: { '<Name>': 'Go' } });
+    const sp = await follow('empty-sub', CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml, 'W_C7_DEPLOY_START_EVENT', 'SP', { pick: (testCase) => testCase.slice(0, 1), fill: { '<Name>': 'Go' } });
     expect(runProfile(sp.after).findings).toEqual([]);
-    const tx = await follow('tx', CASES.find((c) => c.name === 'transaction with a task but no start event')!.xml, 'W_C7_TRANSACTION_NO_START', 'SP', { pick: (c) => c.slice(0, 1), fill: { '<Name>': 'Go', '<firstNodeId>': 'T' } });
+    const tx = await follow('tx', CASES.find((testCase) => testCase.name === 'transaction with a task but no start event')!.xml, 'W_C7_TRANSACTION_NO_START', 'SP', { pick: (testCase) => testCase.slice(0, 1), fill: { '<Name>': 'Go', '<firstNodeId>': 'T' } });
     expect(runProfile(tx.after).findings).toEqual([]);
-    const adHoc = await follow('adhoc', CASES.find((c) => c.name === 'ad-hoc sub-process with sequence flows')!.xml, 'W_C7_DEPLOY_AD_HOC_SUBPROCESS', 'SP', { pick: (c) => c.slice(0, 2), fill: { '<Name>': 'Go' } });
+    const adHoc = await follow('adhoc', CASES.find((testCase) => testCase.name === 'ad-hoc sub-process with sequence flows')!.xml, 'W_C7_DEPLOY_AD_HOC_SUBPROCESS', 'SP', { pick: (testCase) => testCase.slice(0, 2), fill: { '<Name>': 'Go' } });
     expect(remaining(adHoc.after, 'W_C7_DEPLOY_AD_HOC_SUBPROCESS')).toEqual([]);
     expect(adHoc.after.require('SP').$type).toBe('bpmn:SubProcess');
   }, 60000);
@@ -374,7 +374,7 @@ describe('hints run through the CLI', () => {
 
 const ENGINES = (process.env['BPMN_C7_ENGINES'] ?? '')
   .split(',')
-  .map((s) => s.trim().replace(/\/$/, ''))
+  .map((line) => line.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 async function json(res: Response): Promise<Record<string, unknown> & { message?: string }> {
@@ -397,11 +397,11 @@ async function deploy(engine: string, name: string, bpmn: string, start?: string
   if (!res.ok || typeof body['id'] !== 'string') return { ok: false, message: body.message ?? String(res.status) };
   try {
     if (!start) return { ok: true, message: '' };
-    const s = await fetch(`${engine}/process-definition/key/${start}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const instance = await json(s);
-    if (!s.ok) return { ok: true, message: instance.message ?? '', started: false };
+    const startResponse = await fetch(`${engine}/process-definition/key/${start}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const instance = await json(startResponse);
+    if (!startResponse.ok) return { ok: true, message: instance.message ?? '', started: false };
     const tasks = (await (await fetch(`${engine}/task?processInstanceId=${String(instance['id'])}`)).json()) as Array<{ taskDefinitionKey: string }>;
-    return { ok: true, message: '', started: true, tasks: tasks.map((t) => t.taskDefinitionKey).sort() };
+    return { ok: true, message: '', started: true, tasks: tasks.map((task) => task.taskDefinitionKey).sort() };
   } finally {
     await fetch(`${engine}/deployment/${String(body['id'])}?cascade=true`, { method: 'DELETE' });
   }
@@ -418,10 +418,10 @@ async function isOperaton(engine: string): Promise<boolean> {
 
 describe.skipIf(!ENGINES.length)('live engines: the engines agree with CASES', () => {
   for (const engine of ENGINES) {
-    it.each(CASES.map((c, i) => [c.name, c, i] as const))(`${engine}: %s`, async (_name, c, i) => {
-      const result = await deploy(engine, `bpmn-cli-c7-verify-${i}`, c.xml, c.run ? 'P_Verify' : undefined);
-      expect(result.ok, result.message).toBe(((await isOperaton(engine)) ? (c.operaton ?? c.engine) : c.engine) === 'accept');
-      if (c.run) expect(result.started, result.message).toBe(c.run === 'ok');
+    it.each(CASES.map((testCase, caseIndex) => [testCase.name, testCase, caseIndex] as const))(`${engine}: %s`, async (_name, testCase, caseIndex) => {
+      const result = await deploy(engine, `bpmn-cli-c7-verify-${caseIndex}`, testCase.xml, testCase.run ? 'P_Verify' : undefined);
+      expect(result.ok, result.message).toBe(((await isOperaton(engine)) ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'accept');
+      if (testCase.run) expect(result.started, result.message).toBe(testCase.run === 'ok');
     }, 30000);
 
     it(`${engine}: following the second-start hint, each node runs once`, async () => {
@@ -431,9 +431,9 @@ describe.skipIf(!ENGINES.length)('live engines: the engines agree with CASES', (
         ['mixed', twoStarts.mixed, ['U', 'V']],
       ] as const) {
         const doc = await Doc.fromXml(xml(body));
-        const hint = runProfile(doc).findings.find((f) => f.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
+        const hint = runProfile(doc).findings.find((finding) => finding.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
         // the hint's first way out, as ops: `set <flow> source=A` for each flow it names, then `remove B`
-        const moves = [...hint.split(', or ')[0]!.matchAll(/`bpmn set <file> (\w+) source=A`/g)].map((m) => ({ op: 'set' as const, id: m[1]!, values: { source: 'A' } }));
+        const moves = [...hint.split(', or ')[0]!.matchAll(/`bpmn set <file> (\w+) source=A`/g)].map((match) => ({ op: 'set' as const, id: match[1]!, values: { source: 'A' } }));
         await mutateDoc(doc, [...moves, { op: 'remove', ids: ['B'] }], { dryRun: true, layout: false });
         const result = await deploy(engine, `bpmn-cli-c7-verify-two-${name}`, await doc.toXml(), 'P_Verify');
         expect(result.tasks, `${name}: ${result.message}`).toEqual([...tasks]);

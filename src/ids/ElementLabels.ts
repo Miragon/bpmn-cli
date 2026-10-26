@@ -89,9 +89,9 @@ export class ElementLabels {
    * Gateway_InvoiceOk_join keeps `InvoiceOk_join`).
    */
   private joinLabel(own: string): string | undefined {
-    const m = /^(.+?)_?join$/i.exec(own);
-    if (!m) return undefined;
-    const parts = this.contextParts(m[1]!);
+    const match = /^(.+?)_?join$/i.exec(own);
+    if (!match) return undefined;
+    const parts = this.contextParts(match[1]!);
     return parts && !parts.head.length && parts.word === 'After' ? `${parts.tail.join(' ')} Join` : undefined;
   }
 
@@ -101,8 +101,8 @@ export class ElementLabels {
    */
   private contextParts(stem: string): { head: string[]; word: ContextWord; tail: string[] } | undefined {
     const words = stemWords(stem.replace(/_\d+$/, ''));
-    const i = words.slice(0, 3).findIndex((w) => CONTEXT_WORDS.has(w.toLowerCase()));
-    if (i === -1 || i === words.length - 1) return undefined;
-    return { head: words.slice(0, i), word: ucfirst(words[i]!.toLowerCase()) as ContextWord, tail: words.slice(i + 1) };
+    const contextIndex = words.slice(0, 3).findIndex((word) => CONTEXT_WORDS.has(word.toLowerCase()));
+    if (contextIndex === -1 || contextIndex === words.length - 1) return undefined;
+    return { head: words.slice(0, contextIndex), word: ucfirst(words[contextIndex]!.toLowerCase()) as ContextWord, tail: words.slice(contextIndex + 1) };
   }
 }

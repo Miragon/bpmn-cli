@@ -123,7 +123,7 @@ export class ElementRetyper {
     this.doc.invalidate();
     const detail =
       from === to && sameTrigger
-        ? `trigger options updated (${givenKeys.map((k) => `${k}=${String(given[k])}`).join(' ')})`
+        ? `trigger options updated (${givenKeys.map((givenKey) => `${givenKey}=${String(given[givenKey])}`).join(' ')})`
         : `retyped from ${oldLabel} to ${kindLabel(target)}`;
     cs.change(ChangeSet.entryOf(target, detail));
     new RootElements(this.doc).bindRefAs(cs, op.refAs, target);
@@ -148,50 +148,50 @@ export class ElementRetyper {
     const attrs = Object.keys(vendorAttributes(el)).filter((key) => {
       const name = this.camundaName(key);
       if (name) return CAMUNDA.attrAppliesTo(name, el) === false;
-      const z = this.zeebeLocal(key);
-      const def = z ? ZEEBE.attr(z) : undefined;
-      return !!def && !def.owners.some((o) => is(el, o));
+      const zeebeName = this.zeebeLocal(key);
+      const def = zeebeName ? ZEEBE.attr(zeebeName) : undefined;
+      return !!def && !def.owners.some((owner) => is(el, owner));
     });
     const exts: string[] = [];
     for (const ext of el.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) {
       const name = this.camundaName(ext.$type);
-      const z = name ? undefined : this.zeebeLocal(ext.$type);
-      const misplaced = name ? CAMUNDA.allowedOn(name, el) === false : z ? ZEEBE.allowedOn(z, el) === false && !ZEEBE.nestedOnly(z) : false;
+      const zeebeName = name ? undefined : this.zeebeLocal(ext.$type);
+      const misplaced = name ? CAMUNDA.allowedOn(name, el) === false : zeebeName ? ZEEBE.allowedOn(zeebeName, el) === false && !ZEEBE.nestedOnly(zeebeName) : false;
       if (misplaced && !exts.includes(ext.$type)) exts.push(ext.$type);
     }
     const names = [...attrs, ...exts];
     if (!names.length) return undefined;
     const id = idOf(el);
     const fixes = [
-      ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((a) => `${a}=`).join(' ')}\``] : []),
-      ...exts.map((t) => `\`bpmn ext remove <file> ${id} ${t}\``),
+      ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((attr) => `${attr}=`).join(' ')}\``] : []),
+      ...exts.map((extType) => `\`bpmn ext remove <file> ${id} ${extType}\``),
     ];
     const warning: Warning = {
       code: 'W_PROPERTY_INAPPLICABLE',
       message: `${names.join(', ')} of ${id} ${names.length > 1 ? 'have' : 'has'} no effect on a ${to.kind} (kept as ${names.length > 1 ? 'they are' : 'it is'})`,
       element: id,
-      hint: `The ${names.every((n) => this.zeebeLocal(n)) ? 'Zeebe (Camunda 8)' : names.some((n) => this.zeebeLocal(n)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
+      hint: `The ${names.every((extName) => this.zeebeLocal(extName)) ? 'Zeebe (Camunda 8)' : names.some((extName) => this.zeebeLocal(extName)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
     };
     // the Camunda 7 / 8 profile reports these item by item, so a write drops this summary there
-    return coversProfileSubjects(warning, [...attrs.map((a) => `attr:${a}`), ...exts.map((t) => `ext:${t.slice(t.indexOf(':') + 1)}`)]);
+    return coversProfileSubjects(warning, [...attrs.map((attr) => `attr:${attr}`), ...exts.map((extType) => `ext:${extType.slice(extType.indexOf(':') + 1)}`)]);
   }
 
   private static applyKindProps(el: El, from: KindDef, to: KindDef): void {
-    for (const k of Object.keys(from.props ?? {})) if (!(to.props && k in to.props) && descriptorOf(el).propertiesByName?.[k]) el.set(k, undefined);
-    for (const [k, v] of Object.entries(to.props ?? {})) el.set(k, v);
+    for (const propName of Object.keys(from.props ?? {})) if (!(to.props && propName in to.props) && descriptorOf(el).propertiesByName?.[propName]) el.set(propName, undefined);
+    for (const [propName, propValue] of Object.entries(to.props ?? {})) el.set(propName, propValue);
   }
 
-  private static copyProp(next: El, p: PropDescriptor, value: unknown): void {
-    if (p.isMany && Array.isArray(value)) {
-      const list = many(next, p.name);
+  private static copyProp(next: El, property: PropDescriptor, value: unknown): void {
+    if (property.isMany && Array.isArray(value)) {
+      const list = many(next, property.name);
       for (const child of value) {
         list.push(child as El);
-        if (!p.isReference && isEl(child)) child.$parent = next;
+        if (!property.isReference && isEl(child)) child.$parent = next;
       }
       return;
     }
-    next.set(p.name, value);
-    if (!p.isReference && isEl(value)) value.$parent = next;
+    next.set(property.name, value);
+    if (!property.isReference && isEl(value)) value.$parent = next;
   }
 
   private static describeValue(value: unknown): string {
@@ -200,45 +200,45 @@ export class ElementRetyper {
     return String(value);
   }
 
-  private dropProp(el: El, p: PropDescriptor, value: unknown, to: KindDef, cs: ChangeSet): void {
+  private dropProp(el: El, property: PropDescriptor, value: unknown, to: KindDef, cs: ChangeSet): void {
     const detail = ElementRetyper.describeValue(value);
-    if (!p.isReference) {
-      const children = (Array.isArray(value) ? value : [value]).filter((c): c is El => isEl(c) && !!c.get<string | undefined>('id'));
+    if (!property.isReference) {
+      const children = (Array.isArray(value) ? value : [value]).filter((child): child is El => isEl(child) && !!child.get<string | undefined>('id'));
       const before = cs.removed.length;
       for (const child of children) new ElementRemover(this.doc).cascade(child, cs);
-      const removed = cs.removed.slice(before).map((c) => c.id);
+      const removed = cs.removed.slice(before).map((change) => change.id);
       if (removed.length) this.doc.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
     }
     cs.warn({
       code: 'W_PROPERTY_DROPPED',
-      message: `${p.name} of ${idOf(el)} (${detail}) was dropped: a ${to.kind} has no ${p.name}`,
+      message: `${property.name} of ${idOf(el)} (${detail}) was dropped: a ${to.kind} has no ${property.name}`,
       element: idOf(el),
-      ...(p.name === 'default' ? { hint: 'The flow still exists but is no longer marked as default.' } : {}),
+      ...(property.name === 'default' ? { hint: 'The flow still exists but is no longer marked as default.' } : {}),
     });
   }
 
   private dropDiagram(diagram: El | undefined): void {
     if (!diagram || !is(diagram, 'bpmndi:BPMNDiagram')) return;
     removeFrom(this.doc.definitions, 'diagrams', diagram);
-    for (const e of walk(diagram)) {
-      const id = e.get<string | undefined>('id');
+    for (const element of walk(diagram)) {
+      const id = element.get<string | undefined>('id');
       if (id) this.doc.ids.release(id);
     }
   }
 
   private static replaceInParent(parent: El, el: El, next: El): void {
-    for (const p of descriptorOf(parent).properties ?? []) {
-      if (p.isReference) continue;
-      const v = ownValue(parent, p.name);
-      if (Array.isArray(v)) {
-        const i = v.indexOf(el);
-        if (i !== -1) {
-          v[i] = next;
+    for (const property of descriptorOf(parent).properties ?? []) {
+      if (property.isReference) continue;
+      const propValue = ownValue(parent, property.name);
+      if (Array.isArray(propValue)) {
+        const index = propValue.indexOf(el);
+        if (index !== -1) {
+          propValue[index] = next;
           next.$parent = parent;
           return;
         }
-      } else if (v === el) {
-        parent.set(p.name, next);
+      } else if (propValue === el) {
+        parent.set(property.name, next);
         next.$parent = parent;
         return;
       }
@@ -248,13 +248,13 @@ export class ElementRetyper {
   private swapType(el: El, to: KindDef, cs: ChangeSet): El {
     const next = this.doc.moddle.create(to.type, { id: idOf(el) });
     const nextProps = descriptorOf(next).propertiesByName ?? {};
-    for (const p of descriptorOf(el).properties ?? []) {
-      if (p.name === 'id') continue;
-      const value = ownValue(el, p.name);
+    for (const property of descriptorOf(el).properties ?? []) {
+      if (property.name === 'id') continue;
+      const value = ownValue(el, property.name);
       if (value === undefined || value === null || (Array.isArray(value) && !value.length)) continue;
-      if (p.name === 'triggeredByEvent') continue; // kind prop, re-applied by applyKindProps
-      if (nextProps[p.name]) ElementRetyper.copyProp(next, p, value);
-      else this.dropProp(el, p, value, to, cs);
+      if (property.name === 'triggeredByEvent') continue; // kind prop, re-applied by applyKindProps
+      if (nextProps[property.name]) ElementRetyper.copyProp(next, property, value);
+      else this.dropProp(el, property, value, to, cs);
     }
     Object.assign(next.$attrs, el.$attrs);
     const parent = el.$parent as El | undefined;
@@ -267,8 +267,8 @@ export class ElementRetyper {
       }
       if (ref.isMany) {
         const list = many(ref.holder, ref.prop);
-        const i = list.indexOf(el);
-        if (i !== -1) list[i] = next;
+        const index = list.indexOf(el);
+        if (index !== -1) list[index] = next;
       } else {
         ref.holder.set(ref.prop, next);
       }

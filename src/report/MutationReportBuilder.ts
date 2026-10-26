@@ -9,7 +9,7 @@ export class MutationReportBuilder {
   /** Without those the validator reports too: the validator's has the richer hint. */
   opWarnings(): Warning[] {
     const validationKeys = new Set(this.result.validation.warnings.map(MutationReportBuilder.findingKey));
-    return this.result.changes.warnings.filter((w) => !validationKeys.has(MutationReportBuilder.findingKey(w)));
+    return this.result.changes.warnings.filter((warning) => !validationKeys.has(MutationReportBuilder.findingKey(warning)));
   }
 
   /** What --strict counts. */
@@ -64,13 +64,13 @@ export class MutationReportBuilder {
       if (!chained) out.set(from, to);
     }
     // only ids the file had before count
-    const created = new Set(result.changes.created.map((c) => c.id));
+    const created = new Set(result.changes.created.map((change) => change.id));
     for (const [old, now] of out) if (old === now || created.has(now)) out.delete(old);
     return out.size ? Object.fromEntries(out) : undefined;
   }
 
-  private static findingKey(w: Warning): string {
+  private static findingKey(warning: Warning): string {
     // an event-gateway finding is about one branch: another target is another finding
-    return `${w.code}|${w.element ?? ''}${w.code === 'W_EVENT_GATEWAY_TARGET' ? `|${w.related?.[0] ?? ''}` : ''}`;
+    return `${warning.code}|${warning.element ?? ''}${warning.code === 'W_EVENT_GATEWAY_TARGET' ? `|${warning.related?.[0] ?? ''}` : ''}`;
   }
 }

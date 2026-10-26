@@ -38,8 +38,8 @@ export abstract class CliCommand {
   }
 
   /** Paths and stdin resolve from the working directory; project plugins run. */
-  protected lintOptions(o: RawOpts): Pick<FileMutationOptions, 'lintConfig' | 'lintFrom' | 'lintProjectCode'> {
-    const config = o['lintConfig'] as string | false | undefined;
+  protected lintOptions(options: RawOpts): Pick<FileMutationOptions, 'lintConfig' | 'lintFrom' | 'lintProjectCode'> {
+    const config = options['lintConfig'] as string | false | undefined;
     const cwd = config === false ? undefined : this.workingDir();
     return { ...(config !== undefined ? { lintConfig: config } : {}), ...(cwd !== undefined ? { lintFrom: cwd } : {}), lintProjectCode: true };
   }

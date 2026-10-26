@@ -27,13 +27,13 @@ export function idOf(el: El): string {
 }
 
 /** Unlike `el.get`, never makes bpmn-moddle create an empty collection. */
-export function peek<T>(el: El | undefined, prop: string): T | undefined {
-  return el ? ((el as unknown as Record<string, unknown>)[prop] as T | undefined) : undefined;
+export function peek<TValue>(el: El | undefined, prop: string): TValue | undefined {
+  return el ? ((el as unknown as Record<string, unknown>)[prop] as TValue | undefined) : undefined;
 }
 
 export function list(el: El | undefined, prop: string): El[] {
-  const v = peek<unknown>(el, prop);
-  return Array.isArray(v) ? (v as El[]) : [];
+  const value = peek<unknown>(el, prop);
+  return Array.isArray(value) ? (value as El[]) : [];
 }
 
 export function shownId(el: El | undefined): string {
@@ -45,7 +45,7 @@ export function is(el: unknown, type: string): boolean {
 }
 
 export function isAny(el: unknown, types: string[]): boolean {
-  return types.some((t) => is(el, t));
+  return types.some((type) => is(el, type));
 }
 
 /** A group has no `name`: it is the value of its category value. */
@@ -101,8 +101,8 @@ export function setProp(el: El, prop: string, value: unknown): void {
   el.set(prop, value);
 }
 
-function isModdleElement(v: unknown): v is El {
-  return !!v && typeof v === 'object' && typeof (v as El).$type === 'string' && '$descriptor' in (v as object);
+function isModdleElement(value: unknown): value is El {
+  return !!value && typeof value === 'object' && typeof (value as El).$type === 'string' && '$descriptor' in (value as object);
 }
 
 const BPMN_TYPE = /^(bpmn|bpmndi|dc|di):/;
@@ -132,16 +132,16 @@ export function* walk(root: El, opts: WalkOptions = {}): Generator<El> {
     const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
     if (descriptor.isGeneric) {
       const children = (el as unknown as { $children?: unknown[] }).$children;
-      if (Array.isArray(children)) for (const c of children) if (isModdleElement(c)) stack.push(c);
+      if (Array.isArray(children)) for (const child of children) if (isModdleElement(child)) stack.push(child);
       continue;
     }
-    for (const p of descriptor.properties ?? []) {
-      if (p.isReference) continue;
-      const v = el.get<unknown>(p.name);
-      if (Array.isArray(v)) {
-        for (let i = v.length - 1; i >= 0; i--) if (isModdleElement(v[i])) stack.push(v[i] as El);
-      } else if (isModdleElement(v)) {
-        stack.push(v);
+    for (const property of descriptor.properties ?? []) {
+      if (property.isReference) continue;
+      const value = el.get<unknown>(property.name);
+      if (Array.isArray(value)) {
+        for (let index = value.length - 1; index >= 0; index--) if (isModdleElement(value[index])) stack.push(value[index] as El);
+      } else if (isModdleElement(value)) {
+        stack.push(value);
       }
     }
   }
@@ -154,14 +154,14 @@ export function relink(root: El): void {
     seen.add(el);
     const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
     if (descriptor.isGeneric) return;
-    for (const p of descriptor.properties ?? []) {
-      if (p.isReference) continue;
-      const v = el.get<unknown>(p.name);
-      const kids = Array.isArray(v) ? v : [v];
-      for (const k of kids) {
-        if (isModdleElement(k)) {
-          k.$parent = el;
-          visit(k);
+    for (const property of descriptor.properties ?? []) {
+      if (property.isReference) continue;
+      const value = el.get<unknown>(property.name);
+      const kids = Array.isArray(value) ? value : [value];
+      for (const kid of kids) {
+        if (isModdleElement(kid)) {
+          kid.$parent = el;
+          visit(kid);
         }
       }
     }
@@ -193,13 +193,13 @@ export function findReferences(root: El, target: El): Array<{ holder: El; prop: 
   for (const el of walk(root)) {
     const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean; isMany?: boolean }> };
     if (descriptor.isGeneric) continue;
-    for (const p of descriptor.properties ?? []) {
-      if (!p.isReference) continue;
-      const v = el.get<unknown>(p.name);
-      if (p.isMany) {
-        if (Array.isArray(v) && v.includes(target)) refs.push({ holder: el, prop: p.name, isMany: true });
-      } else if (v === target) {
-        refs.push({ holder: el, prop: p.name, isMany: false });
+    for (const property of descriptor.properties ?? []) {
+      if (!property.isReference) continue;
+      const value = el.get<unknown>(property.name);
+      if (property.isMany) {
+        if (Array.isArray(value) && value.includes(target)) refs.push({ holder: el, prop: property.name, isMany: true });
+      } else if (value === target) {
+        refs.push({ holder: el, prop: property.name, isMany: false });
       }
     }
   }
@@ -211,11 +211,11 @@ export function rootElements(defs: El): El[] {
 }
 
 export function processes(defs: El): El[] {
-  return rootElements(defs).filter((e) => is(e, 'bpmn:Process'));
+  return rootElements(defs).filter((element) => is(element, 'bpmn:Process'));
 }
 
 export function collaboration(defs: El): El | undefined {
-  return rootElements(defs).find((e) => is(e, 'bpmn:Collaboration'));
+  return rootElements(defs).find((element) => is(element, 'bpmn:Collaboration'));
 }
 
 /** What bpmn-auto-layout lays out. */
@@ -229,10 +229,10 @@ export async function parseXml(xml: string, moddle: BpmnModdle = createModdle())
   try {
     result = await moddle.fromXML(xml);
   } catch (err) {
-    const e = err as Error & { warnings?: ImportWarning[] };
-    throw new ModelError(`Cannot parse BPMN XML: ${e.message.split('\n')[0]}`, 'PARSE_ERROR', {
-      message: e.message,
-      warnings: (e.warnings ?? []).map((w) => w.message),
+    const error = err as Error & { warnings?: ImportWarning[] };
+    throw new ModelError(`Cannot parse BPMN XML: ${error.message.split('\n')[0]}`, 'PARSE_ERROR', {
+      message: error.message,
+      warnings: (error.warnings ?? []).map((warning) => warning.message),
     });
   } finally {
     overwrites.stop();
@@ -250,26 +250,26 @@ export async function parseXml(xml: string, moddle: BpmnModdle = createModdle())
  */
 function resolvePaddedReferences(result: ImportResult): ImportWarning[] {
   const byId = result.elementsById;
-  const padded = result.references.filter((r) => r.id !== r.id.trim() && !byId[r.id] && byId[r.id.trim()]);
+  const padded = result.references.filter((reference) => reference.id !== reference.id.trim() && !byId[reference.id] && byId[reference.id.trim()]);
   if (!padded.length) return result.warnings;
   const rebuilt = new Map<El, Set<string>>();
-  for (const r of padded) {
-    const property = (r.element.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean }> }).propertiesByName?.[r.property];
+  for (const reference of padded) {
+    const property = (reference.element.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean }> }).propertiesByName?.[reference.property];
     if (!property) continue;
     if (!property.isMany) {
-      r.element.set(property.name, byId[r.id.trim()]);
+      reference.element.set(property.name, byId[reference.id.trim()]);
       continue;
     }
-    const seen = rebuilt.get(r.element) ?? new Set<string>();
-    rebuilt.set(r.element, seen);
-    if (seen.has(r.property)) continue;
-    seen.add(r.property);
+    const seen = rebuilt.get(reference.element) ?? new Set<string>();
+    rebuilt.set(reference.element, seen);
+    if (seen.has(reference.property)) continue;
+    seen.add(reference.property);
     // the property's references in document order, each resolved as written or trimmed
-    const list = result.references.filter((x) => x.element === r.element && x.property === r.property).map((x) => byId[x.id] ?? byId[x.id.trim()]).filter((x): x is El => !!x);
-    const collection = r.element.get<El[]>(property.name);
+    const list = result.references.filter((sibling) => sibling.element === reference.element && sibling.property === reference.property).map((sibling) => byId[sibling.id] ?? byId[sibling.id.trim()]).filter((sibling): sibling is El => !!sibling);
+    const collection = reference.element.get<El[]>(property.name);
     collection.splice(0, collection.length, ...list);
   }
-  return result.warnings.filter((w) => !(/^unresolved reference/.test(w.message) && padded.some((r) => r.element === w.element && r.property === w.property && r.id === w.value)));
+  return result.warnings.filter((warning) => !(/^unresolved reference/.test(warning.message) && padded.some((reference) => reference.element === warning.element && reference.property === warning.property && reference.id === warning.value)));
 }
 
 function elementText(el: El, tag = false): string {
@@ -293,9 +293,9 @@ function watchOverwrites(moddle: BpmnModdle): { stop(): void; warnings(): Import
   const found: Array<{ holder: El; prop: string; lost: El; kept: El }> = [];
   props.set = function set(this: Props, target: El, name: string, value: unknown): void {
     if (value && typeof value === 'object' && typeof (value as El).$type === 'string' && /^bpmn:/.test(target.$type)) {
-      const p = (target.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean; isReference?: boolean }> }).propertiesByName?.[name];
-      const current = p && !p.isMany && !p.isReference && Object.prototype.hasOwnProperty.call(target, p.name) ? (target as unknown as Record<string, unknown>)[p.name] : undefined;
-      if (current && current !== value && typeof current === 'object' && typeof (current as El).$type === 'string') found.push({ holder: target, prop: p!.name, lost: current as El, kept: value as El });
+      const property = (target.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean; isReference?: boolean }> }).propertiesByName?.[name];
+      const current = property && !property.isMany && !property.isReference && Object.prototype.hasOwnProperty.call(target, property.name) ? (target as unknown as Record<string, unknown>)[property.name] : undefined;
+      if (current && current !== value && typeof current === 'object' && typeof (current as El).$type === 'string') found.push({ holder: target, prop: property!.name, lost: current as El, kept: value as El });
     }
     original.call(this, target, name, value);
   };

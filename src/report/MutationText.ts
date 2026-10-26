@@ -24,7 +24,7 @@ export class MutationText {
     if (text && !formatOnly) lines.push(text);
     if (result.aliases && Object.keys(result.aliases).length) lines.push(aliasLine(result.aliases));
     // errors only remain in a result written with --force
-    for (const e of result.validation.errors) lines.push(`forced ${validatorTag(e)}${e.code}${e.element ? ` ${e.element}` : ''}: ${e.message}`);
+    for (const error of result.validation.errors) lines.push(`forced ${validatorTag(error)}${error.code}${error.element ? ` ${error.element}` : ''}: ${error.message}`);
     lines.push(...new WarningLines(advisoryOf(result.validation.validators)).lines(result.warnings.added));
     if (result.warnings.resolved.length) lines.push(`resolved: ${findingList(result.warnings.resolved)}`);
     if (result.warnings.preexistingCount) lines.push(MutationText.preexistingLine(result.warnings.preexistingCount));

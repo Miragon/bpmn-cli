@@ -63,7 +63,7 @@ export class ArtifactEditor {
     const doc = this.doc;
     if (!opts.members?.length) throw usageError('A group needs --members <id,...>: the elements it is drawn around');
     const members = opts.members.map((id) => doc.require(id));
-    const wrong = members.find((m) => !is(m, 'bpmn:FlowNode') && !isDataReference(m));
+    const wrong = members.find((member) => !is(member, 'bpmn:FlowNode') && !isDataReference(member));
     if (wrong) {
       throw modelError('E_INVALID_VALUE', `${idOf(wrong)} is a ${kindLabel(wrong)}; group members are flow nodes, data objects and data stores`, { element: idOf(wrong) });
     }
@@ -133,10 +133,10 @@ export class ArtifactEditor {
   private groupContainer(members: El[]): El {
     const doc = this.doc;
     const within = (el: El, scope: El): boolean => {
-      for (let p = el.$parent as El | undefined; p; p = p.$parent as El | undefined) if (p === scope) return true;
+      for (let ancestor = el.$parent as El | undefined; ancestor; ancestor = ancestor.$parent as El | undefined) if (ancestor === scope) return true;
       return false;
     };
-    for (let scope = doc.scopeOf(members[0]!); scope && is(scope, 'bpmn:SubProcess'); scope = doc.scopeOf(scope)) if (members.every((m) => within(m, scope!))) return scope;
+    for (let scope = doc.scopeOf(members[0]!); scope && is(scope, 'bpmn:SubProcess'); scope = doc.scopeOf(scope)) if (members.every((member) => within(member, scope!))) return scope;
     return collaboration(doc.definitions) ?? doc.processOf(members[0]!)!;
   }
 }

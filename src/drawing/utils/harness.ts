@@ -12,51 +12,51 @@ export type Seg = [Point, Point];
 
 export function segs(pts: Point[]): Seg[] {
   const out: Seg[] = [];
-  for (let i = 0; i + 1 < pts.length; i++) out.push([pts[i]!, pts[i + 1]!]);
+  for (let index = 0; index + 1 < pts.length; index++) out.push([pts[index]!, pts[index + 1]!]);
   return out;
 }
 
-export const hits = ([p, q]: Seg, b: Box, shrink = 2): boolean =>
-  Math.min(p.x, q.x) < b.x + b.width - shrink &&
-  Math.max(p.x, q.x) > b.x + shrink &&
-  Math.min(p.y, q.y) < b.y + b.height - shrink &&
-  Math.max(p.y, q.y) > b.y + shrink;
+export const hits = ([start, end]: Seg, box: Box, shrink = 2): boolean =>
+  Math.min(start.x, end.x) < box.x + box.width - shrink &&
+  Math.max(start.x, end.x) > box.x + shrink &&
+  Math.min(start.y, end.y) < box.y + box.height - shrink &&
+  Math.max(start.y, end.y) > box.y + shrink;
 
-function slab(p: number, d: number, lo: number, hi: number): [number, number] {
-  const a = (lo - p) / d;
-  const b = (hi - p) / d;
-  return a < b ? [a, b] : [b, a];
+function slab(origin: number, direction: number, lo: number, hi: number): [number, number] {
+  const lowExit = (lo - origin) / direction;
+  const highExit = (hi - origin) / direction;
+  return lowExit < highExit ? [lowExit, highExit] : [highExit, lowExit];
 }
 
 /** Liang-Barsky on the open box; for axis-parallel segments the same as `hits`. */
-export function cuts(seg: Seg, b: Box, shrink = 2): boolean {
-  const [p, q] = seg;
-  if (p.x === q.x || p.y === q.y) return hits(seg, b, shrink);
-  const x0 = b.x + shrink;
-  const x1 = b.x + b.width - shrink;
-  const y0 = b.y + shrink;
-  const y1 = b.y + b.height - shrink;
+export function cuts(seg: Seg, box: Box, shrink = 2): boolean {
+  const [start, end] = seg;
+  if (start.x === end.x || start.y === end.y) return hits(seg, box, shrink);
+  const x0 = box.x + shrink;
+  const x1 = box.x + box.width - shrink;
+  const y0 = box.y + shrink;
+  const y1 = box.y + box.height - shrink;
   if (x0 >= x1 || y0 >= y1) return false;
-  const [ax, bx] = slab(p.x, q.x - p.x, x0, x1);
-  const [ay, by] = slab(p.y, q.y - p.y, y0, y1);
+  const [ax, bx] = slab(start.x, end.x - start.x, x0, x1);
+  const [ay, by] = slab(start.y, end.y - start.y, y0, y1);
   const lo = Math.max(ax, ay);
   const hi = Math.min(bx, by);
   return lo < hi && lo < 1 && hi > 0;
 }
 
-export const overlap = (a: Box, b: Box): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+export const overlap = (first: Box, second: Box): boolean => first.x < second.x + second.width && second.x < first.x + first.width && first.y < second.y + second.height && second.y < first.y + first.height;
 
-export const inside = (a: Box, b: Box): boolean => a.x >= b.x && a.y >= b.y && a.x + a.width <= b.x + b.width && a.y + a.height <= b.y + b.height;
+export const inside = (inner: Box, outer: Box): boolean => inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
 
-export const ptIn = (p: Point, b: Box): boolean => p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height;
+export const ptIn = (point: Point, box: Box): boolean => point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
 
 /** ≤ 0: none */
-export function collinear([a, b]: Seg, [c, d]: Seg): number {
-  if (a.x === b.x && c.x === d.x && a.x === c.x) {
-    return Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) - Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y));
+export function collinear([firstStart, firstEnd]: Seg, [secondStart, secondEnd]: Seg): number {
+  if (firstStart.x === firstEnd.x && secondStart.x === secondEnd.x && firstStart.x === secondStart.x) {
+    return Math.min(Math.max(firstStart.y, firstEnd.y), Math.max(secondStart.y, secondEnd.y)) - Math.max(Math.min(firstStart.y, firstEnd.y), Math.min(secondStart.y, secondEnd.y));
   }
-  if (a.y === b.y && c.y === d.y && a.y === c.y) {
-    return Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) - Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x));
+  if (firstStart.y === firstEnd.y && secondStart.y === secondEnd.y && firstStart.y === secondStart.y) {
+    return Math.min(Math.max(firstStart.x, firstEnd.x), Math.max(secondStart.x, secondEnd.x)) - Math.max(Math.min(firstStart.x, firstEnd.x), Math.min(secondStart.x, secondEnd.x));
   }
   return 0;
 }
@@ -68,7 +68,7 @@ export function glyph(lb: Box, name: string): Box {
   return { x: cx(lb) - width / 2, y: lb.y, width, height: lines * 14 };
 }
 
-export const lookup = <T>(map: Map<string, T>, id: string | undefined): T | undefined => (id === undefined ? undefined : map.get(id));
+export const lookup = <TValue>(map: Map<string, TValue>, id: string | undefined): TValue | undefined => (id === undefined ? undefined : map.get(id));
 
 export function boundsOf(bounds: unknown): Box | undefined {
   if (!bounds) return undefined;
@@ -91,15 +91,15 @@ export interface MetricIndex {
 }
 
 export function enclosingProcess(scope: El | undefined): El | undefined {
-  let s: El | undefined = scope;
-  while (s && !is(s, 'bpmn:Process')) s = s.$parent as El | undefined;
-  return s;
+  let current: El | undefined = scope;
+  while (current && !is(current, 'bpmn:Process')) current = current.$parent as El | undefined;
+  return current;
 }
 
 export interface Shape {
   id: string;
   el: El;
-  b: Box;
+  bounds: Box;
   container: boolean;
   expanded: boolean;
   label?: Box;
@@ -118,7 +118,7 @@ export interface Edge {
 function endsOf(el: El): Set<string | undefined> {
   const source = raw<unknown>(el, 'sourceRef');
   const ends = new Set<string | undefined>([idOf(source), idOf(raw(el, 'targetRef'))]);
-  if (Array.isArray(source)) for (const s of source) ends.add(idOf(s));
+  if (Array.isArray(source)) for (const sourceElement of source) ends.add(idOf(sourceElement));
   const parent = el.$parent;
   if (parent && is(parent, 'bpmn:FlowNode')) ends.add(idOf(parent));
   return ends;
@@ -134,13 +134,13 @@ export function readDrawnPlane(plane: unknown, seen: Set<string>): { shapes: Sha
     seen.add(id);
     const label = boundsOf(raw(raw(pe, 'label'), 'bounds'));
     if (is(pe, 'bpmndi:BPMNShape')) {
-      const b = boundsOf(raw(pe, 'bounds'));
-      if (!b) continue;
+      const bounds = boundsOf(raw(pe, 'bounds'));
+      if (!bounds) continue;
       const expanded = !!raw<boolean>(pe, 'isExpanded');
       const container = (is(el, 'bpmn:SubProcess') && expanded) || is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane');
-      shapes.push({ id, el, b, container, expanded, ...(label ? { label } : {}) });
+      shapes.push({ id, el, bounds, container, expanded, ...(label ? { label } : {}) });
     } else if (is(pe, 'bpmndi:BPMNEdge')) {
-      const pts = rawList(pe, 'waypoint').map((w) => ({ x: raw<number>(w, 'x')!, y: raw<number>(w, 'y')! }));
+      const pts = rawList(pe, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x')!, y: raw<number>(waypoint, 'y')! }));
       edges.push({ id, el, pts, segs: segs(pts), ends: endsOf(el), ...(label ? { label } : {}) });
     }
   }
@@ -162,17 +162,17 @@ interface Run {
 /** A zero-length segment joins the run before it; leading ones join the first run. */
 function runs(list: Seg[]): Run[] {
   const out: Run[] = [];
-  const way = ([p, q]: Seg): string => `${Math.sign(q.x - p.x)},${Math.sign(q.y - p.y)}`;
+  const way = ([start, end]: Seg): string => `${Math.sign(end.x - start.x)},${Math.sign(end.y - start.y)}`;
   const lead: number[] = [];
-  list.forEach((s, k) => {
+  list.forEach((segment, segmentIndex) => {
     const last = out[out.length - 1];
-    const empty = s[0].x === s[1].x && s[0].y === s[1].y;
-    const straight = s[0].x === s[1].x || s[0].y === s[1].y;
-    if (!last && empty) lead.push(k);
-    else if (last && (empty || (straight && way(last.seg) === way(s)))) {
-      last.seg = [last.seg[0], s[1]];
-      last.idx.push(k);
-    } else out.push({ seg: s, idx: out.length ? [k] : [...lead, k] });
+    const empty = segment[0].x === segment[1].x && segment[0].y === segment[1].y;
+    const straight = segment[0].x === segment[1].x || segment[0].y === segment[1].y;
+    if (!last && empty) lead.push(segmentIndex);
+    else if (last && (empty || (straight && way(last.seg) === way(segment)))) {
+      last.seg = [last.seg[0], segment[1]];
+      last.idx.push(segmentIndex);
+    } else out.push({ seg: segment, idx: out.length ? [segmentIndex] : [...lead, segmentIndex] });
   });
   if (!out.length && lead.length) out.push({ seg: list[lead[0]!]!, idx: lead });
   return out;
@@ -182,33 +182,33 @@ function runs(list: Seg[]): Run[] {
  * The common tail of two flows entering one gateway's top or bottom vertex vertically, back to
  * where they part. bpmn-js draws a join's entries sharing that vertex, so the tail is no merge.
  */
-export function joinTail(a: Edge, b: Edge, target: Shape | undefined): Set<string> {
+export function joinTail(first: Edge, second: Edge, target: Shape | undefined): Set<string> {
   const tail = new Set<string>();
   if (!target || !is(target.el, 'bpmn:Gateway')) return tail;
-  const g = target.b;
-  const near = (p: Point, q: Point): boolean => Math.abs(p.x - q.x) <= 2 && Math.abs(p.y - q.y) <= 2;
+  const targetBounds = target.bounds;
+  const near = (here: Point, there: Point): boolean => Math.abs(here.x - there.x) <= 2 && Math.abs(here.y - there.y) <= 2;
   // 1: enters the bottom vertex, -1: the top one, 0: neither
-  const entry = (r: Run | undefined): number => {
-    if (!r) return 0;
-    const [p, q] = r.seg;
-    if (p.x !== q.x || Math.abs(q.x - (cx(g))) > 2) return 0;
-    if (Math.abs(q.y - (g.y + g.height)) <= 2 && p.y > q.y) return 1;
-    return Math.abs(q.y - g.y) <= 2 && p.y < q.y ? -1 : 0;
+  const entry = (run: Run | undefined): number => {
+    if (!run) return 0;
+    const [start, end] = run.seg;
+    if (start.x !== end.x || Math.abs(end.x - (cx(targetBounds))) > 2) return 0;
+    if (Math.abs(end.y - (targetBounds.y + targetBounds.height)) <= 2 && start.y > end.y) return 1;
+    return Math.abs(end.y - targetBounds.y) <= 2 && start.y < end.y ? -1 : 0;
   };
-  const ra = runs(a.segs);
-  const rb = runs(b.segs);
+  const ra = runs(first.segs);
+  const rb = runs(second.segs);
   const side = entry(ra[ra.length - 1]);
   if (!side || entry(rb[rb.length - 1]) !== side) return tail;
-  for (let i = ra.length - 1, j = rb.length - 1; i >= 0 && j >= 0; i--, j--) {
-    const x = ra[i]!;
-    const y = rb[j]!;
-    if (collinear(x.seg, y.seg) <= 0) break;
-    for (const k of x.idx) for (const l of y.idx) tail.add(`${k},${l}`);
-    if (!near(x.seg[0], y.seg[0])) break;
+  for (let firstIndex = ra.length - 1, secondIndex = rb.length - 1; firstIndex >= 0 && secondIndex >= 0; firstIndex--, secondIndex--) {
+    const firstRun = ra[firstIndex]!;
+    const secondRun = rb[secondIndex]!;
+    if (collinear(firstRun.seg, secondRun.seg) <= 0) break;
+    for (const firstSegmentIndex of firstRun.idx) for (const secondSegmentIndex of secondRun.idx) tail.add(`${firstSegmentIndex},${secondSegmentIndex}`);
+    if (!near(firstRun.seg[0], secondRun.seg[0])) break;
     // two flows drawn on top of each other from start to end are no join
-    if (i === 0 && j === 0) return new Set();
+    if (firstIndex === 0 && secondIndex === 0) return new Set();
   }
   return tail;
 }
 
-export const subTitleOf = (s: Shape): Box | undefined => (s.expanded && is(s.el, 'bpmn:SubProcess') ? titleBox(s.b, raw<string>(s.el, 'name')) : undefined);
+export const subTitleOf = (shape: Shape): Box | undefined => (shape.expanded && is(shape.el, 'bpmn:SubProcess') ? titleBox(shape.bounds, raw<string>(shape.el, 'name')) : undefined);

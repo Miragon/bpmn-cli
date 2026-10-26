@@ -39,57 +39,57 @@ export class AroundWindow {
 
     const distance = new Map<El, number>();
     let frontier = seeds;
-    for (const s of seeds) distance.set(s, 0);
+    for (const seed of seeds) distance.set(seed, 0);
     for (let step = 1; step <= depth && frontier.length; step++) {
       const next: El[] = [];
       for (const node of frontier) {
-        for (const n of this.neighbours(node, inner)) {
-          if (distance.has(n) || !is(n, 'bpmn:FlowNode')) continue;
-          distance.set(n, step);
-          next.push(n);
+        for (const neighbour of this.neighbours(node, inner)) {
+          if (distance.has(neighbour) || !is(neighbour, 'bpmn:FlowNode')) continue;
+          distance.set(neighbour, step);
+          next.push(neighbour);
         }
       }
       frontier = next;
     }
-    const inWindow = (n: El | undefined): n is El => !!n && distance.has(n);
+    const inWindow = (candidate: El | undefined): candidate is El => !!candidate && distance.has(candidate);
 
     const scopeSet = new Set<El>([process]);
-    for (const n of distance.keys()) {
-      let s = doc.scopeOf(n);
-      while (s && !scopeSet.has(s)) {
-        scopeSet.add(s);
-        s = doc.scopeOf(s);
+    for (const node of distance.keys()) {
+      let scope = doc.scopeOf(node);
+      while (scope && !scopeSet.has(scope)) {
+        scopeSet.add(scope);
+        scope = doc.scopeOf(scope);
       }
     }
     const expansion = diExpansionState(doc.definitions);
     const scopes: AroundScope[] = [];
     const nodes: AroundNode[] = [];
 
-    const nodeOf = (n: El): AroundNode => {
-      const facts = new ElementFacts(n);
-      const sub = is(n, 'bpmn:SubProcess');
-      const children = sub ? doc.flowNodes(n).filter((c) => !is(c, 'bpmn:BoundaryEvent')) : [];
+    const nodeOf = (node: El): AroundNode => {
+      const facts = new ElementFacts(node);
+      const sub = is(node, 'bpmn:SubProcess');
+      const children = sub ? doc.flowNodes(node).filter((child) => !is(child, 'bpmn:BoundaryEvent')) : [];
       const from = doc
-        .incoming(n)
-        .filter((f) => !inWindow(peek<El>(f, 'sourceRef')))
-        .map((f) => compact({ id: shownId(f), source: shownId(peek<El>(f, 'sourceRef')), name: ownNameOf(f) }));
+        .incoming(node)
+        .filter((flow) => !inWindow(peek<El>(flow, 'sourceRef')))
+        .map((flow) => compact({ id: shownId(flow), source: shownId(peek<El>(flow, 'sourceRef')), name: ownNameOf(flow) }));
       return compact<AroundNode>({
-        id: shownId(n),
-        kind: kindLabel(n),
-        name: ownNameOf(n),
-        scope: shownId(doc.scopeOf(n)),
-        distance: distance.get(n)!,
-        host: is(n, 'bpmn:BoundaryEvent') ? shownId(peek<El>(n, 'attachedToRef')) : undefined,
-        lane: is(n, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, n)?.get<string>('id'),
-        trigger: is(n, 'bpmn:Event') ? facts.trigger() : undefined,
+        id: shownId(node),
+        kind: kindLabel(node),
+        name: ownNameOf(node),
+        scope: shownId(doc.scopeOf(node)),
+        distance: distance.get(node)!,
+        host: is(node, 'bpmn:BoundaryEvent') ? shownId(peek<El>(node, 'attachedToRef')) : undefined,
+        lane: is(node, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, node)?.get<string>('id'),
+        trigger: is(node, 'bpmn:Event') ? facts.trigger() : undefined,
         nonInterrupting: facts.nonInterrupting(),
-        expanded: sub ? expansion.get(shownId(n)) !== false : undefined,
-        content: sub && children.length && !children.some((c) => inWindow(c)) ? children.length : undefined,
+        expanded: sub ? expansion.get(shownId(node)) !== false : undefined,
+        content: sub && children.length && !children.some((child) => inWindow(child)) ? children.length : undefined,
         // the zeebe settings are in impl, complete (no job= next to zeebe:taskDefinition type=...)
         props: facts.props({ zeebe: false }),
         impl: facts.implementation(),
         documentation: facts.documentation(),
-        outgoing: doc.outgoing(n).map((f) => new ElementFacts(f).flow()),
+        outgoing: doc.outgoing(node).map((flow) => new ElementFacts(flow).flow()),
         from: nonEmpty(from),
       });
     };
@@ -98,39 +98,39 @@ export class AroundWindow {
     const visitScope = (scope: El): void => {
       const ordered = new FlowOrder(doc, scope).ordered;
       const placed = new Set<El>();
-      const emit = (n: El): void => {
-        if (placed.has(n)) return;
-        placed.add(n);
-        nodes.push(nodeOf(n));
-        if (is(n, 'bpmn:Activity')) for (const b of doc.boundaryEventsOf(n)) if (inWindow(b)) emit(b);
-        if (is(n, 'bpmn:SubProcess') && scopeSet.has(n)) {
-          scopes.push(scopeEntry(n, true));
-          visitScope(n);
+      const emit = (node: El): void => {
+        if (placed.has(node)) return;
+        placed.add(node);
+        nodes.push(nodeOf(node));
+        if (is(node, 'bpmn:Activity')) for (const boundaryEvent of doc.boundaryEventsOf(node)) if (inWindow(boundaryEvent)) emit(boundaryEvent);
+        if (is(node, 'bpmn:SubProcess') && scopeSet.has(node)) {
+          scopes.push(scopeEntry(node, true));
+          visitScope(node);
         }
       };
-      for (const n of ordered) if (inWindow(n)) emit(n);
-      for (const n of doc.flowNodes(scope)) if (inWindow(n) && is(n, 'bpmn:BoundaryEvent')) emit(n);
+      for (const node of ordered) if (inWindow(node)) emit(node);
+      for (const node of doc.flowNodes(scope)) if (inWindow(node) && is(node, 'bpmn:BoundaryEvent')) emit(node);
       // sub-processes outside the window that hold window nodes: a heading, then their window
-      for (const n of doc.flowNodes(scope)) {
-        if (!is(n, 'bpmn:SubProcess') || inWindow(n) || !scopeSet.has(n)) continue;
-        scopes.push(scopeEntry(n, false));
-        visitScope(n);
+      for (const node of doc.flowNodes(scope)) {
+        if (!is(node, 'bpmn:SubProcess') || inWindow(node) || !scopeSet.has(node)) continue;
+        scopes.push(scopeEntry(node, false));
+        visitScope(node);
       }
     };
-    const scopeEntry = (s: El, shown: boolean): AroundScope =>
+    const scopeEntry = (scope: El, shown: boolean): AroundScope =>
       compact<AroundScope>({
-        id: shownId(s),
-        kind: is(s, 'bpmn:Process') ? 'process' : kindLabel(s),
-        name: ownNameOf(s),
-        parent: is(s, 'bpmn:Process') ? undefined : shownId(doc.scopeOf(s)),
-        lane: is(s, 'bpmn:Process') ? undefined : this.links.effectiveLane(s)?.lane.get<string>('id'),
+        id: shownId(scope),
+        kind: is(scope, 'bpmn:Process') ? 'process' : kindLabel(scope),
+        name: ownNameOf(scope),
+        parent: is(scope, 'bpmn:Process') ? undefined : shownId(doc.scopeOf(scope)),
+        lane: is(scope, 'bpmn:Process') ? undefined : this.links.effectiveLane(scope)?.lane.get<string>('id'),
         inWindow: shown,
       });
     scopes.push(scopeEntry(process, false));
     visitScope(process);
 
     const content = this.processContent(process);
-    const shownFlows = content.flows.filter((f) => inWindow(peek<El>(f, 'sourceRef')) && inWindow(peek<El>(f, 'targetRef'))).length;
+    const shownFlows = content.flows.filter((flow) => inWindow(peek<El>(flow, 'sourceRef')) && inWindow(peek<El>(flow, 'targetRef'))).length;
     const windowEls = [...distance.keys()];
     const participant = doc.participantOf(process);
 
@@ -158,13 +158,13 @@ export class AroundWindow {
   private neighbours(node: El, inner: boolean): El[] {
     const doc = this.doc;
     const out: El[] = [];
-    for (const f of doc.outgoing(node)) {
-      const t = peek<El>(f, 'targetRef');
-      if (t) out.push(t);
+    for (const flow of doc.outgoing(node)) {
+      const target = peek<El>(flow, 'targetRef');
+      if (target) out.push(target);
     }
-    for (const f of doc.incoming(node)) {
-      const s = peek<El>(f, 'sourceRef');
-      if (s) out.push(s);
+    for (const flow of doc.incoming(node)) {
+      const source = peek<El>(flow, 'sourceRef');
+      if (source) out.push(source);
     }
     if (is(node, 'bpmn:Activity')) out.push(...doc.boundaryEventsOf(node));
     const host = is(node, 'bpmn:BoundaryEvent') ? peek<El>(node, 'attachedToRef') : undefined;
@@ -173,18 +173,18 @@ export class AroundWindow {
     if (scope && (AroundWindow.isLink(node, 'throw') || AroundWindow.isLink(node, 'catch'))) {
       const name = AroundWindow.linkName(node);
       const other = AroundWindow.isLink(node, 'throw') ? 'catch' : 'throw';
-      if (name) out.push(...doc.flowNodes(scope).filter((n) => AroundWindow.isLink(n, other) && AroundWindow.linkName(n) === name));
+      if (name) out.push(...doc.flowNodes(scope).filter((candidate) => AroundWindow.isLink(candidate, other) && AroundWindow.linkName(candidate) === name));
     }
     // leaving a sub-process: its first and last nodes lead to the sub-process
     if (scope && is(scope, 'bpmn:SubProcess') && this.isEntryOrExit(node)) out.push(scope);
     // entering one (inner): the sub-process leads to its first and last nodes
-    if (inner && is(node, 'bpmn:SubProcess')) out.push(...doc.flowNodes(node).filter((n) => this.isEntryOrExit(n)));
+    if (inner && is(node, 'bpmn:SubProcess')) out.push(...doc.flowNodes(node).filter((child) => this.isEntryOrExit(child)));
     return out;
   }
 
   private seedsOf(el: El): El[] {
     if (is(el, 'bpmn:FlowNode')) return [el];
-    if (is(el, 'bpmn:SequenceFlow')) return [peek<El>(el, 'sourceRef'), peek<El>(el, 'targetRef')].filter((n): n is El => !!n);
+    if (is(el, 'bpmn:SequenceFlow')) return [peek<El>(el, 'sourceRef'), peek<El>(el, 'targetRef')].filter((endpoint): endpoint is El => !!endpoint);
     throw usageError(`--around needs a flow node or a sequence flow; "${this.id}" is a ${labelOf(el)}`, {
       hint: is(el, 'bpmn:Process') || is(el, 'bpmn:Participant') || is(el, 'bpmn:SubProcess') ? 'Use `bpmn show <file> --scope <id>` for a whole process, pool or sub-process.' : 'Pick a node it belongs to (`bpmn show <file> <id>` names it).',
     });
@@ -192,7 +192,7 @@ export class AroundWindow {
 
   private processContent(process: El): { nodes: El[]; flows: El[] } {
     const scopes = scopesWithin(process);
-    return { nodes: scopes.flatMap((s) => this.doc.flowNodes(s)), flows: scopes.flatMap((s) => this.doc.sequenceFlows(s)) };
+    return { nodes: scopes.flatMap((scope) => this.doc.flowNodes(scope)), flows: scopes.flatMap((scope) => this.doc.sequenceFlows(scope)) };
   }
 
   private messageFlows(windowEls: El[]): ViewMessageFlow[] {
@@ -217,11 +217,11 @@ export class AroundWindow {
 
   private annotations(windowEls: El[]): ViewAnnotation[] {
     const annotations: ViewAnnotation[] = [];
-    for (const n of windowEls) {
-      for (const a of this.links.annotationsOf(n)) {
-        const known = annotations.find((x) => x.id === a.id);
-        if (known) known.attachedTo.push(shownId(n));
-        else annotations.push(compact<ViewAnnotation>({ id: a.id, text: a.text, attachedTo: [shownId(n)] }));
+    for (const element of windowEls) {
+      for (const annotation of this.links.annotationsOf(element)) {
+        const known = annotations.find((existing) => existing.id === annotation.id);
+        if (known) known.attachedTo.push(shownId(element));
+        else annotations.push(compact<ViewAnnotation>({ id: annotation.id, text: annotation.text, attachedTo: [shownId(element)] }));
       }
     }
     return annotations;
@@ -229,17 +229,17 @@ export class AroundWindow {
 
   private data(windowEls: El[]): ViewData[] {
     const data: ViewData[] = [];
-    for (const n of windowEls) {
-      const links = this.links.dataLinksOf(n);
+    for (const element of windowEls) {
+      const links = this.links.dataLinksOf(element);
       for (const [side, refs] of [['to', links?.reads ?? []], ['from', links?.writes ?? []]] as const) {
-        for (const r of refs) {
-          const ref = this.doc.get(r.id);
-          let entry = data.find((d) => d.id === r.id);
+        for (const dataRef of refs) {
+          const ref = this.doc.get(dataRef.id);
+          let entry = data.find((dataEntry) => dataEntry.id === dataRef.id);
           if (!entry) {
-            entry = compact<ViewData>({ id: r.id, kind: ref && is(ref, 'bpmn:DataStoreReference') ? 'dataStore' : 'dataObject', name: r.name, from: [], to: [] });
+            entry = compact<ViewData>({ id: dataRef.id, kind: ref && is(ref, 'bpmn:DataStoreReference') ? 'dataStore' : 'dataObject', name: dataRef.name, from: [], to: [] });
             data.push(entry);
           }
-          entry[side].push(shownId(n));
+          entry[side].push(shownId(element));
         }
       }
     }
@@ -251,7 +251,7 @@ export class AroundWindow {
   }
 
   private static linkName(el: El): string | undefined {
-    const def = list(el, 'eventDefinitions').find((d) => is(d, 'bpmn:LinkEventDefinition'));
+    const def = list(el, 'eventDefinitions').find((definition) => is(definition, 'bpmn:LinkEventDefinition'));
     const name = def ? peek<unknown>(def, 'name') : undefined;
     return typeof name === 'string' && name ? name : undefined;
   }

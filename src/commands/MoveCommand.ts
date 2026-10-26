@@ -17,22 +17,22 @@ export class MoveCommand extends MutationCommand {
         .option('--in <scopeId>', 'move into this process / sub-process')
         .option('--on <activityId>', 'boundary events: re-attach to this activity')
         .option('--lane <laneId>', 'assign to this lane (empty string removes)'),
-    ).action((file: string, ids: string[], o: RawOpts) => this.run(file, ids, o));
+    ).action((file: string, ids: string[], options: RawOpts) => this.run(file, ids, options));
   }
 
-  private async run(file: string, ids: string[], o: RawOpts): Promise<void> {
-    const opts = this.mutationOptions(o);
+  private async run(file: string, ids: string[], options: RawOpts): Promise<void> {
+    const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
-      this.checkPlacementFlags(o);
+      this.checkPlacementFlags(options);
       const op: MoveOp = {
         op: 'move',
         ids,
-        ...(o['after'] ? { after: String(o['after']) } : {}),
-        ...(o['before'] ? { before: String(o['before']) } : {}),
-        ...(o['flow'] ? { flow: String(o['flow']) } : {}),
-        ...(o['in'] ? { in: String(o['in']) } : {}),
-        ...(o['on'] ? { on: String(o['on']) } : {}),
-        ...(o['lane'] !== undefined ? { lane: String(o['lane']) } : {}),
+        ...(options['after'] ? { after: String(options['after']) } : {}),
+        ...(options['before'] ? { before: String(options['before']) } : {}),
+        ...(options['flow'] ? { flow: String(options['flow']) } : {}),
+        ...(options['in'] ? { in: String(options['in']) } : {}),
+        ...(options['on'] ? { on: String(options['on']) } : {}),
+        ...(options['lane'] !== undefined ? { lane: String(options['lane']) } : {}),
       };
       if (!op.after && !op.before && !op.flow && !op.in && !op.on && op.lane === undefined) {
         throw usageError('move needs one of --after, --before, --flow, --in, --on or --lane');

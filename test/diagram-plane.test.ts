@@ -17,10 +17,10 @@ import { BPMN_NS } from './helpers.js';
 
 const NS = `xmlns:bpmn="${BPMN_NS}" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"`;
 
-const shape = (id: string, x: number, y: number, w: number, h: number, extra = '', inner = ''): string =>
-  `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}" ${extra}><dc:Bounds x="${x}" y="${y}" width="${w}" height="${h}" />${inner}</bpmndi:BPMNShape>`;
+const shape = (id: string, left: number, top: number, width: number, height: number, extra = '', inner = ''): string =>
+  `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}" ${extra}><dc:Bounds x="${left}" y="${top}" width="${width}" height="${height}" />${inner}</bpmndi:BPMNShape>`;
 const edge = (id: string, pts: Array<[number, number]>): string =>
-  `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${pts.map(([x, y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`;
+  `<bpmndi:BPMNEdge id="${id}_di" bpmnElement="${id}">${pts.map(([left, top]) => `<di:waypoint x="${left}" y="${top}" />`).join('')}</bpmndi:BPMNEdge>`;
 
 /** A pool with two lanes (the second nested twice), a task with a boundary event, an expanded sub-process. */
 const POOL = `<?xml version="1.0" encoding="UTF-8"?>
@@ -61,11 +61,11 @@ async function load(xml = POOL): Promise<{ doc: Doc; planes: Plane[] }> {
 }
 
 function bounds(doc: Doc, id: string): Record<string, number> | undefined {
-  for (const d of doc.definitions.get<El[]>('diagrams')) {
-    for (const pe of d.get<El>('plane').get<El[]>('planeElement')) {
+  for (const diagram of doc.definitions.get<El[]>('diagrams')) {
+    for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
       if (pe.get<El>('bpmnElement')?.get('id') === id && pe.get('bounds')) {
-        const b = pe.get<El>('bounds');
-        return { x: b.get('x'), y: b.get('y'), width: b.get('width'), height: b.get('height') };
+        const box = pe.get<El>('bounds');
+        return { x: box.get('x'), y: box.get('y'), width: box.get('width'), height: box.get('height') };
       }
     }
   }
@@ -76,30 +76,30 @@ describe('DiagramReader', () => {
   it('reads shapes, edges and membership from the semantic model', async () => {
     const { planes } = await load();
     expect(planes).toHaveLength(1);
-    const p = planes[0]!;
-    expect(p.rootId).toBe('C');
-    const s = (id: string) => p.shapes.get(id)!;
-    expect(s('Pool')).toMatchObject({ kind: 'participant', container: true });
-    expect(s('L2a')).toMatchObject({ kind: 'lane', container: true, laneId: 'L2', poolId: 'Pool' });
-    expect(s('T')).toMatchObject({ kind: 'task', container: false, laneId: 'L1', poolId: 'Pool' });
-    expect(s('B')).toMatchObject({ kind: 'boundary', hostId: 'T', laneId: 'L1' });
-    expect(s('Sub')).toMatchObject({ kind: 'subProcess', container: true, expanded: true, laneId: 'L2a' });
-    expect(s('SS')).toMatchObject({ kind: 'event', parentId: 'Sub', poolId: 'Pool' });
-    expect(s('S').label).toEqual({ x: 180, y: 200, width: 30, height: 14 });
-    expect(p.edges.get('F2')).toMatchObject({ kind: 'sequenceFlow', sourceId: 'T', targetId: 'Sub' });
-    expect(p.edges.get('F2')!.points).toHaveLength(4);
+    const plane = planes[0]!;
+    expect(plane.rootId).toBe('C');
+    const shapeById = (id: string) => plane.shapes.get(id)!;
+    expect(shapeById('Pool')).toMatchObject({ kind: 'participant', container: true });
+    expect(shapeById('L2a')).toMatchObject({ kind: 'lane', container: true, laneId: 'L2', poolId: 'Pool' });
+    expect(shapeById('T')).toMatchObject({ kind: 'task', container: false, laneId: 'L1', poolId: 'Pool' });
+    expect(shapeById('B')).toMatchObject({ kind: 'boundary', hostId: 'T', laneId: 'L1' });
+    expect(shapeById('Sub')).toMatchObject({ kind: 'subProcess', container: true, expanded: true, laneId: 'L2a' });
+    expect(shapeById('SS')).toMatchObject({ kind: 'event', parentId: 'Sub', poolId: 'Pool' });
+    expect(shapeById('S').label).toEqual({ x: 180, y: 200, width: 30, height: 14 });
+    expect(plane.edges.get('F2')).toMatchObject({ kind: 'sequenceFlow', sourceId: 'T', targetId: 'Sub' });
+    expect(plane.edges.get('F2')!.points).toHaveLength(4);
   });
 
   it('finds frames and home planes', async () => {
     const { doc, planes } = await load();
-    const p = planes[0]!;
-    expect(Frames.of(p, p.shapes.get('T')!)!.id).toBe('L1');
-    expect(Frames.of(p, p.shapes.get('SS')!)!.id).toBe('Sub');
-    expect(Frames.of(p, p.shapes.get('L2a')!)!.id).toBe('L2');
-    expect(Frames.of(p, p.shapes.get('L1')!)!.id).toBe('Pool');
+    const plane = planes[0]!;
+    expect(Frames.of(plane, plane.shapes.get('T')!)!.id).toBe('L1');
+    expect(Frames.of(plane, plane.shapes.get('SS')!)!.id).toBe('Sub');
+    expect(Frames.of(plane, plane.shapes.get('L2a')!)!.id).toBe('L2');
+    expect(Frames.of(plane, plane.shapes.get('L1')!)!.id).toBe('Pool');
     const sem = Semantics.of(doc.definitions);
-    expect(sem.homePlane(planes, 'SS')).toBe(p);
-    expect(sem.homePlane(planes, 'F1')).toBe(p);
+    expect(sem.homePlane(planes, 'SS')).toBe(plane);
+    expect(sem.homePlane(planes, 'F1')).toBe(plane);
   });
 
   it('does not materialise collections on the model', async () => {
@@ -113,11 +113,11 @@ describe('DiagramReader', () => {
 describe('PlaneWriter', () => {
   it('updates geometry in place and keeps every other DI attribute', async () => {
     const { doc, planes } = await load();
-    const p = planes[0]!;
-    const s = p.shapes.get('S')!;
-    s.bounds.x += 10;
-    s.label!.x += 10;
-    p.edges.get('F1')!.points[0]!.x += 10;
+    const plane = planes[0]!;
+    const startShape = plane.shapes.get('S')!;
+    startShape.bounds.x += 10;
+    startShape.label!.x += 10;
+    plane.edges.get('F1')!.points[0]!.x += 10;
     new PlaneWriter(doc.moddle, doc.definitions).write(planes);
     const xml = await doc.toXml();
     expect(bounds(doc, 'S')).toEqual({ x: 190, y: 157, width: 36, height: 36 });
@@ -131,15 +131,15 @@ describe('PlaneWriter', () => {
 
   it('creates DI for new shapes and edges in the file\'s id style, rounded', async () => {
     const { doc, planes } = await load();
-    const p = planes[0]!;
+    const plane = planes[0]!;
     const el = doc.create('bpmn:ExclusiveGateway', { id: 'G' });
     doc.get('P')!.get<El[]>('flowElements').push(el);
     el.$parent = doc.get('P');
-    p.shapes.set('G', { id: 'G', el, bounds: { x: 600.4, y: 150.6, width: 50, height: 50 }, kind: 'gateway', container: false, label: { x: 590, y: 120, width: 70, height: 14 } });
+    plane.shapes.set('G', { id: 'G', el, bounds: { x: 600.4, y: 150.6, width: 50, height: 50 }, kind: 'gateway', container: false, label: { x: 590, y: 120, width: 70, height: 14 } });
     new PlaneWriter(doc.moddle, doc.definitions).write(planes);
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmndi:BPMNShape id="G_di" bpmnElement="G" isMarkerVisible="true">\s*<dc:Bounds x="600" y="151" width="50" height="50" \/>\s*<bpmndi:BPMNLabel>/);
-    expect(p.shapes.get('G')!.di).toBeDefined();
+    expect(plane.shapes.get('G')!.di).toBeDefined();
   });
 
   it('follows the BPMNShape_ style of engine-written files and avoids taken ids', async () => {
@@ -151,21 +151,21 @@ describe('PlaneWriter', () => {
 
   it('moves DI to another plane, deletes dropped DI and whole planes', async () => {
     const { doc, planes } = await load();
-    const p = planes[0]!;
-    const ss = p.shapes.get('SS')!;
-    p.shapes.delete('SS');
+    const plane = planes[0]!;
+    const ss = plane.shapes.get('SS')!;
+    plane.shapes.delete('SS');
     const child: Plane = { id: 'x', rootId: 'Sub', root: doc.get('Sub')!, shapes: new Map([['SS', ss]]), edges: new Map(), dropped: [] };
-    p.dropped.push(p.edges.get('F1')!.di!);
-    p.edges.delete('F1');
-    new PlaneWriter(doc.moddle, doc.definitions).write([p, child]);
+    plane.dropped.push(plane.edges.get('F1')!.di!);
+    plane.edges.delete('F1');
+    new PlaneWriter(doc.moddle, doc.definitions).write([plane, child]);
     const diagrams = doc.definitions.get<El[]>('diagrams');
     expect(diagrams).toHaveLength(2);
     const second = diagrams[1]!.get<El>('plane');
     expect(second.get<El>('bpmnElement')).toBe(doc.get('Sub'));
-    expect(second.get<El[]>('planeElement').map((e) => e.get('id'))).toEqual(['SS_di']);
+    expect(second.get<El[]>('planeElement').map((element) => element.get('id'))).toEqual(['SS_di']);
     expect(await doc.toXml()).not.toContain('F1_di');
     child.deleted = true;
-    new PlaneWriter(doc.moddle, doc.definitions).write([p, child]);
+    new PlaneWriter(doc.moddle, doc.definitions).write([plane, child]);
     expect(doc.definitions.get<El[]>('diagrams')).toHaveLength(1);
   });
 });
@@ -192,7 +192,7 @@ describe('DiPruner.prune and colours', () => {
     const xml = await fresh.toXml();
     expect(xml).toContain('bioc:fill="#c8e6c9"');
     expect(xml).toContain('color:color="#205022"');
-    const shapeDi = fresh.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement').find((e) => is(e.get('bpmnElement'), 'bpmn:StartEvent'))!;
+    const shapeDi = fresh.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement').find((element) => is(element.get('bpmnElement'), 'bpmn:StartEvent'))!;
     expect(shapeDi.get('color:background-color')).toBe('#c8e6c9');
   });
 });

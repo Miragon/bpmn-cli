@@ -17,10 +17,10 @@ import { definitionsXml } from './helpers.js';
 /** Nodes `[tag, id, extra attrs]` and flows `[id, source, target]` (incoming / outgoing written). */
 function model(nodes: Array<[string, string, string?]>, flows: Array<[string, string, string]>): string {
   const body = nodes.map(([tag, id, attrs]) => {
-    const links = [...flows.filter((f) => f[2] === id).map((f) => `<bpmn:incoming>${f[0]}</bpmn:incoming>`), ...flows.filter((f) => f[1] === id).map((f) => `<bpmn:outgoing>${f[0]}</bpmn:outgoing>`)];
+    const links = [...flows.filter((flow) => flow[2] === id).map((flow) => `<bpmn:incoming>${flow[0]}</bpmn:incoming>`), ...flows.filter((flow) => flow[1] === id).map((flow) => `<bpmn:outgoing>${flow[0]}</bpmn:outgoing>`)];
     return `<bpmn:${tag} id="${id}"${attrs ? ` ${attrs}` : ''}>${links.join('')}</bpmn:${tag}>`;
   });
-  for (const [id, s, t] of flows) body.push(`<bpmn:sequenceFlow id="${id}" sourceRef="${s}" targetRef="${t}" />`);
+  for (const [id, source, target] of flows) body.push(`<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`);
   return definitionsXml(body.join('\n'));
 }
 
@@ -57,7 +57,7 @@ function failure(fn: () => unknown): CliError {
   throw new Error('expected a failure');
 }
 
-const targetOf = (doc: Doc, id: string): string[] => doc.outgoing(doc.require(id)).map((f) => f.get<{ id: string }>('targetRef').id);
+const targetOf = (doc: Doc, id: string): string[] => doc.outgoing(doc.require(id)).map((flow) => flow.get<{ id: string }>('targetRef').id);
 
 describe('a plain remove of a join or merge (audit #53)', () => {
   it('an exclusive merge is bridged from every predecessor, like --bridge-all; nothing after it is cut off', async () => {
@@ -65,11 +65,11 @@ describe('a plain remove of a join or merge (audit #53)', () => {
     const doc = await Doc.fromXml(xml);
     const cs = runOps(doc, [{ op: 'remove', ids: ['J'] }]);
     expect([targetOf(doc, 'B1'), targetOf(doc, 'D1')]).toEqual([['C'], ['C']]);
-    expect(cs.removed.map((r) => r.id)).toEqual(['F6', 'J']);
+    expect(cs.removed.map((removedElement) => removedElement.id)).toEqual(['F6', 'J']);
     expect(cs.notes).toContain('bridged all: B1, D1 -> C');
-    const r = await applyToXml(xml, [{ op: 'remove', ids: ['J'] }], { layout: false });
-    expect(r.result.warnings.added.map((w) => w.code)).not.toContain('W_UNREACHABLE');
-    expect(r.result.warnings.added.map((w) => `${w.code} ${w.element}`)).toContain('W_IMPLICIT_JOIN C');
+    const applied = await applyToXml(xml, [{ op: 'remove', ids: ['J'] }], { layout: false });
+    expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_UNREACHABLE');
+    expect(applied.result.warnings.added.map((warning) => `${warning.code} ${warning.element}`)).toContain('W_IMPLICIT_JOIN C');
   });
 
   it('a task with two incoming flows (an implicit merge) is bridged the same way', async () => {
@@ -101,11 +101,11 @@ describe('a plain remove of a join or merge (audit #53)', () => {
     ] as const) {
       const xml = block(tag, tag);
       const doc = await Doc.fromXml(xml);
-      const e = failure(() => runOps(doc, [{ op: 'remove', ids: ['J'] }]));
-      expect(e.code).toBe('E_AMBIGUOUS_BRIDGE');
-      expect(e.message).toBe(`J is a ${kind} join of 2 paths (B1, D1): bridging them to C ends the synchronisation (C would run once per path), removing it without a bridge leaves C unconnected`);
-      expect(e.details.hint).toBe('Say which: `bpmn remove <file> J --bridge-all` (each path runs on to C on its own), or `bpmn remove <file> J --no-bridge` and connect what should stay with `bpmn connect`.');
-      expect(e.details.candidates).toEqual(['F3', 'F5']);
+      const error = failure(() => runOps(doc, [{ op: 'remove', ids: ['J'] }]));
+      expect(error.code).toBe('E_AMBIGUOUS_BRIDGE');
+      expect(error.message).toBe(`J is a ${kind} join of 2 paths (B1, D1): bridging them to C ends the synchronisation (C would run once per path), removing it without a bridge leaves C unconnected`);
+      expect(error.details.hint).toBe('Say which: `bpmn remove <file> J --bridge-all` (each path runs on to C on its own), or `bpmn remove <file> J --no-bridge` and connect what should stay with `bpmn connect`.');
+      expect(error.details.candidates).toEqual(['F3', 'F5']);
       const all = await Doc.fromXml(xml);
       runOps(all, [{ op: 'remove', ids: ['J'], bridgeAll: true }]);
       expect([targetOf(all, 'B1'), targetOf(all, 'D1')]).toEqual([['C'], ['C']]);
@@ -135,7 +135,7 @@ describe('a plain remove of a join or merge (audit #53)', () => {
       ],
     );
     const end = await Doc.fromXml(ends);
-    expect(runOps(end, [{ op: 'remove', ids: ['E'] }]).removed.map((r) => r.id)).toEqual(['F2', 'F3', 'E']);
+    expect(runOps(end, [{ op: 'remove', ids: ['E'] }]).removed.map((removedElement) => removedElement.id)).toEqual(['F2', 'F3', 'E']);
     // a 1:1 node: the ordinary bridge
     const one = await Doc.fromXml(xml);
     expect(runOps(one, [{ op: 'remove', ids: ['C'] }]).notes).toContain('bridged: J -> E');

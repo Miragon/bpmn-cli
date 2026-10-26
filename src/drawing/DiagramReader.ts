@@ -48,7 +48,7 @@ export class DiagramReader {
 
   /** A plane without bpmnElement shows the first process or collaboration, as in bpmn-js. */
   static displayRoot(defs: El | undefined): El | undefined {
-    return rawList(defs, 'rootElements').find((r) => is(r, 'bpmn:Process') || is(r, 'bpmn:Collaboration'));
+    return rawList(defs, 'rootElements').find((root) => is(root, 'bpmn:Process') || is(root, 'bpmn:Collaboration'));
   }
 
   /** Undefined without valid bounds: the element counts as undrawn. */
@@ -59,35 +59,35 @@ export class DiagramReader {
     const expanded = kind === 'subProcess' ? raw<boolean>(di, 'isExpanded') === true : undefined;
     const container = kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true);
     const label = boxOf(raw(raw(di, 'label'), 'bounds'));
-    const s: DShape = { id, el, di, bounds, kind, container };
-    if (expanded !== undefined) s.expanded = expanded;
-    if (label) s.label = label;
+    const shape: DShape = { id, el, di, bounds, kind, container };
+    if (expanded !== undefined) shape.expanded = expanded;
+    if (label) shape.label = label;
     if (kind === 'boundary') {
       const host = idOf(raw(el, 'attachedToRef'));
-      if (host) s.hostId = host;
+      if (host) shape.hostId = host;
     }
     const lane = kind === 'lane' ? this.sem.laneParent.get(id) : this.sem.laneOf.get(id);
-    if (lane) s.laneId = lane;
+    if (lane) shape.laneId = lane;
     const pool = this.sem.poolOf(id);
-    if (pool) s.poolId = pool;
-    return s;
+    if (pool) shape.poolId = pool;
+    return shape;
   }
 
   private readEdge(di: El, el: El, id: string): DEdge {
-    const points = rawList(di, 'waypoint').map((w) => ({ x: raw<number>(w, 'x') ?? 0, y: raw<number>(w, 'y') ?? 0 }));
+    const points = rawList(di, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x') ?? 0, y: raw<number>(waypoint, 'y') ?? 0 }));
     const label = boxOf(raw(raw(di, 'label'), 'bounds'));
-    const e: DEdge = { id, el, di, kind: DiagramReader.edgeKind(el), points, ...DiagramReader.edgeEnds(el) };
-    if (label) e.label = label;
-    return e;
+    const edge: DEdge = { id, el, di, kind: DiagramReader.edgeKind(el), points, ...DiagramReader.edgeEnds(el) };
+    if (label) edge.label = label;
+    return edge;
   }
 
   private linkParents(plane: Plane): void {
-    for (const s of plane.shapes.values()) {
-      const scope = this.sem.scopeOf.get(s.id);
+    for (const shape of plane.shapes.values()) {
+      const scope = this.sem.scopeOf.get(shape.id);
       const sid = idOf(scope);
       if (!scope || !sid || !Semantics.isSubProcess(scope)) continue;
       const parent = plane.shapes.get(sid);
-      if (parent?.expanded) s.parentId = sid;
+      if (parent?.expanded) shape.parentId = sid;
     }
   }
 
@@ -102,8 +102,8 @@ export class DiagramReader {
       const id = idOf(el);
       if (!el || !id) continue;
       if (is(pe, 'bpmndi:BPMNShape')) {
-        const s = this.readShape(pe, el, id);
-        if (s) plane.shapes.set(id, s);
+        const shape = this.readShape(pe, el, id);
+        if (shape) plane.shapes.set(id, shape);
         else (plane.unbounded ??= new Map()).set(id, pe);
       } else if (is(pe, 'bpmndi:BPMNEdge')) {
         plane.edges.set(id, this.readEdge(pe, el, id));

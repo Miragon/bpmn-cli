@@ -53,14 +53,14 @@ afterAll(() => {
 });
 
 describe('a change that leaves the model as it was is not written (#46)', () => {
-  it.each([['auto', 'auto'], ['--no-layout', false]] as const)('keeps the file byte for byte and its mtime (%s)', async (_, layout) => {
+  it.each([['auto', 'auto'], ['--no-layout', false]] as const)('keeps the file byte for byte and its mtime (%s)', async (_mode, layout) => {
     const file = join(dir, `noop-${String(layout)}.bpmn`);
     writeFileSync(file, STYLED);
     const past = new Date('2020-01-01T00:00:00Z');
     utimesSync(file, past, past);
-    const r = await mutateFile(file, [rename('Task_Check', 'Check order')], { layout });
-    expect(r).toMatchObject({ unchanged: true, written: false });
-    expect(r.xml).toBe(STYLED);
+    const result = await mutateFile(file, [rename('Task_Check', 'Check order')], { layout });
+    expect(result).toMatchObject({ unchanged: true, written: false });
+    expect(result.xml).toBe(STYLED);
     expect(readFileSync(file, 'utf8')).toBe(STYLED);
     expect(statSync(file).mtime.getTime()).toBe(past.getTime());
   });
@@ -70,26 +70,26 @@ describe('a change that leaves the model as it was is not written (#46)', () => 
     const other = join(dir, 'noop-copy.bpmn');
     writeFileSync(file, STYLED);
     expect(await mutateFile(file, [rename('Task_Check', 'Check order')], { dryRun: true })).toMatchObject({ unchanged: true, written: false });
-    const r = await mutateFile(file, [rename('Task_Check', 'Check order')], { out: other });
-    expect(r).toMatchObject({ unchanged: true, written: true });
+    const result = await mutateFile(file, [rename('Task_Check', 'Check order')], { out: other });
+    expect(result).toMatchObject({ unchanged: true, written: true });
     expect(readFileSync(other, 'utf8')).toBe(STYLED);
   });
 
   it('a real change is written and not unchanged', async () => {
-    const r = await dry(STYLED, [rename('Task_Check', 'Check the order')], { layout: false });
-    expect(r.unchanged).toBe(false);
+    const result = await dry(STYLED, [rename('Task_Check', 'Check the order')], { layout: false });
+    expect(result.unchanged).toBe(false);
   });
 });
 
 describe('text-preserving output (#30, #31, #44)', () => {
-  it.each([['auto', 'auto'], ['--no-layout', false]] as const)('a rename changes the renamed start tag only, in its attribute order (%s)', async (_, layout) => {
-    const r = await dry(STYLED, [rename('Task_Check', 'Check the order')], { layout });
-    expect(r.xml).toBe(STYLED.replace('name="Check order"', 'name="Check the order"'));
+  it.each([['auto', 'auto'], ['--no-layout', false]] as const)('a rename changes the renamed start tag only, in its attribute order (%s)', async (_mode, layout) => {
+    const result = await dry(STYLED, [rename('Task_Check', 'Check the order')], { layout });
+    expect(result.xml).toBe(STYLED.replace('name="Check order"', 'name="Check the order"'));
   });
 
   it('prolog, comments, CDATA, entities, quotes, the root tag and the missing final line break survive an insert', async () => {
-    const r = await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }]);
-    const out = r.xml;
+    const result = await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }]);
+    const out = result.xml;
     expect(out.startsWith(STYLED.slice(0, STYLED.indexOf('<bpmn:process')))).toBe(true);
     for (const kept of [
       '<!-- the order starts here -->',
@@ -105,7 +105,7 @@ describe('text-preserving output (#30, #31, #44)', () => {
       expect(out).toContain(kept);
     }
     expect(out.endsWith('\n')).toBe(false);
-    expect(r.changes.notes.join(' ')).not.toMatch(/comment|formatting/);
+    expect(result.changes.notes.join(' ')).not.toMatch(/comment|formatting/);
   });
 
   it("new and changed elements follow the file's indentation, empty-element style and attribute order", async () => {
@@ -120,7 +120,7 @@ describe('text-preserving output (#30, #31, #44)', () => {
   });
 
   it('CRLF line breaks and tab indentation are kept, also around new elements', async () => {
-    const crlfTabs = STYLED.replace(/^((?: {4})+)/gm, (m) => '\t'.repeat(m.length / 4)).replace(/\n/g, '\r\n');
+    const crlfTabs = STYLED.replace(/^((?: {4})+)/gm, (indent) => '\t'.repeat(indent.length / 4)).replace(/\n/g, '\r\n');
     const out = (await dry(crlfTabs, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }])).xml;
     expect(out).not.toMatch(/[^\r]\n/);
     expect(out).toMatch(/\r\n\t\t<bpmn:task id="Activity_Audit" name="Audit">\r\n\t\t\t<bpmn:incoming>Flow_2<\/bpmn:incoming>/);
@@ -129,35 +129,35 @@ describe('text-preserving output (#30, #31, #44)', () => {
   });
 
   it('a changed condition keeps its CDATA section', async () => {
-    const r = await dry(STYLED, [{ op: 'set', id: 'Flow_Yes', values: { condition: '${amount < 200 && ok}' } }], { layout: false });
-    expect(r.xml).toBe(STYLED.replace('${amount < 100 && ok}', '${amount < 200 && ok}'));
+    const result = await dry(STYLED, [{ op: 'set', id: 'Flow_Yes', values: { condition: '${amount < 200 && ok}' } }], { layout: false });
+    expect(result.xml).toBe(STYLED.replace('${amount < 100 && ok}', '${amount < 200 && ok}'));
   });
 
   it('a retype keeps the attribute order and renames both tags', async () => {
-    const r = await dry(STYLED, [{ op: 'retype', id: 'Task_Check', kind: 'manualTask' }], { layout: false });
-    expect(r.xml).toBe(STYLED.replace('<bpmn:userTask id="Task_Check"', '<bpmn:manualTask id="Task_Check"').replace('</bpmn:userTask>', '</bpmn:manualTask>'));
+    const result = await dry(STYLED, [{ op: 'retype', id: 'Task_Check', kind: 'manualTask' }], { layout: false });
+    expect(result.xml).toBe(STYLED.replace('<bpmn:userTask id="Task_Check"', '<bpmn:manualTask id="Task_Check"').replace('</bpmn:userTask>', '</bpmn:manualTask>'));
   });
 
   it('a namespace the change declares joins the original root tag', async () => {
-    const r = await dry(LISTLESS, [{ op: 'set', id: 'Task_A', values: { 'camunda:asyncBefore': 'true' } }], { layout: false });
+    const result = await dry(LISTLESS, [{ op: 'set', id: 'Task_A', values: { 'camunda:asyncBefore': 'true' } }], { layout: false });
     const declaration = ' xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
-    expect(r.xml).toContain(declaration);
-    expect(r.xml.replace(declaration, '')).toBe(LISTLESS.replace('<task id="Task_A" name="Register request" />', '<task id="Task_A" name="Register request" camunda:asyncBefore="true" />'));
+    expect(result.xml).toContain(declaration);
+    expect(result.xml.replace(declaration, '')).toBe(LISTLESS.replace('<task id="Task_A" name="Register request" />', '<task id="Task_A" name="Register request" camunda:asyncBefore="true" />'));
   });
 });
 
 describe('comments next to removed elements are reported (#31)', () => {
   it('removing an element drops the comment before it with a note, the other comments stay', async () => {
-    const r = await dry(STYLED, [{ op: 'remove', ids: ['Task_Script'] }]);
-    expect(r.xml).not.toContain('scripted step');
-    for (const kept of ['Synthetic roundtrip fixture', 'the order starts here', 'end of the synthetic fixture']) expect(r.xml).toContain(kept);
-    expect(r.changes.notes).toContain('1 XML comment(s) dropped: they were inside or next to elements the change removed or rewrote');
+    const result = await dry(STYLED, [{ op: 'remove', ids: ['Task_Script'] }]);
+    expect(result.xml).not.toContain('scripted step');
+    for (const kept of ['Synthetic roundtrip fixture', 'the order starts here', 'end of the synthetic fixture']) expect(result.xml).toContain(kept);
+    expect(result.changes.notes).toContain('1 XML comment(s) dropped: they were inside or next to elements the change removed or rewrote');
   });
 
   it('a forced write of a lossy import says that the formatting and the comments are gone', async () => {
     const lossy = STYLED.replace('<bpmn:userTask id="Task_Check"', '<bpmn:userTask id="Task_Check" ').replace('</bpmn:process>', '<bpmn:fooBar id="X" />\n    </bpmn:process>');
-    const r = await dry(lossy, [rename('Task_Check', 'Check the order')], { layout: false, force: true });
-    expect(r.changes.notes.join('\n')).toMatch(/the file's formatting was not kept \(the import was lossy\).*4 XML comment\(s\) dropped/);
+    const result = await dry(lossy, [rename('Task_Check', 'Check the order')], { layout: false, force: true });
+    expect(result.changes.notes.join('\n')).toMatch(/the file's formatting was not kept \(the import was lossy\).*4 XML comment\(s\) dropped/);
   });
 });
 
@@ -174,7 +174,7 @@ describe('incoming / outgoing lists are written the way the file keeps them (#45
 
   it('in memory the lists are complete (the placement grammar and the views read them)', async () => {
     const doc = await Doc.fromXml(LISTLESS);
-    const id = (e: El): string => e.get<string>('id');
+    const id = (element: El): string => element.get<string>('id');
     expect(doc.outgoing(doc.require('Task_A')).map(id)).toEqual(['flow_a_b']);
     expect(doc.incoming(doc.require('End')).map(id)).toEqual(['flow_b_end']);
   });
@@ -191,24 +191,24 @@ describe('incoming / outgoing lists are written the way the file keeps them (#45
   });
 
   it('a file without any sequence flow, like a new one, gets the lists the Modeler writes', async () => {
-    const r = await dry(definitionsXml('    <bpmn:startEvent id="Start" />'), [{ op: 'add', kind: 'task', name: 'Work', id: 'Activity_Work', after: 'Start' }], { layout: false });
-    expect(r.xml).toMatch(/<bpmn:startEvent id="Start">\s*<bpmn:outgoing>Flow_\w+<\/bpmn:outgoing>/);
-    expect(r.xml).toMatch(/<bpmn:task id="Activity_Work" name="Work">\s*<bpmn:incoming>Flow_\w+<\/bpmn:incoming>/);
+    const result = await dry(definitionsXml('    <bpmn:startEvent id="Start" />'), [{ op: 'add', kind: 'task', name: 'Work', id: 'Activity_Work', after: 'Start' }], { layout: false });
+    expect(result.xml).toMatch(/<bpmn:startEvent id="Start">\s*<bpmn:outgoing>Flow_\w+<\/bpmn:outgoing>/);
+    expect(result.xml).toMatch(/<bpmn:task id="Activity_Work" name="Work">\s*<bpmn:incoming>Flow_\w+<\/bpmn:incoming>/);
   });
 });
 
 describe('a full redraw keeps the DI ids (#47)', () => {
-  const diIds = (xml: string): string[] => [...xml.matchAll(/<bpmndi:(?:BPMNShape|BPMNEdge|BPMNPlane|BPMNDiagram) id="([^"]+)"/g)].map((m) => m[1]!);
+  const diIds = (xml: string): string[] => [...xml.matchAll(/<bpmndi:(?:BPMNShape|BPMNEdge|BPMNPlane|BPMNDiagram) id="([^"]+)"/g)].map((match) => match[1]!);
 
   it("existing DI keeps its ids, new DI gets the file's id style", async () => {
-    const r = await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }], { layout: 'full' });
-    expect(r.layout.mode).toBe('full');
-    const ids = diIds(r.xml);
+    const result = await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }], { layout: 'full' });
+    expect(result.layout.mode).toBe('full');
+    const ids = diIds(result.xml);
     expect(ids).toEqual(expect.arrayContaining([...diIds(STYLED), 'Activity_Audit_di']));
     expect(ids.filter((id) => /^BPMN(Shape|Edge)_/.test(id))).toEqual([]);
     expect(new Set(ids).size).toBe(ids.length);
     // the start tags of the DI elements stay as they were; only bounds and waypoints change
-    expect(r.xml).toContain('<bpmndi:BPMNShape id="Gateway_Ok_di" bpmnElement="Gateway_Ok" isMarkerVisible="true">');
+    expect(result.xml).toContain('<bpmndi:BPMNShape id="Gateway_Ok_di" bpmnElement="Gateway_Ok" isMarkerVisible="true">');
   });
 
   it('a file the engine drew keeps the engine ids, a file without a drawing gets them', async () => {
@@ -233,9 +233,9 @@ describe('id references written with whitespace around them', () => {
     const doc = await Doc.fromXml(xml);
     expect(doc.importWarnings).toEqual([]);
     expect(doc.lossyImportWarnings).toEqual([]);
-    expect((doc.get('L1')!.get<El[]>('flowNodeRef')).map((n) => n.get('id'))).toEqual(['Start', 'Task_A', 'End']);
-    const r = await mutateDoc(doc, [{ op: 'set', id: 'Task_A', values: { name: 'Do B' } }], { layout: false });
-    expect(r.xml).toBe(xml.replace('name="Do A"', 'name="Do B"'));
+    expect((doc.get('L1')!.get<El[]>('flowNodeRef')).map((node) => node.get('id'))).toEqual(['Start', 'Task_A', 'End']);
+    const result = await mutateDoc(doc, [{ op: 'set', id: 'Task_A', values: { name: 'Do B' } }], { layout: false });
+    expect(result.xml).toBe(xml.replace('name="Do A"', 'name="Do B"'));
   });
 });
 
@@ -243,19 +243,19 @@ describe('the safety net', () => {
   it('falls back to the plain serialisation when the preserved text would not read back as the changed model', async () => {
     // a baseline that does not describe the original: its unchanged task text would be copied from the original
     const original = definitionsXml('    <bpmn:task id="A" name="as read" />\n    <bpmn:task id="B" name="b" />');
-    const model = async (a: string, b: string): Promise<string> => (await Doc.fromXml(definitionsXml(`    <bpmn:task id="A" name="${a}" />\n    <bpmn:task id="B" name="${b}" />`))).toXml();
-    const r = await preserveText(original, await model('other', 'b'), await model('other', 'b2'));
-    expect(r.mode).toBe('plain');
-    expect(r.reason).toMatch(/does not read back/);
-    expect(r.xml).toBe(await model('other', 'b2'));
+    const model = async (firstName: string, secondName: string): Promise<string> => (await Doc.fromXml(definitionsXml(`    <bpmn:task id="A" name="${firstName}" />\n    <bpmn:task id="B" name="${secondName}" />`))).toXml();
+    const result = await preserveText(original, await model('other', 'b'), await model('other', 'b2'));
+    expect(result.mode).toBe('plain');
+    expect(result.reason).toMatch(/does not read back/);
+    expect(result.xml).toBe(await model('other', 'b2'));
   });
 
   it('a DOCTYPE keeps the plain serialisation', async () => {
     const original = `<?xml version="1.0"?>\n<!DOCTYPE definitions>\n${definitionsXml('    <bpmn:task id="A" />').replace(/^<\?xml[^>]*>\n/, '')}`;
     const next = await (await Doc.fromXml(definitionsXml('    <bpmn:task id="A" name="x" />'))).toXml();
-    const r = await preserveText(original, await (await Doc.fromXml(definitionsXml('    <bpmn:task id="A" />'))).toXml(), next);
-    expect(r).toMatchObject({ mode: 'plain', xml: next });
-    expect(r.reason).toMatch(/DOCTYPE/);
+    const result = await preserveText(original, await (await Doc.fromXml(definitionsXml('    <bpmn:task id="A" />'))).toXml(), next);
+    expect(result).toMatchObject({ mode: 'plain', xml: next });
+    expect(result.reason).toMatch(/DOCTYPE/);
   });
 
   it('the position-keeping reader', () => {
@@ -263,10 +263,10 @@ describe('the safety net', () => {
     const doc = readXmlText(text);
     expect(doc.comments).toBe(1);
     expect(doc.root).toMatchObject({ name: 'a:root', uri: 'urn:a', local: 'root', selfClosing: false });
-    const kid = doc.root.children.find((c) => c.kind === 'element') as ReturnType<typeof readXmlText>['root'];
+    const kid = doc.root.children.find((child) => child.kind === 'element') as ReturnType<typeof readXmlText>['root'];
     expect(text.slice(kid.start, kid.end)).toBe('<a:kid id="k" a:y="2"/>');
-    expect(kid.attrs.map((a) => [a.name, a.raw, a.ws])).toEqual([['id', 'k', ' '], ['a:y', '2', ' ']]);
-    expect(doc.root.children.map((c) => c.kind)).toEqual(['text', 'comment', 'text', 'element', 'text', 'cdata']);
+    expect(kid.attrs.map((attr) => [attr.name, attr.raw, attr.ws])).toEqual([['id', 'k', ' '], ['a:y', '2', ' ']]);
+    expect(doc.root.children.map((child) => child.kind)).toEqual(['text', 'comment', 'text', 'element', 'text', 'cdata']);
     for (const bad of ['<a><b></a></b>', '<x:a/>', '<a b="1" b="2"/>', '<!DOCTYPE a><a/>', '<a/><b/>', '<a>']) expect(() => readXmlText(bad)).toThrow(XmlTextError);
   });
 });
@@ -285,23 +285,23 @@ function bpmnFiles(base: string): string[] {
   return out.sort();
 }
 
-const CORPUS = [...bpmnFiles(join(HERE, 'fixtures')), ...bpmnFiles(join(ROOT, 'tools', 'scenarios'))].map((p) => [p.slice(ROOT.length + 1), p] as const);
+const CORPUS = [...bpmnFiles(join(HERE, 'fixtures')), ...bpmnFiles(join(ROOT, 'tools', 'scenarios'))].map((filePath) => [filePath.slice(ROOT.length + 1), filePath] as const);
 
 describe('every synthetic fixture and scenario', () => {
-  it.each(CORPUS)('%s: a no-op is unchanged, a rename changes one line', async (_, path) => {
+  it.each(CORPUS)('%s: a no-op is unchanged, a rename changes one line', async (_relativePath, path) => {
     const xml = readFileSync(path, 'utf8');
     const doc = await Doc.fromXml(xml);
     if (doc.lossyImportWarnings.length) return;
-    const named = [...doc.byId().values()].find((e) => (is(e, 'bpmn:Activity') || is(e, 'bpmn:Event')) && e.get<string | undefined>('name'));
+    const named = [...doc.byId().values()].find((element) => (is(element, 'bpmn:Activity') || is(element, 'bpmn:Event')) && element.get<string | undefined>('name'));
     if (!named) return;
     const id = named.get<string>('id');
     const name = named.get<string>('name');
     const same = await mutateDoc(doc, [rename(id, name)], { layout: false, force: true });
     expect(same.unchanged).toBe(true);
     const renamed = await mutateDoc(await Doc.fromXml(xml), [rename(id, `${name} X`)], { layout: false, force: true });
-    const a = xml.split('\n');
-    const b = renamed.xml.split('\n');
-    expect(b.length).toBe(a.length);
-    expect(a.filter((line, i) => line !== b[i])).toHaveLength(1);
+    const originalLines = xml.split('\n');
+    const renamedLines = renamed.xml.split('\n');
+    expect(renamedLines.length).toBe(originalLines.length);
+    expect(originalLines.filter((line, index) => line !== renamedLines[index])).toHaveLength(1);
   });
 });

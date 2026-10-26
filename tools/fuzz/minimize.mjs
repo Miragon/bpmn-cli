@@ -31,12 +31,12 @@ import { runWalk } from './lib/walk.mjs';
 
 const SPEC = { kind: undefined, detail: undefined, out: undefined };
 
-function matcher(summary, o) {
-  const K = o.kind ? new RegExp(o.kind) : undefined;
-  const D = o.detail ? new RegExp(o.detail) : undefined;
-  const first = summary.violations.find((v) => (K ? K.test(v.kind) : v.severity === 'error') && (!D || D.test(String(v.detail))));
-  const kind = K ?? (first ? new RegExp(`^${first.kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) : undefined);
-  return { first, hit: (v) => kind.test(v.kind) && (!D || D.test(String(v.detail))) };
+function matcher(summary, options) {
+  const kindPattern = options.kind ? new RegExp(options.kind) : undefined;
+  const detailPattern = options.detail ? new RegExp(options.detail) : undefined;
+  const first = summary.violations.find((violation) => (kindPattern ? kindPattern.test(violation.kind) : violation.severity === 'error') && (!detailPattern || detailPattern.test(String(violation.detail))));
+  const kind = kindPattern ?? (first ? new RegExp(`^${first.kind.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) : undefined);
+  return { first, hit: (violation) => kind.test(violation.kind) && (!detailPattern || detailPattern.test(String(violation.detail))) };
 }
 
 /** ddmin over `steps`; `test(list)` -> index of the triggering step or -1. */
@@ -46,25 +46,25 @@ async function ddmin(steps, test) {
   let at = await probe(steps);
   if (at < 0) return { reproduced: false, tests };
   let cur = steps.slice(0, at + 1);
-  let n = 2;
+  let granularity = 2;
   while (cur.length >= 2) {
-    const chunk = Math.ceil(cur.length / n);
+    const chunk = Math.ceil(cur.length / granularity);
     let reduced = false;
-    for (let i = 0; i < cur.length && !reduced; i += chunk) {
-      const cand = [...cur.slice(0, i), ...cur.slice(i + chunk)];
+    for (let chunkStart = 0; chunkStart < cur.length && !reduced; chunkStart += chunk) {
+      const cand = [...cur.slice(0, chunkStart), ...cur.slice(chunkStart + chunk)];
       if (!cand.length) continue;
       at = await probe(cand);
-      if (at >= 0) { cur = cand.slice(0, at + 1); n = Math.max(n - 1, 2); reduced = true; }
+      if (at >= 0) { cur = cand.slice(0, at + 1); granularity = Math.max(granularity - 1, 2); reduced = true; }
     }
     if (!reduced) {
-      if (n >= cur.length) break;
-      n = Math.min(cur.length, n * 2);
+      if (granularity >= cur.length) break;
+      granularity = Math.min(cur.length, granularity * 2);
     }
   }
   return { reproduced: true, tests, steps: cur };
 }
 
-const quote = (s) => (/^[\w./:=,@%+-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
+const quote = (arg) => (/^[\w./:=,@%+-]+$/.test(arg) ? arg : `'${String(arg).replace(/'/g, `'\\''`)}'`);
 
 function writeRepro(dir, model, steps, mode) {
   copyFileSync(model, join(dir, 'start.bpmn'));
@@ -75,15 +75,15 @@ function writeRepro(dir, model, steps, mode) {
   const layout = mode === 'auto' ? '' : ` --layout ${mode}`;
   const lines = ['#!/bin/sh', '# Minimised fuzz repro: replays the steps on a copy of start.bpmn, then prints the metrics.', 'D=$(cd "$(dirname "$0")" && pwd)',
     `BPMN=\${BPMN:-"node ${binRef}"}`, 'cp "$D/start.bpmn" "$D/work.bpmn"'];
-  steps.forEach((s, i) => {
-    if (i === steps.length - 1) lines.push('cp "$D/work.bpmn" "$D/before-last.bpmn"');
-    lines.push(`# step ${i}: ${s.name}`);
-    const argv = toArgv(s.ops);
-    if (argv) lines.push(`$BPMN ${argv.map((a) => (a === '%F' ? '"$D/work.bpmn"' : quote(a))).join(' ')}${layout}`);
+  steps.forEach((step, stepIndex) => {
+    if (stepIndex === steps.length - 1) lines.push('cp "$D/work.bpmn" "$D/before-last.bpmn"');
+    lines.push(`# step ${stepIndex}: ${step.name}`);
+    const argv = toArgv(step.ops);
+    if (argv) lines.push(`$BPMN ${argv.map((arg) => (arg === '%F' ? '"$D/work.bpmn"' : quote(arg))).join(' ')}${layout}`);
     else {
-      const f = `op-${String(i).padStart(2, '0')}.json`;
-      writeFileSync(join(dir, f), JSON.stringify(s.ops, null, 1));
-      lines.push(`$BPMN apply "$D/work.bpmn" "$D/${f}"${layout}`);
+      const opsFile = `op-${String(stepIndex).padStart(2, '0')}.json`;
+      writeFileSync(join(dir, opsFile), JSON.stringify(step.ops, null, 1));
+      lines.push(`$BPMN apply "$D/work.bpmn" "$D/${opsFile}"${layout}`);
     }
   });
   lines.push('$BPMN metrics "$D/work.bpmn"');
@@ -92,13 +92,13 @@ function writeRepro(dir, model, steps, mode) {
   return join(dir, 'run.sh');
 }
 
-export async function minimizeWalk(walkDir, o = {}) {
+export async function minimizeWalk(walkDir, options = {}) {
   const summary = JSON.parse(readFileSync(join(walkDir, 'summary.json'), 'utf8'));
   const steps = JSON.parse(readFileSync(join(walkDir, 'steps.json'), 'utf8'));
-  const { first, hit } = matcher(summary, o);
+  const { first, hit } = matcher(summary, options);
   if (!first) return { reproduced: false, tests: 0, reason: 'no matching violation in the walk' };
   const slug = first.kind.replace(/[^\w]+/g, '_');
-  const out = resolve(o.out ?? join(walkDir, `min-${slug}`));
+  const out = resolve(options.out ?? join(walkDir, `min-${slug}`));
   mkdirSync(out, { recursive: true });
   const exec = await makeExecutor({ exec: summary.config.exec, via: summary.config.via, workDir: join(out, 'probe') });
   const metrics = await loadMetrics();
@@ -107,34 +107,34 @@ export async function minimizeWalk(walkDir, o = {}) {
   const xml = readFileSync(summary.modelPath, 'utf8');
   const detEvery = /nondeterministic/.test(first.kind) ? 1 : 0;
   const test = async (list) => {
-    const s = await runWalk({ xml, model: summary.model, seed: summary.seed, mode: summary.mode, steps: list.length, replay: list, exec, metrics, render, detEvery });
-    return s.violations.find(hit)?.step ?? -1;
+    const walkSummary = await runWalk({ xml, model: summary.model, seed: summary.seed, mode: summary.mode, steps: list.length, replay: list, exec, metrics, render, detEvery });
+    return walkSummary.violations.find(hit)?.step ?? -1;
   };
-  const r = await ddmin(steps, test);
-  if (!r.reproduced) return r;
+  const minimized = await ddmin(steps, test);
+  if (!minimized.reproduced) return minimized;
   rmSync(join(out, 'probe'), { recursive: true, force: true });
-  const script = writeRepro(out, summary.modelPath, r.steps, summary.mode);
-  const result = { reproduced: true, tests: r.tests, length: r.steps.length, violation: first, script };
+  const script = writeRepro(out, summary.modelPath, minimized.steps, summary.mode);
+  const result = { reproduced: true, tests: minimized.tests, length: minimized.steps.length, violation: first, script };
   writeFileSync(join(out, 'min.json'), JSON.stringify(result, null, 1));
   return result;
 }
 
 async function main() {
-  let o;
+  let options;
   try {
-    o = parseArgs(process.argv.slice(2), SPEC);
-    if (o._.length !== 1) throw new Error('usage: node tools/fuzz/minimize.mjs <walk-dir> [--kind regex] [--detail regex] [--out dir]');
-  } catch (e) {
-    console.error(e.message);
+    options = parseArgs(process.argv.slice(2), SPEC);
+    if (options._.length !== 1) throw new Error('usage: node tools/fuzz/minimize.mjs <walk-dir> [--kind regex] [--detail regex] [--out dir]');
+  } catch (error) {
+    console.error(error.message);
     process.exit(2);
   }
-  const r = await minimizeWalk(o._[0], o);
-  if (!r.reproduced) {
-    console.log(`not reproduced${r.reason ? `: ${r.reason}` : ''}`);
+  const minimized = await minimizeWalk(options._[0], options);
+  if (!minimized.reproduced) {
+    console.log(`not reproduced${minimized.reason ? `: ${minimized.reason}` : ''}`);
     process.exit(1);
   }
-  console.log(JSON.stringify({ tests: r.tests, length: r.length, violation: r.violation }));
-  console.log(readFileSync(r.script, 'utf8'));
+  console.log(JSON.stringify({ tests: minimized.tests, length: minimized.length, violation: minimized.violation }));
+  console.log(readFileSync(minimized.script, 'utf8'));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

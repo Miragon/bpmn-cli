@@ -33,8 +33,8 @@ interface Node {
   name?: string;
   x: number | string;
   y: number | string;
-  w?: number | string;
-  h?: number | string;
+  width?: number | string;
+  height?: number | string;
   /** DI label bounds: x, y, width, height */
   label?: [number, number, number, number];
 }
@@ -49,17 +49,17 @@ interface Flow {
 
 /** A process with these nodes and flows, drawn as given (any value goes into the DI as written). */
 function model(nodes: Node[], flows: Flow[] = []): string {
-  const size = (n: Node): [number | string, number | string] => [n.w ?? (n.kind === 'task' ? 100 : 36), n.h ?? (n.kind === 'task' ? 80 : 36)];
-  const sem = nodes.map((n) => `    <bpmn:${n.kind ?? 'task'} id="${n.id}"${n.name ? ` name="${n.name}"` : ''} />`).join('\n');
-  const sf = flows.map((f) => `    <bpmn:sequenceFlow id="${f.id}"${f.name ? ` name="${f.name}"` : ''} sourceRef="${f.from}" targetRef="${f.to}" />`).join('\n');
+  const size = (node: Node): [number | string, number | string] => [node.width ?? (node.kind === 'task' ? 100 : 36), node.height ?? (node.kind === 'task' ? 80 : 36)];
+  const sem = nodes.map((node) => `    <bpmn:${node.kind ?? 'task'} id="${node.id}"${node.name ? ` name="${node.name}"` : ''} />`).join('\n');
+  const sf = flows.map((flow) => `    <bpmn:sequenceFlow id="${flow.id}"${flow.name ? ` name="${flow.name}"` : ''} sourceRef="${flow.from}" targetRef="${flow.to}" />`).join('\n');
   const shapes = nodes
-    .map((n) => {
-      const [w, h] = size(n);
-      const label = n.label ? `<bpmndi:BPMNLabel><dc:Bounds x="${n.label[0]}" y="${n.label[1]}" width="${n.label[2]}" height="${n.label[3]}" /></bpmndi:BPMNLabel>` : '';
-      return `      <bpmndi:BPMNShape id="${n.id}_di" bpmnElement="${n.id}"><dc:Bounds x="${n.x}" y="${n.y}" width="${w}" height="${h}" />${label}</bpmndi:BPMNShape>`;
+    .map((node) => {
+      const [width, height] = size(node);
+      const label = node.label ? `<bpmndi:BPMNLabel><dc:Bounds x="${node.label[0]}" y="${node.label[1]}" width="${node.label[2]}" height="${node.label[3]}" /></bpmndi:BPMNLabel>` : '';
+      return `      <bpmndi:BPMNShape id="${node.id}_di" bpmnElement="${node.id}"><dc:Bounds x="${node.x}" y="${node.y}" width="${width}" height="${height}" />${label}</bpmndi:BPMNShape>`;
     })
     .join('\n');
-  const edges = flows.map((f) => `      <bpmndi:BPMNEdge id="${f.id}_di" bpmnElement="${f.id}">${f.points.map(([x, y]) => `<di:waypoint x="${x}" y="${y}" />`).join('')}</bpmndi:BPMNEdge>`).join('\n');
+  const edges = flows.map((flow) => `      <bpmndi:BPMNEdge id="${flow.id}_di" bpmnElement="${flow.id}">${flow.points.map(([pointX, pointY]) => `<di:waypoint x="${pointX}" y="${pointY}" />`).join('')}</bpmndi:BPMNEdge>`).join('\n');
   return `${HEAD}
   <bpmn:process id="Process_1" isExecutable="true">
 ${sem}
@@ -76,34 +76,34 @@ ${edges}
 }
 
 const START: Node = { id: 'Event_Start', kind: 'startEvent', name: 'Start', x: 100, y: 100 };
-const drawnIds = (svg: string): string[] => [...svg.matchAll(/<g data-id="([^"]+)"/g)].map((m) => m[1]!);
+const drawnIds = (svg: string): string[] => [...svg.matchAll(/<g data-id="([^"]+)"/g)].map((match) => match[1]!);
 
 /** The tspans of a text element with this data attribute. */
 function textOf(svg: string, attr: string, id: string): Array<{ x: number; y: number; text: string }> {
-  const m = new RegExp(`<text ${attr}="${id}"[^>]*>(.*?)</text>`).exec(svg);
-  if (!m) throw new Error(`no <text ${attr}="${id}">`);
-  return [...m[1]!.matchAll(/<tspan x="([\d.-]+)" y="([\d.-]+)">(.*?)<\/tspan>/g)].map((t) => ({ x: Number(t[1]), y: Number(t[2]), text: t[3]! }));
+  const match = new RegExp(`<text ${attr}="${id}"[^>]*>(.*?)</text>`).exec(svg);
+  if (!match) throw new Error(`no <text ${attr}="${id}">`);
+  return [...match[1]!.matchAll(/<tspan x="([\d.-]+)" y="([\d.-]+)">(.*?)<\/tspan>/g)].map((tspan) => ({ x: Number(tspan[1]), y: Number(tspan[2]), text: tspan[3]! }));
 }
 
 describe('broken and far-flung coordinates', () => {
   it('leaves out shapes and connections whose coordinates are not finite numbers within ±1,000,000 px, with a note', async () => {
     const nan = model([START, { id: 'Activity_Do', name: 'Do', x: 200, y: 78 }], [{ id: 'Flow_1', from: 'Event_Start', to: 'Activity_Do', points: [['NaN', 118], [200, 118]] }]);
-    const r = await renderSvg(nan, { maxSize: 2000 });
-    expect(r.svg).not.toContain('NaN');
-    expect(Number.isFinite(r.width) && Number.isFinite(r.height) && Number.isFinite(r.tokens)).toBe(true);
-    expect(drawnIds(r.svg).sort()).toEqual(['Activity_Do', 'Event_Start']);
-    expect(r.notes).toContain('1 element has broken coordinates (not a number, beyond ±1,000,000 px, or a negative size) and is not drawn: Flow_1 (`bpmn layout <file>` draws it again)');
+    const rendered = await renderSvg(nan, { maxSize: 2000 });
+    expect(rendered.svg).not.toContain('NaN');
+    expect(Number.isFinite(rendered.width) && Number.isFinite(rendered.height) && Number.isFinite(rendered.tokens)).toBe(true);
+    expect(drawnIds(rendered.svg).sort()).toEqual(['Activity_Do', 'Event_Start']);
+    expect(rendered.notes).toContain('1 element has broken coordinates (not a number, beyond ±1,000,000 px, or a negative size) and is not drawn: Flow_1 (`bpmn layout <file>` draws it again)');
     // the PNG shows the start event and the task (not a blank image)
-    const { pixels } = await new PngRenderer().rasterize(r.svg, { pixels: true });
+    const { pixels } = await new PngRenderer().rasterize(rendered.svg, { pixels: true });
     let dark = 0;
-    for (let i = 0; i < pixels!.length; i += 4) if (pixels![i]! < 128) dark++;
+    for (let index = 0; index < pixels!.length; index += 4) if (pixels![index]! < 128) dark++;
     expect(dark).toBeGreaterThan(200);
     // overflowing (1e308), infinite and far (1e9) coordinates, a negative size, far label bounds
     for (const [task, points] of [
-      [{ x: '1e308', w: '1e308' }, [[136, 118], [200, 118]]],
+      [{ x: '1e308', width: '1e308' }, [[136, 118], [200, 118]]],
       [{ x: 'Infinity' }, [[136, 118], [200, 118]]],
       [{ x: 1e9, y: 1e9 }, [[136, 118], [1e9, 118], [1e9, 1e9]]],
-      [{ w: -100, h: -80 }, [[136, 118], [200, 118]]],
+      [{ width: -100, height: -80 }, [[136, 118], [200, 118]]],
     ] as Array<[Partial<Node>, Flow['points']]>) {
       const xml = model([START, { id: 'Activity_Do', name: 'Do', x: 200, y: 78, ...task }], [{ id: 'Flow_1', from: 'Event_Start', to: 'Activity_Do', points }]);
       const out = await renderSvg(xml, { maxSize: 2000, tiles: true });
@@ -129,36 +129,36 @@ describe('--tiles', () => {
     // a start event and a task 50,000 px apart, one flow between them (it was 676 tiles, 625 blank)
     const xml = model([START, { id: 'Activity_Far', name: 'Far away', x: 50000, y: 50000 }], [{ id: 'Flow_1', from: 'Event_Start', to: 'Activity_Far', points: [[136, 118], [50050, 118], [50050, 50000]] }]);
     const t0 = Date.now();
-    const r = await renderSvg(xml, { maxSize: 2000, tiles: true });
+    const rendered = await renderSvg(xml, { maxSize: 2000, tiles: true });
     expect(Date.now() - t0).toBeLessThan(2000);
-    expect(r.tiles!.length).toBe(2);
-    expect(r.tiles!.map((t) => drawnIds(t.svg).filter((id) => id !== 'Flow_1'))).toEqual([['Event_Start'], ['Activity_Far']]);
-    expect(r.tiles!.map((t) => t.band)).toEqual([1, 2]);
-    expect(r.notes.join('\n')).toMatch(/split into 2 tiles \(2 bands\) at the diagram's columns .*; parts with no shape or label \(empty, or only connections passing through\) are left out/);
+    expect(rendered.tiles!.length).toBe(2);
+    expect(rendered.tiles!.map((tile) => drawnIds(tile.svg).filter((id) => id !== 'Flow_1'))).toEqual([['Event_Start'], ['Activity_Far']]);
+    expect(rendered.tiles!.map((tile) => tile.band)).toEqual([1, 2]);
+    expect(rendered.notes.join('\n')).toMatch(/split into 2 tiles \(2 bands\) at the diagram's columns .*; parts with no shape or label \(empty, or only connections passing through\) are left out/);
   });
 
   it(`makes at most ${MAX_TILES} tiles: a drawing that needs more stays one image, with a note`, async () => {
     // 60 tasks 2,500 px apart: each would be a tile of its own
-    const nodes: Node[] = Array.from({ length: 60 }, (_, i) => ({ id: `Activity_${i + 1}`, name: `Task ${i + 1}`, x: i * 2500, y: 0 }));
-    const r = await renderSvg(model(nodes), { maxSize: 2000, tiles: true });
-    expect(r.tiles).toBeUndefined();
-    expect(Math.max(r.width, r.height)).toBeLessThanOrEqual(2000);
-    expect(r.notes).toContain(`--tiles: the drawing needs more than ${MAX_TILES} tiles at scale 1.00: it is drawn as one image instead`);
-    expect(r.notes.join('\n')).toMatch(/hard to read\); render a part instead: --around <id> \[--depth n\], --path <from> <to> or --scope <id>$/m);
+    const nodes: Node[] = Array.from({ length: 60 }, (_unused, index) => ({ id: `Activity_${index + 1}`, name: `Task ${index + 1}`, x: index * 2500, y: 0 }));
+    const rendered = await renderSvg(model(nodes), { maxSize: 2000, tiles: true });
+    expect(rendered.tiles).toBeUndefined();
+    expect(Math.max(rendered.width, rendered.height)).toBeLessThanOrEqual(2000);
+    expect(rendered.notes).toContain(`--tiles: the drawing needs more than ${MAX_TILES} tiles at scale 1.00: it is drawn as one image instead`);
+    expect(rendered.notes.join('\n')).toMatch(/hard to read\); render a part instead: --around <id> \[--depth n\], --path <from> <to> or --scope <id>$/m);
     // bounded work: shapes spread over the whole coordinate range, the smallest --max-size
-    const spread: Node[] = Array.from({ length: 400 }, (_, i) => ({ id: `Activity_${i + 1}`, x: -999000 + i * 4990, y: -999000 + ((i * 7919) % 400) * 4990 }));
+    const spread: Node[] = Array.from({ length: 400 }, (_unused, index) => ({ id: `Activity_${index + 1}`, x: -999000 + index * 4990, y: -999000 + ((index * 7919) % 400) * 4990 }));
     const t0 = Date.now();
-    const s = await renderSvg(model(spread), { maxSize: 50, scale: 10, tiles: true });
+    const spreadRendered = await renderSvg(model(spread), { maxSize: 50, scale: 10, tiles: true });
     expect(Date.now() - t0).toBeLessThan(3000);
-    expect(s.tiles).toBeUndefined();
-    expect(Math.max(s.width, s.height)).toBeLessThanOrEqual(50);
+    expect(spreadRendered.tiles).toBeUndefined();
+    expect(Math.max(spreadRendered.width, spreadRendered.height)).toBeLessThanOrEqual(50);
   });
 
   it('numbers the bands among the tiles kept, and says how many there are', async () => {
     // two tasks 20,000 px apart vertically, nothing between them
-    const r = await renderSvg(model([{ id: 'Activity_Top', name: 'Top', x: 100, y: 100 }, { id: 'Activity_Bottom', name: 'Bottom', x: 100, y: 20000 }]), { maxSize: 2000, tiles: true });
-    expect(r.tiles!.map((t) => t.band)).toEqual([1, 2]);
-    expect(r.notes.join('\n')).toMatch(/split into 2 tiles \(2 bands\)/);
+    const rendered = await renderSvg(model([{ id: 'Activity_Top', name: 'Top', x: 100, y: 100 }, { id: 'Activity_Bottom', name: 'Bottom', x: 100, y: 20000 }]), { maxSize: 2000, tiles: true });
+    expect(rendered.tiles!.map((tile) => tile.band)).toEqual([1, 2]);
+    expect(rendered.notes.join('\n')).toMatch(/split into 2 tiles \(2 bands\)/);
   });
 });
 
@@ -168,10 +168,10 @@ describe('notes', () => {
     const xml = readFileSync(GALLERY, 'utf8');
     const whole = await renderSvg(xml);
     // a long edge of 0.7458 of the drawing's: drawn at a scale just below 0.75
-    const r = await renderSvg(xml, { maxSize: Math.floor(Math.max(whole.width, whole.height) * 0.7458) });
-    expect(r.scale).toBeLessThan(MIN_LABEL_SCALE);
-    expect(r.scale).toBeGreaterThanOrEqual(0.745);
-    expect(r.notes.join('\n')).toMatch(/the labels are drawn at 0\.74 of their size \(below 0\.75/);
+    const rendered = await renderSvg(xml, { maxSize: Math.floor(Math.max(whole.width, whole.height) * 0.7458) });
+    expect(rendered.scale).toBeLessThan(MIN_LABEL_SCALE);
+    expect(rendered.scale).toBeGreaterThanOrEqual(0.745);
+    expect(rendered.notes.join('\n')).toMatch(/the labels are drawn at 0\.74 of their size \(below 0\.75/);
   });
 });
 
@@ -183,12 +183,12 @@ describe('labels like bpmn-js 18', () => {
       // two lines at 90, then the widest of them is too narrow for the first: three
       { id: 'Event_Rollback', kind: 'endEvent', name: 'Roll back bookings', x: 300, y: 100, label: [290, 143, 56, 27] },
       // no label bounds: below the shape, 90 px
-      { id: 'Gateway_Kulanz', kind: 'exclusiveGateway', name: 'Kulanzentscheidung?', x: 500, y: 93, w: 50, h: 50, label: [470, 150, 110, 14] },
+      { id: 'Gateway_Kulanz', kind: 'exclusiveGateway', name: 'Kulanzentscheidung?', x: 500, y: 93, width: 50, height: 50, label: [470, 150, 110, 14] },
     ]);
     const { svg } = await renderSvg(xml);
-    expect(textOf(svg, 'data-label', 'Event_Comp').map((l) => l.text)).toEqual(['Compensation end']);
-    expect(textOf(svg, 'data-label', 'Event_Rollback').map((l) => l.text)).toEqual(['Roll', 'back', 'bookings']);
-    expect(textOf(svg, 'data-label', 'Gateway_Kulanz').map((l) => l.text)).toEqual(['Kulanzentscheidung?']);
+    expect(textOf(svg, 'data-label', 'Event_Comp').map((line) => line.text)).toEqual(['Compensation end']);
+    expect(textOf(svg, 'data-label', 'Event_Rollback').map((line) => line.text)).toEqual(['Roll', 'back', 'bookings']);
+    expect(textOf(svg, 'data-label', 'Gateway_Kulanz').map((line) => line.text)).toEqual(['Kulanzentscheidung?']);
     // the lines stay centred on the label bounds, 13.2 px apart, the first baseline 9.9 px below their top
     expect(textOf(svg, 'data-label', 'Event_Rollback')).toEqual([
       { x: 318, y: 152.9, text: 'Roll' },
@@ -242,11 +242,11 @@ describe('a file without a diagram', () => {
     const xml = readFileSync(join(ROOT, 'test', 'fixtures', 'views', 'claims.bpmn'), 'utf8');
     const metrics = LayoutAnalysis.of((await Doc.fromXml(xml)).definitions).problems;
     expect(metrics.length).toBeGreaterThan(10);
-    const r = await renderSvg(xml, { problems: true });
-    expect(r.problems.map((p) => [p.kind, p.ids, p.detail])).toEqual(metrics.map((p) => [p.kind, p.ids, p.detail]));
-    expect(r.problems.every((p) => !p.drawn)).toBe(true);
-    expect(r.svg).not.toContain('data-problem');
-    expect(r.notes).toContain("the problems are the file's (`bpmn metrics <file>`), not the in-memory drawing's: none is in the image");
+    const rendered = await renderSvg(xml, { problems: true });
+    expect(rendered.problems.map((problem) => [problem.kind, problem.ids, problem.detail])).toEqual(metrics.map((metric) => [metric.kind, metric.ids, metric.detail]));
+    expect(rendered.problems.every((problem) => !problem.drawn)).toBe(true);
+    expect(rendered.svg).not.toContain('data-problem');
+    expect(rendered.notes).toContain("the problems are the file's (`bpmn metrics <file>`), not the in-memory drawing's: none is in the image");
   });
 });
 
@@ -260,8 +260,8 @@ describe('bpmn render', () => {
   });
 
   function cli(args: string[]): { code: number; out: string; err: string } {
-    const r = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { cwd: ROOT, input: '', encoding: 'utf8' });
-    return { code: r.status ?? -1, out: r.stdout, err: r.stderr };
+    const run = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { cwd: ROOT, input: '', encoding: 'utf8' });
+    return { code: run.status ?? -1, out: run.stdout, err: run.stderr };
   }
 
   it('refuses an -o name that is not .png or .svg unless --format says what to write', () => {

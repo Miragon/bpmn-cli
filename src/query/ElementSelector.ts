@@ -23,34 +23,34 @@ export class ElementSelector {
     const doc = this.doc;
     const out = doc.outgoing(node);
     const def = node.get<El | undefined>('default');
-    const ordered = def && out.includes(def) ? [def, ...out.filter((f) => f !== def)] : out;
-    const flows = ordered.map((f) => ({ flow: f, to: f.get<El>('targetRef') })).filter((s) => !!s.to);
-    const boundaries = is(node, 'bpmn:Activity') ? doc.boundaryEventsOf(node).map((b) => ({ to: b })) : [];
+    const ordered = def && out.includes(def) ? [def, ...out.filter((flow) => flow !== def)] : out;
+    const flows = ordered.map((flow) => ({ flow, to: flow.get<El>('targetRef') })).filter((step) => !!step.to);
+    const boundaries = is(node, 'bpmn:Activity') ? doc.boundaryEventsOf(node).map((boundaryEvent) => ({ to: boundaryEvent })) : [];
     return [...flows, ...boundaries];
   }
 
-  private shortest(a: El, b: El): El[] | undefined {
-    if (a === b) return [];
+  private shortest(start: El, goal: El): El[] | undefined {
+    if (start === goal) return [];
     const prev = new Map<El, { from: El; flow?: El }>();
-    const queue = [a];
-    const seen = new Set([a]);
+    const queue = [start];
+    const seen = new Set([start]);
     while (queue.length) {
       const cur = queue.shift()!;
-      for (const s of this.steps(cur)) {
-        if (seen.has(s.to)) continue;
-        seen.add(s.to);
-        prev.set(s.to, { from: cur, ...(s.flow ? { flow: s.flow } : {}) });
-        if (s.to === b) {
+      for (const step of this.steps(cur)) {
+        if (seen.has(step.to)) continue;
+        seen.add(step.to);
+        prev.set(step.to, { from: cur, ...(step.flow ? { flow: step.flow } : {}) });
+        if (step.to === goal) {
           const out: El[] = [];
-          for (let n: El = b; n !== a; ) {
-            const p = prev.get(n)!;
-            out.unshift(n);
-            if (p.flow) out.unshift(p.flow);
-            n = p.from;
+          for (let node: El = goal; node !== start; ) {
+            const previous = prev.get(node)!;
+            out.unshift(node);
+            if (previous.flow) out.unshift(previous.flow);
+            node = previous.from;
           }
           return out;
         }
-        queue.push(s.to);
+        queue.push(step.to);
       }
     }
     return undefined;
@@ -73,17 +73,17 @@ export class ElementSelector {
     const last = this.shortest(cur, to);
     if (!last) throw ElementSelector.noMatch(`No sequence-flow path leads from ${ElementSelector.idOf(cur)} to ${toId}`, `Check the direction (--path <fromId> <toId>)${via.length ? ' and the --via flows' : ''}; \`bpmn show <file>\` lists the flows of every node.`, toId);
     out.push(...last);
-    return out.filter((el, i) => out.indexOf(el) === i);
+    return out.filter((el, index) => out.indexOf(el) === index);
   }
 
   private reach(start: El, stop: El, forward: (from: El, to: El) => boolean): El[] {
     const seen = new Set<El>([start]);
     const order = [start];
-    for (let i = 0; i < order.length; i++) {
-      for (const s of this.steps(order[i]!)) {
-        if (s.to === stop || seen.has(s.to) || !forward(order[i]!, s.to)) continue;
-        seen.add(s.to);
-        order.push(s.to);
+    for (let index = 0; index < order.length; index++) {
+      for (const step of this.steps(order[index]!)) {
+        if (step.to === stop || seen.has(step.to) || !forward(order[index]!, step.to)) continue;
+        seen.add(step.to);
+        order.push(step.to);
       }
     }
     return order;
@@ -98,19 +98,19 @@ export class ElementSelector {
     const flow = doc.require(flowId, 'bpmn:SequenceFlow', 'sequence flow');
     const source = flow.get<El>('sourceRef');
     const target = flow.get<El>('targetRef');
-    const forward = (a: El, b: El): boolean => {
-      const xa = centreX(ElementSelector.idOf(a) ?? '');
-      const xb = centreX(ElementSelector.idOf(b) ?? '');
+    const forward = (from: El, to: El): boolean => {
+      const xa = centreX(ElementSelector.idOf(from) ?? '');
+      const xb = centreX(ElementSelector.idOf(to) ?? '');
       return xa === undefined || xb === undefined || xb >= xa - 1;
     };
     const mine = this.reach(target, source, forward);
-    const others = new Set(doc.outgoing(source).filter((f) => f !== flow).flatMap((f) => this.reach(f.get<El>('targetRef'), source, forward)));
-    const nodes = mine.filter((n) => !others.has(n));
+    const others = new Set(doc.outgoing(source).filter((sibling) => sibling !== flow).flatMap((sibling) => this.reach(sibling.get<El>('targetRef'), source, forward)));
+    const nodes = mine.filter((node) => !others.has(node));
     if (!nodes.length) {
       throw ElementSelector.noMatch(`Nothing lies on the branch of ${flowId}: it leads to ${ElementSelector.idOf(target)}, which the other branches of ${ElementSelector.idOf(source)} reach too`, 'Name a flow that starts a branch with its own nodes (`bpmn show <file>` lists the outgoing flows of the gateway).', flowId);
     }
-    const flows = nodes.flatMap((n) => doc.outgoing(n));
-    return [flow, ...nodes, ...flows.filter((f, i) => flows.indexOf(f) === i)];
+    const flows = nodes.flatMap((node) => doc.outgoing(node));
+    return [flow, ...nodes, ...flows.filter((outgoing, index) => flows.indexOf(outgoing) === index)];
   }
 
   ofKind(kind: string): El[] {
@@ -134,7 +134,7 @@ export class ElementSelector {
       .map((el) => ElementSelector.idOf(el)!)
       .filter((id) => !!id && opts.drawn(id));
     const all = [...(sel.ids ?? []), ...picked];
-    const out = all.filter((id, i) => all.indexOf(id) === i);
+    const out = all.filter((id, index) => all.indexOf(id) === index);
     if (!out.length) {
       throw ElementSelector.noMatch('The selection names no drawn element', 'Name ids, or a --path / --kind / --branch that reaches drawn elements (`bpmn show <file> --layout` lists what is drawn).');
     }

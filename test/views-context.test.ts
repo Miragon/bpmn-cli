@@ -168,8 +168,8 @@ describe('show <id> --context: what can interrupt the element', () => {
       'event sub-processes: eventSubProcess Activity_OnTimeout "Handle timeout" in Process_Shop [startEvent:timer Event_Timeout "Timeout" [P1D] -> Event_TimedOut]',
     ]);
     const doc = await Doc.fromXml(SHOP);
-    const c = elementContext(doc, 'Activity_PickItems');
-    expect(c.caughtBy.map((b) => [b.id, b.on, b.nonInterrupting ?? false])).toEqual([
+    const pickContext = elementContext(doc, 'Activity_PickItems');
+    expect(pickContext.caughtBy.map((boundary) => [boundary.id, boundary.on, boundary.nonInterrupting ?? false])).toEqual([
       ['Event_PackLate', 'Activity_Pack', true],
       ['Event_Cancelled', 'Activity_Fulfil', false],
       ['Event_Stopped', 'Activity_Fulfil', true],
@@ -180,7 +180,7 @@ describe('show <id> --context: what can interrupt the element', () => {
     ]);
     // the element's own boundary events are `boundary`, not `caught by`
     const pack = elementContext(doc, 'Activity_Pack');
-    expect([pack.boundary.map((b) => b.id), pack.caughtBy.map((b) => b.id)]).toEqual([['Event_PackLate'], ['Event_Cancelled', 'Event_Stopped', 'Event_Declined', 'Event_Late', 'Event_StockLow', 'Event_Undo']]);
+    expect([pack.boundary.map((boundary) => boundary.id), pack.caughtBy.map((boundary) => boundary.id)]).toEqual([['Event_PackLate'], ['Event_Cancelled', 'Event_Stopped', 'Event_Declined', 'Event_Late', 'Event_StockLow', 'Event_Undo']]);
   });
 });
 

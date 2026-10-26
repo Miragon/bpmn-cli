@@ -40,7 +40,7 @@ export class ChangeSet {
   /** retyped element -> the element that took its place */
   private static readonly successors = new WeakMap<El, El>();
 
-  static about<T extends object>(entry: T, el: El | undefined): T {
+  static about<TEntry extends object>(entry: TEntry, el: El | undefined): TEntry {
     if (el) ChangeSet.elements.set(entry, el);
     return entry;
   }
@@ -107,7 +107,7 @@ export class ChangeSet {
   }
 
   change(change: Change): this {
-    if (!this.changed.some((c) => c.id === change.id && c.detail === change.detail)) this.changed.push(change);
+    if (!this.changed.some((existing) => existing.id === change.id && existing.detail === change.detail)) this.changed.push(change);
     return this;
   }
 
@@ -131,30 +131,30 @@ export class ChangeSet {
    * id of an element this change removed is a takeover, so every id is listed once.
    */
   rename(renames: Rename[]): this {
-    for (const r of renames) {
-      const el = ChangeSet.elements.get(r);
+    for (const rename of renames) {
+      const el = ChangeSet.elements.get(rename);
       const renamed = el && ChangeSet.successorOf(el);
-      const created = this.created.some((c) => c.id === r.from || c.id === r.to);
-      for (const c of [...this.created, ...this.changed]) if (c.id === r.from && (!renamed || ChangeSet.successorOf(ChangeSet.elements.get(c) ?? renamed) === renamed)) c.id = r.to;
-      if (r.regenerated) {
-        const old = new RegExp(`(?<![A-Za-z0-9_.-])${r.from.replace(/[.]/g, '\\.')}(?![A-Za-z0-9_.-])`, 'g');
-        for (const c of [...this.created, ...this.changed]) if (c.detail) c.detail = c.detail.replace(old, r.to);
-        this.notes = this.notes.map((n) => n.replace(old, r.to));
+      const created = this.created.some((entry) => entry.id === rename.from || entry.id === rename.to);
+      for (const entry of [...this.created, ...this.changed]) if (entry.id === rename.from && (!renamed || ChangeSet.successorOf(ChangeSet.elements.get(entry) ?? renamed) === renamed)) entry.id = rename.to;
+      if (rename.regenerated) {
+        const old = new RegExp(`(?<![A-Za-z0-9_.-])${rename.from.replace(/[.]/g, '\\.')}(?![A-Za-z0-9_.-])`, 'g');
+        for (const entry of [...this.created, ...this.changed]) if (entry.detail) entry.detail = entry.detail.replace(old, rename.to);
+        this.notes = this.notes.map((note) => note.replace(old, rename.to));
         this.warnings = this.warnings
-          .filter((w) => !(w.code === 'W_ID_SUFFIXED' && w.element === r.from))
-          .map((w) => (w.element === r.from ? { ...w, element: r.to, message: w.message.replace(old, r.to), ...(w.hint ? { hint: w.hint.replace(old, r.to) } : {}) } : w));
+          .filter((warning) => !(warning.code === 'W_ID_SUFFIXED' && warning.element === rename.from))
+          .map((warning) => (warning.element === rename.from ? { ...warning, element: rename.to, message: warning.message.replace(old, rename.to), ...(warning.hint ? { hint: warning.hint.replace(old, rename.to) } : {}) } : warning));
       }
-      const gone = r.takeover || created ? -1 : this.removed.findIndex((c) => c.id === r.to);
+      const gone = rename.takeover || created ? -1 : this.removed.findIndex((entry) => entry.id === rename.to);
       if (gone === -1) {
-        this.renames.push(r);
+        this.renames.push(rename);
         continue;
       }
       // the id the element had in the file (an earlier op of the batch may have renamed it already)
-      let origin = r.from;
-      for (let i = this.renames.length - 1; i >= 0; i--) if (this.renames[i]!.to === origin && !this.renames[i]!.takeover) origin = this.renames[i]!.from;
-      this.removed[gone] = { id: origin, kind: this.removed[gone]!.kind, ...(r.was && origin === r.from ? { detail: r.was } : {}) };
-      for (const c of this.changed) if (c.id === r.to && c.detail) c.detail = c.detail.replace(renamedNote(r.from), '');
-      this.renames.push(ChangeSet.about({ ...r, takeover: true as const }, el));
+      let origin = rename.from;
+      for (let index = this.renames.length - 1; index >= 0; index--) if (this.renames[index]!.to === origin && !this.renames[index]!.takeover) origin = this.renames[index]!.from;
+      this.removed[gone] = { id: origin, kind: this.removed[gone]!.kind, ...(rename.was && origin === rename.from ? { detail: rename.was } : {}) };
+      for (const entry of this.changed) if (entry.id === rename.to && entry.detail) entry.detail = entry.detail.replace(renamedNote(rename.from), '');
+      this.renames.push(ChangeSet.about({ ...rename, takeover: true as const }, el));
     }
     return this;
   }
@@ -169,7 +169,7 @@ export class ChangeSet {
     this.replaced.push(...other.replaced);
     this.relocated.push(...other.relocated);
     this.created.push(...other.created);
-    for (const c of other.changed) this.change(c);
+    for (const change of other.changed) this.change(change);
     this.removed.push(...other.removed);
     this.warnings.push(...other.warnings);
     this.notes.push(...other.notes);
@@ -184,7 +184,7 @@ export class ChangeSet {
 
   touchedIds(): string[] {
     const ids = new Set<string>();
-    for (const c of [...this.created, ...this.changed]) ids.add(c.id);
+    for (const entry of [...this.created, ...this.changed]) ids.add(entry.id);
     return [...ids];
   }
 

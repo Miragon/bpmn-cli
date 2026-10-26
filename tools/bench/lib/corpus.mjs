@@ -29,11 +29,11 @@ import { ROOT } from './metrics.mjs';
 
 function bpmnFiles(dir) {
   const out = [];
-  const walk = (d) => {
-    for (const name of readdirSync(d).sort()) {
-      const p = join(d, name);
-      if (statSync(p).isDirectory()) walk(p);
-      else if (name.endsWith('.bpmn')) out.push(p);
+  const walk = (dir) => {
+    for (const name of readdirSync(dir).sort()) {
+      const entryPath = join(dir, name);
+      if (statSync(entryPath).isDirectory()) walk(entryPath);
+      else if (name.endsWith('.bpmn')) out.push(entryPath);
     }
   };
   walk(dir);
@@ -42,11 +42,11 @@ function bpmnFiles(dir) {
 
 function envCorpora(env) {
   const used = new Set(['scenarios', 'engine']);
-  return (env.BPMN_BENCH_CORPUS ?? '').split(':').map((s) => s.trim()).filter(Boolean).map((entry) => {
+  return (env.BPMN_BENCH_CORPUS ?? '').split(':').map((entrySpec) => entrySpec.trim()).filter(Boolean).map((entry) => {
     const [given, dir] = entry.includes('=') ? entry.split('=') : [basename(entry), entry];
     const base = given.replace(/[^\w.-]+/g, '_');
     let name = base;
-    for (let i = 2; used.has(name); i++) name = `${base}-${i}`;
+    for (let suffix = 2; used.has(name); suffix++) name = `${base}-${suffix}`;
     used.add(name);
     if (!existsSync(dir)) throw new Error(`BPMN_BENCH_CORPUS: ${dir} does not exist`);
     return { name, dir: resolve(dir) };
@@ -64,8 +64,8 @@ function engineCorpus(scenarios, out, refBin) {
     // as arms.mjs and fuzz/lib/exec.mjs: only a build that has the flag gets it (an older BASELINE_BIN)
     noLint ??= /--no-lint-config/.test(spawnSync(process.execPath, [refBin, 'layout', '--help'], { encoding: 'utf8' }).stdout ?? '') ? ['--no-lint-config'] : [];
     copyFileSync(src, dst);
-    const r = spawnSync(process.execPath, [refBin, 'layout', dst, '--force', ...noLint], { encoding: 'utf8', env: CLI_ENV });
-    if (r.status !== 0) rmSync(dst);
+    const layoutRun = spawnSync(process.execPath, [refBin, 'layout', dst, '--force', ...noLint], { encoding: 'utf8', env: CLI_ENV });
+    if (layoutRun.status !== 0) rmSync(dst);
   }
   return { name: 'engine', dir };
 }
@@ -74,24 +74,24 @@ export function resolveCorpora({ only, engine = false, out, refBin, env = proces
   const scenarios = join(ROOT, 'tools', 'scenarios');
   const list = [{ name: 'scenarios', dir: scenarios }, ...envCorpora(env)];
   if (engine) list.push(engineCorpus(scenarios, out, refBin));
-  return list.filter((c) => !only?.length || only.includes(c.name)).map((c) => ({ ...c, files: bpmnFiles(c.dir) }));
+  return list.filter((corpus) => !only?.length || only.includes(corpus.name)).map((corpus) => ({ ...corpus, files: bpmnFiles(corpus.dir) }));
 }
 
 export const modelName = (corpus, file) => relative(corpus.dir, file).replace(/\.bpmn$/, '').split(/[\\/]/).join('__');
 
 export async function writeSpecs(corpora, out, filter) {
   const specs = [];
-  for (const c of corpora) {
-    const dir = join(out, 'specs', c.name);
+  for (const corpus of corpora) {
+    const dir = join(out, 'specs', corpus.name);
     mkdirSync(dir, { recursive: true });
-    for (const file of c.files) {
-      const model = modelName(c, file);
-      if (filter && !`${c.name}/${model}`.includes(filter)) continue;
+    for (const file of corpus.files) {
+      const model = modelName(corpus, file);
+      if (filter && !`${corpus.name}/${model}`.includes(filter)) continue;
       let spec;
       try {
-        spec = { corpus: c.name, model, file, ...(await generate(readFileSync(file, 'utf8'))) };
-      } catch (e) {
-        spec = { corpus: c.name, model, file, unreadable: String(e.message).split('\n')[0], edits: {} };
+        spec = { corpus: corpus.name, model, file, ...(await generate(readFileSync(file, 'utf8'))) };
+      } catch (error) {
+        spec = { corpus: corpus.name, model, file, unreadable: String(error.message).split('\n')[0], edits: {} };
       }
       writeFileSync(join(dir, `${model}.json`), JSON.stringify(spec, null, 1));
       specs.push(spec);

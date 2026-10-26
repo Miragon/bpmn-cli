@@ -47,11 +47,11 @@ export class DocRenderer {
     const { doc, opts, sem } = this;
     const defs = doc.definitions;
     const read = new DiagramReader(defs, sem).planes();
-    const checked = read.map((p) => DocRenderer.saneOf(p));
-    const planes = checked.map((c) => c.plane);
+    const checked = read.map((readPlane) => DocRenderer.saneOf(readPlane));
+    const planes = checked.map((sane) => sane.plane);
     const want = Crop.of(doc, sem, planes, opts);
     const plane = this.pickPlane(planes, opts.plane ?? want.plane ?? DocRenderer.focusPlane(planes, opts.focus));
-    const others = planes.filter((p) => p !== plane).map((p) => p.rootId);
+    const others = planes.filter((candidate) => candidate !== plane).map((candidate) => candidate.rootId);
     const highlight = this.halos();
     if (!plane) return new Composer([], { plane: 'none', planes: others, notes: ['the document has no diagram plane'] }, opts).result();
     const notes: string[] = [];
@@ -75,16 +75,16 @@ export class DocRenderer {
     const drawn = want.crop ? want.crop.drawnOn(plane, planes, notes) : undefined;
     const scene = new Scene(plane, drawn, highlight);
     if (Array.isArray(opts.highlight)) {
-      const inImage = new Set(scene.items.filter((i) => i.id !== undefined && /^<g data-(id|context)=/.test(i.svg)).map((i) => i.id!));
+      const inImage = new Set(scene.items.filter((item) => item.id !== undefined && /^<g data-(id|context)=/.test(item.svg)).map((item) => item.id!));
       const missing = opts.highlight.filter((id) => !inImage.has(id));
       if (missing.length) notes.push(`highlighted but not in the image (${drawn ? 'outside the crop or ' : ''}not drawn on this plane): ${missing.join(', ')}`);
     }
     const nodes = want.crop?.frame
-      ? [...plane.shapes.values()].filter((s) => s.id !== want.crop!.frame && drawn!.has(s.id) && is(s.el, 'bpmn:FlowNode')).map((s) => s.id)
+      ? [...plane.shapes.values()].filter((shape) => shape.id !== want.crop!.frame && drawn!.has(shape.id) && is(shape.el, 'bpmn:FlowNode')).map((shape) => shape.id)
       : want.crop
         ? want.crop.nodes.filter((id) => drawn!.has(id))
         : want.scope
-          ? [...plane.shapes.values()].filter((s) => is(s.el, 'bpmn:FlowNode')).map((s) => s.id)
+          ? [...plane.shapes.values()].filter((shape) => is(shape.el, 'bpmn:FlowNode')).map((shape) => shape.id)
           : undefined;
     return new Composer(scene.items, { plane: plane.rootId, planes: others, notes, located: plane, defs, ...(fileProblems ? { fileProblems } : {}), ...(drawn ? { drawn } : {}), ...(nodes ? { nodes } : {}) }, opts).result();
   }
@@ -93,40 +93,40 @@ export class DocRenderer {
     return ids.slice(0, 5).join(', ') + (ids.length > 5 ? `, ... (${ids.length - 5} more)` : '');
   }
 
-  private static thousands(v: number): string {
-    return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  private static thousands(count: number): string {
+    return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
-  private static saneNumber(v: unknown): boolean {
-    return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= COORD_LIMIT;
+  private static saneNumber(candidate: unknown): boolean {
+    return typeof candidate === 'number' && Number.isFinite(candidate) && Math.abs(candidate) <= COORD_LIMIT;
   }
 
-  private static saneBox(b: Box): boolean {
-    return [b.x, b.y, b.width, b.height, b.x + b.width, b.y + b.height].every((v) => DocRenderer.saneNumber(v)) && b.width >= 0 && b.height >= 0;
+  private static saneBox(box: Box): boolean {
+    return [box.x, box.y, box.width, box.height, box.x + box.width, box.y + box.height].every((coordinate) => DocRenderer.saneNumber(coordinate)) && box.width >= 0 && box.height >= 0;
   }
 
   private static saneOf(plane: Plane): { plane: Plane; broken: string[]; labels: string[] } {
     const broken: string[] = [];
     const labels: string[] = [];
     const shapes = new Map<string, DShape>();
-    for (const [id, s] of plane.shapes) {
-      if (!DocRenderer.saneBox(s.bounds)) broken.push(id);
-      else if (s.label && !DocRenderer.saneBox(s.label)) {
+    for (const [id, shape] of plane.shapes) {
+      if (!DocRenderer.saneBox(shape.bounds)) broken.push(id);
+      else if (shape.label && !DocRenderer.saneBox(shape.label)) {
         labels.push(id);
-        const copy = { ...s };
+        const copy = { ...shape };
         delete copy.label;
         shapes.set(id, copy);
-      } else shapes.set(id, s);
+      } else shapes.set(id, shape);
     }
     const edges = new Map<string, DEdge>();
-    for (const [id, e] of plane.edges) {
-      if (!e.points.every((p) => DocRenderer.saneNumber(p.x) && DocRenderer.saneNumber(p.y))) broken.push(id);
-      else if (e.label && !DocRenderer.saneBox(e.label)) {
+    for (const [id, edge] of plane.edges) {
+      if (!edge.points.every((point) => DocRenderer.saneNumber(point.x) && DocRenderer.saneNumber(point.y))) broken.push(id);
+      else if (edge.label && !DocRenderer.saneBox(edge.label)) {
         labels.push(id);
-        const copy = { ...e };
+        const copy = { ...edge };
         delete copy.label;
         edges.set(id, copy);
-      } else edges.set(id, e);
+      } else edges.set(id, edge);
     }
     if (!broken.length && !labels.length) return { plane, broken, labels };
     return { plane: { ...plane, shapes, edges }, broken, labels };
@@ -134,9 +134,9 @@ export class DocRenderer {
 
   private pickPlane(planes: Plane[], id: string | undefined): Plane | undefined {
     if (id === undefined) return planes[0];
-    const found = planes.find((p) => p.rootId === id);
+    const found = planes.find((candidate) => candidate.rootId === id);
     if (found) return found;
-    const candidates = planes.map((p) => p.rootId);
+    const candidates = planes.map((candidate) => candidate.rootId);
     const hint = candidates.length ? `The planes of this file: ${candidates.join(', ')}.` : 'The file has no diagram.';
     if (!this.sem.byId.has(id)) throw modelError('E_NOT_FOUND', `No element with id "${id}"`, { element: id, candidates, hint });
     throw modelError('E_WRONG_KIND', `${id} has no diagram plane of its own (only collapsed sub-processes, processes and collaborations have one)`, { element: id, candidates, hint: `${hint} An expanded sub-process is drawn on the plane of its parent.` });
@@ -144,8 +144,8 @@ export class DocRenderer {
 
   private static focusPlane(planes: Plane[], focus: string[] | undefined): string | undefined {
     for (const id of focus ?? []) {
-      const p = planeOfId(planes, id);
-      if (p) return p.rootId;
+      const focused = planeOfId(planes, id);
+      if (focused) return focused.rootId;
     }
     return undefined;
   }
@@ -164,7 +164,7 @@ export class DocRenderer {
         is(el, 'bpmn:DataObjectReference') ||
         is(el, 'bpmn:DataStoreReference') ||
         is(el, 'bpmn:TextAnnotation');
-      if (!drawable || planes.some((p) => p.shapes.has(id) || p.edges.has(id))) continue;
+      if (!drawable || planes.some((other) => other.shapes.has(id) || other.edges.has(id))) continue;
       if (sem.homePlane(planes, id) === plane) out.push(id);
     }
     return out;
@@ -172,15 +172,15 @@ export class DocRenderer {
 
   /** Created wins over changed, changed over moved. */
   private halos(): (id: string) => string | undefined {
-    const h = this.opts.highlight;
+    const highlight = this.opts.highlight;
     const colors = new Map<string, string>();
-    if (Array.isArray(h)) {
-      for (const id of h) {
+    if (Array.isArray(highlight)) {
+      for (const id of highlight) {
         this.doc.require(id);
         colors.set(id, HALO_COLORS.changed);
       }
-    } else if (h) {
-      for (const k of ['created', 'changed', 'moved'] as const) for (const id of h[k] ?? []) if (!colors.has(id)) colors.set(id, HALO_COLORS[k]);
+    } else if (highlight) {
+      for (const category of ['created', 'changed', 'moved'] as const) for (const id of highlight[category] ?? []) if (!colors.has(id)) colors.set(id, HALO_COLORS[category]);
     }
     return (id) => colors.get(id);
   }

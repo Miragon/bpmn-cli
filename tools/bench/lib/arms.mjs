@@ -33,19 +33,19 @@ function cliFeatures(bin) {
 }
 
 function cliError(stderr) {
-  const tryJson = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
-  const e = (tryJson(stderr) ?? tryJson(stderr.trim().split('\n').pop() ?? ''))?.error;
-  return e?.code ? { code: e.code, message: String(e.message).slice(0, 200) } : { code: 'E_UNPARSED', message: stderr.trim().split('\n')[0]?.slice(0, 200) };
+  const tryJson = (text) => { try { return JSON.parse(text); } catch { return undefined; } };
+  const reportedError = (tryJson(stderr) ?? tryJson(stderr.trim().split('\n').pop() ?? ''))?.error;
+  return reportedError?.code ? { code: reportedError.code, message: String(reportedError.message).slice(0, 200) } : { code: 'E_UNPARSED', message: stderr.trim().split('\n')[0]?.slice(0, 200) };
 }
 
 function cliInfo(stdout) {
   try {
-    const j = JSON.parse(stdout);
+    const parsed = JSON.parse(stdout);
     // current builds report warnings as a delta ({added, resolved, preexistingCount}); older ones as op warnings + validation.warnings
-    const delta = j.warnings && !Array.isArray(j.warnings) ? j.warnings : undefined;
-    const warnings = delta ? delta.added.length : (j.warnings || []).length;
-    const validationWarnings = delta ? delta.added.length + delta.preexistingCount : (j.validation?.warnings || []).length;
-    return { layout: j.layout ? { status: j.layout.status, mode: j.layout.mode, reason: j.layout.reason } : undefined, warnings, validationWarnings };
+    const delta = parsed.warnings && !Array.isArray(parsed.warnings) ? parsed.warnings : undefined;
+    const warnings = delta ? delta.added.length : (parsed.warnings || []).length;
+    const validationWarnings = delta ? delta.added.length + delta.preexistingCount : (parsed.validation?.warnings || []).length;
+    return { layout: parsed.layout ? { status: parsed.layout.status, mode: parsed.layout.mode, reason: parsed.layout.reason } : undefined, warnings, validationWarnings };
   } catch {
     return {};
   }
@@ -53,14 +53,14 @@ function cliInfo(stdout) {
 
 function cliArm(name, bin, layout) {
   if (!existsSync(bin)) throw new Error(`${name}: ${bin} does not exist${name === 'new' ? ' (npm run build?)' : ''}`);
-  const f = cliFeatures(bin);
-  const mode = f.layoutModes ? ['--layout', layout] : [];
-  const noLint = f.noLint ? ['--no-lint-config'] : [];
+  const features = cliFeatures(bin);
+  const mode = features.layoutModes ? ['--layout', layout] : [];
+  const noLint = features.noLint ? ['--no-lint-config'] : [];
   const global = { layout: (file) => [bin, 'layout', file, '--force', '--json', ...noLint] };
-  if (f.tidy) global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint];
-  if (f.engine) global['engine-auto'] = (file) => [bin, 'layout', file, '--force', '--engine', 'auto', '--json', ...noLint];
+  if (features.tidy) global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint];
+  if (features.engine) global['engine-auto'] = (file) => [bin, 'layout', file, '--force', '--engine', 'auto', '--json', ...noLint];
   return {
-    name, key: f.layoutModes ? `${name}-${layout}` : name, path: bin, kind: 'cli', features: f, forceable: true, global,
+    name, key: features.layoutModes ? `${name}-${layout}` : name, path: bin, kind: 'cli', features, forceable: true, global,
     edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', ...mode, ...noLint, ...(force ? ['--force'] : [])],
     error: cliError, info: cliInfo,
   };
@@ -71,9 +71,9 @@ function prArm(main) {
   return {
     name: 'pr', key: 'pr', path: main, kind: 'pr', features: {}, forceable: false,
     edit: (file, ops) => [main, 'edit', file, '--ops', ops, '--json'],
-    global: { layout: (f) => [main, 'layout', f, '--mode', 'layout', '--json'], tidy: (f) => [main, 'layout', f, '--mode', 'tidy', '--json'] },
-    error: (stderr) => ({ code: 'E_PR', message: (stderr.trim().split('\n').find((l) => l.startsWith('[bpmn-edit]')) ?? stderr.trim().split('\n')[0] ?? '').slice(0, 200) }),
-    info: (stdout) => { try { const j = JSON.parse(stdout); return { diagnostics: (j.diagnostics || j.result?.diagnostics || []).length, moved: (j.movedIds || []).length }; } catch { return {}; } },
+    global: { layout: (file) => [main, 'layout', file, '--mode', 'layout', '--json'], tidy: (file) => [main, 'layout', file, '--mode', 'tidy', '--json'] },
+    error: (stderr) => ({ code: 'E_PR', message: (stderr.trim().split('\n').find((line) => line.startsWith('[bpmn-edit]')) ?? stderr.trim().split('\n')[0] ?? '').slice(0, 200) }),
+    info: (stdout) => { try { const parsed = JSON.parse(stdout); return { diagnostics: (parsed.diagnostics || parsed.result?.diagnostics || []).length, moved: (parsed.movedIds || []).length }; } catch { return {}; } },
   };
 }
 
