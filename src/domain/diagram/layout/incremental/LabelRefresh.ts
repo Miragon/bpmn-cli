@@ -15,9 +15,12 @@ export class LabelRefresh {
     private readonly snap: Snapshot,
   ) {}
 
+  /**
+   * An existing label that connections drawn in this run run over steps aside, as does one now on
+   * the title of an expanded sub-process that it was clear of before the ops.
+   */
   labels(routed: ReadonlySet<string>): void {
     for (const plane of this.run.planes) {
-      // segments of connections drawn in this run: an existing label they run over steps aside
       const fresh = [...plane.edges.values()].filter((edge) => routed.has(edge.id)).flatMap((edge) => edge.points.slice(1).map((end, index) => [edge.points[index]!, end] as const));
       const grown = [...this.run.grown].map((id) => plane.shapes.get(id)).filter((shape): shape is DShape => !!shape);
       for (const shape of plane.shapes.values()) {
@@ -46,7 +49,6 @@ export class LabelRefresh {
         const now = raw<string>(edge.el, 'name');
         if (now && now !== before) this.run.drawing(plane).refitLabel(edge);
       }
-      // a label now on the title of an expanded sub-process that it was clear of before the ops
       for (const [id, sub] of this.run.drawing(plane).clearTitles((element, sub) => !this.run.fromEngine.has(element.id) && this.clearOfOldTitle(element, sub))) this.run.notes.push(`label of ${id} moved off the name of ${sub}`);
     }
   }

@@ -109,7 +109,11 @@ export class ProblemLocator {
     return pts[0];
   }
 
-  /** On the defect itself, using the same tests as the checks. */
+  /**
+   * On the defect itself, using the same tests as the checks.
+   * For a segment overlap a join's common tail does not count, so the badge goes on the run that
+   * does.
+   */
   private at(problem: LayoutProblem, pl: LocPlane): Point | undefined {
     const [firstId, secondId] = problem.ids;
     const sa = firstId === undefined ? undefined : pl.shapes.get(firstId);
@@ -164,7 +168,6 @@ export class ProblemLocator {
       case 'parallelRun':
         return ea && eb ? this.sharedAt(ea, eb) : undefined;
       case 'segmentOverlap':
-        // a join's common tail does not count, so the badge goes on the run that does
         return ea && eb ? this.sharedAt(ea, eb, joinTail(ea, eb, pl.shapes.get(problem.ids[2] ?? ''))) : undefined;
       case 'edgeLeavesLane':
       case 'edgeOutside':

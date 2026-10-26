@@ -112,6 +112,7 @@ export class FindingBaseline {
   /**
    * Each finding is matched once. Undefined for a document created in memory: no warning
    * was already there. A lint warning a platform or validator finding repeats counts once.
+   * Platform findings that are not new are only counted: the result lists the added ones.
    */
   delta(): ValidationDelta | undefined {
     if (!this.doc.source) return undefined;
@@ -126,7 +127,6 @@ export class FindingBaseline {
     const errors = [...raw.errors];
     resolved.push(...this.before.errors.filter((earlier) => !FindingBaseline.takeMatch(errors, (candidate) => this.sameFinding(earlier, candidate))));
     resolved.push(...platformResolved, ...(final.validators ?? []).flatMap((report) => report.resolved));
-    // counted only: the result lists the added platform findings
     const addedFindings = new Set<ProfileFinding>(final.platform?.added ?? []);
     const kept = (this.profileAfter?.findings ?? []).filter((finding) => !addedFindings.has(finding));
     const keptCount = final.platform ? Math.max(0, Object.values(final.platform.counts).reduce((sum, count) => sum + count, 0) - addedFindings.size) : 0;
@@ -146,6 +146,8 @@ export class FindingBaseline {
    * Findings match by code and element (renamed ids followed) or by `key`, else by message;
    * the n-th run of a name compares with the n-th run before. An advisory run reports its
    * introduced errors among the warnings. Left-out findings are counted, not compared.
+   * Without a run before (a created document) nothing is compared and every finding is reported;
+   * a finding the file had that is now left out stays in the result, not resolved.
    */
   static compareRuns(before: ValidatorRun[], after: ValidatorRun[], renames: Map<string, string> = new Map()): ValidatorReport[] {
     const rename = FindingBaseline.renamer(renames);
@@ -155,7 +157,6 @@ export class FindingBaseline {
       const nth = seen.get(run.name) ?? 0;
       seen.set(run.name, nth + 1);
       const prev = before.filter((beforeRun) => beforeRun.name === run.name)[nth];
-      // without a run before (a created document) nothing is compared: every finding is reported
       const reasonOf = (issue: ValidatorIssue) => (prev ? leftOutOf(issue) : undefined);
       const left = (prev?.issues ?? []).filter((issue) => reasonOf(issue) === undefined).map((issue) => ({ issue, id: FindingBaseline.identity(issue, rename, renames) }));
       const blocking = run.blocks !== false;
@@ -179,7 +180,6 @@ export class FindingBaseline {
         if (issue.severity === 'error' && blocking) report.errors.push(issue);
         else report.warnings.push(issue);
       }
-      // a finding the file had that is now left out is still in the result: not resolved
       for (const issue of marked) {
         const id = FindingBaseline.identity(issue, (text) => text, none);
         const matchIndex = left.findIndex((entry) => entry.id === id && entry.issue.severity === issue.severity);

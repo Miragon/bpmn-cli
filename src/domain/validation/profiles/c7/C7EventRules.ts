@@ -35,10 +35,10 @@ export class C7EventRules extends C7Rules {
     this.push('runtime', 'W_C7_MULTIPLE_EVENT_DEFINITIONS', el, undefined, 'definitions', `${this.describe(el, undefined)} has ${defs.length} event definitions (${kinds.join(', ')}); ${what}`, `Keep one: \`bpmn set <file> ${id} trigger=${keep}\` (keeps that definition, drops the others), and model each other trigger as its own event (behind an event-based gateway, or another boundary / start event). One definition is edited with \`bpmn set <file> ${id} 'definition[<n>].<key>=<value>'\`.`);
   }
 
+  /** Checks an event; of several definitions only the one the engines act on is checked, as they parse only that one. */
   checkEvent(el: El): void {
     this.checkCompensationHost(el);
     this.checkMultipleDefinitions(el);
-    // of several definitions the engines parse only the one they act on
     for (const def of this.actedOn(el)) this.checkDefinition(el, def);
   }
 
@@ -121,9 +121,9 @@ export class C7EventRules extends C7Rules {
     this.push('deploy', 'W_C7_DEPLOY_EVENT_DEFINITION', el, undefined, 'timer', `Timer of ${this.describe(el, undefined)} has no date, cycle or duration; the engines refuse the file`, `\`bpmn set <file> ${idOf(el)} timer=PT1H\` (or R/PT1H, or a date).`);
   }
 
+  /** Checks the condition of a conditional definition; a missing condition element is left to the schema error. */
   private checkConditionalDefinition(el: El, def: El): void {
     const id = idOf(el)!;
-    // a missing condition element is a schema error
     const cond = peek<El>(def, 'condition');
     if (cond && this.emptyCondition(cond)) {
       this.push('runtime', 'W_C7_EMPTY_CONDITION', el, undefined, 'emptyCondition', `Conditional event ${id} has an empty condition (no expression and no ${this.prefix}:resource): it deploys, but evaluating it fails when the process runs`, `\`bpmn set <file> ${id} ${sh('when=${expression}')}\` (or a script: \`bpmn set <file> ${id} condition.${this.prefix}:resource=deployment://<script>.groovy condition.language=groovy\`).`);
@@ -169,12 +169,14 @@ export class C7EventRules extends C7Rules {
     if (msg && !nameOf(msg)) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of receive task ${idOf(el)} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
   }
 
-  /** Every flow node of a scope and of its nested sub-processes. */
+  /**
+   * Every flow node of a scope and of its nested sub-processes, except the content of an ad-hoc
+   * sub-process, which the engines skip.
+   */
   private allFlowNodes(scope: El): El[] {
     const out: El[] = [];
     for (const node of this.doc.flowNodes(scope)) {
       out.push(node);
-      // the engines skip the content of an ad-hoc sub-process
       if (this.kit.is(node, 'bpmn:SubProcess') && !this.kit.is(node, 'bpmn:AdHocSubProcess')) out.push(...this.allFlowNodes(node));
     }
     return out;
@@ -222,6 +224,7 @@ export class C7EventRules extends C7Rules {
   /**
    * Link events: catch names are unique in the whole process (sub-processes included); a throw
    * event reached by a sequence flow needs a catch event of its name in the same (sub-)process.
+   * A definition without name is skipped: that is a schema error.
    */
   checkLinks(proc: El): void {
     const firstCatch = new Map<string, El>();
@@ -232,7 +235,6 @@ export class C7EventRules extends C7Rules {
       if (!def) continue;
       const id = idOf(node)!;
       const name = peek<string>(def, 'name');
-      // a missing name is a schema error
       if (name === undefined || name === null) continue;
       if (this.kit.is(node, 'bpmn:IntermediateCatchEvent')) {
         const first = firstCatch.get(name);
@@ -324,6 +326,7 @@ export class C7EventRules extends C7Rules {
    * How to get rid of a second start event `extra` next to `first`, without running a node twice:
    * its flows into what `first` reaches go with it, a branch of its own moves to `first` unless it
    * runs into a node `first` reaches. A process may keep it with another trigger.
+   * The hint names the nodes (no end events) a branch of its own runs into that `first` reaches as well.
    */
   private extraStartHint(scope: El, first: El, extra: El): string {
     const sid = idOf(extra)!;
@@ -335,7 +338,6 @@ export class C7EventRules extends C7Rules {
       return target && target !== first && !reached.has(target);
     });
     const into = flows.filter((flow) => !own.includes(flow));
-    // nodes (no end events) that a branch of its own runs into and `first` reaches as well
     const meet = new Set<string>();
     for (const flow of own) {
       const target = peek<El>(flow, 'targetRef')!;

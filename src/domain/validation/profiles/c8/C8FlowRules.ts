@@ -25,6 +25,7 @@ export class C8FlowRules extends C8Rules {
     this.push('deploy', 'W_C8_DEPLOY_UNSUPPORTED', el, undefined, 'complexGateway', `Complex gateway ${idOf(el)}: Camunda 8 does not support complex gateways and refuses the file`, `\`bpmn retype <file> ${idOf(el)} inclusiveGateway\` (or exclusiveGateway: one path).`);
   }
 
+  /** Checks an ad-hoc sub-process; a static completion condition is refused at deploy (unlike a multi-instance one). */
   checkAdHoc(el: El): void {
     const id = idOf(el)!;
     const nodes = this.doc.flowNodes(el);
@@ -36,7 +37,6 @@ export class C8FlowRules extends C8Rules {
     if (!nodes.some((node) => this.kit.is(node, 'bpmn:Activity'))) {
       this.push('deploy', 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', el, undefined, 'adHoc:empty', `Ad-hoc sub-process ${id} contains no activity; Camunda 8 refuses the file`, `\`bpmn add <file> serviceTask "<Name>" --in ${id}\`.`);
     }
-    // a static completion condition is refused at deploy (unlike a multi-instance one)
     const cc = peek<El>(el, 'completionCondition');
     if (cc) {
       const body = peek<string>(cc, 'body') ?? '';
@@ -46,6 +46,7 @@ export class C8FlowRules extends C8Rules {
     }
   }
 
+  /** Checks the condition of a sequence flow; out of complex gateways it is W_C8_DEPLOY_UNSUPPORTED, out of parallel / event-based ones W_CONDITION_IGNORED. */
   checkFlow(flow: El): void {
     const cond = peek<El>(flow, 'conditionExpression');
     if (!cond) return;
@@ -56,7 +57,6 @@ export class C8FlowRules extends C8Rules {
     if (!isFeel(body)) {
       this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', flow, undefined, 'condition', `The condition "${body.trim()}" of sequence flow ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, body.trim() ? `\`bpmn set <file> ${id} ${sh(`condition==${feelOf(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${id} ${sh('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${id} condition=\`).`);
     }
-    // complex gateways are W_C8_DEPLOY_UNSUPPORTED, parallel / event-based ones W_CONDITION_IGNORED
     if (source && !this.kit.is(source, 'bpmn:Gateway')) {
       this.push('runtime', 'W_C8_CONDITION_IGNORED', flow, undefined, 'conditionIgnored', `Sequence flow ${id} out of ${this.describe(source)} has a condition; Camunda 8 evaluates conditions at exclusive and inclusive gateways only and always takes this flow`, `Remove it (\`bpmn set <file> ${id} condition=\`), or branch with a gateway: \`bpmn add <file> exclusiveGateway "<Question?>" --after ${idOf(source)}\`, then move the condition onto its flows.`);
     }
@@ -72,10 +72,10 @@ export class C8FlowRules extends C8Rules {
     }
   }
 
+  /** Checks an event-based gateway; the engine counts its <bpmn:outgoing> entries, which a file may leave out. */
   checkEventGateway(gw: El): void {
     const id = idOf(gw)!;
     const flows = this.outgoing.get(gw) ?? [];
-    // the engine counts the <bpmn:outgoing> entries of the gateway, which a file may leave out
     const listed = flows.filter((flow) => !this.unlisted.has(flow) || this.unlisted.get(flow) !== gw);
     if (flows.length < 2) {
       this.push('deploy', 'W_C8_DEPLOY_EVENT_GATEWAY', gw, undefined, 'branches', `Event-based gateway ${id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${id} --timer PT1H\`.`);

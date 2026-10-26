@@ -1,5 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
-import type { FormerEnd } from '../../document/EditContext.js';
+import type { EditContext, FormerEnd } from '../../document/EditContext.js';
 import { followDiIds } from '../../diagram/utils/di-ids.js';
 import { connectionRequest, type IdRequest } from '../../document/utils/requests.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
@@ -13,7 +13,10 @@ import { is, many, type El, idOf } from '../../document/utils/moddle.js';
  * the document's flows keep theirs and get reported as stale.
  */
 export class FlowIdFollower {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   /**
    * Call before `set` renames `node`: a flow still named after its old id or name
@@ -21,7 +24,7 @@ export class FlowIdFollower {
    */
   recordFormerEnd(node: El): void {
     if (!is(node, 'bpmn:FlowNode') || !(many(node, 'incoming').length || many(node, 'outgoing').length)) return;
-    this.doc.edit.recordFormerEnd(node, { id: idOf(node), labels: this.endLabels(node) });
+    this.edit.recordFormerEnd(node, { id: idOf(node), labels: this.endLabels(node) });
   }
 
   /**
@@ -30,10 +33,10 @@ export class FlowIdFollower {
    */
   namesEnds(id: string | undefined, source: El, target: El): boolean {
     if (!id) return false;
-    const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: this.endLabels(el) }, ...this.doc.edit.formerEndsOf(el)];
+    const names = (el: El): FormerEnd[] => [{ id: idOf(el), labels: this.endLabels(el) }, ...this.edit.formerEndsOf(el)];
     const targets = names(target);
     return names(source).some((sourceName) =>
-      targets.some((targetName) => sourceName.labels.some((sourceLabel) => targetName.labels.some((targetLabel) => this.doc.edit.allocator.isDerived(id, connectionRequest('bpmn:SequenceFlow', sourceName.id, targetName.id, { sourceLabel, targetLabel }))))),
+      targets.some((targetName) => sourceName.labels.some((sourceLabel) => targetName.labels.some((targetLabel) => this.edit.allocator.isDerived(id, connectionRequest('bpmn:SequenceFlow', sourceName.id, targetName.id, { sourceLabel, targetLabel }))))),
     );
   }
 
@@ -49,21 +52,21 @@ export class FlowIdFollower {
     if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
     const old = idOf(flow);
     if (!old) {
-      flow.set('id', doc.edit.allocator.explicitOr(wanted, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)));
+      flow.set('id', this.edit.allocator.explicitOr(wanted, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)));
       doc.invalidate();
       return '';
     }
     if (!this.namesEnds(old, oldSource, oldTarget)) return undefined;
     const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
-    if (doc.edit.keepsFlowId(flow)) {
-      doc.edit.recordKeptFlow(flow, `${oldIds[0]} -> ${oldIds[1]}`);
+    if (this.edit.keepsFlowId(flow)) {
+      this.edit.recordKeptFlow(flow, `${oldIds[0]} -> ${oldIds[1]}`);
       return undefined;
     }
     doc.ids.release(old);
-    const id = doc.edit.allocator.allocate(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
+    const id = this.edit.allocator.allocate(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
     if (id === old) return undefined;
     flow.set('id', id);
-    doc.edit.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
+    this.edit.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
     this.followEdgeId(flow, old, id);
     return old;
   }
@@ -79,7 +82,7 @@ export class FlowIdFollower {
       if (!is(root, 'bpmn:Collaboration')) continue;
       for (const flow of many(root, 'messageFlows')) if (flow.get<El | undefined>('sourceRef') === node || flow.get<El | undefined>('targetRef') === node) flows.add(flow);
     }
-    return [...flows].filter((flow) => !!flow.get<El | undefined>('sourceRef') && !!flow.get<El | undefined>('targetRef') && doc.edit.allocator.generatedFrom(idOf(flow), FlowIdFollower.connectionRequestOf(flow)));
+    return [...flows].filter((flow) => !!flow.get<El | undefined>('sourceRef') && !!flow.get<El | undefined>('targetRef') && this.edit.allocator.generatedFrom(idOf(flow), FlowIdFollower.connectionRequestOf(flow)));
   }
 
   /** `was`: the ends before the rename (`A -> B`). */
@@ -87,12 +90,12 @@ export class FlowIdFollower {
     const doc = this.doc;
     const old = idOf(flow);
     const req = FlowIdFollower.connectionRequestOf(flow);
-    if (doc.edit.allocator.generatedFrom(old, req)) return;
+    if (this.edit.allocator.generatedFrom(old, req)) return;
     doc.ids.release(old);
-    const id = doc.edit.allocator.allocate(req).id;
+    const id = this.edit.allocator.allocate(req).id;
     if (id === old) return;
     flow.set('id', id);
-    doc.edit.recordRegenerated(old, id, was, flow);
+    this.edit.recordRegenerated(old, id, was, flow);
     this.followEdgeId(flow, old, id);
   }
 

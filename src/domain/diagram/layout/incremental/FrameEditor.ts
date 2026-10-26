@@ -107,12 +107,14 @@ export class FrameEditor {
     return true;
   }
 
-  /** Closes the lane's band when empty, else lets a sibling take it over. */
+  /**
+   * Closes the lane's band when empty, else lets a sibling take it over.
+   * The only lane's band is the whole frame, which keeps its size (audit #39).
+   */
   removedLane(box: Box, poolId: string | undefined, parentId: string | undefined): void {
     const pool = poolId ? this.plane.shapes.get(poolId) : undefined;
     const occupied = [...this.plane.shapes.values()].some((shape) => PlaneQuery.isLeaf(shape) && shape.kind !== 'boundary' && cy(shape.bounds) > box.y && cy(shape.bounds) < bottom(box) && (!pool || (shape.bounds.x >= pool.bounds.x && shape.bounds.x <= right(pool.bounds))));
     const siblings = this.siblingLanes(poolId, parentId, '');
-    // the only lane: its band is the whole frame, which keeps its size (audit #39)
     if (!siblings.length) return;
     if (!occupied) {
       this.record(this.space.makeSpace({ axis: 'y', line: bottom(box) - 0.5, delta: -box.height, ...(pool ? { within: { ...pool.bounds } } : {}) }));
@@ -261,7 +263,10 @@ export class FrameEditor {
     this.record(this.space.closeStrip({ axis: 'x', from: right(sub.bounds), to: right(old) + gap, gap, ...(band ? { within: { ...band } } : {}) }));
   }
 
-  /** The content of `child` moves in and the space tool makes room. */
+  /**
+   * The content of `child` moves in and the space tool makes room.
+   * It is a frame from then on, so the space tool never grows it over foreign shapes.
+   */
   expand(sub: DShape, child: Plane | undefined, sem: Semantics): void {
     const content = child ? [...child.shapes.values()] : [];
     let box: Box | undefined;
@@ -271,7 +276,6 @@ export class FrameEditor {
     const width = Math.max(350, box ? Math.round(box.width + 2 * PAD) : 0);
     const height = Math.max(200, box ? Math.round(box.height + 45 + PAD) : 0);
     const old = copyBox(sub.bounds);
-    // a frame from now on, so the space tool never grows it over foreign shapes
     sub.expanded = true;
     sub.container = true;
     const keep = new Set(PlaneQuery.boundariesOf(this.plane, sub.id).map((boundary) => boundary.id));

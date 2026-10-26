@@ -58,13 +58,13 @@ export class PlacementObstacles {
   /**
    * Where a space-tool run for a node goes: inside its expanded sub-process (frame mode: it never
    * grows over foreign shapes), else within its pool.
+   * Without a pool, the smallest group around the anchor confines it like a pool would.
    */
   spaceBand(plane: Plane, shape: Pick<DShape, 'parentId' | 'poolId'>, anchor?: DShape): { within?: Box; frame?: string } {
     const sub = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
     if (sub) return { within: { ...sub.bounds }, frame: sub.id };
     const pool = shape.poolId ? plane.shapes.get(shape.poolId) : undefined;
     if (pool) return { within: { ...pool.bounds } };
-    // no pool: a group around the anchor confines the space tool like a pool would
     const group = anchor ? this.homeGroups(plane, [anchor]).map((id) => plane.shapes.get(id)!).sort((first, second) => first.bounds.width * first.bounds.height - second.bounds.width * second.bounds.height)[0] : undefined;
     return group ? { within: { ...group.bounds } } : {};
   }

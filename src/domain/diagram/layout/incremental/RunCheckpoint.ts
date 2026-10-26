@@ -5,6 +5,7 @@ import { DrawingCheckpoint } from '../../di/DrawingCheckpoint.js';
 export class RunCheckpoint {
   constructor(private readonly run: IncrementalLayout) {}
 
+  /** Shapes waiting to be placed again (DI reused) are kept with their boundary events and content. */
   take(): Checkpoint {
     const run = this.run;
     const cp: Checkpoint = {
@@ -27,7 +28,6 @@ export class RunCheckpoint {
       cp.members.set(plane, { shapes: [...plane.shapes.values()], edges: [...plane.edges.values()] });
       cp.drawing.keepPlane(plane);
     }
-    // shapes waiting to be placed again (DI reused): their boundary events and content move along
     for (const reused of run.place.reuse.values()) {
       [reused.shape, ...reused.boundaries, ...(reused.content?.shapes ?? [])].forEach((shape) => cp.drawing.keepShape(shape));
       (reused.content?.edges ?? []).forEach((edge) => cp.drawing.keepEdge(edge));

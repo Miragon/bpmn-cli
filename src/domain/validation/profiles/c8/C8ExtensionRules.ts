@@ -55,7 +55,10 @@ export class C8ExtensionRules extends C8Rules {
     return `Remove it: ${remove}${equivalent ? `; Camunda 8 reads ${this.extAdd(el, owner, equivalent.replace(/^zeebe:/, `${this.prefix}:`))}` : ''}.`;
   }
 
-  /** zeebe:* / camunda:* / operaton:* attributes of a BPMN element. */
+  /**
+   * zeebe:* / camunda:* / operaton:* attributes of a BPMN element.
+   * An unknown one that belongs to a zeebe extension element allowed there (zeebe:assignee) is pointed to it.
+   */
   checkAttributes(el: El, owner: El | undefined): void {
     const addr = this.addressOf(el, owner);
     const where = this.describe(el, owner);
@@ -71,7 +74,6 @@ export class C8ExtensionRules extends C8Rules {
       if (uri !== this.kit.zeebe.uri) continue;
       const def = this.kit.zeebe.attr(local);
       if (!def) {
-        // an attribute of a zeebe extension element on the BPMN element (zeebe:assignee)
         const home = this.kit.zeebe.typeNames().find((typeName) => this.kit.zeebe.allowedOn(typeName, el) === true && this.kit.zeebe.type(typeName)!.attributes.some((attribute) => attribute.name === local));
         const guess = home ? undefined : didYouMean(local, this.kit.zeebe.attrs().map((attribute) => localName(attribute.name)));
         const value = String(el.$attrs[key] ?? '');
@@ -115,6 +117,7 @@ export class C8ExtensionRules extends C8Rules {
   /**
    * Extension elements of one BPMN element: foreign, unknown, misplaced, duplicates; then the
    * content of each zeebe element.
+   * Input mappings are reported where the engine reads only outputs.
    */
   checkExtensions(host: El, owner: El | undefined): void {
     const values = this.extensionValues(host);
@@ -157,7 +160,6 @@ export class C8ExtensionRules extends C8Rules {
       if (count < 2 || !this.kit.zeebe.isSingle(local)) continue;
       this.push('deploy', 'W_C8_DEPLOY_DUPLICATE_EXTENSION', host, owner, `dup:${local}`, `${where} has ${count} ${this.zeebeName(local)} elements; Camunda 8 reads one and refuses the file`, `Merge them into one: ${lowerFirst(this.rebuildHint(host, owner, this.zeebeName(local)).replace(/^See it/, 'See them'))}`);
     }
-    // input mappings where the engine reads only outputs
     const ignored = this.inputsIgnored(host);
     if (ignored) {
       for (const io of this.zeebe(host, 'ioMapping')) {
@@ -172,6 +174,7 @@ export class C8ExtensionRules extends C8Rules {
   /**
    * Attributes and children of a zeebe element (known names, placement), recursively; then the
    * engine rules on its content.
+   * For a mapping the hint gives the corrected one, as it is replaced by its target.
    */
   private checkZeebeElement(host: El, owner: El | undefined, zeebeElement: El, path: string): void {
     const local = localName(zeebeElement.$type);
@@ -188,7 +191,6 @@ export class C8ExtensionRules extends C8Rules {
     for (const feelAttribute of FEEL_ATTRS[local] ?? []) {
       const value = attr(zeebeElement, feelAttribute);
       const target = attr(zeebeElement, 'target');
-      // a mapping is replaced by its target: give the corrected one
       const fix =
         (local === 'input' || local === 'output') && target && isFeel(value)
           ? `${this.extAdd(host, owner, `${this.zeebeName(local)} ${sh(`source==${feelOf(value!.trim().slice(1)).trim()}`)} target=${sh(target)}`)} (replaces the mapping of that target; check the FEEL syntax).`

@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { CliError } from '../document/CliError.js';
 import { modelError, usageError } from '../document/utils/errors.js';
 import { ElementLabels, type AnchorContext } from '../document/ids/ElementLabels.js';
@@ -36,7 +37,10 @@ const PLACEMENT_KEYS = ['after', 'before', 'flow', 'on', 'in'] as const;
  * Collapse requests go to Doc.layoutRequests because `expanded` lives in DI.
  */
 export class ElementCreationService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   private static parseEventSubProcessKind(token: string): ParsedKind | undefined {
     const idx = token.indexOf(':');
@@ -191,6 +195,7 @@ export class ElementCreationService {
     new FlowRules(this.doc).assertCondition(op.condition);
   }
 
+  /** Warns about flow options the add ignored; op.flowId counts as used when a spliced flow without id took it. */
   private warnIgnoredFlowOptions(op: AddElement, node: El, entryFlow: El | undefined, cs: ChangeSet): void {
     const id = idOf(node);
     const mode = NodePlacementService.modeOf(op);
@@ -207,11 +212,10 @@ export class ElementCreationService {
       }
       return;
     }
-    // a spliced flow without id takes op.flowId too
     const named = (change: Change): boolean => change.kind === 'sequenceFlow' && change.id === op.flowId;
     if (op.flowId && !cs.created.some(named) && !cs.changed.some((change) => named(change) && !!change.detail?.endsWith(renamedNote('')))) {
       const entry = entryFlow ?? this.doc.incoming(node)[0];
-      const kept = !!entry && this.doc.edit.preferFlowId(entry, op.flowId, node);
+      const kept = !!entry && this.edit.preferFlowId(entry, op.flowId, node);
       cs.warn({
         code: 'W_OPTION_IGNORED',
         message: `--flow-id ${op.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
@@ -245,14 +249,14 @@ export class ElementCreationService {
       case 'on':
         return `on ${op.on}`;
       default:
-        return `in ${idOf(new NodePlacementService(this.doc, op).scope())}`;
+        return `in ${idOf(new NodePlacementService(this.doc, this.edit, op).scope())}`;
     }
   }
 
   private resolveLane(op: AddElement): El | undefined {
     if (!op.lane) return undefined;
-    const lane = this.doc.require(op.lane, 'bpmn:Lane', 'lane');
-    const scope = new NodePlacementService(this.doc, op).scope();
+    const lane = this.edit.require(op.lane, 'bpmn:Lane', 'lane');
+    const scope = new NodePlacementService(this.doc, this.edit, op).scope();
     if (!is(scope, 'bpmn:Process')) {
       throw modelError('E_INVALID_LANE_MEMBERSHIP', `Nodes inside sub-process ${idOf(scope)} cannot be lane members`, {
         element: op.lane,
@@ -262,14 +266,18 @@ export class ElementCreationService {
     return lane;
   }
 
+  /**
+   * Adds a flow node. An event sub-process gets its start trigger here, so it is valid in one op;
+   * the inherited lane is read before the placement, as a splice may rename the flow op.flow
+   * names; the event-based gateway rule checks the node's flows once the trigger is set.
+   */
   private addFlowNode(op: AddElement, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet, context: AnchorContext | undefined): El {
     this.checkFlowOptions(op);
     const explicitLane = this.resolveLane(op);
-    const id = this.doc.edit.allocator.explicitOr(op.id, this.elementRequest(def, trigger ?? ElementCreationService.inferTrigger(op), op, context));
+    const id = this.edit.allocator.explicitOr(op.id, this.elementRequest(def, trigger ?? ElementCreationService.inferTrigger(op), op, context));
     const el = this.doc.create(def.type, { id, ...(op.name ? { name: op.name } : {}), ...(def.props ?? {}) });
     const isEvent = def.family === 'event';
     const isEventSub = def.kind === 'eventSubProcess';
-    // so the event sub-process is valid in one op
     const startTrigger = isEventSub ? (trigger ?? ElementCreationService.inferTrigger(op)) : undefined;
     const messageTask = ElementCreationService.takesMessage(def) && op.message !== undefined;
     if (!isEvent && !startTrigger && ElementCreationService.hasTriggerOptions(messageTask ? { ...op, message: undefined } : op)) {
@@ -288,9 +296,8 @@ export class ElementCreationService {
 
     const entry = { id, kind: def.kind, ...(op.name ? { name: op.name } : {}), detail: this.placementDetail(op) };
     cs.create(entry);
-    // before the placement: a splice may rename the flow op.flow names
     const inherited = explicitLane ? LaneInheritance.NONE : LaneInheritance.of(this.doc, op);
-    const entryFlow = new NodePlacementService(this.doc, op).place(el, cs);
+    const entryFlow = new NodePlacementService(this.doc, this.edit, op).place(el, cs);
     this.warnIgnoredFlowOptions(op, el, entryFlow, cs);
     if (op.flowAs) {
       const flow = entryFlow ?? (NodePlacementService.modeOf(op) === 'before' ? this.doc.outgoing(el)[0] : undefined);
@@ -324,13 +331,12 @@ export class ElementCreationService {
         }
         resolved = 'none';
       }
-      this.reportNewRoots(cs, () => new EventDefinitionService(this.doc, el).apply(resolved, op));
+      this.reportNewRoots(cs, () => new EventDefinitionService(this.doc, this.edit, el).apply(resolved, op));
       if (resolved !== 'none') entry.kind = kindLabel(el);
     }
-    if (messageTask) new PropertyService(this.doc).setTaskMessage(el, op.message ?? '', cs);
-    if (new Camunda8Defaults(this.doc).userTask(el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
-    // checked once the trigger is set
-    for (const flow of new Set([...this.doc.incoming(el), ...this.doc.outgoing(el)])) new EventGatewayRule(this.doc).warnFlow(flow, cs);
+    if (messageTask) new PropertyService(this.doc, this.edit).setTaskMessage(el, op.message ?? '', cs);
+    if (new Camunda8Defaults(this.doc, this.edit).userTask(el)) cs.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
+    for (const flow of new Set([...this.doc.incoming(el), ...this.doc.outgoing(el)])) new EventGatewayRule(this.doc, this.edit).warnFlow(flow, cs);
     if (op.collapsed && def.family === 'subProcess') {
       this.doc.layoutRequests.collapse(id);
       cs.note(`${id} will be laid out collapsed`);
@@ -338,11 +344,11 @@ export class ElementCreationService {
     this.addDocumentation(el, op.doc);
 
     if (explicitLane) {
-      new LaneService(this.doc).assign(el, explicitLane, cs);
+      new LaneService(this.doc, this.edit).assign(el, explicitLane, cs);
     } else {
       const scope = this.doc.scopeOf(el);
       if (inherited.lane && scope && is(scope, 'bpmn:Process')) {
-        new LaneService(this.doc).assign(el, inherited.lane, cs);
+        new LaneService(this.doc, this.edit).assign(el, inherited.lane, cs);
         const warning = inherited.warning(id);
         if (warning) cs.warn(warning);
       }
@@ -362,7 +368,7 @@ export class ElementCreationService {
     const { def, trigger } = ElementCreationService.resolveKind(op.kind);
 
     if (op.ifAbsent && !op.id) {
-      const base = this.doc.edit.allocator.baseOf(this.elementRequest(def, trigger, op));
+      const base = this.edit.allocator.baseOf(this.elementRequest(def, trigger, op));
       throw usageError('--if-absent needs an explicit --id to check for', {
         hint: `Pass --id ${base} (the id add generates${op.name ? ` for "${op.name}"` : ''}), or drop --if-absent.`,
       });
@@ -373,7 +379,7 @@ export class ElementCreationService {
       cs.bind(op.as, existing);
       if (op.flowAs) cs.bind(op.flowAs, this.doc.incoming(existing)[0]);
       if (op.outAs) this.bindExistingOutAs(op.outAs, existing, cs);
-      new RootElementService(this.doc).bindRefAs(cs, op.refAs, existing);
+      new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, existing);
       if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
         cs.warn({
           code: 'W_KIND_MISMATCH',
@@ -395,33 +401,33 @@ export class ElementCreationService {
       case 'participant': {
         ElementCreationService.rejectPlacement(op, [], 'participant');
         const before = new Set(this.doc.processes());
-        el = new PoolService(this.doc).createParticipant(op, cs);
-        for (const process of this.doc.processes()) if (!before.has(process)) this.doc.initProcess(process);
+        el = new PoolService(this.doc, this.edit).createParticipant(op, cs);
+        for (const process of this.doc.processes()) if (!before.has(process)) this.doc.initProcess(process, this.edit.platform());
         break;
       }
       case 'lane':
         ElementCreationService.rejectPlacement(op, ['in'], 'lane');
-        el = new LaneService(this.doc).createLane(op, cs);
+        el = new LaneService(this.doc, this.edit).createLane(op, cs);
         break;
       case 'data': {
         ElementCreationService.rejectPlacement(op, ['in', 'to'], def.kind);
-        const scope = this.doc.requireScope(op.in);
+        const scope = this.edit.requireScope(op.in);
         const opts = { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}) };
-        el = def.kind === 'dataStore' ? new ArtifactService(this.doc).createDataStore(scope, opts, cs) : new ArtifactService(this.doc).createDataObject(scope, opts, cs);
-        if (op.to) new AssociationService(this.doc).createDataAssociation(el, this.doc.require(op.to), {}, cs);
+        el = def.kind === 'dataStore' ? new ArtifactService(this.doc, this.edit).createDataStore(scope, opts, cs) : new ArtifactService(this.doc, this.edit).createDataObject(scope, opts, cs);
+        if (op.to) new AssociationService(this.doc, this.edit).createDataAssociation(el, this.edit.require(op.to), {}, cs);
         break;
       }
       case 'artifact': {
         if (def.kind === 'group') {
           ElementCreationService.rejectPlacement(op, [], def.kind);
-          el = new ArtifactService(this.doc).createGroup({ ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(op.members ? { members: op.members } : {}) }, cs);
+          el = new ArtifactService(this.doc, this.edit).createGroup({ ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(op.members ? { members: op.members } : {}) }, cs);
           break;
         }
         ElementCreationService.rejectPlacement(op, ['in', 'to'], def.kind);
-        const scope = this.doc.requireScope(op.in);
+        const scope = this.edit.requireScope(op.in);
         const text = op.text ?? op.name;
-        el = new ArtifactService(this.doc).createTextAnnotation(scope, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(text ? { text } : {}) }, cs);
-        if (op.to) new AssociationService(this.doc).createAssociation(this.doc.require(op.to), el, {}, cs);
+        el = new ArtifactService(this.doc, this.edit).createTextAnnotation(scope, { ...(op.id ? { id: op.id } : {}), ...(op.name ? { name: op.name } : {}), ...(text ? { text } : {}) }, cs);
+        if (op.to) new AssociationService(this.doc, this.edit).createAssociation(this.edit.require(op.to), el, {}, cs);
         break;
       }
       default:
@@ -436,11 +442,11 @@ export class ElementCreationService {
       }
     }
     if (op.set && Object.keys(op.set).length) {
-      cs.merge(new PropertyService(this.doc).set({ op: 'set', id: idOf(el), values: op.set }));
+      cs.merge(new PropertyService(this.doc, this.edit).set({ op: 'set', id: idOf(el), values: op.set }));
     }
     cs.bind(op.as, el);
-    new RootElementService(this.doc).bindRefAs(cs, op.refAs, el);
-    this.doc.edit.allocator.reportSuffixed(cs);
+    new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, el);
+    this.edit.allocator.reportSuffixed(cs);
     this.doc.invalidate();
     return cs;
   }

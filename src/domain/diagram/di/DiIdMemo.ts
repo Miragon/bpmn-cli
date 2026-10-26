@@ -30,7 +30,12 @@ export class DiIdMemo {
     return memo;
   }
 
-  /** DI of elements that had none follows the file's DI id style. */
+  /**
+   * DI of elements that had none follows the file's DI id style.
+   * DI without a free old id gets its style's id once every old id is given, uncut ids first, so a
+   * cut id never pushes one that needs no cut to `_2`. A main diagram whose root changed (e.g. to a
+   * new collaboration) keeps the old main ids.
+   */
   restore(defs: El): void {
     const diagrams = rawList(defs, 'diagrams');
     const di = new Set<El>();
@@ -45,7 +50,6 @@ export class DiIdMemo {
       const id = idOf(el);
       if (id) taken.delete(id);
     }
-    // DI without a free old id gets its style's id once every old id is given
     const fresh: Array<{ el: El; base: string }> = [];
     const claim = (el: El, wanted: string | undefined, base: string): void => {
       if (wanted && !taken.has(wanted)) {
@@ -73,7 +77,6 @@ export class DiIdMemo {
     for (const diagram of unmatched) {
       const plane = raw<El>(diagram, 'plane');
       const root = idOf(raw(plane, 'bpmnElement'));
-      // a main diagram whose root changed (e.g. to a new collaboration) keeps the old main ids
       const reusedMemo = diagram === diagrams[0] && main && old.includes(main) && !derived(main) ? main : undefined;
       if (reusedMemo) old.splice(old.indexOf(reusedMemo), 1);
       if (plane) claim(plane, reusedMemo?.plane, rootId('Plane', plane, root));
@@ -90,7 +93,6 @@ export class DiIdMemo {
         claim(pe, wanted, styledId(style ?? 'bpmn', kind, elId));
       }
     }
-    // uncut ids first, so a cut id never pushes one that needs no cut to `_2`
     const uncut = (candidate: { el: El; base: string }): boolean => idOf(candidate.el) === candidate.base;
     for (const { el, base } of [...fresh.filter(uncut), ...fresh.filter((candidate) => !uncut(candidate))]) el.set('id', claimUnique(taken, base));
   }

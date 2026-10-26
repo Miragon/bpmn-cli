@@ -1,25 +1,21 @@
 import { NestedSlots } from './NestedSlots.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError, usageError } from '../document/utils/errors.js';
-import { IdRenameService } from './IdRenameService.js';
 import { kindLabel, kindOf, normalizeTrigger, triggerOf, TRIGGER_TYPES, type Trigger } from '../document/utils/kinds.js';
-import { addTo, is, many, walk, type El } from '../document/utils/moddle.js';
+import { is, walk, type El } from '../document/utils/moddle.js';
 import { ChangeSet } from '../document/ChangeSet.js';
 import { descriptorOf, idOf, typeLabel, vendorContent } from '../document/utils/elements.js';
 import { definitionsOf, slotsOf, SLOT_TEXT, splitNestedKey, type NestedSlot } from '../document/utils/nested-slots.js';
-import { ArtifactService } from './ArtifactService.js';
-import { LaneService } from './participants/LaneService.js';
-import { DecisionLinkWriter } from './DecisionLinkWriter.js';
+import { SetKeyCatalog } from './SetKeyCatalog.js';
 import { TRIGGER_OPTION_KEYS } from './events/EventTrigger.js';
 import { TriggerChange } from './events/TriggerChange.js';
 import { ZeebeSubscription } from './events/ZeebeSubscription.js';
-import { renamedNote } from '../document/utils/renames.js';
 import type { SetProperties, TriggerOptions } from '../commands/types.js';
 import { CAMUNDA } from '../document/vendor/CamundaDescriptor.js';
 import { ZEEBE, ZEEBE_URI } from '../document/vendor/ZeebeDescriptor.js';
 import { SequenceFlowService } from './flows/SequenceFlowService.js';
-import { FlowIdFollower } from './flows/FlowIdFollower.js';
 import { FlowRules } from '../document/FlowRules.js';
 import { RootElementService } from './events/RootElementService.js';
 
@@ -47,9 +43,12 @@ export class PropertyService {
   private readonly coercer: PropertyCoercer;
   private readonly slots: NestedSlots;
 
-  constructor(private readonly doc: Doc) {
-    this.coercer = new PropertyCoercer(doc);
-    this.slots = new NestedSlots(doc);
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {
+    this.coercer = new PropertyCoercer(doc, edit);
+    this.slots = new NestedSlots(doc, edit);
   }
 
   private static normalizeKey(key: string): string {
@@ -65,9 +64,10 @@ export class PropertyService {
     return expr;
   }
 
+  /** Applies the keys of the op; a conditional event's script resource is removed first, so that when= fills the condition. */
   set(op: SetProperties): ChangeSet {
     const cs = new ChangeSet();
-    const el = this.doc.require(op.id);
+    const el = this.edit.require(op.id);
     const entries: Array<[string, string]> = [
       ...Object.entries(op.values ?? {}).map(([entryKey, entryValue]) => [PropertyService.normalizeKey(entryKey), entryValue === undefined || entryValue === null ? '' : String(entryValue)] as [string, string]),
       ...(op.unset ?? []).map((unsetKey) => [PropertyService.normalizeKey(unsetKey), ''] as [string, string]),
@@ -116,85 +116,27 @@ export class PropertyService {
     }
     for (const nestedEntry of flowCondition) this.slots.apply(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, cs, conditionKeys.has('condition'));
     if (conditionKeys.size) this.applyCondition(el, conditionKeys, cs);
-    // a conditional event's script resource goes first, so that when= fills the condition
     const resourceRemoval = is(el, 'bpmn:Event') ? nested.filter((nestedEntry) => nestedEntry.slot === 'condition' && !nestedEntry.value && this.coercer.isResourceKey(nestedEntry.key)) : [];
     for (const nestedEntry of resourceRemoval) this.slots.apply(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, cs, eventKeys.has('when'));
     if (eventKeys.size) this.applyEventKeys(el, eventKeys, cs);
     for (const nestedEntry of nested) if (!flowCondition.includes(nestedEntry) && !resourceRemoval.includes(nestedEntry)) this.slots.apply(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, cs);
     this.doc.invalidate();
-    new RootElementService(this.doc).bindRefAs(cs, op.refAs, el);
+    new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, el);
     return cs;
   }
 
   private applyKey(el: El, key: string, value: string, cs: ChangeSet): void {
     if (key.includes(':')) value = this.coercer.vendorValue(el, key, value);
     const detail = value ? `${key}=${value}` : `${key} removed`;
-    switch (key) {
-      case 'id': {
-        if (!value) throw PropertyCoercer.invalid(el, key, 'an id cannot be empty');
-        const old = idOf(el);
-        new FlowIdFollower(this.doc).recordFormerEnd(el);
-        new IdRenameService(this.doc).rename(el, value);
-        cs.change(ChangeSet.entryOf(el, `renamed from ${old}`));
-        return;
-      }
-      case 'name':
-        new FlowIdFollower(this.doc).recordFormerEnd(el);
-        if (is(el, 'bpmn:Group')) new ArtifactService(this.doc).setGroupName(el, value);
-        else el.set('name', value || undefined);
-        break;
-      case 'doc':
-        this.setDocumentation(el, value);
-        break;
-      case 'default':
-        this.setDefaultKey(el, value, cs);
-        break;
-      case 'source':
-      case 'target': {
-        if (!is(el, 'bpmn:SequenceFlow')) throw this.coercer.unknownKey(el, key, 'applies to sequence flows');
-        if (!value) throw PropertyCoercer.invalid(el, key, 'a flow always needs a source and a target');
-        const node = this.doc.require(value, 'bpmn:FlowNode');
-        const renamed = new SequenceFlowService(this.doc).redirect(el, key === 'source' ? { source: node } : { target: node });
-        if (key === 'source') new SequenceFlowService(this.doc).dropIgnoredConditions(node, cs, [el]);
-        cs.change(ChangeSet.flowEntryOf(el, `${ChangeSet.flowEntryOf(el).detail} (${key} changed)${renamedNote(renamed)}`));
-        return;
-      }
-      case 'loop':
-      case 'cardinality':
-      case 'completion':
-        if (!is(el, 'bpmn:Activity')) throw this.coercer.unknownKey(el, key, 'applies to activities');
-        this.setLoopKey(el, key, value, cs);
-        break;
-      case 'expanded': {
-        if (!is(el, 'bpmn:SubProcess')) throw this.coercer.unknownKey(el, key, 'applies to sub-processes');
-        this.doc.layoutRequests.expand(idOf(el), value ? PropertyCoercer.bool(el, key, value) : true);
-        break;
-      }
-      case 'lane': {
-        if (!is(el, 'bpmn:FlowNode')) throw this.coercer.unknownKey(el, key, 'applies to flow nodes');
-        new LaneService(this.doc).assign(el, value ? this.doc.require(value, 'bpmn:Lane', 'lane') : undefined, cs);
-        break;
-      }
-      case 'message':
-        if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) throw this.coercer.unknownKey(el, key, 'applies to events, send tasks and receive tasks');
-        this.setTaskMessage(el, value, cs);
-        break;
-      case 'calledDecision':
-        // BPMN defines no unprefixed calledDecision on other elements: it can only be removed
-        if (is(el, 'bpmn:BusinessRuleTask') || value) {
-          cs.change(ChangeSet.entryOf(el, new DecisionLinkWriter(this.doc).write(el, value, cs)));
-          return;
-        }
-        this.setModelProperty(el, key, value);
-        break;
-      default:
-        if (key.includes(':')) {
-          if (value && new ZeebeSubscription(this.doc).setCorrelationKey(el, key, value, cs)) return;
-          if (value) this.assertVendorHost(el, key, value);
-          if (value) this.assertZeebeHost(el, key, value);
-          this.coercer.setVendorAttribute(el, key, value);
-        } else this.setModelProperty(el, key, value);
-    }
+    const write = SetKeyCatalog.writerOf(key);
+    if (write) {
+      if (write({ doc: this.doc, edit: this.edit, coercer: this.coercer, properties: this, changes: cs }, el, value, key) === 'recorded by the key') return;
+    } else if (key.includes(':')) {
+      if (value && new ZeebeSubscription(this.doc).setCorrelationKey(el, key, value, cs)) return;
+      if (value) this.assertVendorHost(el, key, value);
+      if (value) this.assertZeebeHost(el, key, value);
+      this.coercer.setVendorAttribute(el, key, value);
+    } else this.setModelProperty(el, key, value);
     cs.change(ChangeSet.entryOf(el, detail));
   }
 
@@ -204,20 +146,9 @@ export class PropertyService {
       task.set('messageRef', undefined);
       return;
     }
-    const { el: message, created } = new RootElementService(this.doc).ensure('bpmn:Message', name);
+    const { el: message, created } = new RootElementService(this.doc, this.edit).ensure('bpmn:Message', name);
     task.set('messageRef', message);
     if (created) cs.create({ id: idOf(message), kind: 'message', name: message.get<string>('name'), detail: 'root element' });
-  }
-
-  private setDocumentation(el: El, value: string): void {
-    const docs = many(el, 'documentation');
-    if (!value) {
-      docs.splice(0, docs.length);
-      return;
-    }
-    const first = docs[0];
-    if (first) first.set('text', value);
-    else addTo(el, 'documentation', this.doc.moddle.create('bpmn:Documentation', { text: value }));
   }
 
   /** A default flow has no condition: the flow's own one is removed with a warning. */
@@ -227,7 +158,7 @@ export class PropertyService {
     const expr = flow.get<El | undefined>('conditionExpression');
     const resourceKey = this.coercer.resourceKeyOf(expr);
     const condition = expr?.get<string | undefined>('body') ?? (resourceKey ? `${resourceKey}=${String(expr!.$attrs[resourceKey])}` : undefined);
-    new SequenceFlowService(this.doc).setDefault(flow, true);
+    new SequenceFlowService(this.doc, this.edit).setDefault(flow, true);
     if (condition) {
       cs.warn({
         code: 'W_CONDITION_DROPPED',
@@ -239,10 +170,10 @@ export class PropertyService {
     if (previous && previous !== flow) cs.change(ChangeSet.entryOf(previous, `no longer the default flow of ${idOf(source)}`));
   }
 
-  private setDefaultKey(el: El, value: string, cs: ChangeSet): void {
+  setDefaultKey(el: El, value: string, cs: ChangeSet): void {
     if (is(el, 'bpmn:SequenceFlow')) {
       if (value && PropertyCoercer.bool(el, 'default', value)) this.makeDefaultFlow(el, cs);
-      else new SequenceFlowService(this.doc).setDefault(el, false);
+      else new SequenceFlowService(this.doc, this.edit).setDefault(el, false);
       return;
     }
     if (!descriptorOf(el).propertiesByName?.['default']) {
@@ -252,7 +183,7 @@ export class PropertyService {
       el.set('default', undefined);
       return;
     }
-    const flow = this.doc.require(value, 'bpmn:SequenceFlow', 'sequence flow');
+    const flow = this.edit.require(value, 'bpmn:SequenceFlow', 'sequence flow');
     if (flow.get<El | undefined>('sourceRef') !== el) {
       throw modelError('E_NOT_OUTGOING', `${value} is not an outgoing flow of ${idOf(el)}`, {
         element: idOf(el),
@@ -264,10 +195,10 @@ export class PropertyService {
     this.makeDefaultFlow(flow, cs);
   }
 
-  private setLoopKey(el: El, key: string, value: string, cs: ChangeSet): void {
+  /** Sets one loop key; `completion` on an ad-hoc sub-process sets its own completion condition. */
+  setLoopKey(el: El, key: string, value: string, cs: ChangeSet): void {
     const current = el.get<El | undefined>('loopCharacteristics');
     const isMulti = is(current, 'bpmn:MultiInstanceLoopCharacteristics');
-    // an ad-hoc sub-process has a completion condition of its own
     if (key === 'completion' && is(el, 'bpmn:AdHocSubProcess') && !isMulti) {
       el.set('completionCondition', value ? this.expression(value, el) : undefined);
       return;
@@ -332,7 +263,7 @@ export class PropertyService {
     });
   }
 
-  private setModelProperty(el: El, key: string, value: string): void {
+  setModelProperty(el: El, key: string, value: string): void {
     if (PropertyCoercer.removeUndefined(el, key, value)) return;
     const property = descriptorOf(el).propertiesByName?.[key];
     if (!property || key === 'id') throw this.coercer.unknownKey(el, key);
@@ -373,7 +304,7 @@ export class PropertyService {
     const condition = keys.get('condition') ?? '';
     if (!condition) {
       if (keys.get('language')) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
-      new SequenceFlowService(this.doc).setCondition(flow, undefined);
+      new SequenceFlowService(this.doc, this.edit).setCondition(flow, undefined);
       cs.change(ChangeSet.entryOf(flow, 'condition removed'));
       return;
     }
@@ -385,7 +316,7 @@ export class PropertyService {
     else if (oldLanguage && PropertyService.isJuel(condition) && oldLanguage.toLowerCase() !== 'juel') dropped.push(`language ${oldLanguage}`);
     else language = oldLanguage;
     if (!existing || !is(existing, 'bpmn:FormalExpression')) {
-      new SequenceFlowService(this.doc).setCondition(flow, condition, language);
+      new SequenceFlowService(this.doc, this.edit).setCondition(flow, condition, language);
     } else {
       if (resourceKey) {
         dropped.unshift(`${resourceKey} ${String(existing.$attrs[resourceKey])}`);
@@ -493,7 +424,7 @@ export class PropertyService {
   private applyEventKeys(el: El, keys: Map<string, string>, cs: ChangeSet): void {
     const def = kindOf(el);
     const allowed = def?.triggers ?? [];
-    const change = new TriggerChange(this.doc, el);
+    const change = new TriggerChange(this.doc, this.edit, el);
     const current = change.current;
     let requested: Trigger | undefined;
     if (keys.has('trigger')) {

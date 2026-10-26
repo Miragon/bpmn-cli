@@ -42,6 +42,7 @@ export class WarningLines {
   /**
    * validate's text: FLOOD_MIN or more findings of one advisory rule with one hint become one
    * line naming the most common message.
+   * Advisory rule names carry no E_ / W_, so their errors read `[bpmnlint error]`.
    */
   problems(problems: readonly Warning[]): string {
     const isAdvisory = (problem: Warning): boolean => {
@@ -64,7 +65,6 @@ export class WarningLines {
       const key = keyOf(problem);
       const group = key ? groups.get(key)! : [problem];
       if (group.length < FLOOD_MIN) {
-        // advisory rule names carry no E_ / W_, so their errors read `[bpmnlint error]`
         out.push(isAdvisory(problem) ? renderProblems([problem]).replace(validatorTag(problem), tag(problem)) : renderProblems([problem]));
         continue;
       }

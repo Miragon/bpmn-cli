@@ -30,6 +30,10 @@ export interface PlaceOptions {
 export class ScopePlacer {
   constructor(private readonly opts: PlaceOptions) {}
 
+  /**
+   * Runs the arrangement trials unless the process has lanes: LaneArranger runs them on its rows by
+   * lane instead.
+   */
   layOut(scope: El): ScopeLayout {
     const graph = new ScopeGraph(scope, (node) => this.nest(node));
     const { layout } = graph;
@@ -38,7 +42,6 @@ export class ScopePlacer {
     const grid = new ScopeGrid(layout, this.opts.groups);
     grid.arrange();
     artifacts.placeAttached();
-    // in a laned process LaneArranger runs these trials on its rows by lane instead
     if (!this.hasLanes(scope)) {
       new JoinColumnTrial(layout, (shifts) => {
         grid.arrange(shifts);

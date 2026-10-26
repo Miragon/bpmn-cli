@@ -1,12 +1,12 @@
-import { ElementOrderService } from './ElementOrderService.js';
-import { laneSetOf } from '../document/utils/lanes.js';
-import type { ReorderElements } from '../commands/types.js';
-import { bottom, copyBox, cx, cy, right } from '../diagram/utils/geom.js';
-import { idOf, rawList } from '../diagram/utils/raw.js';
-import type { DShape } from '../diagram/di/types.js';
-import type { Semantics } from '../diagram/di/Semantics.js';
-import { DrawingSnapshot } from '../diagram/layout/incremental/DrawingSnapshot.js';
-import type { DrawnDiagram } from '../diagram/DrawnDiagram.js';
+import { laneSetOf } from '../../document/utils/lanes.js';
+import type { ReorderElements } from '../../commands/types.js';
+import { ReorderTarget } from '../../commands/ReorderTarget.js';
+import { bottom, copyBox, cx, cy, right } from '../utils/geom.js';
+import { idOf, rawList } from '../utils/raw.js';
+import type { DShape } from '../di/types.js';
+import type { Semantics } from '../di/Semantics.js';
+import { DrawingSnapshot } from '../layout/incremental/DrawingSnapshot.js';
+import type { DrawnDiagram } from '../DrawnDiagram.js';
 
 /**
  * The diagram part of an `order` op: lane or pool bands follow the new semantic order,
@@ -35,6 +35,10 @@ export class LaneBandService {
     return out;
   }
 
+  /**
+   * Restacks the lanes in their model order; the members of each band are decided before anything
+   * moves. A band whose members hang out at its bottom grows, so nothing lands in the band below.
+   */
   private orderBands(): string[] {
     const owner = this.diagram.doc.get(this.op.id);
     const set = owner ? laneSetOf(owner) : undefined;
@@ -47,7 +51,6 @@ export class LaneBandService {
     const bands = lanes.map((id) => plane.shapes.get(id)!);
     const byY = [...bands].sort((one, other) => one.bounds.y - other.bounds.y);
     if (bands.every((band, index) => band === byY[index])) return [];
-    // decided before anything moves
     const subtrees = new Map(bands.map((band) => [band.id, this.laneSubtree(this.diagram.sem, band.id)]));
     const poolId = bands[0]!.poolId;
     const members = new Map<string, string[]>(bands.map((band) => [band.id, []]));
@@ -74,7 +77,6 @@ export class LaneBandService {
         else this.diagram.drawing(plane).shift(id, 0, dy);
       }
     }
-    // a band whose members hang out at its bottom grows, so nothing lands in the band below
     const pool = poolId ? plane.shapes.get(poolId) : undefined;
     for (const band of bands) {
       const lowest = Math.max(-Infinity, ...members.get(band.id)!.map((id) => plane.shapes.get(id)!).filter((member) => member.kind !== 'lane').map((member) => bottom(this.diagram.drawing(plane).unitBox(member))));
@@ -84,7 +86,11 @@ export class LaneBandService {
     return this.diagram.drawing(plane).settle(this.snap);
   }
 
-  /** The gaps between the old slots stay; pools that share rows keep their places. */
+  /**
+   * The gaps between the old slots stay; pools that share rows keep their places.
+   * The members of each pool are decided before anything moves; collaboration-level artifacts (no
+   * process) go with the pool they are drawn in.
+   */
   private orderPoolBands(): string[] {
     const collab = this.diagram.doc.get(this.op.id);
     const ids = rawList(collab, 'participants').map((participant) => idOf(participant)!).filter(Boolean);
@@ -103,12 +109,10 @@ export class LaneBandService {
       }
     }
     const gaps = byY.slice(1).map((band, index) => band.bounds.y - bottom(byY[index]!.bounds));
-    // decided before anything moves
     const members = new Map<string, DShape[]>(bands.map((band) => [band.id, []]));
     for (const shape of plane.shapes.values()) {
       if (shape.kind === 'participant' || shape.hostId || shape.parentId) continue;
       let pool = shape.poolId && members.has(shape.poolId) ? shape.poolId : undefined;
-      // collaboration-level artifacts (no process) go with the pool they are drawn in
       if (!pool && !shape.poolId) pool = bands.find((band) => cy(shape.bounds) >= band.bounds.y && cy(shape.bounds) <= bottom(band.bounds) && cx(shape.bounds) >= band.bounds.x && cx(shape.bounds) <= right(band.bounds))?.id;
       if (pool) members.get(pool)!.push(shape);
     }
@@ -127,6 +131,6 @@ export class LaneBandService {
   }
 
   run(): string[] {
-    return new ElementOrderService(this.diagram.doc, this.op).ordersPools() ? this.orderPoolBands() : this.orderBands();
+    return new ReorderTarget(this.diagram.doc, this.op).ordersPools() ? this.orderPoolBands() : this.orderBands();
   }
 }

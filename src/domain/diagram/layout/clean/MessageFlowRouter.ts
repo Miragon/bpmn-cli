@@ -63,12 +63,14 @@ export class MessageFlowRouter {
     private readonly pools: MessagePool[],
   ) {}
 
+  /**
+   * The pool order whose message flows cut the fewest shapes; the hits of every end leaving upwards
+   * / downwards do not depend on the order (a pool end has nothing in its way).
+   */
   poolOrder(): MessagePool[] {
     const { pools, jobs } = this;
     if (pools.length < 2 || pools.length > MAX_PERMUTED || !jobs.length) return pools;
-    // hits of every end when it leaves upwards / downwards: independent of the order
     const endCost = (box: Box, own: Box[], el: El, pool?: MessagePool): { up: number; down: number } => {
-      // a pool end has nothing in its way
       const inside = is(el, 'bpmn:Participant') ? undefined : pool;
       return { up: this.straightHits(box, own, inside, true), down: this.straightHits(box, own, inside, false) };
     };
@@ -99,7 +101,12 @@ export class MessageFlowRouter {
     return best;
   }
 
-  /** Expects the pools in their final top-to-bottom order. */
+  /**
+   * Expects the pools in their final top-to-bottom order.
+   * One channel per flow and gap, in the order with the fewest crossings (few flows per gap, so all
+   * are tried; with more, flows that start further left get the upper channel). A straight flow
+   * carries its label in the middle of the gap.
+   */
   route(): Array<{ el: El; points: Point[]; channelY?: number }> {
     const { pools, jobs } = this;
     const rightEdge = Math.max(0, ...pools.map((pool) => pool.box.x + pool.box.width));
@@ -110,7 +117,6 @@ export class MessageFlowRouter {
       return { top, bottom };
     };
     const plans = jobs.map((job) => this.planOf(job));
-    // one channel per flow and gap: flows that start further left get the upper channel
     const channels = new Map<string, number>();
     const byGap = new Map<number, Plan[]>();
     for (const plan of plans) for (const gap of new Set(plan.gaps)) byGap.set(gap, [...(byGap.get(gap) ?? []), plan]);
@@ -118,7 +124,6 @@ export class MessageFlowRouter {
       const range = gapRange(gap);
       const level = (channelIndex: number, channelCount: number): number => Math.round(range.top + ((channelIndex + 1) * (range.bottom - range.top)) / (channelCount + 1));
       const sorted = [...list].sort((left, right) => Math.min(left.sx, left.tx) - Math.min(right.sx, right.tx));
-      // pick the channel order with the fewest crossings (few flows per gap, so try them all)
       const order = sorted.length <= 5 ? this.bestChannelOrder(sorted, level, range) : sorted;
       order.forEach((plan, channelIndex) => channels.set(`${gap}|${plans.indexOf(plan)}`, level(channelIndex, order.length)));
     }
@@ -132,7 +137,6 @@ export class MessageFlowRouter {
       if (!plan.outside) {
         const channelHeight = channels.get(`${plan.gaps[0]}|${index}`) ?? Math.round((sy + ty) / 2);
         middle = Math.abs(sx - tx) < 1 ? [] : [{ x: sx, y: channelHeight }, { x: tx, y: channelHeight }];
-        // a straight flow carries its label in the middle of the gap
         const range = gapRange(plan.gaps[0]!);
         channelY = middle.length ? channelHeight : Math.round((range.top + range.bottom) / 2);
       } else {
@@ -210,6 +214,10 @@ export class MessageFlowRouter {
     return this.hits(line, this.obstaclesFor(pool, box, own, up)) + (this.alongCost(line, pool.lines) >= 300 ? 1 : 0);
   }
 
+  /**
+   * Xs for a vertical run through the gaps between obstacles: in a narrow gap the middle or beside
+   * it (sequence flows use the middle), in a wide one near `near`.
+   */
   private corridorXs(pool: MessagePool, obstacles: Box[], y1: number, y2: number, near: number): number[] {
     const lo = Math.min(y1, y2), hi = Math.max(y1, y2);
     const spans = obstacles
@@ -221,7 +229,6 @@ export class MessageFlowRouter {
     let cursor = left;
     const gap = (gapStart: number, gapEnd: number): void => {
       if (gapEnd < gapStart) return;
-      // narrow gap: the middle or beside it (sequence flows use the middle); wide: near `near`
       if (gapEnd - gapStart > 120) out.push(Math.round(Math.min(Math.max(near, gapStart + 20), gapEnd - 20)));
       else out.push(Math.round((gapStart + gapEnd) / 2), Math.round((gapStart + gapEnd) / 2 - Math.min(10, (gapEnd - gapStart) / 2)), Math.round((gapStart + gapEnd) / 2 + Math.min(10, (gapEnd - gapStart) / 2)));
     };
@@ -239,6 +246,10 @@ export class MessageFlowRouter {
     return box.width >= 100 ? [cx, cx - 25, cx + 25] : [cx];
   }
 
+  /**
+   * A clean straight line where there is one (the middle first, else the one crossing the fewest
+   * lines), else a jog clearing the boundary events hanging out of the border it leaves.
+   */
   private legOf(box: Box, own: Box[], pool: MessagePool | undefined, up: boolean, el: El): Leg {
     const edge = up ? box.y : box.y + box.height;
     const exits = this.exitXs(box);
@@ -247,13 +258,11 @@ export class MessageFlowRouter {
     const border = up ? pool.box.y : pool.box.y + pool.box.height;
     const obstacles = this.obstaclesFor(pool, box, own, up);
     const score = (pts: Point[]): number => this.hits(pts, obstacles) * 1000 + crossings(pts, pool.lines) * 5 + this.alongCost(pts, pool.lines);
-    // clean straight lines: the middle first, else the one crossing the fewest lines
     const clean = exits
       .map((exitX, exitIndex) => ({ x: exitX, line: [{ x: exitX, y: edge }, { x: exitX, y: border }], exitIndex }))
       .filter(({ line }) => !this.hits(line, obstacles) && this.alongCost(line, pool.lines) < 300)
       .map(({ x: exitX, line, exitIndex }) => ({ x: exitX, score: exitIndex === 0 ? -1 : crossings(line, pool.lines) * 5 + exitIndex }));
     if (clean.length) return straight(clean.reduce((bestExit, candidate) => (candidate.score < bestExit.score ? candidate : bestExit)).x);
-    // the jog clears the boundary events hanging out of the border it leaves
     const reach = up ? Math.min(box.y, ...own.filter((boundaryEvent) => this.onTop(boundaryEvent, box)).map((boundaryEvent) => boundaryEvent.y)) : Math.max(box.y + box.height, ...own.map((boundaryEvent) => boundaryEvent.y + boundaryEvent.height));
     const jy = Math.round(up ? reach - JOG : reach + JOG);
     let best: { leg: Leg; score: number } = { leg: straight(exits[0]!), score: score([{ x: exits[0]!, y: edge }, { x: exits[0]!, y: border }]) };

@@ -23,6 +23,7 @@ export class C8Profile extends EngineProfile {
   private events!: C8EventRules;
   private flows!: C8FlowRules;
 
+  /** Checks the document; the root elements the executable processes use are checked through their events. */
   protected override checkDocument(run: RuleRun): void {
     const { doc } = run;
     const prefix = run.ns.prefixOf(this.kit.zeebe.uri) ?? 'zeebe';
@@ -34,7 +35,6 @@ export class C8Profile extends EngineProfile {
     const processes = doc.processes();
     const executable = processes.filter((proc) => peek<boolean>(proc, 'isExecutable') === true);
     schema.checkExecutable(processes, executable);
-    // the root elements the processes use are checked through their events
     for (const proc of executable) this.visit(proc, undefined, true);
     this.extensions.checkCaughtMessages(executable);
     schema.checkSchemaEventDefinitions();

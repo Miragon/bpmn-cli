@@ -1,10 +1,12 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError, usageError } from '../document/utils/errors.js';
 import { insertInto, is, many, removeFrom, type El } from '../document/utils/moddle.js';
 import { ChangeSet } from '../document/ChangeSet.js';
 import { idOf } from '../document/utils/elements.js';
 import { laneSetOf } from '../document/utils/lanes.js';
 import type { ReorderElements } from '../commands/types.js';
+import { ReorderTarget } from '../commands/ReorderTarget.js';
 
 /**
  * The `order` op: the top-to-bottom order of a node's outgoing flows, of lanes or of pools.
@@ -14,43 +16,27 @@ import type { ReorderElements } from '../commands/types.js';
 export class ElementOrderService {
   constructor(
     private readonly doc: Doc,
+    private readonly edit: EditContext,
     private readonly op: ReorderElements,
   ) {}
 
-  ordersLanes(): boolean {
-    if (this.op.lanes?.length) return true;
-    const first = this.op.flows?.[0];
-    return !!first && is(this.doc.get(first), 'bpmn:Lane');
-  }
-
-  ordersPools(): boolean {
-    if (this.op.pools?.length) return true;
-    if (is(this.doc.get(this.op.id), 'bpmn:Collaboration')) return true;
-    const first = this.op.flows?.[0];
-    return !!first && is(this.doc.get(first), 'bpmn:Participant');
-  }
-
-  /** The diagram phase reorders the bands of a kept diagram. */
-  ordersBands(): boolean {
-    return this.ordersLanes() || this.ordersPools();
-  }
-
   apply(): ChangeSet {
-    if (this.ordersPools()) return this.orderPools();
-    if (this.ordersLanes()) return this.orderLanes();
+    const target = new ReorderTarget(this.doc, this.op);
+    if (target.ordersPools()) return this.orderPools();
+    if (target.ordersLanes()) return this.orderLanes();
     return this.orderOutgoing();
   }
 
   private orderPools(): ChangeSet {
     const { doc, op } = this;
     const cs = new ChangeSet();
-    const collab = doc.require(op.id, 'bpmn:Collaboration', 'collaboration');
+    const collab = this.edit.require(op.id, 'bpmn:Collaboration', 'collaboration');
     const ids = op.pools ?? op.flows ?? [];
     if (!ids.length) throw usageError('order needs the participant ids in the wanted top-to-bottom order', { element: op.id });
     const participants = many(collab, 'participants');
     const listed: El[] = [];
     for (const id of ids) {
-      const participant = doc.require(id, 'bpmn:Participant', 'participant (pool)');
+      const participant = this.edit.require(id, 'bpmn:Participant', 'participant (pool)');
       if (!participants.includes(participant)) {
         throw modelError('E_NOT_PARTICIPANT', `${id} is not a participant of ${idOf(collab)}`, {
           element: idOf(collab),
@@ -76,13 +62,13 @@ export class ElementOrderService {
   private orderLanes(): ChangeSet {
     const { doc, op } = this;
     const cs = new ChangeSet();
-    const owner = doc.require(op.id, ['bpmn:Process', 'bpmn:Participant', 'bpmn:Lane'], 'process, participant or lane');
+    const owner = this.edit.require(op.id, ['bpmn:Process', 'bpmn:Participant', 'bpmn:Lane'], 'process, participant or lane');
     const ids = op.lanes ?? op.flows ?? [];
     const set = laneSetOf(owner);
     const lanes = set ? many(set, 'lanes') : [];
     const listed: El[] = [];
     for (const id of ids) {
-      const lane = doc.require(id, 'bpmn:Lane', 'lane');
+      const lane = this.edit.require(id, 'bpmn:Lane', 'lane');
       if (!lanes.includes(lane)) {
         throw modelError('E_NOT_CHILD_LANE', `${id} is not a direct child lane of ${idOf(owner)}`, {
           element: idOf(owner),
@@ -110,12 +96,12 @@ export class ElementOrderService {
   private orderOutgoing(): ChangeSet {
     const { doc, op } = this;
     const cs = new ChangeSet();
-    const node = doc.require(op.id, 'bpmn:FlowNode');
+    const node = this.edit.require(op.id, 'bpmn:FlowNode');
     if (!op.flows?.length) throw usageError('order needs the flow ids in the wanted order', { element: op.id });
     const outgoing = doc.outgoing(node);
     const listed: El[] = [];
     for (const flowId of op.flows) {
-      const flow = doc.require(flowId, 'bpmn:SequenceFlow', 'sequence flow');
+      const flow = this.edit.require(flowId, 'bpmn:SequenceFlow', 'sequence flow');
       if (!outgoing.includes(flow)) {
         throw modelError('E_NOT_OUTGOING', `${flowId} is not an outgoing flow of ${idOf(node)}`, {
           element: idOf(node),

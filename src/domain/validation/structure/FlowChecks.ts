@@ -5,7 +5,10 @@ import { is, type El, peek, list, shownId } from '../../document/utils/moddle.js
 import { FlowRules } from '../../document/FlowRules.js';
 import type { StructureFindings } from './StructureFindings.js';
 
-/** Sequence flows (ends, mirror lists, default flow) and message flows. */
+/**
+ * Sequence flows (ends, mirror lists, default flow) and message flows.
+ * A flow with a missing end is skipped here, as checkReferences reports it.
+ */
 export class FlowChecks {
   constructor(
     private readonly doc: Doc,
@@ -15,7 +18,7 @@ export class FlowChecks {
   checkSequenceFlow(flow: El, scope: El): void {
     const source = peek<El>(flow, 'sourceRef');
     const target = peek<El>(flow, 'targetRef');
-    if (!source || !target) return; // reported by checkReferences
+    if (!source || !target) return;
     try {
       new FlowRules(this.doc).assertEndpoints(source, target);
     } catch (err) {
@@ -68,8 +71,8 @@ export class FlowChecks {
     }
   }
 
+  /** Checks that a default flow leaves its node; only exclusive/inclusive/complex gateways and activities have a `default` property. */
   checkDefaultFlow(node: El): void {
-    // only exclusive/inclusive/complex gateways and activities have a `default` property
     const def = peek<El>(node, 'default');
     if (!def || this.outgoingOf(node).includes(def)) return;
     this.findings.error('E_INVALID_DEFAULT', `Default flow ${shownId(def)} of ${this.findings.describe(node)} is not one of its outgoing flows`, shownId(node), {
@@ -83,7 +86,7 @@ export class FlowChecks {
     for (const mf of doc.messageFlows()) {
       const source = peek<El>(mf, 'sourceRef');
       const target = peek<El>(mf, 'targetRef');
-      if (!source || !target) continue; // reported by checkReferences
+      if (!source || !target) continue;
       let bad = false;
       for (const end of [source, target]) {
         if (!is(end, 'bpmn:InteractionNode')) {

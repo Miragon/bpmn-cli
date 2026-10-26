@@ -81,10 +81,10 @@ export class ChainResolver implements BpmnlintChain {
     return [...[...this.leftOut].map((pkg) => ({ ids: [pkg], state: this.before.get(pkg)! })), ...[...this.loadFailures].map(([file, failure]) => ({ ids: [file], state: failure.state }))];
   }
 
+  /** The first tier that answers; a tier that throws hands over to the next. The package state is recorded before any tier looks, so an install landing meanwhile still invalidates the cache. */
   private async first(kind: 'rule' | 'config', pkg: string, name: string): Promise<unknown> {
     const key = `${kind}:${pkg}/${name}`;
     if (this.answers.has(key)) return this.answers.get(key);
-    // recorded before any tier looks, so an install landing meanwhile still invalidates the cache
     if (pkg !== 'bpmnlint' && !this.before.has(pkg)) this.before.set(pkg, depState(this.rcDir, [pkg]));
     const tiers = this.pinned.has(pkg) ? [...this.tiers.filter((tier) => tier.name === 'project'), ...this.tiers.filter((tier) => tier.name !== 'project')] : this.tiers;
     for (const tier of tiers) {
@@ -96,13 +96,12 @@ export class ChainResolver implements BpmnlintChain {
         this.used.set(key, tier.name);
         if (kind === 'config' && tier.name === 'project') this.pinned.add(pkg);
         return answer;
-      } catch {
-        /* the next tier */
-      }
+      } catch {}
     }
     throw this.reason(kind, pkg, name);
   }
 
+  /** The package is resolved only to tell "not installed" from "outside the repository"; nothing is loaded. */
   private reason(kind: 'rule' | 'config', pkg: string, name: string): Error {
     const fail = (message: string, hint: string) => Object.assign(new Error(message), { hint });
     const where = shown(this.rcDir, this.opts.from);
@@ -111,7 +110,6 @@ export class ChainResolver implements BpmnlintChain {
       return fail(`bpmnlint ${version} has no ${kind} ${name}`, `bpmn-cli runs bpmnlint ${version}; update bpmn-cli or remove the ${kind}.`);
     }
     this.leftOut.add(pkg);
-    // resolved only to tell "not installed" from "outside the repository"; nothing is loaded
     let path: string | undefined;
     try {
       path = createRequire(join(this.rcDir, '__bpmn-cli__.js')).resolve(pkg);
@@ -156,7 +154,10 @@ export class ChainResolver implements BpmnlintChain {
     return undefined;
   }
 
-  /** A require that loads entry modules only from inside the repository root. */
+  /**
+   * A require that loads entry modules only from inside the repository root.
+   * The state of each module is taken before the require, so a fix written while it runs still invalidates the cache.
+   */
   private boundedRequire(failures: Map<string, LoadFailureOf>): Require {
     const req = createRequire(join(this.rcDir, '__bpmn-cli__.js')) as Require;
     const check = (id: string): string => {
@@ -166,7 +167,6 @@ export class ChainResolver implements BpmnlintChain {
     };
     const bounded = ((id: string) => {
       const path = check(id);
-      // taken before the require, so a fix written while it runs still invalidates the cache
       const state = depState(this.rcDir, [path]);
       try {
         return req(path);

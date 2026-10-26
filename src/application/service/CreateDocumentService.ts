@@ -12,12 +12,12 @@ export class CreateDocumentService implements CreateDocumentUseCase {
     private readonly settings: LoadProjectSettingsPort,
   ) {}
 
+  /** An existing file fails before the .bpmnlintrc is read. */
   async create(command: CreateDocumentUseCase.Command): Promise<CreateDocumentUseCase.Result> {
     const { destination, ...opts } = command;
     if (opts.processId !== undefined) Doc.assertProcessId(opts.processId);
     const target = opts.out ?? destination;
     if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
-    // fail before the .bpmnlintrc is read: a file that exists
     if (opts.mustNotExist) await this.save.assertNew(target, opts);
     const lint = await this.settings.lint(opts.file ?? target, opts);
     const conventions = opts.conventions ?? (await this.settings.idConventions(target, opts))?.conventions;

@@ -104,6 +104,7 @@ export class DiWriter {
     for (const childLane of lane.children) this.emitLane(childLane, origin);
   }
 
+  /** A collapsed sub-process gets only its shape here, its content lives on its own plane. */
   private emitNode(node: GNode, origin: Point): void {
     const box = this.shift(node.box, origin);
     if (node.child) {
@@ -112,7 +113,7 @@ export class DiWriter {
       const pad = node.childPad ?? { left: 0, top: padding.top, inner: node.child.width };
       this.emitScope(node.child, { x: box.x + padding.left + pad.left + Math.max(0, (box.width - padding.left - padding.right - pad.inner) / 2), y: box.y + pad.top });
     } else if (node.kind === 'subProcess' || node.kind === 'eventSubProcess') {
-      this.shape(node.el, box); // collapsed: own plane
+      this.shape(node.el, box);
     } else {
       const kind = node.kind === 'gateway' ? 'gateway' : is(node.el, 'bpmn:Event') ? 'event' : undefined;
       const label = kind ? ScopeLabels.of(node, kind) : undefined;

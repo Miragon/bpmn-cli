@@ -1,12 +1,14 @@
-import { LAYOUT_MODES } from '../../../domain/batch/types.js';
+import { LAYOUT_MODES } from '../../../domain/diagram/types.js';
 import { Doc } from '../../../domain/document/Doc.js';
+import { EditContext } from '../../../domain/document/EditContext.js';
 import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../../../domain/document/utils/kinds.js';
 import { SWATCHES } from '../../../domain/diagram/utils/colors.js';
 import { OPS_SCHEMA } from '../../../domain/commands/OpsSchemaBuilder.js';
-import { OP_DESCRIPTIONS, OP_FIELDS, opsExample } from '../../../domain/commands/utils/op-fields.js';
+import { opsExample } from '../../../domain/commands/utils/op-fields.js';
+import { EditCommandDefinitions } from '../../../domain/commands/definitions/EditCommandDefinitions.js';
 import { EXTENSION_STRUCTURE } from '../../../domain/editing/extensions/ExtensionStructure.js';
 import { NESTED_SLOTS, NESTED_TYPES, type NestedSlot } from '../../../domain/document/utils/nested-slots.js';
-import { SET_KEYS, type SetKeyDoc } from '../../../domain/editing/PropertyCoercer.js';
+import { SET_KEYS, SetKeyCatalog, type SetKeyDoc } from '../../../domain/editing/SetKeyCatalog.js';
 import { OP_NAMES } from '../../../domain/commands/utils/op-names.js';
 import { ZEEBE } from '../../../domain/document/vendor/ZeebeDescriptor.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
@@ -88,7 +90,7 @@ export class KindsReference {
         ]),
       ),
       nonInterrupting: NON_INTERRUPTING_DOC,
-      setKeys: SET_KEYS,
+      setKeys: SetKeyCatalog.docs(),
       nestedKeys: this.nestedKeyTable(),
       nestedSelectors: NESTED_SELECTORS,
       zeebeElements: this.zeebeElementTable(),
@@ -144,9 +146,9 @@ export class KindsReference {
   opsSection(): string {
     const out: string[] = [heading('OPS JSON  (bpmn apply <file> ops.json; keys = CLI flags in lowerCamelCase; full schema: bpmn kinds --json -> ops)')];
     for (const opName of OP_NAMES) {
-      const required = Object.entries(OP_FIELDS[opName]).filter(([, spec]) => spec.required).map(([key]) => key);
-      out.push(`  ${opName.padEnd(8)} ${OP_DESCRIPTIONS[opName]}`);
-      out.push(`           keys: ${Object.keys(OP_FIELDS[opName]).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
+      const required = Object.entries(EditCommandDefinitions.of(opName).fields).filter(([, spec]) => spec.required).map(([key]) => key);
+      out.push(`  ${opName.padEnd(8)} ${EditCommandDefinitions.of(opName).description}`);
+      out.push(`           keys: ${Object.keys(EditCommandDefinitions.of(opName).fields).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
     }
     out.push('\nBatch aliases: "as": "$name" on add / connect / split / split nodes ("flowAs" on add and split nodes: the flow into the');
     out.push('node, on a prepend before a join or a node without incoming flow the flow out of it; "outAs" on add: the one flow');
@@ -257,14 +259,16 @@ export class KindsReference {
 
   private nestedKeyTable(): Record<NestedSlot, Record<string, string[]>> {
     const doc = Doc.create();
+    const edit = new EditContext(doc);
     const table = {} as Record<NestedSlot, Record<string, string[]>>;
     for (const slot of NESTED_SLOTS) {
       table[slot] = {};
-      for (const type of NESTED_TYPES[slot]) table[slot][type] = new NestedSlots(doc).keysOf(slot, doc.moddle.create(type));
+      for (const type of NESTED_TYPES[slot]) table[slot][type] = new NestedSlots(doc, edit).keysOf(slot, doc.moddle.create(type));
     }
     return table;
   }
 
+  /** A whole family (all events, all tasks, ...) an element is allowed on is named once. */
   private zeebeElementTable(): ZeebeElementDoc[] {
     const out: ZeebeElementDoc[] = [];
     for (const name of ZEEBE.typeNames()) {
@@ -273,7 +277,6 @@ export class KindsReference {
       if (ZEEBE.nestedOnly(name)) on.push(...ZEEBE.containersOf(name).map((container) => `in ${container}`));
       else {
         if (ZEEBE.allowedOn(name, 'bpmn:Process') === true) on.push('process');
-        // a whole family (all events, all tasks, ...) is named once
         const families = new Map<string, KindDef[]>();
         for (const kind of KINDS) families.set(kind.family, [...(families.get(kind.family) ?? []), kind]);
         for (const [family, kinds] of families) {

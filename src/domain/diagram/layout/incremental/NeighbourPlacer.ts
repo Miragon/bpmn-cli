@@ -37,13 +37,15 @@ export class NeighbourPlacer {
     private readonly boundaries: BoundaryPlacer,
   ) {}
 
-  /** Places at a chosen candidate, opening its row (or seating the event on top) first. */
+  /**
+   * Places at a chosen candidate, opening its row (or seating the event on top) first.
+   * The event is seated after the room was made.
+   */
   private placeCand(plane: Plane, id: string, probe: Probe, cand: Cand, anchor: DShape): void {
     if (cand.insert) {
       const { line, delta, within, frame } = cand.insert;
       this.placer.recordSpace(this.placer.drawing(plane).makeSpace({ axis: 'y', line, delta, anchors: [anchor.id, probe.parentId], ...(within ? { within } : {}), ...(frame ? { frame } : {}) }));
     }
-    // the spot after the room was made
     if (cand.top) this.boundaries.seatOnTop(plane, anchor, cand.top);
     this.placer.placeAt(plane, id, cand.x, this.rows.intoOwnLane(plane, probe, cand.x, cand.centre, cand.size, [], anchor), cand.size);
   }
@@ -69,12 +71,12 @@ export class NeighbourPlacer {
   /**
    * The successor S a node is spliced before (the flow into it ended at S before the ops), also
    * through a chain of new nodes, branches included; a new branch that never reaches S is none.
+   * Inside the chain the predecessor was spliced before S in this run, and S still follows.
    */
   private spliceTarget(plane: Plane, id: string, pred: string): string | undefined {
     const el = this.placer.sem.byId.get(id);
     const join = this.placer.joins?.get(id);
     if (join) return join;
-    // inside the chain: the predecessor was spliced before S in this run, and S still follows
     const before = this.placer.placed.has(pred) ? this.placer.spliced?.get(pred) : undefined;
     if (before && before !== id && this.chainReaches(plane, id, before)) return before;
     const succ = new Set(this.placer.sem.successors(id));
@@ -154,6 +156,14 @@ export class NeighbourPlacer {
     return leftReach && rightReach && leftReach.side === rightReach.side ? Math.ceil(Math.max(0, leftReach.right) + Math.max(0, rightReach.left) + 4) : 0;
   }
 
+  /**
+   * A splice or continuation goes on the anchor's row, or S's; when S's row lies in another lane
+   * than the node's own the row follows the node's lane (audit #14). Gaps grow so labels of
+   * neighbours on one side (events below, gateways above) keep apart. A new branch takes the
+   * cheapest free row below the anchor's branches in its own frame (one into another lane does not
+   * count), or a row above an anchor without a branch above, which wins only when every row below
+   * crosses.
+   */
   placeAfter(plane: Plane, id: string, preds: DShape[], pending: ReadonlySet<string>): void {
     const sp = this.placer.spacingFor(plane);
     const size = this.placer.sizeFor(plane, id);
@@ -188,7 +198,6 @@ export class NeighbourPlacer {
     if (successor) (this.placer.spliced ??= new Map()).set(id, successor.id);
     const maxRight = Math.max(...preds.map((predecessor) => right(predecessor.bounds)));
     if (successor || !succShapes.length) {
-      // splice / continuation on the anchor's row
       const sameRow = successor && Math.abs(cy(successor.bounds) - cy(main.bounds)) <= sp.rowTol;
       /**
        * a branching anchor: another branch is drawn, or was drawn before the ops and leads to a
@@ -197,9 +206,7 @@ export class NeighbourPlacer {
       const branching = succShapes.length > 0 || Semantics.sequenceFlows(this.placer.sem.byId.get(main.id), 'outgoing').some((flow) => idOf(raw(flow, 'targetRef')) !== id && this.placer.oldTarget.has(idOf(flow) ?? ''));
       const onS = !!successor && (sameRow || branching);
       let center = onS ? cy(successor.bounds) : cy(main.bounds);
-      // S's row in another lane than the node's own: the row follows the node's lane (audit #14)
       const ownRow = !!successor && onS && !!probe.laneId && successor.laneId !== probe.laneId;
-      // labels of neighbours on one side (events below, gateways above) keep apart: gaps grow
       const reach = this.newReach(id, size);
       const gap = Math.max(sp.gap, this.labelRoom(this.reachOf(main), reach));
       const sGap = successor ? this.labelRoom(reach, this.reachOf(successor)) : 0;
@@ -218,15 +225,12 @@ export class NeighbourPlacer {
       if (!successor) (this.placer.continued ??= new Set()).add(id);
       return;
     }
-    // new branch: a free row below the anchor's existing branches (cheapest connection)
     const left = right(main.bounds) + sp.gap;
-    // the anchor's branches in the new node's own frame (one into another lane does not count)
     const below = succShapes.filter((shape) => cy(shape.bounds) >= cy(main.bounds) - sp.rowTol && Frames.of(plane, shape) === frame);
     const base = Math.max(cy(main.bounds), ...below.map((shape) => cy(shape.bounds)));
     const floor = Math.max(bottom(main.bounds), ...below.map((shape) => cy(shape.bounds)));
     const extent = this.chainExtent(plane, id, pending, sp.gap);
     const cands = this.rows.rowCandidates(plane, probe, frame, left, size, extent, base + sp.row, sp.row, floor, exclude, 0, main, cx(main.bounds));
-    // rows above an anchor without a branch above (they win only when every row below crosses)
     if (!succShapes.some((shape) => cy(shape.bounds) < cy(main.bounds) - sp.rowTol && Frames.of(plane, shape) === frame)) cands.push(...this.rows.rowsAbove(plane, probe, frame, main, left, size, extent, cy(main.bounds) - sp.row, sp.row, exclude, TOP_ROW));
     this.placeCand(plane, id, probe, this.rows.cheapest(id, plane, main, kind, cands), main);
   }

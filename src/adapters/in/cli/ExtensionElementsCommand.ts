@@ -43,10 +43,10 @@ export class ExtensionElementsCommand extends MutationCommand {
     }, opts.json);
   }
 
+  /** `2` or `loop.2` is an index into the extension elements; anything else a selector. */
   private async remove(file: string, id: string, typeOrIndex: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
-      // `2` or `loop.2` is an index into the extension elements; anything else a selector
       const indexed = /^(?:(definition|loop|condition)\.)?(\d+)$/.exec(typeOrIndex.trim());
       const op: EditExtensionElements = indexed
         ? { op: 'ext', id, action: 'remove', index: Number(indexed[2]), ...(indexed[1] ? { slot: indexed[1] as EditExtensionElements['slot'] } : {}) }

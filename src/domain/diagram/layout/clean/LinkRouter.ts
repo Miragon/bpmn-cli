@@ -36,7 +36,10 @@ export class LinkRouter {
     }
   }
 
-  /** The candidate path that cuts no shape, crosses the fewest lines and is shortest wins. */
+  /**
+   * The candidate path that cuts no shape, crosses the fewest lines and is shortest wins.
+   * The plain diagonal BPMN draws by default is a candidate too.
+   */
   private linkPath(artifactBox: Box, targetBox: Box, node: GNode | undefined, boxes: Box[], lines: Segment[], end: 'shape' | 'flow'): Point[] {
     const ac = center(artifactBox), nc = center(targetBox);
     const ignore = [artifactBox, targetBox];
@@ -83,7 +86,6 @@ export class LinkRouter {
         push(...exit, { x: approachX, y: runY }, { x: approachX, y: nc.y }, { x: nSideX, y: nc.y });
       }
     }
-    // the plain diagonal BPMN draws by default
     cands.push([borderPoint(artifactBox, nc), end === 'flow' ? nc : borderPoint(targetBox, ac)]);
     const length = (pts: Point[]): number => {
       let len = 0;

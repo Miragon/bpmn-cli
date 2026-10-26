@@ -13,11 +13,13 @@ export interface CreateDocumentUseCase {
 
 export declare namespace CreateDocumentUseCase {
 
+  /** What the new document holds and where it is written. */
   interface Command extends NewDocOptions, FileMutationOptions {
 
     /** where the document goes (undefined: nowhere yet); `out` overrides it */
     destination?: string;
   }
 
+  /** The written (or dry-run) document and what was checked on it. */
   type Result = MutationResult;
 }

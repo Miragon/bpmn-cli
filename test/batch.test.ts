@@ -2,7 +2,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { OPS_SCHEMA } from '../src/domain/commands/OpsSchemaBuilder.js';
-import { OP_FIELDS, opsExample } from '../src/domain/commands/utils/op-fields.js';
+import { opsExample } from '../src/domain/commands/utils/op-fields.js';
+import { EditCommandDefinitions } from '../src/domain/commands/definitions/EditCommandDefinitions.js';
 import { parseOps } from '../src/index.js';
 import { Doc } from '../src/domain/document/Doc.js';
 import { isCliError } from '../src/domain/document/utils/errors.js';
@@ -413,7 +414,7 @@ describe('OPS_SCHEMA', () => {
   it('lists exactly the keys the parser accepts, with op as a const', () => {
     for (const name of OP_NAMES) {
       const def = defs[name]!;
-      expect(Object.keys(def.properties)).toEqual(['op', ...Object.keys(OP_FIELDS[name])]);
+      expect(Object.keys(def.properties)).toEqual(['op', ...Object.keys(EditCommandDefinitions.of(name).fields)]);
       expect(def.properties['op']).toEqual({ const: name });
       expect(def.additionalProperties).toBe(false);
       expect(def.required[0]).toBe('op');

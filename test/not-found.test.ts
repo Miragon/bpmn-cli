@@ -77,7 +77,7 @@ describe('E_NOT_FOUND candidates', () => {
     expect(failure.details.hint).toMatch(/^In this batch \$archive is an alias: write "\$archive"\./);
   });
 
-  it('a batch that fails at its first op: the plain hint; the batch context is gone afterwards', async () => {
+  it('a batch that fails at its first op: the plain hint afterwards', async () => {
     const doc = await Doc.fromXml(await invoice());
     let err: CliError | undefined;
     try {
@@ -88,6 +88,5 @@ describe('E_NOT_FOUND candidates', () => {
     }
     expect(err?.details.candidates?.[0]).toBe('Activity_CheckInvoice');
     expect(err?.details.hint).toBe('Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.');
-    expect(doc.edit.batch).toBeUndefined();
   });
 });

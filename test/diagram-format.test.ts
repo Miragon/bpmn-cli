@@ -1,5 +1,5 @@
 /**
- * Format operations (src/domain/batch/DiagramCommandService.ts) through the write pipeline: place,
+ * Format operations (src/domain/diagram/DiagramCommandService.ts) through the write pipeline: place,
  * align, color, label, route, space, tidy and lane order, their refusals,
  * batch semantics (in batch order, each after the layout of the model commands before it,
  * all or nothing)

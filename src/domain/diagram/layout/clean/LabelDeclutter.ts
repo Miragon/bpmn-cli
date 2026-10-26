@@ -148,11 +148,11 @@ export class LabelDeclutter {
     return { x: frame.x, y: top, width: frame.width, height: frame.y + frame.height - top };
   }
 
+  /** Whether `box` hits a shape, a placed label, a title or a line (the text would sit on it). */
   private clashes(box: Box, own?: Box): boolean {
     return (
       this.shapes.some((shape) => shape !== own && boxesOverlap(shape, box, 2)) ||
       this.placed.some((other) => boxesOverlap(other, box, 2)) ||
-      // the text would sit on the line
       this.lines.some((seg) => this.hitsBox(seg, box, seg[0].y === seg[1].y ? -RUN_KEEP : 1)) ||
       this.titleBoxes.some((title) => boxesOverlap(title, box, 2))
     );

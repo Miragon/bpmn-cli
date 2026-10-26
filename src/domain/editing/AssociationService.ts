@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError } from '../document/utils/errors.js';
 import { kindLabel, triggerOf } from '../document/utils/kinds.js';
 import { ElementLabels } from '../document/ids/ElementLabels.js';
@@ -15,7 +16,10 @@ export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
  * A data input association targets a placeholder bpmn:Property on the node (bpmn-js convention).
  */
 export class AssociationService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   /**
    * One end must be a text annotation, or the pair is a compensate boundary event ->
@@ -45,7 +49,7 @@ export class AssociationService {
     if (!container) {
       throw modelError('E_INVALID_SCOPE', `Cannot find a process or collaboration to hold the association of ${idOf(note)}`, { element: idOf(note) });
     }
-    const id = allocateId(doc, typeRequest('bpmn:Association', { context: this.between(source, target) }), opts.id);
+    const id = allocateId(this.edit, typeRequest('bpmn:Association', { context: this.between(source, target) }), opts.id);
     const association = doc.create('bpmn:Association', {
       id,
       sourceRef: source,
@@ -75,12 +79,12 @@ export class AssociationService {
     let association: El;
     if (sourceIsData) {
       this.assertDataNode(target, 'input', source);
-      const id = allocateId(doc, typeRequest('bpmn:DataInputAssociation', { context: this.between(source, target) }), opts.id);
+      const id = allocateId(this.edit, typeRequest('bpmn:DataInputAssociation', { context: this.between(source, target) }), opts.id);
       association = doc.create('bpmn:DataInputAssociation', { id, sourceRef: [source], targetRef: this.placeholderProperty(target) });
       addTo(target, 'dataInputAssociations', association);
     } else {
       this.assertDataNode(source, 'output', target);
-      const id = allocateId(doc, typeRequest('bpmn:DataOutputAssociation', { context: this.between(source, target) }), opts.id);
+      const id = allocateId(this.edit, typeRequest('bpmn:DataOutputAssociation', { context: this.between(source, target) }), opts.id);
       association = doc.create('bpmn:DataOutputAssociation', { id, targetRef: target });
       addTo(source, 'dataOutputAssociations', association);
     }
@@ -135,7 +139,7 @@ export class AssociationService {
   private placeholderProperty(node: El): El {
     const existing = many(node, 'properties').find((candidate) => candidate.get<string | undefined>('name') === PLACEHOLDER_PROPERTY);
     if (existing) return existing;
-    const property = this.doc.create('bpmn:Property', { id: this.doc.allocateId(typeRequest('bpmn:Property', { context: new ElementLabels(node).label() })).id, name: PLACEHOLDER_PROPERTY });
+    const property = this.doc.create('bpmn:Property', { id: this.edit.allocator.allocate(typeRequest('bpmn:Property', { context: new ElementLabels(node).label() })).id, name: PLACEHOLDER_PROPERTY });
     addTo(node, 'properties', property);
     return property;
   }

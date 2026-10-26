@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError } from '../document/utils/errors.js';
 import { kindLabel } from '../document/utils/kinds.js';
 import { addTo, is, many, removeFrom, walk, type El } from '../document/utils/moddle.js';
@@ -19,10 +20,21 @@ type EngineSpelling = { kind: 'c7'; uri: string; prefix: string } | { kind: 'zee
 export class DecisionLinkWriter {
   private readonly reader: DecisionLinkReader;
 
-  constructor(private readonly doc: Doc) {
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {
     this.reader = new DecisionLinkReader(doc);
   }
 
+  /**
+   * Writes the decision link of a business rule task in the platform's spelling. The task's own
+   * link is read before calledElement (a hand-written decision link too) goes, so it keeps its
+   * spelling; an extension container this empties goes too, one the file had empty stays.
+   * Camunda 7 writes operaton:decisionRef in an Operaton-only file, as Operaton reads its own
+   * namespace first. Camunda 8 keeps an existing zeebe:calledDecision's resultVariable; its
+   * missing-resultVariable warning yields to the Camunda 8 profile's when that runs.
+   */
   write(el: El, value: string, cs: ChangeSet): string {
     const doc = this.doc;
     if (!is(el, 'bpmn:BusinessRuleTask')) {
@@ -31,8 +43,7 @@ export class DecisionLinkWriter {
         hint: `Only a businessRuleTask calls a decision: \`bpmn retype <file> ${this.idOf(el)} businessRuleTask\` first. An unprefixed calledDecision="..." attribute on another element is removed with \`bpmn set <file> ${this.idOf(el)} calledDecision=\`.`,
       });
     }
-    const platform = doc.platform();
-    // read before calledElement goes: a task with its own link keeps its spelling
+    const platform = this.edit.platform();
     const ownLink = this.reader.linkOf(el);
     const removed: string[] = [];
     const dropAttr = (key: string): void => {
@@ -53,7 +64,6 @@ export class DecisionLinkWriter {
         removed.push(call.$type);
         dropped = true;
       }
-      // a container this emptied goes too (an empty one the file had stays)
       if (dropped && container && !many(container, 'values').length) el.set('extensionElements', undefined);
     };
     let written = '';
@@ -64,7 +74,6 @@ export class DecisionLinkWriter {
       el.$attrs[key] = value;
       written = key;
     };
-    // an existing zeebe:calledDecision keeps its resultVariable
     const writeZeebe = (own: El | undefined, usual: string): El => {
       dropAttr('calledDecision');
       dropC7();
@@ -86,21 +95,18 @@ export class DecisionLinkWriter {
       written = call.$type;
       return call;
     };
-    // a hand-written calledElement is a decision link too
     dropAttr('calledElement');
     if (!value) {
       dropAttr('calledDecision');
       dropC7();
       dropZeebe();
     } else if (platform === 'camunda7') {
-      // Operaton reads its own namespace first: an Operaton-only file gets operaton:decisionRef
       const operatonOnly = !doc.prefixFor(CAMUNDA_URI) && !!doc.prefixFor(OPERATON_URI);
       const prefix = operatonOnly ? this.prefixFor(OPERATON_URI, 'operaton') : this.prefixFor(CAMUNDA_URI, 'camunda');
       writeC7(`${prefix}:decisionRef`);
     } else if (platform === 'camunda8') {
       const call = writeZeebe(this.reader.zeebeCalls(el)[0], 'zeebe');
       if (!textValue((call as unknown as Record<string, unknown>)['resultVariable'])) {
-        // the Camunda 8 profile reports the same; when it runs, a write shows that one
         cs.warn(
           coversProfileSubjects(
             {

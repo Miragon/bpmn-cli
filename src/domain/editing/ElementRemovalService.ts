@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError, usageError } from '../document/utils/errors.js';
 import { findReferences, is, many, removeFrom, walk, type El } from '../document/utils/moddle.js';
 import { ChangeSet } from '../document/ChangeSet.js';
@@ -14,7 +15,10 @@ import { SequenceFlowService } from './flows/SequenceFlowService.js';
  * fall with their host, other references are pruned or cleared.
  */
 export class ElementRemovalService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   remove(op: RemoveElements): ChangeSet {
     const cs = new ChangeSet();
@@ -33,14 +37,14 @@ export class ElementRemovalService {
           cs.note(`${id} does not exist; skipped`);
           continue;
         }
-        const branch = this.branchOf(this.doc.require(id, ['bpmn:FlowNode'], 'flow node'));
+        const branch = this.branchOf(this.edit.require(id, ['bpmn:FlowNode'], 'flow node'));
         for (const el of branch.nodes) removing.add(idOf(el));
         cs.note(
           `branch of ${id}: ${branch.nodes.length} node(s) (${branch.nodes.map(idOf).join(', ')})${branch.stops.length ? `; it stops before ${branch.stops.map(idOf).join(', ')}, which other paths reach (they stay)` : '; it ends there'}`,
         );
         for (const el of branch.nodes) {
           if (gone.has(idOf(el))) continue;
-          new FlowBridgeService(this.doc, cs).single(el, false);
+          new FlowBridgeService(this.doc, this.edit, cs).single(el, false);
           this.cascade(el, cs);
           for (const removal of cs.removed) gone.add(removal.id);
         }
@@ -59,14 +63,14 @@ export class ElementRemovalService {
           cs.note(`${id} does not exist; skipped`);
           continue;
         }
-        this.doc.require(id);
+        this.edit.require(id);
         continue;
       }
       if (is(el, 'bpmn:Definitions')) {
         throw modelError('E_INVALID_REMOVE', 'The definitions element cannot be removed', { element: id, hint: 'Delete the file instead.' });
       }
       if (is(el, 'bpmn:FlowNode')) {
-        new FlowBridgeService(this.doc, cs).forRemoval(el, bridge, !!op.bridgeAll, removing);
+        new FlowBridgeService(this.doc, this.edit, cs).forRemoval(el, bridge, !!op.bridgeAll, removing);
       }
       this.cascade(el, cs);
       for (const removal of cs.removed) gone.add(removal.id);
@@ -154,11 +158,14 @@ export class ElementRemovalService {
     return is(el, 'bpmn:SequenceFlow') ? ChangeSet.flowEntryOf(el) : ChangeSet.entryOf(el);
   }
 
-  /** Cascade-removes one element without bridging. */
+  /**
+   * Cascade-removes one element without bridging. The ids of vendor extension content are not
+   * part of the id space and are never released.
+   */
   cascade(el: El, cs: ChangeSet): void {
     if (!this.isAttached(el)) return;
     if (is(el, 'bpmn:SequenceFlow')) {
-      new SequenceFlowService(this.doc).remove(el);
+      new SequenceFlowService(this.doc, this.edit).remove(el);
       cs.remove(ChangeSet.flowEntryOf(el));
       this.cleanupReferences(new Set([el]), cs);
       return;
@@ -167,7 +174,6 @@ export class ElementRemovalService {
       this.removeParticipant(el, cs);
       return;
     }
-    // vendor extension content is not part of the id space: its ids are never released
     const subtree = [...walk(el, { bpmnOnly: true })];
     const removed = new Set(subtree);
     const parent = detachFromParent(el);
@@ -255,6 +261,10 @@ export class ElementRemovalService {
     }
   }
 
+  /**
+   * Drops the references to removed elements. The ids of a diagram dropped with them are released,
+   * so a later `set id=` of the batch can take the derived DI id along.
+   */
   private cleanupReferences(removed: Set<El>, cs: ChangeSet): void {
     for (const { holder, prop, isMany, target } of referencesToAny(this.doc.definitions, removed)) {
       if (!this.isAttached(holder)) continue;
@@ -262,7 +272,6 @@ export class ElementRemovalService {
       if (holder.$type.startsWith('bpmndi:')) {
         const gone = is(holder, 'bpmndi:BPMNPlane') ? (holder.$parent as El) : holder;
         detachFromParent(gone);
-        // released so a later `set id=` of the batch can take the derived DI id along
         for (const element of walk(gone, { bpmnOnly: true })) {
           const id = idOf(element);
           if (id) this.doc.ids.release(id);

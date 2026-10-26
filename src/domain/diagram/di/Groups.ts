@@ -184,6 +184,10 @@ export class Groups {
     return memberUnion;
   }
 
+  /**
+   * Grows `ids` to everything the box holds; a boundary event joins together with its host, never
+   * alone.
+   */
   private fit(shapes: Map<string, Item>, self: string, ids: Set<string>, top: number): Box {
     const withEvents = (): void => {
       for (const shape of shapes.values()) if (shape.host && ids.has(shape.host)) ids.add(shape.id);
@@ -196,7 +200,6 @@ export class Groups {
       for (const shape of shapes.values()) {
         if (shape.id === self || ids.has(shape.id) || !this.holds(box, shape)) continue;
         ids.add(shape.id);
-        // a boundary event joins together with its host, never alone
         if (shape.host && shapes.has(shape.host)) ids.add(shape.host);
       }
       withEvents();
@@ -253,6 +256,8 @@ export class Groups {
   /**
    * Smallest old box first, so a group inside another one is drawn first and counts as its member.
    * Each group goes to the plane holding most of its members.
+   * Boxes holding a later group or a changed member group are fitted again, so a second redraw is
+   * stable. Groups around nothing come last and never become a member of another group.
    */
   redraw(moddle: BpmnModdle, groups: readonly RememberedGroup[], shapeId: (id: string) => string = (id) => `BPMNShape_${id}`): RedrawnGroups {
     const result: RedrawnGroups = { drawn: [], kept: [], moved: [] };
@@ -300,7 +305,6 @@ export class Groups {
       fitted.push({ group, el, home, ids, top, box, label });
       result.drawn.push(group.id);
     }
-    // refit boxes holding a later group or a changed member group, so a second redraw is stable
     let changed = new Set<string>();
     for (let pass = 0; pass < ROUNDS; pass++) {
       const again = fitted.filter((fit) => fitted.some((other) => other !== fit && other.home === fit.home && (fit.ids.has(other.group.id) ? changed.has(other.group.id) : inside(other.box, fit.box))));
@@ -316,7 +320,6 @@ export class Groups {
       }
     }
     for (const fit of fitted) add(fit.group, fit.el, fit.home.plane, fit.box, fit.label);
-    // groups around nothing come last and never become a member of another group
     const placed = new Map<El, Box[]>();
     for (const { group, el } of empty) {
       const home = planes.find((plane) => plane.root === group.root) ?? planes[0]!;

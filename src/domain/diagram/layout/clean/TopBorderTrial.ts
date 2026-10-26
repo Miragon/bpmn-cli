@@ -19,11 +19,16 @@ import { obstacles, routedArtifacts } from '../../utils/scope.js';
  * compensation events and events with data or a note stay put; a rejected move is undone.
  */
 export class TopBorderTrial extends ArrangementTrial {
+  /**
+   * Events with data or a note attached keep their place below the host. Links of notes other than
+   * a boundary event's do not count, as those are placed later. A way below the host's row as clean
+   * as a way up (two bends, no fault) is not worth trying; on the top border the label goes to the
+   * upper left where the upper right is taken.
+   */
   run(): void {
     const { layout } = this;
     const lanes = layout.laneBands;
     const laneOf = (node: GNode): LaneBandInfo | undefined => lanes?.find((band) => band.nodes.has(node));
-    // placed below the host for the event as it is
     const attached = new Set<GNode>();
     for (const artifact of layout.artifacts) {
       const ends: Array<LinkEnd | GNode | undefined> = [artifact.anchorNode, ...artifact.links.flatMap((link) => [link.from, link.to])];
@@ -38,7 +43,6 @@ export class TopBorderTrial extends ArrangementTrial {
     const ways = new Map<GNode, { length: number; bends: number; up: boolean; box: boolean; label: boolean; worth: boolean }>();
     let linkCrossings = 0;
     const look = (): void => {
-      // notes other than a boundary event's are placed later, so their links do not count
       new LinkRouter(layout).route();
       const links = [...layout.compensations.map((compensation) => compensation.points), ...routedArtifacts(layout).flatMap((artifact) => artifact.links.map((link) => link.points))];
       linkCrossings = this.crossingPairs(layout.edges.map((edge) => edge.points), links);
@@ -67,7 +71,6 @@ export class TopBorderTrial extends ArrangementTrial {
           ways.set(boundaryEvent, { length, bends, up, box, label: clear, worth: false });
           continue;
         }
-        // a way below its host's row as clean as a way up (two bends, no fault) cannot be beaten
         const worth = boundaryEvent.out.some((edge) => edge.runsAbove || edge.points.length >= 5) || this.faultyFlows(boundaryEvent.out, labels).size > 0;
         ways.set(boundaryEvent, { length, bends, up: false, box: false, label: false, worth });
       }
@@ -93,7 +96,6 @@ export class TopBorderTrial extends ArrangementTrial {
       const kept = new Map(ways);
       let after = measure();
       let now = ways.get(boundaryEvent)!;
-      // the label to the upper left where the upper right is taken
       if (now.up && now.box && !now.label) {
         boundaryEvent.labelLeft = true;
         after = measure();

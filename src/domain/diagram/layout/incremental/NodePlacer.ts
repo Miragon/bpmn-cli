@@ -177,18 +177,21 @@ export class NodePlacer {
     return { ...SIZES.task };
   }
 
-  /** Size of a new shape: the median of its kind on the plane, else the engine default. */
+  /**
+   * Size of a new shape: the median of its kind on the plane, else the engine default.
+   * A relocated node keeps its size. Events and boundary events count as one kind, so do tasks and
+   * collapsed sub-processes; the median stays within a sensible range of the default (hand drawings
+   * may contain one huge task).
+   */
   sizeFor(plane: Plane, id: string): { width: number; height: number } {
     const block = this.blockSize.get(id);
     if (block) return block;
-    // a relocated node keeps its size (an expanded sub-process its content too)
     const reused = this.reuse.get(id)?.shape.bounds;
     if (reused) return { width: reused.width, height: reused.height };
     const el = this.sem.byId.get(id)!;
     const kind = DiagramReader.shapeKind(el);
     if (kind === 'subProcess' && this.expandedByDefault(id)) return { width: 350, height: 200 };
     if (kind === 'annotation') return this.defaultSize(el);
-    // events and boundary events share a size, so do tasks and collapsed sub-processes
     const family = (shapeKind: ShapeKind): string => (shapeKind === 'boundary' ? 'event' : shapeKind === 'subProcess' ? 'task' : shapeKind);
     const sameKind = (shape: DShape): boolean => !shape.container && family(shape.kind) === family(kind) && (kind !== 'data' || shape.el.$type === el.$type);
     const peers = [...plane.shapes.values()].filter(sameKind);
@@ -196,7 +199,6 @@ export class NodePlacer {
     const medianHeight = median(peers.map((shape) => shape.bounds.height));
     const fallback = this.defaultSize(el);
     if (medianWidth === undefined || medianHeight === undefined) return fallback;
-    // stay within a sensible range of the default (hand drawings may contain one huge task)
     return { width: Math.round(clamp(medianWidth, fallback.width * 0.6, fallback.width * 1.6)), height: Math.round(clamp(medianHeight, fallback.height * 0.6, fallback.height * 1.6)) };
   }
 
@@ -205,7 +207,10 @@ export class NodePlacer {
     return !this.collapsed.has(id);
   }
 
-  /** Creates the DShape of a new element (membership from the semantic model). */
+  /**
+   * Creates the DShape of a new element (membership from the semantic model).
+   * A BPMNShape without valid bounds is reused (one DI per element, its colours kept).
+   */
   newShape(plane: Plane, id: string, bounds: Box): DShape {
     const reuse = this.reuse.get(id);
     const el = this.sem.byId.get(id)!;
@@ -213,7 +218,6 @@ export class NodePlacer {
     const expanded = kind === 'subProcess' ? (reuse ? reuse.shape.expanded === true : this.expandedByDefault(id) || this.blockSize.has(id)) : undefined;
     const shape: DShape = { id, el, bounds, kind, container: kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true) };
     if (reuse?.shape.di) shape.di = reuse.shape.di;
-    // a BPMNShape without valid bounds gets its bounds now (one DI per element, its colours kept)
     else if (!reuse) {
       const di = this.planes.map((candidate) => candidate.unbounded?.get(id)).find((unbounded) => !!unbounded);
       if (di) shape.di = di;
@@ -237,9 +241,12 @@ export class NodePlacer {
     return shape;
   }
 
-  /** Adds a placed shape to the plane with its reused boundary events, fitted into its frame. */
+  /**
+   * Adds a placed shape to the plane with its reused boundary events, fitted into its frame.
+   * Never above / left of the frame's interior, as fitInFrame only grows a frame right and down. A
+   * new gateway's label above it gets room below the title of its sub-process.
+   */
   commit(plane: Plane, shape: DShape): void {
-    // never above / left of the frame's interior (fitInFrame only grows a frame right and down)
     const frame = shape.kind === 'boundary' ? undefined : Frames.of(plane, shape);
     if (frame) {
       const inner = Frames.interior(frame, 15);
@@ -292,7 +299,6 @@ export class NodePlacer {
     this.hooks.afterPlace?.(plane, shape);
     const fitted = this.drawing(plane).fitInFrame(shape.id, 15);
     fitted.moved.forEach((movedId) => this.moved.add(movedId));
-    // the label a new gateway gets above it: room below the title of its sub-process
     const name = raw<string>(shape.el, 'name')?.trim();
     if (!reuse && name && frame?.kind === 'subProcess' && hasExternalLabel(shape) && shape.kind !== 'boundary' && defaultLabelSide(shape.kind) === 'above') {
       const { width, height } = labelSize(name);
@@ -306,7 +312,11 @@ export class NodePlacer {
     result.moved.forEach((movedId) => this.moved.add(movedId));
   }
 
-  /** Moves an existing node into its (new) lane: same x, a free row of the lane band. */
+  /**
+   * Moves an existing node into its (new) lane: same x, a free row of the lane band.
+   * The lane grows only when the row is not one of its own (as close to the border as its shapes
+   * sit).
+   */
   changeLane(plane: Plane, id: string): boolean {
     const shape = plane.shapes.get(id);
     const lane = shape?.laneId ? plane.shapes.get(shape.laneId) : undefined;
@@ -322,7 +332,6 @@ export class NodePlacer {
     const centre = this.rows.rowInLane(plane, lane, shape.bounds.x, shape.bounds.width, shape.bounds.height, neighbours, exclude);
     const dy = Math.round(centre - shape.bounds.height / 2 - shape.bounds.y);
     for (const movedId of this.drawing(plane).shift(id, 0, dy)) this.moved.add(movedId);
-    // a row of the lane's own (as close to the border as its shapes sit) needs no growth
     if (!inLane()) this.recordSpace(this.drawing(plane).fitInFrame(id, 15));
     return true;
   }
@@ -380,6 +389,9 @@ export class NodePlacer {
    * Gives every flow node in `ids` a shape, in op order as far as their neighbours allow: the
    * normal flow, boundary events, their exception paths, nodes before a placed successor, the
    * rest. Ids whose plane does not exist are skipped and returned.
+   * A relocated node brings its boundary events and content along (commit), so these are never
+   * placed twice. Before each placement the node placed last gets its flows, so the next placement
+   * sees them; a boundary event whose host was placed meanwhile goes on it.
    */
   placeFlowNodes(ids: string[]): string[] {
     const pending = new Set(ids);
@@ -400,10 +412,8 @@ export class NodePlacer {
     }
     let last: { plane: Plane; id: string } | undefined;
     while (pending.size) {
-      // a relocated node brings its boundary events and content along (commit): never placed twice
       for (const id of pending) if (this.planes.some((candidate) => candidate.shapes.has(id))) pending.delete(id);
       if (!pending.size) break;
-      // more nodes follow: the one placed last gets its flows now, so the next placement sees them
       if (last) this.hooks.afterNode?.(last.plane, last.id);
       last = undefined;
       let chosen: { id: string; plane: Plane; mode: 'boundary' | 'after' | 'exception' | 'before' | 'free'; preds?: DShape[]; succ?: DShape } | undefined;
@@ -439,9 +449,7 @@ export class NodePlacer {
         if (!this.boundaries.placeBoundary(chosen.plane, chosen.id)) this.neighbours.placeUnconnected(chosen.plane, chosen.id);
       } else if (chosen.mode === 'after' || chosen.mode === 'exception') this.neighbours.placeAfter(chosen.plane, chosen.id, chosen.preds!, pending);
       else if (chosen.mode === 'before') this.neighbours.placeBefore(chosen.plane, chosen.id, chosen.succ!);
-      else if (is(this.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') && this.boundaries.placeBoundary(chosen.plane, chosen.id)) {
-        /* host placed meanwhile */
-      } else this.neighbours.placeUnconnected(chosen.plane, chosen.id);
+      else if (!is(this.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') || !this.boundaries.placeBoundary(chosen.plane, chosen.id)) this.neighbours.placeUnconnected(chosen.plane, chosen.id);
       this.pullPlacedJoins(chosen.plane, chosen.id, pending);
       last = { plane: chosen.plane, id: chosen.id };
     }

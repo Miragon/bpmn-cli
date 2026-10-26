@@ -189,6 +189,9 @@ export class C7ExtensionRules extends C7Rules {
   /**
    * Extension elements of one BPMN element: unknown or misplaced types, duplicates, foreign
    * content, and the engine rules on their content.
+   * Types are grouped per namespace, as Operaton reads one operaton:inputOutput next to one
+   * camunda:inputOutput; when executable, duplicates of the containers the engines read with a
+   * single-element lookup are reported.
    */
   checkExtensions(host: El, owner: El | undefined, executable: boolean): void {
     const values = this.extensionValues(host);
@@ -206,7 +209,6 @@ export class C7ExtensionRules extends C7Rules {
       this.push('deploy', 'W_C7_DEPLOY_DEFINITIONS_EXTENSION', host, undefined, 'definitions', `bpmn:definitions carries bpmn:extensionElements (${types}), which the BPMN schema does not allow there; the engines refuse the file`, `Move the content to the process: \`bpmn ext remove <file> ${hostId ?? '<definitionsId>'} <type>\`, then \`bpmn ext add <file> <processId> <type> ...\`.`);
       return;
     }
-    // per namespace: Operaton reads one operaton:inputOutput next to one camunda:inputOutput
     const byType = new Map<string, { local: string; type: string; uri: string; els: El[] }>();
     for (const extValue of values) {
       if (!extValue.uri) continue;
@@ -248,7 +250,6 @@ export class C7ExtensionRules extends C7Rules {
       if (executable) this.content.checkContent(host, owner, extValue.el, extValue.local);
     }
     if (!executable) return;
-    // duplicates of the containers the engines read with a single-element lookup
     for (const { local, type, uri, els } of byType.values()) {
       if (els.length < 2) continue;
       let read = false;

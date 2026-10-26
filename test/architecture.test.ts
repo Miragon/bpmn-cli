@@ -38,7 +38,13 @@ const DOMAIN_MODULES = ['document', 'commands', 'diagram', 'editing', 'validatio
 const ADAPTERS = ['in/cli', 'in/report', 'out/files', 'out/memory'];
 /** adapter -> the adapters it may use: the CLI prints through the reports the library also returns */
 const ADAPTER_USES: Record<string, string[]> = { 'in/cli': ['in/report'] };
-const inFolder = (file: string, folder: string) => file.startsWith(join('src', folder) + sep);
+/** the public API's classes (Doc, CliError, ChangeSet), constants and pure helpers on kinds, op names, metrics and conventions text */
+const DOMAIN_VALUES_ENTRIES_REEXPORT = [
+  'Doc', 'TARGETS', 'CliError', 'EXIT_CODES', 'ChangeSet', 'KINDS', 'parseKind', 'kindOf', 'kindLabel', 'FORMAT_OP_NAMES', 'isDiagramCommand', 'LAYOUT_MODES',
+  'AROUND_DEFAULT_DEPTH', 'BPMNLINT_COVERS', 'BPMNLINT_VALIDATOR', 'renderConventions', 'ID_NAMING_RULE', 'PLATFORM_CHOICES', 'OPS_SCHEMA',
+  'diffProblems', 'metricsDelta', 'KEYS', 'WEIGHTS', 'SWATCHES', 'RENDER_MAX_SIZE', 'MIN_LABEL_SCALE', 'HALO_COLORS',
+];
+const inFolder =(file: string, folder: string) => file.startsWith(join('src', folder) + sep);
 
 /** Every import specifier of a source file, type-only imports included. */
 function importsOf(file: string): string[] {
@@ -118,6 +124,16 @@ describe('architecture', () => {
     expect(offenders).toEqual([]);
   });
 
+
+  it('the entries reach the domain only through the use cases: from domain/ they import types and re-export only the public data and classes', () => {
+    const valueNamesFromDomain = (entry: string, keyword: 'import' | 'export') =>
+      [...readFileSync(entry, 'utf8').matchAll(new RegExp(`^${keyword}\\s+(type\\s+)?(?:\\{([^}]*)\\}|\\*|\\w+)\\s+from\\s+'([^']+)'`, 'gm'))]
+        .filter((statement) => !statement[1] && inFolder(join(entry, '..', statement[3]!), 'domain'))
+        .flatMap((statement) => (statement[2] ?? '*').split(',').map((specifier) => specifier.trim()).filter((specifier) => specifier && !specifier.startsWith('type ')).map((specifier) => specifier.split(/\s+as\s+/)[0]!));
+    const entries = ENTRIES.filter((entry) => entry !== 'src/cli.ts');
+    expect(entries.flatMap((entry) => valueNamesFromDomain(entry, 'import').map((name) => `${entry}: ${name}`))).toEqual([]);
+    expect(entries.flatMap((entry) => valueNamesFromDomain(entry, 'export')).filter((name) => !DOMAIN_VALUES_ENTRIES_REEXPORT.includes(name))).toEqual([]);
+  });
 
   it('application/ holds only the ports and the services that implement them', () => {
     const application = join('src', 'application');

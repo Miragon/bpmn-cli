@@ -96,7 +96,11 @@ export class CompactionService {
     return out.filter((strip) => strip.to - strip.from - strip.keep >= MIN_GAIN);
   }
 
-  /** Merged intervals clipped to the region, near to far. */
+  /**
+   * Merged intervals clipped to the region, near to far.
+   * A group is a drawn frame: only its borders occupy. An edge segment along the axis only gets
+   * shorter; one across it occupies its extent.
+   */
   occupied(axis: Axis, region: Box, opts: Pick<StripOptions, 'skip' | 'solid' | 'loose'>): Array<[number, number]> {
     const occ: Array<[number, number]> = [];
     const lo = this.near(region, axis);
@@ -109,7 +113,6 @@ export class CompactionService {
       if (opts.skip.has(shape.id)) continue;
       if (PlaneQuery.isLeaf(shape) || solid(shape)) take(shape.bounds);
       else if (shape.kind === 'group') {
-        // a group is a drawn frame: its borders stay where they are
         const [nearEdge, farEdge] = [this.near(shape.bounds, axis), this.far(shape.bounds, axis)];
         take(axis === 'x' ? { ...shape.bounds, x: nearEdge, width: 0 } : { ...shape.bounds, y: nearEdge, height: 0 }, 2);
         take(axis === 'x' ? { ...shape.bounds, x: farEdge, width: 0 } : { ...shape.bounds, y: farEdge, height: 0 }, 2);
@@ -123,7 +126,6 @@ export class CompactionService {
       for (let index = 0; index + 1 < edge.points.length; index++) {
         const from = edge.points[index]!;
         const to = edge.points[index + 1]!;
-        // a segment along the axis only gets shorter; one across it occupies its extent
         if (axis === 'x' ? from.y === to.y : from.x === to.x) continue;
         take({ x: Math.min(from.x, to.x), y: Math.min(from.y, to.y), width: Math.abs(to.x - from.x), height: Math.abs(to.y - from.y) }, 1);
       }
@@ -137,18 +139,22 @@ export class CompactionService {
     return merged;
   }
 
+  /**
+   * Whether a bend or the label of `edge` lies in the strip; boxes grow by 1 px so that a bend has
+   * an extent.
+   */
   private touches(edge: DEdge, axis: Axis, strip: Strip, within: Box | undefined): boolean {
-    // boxes grown by 1 px so that a bend (a point) has an extent
     const hit = (box: Box): boolean => this.far(box, axis) + 1 > strip.from && this.near(box, axis) - 1 < strip.to && (!within || this.acrossRegion({ x: box.x - 1, y: box.y - 1, width: box.width + 2, height: box.height + 2 }, within, axis));
     return [...edge.points.slice(1, -1).map((point) => ({ x: point.x, y: point.y, width: 0, height: 0 })), ...(edge.label ? [edge.label] : [])].some(hit);
   }
 
   /**
    * Scales the bends and label inside a closed strip into the room it kept, so the line
-   * stays orthogonal; closeStrip has already shifted what lay beyond.
+   * stays orthogonal; closeStrip has already shifted what lay beyond. Its line lies 3 before
+   * the strip's end: bends from there on started beyond it and have moved already.
    */
   private squeeze(edge: DEdge, axis: Axis, strip: Strip, within: Box | undefined): void {
-    const line = strip.to - 3; // closeStrip's line: what started beyond it moved
+    const line = strip.to - 3;
     const map = (coordinate: number): number => strip.from + ((coordinate - strip.from) * strip.keep) / (strip.to - strip.from);
     const inBand = (coordinate: number): boolean => !within || (axis === 'x' ? coordinate >= within.y - 1 && coordinate <= bottom(within) + 1 : coordinate >= within.x - 1 && coordinate <= right(within) + 1);
     for (const point of edge.points.slice(1, -1)) {
@@ -200,6 +206,12 @@ export class CompactionService {
     return depth;
   }
 
+  /**
+   * Closes in this order: expanded sub-processes, deepest first, with everything outside staying;
+   * columns of the pools (all lanes at once) or of a process plane; rows of the leaf lanes (bottom
+   * to top, in the band of the whole pool so the pool shrinks with its lanes), of pools without
+   * lanes and of a process plane; rows between pools. Pools aligned before stay aligned.
+   */
   compact(opts: CompactOptions): CompactStats {
     const stats: CompactStats = { strips: { x: 0, y: 0 }, px: { x: 0, y: 0 }, refused: 0 };
     const { x: gapX, y: gapY } = this.gaps();
@@ -228,7 +240,6 @@ export class CompactionService {
       }
     };
 
-    // 1. expanded sub-processes, deepest first; everything outside stays
     const subs = shapes()
       .filter((shape) => shape.kind === 'subProcess' && shape.container && wanted(shape))
       .sort((one, other) => this.depth(other) - this.depth(one) || other.bounds.x - one.bounds.x);
@@ -249,7 +260,6 @@ export class CompactionService {
       }
     }
 
-    // 2. columns of the pools (all lanes at once), or of a process plane
     const lanesOf = (pool: DShape): DShape[] => shapes().filter((lane) => lane.kind === 'lane' && lane.poolId === pool.id);
     const hasContent = (pool: DShape): boolean => shapes().some((shape) => PlaneQuery.isLeaf(shape) && shape.poolId === pool.id);
     for (const pool of pools.filter((candidate) => !opts.only || opts.only.has(candidate.id)).sort((one, other) => one.bounds.y - other.bounds.y)) {
@@ -265,14 +275,12 @@ export class CompactionService {
       if (region) close('x', findStrips('x', region, { lead: PAD, trail: PAD, gap: gapX, skip: new Set() }), undefined);
     }
 
-    // 3. rows of the leaf lanes (bottom to top), of pools without lanes, of a process plane
     const leafLanes = shapes()
       .filter((lane) => lane.kind === 'lane' && !shapes().some((child) => child.kind === 'lane' && child.laneId === lane.id) && wanted(lane))
       .sort((one, other) => other.bounds.y - one.bounds.y);
     for (const lane of leafLanes) {
       const drawnLane = this.plane.shapes.get(lane.id)!;
       const strips = findStrips('y', drawnLane.bounds, { start: drawnLane.bounds.y, end: bottom(drawnLane.bounds), lead: PAD, trail: PAD, gap: gapY, skip: this.chainIds(drawnLane), empty: EMPTY_LANE });
-      // the band of the whole pool, so the pool shrinks with its lanes
       const pool = drawnLane.poolId ? this.plane.shapes.get(drawnLane.poolId) : undefined;
       close('y', strips, pool?.bounds ?? drawnLane.bounds);
     }
@@ -287,7 +295,6 @@ export class CompactionService {
       if (region) close('y', findStrips('y', region, { lead: PAD, trail: PAD, gap: gapY, skip: new Set() }), undefined);
     }
 
-    // 4. rows between pools
     if (pools.length > 1 && !opts.only) {
       const sorted = [...pools].sort((one, other) => one.bounds.y - other.bounds.y);
       const gaps = sorted.slice(1).map((pool, index) => pool.bounds.y - bottom(sorted[index]!.bounds)).filter((gap) => gap >= 0);
@@ -296,7 +303,6 @@ export class CompactionService {
       if (region) close('y', findStrips('y', region, { lead: 0, trail: 0, gap: poolGap, skip: new Set(), solid: (shape) => shape.kind === 'participant' || (shape.kind === 'subProcess' && shape.container) }), undefined);
     }
 
-    // 5. pools aligned before stay aligned
     if (aligned) {
       const now = pools.map((pool) => this.plane.shapes.get(pool.id)!);
       const edge = Math.max(...now.map((pool) => right(pool.bounds)));

@@ -26,11 +26,10 @@ export class FileDocumentStore implements LoadDocumentPort, SaveDocumentPort {
     return assertNewFile(target, opts);
   }
 
+  /** Copies the file to <file>.bak; a file with no original has nothing to back up. */
   private static async backup(file: string): Promise<void> {
     try {
       await copyFile(file, `${file}.bak`);
-    } catch {
-      /* no original to back up */
-    }
+    } catch {}
   }
 }

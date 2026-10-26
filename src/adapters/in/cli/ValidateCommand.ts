@@ -9,6 +9,7 @@ import { ValidationText } from '../report/ValidationText.js';
  * writes nothing (`bpmn validate`).
  */
 export class ValidateCommand extends CliCommand {
+  /** Content the reader could not keep (duplicates, unknown elements) fails --strict too. */
   register(program: CommandType): void {
     this.withLintOptions(
       this.withJsonOptions(this.define(program, 'validate'))
@@ -28,7 +29,6 @@ export class ValidateCommand extends CliCommand {
           this.cli.print(new ValidationText(report).text());
         }
         if (report.errors.length) this.cli.exitCode = 2;
-        // content the reader could not keep (duplicates, unknown elements) fails --strict too
         else if (options['strict'] && (report.warnings.length || report.importWarnings.length)) this.cli.exitCode = 5;
       }, !!options['json']),
     );

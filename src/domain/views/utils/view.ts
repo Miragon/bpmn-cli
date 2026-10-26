@@ -1,7 +1,4 @@
-import { KindError } from '../../document/KindError.js';
-import { kindLabel, kindOf, parseKind, triggerOf } from '../../document/utils/kinds.js';
-import { groupName, is, localType, peek, shownId, walk, type El } from '../../document/utils/moddle.js';
-import { usageError } from '../../document/utils/errors.js';
+import { groupName, is, peek, shownId, walk, type El } from '../../document/utils/moddle.js';
 
 export function nameOf(el: El): string | undefined {
   if (is(el, 'bpmn:Group')) return groupName(el);
@@ -29,14 +26,6 @@ export function truncate(text: string, max: number): string {
   return flat.length > max ? `${flat.slice(0, max - 3)}...` : flat;
 }
 
-/** The canonical kind for kinds the AI can create, else the lowerCamel local type. */
-export function labelOf(el: El): string {
-  if (kindOf(el)) return kindLabel(el);
-  if (is(el, 'bpmn:DataAssociation')) return 'dataAssociation';
-  const local = localType(el);
-  return local.charAt(0).toLowerCase() + local.slice(1);
-}
-
 export function refLabel(ref: El | undefined): string {
   if (!ref) return '?';
   return nameOf(ref) ?? shownId(ref);
@@ -60,18 +49,3 @@ export function scopesWithin(process: El): El[] {
   return [...walk(process)].filter((element) => is(element, 'bpmn:Process') || is(element, 'bpmn:SubProcess'));
 }
 
-/** Non-kind labels `find --kind` also accepts. */
-const EXTRA_KINDS = ['sequenceFlow', 'messageFlow', 'association', 'dataAssociation', 'process', 'collaboration', 'message', 'error', 'signal', 'escalation'];
-
-export function kindFilter(kind: string): (el: El) => boolean {
-  try {
-    const { def, trigger } = parseKind(kind);
-    return (el) => kindOf(el)?.kind === def.kind && (!trigger || triggerOf(el) === trigger);
-  } catch (err) {
-    if (!(err instanceof KindError)) throw err;
-    const token = kind.trim().toLowerCase();
-    const extra = EXTRA_KINDS.find((kind) => kind.toLowerCase() === token);
-    if (extra) return (el) => labelOf(el) === extra;
-    throw usageError(err.message, { candidates: [...err.candidates, ...EXTRA_KINDS.filter((kind) => kind.toLowerCase().includes(token))] });
-  }
-}

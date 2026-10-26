@@ -1,4 +1,4 @@
-import { OP_FIELDS } from '../../../domain/commands/utils/op-fields.js';
+import { EditCommandDefinitions } from '../../../domain/commands/definitions/EditCommandDefinitions.js';
 import { OP_NAMES } from '../../../domain/commands/utils/op-names.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import { COMMANDS, COMMON_OPTIONS } from './CommandCatalogue.js';
@@ -502,7 +502,7 @@ export class AgentGuide {
   private opKeyLines(): string[] {
     const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((trigger) => trigger.keys), 'nonInterrupting']);
     return OP_NAMES.map((opName) => {
-      const fields = Object.entries(OP_FIELDS[opName]).filter(([key]) => !FULL_GUIDE_ONLY_KEYS.has(key));
+      const fields = Object.entries(EditCommandDefinitions.of(opName).fields).filter(([key]) => !FULL_GUIDE_ONLY_KEYS.has(key));
       const folds = fields.filter(([key]) => triggerKeys.has(key)).length > 3;
       const keys = fields.filter(([key]) => !folds || !triggerKeys.has(key)).map(([key, spec]) => (spec.required ? `${key}*` : key));
       if (folds) keys.push('<trigger keys>');

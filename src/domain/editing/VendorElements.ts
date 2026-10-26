@@ -40,14 +40,17 @@ export class VendorElements {
     return CANONICAL_URI[prefix];
   }
 
-  /** A URI the file already binds keeps the file's prefix; a new one is declared on definitions. */
+  /**
+   * A URI the file already binds keeps the file's prefix; a new one is declared on definitions.
+   * An unknown prefix throws E_UNKNOWN_NAMESPACE with the standard hint.
+   */
   resolvePrefix(el: El, prefix: string, scope: Record<string, string>): { prefix: string; uri: string } {
     const doc = this.doc;
     const inline = scope[prefix];
     if (inline === BPMN_NS || (inline === undefined && prefix === 'bpmn')) return { prefix: this.bpmnPrefix(), uri: BPMN_NS };
     const uri = inline ?? doc.namespaceUri(prefix);
     if (!uri) {
-      doc.declareNamespace(prefix); // throws E_UNKNOWN_NAMESPACE with the standard hint
+      doc.declareNamespace(prefix);
       return { prefix, uri: doc.namespaceUri(prefix)! };
     }
     const existing = this.filePrefixFor(uri);

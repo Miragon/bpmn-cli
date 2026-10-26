@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { modelError, usageError } from '../../document/utils/errors.js';
 import type { CliError } from '../../document/CliError.js';
 import { gatewayKindList, parseKind } from '../../document/utils/kinds.js';
@@ -23,7 +24,10 @@ import { ConnectionService } from '../ConnectionService.js';
  * end event terminates there; a join needs two branches that reach it.
  */
 export class BranchSplitService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   private static gatewayKind(token: string | undefined): string {
     const kind = token ?? 'exclusiveGateway';
@@ -52,19 +56,20 @@ export class BranchSplitService {
   /**
    * op.joinId, else `<gatewayId>_join` in the file's id style. `base` (the id it wanted)
    * marks it generated, so a retype in the same batch gives it the new prefix.
+   * A join named by declared conventions rather than the file's style is recorded for the
+   * result's `conventions:` line.
    */
   private joinIdFor(op: SplitIntoBranches, gateway: El, cs: ChangeSet, kind: string): { id: string; base?: string } {
     if (op.joinId) return { id: op.joinId };
     const gatewayId = idOf(gateway);
-    const base = this.doc.idStyle.joinId(gatewayId, kind, new ElementLabels(gateway).label());
-    const sep = this.doc.idStyle.suffixSep(kind);
-    const id = this.doc.edit.allocator.suffixed(base, sep);
+    const base = this.edit.idStyle.joinId(gatewayId, kind, new ElementLabels(gateway).label());
+    const sep = this.edit.idStyle.suffixSep(kind);
+    const id = this.edit.allocator.suffixed(base, sep);
     if (id !== base) {
       cs.warn({ code: 'W_ID_SUFFIXED', message: `Id ${base} is already taken; using ${id}`, element: id, hint: 'Pass joinId to choose the join id yourself.' });
     }
-    // the result's `conventions:` line: a join named by declared conventions, not the file's style
-    const style = this.doc.idStyle;
-    if (style.declared && style.explain(IdStyle.keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) this.doc.edit.allocator.recordDeclared(id);
+    const style = this.edit.idStyle;
+    if (style.declared && style.explain(IdStyle.keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) this.edit.allocator.recordDeclared(id);
     return { id, base };
   }
 
@@ -104,6 +109,11 @@ export class BranchSplitService {
     });
   }
 
+  /**
+   * Splits after op.after into a gateway, its branches and a join. Branches ending in an end
+   * event terminate there instead of reaching the join; a generated join id is marked generated,
+   * not the caller's (ElementCreationService.add claimed it as given).
+   */
   split(op: SplitIntoBranches): ChangeSet {
     const cs = new ChangeSet();
     const kind = BranchSplitService.gatewayKind(op.kind);
@@ -111,7 +121,7 @@ export class BranchSplitService {
     if (!op.branches?.length) {
       throw modelError('E_INVALID_VALUE', 'split needs at least one branch', { hint: 'Pass branches: [{ nodes: [...] }, ...].' });
     }
-    const anchor = this.doc.require(op.after, 'bpmn:FlowNode');
+    const anchor = this.edit.require(op.after, 'bpmn:FlowNode');
     const scope = this.doc.scopeOf(anchor);
     if (!scope) throw modelError('E_INVALID_PLACEMENT', `${op.after} is not inside a process`, { element: op.after });
     const outgoing = this.doc.outgoing(anchor);
@@ -129,19 +139,18 @@ export class BranchSplitService {
     const lane = laneOf(this.doc, anchor);
     const laneOpt = lane ? { lane: idOf(lane) } : {};
 
-    // 1. split gateway
-    const gwCs = new ElementCreationService(this.doc).add({ op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, new ElementLabels(anchor).anchorContext('After'));
+    const gwCs = new ElementCreationService(this.doc, this.edit).add({ op: 'add', kind, ...(op.name ? { name: op.name } : {}), ...(op.id ? { id: op.id } : {}), in: idOf(scope), ...laneOpt }, new ElementLabels(anchor).anchorContext('After'));
     cs.merge(gwCs);
     const gatewayId = BranchSplitService.createdId(gwCs);
-    const gateway = this.doc.require(gatewayId);
+    const gateway = this.edit.require(gatewayId);
     cs.bind(op.as, gateway);
     if (spliced) {
-      const renamed = new SequenceFlowService(this.doc).redirect(spliced, { target: gateway });
+      const renamed = new SequenceFlowService(this.doc, this.edit).redirect(spliced, { target: gateway });
       insertAfterInScope(scope, spliced, gateway);
       cs.change(ChangeSet.flowEntryOf(spliced, `${op.after} -> ${gatewayId} (was -> ${idOf(successor!)})${renamedNote(renamed)}`));
       cs.note(`inserted ${gatewayId} between ${op.after} and ${idOf(successor!)}`);
     } else {
-      const flow = new SequenceFlowService(this.doc).create(anchor, gateway);
+      const flow = new SequenceFlowService(this.doc, this.edit).create(anchor, gateway);
       insertAfterInScope(scope, flow, gateway);
       cs.create(ChangeSet.flowEntryOf(flow));
       cs.note(`appended ${gatewayId} after ${op.after}`);
@@ -149,7 +158,6 @@ export class BranchSplitService {
     const gwEntry = cs.created.find((change) => change.id === gatewayId);
     if (gwEntry) gwEntry.detail = spliced ? `between ${op.after} and ${idOf(successor!)}` : `after ${op.after}`;
 
-    // 2. branches
     const ends: Array<{ end: string; flowOptions: FlowOptionValues; direct: boolean }> = [];
     for (const branch of op.branches) {
       const flowOptions = FlowOptions.of(branch);
@@ -167,15 +175,14 @@ export class BranchSplitService {
       branch.nodes.forEach((node, index) => {
         const own = FlowOptions.of(node);
         const addOp: AddElement = { ...node, ...(index === 0 ? { ...flowOptions, ...own } : own), op: 'add', after: prev };
-        const nodeCs = new ElementCreationService(this.doc).add(addOp);
+        const nodeCs = new ElementCreationService(this.doc, this.edit).add(addOp);
         cs.merge(nodeCs);
         prev = BranchSplitService.createdId(nodeCs);
       });
       ends.push({ end: prev, flowOptions, direct: false });
     }
 
-    // 3. join (branches ending in an end event terminate there)
-    const terminating = ends.filter((branchEnd) => !branchEnd.direct && is(this.doc.require(branchEnd.end), 'bpmn:EndEvent'));
+    const terminating = ends.filter((branchEnd) => !branchEnd.direct && is(this.edit.require(branchEnd.end), 'bpmn:EndEvent'));
     const continuing = ends.filter((branchEnd) => !terminating.includes(branchEnd));
     let joinId: string | undefined;
     const why = !withJoin ? 'join is false' : !continuing.length ? 'every branch ends in an end event' : continuing.length === 1 ? `only one branch continues (the others end in an end event), and a join needs two` : undefined;
@@ -195,11 +202,10 @@ export class BranchSplitService {
       cs.note(`only the branch ending at ${lone.direct ? gatewayId : lone.end} continues; no join gateway created${successor ? ` (it runs on to ${idOf(successor)})` : ''}`);
     } else if (withJoin) {
       const wanted = this.joinIdFor(op, gateway, cs, kind);
-      const joinCs = new ElementCreationService(this.doc).add({ op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted.id, in: idOf(scope), ...laneOpt });
+      const joinCs = new ElementCreationService(this.doc, this.edit).add({ op: 'add', kind, ...(op.joinName ? { name: op.joinName } : {}), id: wanted.id, in: idOf(scope), ...laneOpt });
       cs.merge(joinCs);
       joinId = BranchSplitService.createdId(joinCs);
-      // generated, not the caller's (ElementCreationService.add claimed it as given)
-      if (wanted.base !== undefined) this.doc.edit.allocator.markGenerated(joinId, wanted.base);
+      if (wanted.base !== undefined) this.edit.allocator.markGenerated(joinId, wanted.base);
       cs.bind(op.joinAs, this.doc.get(joinId));
       const joinEntry = cs.created.find((change) => change.id === joinId);
       if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;
@@ -213,12 +219,12 @@ export class BranchSplitService {
       for (const { end, flowOptions, direct } of continuing) {
         const opts = direct ? flowOptions : {};
         cs.merge(
-          new ConnectionService(this.doc).connect({ op: 'connect', source: end, target, ...new FlowOptions(opts).toConnect() }),
+          new ConnectionService(this.doc, this.edit).connect({ op: 'connect', source: end, target, ...new FlowOptions(opts).toConnect() }),
         );
       }
     }
     if (joinId && successor) {
-      cs.merge(new ConnectionService(this.doc).connect({ op: 'connect', source: joinId, target: idOf(successor) }));
+      cs.merge(new ConnectionService(this.doc, this.edit).connect({ op: 'connect', source: joinId, target: idOf(successor) }));
     }
 
     const branchIds = ends.map((branchEnd) => (branchEnd.direct ? '(direct)' : terminating.includes(branchEnd) ? `${branchEnd.end} (end event)` : branchEnd.end));

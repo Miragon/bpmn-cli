@@ -4,7 +4,9 @@ import type { Shot } from '../../../application/port/out/WriteImagePort.js';
 import type { FileMutationOptions } from '../../../application/port/in/EditDocumentUseCase.js';
 import { defaultWithConditionViolation, placementViolation } from '../../../domain/commands/utils/op-rules.js';
 import type { EditCommand, TriggerOptions } from '../../../domain/commands/types.js';
-import { LAYOUT_MODES, type LayoutMode, type MutationResult } from '../../../domain/batch/types.js';
+import { TRIGGER_FIELDS, TRIGGER_KEYS } from '../../../domain/commands/utils/op-fields.js';
+import type { MutationResult } from '../../../domain/batch/types.js';
+import { LAYOUT_MODES, type LayoutMode } from '../../../domain/diagram/types.js';
 import { RENDER_MAX_SIZE, type RenderOptions } from '../../../domain/views/render/types.js';
 import { changeHighlight } from '../report/utils/highlight.js';
 import { type MutationReport, type MutationSummary } from '../report/command-report.js';
@@ -12,7 +14,8 @@ import { RenderReport } from './RenderReport.js';
 import { isCliError, usageError } from '../../../domain/document/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import type { CliStream } from './Cli.js';
-import { flag, renderFormat, renderTarget } from './utils/flags.js';
+import { renderFormat, renderTarget } from './utils/flags.js';
+import { flag } from '../report/utils/option-flags.js';
 import { ModelViewText } from '../report/ModelViewText.js';
 import { MutationReportBuilder } from '../report/MutationReportBuilder.js';
 import { MutationSummaryBuilder } from '../report/MutationSummaryBuilder.js';
@@ -68,34 +71,16 @@ export abstract class MutationCommand extends CliCommand {
   }
 
   protected withTriggerOptions(cmd: CommandType): CommandType {
-    return cmd
-      .option('--timer <iso>', 'timer: R/PT1H (cycle), PT5M (duration) or a date')
-      .option('--timer-kind <kind>', 'cycle | duration | date (default: classified from the value)')
-      .option('--message <name>', 'message name (bpmn:Message is created when missing)')
-      .option('--error <name>', 'error name')
-      .option('--error-code <code>', 'error code')
-      .option('--signal <name>', 'signal name')
-      .option('--escalation <name>', 'escalation name')
-      .option('--escalation-code <code>', 'escalation code')
-      .option('--when <expr>', 'condition of a conditional event')
-      .option('--link <name>', 'link name')
-      .option('--non-interrupting', 'non-interrupting boundary / start event');
+    for (const key of TRIGGER_KEYS) cmd.option(...CliCommand.catalogue.triggerOption(key));
+    return cmd;
   }
 
   protected triggerOptions(options: RawOpts): TriggerOptions {
-    const trigger: TriggerOptions = {};
-    if (options['timer']) trigger.timer = String(options['timer']);
-    if (options['timerKind']) trigger.timerKind = String(options['timerKind']) as TriggerOptions['timerKind'];
-    if (options['message']) trigger.message = String(options['message']);
-    if (options['error']) trigger.error = String(options['error']);
-    if (options['errorCode']) trigger.errorCode = String(options['errorCode']);
-    if (options['signal']) trigger.signal = String(options['signal']);
-    if (options['escalation']) trigger.escalation = String(options['escalation']);
-    if (options['escalationCode']) trigger.escalationCode = String(options['escalationCode']);
-    if (options['when']) trigger.when = String(options['when']);
-    if (options['link']) trigger.link = String(options['link']);
-    if (options['nonInterrupting']) trigger.nonInterrupting = true;
-    return trigger;
+    const trigger: Record<string, string | boolean> = {};
+    for (const key of TRIGGER_KEYS) {
+      if (options[key]) trigger[key] = TRIGGER_FIELDS[key].type === 'boolean' ? true : String(options[key]);
+    }
+    return trigger as TriggerOptions;
   }
 
   protected mutationOptions(options: RawOpts): MutationFlags {

@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
 import type { El } from '../../document/utils/moddle.js';
 import { usageError } from '../../document/utils/errors.js';
@@ -57,18 +58,18 @@ export class FlowOptions {
   }
 
   /** For an existing flow (the one into a spliced node); reported as changed when one was given. */
-  apply(doc: Doc, flow: El, cs: ChangeSet): void {
+  apply(doc: Doc, edit: EditContext, flow: El, cs: ChangeSet): void {
     let touched = false;
     if (this.values.flowName !== undefined) {
       flow.set('name', this.values.flowName || undefined);
       touched = true;
     }
     if (this.values.condition !== undefined) {
-      new SequenceFlowService(doc).setCondition(flow, this.values.condition, this.values.language);
+      new SequenceFlowService(doc, edit).setCondition(flow, this.values.condition, this.values.language);
       touched = true;
     }
     if (this.values.default) {
-      new SequenceFlowService(doc).setDefault(flow, true);
+      new SequenceFlowService(doc, edit).setDefault(flow, true);
       touched = true;
     }
     if (touched) cs.change(ChangeSet.flowEntryOf(flow));

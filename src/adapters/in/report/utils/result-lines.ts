@@ -1,14 +1,14 @@
 import type { LayoutProblem } from '../../../../domain/diagram/utils/problems.js';
-import type { FormatResult } from '../../../../domain/batch/DiagramCommandService.js';
+import type { FormatResult } from '../../../../domain/diagram/DiagramCommandService.js';
 import type { Change, ChangeSet } from '../../../../domain/document/ChangeSet.js';
-import type { LayoutStatus } from '../../../../domain/batch/types.js';
+import type { LayoutStatus } from '../../../../domain/diagram/types.js';
 import type { Warning } from '../../../../domain/document/CliError.js';
 import { INDENT, quote } from './view-lines.js';
 
 export type ChangeEntries = Pick<ChangeSet, 'created' | 'changed' | 'removed' | 'warnings' | 'notes'>;
 
+/** A flow without id (valid BPMN) that an op removed reads `(no id)`. */
 function changeLine(verb: string, change: Change): string {
-  // a flow without id (valid BPMN) that an op removed
   let line = `${verb} ${change.kind} ${change.id || '(no id)'}`;
   if (change.name) line += ` ${quote(change.name)}`;
   if (change.detail) line += ` - ${change.detail}`;

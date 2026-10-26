@@ -1,5 +1,6 @@
 import { PropertyCoercer } from './PropertyCoercer.js';
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError } from '../document/utils/errors.js';
 import { IdRenameService } from './IdRenameService.js';
 import { kindLabel, kindOf, TRIGGER_TYPES } from '../document/utils/kinds.js';
@@ -24,8 +25,11 @@ const NESTED_BLOCKED: Record<string, string> = {
 export class NestedSlots {
   private readonly coercer: PropertyCoercer;
 
-  constructor(private readonly doc: Doc) {
-    this.coercer = new PropertyCoercer(doc);
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {
+    this.coercer = new PropertyCoercer(doc, edit);
   }
 
   /** Other vendors' attributes are accepted too, unchecked. */
@@ -72,12 +76,12 @@ export class NestedSlots {
     });
   }
 
+  /** Checks one nested key; a zeebe setting of a nested element is its extension element (loop.zeebe:...). */
   private checkKey(el: El, slot: NestedSlot, target: El, key: string, prefix: string = slot): void {
     const id = idOf(el);
     const full = `${prefix}.${key}`;
     const zi = key.indexOf(':');
     if (zi > 0 && this.doc.namespaceUri(key.slice(0, zi)) === ZEEBE_URI && !ZEEBE.attr(key.slice(zi + 1))) {
-      // a zeebe setting of a nested element is its extension element (loop.zeebe:...)
       const local = key.slice(zi + 1);
       const owner = ZEEBE.typeNames().find((typeName) => ZEEBE.allowedOn(typeName, target) === true && ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
       if (owner) {
@@ -159,7 +163,8 @@ export class NestedSlots {
     const refSlot = ref.slot;
     let target = resolveNested(el, ref, full);
     if (!target) {
-      if (!value) return; // nothing to remove
+      const nothingToRemove = !value;
+      if (nothingToRemove) return;
       target = this.create(el, refSlot, key, cs);
     }
     if (value) this.checkKey(el, refSlot, target, key, ref.text);
@@ -169,9 +174,9 @@ export class NestedSlots {
       this.coercer.setVendorAttribute(target, key, value);
     } else if (key === 'id') {
       if (!value) throw PropertyCoercer.invalid(el, full, 'an id cannot be empty');
-      if (idOf(target)) new IdRenameService(this.doc).rename(target, value);
+      if (idOf(target)) new IdRenameService(this.doc, this.edit).rename(target, value);
       else {
-        this.doc.claimId(value);
+        this.edit.allocator.claim(value);
         target.set('id', value);
       }
     } else if (!PropertyCoercer.removeUndefined(target, key, value)) {

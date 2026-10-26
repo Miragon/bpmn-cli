@@ -49,10 +49,10 @@ export class C7Profile extends EngineProfile {
     schema.checkSchemaAttributes();
   }
 
+  /** Checks one element; an executable ad-hoc sub-process ends the walk, as the engines skip it with its content like a non-executable process. */
   protected override checkElement(el: El, owner: El | undefined, executable: boolean): ElementWalk {
     const is = this.kit.is;
     if (executable && is(el, 'bpmn:AdHocSubProcess')) {
-      // the engines skip an ad-hoc sub-process with its content, like a non-executable process
       this.flows.checkAdHoc(el);
       return 'stop';
     }

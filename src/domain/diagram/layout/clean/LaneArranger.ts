@@ -39,6 +39,12 @@ export class LaneArranger {
     private readonly groups?: ReadonlyMap<string, readonly string[]>,
   ) {}
 
+  /**
+   * Nodes not in any lane go to the first lane. The lanes take the scope's lane bands after the
+   * trials, since undoing a trial puts back only those. A loop drawn over the top (its label above
+   * y 0) and annotations may move the content down; the first lane grows with it. Event
+   * sub-processes of the last lane or of none go below everything.
+   */
   apply(): void {
     const { scope, process, groups } = this;
     const laneSets = many(process, 'laneSets');
@@ -65,7 +71,6 @@ export class LaneArranger {
     top.forEach(collect);
     if (!leaves.length) return;
     this.leaves = leaves;
-    // nodes not in any lane go to the first lane
     const assigned = new Set(leaves.flatMap((lane) => lane.nodes));
     for (const node of scope.nodes) if (!assigned.has(node)) leaves[0]!.nodes.push(node);
 
@@ -110,7 +115,6 @@ export class LaneArranger {
     }).run();
     new ChainLiftTrial(scope, arrange).run();
     new TopBorderTrial(scope).run();
-    // undoing a trial puts back the scope's lane bands, not these
     leaves.forEach((lane, index) => {
       const laneBand = scope.laneBands![index]!;
       lane.y = laneBand.top;
@@ -118,18 +122,15 @@ export class LaneArranger {
     });
     const ref = scope.nodes[0];
     const yOf = (): number => ref?.box.y ?? 0;
-    // a loop drawn over the top (its label above y 0) moves the content down: the bands follow
     const beforeRouting = yOf();
     new ChannelRouter(scope).route();
     this.growFirstLane(yOf() - beforeRouting, true);
     this.fitLaneLoops();
-    // annotations may open a strip above the content too
     const beforeNotes = yOf();
     new ScopeArtifactPlacer(scope).placeAnnotations();
     this.growFirstLane(yOf() - beforeNotes, false);
     new LinkRouter(scope).route();
     growToFit(scope);
-    // event sub-processes of the last lane or of none go below everything
     const last = leaves[leaves.length - 1]!;
     for (const lane of leaves) if (lane !== last && lane.subs.length) this.placeLaneEventSubs(lane);
     const placed = new Set(leaves.filter((lane) => lane !== last).flatMap((lane) => lane.subs));
@@ -223,6 +224,8 @@ export class LaneArranger {
    * Grows each lane around the runs of its loops, boundary ways and their labels that the
    * router laid closer than CHANNEL_KEEP to its border: a channel runs loopGap off the rows,
    * which is the lane padding, so on the border.
+   * A self loop's label below its run holds the lane open like the run does. When the lane grows
+   * upwards its own flows move whole, as a run over the top may lie in the lane before.
    */
   private fitLaneLoops(): void {
     const { scope, leaves } = this;
@@ -237,11 +240,9 @@ export class LaneArranger {
       const downs = ups.map((edge) => edge.points[1]!.y);
       if (!runs.length && !downs.length) return;
       const top = Math.min(...runs.map((pointY) => pointY - CHANNEL_KEEP), ...loops.flatMap((edge) => (edge.label ? [edge.label.y] : [])));
-      // a self loop's label below its run holds the lane open like the run does
       const low = Math.max(...[...runs, ...downs].map((pointY) => pointY + CHANNEL_KEEP), ...loops.flatMap((edge) => (edge.label ? [edge.label.y + edge.label.height] : [])));
       const above = Math.max(0, Math.ceil(lane.y - top));
       if (above) {
-        // the lane's own flows move whole: a run over the top may lie in the lane before
         const cut = lane.y;
         this.openStrip(cut, above);
         for (const edge of inside) {
@@ -264,12 +265,14 @@ export class LaneArranger {
     });
   }
 
-  /** Stacks them below the lane's content; the lane grows and the lanes below move down. */
+  /**
+   * Stacks them below the lane's content; the lane grows and the lanes below move down.
+   * A label starting on the bottom border belongs to the lane below (a loop label).
+   */
   private placeLaneEventSubs(lane: LaneBand): void {
     const { scope } = this;
     const top = lane.y, bottom = lane.y + lane.height;
     const inBand = (pointY: number): boolean => pointY > top && pointY <= bottom;
-    // a label starting on the bottom border is a loop label of the lane below
     const labelIn = (pointY: number): boolean => pointY >= top && pointY < bottom;
     let content = bottom - SIZES.lanePadding;
     for (const node of lane.nodes) content = Math.max(content, node.box.y + node.box.height, ...node.boundary.map((event) => event.box.y + event.box.height));

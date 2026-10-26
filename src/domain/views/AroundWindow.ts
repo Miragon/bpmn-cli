@@ -1,6 +1,6 @@
 import type { Doc } from '../document/Doc.js';
 import { usageError } from '../document/utils/errors.js';
-import { kindLabel, triggerOf } from '../document/utils/kinds.js';
+import { kindLabel, kindOrTypeLabel, triggerOf } from '../document/utils/kinds.js';
 import { diExpansionState } from '../diagram/utils/expansion.js';
 import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
 import { laneOf } from '../document/utils/lanes.js';
@@ -9,7 +9,7 @@ import { AROUND_DEFAULT_DEPTH, type AroundNode, type AroundOptions, type AroundS
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { ViewAnnotation, ViewData, ViewMessageFlow } from './model-view.js';
-import { compact, labelOf, nonEmpty, ownNameOf, scopesWithin } from './utils/view.js';
+import { compact, nonEmpty, ownNameOf, scopesWithin } from './utils/view.js';
 
 /**
  * `show <file> --around <id>`: the neighbourhood of one element, `depth` flow steps both ways.
@@ -27,6 +27,11 @@ export class AroundWindow {
     this.links = new ElementLinks(doc);
   }
 
+  /**
+   * Lists the window in tree order: boundary events after their host, a sub-process's window
+   * after it; a sub-process outside the window that holds window nodes gets a heading, then its
+   * window. A node's zeebe settings are left to `impl`, complete (no job= next to zeebe:taskDefinition type=...).
+   */
   view(): AroundView {
     const { doc, id, opts } = this;
     const depth = opts.depth ?? AROUND_DEFAULT_DEPTH;
@@ -85,7 +90,6 @@ export class AroundWindow {
         nonInterrupting: facts.nonInterrupting(),
         expanded: sub ? expansion.get(shownId(node)) !== false : undefined,
         content: sub && children.length && !children.some((child) => inWindow(child)) ? children.length : undefined,
-        // the zeebe settings are in impl, complete (no job= next to zeebe:taskDefinition type=...)
         props: facts.props({ zeebe: false }),
         impl: facts.implementation(),
         documentation: facts.documentation(),
@@ -94,7 +98,6 @@ export class AroundWindow {
       });
     };
 
-    // tree order: boundary events after their host, a sub-process's window after it
     const visitScope = (scope: El): void => {
       const ordered = new FlowOrder(doc, scope).ordered;
       const placed = new Set<El>();
@@ -110,7 +113,6 @@ export class AroundWindow {
       };
       for (const node of ordered) if (inWindow(node)) emit(node);
       for (const node of doc.flowNodes(scope)) if (inWindow(node) && is(node, 'bpmn:BoundaryEvent')) emit(node);
-      // sub-processes outside the window that hold window nodes: a heading, then their window
       for (const node of doc.flowNodes(scope)) {
         if (!is(node, 'bpmn:SubProcess') || inWindow(node) || !scopeSet.has(node)) continue;
         scopes.push(scopeEntry(node, false));
@@ -155,6 +157,10 @@ export class AroundWindow {
     return this.doc.incoming(node).length === 0 || this.doc.outgoing(node).length === 0;
   }
 
+  /**
+   * The first and last nodes of a sub-process lead out to the sub-process; with `inner`, a
+   * sub-process also leads into its first and last nodes.
+   */
   private neighbours(node: El, inner: boolean): El[] {
     const doc = this.doc;
     const out: El[] = [];
@@ -175,9 +181,7 @@ export class AroundWindow {
       const other = AroundWindow.isLink(node, 'throw') ? 'catch' : 'throw';
       if (name) out.push(...doc.flowNodes(scope).filter((candidate) => AroundWindow.isLink(candidate, other) && AroundWindow.linkName(candidate) === name));
     }
-    // leaving a sub-process: its first and last nodes lead to the sub-process
     if (scope && is(scope, 'bpmn:SubProcess') && this.isEntryOrExit(node)) out.push(scope);
-    // entering one (inner): the sub-process leads to its first and last nodes
     if (inner && is(node, 'bpmn:SubProcess')) out.push(...doc.flowNodes(node).filter((child) => this.isEntryOrExit(child)));
     return out;
   }
@@ -185,7 +189,7 @@ export class AroundWindow {
   private seedsOf(el: El): El[] {
     if (is(el, 'bpmn:FlowNode')) return [el];
     if (is(el, 'bpmn:SequenceFlow')) return [peek<El>(el, 'sourceRef'), peek<El>(el, 'targetRef')].filter((endpoint): endpoint is El => !!endpoint);
-    throw usageError(`--around needs a flow node or a sequence flow; "${this.id}" is a ${labelOf(el)}`, {
+    throw usageError(`--around needs a flow node or a sequence flow; "${this.id}" is a ${kindOrTypeLabel(el)}`, {
       hint: is(el, 'bpmn:Process') || is(el, 'bpmn:Participant') || is(el, 'bpmn:SubProcess') ? 'Use `bpmn show <file> --scope <id>` for a whole process, pool or sub-process.' : 'Pick a node it belongs to (`bpmn show <file> <id>` names it).',
     });
   }

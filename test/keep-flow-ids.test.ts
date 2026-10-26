@@ -20,6 +20,7 @@ import { mutateDoc, renderMutation } from '../src/index.js';
 import type { ChangeSet } from '../src/domain/document/ChangeSet.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 import { FlowIdFollower } from '../src/domain/editing/flows/FlowIdFollower.js';
+import { EditContext } from '../src/domain/document/EditContext.js';
 
 /** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */
 async function drawnDefault(style: 'suffix' | 'bpmn' = 'suffix'): Promise<string> {
@@ -813,9 +814,9 @@ describe('mixed id styles: a followed hint still names its ends on the next read
     const naming = ops.flatMap((op) => {
       const id = (op as { values: { id: string } }).values.id;
       const flow = doc.get(id)!;
-      return new FlowIdFollower(doc).namesEnds(id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
+      return new FlowIdFollower(doc, new EditContext(doc)).namesEnds(id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
     });
-    return { followed: ops.map((op) => (op as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).idStyle.info().sequenceFlow, after: doc.idStyle.info().sequenceFlow };
+    return { followed: ops.map((op) => (op as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).ownIdStyle.info().sequenceFlow, after: doc.ownIdStyle.info().sequenceFlow };
   }
 
   // the five 'follow hints' violations of the keep-mode fuzz campaigns (seeds 1003, 9456, 9473, 7392, 7922): each followed

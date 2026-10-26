@@ -76,9 +76,12 @@ export class FullLayout {
     return { code: warning.code, elementId: warning.elementId, message: warning.message, relatedElementIds: warning.relatedElementIds ?? [] };
   }
 
-  /** Clobbers the model's in-memory DI; treat the returned XML as the truth. */
+  /**
+   * Clobbers the model's in-memory DI; treat the returned XML as the truth.
+   * Id-less elements get ids first, so the DI never says bpmnElement="undefined". Without old DI
+   * the layouter's ids stand unless a DI id would exceed 64 characters.
+   */
   async run(): Promise<LayoutResult> {
-    // never bpmnElement="undefined"
     const givenIds = new DrawnElementIds(this.model.definitions).give(this.opts.allocateId);
     const given = givenIds.length ? { givenIds } : {};
     const expanded = resolveExpanded(this.model, this.opts);
@@ -91,7 +94,6 @@ export class FullLayout {
       const { xml } = await this.model.moddle.toXML(this.model.definitions, { format: true });
       return { xml, warnings: warnings.map((warning) => ({ code: warning.code, elementId: warning.elementId, message: warning.message, relatedElementIds: [] })), expanded: [...expanded], ...given, ...this.groupNotes(redrawn) };
     }
-    // without old DI the layouter's ids stand unless a DI id would exceed 64 characters
     const cut = !diIds.diagrams.length && !diIdsFit(this.model.definitions);
     this.injectLayoutHints(expanded);
     const temporary = TemporaryLaneMembers.add(this.model.definitions);

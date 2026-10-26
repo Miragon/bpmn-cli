@@ -14,13 +14,13 @@ export class SummaryText {
     private readonly opts: { dryRun?: boolean; advisory?: ReadonlySet<string> } = {},
   ) {}
 
+  /** A renamed id names the old one it replaces, as a later command must use the new id. */
   text(): string {
     const { summary, opts } = this;
     const lines: string[] = [];
     for (const [kind, ids] of Object.entries(summary.created)) lines.push(`created ${kind}: ${ids.join(', ')}`);
     if (summary.aliases) lines.push(aliasLine(summary.aliases));
     if (summary.changed.length) lines.push(`changed: ${summary.changed.join(', ')}`);
-    // a later command must use the new id: say which old one it replaces
     if (summary.renamed) lines.push(`renamed: ${Object.entries(summary.renamed).map(([from, to]) => `${from} -> ${to}`).join(', ')}`);
     if (summary.removed.length) lines.push(`removed: ${summary.removed.join(', ')}`);
     for (const format of summary.format ?? []) lines.push(formatLine(format).trimStart());

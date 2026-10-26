@@ -64,11 +64,13 @@ export class IdConventionsReader {
     this.where = source ?? '.bpmnlintrc';
   }
 
-  /** `conventions` is undefined for no setting, severity off or every prefix switched off. */
+  /**
+   * `conventions` is undefined for no setting, severity off or every prefix switched off.
+   * Options are read as element-id-naming's factory reads them.
+   */
   read(setting: BpmnlintRuleSetting | undefined): { conventions?: IdConventions; notes: ValidatorFinding[] } {
     const notes = this.notes;
     if (!setting || setting.severity === 'off') return { notes };
-    // the rule's own reading of its options (element-id-naming's factory)
     const options = (setting.config ?? {}) as { prefixes?: Prefixes; case?: string; eventDefinitionQualifier?: string };
     const { prefixes: overrides = {}, case: caseName = 'camelCase' } = options;
     const prefixes = { ...this.naming.DEFAULT_PREFIXES, ...overrides };
@@ -147,6 +149,7 @@ export class IdConventionsReader {
     return table;
   }
 
+  /** A required qualified prefix too long for new ids is ignored (noted once): those ids follow the learned style, which the rule reports. */
   private qualifiedPrefixes(moddle: Moddle, table: Record<string, string>, qualifier: QualifierMode, ignored: string[]): void {
     for (const def of KINDS) {
       const plain = table[def.type];
@@ -158,7 +161,6 @@ export class IdConventionsReader {
         const key = `${def.type}:${trigger}`;
         if (isUsablePrefix(qualified)) table[key] = qualified;
         else if (qualified !== undefined && qualifier === 'required' && !this.noted.has(key)) {
-          // too long for new ids: they follow the learned style, which the rule reports
           this.noted.add(key);
           ignored.push(key);
           this.note(`prefix of ${key}`, qualified, `is longer than 56 characters (the ${def.type} prefix qualified with the trigger): new ids of such events follow the learned id style, and the rule reports them`, `Shorten the ${def.type} prefix in the .bpmnlintrc, or set eventDefinitionQualifier to optional.`);

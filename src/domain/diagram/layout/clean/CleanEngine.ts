@@ -26,6 +26,10 @@ export class CleanEngine {
     private readonly groups?: ReadonlyMap<string, readonly string[]>,
   ) {}
 
+  /**
+   * Collaboration artifacts are drawn last, as notes go next to elements that must already be
+   * placed. Each collapsed sub-process gets a diagram of its own (bpmn-js drill-down).
+   */
   run(): { warnings: EngineWarning[] } {
     const { moddle, definitions } = this.model;
     const { expanded, groups } = this;
@@ -42,7 +46,6 @@ export class CleanEngine {
       const stack = new PoolStacker(root, writer);
       stack.drawPools(placer, placeOpts.groups);
       stack.drawMessageFlows(warnings);
-      // after everything else: the notes go next to elements that must already be placed
       new CollaborationArtifacts(root, stack.pools, writer).draw(warnings);
     } else {
       const scope = placer.layOut(root);
@@ -58,7 +61,6 @@ export class CleanEngine {
       }
     }
     writer.writePlane(definitions, root, idOf(root), warnings);
-    // collapsed sub-processes: one diagram each (bpmn-js drill-down)
     for (const [subId, scope] of collapsedScopes) {
       writer.startPlane();
       writer.emitScope(scope, { x: margin, y: margin });

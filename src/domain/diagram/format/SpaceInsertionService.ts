@@ -23,7 +23,11 @@ export class SpaceInsertionService {
     return Math.round((median(widths) ?? 100) + PlaneQuery.spacingOf(plane).gap);
   }
 
-  /** Negative `space`: closes up to `amount` px of the empty space right of / below an element. */
+  /**
+   * Negative `space`: closes up to `amount` px of the empty space right of / below an element.
+   * For a lane or pool the strip lies within the pool band, so the pool shrinks with a lane;
+   * otherwise it starts past what touches the far edge (its label, ...).
+   */
   private closeSpace(refId: string, plane: Plane, shape: DShape, axis: 'x' | 'y', amount: number): string[] {
     const compaction = new CompactionService(this.diagram.drawing(plane));
     const gaps = compaction.gaps();
@@ -34,7 +38,6 @@ export class SpaceInsertionService {
     let strip: { from: number; to: number; keep: number } | undefined;
     let within: Box | undefined;
     if (shape.container && shape.kind !== 'subProcess') {
-      // within the pool band, so the pool shrinks with a lane
       within = copyBox((pool ?? shape).bounds);
       const lanes = [...plane.shapes.values()].filter((lane) => lane.kind === 'lane' && (lane.poolId === shape.id || Frames.chain(plane, lane).includes(shape))).map((lane) => lane.id);
       const occ = compaction.occupied(axis, shape.bounds, { skip: new Set([shape.id, ...(pool ? [pool.id] : []), ...lanes]), loose });
@@ -47,7 +50,6 @@ export class SpaceInsertionService {
       if (axis === 'x' && !pool) Object.assign(region, { y: -1e6, height: 2e6 });
       const skip = new Set([shape.id, ...[...plane.shapes.values()].filter((frame) => frame.kind === 'lane' || frame.kind === 'participant').map((frame) => frame.id)]);
       const occ = compaction.occupied(axis, region, { skip, loose, solid: (other) => other.kind === 'subProcess' && other.container && other.id !== shape.id && !Frames.chain(plane, shape).includes(other) });
-      // the strip starts past what touches the far edge (its label, ...)
       let from = far(unit);
       for (const [start, end] of occ) if (start <= from + 1) from = Math.max(from, end);
       const next = occ.find(([start]) => start > from + 1);
@@ -77,6 +79,11 @@ export class SpaceInsertionService {
     return this.diagram.drawing(plane).settle(this.snap);
   }
 
+  /**
+   * Inserts space right of / below the reference; a frame grows itself, as the line runs just
+   * inside its far edge. A few pixels where a column or row was likely meant come with a hint how
+   * to ask for one.
+   */
   run(): string[] {
     const refId = (this.op.after ?? this.op.below)!;
     const { plane, shape } = this.diagram.drawnShape(refId);
@@ -89,12 +96,10 @@ export class SpaceInsertionService {
     const delta = Math.abs(by.count) * step;
     const where = axis === 'x' ? `right of ${refId}` : `below ${refId}`;
     if (by.count < 0) return this.closeSpace(refId, plane, shape, axis, delta);
-    // a few pixels where a column or row was likely meant: say how to ask for one
     const steps = by.unit === 'px' ? '' : ` (${by.count} ${by.unit}${by.count > 1 ? 's' : ''} of ${step} px)`;
     const own = axis === 'x' ? column : row;
     const unitHint = by.unit === 'px' && delta < own / 4 ? `; one ${axis === 'x' ? 'column' : 'row'} is ${own} px: --by ${delta}${axis === 'x' ? 'col' : 'row'} moves by ${delta} ${axis === 'x' ? 'columns' : 'rows'}` : '';
     this.notes.push(`inserted ${delta} px${steps} ${where}${unitHint}`);
-    // a frame grows itself: the line runs just inside its far edge
     const box = shape.container ? shape.bounds : this.diagram.drawing(plane).unitBox(shape);
     const line = shape.container ? (axis === 'x' ? right(box) - 1 : bottom(box) - 1) : axis === 'x' ? right(box) + 1 : bottom(box) + 1;
     const pool = shape.kind === 'participant' ? shape : shape.poolId ? plane.shapes.get(shape.poolId) : undefined;

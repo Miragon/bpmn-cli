@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError } from '../document/utils/errors.js';
 import { ElementLabels } from '../document/ids/ElementLabels.js';
 import { isEventSubProcess, kindLabel, triggerOf } from '../document/utils/kinds.js';
@@ -19,7 +20,10 @@ export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'd
  * association or data association) from the two endpoints.
  */
 export class ConnectionService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   private static describe(el: El): string {
     return `${idOf(el)} (${kindLabel(el)})`;
@@ -94,8 +98,8 @@ export class ConnectionService {
         hint: 'Use a sequence flow inside a pool.',
       });
     }
-    const id = this.doc.edit.allocator.explicitOr(op.id, ElementLabels.flowRequest('bpmn:MessageFlow', source, target));
-    const message = op.message ? new RootElementService(this.doc).ensure('bpmn:Message', op.message) : undefined;
+    const id = this.edit.allocator.explicitOr(op.id, ElementLabels.flowRequest('bpmn:MessageFlow', source, target));
+    const message = op.message ? new RootElementService(this.doc, this.edit).ensure('bpmn:Message', op.message) : undefined;
     if (message?.created) {
       const name = message.el.get<string | undefined>('name');
       cs.create({ id: idOf(message.el), kind: 'message', ...(name ? { name } : {}), detail: 'root element' });
@@ -159,10 +163,11 @@ export class ConnectionService {
     new FlowOptions({ condition: op.condition, default: op.default }).assertConsistent({ element: op.source, related: [op.target] });
   }
 
+  /** Connects source and target; the op's alias names the connection, not a root message created with it. */
   connect(op: ConnectElements): ChangeSet {
     const cs = new ChangeSet();
-    const source = this.doc.require(op.source);
-    const target = this.doc.require(op.target);
+    const source = this.edit.require(op.source);
+    const target = this.edit.require(op.target);
     const kind = this.kindOf(source, target);
     const selfLoop = source === target;
     if (selfLoop && !(kind === 'sequenceFlow' && is(source, 'bpmn:Activity'))) {
@@ -178,7 +183,7 @@ export class ConnectionService {
       const same = existing ?? this.existingConnection(kind, source, target);
       if (same) {
         cs.note(`${kind} ${idOf(same)} ${op.source} -> ${op.target} already exists; nothing to do`);
-        new RootElementService(this.doc).bindRefAs(cs, op.refAs, same);
+        new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, same);
         return cs.bind(op.as, same);
       }
     }
@@ -198,13 +203,12 @@ export class ConnectionService {
       });
     }
 
-    // the alias names the connection, not a root message created with it
     let made: El | undefined;
     switch (kind) {
       case 'sequenceFlow': {
-        const flow = (made = new SequenceFlowService(this.doc).create(source, target, new FlowOptions({ flowId: op.id, flowName: op.name, condition: op.condition, language: op.language, default: op.default }).toAttrs(true)));
+        const flow = (made = new SequenceFlowService(this.doc, this.edit).create(source, target, new FlowOptions({ flowId: op.id, flowName: op.name, condition: op.condition, language: op.language, default: op.default }).toAttrs(true)));
         cs.create(ChangeSet.flowEntryOf(flow));
-        new EventGatewayRule(this.doc).warnFlow(flow, cs);
+        new EventGatewayRule(this.doc, this.edit).warnFlow(flow, cs);
         if (selfLoop) cs.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);
         const out = this.doc.outgoing(source).length;
         const inc = this.doc.incoming(target).length;
@@ -230,17 +234,17 @@ export class ConnectionService {
         made = this.createMessageFlow(source, target, op, cs);
         break;
       case 'association':
-        made = new AssociationService(this.doc).createAssociation(source, target, op.id ? { id: op.id } : {}, cs);
+        made = new AssociationService(this.doc, this.edit).createAssociation(source, target, op.id ? { id: op.id } : {}, cs);
         break;
       case 'dataAssociation':
-        made = new AssociationService(this.doc).createDataAssociation(source, target, op.id ? { id: op.id } : {}, cs);
+        made = new AssociationService(this.doc, this.edit).createDataAssociation(source, target, op.id ? { id: op.id } : {}, cs);
         break;
       default:
         break;
     }
     cs.bind(op.as, made);
-    new RootElementService(this.doc).bindRefAs(cs, op.refAs, made);
-    this.doc.edit.allocator.reportSuffixed(cs);
+    new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, made);
+    this.edit.allocator.reportSuffixed(cs);
     this.doc.invalidate();
     return cs;
   }

@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { usageError } from '../../document/utils/errors.js';
 import type { ChangeSet } from '../../document/ChangeSet.js';
 import { idOf } from '../../document/utils/elements.js';
@@ -14,14 +15,17 @@ import type { EditExtensionElements } from '../../commands/types.js';
  * never to write a file the engines reject or ignore.
  */
 export class ExtensionElementService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
+  /** Adds or removes extension elements; a correlation key goes to the message the event waits for, where Camunda 8 reads it. */
   apply(op: EditExtensionElements): ChangeSet {
     const doc = this.doc;
-    let owner = doc.require(op.id);
+    let owner = this.edit.require(op.id);
     if (op.action !== 'add' && op.action !== 'remove') throw usageError(`Unknown ext action "${String(op.action)}"; use add or remove`, { element: op.id });
     const notes: string[] = [];
-    // Camunda 8 reads a correlation key on the message, not on the event that waits for it
     const subscription = new ZeebeSubscription(doc);
     const message = subscription.messageFor(owner, op);
     if (message) {
@@ -31,7 +35,7 @@ export class ExtensionElementService {
       op = { ...rest, id: idOf(message), ...(split ? { type: split.rest } : {}) };
       owner = message;
     }
-    const { host, op: inner } = NESTED_HOSTS.resolve(doc, owner, NESTED_HOSTS.normalizeIndex(op), notes);
+    const { host, op: inner } = NESTED_HOSTS.resolve(doc, this.edit, owner, NESTED_HOSTS.normalizeIndex(op), notes);
     const cs = inner.action === 'add' ? new ExtensionInserter(doc).add(host, inner) : new ExtensionRemover(doc).remove(host, inner);
     for (const note of notes) cs.note(note);
     return cs;

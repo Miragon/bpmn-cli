@@ -15,7 +15,8 @@ import { ElementTypeChangeService } from '../src/domain/editing/ElementTypeChang
 import { ElementMoveService } from '../src/domain/editing/ElementMoveService.js';
 import { PropertyService } from '../src/domain/editing/PropertyService.js';
 import { ElementProperties } from '../src/domain/editing/ElementProperties.js';
-import { SET_KEYS } from '../src/domain/editing/PropertyCoercer.js';
+import { SET_KEYS } from '../src/domain/editing/SetKeyCatalog.js';
+import { EditContext } from '../src/domain/document/EditContext.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -140,7 +141,7 @@ const triggersReady = implemented(() => {
   const ev = doc.create('bpmn:StartEvent', { id: 'Probe' });
   many(doc.defaultScope(), 'flowElements').push(ev);
   ev.$parent = doc.defaultScope();
-  new EventDefinitionService(doc, ev).apply('timer', { timer: 'PT1M' });
+  new EventDefinitionService(doc, new EditContext(doc), ev).apply('timer', { timer: 'PT1M' });
 });
 
 const lanesReady = implemented(() => {
@@ -148,7 +149,7 @@ const lanesReady = implemented(() => {
   const task = doc.create('bpmn:Task', { id: 'Probe' });
   many(doc.defaultScope(), 'flowElements').push(task);
   task.$parent = doc.defaultScope();
-  new LaneService(doc).assign(task, undefined, new ChangeSet());
+  new LaneService(doc, new EditContext(doc)).assign(task, undefined, new ChangeSet());
 });
 
 const itTriggers = triggersReady ? it : it.todo;
@@ -161,7 +162,7 @@ const itLanes = lanesReady ? it : it.todo;
 describe('set: generic keys', () => {
   it('sets name and documentation, and unsets with empty values', async () => {
     const doc = await linearDoc();
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { name: 'Check invoice', doc: 'Look at it carefully' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { name: 'Check invoice', doc: 'Look at it carefully' } });
     const task = doc.require('Task_A');
     expect(task.get('name')).toBe('Check invoice');
     expect(many(task, 'documentation')[0]!.get('text')).toBe('Look at it carefully');
@@ -169,7 +170,7 @@ describe('set: generic keys', () => {
     expect(cs.changed[0]!.kind).toBe('userTask');
     const xml = await doc.toXml();
     expect(xml).toContain('<bpmn:documentation>Look at it carefully</bpmn:documentation>');
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { name: '' }, unset: ['documentation'] });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { name: '' }, unset: ['documentation'] });
     expect(task.get('name')).toBeUndefined();
     expect(many(task, 'documentation')).toHaveLength(0);
     await expectRoundTrip(doc);
@@ -177,16 +178,16 @@ describe('set: generic keys', () => {
 
   it('sets typed moddle attributes with descriptor validation (boolean, integer, enum, reference)', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'Process_1', values: { isExecutable: 'false' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Process_1', values: { isExecutable: 'false' } });
     expect(doc.require('Process_1').get('isExecutable')).toBe(false);
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { completionQuantity: '2', isForCompensation: 'yes' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { completionQuantity: '2', isForCompensation: 'yes' } });
     expect(doc.require('Task_A').get('completionQuantity')).toBe(2);
     expect(doc.require('Task_A').get('isForCompensation')).toBe(true);
-    new PropertyService(doc).set({ op: 'set', id: 'Gw', values: { gatewayDirection: 'diverging' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Gw', values: { gatewayDirection: 'diverging' } });
     expect(doc.require('Gw').get('gatewayDirection')).toBe('Diverging');
-    new PropertyService(doc).set({ op: 'set', id: 'Call', values: { calledElement: 'Other' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Call', values: { calledElement: 'Other' } });
     expect(doc.require('Call').get('calledElement')).toBe('Other');
-    new PropertyService(doc).set({ op: 'set', id: 'MF1', values: { messageRef: 'Message_Order' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'MF1', values: { messageRef: 'Message_Order' } });
     expect(doc.require('MF1').get<El>('messageRef').get('id')).toBe('Message_Order');
     const xml = await doc.toXml();
     expect(xml).toContain('gatewayDirection="Diverging"');
@@ -197,17 +198,17 @@ describe('set: generic keys', () => {
 
   it('rejects invalid enum / boolean / integer values', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Gw', values: { gatewayDirection: 'sideways' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Process_1', values: { isExecutable: 'maybe' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { completionQuantity: 'two' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'MF1', values: { messageRef: 'Nope' } }))).toBe('E_NOT_FOUND');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Gw', values: { gatewayDirection: 'sideways' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Process_1', values: { isExecutable: 'maybe' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { completionQuantity: 'two' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'MF1', values: { messageRef: 'Nope' } }))).toBe('E_NOT_FOUND');
     expect(Object.keys(new ElementProperties(doc).read(doc.require('Gw')))).not.toContain('gatewayDirection');
   });
 
   it('sets vendor attributes and declares the namespace automatically', async () => {
     const doc = await linearDoc();
     expect(doc.definitions.$attrs['xmlns:camunda']).toBeUndefined();
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { 'camunda:assignee': 'bob', 'zeebe:modelerTemplate': 'tpl' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { 'camunda:assignee': 'bob', 'zeebe:modelerTemplate': 'tpl' } });
     expect(doc.require('Task_A').$attrs['camunda:assignee']).toBe('bob');
     expect(doc.definitions.$attrs['xmlns:camunda']).toBe(CAMUNDA);
     expect(doc.definitions.$attrs['xmlns:zeebe']).toBe(ZEEBE);
@@ -216,16 +217,16 @@ describe('set: generic keys', () => {
     expect(xml).toContain(`xmlns:camunda="${CAMUNDA}"`);
     const again = await expectRoundTrip(doc);
     expect(again.require('Task_A').$attrs['camunda:assignee']).toBe('bob');
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { 'camunda:assignee': '' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { 'camunda:assignee': '' } });
     expect(doc.require('Task_A').$attrs['camunda:assignee']).toBeUndefined();
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { 'acme:thing': '1' } }))).toBe('E_UNKNOWN_NAMESPACE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { 'acme:thing': '1' } }))).toBe('E_UNKNOWN_NAMESPACE');
   });
 
   it('rejects unknown keys listing the settable keys', async () => {
     const doc = await fullDoc();
     let caught: unknown;
     try {
-      new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { colour: 'red' } });
+      new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { colour: 'red' } });
     } catch (err) {
       caught = err;
     }
@@ -233,9 +234,9 @@ describe('set: generic keys', () => {
     const candidates = isCliError(caught) ? (caught.details.candidates as string[]) : [];
     expect(candidates).toEqual(expect.arrayContaining(['name', 'doc', 'id', 'loop', 'lane', 'isForCompensation', 'completionQuantity']));
     expect(candidates).not.toContain('condition');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { condition: 'x' } }))).toBe('E_UNKNOWN_KEY');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { attachedToRef: 'Task_B' } }))).toBe('E_UNKNOWN_KEY');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: {} }))).toBe('E_USAGE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { condition: 'x' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { attachedToRef: 'Task_B' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: {} }))).toBe('E_USAGE');
     expect(SET_KEYS.some((setKey) => setKey.key === 'loop' && setKey.appliesTo === 'activity')).toBe(true);
   });
 });
@@ -245,31 +246,31 @@ describe('set: flow keys', () => {
     const doc = await fullDoc();
     const gw = doc.require('Gw');
     expect(gw.get<El>('default').get('id')).toBe('F_no');
-    new PropertyService(doc).set({ op: 'set', id: 'F_no', values: { condition: '${!ok}', language: 'juel' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_no', values: { condition: '${!ok}', language: 'juel' } });
     const fNo = doc.require('F_no');
     expect(fNo.get<El>('conditionExpression').get('body')).toBe('${!ok}');
     expect(fNo.get<El>('conditionExpression').get('language')).toBe('juel');
     expect(gw.get('default')).toBeUndefined();
 
-    new PropertyService(doc).set({ op: 'set', id: 'F_yes', values: { default: 'true' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_yes', values: { default: 'true' } });
     expect(gw.get<El>('default').get('id')).toBe('F_yes');
     expect(doc.require('F_yes').get('conditionExpression')).toBeUndefined();
-    new PropertyService(doc).set({ op: 'set', id: 'F_yes', values: { default: 'false' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_yes', values: { default: 'false' } });
     expect(gw.get('default')).toBeUndefined();
-    new PropertyService(doc).set({ op: 'set', id: 'Gw', values: { default: 'F_no' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Gw', values: { default: 'F_no' } });
     expect(gw.get<El>('default').get('id')).toBe('F_no');
     expect(fNo.get('conditionExpression')).toBeUndefined();
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Gw', values: { default: 'F1' } }))).toBe('E_NOT_OUTGOING');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Gw', values: { default: 'F1' } }))).toBe('E_NOT_OUTGOING');
 
-    new PropertyService(doc).set({ op: 'set', id: 'F_T', values: { target: 'Task_Send' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_T', values: { target: 'Task_Send' } });
     const ft = doc.require('F_T');
     expect(ft.get<El>('targetRef').get('id')).toBe('Task_Send');
     expect(ids(doc.incoming(doc.require('Task_Remind')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Task_Send')))).toEqual(['F_no', 'F_T']);
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'F_T', values: { target: 'SubTask' } }))).toBe('E_CROSS_SCOPE');
-    new PropertyService(doc).set({ op: 'set', id: 'F_no', values: { condition: '' } });
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_T', values: { target: 'SubTask' } }))).toBe('E_CROSS_SCOPE');
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_no', values: { condition: '' } });
     expect(fNo.get('conditionExpression')).toBeUndefined();
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'F_no', values: { language: 'juel' } }))).toBe('E_NO_CONDITION');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_no', values: { language: 'juel' } }))).toBe('E_NO_CONDITION');
     await expectRoundTrip(doc);
   });
 });
@@ -277,7 +278,7 @@ describe('set: flow keys', () => {
 describe('set: loop keys', () => {
   it('creates multi-instance / standard loop characteristics with expressions', async () => {
     const doc = await linearDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'sequential', cardinality: '3', completion: '${done}' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { loop: 'sequential', cardinality: '3', completion: '${done}' } });
     const task = doc.require('Task_A');
     const loop = task.get<El>('loopCharacteristics');
     expect(loop.$type).toBe('bpmn:MultiInstanceLoopCharacteristics');
@@ -291,23 +292,23 @@ describe('set: loop keys', () => {
     expect(xml).toContain('xsi:type="bpmn:tFormalExpression">3</bpmn:loopCardinality>');
     await expectRoundTrip(doc);
 
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'parallel' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { loop: 'parallel' } });
     expect(task.get<El>('loopCharacteristics')).toBe(loop);
     expect(loop.get('isSequential')).toBe(false);
     expect(new ElementProperties(doc).read(task)).toMatchObject({ loop: 'parallel', cardinality: '3', completion: '${done}' });
 
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'standard' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { loop: 'standard' } });
     expect(task.get<El>('loopCharacteristics').$type).toBe('bpmn:StandardLoopCharacteristics');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { cardinality: '2' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { cardinality: '2' } }))).toBe('E_INVALID_VALUE');
     xml = await doc.toXml();
     expect(xml).toContain('<bpmn:standardLoopCharacteristics />');
 
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'none' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { loop: 'none' } });
     expect(task.get('loopCharacteristics')).toBeUndefined();
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { cardinality: '5' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { cardinality: '5' } });
     expect(task.get<El>('loopCharacteristics').get('isSequential')).toBe(false);
     expect(cs.notes[0]).toMatch(/parallel multi-instance/);
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { loop: 'weird' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { loop: 'weird' } }))).toBe('E_INVALID_VALUE');
     await expectRoundTrip(doc);
   });
 });
@@ -316,13 +317,13 @@ describe('set: sub-process expansion', () => {
   it('records expansion requests per document', async () => {
     const doc = await fullDoc();
     expect(new ElementProperties(doc).read(doc.require('Sub'))['expanded']).toBe(true);
-    new PropertyService(doc).set({ op: 'set', id: 'Sub', values: { expanded: 'false' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Sub', values: { expanded: 'false' } });
     expect(doc.layoutRequests.expansion()).toEqual({ expand: [], collapse: ['Sub'] });
     expect(new ElementProperties(doc).read(doc.require('Sub'))['expanded']).toBe(false);
-    new PropertyService(doc).set({ op: 'set', id: 'Sub', values: { expanded: 'true' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Sub', values: { expanded: 'true' } });
     expect(doc.layoutRequests.expansion()).toEqual({ expand: ['Sub'], collapse: [] });
     expect(doc.layoutRequests.requested('Sub')).toBe(true);
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { expanded: 'false' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { expanded: 'false' } }))).toBe('E_UNKNOWN_KEY');
     const other = await linearDoc();
     expect(other.layoutRequests.expansion()).toEqual({ expand: [], collapse: [] });
   });
@@ -331,27 +332,27 @@ describe('set: sub-process expansion', () => {
 describe('set: event keys', () => {
   it('sets nonInterrupting directly on boundary events', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
     expect(doc.require('Timer_A').get('cancelActivity')).toBe(false);
     expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H', nonInterrupting: true });
     const xml = await doc.toXml();
     expect(xml).toContain('cancelActivity="false"');
-    new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'false' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'false' } });
     expect((await doc.toXml()).includes('cancelActivity')).toBe(false);
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { trigger: 'bogus' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT1M', message: 'x' } }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'End', values: { trigger: 'timer' } }))).toBe('E_INVALID_TRIGGER');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { timer: 'PT1M' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { trigger: 'bogus' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT1M', message: 'x' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'End', values: { trigger: 'timer' } }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { timer: 'PT1M' } }))).toBe('E_UNKNOWN_KEY');
   });
 
   itTriggers('changes triggers through applyTrigger (timer value, message, trigger=none)', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2D' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2D' } });
     expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT2D' });
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { message: 'Reminder' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { message: 'Reminder' } });
     expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'message', message: 'Reminder' });
     expect(cs.changed[0]!.kind).toBe('boundaryEvent:message');
-    new PropertyService(doc).set({ op: 'set', id: 'Start', values: { trigger: 'none' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Start', values: { trigger: 'none' } });
     expect(new ElementProperties(doc).read(doc.require('Start'))['trigger']).toBe('none');
     await expectRoundTrip(doc);
   });
@@ -360,7 +361,7 @@ describe('set: event keys', () => {
 describe('set: id rename', () => {
   it('renames an id and every reference, including calledElement strings', async () => {
     const doc = await fullDoc();
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { id: 'Activity_DoA' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { id: 'Activity_DoA' } });
     expect(cs.changed[0]).toMatchObject({ id: 'Activity_DoA', kind: 'userTask', detail: 'renamed from Task_A' });
     expect(doc.get('Task_A')).toBeUndefined();
     expect(doc.ids.has('Task_A')).toBe(false);
@@ -375,12 +376,12 @@ describe('set: id rename', () => {
     expect(xml).toContain('<bpmn:flowNodeRef>Activity_DoA</bpmn:flowNodeRef>');
     expect(xml).not.toContain('Task_A');
 
-    new IdRenameService(doc).rename(doc.require('Process_2'), 'Process_Customer');
+    new IdRenameService(doc, new EditContext(doc)).rename(doc.require('Process_2'), 'Process_Customer');
     expect(doc.require('Call').get('calledElement')).toBe('Process_Customer');
     expect(doc.require('P_Customer').get<El>('processRef').get('id')).toBe('Process_Customer');
 
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'End', values: { id: 'Start' } }))).toBe('E_DUPLICATE_ID');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'End', values: { id: '1bad id' } }))).toBe('E_INVALID_ID');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'End', values: { id: 'Start' } }))).toBe('E_DUPLICATE_ID');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'End', values: { id: '1bad id' } }))).toBe('E_INVALID_ID');
     expect(doc.require('End').get('id')).toBe('End');
     await expectRoundTrip(doc);
   });
@@ -389,7 +390,7 @@ describe('set: id rename', () => {
 describe('set: readProperties', () => {
   it('round-trips what set wrote', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({
+    new PropertyService(doc, new EditContext(doc)).set({
       op: 'set',
       id: 'Task_A',
       values: { name: 'Do it', doc: 'docs', 'camunda:assignee': 'bob', isForCompensation: 'true', loop: 'sequential', cardinality: '2' },
@@ -413,13 +414,13 @@ describe('set: readProperties', () => {
     expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
     expect(new ElementProperties(doc).read(doc.require('Process_1'))).toMatchObject({ isExecutable: true });
     expect(new ElementProperties(doc).read(doc.require('Note_1'))).toMatchObject({ text: 'hello' });
-    new PropertyService(doc).set({ op: 'set', id: 'Note_1', values: { text: 'changed' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Note_1', values: { text: 'changed' } });
     expect(doc.require('Note_1').get('text')).toBe('changed');
     // every read key is accepted by set again (round trip)
     const again = new ElementProperties(doc).read(doc.require('Task_A'));
     const values: Record<string, string> = {};
     for (const [key, value] of Object.entries(again)) if (key !== 'id' && key !== 'lane') values[key] = String(value);
-    expect(() => new PropertyService(doc).set({ op: 'set', id: 'Task_A', values })).not.toThrow();
+    expect(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values })).not.toThrow();
     expect(new ElementProperties(doc).read(doc.require('Task_A'))).toEqual(again);
   });
 });
@@ -431,7 +432,7 @@ describe('set: readProperties', () => {
 describe('remove', () => {
   it('removes a node with bridging and cascades boundary events, associations, lane refs and data associations', async () => {
     const doc = await fullDoc();
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Task_A'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Task_A'] });
     expect(doc.get('Task_A')).toBeUndefined();
     expect(doc.ids.has('Task_A')).toBe(false);
     const f1 = doc.require('F1');
@@ -459,7 +460,7 @@ describe('remove', () => {
 
   it('removes a node without bridging', async () => {
     const doc = await linearDoc();
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Task_A'], bridge: false });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Task_A'], bridge: false });
     expect(doc.get('F1')).toBeUndefined();
     expect(doc.get('F2')).toBeUndefined();
     expect(ids(doc.outgoing(doc.require('Start')))).toEqual([]);
@@ -472,7 +473,7 @@ describe('remove', () => {
   it('removes a sub-process with its children (ids released) and a gateway default', async () => {
     const doc = await fullDoc();
     // Sub has two incoming flows: a plain remove would bridge them (a merge, see test/remove-join.test.ts)
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Sub'], bridge: false });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Sub'], bridge: false });
     for (const id of ['Sub', 'SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2', 'F3', 'F4', 'F5']) {
       expect(doc.get(id), id).toBeUndefined();
       expect(doc.ids.has(id), id).toBe(false);
@@ -483,22 +484,22 @@ describe('remove', () => {
     expect(ids(doc.incoming(doc.require('Call')))).toEqual([]);
     expect(ids(doc.require('Lane_Ops').get<El[]>('flowNodeRef'))).not.toContain('Sub');
     // a new id follows the file: its tasks are Task_*
-    expect(doc.newId('Activity', 'Sub')).toBe('Task_Sub');
+    expect(new EditContext(doc).newId('Activity', 'Sub')).toBe('Task_Sub');
     // a gateway default is cleared when the default flow goes
-    new ElementRemovalService(doc).remove({ op: 'remove', ids: ['F_no'] });
+    new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['F_no'] });
     expect(doc.require('Gw').get('default')).toBeUndefined();
     await expectRoundTrip(doc);
   });
 
   it('removes lanes (members unassigned, empty lane set dropped)', async () => {
     const doc = await fullDoc();
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Lane_Sales'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Lane_Sales'] });
     expect(doc.get('Lane_Sales')).toBeUndefined();
     expect(doc.get('Start')).toBeDefined();
     expect(ids(doc.lanesOf(doc.require('Start')))).toEqual([]);
     expect(ids(many(doc.require('LaneSet_1'), 'lanes'))).toEqual(['Lane_Ops']);
     expect(cs.removed).toEqual([{ id: 'Lane_Sales', kind: 'lane', name: 'Sales' }]);
-    new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Lane_Ops'] });
+    new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Lane_Ops'] });
     expect(doc.get('LaneSet_1')).toBeUndefined();
     expect(many(doc.require('Process_1'), 'laneSets')).toHaveLength(0);
     expect((await doc.toXml()).includes('laneSet')).toBe(false);
@@ -507,7 +508,7 @@ describe('remove', () => {
 
   it('removes a participant with its process and message flows; the collaboration goes with the last one', async () => {
     const doc = await fullDoc();
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['P_Customer'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['P_Customer'] });
     for (const id of ['P_Customer', 'Process_2', 'C_Start', 'C_Task', 'CF1', 'MF1', 'MF2']) expect(doc.get(id), id).toBeUndefined();
     expect(doc.get('Collab')).toBeDefined();
     expect(ids(doc.participants())).toEqual(['P_Shop']);
@@ -518,7 +519,7 @@ describe('remove', () => {
     expect(cs.warnings.map((warning) => warning.code)).toContain('W_DANGLING_CALLED_ELEMENT');
     await expectRoundTrip(doc);
 
-    const cs2 = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['P_Shop'] });
+    const cs2 = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['P_Shop'] });
     expect(doc.collaboration()).toBeUndefined();
     expect(doc.get('Process_1')).toBeUndefined();
     expect(doc.processes()).toHaveLength(0);
@@ -528,7 +529,7 @@ describe('remove', () => {
 
   it('removes a data object reference with its backing object, data associations and placeholder property', async () => {
     const doc = await fullDoc();
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['DOR_Order'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['DOR_Order'] });
     expect(doc.get('DOR_Order')).toBeUndefined();
     expect(doc.get('DO_Order')).toBeUndefined();
     expect(doc.get('DOA1')).toBeUndefined();
@@ -546,11 +547,11 @@ describe('remove', () => {
 
   it('removes a text annotation with its association, and flows / message flows on their own', async () => {
     const doc = await fullDoc();
-    new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Note_1'] });
+    new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Note_1'] });
     expect(doc.get('Note_1')).toBeUndefined();
     expect(doc.get('Assoc_1')).toBeUndefined();
     expect(many(doc.require('Process_1'), 'artifacts')).toHaveLength(0);
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['F_yes', 'MF2'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['F_yes', 'MF2'] });
     expect(ids(doc.outgoing(doc.require('Gw')))).toEqual(['F_no']);
     expect(ids(doc.incoming(doc.require('Task_B')))).toEqual([]);
     expect(ids(doc.messageFlows())).toEqual(['MF1']);
@@ -565,7 +566,7 @@ describe('remove', () => {
         { extraRoots: '<bpmn:message id="Message_1" name="Msg" />' },
       ),
     );
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Message_1'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Message_1'] });
     expect(doc.get('Message_1')).toBeUndefined();
     expect(doc.require('Start').get<El[]>('eventDefinitions')[0]!.get('messageRef')).toBeUndefined();
     expect(cs.removed[0]).toEqual({ id: 'Message_1', kind: 'message', name: 'Msg' });
@@ -575,23 +576,23 @@ describe('remove', () => {
 
   it('handles ifExists, unknown ids and ids already removed by a cascade', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Nope'] }))).toBe('E_NOT_FOUND');
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Nope', 'Sub', 'SubTask'], ifExists: true });
+    expect(errorCode(() => new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Nope'] }))).toBe('E_NOT_FOUND');
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Nope', 'Sub', 'SubTask'], ifExists: true });
     expect(cs.notes).toEqual(expect.arrayContaining([expect.stringMatching(/Nope does not exist/), expect.stringMatching(/SubTask was already removed/)]));
     expect(doc.get('Sub')).toBeUndefined();
-    expect(errorCode(() => new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Definitions_1'] }))).toBe('E_INVALID_REMOVE');
-    expect(errorCode(() => new ElementRemovalService(doc).remove({ op: 'remove', ids: [] }))).toBe('E_USAGE');
+    expect(errorCode(() => new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Definitions_1'] }))).toBe('E_INVALID_REMOVE');
+    expect(errorCode(() => new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: [] }))).toBe('E_USAGE');
   });
 
   it('cascadeRemove works on a boundary event and on a whole process', async () => {
     const doc = await fullDoc();
     const cs = new ChangeSet();
-    new ElementRemovalService(doc).cascade(doc.require('Timer_A'), cs);
+    new ElementRemovalService(doc, new EditContext(doc)).cascade(doc.require('Timer_A'), cs);
     expect(doc.get('Timer_A')).toBeUndefined();
     expect(doc.get('F_T')).toBeUndefined();
     expect(doc.get('Task_Remind')).toBeDefined();
     expect(doc.boundaryEventsOf(doc.require('Task_A'))).toHaveLength(0);
-    new ElementRemovalService(doc).cascade(doc.require('Process_2'), cs);
+    new ElementRemovalService(doc, new EditContext(doc)).cascade(doc.require('Process_2'), cs);
     expect(doc.get('Process_2')).toBeUndefined();
     expect(doc.get('C_Task')).toBeUndefined();
     // message flows end at the participant (now a black box), so they survive
@@ -611,7 +612,7 @@ describe('retype', () => {
   it('task -> serviceTask keeps id, flows, boundary events, lane, extensions, vendor attrs and data associations', async () => {
     const doc = await fullDoc();
     const old = doc.require('Task_A');
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Task_A', kind: 'service' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Task_A', kind: 'service' });
     const task = doc.require('Task_A');
     expect(task).not.toBe(old);
     expect(task.$type).toBe('bpmn:ServiceTask');
@@ -643,29 +644,29 @@ describe('retype', () => {
 
   it('retypes across the activity family (task -> subProcess -> callActivity) and drops unknown properties with a warning', async () => {
     const doc = await fullDoc();
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Call', kind: 'subProcess' });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Call', kind: 'subProcess' });
     expect(doc.require('Call').$type).toBe('bpmn:SubProcess');
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'task' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
     expect(cs.warnings).toEqual([]);
     expect(doc.require('Sub').$type).toBe('bpmn:CallActivity');
     for (const id of ['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']) expect(doc.get(id), id).toBeUndefined();
     expect(ids(doc.incoming(doc.require('Sub')))).toEqual(['F3', 'F4']);
-    const cs2 = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
+    const cs2 = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'task' });
     expect(cs2.warnings).toEqual([]);
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
-    new PropertyService(doc).set({ op: 'set', id: 'Sub', values: { calledElement: 'X' } });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Sub', values: { calledElement: 'X' } });
     expect(doc.require('Sub').get('calledElement')).toBe('X');
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Call', values: { calledElement: 'X' } }))).toBe('E_UNKNOWN_KEY');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Call', values: { calledElement: 'X' } }))).toBe('E_UNKNOWN_KEY');
     await expectRoundTrip(doc);
   });
 
   it('reports dropped children / attributes as W_PROPERTY_DROPPED', async () => {
     const doc = await fullDoc();
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'userTask' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'userTask' });
     expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_PROPERTY_DROPPED']);
     expect(cs.removed.map((change) => change.id)).toEqual(expect.arrayContaining(['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']));
-    const cs2 = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Call', kind: 'task' });
+    const cs2 = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Call', kind: 'task' });
     expect(cs2.warnings[0]).toMatchObject({ code: 'W_PROPERTY_DROPPED', element: 'Call' });
     expect(cs2.warnings[0]!.message).toMatch(/calledElement/);
     await expectRoundTrip(doc);
@@ -673,7 +674,7 @@ describe('retype', () => {
 
   it('gateway -> gateway (default dropped for parallel, kept for inclusive)', async () => {
     const doc = await fullDoc();
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Gw', kind: 'parallelGateway' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Gw', kind: 'parallelGateway' });
     const gw = doc.require('Gw');
     expect(gw.$type).toBe('bpmn:ParallelGateway');
     expect(ids(doc.outgoing(gw))).toEqual(['F_yes', 'F_no']);
@@ -687,10 +688,10 @@ describe('retype', () => {
     expect(again.require('Gw').$type).toBe('bpmn:ParallelGateway');
 
     const doc2 = await fullDoc();
-    new ElementTypeChangeService(doc2).retype({ op: 'retype', id: 'Gw', kind: 'or' });
+    new ElementTypeChangeService(doc2, new EditContext(doc2)).retype({ op: 'retype', id: 'Gw', kind: 'or' });
     expect(doc2.require('Gw').$type).toBe('bpmn:InclusiveGateway');
     expect(doc2.require('Gw').get<El>('default').get('id')).toBe('F_no');
-    const noop = new ElementTypeChangeService(doc2).retype({ op: 'retype', id: 'Gw', kind: 'inclusiveGateway' });
+    const noop = new ElementTypeChangeService(doc2, new EditContext(doc2)).retype({ op: 'retype', id: 'Gw', kind: 'inclusiveGateway' });
     expect(noop.isEmpty).toBe(true);
     expect(noop.notes[0]).toMatch(/already/);
   });
@@ -698,32 +699,32 @@ describe('retype', () => {
   it('subProcess <-> eventSubProcess toggles triggeredByEvent in place', async () => {
     const doc = await docFromXml(definitionsXml(`<bpmn:subProcess id="Sub" name="S"><bpmn:startEvent id="S1" /></bpmn:subProcess>`));
     const sub = doc.require('Sub');
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
     expect(doc.require('Sub')).toBe(sub);
     expect(sub.get('triggeredByEvent')).toBe(true);
     expect((await doc.toXml()).includes('triggeredByEvent="true"')).toBe(true);
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'subProcess' });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'subProcess' });
     expect(sub.get('triggeredByEvent')).toBeFalsy();
     expect((await doc.toXml()).includes('triggeredByEvent')).toBe(false);
     const connected = await fullDoc();
-    expect(errorCode(() => new ElementTypeChangeService(connected).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementTypeChangeService(connected, new EditContext(connected)).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' }))).toBe('E_INVALID_RETYPE');
   });
 
   it('rejects invalid retypes with helpful errors', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Task_A', kind: 'xor' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Start', kind: 'endEvent' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'catch' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'F1', kind: 'task' }))).toBe('E_INVALID_RETYPE');
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Task_A', kind: 'choreographyTask' }))).toBe('E_UNKNOWN_KIND');
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Task_A', kind: 'whatever' }))).toBe('E_UNKNOWN_KIND');
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Nope', kind: 'task' }))).toBe('E_NOT_FOUND');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Task_A', kind: 'xor' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Start', kind: 'endEvent' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'catch' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'F1', kind: 'task' }))).toBe('E_INVALID_RETYPE');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Task_A', kind: 'choreographyTask' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Task_A', kind: 'whatever' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Nope', kind: 'task' }))).toBe('E_NOT_FOUND');
     // trigger not allowed on the new kind without saying which one to use
     const doc2 = await docFromXml(
       definitionsXml(`<bpmn:intermediateCatchEvent id="Ev"><bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1M</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>`),
     );
-    expect(errorCode(() => new ElementTypeChangeService(doc2).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' }))).toBe('E_INVALID_TRIGGER');
-    expect(errorCode(() => new ElementTypeChangeService(doc2).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent:timer' }))).toBe('E_UNKNOWN_KIND');
+    expect(errorCode(() => new ElementTypeChangeService(doc2, new EditContext(doc2)).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new ElementTypeChangeService(doc2, new EditContext(doc2)).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent:timer' }))).toBe('E_UNKNOWN_KIND');
     expect(doc2.require('Ev').$type).toBe('bpmn:IntermediateCatchEvent');
   });
 
@@ -734,9 +735,9 @@ describe('retype', () => {
         extraRoots: '<bpmn:message id="Message_1" name="Msg" />',
       }),
     );
-    const noop = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Ev', kind: 'intermediateCatchEvent:message' });
+    const noop = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Ev', kind: 'intermediateCatchEvent:message' });
     expect(noop.isEmpty).toBe(true);
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Ev', kind: 'intermediateThrowEvent' });
     const ev = doc.require('Ev');
     expect(ev.$type).toBe('bpmn:IntermediateThrowEvent');
     expect(ev.get<El[]>('eventDefinitions')[0]!.get<El>('messageRef').get('id')).toBe('Message_1');
@@ -747,13 +748,13 @@ describe('retype', () => {
 
   itTriggers('changes an event trigger via applyTrigger', async () => {
     const doc = await fullDoc();
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Reminder' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Reminder' });
     const ev = doc.require('Timer_A');
     expect(ev.$type).toBe('bpmn:BoundaryEvent');
     expect(new ElementProperties(doc).read(ev)).toMatchObject({ trigger: 'message', message: 'Reminder' });
     expect(cs.changed[0]).toMatchObject({ kind: 'boundaryEvent:message', detail: 'retyped from boundaryEvent:timer to boundaryEvent:message' });
     expect(doc.rootElementsOfType('bpmn:Message').some((message) => message.get('name') === 'Reminder')).toBe(true);
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Start', kind: 'start:timer', timer: 'R/PT1H' });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Start', kind: 'start:timer', timer: 'R/PT1H' });
     expect(new ElementProperties(doc).read(doc.require('Start'))).toMatchObject({ trigger: 'timer', timer: 'R/PT1H' });
     await expectRoundTrip(doc);
   });
@@ -766,7 +767,7 @@ describe('retype', () => {
 describe('move', () => {
   it('move --after detaches (bridging) and splices the node behind the anchor', async () => {
     const doc = await fullDoc();
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['Task_Remind'], after: 'Task_B' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_Remind'], after: 'Task_B' });
     const remind = doc.require('Task_Remind');
     expect(doc.get('F_T')).toBeUndefined(); // 1 in / 0 out: nothing to bridge, flow removed
     expect(ids(doc.incoming(remind))).toEqual(['F3']);
@@ -783,7 +784,7 @@ describe('move', () => {
 
   it('move --after with several ids chains them and bridges around the gap', async () => {
     const doc = await fullDoc();
-    new ElementMoveService(doc).move({ op: 'move', ids: ['Task_B', 'Task_Send'], after: 'Start' });
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_B', 'Task_Send'], after: 'Start' });
     const start = doc.require('Start');
     const path: string[] = [];
     let cur: El | undefined = start;
@@ -804,7 +805,7 @@ describe('move', () => {
   it('move --in relocates nodes into another scope, dropping crossing flows and lane refs but keeping flows between moved nodes', async () => {
     const doc = await fullDoc();
     const sub = doc.require('Sub');
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['Task_A', 'Gw'], in: 'Sub' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_A', 'Gw'], in: 'Sub' });
     const task = doc.require('Task_A');
     expect(task.$parent).toBe(sub);
     expect(doc.scopeOf(task)).toBe(sub);
@@ -822,25 +823,25 @@ describe('move', () => {
     expect(cs.changed.filter((change) => /moved into Sub/.test(change.detail ?? '')).map((change) => change.id)).toEqual(['Task_A', 'Gw']);
     await expectRoundTrip(doc);
     // moving out again into the other pool
-    new ElementMoveService(doc).move({ op: 'move', ids: ['Task_A'], in: 'P_Customer' });
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_A'], in: 'P_Customer' });
     expect(doc.scopeOf(doc.require('Task_A')).get('id')).toBe('Process_2');
     expect(doc.get('F2')).toBeUndefined();
-    expect(errorCode(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Sub'], in: 'Sub' }))).toBe('E_INVALID_PLACEMENT');
-    expect(errorCode(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Timer_A'], in: 'Process_1' }))).toBe('E_INVALID_PLACEMENT');
-    expect(errorCode(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Gw'] }))).toBe('E_USAGE');
+    expect(errorCode(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Sub'], in: 'Sub' }))).toBe('E_INVALID_PLACEMENT');
+    expect(errorCode(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Timer_A'], in: 'Process_1' }))).toBe('E_INVALID_PLACEMENT');
+    expect(errorCode(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Gw'] }))).toBe('E_USAGE');
     await expectRoundTrip(doc);
   });
 
   it('move --before / --flow and lane inheritance across processes', async () => {
     const doc = await fullDoc();
-    new ElementMoveService(doc).move({ op: 'move', ids: ['C_Task'], before: 'End' });
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['C_Task'], before: 'End' });
     const cTask = doc.require('C_Task');
     expect(doc.scopeOf(cTask).get('id')).toBe('Process_1');
     expect(doc.get('CF1')).toBeUndefined();
     expect(doc.require('F6').get<El>('targetRef')).toBe(cTask);
     expect(doc.outgoing(cTask)[0]!.get<El>('targetRef').get('id')).toBe('End');
     expect(ids(doc.lanesOf(cTask))).toEqual(['Lane_Ops']);
-    new ElementMoveService(doc).move({ op: 'move', ids: ['Task_Remind'], flow: 'F1', flowName: 'first' });
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_Remind'], flow: 'F1', flowName: 'first' });
     expect(doc.require('F1').get<El>('targetRef').get('id')).toBe('Task_Remind');
     expect(doc.require('F1').get('name')).toBe('first');
     expect(doc.outgoing(doc.require('Task_Remind'))[0]!.get<El>('targetRef').get('id')).toBe('Task_A');
@@ -849,7 +850,7 @@ describe('move', () => {
 
   it('move --on re-attaches a boundary event (flows in the same scope survive)', async () => {
     const doc = await fullDoc();
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['Timer_A'], on: 'Task_B' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Timer_A'], on: 'Task_B' });
     const ev = doc.require('Timer_A');
     expect(ev.get<El>('attachedToRef').get('id')).toBe('Task_B');
     expect(doc.boundaryEventsOf(doc.require('Task_A'))).toHaveLength(0);
@@ -859,9 +860,9 @@ describe('move', () => {
     const order = flowElementIds(doc.require('Process_1'));
     expect(order.indexOf('Timer_A')).toBe(order.indexOf('Task_B') + 1);
     expect(cs.changed[0]).toMatchObject({ id: 'Timer_A', kind: 'boundaryEvent:timer', detail: 'moved onto Task_B (was Task_A)' });
-    expect(errorCode(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Task_A'], on: 'Task_B' }))).toBe('E_INVALID_PLACEMENT');
+    expect(errorCode(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_A'], on: 'Task_B' }))).toBe('E_INVALID_PLACEMENT');
     // onto an activity in another scope: the outgoing flow crosses and is dropped
-    const cs2 = new ElementMoveService(doc).move({ op: 'move', ids: ['Timer_A'], on: 'SubTask' });
+    const cs2 = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Timer_A'], on: 'SubTask' });
     expect(doc.scopeOf(ev).get('id')).toBe('Sub');
     expect(doc.get('F_T')).toBeUndefined();
     expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_FLOW_DROPPED']);
@@ -878,8 +879,8 @@ describe('move', () => {
       [{ op: 'move', ids: ['Task_B', 'Sub'], after: 'SubTask' }, 'SubTask cannot anchor the move of Task_B, Sub: it is inside Sub, one of the moved nodes'],
     ];
     for (const [op, message] of refusals) {
-      expect(() => new ElementMoveService(doc).move(op), JSON.stringify(op)).toThrow(message);
-      expect(errorCode(() => new ElementMoveService(doc).move(op))).toBe('E_INVALID_PLACEMENT');
+      expect(() => new ElementMoveService(doc, new EditContext(doc)).move(op), JSON.stringify(op)).toThrow(message);
+      expect(errorCode(() => new ElementMoveService(doc, new EditContext(doc)).move(op))).toBe('E_INVALID_PLACEMENT');
     }
     expect(await doc.toXml()).toBe(xml);
   });
@@ -895,12 +896,12 @@ describe('move', () => {
       [{ op: 'move', ids: ['Task_B'], after: 'Gw', before: 'Sub' }, 'Task_B is already between Gw and Sub'],
     ];
     for (const [op, note] of inPlace) {
-      const cs = new ElementMoveService(doc).move(op);
+      const cs = new ElementMoveService(doc, new EditContext(doc)).move(op);
       expect([cs.created, cs.changed, cs.removed, cs.warnings, cs.notes], JSON.stringify(op)).toEqual([[], [], [], [], [note]]);
     }
     expect(await doc.toXml()).toBe(xml);
     // a gateway's successor moved after it becomes a new branch (append), as before: F_yes is bridged to Sub
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['Task_B'], after: 'Gw' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_B'], after: 'Gw' });
     expect(cs.notes).toEqual(['bridged: Gw -> Sub', 'appended after Gw']);
     expect(doc.require('F_yes').get<El>('targetRef').get('id')).toBe('Sub');
     expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
@@ -908,9 +909,9 @@ describe('move', () => {
 
   itLanes('move --lane assigns lanes (alone and combined with a placement)', async () => {
     const doc = await fullDoc();
-    new ElementMoveService(doc).move({ op: 'move', ids: ['Task_B'], lane: 'Lane_Sales' });
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_B'], lane: 'Lane_Sales' });
     expect(ids(doc.lanesOf(doc.require('Task_B')))).toEqual(['Lane_Sales']);
-    new ElementMoveService(doc).move({ op: 'move', ids: ['Task_Send'], after: 'Start', lane: 'Lane_Sales' });
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_Send'], after: 'Start', lane: 'Lane_Sales' });
     expect(ids(doc.lanesOf(doc.require('Task_Send')))).toEqual(['Lane_Sales']);
     expect(doc.require('F1').get<El>('targetRef').get('id')).toBe('Task_Send');
     await expectRoundTrip(doc);
@@ -925,7 +926,7 @@ describe('order', () => {
   it('rewrites node.outgoing and the declaration order', async () => {
     const doc = await fullDoc();
     const gw = doc.require('Gw');
-    const cs = new ElementOrderService(doc, { op: 'order', id: 'Gw', flows: ['F_no'] }).apply();
+    const cs = new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'Gw', flows: ['F_no'] }).apply();
     expect(ids(gw.get<El[]>('outgoing'))).toEqual(['F_no', 'F_yes']);
     const order = flowElementIds(doc.require('Process_1'));
     expect(order.indexOf('F_no')).toBe(order.indexOf('Gw') + 1);
@@ -934,7 +935,7 @@ describe('order', () => {
     const xml = await doc.toXml();
     expect(xml.indexOf('<bpmn:outgoing>F_no</bpmn:outgoing>')).toBeLessThan(xml.indexOf('<bpmn:outgoing>F_yes</bpmn:outgoing>'));
     expect(xml.indexOf('id="F_no"')).toBeLessThan(xml.indexOf('id="F_yes"'));
-    const noop = new ElementOrderService(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
+    const noop = new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
     expect(noop.isEmpty).toBe(true);
     await expectRoundTrip(doc);
   });
@@ -945,7 +946,7 @@ describe('order', () => {
       <bpmn:exclusiveGateway id="G"><bpmn:outgoing>Fa</bpmn:outgoing><bpmn:outgoing>Fb</bpmn:outgoing></bpmn:exclusiveGateway>
       <bpmn:task id="A"><bpmn:incoming>Fa</bpmn:incoming></bpmn:task><bpmn:task id="B"><bpmn:incoming>Fb</bpmn:incoming></bpmn:task>`),
     );
-    new ElementOrderService(doc, { op: 'order', id: 'G', flows: ['Fb', 'Fa'] }).apply();
+    new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'G', flows: ['Fb', 'Fa'] }).apply();
     expect(flowElementIds(doc.defaultScope())).toEqual(['G', 'Fb', 'Fa', 'A', 'B']);
     expect(ids(doc.require('G').get<El[]>('outgoing'))).toEqual(['Fb', 'Fa']);
     await expectRoundTrip(doc);
@@ -953,10 +954,10 @@ describe('order', () => {
 
   it('rejects flows that are not outgoing flows of the node', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => new ElementOrderService(doc, { op: 'order', id: 'Gw', flows: ['F1'] }).apply())).toBe('E_NOT_OUTGOING');
-    expect(errorCode(() => new ElementOrderService(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_no'] }).apply())).toBe('E_USAGE');
-    expect(errorCode(() => new ElementOrderService(doc, { op: 'order', id: 'Gw', flows: [] }).apply())).toBe('E_USAGE');
-    expect(errorCode(() => new ElementOrderService(doc, { op: 'order', id: 'F1', flows: ['F1'] }).apply())).toBe('E_WRONG_KIND');
+    expect(errorCode(() => new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'Gw', flows: ['F1'] }).apply())).toBe('E_NOT_OUTGOING');
+    expect(errorCode(() => new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'Gw', flows: ['F_no', 'F_no'] }).apply())).toBe('E_USAGE');
+    expect(errorCode(() => new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'Gw', flows: [] }).apply())).toBe('E_USAGE');
+    expect(errorCode(() => new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'F1', flows: ['F1'] }).apply())).toBe('E_WRONG_KIND');
   });
 });
 
@@ -967,7 +968,7 @@ describe('order', () => {
 describe('ext', () => {
   it('adds, lists, replaces and removes typed extension elements', async () => {
     const doc = await linearDoc();
-    const cs = new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'send-mail', retries: '3' } });
+    const cs = new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'send-mail', retries: '3' } });
     const task = doc.require('Task_A');
     expect(doc.definitions.$attrs['xmlns:zeebe']).toBe(ZEEBE);
     expect(listExtensions(task)).toEqual([{ index: 0, type: 'zeebe:taskDefinition', attrs: { type: 'send-mail', retries: '3' } }]);
@@ -977,34 +978,34 @@ describe('ext', () => {
     expect(xml).toContain(`xmlns:zeebe="${ZEEBE}"`);
     await expectRoundTrip(doc);
 
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:formDefinition', attrs: { formKey: 'f' } });
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'other' }, replace: true });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:formDefinition', attrs: { formKey: 'f' } });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'other' }, replace: true });
     expect(listExtensions(task).map((extension) => [extension.index, extension.type, extension.attrs['type'] ?? extension.attrs['formKey']])).toEqual([
       [0, 'zeebe:formDefinition', 'f'],
       [1, 'zeebe:taskDefinition', 'other'],
     ]);
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'camunda:script', body: 'return 1;', attrs: { scriptFormat: 'js' } });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'camunda:script', body: 'return 1;', attrs: { scriptFormat: 'js' } });
     expect(listExtensions(task)[2]).toEqual({ index: 2, type: 'camunda:script', attrs: { scriptFormat: 'js' }, body: 'return 1;' });
     xml = await doc.toXml();
     expect(xml).toContain('<camunda:script scriptFormat="js">return 1;</camunda:script>');
     await expectRoundTrip(doc);
 
-    const rm = new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:taskDefinition' });
+    const rm = new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:taskDefinition' });
     expect(rm.changed[0]!.detail).toBe('ext removed zeebe:taskDefinition');
     expect(listExtensions(task).map((extension) => extension.type)).toEqual(['zeebe:formDefinition', 'camunda:script']);
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 0 });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 0 });
     expect(listExtensions(task).map((extension) => extension.type)).toEqual(['camunda:script']);
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 5 }))).toBe('E_NO_EXTENSION');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:nope' }))).toBe('E_NO_EXTENSION');
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' });
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'remove', index: 5 }))).toBe('E_NO_EXTENSION');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'zeebe:nope' }))).toBe('E_NO_EXTENSION');
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' });
     expect(task.get('extensionElements')).toBeUndefined();
     expect(listExtensions(task)).toEqual([]);
     expect((await doc.toXml()).includes('extensionElements')).toBe(false);
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' }))).toBe('E_NO_EXTENSION');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add' }))).toBe('E_USAGE');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'acme:x' }))).toBe('E_UNKNOWN_NAMESPACE');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'bpmn:documentation' }))).toBe('E_INVALID_VALUE');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'noprefix' }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'remove', type: 'camunda:script' }))).toBe('E_NO_EXTENSION');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add' }))).toBe('E_USAGE');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'acme:x' }))).toBe('E_UNKNOWN_NAMESPACE');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'bpmn:documentation' }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', type: 'noprefix' }))).toBe('E_INVALID_VALUE');
     await expectRoundTrip(doc);
   });
 
@@ -1017,7 +1018,7 @@ describe('ext', () => {
       <!-- a comment -->
       <zeebe:taskHeaders><zeebe:header key="k" value="v"/></zeebe:taskHeaders>
       <camunda:inputOutput><camunda:inputParameter name="x"><![CDATA[1 < 2]]></camunda:inputParameter></camunda:inputOutput>`;
-    const cs = new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: snippet });
+    const cs = new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: snippet });
     expect(cs.changed[0]!.detail).toBe('ext added zeebe:ioMapping, zeebe:taskHeaders, camunda:inputOutput');
     const task = doc.require('Task_A');
     expect(listExtensions(task)).toEqual([
@@ -1046,11 +1047,11 @@ describe('ext', () => {
     expect(listExtensions(holder)).toEqual(listExtensions(task));
 
     // replace by type when adding from a snippet
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:taskHeaders><zeebe:header key="k2" value="v2"/></zeebe:taskHeaders>', replace: true });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:taskHeaders><zeebe:header key="k2" value="v2"/></zeebe:taskHeaders>', replace: true });
     expect(listExtensions(task).filter((extension) => extension.type === 'zeebe:taskHeaders')).toHaveLength(1);
     expect(listExtensions(task).find((extension) => extension.type === 'zeebe:taskHeaders')?.children?.[0]?.attrs).toEqual({ key: 'k2', value: 'v2' });
     // inline xmlns declarations are honoured and declared on the definitions
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<acme:thing xmlns:acme="http://acme.example/ns" a="1"/>' });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<acme:thing xmlns:acme="http://acme.example/ns" a="1"/>' });
     expect(doc.definitions.$attrs['xmlns:acme']).toBe('http://acme.example/ns');
     expect((await doc.toXml()).includes('<acme:thing a="1" />')).toBe(true);
     await expectRoundTrip(doc);
@@ -1058,16 +1059,16 @@ describe('ext', () => {
 
   it('rejects malformed snippets and unknown namespaces', async () => {
     const doc = await linearDoc();
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo></zeebe:bar>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo a=1/>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: 'just text' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<!-- only a comment -->' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<foo:bar/>' }))).toBe('E_UNKNOWN_NAMESPACE');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<thing xmlns="http://x"/>' }))).toBe('E_INVALID_XML');
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<bpmn:documentation>x</bpmn:documentation>' }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo></zeebe:bar>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<zeebe:foo a=1/>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: 'just text' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<!-- only a comment -->' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<foo:bar/>' }))).toBe('E_UNKNOWN_NAMESPACE');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<thing xmlns="http://x"/>' }))).toBe('E_INVALID_XML');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Task_A', action: 'add', xml: '<bpmn:documentation>x</bpmn:documentation>' }))).toBe('E_INVALID_VALUE');
     expect(doc.require('Task_A').get('extensionElements')).toBeUndefined();
-    expect(errorCode(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Nope', action: 'add', type: 'zeebe:x' }))).toBe('E_NOT_FOUND');
+    expect(errorCode(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Nope', action: 'add', type: 'zeebe:x' }))).toBe('E_NOT_FOUND');
   });
 });
 
@@ -1078,12 +1079,12 @@ describe('ext', () => {
 describe('mixed scenario', () => {
   it('serialises without import warnings after set / retype / move / order / ext / remove', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
-    new ElementOrderService(doc, { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
-    new ElementMoveService(doc).move({ op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
-    new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Call', 'Note_1'] });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { name: 'A2', 'camunda:candidateGroups': 'sales', loop: 'parallel', cardinality: '2', id: 'Activity_A2' } });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Activity_A2', kind: 'serviceTask' });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_A2', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' }, replace: true });
+    new ElementOrderService(doc, new EditContext(doc), { op: 'order', id: 'Gw', flows: ['F_no', 'F_yes'] }).apply();
+    new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_Remind'], after: 'Gw', condition: '${remind}', flowName: 'remind' });
+    new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Call', 'Note_1'] });
     const again = await expectRoundTrip(doc);
     const a2 = again.require('Activity_A2');
     expect(a2.$type).toBe('bpmn:ServiceTask');
@@ -1153,20 +1154,20 @@ const COLLAPSED_WITH_DI = definitionsXml(
 describe('set: non-interrupting rules match add/retype', () => {
   it('refuses nonInterrupting=true where add refuses it (error starts, untyped starts, starts outside an event sub-process)', async () => {
     const doc = await docFromXml(EVENT_SUB);
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'OnErr', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'OnErr', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
     expect(doc.require('OnErr').get('isInterrupting')).not.toBe(false);
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'Start', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
-    new PropertyService(doc).set({ op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Start', values: { nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
     expect(doc.require('OnMsg').get('isInterrupting')).toBe(false);
     // an explicit flag together with an interrupting-only trigger is still an error
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom', nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom', nonInterrupting: 'true' } }))).toBe('E_INVALID_TRIGGER');
     await expectRoundTrip(doc);
   });
 
   it('a trigger change to an interrupting-only trigger clears the flag with W_PROPERTY_DROPPED instead of failing', async () => {
     const doc = await docFromXml(EVENT_SUB);
-    new PropertyService(doc).set({ op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'OnMsg', values: { nonInterrupting: 'true' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'OnMsg', values: { trigger: 'error', error: 'Boom' } });
     expect(doc.require('OnMsg').get('isInterrupting')).not.toBe(false);
     expect((await doc.toXml()).includes('isInterrupting')).toBe(false);
     expect(new ElementProperties(doc).read(doc.require('OnMsg'))).toMatchObject({ trigger: 'error', error: 'Boom' });
@@ -1175,16 +1176,16 @@ describe('set: non-interrupting rules match add/retype', () => {
     expect(cs.warnings[0]!.message).toMatch(/nonInterrupting/);
 
     const full = await fullDoc();
-    new PropertyService(full).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
-    const cs2 = new PropertyService(full).set({ op: 'set', id: 'Timer_A', values: { trigger: 'error', error: 'Fail' } });
+    new PropertyService(full, new EditContext(full)).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    const cs2 = new PropertyService(full, new EditContext(full)).set({ op: 'set', id: 'Timer_A', values: { trigger: 'error', error: 'Fail' } });
     expect(full.require('Timer_A').get('cancelActivity')).not.toBe(false);
     expect((await full.toXml()).includes('cancelActivity')).toBe(false);
     expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_PROPERTY_DROPPED']);
     expect(cs2.changed[0]).toMatchObject({ id: 'Timer_A', kind: 'boundaryEvent:error' });
     // a trigger that allows non-interrupting keeps the flag silently
-    new PropertyService(full).set({ op: 'set', id: 'Timer_A', values: { trigger: 'message', message: 'Late' } });
-    new PropertyService(full).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
-    const cs3 = new PropertyService(full).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2H' } });
+    new PropertyService(full, new EditContext(full)).set({ op: 'set', id: 'Timer_A', values: { trigger: 'message', message: 'Late' } });
+    new PropertyService(full, new EditContext(full)).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    const cs3 = new PropertyService(full, new EditContext(full)).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2H' } });
     expect(full.require('Timer_A').get('cancelActivity')).toBe(false);
     expect(cs3.warnings).toEqual([]);
     await expectRoundTrip(full);
@@ -1194,7 +1195,7 @@ describe('set: non-interrupting rules match add/retype', () => {
 describe('set: default flow side effects are reported', () => {
   it('default=true drops the condition with W_CONDITION_DROPPED and reports the previous default flow', async () => {
     const doc = await fullDoc();
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'F_yes', values: { default: 'true' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_yes', values: { default: 'true' } });
     expect(doc.require('Gw').get<El>('default').get('id')).toBe('F_yes');
     expect(doc.require('F_yes').get('conditionExpression')).toBeUndefined();
     expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_CONDITION_DROPPED', element: 'F_yes' })]);
@@ -1203,7 +1204,7 @@ describe('set: default flow side effects are reported', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'F_no', detail: 'no longer the default flow of Gw' }), expect.objectContaining({ id: 'F_yes', detail: 'default=true' })]),
     );
     // the node-side key reports the same
-    const cs2 = new PropertyService(doc).set({ op: 'set', id: 'Gw', values: { default: 'F_no' } });
+    const cs2 = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Gw', values: { default: 'F_no' } });
     expect(cs2.changed).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'F_yes', detail: 'no longer the default flow of Gw' })]));
     expect(cs2.warnings).toEqual([]);
     await expectRoundTrip(doc);
@@ -1211,10 +1212,10 @@ describe('set: default flow side effects are reported', () => {
 
   it('refuses default=true together with a condition (a default flow has no condition)', async () => {
     const doc = await fullDoc();
-    expect(errorCode(() => new PropertyService(doc).set({ op: 'set', id: 'F_no', values: { default: 'true', condition: '${x}' } }))).toBe('E_INVALID_VALUE');
+    expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_no', values: { default: 'true', condition: '${x}' } }))).toBe('E_INVALID_VALUE');
     expect(doc.require('F_no').get('conditionExpression')).toBeUndefined();
     // default=false / an empty condition may accompany each other
-    new PropertyService(doc).set({ op: 'set', id: 'F_no', values: { default: 'true', condition: '' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F_no', values: { default: 'true', condition: '' } });
     expect(doc.require('Gw').get<El>('default').get('id')).toBe('F_no');
   });
 });
@@ -1224,7 +1225,7 @@ describe('set / retype: message flows must still fit the event afterwards', () =
     const doc = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
     let caught: unknown;
     try {
-      new PropertyService(doc).set({ op: 'set', id: 'Recv', values: { trigger: 'timer', timer: 'PT1H' } });
+      new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Recv', values: { trigger: 'timer', timer: 'PT1H' } });
     } catch (err) {
       caught = err;
     }
@@ -1233,17 +1234,17 @@ describe('set / retype: message flows must still fit the event afterwards', () =
     expect(isCliError(caught) && caught.details['hint']).toMatch(/bpmn remove <file> MF/);
 
     const doc2 = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
-    expect(errorCode(() => new ElementTypeChangeService(doc2).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:timer', timer: 'PT1H' }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new ElementTypeChangeService(doc2, new EditContext(doc2)).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:timer', timer: 'PT1H' }))).toBe('E_INVALID_TRIGGER');
     // staying a message event (or untyped) is fine
     const doc3 = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:messageEventDefinition messageRef="Message_M" />'));
-    expect(new ElementTypeChangeService(doc3).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:message', message: 'Other' }).warnings).toEqual([]);
-    expect(new PropertyService(doc3).set({ op: 'set', id: 'Recv', values: { trigger: 'none' } }).warnings).toEqual([]);
+    expect(new ElementTypeChangeService(doc3, new EditContext(doc3)).retype({ op: 'retype', id: 'Recv', kind: 'startEvent:message', message: 'Other' }).warnings).toEqual([]);
+    expect(new PropertyService(doc3, new EditContext(doc3)).set({ op: 'set', id: 'Recv', values: { trigger: 'none' } }).warnings).toEqual([]);
     await expectRoundTrip(doc3);
   });
 
   it('does not blame a conflict that already existed in the file', async () => {
     const doc = await docFromXml(MESSAGE_FLOW_TO_EVENT('<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>'));
-    new PropertyService(doc).set({ op: 'set', id: 'Recv', values: { timer: 'PT2H' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Recv', values: { timer: 'PT2H' } });
     expect(new ElementProperties(doc).read(doc.require('Recv'))).toMatchObject({ trigger: 'timer', timer: 'PT2H' });
   });
 });
@@ -1251,13 +1252,13 @@ describe('set / retype: message flows must still fit the event afterwards', () =
 describe('retype: trigger details, dropped flags, ignored options, child diagrams', () => {
   it('same kind and trigger with options updates the trigger details instead of rebuilding them', async () => {
     const doc = await fullDoc();
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timerKind: 'cycle' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timerKind: 'cycle' });
     expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT1H' });
     expect(await doc.toXml()).toContain('<bpmn:timeCycle');
     expect(cs.changed).toEqual([{ id: 'Timer_A', kind: 'boundaryEvent:timer', detail: 'trigger options updated (timerKind=cycle)' }]);
 
     const errs = await docFromXml(EVENT_SUB);
-    const cs2 = new ElementTypeChangeService(errs).retype({ op: 'retype', id: 'OnErr', kind: 'start:error', errorCode: 'E2' });
+    const cs2 = new ElementTypeChangeService(errs, new EditContext(errs)).retype({ op: 'retype', id: 'OnErr', kind: 'start:error', errorCode: 'E2' });
     const def = errs.require('OnErr').get<El[]>('eventDefinitions')[0]!;
     expect(def.get<El>('errorRef').get('id')).toBe('Error_Boom');
     expect(errs.require('Error_Boom').get('errorCode')).toBe('E2');
@@ -1267,29 +1268,29 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
 
   it('clears a non-interrupting flag the new trigger cannot carry, with W_PROPERTY_DROPPED', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
-    const kept = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Late' });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { nonInterrupting: 'true' } });
+    const kept = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Late' });
     expect(doc.require('Timer_A').get('cancelActivity')).toBe(false);
     expect(kept.warnings).toEqual([]);
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'Boom' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'Boom' });
     expect(doc.require('Timer_A').get('cancelActivity')).not.toBe(false);
     expect((await doc.toXml()).includes('cancelActivity')).toBe(false);
     expect(cs.warnings).toEqual([expect.objectContaining({ code: 'W_PROPERTY_DROPPED', element: 'Timer_A' })]);
     expect(cs.warnings[0]!.message).toMatch(/nonInterrupting .* error boundary events are always interrupting/);
     expect(cs.changed[0]).toMatchObject({ kind: 'boundaryEvent:error', detail: 'retyped from boundaryEvent:message to boundaryEvent:error' });
     // an explicit --non-interrupting with an error trigger is still refused
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timer: 'PT1H', nonInterrupting: true }))).toBeUndefined();
-    expect(errorCode(() => new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'X', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:timer', timer: 'PT1H', nonInterrupting: true }))).toBeUndefined();
+    expect(errorCode(() => new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:error', error: 'X', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
   });
 
   it('warns W_OPTION_IGNORED for trigger options on a non-event and stays a no-op for the same kind', async () => {
     const doc = await fullDoc();
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
     // (W_PROPERTY_INAPPLICABLE for the camunda:assignee the serviceTask keeps is covered in test/c7-semantic.test.ts)
     expect(cs.warnings.filter((warning) => warning.code !== 'W_PROPERTY_INAPPLICABLE')).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'Task_A' })]);
     expect(cs.warnings[0]!.message).toMatch(/timer/);
     expect(cs.changed[0]!.detail).toBe('retyped from userTask to serviceTask');
-    const again = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
+    const again = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Task_A', kind: 'serviceTask', timer: 'PT1H' });
     expect(again.isEmpty).toBe(true);
     expect(again.notes[0]).toMatch(/already/);
     expect(again.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
@@ -1298,7 +1299,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
   it('a sub-process that becomes a task loses its child diagram (no BPMNPlane rooted at a task)', async () => {
     const doc = await docFromXml(COLLAPSED_WITH_DI);
     expect(many(doc.definitions, 'diagrams')).toHaveLength(2);
-    new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Sub', kind: 'task' });
+    new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Sub', kind: 'task' });
     const diagrams = many(doc.definitions, 'diagrams');
     expect(diagrams).toHaveLength(1);
     expect(diagrams[0]!.get<El>('plane').get<El>('bpmnElement').get('id')).toBe('Process_1');
@@ -1310,8 +1311,8 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
     await expectRoundTrip(doc);
     // sub-process -> sub-process keeps it
     const doc2 = await docFromXml(COLLAPSED_WITH_DI);
-    new ElementRemovalService(doc2).remove({ op: 'remove', ids: ['F1'] });
-    new ElementTypeChangeService(doc2).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
+    new ElementRemovalService(doc2, new EditContext(doc2)).remove({ op: 'remove', ids: ['F1'] });
+    new ElementTypeChangeService(doc2, new EditContext(doc2)).retype({ op: 'retype', id: 'Sub', kind: 'eventSubProcess' });
     expect(many(doc2.definitions, 'diagrams')).toHaveLength(2);
     expect(many(doc2.definitions, 'diagrams')[1]!.get<El>('plane').get<El>('bpmnElement')).toBe(doc2.require('Sub'));
   });
@@ -1320,7 +1321,7 @@ describe('retype: trigger details, dropped flags, ignored options, child diagram
 describe('move: bridging with --in, no id recycling', () => {
   it('move --in bridges around a single node (predecessor -> successor) and only drops what still crosses', async () => {
     const doc = await fullDoc();
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['Call'], in: 'Sub' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Call'], in: 'Sub' });
     const call = doc.require('Call');
     expect(call.$parent).toBe(doc.require('Sub'));
     expect(doc.require('F5').get<El>('targetRef').get('id')).toBe('End');
@@ -1346,7 +1347,7 @@ describe('move: bridging with --in, no id recycling', () => {
     <bpmn:endEvent id="E"><bpmn:incoming>F3</bpmn:incoming></bpmn:endEvent>
     <bpmn:subProcess id="X"><bpmn:startEvent id="XS" /></bpmn:subProcess>`),
     );
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['A', 'B'], in: 'X' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['A', 'B'], in: 'X' });
     expect(doc.require('F1').get<El>('targetRef').get('id')).toBe('E');
     expect(doc.require('F1').get('name')).toBe('done'); // carried over from the exit flow
     expect(doc.require('F1').get<El>('conditionExpression').get('body')).toBe('${x}');
@@ -1372,7 +1373,7 @@ describe('move: bridging with --in, no id recycling', () => {
     <bpmn:sequenceFlow id="Flow_3" sourceRef="B" targetRef="C" />
     <bpmn:task id="C"><bpmn:incoming>Flow_3</bpmn:incoming></bpmn:task>`),
     );
-    const cs = new ElementMoveService(doc).move({ op: 'move', ids: ['X'], after: 'B' });
+    const cs = new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['X'], after: 'B' });
     expect(cs.removed.map((change) => change.id)).toEqual(['Flow_4']);
     expect(cs.created.map((change) => change.id)).toEqual(['Flow_XToC']);
     expect(doc.get('Flow_4')).toBeUndefined();
@@ -1386,8 +1387,8 @@ describe('move: bridging with --in, no id recycling', () => {
 describe('remove / move: bridging policy', () => {
   it('a condition is not carried onto the predecessor\'s default flow (W_CONDITION_DROPPED, flow stays default)', async () => {
     const doc = await fullDoc();
-    new PropertyService(doc).set({ op: 'set', id: 'F4', values: { condition: '${c}' } });
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Task_Send'] });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'F4', values: { condition: '${c}' } });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Task_Send'] });
     const fNo = doc.require('F_no');
     expect(fNo.get<El>('targetRef').get('id')).toBe('Sub');
     expect(fNo.get('conditionExpression')).toBeUndefined();
@@ -1397,8 +1398,8 @@ describe('remove / move: bridging policy', () => {
     await expectRoundTrip(doc);
     // the same through move
     const doc2 = await fullDoc();
-    new PropertyService(doc2).set({ op: 'set', id: 'F4', values: { condition: '${m}' } });
-    const cs2 = new ElementMoveService(doc2).move({ op: 'move', ids: ['Task_Send'], after: 'Start' });
+    new PropertyService(doc2, new EditContext(doc2)).set({ op: 'set', id: 'F4', values: { condition: '${m}' } });
+    const cs2 = new ElementMoveService(doc2, new EditContext(doc2)).move({ op: 'move', ids: ['Task_Send'], after: 'Start' });
     expect(doc2.require('F_no').get('conditionExpression')).toBeUndefined();
     expect(doc2.require('Gw').get<El>('default').get('id')).toBe('F_no');
     expect(cs2.warnings.map((warning) => warning.code)).toEqual(['W_CONDITION_DROPPED']);
@@ -1414,7 +1415,7 @@ describe('remove / move: bridging policy', () => {
     <bpmn:task id="B"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
     <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="Gw" />`);
     const doc = await docFromXml(viaGateway);
-    const cs = new ElementRemovalService(doc).remove({ op: 'remove', ids: ['B'] });
+    const cs = new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['B'] });
     expect(doc.get('F2')).toBeUndefined();
     expect(doc.get('F3')).toBeUndefined();
     expect(ids(doc.outgoing(doc.require('Gw')))).toEqual([]);
@@ -1424,7 +1425,7 @@ describe('remove / move: bridging policy', () => {
     await expectRoundTrip(doc);
 
     const doc2 = await docFromXml(viaGateway);
-    new ElementMoveService(doc2).move({ op: 'move', ids: ['B'], after: 'S' });
+    new ElementMoveService(doc2, new EditContext(doc2)).move({ op: 'move', ids: ['B'], after: 'S' });
     expect(doc2.outgoing(doc2.require('Gw')).some((flow) => flow.get<El>('targetRef').get('id') === 'Gw')).toBe(false);
     expect(doc2.require('F1').get<El>('targetRef').get('id')).toBe('B');
     await expectRoundTrip(doc2);
@@ -1438,7 +1439,7 @@ describe('remove / move: bridging policy', () => {
     <bpmn:task id="B"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
     <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="A" />`);
     const doc3 = await docFromXml(viaTask);
-    const cs3 = new ElementRemovalService(doc3).remove({ op: 'remove', ids: ['B'] });
+    const cs3 = new ElementRemovalService(doc3, new EditContext(doc3)).remove({ op: 'remove', ids: ['B'] });
     expect(doc3.require('F2').get<El>('targetRef').get('id')).toBe('A');
     expect(cs3.notes).toContain('bridged: A -> A');
     await expectRoundTrip(doc3);

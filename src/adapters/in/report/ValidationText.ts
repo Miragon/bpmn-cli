@@ -6,6 +6,7 @@ import { validatorLines } from './utils/mutation-lines.js';
 export class ValidationText {
   constructor(private readonly report: ValidationReport) {}
 
+  /** Finding counts are shown only for c7 / c8: plain BPMN has no engine rules, and a count of 0 would read as "checked and fine". */
   text(): string {
     const report = this.report;
     const { errors, warnings, platform } = report;
@@ -15,7 +16,6 @@ export class ValidationText {
     if (errors.length) lines.push(findings.problems(errors).trimEnd());
     if (warnings.length) lines.push(findings.problems(warnings).trimEnd());
     if (platform) {
-      // plain BPMN has no engine rules: a count of 0 would read as "checked and fine"
       const counts = platform.platform === 'c7' || platform.platform === 'c8' ? ` - ${platform.counts.deploy} refused at deploy, ${platform.counts.runtime} runtime, ${platform.counts.practice} practice finding(s)` : '';
       lines.push(`platform: ${platform.platform} (${platform.detail})${counts}`);
     }

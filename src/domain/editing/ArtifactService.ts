@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError, usageError } from '../document/utils/errors.js';
 import { kindByName, kindLabel } from '../document/utils/kinds.js';
 import { ElementLabels } from '../document/ids/ElementLabels.js';
@@ -15,13 +16,16 @@ import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
  * Group members share the group's bpmn:CategoryValue, so membership needs no coordinates.
  */
 export class ArtifactService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   createDataObject(scope: El, opts: { id?: string; name?: string }, cs: ChangeSet): El {
     const doc = this.doc;
     this.assertFlowScope(scope, 'data objects');
-    const id = allocateId(doc, this.artifactRequest('dataObject', scope, opts), opts.id);
-    const dataObject = doc.create('bpmn:DataObject', { id: doc.allocateId(this.backingRequest('bpmn:DataObject', id, opts.name)).id });
+    const id = allocateId(this.edit, this.artifactRequest('dataObject', scope, opts), opts.id);
+    const dataObject = doc.create('bpmn:DataObject', { id: this.edit.allocator.allocate(this.backingRequest('bpmn:DataObject', id, opts.name)).id });
     const ref = doc.create('bpmn:DataObjectReference', { id, ...(opts.name ? { name: opts.name } : {}), dataObjectRef: dataObject });
     addTo(scope, 'flowElements', dataObject, ref);
     cs.create({ id, kind: 'dataObject', ...(opts.name ? { name: opts.name } : {}), detail: `in ${idOf(scope)}` });
@@ -33,8 +37,8 @@ export class ArtifactService {
   createDataStore(scope: El, opts: { id?: string; name?: string }, cs: ChangeSet): El {
     const doc = this.doc;
     this.assertFlowScope(scope, 'data stores');
-    const id = allocateId(doc, this.artifactRequest('dataStore', scope, opts), opts.id);
-    const store = doc.create('bpmn:DataStore', { id: doc.allocateId(this.backingRequest('bpmn:DataStore', id, opts.name)).id, ...(opts.name ? { name: opts.name } : {}) });
+    const id = allocateId(this.edit, this.artifactRequest('dataStore', scope, opts), opts.id);
+    const store = doc.create('bpmn:DataStore', { id: this.edit.allocator.allocate(this.backingRequest('bpmn:DataStore', id, opts.name)).id, ...(opts.name ? { name: opts.name } : {}) });
     addTo(doc.definitions, 'rootElements', store);
     const ref = doc.create('bpmn:DataStoreReference', { id, ...(opts.name ? { name: opts.name } : {}), dataStoreRef: store });
     addTo(scope, 'flowElements', ref);
@@ -51,7 +55,7 @@ export class ArtifactService {
         element: idOf(scope),
       });
     }
-    const id = allocateId(doc, this.artifactRequest('textAnnotation', scope, opts), opts.id);
+    const id = allocateId(this.edit, this.artifactRequest('textAnnotation', scope, opts), opts.id);
     const annotation = doc.create('bpmn:TextAnnotation', { id, ...(opts.text ? { text: opts.text } : {}) });
     addTo(scope, 'artifacts', annotation);
     cs.create({ id, kind: 'textAnnotation', ...(opts.text ? { name: opts.text } : {}), detail: `in ${idOf(scope)}` });
@@ -62,13 +66,13 @@ export class ArtifactService {
   createGroup(opts: { id?: string; name?: string; members?: string[] }, cs: ChangeSet): El {
     const doc = this.doc;
     if (!opts.members?.length) throw usageError('A group needs --members <id,...>: the elements it is drawn around');
-    const members = opts.members.map((id) => doc.require(id));
+    const members = opts.members.map((id) => this.edit.require(id));
     const wrong = members.find((member) => !is(member, 'bpmn:FlowNode') && !isDataReference(member));
     if (wrong) {
       throw modelError('E_INVALID_VALUE', `${idOf(wrong)} is a ${kindLabel(wrong)}; group members are flow nodes, data objects and data stores`, { element: idOf(wrong) });
     }
     const around = `Around ${new ElementLabels(members[0]!).label()}`;
-    const id = allocateId(doc, kindRequest(kindByName('group')!, opts.name ? { name: opts.name } : { context: around }), opts.id);
+    const id = allocateId(this.edit, kindRequest(kindByName('group')!, opts.name ? { name: opts.name } : { context: around }), opts.id);
     const value = this.createCategoryValue(speakingStem(id) ?? around, opts.name);
     const group = doc.create('bpmn:Group', { id, categoryValueRef: value });
     addTo(this.groupContainer(members), 'artifacts', group);
@@ -109,18 +113,18 @@ export class ArtifactService {
     const doc = this.doc;
     const context = speakingStem(refId) ?? '';
     const req = typeRequest(type, { ...(name ? { name } : {}), context });
-    if (doc.idStyle.derivedBase(req) !== refId) return req;
+    if (this.edit.idStyle.derivedBase(req) !== refId) return req;
     const word = type === 'bpmn:DataObject' ? 'Object' : 'Store';
     const worded = typeRequest(type, name ? { name: `${name} ${word}` } : { context: `${context} ${word}` });
-    const id = doc.idStyle.derivedBase(worded);
+    const id = this.edit.idStyle.derivedBase(worded);
     return id !== refId && id.toLowerCase().endsWith(word.toLowerCase()) ? worded : { ...req, tailWord: word };
   }
 
   private createCategoryValue(context: string, name: string | undefined): El {
     const doc = this.doc;
     const request = { ...(name ? { name } : {}), context };
-    const value = doc.create('bpmn:CategoryValue', { id: doc.allocateId(typeRequest('bpmn:CategoryValue', request)).id, ...(name ? { value: name } : {}) });
-    const category = doc.create('bpmn:Category', { id: doc.allocateId(typeRequest('bpmn:Category', request)).id });
+    const value = doc.create('bpmn:CategoryValue', { id: this.edit.allocator.allocate(typeRequest('bpmn:CategoryValue', request)).id, ...(name ? { value: name } : {}) });
+    const category = doc.create('bpmn:Category', { id: this.edit.allocator.allocate(typeRequest('bpmn:Category', request)).id });
     addTo(category, 'categoryValue', value);
     addTo(doc.definitions, 'rootElements', category);
     return value;

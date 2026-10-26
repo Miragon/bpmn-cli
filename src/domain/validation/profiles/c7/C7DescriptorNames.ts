@@ -9,7 +9,7 @@ export class C7DescriptorNames {
 
   constructor(private readonly kit: RuleKit) {}
 
-  /** Attribute names of a camunda type: its own, its camunda and its BPMN super types'. */
+  /** Attribute names of a camunda type: its own, its camunda and its BPMN super types' (none for an unknown BPMN type). */
   attrNames(elementType: CamundaElementType): Set<string> {
     const names = new Set(elementType.properties.filter((property) => property.isAttr || property.isReference).map((property) => property.name));
     for (const sup of elementType.bpmnSuperTypes) {
@@ -20,9 +20,7 @@ export class C7DescriptorNames {
         try {
           const descriptor = this.probe.getElementDescriptor(this.probe.getType(sup)) as { properties?: Array<{ name: string; isAttr?: boolean; isReference?: boolean; isMany?: boolean }> };
           for (const property of descriptor.properties ?? []) if (property.isAttr || (property.isReference && !property.isMany)) known.add(property.name);
-        } catch {
-          /* unknown BPMN type: nothing to add */
-        }
+        } catch {}
         this.bpmnAttrNames.set(sup, known);
       }
       for (const name of known) names.add(name);

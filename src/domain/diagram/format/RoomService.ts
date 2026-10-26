@@ -33,11 +33,12 @@ export class RoomService {
   /**
    * The lane / pool the centre would land in, the frame itself when the shape just leaves it,
    * or undefined when it stays. Past the right or last bottom edge is fine: the frame grows.
+   * Hand drawings sit a few px into the header of a lane or pool. Below the lane (and right of the
+   * pool) only the last lane of the pool may grow downwards.
    */
   private escape(shape: DShape, frame: DShape, box: Box): DShape | undefined {
     const inner = Frames.interior(frame, 0);
     const center = { x: cx(box), y: cy(box) };
-    // hand drawings sit a few px into the header of a lane or pool
     const tol = frame.kind === 'lane' || frame.kind === 'participant' ? HEADER_TOLERANCE : 0.5;
     if (box.x < inner.x - tol || box.y < frame.bounds.y - 0.5) return frame;
     const otherPool = [...this.plane.shapes.values()].find((pool) => pool.kind === 'participant' && pool.id !== shape.poolId && containsPoint(pool.bounds, center));
@@ -45,7 +46,6 @@ export class RoomService {
     if (frame.kind !== 'lane') return undefined;
     const there = this.laneAt(shape.poolId, center);
     if (there) return there.id === frame.id ? undefined : there;
-    // below the lane (and right of the pool): only the last lane of the pool may grow downwards
     const below = center.y >= bottom(frame.bounds) && [...this.plane.shapes.values()].some((lane) => lane.kind === 'lane' && lane.poolId === shape.poolId && lane.bounds.y >= bottom(frame.bounds) - 1);
     return below ? frame : undefined;
   }
@@ -83,7 +83,10 @@ export class RoomService {
     }
   }
 
-  /** A frame that no longer holds the reference, or one pushed away by a frame that grew. */
+  /**
+   * A frame that no longer holds the reference, or one pushed away by a frame that grew.
+   * The outermost such frame wins: a pool pushed away takes its lanes along.
+   */
   private frameLeft(ref: DShape, snap: DrawingSnapshot, movedFrames: ReadonlySet<string>): DShape | undefined {
     const was = snap.bounds.get(ref.id);
     let lost: DShape | undefined;
@@ -92,7 +95,7 @@ export class RoomService {
       if (!fb || !was) continue;
       const left = inside(was, fb) && !inside(ref.bounds, frame.bounds);
       const pushed = !movedFrames.has(frame.id) && (Math.abs(frame.bounds.x - fb.x) > 0.5 || Math.abs(frame.bounds.y - fb.y) > 0.5);
-      if (left || pushed) lost = frame; // the outermost one: a pool pushed away takes its lanes along
+      if (left || pushed) lost = frame;
     }
     return lost;
   }
@@ -182,7 +185,6 @@ export class RoomService {
       const stuck = first.unresolved.filter(([one, other]) => ids.includes(one) || ids.includes(other));
       let left = false;
       if (stuck.length) {
-        // the moved shapes give way along the axis the request leaves free
         const second = this.drawing.separate({ active: ids, movable: all, pinned: fixed, locked: { ids, axes: lock }, baseline: snap.bounds });
         left = second.unresolved.some(([one, other]) => ids.includes(one) || ids.includes(other));
         if (!left) out.push(`moved ${moved.map((shape) => shape.id).join(', ')} ${lock.includes('x') ? 'down' : 'right'} a little to clear ${stuck.map(([one, other]) => (ids.includes(one) ? other : one)).join(', ')}`);

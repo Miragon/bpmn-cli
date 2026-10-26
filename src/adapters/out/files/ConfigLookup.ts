@@ -38,10 +38,10 @@ export class ConfigLookup {
     }
   }
 
+  /** A .bpmnlintrc in a parent directory counts only inside a repository: not ~ or /tmp for every model below them. */
   private from(startDir: string): string | undefined {
     const found = findUp(startDir, [BPMNLINT_CONFIG_FILE], { stopAtGitRoot: true });
     if (!found) return undefined;
-    // a parent directory counts only inside a repository: not ~ or /tmp for every model below them
     if (found.dir !== startDir) {
       const root = gitRoot(startDir);
       if (root === undefined || gitDirOf(real(root)) === null) return undefined;

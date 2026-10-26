@@ -8,13 +8,14 @@ export class DiPruner {
   /**
    * Deletes DI whose semantic element is gone (or is not the element registered under its id)
    * and diagrams whose root is gone; returns the ids of the deleted DI's elements.
+   * A plane without bpmnElement shows the first process / collaboration, as in bpmn-js, and is
+   * kept.
    */
   static prune(defs: El, sem: Semantics): string[] {
     const pruned: string[] = [];
     const diagrams = rawList(defs, 'diagrams');
     for (let diagramIndex = diagrams.length - 1; diagramIndex >= 0; diagramIndex--) {
       const plane = raw<El>(diagrams[diagramIndex], 'plane');
-      // bpmn-js shows the first process / collaboration on a plane without bpmnElement: keep it
       const root = raw<El>(plane, 'bpmnElement') ?? (plane ? DiagramReader.displayRoot(defs) : undefined);
       const rootId = idOf(root);
       if (!plane || !root || !rootId || sem.byId.get(rootId) !== root) {

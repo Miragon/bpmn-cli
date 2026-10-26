@@ -57,11 +57,11 @@ export class C8SchemaRules extends C8Rules {
   /**
    * Child element order and IDREFs that name no id, read from the file's text (SchemaText): the
    * model shows neither, Camunda 8 refuses both. An issue of an element an edit removed is gone.
+   * An invalid id is reported here only for an element bpmn-moddle could not read; checkIds reports the others.
    */
   checkSchemaText(issues: SchemaTextIssue[]): void {
     for (const issue of issues) {
       if (issue.kind === 'id') {
-        // checkIds reports the elements bpmn-moddle read; this one it could not read
         if (this.doc.get(issue.value!)) continue;
         this.push('deploy', 'W_C8_DEPLOY_SCHEMA', this.doc.definitions, undefined, `id:${issue.value}`, `<bpmn:${issue.element}> has the id "${issue.value}", which is no XML NCName (${issue.value!.includes(':') ? 'a colon is not allowed in an id' : 'letters, digits, _ . - and no leading digit'}); bpmn-moddle cannot read the element (an import warning) and Camunda 8 validates the file against the BPMN schema and refuses it`, `Rename it in the XML (and every reference to it), e.g. to ${issue.value!.replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^(?=[^A-Za-z_])/, '_')}.`);
         continue;
@@ -84,7 +84,10 @@ export class C8SchemaRules extends C8Rules {
     }
   }
 
-  /** Every event definition of the file: a conditional one needs a condition, a link one a name. */
+  /**
+   * Every event definition of the file: a conditional one needs a condition, a link one a name.
+   * A missing link name is refused by the schema, an empty one by Camunda 8 ("must be present and not empty").
+   */
   checkSchemaEventDefinitions(): void {
     for (const def of this.kit.walk(this.doc.definitions, { bpmnOnly: true })) {
       if (!this.kit.is(def, 'bpmn:EventDefinition')) continue;
@@ -94,7 +97,6 @@ export class C8SchemaRules extends C8Rules {
       if (this.kit.is(def, 'bpmn:ConditionalEventDefinition') && !peek<El>(def, 'condition')) {
         this.push('deploy', 'W_C8_DEPLOY_EVENT_DEFINITION', event ?? def, undefined, 'schema:condition', `The conditional event definition of ${label} has no condition element, which the BPMN schema requires; Camunda 8 refuses the file`, id ? `\`bpmn set <file> ${id} ${sh('when== <expression>')}\`.` : 'Fix it in the XML.');
       } else if (this.kit.is(def, 'bpmn:LinkEventDefinition') && missing(peek<string>(def, 'name'))) {
-        // no name: the schema refuses it; an empty one: Camunda 8 ("must be present and not empty")
         const none = peek<string>(def, 'name') === undefined || peek<string>(def, 'name') === null;
         this.push('deploy', 'W_C8_DEPLOY_LINK', event ?? def, undefined, 'schema:linkName', `The link event definition of ${label} has ${none ? 'no name, which the BPMN schema requires' : 'an empty name'}; Camunda 8 refuses the file`, id ? `\`bpmn set <file> ${id} link=<Name>\` (the throw and the catch event of a pair share the name).` : 'Fix it in the XML.');
       }

@@ -10,6 +10,7 @@ import { Doc } from '../src/domain/document/Doc.js';
 import { runOps } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 import { ElementRemovalService } from '../src/domain/editing/ElementRemovalService.js';
+import { EditContext } from '../src/domain/document/EditContext.js';
 
 /** Nodes `[tag, id, extra attrs]` and flows `[id, source, target]` (incoming / outgoing written). */
 function model(nodes: Array<[string, string, string?]>, flows: Array<[string, string, string]>, extra = ''): string {
@@ -149,7 +150,7 @@ describe('remove --with-branch', () => {
 
   it('branchOf reports the stops in document order', async () => {
     const doc = await Doc.fromXml(SPLIT);
-    const branch = new ElementRemovalService(doc).branchOf(doc.require('D1'));
+    const branch = new ElementRemovalService(doc, new EditContext(doc)).branchOf(doc.require('D1'));
     expect(branch.nodes.map((node) => node.get('id'))).toEqual(['D1']);
     expect(branch.stops.map((node) => node.get('id'))).toEqual(['J']);
   });

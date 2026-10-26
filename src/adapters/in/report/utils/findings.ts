@@ -1,4 +1,4 @@
-import type { LayoutStatus } from '../../../../domain/batch/types.js';
+import type { LayoutStatus } from '../../../../domain/diagram/types.js';
 import type { Warning } from '../../../../domain/document/CliError.js';
 import type { ValidatorReport } from '../../../../domain/validation/validators.js';
 

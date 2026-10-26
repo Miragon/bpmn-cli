@@ -41,6 +41,7 @@ export class LayoutViewBuilder {
     return { diagrams: planes.map((plane) => LayoutViewBuilder.diagramOf(plane, sem.laneParent)), colors, labels, metrics: LayoutAnalysis.of(this.defs) };
   }
 
+  /** An empty collaboration root says nothing and is left out. */
   private static diagramOf(plane: Plane, laneParent: Map<string, string>): LayoutDiagram {
     const frames = [...plane.shapes.values()].filter((shape) => shape.kind === 'participant' || shape.kind === 'lane' || (shape.kind === 'subProcess' && shape.container));
     const drawn = (id: string | undefined): string | undefined => (id && plane.shapes.has(id) ? id : undefined);
@@ -72,7 +73,6 @@ export class LayoutViewBuilder {
       for (const kid of kids) visit(kid.id, kid.kind === 'participant' ? 'participant' : kid.kind === 'lane' ? 'lane' : 'subProcess', kid.el, id);
     };
     visit(plane.rootId, LayoutViewBuilder.rootKind(plane.root), plane.root);
-    // an empty collaboration root says nothing
     const out = groups.filter((group) => !(group.kind === 'collaboration' && !group.rows.length));
     for (const group of out) if (group.parent && !out.some((other) => other.id === group.parent)) delete group.parent;
     return { id: plane.id, root: plane.rootId, columns: cols.count, gaps: cols.gaps, groups: out };

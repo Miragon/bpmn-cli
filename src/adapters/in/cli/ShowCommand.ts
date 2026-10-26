@@ -12,6 +12,7 @@ import { depthArg } from './utils/flags.js';
  * With --conventions it lists the id conventions new ids follow.
  */
 export class ShowCommand extends CliCommand {
+  /** --lint-config is declared before --no-lint-config, so neither given leaves lintConfig undefined. */
   register(program: CommandType): void {
     this.withJsonOptions(
       this.define(program, 'show')
@@ -22,24 +23,23 @@ export class ShowCommand extends CliCommand {
         .option('--context', 'with an id: the element in its context (where, lane, before / after, what catches it, message flows)')
         .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane with their columns (c0..cN), wide gaps, colours, label sides, layout problems')
         .option('--conventions', "the id conventions new ids follow here: element-id-naming of the .bpmnlintrc (prefixes, case, qualifier) and the file's own style; a file that does not exist yet: those of a new model there")
-        // --lint-config before --no-lint-config: neither given leaves lintConfig undefined
         .option('--lint-config <path>', "with --conventions: the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file, up to the repository root, whoever owns it; outside one only in the file's directory; stdin: from the working directory)")
         .option('--no-lint-config', 'with --conventions: do not read the .bpmnlintrc (no id conventions from element-id-naming)'),
     ).action((file: string, id: string | undefined, options: RawOpts) => this.cli.guarded(() => (options['conventions'] ? this.conventions(file, id, options) : this.view(file, id, options)), !!options['json']));
   }
 
+  /** A file that does not exist yet gets the conventions a new model there gets (before `bpmn new`). */
   private async conventions(file: string, id: string | undefined, options: RawOpts): Promise<void> {
     const extra = [...(id !== undefined ? ['the element id'] : []), ...['scope', 'around', 'depth', 'inner', 'context', 'layout'].filter((key) => options[key] !== undefined && options[key] !== false).map((key) => `--${key}`)];
     if (extra.length) throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
-    // a file that does not exist yet: the conventions a new model there gets (before `bpmn new`)
     const doc = file === '-' || existsSync(file) ? await this.cli.readDocArg(file) : undefined;
     const view = await this.cli.useCases.showConventions.show({ ...this.lintOptions(options), ...(file === '-' ? {} : { file }), ...(doc ? { doc } : {}) });
     if (options['json']) this.cli.printJson(view, !!options['pretty']);
     else this.cli.print(renderConventions(view));
   }
 
+  /** Refuses --lint-config / --no-lint-config: the .bpmnlintrc only decides the id conventions. */
   private async view(file: string, id: string | undefined, options: RawOpts): Promise<void> {
-    // the .bpmnlintrc only decides the id conventions here
     if (options['lintConfig'] !== undefined) {
       throw usageError(`${options['lintConfig'] === false ? '--no-lint-config' : '--lint-config'} goes only with --conventions`, { hint: 'Use `bpmn show <file> --conventions --lint-config <path>` (or --no-lint-config).' });
     }

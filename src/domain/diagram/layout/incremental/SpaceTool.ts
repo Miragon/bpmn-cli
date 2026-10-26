@@ -111,6 +111,10 @@ export class SpaceTool {
     return moved;
   }
 
+  /**
+   * Pools that ended with a grown one grow with it, never shrinking past their content or the
+   * message flows docking on them.
+   */
   private alignPoolsAndLanes(before: Map<string, Box>, res: SpaceResult): void {
     const pools = [...this.plane.shapes.values()].filter((shape) => shape.kind === 'participant');
     const grown = pools.filter((pool) => res.resized.has(pool.id));
@@ -120,7 +124,6 @@ export class SpaceTool {
       for (const pool of pools) {
         if (pool === grownPool || res.resized.has(pool.id) || res.moved.has(pool.id)) continue;
         if (Math.abs(right(before.get(pool.id)!) - right(old)) > 2) continue;
-        // never past its own content or the message flows docking on it
         const target = right(grownPool.bounds);
         if (target < right(pool.bounds)) {
           const content = [...this.plane.shapes.values()].filter((shape) => shape.poolId === pool.id && shape.kind !== 'lane').map((shape) => right(shape.bounds) + 15);
@@ -269,7 +272,11 @@ export class SpaceTool {
     return near(box, pass.axis) < pass.line && far(box, pass.axis) > pass.line ? 'resize' : 'stay';
   }
 
-  /** Top-down: the content of a container beyond the line goes with its container. */
+  /**
+   * Top-down: the content of a container beyond the line goes with its container.
+   * Boundary events of a resized host stay on its border, which moves only beyond the line. A pool
+   * or lane reaching beyond the band holds content that stays, so it never shrinks.
+   */
   private decideAll(pass: Pass): Map<string, Decision> {
     const { plane, axis, line, delta, band, keep, before } = pass;
     const decision = new Map<string, Decision>();
@@ -292,7 +299,6 @@ export class SpaceTool {
       else if (host && hostDecision && (!host.container || hostDecision !== 'resize')) {
         verdict = hostDecision === 'move' ? 'move' : 'stay';
       } else if (host && hostDecision === 'resize') {
-        // on a resized host they stay on its border, which moves only beyond the line
         const eb = before.get(shape.id)!;
         verdict = (axis === 'x' ? cx(eb) : cy(eb)) >= line ? 'move' : 'stay';
       } else if (scoped) {
@@ -308,7 +314,6 @@ export class SpaceTool {
         const ref = before.get(shape.id)!;
         if (near(ref, axis) >= line) verdict = overlapsBand(ref, band, axis) ? 'move' : 'stay';
         else if ((shape.container || shape.kind === 'group') && far(ref, axis) > line && overlapsBand(ref, band, axis)) {
-          // a pool or lane reaching beyond the band holds content that stays, so it never shrinks
           verdict = delta < 0 && beyondBand(ref, band, axis) ? 'stay' : 'resize';
         }
       }
@@ -319,6 +324,10 @@ export class SpaceTool {
     return decision;
   }
 
+  /**
+   * Connections inside a rigid sub-process move or stay with it as a whole; an edge label goes with
+   * the segment nearest to it.
+   */
   private applyPass(pass: Pass, decision: ReadonlyMap<string, Decision>): SpaceResult {
     const { plane, axis, line, delta, band, keep, before } = pass;
     const res: SpaceResult = { moved: new Set(), resized: new Set() };
@@ -339,7 +348,6 @@ export class SpaceTool {
     }
     if (axis === 'x') this.alignPoolsAndLanes(before, res);
 
-    // connections inside a rigid sub-process move or stay with it as a whole
     const blockOf = new Map<string, string>();
     if (pass.held) {
       for (const shape of plane.shapes.values()) {
@@ -380,7 +388,6 @@ export class SpaceTool {
         }
       });
       if (!edge.label) continue;
-      // the label goes with the segment nearest to it
       const startShifted = seg >= 0 ? shifted[seg] : undefined;
       const endShifted = seg >= 0 ? shifted[seg + 1] : undefined;
       const follow = startShifted !== undefined && startShifted === endShifted ? startShifted : near(edge.label, axis) >= line && (seg >= 0 || centreInBand(edge.label, band, axis));
@@ -526,7 +533,10 @@ export class SpaceTool {
     return labelAt(shape, { width, height }, defaultLabelSide(shape.kind));
   }
 
-  /** Grows the frames around a shape, innermost first, until it and its label fit with `pad`. */
+  /**
+   * Grows the frames around a shape, innermost first, until it and its label fit with `pad`.
+   * Lanes sit flush in their pool or parent lane.
+   */
   fitInFrame(id: string, pad = 15, frameFn: (shape: DShape) => DShape | undefined = (shape) => Frames.of(this.plane, shape), keepAlso: Iterable<string> = []): SpaceResult {
     const out: SpaceResult = { moved: new Set(), resized: new Set() };
     const merge = (result: SpaceResult): void => {
@@ -545,7 +555,6 @@ export class SpaceTool {
       while (frame && guard > 0 && !containsPoint(frame.bounds, { x: cx(inner.bounds), y: cy(inner.bounds) })) frame = frameFn(frame);
       if (!frame) break;
       const box = inner.kind === 'participant' || inner.kind === 'lane' ? inner.bounds : this.unitBox(inner);
-      // lanes sit flush in their pool or parent lane
       const framePad = inner.kind === 'lane' ? 0 : pad;
       const label = guard === 0 ? this.labelOrDefault(inner) : undefined;
       const reach = (axis: Axis): number => {
@@ -575,13 +584,14 @@ export class SpaceTool {
   /**
    * Moves everything beyond `to` back, leaving one `gap`. Undefined when something that stays
    * reaches into the landing area or a moved shape would land on another one.
+   * Content starting a few px before `to` (a slightly smaller gap in the drawing) moves too; a
+   * landing undoes the close (audit #42).
    */
   closeStrip(req: StripRequest): SpaceResult | undefined {
     const { axis, from, to, gap } = req;
     const width = to - from;
     if (width - gap <= 0) return undefined;
     const band = bandOf(req.within, axis);
-    // content starting a few px before `to` (a slightly smaller gap in the drawing) moves too
     const tol = 3;
     const line = to - tol;
     const lo = from + gap + tol;
@@ -607,7 +617,6 @@ export class SpaceTool {
         if (coordinate > lo && coordinate < hi && pointInBand(point, band, axis)) return undefined;
       }
     }
-    // a moved shape landing on another one undoes the close (audit #42)
     const shapesBefore = new Map([...this.plane.shapes.values()].map((shape) => [shape, { bounds: { ...shape.bounds }, label: shape.label ? { ...shape.label } : undefined }] as const));
     const edgesBefore = new Map([...this.plane.edges.values()].map((edge) => [edge, { points: edge.points.map((point) => ({ ...point })), label: edge.label ? { ...edge.label } : undefined }] as const));
     const res = this.makeSpace({ axis, line, delta: -(width - gap), ...(req.within ? { within: req.within } : {}), ...(req.keep ? { keep: req.keep } : {}) });

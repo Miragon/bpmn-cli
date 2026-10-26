@@ -70,9 +70,9 @@ export function takeMirrorSnapshot(definitions: El): MirrorSnapshot {
 /**
  * A node that listed entries keeps them plus those of new or re-ended flows; a connected node
  * without entries stays without; a new node follows the file.
+ * A file without sequence flows shows no style: it gets the lists, like a new one.
  */
 export function unkeptEntries(definitions: El, snapshot: MirrorSnapshot): MirrorEntry[] {
-  // a file without sequence flows shows no style: it gets the lists, like a new one
   const fileLists = snapshot.listed.size > 0 || snapshot.ends.size === 0;
   const changed = (flow: El): boolean => {
     const was = snapshot.ends.get(flow);

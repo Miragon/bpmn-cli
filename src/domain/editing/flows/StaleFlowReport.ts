@@ -1,5 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
-import type { FlowEnds, KeptFlow } from '../../document/EditContext.js';
+import type { EditContext, FlowEnds, KeptFlow } from '../../document/EditContext.js';
 import type { ChangeSet } from '../../document/ChangeSet.js';
 import { type Warning } from '../../document/CliError.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
@@ -13,7 +13,10 @@ import { FlowIdFollower } from './FlowIdFollower.js';
  * id that no longer names its ends.
  */
 export class StaleFlowReport {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   /**
    * `deferred`: the flow kept its id, so its W_FLOW_ID_STALE names the rename command;
@@ -29,7 +32,7 @@ export class StaleFlowReport {
    * collides. `before`: the flows' ends when the batch began.
    */
   report(cs: ChangeSet, before?: ReadonlyMap<El, FlowEnds>): void {
-    const kept = this.doc.edit.takeKeptFlows();
+    const kept = this.edit.takeKeptFlows();
     if (!kept.size) return;
     const hinted = new IdRegistry(this.doc.ids.values());
     for (const [flow, was] of kept) {
@@ -48,10 +51,10 @@ export class StaleFlowReport {
     const id = idOf(flow);
     const source = flow.get<El | undefined>('sourceRef');
     const target = flow.get<El | undefined>('targetRef');
-    if (id !== keptId || doc.get(id) !== flow || !source || !target || new FlowIdFollower(doc).namesEnds(id, source, target)) return undefined;
+    if (id !== keptId || doc.get(id) !== flow || !source || !target || new FlowIdFollower(doc, this.edit).namesEnds(id, source, target)) return undefined;
     if (began?.[0] === source && began[1] === target) return undefined;
     const wanted = preferred?.target === target && isValidId(preferred.id) && !hinted.has(preferred.id) && !doc.has(preferred.id) ? preferred.id : undefined;
-    const suggested = wanted ?? doc.idStyle.next(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target), hinted).id;
+    const suggested = wanted ?? this.edit.idStyle.next(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target), hinted).id;
     hinted.claim(suggested);
     return {
       code: 'W_FLOW_ID_STALE',

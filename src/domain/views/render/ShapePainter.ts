@@ -55,10 +55,10 @@ export class ShapePainter {
     }
   }
 
+  /** The halo of a moved element is lighter than that of a created or changed one. */
   halo(color: string): string {
     const shape = this.shape;
     const bounds = shape.bounds;
-    // moved elements: lighter than created / changed ones
     const paint = `fill="none" stroke="${color}" stroke-opacity="${color === HALO_COLORS.moved ? 0.4 : 0.55}" stroke-width="${color === HALO_COLORS.moved ? 4 : 6}"`;
     if (shape.kind === 'event' || shape.kind === 'boundary') return `<circle cx="${formatNumber(bounds.x + bounds.width / 2)}" cy="${formatNumber(bounds.y + bounds.height / 2)}" r="${formatNumber(Math.min(bounds.width, bounds.height) / 2 + 6)}" ${paint}/>`;
     if (shape.kind === 'gateway') {
@@ -71,6 +71,7 @@ export class ShapePainter {
     return `<rect x="${formatNumber(haloBox.x)}" y="${formatNumber(haloBox.y)}" width="${formatNumber(haloBox.width)}" height="${formatNumber(haloBox.height)}" rx="12" ${paint}/>`;
   }
 
+  /** Without label bounds bpmn-js puts a 90 x 20 label below the shape (a group's at its top). */
   label(): Item | undefined {
     const shape = this.shape;
     const external = shape.kind === 'event' || shape.kind === 'boundary' || shape.kind === 'gateway' || shape.kind === 'data' || shape.kind === 'group';
@@ -79,7 +80,6 @@ export class ShapePainter {
     if (!value || !value.trim()) return undefined;
     if (shape.label) return this.text.external(shape.id, value, shape.label.x + shape.label.width / 2, Math.round(shape.label.y), shape.label.width);
     const bounds = shape.bounds;
-    // no label bounds: bpmn-js puts a 90 x 20 label below the shape (a group's at its top)
     return this.text.external(shape.id, value, bounds.x + bounds.width / 2, Math.round(shape.kind === 'group' ? bounds.y : bounds.y + bounds.height));
   }
 
@@ -223,6 +223,7 @@ export class ShapePainter {
     return out;
   }
 
+  /** A call activity is drawn like a collapsed sub-process (bpmn-js: the + marker). */
   private activity(expanded: boolean): string {
     const shape = this.shape;
     const st = this.style;
@@ -237,7 +238,6 @@ export class ShapePainter {
     const icon = shape.kind === 'task' ? this.taskIcon() : '';
     if (icon) out += at(bounds.x + 4, bounds.y + 4, 1, icon);
     const name = raw<string>(el, 'name');
-    // a call activity is drawn like a collapsed sub-process (bpmn-js: the + marker)
     const collapsed = (shape.kind === 'subProcess' && !expanded) || is(el, 'bpmn:CallActivity');
     if (name && name.trim()) out += this.text.inBox(name, bounds, 'center', expanded ? 'top' : 'middle', 7);
     const markers = this.activityMarkers(collapsed);
@@ -249,12 +249,12 @@ export class ShapePainter {
     return out;
   }
 
+  /** A horizontal band's label is laid out as wide as the frame is high, then turned by -90 degrees around the band's centre. */
   private bandLabel(): string {
     const name = raw<string>(this.shape.el, 'name');
     if (!name || !name.trim()) return '';
     const bounds = this.shape.bounds;
     if (!this.horizontal()) return this.text.inBox(name, { x: bounds.x, y: bounds.y, width: bounds.width, height: 30 }, 'center', 'middle', 0);
-    // laid out as wide as the frame is high, then turned by -90 degrees around the band's centre
     const cx = bounds.x + 15;
     const cy = bounds.y + bounds.height / 2;
     const box = { x: cx - bounds.height / 2, y: cy - 15, width: bounds.height, height: 30 };

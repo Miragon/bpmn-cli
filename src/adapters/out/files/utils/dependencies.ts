@@ -51,13 +51,12 @@ function exists(path: string): boolean {
   }
 }
 
+/** The first of the spellings that resolves; one that does not hands over to the next. */
 export function resolveFirst(req: { resolve(id: string): string }, ids: readonly string[]): string | undefined {
   for (const id of ids) {
     try {
       return req.resolve(id);
-    } catch {
-      /* the next spelling */
-    }
+    } catch {}
   }
   return undefined;
 }

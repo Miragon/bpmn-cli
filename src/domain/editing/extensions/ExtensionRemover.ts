@@ -57,19 +57,21 @@ export class ExtensionRemover {
     return cs;
   }
 
+  /**
+   * The items the steps name. A lone bare type also matches case-insensitively at the top level
+   * (legacy); a predicate names one item precisely, so it is found wherever it is (one place only).
+   */
   private select(host: El, top: ExtensionLevel, steps: Step[], text: string): Array<{ el: El; level: ExtensionLevel }> {
     let levels: ExtensionLevel[] = [top];
     let hits: Array<{ el: El; level: ExtensionLevel }> = [];
     for (const [stepIndex, step] of steps.entries()) {
       hits = levels.flatMap((lv) => lv.select(step));
-      // legacy: a bare type also matches case-insensitively at the top level
       if (!hits.length && stepIndex === 0 && steps.length === 1 && step.attr === undefined && step.index === undefined) {
         hits = top
           .items()
           .filter((value) => value.$type.toLowerCase() === step.name.toLowerCase())
           .map((value) => ({ el: value, level: top }));
       }
-      // a predicate names one item precisely: find it wherever it is (one place only)
       if (!hits.length && stepIndex === 0 && step.attr !== undefined) {
         hits = top.selectDeep(step);
         const places = new Set(hits.map((hit) => hit.level.parent));

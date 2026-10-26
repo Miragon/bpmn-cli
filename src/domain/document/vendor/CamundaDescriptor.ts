@@ -88,11 +88,11 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     return type.allowedIn.some((allowed) => allowed === '*' || (allowed.startsWith('bpmn:') && this.elementIs(el, allowed)));
   }
 
+  /** The types that can hold `name`; a child slot typed with a super type accepts the subtype too. */
   override containersOf(name: string): string[] {
     const target = this.type(name);
     if (!target) return [];
     const { types, elements } = this.index() as CamundaIndex;
-    // a child slot typed with a super type accepts the subtype too
     const accepted = new Set<string>([target.type]);
     const addSupers = (key: string): void => {
       for (const sup of types.get(key)?.superClass ?? []) {
@@ -142,13 +142,16 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     return out;
   }
 
+  /**
+   * Indexes the camunda types. A type's hosts also receive the properties of the types it
+   * inherits from; every type that is not a pure mixin (no `extends`) is an extension element.
+   */
   protected override buildIndex(): CamundaIndex {
     const prefix = this.prefix;
     const raw = CAMUNDA_DESCRIPTOR as unknown as { types: RawType[] };
     const types = new Map<string, RawType>();
     for (const rawType of raw.types) types.set(this.typeKey(rawType.name), rawType);
 
-    // camunda types that inherit from T (their hosts receive T's properties too)
     const subTypes = new Map<string, string[]>();
     for (const [key, rawType] of types) {
       for (const sup of rawType.superClass ?? []) {
@@ -195,7 +198,6 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
       }
     }
 
-    // extension element types: everything that is not a pure mixin (no `extends`)
     const elements = new Map<string, CamundaElementType>();
     const propsOf = (key: string, seen: Set<string>): CamundaProperty[] => {
       if (seen.has(key)) return [];
@@ -219,7 +221,8 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
       return [...byName.values()];
     };
     for (const [key, rawType] of types) {
-      if (rawType.extends?.length) continue; // mixin: its properties are attributes of BPMN elements
+      const mixinOfBpmnElementAttributes = !!rawType.extends?.length;
+      if (mixinOfBpmnElementAttributes) continue;
       const allowedIn: string[] = [];
       for (const allowed of ALLOWED_IN_OVERRIDES[key] ?? rawType.meta?.allowedIn ?? []) {
         const qualified = this.qualify(allowed);

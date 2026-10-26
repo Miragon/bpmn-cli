@@ -17,9 +17,9 @@ export class ScopeLint {
     this.gatewayLint = new GatewayLint(doc, findings);
   }
 
+  /** Lints a scope; an ad-hoc sub-process needs neither start/end events nor flows, as its nodes run on their own. */
   lintScope(scope: El, order: FlowOrder): void {
     const nodes = this.doc.flowNodes(scope);
-    // an ad-hoc sub-process needs neither start/end events nor flows: its nodes run on their own
     const adHoc = is(scope, 'bpmn:AdHocSubProcess');
     if ((is(scope, 'bpmn:Process') || nodes.length) && !adHoc) this.lintStartAndEnd(scope, nodes);
     this.lintUnreachable(order);

@@ -51,12 +51,12 @@ export class ProjectBpmnlint {
     return (await this.lint()).validator;
   }
 
+  /** Returns a new object: the cached notes are the validator's, which a write counts as W_CONFIG_IGNORED. */
   async idConventions(): Promise<ProjectIdConventions | undefined> {
     const loaded = await this.loaded();
     if (!loaded) return undefined;
     if (!loaded.ok) return { notes: bpmnlintUnavailableFindings(loaded.unavailable), where: loaded.where, unavailable: true };
     const ids = this.conventionsOf(loaded);
-    // a new object: the cached notes are the validator's, which a write counts as W_CONFIG_IGNORED
     const left = bpmnlintUnavailableFindings([...loaded.resolved.unavailable, ...loaded.notes]);
     return left.length ? { ...ids, notes: [...ids.notes, ...left] } : ids;
   }

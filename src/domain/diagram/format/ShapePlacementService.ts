@@ -25,6 +25,10 @@ export class ShapePlacementService {
     private readonly notes: string[],
   ) {}
 
+  /**
+   * Places the shapes beside their reference; a reference that is one of the moved shapes' own
+   * frames is refused, as the shapes cannot go beside it.
+   */
   run(): string[] {
     if (this.op.side) return this.boundarySide(this.op.ids?.[0] ?? '', this.op.side);
     const items = unique(this.op.ids ?? []).map((id) => this.diagram.movableShape(id));
@@ -71,7 +75,6 @@ export class ShapePlacementService {
     }
     dx = Math.round(dx);
     dy = Math.round(dy);
-    // a reference that is one of the moved shapes' own frames: the shapes cannot go beside it
     for (const frame of fixed) {
       if (!frame.container) continue;
       for (const member of group) {
@@ -131,6 +134,9 @@ export class ShapePlacementService {
   /**
    * Moves the event to the free spot nearest its centre on the other border; its exception path
    * follows, mirrored about the host's centre row, with room made in the frame first.
+   * A pool, a sub-process and the last lane grow on their own; another lane is grown here. Without
+   * a free spot on the border the event may reach over a corner, where hand drawings put a third
+   * event.
    */
   private boundarySide(id: string, side: 'top' | 'bottom'): string[] {
     const { plane, shape: event } = this.diagram.drawnShape(id);
@@ -159,7 +165,6 @@ export class ShapePlacementService {
         this.notes.push(`made ${deficit} px of room above ${host.id} in its ${frameWord(frame)} ${frame.id}`);
       }
     }
-    // a pool, a sub-process and the last lane grow on their own; other lanes do not
     if (side === 'bottom' && path.length && frame?.kind === 'lane' && [...plane.shapes.values()].some((lane) => lane.kind === 'lane' && lane !== frame && lane.poolId === frame.poolId && lane.bounds.y >= bottom(frame.bounds) - 1)) {
       const same = path.filter((node) => Frames.of(plane, node) === frame);
       const low = Math.max(...same.map((node) => bottom(this.diagram.drawing(plane).unitBox(node)) + mirror(node)));
@@ -180,7 +185,6 @@ export class ShapePlacementService {
       if (edge.targetId === host.id) docks.push(edge.points[edge.points.length - 1]!);
     }
     const free = (box: Box): boolean => !others.some((other) => overlaps(other, box, 4)) && !docks.some((dock) => dock.x > box.x - 4 && dock.x < right(box) + 4 && dock.y > box.y - 4 && dock.y < bottom(box) + 4);
-    // else a spot reaching over a corner: hand drawings put a third event there
     let spot: Box | undefined;
     for (const [lo, hi] of [
       [hb.x + size.width / 2, right(hb) - size.width / 2],

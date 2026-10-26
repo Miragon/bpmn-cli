@@ -3,6 +3,8 @@ import { ioError, usageError } from '../../domain/document/utils/errors.js';
 import { SUB_PROCESS_TYPES } from '../../domain/diagram/utils/expansion.js';
 import { kindLabel } from '../../domain/document/utils/kinds.js';
 import { EditBatchService } from '../../domain/batch/EditBatchService.js';
+import { FullLayout, type LayoutResult } from '../../domain/diagram/layout/FullLayout.js';
+import { LayoutDebug } from '../../domain/diagram/layout/LayoutDebug.js';
 import type { LayoutDocOptions, RelayoutDiagramUseCase } from '../port/in/RelayoutDiagramUseCase.js';
 import type { FileWriteOptions } from '../port/in/EditDocumentUseCase.js';
 import type { MutationResult } from '../../domain/batch/types.js';
@@ -29,6 +31,15 @@ export class RelayoutDiagramService implements RelayoutDiagramUseCase {
     const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo(opts, target);
     if (project.tidy) return this.write(doc, new EditBatchService(doc, [{ op: 'tidy' }], { ...project, layout: 'auto' }), target, opts);
     return this.redraw(doc, project, target, opts);
+  }
+
+  layoutModel(command: RelayoutDiagramUseCase.ModelCommand): Promise<LayoutResult> {
+    const { model, ...opts } = command;
+    return new FullLayout(model, opts).run();
+  }
+
+  setDebugSink(command: RelayoutDiagramUseCase.DebugSinkCommand): void {
+    LayoutDebug.setProcessSink(command.sink);
   }
 
   /** Checked before anything is read. */

@@ -61,15 +61,15 @@ export class BoundaryPlacer {
   /**
    * The bottom border right to left (corner included), then the top border; first with a clear
    * exit. `self`: an event already drawn there, left out (where a command would have put it).
+   * A spot on the bottom border keeps the lane below clear of other labels (its flow leaves
+   * downwards) and none takes a spot where connections already dock on the host.
    */
   private boundarySpot(plane: Plane, host: DShape, size: { width: number; height: number }, self?: string): Box {
     const hb = host.bounds;
     const others = PlaneQuery.boundariesOf(plane, host.id).filter((boundary) => boundary.id !== self).map((boundary) => boundary.bounds);
     const offset = Math.min(SIZES.event.width / 2 + 7, hb.width / 2);
-    // the flow leaves a bottom boundary event downwards: keep that lane clear of other labels
     const labels = [...plane.shapes.values()].filter((other) => other.id !== host.id && other.id !== self && other.label).map((other) => other.label!);
     const exitClear = (box: Box): boolean => box.y < hb.y || !labels.some((label) => overlaps(label, { x: cx(box) - 2, y: bottom(box), width: 4, height: 40 }));
-    // where connections already dock on the host (an event there would force them around)
     const docks: Point[] = [];
     for (const edge of plane.edges.values()) {
       if (edge.points.length < 2 || (self && edge.sourceId === self)) continue;
@@ -142,10 +142,10 @@ export class BoundaryPlacer {
    * Rows above the host for the first node of a path from an event on the bottom border placed
    * by the CLI, when the path starts with this node and the top border has a free spot. They cost
    * TOP_ROW more than a row below: a clean row below wins, one crossing a line loses.
+   * An event drawn by hand keeps its border; the CLI's sits where placeBoundary puts it.
    */
   topCandidates(plane: Plane, id: string, probe: Probe, event: DShape, host: DShape, frame: DShape | undefined, size: { width: number; height: number }, extent: number, exclude: ReadonlySet<string>): Cand[] {
     if (attachedSide(event.bounds, host.bounds) !== 'bottom') return [];
-    // an event drawn by hand keeps its border; the CLI's sits where placeBoundary puts it
     if (!this.placer.placed.has(event.id)) {
       const spot = this.boundarySpot(plane, host, { width: event.bounds.width, height: event.bounds.height }, event.id);
       if (Math.abs(spot.x - event.bounds.x) > 1 || Math.abs(spot.y - event.bounds.y) > 1) return [];
@@ -158,11 +158,13 @@ export class BoundaryPlacer {
     return xs.flatMap((centreX, xi) => this.rows.rowsAbove(plane, probe, frame, event, centreX, size, extent, cy(host.bounds) - sp.row, sp.row, exclude, TOP_ROW + 40 * xi, spot));
   }
 
-  /** Moves a boundary event to its spot on the host's top border (its path goes above next). */
+  /**
+   * Moves a boundary event to its spot on the host's top border (its path goes above next).
+   * Its label is placed again once its path is drawn.
+   */
   seatOnTop(plane: Plane, event: DShape, spot: Box): void {
     const moved = this.placer.drawing(plane).shift(event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
     for (const movedId of moved) if (!this.placer.placed.has(movedId)) this.placer.moved.add(movedId);
-    // its label is placed again once its path is drawn
     if (event.label) (this.placer.relabel ??= new Set()).add(event.id);
     this.placer.notes.push(`${event.id} moved to the top border of ${event.hostId}: its path runs above it (below, it would cross a line or take more room)`);
   }

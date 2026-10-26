@@ -41,10 +41,16 @@ export class IdAllocator {
 
   explicitOr(id: string | undefined, req: IdRequest): string {
     if (id) {
-      this.doc.claimId(id);
+      this.claim(id);
       return id;
     }
     return this.allocate(req).id;
+  }
+
+  /** An explicit id is the caller's, so it no longer counts as generated. */
+  claim(id: string): void {
+    this.doc.claimId(id);
+    this.forgetGenerated(id);
   }
 
   /** Claims nothing. */

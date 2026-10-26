@@ -46,6 +46,7 @@ export function crossings(points: readonly Point[], lines: readonly Point[][]): 
   return crossings;
 }
 
+/** Drops collinear points; ports on one spot keep both ends, so never fewer than two points. */
 export function simplify(points: Point[]): Point[] {
   const out: Point[] = [];
   for (const point of points) {
@@ -55,7 +56,6 @@ export function simplify(points: Point[]): Point[] {
     if (prev && last && ((prev.x === last.x && last.x === point.x) || (prev.y === last.y && last.y === point.y))) out.pop();
     out.push({ x: point.x, y: point.y });
   }
-  // ports on one spot keep both ends: never fewer than two points
   if (out.length === 1 && points.length > 1) out.push({ ...out[0]! });
   return out;
 }

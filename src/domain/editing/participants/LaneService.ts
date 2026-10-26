@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { modelError } from '../../document/utils/errors.js';
 import { kindByName, kindLabel } from '../../document/utils/kinds.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
@@ -13,13 +14,16 @@ import type { AddElement } from '../../commands/types.js';
  * members, and nodes inside sub-processes are never lane members.
  */
 export class LaneService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   /** The first child lane of a lane inherits all of the parent's members. */
   createLane(op: AddElement, cs: ChangeSet): El {
     const doc = this.doc;
     const { process, parentLane } = this.resolveLaneContainer(op);
-    const id = allocateId(doc, kindRequest(kindByName('lane')!, { ...(op.name ? { name: op.name } : {}), context: new ElementLabels(parentLane ?? process).context('In') }), op.id);
+    const id = allocateId(this.edit, kindRequest(kindByName('lane')!, { ...(op.name ? { name: op.name } : {}), context: new ElementLabels(parentLane ?? process).context('In') }), op.id);
     const laneSet = parentLane ? this.ensureChildLaneSet(parentLane, cs) : this.ensureLaneSet(process, cs);
     const lane = doc.create('bpmn:Lane', { id, ...(op.name ? { name: op.name } : {}) });
     addTo(laneSet, 'lanes', lane);
@@ -45,7 +49,7 @@ export class LaneService {
       });
     }
     for (const memberId of op.members ?? []) {
-      this.assign(doc.require(memberId, 'bpmn:FlowNode', 'flow node'), lane, cs);
+      this.assign(this.edit.require(memberId, 'bpmn:FlowNode', 'flow node'), lane, cs);
     }
     if (extra.length && parentLane) {
       const extraIds = extra.map(idOf);
@@ -103,7 +107,7 @@ export class LaneService {
   private ensureLaneSet(process: El, cs: ChangeSet): El {
     const sets = many(process, 'laneSets');
     if (sets[0]) return sets[0];
-    const laneSet = this.doc.create('bpmn:LaneSet', { id: this.doc.allocateId(typeRequest('bpmn:LaneSet', { context: new ElementLabels(process).label() })).id });
+    const laneSet = this.doc.create('bpmn:LaneSet', { id: this.edit.allocator.allocate(typeRequest('bpmn:LaneSet', { context: new ElementLabels(process).label() })).id });
     addTo(process, 'laneSets', laneSet);
     cs.note(`created laneSet ${idOf(laneSet)} in ${idOf(process)}`);
     return laneSet;
@@ -112,7 +116,7 @@ export class LaneService {
   private ensureChildLaneSet(lane: El, cs: ChangeSet): El {
     const existing = lane.get<El | undefined>('childLaneSet');
     if (existing) return existing;
-    const laneSet = this.doc.create('bpmn:LaneSet', { id: this.doc.allocateId(typeRequest('bpmn:LaneSet', { context: new ElementLabels(lane).label() })).id });
+    const laneSet = this.doc.create('bpmn:LaneSet', { id: this.edit.allocator.allocate(typeRequest('bpmn:LaneSet', { context: new ElementLabels(lane).label() })).id });
     lane.set('childLaneSet', laneSet);
     laneSet.$parent = lane;
     cs.note(`created nested laneSet ${idOf(laneSet)} in lane ${idOf(lane)}`);
@@ -122,7 +126,7 @@ export class LaneService {
   private resolveLaneContainer(op: AddElement): { process: El; parentLane?: El } {
     const doc = this.doc;
     if (!op.in) return { process: doc.defaultScope() };
-    const container = doc.require(op.in, ['bpmn:Process', 'bpmn:Participant', 'bpmn:Lane', 'bpmn:SubProcess'], 'lane container');
+    const container = this.edit.require(op.in, ['bpmn:Process', 'bpmn:Participant', 'bpmn:Lane', 'bpmn:SubProcess'], 'lane container');
     if (is(container, 'bpmn:SubProcess')) {
       throw modelError('E_INVALID_SCOPE', `Lanes can only be created at process level, not inside sub-process ${op.in}`, {
         element: op.in,
@@ -134,7 +138,7 @@ export class LaneService {
       if (!process) throw modelError('E_INVALID_SCOPE', `Lane ${op.in} is not inside a process`, { element: op.in });
       return { process, parentLane: container };
     }
-    return { process: doc.requireScope(op.in) };
+    return { process: this.edit.requireScope(op.in) };
   }
 
   private assertLaneMember(node: El): El {

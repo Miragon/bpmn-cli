@@ -27,6 +27,7 @@ export class LaneInheritance {
     private readonly cross?: CrossLane,
   ) {}
 
+  /** The lane a placed node inherits; after a branching source it is the target's, as the layout puts the node on the target's row. */
   static of(doc: Doc, placement: Placement): LaneInheritance {
     const anchor = LaneInheritance.anchorOf(doc, placement);
     const lane = anchor ? laneOf(doc, anchor) : undefined;
@@ -37,7 +38,6 @@ export class LaneInheritance {
     const from = laneOf(doc, source);
     const to = laneOf(doc, target);
     if (from === to) return new LaneInheritance(lane);
-    // after a branching source the layout puts the node on the target's row
     const branching = doc.outgoing(source).length > 1 && !!to;
     return new LaneInheritance(branching ? to : lane, { source, target, ...(from ? { from } : {}), ...(to ? { to } : {}), branching });
   }

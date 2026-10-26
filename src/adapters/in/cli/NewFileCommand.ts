@@ -24,10 +24,10 @@ export class NewFileCommand extends MutationCommand {
     ).action((file: string, options: RawOpts) => this.run(file, options));
   }
 
+  /** `new -` (or -o -) writes the new model to stdout. */
   private async run(file: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
-      // `new -` (or -o -) writes the new model to stdout
       const stdout = file === '-' || opts.out === '-';
       const result = await this.cli.useCases.create.create({
         ...opts,

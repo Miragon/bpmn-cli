@@ -1,6 +1,6 @@
 /**
  * Step 3: pool order (`order <collaborationId> <participantId...>`,
- * src/domain/editing/ElementOrderService.ts and src/domain/batch/DiagramCommandService.ts orderPoolBands): the participants
+ * src/domain/editing/ElementOrderService.ts and src/domain/diagram/format/LaneBandService.ts orderPoolBands): the participants
  * of a collaboration are reordered top to bottom, black-box partner pools
  * included; a kept drawing gets its pool bands restacked with their content
  * and the message flows routed again.

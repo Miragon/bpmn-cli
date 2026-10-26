@@ -40,7 +40,8 @@ export function splitNestedKey(key: string): { slot: string; key: string } | und
   const dot = key.indexOf('.');
   if (dot <= 0) return undefined;
   const colon = key.indexOf(':');
-  if (colon >= 0 && colon < dot) return undefined; // a vendor attribute with a dot in its name
+  const vendorAttributeWithDotInName = colon >= 0 && colon < dot;
+  if (vendorAttributeWithDotInName) return undefined;
   return { slot: key.slice(0, dot), key: key.slice(dot + 1) };
 }
 

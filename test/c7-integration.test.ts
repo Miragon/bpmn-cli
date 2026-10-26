@@ -30,6 +30,7 @@ import { elementDetail, renderDetail, renderExtensionList } from '../src/index.j
 import * as lib from '../src/index.js';
 import { definitionsXml } from './helpers.js';
 import { ElementMoveService } from '../src/domain/editing/ElementMoveService.js';
+import { EditContext } from '../src/domain/document/EditContext.js';
 
 const ROOT = join(__dirname, '..');
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
@@ -150,9 +151,9 @@ describe('show <id> and ext list print extension content as an indented tree (#1
 describe('ext on nested elements: definition. / loop. / condition. (#3)', () => {
   it('adds a retry cycle to the multi-instance loop and camunda:in to the signal definition', async () => {
     const doc = await nestedDoc();
-    const cs = new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
+    const cs = new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
     expect(cs.changed[0]).toMatchObject({ id: 'Activity_Review', detail: 'ext added loop.camunda:failedJobRetryTimeCycle' });
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Event_Go', action: 'add', slot: 'definition', type: 'camunda:in', attrs: { variables: 'all' } });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Event_Go', action: 'add', slot: 'definition', type: 'camunda:in', attrs: { variables: 'all' } });
     const xml = await doc.toXml();
     expect(xml).toMatch(/<bpmn:multiInstanceLoopCharacteristics [^>]*>\s*<bpmn:extensionElements>\s*<camunda:failedJobRetryTimeCycle>R3\/PT5M<\/camunda:failedJobRetryTimeCycle>/);
     expect(xml).toMatch(/<bpmn:signalEventDefinition [^>]*>\s*<bpmn:extensionElements>\s*<camunda:in variables="all" \/>/);
@@ -166,36 +167,36 @@ describe('ext on nested elements: definition. / loop. / condition. (#3)', () => 
 
   it('merges / refuses like on the element itself, with hints that use the prefix', async () => {
     const doc = await nestedDoc();
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
-    const dup = caught(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M' }));
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
+    const dup = caught(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M' }));
     expect(dup.code).toBe('E_DUPLICATE_EXTENSION');
     expect(dup.message).toMatch(/the loop characteristics of Activity_Review already has a camunda:failedJobRetryTimeCycle/);
     expect(dup.details['element']).toBe('Activity_Review');
     expect(dup.details['hint']).toMatch(/bpmn ext remove <file> Activity_Review loop\.<selector>/);
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M', replace: true });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R5/PT5M', replace: true });
     expect(await doc.toXml()).toContain('<camunda:failedJobRetryTimeCycle>R5/PT5M</camunda:failedJobRetryTimeCycle>');
   });
 
   it('removes by selector and by index; the empty container goes', async () => {
     const doc = await nestedDoc();
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
-    const cs = new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'remove', type: 'loop.camunda:failedJobRetryTimeCycle' });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' });
+    const cs = new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'remove', type: 'loop.camunda:failedJobRetryTimeCycle' });
     expect(cs.changed[0]!.detail).toBe('ext removed loop.camunda:failedJobRetryTimeCycle');
     expect(doc.require('Activity_Review').get<El>('loopCharacteristics').get('extensionElements')).toBeUndefined();
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Event_Go', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } });
-    new ExtensionElementService(doc).apply({ op: 'ext', id: 'Event_Go', action: 'remove', slot: 'definition', index: 0 });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Event_Go', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } });
+    new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Event_Go', action: 'remove', slot: 'definition', index: 0 });
     expect(listAllExtensions(doc.require('Event_Go'))).toEqual([]);
   });
 
   it('explains a missing or impossible nested element', async () => {
     const doc = await nestedDoc();
-    const noLoop = caught(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Event_Go', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
+    const noLoop = caught(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Event_Go', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
     expect(noLoop.code).toBe('E_WRONG_KIND');
-    const noDefinition = caught(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Event_Start', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } }));
+    const noDefinition = caught(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Event_Start', action: 'add', type: 'definition.camunda:in', attrs: { variables: 'all' } }));
     expect(noDefinition.code).toBe('E_NO_NESTED_ELEMENT');
     expect(noDefinition.details['hint']).toMatch(/trigger=/);
     runOps(doc, [{ op: 'set', id: 'Activity_Review', values: { loop: 'none' } }]);
-    const removed = caught(() => new ExtensionElementService(doc).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
+    const removed = caught(() => new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', id: 'Activity_Review', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle', body: 'R3/PT5M' }));
     expect(removed.code).toBe('E_NO_NESTED_ELEMENT');
     expect(removed.details['hint']).toMatch(/loop=parallel/);
   });
@@ -278,7 +279,7 @@ const GATEWAY = definitionsXml(
 describe('move: no bridge from an event-based gateway to a target the engines reject (#5)', () => {
   it('move --in refuses the group bridge (it used to bridge Gateway_Wait -> Activity_Ship)', async () => {
     const doc = await Doc.fromXml(GATEWAY);
-    const err = caught(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Event_Paid'], in: 'Activity_Sub' }));
+    const err = caught(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Event_Paid'], in: 'Activity_Sub' }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Moving Event_Paid would connect the event-based gateway Gateway_Wait to Activity_Ship/);
     expect(doc.require('F_A').get<El>('targetRef').get('id')).toBe('Event_Paid');
@@ -286,7 +287,7 @@ describe('move: no bridge from an event-based gateway to a target the engines re
 
   it('the move hint does not offer `move --no-bridge` (there is none)', async () => {
     const doc = await Doc.fromXml(GATEWAY);
-    const err = caught(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' }));
+    const err = caught(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.details['hint']).toMatch(/A move always bridges its old place/);
     expect(err.details['hint']).not.toMatch(/bpmn move [^`]*--no-bridge/);

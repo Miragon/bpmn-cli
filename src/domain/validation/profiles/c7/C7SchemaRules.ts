@@ -43,6 +43,7 @@ export class C7SchemaRules extends C7Rules {
    * What the schema requires of every event definition, also one the engines would ignore: a
    * conditional definition has a condition, a link definition a name, a timer at most one of
    * timeDate, timeCycle and timeDuration.
+   * A message names `Conditional event X`, or among several definitions `The conditional definition of <event>`.
    */
   checkSchemaEventDefinitions(): void {
     for (const def of this.kit.walk(this.doc.definitions, { bpmnOnly: true })) {
@@ -62,7 +63,6 @@ export class C7SchemaRules extends C7Rules {
         return `The engines act on the ${triggerName(acting)} definition and ignore this one, but they validate it too: drop it with \`bpmn set <file> ${id} trigger=${triggerName(acting)}\` (keeps only the ${triggerName(acting)}), or ${only}.`;
       };
       const label = id ? this.describe(event!, undefined) : `${def.$type}${idOf(def) ? ` ${idOf(def)}` : ''}`;
-      // `Conditional event X`, or among several `The conditional definition of <event>`
       const what = (single: string): string => (defs.length > 1 ? `The ${triggerName(def)} definition of ${label}` : id ? `${single} ${id}` : label);
       if (this.kit.is(def, 'bpmn:ConditionalEventDefinition') && !peek<El>(def, 'condition')) {
         this.push('deploy', 'W_C7_DEPLOY_EVENT_DEFINITION', event ?? def, undefined, `condition${subject}`, `${what('Conditional event')} has no condition element, which the BPMN schema requires; the engines refuse the file`, fix(sh('when=${expression}'), ''));

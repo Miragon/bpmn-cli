@@ -128,7 +128,8 @@ export class ChangeSet {
 
   /**
    * An element that took the freed id (a splice's new flow) keeps its entries. A rename onto the
-   * id of an element this change removed is a takeover, so every id is listed once.
+   * id of an element this change removed is a takeover, so every id is listed once. A rename is
+   * traced back to the id the element had in the file, as an earlier op may have renamed it already.
    */
   rename(renames: Rename[]): this {
     for (const rename of renames) {
@@ -149,7 +150,6 @@ export class ChangeSet {
         this.renames.push(rename);
         continue;
       }
-      // the id the element had in the file (an earlier op of the batch may have renamed it already)
       let origin = rename.from;
       for (let index = this.renames.length - 1; index >= 0; index--) if (this.renames[index]!.to === origin && !this.renames[index]!.takeover) origin = this.renames[index]!.from;
       this.removed[gone] = { id: origin, kind: this.removed[gone]!.kind, ...(rename.was && origin === rename.from ? { detail: rename.was } : {}) };
@@ -164,6 +164,7 @@ export class ChangeSet {
     return this;
   }
 
+  /** Renames merge after the entries, so a rename onto an id an earlier op removed finds both (a takeover). */
   merge(other: ChangeSet): this {
     this.bindings.push(...other.bindings);
     this.replaced.push(...other.replaced);
@@ -173,7 +174,6 @@ export class ChangeSet {
     this.removed.push(...other.removed);
     this.warnings.push(...other.warnings);
     this.notes.push(...other.notes);
-    // after the entries: a rename onto an id an earlier op removed finds both (a takeover)
     this.rename(other.renames);
     return this;
   }

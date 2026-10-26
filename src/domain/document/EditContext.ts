@@ -81,9 +81,24 @@ export class EditContext {
     return this.settings.conventions ?? this.doc.conventions;
   }
 
-  /** Undefined to detect the platform. */
-  get platformChoice(): EditSettings['platformChoice'] {
-    return this.settings.platformChoice;
+  /** The call's platform choice, else the document's detected one. */
+  platform(): 'camunda7' | 'camunda8' | undefined {
+    const choice = this.settings.platformChoice;
+    if (choice) return choice === 'c7' ? 'camunda7' : choice === 'c8' ? 'camunda8' : undefined;
+    return this.doc.platform();
+  }
+
+  /** Like Doc.require; inside a batch E_NOT_FOUND points to what the batch did. */
+  require(id: string, expect?: string | string[], what = 'element'): El {
+    return this.doc.require(id, expect, what, this.batch);
+  }
+
+  requireScope(id: string | undefined): El {
+    return this.doc.requireScope(id, this.batch);
+  }
+
+  newId(prefix: string, name?: string): string {
+    return this.allocator.allocate({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
   }
 
   get followFlowEnds(): boolean {

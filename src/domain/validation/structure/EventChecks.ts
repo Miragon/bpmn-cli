@@ -59,6 +59,11 @@ export class EventChecks {
     });
   }
 
+  /**
+   * Checks the host of a boundary event. A compensation handler cannot carry one (bpmn-js does
+   * not attach it, Camunda 7 / CIB seven / Operaton refuse the file), nor can an event
+   * sub-process, which has no place in the flow to interrupt or leave.
+   */
   checkBoundaryEvent(el: El, scope: El): void {
     const host = peek<El>(el, 'attachedToRef');
     if (!host) {
@@ -80,15 +85,12 @@ export class EventChecks {
         hint: `Move the boundary event next to its host: \`bpmn remove <file> ${shownId(el)}\` and re-add it with --on ${shownId(host)}.`,
       });
     }
-    // bpmn-js does not attach boundary events to a compensation handler,
-    // and Camunda 7 / CIB seven / Operaton refuse the file
     if (peek<boolean>(host, 'isForCompensation') === true) {
       this.findings.error('E_INVALID_HOST', `${this.findings.describe(el)} is attached to ${shownId(host)}, a compensation handler (isForCompensation=true), which cannot carry boundary events`, shownId(el), {
         related: [shownId(host)],
         hint: `Remove it (\`bpmn remove <file> ${shownId(el)}\`), attach it to a normal activity (\`bpmn move <file> ${shownId(el)} --on <activityId>\`), or make ${shownId(host)} a normal activity (\`bpmn set <file> ${shownId(host)} isForCompensation=false\`).`,
       });
     }
-    // an event sub-process has no place in the flow to interrupt or leave
     if (isEventSubProcess(host)) {
       this.findings.error('E_INVALID_HOST', `${this.findings.describe(el)} is attached to ${shownId(host)}, an event sub-process, which cannot carry boundary events`, shownId(el), {
         related: [shownId(host)],

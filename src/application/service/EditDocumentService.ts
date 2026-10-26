@@ -5,6 +5,7 @@ import type { LoadDocumentPort } from '../port/out/LoadDocumentPort.js';
 import type { LoadProjectSettingsPort } from '../port/out/LoadProjectSettingsPort.js';
 import type { SaveDocumentPort } from '../port/out/SaveDocumentPort.js';
 import { EditBatchService } from '../../domain/batch/EditBatchService.js';
+import { TextPreservation, type PreservedText } from '../../domain/document/xml/TextPreservation.js';
 
 export class EditDocumentService implements EditDocumentUseCase {
   constructor(
@@ -24,5 +25,9 @@ export class EditDocumentService implements EditDocumentUseCase {
     const result = await new EditBatchService(doc, commands, lint.applyTo(opts, target)).run(target);
     if (!opts.dryRun && target) result.written = await this.save.save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
     return result;
+  }
+
+  preserveText(command: EditDocumentUseCase.PreserveTextCommand): Promise<PreservedText> {
+    return new TextPreservation(command.original, command.baseline, command.next).result();
   }
 }

@@ -1,11 +1,11 @@
-import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import type { IdRequest } from '../../document/utils/requests.js';
 
 /** Allocates an id: an explicit one is validated and claimed, else one in the file's style. */
-export function allocateId(doc: Doc, req: IdRequest, explicit: string | undefined): string {
+export function allocateId(edit: EditContext, req: IdRequest, explicit: string | undefined): string {
   if (explicit) {
-    doc.claimId(explicit);
+    edit.allocator.claim(explicit);
     return explicit;
   }
-  return doc.allocateId(req).id;
+  return edit.allocator.allocate(req).id;
 }

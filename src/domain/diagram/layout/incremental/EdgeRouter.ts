@@ -205,6 +205,9 @@ export class EdgeRouter {
   /**
    * Orthogonal route with the BPMN side conventions; associations go straight when that cuts
    * nothing. Undefined when an end has no shape on the plane.
+   * A gateway takes one connection per vertex while one is free (explicit sides are taken as they
+   * are); a join's entries may share its top / bottom vertex as in bpmn-js when that adds no
+   * crossing.
    */
   routeEdge(edge: DEdge, opts: RouteOptions): Point[] | undefined {
     const source = edge.sourceId ? this.plane.shapes.get(edge.sourceId) : undefined;
@@ -236,7 +239,6 @@ export class EdgeRouter {
     const frame = message ? undefined : this.commonFrame(source, target);
     const sourceSides = opts.sourceSides ?? (message ? this.messageSides(source.bounds, target.bounds) : this.sidesFor(source, 'source'));
     const targetSides = opts.targetSides ?? (message ? this.messageSides(target.bounds, source.bounds) : this.sidesFor(target, 'target'));
-    // one connection per gateway vertex while one is free (explicit sides are taken as they are)
     const ends = (gateway: DShape): GatewayEnd[] => (gateway.kind === 'gateway' && !message ? this.gatewayEnds(edge, gateway, opts.lines) : []);
     const targetEnds = ends(target);
     const taken = (shareEntries: boolean): Side[] => (opts.targetSides ? [] : this.takenSides(targetEnds, shareEntries));
@@ -253,7 +255,6 @@ export class EdgeRouter {
       ...(frame ? { frame } : {}),
     };
     const pts = OrthogonalRouter.route({ ...request, targetAvoid: taken(false) });
-    // a join's entries share its top / bottom vertex as in bpmn-js, but never for a crossing
     if (!targetEnds.some((end) => !end.out && (end.side === 'top' || end.side === 'bottom'))) return roundPoints(pts);
     const merged = OrthogonalRouter.route({ ...request, targetMerge: true, targetAvoid: taken(true) });
     return roundPoints(crossings(merged, opts.lines) <= crossings(pts, opts.lines) ? merged : pts);
@@ -316,10 +317,10 @@ export class EdgeRouter {
   /**
    * Whether a kept connection must be rerouted: degenerate, detached, lost an end's border, turned
    * diagonal or newly cuts a shape. `detached: false` is for planes the layout may not route on.
+   * Detached ends count even when they were detached before.
    */
   brokenEdge(edge: DEdge, before: EdgeBefore | undefined, { detached = true }: { detached?: boolean } = {}): boolean {
     if (degenerate(edge.points)) return true;
-    // broken even when it was already detached before
     if (detached && this.detachedEnds(edge).length) return true;
     const tol = 3;
     const now = this.endGaps(edge);

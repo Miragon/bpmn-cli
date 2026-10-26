@@ -4,7 +4,8 @@
  */
 import { CliError } from '../CliError.js';
 import { KindError } from '../KindError.js';
-import { is, type El } from './moddle.js';
+import { is, localType, type El } from './moddle.js';
+import { usageError } from './errors.js';
 import { levenshtein } from './fuzzy.js';
 
 export type Family =
@@ -74,7 +75,6 @@ const TRIGGER_ALIASES: Record<string, Trigger> = {
 };
 
 export const KINDS: KindDef[] = [
-  // tasks
   { kind: 'task', type: 'bpmn:Task', family: 'task', aliases: [], prefix: 'Activity', description: 'Generic task' },
   { kind: 'userTask', type: 'bpmn:UserTask', family: 'task', aliases: ['user'], prefix: 'Activity', description: 'Task performed by a human' },
   { kind: 'serviceTask', type: 'bpmn:ServiceTask', family: 'task', aliases: ['service'], prefix: 'Activity', description: 'Automated task (worker / connector)' },
@@ -83,28 +83,23 @@ export const KINDS: KindDef[] = [
   { kind: 'receiveTask', type: 'bpmn:ReceiveTask', family: 'task', aliases: ['receive'], prefix: 'Activity', description: 'Task waiting for a message' },
   { kind: 'manualTask', type: 'bpmn:ManualTask', family: 'task', aliases: ['manual'], prefix: 'Activity', description: 'Task done outside the engine' },
   { kind: 'businessRuleTask', type: 'bpmn:BusinessRuleTask', family: 'task', aliases: ['rule', 'businessRule', 'decision'], prefix: 'Activity', description: 'Task evaluating a decision / rule' },
-  // sub-processes & call activity
   { kind: 'subProcess', type: 'bpmn:SubProcess', family: 'subProcess', aliases: ['sub'], prefix: 'Activity', description: 'Embedded sub-process (expanded by default, use --collapsed to collapse)' },
   { kind: 'eventSubProcess', type: 'bpmn:SubProcess', family: 'subProcess', aliases: ['eventSub'], prefix: 'Activity', props: { triggeredByEvent: true }, description: 'Event sub-process (triggeredByEvent=true); create it as eventSubProcess:<trigger> (message|timer|signal|conditional|error|escalation|compensate) to get its start event in the same command' },
   { kind: 'adHocSubProcess', type: 'bpmn:AdHocSubProcess', family: 'subProcess', aliases: ['adhoc'], prefix: 'Activity', description: 'Ad-hoc sub-process' },
   { kind: 'transaction', type: 'bpmn:Transaction', family: 'subProcess', aliases: [], prefix: 'Activity', description: 'Transaction sub-process' },
   { kind: 'callActivity', type: 'bpmn:CallActivity', family: 'callActivity', aliases: ['call'], prefix: 'Activity', description: 'Calls another process (set calledElement=<processId>)' },
-  // gateways
   { kind: 'exclusiveGateway', type: 'bpmn:ExclusiveGateway', family: 'gateway', aliases: ['xor', 'exclusive'], prefix: 'Gateway', branchesByCondition: true, namedAsQuestion: true, description: 'XOR: exactly one outgoing path (name it as a question, name the branches)' },
   { kind: 'parallelGateway', type: 'bpmn:ParallelGateway', family: 'gateway', aliases: ['and', 'parallel'], prefix: 'Gateway', synchronises: true, description: 'AND: all outgoing paths' },
   { kind: 'inclusiveGateway', type: 'bpmn:InclusiveGateway', family: 'gateway', aliases: ['or', 'inclusive'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, namedAsQuestion: true, description: 'OR: one or more outgoing paths' },
   { kind: 'complexGateway', type: 'bpmn:ComplexGateway', family: 'gateway', aliases: ['complex'], prefix: 'Gateway', branchesByCondition: true, synchronises: true, description: 'Complex: a custom split / join rule (no Camunda 7 / 8 engine runs it)' },
   { kind: 'eventBasedGateway', type: 'bpmn:EventBasedGateway', family: 'gateway', aliases: ['eventBased', 'event-based', 'eventGateway'], prefix: 'Gateway', description: 'Waits for the first of several catching events' },
-  // events
   { kind: 'startEvent', type: 'bpmn:StartEvent', family: 'event', aliases: ['start'], prefix: 'Event', triggers: ['none', 'message', 'timer', 'signal', 'conditional', 'error', 'escalation', 'compensate'], description: 'Start event (error/escalation/compensate only inside an eventSubProcess)' },
   { kind: 'endEvent', type: 'bpmn:EndEvent', family: 'event', aliases: ['end'], prefix: 'Event', triggers: ['none', 'message', 'error', 'signal', 'escalation', 'terminate', 'compensate', 'cancel'], description: 'End event' },
   { kind: 'intermediateCatchEvent', type: 'bpmn:IntermediateCatchEvent', family: 'event', aliases: ['catch', 'icatch', 'catchEvent'], prefix: 'Event', triggers: ['message', 'timer', 'signal', 'conditional', 'link'], description: 'Intermediate catching event (waits)' },
   { kind: 'intermediateThrowEvent', type: 'bpmn:IntermediateThrowEvent', family: 'event', aliases: ['throw', 'ithrow', 'throwEvent'], prefix: 'Event', triggers: ['none', 'message', 'signal', 'escalation', 'link', 'compensate'], description: 'Intermediate throwing event' },
   { kind: 'boundaryEvent', type: 'bpmn:BoundaryEvent', family: 'event', aliases: ['boundary'], prefix: 'Event', triggers: ['message', 'timer', 'error', 'signal', 'escalation', 'conditional', 'compensate', 'cancel'], description: 'Boundary event attached to an activity (--on <hostId>)' },
-  // containers
   { kind: 'participant', type: 'bpmn:Participant', family: 'participant', aliases: ['pool'], prefix: 'Participant', description: 'Pool; the first one wraps the existing process, further ones get a new process (--black-box for none)' },
   { kind: 'lane', type: 'bpmn:Lane', family: 'lane', aliases: [], prefix: 'Lane', description: 'Lane inside a process (--in <processId>)' },
-  // data & artifacts
   { kind: 'dataObject', type: 'bpmn:DataObjectReference', family: 'data', aliases: ['data', 'dataObjectReference'], prefix: 'DataObjectReference', description: 'Data object (reference + backing bpmn:DataObject)' },
   { kind: 'dataStore', type: 'bpmn:DataStoreReference', family: 'data', aliases: ['store', 'dataStoreReference'], prefix: 'DataStoreReference', description: 'Data store reference' },
   { kind: 'textAnnotation', type: 'bpmn:TextAnnotation', family: 'artifact', aliases: ['note', 'annotation', 'text'], prefix: 'TextAnnotation', description: 'Text annotation (connect it to an element to draw an association)' },
@@ -141,10 +136,12 @@ export function normalizeTrigger(raw: string): Trigger | undefined {
   return (Object.keys(TRIGGER_TYPES) as Trigger[]).find((trigger) => trigger === token);
 }
 
-/** Resolves `kind[:trigger]`. Throws KindError with candidates on failure. */
+/**
+ * Resolves `kind[:trigger]`. Throws KindError with candidates on failure.
+ * A namespaced type (`bpmn:UserTask`) is read whole, not as a kind with a trigger.
+ */
 export function parseKind(token: string): ParsedKind {
   const [rawKind = '', ...rest] = token.trim().split(':');
-  // `bpmn:UserTask` contains a colon too: re-join when the first part is a namespace prefix
   let kindToken = rawKind;
   let triggerToken = rest.join(':');
   if (rawKind.toLowerCase() === 'bpmn' && rest.length) {
@@ -287,4 +284,28 @@ export function idPrefixFor(el: El): string {
   if (is(el, 'bpmn:Event')) return 'Event';
   if (is(el, 'bpmn:Gateway')) return 'Gateway';
   return el.$type.split(':')[1] ?? 'Element';
+}
+
+/** The canonical kind for kinds the AI can create, else the lowerCamel local type. */
+export function kindOrTypeLabel(el: El): string {
+  if (kindOf(el)) return kindLabel(el);
+  if (is(el, 'bpmn:DataAssociation')) return 'dataAssociation';
+  const local = localType(el);
+  return local.charAt(0).toLowerCase() + local.slice(1);
+}
+
+/** Non-kind labels `find --kind` also accepts. */
+const EXTRA_KINDS = ['sequenceFlow', 'messageFlow', 'association', 'dataAssociation', 'process', 'collaboration', 'message', 'error', 'signal', 'escalation'];
+
+export function kindFilter(kind: string): (el: El) => boolean {
+  try {
+    const { def, trigger } = parseKind(kind);
+    return (el) => kindOf(el)?.kind === def.kind && (!trigger || triggerOf(el) === trigger);
+  } catch (err) {
+    if (!(err instanceof KindError)) throw err;
+    const token = kind.trim().toLowerCase();
+    const extra = EXTRA_KINDS.find((kind) => kind.toLowerCase() === token);
+    if (extra) return (el) => kindOrTypeLabel(el) === extra;
+    throw usageError(err.message, { candidates: [...err.candidates, ...EXTRA_KINDS.filter((kind) => kind.toLowerCase().includes(token))] });
+  }
 }

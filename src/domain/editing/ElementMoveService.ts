@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError, usageError } from '../document/utils/errors.js';
 import { kindLabel } from '../document/utils/kinds.js';
 import { addTo, is, removeFrom, walk, type El } from '../document/utils/moddle.js';
@@ -23,7 +24,10 @@ import { SequenceFlowService } from './flows/SequenceFlowService.js';
  * new place, keeping its id. A move that leaves every node where it is changes nothing.
  */
 export class ElementMoveService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   move(op: MoveElements): ChangeSet {
     const cs = new ChangeSet();
@@ -33,7 +37,7 @@ export class ElementMoveService {
     if (mode === 'none' && !hasLane) {
       throw usageError('move needs a placement (--after, --before, --flow, --in, --on) and/or --lane <laneId>');
     }
-    const nodes = op.ids.map((id) => this.doc.require(id, 'bpmn:FlowNode'));
+    const nodes = op.ids.map((id) => this.edit.require(id, 'bpmn:FlowNode'));
     const placement = ElementMoveService.placementOf(op);
     if (mode === 'in') {
       this.moveInto(nodes, placement, cs);
@@ -46,7 +50,7 @@ export class ElementMoveService {
         cs.note(`${nodes.map(idOf).join(', ')} ${nodes.length > 1 ? 'are' : 'is'} already ${ElementMoveService.describePlacement(placement)}${nodes.length > 1 ? ', in this order' : ''}`);
         this.optionsOnInFlow(this.doc.incoming(nodes[0]!)[0], placement, cs);
       } else {
-        const moved = new MovedFlows(this.doc, cs, nodes);
+        const moved = new MovedFlows(this.doc, this.edit, cs, nodes);
         nodes.forEach((node, index) => {
           const prev = nodes[index - 1];
           this.moveNode(node, prev ? { after: idOf(prev) } : placement, cs, hasLane, moved, { prev, next: nodes[index + 1] });
@@ -55,8 +59,8 @@ export class ElementMoveService {
       }
     }
     if (hasLane) {
-      const lane = op.lane ? this.doc.require(op.lane, 'bpmn:Lane', 'lane') : undefined;
-      for (const node of nodes) new LaneService(this.doc).assign(node, lane, cs);
+      const lane = op.lane ? this.edit.require(op.lane, 'bpmn:Lane', 'lane') : undefined;
+      for (const node of nodes) new LaneService(this.doc, this.edit).assign(node, lane, cs);
     }
     this.doc.invalidate();
     return cs;
@@ -88,14 +92,14 @@ export class ElementMoveService {
 
   private anchorsOf(placement: PlacementOptions): El[] {
     const out: El[] = [];
-    if (placement.after) out.push(this.doc.require(placement.after, 'bpmn:FlowNode'));
-    if (placement.before) out.push(this.doc.require(placement.before, 'bpmn:FlowNode'));
+    if (placement.after) out.push(this.edit.require(placement.after, 'bpmn:FlowNode'));
+    if (placement.before) out.push(this.edit.require(placement.before, 'bpmn:FlowNode'));
     if (placement.flow) {
-      const flow = this.doc.require(placement.flow, 'bpmn:SequenceFlow', 'sequence flow');
+      const flow = this.edit.require(placement.flow, 'bpmn:SequenceFlow', 'sequence flow');
       out.push(flow.get<El>('sourceRef'), flow.get<El>('targetRef'));
     }
-    if (placement.on) out.push(this.doc.require(placement.on, 'bpmn:Activity', 'activity'));
-    if (placement.in) out.push(this.doc.requireScope(placement.in));
+    if (placement.on) out.push(this.edit.require(placement.on, 'bpmn:Activity', 'activity'));
+    if (placement.in) out.push(this.edit.requireScope(placement.in));
     return out;
   }
 
@@ -136,9 +140,9 @@ export class ElementMoveService {
   private assertChainAnchor(nodes: El[], placementOptions: PlacementOptions): void {
     const mode = NodePlacementService.modeOf(placementOptions);
     const later = nodes.slice(1);
-    const flow = mode === 'flow' ? this.doc.require(placementOptions.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
-    const after = mode === 'after' || mode === 'between' ? this.doc.require(placementOptions.after!, 'bpmn:FlowNode') : flow?.get<El>('sourceRef');
-    const before = mode === 'before' || mode === 'between' ? this.doc.require(placementOptions.before!, 'bpmn:FlowNode') : undefined;
+    const flow = mode === 'flow' ? this.edit.require(placementOptions.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
+    const after = mode === 'after' || mode === 'between' ? this.edit.require(placementOptions.after!, 'bpmn:FlowNode') : flow?.get<El>('sourceRef');
+    const before = mode === 'before' || mode === 'between' ? this.edit.require(placementOptions.before!, 'bpmn:FlowNode') : undefined;
     let anchor = after;
     let holder = after && later.find((laterNode) => ElementMoveService.isInside(laterNode, after));
     if (!holder && before) {
@@ -168,9 +172,9 @@ export class ElementMoveService {
     if (!flow) return;
     const old = idOf(flow);
     const renamed = placement.flowId !== undefined && placement.flowId !== old;
-    if (renamed) new IdRenameService(this.doc).rename(flow, placement.flowId!);
+    if (renamed) new IdRenameService(this.doc, this.edit).rename(flow, placement.flowId!);
     const options = new ChangeSet();
-    new FlowOptions(placement).apply(this.doc, flow, options);
+    new FlowOptions(placement).apply(this.doc, this.edit, flow, options);
     if (!renamed && !options.changed.length) return;
     cs.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail}${renamed ? ` (renamed from ${old})` : ''}`));
   }
@@ -195,14 +199,14 @@ export class ElementMoveService {
     const last = nodes[nodes.length - 1]!;
     const mode = NodePlacementService.modeOf(placement);
     if (mode === 'after') {
-      const afterNode = this.doc.require(placement.after!, 'bpmn:FlowNode');
+      const afterNode = this.edit.require(placement.after!, 'bpmn:FlowNode');
       return !is(afterNode, 'bpmn:Gateway') && onlyIn(first) === afterNode;
     }
     if (mode === 'before') {
-      const beforeNode = this.doc.require(placement.before!, 'bpmn:FlowNode');
+      const beforeNode = this.edit.require(placement.before!, 'bpmn:FlowNode');
       return !(is(beforeNode, 'bpmn:Gateway') && this.doc.incoming(beforeNode).length >= 2) && onlyOut(last) === beforeNode;
     }
-    if (mode === 'between') return onlyIn(first) === this.doc.require(placement.after!, 'bpmn:FlowNode') && onlyOut(last) === this.doc.require(placement.before!, 'bpmn:FlowNode');
+    if (mode === 'between') return onlyIn(first) === this.edit.require(placement.after!, 'bpmn:FlowNode') && onlyOut(last) === this.edit.require(placement.before!, 'bpmn:FlowNode');
     return false;
   }
 
@@ -243,7 +247,7 @@ export class ElementMoveService {
           }
           continue;
         }
-        new SequenceFlowService(this.doc).remove(flow, cs);
+        new SequenceFlowService(this.doc, this.edit).remove(flow, cs);
         cs.remove(ChangeSet.flowEntryOf(flow));
         cs.warn({
           code: 'W_FLOW_DROPPED',
@@ -273,24 +277,29 @@ export class ElementMoveService {
     for (const id of ids) if (id && !this.doc.has(id)) this.doc.ids.claim(id);
   }
 
+  /**
+   * Moves a node to its placement. For `move a b` the flow a -> b is kept apart: when b is not
+   * bridged, the append after a puts it back as it was. The node's own and inherited lane are
+   * decided before the placement, as a splice may rename the flow; a gateway's out-flow waits for
+   * the append of the next node (a new branch).
+   */
   private moveNode(node: El, placement: PlacementOptions, cs: ChangeSet, explicitLane: boolean, moved: MovedFlows, chain: { prev?: El; next?: El } = {}): void {
     const { prev, next } = chain;
     ElementMoveService.assertNotBoundary(node);
     const anchors = this.anchorsOf(placement);
     for (const anchor of anchors) ElementMoveService.assertNotInside(node, anchor);
     const oldScope = this.doc.scopeOf(node);
-    const targetScope = new NodePlacementService(this.doc, placement).scope();
+    const targetScope = new NodePlacementService(this.doc, this.edit, placement).scope();
     const boundaries = is(node, 'bpmn:Activity') ? this.doc.boundaryEventsOf(node) : [];
     const incoming = this.doc.incoming(node);
     const outgoing = this.doc.outgoing(node);
     const flowIds = [...incoming, ...outgoing].map(idOf);
-    const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && this.doc.edit.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
+    const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && this.edit.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
     const oldTarget = oldOut?.get<El>('targetRef');
     const outLabel = oldOut && MovedFlows.labelOf(oldOut, node);
-    // a -> b of `move a b`: when b is not bridged, the append after a puts the flow back as it was
-    const fromPrev = prev && incoming.find((flow) => flow.get<El>('sourceRef') === prev && this.doc.edit.keepsFlowId(flow));
+    const fromPrev = prev && incoming.find((flow) => flow.get<El>('sourceRef') === prev && this.edit.keepsFlowId(flow));
     const prevLabel = fromPrev && MovedFlows.labelOf(fromPrev, prev!);
-    const bridge = new FlowBridgeService(this.doc, cs, 'move').single(node, true);
+    const bridge = new FlowBridgeService(this.doc, this.edit, cs, 'move').single(node, true);
     if (bridge) moved.bridged(node, bridge);
     this.reserveIds(flowIds);
     if (oldOut && oldTarget && !this.doc.has(idOf(oldOut))) moved.takeOut(node, oldOut, oldTarget, bridge ? undefined : outLabel);
@@ -298,14 +307,12 @@ export class ElementMoveService {
     const laneBefore = laneOf(this.doc, node);
     this.leaveScope([node, ...boundaries], oldScope, targetScope, cs);
     this.doc.invalidate();
-    // decided before the placement: a splice may rename the flow
     const own = laneBefore && (laneBefore.get<El[] | undefined>('flowNodeRef') ?? []).includes(node) ? laneBefore : undefined;
     const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? LaneInheritance.of(this.doc, placement) : LaneInheritance.NONE;
-    // the gateway's out-flow waits for the append of the next node (a new branch)
     const holdOwn = !!next && is(node, 'bpmn:Gateway');
-    new NodePlacementService(this.doc, placement).place(node, cs, (source) => (source === node && holdOwn ? undefined : moved.spareOf(source)));
+    new NodePlacementService(this.doc, this.edit, placement).place(node, cs, (source) => (source === node && holdOwn ? undefined : moved.spareOf(source)));
     moved.putBack();
-    for (const flow of new Set([...this.doc.incoming(node), ...this.doc.outgoing(node)])) new EventGatewayRule(this.doc).warnFlow(flow, cs);
+    for (const flow of new Set([...this.doc.incoming(node), ...this.doc.outgoing(node)])) new EventGatewayRule(this.doc, this.edit).warnFlow(flow, cs);
     if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
     this.fixFlows(boundaries, targetScope, cs);
     if (own) {
@@ -323,7 +330,7 @@ export class ElementMoveService {
 
 
   private moveInto(nodes: El[], placement: PlacementOptions, cs: ChangeSet): void {
-    const scope = new NodePlacementService(this.doc, placement).scope();
+    const scope = new NodePlacementService(this.doc, this.edit, placement).scope();
     const relocating: El[] = [];
     for (const node of nodes) {
       if (is(node, 'bpmn:BoundaryEvent')) {
@@ -336,7 +343,7 @@ export class ElementMoveService {
       }
       relocating.push(node);
     }
-    new FlowBridgeService(this.doc, cs, 'move').group(relocating);
+    new FlowBridgeService(this.doc, this.edit, cs, 'move').group(relocating);
     const moved: El[] = [];
     for (const node of relocating) {
       const oldScope = this.doc.scopeOf(node);
@@ -357,7 +364,7 @@ export class ElementMoveService {
         element: idOf(node),
       });
     }
-    const host = this.doc.require(placement.on!, 'bpmn:Activity', 'activity');
+    const host = this.edit.require(placement.on!, 'bpmn:Activity', 'activity');
     const oldHost = node.get<El | undefined>('attachedToRef');
     if (oldHost === host) {
       cs.note(`${idOf(node)} is already attached to ${idOf(host)}`);
@@ -366,7 +373,7 @@ export class ElementMoveService {
     const oldScope = this.doc.scopeOf(node);
     const scope = this.doc.scopeOf(host) ?? this.doc.defaultScope();
     this.leaveScope([node], oldScope, scope, cs);
-    new NodePlacementService(this.doc, { on: placement.on! }).place(node, cs);
+    new NodePlacementService(this.doc, this.edit, { on: placement.on! }).place(node, cs);
     this.fixFlows([node], scope, cs);
     this.inheritLane(node, [], host, scope);
     cs.change(ChangeSet.entryOf(node, `moved onto ${idOf(host)}${oldHost ? ` (was ${idOf(oldHost)})` : ''}`));

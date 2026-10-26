@@ -2,13 +2,16 @@ import { CAMUNDA, type CamundaDescriptor } from '../../document/vendor/CamundaDe
 import { ZEEBE, type ZeebeDescriptor } from '../../document/vendor/ZeebeDescriptor.js';
 import { inFamily, isCamunda, ruleName } from '../utils/vendor-family.js';
 
+/**
+ * Child types a vendor element holds at most once. The connector, form field and listener
+ * entries are engine-verified (a second one is ENGINE-01009 on all three C7 engines); the
+ * others are single-valued properties of the descriptor.
+ */
 export const SINGLE_CHILD: Readonly<Record<string, readonly string[]>> = {
-  // engine-verified: a second one is ENGINE-01009 on all three C7 engines
   'camunda:connector': ['camunda:connectorId', 'camunda:inputOutput'],
   'camunda:formField': ['camunda:properties', 'camunda:validation'],
   'camunda:executionListener': ['camunda:script'],
   'camunda:taskListener': ['camunda:script'],
-  // single-valued properties of the descriptor
   'camunda:field': ['camunda:string', 'camunda:expression'],
   'camunda:potentialStarter': ['bpmn:resourceAssignmentExpression'],
 };
@@ -66,7 +69,10 @@ const EXAMPLE_CONTAINER: Readonly<Record<string, string>> = {
  */
 export class ExtensionStructure {
   readonly singleTop: ReadonlySet<string>;
-  /** Containers of child types the camunda descriptor does not describe as types. */
+  /**
+   * Containers of child types the camunda descriptor does not describe as types, such as
+   * camunda:connectorId, a String property of camunda:Connector written as an element.
+   */
   private readonly staticHomes: Readonly<Record<string, string>>;
 
   constructor(
@@ -75,7 +81,6 @@ export class ExtensionStructure {
   ) {
     this.singleTop = new Set([...camunda.singles, ...zeebe.singles]);
     this.staticHomes = {
-      // a String property of camunda:Connector, written as an element
       'camunda:connectorId': 'camunda:connector',
       ...zeebe.nestedHomes(),
     };

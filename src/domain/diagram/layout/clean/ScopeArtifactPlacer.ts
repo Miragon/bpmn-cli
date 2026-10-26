@@ -13,6 +13,7 @@ import { routedSegments, shiftScope } from '../../utils/scope.js';
 export class ScopeArtifactPlacer {
   constructor(private readonly layout: ScopeLayout) {}
 
+  /** A link with an end in a nested sub-process is drawn once both shapes exist. */
   build(scope: El, byId: Map<string, GNode>): void {
     const { layout } = this;
     const artifacts: GArtifact[] = [];
@@ -59,7 +60,6 @@ export class ScopeArtifactPlacer {
       const to = resolve(target);
       const art = from && 'links' in from ? (from as GArtifact) : to && 'links' in to ? (to as GArtifact) : undefined;
       if (!from || !to || !art) {
-        // an end in a nested sub-process: drawn once both shapes exist
         if (source && target && !layout.compensations.some((compensation) => compensation.el === el)) layout.crossLinks.push({ el, id: idOf(el), sourceId: idOf(source), targetId: idOf(target) });
         continue;
       }
@@ -91,6 +91,10 @@ export class ScopeArtifactPlacer {
     layout.artifacts = artifacts;
   }
 
+  /**
+   * Data hang below their node, right of the line rising into a join's bottom vertex; unanchored
+   * data go right of the content.
+   */
   placeAttached(): void {
     const { layout } = this;
     const taken: Box[] = [];
@@ -104,14 +108,12 @@ export class ScopeArtifactPlacer {
         taken.push(artifact.box);
         continue;
       }
-      // a join's entries from below rise into its bottom vertex: its data hang right of their line
       const cx = ChannelRouter.entriesFromBelow(node).length ? node.box.x + node.box.width / 2 + 6 + artifact.width / 2 : this.belowX(node);
       let box: Box = { x: Math.round(cx - artifact.width / 2), y: node.box.y + node.box.height + (node.boundary.length ? 24 : 20), width: artifact.width, height: artifact.height };
       while (!free(box)) box = { ...box, x: box.x + artifact.width + 10 };
       artifact.box = box;
       taken.push(box);
     }
-    // unanchored data: right of the content
     let left = layout.width + METRICS.hGap;
     for (const artifact of layout.artifacts) {
       if (artifact.kind === 'annotation' || artifact.anchorNode) continue;
@@ -122,7 +124,11 @@ export class ScopeArtifactPlacer {
     layout.height = Math.max(layout.height, ...layout.artifacts.filter((artifact) => artifact.kind !== 'annotation' || artifact.anchorNode?.host).map((artifact) => artifact.box.y + artifact.box.height));
   }
 
-  /** A note whose spot above its anchor is taken goes into a band above the whole content. */
+  /**
+   * A note whose spot above its anchor is taken goes into a band above the whole content.
+   * The label of an event on its host's top border blocks the spot above the host too. The band
+   * holds its notes in anchor order, so no two association lines cross.
+   */
   placeAnnotations(): void {
     const { layout } = this;
     const notes = layout.artifacts.filter((artifact) => artifact.kind === 'annotation' && !(artifact.anchorNode?.host));
@@ -132,7 +138,6 @@ export class ScopeArtifactPlacer {
       boxes.push(node.box);
       for (const event of node.boundary) {
         boxes.push(event.box);
-        // the label of an event on its host's top border lies above the host, where a note would go
         const label = event.onTop ? ScopeLabels.of(event, 'boundary') : undefined;
         if (label) boxes.push(label);
       }
@@ -173,7 +178,6 @@ export class ScopeArtifactPlacer {
       } else band.push(note);
     }
     if (band.length) {
-      // in anchor order, so no two association lines cross
       const topBand = Math.max(...band.map((note) => note.height)) + METRICS.vGap;
       shiftScope(layout, 0, topBand);
       band.sort((first, second) => anchorX(first) - anchorX(second));
@@ -218,6 +222,10 @@ export class ScopeArtifactPlacer {
     return { x: left - 2, y: top, width: 4, height: 100000 };
   }
 
+  /**
+   * Sibling events, their labels and the drop lines of those on the bottom border (an event on the
+   * top border sends its flows up).
+   */
   private boundaryNoteBlockers(event: GNode, host: GNode): Box[] {
     const out: Box[] = [];
     for (const sibling of host.boundary) {
@@ -225,7 +233,6 @@ export class ScopeArtifactPlacer {
       out.push(sibling.box);
       const label = ScopeLabels.of(sibling, 'boundary');
       if (label) out.push(label);
-      // an event on the top border sends its flows up
       if (sibling.out.length && !sibling.onTop) out.push(this.dropLine(sibling.box.x + sibling.box.width / 2, sibling.box.y));
     }
     const hostY = host.box.y + host.box.height / 2;
@@ -238,6 +245,7 @@ export class ScopeArtifactPlacer {
   /**
    * Lower left of the event below the host; when that covers a sibling event, its label or
    * line, the note tries the lower right, then left of everything it would cover.
+   * Left of the content (x < 0) the note would leave its lane / pool, so that is no candidate.
    */
   private boundaryNoteBox(note: GArtifact, event: GNode, host: GNode, free: (box: Box) => boolean, nodes: Box[]): Box {
     const blockers = this.boundaryNoteBlockers(event, host);
@@ -256,7 +264,6 @@ export class ScopeArtifactPlacer {
     const far = Math.min(near, Math.min(...blockers.map((blocker) => blocker.x)) - 8 - note.width);
     for (let attempt = 0; attempt < 6; attempt++) {
       const dy = attempt * (note.height + 8);
-      // left of the content (x < 0) the note would leave its lane / pool: not a candidate
       for (const { x: left, y: top } of [{ x: near, y: y0 }, right, ...(far >= 0 ? [{ x: far, y: y0 }] : [])]) {
         const box = { x: left, y: top + dy, width: note.width, height: note.height };
         if (clear(box)) return box;
