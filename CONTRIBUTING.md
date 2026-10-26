@@ -35,45 +35,51 @@ them on a private corpus without copying it into the repository, are described i
 
 ## How the package is laid out
 
-- `src/`: the three entries (`cli.ts`, `api.ts`, the browser-safe `index.ts`) and one folder per
-  stage of the pipeline. `src/report/CommandCatalogue.ts` lists every command with its arguments,
+- `src/`: the four entries in the root and three rings around the domain (ports and adapters).
+  The entries wire the rings: `cli.ts` starts the `Cli` with the file adapters, `node.ts` is
+  `@miragon/bpmn-cli/node`, `api.ts` the in-memory functions (the only place they wire the services to the in-memory adapters; `index.ts` re-exports them), and `index.ts` the browser-safe
+  core. `src/adapters/in/report/CommandCatalogue.ts` lists every command with its arguments,
   its `--help` text and its guide usage, and the options of every write: the commander wiring in
-  `src/commands/` and `bpmn guide` both read it. `src/report/guide.ts` holds the error catalogue
-  and the other hand-written tables that `bpmn guide` (`AgentGuide.ts`) and `bpmn kinds`
-  (`KindsReference.ts`) print.
+  `src/adapters/in/cli/` and `bpmn guide` both read it. `src/adapters/in/report/guide.ts` holds the
+  error catalogue and the other hand-written tables that `bpmn guide` (`AgentGuide.ts`) and
+  `bpmn kinds` (`KindsReference.ts`) print.
 
   | folder | holds |
   | --- | --- |
-  | `shared/` | errors, used everywhere |
-  | `model/` | the moddle tree, kinds, the read helpers views and ops share (lanes, nested slots, extensions, decision links), `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator` |
-  | `ids/` | id words and slugs, the file's id style, the declared id conventions |
-  | `xml/` | the text-preserving write, the positional XML reader, the encoding |
-  | `platform/` | Camunda 7 / 8 knowledge; `profiles/` holds the engine rules that load on demand |
-  | `ops/` | the semantic edits (`add`, `connect`, `set`, ...); `flows/`, `events/`, `extensions/` and `participants/` hold what several of them share, `parsing/` the ops JSON of `apply` |
-  | `drawing/` | the drawing (BPMN DI): reading and writing planes, frames, groups, the geometry and the checkpoint every engine shares |
-  | `layout/` | the layout engines: `clean/` redraws (`FullLayout`), `incremental/` keeps a hand-made drawing (placers, routers, the space tool); the debug sink |
-  | `format/` | the format ops (`place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`) |
-  | `render/` | the SVG of a diagram |
-  | `validate/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with |
-  | `query/` | the read views: `show`, `find`, `--around`, `--context`, the selectors |
-  | `pipeline/` | the transactions: `EditTransaction` (`mutateDoc`) with its `DiagramUpdate`, `Relayout` (`layoutDoc`), `DocCheck` (`checkDoc`) |
-  | `report/` | what a command prints, as text and JSON, and the guide |
-  | `node/` | the Node-only layer (`@miragon/bpmn-cli/node`): files, the `.bpmnlintrc`, PNG |
-  | `commands/` | the CLI: the `Cli` (commander, streams, exit codes, errors) and one class per command |
+  | `domain/document/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator`, the errors; `ids/` (id words, the file's id style, the declared id conventions), `xml/` (the text-preserving write, the encoding), `vendor/` (Camunda 7 / 8 knowledge) |
+  | `domain/commands/` | the commands a caller can ask for (`EditCommand`: `AddElement`, `PlaceShapes`, ...), the ops JSON of `apply` and its aliases |
+  | `domain/diagram/` | the drawing (BPMN DI): `di/` reads and writes planes, frames, groups and the checkpoint every engine shares, `layout/` holds the engines (`clean/` redraws with `FullLayout`, `incremental/` keeps a hand-made drawing), `DrawnDiagram` is the drawing the diagram commands change and `format/` the services that change it (`ShapePlacementService`, `SpaceInsertionService`, ...) |
+  | `domain/editing/` | the services that change the model (`ElementCreationService`, `ElementMoveService`, `PropertyService`, ...; `flows/`, `events/`, `extensions/`, `participants/`) |
+  | `domain/validation/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with; `profiles/` holds the engine rules that load on demand |
+  | `domain/views/` | the read views (`show`, `find`, `--around`, `--context`, the selectors) and `render/`, the SVG of a diagram |
+  | `domain/batch/` | one batch of commands on a document in memory: `EditBatchService` (guard, commands, validation, layout, result), `ModelCommandService` and `DiagramCommandService` hand each command to its domain service, `BatchLayoutService` lays the drawing out between them; the top of the domain, nothing imports it back |
+  | `application/port/in/` | one contract per use case, the way in: an interface with its `Command` and `Result` (`EditDocumentUseCase`, `RelayoutDiagramUseCase`, `ValidateDocumentUseCase`, `ShowModelUseCase`, ...) |
+  | `application/port/out/` | what the application needs from outside, named after what it does: `LoadDocumentPort`, `SaveDocumentPort`, `LoadProjectSettingsPort` (the `.bpmnlintrc`), `WriteImagePort` |
+  | `application/service/` | one service per use case that implements its contract (`EditDocumentService implements EditDocumentUseCase`): load, let the domain work, save, all through the outbound ports |
+  | `adapters/in/cli/` | the driving adapter: the `Cli` (commander, streams, exit codes, errors) and one class per command; it knows the use cases only by their contracts |
+  | `adapters/in/report/` | what a use case's result looks like to the one who asked: text and JSON reports (`MutationText`, `MutationReportBuilder`, `ValidationText`, ...), the views as text, and the reference the guide and `bpmn kinds` print; the CLI prints them and `index.ts` / `api.ts` return them |
+  | `adapters/out/files/` | the driven adapters on disk, Node only: `FileDocumentStore`, `BpmnlintProjectSettings`, `FileImageWriter` (PNG) |
+  | `adapters/out/memory/` | the driven adapters of the in-memory API: `InMemoryDocumentStore`, `NoProjectSettings` |
   | `types/` | type shims for the bpmn-io packages that ship no usable declarations |
 
-  Where new code goes: a change of the model's semantics is an op (`ops/`); reading the model
-  without changing it is a view (`query/`); deciding positions is `layout/`, or `format/` when a
-  user asks for it; geometry more than one engine needs is `drawing/`; text or JSON for the user
-  is `report/`; anything that touches the file system or `process` is `node/`; mapping flags to
-  options and printing a command's result is `commands/` (`cli.ts` only starts the `Cli`).
-  `test/architecture.test.ts` keeps the root of `src/` to the three entries.
+  Where new code goes: a new command is a type in `domain/commands/` and a `...Service` of the
+  domain that `domain/batch/` hands it to; a new command line verb or API function is a contract in
+  `application/port/in/` and a service that implements it; reading the model without changing
+  it is a view (`domain/views/`); deciding positions is `domain/diagram/`; text or JSON for the
+  user is `adapters/in/report/`; anything that touches the file system or `process` is an
+  adapter behind a port of `application/port/out/`; mapping flags to options and printing a
+  command's result is `adapters/in/cli/`. The entries (`cli.ts`, `node.ts`, `api.ts`) create
+  the services with their adapters. `test/architecture.test.ts` checks the rings: the domain
+  imports neither the application nor the adapters, the application no adapter, an adapter no
+  other adapter (the CLI only the reports), the driving adapter no service, only adapters and entries import `node:*`, the
+  domain modules import each other without a cycle, and every service of `application/service/`
+  implements its contract and calls no other.
 
-  **Classes first, helpers in `utils/`.** Each stage builds on classes, one per file, the file
-  named like the class (`model/ModelError.ts`, `drawing/DrawingCheckpoint.ts`). Stateless helper
-  functions live in a `utils/` folder of their stage (`model/utils/moddle.ts`,
-  `shared/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
-  error classes. Outside the entries (`api.ts`, `index.ts`, `node/index.ts`, which keep the
+  **Classes first, helpers in `utils/`.** Each module builds on classes, one per file, the file
+  named like the class (`domain/document/ModelError.ts`, `domain/diagram/di/DrawingCheckpoint.ts`). Stateless helper
+  functions live in the one `utils/` folder of their module (`domain/document/utils/moddle.ts`,
+  `domain/document/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
+  error classes. Outside the entries (`api.ts`, `index.ts`, `node.ts`, which keep the
   package's public functions and delegate to the classes) there are no free functions. The
   domain terms the classes are named after are in [GLOSSARY.md](GLOSSARY.md).
 - `test/`: the vitest suite. It also pins the documentation: the README quick start and the
@@ -110,12 +116,12 @@ the tests pin those findings, and bpmn-cli uses bpmnlint's `Linter` beyond its d
 
 `camunda-bpmn-moddle` (pinned to `8.0.1`) is a development dependency: its Camunda 7 descriptor
 says which `camunda:` attributes and extension elements belong where (placement, `validate`), and
-it is inlined into `src/platform/camunda-descriptor.ts` by `node tools/gen-camunda-descriptor.mjs`
+it is inlined into `src/domain/document/vendor/camunda-descriptor.ts` by `node tools/gen-camunda-descriptor.mjs`
 (run it after updating the package; a test fails while the copy differs), so the published package
 reads the copy, without the package and without file access. It is never registered with
 bpmn-moddle, so camunda content stays untyped and the serialisation is unchanged.
 `zeebe-bpmn-moddle` (pinned to `2.0.0`) is the same for Camunda 8: its Zeebe descriptor is inlined
-into `src/platform/zeebe-descriptor.ts` by the same tool and read as data (placement and known
+into `src/domain/document/vendor/zeebe-descriptor.ts` by the same tool and read as data (placement and known
 names of zeebe content, see [Camunda 8](docs/camunda.md#camunda-8)).
 
 ## Ground rules
@@ -126,7 +132,7 @@ names of zeebe content, see [Camunda 8](docs/camunda.md#camunda-8)).
   generated from them via [release-please](https://github.com/googleapis/release-please), so a
   `feat` or `fix` title is what users read in the release notes.
 - **Documentation moves with the code.** A change to a command, an option or an output also
-  changes `src/report/CommandCatalogue.ts` or `src/report/guide.ts` and the matching page in `docs/`.
+  changes `src/adapters/in/report/CommandCatalogue.ts` or `src/adapters/in/report/guide.ts` and the matching page in `docs/`.
 
 ## Before opening a PR
 

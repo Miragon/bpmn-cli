@@ -2,7 +2,7 @@
  * Camunda 8 after the step 3 verifier round (each finding with a test that
  * failed before the fix):
  *
- *  - FEEL is parsed (src/platform/profiles/FeelParser.ts): the 762 expressions of
+ *  - FEEL is parsed (src/domain/validation/profiles/FeelParser.ts): the 762 expressions of
  *    fixtures/c8/feel-verdicts.json were deployed to Camunda 8.9.22 as flow
  *    conditions; the check agrees with the engine on every one (`&`, `|`,
  *    `<>`, `>>`, `%`, if without else, AND, `:=` ... are refused; ranges,
@@ -28,14 +28,14 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { runOps } from '../src/index.js';
 import { mutateDoc } from '../src/index.js';
-import { FeelExpression } from '../src/platform/profiles/FeelExpression.js';
-import { TimerValue } from '../src/platform/profiles/TimerValue.js';
+import { FeelExpression } from '../src/domain/validation/profiles/FeelExpression.js';
+import { TimerValue } from '../src/domain/validation/profiles/TimerValue.js';
 import { loadProfiles, runProfile } from '../src/index.js';
 import { guideText, kindsSections } from '../src/index.js';
-import { KINDS_SECTION_NAMES } from '../src/report/KindsReference.js';
+import { KINDS_SECTION_NAMES } from '../src/adapters/in/report/KindsReference.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
 await loadProfiles();

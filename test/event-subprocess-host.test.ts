@@ -4,14 +4,14 @@
  * attach as well). add --on and move --on refuse it, validate reports it.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { El } from '../src/model/utils/moddle.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
 import { runOps } from '../src/index.js';
-import type { Op } from '../src/ops/types.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 import { validateDoc } from '../src/index.js';
 import { definitionsXml } from './helpers.js';
-import { NodeMover } from '../src/ops/NodeMover.js';
+import { ElementMoveService } from '../src/domain/editing/ElementMoveService.js';
 
 const TIMER = '<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>';
 
@@ -53,7 +53,7 @@ async function caughtAsync(fn: () => Promise<unknown>): Promise<{ code?: string;
 describe('boundary events on an event sub-process (#75)', () => {
   it('add --on an event sub-process is refused with E_INVALID_HOST', async () => {
     const doc = await Doc.fromXml(ORDER);
-    const err = caught(() => runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', id: 'Event_New', on: 'Activity_CancelOrder', timer: 'PT1H' } as Op]));
+    const err = caught(() => runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', id: 'Event_New', on: 'Activity_CancelOrder', timer: 'PT1H' } as EditCommand]));
     expect(err.code).toBe('E_INVALID_HOST');
     expect(err.message).toMatch(/event sub-process/);
     expect(doc.has('Event_New')).toBe(false);
@@ -61,7 +61,7 @@ describe('boundary events on an event sub-process (#75)', () => {
 
   it('move --on an event sub-process is refused with E_INVALID_HOST', async () => {
     const doc = await Doc.fromXml(ORDER);
-    expect(caught(() => new NodeMover(doc).move({ op: 'move', ids: ['Event_ShipTimeout'], on: 'Activity_CancelOrder' })).code).toBe('E_INVALID_HOST');
+    expect(caught(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Event_ShipTimeout'], on: 'Activity_CancelOrder' })).code).toBe('E_INVALID_HOST');
     expect(doc.require('Event_ShipTimeout').get<El>('attachedToRef').get('id')).toBe('Activity_Ship');
   });
 

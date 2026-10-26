@@ -1,5 +1,5 @@
 /**
- * The command classes (src/commands/) run in-process: a Cli with streams of
+ * The command classes (src/adapters/in/cli/) run in-process: a Cli with streams of
  * the test's own, no spawned binary, no build.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { afterAll, describe, expect, it } from 'vitest';
-import { Cli, type CliIo } from '../src/commands/Cli.js';
+import { Cli, type CliIo } from '../src/adapters/in/cli/Cli.js';
+import { FILE_USE_CASES } from './helpers.js';
 import { guideShort } from '../src/index.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'bpmn-cli-commands-'));
@@ -23,7 +24,7 @@ async function bpmn(args: string[], stdin = ''): Promise<{ code: number; out: st
     stdin: Readable.from([Buffer.from(stdin)]),
     env: {},
   };
-  const cli = new Cli('9.9.9', io);
+  const cli = new Cli('9.9.9', FILE_USE_CASES, io);
   await cli.run(['node', 'bpmn', ...args]);
   return { code: cli.exitCode ?? 0, out, err };
 }
@@ -60,7 +61,7 @@ describe('Cli in-process', () => {
   it('reads the environment it is given, not the process environment', async () => {
     const io = { env: { BPMN_KEEP_FLOW_IDS: 'maybe' } };
     let err = '';
-    const cli = new Cli('9.9.9', { stdout: { write: () => true }, stderr: { write: (chunk: string | Uint8Array) => ((err += String(chunk)), true) }, stdin: Readable.from([]), ...io });
+    const cli = new Cli('9.9.9', FILE_USE_CASES, { stdout: { write: () => true }, stderr: { write: (chunk: string | Uint8Array) => ((err += String(chunk)), true) }, stdin: Readable.from([]), ...io });
     await cli.run(['node', 'bpmn', 'add', join(dir, 'order.bpmn'), 'userTask', 'K']);
     expect(cli.exitCode).toBe(1);
     expect(err).toContain('BPMN_KEEP_FLOW_IDS=maybe is not a switch value');

@@ -11,16 +11,16 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { type LayoutProblem, diffProblems } from '../src/drawing/utils/problems.js';
-import type { Plane } from '../src/drawing/types.js';
-import { ElementSelector } from '../src/query/ElementSelector.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { type LayoutProblem, diffProblems } from '../src/domain/diagram/utils/problems.js';
+import type { Plane } from '../src/domain/diagram/di/types.js';
+import { ElementSelector } from '../src/domain/views/ElementSelector.js';
 import { changeHighlight, CliError, HALO_COLORS, MIN_LABEL_SCALE, mutateDoc, parseOps, renderDocSvg, renderSvg, aroundView, mutationReport } from '../src/index.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { ProblemLocator } from '../src/drawing/ProblemLocator.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { is } from '../src/model/utils/moddle.js';
-import { renderPng } from '../src/node/index.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/domain/diagram/di/ProblemLocator.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { is } from '../src/domain/document/utils/moddle.js';
+import { renderPng } from '../src/node.js';
 // @ts-expect-error plain ESM tooling without type declarations
 import { libExecutor } from '../tools/fuzz/lib/exec.mjs';
 // @ts-expect-error plain ESM tooling without type declarations

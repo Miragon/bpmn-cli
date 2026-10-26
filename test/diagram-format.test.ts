@@ -1,7 +1,8 @@
 /**
- * Format operations (src/format/FormatOps.ts) through the write pipeline: place,
+ * Format operations (src/domain/batch/DiagramCommandService.ts) through the write pipeline: place,
  * align, color, label, route, space, tidy and lane order, their refusals,
- * batch semantics (after the semantic ops, in batch order, all or nothing)
+ * batch semantics (in batch order, each after the layout of the model commands before it,
+ * all or nothing)
  * and the persistence of formatting over later writes; plus the read side
  * (layoutView, `show --layout`).
  *
@@ -12,24 +13,24 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OPS_SCHEMA } from '../src/ops/parsing/OpsSchemaBuilder.js';
+import { OPS_SCHEMA } from '../src/domain/commands/OpsSchemaBuilder.js';
 import { parseOps, kindsJson, layoutView, renderLayoutView } from '../src/index.js';
-import { FORMAT_OP_NAMES } from '../src/ops/parsing/utils/op-names.js';
-import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape } from '../src/drawing/types.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { isCliError } from '../src/shared/utils/errors.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/index.js';
+import { FORMAT_OP_NAMES } from '../src/domain/commands/utils/op-names.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DEdge, DShape } from '../src/domain/diagram/di/types.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
+import { mutateFile } from '../src/node.js';
 import { mutateDoc } from '../src/index.js';
-import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
+import type { MutationOptions, MutationResult } from '../src/domain/batch/types.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
 /* ------------------------------------------------------------------ */
 
-const BASE: Op[] = [
+const BASE: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -39,7 +40,7 @@ const BASE: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'E2', name: 'Stopped', after: 'C' },
 ];
 
-const WITH_SUB: Op[] = [
+const WITH_SUB: EditCommand[] = [
   ...BASE,
   { op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', after: 'B' },
   { op: 'add', kind: 'startEvent', id: 'SS', in: 'Sub' },
@@ -49,20 +50,20 @@ const WITH_SUB: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'TE', name: 'Too late', after: 'TB' },
 ];
 
-const POOLED: Op[] = [
+const POOLED: EditCommand[] = [
   ...BASE,
   { op: 'add', kind: 'participant', id: 'Pool', name: 'Org' },
   { op: 'add', kind: 'lane', id: 'L1', name: 'Clerk', in: 'Pool', members: ['S', 'A', 'G', 'B', 'E', 'C', 'E2'] },
   { op: 'add', kind: 'lane', id: 'L2', name: 'Boss', in: 'Pool' },
 ];
 
-async function engineXml(ops: Op[]): Promise<string> {
+async function engineXml(ops: EditCommand[]): Promise<string> {
   const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
   return result.xml;
 }
 
 /** The engine drawing with every coordinate moved: hand-made as far as `auto` is concerned. */
-async function handXml(ops: Op[], dx = 13, dy = 7): Promise<string> {
+async function handXml(ops: EditCommand[], dx = 13, dy = 7): Promise<string> {
   const doc = await Doc.fromXml(await engineXml(ops));
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
@@ -95,14 +96,14 @@ beforeAll(async () => {
   plainHand = await handXml(BASE);
 });
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
   const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
   return { result, after };
 }
 
-async function failure(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ code: string; message: string; op?: number; hint?: string; candidates?: string[]; related?: string[] }> {
+async function failure(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<{ code: string; message: string; op?: number; hint?: string; candidates?: string[]; related?: string[] }> {
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
   } catch (err) {
@@ -509,20 +510,45 @@ describe('order lanes', () => {
 /* ------------------------------------------------------------------ */
 
 describe('format ops in a batch', () => {
-  it('run after the semantic ops and the layout, in batch order', async () => {
+  it('run in batch order, after the layout of the model commands before them', async () => {
     const { result, after } = await run(pooledHand, [
-      { op: 'place', ids: ['X'], above: 'C' },
       { op: 'add', kind: 'task', id: 'X', name: 'Extra', after: 'C', before: 'E2' },
+      { op: 'place', ids: ['X'], above: 'C' },
       { op: 'color', ids: ['X'], color: 'purple' },
     ]);
     expect(result.layout.mode).toBe('incremental');
     expect(result.layout.placed).toContain('X');
-    expect(result.layout.format!.map((step) => `${step.op}#${step.index}`)).toEqual(['place#0', 'color#2']);
+    expect(result.layout.format!.map((step) => `${step.op}#${step.index}`)).toEqual(['place#1', 'color#2']);
     const drawn = shapes(after);
     expect(bottom(drawn.get('X')!)).toBeLessThanOrEqual(drawn.get('C')!.bounds.y - 20);
     expect(inside(drawn.get('X')!, drawn.get('L1')!)).toBe(true);
     expect(layoutView(after.definitions).colors).toEqual([{ id: 'X', color: 'purple', fill: '#e1bee7', stroke: '#5b176d' }]);
     expect(hardAdded(result)).toEqual([]);
+  });
+
+  it('a model command after a diagram command keeps what the diagram command drew', async () => {
+    const { result, after } = await run(pooledHand, [
+      { op: 'add', kind: 'task', id: 'X', name: 'Extra', after: 'C', before: 'E2' },
+      { op: 'place', ids: ['X'], above: 'C' },
+      { op: 'add', kind: 'task', id: 'Y', name: 'Archive', after: 'B', before: 'E' },
+      { op: 'color', ids: ['Y'], color: 'green' },
+    ]);
+    expect(result.layout.mode).toBe('incremental');
+    expect(result.layout.placed).toEqual(expect.arrayContaining(['X', 'Y']));
+    expect(result.layout.format!.map((step) => `${step.op}#${step.index}`)).toEqual(['place#1', 'color#3']);
+    const drawn = shapes(after);
+    expect(bottom(drawn.get('X')!)).toBeLessThanOrEqual(drawn.get('C')!.bounds.y - 20);
+    expect(drawn.get('Y')).toBeDefined();
+    expect(layoutView(after.definitions).colors.map((colored) => colored.id)).toEqual(['Y']);
+    expect(hardAdded(result)).toEqual([]);
+  });
+
+  it('a diagram command cannot name an element a later command adds', async () => {
+    const refused = await failure(pooledHand, [
+      { op: 'place', ids: ['X'], above: 'C' },
+      { op: 'add', kind: 'task', id: 'X', name: 'Extra', after: 'C', before: 'E2' },
+    ]);
+    expect(refused).toMatchObject({ code: 'E_NOT_FOUND', op: 0 });
   });
 
   it('on a new file: drawn in full first, then formatted', async () => {

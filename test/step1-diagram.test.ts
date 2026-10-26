@@ -20,20 +20,20 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { diffProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/drawing/utils/problems.js';
-import type { DEdge, DShape, Plane } from '../src/drawing/types.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { ProblemLocator } from '../src/drawing/ProblemLocator.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Drawing } from '../src/layout/incremental/Drawing.js';
-import { PlaneWriter } from '../src/drawing/PlaneWriter.js';
-import { isCliError } from '../src/shared/utils/errors.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
-import { mutateFile } from '../src/node/index.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { diffProblems, WEIGHTS, type LayoutProblem, type MetricKey } from '../src/domain/diagram/utils/problems.js';
+import type { DEdge, DShape, Plane } from '../src/domain/diagram/di/types.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/domain/diagram/di/ProblemLocator.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { Drawing } from '../src/domain/diagram/layout/incremental/Drawing.js';
+import { PlaneWriter } from '../src/domain/diagram/di/PlaneWriter.js';
+import { isCliError } from '../src/domain/document/utils/errors.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
+import { mutateFile } from '../src/node.js';
 import { mutateDoc } from '../src/index.js';
-import type { MutationOptions, MutationResult } from '../src/pipeline/index.js';
+import type { MutationOptions, MutationResult } from '../src/domain/batch/types.js';
 import { definitionsXml } from './helpers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -42,14 +42,14 @@ function fixture(name: string): string {
   return readFileSync(join(HERE, 'fixtures', 'step1', name), 'utf8');
 }
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental', ...opts });
   const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);
   return { result, after };
 }
 
-async function failure(xml: string, ops: Op[]): Promise<{ code: string; message: string; related?: string[] }> {
+async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string; message: string; related?: string[] }> {
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
@@ -220,7 +220,7 @@ describe('an unconnected node goes below its own container content', () => {
 describe('place / align never push the reference or its frames away', () => {
   it('refuses a row in another pool that its own pool could only reach by pushing that pool away', async () => {
     const xml = fixture('two-pools.bpmn');
-    for (const op of [{ op: 'place', ids: ['Need'], rowOf: 'Pick' }, { op: 'align', ids: ['Need'], axis: 'row', to: 'Pick' }] as Op[]) {
+    for (const op of [{ op: 'place', ids: ['Need'], rowOf: 'Pick' }, { op: 'align', ids: ['Need'], axis: 'row', to: 'Pick' }] as EditCommand[]) {
       const failed = await failure(xml, [op]);
       expect(failed.code).toBe('E_NO_ROOM');
       expect(failed.message).toMatch(/push away pool Supplier of Pick/);

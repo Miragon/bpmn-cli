@@ -35,7 +35,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { mutateDoc } from '../src/index.js';
 import { loadProfiles, runProfile } from '../src/index.js';
 import { validateDoc } from '../src/index.js';

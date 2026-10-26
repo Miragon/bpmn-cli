@@ -24,8 +24,8 @@
       "default": "./dist/index.js"
     },
     "./node": {
-      "types": "./dist/node/index.d.ts",
-      "default": "./dist/node/index.js"
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
     },
     "./package.json": "./package.json"
   },

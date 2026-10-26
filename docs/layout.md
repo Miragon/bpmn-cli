@@ -39,7 +39,8 @@ Every write reports which mode ran, what moved, and the layout score before and 
 ## Formatting without XML
 
 Format commands change only the drawing and name elements, never coordinates. In an `apply` batch
-they run after the model ops and the layout, all or nothing.
+they run in batch order, each after the layout of the model ops before it, all or nothing: a model
+op after a format op keeps what the format op drew.
 
 | command | effect |
 | --- | --- |

@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 
 const ROOT = join(import.meta.dirname, '..');
 const BIN = join(ROOT, 'dist', 'cli.js');

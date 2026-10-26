@@ -1,13 +1,13 @@
 /**
  * The geometry tools of the incremental engine on hand-built planes:
- * src/layout/incremental/SpaceTool.ts (space tool, strip closing, frame growth) and
- * src/layout/incremental/Separation.ts (local overlap removal, tidy).
+ * src/domain/diagram/layout/incremental/SpaceTool.ts (space tool, strip closing, frame growth) and
+ * src/domain/diagram/layout/incremental/Separation.ts (local overlap removal, tidy).
  */
 import { describe, expect, it } from 'vitest';
-import type { Box, Point } from '../src/drawing/types.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { DEdge, DShape, Plane } from '../src/drawing/types.js';
-import { Drawing } from '../src/layout/incremental/Drawing.js';
+import type { Box, Point } from '../src/domain/diagram/di/types.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { DEdge, DShape, Plane } from '../src/domain/diagram/di/types.js';
+import { Drawing } from '../src/domain/diagram/layout/incremental/Drawing.js';
 
 const EL = {} as El;
 

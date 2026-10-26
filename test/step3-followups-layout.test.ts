@@ -3,7 +3,7 @@
  *
  *  - One batch that splices a task into a flow and then a gateway after it
  *    places both like two commands: in the row, between the old ends (the
- *    chain of new nodes is spliced, layout/incremental/NodePlacer.ts spliceTarget), not on
+ *    chain of new nodes is spliced, domain/diagram/layout/incremental/NodePlacer.ts spliceTarget), not on
  *    a new branch row below.
  *  - A full layout sizes pools and lanes around the labels right of their
  *    content (an end event at the right edge, its label wider than the

@@ -3,47 +3,52 @@
  * CLI command it names, without files or environment, so it runs in Node and in the browser.
  * Errors are CliError instances, exactly what the CLI prints with --json.
  */
-import { OpsParser } from './ops/parsing/OpsParser.js';
-import { LayoutDebug, type DebugSink } from './layout/LayoutDebug.js';
-import type { LayoutMetrics } from './drawing/utils/problems.js';
-import type { LayoutView } from './query/layout-view.js';
-import type { AroundView, ElementContext } from './query/context.js';
-import { LayoutViewBuilder } from './query/LayoutViewBuilder.js';
-import { AroundWindow } from './query/AroundWindow.js';
-import { ElementContextBuilder } from './query/ElementContextBuilder.js';
-import { LayoutAnalysis } from './drawing/LayoutAnalysis.js';
-import type { BpmnlintSeverity } from './validate/bpmnlint-validator.js';
-import { ConventionsTable, type ConventionsView, type Undeclared } from './ids/ConventionsTable.js';
-import type { IdConventions } from './ids/IdConventionsReader.js';
-import { Doc, type NewDocOptions } from './model/Doc.js';
-import { CliError } from './shared/CliError.js';
-import { usageError } from './shared/utils/errors.js';
-import { parseOpsJson } from './ops/parsing/utils/ops-json.js';
-import { AroundText } from './report/AroundText.js';
-import { ContextText } from './report/ContextText.js';
-import { DetailText } from './report/DetailText.js';
-import { LayoutText } from './report/LayoutText.js';
-import { ModelViewText } from './report/ModelViewText.js';
-import { assertKindToken } from './model/utils/kinds.js';
-import type { LayoutEngine } from './layout/FullLayout.js';
-import { ExtensionLister, type ExtensionInfo } from './model/ExtensionLister.js';
-import type { Op } from './ops/types.js';
-import type { LayoutMode, MutationResult } from './pipeline/index.js';
-import { EditTransaction } from './pipeline/EditTransaction.js';
-import { Relayout } from './pipeline/Relayout.js';
-import { DocCheck } from './pipeline/DocCheck.js';
-import type { PlatformChoice } from './platform/PlatformDetection.js';
-import { type MutationReport, type ValidationReport } from './report/command-report.js';
-import type { Validator, ValidatorFinding } from './validate/validators.js';
-import { type ElementDetail, type FindHit, type ModelView } from './query/model-view.js';
-import { ViewRequest, type ShownView, type ViewOptions } from './query/ViewRequest.js';
-import { newProcessChange } from './model/utils/new-process.js';
-import { metricsJson } from './report/utils/metrics-json.js';
-import { ValidationReportBuilder } from './report/ValidationReportBuilder.js';
-import { MutationReportBuilder } from './report/MutationReportBuilder.js';
-import { ElementFinder } from './query/ElementFinder.js';
+import { CommandParser } from './domain/commands/CommandParser.js';
+import { LayoutDebug, type DebugSink } from './domain/diagram/layout/LayoutDebug.js';
+import type { LayoutMetrics } from './domain/diagram/utils/problems.js';
+import type { LayoutView } from './domain/views/layout-view.js';
+import type { AroundView, ElementContext } from './domain/views/context.js';
+import { LayoutViewBuilder } from './domain/views/LayoutViewBuilder.js';
+import { AroundWindow } from './domain/views/AroundWindow.js';
+import { ElementContextBuilder } from './domain/views/ElementContextBuilder.js';
+import { LayoutAnalysis } from './domain/diagram/di/LayoutAnalysis.js';
+import { ConventionsTable, type ConventionsView, type ConventionsXmlOptions } from './domain/document/ids/ConventionsTable.js';
+export type { ConventionsXmlOptions } from './domain/document/ids/ConventionsTable.js';
+import type { IdConventions } from './domain/document/ids/IdConventionsReader.js';
+import { Doc, type NewDocOptions } from './domain/document/Doc.js';
+import { CliError } from './domain/document/CliError.js';
+import { usageError } from './domain/document/utils/errors.js';
+import { parseOpsJson } from './domain/commands/utils/ops-json.js';
+import type { LayoutEngine } from './domain/diagram/layout/FullLayout.js';
+import { ExtensionLister, type ExtensionInfo } from './domain/document/ExtensionLister.js';
+import type { EditCommand } from './domain/commands/types.js';
+import type { LayoutMode, MutationOptions, MutationResult } from './domain/batch/types.js';
+import type { CheckOptions, CheckResult } from './application/port/in/ValidateDocumentUseCase.js';
+import type { LayoutDocOptions } from './application/port/in/RelayoutDiagramUseCase.js';
+import { EditDocumentService } from './application/service/EditDocumentService.js';
+import { InMemoryDocumentStore } from './adapters/out/memory/InMemoryDocumentStore.js';
+import { NoProjectSettings } from './adapters/out/memory/NoProjectSettings.js';
+import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
+import { ValidateDocumentService } from './application/service/ValidateDocumentService.js';
+import type { PlatformChoice } from './domain/document/vendor/PlatformDetection.js';
+import { type MutationReport, type ValidationReport } from './adapters/in/report/command-report.js';
+import type { Validator } from './domain/validation/validators.js';
+import { type ElementDetail, type FindHit, type ModelView } from './domain/views/model-view.js';
+import type { ShownView, ViewOptions } from './domain/views/ViewRequest.js';
+import { assertKindToken } from './domain/document/utils/kinds.js';
+import { ShowModelService } from './application/service/ShowModelService.js';
+import { FindElementsService } from './application/service/FindElementsService.js';
+import { CreateDocumentService } from './application/service/CreateDocumentService.js';
+import { metricsJson } from './adapters/in/report/utils/metrics-json.js';
+import { ValidationReportBuilder } from './adapters/in/report/ValidationReportBuilder.js';
+import { MutationReportBuilder } from './adapters/in/report/MutationReportBuilder.js';
+import { ShownText } from './adapters/in/report/ShownText.js';
 
-export type { ShownView, ViewOptions } from './query/ViewRequest.js';
+/** The in-memory API runs the use cases without files and without a project around the document. */
+const IN_MEMORY = new InMemoryDocumentStore();
+const NO_PROJECT = new NoProjectSettings();
+
+export type { ShownView, ViewOptions } from './domain/views/ViewRequest.js';
 
 /** Options of the writing functions (the CLI's mutation flags). */
 export interface EditOptions {
@@ -85,8 +90,8 @@ function toEditResult(input: string | undefined, mutation: MutationResult): Edit
   return { xml: unchanged ? input : mutation.xml, unchanged, result: report };
 }
 
-function readOps(ops: unknown): Op[] {
-  return new OpsParser().parse(typeof ops === 'string' ? parseOpsJson(ops) : ops);
+function readOps(ops: unknown): EditCommand[] {
+  return new CommandParser().parse(typeof ops === 'string' ? parseOpsJson(ops) : ops);
 }
 
 async function loadXml(xml: string, opts: { force?: boolean }): Promise<Doc> {
@@ -99,15 +104,12 @@ async function loadXml(xml: string, opts: { force?: boolean }): Promise<Doc> {
 export async function applyToXml(xml: string, ops: unknown, opts: EditOptions = {}): Promise<EditResult> {
   const list = readOps(ops);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await new EditTransaction(doc, list, opts).run());
+  return toEditResult(xml, await new EditDocumentService(IN_MEMORY, IN_MEMORY, NO_PROJECT).edit({ ...opts, source: { doc }, commands: list, dryRun: true }));
 }
 
 /** `bpmn new`: a laid-out document with one empty process. */
 export async function newXml(opts: NewDocOptions & EditOptions = {}): Promise<EditResult> {
-  const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target, ...(opts.conventions ? { conventions: opts.conventions } : {}) });
-  const mutation = await new EditTransaction(doc, [], opts).run();
-  mutation.changes.create(newProcessChange(doc, opts.processName));
-  return toEditResult(undefined, mutation);
+  return toEditResult(undefined, await new CreateDocumentService(IN_MEMORY, NO_PROJECT).create({ ...opts, dryRun: true }));
 }
 
 export interface LayoutXmlOptions extends Omit<EditOptions, 'layout'> {
@@ -119,10 +121,9 @@ export interface LayoutXmlOptions extends Omit<EditOptions, 'layout'> {
 
 /** `bpmn layout`: redraws the diagram, or with `tidy` keeps it and removes overlaps. */
 export async function layoutXml(xml: string, opts: LayoutXmlOptions = {}): Promise<EditResult> {
-  const relayout = new Relayout(opts);
-  relayout.assertOptions();
+  RelayoutDiagramService.assertOptions(opts);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await relayout.run(doc));
+  return toEditResult(xml, await new RelayoutDiagramService(IN_MEMORY, IN_MEMORY, NO_PROJECT).relayout({ ...opts, source: { doc }, dryRun: true }));
 }
 
 export interface ValidateXmlOptions {
@@ -135,19 +136,17 @@ export interface ValidateXmlOptions {
 
 /** `bpmn validate --json`: structure, lint, platform profile, validators and a layout dry run. */
 export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): Promise<ValidationReport> {
-  return new ValidationReportBuilder(await new DocCheck(opts).run(await Doc.fromXml(xml, opts.file))).report();
+  return new ValidationReportBuilder(await new ValidateDocumentService(IN_MEMORY, NO_PROJECT).validate({ ...opts, source: { doc: await Doc.fromXml(xml, opts.file) } })).report();
 }
 
 /** `bpmn show` on a parsed document. */
 export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
-  return new ViewRequest(opts).of(doc);
+  return new ShowModelService().show({ ...opts, doc });
 }
 
 /** The text of a view as `bpmn show` prints it, without the final newline. */
 export function renderShown(shown: ShownView): string {
-  const text =
-    shown.kind === 'layout' ? new LayoutText(shown.view).text() : shown.kind === 'detail' ? new DetailText(shown.view).text() : shown.kind === 'context' ? new ContextText(shown.view).text() : shown.kind === 'around' ? new AroundText(shown.view).text() : new ModelViewText(shown.view).text();
-  return text.replace(/\n$/, '');
+  return new ShownText(shown).text();
 }
 
 /** `bpmn show --json`: the model as the agent sees it, or one element, its area, the drawing. */
@@ -157,23 +156,12 @@ export function viewXml(xml: string, opts: ViewOptions & { id: string; context: 
 export function viewXml(xml: string, opts: ViewOptions & { id: string }): Promise<ElementDetail>;
 export function viewXml(xml: string, opts?: ViewOptions): Promise<ModelView>;
 export async function viewXml(xml: string, opts: ViewOptions = {}): Promise<ModelView | ElementDetail | ElementContext | AroundView | LayoutView> {
-  const request = new ViewRequest(opts);
-  return request.of(await Doc.fromXml(xml)).view;
+  return new ShowModelService().show({ ...opts, doc: await Doc.fromXml(xml) }).view;
 }
 
 /** `bpmn show`: the view as text, exactly as the CLI prints it. */
 export async function showXml(xml: string, opts: ViewOptions = {}): Promise<string> {
-  const request = new ViewRequest(opts);
-  return renderShown(request.of(await Doc.fromXml(xml)));
-}
-
-export interface ConventionsXmlOptions {
-  conventions?: IdConventions;
-  file?: string;
-  severity?: BpmnlintSeverity;
-  notes?: ValidatorFinding[];
-  where?: string;
-  undeclared?: Undeclared;
+  return renderShown(new ShowModelService().show({ ...opts, doc: await Doc.fromXml(xml) }));
 }
 
 /** `bpmn show --conventions --json`: the id conventions new ids follow (no xml: a new file). */
@@ -190,7 +178,7 @@ export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'scor
 /** `bpmn find --json`: elements whose id, name or vendor value contains `text` (any case). */
 export async function findXml(xml: string, text: string, opts: { kind?: string } = {}): Promise<FindHit[]> {
   if (opts.kind !== undefined) assertKindToken(opts.kind);
-  return new ElementFinder(await Doc.fromXml(xml)).find(text, opts.kind);
+  return new FindElementsService().find({ doc: await Doc.fromXml(xml), text, ...(opts.kind !== undefined ? { kind: opts.kind } : {}) });
 }
 
 /** `bpmn ext list --json`: the extension elements of an element and its definitions. */
@@ -202,4 +190,19 @@ export async function extensionsXml(xml: string, id: string): Promise<ExtensionI
 /** Sets or, without an argument, clears the process-wide sink of layout diagnostics. */
 export function setLayoutDebug(sink?: DebugSink): void {
   LayoutDebug.setProcessSink(sink);
+}
+
+/** Applies ops to an in-memory document in one batch. */
+export function mutateDoc(doc: Doc, ops: EditCommand[], opts: MutationOptions = {}): Promise<MutationResult> {
+  return new EditDocumentService(IN_MEMORY, IN_MEMORY, NO_PROJECT).edit({ ...opts, source: { doc }, commands: ops, dryRun: true });
+}
+
+/** `bpmn layout` on an in-memory document. */
+export function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<MutationResult> {
+  return new RelayoutDiagramService(IN_MEMORY, IN_MEMORY, NO_PROJECT).relayout({ ...opts, source: { doc }, dryRun: true });
+}
+
+/** What `bpmn validate` finds in a document. */
+export function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
+  return new ValidateDocumentService(IN_MEMORY, NO_PROJECT).validate({ ...opts, source: { doc } });
 }

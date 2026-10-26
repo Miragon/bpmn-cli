@@ -1,5 +1,5 @@
 /**
- * Tests of the single-connection orthogonal router (src/layout/incremental/OrthogonalRouter.ts).
+ * Tests of the single-connection orthogonal router (src/domain/diagram/layout/incremental/OrthogonalRouter.ts).
  *
  * Every route is checked against the contract (`expectValid`): ≥ 2 points,
  * orthogonal segments without zero-length or collinear interior points, the
@@ -9,10 +9,10 @@
  * frame when one is given. The scenarios then assert the shape of the route.
  */
 import { describe, expect, it } from 'vitest';
-import { attachedSide, defaultSides } from '../src/drawing/utils/sides.js';
-import { OrthogonalRouter, type RouteRequest } from '../src/layout/incremental/OrthogonalRouter.js';
-import { type Side } from '../src/drawing/types.js';
-import type { Box, Point } from '../src/drawing/types.js';
+import { attachedSide, defaultSides } from '../src/domain/diagram/utils/sides.js';
+import { OrthogonalRouter, type RouteRequest } from '../src/domain/diagram/layout/incremental/OrthogonalRouter.js';
+import { type Side } from '../src/domain/diagram/di/types.js';
+import type { Box, Point } from '../src/domain/diagram/di/types.js';
 
 const box = (left: number, top: number, width = 100, height = 80): Box => ({ x: left, y: top, width, height });
 const TASK_OUT = defaultSides('task', 'source');

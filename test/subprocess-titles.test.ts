@@ -4,7 +4,7 @@
  * had a compensation event's label on the sub-process's name).
  *
  *  - Full engine: every label of a sub-process's content stays off its title
- *    (drawing/utils/text.ts titleBox, where bpmn-js draws the name) and inside the frame,
+ *    (domain/diagram/utils/text.ts titleBox, where bpmn-js draws the name) and inside the frame,
  *    in both op orders of the maintainer's case, for a gateway in the first
  *    row (its label above, the frame grows at the top), under a title of
  *    four lines, for labels wider than the events (left, right, below) and
@@ -31,10 +31,10 @@
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../src/api.js';
 import { renderSvg } from '../src/index.js';
-import { titleBox } from '../src/drawing/utils/text.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { ProblemLocator } from '../src/drawing/ProblemLocator.js';
-import { parseXml } from '../src/model/utils/moddle.js';
+import { titleBox } from '../src/domain/diagram/utils/text.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { ProblemLocator } from '../src/domain/diagram/di/ProblemLocator.js';
+import { parseXml } from '../src/domain/document/utils/moddle.js';
 
 interface Box {
   x: number;

@@ -1,5 +1,5 @@
 /**
- * The Camunda 7 validation profile (src/platform/): platform detection, one
+ * The Camunda 7 validation profile (src/domain/validation/profiles/): platform detection, one
  * synthetic model per rule with the exact findings it must produce, the
  * `validate` command (--platform, --strict, JSON), and mutations reporting only
  * the findings a change introduced.
@@ -18,8 +18,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { checkFile } from '../src/node/index.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { checkFile } from '../src/node.js';
 import { mutateDoc, detectPlatform, loadProfiles, runProfile, type ProfileFinding } from '../src/index.js';
 import { validateDoc } from '../src/index.js';
 

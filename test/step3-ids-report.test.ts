@@ -9,14 +9,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, validateXml } from '../src/api.js';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { conventionsView } from '../src/index.js';
-import { ID_CONVENTIONS } from '../src/report/guide.js';
-import { cutAt, cutName, idWords, isFiller, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/ids/utils/slug.js';
-import { IdRegistry } from '../src/ids/IdRegistry.js';
-import { connectionRequest, kindRequest } from '../src/ids/utils/requests.js';
-import { IdStyle } from '../src/ids/IdStyle.js';
-import { kindByName } from '../src/model/utils/kinds.js';
+import { ID_CONVENTIONS } from '../src/adapters/in/report/guide.js';
+import { cutAt, cutName, idWords, isFiller, keptTail, MAX_ID, slugify, snakeSlug, transliterate } from '../src/domain/document/utils/slug.js';
+import { IdRegistry } from '../src/domain/document/ids/IdRegistry.js';
+import { connectionRequest, kindRequest } from '../src/domain/document/utils/requests.js';
+import { IdStyle } from '../src/domain/document/ids/IdStyle.js';
+import { kindByName } from '../src/domain/document/utils/kinds.js';
 import { runOps, mutationSummary, renderMutation, renderSummary } from '../src/index.js';
 import { definitionsXml, flowBetween } from './helpers.js';
 

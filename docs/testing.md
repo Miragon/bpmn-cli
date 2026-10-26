@@ -72,7 +72,7 @@ with `--hard warn`) are reported but only fail with `--strict`.
 
 ## Metric kinds
 
-The layout problems come from one library, `src/drawing/LayoutAnalysis.ts` (built into
+The layout problems come from one library, `src/domain/diagram/di/LayoutAnalysis.ts` (built into
 `dist/index.js`). `tools/layout-regress.mjs` has its own copy of the
 harness kinds; the library adds kinds the harness does not measure (for
 example `frameIntrusion`, `frameOverlap`, `degenerateEdge`, `detachedEdge`). The bench, the
@@ -372,8 +372,9 @@ bundle finds the font and `@resvg/resvg-wasm`.
 ## Isomorphism check
 
 The package's main entry (`src/index.ts`, published as `@miragon/bpmn-cli`)
-must run in a browser; only `src/node/` (`@miragon/bpmn-cli/node`), the CLI
-(`src/commands/`, `src/cli.ts`) may touch files, `process` or other Node builtins.
+must run in a browser; only the adapters (`src/adapters/`), the node entry
+(`src/node.ts`, `@miragon/bpmn-cli/node`) and the CLI (`src/cli.ts`) may touch files,
+`process` or other Node builtins.
 
 ```
 npm run build && npm run check:iso     # node tools/iso/check.mjs [--json]
@@ -399,7 +400,7 @@ npx vitest run test/isomorphic.test.ts
   loads, naming both (Rollup / Vite would put that module into the host's
   entry chunk and make the rule chunk import the entry chunk back: a host
   whose entry module awaits a Camunda 7 / 8 call at top level would hang;
-  the rules get the core helpers from `src/platform/profiles/rule-kit.ts`); and
+  the rules get the core helpers from `src/domain/validation/profiles/rule-kit.ts`); and
   when a size is over its budget in
   `tools/iso/budget.json` (KB = 1024 bytes; set to the measured size plus
   about 2 %: raise one only in the change that needs it, with the reason in
@@ -417,11 +418,11 @@ npx vitest run test/isomorphic.test.ts
   `validateXml` with the Camunda 7 and the Camunda 8 profile and with host
   validators, `showXml`, `findXml` and `metricsXml` must give there exactly what they
   give in Node, and `renderSvg` the same SVG. It also checks that the inlined
-  Camunda 7 descriptor (`src/platform/camunda-descriptor.ts`) equals the
+  Camunda 7 descriptor (`src/domain/document/vendor/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
 - The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
-  esbuild make of the `import()` in `src/platform/profiles/PlatformProfiles.ts`), writes a
+  esbuild make of the `import()` in `src/domain/validation/profiles/PlatformProfiles.ts`), writes a
   fresh copy per case, loads it with Node's own loader and records which
   chunk is evaluated: a plain model (also with a host validator, whose error, pre-existing
   error and covered lint warning come out like Node's) and
@@ -440,7 +441,8 @@ npx vitest run test/isomorphic.test.ts
 - `test/api.test.ts` checks that the in-memory API gives what the CLI writes
   and prints for the same input.
 
-When the check fails, move the Node-only code into `src/node/` (or behind an
+When the check fails, move the Node-only code into an adapter in `src/adapters/out/files/`
+behind a port of `src/application/port/out/` (or behind an
 option, like the layout debug lines: `setLayoutDebug`, which the CLI maps to
 `BPMN_LAYOUT_DEBUG`).
 
@@ -596,7 +598,7 @@ draw the engine corpus with the same CLI.
 ## Roundtrip fidelity
 
 A write changes the text of the elements it changed and nothing else
-(src/xml/TextPreservation.ts, src/model/utils/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
+(src/domain/document/xml/TextPreservation.ts, src/domain/document/utils/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
 keep it that way:
 
 - `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
@@ -628,7 +630,7 @@ not from the writer: a file without a diagram is drawn, the incremental
 layout completes missing DI (an edge, a shape, the plane's `bpmnElement`)
 and routes a line that does not reach its ends again (`detachedEdge`).
 With `--no-layout` every no-op must be byte-identical; a `fall-backs` count
-above zero means xml/TextPreservation.ts could not keep a file's text (the note says
+above zero means domain/document/xml/TextPreservation.ts could not keep a file's text (the note says
 why) and deserves a synthetic fixture.
 
 ## Speaking ids
@@ -664,7 +666,7 @@ flow between two lanes).
 
 ## Engine checks (Camunda 7)
 
-The Camunda 7 profile of `bpmn validate` (`src/platform/profiles/C7Profile.ts`) states for
+The Camunda 7 profile of `bpmn validate` (`src/domain/validation/profiles/C7Profile.ts`) states for
 every rule what the engines do. `test/c7-profile.test.ts` holds one synthetic
 model per rule (82 models) with the expected codes and the engine verdict;
 by default it checks only the profile. To re-check the verdicts against live
@@ -704,9 +706,9 @@ element by element.
 
 ## Engine checks (Camunda 8)
 
-The Camunda 8 profile (`src/platform/profiles/C8Profile.ts`) states for every rule what
+The Camunda 8 profile (`src/domain/validation/profiles/C8Profile.ts`) states for every rule what
 Camunda 8.9 does; placement and known names come from the Zeebe descriptor
-(`src/platform/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
+(`src/domain/document/vendor/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
 `node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails
 while it is stale). `test/c8-profile.test.ts` holds one synthetic model per
 rule (151 models) with the expected codes and Camunda 8's verdict, the timer

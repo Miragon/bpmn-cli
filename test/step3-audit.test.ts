@@ -9,12 +9,12 @@
  *    missing, not by a whole column, when part of the room is free
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { DShape } from '../src/drawing/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DShape } from '../src/domain/diagram/di/types.js';
 import { mutateDoc } from '../src/index.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Semantics } from '../src/drawing/Semantics.js';
-import { Drawing } from '../src/layout/incremental/Drawing.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { Semantics } from '../src/domain/diagram/di/Semantics.js';
+import { Drawing } from '../src/domain/diagram/layout/incremental/Drawing.js';
 
 const NS = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI"';
 const sh = (id: string, left: number, top: number, width: number, height: number, extra = ''): string => `<bpmndi:BPMNShape id="${id}_di" bpmnElement="${id}"${extra}><dc:Bounds x="${left}" y="${top}" width="${width}" height="${height}" /></bpmndi:BPMNShape>`;

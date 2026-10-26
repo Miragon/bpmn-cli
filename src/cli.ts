@@ -1,7 +1,19 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { Cli } from './commands/Cli.js';
-import { LayoutDebug } from './layout/LayoutDebug.js';
+import { Cli } from './adapters/in/cli/Cli.js';
+import { BpmnlintProjectSettings } from './adapters/out/files/BpmnlintProjectSettings.js';
+import { FileDocumentStore } from './adapters/out/files/FileDocumentStore.js';
+import { FileImageWriter } from './adapters/out/files/FileImageWriter.js';
+import { EditDocumentService } from './application/service/EditDocumentService.js';
+import { CreateDocumentService } from './application/service/CreateDocumentService.js';
+import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
+import { ValidateDocumentService } from './application/service/ValidateDocumentService.js';
+import { ReadDocumentService } from './application/service/ReadDocumentService.js';
+import { ShowModelService } from './application/service/ShowModelService.js';
+import { ShowConventionsService } from './application/service/ShowConventionsService.js';
+import { FindElementsService } from './application/service/FindElementsService.js';
+import { RenderDiagramService } from './application/service/RenderDiagramService.js';
+import { LayoutDebug } from './domain/diagram/layout/LayoutDebug.js';
 
 // dist/cli.js and src/cli.ts both sit one level below package.json
 const VERSION = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
@@ -23,7 +35,19 @@ function exitWhenWritten(): void {
   process.stdout.write('', () => process.stderr.write('', () => process.exit()));
 }
 
-const cli = new Cli(VERSION);
+const files = new FileDocumentStore();
+const project = new BpmnlintProjectSettings();
+const cli = new Cli(VERSION, {
+  edit: new EditDocumentService(files, files, project),
+  create: new CreateDocumentService(files, project),
+  relayout: new RelayoutDiagramService(files, files, project),
+  validate: new ValidateDocumentService(files, project),
+  read: new ReadDocumentService(files),
+  showModel: new ShowModelService(),
+  showConventions: new ShowConventionsService(project),
+  findElements: new FindElementsService(),
+  render: new RenderDiagramService(files, new FileImageWriter()),
+});
 void cli.run(process.argv).then(() => {
   process.exitCode = cli.exitCode;
   exitWhenWritten();

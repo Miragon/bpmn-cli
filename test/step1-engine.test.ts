@@ -1,5 +1,5 @@
 /**
- * Regression tests for the clean full-layout engine (src/layout/*): lane
+ * Regression tests for the clean full-layout engine (src/domain/diagram/layout/clean/*): lane
  * bands that follow the content, message flows that avoid shapes and pick
  * the pool order, notes on boundary events, event sub-processes in their own
  * lane and collapsible, and text annotations owned by the collaboration.
@@ -13,9 +13,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/layout/FullLayout.js';
-import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from '../src/layout/clean/MessageFlowRouter.js';
-import { is, many, parseXml, type El, type Model } from '../src/model/utils/moddle.js';
+import { type LayoutOptions, type LayoutWarningInfo, FullLayout } from '../src/domain/diagram/layout/FullLayout.js';
+import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from '../src/domain/diagram/layout/clean/MessageFlowRouter.js';
+import { is, many, parseXml, type El, type Model } from '../src/domain/document/utils/moddle.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const scenario = (name: string): string => readFileSync(join(HERE, '..', 'tools', 'scenarios', name), 'utf8');

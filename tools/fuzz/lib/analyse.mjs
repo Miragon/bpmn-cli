@@ -14,7 +14,7 @@
  *    attribute), dupDi, danglingDi, staleDi, nanBounds, nonPositiveSize,
  *    nanLabel, negLabel, fewWaypoints, nanWaypoint, noDi, wrongPlane (DI not
  *    on the plane the element belongs to: mirrors homePlane in
- *    src/drawing/Semantics.ts), frameIntrusion / poolIntrusion (an expanded
+ *    src/domain/diagram/di/Semantics.ts), frameIntrusion / poolIntrusion (an expanded
  *    sub-process or pool covering a node that is not its content), frameOverlap
  *    (two sibling frames overlapping). Groups never need DI.
  *  - `geometry(a)`, `stability(before, after, reported)` and `reportedIds(layout)`:
@@ -136,7 +136,7 @@ export async function analyse(xml) {
   return { defs, warnings, sem: readSemantics(defs), planes };
 }
 
-/** The plane an element's DI belongs on (mirrors src/drawing/Semantics.ts homePlane). */
+/** The plane an element's DI belongs on (mirrors src/domain/diagram/di/Semantics.ts homePlane). */
 function homePlane(analysis, el) {
   const { sem, planes } = analysis;
   const collabPlane = () => (sem.collab ? planes.find((plane) => plane.rootId === sem.collab.id) : undefined);

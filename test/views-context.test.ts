@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { showXml } from '../src/api.js';
 import { elementContext } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 
 /**
  * A shop pool (Process_Shop) between two black boxes (Customer, Bank).

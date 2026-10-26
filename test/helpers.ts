@@ -1,4 +1,33 @@
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { CliUseCases } from '../src/adapters/in/cli/Cli.js';
+import { BpmnlintProjectSettings } from '../src/adapters/out/files/BpmnlintProjectSettings.js';
+import { FileDocumentStore } from '../src/adapters/out/files/FileDocumentStore.js';
+import { FileImageWriter } from '../src/adapters/out/files/FileImageWriter.js';
+import { EditDocumentService } from '../src/application/service/EditDocumentService.js';
+import { CreateDocumentService } from '../src/application/service/CreateDocumentService.js';
+import { RelayoutDiagramService } from '../src/application/service/RelayoutDiagramService.js';
+import { ValidateDocumentService } from '../src/application/service/ValidateDocumentService.js';
+import { ReadDocumentService } from '../src/application/service/ReadDocumentService.js';
+import { ShowModelService } from '../src/application/service/ShowModelService.js';
+import { ShowConventionsService } from '../src/application/service/ShowConventionsService.js';
+import { FindElementsService } from '../src/application/service/FindElementsService.js';
+import { RenderDiagramService } from '../src/application/service/RenderDiagramService.js';
+
+const files = new FileDocumentStore();
+const project = new BpmnlintProjectSettings();
+
+/** The use cases on the file system, as src/cli.ts wires them. */
+export const FILE_USE_CASES: CliUseCases = {
+  edit: new EditDocumentService(files, files, project),
+  create: new CreateDocumentService(files, project),
+  relayout: new RelayoutDiagramService(files, files, project),
+  validate: new ValidateDocumentService(files, project),
+  read: new ReadDocumentService(files),
+  showModel: new ShowModelService(),
+  showConventions: new ShowConventionsService(project),
+  findElements: new FindElementsService(),
+  render: new RenderDiagramService(files, new FileImageWriter()),
+};
 
 export const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
 

@@ -22,15 +22,15 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { diffProblems } from '../src/drawing/utils/problems.js';
-import type { DShape } from '../src/drawing/types.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { diffProblems } from '../src/domain/diagram/utils/problems.js';
+import type { DShape } from '../src/domain/diagram/di/types.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { type MutationOptions, type MutationResult } from '../src/domain/batch/types.js';
 import { validateDoc } from '../src/index.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -38,7 +38,7 @@ const HARD = new Set(['overlaps', 'through', 'missing', 'outsideLane', 'outsideP
 
 const fixture = (name: string): string => readFileSync(join(HERE, 'fixtures', 'gate', name), 'utf8');
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
   const after = await Doc.fromXml(result.xml);
   expect(after.importWarnings).toEqual([]);

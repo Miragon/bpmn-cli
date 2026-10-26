@@ -1,16 +1,16 @@
 /**
  * Step 3: what `show --layout` tells an agent about x positions (columns,
  * wide gaps, rows that hold unrelated clusters) and the drawing-quality
- * problem kinds in a real write (src/query/layout-view.ts, LayoutAnalysis.ts).
+ * problem kinds in a real write (src/domain/views/layout-view.ts, LayoutAnalysis.ts).
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
+import { Doc } from '../src/domain/document/Doc.js';
 import { layoutView, renderLayoutView } from '../src/index.js';
-import type { El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import type { El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 
-const BASE: Op[] = [
+const BASE: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -20,7 +20,7 @@ const BASE: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'E2', name: 'Stopped', after: 'C' },
 ];
 
-async function engineDoc(ops: Op[]): Promise<Doc> {
+async function engineDoc(ops: EditCommand[]): Promise<Doc> {
   const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
   return Doc.fromXml(result.xml);
 }

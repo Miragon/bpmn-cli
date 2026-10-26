@@ -3,13 +3,13 @@
  * Writes the vendor descriptors the core reads as data, as TypeScript
  * constants (the installed versions of the development dependencies):
  *
- *   src/platform/camunda-descriptor.ts  Camunda 7: camunda-bpmn-moddle's resources/camunda.json
- *   src/platform/zeebe-descriptor.ts    Camunda 8: zeebe-bpmn-moddle's resources/zeebe.json
+ *   src/domain/document/vendor/camunda-descriptor.ts  Camunda 7: camunda-bpmn-moddle's resources/camunda.json
+ *   src/domain/document/vendor/zeebe-descriptor.ts    Camunda 8: zeebe-bpmn-moddle's resources/zeebe.json
  *
  *   node tools/gen-camunda-descriptor.mjs          # after updating camunda-bpmn-moddle or zeebe-bpmn-moddle
  *   node tools/gen-camunda-descriptor.mjs --check  # exit 1 when a file is stale
  *
- * Why a copy: src/platform/VendorDescriptor.ts used to read the JSON with
+ * Why a copy: src/domain/document/vendor/VendorDescriptor.ts used to read the JSON with
  * createRequire (node:module), which a browser bundle cannot resolve; a JSON
  * import attribute warns on Node 22, the oldest Node the package supports.
  * The constant needs neither. The data stays exactly the package's
@@ -25,8 +25,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(join(ROOT, 'package.json'));
 
 const TARGETS = [
-  { pkg: 'camunda-bpmn-moddle', json: 'camunda.json', file: 'camunda-descriptor.ts', constant: 'CAMUNDA_DESCRIPTOR', what: 'Camunda 7', reader: 'src/platform/CamundaDescriptor.ts' },
-  { pkg: 'zeebe-bpmn-moddle', json: 'zeebe.json', file: 'zeebe-descriptor.ts', constant: 'ZEEBE_DESCRIPTOR', what: 'Camunda 8 (Zeebe)', reader: 'src/platform/ZeebeDescriptor.ts' },
+  { pkg: 'camunda-bpmn-moddle', json: 'camunda.json', file: 'camunda-descriptor.ts', constant: 'CAMUNDA_DESCRIPTOR', what: 'Camunda 7', reader: 'src/domain/document/vendor/CamundaDescriptor.ts' },
+  { pkg: 'zeebe-bpmn-moddle', json: 'zeebe.json', file: 'zeebe-descriptor.ts', constant: 'ZEEBE_DESCRIPTOR', what: 'Camunda 8 (Zeebe)', reader: 'src/domain/document/vendor/ZeebeDescriptor.ts' },
 ];
 
 /** One line per type (and per association / enumeration), the rest as JSON. */
@@ -69,7 +69,7 @@ export const ${target.constant}_VERSION = ${JSON.stringify(version)};
 
 export const ${target.constant}: { types: unknown[]; [key: string]: unknown } = ${render(json)};
 `;
-  return { text, version, types: json.types.length, out: join(ROOT, 'src', 'platform', target.file) };
+  return { text, version, types: json.types.length, out: join(ROOT, 'src', 'domain', 'document', 'vendor', target.file) };
 }
 
 const check = process.argv.includes('--check');
@@ -84,14 +84,14 @@ for (const target of TARGETS) {
       /* missing: stale */
     }
     if (current !== text) {
-      console.error(`src/platform/${target.file} is stale (${target.pkg}@${version}): run node tools/gen-camunda-descriptor.mjs`);
+      console.error(`src/domain/document/vendor/${target.file} is stale (${target.pkg}@${version}): run node tools/gen-camunda-descriptor.mjs`);
       stale = true;
     } else {
-      console.log(`src/platform/${target.file} is up to date (${target.pkg}@${version})`);
+      console.log(`src/domain/document/vendor/${target.file} is up to date (${target.pkg}@${version})`);
     }
   } else {
     writeFileSync(out, text);
-    console.log(`wrote src/platform/${target.file} (${target.pkg}@${version}, ${types} types)`);
+    console.log(`wrote src/domain/document/vendor/${target.file} (${target.pkg}@${version}, ${types} types)`);
   }
 }
 if (stale) process.exit(1);

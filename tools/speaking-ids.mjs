@@ -12,7 +12,7 @@
  * unnamed timer boundary event on it, and reports:
  *   - speaking: the new ids (created, and the new ids of renamed flows) that
  *     are no Camunda Modeler hash, no number and no glued number;
- *   - renamed: flows whose ids named their old ends (src/ops/flows/FlowIdFollower.ts);
+ *   - renamed: flows whose ids named their old ends (src/domain/editing/flows/FlowIdFollower.ts);
  *   - with --baseline: the new ids whose prefix equals the one the other
  *     build gives the same element (step 2 learned the prefixes);
  *   - collisions: two independent edits of the file at the first and the

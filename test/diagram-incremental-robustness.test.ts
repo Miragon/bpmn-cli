@@ -7,15 +7,15 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import type { DEdge, DShape } from '../src/drawing/types.js';
-import { LayoutAnalysis } from '../src/drawing/LayoutAnalysis.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Drawing } from '../src/layout/incremental/Drawing.js';
-import { is, type El } from '../src/model/utils/moddle.js';
-import type { Op } from '../src/ops/types.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import type { DEdge, DShape } from '../src/domain/diagram/di/types.js';
+import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { Drawing } from '../src/domain/diagram/layout/incremental/Drawing.js';
+import { is, type El } from '../src/domain/document/utils/moddle.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
-import { type MutationOptions, type MutationResult } from '../src/pipeline/index.js';
+import { type MutationOptions, type MutationResult } from '../src/domain/batch/types.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +23,7 @@ function fixture(name: string): string {
   return readFileSync(join(HERE, 'fixtures', 'incremental', name), 'utf8');
 }
 
-async function run(xml: string, ops: Op[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
+async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}): Promise<{ result: MutationResult; after: Doc }> {
   const result = await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
   const after = await Doc.fromXml(result.xml);
   return { result, after };
@@ -285,7 +285,7 @@ describe('several diagrams, partial and unusual DI', () => {
 
   it('vertical pools are not edited with horizontal logic: auto redraws, incremental refuses', async () => {
     const xml = fixture('vertical.bpmn');
-    const ops: Op[] = [{ op: 'move', ids: ['A'], lane: 'L2' }];
+    const ops: EditCommand[] = [{ op: 'move', ids: ['A'], lane: 'L2' }];
     const auto = await run(xml, ops);
     expect(auto.result.layout.mode).toBe('full');
     expect(auto.result.layout.warnings.map((warning) => warning.code)).toContain('INCREMENTAL_FAILED');
@@ -298,7 +298,7 @@ describe('several diagrams, partial and unusual DI', () => {
   it('a line that does not reach its end on a plane with vertical pools stays as drawn: a rename keeps the drawing, the metric still reports it', async () => {
     // F3 ends 22 px left of End E (x 182..218)
     const xml = fixture('vertical.bpmn').replace('<di:waypoint x="218" y="550"/>', '<di:waypoint x="160" y="550"/>');
-    const ops: Op[] = [{ op: 'set', id: 'A', values: { name: 'Task A2' } }];
+    const ops: EditCommand[] = [{ op: 'set', id: 'A', values: { name: 'Task A2' } }];
     for (const layout of ['auto', 'incremental'] as const) {
       const { result, after } = await run(xml, ops, { layout });
       expect(result.layout.mode, layout).toBe('incremental');
@@ -312,7 +312,7 @@ describe('several diagrams, partial and unusual DI', () => {
   it('a retype and a rename of the same node in one batch are no end change: both views keep its edges, with and without layout', async () => {
     const xml = fixture('twoviews.bpmn');
     const viewEdges = (doc: Doc): string[][] => new DiagramReader(doc.definitions).planes().map((plane) => [...plane.edges.keys()].sort());
-    const ops: Op[] = [
+    const ops: EditCommand[] = [
       { op: 'retype', id: 'C', kind: 'userTask' },
       { op: 'set', id: 'C', values: { id: 'Activity_C' } },
     ];
@@ -423,7 +423,7 @@ describe('connections', () => {
 /* engine ownership                                                     */
 /* ------------------------------------------------------------------ */
 
-const BASE: Op[] = [
+const BASE: EditCommand[] = [
   { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
   { op: 'add', kind: 'userTask', id: 'A', name: 'Check', after: 'S' },
   { op: 'add', kind: 'exclusiveGateway', id: 'G', name: 'ok?', after: 'A' },
@@ -433,7 +433,7 @@ const BASE: Op[] = [
   { op: 'add', kind: 'endEvent', id: 'E2', name: 'Stopped', after: 'C' },
 ];
 
-async function engineXml(ops: Op[]): Promise<string> {
+async function engineXml(ops: EditCommand[]): Promise<string> {
   const result = await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true });
   expect(result.layout.mode).toBe('full');
   return result.xml;
@@ -456,15 +456,15 @@ describe('engine ownership (auto mode)', () => {
       }
       return doc.toXml();
     };
-    const add: Op[] = [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'B' }];
+    const add: EditCommand[] = [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'B' }];
     expect((await run(await moveNote(), add)).result.layout.mode).toBe('incremental');
     // a format op that only reroutes or moves a label: the next edit keeps it
-    const routed = await run(xml, [{ op: 'route', id: (await flowId(xml, 'G', 'C'))!, exit: 'bottom', entry: 'top' } as Op]);
+    const routed = await run(xml, [{ op: 'route', id: (await flowId(xml, 'G', 'C'))!, exit: 'bottom', entry: 'top' } as EditCommand]);
     const next = await run(routed.result.xml, add);
     expect(next.result.layout.mode).toBe('incremental');
     const flow = (await flowId(xml, 'G', 'C'))!;
     expect(edges(next.after).get(flow)!.points).toEqual(edges(routed.after).get(flow)!.points);
-    const labelled = await run(xml, [{ op: 'label', id: 'S', side: 'above' } as Op]);
+    const labelled = await run(xml, [{ op: 'label', id: 'S', side: 'above' } as EditCommand]);
     expect((await run(labelled.result.xml, add)).result.layout.mode).toBe('incremental');
   });
 

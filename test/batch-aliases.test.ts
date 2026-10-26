@@ -10,15 +10,15 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
 import { renderMutation, parseOps } from '../src/index.js';
-import { OPS_SCHEMA } from '../src/ops/parsing/OpsSchemaBuilder.js';
-import { opsExample } from '../src/ops/parsing/utils/op-fields.js';
+import { OPS_SCHEMA } from '../src/domain/commands/OpsSchemaBuilder.js';
+import { opsExample } from '../src/domain/commands/utils/op-fields.js';
 import { idConventionsFromLint } from '../src/index.js';
-import { Doc } from '../src/model/Doc.js';
-import { CliError } from '../src/shared/CliError.js';
-import { ERROR_CATALOGUE } from '../src/report/guide.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { CliError } from '../src/domain/document/CliError.js';
+import { ERROR_CATALOGUE } from '../src/adapters/in/report/guide.js';
 import { guideShort, guideText } from '../src/index.js';
-import { bpmnlintEngine } from '../src/node/index.js';
-import type { Op } from '../src/ops/types.js';
+import { bpmnlintEngine } from '../src/node.js';
+import type { EditCommand } from '../src/domain/commands/types.js';
 import { mutateDoc } from '../src/index.js';
 
 function failure(fn: () => unknown): CliError {
@@ -149,7 +149,7 @@ describe('batch aliases', () => {
         { op: 'retype', id: '$t', kind: 'userTask' },
         { op: 'set', id: '$t', values: { name: 'Check the invoice' } },
         { op: 'add', kind: 'end', name: 'Done', after: '$t' },
-      ] as Op[],
+      ] as EditCommand[],
       { layout: false, conventions },
     );
     expect(outcome.aliases).toEqual({ $s: 'startEvent_start', $t: 'userTask_checkInvoice' });
@@ -212,10 +212,10 @@ describe('batch aliases', () => {
 
   it('typed ops of the library are resolved and checked the same way while they run', async () => {
     const doc = await Doc.fromXml((await newXml({ processName: 'P' })).xml);
-    const ops = [{ op: 'add', kind: 'startEvent', name: 'S', as: '$s' }, { op: 'add', kind: 'task', name: 'T', after: '$x' }] as Op[];
+    const ops = [{ op: 'add', kind: 'startEvent', name: 'S', as: '$s' }, { op: 'add', kind: 'task', name: 'T', after: '$x' }] as EditCommand[];
     const cliError = await rejection(mutateDoc(doc, ops));
     expect([cliError.code, cliError.details.op, cliError.details.candidates]).toEqual(['E_UNKNOWN_ALIAS', 1, ['$s']]);
-    const removed = await rejection(mutateDoc(await Doc.fromXml((await newXml({ processName: 'P' })).xml), [{ op: 'add', kind: 'task', name: 'T', as: '$t' }, { op: 'remove', ids: ['$t'] }, { op: 'set', id: '$t', values: { name: 'x' } }] as Op[]));
+    const removed = await rejection(mutateDoc(await Doc.fromXml((await newXml({ processName: 'P' })).xml), [{ op: 'add', kind: 'task', name: 'T', as: '$t' }, { op: 'remove', ids: ['$t'] }, { op: 'set', id: '$t', values: { name: 'x' } }] as EditCommand[]));
     expect([removed.code, removed.message]).toEqual(['E_NOT_FOUND', 'ops[2] (set): "id": $t named Activity_T, which an op before this one removed']);
   });
 
@@ -332,12 +332,12 @@ describe('outAs: the flow an add creates out of the new node', () => {
     for (const kind of ['dataObject', 'textAnnotation', 'lane', 'participant']) {
       expect(failure(() => parseOps([{ op: 'add', kind, name: 'D', in: 'Process_Audit', outAs: '$d' }])).message).toBe(`ops[0] (add): "outAs": add ${kind} creates no sequence flow out of it`);
     }
-    const typedData = await rejection(mutateDoc(await Doc.fromXml(xml), [{ op: 'add', kind: 'dataObject', name: 'D', in: 'Process_Audit', to: 'Activity_Check', outAs: '$d' }] as Op[], { layout: false }));
+    const typedData = await rejection(mutateDoc(await Doc.fromXml(xml), [{ op: 'add', kind: 'dataObject', name: 'D', in: 'Process_Audit', to: 'Activity_Check', outAs: '$d' }] as EditCommand[], { layout: false }));
     expect([typedData.code, typedData.message]).toEqual(['E_USAGE', 'outAs $d: add dataObject creates no sequence flow out of it']);
     // split nodes take no outAs (the split creates the flow out of a node with the next one)
     expect(failure(() => parseOps([{ op: 'split', after: 'X', branches: [{ nodes: [{ kind: 'task', outAs: '$o' }] }] }])).message).toMatch(/nodes\[0\]: unknown key "outAs"/);
     // typed ops of the library skip parseOps: the add refuses it while it runs
-    const typed = await rejection(mutateDoc(await Doc.fromXml(xml), [{ op: 'add', kind: 'task', name: 'T', in: 'Process_Audit', outAs: '$o' }] as Op[], { layout: false }));
+    const typed = await rejection(mutateDoc(await Doc.fromXml(xml), [{ op: 'add', kind: 'task', name: 'T', in: 'Process_Audit', outAs: '$o' }] as EditCommand[], { layout: false }));
     expect([typed.code, typed.message]).toEqual(['E_USAGE', 'outAs $o: Activity_T gets no flow out of it from this placement (--in)']);
     // an alias like any other: used before its op, the message says which op defines it
     const early = failure(() => parseOps([{ op: 'set', id: '$o', values: { name: 'x' } }, { op: 'add', kind: 'task', name: 'T', after: 'A', outAs: '$o' }]));

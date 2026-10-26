@@ -1,18 +1,18 @@
 /**
- * src/drawing/DiagramReader.ts (reading the DI into planes) and src/drawing/PlaneWriter.ts
+ * src/domain/diagram/di/DiagramReader.ts (reading the DI into planes) and src/domain/diagram/di/PlaneWriter.ts
  * (writing it back, pruning, colours) on hand-written DI fixtures.
  */
 import { describe, expect, it } from 'vitest';
-import { Doc } from '../src/model/Doc.js';
-import { DiPruner } from '../src/drawing/DiPruner.js';
-import { Frames } from '../src/drawing/Frames.js';
-import type { Plane } from '../src/drawing/types.js';
-import { applyColors, colorsOf } from '../src/drawing/utils/colors.js';
-import { DiagramReader } from '../src/drawing/DiagramReader.js';
-import { Semantics } from '../src/drawing/Semantics.js';
-import { DiIds } from '../src/drawing/DiIds.js';
-import { PlaneWriter } from '../src/drawing/PlaneWriter.js';
-import { is, type El } from '../src/model/utils/moddle.js';
+import { Doc } from '../src/domain/document/Doc.js';
+import { DiPruner } from '../src/domain/diagram/di/DiPruner.js';
+import { Frames } from '../src/domain/diagram/di/Frames.js';
+import type { Plane } from '../src/domain/diagram/di/types.js';
+import { applyColors, colorsOf } from '../src/domain/diagram/utils/colors.js';
+import { DiagramReader } from '../src/domain/diagram/di/DiagramReader.js';
+import { Semantics } from '../src/domain/diagram/di/Semantics.js';
+import { DiIds } from '../src/domain/diagram/di/DiIds.js';
+import { PlaneWriter } from '../src/domain/diagram/di/PlaneWriter.js';
+import { is, type El } from '../src/domain/document/utils/moddle.js';
 import { BPMN_NS } from './helpers.js';
 
 const NS = `xmlns:bpmn="${BPMN_NS}" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0"`;

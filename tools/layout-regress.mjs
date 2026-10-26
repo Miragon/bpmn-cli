@@ -4,7 +4,7 @@
  *
  * Re-lays out every scenario in tools/scenarios with the current build and
  * scores the diagram interchange it produced. Use it after every change to
- * src/layout/*: a change is good when the total score drops and no single
+ * src/domain/diagram/layout/*: a change is good when the total score drops and no single
  * file gets worse.
  *
  *   npm run build

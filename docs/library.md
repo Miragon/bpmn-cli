@@ -59,7 +59,11 @@ Every function runs the CLI command it names, without a file:
 | `findXml(xml, text)` | `bpmn find --json` |
 | `renderSvg(xml, opts?)` | `bpmn render --format svg` |
 
-`ops` is the [ops JSON](ops.md#ops-json-bpmn-apply) of `bpmn apply`. A writing function returns
+`ops` is the [ops JSON](ops.md#ops-json-bpmn-apply) of `bpmn apply`; its TypeScript type is
+`EditCommand`, one type per command named after what it does (`AddElement`, `ConnectElements`,
+`PlaceShapes`, `RerouteFlow`, ...; the diagram commands together are `DiagramCommand`). The
+commands of a batch run in their order: a diagram command sees the layout of the commands before
+it. A writing function returns
 `{ xml, unchanged, result }`: `unchanged` is `true` when there is nothing to save, `result` is what
 the CLI prints with `--json`. `renderMutation(result)` gives the CLI's text.
 
@@ -100,7 +104,9 @@ validator like the CLI ([bpmnlint](bpmnlint.md)). Plugins the project installed 
 
 A host that keeps a parsed model between calls uses the pipeline on a `Doc`:
 `Doc.fromXml(xml)`, then `mutateDoc(doc, ops, opts)`, `layoutDoc`, `checkDoc`. They never write.
-Every other part (views, metrics, format ops, the platform profile) is exported too.
+Every other part (views, metrics, the diagram commands, the platform profile) is exported too:
+`runOps(doc, commands)` runs commands on a `Doc`, `parseOps(json)` reads the ops JSON into
+`EditCommand`s.
 
 ::: warning Load the profile rules before runProfile
 `runProfile` and `validateDoc(doc, { platform })` are synchronous: call `await loadProfiles()`

@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../src/api.js';
-import { CliError } from '../src/shared/CliError.js';
+import { CliError } from '../src/domain/document/CliError.js';
 import { mutationSummary, renderSummary } from '../src/index.js';
 
 async function rejection(pending: Promise<unknown>): Promise<CliError> {
