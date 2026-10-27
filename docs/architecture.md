@@ -87,10 +87,18 @@ export class AddElementCommand extends MutationCommand {
       .option('--after <id>')
       .option('--before <id>')
       // …
-      .action((file, kind, name, keyValues, options) => this.run(file, kind, name, keyValues, options))
+      .action((file, kind, name, keyValues, options) =>
+        this.run(file, kind, name, keyValues, options),
+      )
   }
 
-  private async run(file: string, kind: string, name: string | undefined, keyValues: string[], options: RawOpts) {
+  private async run(
+    file: string,
+    kind: string,
+    name: string | undefined,
+    keyValues: string[],
+    options: RawOpts,
+  ) {
     const opts = this.mutationOptions(options)
     await this.cli.guarded(async () => {
       this.checkPlacementFlags(options)
@@ -118,16 +126,32 @@ behind it, `cli.ts` decided at startup.
 
 ```ts
 // src/adapters/in/cli/MutationCommand.ts
-protected async mutate(file: string, ops: EditCommand[], opts: MutationFlags) {
-  const result = await this.cli.useCases.edit.edit({ ...opts, source: { file }, commands: ops })
-  await this.printMutation(result, opts, this.cli.io.stdout)   // step 8
+protected async mutate(
+  file: string,
+  ops: EditCommand[],
+  opts: MutationFlags,
+) {
+  const result = await this.cli.useCases.edit.edit({
+    ...opts,
+    source: { file },
+    commands: ops,
+  })
+  // step 8
+  await this.printMutation(result, opts, this.cli.io.stdout)
 }
 ```
 
 ```ts
 // src/application/port/in/EditDocumentUseCase.ts
 export interface EditDocumentUseCase {
-  edit(command: { source: DocumentSource; commands: EditCommand[] } & FileMutationOptions): Promise<MutationResult>
+  edit(command: EditDocumentUseCase.Command): Promise<MutationResult>
+}
+
+export declare namespace EditDocumentUseCase {
+  interface Command extends FileMutationOptions {
+    source: DocumentSource   // { file } or an already loaded { doc }
+    commands: EditCommand[]
+  }
 }
 ```
 
@@ -146,11 +170,24 @@ export class EditDocumentService implements EditDocumentUseCase {
   ) {}
 
   async edit({ source, commands, ...opts }: EditDocumentUseCase.Command) {
-    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.load.read(source.file), source.file)  // step 7
+    // step 7: read the file
+    const doc = 'doc' in source
+      ? source.doc
+      : await Doc.fromXml(await this.load.read(source.file), source.file)
     const target = opts.out ?? doc.file
-    const lint = await this.settings.lint(target, opts)                                   // .bpmnlintrc
-    const result = await new EditBatchService(doc, commands, lint.applyTo(opts, target)).run(target)  // step 4
-    if (!opts.dryRun) result.written = await this.save.save(target, result.xml, { /* … */ })        // step 7
+
+    // the project's .bpmnlintrc, if any
+    const lint = await this.settings.lint(target, opts)
+
+    // step 4: the domain does the work
+    const batchOpts = lint.applyTo(opts, target)
+    const batch = new EditBatchService(doc, commands, batchOpts)
+    const result = await batch.run(target)
+
+    // step 7: write the file
+    if (!opts.dryRun) {
+      result.written = await this.save.save(target, result.xml, { … })
+    }
     return result
   }
 }
@@ -168,13 +205,23 @@ original text. If anything throws, nothing is written: the caller keeps its inpu
 ```ts
 // src/domain/batch/EditBatchService.ts
 async run(file = this.doc.file): Promise<MutationResult> {
-  await this.guard()                                            // lossless import, C7/C8 rules loaded
-  const findings = await FindingBaseline.capture(this.doc, …)   // warnings that were already there
-  const diagram  = await BatchDrawing.capture(this.doc, …)      // the drawing before
-  const { batch } = await this.runCommands(diagram)             // step 5
-  await this.validate(findings, batch)                          // new errors refuse the write
-  const drawn = await diagram.apply(this.edit, batch.ops, batch.changes)  // layout
-  const xml = await this.keptText(drawn.xml, …)                 // rewrite only what changed
+  // lossless import, Camunda 7 / 8 rules loaded
+  await this.guard()
+
+  // remember the state before: warnings already there, the drawing
+  const findings = await FindingBaseline.capture(this.doc, …)
+  const diagram = await BatchDrawing.capture(this.doc, …)
+
+  // step 5: run every command on the model
+  const { batch } = await this.runCommands(diagram)
+
+  // new errors refuse the write
+  await this.validate(findings, batch)
+
+  // lay out the drawing, rewrite only what changed in the text
+  const drawn = await diagram.apply(this.edit, batch.ops, batch.changes)
+  const xml = await this.keptText(drawn.xml, …)
+
   return this.result(file, batch, xml, drawn.layout, …)
 }
 ```
@@ -189,11 +236,16 @@ step 4.
 // src/domain/batch/ModelCommandService.ts
 private dispatch(op: EditCommand): ChangeSet {
   if (isDiagramCommand(op)) return new ChangeSet()
+  const { doc, edit } = this
   switch (op.op) {
-    case 'add':     return new ElementCreationService(this.doc, this.edit).add(op)
-    case 'connect': return new ConnectionService(this.doc, this.edit).connect(op)
-    case 'set':     return new PropertyService(this.doc, this.edit).set(op)
-    case 'remove':  return new ElementRemovalService(this.doc, this.edit).remove(op)
+    case 'add':
+      return new ElementCreationService(doc, edit).add(op)
+    case 'connect':
+      return new ConnectionService(doc, edit).connect(op)
+    case 'set':
+      return new PropertyService(doc, edit).set(op)
+    case 'remove':
+      return new ElementRemovalService(doc, edit).remove(op)
     // … retype, move, order, ext, split
   }
 }
@@ -209,17 +261,29 @@ a `ChangeSet`.
 // src/domain/editing/ElementCreationService.ts
 add(op: AddElement): ChangeSet {
   const cs = new ChangeSet()
-  const { def, trigger } = ElementCreationService.resolveKind(op.kind)   // 'userTask' → bpmn:UserTask
+  // 'userTask' → bpmn:UserTask
+  const { def, trigger } = ElementCreationService.resolveKind(op.kind)
   const el = this.addFlowNode(op, def, trigger, cs)
-  if (op.set) cs.merge(new PropertyService(this.doc, this.edit).set({ op: 'set', id: idOf(el), values: op.set }))
+  if (op.set) {
+    const values = { op: 'set', id: idOf(el), values: op.set }
+    cs.merge(new PropertyService(this.doc, this.edit).set(values))
+  }
   return cs
 }
 
-private addFlowNode(op: AddElement, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet): El {
-  const id = this.edit.allocator.explicitOr(op.id, …)                 // 'Activity_CheckInvoice'
+private addFlowNode(
+  op: AddElement,
+  def: KindDef,
+  trigger: Trigger | undefined,
+  cs: ChangeSet,
+): El {
+  // 'Activity_CheckInvoice'
+  const id = this.edit.allocator.explicitOr(op.id, …)
   const el = this.doc.create(def.type, { id, name: op.name })
   cs.create({ id, kind: def.kind, name: op.name })
-  new NodePlacementService(this.doc, this.edit, op).place(el, cs)      // --after: splice in, add the flow
+
+  // --after: splice in behind the anchor and add the sequence flow
+  new NodePlacementService(this.doc, this.edit, op).place(el, cs)
   return el
 }
 ```
@@ -231,15 +295,21 @@ private addFlowNode(op: AddElement, def: KindDef, trigger: Trigger | undefined, 
 
 ```ts
 // src/adapters/out/files/FileDocumentStore.ts
-export class FileDocumentStore implements LoadDocumentPort, SaveDocumentPort {
+export class FileDocumentStore
+  implements LoadDocumentPort, SaveDocumentPort
+{
+  // decoded in the encoding the XML declares
   read(file: string): Promise<string> {
-    return readXml(file)                     // decoded in the encoding the XML declares
+    return readXml(file)
   }
 
-  async save(target: string, xml: string, opts: { source?: string; unchanged: boolean; backup?: boolean }) {
-    if (opts.unchanged && target === opts.source) return false   // no-op: leave the file alone
-    if (opts.backup && opts.source) await FileDocumentStore.backup(opts.source)
-    await writeAtomic(target, xml)           // a failed write leaves the old file
+  async save(target: string, xml: string, opts: SaveOptions) {
+    const { source, unchanged, backup } = opts
+    // a no-op leaves the file alone
+    if (unchanged && target === source) return false
+    if (backup && source) await FileDocumentStore.backup(source)
+    // a failed write leaves the old file
+    await writeAtomic(target, xml)
     return true
   }
 }
@@ -251,7 +321,7 @@ Back in `MutationCommand`, the result becomes a report (`MutationReportBuilder`)
 (`MutationText`), both in `adapters/in/report/`. The library returns the same report, so the
 CLI and `applyToXml()` describe a change in the same words.
 
-```text
+```txt
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
 created sequenceFlow Flow_OrderReceivedToCheckInvoice - Event_OrderReceived -> Activity_CheckInvoice
 layout: ok - full (engine-owned diagram: redrawn)
