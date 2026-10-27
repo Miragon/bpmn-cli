@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { detectPlatform, loadProfiles, runProfile } from '../../../src/index.js';
-import { PlatformDetection } from '../../../src/domain/document/vendor/PlatformDetection.js';
+import type { Platform } from '../../../src/domain/document/vendor/PlatformDetection.js';
 import { validateDoc } from '../../../src/index.js';
 import { cli } from '../../helpers/cli.js';
 
@@ -252,19 +252,18 @@ describe('profile follow-ups: one synthetic model per rule', () => {
 });
 
 describe('one platform detector', () => {
-  const cases: Array<[string, string, string, 'camunda7' | 'camunda8' | undefined]> = [
-    ['Camunda Platform', C7, chain([UT()]), 'camunda7'],
-    ['Operaton namespace only', OPERATON, chain([UT('T')]).replace('<bpmn:userTask id="T">', '<bpmn:userTask id="T" operaton:assignee="demo">'), 'camunda7'],
-    ['camunda content with both namespaces declared', `${CAMUNDA} ${ZEEBE}`, chain([UT('T')]).replace('<bpmn:userTask id="T">', '<bpmn:userTask id="T" camunda:assignee="demo">'), 'camunda7'],
-    ['executionPlatform Operaton', `${MODELER} modeler:executionPlatform="Operaton"`, chain([UT()]), 'camunda7'],
-    ['zeebe content', `${ZEEBE} ${CAMUNDA}`, chain([UT('T', ext('<zeebe:formDefinition formKey="f" />'))]), 'camunda8'],
-    ['nothing', '', chain([UT()]), undefined],
+  const cases: Array<[string, string, string, Platform]> = [
+    ['Camunda Platform', C7, chain([UT()]), 'c7'],
+    ['Operaton namespace only', OPERATON, chain([UT('T')]).replace('<bpmn:userTask id="T">', '<bpmn:userTask id="T" operaton:assignee="demo">'), 'c7'],
+    ['camunda content with both namespaces declared', `${CAMUNDA} ${ZEEBE}`, chain([UT('T')]).replace('<bpmn:userTask id="T">', '<bpmn:userTask id="T" camunda:assignee="demo">'), 'c7'],
+    ['executionPlatform Operaton', `${MODELER} modeler:executionPlatform="Operaton"`, chain([UT()]), 'c7'],
+    ['zeebe content', `${ZEEBE} ${CAMUNDA}`, chain([UT('T', ext('<zeebe:formDefinition formKey="f" />'))]), 'c8'],
+    ['nothing', '', chain([UT()]), 'none'],
   ];
   it.each(cases)('Doc.platform() follows detectPlatform: %s', async (_name, ns, body, expected) => {
     const doc = await Doc.fromXml(xml(body, { ns, attrs: '' }));
-    const platform = detectPlatform(doc).platform;
-    expect(new PlatformDetection(doc.definitions).target()).toBe(expected);
-    expect(doc.platform()).toBe(platform === 'c7' ? 'camunda7' : platform === 'c8' ? 'camunda8' : undefined);
+    expect(detectPlatform(doc).platform).toBe(expected);
+    expect(doc.platform()).toBe(expected);
   });
 
   it('says when the file is read as Operaton reads it, and names both declared namespaces', async () => {

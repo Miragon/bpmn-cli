@@ -10,7 +10,7 @@ import { DecisionLinkReader } from '../document/DecisionLinkReader.js';
 import { CAMUNDA_URI, OPERATON_URI } from '../document/vendor/CamundaDescriptor.js';
 import { ZEEBE_URI } from '../document/vendor/ZeebeDescriptor.js';
 
-type EngineSpelling = { kind: 'c7'; uri: string; prefix: string } | { kind: 'zeebe'; prefix: string };
+type EngineSpelling = { kind: 'c7'; uri: string; prefix: string } | { kind: 'c8'; prefix: string };
 
 /**
  * Writes a business rule task's decision link in one spelling and removes the others, so a
@@ -100,11 +100,11 @@ export class DecisionLinkWriter {
       dropAttr('calledDecision');
       dropC7();
       dropZeebe();
-    } else if (platform === 'camunda7') {
+    } else if (platform === 'c7') {
       const operatonOnly = !doc.prefixFor(CAMUNDA_URI) && !!doc.prefixFor(OPERATON_URI);
       const prefix = operatonOnly ? this.prefixFor(OPERATON_URI, 'operaton') : this.prefixFor(CAMUNDA_URI, 'camunda');
       writeC7(`${prefix}:decisionRef`);
-    } else if (platform === 'camunda8') {
+    } else if (platform === 'c8') {
       const call = writeZeebe(this.reader.zeebeCalls(el)[0], 'zeebe');
       if (!textValue((call as unknown as Record<string, unknown>)['resultVariable'])) {
         cs.warn(
@@ -130,7 +130,7 @@ export class DecisionLinkWriter {
       if (ownC7) writeC7(ownC7);
       else if (ownCall) writeZeebe(ownCall, 'zeebe');
       else if (follow?.kind === 'c7') writeC7(`${this.prefixFor(follow.uri, follow.prefix)}:decisionRef`);
-      else if (follow?.kind === 'zeebe') writeZeebe(this.reader.zeebeCalls(el)[0], follow.prefix);
+      else if (follow?.kind === 'c8') writeZeebe(this.reader.zeebeCalls(el)[0], follow.prefix);
       else {
         dropC7();
         dropZeebe();
@@ -163,7 +163,7 @@ export class DecisionLinkWriter {
         if (!textValue((call as unknown as Record<string, unknown>)['decisionId'])) continue;
         const prefix = call.$type.split(':')[0]!;
         const declared = ((call.$descriptor as { ns?: { uri?: string } }).ns?.uri ?? this.reader.uriOf(task, prefix)) === ZEEBE_URI;
-        seen.set(declared ? 'zeebe' : call.$type, declared ? { kind: 'zeebe', prefix } : undefined);
+        seen.set(declared ? 'zeebe' : call.$type, declared ? { kind: 'c8', prefix } : undefined);
       }
       for (const key of ['calledDecision', 'calledElement']) if (textValue(task.$attrs?.[key])) seen.set(key, undefined);
       if (seen.size > 1) return undefined;

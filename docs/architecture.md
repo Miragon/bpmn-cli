@@ -23,7 +23,7 @@ flowchart TB
   service --> domain["Domain<br/>domain/"]
   service --> portOut{{"Port<br/>application/port/out"}}
   portOut --> files["Files<br/>adapters/out/files"]
-  portOut --> memory["Memory<br/>adapters/out/memory"]
+  portOut --> memory["No project<br/>adapters/out/memory"]
 
   classDef adapter stroke:#2f80ed,stroke-width:2px
   classDef app stroke:#f2994a,stroke-width:2px
@@ -42,7 +42,7 @@ container.
 | rule (checked by the test) | why |
 | --- | --- |
 | `domain/` imports no application, adapter or entry | the domain runs anywhere, also in a browser |
-| `application/` imports no adapter | a service does not know whether it writes to disk or to memory |
+| `application/` imports no adapter | a service does not know whether it writes to disk or does not write at all |
 | only adapters and entries import `node:*` | the browser bundle stays free of Node |
 | `adapters/in` knows use cases only by their interface | the entry decides which service is behind it |
 | each service implements one use case and calls no other service | one way in, no hidden orchestration |
@@ -158,22 +158,23 @@ export declare namespace EditDocumentUseCase {
 ### 3. Load, run, save
 
 The service is short on purpose: get the document, let the domain work, write the result.
-`load`, `save` and `settings` are outbound ports, handed in by the constructor.
+`settings`, `load` and `save` are outbound ports, handed in by the constructor; without `load`
+or `save` the service takes only a document and writes nothing.
 
 ```ts
 // src/application/service/EditDocumentService.ts
 export class EditDocumentService implements EditDocumentUseCase {
   constructor(
-    private readonly load: LoadDocumentPort,
-    private readonly save: SaveDocumentPort,
     private readonly settings: LoadProjectSettingsPort,
+    private readonly load?: LoadDocumentPort,
+    private readonly save?: SaveDocumentPort,
   ) {}
 
   async edit({ source, commands, ...opts }: EditDocumentUseCase.Command) {
     // step 7: read the file
     const doc = 'doc' in source
       ? source.doc
-      : await Doc.fromXml(await this.load.read(source.file), source.file)
+      : await Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file)
     const target = opts.out ?? doc.file
 
     // the project's .bpmnlintrc, if any
@@ -186,15 +187,15 @@ export class EditDocumentService implements EditDocumentUseCase {
 
     // step 7: write the file
     if (!opts.dryRun) {
-      result.written = await this.save.save(target, result.xml, { … })
+      result.written = await this.savePort().save(target, result.xml, { … })
     }
     return result
   }
 }
 ```
 
-In the CLI the ports are a `FileDocumentStore` and `BpmnlintProjectSettings`; in `applyToXml()`
-they are an `InMemoryDocumentStore` and `NoProjectSettings`. The service cannot tell.
+In the CLI the ports are a `FileDocumentStore` and `BpmnlintProjectSettings`; `applyToXml()`
+passes only `NoProjectSettings` and a `{ doc }` with `dryRun`, so nothing is read or written.
 
 ### 4. The batch
 
@@ -332,7 +333,7 @@ written: order.bpmn
 
 - `bpmn apply` differs only in step 1: it reads the commands as JSON instead of flags.
 - `mutateFile()` (`node.ts`) starts at step 2.
-- `applyToXml()` (`api.ts`) starts at step 2, with memory in step 7 and no project
+- `applyToXml()` (`api.ts`) starts at step 2, with nothing in step 7 and no project
   `.bpmnlintrc`, and returns the XML instead of saving it.
 
 From step 2 onwards, all of them run the same code.

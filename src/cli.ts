@@ -38,10 +38,10 @@ function exitWhenWritten(): void {
 const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
 const cli = new Cli(VERSION, {
-  editDocument: new EditDocumentService(files, files, project),
-  createDocument: new CreateDocumentService(files, project),
-  relayoutDiagram: new RelayoutDiagramService(files, files, project),
-  validateDocument: new ValidateDocumentService(files, project),
+  editDocument: new EditDocumentService(project, files, files),
+  createDocument: new CreateDocumentService(project, files),
+  relayoutDiagram: new RelayoutDiagramService(project, files, files),
+  validateDocument: new ValidateDocumentService(project, files),
   readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),

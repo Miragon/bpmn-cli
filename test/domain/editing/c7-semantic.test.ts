@@ -19,7 +19,6 @@ import { renderDetail, renderView, runOps, mutateDoc, buildView, elementDetail, 
 import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { definitionsXml, flowBetween } from '../../helpers/helpers.js';
 import { CAMUNDA as C7_DESCRIPTOR } from '../../../src/domain/document/vendor/CamundaDescriptor.js';
-import { PlatformDetection } from '../../../src/domain/document/vendor/PlatformDetection.js';
 import { VendorDescriptor } from '../../../src/domain/document/vendor/VendorDescriptor.js';
 import { ElementProperties } from '../../../src/domain/editing/ElementProperties.js';
 import { caught } from '../../helpers/errors.js';
@@ -62,14 +61,14 @@ describe('C7 target: history time to live and platform version', () => {
     expect(xml).toMatch(/<bpmn:process id="Process_Order"[^>]*camunda:historyTimeToLive="180"/);
     expect(xml).toContain('modeler:executionPlatform="Camunda Platform"');
     expect(xml).toContain('modeler:executionPlatformVersion="7.24.0"');
-    expect(new PlatformDetection(doc.definitions).target()).toBe('camunda7');
+    expect(doc.platform()).toBe('c7');
   });
 
   it('other targets get no TTL', async () => {
     expect(await Doc.create({ target: 'camunda8' }).toXml()).not.toContain('historyTimeToLive');
     expect(await Doc.create({}).toXml()).not.toContain('historyTimeToLive');
-    expect(new PlatformDetection(Doc.create({ target: 'camunda8' }).definitions).target()).toBe('camunda8');
-    expect(new PlatformDetection(Doc.create({}).definitions).target()).toBeUndefined();
+    expect(Doc.create({ target: 'camunda8' }).platform()).toBe('c8');
+    expect(Doc.create({}).platform()).toBe('none');
   });
 
   it('a process created later in a C7 file (participant) gets the TTL too, in other files not', async () => {
@@ -93,7 +92,7 @@ describe('C7 target: history time to live and platform version', () => {
   it('a loaded C7 file (modeler:executionPlatform) is recognised; an explicit TTL is never overwritten', async () => {
     const xml = definitionsXml('<bpmn:startEvent id="S" />', { nsDecl: `${CAMUNDA} xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform"` });
     const doc = await Doc.fromXml(xml);
-    expect(new PlatformDetection(doc.definitions).target()).toBe('camunda7');
+    expect(doc.platform()).toBe('c7');
     const cs = runOps(doc, [{ op: 'add', kind: 'participant', name: 'Other' }, { op: 'add', kind: 'participant', name: 'Third' }]);
     const processElement = doc.require(cs.created.find((change) => change.kind === 'process')!.id);
     expect(processElement.$attrs['camunda:historyTimeToLive']).toBe('180');

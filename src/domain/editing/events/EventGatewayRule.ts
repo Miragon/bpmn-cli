@@ -18,7 +18,7 @@ export class EventGatewayRule {
   ) {}
 
   get rule(): 'engines' | 'bpmn' {
-    return this.edit.platform() === 'camunda7' ? 'engines' : 'bpmn';
+    return this.edit.platform() === 'c7' ? 'engines' : 'bpmn';
   }
 
   /** `leaving` are the flows that disappear with the change (e.g. the flow a bridge replaces). */

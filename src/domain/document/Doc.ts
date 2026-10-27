@@ -16,7 +16,7 @@ import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, pa
 import { ModelError } from './ModelError.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from './vendor/CamundaDescriptor.js';
 import { C8_PLATFORM_VERSION } from './vendor/ZeebeDescriptor.js';
-import { PlatformDetection } from './vendor/PlatformDetection.js';
+import { PlatformDetection, platformOfTarget, TARGETS, type Platform, type Target } from './vendor/PlatformDetection.js';
 
 /** `operaton` is Operaton's copy of the camunda namespace (only Operaton reads it). */
 export const KNOWN_NAMESPACES: Record<string, string> = {
@@ -37,12 +37,10 @@ export interface NewDocOptions {
   processName?: string;
   executable?: boolean;
   /** declares vendor namespaces, the platform and (camunda7) the Modeler's process defaults */
-  target?: 'camunda8' | 'camunda7' | 'none';
+  target?: Target;
   /** process and definitions ids follow them only where they name that type exactly */
   conventions?: IdConventions;
 }
-
-export const TARGETS = ['camunda8', 'camunda7', 'none'] as const;
 
 export interface DocSource {
   text: string;
@@ -142,12 +140,13 @@ export class Doc {
     });
     const doc = new Doc({ moddle, definitions, importWarnings: [] }, ids, file);
     if (opts.conventions) doc.conventions = opts.conventions;
-    if (opts.target === 'camunda8') {
+    const platform = platformOfTarget(opts.target);
+    if (platform === 'c8') {
       doc.declareNamespace('zeebe');
       doc.declareNamespace('modeler');
       definitions.$attrs['modeler:executionPlatform'] = 'Camunda Cloud';
       definitions.$attrs['modeler:executionPlatformVersion'] = C8_PLATFORM_VERSION;
-    } else if (opts.target === 'camunda7') {
+    } else if (platform === 'c7') {
       doc.declareNamespace('camunda');
       doc.declareNamespace('modeler');
       definitions.$attrs['modeler:executionPlatform'] = 'Camunda Platform';
@@ -157,8 +156,8 @@ export class Doc {
     return doc;
   }
 
-  platform(): 'camunda7' | 'camunda8' | undefined {
-    return new PlatformDetection(this.definitions).target();
+  platform(): Platform {
+    return new PlatformDetection(this.definitions).info().platform;
   }
 
   /**
@@ -167,7 +166,7 @@ export class Doc {
    * Operaton-only files). An existing value is never touched.
    */
   initProcess(process: El, platform = this.platform()): void {
-    if (platform !== 'camunda7') return;
+    if (platform !== 'c7') return;
     const camunda = KNOWN_NAMESPACES['camunda']!;
     const operaton = KNOWN_NAMESPACES['operaton']!;
     const uri = !this.prefixFor(camunda) && this.prefixFor(operaton) ? operaton : camunda;
