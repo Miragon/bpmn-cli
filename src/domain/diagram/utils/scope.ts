@@ -1,5 +1,6 @@
 import type { Box, GArtifact, GNode, LinkEnd, ScopeLayout } from '../di/types.js';
 import { toSegments, type Segment } from './geometry.js';
+import { translate, translateEdge, translatePoints } from './geom.js';
 
 /** data objects and notes of boundary events are placed before routing */
 export function routedArtifacts(layout: ScopeLayout): GArtifact[] {
@@ -40,27 +41,19 @@ export function growToFit(layout: ScopeLayout): void {
 /** Shifts the whole scope; a flow anchor is the same object as the link end using it and moves once. */
 export function shiftScope(layout: ScopeLayout, dx: number, dy: number): void {
   for (const node of layout.nodes) shiftNode(node, dx, dy);
-  for (const es of layout.eventSubs) {
-    es.box.x += dx;
-    es.box.y += dy;
-  }
+  for (const es of layout.eventSubs) translate(es.box, dx, dy);
   const movedEnds = new Set<LinkEnd>();
   const moveEnd = (end: LinkEnd | undefined): void => {
     if (!end?.flow || movedEnds.has(end)) return;
     movedEnds.add(end);
-    end.box.x += dx;
-    end.box.y += dy;
+    translate(end.box, dx, dy);
   };
   for (const artifact of layout.artifacts) {
-    artifact.box.x += dx;
-    artifact.box.y += dy;
+    translate(artifact.box, dx, dy);
     for (const link of artifact.links) {
       moveEnd(link.from);
       moveEnd(link.to);
-      for (const point of link.points) {
-        point.x += dx;
-        point.y += dy;
-      }
+      translatePoints(link.points, dx, dy);
     }
     moveEnd(artifact.anchor);
   }
@@ -71,29 +64,13 @@ export function shiftScope(layout: ScopeLayout, dx: number, dy: number): void {
 
 function shiftEdges(layout: ScopeLayout, dx: number, dy: number): void {
   for (const edge of layout.edges) {
-    for (const point of edge.points) {
-      point.x += dx;
-      point.y += dy;
-    }
-    if (edge.label) {
-      edge.label.x += dx;
-      edge.label.y += dy;
-    }
+    translateEdge(edge, dx, dy);
     if (edge.bandY !== undefined) edge.bandY += dy;
   }
-  for (const compensation of layout.compensations) {
-    for (const point of compensation.points) {
-      point.x += dx;
-      point.y += dy;
-    }
-  }
+  for (const compensation of layout.compensations) translatePoints(compensation.points, dx, dy);
 }
 
 export function shiftNode(node: GNode, dx: number, dy: number): void {
-  node.box.x += dx;
-  node.box.y += dy;
-  for (const boundaryEvent of node.boundary) {
-    boundaryEvent.box.x += dx;
-    boundaryEvent.box.y += dy;
-  }
+  translate(node.box, dx, dy);
+  for (const boundaryEvent of node.boundary) translate(boundaryEvent.box, dx, dy);
 }

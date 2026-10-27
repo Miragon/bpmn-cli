@@ -7,10 +7,6 @@ export function center(box: Box): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
-export function boxesOverlap(first: Box, second: Box, margin = 0): boolean {
-  return first.x < second.x + second.width + margin && first.x + first.width + margin > second.x && first.y < second.y + second.height + margin && first.y + first.height + margin > second.y;
-}
-
 export const right = (box: Box): number => box.x + box.width;
 export const bottom = (box: Box): number => box.y + box.height;
 export const cx = (box: Box): number => box.x + box.width / 2;
@@ -60,6 +56,25 @@ export function unionAll(boxes: readonly Box[]): Box | undefined {
   let out: Box | undefined;
   for (const box of boxes) out = out ? union(out, box) : copyBox(box);
   return out;
+}
+
+export function translate(at: Point, dx: number, dy: number): void {
+  at.x += dx;
+  at.y += dy;
+}
+
+export function translatePoints(points: readonly Point[], dx: number, dy: number): void {
+  for (const point of points) translate(point, dx, dy);
+}
+
+export function translateShape(shape: { bounds: Box; label?: Box | undefined }, dx: number, dy: number): void {
+  translate(shape.bounds, dx, dy);
+  if (shape.label) translate(shape.label, dx, dy);
+}
+
+export function translateEdge(edge: { points: Point[]; label?: Box | undefined }, dx: number, dy: number): void {
+  translatePoints(edge.points, dx, dy);
+  if (edge.label) translate(edge.label, dx, dy);
 }
 
 export function grow(box: Box, by: number): Box {

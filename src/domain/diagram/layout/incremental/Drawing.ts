@@ -9,7 +9,7 @@ import type { DrawingSnapshot } from './DrawingSnapshot.js';
 import type { TrialGuard } from '../../di/TrialGuard.js';
 import type { Box, DEdge, DShape, Plane, Point, Side } from '../../di/types.js';
 import type { Semantics } from '../../di/Semantics.js';
-import { segmentHits } from '../../utils/geom.js';
+import { segmentHits, translateEdge } from '../../utils/geom.js';
 import { hasExternalLabel, labelSideOf, type LabelSide } from '../../utils/labels.js';
 import { raw } from '../../utils/raw.js';
 
@@ -165,14 +165,7 @@ export class Drawing {
       const sourceDelta = edge.sourceId ? delta.get(edge.sourceId) : undefined;
       const targetDelta = edge.targetId ? delta.get(edge.targetId) : undefined;
       if (!sourceDelta || !targetDelta || sourceDelta.dx !== targetDelta.dx || sourceDelta.dy !== targetDelta.dy) continue;
-      for (const point of edge.points) {
-        point.x += sourceDelta.dx;
-        point.y += sourceDelta.dy;
-      }
-      if (edge.label) {
-        edge.label.x += sourceDelta.dx;
-        edge.label.y += sourceDelta.dy;
-      }
+      translateEdge(edge, sourceDelta.dx, sourceDelta.dy);
     }
     const rerouted: DEdge[] = [];
     for (const edge of this.routeOrder(this.plane.edges.values())) {

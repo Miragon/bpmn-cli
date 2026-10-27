@@ -1,5 +1,5 @@
 import { LayoutDebug } from '../LayoutDebug.js';
-import { bottom, type Box, containsPoint, cx, cy, overlaps, right } from '../../utils/geom.js';
+import { bottom, type Box, containsPoint, cx, cy, overlaps, right, translateEdge, translateShape } from '../../utils/geom.js';
 import { Frames } from '../../di/Frames.js';
 import { PlaneQuery } from '../../di/PlaneQuery.js';
 import { defaultLabelSide, hasExternalLabel, labelAt } from '../../utils/labels.js';
@@ -76,14 +76,7 @@ export class SpaceTool {
     const shape = this.plane.shapes.get(id);
     if (!shape || (!dx && !dy)) return [];
     const moved = [id];
-    const move = (moving: DShape): void => {
-      moving.bounds.x += dx;
-      moving.bounds.y += dy;
-      if (moving.label) {
-        moving.label.x += dx;
-        moving.label.y += dy;
-      }
-    };
+    const move = (moving: DShape): void => translateShape(moving, dx, dy);
     move(shape);
     for (const boundary of PlaneQuery.boundariesOf(this.plane, id)) {
       move(boundary);
@@ -98,14 +91,7 @@ export class SpaceTool {
       const inside = new Set(shapes.map((child) => child.id));
       for (const edge of edges) {
         if (!(edge.sourceId && inside.has(edge.sourceId)) || !(edge.targetId && inside.has(edge.targetId))) continue;
-        for (const point of edge.points) {
-          point.x += dx;
-          point.y += dy;
-        }
-        if (edge.label) {
-          edge.label.x += dx;
-          edge.label.y += dy;
-        }
+        translateEdge(edge, dx, dy);
       }
     }
     return moved;

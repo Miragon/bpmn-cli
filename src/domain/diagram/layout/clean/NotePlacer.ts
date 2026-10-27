@@ -1,4 +1,5 @@
 import type { Box } from '../../di/types.js';
+import { overlaps } from '../../utils/geom.js';
 import type { Segment } from '../../utils/geometry.js';
 
 export interface NoteJob {
@@ -39,8 +40,8 @@ export class NotePlacer {
     let fallbackY = top;
     const free = (job: NoteJob, box: Box): boolean => {
       if (box.x < 0 || box.y < 0) return false;
-      if (job.pool ? !this.inside(box, job.pool) : world.pools.some((pool) => this.overlaps(box, pool, 0))) return false;
-      if ([...world.obstacles, ...taken].some((obstacle) => this.overlaps(box, obstacle, MARGIN))) return false;
+      if (job.pool ? !this.inside(box, job.pool) : world.pools.some((pool) => overlaps(box, pool, 0))) return false;
+      if ([...world.obstacles, ...taken].some((obstacle) => overlaps(box, obstacle, MARGIN))) return false;
       return !world.lines.some((line) => this.lineThrough(line, box));
     };
     return jobs.map((job) => {
@@ -54,10 +55,6 @@ export class NotePlacer {
       taken.push(box);
       return box;
     });
-  }
-
-  private overlaps(first: Box, second: Box, margin: number): boolean {
-    return first.x < second.x + second.width + margin && first.x + first.width + margin > second.x && first.y < second.y + second.height + margin && first.y + first.height + margin > second.y;
   }
 
   private inside(inner: Box, outer: Box): boolean {

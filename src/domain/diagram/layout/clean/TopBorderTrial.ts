@@ -1,6 +1,6 @@
 import { LayoutDebug } from '../LayoutDebug.js';
 import { titleBox } from '../../utils/text.js';
-import { boxesOverlap, center, equalBoxes, segmentHitsBox } from '../../utils/geom.js';
+import { center, equalBoxes, overlaps, segmentHitsBox } from '../../utils/geom.js';
 import type { Box, GEdge, GNode, LaneBandInfo, LinkEnd, Point } from '../../di/types.js';
 import { is, many, type El, idOf } from '../../../document/utils/moddle.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
@@ -64,9 +64,9 @@ export class TopBorderTrial extends ArrangementTrial {
           const box = !segments.some(([edge, pieces]) => (!edge || !mine.has(edge)) && pieces.some(([start, end]) => segmentHitsBox(start, end, boundaryEvent.box)));
           const clear =
             !label ||
-            (!shapes.some((shape) => shape !== boundaryEvent.box && boxesOverlap(shape, label, 2)) &&
-              !labels.some((otherLabel) => !equalBoxes(otherLabel, label) && boxesOverlap(otherLabel, label, 2)) &&
-              !flowLabels.some((flowLabel) => boxesOverlap(flowLabel, label, 2)) &&
+            (!shapes.some((shape) => shape !== boundaryEvent.box && overlaps(shape, label, 2)) &&
+              !labels.some((otherLabel) => !equalBoxes(otherLabel, label) && overlaps(otherLabel, label, 2)) &&
+              !flowLabels.some((flowLabel) => overlaps(flowLabel, label, 2)) &&
               !segments.some(([, pieces]) => pieces.some(([start, end]) => segmentHitsBox(start, end, label))));
           ways.set(boundaryEvent, { length, bends, up, box, label: clear, worth: false });
           continue;
@@ -88,7 +88,7 @@ export class TopBorderTrial extends ArrangementTrial {
       boundaryEvent.onTop = true;
       ScopeGrid.placeBoundaryEvents(host);
       const title = host.child ? titleBox(host.box, nameOf(host)) : undefined;
-      if (title && boxesOverlap(title, boundaryEvent.box, 2)) {
+      if (title && overlaps(title, boundaryEvent.box, 2)) {
         if (LayoutDebug.on()) LayoutDebug.log(`[boundary] ${boundaryEvent.id} stays on the bottom border: the title of ${host.id} is in the way`);
         checkpoint.restore();
         continue;

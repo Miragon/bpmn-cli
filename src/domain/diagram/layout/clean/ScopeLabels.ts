@@ -1,5 +1,5 @@
 import { LABEL_LINE, labelSize } from '../../utils/text.js';
-import { boxesOverlap } from '../../utils/geom.js';
+import { overlaps } from '../../utils/geom.js';
 import type { Box, GArtifact, GNode, ScopeLayout } from '../../di/types.js';
 import { bottom } from '../../utils/geom.js';
 import { nameOf } from '../../utils/names.js';
@@ -56,7 +56,7 @@ export class ScopeLabels {
       const label = artifact.kind === 'annotation' ? undefined : ScopeLabels.of(artifact, 'data');
       if (!label) continue;
       const spots = [...[0, -0.6, 0.6, -1.2, 1.2].map((dx) => ({ ...label, x: Math.round(label.x + dx * label.width) })), ...[1, 2, 3].map((step) => ({ ...label, y: label.y + step * (label.height + 4) }))];
-      out.push([spots.find((spot) => !out.some(([placed]) => boxesOverlap(placed, spot, 2))) ?? label, artifact]);
+      out.push([spots.find((spot) => !out.some(([placed]) => overlaps(placed, spot, 2))) ?? label, artifact]);
     }
     return out;
   }

@@ -1,6 +1,6 @@
 import { is, many, type El, idOf } from '../../../document/utils/moddle.js';
 import { METRICS, SIZES, annotationSize } from '../../utils/sizes.js';
-import { boxesOverlap } from '../../utils/geom.js';
+import { overlaps } from '../../utils/geom.js';
 import type { Box, GArtifact, GEdge, GNode, LinkEnd, Point, ScopeLayout } from '../../di/types.js';
 import { ChannelRouter } from './ChannelRouter.js';
 import { ScopeLabels } from './ScopeLabels.js';
@@ -98,7 +98,7 @@ export class ScopeArtifactPlacer {
   placeAttached(): void {
     const { layout } = this;
     const taken: Box[] = [];
-    const free = (box: Box): boolean => !taken.some((takenBox) => boxesOverlap(takenBox, box, 10));
+    const free = (box: Box): boolean => !taken.some((takenBox) => overlaps(takenBox, box, 10));
     for (const artifact of layout.artifacts) {
       const node = artifact.anchorNode;
       if (!node) continue;
@@ -147,7 +147,7 @@ export class ScopeArtifactPlacer {
     for (const edge of layout.edges) if (edge.label) boxes.push(edge.label);
     const segments = routedSegments(layout);
     const collides = (box: Box): boolean =>
-      boxes.some((obstacle) => boxesOverlap(obstacle, box, 6)) ||
+      boxes.some((obstacle) => overlaps(obstacle, box, 6)) ||
       segments.some(([start, end]) => Math.min(start.x, end.x) < box.x + box.width + 4 && Math.max(start.x, end.x) > box.x - 4 && Math.min(start.y, end.y) < box.y + box.height + 4 && Math.max(start.y, end.y) > box.y - 4);
     const settle = (note: GArtifact, cx: number, top: number, check: (box: Box) => boolean): Box | undefined => {
       for (let step = 0; step <= 8; step++) {
@@ -258,7 +258,7 @@ export class ScopeArtifactPlacer {
     };
     if (!blockers.length) return fallback();
     const others = nodes.filter((box) => box !== host.box && box !== event.box);
-    const clear = (box: Box): boolean => free(box) && !blockers.some((blocker) => boxesOverlap(blocker, box, 4)) && !others.some((blocker) => boxesOverlap(blocker, box, 8));
+    const clear = (box: Box): boolean => free(box) && !blockers.some((blocker) => overlaps(blocker, box, 4)) && !others.some((blocker) => overlaps(blocker, box, 8));
     const label = ScopeLabels.of(event, 'boundary');
     const right = { x: event.box.x + event.box.width + 8, y: Math.max(y0, label ? label.y + label.height + 6 : y0) };
     const far = Math.min(near, Math.min(...blockers.map((blocker) => blocker.x)) - 8 - note.width);

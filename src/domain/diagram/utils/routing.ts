@@ -1,6 +1,6 @@
 /** Costs, directions and segment helpers the orthogonal router and its grid share. */
 import type { Box, Point, Side } from '../di/types.js';
-import { bottom, right } from './geom.js';
+import { bottom, right, segmentsCross } from './geom.js';
 
 export const BEND = 150;
 /** a port on a side another connection of the shape takes */
@@ -27,15 +27,6 @@ export const EPS = 1e-6;
 export const DX = [1, 0, -1, 0];
 export const DY = [0, 1, 0, -1];
 export const OUTWARD: Record<Side, number> = { right: 0, bottom: 1, left: 2, top: 3 };
-
-function orient(first: Point, second: Point, third: Point): number {
-  return Math.sign((second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x));
-}
-
-export function segmentsCross(firstStart: Point, firstEnd: Point, secondStart: Point, secondEnd: Point): boolean {
-  const o1 = orient(firstStart, firstEnd, secondStart), o2 = orient(firstStart, firstEnd, secondEnd), o3 = orient(secondStart, secondEnd, firstStart), o4 = orient(secondStart, secondEnd, firstEnd);
-  return o1 * o2 < 0 && o3 * o4 < 0;
-}
 
 /** The router's crossing cost uses the same test. */
 export function crossings(points: readonly Point[], lines: readonly Point[][]): number {
