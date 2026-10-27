@@ -10,7 +10,12 @@ export class RenderDiagramService implements RenderDiagramUseCase {
 
   async render(command: RenderDiagramUseCase.Command): Promise<RenderDiagramUseCase.Result> {
     const { source, ...request } = command;
-    const xml = 'xml' in source ? source.xml : 'file' in source ? await this.load.read(source.file) : this.load.decode(source.bytes, source.name);
+    const xml = await this.textOf(source);
     return this.images.write({ xml, ...request });
+  }
+
+  private async textOf(source: RenderDiagramUseCase.Command['source']): Promise<string> {
+    if ('xml' in source) return source.xml;
+    return 'file' in source ? this.load.read(source.file) : this.load.decode(source.bytes, source.name);
   }
 }
