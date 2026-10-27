@@ -1,6 +1,6 @@
 /**
  * The browser bundle of the core entry: the engine of the isomorphism check
- * (tools/iso/check.mjs in `npm run gate`, test/isomorphic.test.ts).
+ * (tools/iso/check.mjs in `npm run gate`, test/e2e/isomorphic.test.ts).
  *
  * Contract: `bundleCore(opts)` bundles one entry with esbuild for
  * platform=browser and resolves to

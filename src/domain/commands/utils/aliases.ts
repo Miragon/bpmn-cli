@@ -1,5 +1,6 @@
 import { CliError } from '../../document/CliError.js';
 import { editDistance, typoTolerance } from '../../document/utils/fuzzy.js';
+import { EditCommandDefinitions } from '../definitions/EditCommandDefinitions.js';
 import type { EditCommand } from '../types.js';
 
 export const ALIAS = /^\$[A-Za-z_][A-Za-z0-9_-]*$/;
@@ -7,6 +8,10 @@ export const ALIAS = /^\$[A-Za-z_][A-Za-z0-9_-]*$/;
 /** `$check` is an alias, `${ok}` an expression. */
 export function isAlias(value: unknown): value is string {
   return typeof value === 'string' && ALIAS.test(value);
+}
+
+function opsDefining(key: string): string {
+  return EditCommandDefinitions.all().filter((definition) => key in definition.fields).map((definition) => definition.name).join(', ');
 }
 
 function listing(defined: ReadonlyMap<string, number>): string {
@@ -21,6 +26,6 @@ export function unknownAlias(index: number, op: EditCommand, key: string, alias:
   return new CliError('E_UNKNOWN_ALIAS', `ops[${index}] (${op.op}): "${key}": alias ${alias} is not defined${where}${close}; ${listing(defined)}`, 'usage', {
     op: index,
     candidates,
-    hint: 'An op defines an alias with "as": "$name" (add, connect, split and the nodes of a split branch), "flowAs" (add: the flow into the new node), "outAs" (add: the flow it creates out of the new node), "joinAs" (split: the join gateway) or "refAs" (add, connect, set, retype: the message / error / signal / escalation the element references); only the ops after it can use it.',
+    hint: `An op defines an alias with "as": "$name" (${opsDefining('as')} and the nodes of a split branch), "flowAs" (${opsDefining('flowAs')}: the flow into the new node), "outAs" (${opsDefining('outAs')}: the flow it creates out of the new node), "joinAs" (${opsDefining('joinAs')}: the join gateway) or "refAs" (${opsDefining('refAs')}: the message / error / signal / escalation the element references); only the ops after it can use it.`,
   });
 }

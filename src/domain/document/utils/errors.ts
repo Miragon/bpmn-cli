@@ -12,10 +12,6 @@ export function ioError(code: string, message: string, details: ErrorDetails = {
   return new CliError(code, message, 'io', details);
 }
 
-export function layoutError(code: string, message: string, details: ErrorDetails = {}): CliError {
-  return new CliError(code, message, 'layout', details);
-}
-
 export function isCliError(err: unknown): err is CliError {
   return err instanceof CliError;
 }

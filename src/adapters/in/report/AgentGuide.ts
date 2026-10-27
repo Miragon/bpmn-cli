@@ -1,5 +1,5 @@
 import { EditCommandDefinitions } from '../../../domain/commands/definitions/EditCommandDefinitions.js';
-import { OP_NAMES } from '../../../domain/commands/utils/op-names.js';
+import { FORMAT_OP_NAMES, OP_NAMES } from '../../../domain/commands/utils/op-names.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import { COMMANDS, COMMON_OPTIONS } from './CommandCatalogue.js';
 import { COMMON_ERRORS, ERROR_CATALOGUE, TOP_ERRORS, TRIGGER_OPTIONS } from './guide.js';
@@ -191,7 +191,7 @@ export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string 
   reading: { sections: ['READING LARGE MODELS'], summary: 'show --around, --context, find' },
   output: { sections: ['OUTPUT'], summary: 'results, warnings delta, --summary, JSON, stdin / stdout' },
   layout: { sections: ['LAYOUT MODES'], summary: 'auto / incremental / full' },
-  format: { sections: ['FORMATTING WITHOUT XML'], summary: 'place, align, color, label, route, space, tidy' },
+  format: { sections: ['FORMATTING WITHOUT XML'], summary: FORMAT_OP_NAMES.join(', ') },
   render: { sections: ['LOOKING AT THE DRAWING'], summary: 'bpmn render: crops, halos, numbered problems, tiles, --render' },
   ops: { sections: ['OPS JSON'], summary: 'apply and its ops' },
   placement: { sections: ['PLACEMENT'], summary: '--after / --before / --flow / --in / --on' },
@@ -220,8 +220,8 @@ export class AgentGuide {
         '  - You never see or write DI (shapes, edges, coordinates). The CLI keeps the drawing: a hand-made (or formatted)',
         '    diagram stays as it is, new elements are placed locally and only affected flows rerouted; a new file, or a',
         '    drawing the engine made and nobody changed, is redrawn by the built-in engine (see LAYOUT MODES).',
-        '  - To change the picture, use the format commands (place, align, color, label, route, space, tidy, compact,',
-        '    order of lanes and pools); they name other elements, never coordinates (see FORMATTING WITHOUT XML).',
+        `  - To change the picture, use the format commands (${FORMAT_OP_NAMES.join(', ')}, order of lanes and pools);`,
+        '    they name other elements, never coordinates (see FORMATTING WITHOUT XML).',
         '  - Elements are addressed by id only (names may repeat). Ids speak and follow the file: a new id says what it',
         '    names (Activity_CheckInvoice; unnamed: kind + place, Gateway_AfterCheckInvoice, Event_TimerOnReview; flows',
         '    their ends, Flow_CheckInvoiceToBookInvoice) with the file\'s prefixes, case and flow form (serviceTask_checkStock,',

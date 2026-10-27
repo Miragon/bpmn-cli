@@ -28,7 +28,7 @@ setup does not offer.
 
 Graders cannot run a command, so `tidy-after-edit` checks the layout problems as DI conditions on
 the file: the label's bounds, and the rejection branch in a row below the reminder path (with
-rows at least 100 px apart, as the CLI draws them). `test/plugin.test.ts` keeps them in line with
+rows at least 100 px apart, as the CLI draws them). `test/e2e/plugin.test.ts` keeps them in line with
 `bpmn metrics --json` on the fixture, the solution and seven other states of the file. For the
 layout problems a run left, run `bpmn metrics <file> --json` on the workspaces that `--keep-temp`
 keeps.
@@ -75,6 +75,6 @@ claude plugin eval plugins/bpmn-cli --scaffold --allow-tools Bash Write Edit --j
   neither the plugin nor the CLI. `bpmn guide --short` names `bpmn render` too: in the first
   `tidy-after-edit` run both baseline runs found the CLI, rendered and read the PNGs as well.
 
-`test/plugin.test.ts` checks the suite without a model: every case is well-formed, every regex
+`test/e2e/plugin.test.ts` checks the suite without a model: every case is well-formed, every regex
 compiles, a reference solution made with the CLI passes every file grader, the untouched fixture
 fails the graders that check the change, and the transcript graders match what the CLI prints.

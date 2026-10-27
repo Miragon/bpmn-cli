@@ -45,7 +45,7 @@ const LOADERS: Record<EnginePlatform, () => Promise<EngineProfile>> = {
  * demand as a chunk of their own; run stays synchronous and throws E_PROFILE_NOT_LOADED until
  * they are loaded. Mutations report only the findings the change introduced (delta).
  */
-export class PlatformProfiles {
+class PlatformProfiles {
   private readonly rules: Partial<Record<EnginePlatform, EngineProfile>> = {};
   /**
    * A failed load is forgotten, so a later call imports the chunk again; a browser

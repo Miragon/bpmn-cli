@@ -217,9 +217,10 @@ export class ModelCommandService {
     return cs;
   }
 
-  /** Diagram-only commands (tidy, compact) change nothing here: DiagramCommandService runs them once the drawing is up to date. */
+  /** Diagram-only commands change nothing here: DiagramCommandService runs them once the drawing is up to date. */
   private dispatch(op: EditCommand): ChangeSet {
     const doc = this.doc;
+    if (isDiagramCommand(op)) return new ChangeSet();
     switch (op.op) {
       case 'add':
         return new ElementCreationService(doc, this.edit).add(op);
@@ -239,15 +240,6 @@ export class ModelCommandService {
         return new ExtensionElementService(doc, this.edit).apply(op);
       case 'split':
         return new BranchSplitService(doc, this.edit).split(op);
-      case 'place':
-      case 'align':
-      case 'color':
-      case 'label':
-      case 'route':
-      case 'space':
-      case 'tidy':
-      case 'compact':
-        return new ChangeSet();
       default:
         throw usageError(`Unknown operation "${String((op as { op?: unknown }).op)}"`);
     }

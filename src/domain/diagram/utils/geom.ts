@@ -66,11 +66,6 @@ export function grow(box: Box, by: number): Box {
   return { x: box.x - by, y: box.y - by, width: box.width + 2 * by, height: box.height + 2 * by };
 }
 
-export function translate(box: Box, dx: number, dy: number): void {
-  box.x += dx;
-  box.y += dy;
-}
-
 function slab(origin: number, direction: number, lo: number, hi: number): [number, number] {
   const lowExit = (lo - origin) / direction;
   const highExit = (hi - origin) / direction;

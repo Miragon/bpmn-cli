@@ -15,7 +15,7 @@ export interface VendorElementType {
   allowedIn: string[];
 }
 
-export interface RawProperty {
+interface RawProperty {
   name: string;
   type?: string;
   isAttr?: boolean;

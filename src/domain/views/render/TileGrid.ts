@@ -32,7 +32,7 @@ export class TileGrid {
   ) {}
 
   cut(): { views: TileView[]; skipped: boolean } | { over: true } | undefined {
-    const { items, view, frame, budget } = this;
+    const { items, view, frame } = this;
     const plane = frame.located;
     if (!plane) return undefined;
     const marks: Box[] = items.filter((item) => !item.extra && item.content && meets(item.content, view)).map((item) => item.content!);

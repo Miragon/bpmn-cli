@@ -3,7 +3,7 @@ import { idOf, raw, rawList } from '../utils/raw.js';
 import { center } from '../utils/geom.js';
 import type { Box, Point } from './types.js';
 
-export const BPMIQ_URI = 'https://bpmiq.io/schema/1.0/bpmiq';
+const BPMIQ_URI = 'https://bpmiq.io/schema/1.0/bpmiq';
 
 /** design-iq's default sticky size */
 const DEFAULT_SIZE = 120;

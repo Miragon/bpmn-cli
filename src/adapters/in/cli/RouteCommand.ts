@@ -1,5 +1,4 @@
-import { Option, type Command as CommandType } from 'commander';
-import { SIDE_VALUES } from '../../../domain/commands/utils/op-fields.js';
+import type { Command as CommandType } from 'commander';
 import type { RerouteFlow } from '../../../domain/commands/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { FormatCommand } from './FormatCommand.js';
@@ -11,8 +10,8 @@ export class RouteCommand extends FormatCommand {
   register(program: CommandType): void {
     this.withMutationOptions(
       this.define(program, 'route')
-        .addOption(new Option('--exit <side>', `side it leaves its source by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES]))
-        .addOption(new Option('--entry <side>', `side it enters its target by: ${SIDE_VALUES.join(' | ')}`).choices([...SIDE_VALUES])),
+        .option('--exit <side>')
+        .option('--entry <side>'),
     ).action((file: string, flowId: string, options: RawOpts) => {
       const op: RerouteFlow = { op: 'route', id: flowId, ...(this.pick(options, ['exit', 'entry'] as const) as Pick<RerouteFlow, 'exit' | 'entry'>) };
       return this.runFormat(file, op, options);

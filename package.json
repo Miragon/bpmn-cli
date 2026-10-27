@@ -51,6 +51,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "knip": "knip",
     "layout:regress": "node tools/layout-regress.mjs",
     "bench": "node tools/bench/run.mjs",
     "bench:summary": "node tools/bench/summary.mjs",
@@ -60,7 +61,7 @@
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run build && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
+    "gate": "npm run build && knip && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -77,6 +78,7 @@
     "archunit": "2.5.4",
     "camunda-bpmn-moddle": "8.0.2",
     "esbuild": "^0.28.2",
+    "knip": "6.43.0",
     "playwright": "1.64.1",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",

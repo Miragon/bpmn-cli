@@ -11,7 +11,7 @@ import { RunCheckpoint } from './RunCheckpoint.js';
 import type { DrawingCheckpoint } from '../../di/DrawingCheckpoint.js';
 import type { Doc } from '../../../document/Doc.js';
 import { is, layoutRoot, type El } from '../../../document/utils/moddle.js';
-import { copyBox, sameBox, samePoints, type Box, type Point } from '../../utils/geom.js';
+import { copyBox, sameBox, samePoints, type Box } from '../../utils/geom.js';
 import { NodePlacer, type PlacementHooks, type PlacerState } from './NodePlacer.js';
 import { idOf, raw, rawList } from '../../utils/raw.js';
 import { DiagramReader } from '../../di/DiagramReader.js';

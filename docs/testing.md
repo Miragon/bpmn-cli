@@ -9,7 +9,7 @@ opt-in Camunda 8 engine check, see
 | layer | what it catches | command | time |
 | --- | --- | --- | --- |
 | unit tests | behaviour of every op, the pipeline, the layout engines | `npx vitest run` | ~10 s |
-| property test | invariant violations in short seeded edit sequences | `npx vitest run test/fuzz.test.ts` | ~5 s |
+| property test | invariant violations in short seeded edit sequences | `npx vitest run test/e2e/fuzz.test.ts` | ~5 s |
 | layout regression | quality of the clean full-layout engine on tools/scenarios | `npm run layout:regress` | ~20 s |
 | fuzzer | invariant violations in long random edit sequences, through the real CLI | `npm run fuzz` | 10 s to hours |
 | benchmark | stability, quality, hard defects and semantic success of six typical edits, against a baseline | `npm run bench` | ~30 s per arm on the scenarios |
@@ -26,7 +26,7 @@ gated deterministically by the property test's fixed walks, the regression
 budget and `bench --compare`.
 
 None of the layers depends on the shell's `BPMN_KEEP_FLOW_IDS`: the unit
-tests clear it before every file (`test/setup.ts`), so the CLIs they spawn
+tests clear it before every file (`test/helpers/setup.ts`), so the CLIs they spawn
 rename flows as by default, and the fuzzer, the benchmark, the layout
 regression and the demo run the CLI without it (`CLI_ENV` in
 `tools/fuzz/lib/setup.mjs`). A test that needs it sets it for its own spawn.
@@ -101,11 +101,11 @@ introduced (or export `HARD_KEYS`).
 
 ```
 npx vitest run                       # everything
-npx vitest run test/fuzz.test.ts     # the property test only
+npx vitest run test/e2e/fuzz.test.ts     # the property test only
 npm run typecheck
 ```
 
-`test/fuzz.test.ts` runs about twenty fixed walks of 15 steps in-process on the
+`test/e2e/fuzz.test.ts` runs about twenty fixed walks of 15 steps in-process on the
 library (no build needed): the synthetic fixtures in `test/fixtures/` and a few
 scenarios. A failure message names the step, the op and the violation, e.g.
 `step 10 align: hard:overlaps Task_B,Task_C`. Reproduce and shrink it with the
@@ -126,7 +126,7 @@ Every fixture must be synthetic. To keep a defect found on a private model,
 rebuild a minimal model that shows it (the minimiser's repro tells you which
 ops matter) and add that.
 
-`test/bpmnlint.test.ts` checks the project's bpmnlint configuration (issue
+`test/adapters/out/files/bpmnlint.test.ts` checks the project's bpmnlint configuration (issue
 #33) with the real bpmnlint and @miragon/bpmnlint-plugin-rules, offline:
 each case writes a repository of its own into a temporary directory (a
 `.git` directory, a `.bpmnlintrc`, models, and a `node_modules` with
@@ -147,10 +147,10 @@ chunk (the exit code stays, no `EPIPE` trace), load a plugin that leaves a
 timer running (the command still ends) and run from a removed working
 directory. A `.bpmnlintrc` above the
 temporary directory or the repository would run bpmnlint in every CLI test:
-`test/global-setup.ts` (vitest's globalSetup) stops the run and names it.
+`test/helpers/global-setup.ts` (vitest's globalSetup) stops the run and names it.
 The fuzzer, the benchmark and the layout regression pass
 `--no-lint-config`.
-The id conventions of a `.bpmnlintrc` (#34): `test/conventions-lint.test.ts`
+The id conventions of a `.bpmnlintrc` (#34): `test/domain/validation/conventions-lint.test.ts`
 lints every id bpmn-cli generates under several `element-id-naming` settings
 (the bare flag, PascalCase with `Flow_`, snake_case with the qualifier
 required, exact prefixes for pools, lanes, messages and the process, prefixes
@@ -160,7 +160,7 @@ gives another trigger, with the flows named after them, a split's join, the
 join after an explicit split id in another case), and expects no finding (a
 control without conventions has them); it also checks how
 `idConventionsFromLint` reads the options and the `W_CONFIG_IGNORED` notes.
-`test/conventions-declared.test.ts` checks the style around them (the rest of
+`test/domain/validation/conventions-declared.test.ts` checks the style around them (the rest of
 a file stable over many writes and learned from its own ids that do not
 follow the rule, single words (also under PascalCase), the kind word, glued
 suffixes and joins, also after an explicit split id, message flows and
@@ -173,13 +173,13 @@ named after it (also in the entries of an op before its retype), an id
 freed and then claimed explicitly, the `conventions`
 of a result (none in a new file or one that follows the rule), the view of
 `show --conventions` with its reasons).
-`test/bpmnlint.test.ts` checks the lookup, the notes in validate and writes
+`test/adapters/out/files/bpmnlint.test.ts` checks the lookup, the notes in validate and writes
 (also the one for a prefix declared for a DI type),
 `show --conventions` and `new` on the command line (its own errors before
 the `.bpmnlintrc`'s), and that a `.bpmnlintrc` without the rule, or
 with it off, writes every fixture byte for byte as without one.
 
-`test/step2-integration.test.ts` checks that the parts of step 2 work as one
+`test/e2e/pipeline.test.ts` checks that the parts of step 2 work as one
 pipeline: the in-memory API keeps the text (a no-op is the input string
 itself, an insert gets ids in the file's style and changes only what it
 touched, a full redraw keeps every DI start tag, a sticky keeps its text
@@ -187,7 +187,7 @@ when it follows its node), validators see the text-preserving result, a
 host validator runs in memory (a write that adds its error is refused,
 `validateXml` reports every finding), and the validators see the file a
 helper writes (the `--out` target) or checks, unless `file` names another.
-`test/validators.test.ts` covers the validator hook of the pipeline
+`test/domain/validation/validators.test.ts` covers the validator hook of the pipeline
 (blocking, pre-existing errors through renames, findings counted one by one,
 a warning matched by its `key`, `covers`, the context, failing validators,
 the check of `validate`, and the CLI, which takes no host validators: a
@@ -198,22 +198,22 @@ unchanged file shows none of them, the `E_VALIDATION` advice (the
 catalogue fix, the `guide --short` line, the plugin skill's row) does not
 send the reader to `bpmn validate`, and the guide's JSON error shape lists
 the `errors` that advice points to),
-`test/decision-link.test.ts` the decision link (`calledDecision`) in models
+`test/domain/views/decision-link.test.ts` the decision link (`calledDecision`) in models
 without an engine (the unprefixed attribute; with `platform: 'none'` the
 spelling of the task's link or of the file's other links kept), Camunda 7,
 Operaton and Camunda 8 files.
-`test/views.test.ts` checks the reading views (`show --around`, `show <id>
+`test/domain/views/views.test.ts` checks the reading views (`show --around`, `show <id>
 --context`, lanes and message-flow names in `show`, message flows and
 annotations in `show <id>`) on the synthetic `test/fixtures/views/claims.bpmn`
 and holds a byte budget: on a generated 120-task model the neighbourhood
 stays under 320 bytes per shown node and a tenth of `show`, and does not grow
-with the model. `test/report-delta.test.ts` checks that a result lists only
+with the model. `test/adapters/in/report/report-delta.test.ts` checks that a result lists only
 the warnings a change added and resolved and counts the others (renames
-followed, floods as one line, `--summary`); `test/cli-views.test.ts` the
+followed, floods as one line, `--summary`); `test/e2e/cli-views.test.ts` the
 same on the command line, plus compact JSON, stdin / stdout, `guide --short`
 (<= 5 KB), every `guide <topic>`, `kinds --section` and the guide's CAMUNDA 8
 recipe run command by command.
-`test/step3-integration.test.ts` checks the step 3 packages together: an
+`test/e2e/apply-batches.test.ts` checks the step 3 packages together: an
 `apply` batch that names everything by alias, with the selectors, the pool
 order and `compact` taking aliases; an alias of a flow renamed after its new
 ends followed into a format op, and `E_NOT_FOUND` naming the new id when a
@@ -224,7 +224,7 @@ profile in the warnings delta; and the strip of a removed node that must not
 pull an expanded sub-process over a shape of another row (found by the gate's
 fuzz campaign on the integrated build).
 The round 1 verifier's findings, each with a test that fails on round 1:
-`test/step3-ids-report.test.ts` (ids and the report: flows at unnamed
+`test/domain/document/id-quality.test.ts` (ids and the report: flows at unnamed
 gateways named by their speaking ids (no `_2`), unnamed elements in a row
 (the nearest named anchor once; where the prefix says the kind, `Task_`,
 `task_`, the anchor's kind where an id would repeat the anchor's,
@@ -244,27 +244,27 @@ transliteration beyond German, the definitions id of `new`, and the warnings
 delta: platform findings counted, a shrinking `W_DUPLICATE_NAME`, a bridge
 that takes over a removed flow's id, warnings of a batch's final state, `new`
 with the platform's findings),
-`test/step3-c8-fixes.test.ts` (Camunda 8, see "Engine checks (Camunda 8)"),
-`test/views-context.test.ts` (`show <id> --context` on a synthetic shop
+`test/domain/validation/c8-feel-and-deploy.test.ts` (Camunda 8, see "Engine checks (Camunda 8)"),
+`test/domain/views/views-context.test.ts` (`show <id> --context` on a synthetic shop
 model: every boundary event of the sub-processes around an element, the
 message of a message element with the flows of that message drawn to its
 pool, a message flow's ends, what uses a message / signal / error /
-escalation), `test/format-frames.test.ts` (align / place with selector sets
+escalation), `test/domain/diagram/format-frames.test.ts` (align / place with selector sets
 and explicit ids never take a shape out of its sub-process, also on the two
-scenarios the fuzzer hit), `test/move-lanes.test.ts` (a node moved into a
+scenarios the fuzzer hit), `test/domain/editing/move-lanes.test.ts` (a node moved into a
 flow between two lanes gets add's lane when it has none, keeps its own
 otherwise and is drawn on a row of it, like `add --lane`) and
-`test/remove-join.test.ts` (a plain remove bridges a merge, refuses a
-parallel / inclusive join); `test/step3-fixes-integration.test.ts` checks the
+`test/domain/editing/remove-join.test.ts` (a plain remove bridges a merge, refuses a
+parallel / inclusive join); `test/e2e/summary-and-redirects.test.ts` checks the
 fixes together (the message of `refAs` and speaking ids in `--summary`,
 created elements not also listed as changed, the subscription redirect in the
 warnings delta, a plain remove of a merge and `move` into a cross-lane flow
 renaming flows after their new ends).
-`test/drawn-ids.test.ts` checks that a full redraw gives id-less elements
+`test/domain/document/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, and that an op giving a sequence flow without id
-other ends gives it one from them, and `test/node-files.test.ts` the encodings (a file
+other ends gives it one from them, and `test/e2e/node-files.test.ts` the encodings (a file
 is read as it declares, a write is UTF-8 and says so).
-`test/layout-batch-parity.test.ts` checks issue #18, stage A, on the
+`test/domain/diagram/layout-batch-parity.test.ts` checks issue #18, stage A, on the
 synthetic hand-drawn model of the plugin eval `edit-hand-drawn-model`: the
 agent's batches (decision + "no" to the existing node, decision + a new "no"
 branch, `split`, a merge gateway; each with and without the timer reminder
@@ -292,7 +292,7 @@ grows at its bottom), and next to an annotation on a flow the move
 reroutes (no `through`); `E_NO_ROOM` names the space-tool run with the
 fewest layout problems, and after other ops of a batch only the batch op
 (no command for the file).
-`test/layout-room-making.test.ts` checks issue #18, stage B, on synthetic
+`test/domain/diagram/layout-room-making.test.ts` checks issue #18, stage B, on synthetic
 hand-drawn models (`test/fixtures/layout-room/`), the eval's model and a
 public scenario: a boundary path above a line from an earlier boundary event
 opens the row below its host (the line and its end move down), a decision
@@ -316,7 +316,7 @@ one between two drawn lines is undone (`shared-reject-line.bpmn`); a
 reroute that still crosses is not measured (the `debug` sink); and an
 association a splice breaks is routed again before the next op of the
 batch (fails when `routeNow` skips associations again).
-`test/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
+`test/e2e/render.test.ts` checks `bpmn render` (issue #12, stage 1): every file
 of `tools/scenarios` and `test/fixtures` (and each of its other planes)
 renders to SVG and PNG within the default 2000 px, with the same bytes twice
 (the PNG of every tenth file twice); the PNG has text pixels with the bundled
@@ -330,7 +330,7 @@ not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
 `-o -`, `--json`, `--plane`, the usage errors). The synthetic
 `test/fixtures/render/gallery.bpmn` has every element kind the renderer
 draws (built with the CLI, then a group and multiple events added by hand).
-`test/render-agent.test.ts` checks the agent features (stage 2): every layout
+`test/domain/views/render-agent.test.ts` checks the agent features (stage 2): every layout
 problem of every scenario and fixture located inside the bounding box of its
 elements on its plane (`locateProblems`; `layoutProblems` unchanged);
 `--problems` listing every metrics problem in its order with the same ids,
@@ -345,7 +345,7 @@ mutating commands (text, JSON, the region of a large drawing, a failed render
 that leaves the change standing); and the fuzz walk's render oracle. The
 synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
 wide, built with the CLI) is the tiles and focus model.
-`test/render-fixes.test.ts` checks the fixes after the verification of
+`test/domain/views/render-fixes.test.ts` checks the fixes after the verification of
 issue #12 on synthetic models: broken or far-flung coordinates (NaN,
 1e308, Infinity, 1e9, a negative size, far label bounds) are left out with a
 note and never give `width="NaN"`, an all-broken plane is `E_RENDER`;
@@ -358,7 +358,7 @@ a message flow's envelope and message name; a file without a diagram lists
 the `metrics` problems of the file; `-o x.jpg` is `E_USAGE` (with
 `--format png` it is written); a `--scope` on an empty plane is
 `E_NO_MATCH`.
-`test/plugin.test.ts` checks the Claude Code plugin; for the look step
+`test/e2e/plugin.test.ts` checks the Claude Code plugin; for the look step
 (stage 3) the render example of `SKILL.md` runs on the recipes' model and
 writes a real PNG within 2000 px into `.bpmn-render/`, every render the
 skill shows writes there (not to the CLI's default in the temporary
@@ -378,7 +378,7 @@ must run in a browser; only the adapters (`src/adapters/`), the node entry
 
 ```
 npm run build && npm run check:iso     # node tools/iso/check.mjs [--json]
-npx vitest run test/isomorphic.test.ts
+npx vitest run test/e2e/isomorphic.test.ts
 ```
 
 - `tools/iso/check.mjs` (part of the gate) bundles `dist/index.js` with
@@ -410,7 +410,7 @@ npx vitest run test/isomorphic.test.ts
   esbuild itself never shows the hang (it puts shared modules into chunks
   of their own); the check models what Rollup does, and the Vite run in
   HANDOVER.md ("Profile rules on demand") proved it in Chrome.
-- `test/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
+- `test/e2e/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
   needed), checks that the check sees a planted `node:fs` import and
   `process` read, and runs the bundle in a `vm` context without any Node
   global: `applyToXml` (also with host validators, and a no-op that must
@@ -438,7 +438,7 @@ npx vitest run test/isomorphic.test.ts
 - Test files that call `runProfile` or `validateDoc(doc, { platform })`
   directly load the rules first (`await loadProfiles()` at the top); the
   pipeline tests do not, so they run the on-demand path.
-- `test/api.test.ts` checks that the in-memory API gives what the CLI writes
+- `test/e2e/api.test.ts` checks that the in-memory API gives what the CLI writes
   and prints for the same input.
 
 When the check fails, move the Node-only code into an adapter in `src/adapters/out/files/`
@@ -601,7 +601,7 @@ A write changes the text of the elements it changed and nothing else
 (src/domain/document/xml/TextPreservation.ts, src/domain/document/utils/mirror.ts; [contract.md](contract.md#what-a-write-changes)). Two checks
 keep it that way:
 
-- `test/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
+- `test/e2e/roundtrip.test.ts` (part of `npx vitest run`): the synthetic
   fixtures in `test/fixtures/roundtrip/` (prolog, comments, CDATA, vendor
   attributes before typed ones, four-space indentation, `/>` without a
   space, a file without incoming / outgoing lists) with exact expected
@@ -650,30 +650,30 @@ node tools/speaking-ids.mjs                                   # tools/scenarios
 node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
 ```
 
-The regression tests: `test/speaking-ids.test.ts` and
-`test/conventions-ids.test.ts` (ids in every file style, renamed flows and
+The regression tests: `test/domain/document/speaking-ids.test.ts` and
+`test/domain/document/conventions-ids.test.ts` (ids in every file style, renamed flows and
 their DI, also after an end got another id earlier in the batch; a flow
 form that stays put over many edits, also in snake_case and Pascal_Snake
 bodies, ties, flows under an outvoted prefix or scope),
-`test/keep-flow-ids.test.ts` (flow ids kept with `--keep-flow-ids`,
+`test/domain/editing/keep-flow-ids.test.ts` (flow ids kept with `--keep-flow-ids`,
 `W_FLOW_ID_STALE`, an end renamed or named earlier, `--flow-id` on a
 splice, followed hints in files of mixed flow prefixes:
-`test/fixtures/mixed-styles/`), `test/batch-aliases.test.ts` (aliases in `apply`, on the command
-line too), `test/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
-`test/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
-`test/lane-splice.test.ts` (the lane and the geometry of a node added into a
+`test/fixtures/mixed-styles/`), `test/domain/batch/batch-aliases.test.ts` (aliases in `apply`, on the command
+line too), `test/domain/document/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
+`test/domain/editing/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
+`test/domain/editing/lane-splice.test.ts` (the lane and the geometry of a node added into a
 flow between two lanes).
 
 ## Engine checks (Camunda 7)
 
 The Camunda 7 profile of `bpmn validate` (`src/domain/validation/profiles/C7Profile.ts`) states for
-every rule what the engines do. `test/c7-profile.test.ts` holds one synthetic
+every rule what the engines do. `test/domain/validation/c7-profile.test.ts` holds one synthetic
 model per rule (82 models) with the expected codes and the engine verdict;
 by default it checks only the profile. To re-check the verdicts against live
 engines (REST, no authentication), list their REST roots:
 
 ```
-BPMN_C7_ENGINES=http://localhost:8080/engine-rest[,http://host:port/engine-rest ...] npx vitest run test/c7-profile.test.ts
+BPMN_C7_ENGINES=http://localhost:8080/engine-rest[,http://host:port/engine-rest ...] npx vitest run test/domain/validation/c7-profile.test.ts
 ```
 
 Each model is deployed to every listed engine, the test asserts the engine's
@@ -681,21 +681,21 @@ verdict and that a deploy-severity finding (`W_C7_DEPLOY_*`) is reported
 exactly for the refused ones, and every deployment is deleted again. The
 verdicts were identical on Camunda 7.24.0, CIB seven 2.2.0 and Operaton 2.1.5
 (341 tests with three engines). The follow-up rounds add their own models with
-engine verdicts the same way: `test/c7-followups-profile.test.ts` (deploy
+engine verdicts the same way: `test/domain/validation/c7-profile-rules.test.ts` (deploy
 rules the engines disagreed with or the profile missed; `operaton` marks a
 verdict only Operaton gives, the engine is told apart by
-`/telemetry/data`), `test/c7-followups-integration.test.ts` (events with
+`/telemetry/data`), `test/e2e/camunda7-rules.test.ts` (events with
 several event definitions, attributes BPMN does not define) and
-`test/c7-followups-verify.test.ts` (schema rules on every event definition,
+`test/domain/validation/c7-schema-rules.test.ts` (schema rules on every event definition,
 start events of transactions / empty sub-processes / ad-hoc sub-processes;
 `run` also starts the process and checks that it fails or runs, and the
 second-start hint is followed and run). Run all four with the same
 `BPMN_C7_ENGINES`; `--no-file-parallelism` keeps two files from deploying
 one message name at the same time.
 
-The other C7 regression tests (`test/c7-semantic.test.ts`,
-`test/c7-ext-structure.test.ts`, `test/c7-integration.test.ts`,
-`test/c7-followups-ops.test.ts`) run without engines; their engine evidence (deploy and run the CLI-built models, real
+The other C7 regression tests (`test/domain/editing/c7-semantic.test.ts`,
+`test/domain/editing/c7-ext-structure.test.ts`, `test/e2e/camunda7.test.ts`,
+`test/domain/editing/c7-ops.test.ts`) run without engines; their engine evidence (deploy and run the CLI-built models, real
 customer files before and after edits) was collected outside the repository,
 see [audit-2026-10.md](audit-2026-10.md#camunda-7-audit-2026-10-09). When you
 change how vendor content is written, build a small model with the CLI, deploy
@@ -709,24 +709,24 @@ element by element.
 The Camunda 8 profile (`src/domain/validation/profiles/C8Profile.ts`) states for every rule what
 Camunda 8.9 does; placement and known names come from the Zeebe descriptor
 (`src/domain/document/vendor/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
-`node tools/gen-camunda-descriptor.mjs`, `test/isomorphic.test.ts` fails
-while it is stale). `test/c8-profile.test.ts` holds one synthetic model per
+`node tools/gen-camunda-descriptor.mjs`, `test/e2e/isomorphic.test.ts` fails
+while it is stale). `test/domain/validation/c8-profile.test.ts` holds one synthetic model per
 rule (151 models) with the expected codes and Camunda 8's verdict, the timer
 and FEEL value checks with the values they were checked on, and the
-`validate` output; `test/c8-ops.test.ts` covers `set` / `ext` / `retype` /
+`validate` output; `test/domain/editing/c8-ops.test.ts` covers `set` / `ext` / `retype` /
 `show` in Camunda 8 files and runs the profile's hints through the real CLI
-until a refused model has no deploy finding left; `test/step3-c8-fixes.test.ts`
+until a refused model has no deploy finding left; `test/domain/validation/c8-feel-and-deploy.test.ts`
 checks the FEEL syntax check against `test/fixtures/c8/feel-verdicts.json`
 (762 synthetic expressions with the verdict of Camunda 8.9.22, one per line:
 add a new expression with the verdict you got from the engine) and the
 schema-text, white-space, `refAs` and subscription rules;
-`test/step3-followups-c8.test.ts` holds the timer range, cron field and
+`test/domain/validation/c8-values.test.ts` holds the timer range, cron field and
 xsd:boolean models (27, with the verdict) and the duplicate id. By default they
 check the CLI only. To re-check against a live Camunda 8 (REST v2, no
 authentication), name its v2 root:
 
 ```
-BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/c8-profile.test.ts test/c8-ops.test.ts test/step3-c8-fixes.test.ts test/step3-followups-c8.test.ts
+BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/domain/validation/c8-profile.test.ts test/domain/editing/c8-ops.test.ts test/domain/validation/c8-feel-and-deploy.test.ts test/domain/validation/c8-values.test.ts
 ```
 
 Each model is deployed (`POST /v2/deployments`), the test asserts that the

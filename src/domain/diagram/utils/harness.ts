@@ -70,7 +70,7 @@ export function glyph(lb: Box, name: string): Box {
 
 export const lookup = <TValue>(map: Map<string, TValue>, id: string | undefined): TValue | undefined => (id === undefined ? undefined : map.get(id));
 
-export function boundsOf(bounds: unknown): Box | undefined {
+function boundsOf(bounds: unknown): Box | undefined {
   if (!bounds) return undefined;
   return {
     x: raw<number>(bounds, 'x')!,

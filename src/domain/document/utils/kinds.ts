@@ -276,16 +276,6 @@ export function isRejectedType(type: string): string | undefined {
   return REJECTED_TYPES[type];
 }
 
-export function idPrefixFor(el: El): string {
-  const def = kindOf(el);
-  if (def) return def.prefix;
-  if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) return 'Flow';
-  if (is(el, 'bpmn:Activity')) return 'Activity';
-  if (is(el, 'bpmn:Event')) return 'Event';
-  if (is(el, 'bpmn:Gateway')) return 'Gateway';
-  return el.$type.split(':')[1] ?? 'Element';
-}
-
 /** The canonical kind for kinds the AI can create, else the lowerCamel local type. */
 export function kindOrTypeLabel(el: El): string {
   if (kindOf(el)) return kindLabel(el);

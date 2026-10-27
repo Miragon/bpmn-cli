@@ -38,13 +38,13 @@ export interface XElement {
   ns: ReadonlyMap<string, string>;
 }
 
-export interface XLeaf {
+interface XLeaf {
   kind: 'text' | 'cdata' | 'comment' | 'pi';
   start: number;
   end: number;
 }
 
-export type XNode = XElement | XLeaf;
+type XNode = XElement | XLeaf;
 
 export interface XDocument {
   text: string;

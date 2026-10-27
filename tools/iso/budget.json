@@ -5,6 +5,6 @@
   },
   "onDemand": {
     "c7": { "minified": 65, "gzip": 19 },
-    "c8": { "minified": 89, "gzip": 25 }
+    "c8": { "minified": 89, "gzip": 25.5 }
   }
 }

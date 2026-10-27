@@ -16,7 +16,7 @@ export interface ProfileFinding extends Warning {
  * What exactly is wrong on the element, so a mutation can tell the findings it introduced
  * from those the file already had, without it showing up in JSON output.
  */
-export const SUBJECT: unique symbol = Symbol('profile-finding-subject');
+const SUBJECT: unique symbol = Symbol('profile-finding-subject');
 
 type WithSubject = ProfileFinding & { [SUBJECT]?: string };
 

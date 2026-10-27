@@ -7,7 +7,7 @@ import { inFamily, isCamunda, ruleName } from '../utils/vendor-family.js';
  * entries are engine-verified (a second one is ENGINE-01009 on all three C7 engines); the
  * others are single-valued properties of the descriptor.
  */
-export const SINGLE_CHILD: Readonly<Record<string, readonly string[]>> = {
+const SINGLE_CHILD: Readonly<Record<string, readonly string[]>> = {
   'camunda:connector': ['camunda:connectorId', 'camunda:inputOutput'],
   'camunda:formField': ['camunda:properties', 'camunda:validation'],
   'camunda:executionListener': ['camunda:script'],
@@ -17,7 +17,7 @@ export const SINGLE_CHILD: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** Same type and same value of the first attribute present is the same item: adding replaces it. */
-export const KEYS: Readonly<Record<string, readonly string[]>> = {
+const KEYS: Readonly<Record<string, readonly string[]>> = {
   'camunda:inputParameter': ['name'],
   'camunda:outputParameter': ['name'],
   'camunda:formField': ['id'],
@@ -67,7 +67,7 @@ const EXAMPLE_CONTAINER: Readonly<Record<string, string>> = {
  * The structure rules of vendor extension elements: containers, keyed items, single-instance
  * types and child order. Names are canonical (camunda: / zeebe: by namespace URI).
  */
-export class ExtensionStructure {
+class ExtensionStructure {
   readonly singleTop: ReadonlySet<string>;
   /**
    * Containers of child types the camunda descriptor does not describe as types, such as

@@ -10,7 +10,7 @@ import { ModelError } from '../ModelError.js';
 export type El = ModdleElement;
 
 export const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
-export const TARGET_NS = 'http://bpmn.io/schema/bpmn';
+const TARGET_NS = 'http://bpmn.io/schema/bpmn';
 
 export interface Model {
   moddle: BpmnModdle;
@@ -44,10 +44,6 @@ export function is(el: unknown, type: string): boolean {
   return !!el && typeof el === 'object' && typeof (el as El).$instanceOf === 'function' && (el as El).$instanceOf(type);
 }
 
-export function isAny(el: unknown, types: string[]): boolean {
-  return types.some((type) => is(el, type));
-}
-
 /** A group has no `name`: it is the value of its category value. */
 export function groupName(group: El): string | undefined {
   return group.get<El | undefined>('categoryValueRef')?.get<string | undefined>('value') || undefined;
@@ -65,7 +61,7 @@ export function many(el: El, prop: string): El[] {
   return el.get<El[]>(prop);
 }
 
-export function isReferenceProp(el: El, prop: string): boolean {
+function isReferenceProp(el: El, prop: string): boolean {
   const descriptor = el.$descriptor as { propertiesByName?: Record<string, { isReference?: boolean }> };
   return !!descriptor.propertiesByName?.[prop]?.isReference;
 }
@@ -94,11 +90,6 @@ export function removeFrom(parent: El, prop: string, child: El): boolean {
   if (idx === -1) return false;
   list.splice(idx, 1);
   return true;
-}
-
-/** `undefined` deletes the property. */
-export function setProp(el: El, prop: string, value: unknown): void {
-  el.set(prop, value);
 }
 
 function isModdleElement(value: unknown): value is El {
@@ -147,28 +138,6 @@ export function* walk(root: El, opts: WalkOptions = {}): Generator<El> {
   }
 }
 
-export function relink(root: El): void {
-  const seen = new Set<El>();
-  const visit = (el: El): void => {
-    if (seen.has(el)) return;
-    seen.add(el);
-    const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
-    if (descriptor.isGeneric) return;
-    for (const property of descriptor.properties ?? []) {
-      if (property.isReference) continue;
-      const value = el.get<unknown>(property.name);
-      const kids = Array.isArray(value) ? value : [value];
-      for (const kid of kids) {
-        if (isModdleElement(kid)) {
-          kid.$parent = el;
-          visit(kid);
-        }
-      }
-    }
-  };
-  visit(root);
-}
-
 export function isDiElement(el: El): boolean {
   return /^(bpmndi|dc|di):/.test(el.$type);
 }
@@ -182,10 +151,6 @@ export function indexById(root: El, opts: { semanticOnly?: boolean } = {}): Map<
     if (id) map.set(id, el);
   }
   return map;
-}
-
-export function findById(model: Model, id: string): El | undefined {
-  return indexById(model.definitions).get(id);
 }
 
 export function findReferences(root: El, target: El): Array<{ holder: El; prop: string; isMany: boolean }> {
@@ -206,7 +171,7 @@ export function findReferences(root: El, target: El): Array<{ holder: El; prop: 
   return refs;
 }
 
-export function rootElements(defs: El): El[] {
+function rootElements(defs: El): El[] {
   return many(defs, 'rootElements');
 }
 

@@ -6,7 +6,7 @@ export const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
 /** The Camunda 8 version the profile was checked against. */
 export const C8_PLATFORM_VERSION = '8.9.0';
 
-export interface ZeebeProperty {
+interface ZeebeProperty {
   name: string;
   type: string;
   isAttr: boolean;

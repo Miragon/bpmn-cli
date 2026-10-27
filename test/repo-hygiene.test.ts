@@ -11,8 +11,8 @@
  * regression harness's work directory, the docs site's dev cache in
  * docs/.vitepress/cache) is not scanned.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -61,5 +61,34 @@ describe('repository hygiene', () => {
       for (const localPath of LOCAL_PATHS) if (text.includes(localPath)) bad.push(`${file}: ${localPath}`);
     }
     expect(bad).toEqual([]);
+  });
+});
+
+/** Test files that check the repository as a whole sit directly in test/. */
+const PROJECT_TESTS = new Set(['architecture.test.ts', 'repo-hygiene.test.ts']);
+
+/**
+ * Tests mirror the module folders of src/: a test sits in the folder of the module whose
+ * interface it exercises, a black-box test through the entries in test/e2e, shared helpers in
+ * test/helpers. Test names say what they test, never the work step that added them.
+ */
+describe('test layout', () => {
+  const testFiles = repoFiles.filter((file) => file.startsWith(`test${sep}`) && file.endsWith('.ts') && !file.startsWith(join('test', 'fixtures')));
+
+  it('puts every test into a src module folder, test/e2e or the project tests', () => {
+    const misplaced = testFiles.filter((file) => file.endsWith('.test.ts')).filter((file) => {
+      const folder = dirname(relative('test', file));
+      if (folder === '.') return !PROJECT_TESTS.has(relative('test', file));
+      return folder !== 'e2e' && !existsSync(join(ROOT, 'src', folder));
+    });
+    expect(misplaced).toEqual([]);
+  });
+
+  it('keeps helpers in test/helpers', () => {
+    expect(testFiles.filter((file) => !file.endsWith('.test.ts') && !file.startsWith(join('test', 'helpers')))).toEqual([]);
+  });
+
+  it('names no test after a work step', () => {
+    expect(testFiles.filter((file) => /(^|[/-])step\d/.test(file))).toEqual([]);
   });
 });

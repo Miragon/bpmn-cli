@@ -3,20 +3,8 @@
  * `definition.` / `loop.` / `condition.` set keys), `extensions` the deduplicated extension
  * types and vendor attribute names, `extensionElements` the types in document order.
  */
-import type { Doc } from '../document/Doc.js';
-import { usageError } from '../document/utils/errors.js';
 import type { Warning } from '../document/CliError.js';
-import { KindError } from '../document/KindError.js';
-import { kindLabel, kindOf, parseKind, triggerOf, TRIGGER_TYPES } from '../document/utils/kinds.js';
-import { diExpansionState } from '../diagram/utils/expansion.js';
-import { Groups } from '../diagram/di/Groups.js';
-import { groupName, is, localType, walk, type El, peek, list, shownId } from '../document/utils/moddle.js';
-import { laneOf } from '../document/utils/lanes.js';
-import { DecisionLinkReader } from '../document/DecisionLinkReader.js';
-import { ExtensionLister, type ExtensionInfo } from '../document/ExtensionLister.js';
-import { definitionsOf, nestedEntries } from '../document/utils/nested-slots.js';
-import { vendorAttributes } from '../document/utils/elements.js';
-import { ZEEBE_URI } from '../document/vendor/ZeebeDescriptor.js';
+import type { ExtensionInfo } from '../document/ExtensionLister.js';
 
 export interface ViewFlow {
   id: string;

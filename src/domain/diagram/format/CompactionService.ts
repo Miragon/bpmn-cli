@@ -10,10 +10,10 @@ import { Drawing } from '../layout/incremental/Drawing.js';
 
 export const PAD = 30;
 /** room for the name at the top of a sub-process */
-export const SUB_TOP = 45;
-export const HEADER = 30;
+const SUB_TOP = 45;
+const HEADER = 30;
 const EMPTY_LANE = 120;
-export const MIN_GAIN = 10;
+const MIN_GAIN = 10;
 
 export interface Strip {
   from: number;

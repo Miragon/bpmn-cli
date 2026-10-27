@@ -192,9 +192,9 @@ export interface SplitIntoBranches {
 
 // format operations: diagram only
 
-export type SideName = 'left' | 'right' | 'top' | 'bottom';
-export type LabelSideName = 'above' | 'below' | 'left' | 'right';
-export type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
+type SideName = 'left' | 'right' | 'top' | 'bottom';
+type LabelSideName = 'above' | 'below' | 'left' | 'right';
+type ColorName = 'blue' | 'orange' | 'green' | 'red' | 'purple' | 'default';
 
 /** Selectors of place / align / color / tidy add elements to `ids` (connections only for color). */
 export interface Selectors {
@@ -271,7 +271,7 @@ export interface InsertSpace {
 }
 
 /** A `space` amount: column / row steps of the drawing or pixels; negative closes. */
-export type SpaceAmount = 'column' | 'row' | '-column' | '-row' | number | `${number}${SpaceUnit}` | `${number} ${SpaceUnit}`;
+type SpaceAmount = 'column' | 'row' | '-column' | '-row' | number | `${number}${SpaceUnit}` | `${number} ${SpaceUnit}`;
 type SpaceUnit = 'col' | 'cols' | 'column' | 'columns' | 'row' | 'rows' | 'px';
 
 export interface TidyShapes extends Selectors {

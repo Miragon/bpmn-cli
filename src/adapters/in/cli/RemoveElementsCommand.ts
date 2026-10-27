@@ -11,9 +11,9 @@ export class RemoveElementsCommand extends MutationCommand {
     this.withMutationOptions(
       this.define(program, 'remove')
         .option('--no-bridge', 'do not reconnect predecessor and successor')
-        .option('--bridge-all', 'a join (several incoming flows, one outgoing): connect every predecessor to the successor')
-        .option('--with-branch', 'also remove the exclusive downstream path (every node only this one leads to, up to the next merge or the ends)')
-        .option('--if-exists', 'ignore unknown ids'),
+        .option('--bridge-all')
+        .option('--with-branch')
+        .option('--if-exists'),
     ).action((file: string, ids: string[], options: RawOpts) => this.run(file, ids, options));
   }
 

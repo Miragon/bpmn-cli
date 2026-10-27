@@ -91,7 +91,7 @@ export function slotsOf(el: El): NestedSlot[] {
  * With several event definitions, `definition` is the first one (ops use resolveNested);
  * `condition` of an event needs exactly one conditional event definition.
  */
-export function nestedElement(el: El, slot: NestedSlot): El | undefined {
+function nestedElement(el: El, slot: NestedSlot): El | undefined {
   switch (slot) {
     case 'definition':
       return definitionsOf(el)[0];

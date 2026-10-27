@@ -153,10 +153,10 @@ only.
 
 | bundle (minified / gzip) | size |
 | --- | ---: |
-| everything `@miragon/bpmn-cli` exports | 1103.8 / 346.9 KB |
-| `applyToXml` only | 799.7 / 250.3 KB |
-| Camunda 7 rules, on demand | 64.0 / 18.6 KB |
-| Camunda 8 rules, on demand | 87.8 / 24.9 KB |
+| everything `@miragon/bpmn-cli` exports | 1103.3 / 346.7 KB |
+| `applyToXml` only | 799.8 / 250.3 KB |
+| Camunda 7 rules, on demand | 64.4 / 18.8 KB |
+| Camunda 8 rules, on demand | 88.3 / 25.2 KB |
 
 `node tools/iso/check.mjs --table` prints the current sizes.
 
