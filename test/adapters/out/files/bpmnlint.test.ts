@@ -83,6 +83,9 @@ const listless = (xml: string): string => xml.replace(/\s*<bpmn:(incoming|outgoi
 const lintOf = (issues: readonly unknown[]): ValidatorIssue[] => (issues as ValidatorIssue[]).filter((warning) => warning.validator === 'bpmnlint');
 const codes = (issues: readonly unknown[]): string[] => (issues as Array<{ code: string; element?: string }>).map((warning) => `${warning.code}${warning.element ? ` ${warning.element}` : ''}`);
 
+/** A code example as written in the docs, without line breaks, indentation, comment markers or trailing commas. */
+const codeOf = (text: string): string => text.replace(/\/\/|\s+/g, '').replace(/,(?=[)\]}])/g, '');
+
 describe('resolveBpmnlintConfig: the effective rules', () => {
   it('normalises the names, keeps the options as bpmnlint hands them to the rule, runs any flag but off as a warning', async () => {
     const engine = bpmnlintEngine();
@@ -1702,7 +1705,7 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
       "const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' });",
       "const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });",
       'const edit = await applyToXml(xml, ops, { validators: [lint] });',
-    ]) expect(library).toContain(line);
+    ]) expect(codeOf(library)).toContain(codeOf(line));
     const engine = bpmnlintEngine();
     const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' });
     const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });
@@ -1716,7 +1719,7 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
       'const { conventions, notes } = idConventionsFromLint(resolved.rules[ID_NAMING_RULE], engine.plugin.naming);',
       "const lint = bpmnlintValidator(engine, resolved, { detail: 'default rules', notes });",
       'await applyToXml(xml, ops, { validators: [lint], conventions });',
-    ]) expect(validators).toContain(line);
+    ]) expect(codeOf(validators)).toContain(codeOf(line));
     for (const target of ['c7', 'c8'] as const) {
       const rc = engine.plugin.getDefaultLintConfig({ engine: target });
       const resolved = await resolveBpmnlintConfig(engine, rc);
@@ -1746,7 +1749,7 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
       "const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });",
       'const named = await applyToXml(xml, ops, { validators: [bpmnlintValidator(engine, automation, { notes })], conventions });',
       "await applyToXml(xml, ops, { conventions: { prefixes: { 'bpmn:ServiceTask': 'serviceTask_', 'bpmn:SequenceFlow': 'flow_' }, case: 'camelCase' } });",
-    ]) expect(library).toContain(line);
+    ]) expect(codeOf(library)).toContain(codeOf(line));
     const engine = bpmnlintEngine();
     const automation = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ preset: 'automation' }));
     const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });

@@ -43,20 +43,42 @@ a gateway with its branches and the join; an alias (`"as": "$book"`) names a new
 ops.
 
 ```json [ops.json]
-{ "ops": [
-  { "op": "split", "after": "Activity_CheckInvoice", "name": "Invoice ok?",
-    "branches": [
-      { "flowName": "yes", "condition": "= ok",
-        "nodes": [
-          { "kind": "serviceTask", "name": "Book invoice", "as": "$book" }
-        ] },
-      { "flowName": "no", "default": true,
-        "nodes": [
-          { "kind": "sendTask", "name": "Ask customer", "as": "$ask" }
-        ] } ] },
-  { "op": "ext", "id": "$book", "action": "add",
-    "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
-] }
+{
+  "ops": [
+    {
+      "op": "split",
+      "after": "Activity_CheckInvoice",
+      "name": "Invoice ok?",
+      "branches": [
+        {
+          "flowName": "yes",
+          "condition": "= ok",
+          "nodes": [
+            {
+              "kind": "serviceTask",
+              "name": "Book invoice",
+              "as": "$book"
+            }
+          ]
+        },
+        {
+          "flowName": "no",
+          "default": true,
+          "nodes": [
+            { "kind": "sendTask", "name": "Ask customer", "as": "$ask" }
+          ]
+        }
+      ]
+    },
+    {
+      "op": "ext",
+      "id": "$book",
+      "action": "add",
+      "type": "zeebe:taskDefinition",
+      "attrs": { "type": "book-invoice" }
+    }
+  ]
+}
 ```
 
 ```console{4,5}

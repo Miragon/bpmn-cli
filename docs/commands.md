@@ -29,7 +29,7 @@ of kinds, keys and error codes.
 | Help | [`kinds`, `guide`](#kinds-and-guide) | reference tables, cheat sheet for agents |
 
 `-` as the file reads the model from stdin; a mutating command then writes to stdout. Ids, kinds and
-keys are in [Ids, kinds and keys](reference.md).
+keys are in [Syntax and output](reference.md).
 
 ## Options of every write
 
@@ -83,8 +83,10 @@ Creates one element and wires it in. A placement option says where; trailing `ke
 like `set`.
 
 ```sh
-bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived camunda:assignee=kermit
-bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice --timer PT2D --non-interrupting
+bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived \
+  camunda:assignee=kermit
+bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice \
+  --timer PT2D --non-interrupting
 ```
 
 - Placement: `--after`, `--before`, `--flow`, `--in`, `--on`, `--lane` ([Placement grammar](reference.md#placement-grammar)).
@@ -107,8 +109,10 @@ The endpoints decide the kind: sequence flow, message flow (different pools), as
 ## `set`
 
 ```sh
-bpmn set order.bpmn Activity_CheckInvoice name="Check the invoice" camunda:asyncBefore=true
-bpmn set order.bpmn Activity_CheckInvoice 'loop.camunda:collection=${invoices}'
+bpmn set order.bpmn Activity_CheckInvoice name="Check the invoice" \
+  camunda:asyncBefore=true
+bpmn set order.bpmn Activity_CheckInvoice \
+  'loop.camunda:collection=${invoices}'
 ```
 
 `key=` or `--unset key` removes a property. `id=New_Id` renames and re-points every reference. Parts
@@ -144,7 +148,8 @@ A sub-process with content becomes a task only with `--force`.
 
 ```sh
 bpmn move order.bpmn Activity_ClarifyInvoice --before Activity_BookInvoice
-bpmn order order.bpmn Gateway_InvoiceOk Flow_InvoiceOkToClarifyInvoice Flow_InvoiceOkToBookInvoice
+bpmn order order.bpmn Gateway_InvoiceOk Flow_InvoiceOkToClarifyInvoice \
+  Flow_InvoiceOkToBookInvoice
 ```
 
 The flow order drives the picture: the default flow (else the first) continues straight, the others
@@ -232,4 +237,4 @@ is its core, `guide <topic>` one part.
 
 - [Ops JSON](ops.md): many changes in one batch.
 - [Layout and formatting](layout.md): how the drawing is kept, and the format commands.
-- [Ids, kinds and keys](reference.md): every kind, trigger and key.
+- [Syntax and output](reference.md): every kind, trigger and key.

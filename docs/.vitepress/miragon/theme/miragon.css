@@ -644,6 +644,76 @@
 }
 
 /* =========================================================
+   ZOOM
+   Bilder, Mermaid-Diagramme und Elemente mit data-zoom öffnen sich im
+   Vollbild (ZoomOverlay.vue). Das Overlay ist die Seite selbst, ohne
+   Deckkraft, damit die Farben des Diagramms hell und dunkel bleiben. Die
+   Kopie wächst bis an den Rand, das Seitenverhältnis bleibt.
+   ========================================================= */
+.vp-doc :is(img, .mermaid, [data-zoom]):not([data-zoom="off"], [data-zoom="off"] *, a *) {
+  cursor: zoom-in;
+}
+.miragon-zoom-offen {
+  overflow: hidden;
+}
+.miragon-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  background: var(--cd-ui-seite);
+  cursor: zoom-out;
+}
+.miragon-zoom-buehne {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 56px 24px 24px;
+  overflow: auto;
+}
+.miragon-zoom-kopie {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: default;
+}
+.miragon-zoom-kopie svg,
+img.miragon-zoom-kopie,
+.miragon-zoom-kopie img {
+  width: 100%;
+  height: 100%;
+  max-width: none !important;
+  object-fit: contain;
+}
+.miragon-zoom-zu {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--cd-ui-linie);
+  border-radius: 999px;
+  background: var(--cd-ui-seite);
+  color: var(--cd-ui-text);
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+.miragon-zoom-zu:hover {
+  border-color: var(--cd-ui-kontur);
+}
+.miragon-zoom-zu svg {
+  width: 14px;
+}
+
+/* =========================================================
    FOKUS
    Sichtbarer Tastatur-Fokus über die Rolle: hell blau-link, dunkel blau-hell.
    :where() hält die Spezifität niedrig, damit Komponenten nicht überschrieben

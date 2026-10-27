@@ -10,7 +10,12 @@ A house rule: a path ends in an end event. The first write would add a task with
 flow and is refused; the second one passes.
 
 ```ts
-import { applyToXml, CliError, newXml, type NamedValidator } from '@miragon/bpmn-cli';
+import {
+  applyToXml,
+  CliError,
+  newXml,
+  type NamedValidator,
+} from '@miragon/bpmn-cli';
 
 // a house rule: a path ends in an end event, never in a task or a gateway
 const houseRules: NamedValidator = {
@@ -20,8 +25,14 @@ const houseRules: NamedValidator = {
   validateDoc: (doc) =>
     doc.processes()
       .flatMap((process) => doc.flowNodes(process))
-      .filter((node) => node.$type !== 'bpmn:EndEvent' && doc.outgoing(node).length === 0)
-      .map((node) => ({ severity: 'error', code: 'DEAD_END', message: `${node.id} has no outgoing sequence flow`, element: node.id })),
+      .filter((node) => node.$type !== 'bpmn:EndEvent')
+      .filter((node) => doc.outgoing(node).length === 0)
+      .map((node) => ({
+        severity: 'error',
+        code: 'DEAD_END',
+        message: `${node.id} has no outgoing sequence flow`,
+        element: node.id,
+      })),
 };
 
 let { xml } = await newXml({ processName: 'Order handling' });
@@ -31,16 +42,39 @@ let { xml } = await newXml({ processName: 'Order handling' });
 ]));
 
 try {
-  await applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Archive', in: 'Process_OrderHandling' }], { validators: [houseRules] });
+  const archive = {
+    op: 'add',
+    kind: 'userTask',
+    name: 'Archive',
+    in: 'Process_OrderHandling',
+  };
+  await applyToXml(xml, [archive], { validators: [houseRules] });
 } catch (err) {
   if (!(err instanceof CliError)) throw err;
-  err.code;           // 'E_VALIDATION'
-  err.message;        // 'The change would introduce 1 error(s) reported by validator house-rules; nothing was written'
-  err.details.errors; // [{ code: 'DEAD_END', message: 'Activity_Archive has no outgoing sequence flow', validator: 'house-rules', severity: 'error', element: 'Activity_Archive' }]
+  err.code;
+  // 'E_VALIDATION'
+  err.message;
+  // 'The change would introduce 1 error(s) reported by validator
+  //  house-rules; nothing was written'
+  err.details.errors;
+  // [{ code: 'DEAD_END',
+  //    message: 'Activity_Archive has no outgoing sequence flow',
+  //    validator: 'house-rules', severity: 'error',
+  //    element: 'Activity_Archive' }]
 }
 
-const edit = await applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_OrderReceived' }], { validators: [houseRules] });
-edit.result.validation.validators; // [{ name: 'house-rules', detail: 'our modelling guideline', errors: [], warnings: [], preexisting: [], resolved: [], counts: { errors: 0, warnings: 0 } }]
+const check = {
+  op: 'add',
+  kind: 'userTask',
+  name: 'Check invoice',
+  after: 'Event_OrderReceived',
+};
+const edit = await applyToXml(xml, [check], { validators: [houseRules] });
+
+edit.result.validation.validators;
+// [{ name: 'house-rules', detail: 'our modelling guideline',
+//    errors: [], warnings: [], preexisting: [], resolved: [],
+//    counts: { errors: 0, warnings: 0 } }]
 ```
 
 ## Writing a validator
@@ -87,14 +121,26 @@ A validator with `blocks: false` reports and never refuses. The project's bpmnli
 ([bpmnlint](bpmnlint.md)). A host can run the plugin's default configuration the same way:
 
 ```js
-import { applyToXml, bpmnlintValidator, idConventionsFromLint, ID_NAMING_RULE, resolveBpmnlintConfig } from '@miragon/bpmn-cli';
+import {
+  applyToXml,
+  bpmnlintValidator,
+  idConventionsFromLint,
+  ID_NAMING_RULE,
+  resolveBpmnlintConfig,
+} from '@miragon/bpmn-cli';
 import { bpmnlintEngine } from '@miragon/bpmn-cli/node';
 
 const engine = bpmnlintEngine();
 const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });
 const resolved = await resolveBpmnlintConfig(engine, rc);
-const { conventions, notes } = idConventionsFromLint(resolved.rules[ID_NAMING_RULE], engine.plugin.naming);
-const lint = bpmnlintValidator(engine, resolved, { detail: 'default rules', notes });
+const { conventions, notes } = idConventionsFromLint(
+  resolved.rules[ID_NAMING_RULE],
+  engine.plugin.naming,
+);
+const lint = bpmnlintValidator(engine, resolved, {
+  detail: 'default rules',
+  notes,
+});
 await applyToXml(xml, ops, { validators: [lint], conventions });
 ```
 

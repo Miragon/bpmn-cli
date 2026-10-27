@@ -49,6 +49,9 @@ interface Run {
   err: string;
 }
 
+/** A code example as written in the docs, without line breaks, indentation, comment markers or trailing commas. */
+const codeOf = (text: string): string => text.replace(/\/\/|\s+/g, '').replace(/,(?=[)\]}])/g, '');
+
 function cli(...args: string[]): Run {
   const spawned = spawnSync(process.execPath, ['--import', 'tsx', join(ROOT, 'src', 'cli.ts'), ...args], { encoding: 'utf8', cwd: ROOT, input: '' });
   return { code: spawned.status ?? -1, out: spawned.stdout, err: spawned.stderr };
@@ -84,7 +87,7 @@ describe('the docs/library.md example (Library use)', () => {
     expect(example).toContain("{ op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },");
     if (!edit.unchanged) xml = edit.xml;
     const quote = (data: unknown): string => JSON.stringify(data).replaceAll('"', "'").replaceAll(',', ', ');
-    expect(example).toContain(`// ${quote(edit.result.created.map((change) => change.id))}`);
+    expect(codeOf(example)).toContain(codeOf(quote(edit.result.created.map((change) => change.id))));
     expect(example).toContain(`// '${edit.result.layout.mode}' (${edit.result.layout.reason})`);
     expect(renderMutation(edit.result)).toMatch(/^created startEvent [\s\S]*\nlayout: ok - full \(/m);
     const quickStart = /\$ bpmn show order\.bpmn\n([\s\S]*?)\n```/.exec(readme)?.[1];

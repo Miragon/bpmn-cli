@@ -1,4 +1,4 @@
-# Ids, kinds and keys
+# Syntax and output
 
 How new ids are made, the element kinds and triggers, where a node goes, the keys `set` takes, and
 what a command prints and exits with.
@@ -147,7 +147,10 @@ written: order.bpmn
 
 ```json
 {
-  "ok": true, "file": "order.bpmn", "written": true, "unchanged": false,
+  "ok": true,
+  "file": "order.bpmn",
+  "written": true,
+  "unchanged": false,
   "created": [{ "id": "Event_Done", "kind": "endEvent", "name": "Done" }],
   "warnings": { "added": [], "resolved": [], "preexistingCount": 0 },
   "layout": { "status": "ok", "mode": "full" },

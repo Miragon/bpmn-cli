@@ -21,12 +21,25 @@ whenever a change touches more than one element.
 
 ```json [book.json]
 [
-  { "op": "add", "kind": "serviceTask", "name": "Book invoice",
-    "after": "Activity_CheckInvoice", "as": "$book" },
-  { "op": "set", "id": "$book",
-    "values": { "doc": "Posts the invoice to the ledger." } },
-  { "op": "ext", "id": "$book", "action": "add",
-    "type": "zeebe:taskDefinition", "attrs": { "type": "book-invoice" } }
+  {
+    "op": "add",
+    "kind": "serviceTask",
+    "name": "Book invoice",
+    "after": "Activity_CheckInvoice",
+    "as": "$book"
+  },
+  {
+    "op": "set",
+    "id": "$book",
+    "values": { "doc": "Posts the invoice to the ledger." }
+  },
+  {
+    "op": "ext",
+    "id": "$book",
+    "action": "add",
+    "type": "zeebe:taskDefinition",
+    "attrs": { "type": "book-invoice" }
+  }
 ]
 ```
 
@@ -77,7 +90,14 @@ retype. On a splice `"flowAs"` names the flow into the new node and `"outAs"` th
 creates (new node -> old successor), so the same batch can give it a condition:
 
 ```json
-{"op": "add", "kind": "exclusiveGateway", "name": "Valid?", "flow": "Flow_CheckToOk", "as": "$valid", "outAs": "$yes"}
+{
+  "op": "add",
+  "kind": "exclusiveGateway",
+  "name": "Valid?",
+  "flow": "Flow_CheckToOk",
+  "as": "$valid",
+  "outAs": "$yes"
+}
 ```
 
 ## Flow ids in a batch
@@ -96,38 +116,86 @@ splits after the check, adds a reminder timer with its own path and gives both t
 ```json [ops.json]
 {
   "ops": [
-    { "op": "split", "after": "Activity_CheckInvoice",
-      "kind": "exclusiveGateway", "name": "Invoice ok?", "as": "$ok",
+    {
+      "op": "split",
+      "after": "Activity_CheckInvoice",
+      "kind": "exclusiveGateway",
+      "name": "Invoice ok?",
+      "as": "$ok",
       "branches": [
-        { "flowName": "yes", "condition": "= ok",
+        {
+          "flowName": "yes",
+          "condition": "= ok",
           "nodes": [
-            { "kind": "serviceTask", "name": "Book invoice", "as": "$book" }
-          ] },
-        { "flowName": "no", "default": true,
+            {
+              "kind": "serviceTask",
+              "name": "Book invoice",
+              "as": "$book"
+            }
+          ]
+        },
+        {
+          "flowName": "no",
+          "default": true,
           "nodes": [
-            { "kind": "userTask", "name": "Clarify invoice", "as": "$clarify",
+            {
+              "kind": "userTask",
+              "name": "Clarify invoice",
+              "as": "$clarify",
               "set": {
                 "doc": "Call the customer and clarify the open positions."
-              } }
-          ] }
-      ] },
-    { "op": "add", "kind": "boundaryEvent:timer", "name": "Reminder",
-      "on": "$clarify", "timer": "P2D", "nonInterrupting": true,
-      "as": "$reminder" },
-    { "op": "add", "kind": "sendTask", "name": "Remind customer",
-      "after": "$reminder", "as": "$remind" },
-    { "op": "add", "kind": "endEvent", "name": "Reminder sent",
-      "in": "Process_OrderHandling", "as": "$sent" },
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "name": "Reminder",
+      "on": "$clarify",
+      "timer": "P2D",
+      "nonInterrupting": true,
+      "as": "$reminder"
+    },
+    {
+      "op": "add",
+      "kind": "sendTask",
+      "name": "Remind customer",
+      "after": "$reminder",
+      "as": "$remind"
+    },
+    {
+      "op": "add",
+      "kind": "endEvent",
+      "name": "Reminder sent",
+      "in": "Process_OrderHandling",
+      "as": "$sent"
+    },
     { "op": "connect", "source": "$remind", "target": "$sent" },
-    { "op": "set", "id": "$book",
-      "values": { "name": "Book invoice in ERP",
-                  "doc": "Posts the invoice to the ledger." } },
-    { "op": "ext", "id": "$book", "action": "add",
+    {
+      "op": "set",
+      "id": "$book",
+      "values": {
+        "name": "Book invoice in ERP",
+        "doc": "Posts the invoice to the ledger."
+      }
+    },
+    {
+      "op": "ext",
+      "id": "$book",
+      "action": "add",
       "type": "zeebe:taskDefinition",
-      "attrs": { "type": "book-invoice", "retries": "3" } },
-    { "op": "ext", "id": "$remind", "action": "add",
+      "attrs": { "type": "book-invoice", "retries": "3" }
+    },
+    {
+      "op": "ext",
+      "id": "$remind",
+      "action": "add",
       "type": "zeebe:taskDefinition",
-      "attrs": { "type": "remind-customer" } }
+      "attrs": { "type": "remind-customer" }
+    }
   ]
 }
 ```
