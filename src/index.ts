@@ -92,7 +92,7 @@ export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): Arou
 export function elementContext(doc: Doc, id: string): ElementContext { return new ShowModelService().elementContext({ doc, id }); }
 export function implementationOf(el: El): Implementation | undefined { return new ShowModelService().implementation({ element: el }); }
 /* the building blocks */
-export { Doc, TARGETS, type DocSource, type NewDocOptions } from './domain/document/Doc.js';
+export { Doc, type DocSource, type NewDocOptions } from './domain/document/Doc.js';
 export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './domain/document/CliError.js';
 export { KINDS, parseKind, kindOf, kindLabel } from './domain/document/utils/kinds.js';
 export { FORMAT_OP_NAMES, isDiagramCommand } from './domain/commands/utils/op-names.js';
@@ -170,7 +170,7 @@ export type { ValidateOptions, ValidationResult } from './domain/validation/Stru
 /** Structural validation and lint of a document, with the platform profile on request. */
 export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult { return new ValidateDocumentService(IN_MEMORY, NO_PROJECT).validateStructure({ ...opts, doc }); }
 /* the platform profile: Camunda 7 / 8 rules, loaded on demand */
-export { PLATFORM_CHOICES, type Platform, type PlatformChoice, type PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
+export { PLATFORM_CHOICES, TARGETS, type Platform, type PlatformChoice, type PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './domain/validation/profiles/PlatformProfiles.js';
 export type { ProfileFinding, Severity } from './domain/document/utils/finding.js';
 export type { ExtensionInfo } from './domain/document/ExtensionLister.js';

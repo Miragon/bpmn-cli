@@ -4,6 +4,7 @@ import { ChangeSet, type Rename } from './ChangeSet.js';
 import type { Doc } from './Doc.js';
 import { IdAllocator } from './IdAllocator.js';
 import type { El } from './utils/moddle.js';
+import type { Platform } from './vendor/PlatformDetection.js';
 
 /** What a running `apply` batch did so far: E_NOT_FOUND points to it. */
 export interface BatchContext {
@@ -50,7 +51,7 @@ export interface DroppedContent {
 export interface EditSettings {
   conventions?: IdConventions;
   /** so the ops follow the same engine as the profile that reports on them */
-  platformChoice?: 'c7' | 'c8' | 'none';
+  platformChoice?: Platform;
   keepFlowIds?: boolean;
 }
 
@@ -82,10 +83,8 @@ export class EditContext {
   }
 
   /** The call's platform choice, else the document's detected one. */
-  platform(): 'camunda7' | 'camunda8' | undefined {
-    const choice = this.settings.platformChoice;
-    if (choice) return choice === 'c7' ? 'camunda7' : choice === 'c8' ? 'camunda8' : undefined;
-    return this.doc.platform();
+  platform(): Platform {
+    return this.settings.platformChoice ?? this.doc.platform();
   }
 
   /** Like Doc.require; inside a batch E_NOT_FOUND points to what the batch did. */

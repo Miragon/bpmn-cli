@@ -88,7 +88,7 @@ export class BpmnlintValidator {
       const msg = warning.message.split('\n')[0]!;
       if (own.has(msg)) continue;
       const id = (warning.element as { id?: string } | undefined)?.id;
-      const hint = isDecisionLinkWarning(warning) && doc.platform() === undefined ? DECISION_LINK_HINT : IMPORT_HINT;
+      const hint = isDecisionLinkWarning(warning) && doc.platform() === 'none' ? DECISION_LINK_HINT : IMPORT_HINT;
       out.push({ severity: 'error', code: 'import-warning', message: `Import warning: ${msg}`, ...(id ? { element: id } : {}), key: `import|${id ?? ''}|${msg}`, hint });
     }
   }

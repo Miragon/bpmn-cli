@@ -1,5 +1,6 @@
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import { Doc } from '../../../domain/document/Doc.js';
+import type { Target } from '../../../domain/document/vendor/PlatformDetection.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 
@@ -35,7 +36,7 @@ export class NewFileCommand extends MutationCommand {
         processName: options['name'] as string | undefined,
         processId: options['id'] as string | undefined,
         executable: options['executable'] !== false,
-        target: options['target'] as 'camunda8' | 'camunda7' | undefined,
+        target: options['target'] as Target | undefined,
         mustNotExist: true,
         ...(stdout ? { out: undefined, dryRun: true } : {}),
       });

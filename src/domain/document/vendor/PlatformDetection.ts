@@ -6,6 +6,15 @@ import { ZEEBE_URI } from './ZeebeDescriptor.js';
 
 export type Platform = 'c7' | 'c8' | 'none';
 export type PlatformChoice = Platform | 'auto';
+
+/** How `bpmn new --target` and `NewDocOptions.target` spell a platform; camunda7 also covers CIB seven and Operaton. */
+export const TARGETS = ['camunda8', 'camunda7', 'none'] as const;
+export type Target = (typeof TARGETS)[number];
+const PLATFORM_OF_TARGET: Readonly<Record<Target, Platform>> = { camunda8: 'c8', camunda7: 'c7', none: 'none' };
+
+export function platformOfTarget(target: Target | undefined): Platform {
+  return target ? PLATFORM_OF_TARGET[target] : 'none';
+}
 export const PLATFORM_CHOICES: readonly PlatformChoice[] = ['auto', 'c7', 'c8', 'none'];
 
 export interface PlatformInfo {
@@ -73,10 +82,6 @@ export class PlatformDetection {
     return detected.operaton ? { ...info, operaton: true, detail: `--platform option; the file uses the operaton namespace: ${OPERATON_NOTE}` } : info;
   }
 
-  target(): 'camunda7' | 'camunda8' | undefined {
-    const platform = this.info().platform;
-    return platform === 'c7' ? 'camunda7' : platform === 'c8' ? 'camunda8' : undefined;
-  }
 
   private fromExecutionPlatform(value: string): Platform | undefined {
     const normalized = value.trim().toLowerCase();
