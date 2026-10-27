@@ -47,11 +47,17 @@ approves the rest.
 ```sh
 bpmn new claim.bpmn --name "Claim handling" --target camunda7
 bpmn add claim.bpmn start "Claim received"
-bpmn add claim.bpmn serviceTask "Check coverage" --after Event_ClaimReceived camunda:type=external camunda:topic=check-coverage
-bpmn ext add claim.bpmn Activity_CheckCoverage camunda:inputParameter name=amount --body '${amount}'
-bpmn add claim.bpmn boundary:error "Not covered" --on Activity_CheckCoverage --error "Not covered" --error-code NOT_COVERED
+bpmn add claim.bpmn serviceTask "Check coverage" \
+  --after Event_ClaimReceived camunda:type=external \
+  camunda:topic=check-coverage
+bpmn ext add claim.bpmn Activity_CheckCoverage camunda:inputParameter \
+  name=amount --body '${amount}'
+bpmn add claim.bpmn boundary:error "Not covered" \
+  --on Activity_CheckCoverage --error "Not covered" \
+  --error-code NOT_COVERED
 bpmn add claim.bpmn end "Claim rejected" --after Event_NotCovered
-bpmn add claim.bpmn userTask "Approve claim" --after Activity_CheckCoverage camunda:candidateGroups=claims
+bpmn add claim.bpmn userTask "Approve claim" \
+  --after Activity_CheckCoverage camunda:candidateGroups=claims
 bpmn add claim.bpmn end "Claim settled" --after Activity_ApproveClaim
 ```
 
@@ -91,16 +97,27 @@ flow. The process then waits for the payment message.
 ```sh
 bpmn new invoice.bpmn --name "Invoice approval" --target camunda8
 bpmn add invoice.bpmn start "Invoice received"
-bpmn add invoice.bpmn serviceTask "Check invoice" --after Event_InvoiceReceived
-bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:taskDefinition type=check-invoice retries=3
-bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:input source==invoice.amount target=amount
-bpmn add invoice.bpmn exclusiveGateway "Amount over 1000?" --after Activity_CheckInvoice
-bpmn add invoice.bpmn userTask "Approve invoice" --after Gateway_AmountOver1000 --flow-name yes --condition '= amount > 1000'
-bpmn ext add invoice.bpmn Activity_ApproveInvoice zeebe:assignmentDefinition candidateGroups=finance
-bpmn add invoice.bpmn exclusiveGateway --id Gateway_Approved --after Activity_ApproveInvoice
-bpmn connect invoice.bpmn Gateway_AmountOver1000 Gateway_Approved --name no --default
-bpmn add invoice.bpmn receiveTask "Wait for payment" --after Gateway_Approved --message "Payment received"
-bpmn ext add invoice.bpmn Activity_WaitForPayment zeebe:subscription correlationKey==invoiceId
+bpmn add invoice.bpmn serviceTask "Check invoice" \
+  --after Event_InvoiceReceived
+bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:taskDefinition \
+  type=check-invoice retries=3
+bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:input \
+  source==invoice.amount target=amount
+bpmn add invoice.bpmn exclusiveGateway "Amount over 1000?" \
+  --after Activity_CheckInvoice
+bpmn add invoice.bpmn userTask "Approve invoice" \
+  --after Gateway_AmountOver1000 --flow-name yes \
+  --condition '= amount > 1000'
+bpmn ext add invoice.bpmn Activity_ApproveInvoice \
+  zeebe:assignmentDefinition candidateGroups=finance
+bpmn add invoice.bpmn exclusiveGateway --id Gateway_Approved \
+  --after Activity_ApproveInvoice
+bpmn connect invoice.bpmn Gateway_AmountOver1000 Gateway_Approved \
+  --name no --default
+bpmn add invoice.bpmn receiveTask "Wait for payment" \
+  --after Gateway_Approved --message "Payment received"
+bpmn ext add invoice.bpmn Activity_WaitForPayment zeebe:subscription \
+  correlationKey==invoiceId
 bpmn add invoice.bpmn end "Invoice settled" --after Activity_WaitForPayment
 ```
 
