@@ -1,6 +1,6 @@
 /**
  * Audit bugs of the incremental layout fixed with the layout
- * ergonomics package (docs/audit-2026-10.md):
+ * ergonomics package:
  *  - #41 a data object or annotation drawn in a lane follows the lane when
  *    the space tool moves it (it has no lane membership of its own)
  *  - #42 closing a strip inside a sub-process never puts a boundary event

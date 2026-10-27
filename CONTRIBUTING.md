@@ -86,8 +86,7 @@ them on a private corpus without copying it into the repository, are described i
   functions live in the one `utils/` folder of their module (`domain/document/utils/moddle.ts`,
   `domain/document/utils/fuzzy.ts`); a utils file holds no class and imports only other utils files and
   error classes. Outside the entries (`api.ts`, `index.ts`, `node.ts`, which keep the
-  package's public functions and delegate to the classes) there are no free functions. The
-  domain terms the classes are named after are in [GLOSSARY.md](GLOSSARY.md).
+  package's public functions and delegate to the classes) there are no free functions.
 - `test/`: the vitest suite. Its folders mirror the module folders of `src/`
   (`test/domain/batch/`, `test/adapters/in/cli/`, ...): a test sits with the module whose
   interface it exercises. Black-box tests through the entries and the CLI are in `test/e2e/`,

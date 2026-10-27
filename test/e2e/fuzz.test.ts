@@ -63,8 +63,7 @@ const WALKS = [
 ];
 
 /**
- * Walks that currently hit open bugs of the 2026-10 audit (`bug` = the number
- * in the table of docs/audit-2026-10.md). They are expected to fail; when a fix
+ * Walks that currently hit open layout bugs (`bug` = the issue they reproduce). They are expected to fail; when a fix
  * makes one pass, vitest reports it and the walk moves into WALKS.
  */
 const KNOWN: Array<{ file: string; mode: Mode; seed: number; steps?: number; bug: string }> = [];
