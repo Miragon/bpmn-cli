@@ -47,9 +47,3 @@ export function pathHits(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Bo
 export function properCross([firstStart, firstEnd]: Segment, [secondStart, secondEnd]: Segment): boolean {
   return segmentsCross(firstStart, firstEnd, secondStart, secondEnd);
 }
-
-export function crossings(points: Point[], lines: Segment[]): number {
-  let count = 0;
-  for (const segment of toSegments(points)) for (const line of lines) if (properCross(segment, line)) count++;
-  return count;
-}

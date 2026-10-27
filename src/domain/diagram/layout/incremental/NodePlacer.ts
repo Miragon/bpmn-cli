@@ -1,7 +1,7 @@
 import { LayoutDebug } from '../LayoutDebug.js';
 import { annotationSize, SIZES } from '../../utils/sizes.js';
 import { is, type El } from '../../../document/utils/moddle.js';
-import { bottom, clamp, cx, cy, median, right, type Box } from '../../utils/geom.js';
+import { bottom, clamp, cx, cy, median, right, translateEdge, translateShape, type Box } from '../../utils/geom.js';
 import { defaultLabelSide, hasExternalLabel, labelAt } from '../../utils/labels.js';
 import { idOf, raw } from '../../utils/raw.js';
 import { DiagramReader } from '../../di/DiagramReader.js';
@@ -40,19 +40,7 @@ export interface PlacementHooks {
 }
 
 /** What a placement run changes in its placer, to undo it. */
-export interface PlacerState {
-  placed: Set<string>;
-  moved: Set<string>;
-  spacing: Map<Plane, Spacing>;
-  reuse: Map<string, Reuse>;
-  blockSize: Map<string, { width: number; height: number }>;
-  spliced?: Map<string, string>;
-  joins?: Map<string, string>;
-  relabel?: Set<string>;
-  heads?: Map<string, number>;
-  skip?: Map<string, number>;
-  continued?: Set<string>;
-}
+export type PlacerState = Pick<NodePlacer, 'placed' | 'moved' | 'spacing' | 'reuse' | 'blockSize' | 'spliced' | 'joins' | 'relabel' | 'heads' | 'skip' | 'continued'>;
 
 export interface Probe {
   id: string;
@@ -252,14 +240,7 @@ export class NodePlacer {
       const inner = Frames.interior(frame, 15);
       const dx = Math.max(0, Math.round(inner.x - shape.bounds.x));
       const dy = Math.max(0, Math.round(inner.y - shape.bounds.y));
-      if (dx || dy) {
-        shape.bounds.x += dx;
-        shape.bounds.y += dy;
-        if (shape.label) {
-          shape.label.x += dx;
-          shape.label.y += dy;
-        }
-      }
+      if (dx || dy) translateShape(shape, dx, dy);
     }
     plane.shapes.set(shape.id, shape);
     this.placed.add(shape.id);
@@ -269,26 +250,14 @@ export class NodePlacer {
       const dx = shape.bounds.x - old.x;
       const dy = shape.bounds.y - old.y;
       const translate = (moving: DShape): void => {
-        moving.bounds.x += dx;
-        moving.bounds.y += dy;
-        if (moving.label) {
-          moving.label.x += dx;
-          moving.label.y += dy;
-        }
+        translateShape(moving, dx, dy);
         plane.shapes.set(moving.id, moving);
         this.moved.add(moving.id);
       };
       reuse.boundaries.forEach(translate);
       for (const child of reuse.content?.shapes ?? []) translate(child);
       for (const edge of reuse.content?.edges ?? []) {
-        for (const point of edge.points) {
-          point.x += dx;
-          point.y += dy;
-        }
-        if (edge.label) {
-          edge.label.x += dx;
-          edge.label.y += dy;
-        }
+        translateEdge(edge, dx, dy);
         if (reuse.from !== plane) {
           reuse.from.edges.delete(edge.id);
           plane.edges.set(edge.id, edge);

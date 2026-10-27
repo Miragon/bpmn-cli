@@ -1,5 +1,5 @@
 import { SIZES } from '../../utils/sizes.js';
-import { bottom, type Box, copyBox, cx, cy, median, right, union } from '../../utils/geom.js';
+import { bottom, type Box, copyBox, cx, cy, median, right, translateEdge, translateShape, union } from '../../utils/geom.js';
 import { PlaneQuery } from '../../di/PlaneQuery.js';
 import type { DEdge, DShape, Plane } from '../../di/types.js';
 import type { Semantics } from '../../di/Semantics.js';
@@ -142,24 +142,8 @@ export class FrameEditor {
   }
 
   private shiftAll(shapes: DShape[], edges: DEdge[], dx: number, dy: number): void {
-    for (const shape of shapes) {
-      shape.bounds.x += dx;
-      shape.bounds.y += dy;
-      if (shape.label) {
-        shape.label.x += dx;
-        shape.label.y += dy;
-      }
-    }
-    for (const edge of edges) {
-      for (const point of edge.points) {
-        point.x += dx;
-        point.y += dy;
-      }
-      if (edge.label) {
-        edge.label.x += dx;
-        edge.label.y += dy;
-      }
-    }
+    for (const shape of shapes) translateShape(shape, dx, dy);
+    for (const edge of edges) translateEdge(edge, dx, dy);
   }
 
   /**

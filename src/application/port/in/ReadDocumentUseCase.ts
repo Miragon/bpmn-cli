@@ -4,9 +4,6 @@ import type { Doc } from '../../../domain/document/Doc.js';
 export interface ReadDocumentUseCase {
 
   read(command: ReadDocumentUseCase.Command): Promise<ReadDocumentUseCase.Result>;
-
-  /** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content on import, unless `force`. */
-  assertLossless(command: ReadDocumentUseCase.LosslessCommand): void;
 }
 
 export declare namespace ReadDocumentUseCase {
@@ -28,11 +25,4 @@ export declare namespace ReadDocumentUseCase {
 
   /** The opened document. */
   type Result = Doc;
-
-  /** The document to check for content dropped on import. */
-  interface LosslessCommand {
-    doc: Doc;
-    /** accept a lossy import */
-    force?: boolean;
-  }
 }

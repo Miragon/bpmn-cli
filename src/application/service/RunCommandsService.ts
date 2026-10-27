@@ -4,7 +4,6 @@ import type { EditCommand } from '../../domain/commands/types.js';
 import { CommandParser } from '../../domain/commands/CommandParser.js';
 import { parseOpsJson } from '../../domain/commands/utils/ops-json.js';
 import { ModelCommandService } from '../../domain/batch/ModelCommandService.js';
-import { DiagramCommandService, type FormatResult } from '../../domain/diagram/DiagramCommandService.js';
 
 export class RunCommandsService implements RunCommandsUseCase {
   runModelCommand(command: RunCommandsUseCase.ModelCommand): ChangeSet {
@@ -13,10 +12,6 @@ export class RunCommandsService implements RunCommandsUseCase {
 
   runModelCommands(command: RunCommandsUseCase.ModelCommands): ChangeSet {
     return new ModelCommandService(command.doc).runBatch(command.commands).changes;
-  }
-
-  runDiagramCommands(command: RunCommandsUseCase.DiagramCommands): FormatResult[] {
-    return new DiagramCommandService(command.doc).run(command.entries, command.asFile ?? false);
   }
 
   parseCommands(command: RunCommandsUseCase.ParseCommand): EditCommand[] {

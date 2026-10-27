@@ -28,8 +28,10 @@ npm test                # the vitest suite
 npm run gate            # everything a change has to pass before it is handed over
 ```
 
-`npm run gate` builds, runs knip and the tests, the isomorphism check of the browser-safe core, the
-layout-regression budget and a short fuzz campaign. CI runs `typecheck` and `gate` on every pull
+`npm run gate` builds, runs knip twice (the second time in production mode: code in `src/` that only
+tests use fails unless its export is tagged `@internal`), the duplication budget of `src/` (jscpd,
+`.jscpd.json`), the tests, the isomorphism check of the browser-safe core, the layout-regression
+budget and a short fuzz campaign. CI runs `typecheck` and `gate` on every pull
 request and every push to `main`. The test layers, the benchmark and the fuzzer, and how to run
 them on a private corpus without copying it into the repository, are described in
 [docs/testing.md](docs/testing.md).
@@ -60,7 +62,7 @@ them on a private corpus without copying it into the repository, are described i
   | `adapters/in/cli/` | the driving adapter: the `Cli` (commander, streams, exit codes, errors) and one class per command; it knows the use cases only by their contracts |
   | `adapters/in/report/` | what a use case's result looks like to the one who asked: text and JSON reports (`MutationText`, `MutationReportBuilder`, `ValidationText`, ...), the views as text, and the reference the guide and `bpmn kinds` print; the CLI prints them and `index.ts` / `api.ts` return them |
   | `adapters/out/files/` | the driven adapters on disk, Node only: `FileDocumentStore`, `BpmnlintProjectSettings`, `FileImageWriter` (PNG) |
-  | `adapters/out/memory/` | the driven adapters of the in-memory API: `InMemoryDocumentStore`, `NoProjectSettings` |
+  | `adapters/out/memory/` | the driven adapters of the in-memory API: `NoDocumentFiles`, `NoProjectSettings` |
   | `types/` | type shims for the bpmn-io packages that ship no usable declarations |
 
   Where new code goes: a new command is a type in `domain/commands/` and a `...Service` of the

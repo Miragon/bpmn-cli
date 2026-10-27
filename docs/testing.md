@@ -234,9 +234,7 @@ ending on a number that reads like a suffix (`Phase1To...` kept), a cut
 inside a word that keeps the numbers, a camelCase end without its first
 word, a suffix within the cap, none skipped, also on an id that names the
 anchor's kind, a file prefix or scope too long for the cap in every flow
-form, cut flows voting for their form, flows 0.6 cut still following their
-ends, also with `_100` and a leading separator, ends of any length cut
-fast: #31),
+form, cut flows voting for their form, ends of any length cut fast: #31),
 transliteration beyond German, the definitions id of `new`, and the warnings
 delta: platform findings counted, a shrinking `W_DUPLICATE_NAME`, a bridge
 that takes over a removed flow's id, warnings of a batch's final state, `new`
@@ -787,9 +785,9 @@ node bin/bpmn.js add file.bpmn task "X" --after <id> --render /tmp/png/after.png
 reviews and blind judging, render with real bpmn-js:
 
 ```
-tools/render.sh /tmp/png file1.bpmn file2.bpmn            # any files
+tools/bench/render.sh /tmp/png file1.bpmn file2.bpmn      # any files
 tools/bench/render.sh /tmp/png tools/bench/results/latest/work/edits/<arm>/<corpus>/<model>/*/model.bpmn
 ```
 
-Both need Google Chrome (`PUPPETEER_EXECUTABLE_PATH` overrides the macOS
-default path) and fetch `bpmn-to-image` with npx.
+It needs Google Chrome (`PUPPETEER_EXECUTABLE_PATH` overrides the macOS
+default path) and fetches `bpmn-to-image` with npx.

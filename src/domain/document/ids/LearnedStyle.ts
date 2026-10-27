@@ -1,10 +1,10 @@
 import { kindOf, triggerOf } from '../utils/kinds.js';
 import { is, isBpmnElement, walk, type El } from '../utils/moddle.js';
-import { cutAt, isSuffix, MAX_ID, nameWords, pascalSnakeSlug, snakeSlug, SUFFIX_WORD } from '../utils/slug.js';
+import { isSuffix, MAX_ID, nameWords, pascalSnakeSlug, snakeSlug, SUFFIX_WORD } from '../utils/slug.js';
 import { beginAlike, caseLike, GENERIC, GLUED, HASH, lcfirst, localName, PREFIXED, prefixClass, stem, TOOL_DEFAULTS, ucfirst, type PrefixClass } from '../utils/id-words.js';
 import { CONNECTIONS, connectionRequest, kindTypeNames, type IdRequest } from '../utils/requests.js';
 import { ElementLabels } from './ElementLabels.js';
-import { ID_FORMS, IdFitter, LEGACY_BASE, FORM_JOIN, type IdForm } from './IdFitter.js';
+import { ID_FORMS, IdFitter, FORM_JOIN, type IdForm } from './IdFitter.js';
 import { MIN_EVIDENCE, Tally } from './Tally.js';
 import type { DeclaredConventions, Votes } from './DeclaredConventions.js';
 import type { Body, FlowForm, FlowStyle, PrefixSource } from './IdStyle.js';
@@ -21,8 +21,6 @@ const GLUED_SUFFIXED = /^[A-Za-z][A-Za-z0-9]*To[A-Z0-9][A-Za-z0-9]*_\d+$/;
 const GLUED_NAMED = /^[A-Za-z][A-Za-z0-9]*To(?![a-z])[A-Za-z0-9]*$/;
 /** May be a glued flow in a snake_case / Pascal_Snake body (`fweigh_parcel_to_label_parcel`). */
 const GLUED_JOINED = /^[a-z]\w*_[tT]o_\w*$/;
-/** A scopedTo flow 0.6 cut to an empty target word (Flow_KotO_WarenwirtschaftssystemabgleichTo). */
-const SCOPED_CUT = /^([A-Za-z][A-Za-z0-9]*)_([A-Z][A-Za-z0-9]*?)To\d*$/;
 
 type BodyClass = Body | 'hash' | 'numbered' | 'lower' | 'other';
 
@@ -392,8 +390,6 @@ export class LearnedStyle {
       let req: IdRequest | undefined;
       const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: new ElementLabels(el.get<El>('sourceRef')).label(), targetLabel: new ElementLabels(el.get<El>('targetRef')).label() }));
       for (const form of ID_FORMS) if (!seen.some((seenForm) => seenForm.form === form) && this.cutOfForm(id, form, prefix, request)) seen.push({ form, prefix });
-      const scope = seen.some((seenForm) => seenForm.form === 'scopedTo') ? undefined : this.legacyScopedCut(id, prefix, source, target);
-      if (scope) seen.push({ form: 'scopedTo', prefix, scope });
     }
     for (const seenForm of seen) {
       votes.forms.add(seenForm.form);
@@ -483,18 +479,16 @@ export class LearnedStyle {
     for (const [join, slug] of [['_to_', snakeSlug], ['_To_', pascalSnakeSlug]] as const) {
       if (!id.includes(join) || id.charAt(prefix.length) !== slug(ends.source()).charAt(0)) continue;
       if (id.startsWith(`${prefix}${slug(ends.source())}${join}`)) return true;
-      const at = (max: number, legacy = false): string => new IdFitter({ legacy }).pair(prefix, slug(ends.source(), legacy), join, slug(ends.target(), legacy), max);
+      const at = (max: number): string => new IdFitter().pair(prefix, slug(ends.source()), join, slug(ends.target()), max);
       const uncut = at(Infinity);
       if (fits(uncut) || (uncut.length > MAX_ID - 4 && [0, 1, 2, 3, 4].some((trim) => fits(at(MAX_ID - trim))))) return true;
-      const legacy = at(LEGACY_BASE, true);
-      if (fits(legacy) || fits(cutAt(legacy, MAX_ID - 4, true))) return true;
     }
     return false;
   }
 
   private otherStyles(votes: FlowVotes, style: FlowStyle): FlowStyle[] {
     const out = new Map<string, FlowStyle>();
-    const key = (flowStyle: FlowStyle): string => (flowStyle.form === 'named' ? `named|${new IdFitter({ legacy: true }).namedHead(flowStyle.prefix, flowStyle.sep).head}` : `${flowStyle.form}|${flowStyle.prefix}|${flowStyle.scope ?? ''}`);
+    const key = (flowStyle: FlowStyle): string => (flowStyle.form === 'named' ? `named|${new IdFitter().namedHead(flowStyle.prefix, flowStyle.sep).head}` : `${flowStyle.form}|${flowStyle.prefix}|${flowStyle.scope ?? ''}`);
     const add = (flowStyle: FlowStyle): void => {
       if (!out.has(key(flowStyle))) out.set(key(flowStyle), flowStyle);
     };
@@ -529,9 +523,6 @@ export class LearnedStyle {
     const fitter = new IdFitter();
     if (fitter.idForm(form, `${prefix}_`, req, Infinity).length <= MAX_ID - 4) return false;
     const sep = form === 'stemTo' ? '' : '_';
-    const suffixed = (base: string): boolean => id.startsWith(base) && isSuffix(base, id.slice(base.length), sep);
-    const legacy = new IdFitter({ legacy: true }).idForm(form, `${prefix}_`, req, LEGACY_BASE);
-    if (id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true))) return true;
     if (id === fitter.idForm(form, `${prefix}_`, req, MAX_ID)) return true;
     const digits = (sep === '' ? /\d+$/ : /_\d+$/).exec(id)?.[0] ?? '';
     const ks: number[] = [];
@@ -543,18 +534,5 @@ export class LearnedStyle {
       if (id.slice(0, -digitCount) === fitter.idForm(form, `${prefix}_`, req, MAX_ID - digitCount)) return true;
     }
     return false;
-  }
-
-  /** SCOPED_TO does not read a flow 0.6 cut to an empty target word, so this does. */
-  private legacyScopedCut(id: string, prefix: string, source: string, target: string): string | undefined {
-    const match = SCOPED_CUT.exec(id.slice(prefix.length + 1));
-    if (!match) return undefined;
-    const scope = match[1]!;
-    const fitter = new IdFitter({ legacy: true });
-    const sourceWord = fitter.endWord(source, scope, 'Start');
-    if (!match[2]!.startsWith(sourceWord)) return undefined;
-    const legacy = cutAt(`${prefix}_${scope}_${sourceWord}To${fitter.endWord(target, scope, 'End')}`, LEGACY_BASE, true);
-    const suffixed = (base: string): boolean => id.startsWith(base) && isSuffix(base, id.slice(base.length), '');
-    return id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true)) ? scope : undefined;
   }
 }

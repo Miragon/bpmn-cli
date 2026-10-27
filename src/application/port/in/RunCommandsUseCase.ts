@@ -1,7 +1,6 @@
 import type { Doc } from '../../../domain/document/Doc.js';
 import type { ChangeSet } from '../../../domain/document/ChangeSet.js';
 import type { EditCommand } from '../../../domain/commands/types.js';
-import type { FormatEntry, FormatResult } from '../../../domain/diagram/DiagramCommandService.js';
 
 /**
  * The commands of a batch run on a document in memory on their own:
@@ -14,12 +13,6 @@ export interface RunCommandsUseCase {
 
   /** Runs model commands as one batch and returns what changed. */
   runModelCommands(command: RunCommandsUseCase.ModelCommands): ChangeSet;
-
-  /**
-   * Runs the diagram commands of a batch on the drawing; with `asFile` (a format-only batch)
-   * the first command's refusal may name a runnable command.
-   */
-  runDiagramCommands(command: RunCommandsUseCase.DiagramCommands): FormatResult[];
 
   /** Validates the ops (an array or `{ ops }`); a usage error names the op index. */
   parseCommands(command: RunCommandsUseCase.ParseCommand): EditCommand[];
@@ -40,14 +33,6 @@ export declare namespace RunCommandsUseCase {
   interface ModelCommands {
     doc: Doc;
     commands: EditCommand[];
-  }
-
-  /** Diagram commands of a batch and the document they draw on. */
-  interface DiagramCommands {
-    doc: Doc;
-    entries: readonly FormatEntry[];
-    /** a format-only batch: the first command's refusal may name a runnable command */
-    asFile?: boolean;
   }
 
   /** Ops as parsed JSON: an array or `{ ops }`. */

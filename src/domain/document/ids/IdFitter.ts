@@ -1,4 +1,4 @@
-import { camelSlug, cutAt, idWords, isFiller, keptTail, MAX_ID, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, withLetter } from '../utils/slug.js';
+import { camelSlug, idWords, isFiller, keptTail, MAX_ID, nameWords, pascalSnakeSlug, readsApart, slugify, snakeSlug, withLetter } from '../utils/slug.js';
 import { beginAlike, lcfirst, speakingStem, stem, ucfirst } from '../utils/id-words.js';
 import type { Body } from './IdStyle.js';
 import type { IdRequest } from '../utils/requests.js';
@@ -6,9 +6,6 @@ import type { IdRequest } from '../utils/requests.js';
 export type IdForm = 'stemTo' | 'idPair' | 'stemSnake' | 'idSnake';
 export const FORM_JOIN: Record<IdForm, string> = { stemTo: 'To', idPair: '_', stemSnake: '_to_', idSnake: '_to_' };
 export const ID_FORMS = Object.keys(FORM_JOIN) as IdForm[];
-
-/** The longest base id 0.6 generated, so the flows it cut are still recognised. */
-export const LEGACY_BASE = MAX_ID - 3;
 
 interface EndForm {
   text: string;
@@ -21,48 +18,45 @@ interface EndForm {
  */
 export class IdFitter {
   private readonly body: Body;
-  private readonly legacy: boolean;
   /** the numbers the closing end does not end on, as they would look like a collision suffix */
   private readonly closes: RegExp;
   private readonly names: string[] | undefined;
 
-  constructor(opts: { body?: Body; legacy?: boolean; suffixSep?: string; names?: string[] } = {}) {
+  constructor(opts: { body?: Body; suffixSep?: string; names?: string[] } = {}) {
     this.body = opts.body ?? 'pascal';
-    this.legacy = opts.legacy ?? false;
     this.closes = (opts.suffixSep ?? '_') === '' ? /^[_.-]*\d+$/ : /^_\d+$/;
     this.names = opts.names;
   }
 
   ends(source: string, target: string, glued: boolean): [string, string, string] {
-    const legacy = this.legacy;
     switch (this.body) {
       case 'camel': {
-        const sourceSlug = camelSlug(source, legacy);
-        return [glued ? ucfirst(sourceSlug) : sourceSlug, 'To', slugify(target, legacy)];
+        const sourceSlug = camelSlug(source);
+        return [glued ? ucfirst(sourceSlug) : sourceSlug, 'To', slugify(target)];
       }
       case 'snake':
-        return [snakeSlug(source, legacy), '_to_', snakeSlug(target, legacy)];
+        return [snakeSlug(source), '_to_', snakeSlug(target)];
       case 'pascalSnake':
-        return [pascalSnakeSlug(source, legacy), '_To_', pascalSnakeSlug(target, legacy)];
+        return [pascalSnakeSlug(source), '_To_', pascalSnakeSlug(target)];
       default:
-        return [slugify(source, legacy), 'To', slugify(target, legacy)];
+        return [slugify(source), 'To', slugify(target)];
     }
   }
 
   /**
    * `long`: the head leaves the ends fewer than 16 characters, so it stays only where they fit
-   * beside it at whole words (else Flow_; 0.6 always kept it). `glued`: a lower-case prefix
+   * beside it at whole words (else Flow_). `glued`: a lower-case prefix
    * without separator glues the words too (flowCheckToShip); an upper-case one reads apart (F_CheckToShip).
    */
   namedHead(prefix: string, sep: string | undefined): { head: string; glued: boolean; long: boolean } {
     const glued = sep === '' && /[a-z]/.test(prefix);
     const joined = this.body === 'snake' || this.body === 'pascalSnake' ? 4 : 2;
-    return { head: `${prefix}${glued ? '' : '_'}`, glued, long: !this.legacy && MAX_ID - prefix.length - (glued ? 0 : 1) - joined < 16 };
+    return { head: `${prefix}${glued ? '' : '_'}`, glued, long: MAX_ID - prefix.length - (glued ? 0 : 1) - joined < 16 };
   }
 
   pair(head: string, sourceEnd: string, join: string, targetEnd: string, max: number): string {
     const room = max - head.length - join.length;
-    const [fittedSource, fittedTarget] = this.legacy ? this.legacyFitPair(sourceEnd, targetEnd, room) : this.fitPair(sourceEnd, targetEnd, Math.max(room, 0));
+    const [fittedSource, fittedTarget] = this.fitPair(sourceEnd, targetEnd, Math.max(room, 0));
     return `${head}${fittedSource}${join}${fittedTarget}`;
   }
 
@@ -84,7 +78,7 @@ export class IdFitter {
       const pb = targetId.length - stem(targetId).length;
       const room = max - head.length - join.length - pa - pb;
       const fitter = this.ofForm(form);
-      if (this.legacy || room < 16) return fitter.pair(head, sourceId, join, targetId, max);
+      if (room < 16) return fitter.pair(head, sourceId, join, targetId, max);
       const [fittedSource, fittedTarget] = fitter.fitPair(stem(sourceId), stem(targetId), room);
       return `${head}${sourceId.slice(0, pa)}${fittedSource}${join}${targetId.slice(0, pb)}${fittedTarget}`;
     }
@@ -107,7 +101,7 @@ export class IdFitter {
 
   /** An end's id stem when that says something, else its label. */
   stemEnds(form: 'stemTo' | 'stemSnake', req: IdRequest): { sourceEnd: string; targetEnd: string; names?: string[] } {
-    const slug = (text: string): string => (form === 'stemTo' ? camelSlug(text, this.legacy) : snakeSlug(text, this.legacy));
+    const slug = (text: string): string => (form === 'stemTo' ? camelSlug(text) : snakeSlug(text));
     const byLabel = (id: string, label: string | undefined): label is string => speakingStem(id) === undefined && !!label && !!slug(label);
     const end = (id: string, label: string | undefined): string => speakingStem(id) ?? (byLabel(id, label) ? slug(label) : stem(id));
     const [sourceEnd, targetEnd] = [end(req.source!, req.sourceLabel), end(req.target!, req.targetLabel)];
@@ -123,12 +117,12 @@ export class IdFitter {
     const segments = id.split('_');
     if (segments.length > 1 && new RegExp(`^${terminal}(Event)?$`, 'i').test(segments[0]!)) return terminal;
     const rest = segments.length > 1 ? segments.slice(1).filter((segment) => segment !== scope) : segments;
-    const word = (words: string[]): string | undefined => (this.legacy ? words[0] : words.find((candidate) => /[A-Za-z]/.test(candidate)));
+    const word = (words: string[]): string | undefined => words.find((candidate) => /[A-Za-z]/.test(candidate));
     return ucfirst(word(nameWords(rest.join(' '))) ?? word(nameWords(id)) ?? terminal);
   }
 
   private ofForm(form: IdForm, names?: string[]): IdFitter {
-    return new IdFitter({ legacy: this.legacy, suffixSep: form === 'stemTo' ? '' : '_', ...(names ? { names } : {}) });
+    return new IdFitter({ suffixSep: form === 'stemTo' ? '' : '_', ...(names ? { names } : {}) });
   }
 
   /**
@@ -247,30 +241,10 @@ export class IdFitter {
     return withLetter(slug, slug.slice(0, Math.max(max, 0)).replace(/[_.-]+$/, ''), (rest) => this.cutInside(rest, max));
   }
 
-  /**
-   * fitPair as 0.6 cut the ends, to recognise the flows it named. Ends that begin alike differ at
-   * their ends, so each keeps its last word.
-   */
-  private legacyFitPair(sourceEnd: string, targetEnd: string, room: number): [string, string] {
-    if (sourceEnd.length + targetEnd.length <= room) return [sourceEnd, targetEnd];
-    return this.sharePair(sourceEnd, targetEnd, room, beginAlike(sourceEnd, targetEnd) ? (slug, max) => this.cutKeepingLast(slug, max) : (slug, max) => this.legacyCut(slug, max));
-  }
-
   /** The first end gets at least half, the second the rest, the first what the second leaves. */
   private sharePair(sourceEnd: string, targetEnd: string, room: number, cut: (slug: string, max: number) => string): [string, string] {
     const first = cut(sourceEnd, Math.max(Math.floor(room / 2), room - targetEnd.length));
     const second = cut(targetEnd, room - first.length);
     return [cut(sourceEnd, room - second.length), second];
-  }
-
-  private cutKeepingLast(slug: string, max: number): string {
-    if (slug.length <= max) return slug;
-    const match = /^(.*[a-z0-9])([_.-][A-Za-z0-9]+|[A-Z][a-z0-9]+)$/.exec(slug);
-    if (!match || match[2]!.length + 8 > max) return this.legacyCut(slug, max);
-    return `${this.legacyCut(match[1]!, max - match[2]!.length)}${match[2]}`;
-  }
-
-  private legacyCut(slug: string, max: number): string {
-    return cutAt(slug, max, true);
   }
 }

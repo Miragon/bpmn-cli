@@ -1,5 +1,5 @@
 import { titleBox } from '../../utils/text.js';
-import { boxesOverlap } from '../../utils/geom.js';
+import { overlaps } from '../../utils/geom.js';
 import type { Box, Point } from '../../di/types.js';
 import { is, many, type El } from '../../../document/utils/moddle.js';
 import { toSegments, type Segment } from '../../utils/geometry.js';
@@ -151,10 +151,10 @@ export class LabelDeclutter {
   /** Whether `box` hits a shape, a placed label, a title or a line (the text would sit on it). */
   private clashes(box: Box, own?: Box): boolean {
     return (
-      this.shapes.some((shape) => shape !== own && boxesOverlap(shape, box, 2)) ||
-      this.placed.some((other) => boxesOverlap(other, box, 2)) ||
+      this.shapes.some((shape) => shape !== own && overlaps(shape, box, 2)) ||
+      this.placed.some((other) => overlaps(other, box, 2)) ||
       this.lines.some((seg) => this.hitsBox(seg, box, seg[0].y === seg[1].y ? -RUN_KEEP : 1)) ||
-      this.titleBoxes.some((title) => boxesOverlap(title, box, 2))
+      this.titleBoxes.some((title) => overlaps(title, box, 2))
     );
   }
 }

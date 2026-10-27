@@ -23,7 +23,7 @@ flowchart TB
   service --> domain["Domain<br/>domain/"]
   service --> portOut{{"Port<br/>application/port/out"}}
   portOut --> files["Files<br/>adapters/out/files"]
-  portOut --> memory["No project<br/>adapters/out/memory"]
+  portOut --> memory["No project, no files<br/>adapters/out/memory"]
 
   classDef adapter stroke:#2f80ed,stroke-width:2px
   classDef app stroke:#f2994a,stroke-width:2px
@@ -100,23 +100,21 @@ export class AddElementCommand extends MutationCommand {
     options: RawOpts,
   ) {
     const opts = this.mutationOptions(options)
-    await this.cli.guarded(async () => {
-      this.checkPlacementFlags(options)
-      const op: AddElement = {
-        op: 'add',
-        kind,                       // 'userTask'
-        name,                       // 'Check invoice'
-        after: options['after'],    // 'Event_OrderReceived'
-        // …
-      }
-      await this.mutate(file, [op], opts)
-    }, opts.json)
+    this.checkPlacementFlags(options)
+    const op: AddElement = {
+      op: 'add',
+      kind,                       // 'userTask'
+      name,                       // 'Check invoice'
+      after: options['after'],    // 'Event_OrderReceived'
+      // …
+    }
+    await this.mutate(file, [op], opts)
   }
 }
 ```
 
-`guarded()` catches any error and prints it with its code and hint. From here on nobody knows
-about flags any more.
+An error thrown here reaches `Cli.run`, which prints it with its code and hint. From here on
+nobody knows about flags any more.
 
 ### 2. Through the port
 
@@ -158,44 +156,33 @@ export declare namespace EditDocumentUseCase {
 ### 3. Load, run, save
 
 The service is short on purpose: get the document, let the domain work, write the result.
-`settings`, `load` and `save` are outbound ports, handed in by the constructor; without `load`
-or `save` the service takes only a document and writes nothing.
+`settings`, `load` and `save` are outbound ports, handed in by the constructor. The call into
+the domain stands on a line of its own; reading and writing the file are small steps around it.
 
 ```ts
 // src/application/service/EditDocumentService.ts
 export class EditDocumentService implements EditDocumentUseCase {
   constructor(
     private readonly settings: LoadProjectSettingsPort,
-    private readonly load?: LoadDocumentPort,
-    private readonly save?: SaveDocumentPort,
+    private readonly load: LoadDocumentPort,
+    private readonly save: SaveDocumentPort,
   ) {}
 
-  async edit({ source, commands, ...opts }: EditDocumentUseCase.Command) {
-    // step 7: read the file
-    const doc = 'doc' in source
-      ? source.doc
-      : await Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file)
-    const target = opts.out ?? doc.file
-
-    // the project's .bpmnlintrc, if any
-    const lint = await this.settings.lint(target, opts)
-
-    // step 4: the domain does the work
-    const batchOpts = lint.applyTo(opts, target)
-    const batch = new EditBatchService(doc, commands, batchOpts)
-    const result = await batch.run(target)
-
-    // step 7: write the file
-    if (!opts.dryRun) {
-      result.written = await this.savePort().save(target, result.xml, { … })
-    }
+  async edit(command: EditDocumentUseCase.Command) {
+    const { source, commands, ...opts } = command
+    const doc = await this.open(source, opts)            // step 7: read the file
+    const target = await this.targetOf(doc, opts)
+    const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo(opts, target)
+    const result = await new EditBatchService(doc, commands, project).run(target)   // step 4: the domain
+    await this.write(result, doc, target, opts)          // step 7: write the file
     return result
   }
 }
 ```
 
 In the CLI the ports are a `FileDocumentStore` and `BpmnlintProjectSettings`; `applyToXml()`
-passes only `NoProjectSettings` and a `{ doc }` with `dryRun`, so nothing is read or written.
+passes `NoProjectSettings`, `NoDocumentFiles` and a `{ doc }` with `dryRun`, so nothing is read
+or written.
 
 ### 4. The batch
 

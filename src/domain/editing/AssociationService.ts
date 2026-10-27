@@ -9,6 +9,7 @@ import type { ChangeSet } from '../document/ChangeSet.js';
 import { allocateId } from './utils/allocate-id.js';
 import { artifactContainerOf, isDataReference } from './utils/artifacts.js';
 
+/** @internal */
 export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
 
 /**

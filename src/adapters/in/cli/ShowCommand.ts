@@ -25,7 +25,7 @@ export class ShowCommand extends CliCommand {
         .option('--conventions', "the id conventions new ids follow here: element-id-naming of the .bpmnlintrc (prefixes, case, qualifier) and the file's own style; a file that does not exist yet: those of a new model there")
         .option('--lint-config <path>', "with --conventions: the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file, up to the repository root, whoever owns it; outside one only in the file's directory; stdin: from the working directory)")
         .option('--no-lint-config', 'with --conventions: do not read the .bpmnlintrc (no id conventions from element-id-naming)'),
-    ).action((file: string, id: string | undefined, options: RawOpts) => this.cli.guarded(() => (options['conventions'] ? this.conventions(file, id, options) : this.view(file, id, options)), !!options['json']));
+    ).action((file: string, id: string | undefined, options: RawOpts) => (options['conventions'] ? this.conventions(file, id, options) : this.view(file, id, options)));
   }
 
   /** A file that does not exist yet gets the conventions a new model there gets (before `bpmn new`). */

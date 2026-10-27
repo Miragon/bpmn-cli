@@ -1,4 +1,5 @@
-import { addTo, is, many, processes, removeFrom, walk, type El, idOf } from '../../document/utils/moddle.js';
+import { addTo, idOf, indexById, is, many, processes, removeFrom, type El } from '../../document/utils/moddle.js';
+import { allLanes } from '../../document/utils/lanes.js';
 
 interface TempMember {
   laneId: string;
@@ -14,19 +15,6 @@ export class TemporaryLaneMembers {
 
   get count(): number {
     return this.members.length;
-  }
-
-  private static allLanes(process: El): El[] {
-    const out: El[] = [];
-    const visit = (laneSet: El | undefined): void => {
-      if (!laneSet) return;
-      for (const lane of many(laneSet, 'lanes')) {
-        out.push(lane);
-        visit(lane.get<El | undefined>('childLaneSet'));
-      }
-    };
-    for (const ls of many(process, 'laneSets')) visit(ls);
-    return out;
   }
 
   private static isLeafLane(lane: El): boolean {
@@ -56,7 +44,7 @@ export class TemporaryLaneMembers {
   static add(defs: El): TemporaryLaneMembers {
     const added: TempMember[] = [];
     for (const process of processes(defs)) {
-      const lanes = TemporaryLaneMembers.allLanes(process);
+      const lanes = allLanes(process);
       if (!lanes.length) continue;
       const leafLanes = lanes.filter(TemporaryLaneMembers.isLeafLane);
       if (!leafLanes.length) continue;
@@ -76,11 +64,7 @@ export class TemporaryLaneMembers {
 
   withdraw(defs: El): void {
     if (!this.members.length) return;
-    const byId = new Map<string, El>();
-    for (const el of walk(defs)) {
-      const id = el.get<string | undefined>('id');
-      if (id) byId.set(id, el);
-    }
+    const byId = indexById(defs);
     for (const { laneId, nodeId } of this.members) {
       const lane = byId.get(laneId);
       const node = byId.get(nodeId);

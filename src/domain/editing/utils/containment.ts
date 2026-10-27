@@ -15,7 +15,7 @@ export function contains(parent: El, child: El): boolean {
   return false;
 }
 
-export function detachFromParent(el: El): El | undefined {
+export function detachFromParent(el: El, replacement?: El): El | undefined {
   const parent = el.$parent as El | undefined;
   if (!parent) return undefined;
   for (const property of descriptorOf(parent).properties ?? []) {
@@ -23,14 +23,15 @@ export function detachFromParent(el: El): El | undefined {
     const propValue = ownValue(parent, property.name);
     if (Array.isArray(propValue)) {
       const index = propValue.indexOf(el);
-      if (index !== -1) {
-        propValue.splice(index, 1);
-        return parent;
-      }
-    } else if (propValue === el) {
-      parent.set(property.name, undefined);
-      return parent;
+      if (index === -1) continue;
+      if (replacement) propValue[index] = replacement;
+      else propValue.splice(index, 1);
+    } else {
+      if (propValue !== el) continue;
+      parent.set(property.name, replacement);
     }
+    if (replacement) replacement.$parent = parent;
+    return parent;
   }
   return parent;
 }

@@ -1,14 +1,13 @@
 import type { Doc } from '../../document/Doc.js';
 import type { EditContext } from '../../document/EditContext.js';
 import { modelError, usageError } from '../../document/utils/errors.js';
-import type { CliError } from '../../document/CliError.js';
 import { gatewayKindList, parseKind } from '../../document/utils/kinds.js';
 import { KindError } from '../../document/KindError.js';
 import { is, type El, idOf } from '../../document/utils/moddle.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
 import { IdStyle } from '../../document/ids/IdStyle.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
-import { BRANCH_FIELDS, NODE_FIELDS } from '../../commands/utils/op-fields.js';
+import { CommandParser } from '../../commands/CommandParser.js';
 import { laneOf } from '../../document/utils/lanes.js';
 import { renamedNote } from '../../document/utils/renames.js';
 import { insertAfterInScope } from '../utils/declaration-order.js';
@@ -73,42 +72,6 @@ export class BranchSplitService {
     return { id, base };
   }
 
-  private static describe(input: unknown): string {
-    if (input === null) return 'null';
-    if (Array.isArray(input)) return 'an array';
-    if (typeof input === 'object') return 'an object';
-    return `${typeof input} ${JSON.stringify(input)}`;
-  }
-
-  private static isObject(candidate: unknown): candidate is Record<string, unknown> {
-    return typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate);
-  }
-
-  /**
-   * The shape parseOps checks, in its words, for typed library ops that skip it.
-   * A branch without `nodes` is no empty branch: the CLI refuses it too.
-   */
-  private static checkShape(branches: unknown): void {
-    if (branches === undefined || branches === null) return;
-    if (!Array.isArray(branches)) {
-      throw usageError(`split: "branches" must be an array of branch objects, got ${BranchSplitService.describe(branches)}`, { hint: 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].' });
-    }
-    const missing = (path: string, key: string, description: string): CliError => usageError(`${path}: missing required key "${key}" (${description})`);
-    branches.forEach((branch: unknown, branchIndex) => {
-      if (!BranchSplitService.isObject(branch)) throw usageError(`split branches[${branchIndex}]: expected an object, got ${BranchSplitService.describe(branch)}`);
-      const nodes = branch['nodes'];
-      if (nodes === undefined || nodes === null) throw missing(`split branches[${branchIndex}]`, 'nodes', BRANCH_FIELDS.nodes.description);
-      if (!Array.isArray(nodes)) throw usageError(`split branches[${branchIndex}]: "nodes" must be an array of node objects, got ${BranchSplitService.describe(nodes)}`, { hint: 'An empty array is allowed: the branch is then a direct gateway -> join flow.' });
-      nodes.forEach((node: unknown, nodeIndex) => {
-        const path = `split branches[${branchIndex}].nodes[${nodeIndex}]`;
-        if (!BranchSplitService.isObject(node)) throw usageError(`${path}: expected an object, got ${BranchSplitService.describe(node)}`);
-        const kind = node['kind'];
-        if (kind === undefined || kind === null) throw missing(path, 'kind', NODE_FIELDS.kind.description);
-        if (typeof kind !== 'string') throw usageError(`${path}: "kind" must be a string, got ${BranchSplitService.describe(kind)}`, { hint: 'Write it as a JSON string, e.g. "kind": "...".' });
-      });
-    });
-  }
-
   /**
    * Splits after op.after into a gateway, its branches and a join. Branches ending in an end
    * event terminate there instead of reaching the join; a generated join id is marked generated,
@@ -117,7 +80,7 @@ export class BranchSplitService {
   split(op: SplitIntoBranches): ChangeSet {
     const cs = new ChangeSet();
     const kind = BranchSplitService.gatewayKind(op.kind);
-    BranchSplitService.checkShape(op.branches);
+    if (op.branches !== undefined && op.branches !== null) new CommandParser().parseBranches(op.branches);
     if (!op.branches?.length) {
       throw modelError('E_INVALID_VALUE', 'split needs at least one branch', { hint: 'Pass branches: [{ nodes: [...] }, ...].' });
     }

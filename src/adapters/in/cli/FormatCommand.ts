@@ -40,8 +40,6 @@ export abstract class FormatCommand extends MutationCommand {
 
   protected async runFormat(file: string, op: EditCommand, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      await this.mutate(file, [op], opts);
-    }, opts.json);
+    await this.mutate(file, [op], opts);
   }
 }

@@ -7,51 +7,18 @@ import { is, type El } from '../../document/utils/moddle.js';
 import type { Box, Point } from '../di/types.js';
 import { idOf, raw, rawList } from './raw.js';
 import { titleBox } from './text.js';
+import { toSegments, type Segment } from './geometry.js';
 
-export type Seg = [Point, Point];
-
-export function segs(pts: Point[]): Seg[] {
-  const out: Seg[] = [];
-  for (let index = 0; index + 1 < pts.length; index++) out.push([pts[index]!, pts[index + 1]!]);
-  return out;
-}
-
-export const hits = ([start, end]: Seg, box: Box, shrink = 2): boolean =>
+export const hits = ([start, end]: Segment, box: Box, shrink = 2): boolean =>
   Math.min(start.x, end.x) < box.x + box.width - shrink &&
   Math.max(start.x, end.x) > box.x + shrink &&
   Math.min(start.y, end.y) < box.y + box.height - shrink &&
   Math.max(start.y, end.y) > box.y + shrink;
 
-function slab(origin: number, direction: number, lo: number, hi: number): [number, number] {
-  const lowExit = (lo - origin) / direction;
-  const highExit = (hi - origin) / direction;
-  return lowExit < highExit ? [lowExit, highExit] : [highExit, lowExit];
-}
-
-/** Liang-Barsky on the open box; for axis-parallel segments the same as `hits`. */
-export function cuts(seg: Seg, box: Box, shrink = 2): boolean {
-  const [start, end] = seg;
-  if (start.x === end.x || start.y === end.y) return hits(seg, box, shrink);
-  const x0 = box.x + shrink;
-  const x1 = box.x + box.width - shrink;
-  const y0 = box.y + shrink;
-  const y1 = box.y + box.height - shrink;
-  if (x0 >= x1 || y0 >= y1) return false;
-  const [ax, bx] = slab(start.x, end.x - start.x, x0, x1);
-  const [ay, by] = slab(start.y, end.y - start.y, y0, y1);
-  const lo = Math.max(ax, ay);
-  const hi = Math.min(bx, by);
-  return lo < hi && lo < 1 && hi > 0;
-}
-
-export const overlap = (first: Box, second: Box): boolean => first.x < second.x + second.width && second.x < first.x + first.width && first.y < second.y + second.height && second.y < first.y + first.height;
-
 export const inside = (inner: Box, outer: Box): boolean => inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
 
-export const ptIn = (point: Point, box: Box): boolean => point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
-
 /** ≤ 0: none */
-export function collinear([firstStart, firstEnd]: Seg, [secondStart, secondEnd]: Seg): number {
+export function collinear([firstStart, firstEnd]: Segment, [secondStart, secondEnd]: Segment): number {
   if (firstStart.x === firstEnd.x && secondStart.x === secondEnd.x && firstStart.x === secondStart.x) {
     return Math.min(Math.max(firstStart.y, firstEnd.y), Math.max(secondStart.y, secondEnd.y)) - Math.max(Math.min(firstStart.y, firstEnd.y), Math.min(secondStart.y, secondEnd.y));
   }
@@ -109,7 +76,7 @@ export interface Edge {
   id: string;
   el: El;
   pts: Point[];
-  segs: Seg[];
+  segs: Segment[];
   /** `undefined` is an unresolved end and makes edges related, as in the harness */
   ends: Set<string | undefined>;
   label?: Box;
@@ -141,7 +108,7 @@ export function readDrawnPlane(plane: unknown, seen: Set<string>): { shapes: Sha
       shapes.push({ id, el, bounds, container, expanded, ...(label ? { label } : {}) });
     } else if (is(pe, 'bpmndi:BPMNEdge')) {
       const pts = rawList(pe, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x')!, y: raw<number>(waypoint, 'y')! }));
-      edges.push({ id, el, pts, segs: segs(pts), ends: endsOf(el), ...(label ? { label } : {}) });
+      edges.push({ id, el, pts, segs: toSegments(pts), ends: endsOf(el), ...(label ? { label } : {}) });
     }
   }
   return { shapes, edges };
@@ -155,14 +122,14 @@ export function drawnEnds(el: El): [string | undefined, string | undefined] {
 }
 
 interface Run {
-  seg: Seg;
+  seg: Segment;
   idx: number[];
 }
 
 /** A zero-length segment joins the run before it; leading ones join the first run. */
-function runs(list: Seg[]): Run[] {
+function runs(list: Segment[]): Run[] {
   const out: Run[] = [];
-  const way = ([start, end]: Seg): string => `${Math.sign(end.x - start.x)},${Math.sign(end.y - start.y)}`;
+  const way = ([start, end]: Segment): string => `${Math.sign(end.x - start.x)},${Math.sign(end.y - start.y)}`;
   const lead: number[] = [];
   list.forEach((segment, segmentIndex) => {
     const last = out[out.length - 1];

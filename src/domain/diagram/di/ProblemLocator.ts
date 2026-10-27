@@ -1,7 +1,8 @@
 import { is, type El } from '../../document/utils/moddle.js';
 import type { Box, Point } from './types.js';
-import { cx, cy, segmentsCross } from '../utils/geom.js';
-import { collinear, cuts, drawnEnds, glyph, hits, joinTail, ptIn, readDrawnPlane, segs, subTitleOf, type Edge, type Seg, type Shape } from '../utils/harness.js';
+import { containsPoint, cx, cy, segmentHits, segmentsCross } from '../utils/geom.js';
+import { toSegments, type Segment } from '../utils/geometry.js';
+import { collinear, drawnEnds, glyph, hits, joinTail, readDrawnPlane, subTitleOf, type Edge, type Shape } from '../utils/harness.js';
 import { idOf, raw, rawList } from '../utils/raw.js';
 import type { LayoutProblem } from '../utils/problems.js';
 
@@ -56,14 +57,14 @@ export class ProblemLocator {
     return width >= 0 && height >= 0 ? { x: left + width / 2, y: top + height / 2 } : this.centreOf(first);
   }
 
-  private crossPoint([firstStart, firstEnd]: Seg, [secondStart, secondEnd]: Seg): Point {
+  private crossPoint([firstStart, firstEnd]: Segment, [secondStart, secondEnd]: Segment): Point {
     const den = (firstEnd.x - firstStart.x) * (secondEnd.y - secondStart.y) - (firstEnd.y - firstStart.y) * (secondEnd.x - secondStart.x);
     const progress = den ? ((secondStart.x - firstStart.x) * (secondEnd.y - secondStart.y) - (secondStart.y - firstStart.y) * (secondEnd.x - secondStart.x)) / den : 0.5;
     return { x: firstStart.x + progress * (firstEnd.x - firstStart.x), y: firstStart.y + progress * (firstEnd.y - firstStart.y) };
   }
 
   /** the middle of the part of a segment inside the box shrunk by `shrink` */
-  private clipMiddle(seg: Seg, box: Box, shrink: number): Point {
+  private clipMiddle(seg: Segment, box: Box, shrink: number): Point {
     const [segmentStart, segmentEnd] = seg;
     const dx = segmentEnd.x - segmentStart.x;
     const dy = segmentEnd.y - segmentStart.y;
@@ -99,7 +100,7 @@ export class ProblemLocator {
   }
 
   private halfway(pts: Point[]): Point | undefined {
-    const parts = segs(pts);
+    const parts = toSegments(pts);
     let rest = parts.reduce((sum, [start, end]) => sum + Math.hypot(end.x - start.x, end.y - start.y), 0) / 2;
     for (const [start, end] of parts) {
       const len = Math.hypot(end.x - start.x, end.y - start.y);
@@ -134,7 +135,7 @@ export class ProblemLocator {
       case 'outsideSub':
         return sa ? this.centreOf(sa.bounds) : undefined;
       case 'through': {
-        const seg = sb ? ea?.segs.find((segment) => cuts(segment, sb.bounds)) : undefined;
+        const seg = sb ? ea?.segs.find((segment) => segmentHits(...segment, sb.bounds)) : undefined;
         return seg && sb ? this.clipMiddle(seg, sb.bounds, 2) : undefined;
       }
       case 'msgThroughPool': {
@@ -171,7 +172,7 @@ export class ProblemLocator {
         return ea && eb ? this.sharedAt(ea, eb, joinTail(ea, eb, pl.shapes.get(problem.ids[2] ?? ''))) : undefined;
       case 'edgeLeavesLane':
       case 'edgeOutside':
-        return sb ? ea?.pts.find((point) => !ptIn(point, sb.bounds)) : undefined;
+        return sb ? ea?.pts.find((point) => !containsPoint(sb.bounds, point)) : undefined;
       case 'laneGap':
         if (!sa || !sb) return undefined;
         return problem.detail === 'bottom' ? { x: cx(sa.bounds), y: (sa.bounds.y + sa.bounds.height + sb.bounds.y + sb.bounds.height) / 2 } : { x: cx(sa.bounds), y: (sa.bounds.y + sb.bounds.y) / 2 };

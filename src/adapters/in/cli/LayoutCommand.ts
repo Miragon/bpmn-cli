@@ -20,16 +20,14 @@ export class LayoutCommand extends MutationCommand {
   /** --expand / --collapse are validated like `set <id> expanded=`: unknown ids and non-sub-processes are errors. */
   private async run(file: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const expand = splitList(options['expand'] as string | undefined);
-      const collapse = splitList(options['collapse'] as string | undefined);
-      const layoutOpts = { tidy: !!options['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) };
-      await this.runMutation(
-        file,
-        opts,
-        (fo) => this.cli.useCases.relayoutDiagram.relayout({ ...fo, ...layoutOpts, source: { file } }),
-        (doc, fo) => this.cli.useCases.relayoutDiagram.relayout({ ...fo, ...layoutOpts, source: { doc } }),
-      );
-    }, opts.json);
+    const expand = splitList(options['expand'] as string | undefined);
+    const collapse = splitList(options['collapse'] as string | undefined);
+    const layoutOpts = { tidy: !!options['tidy'], ...(expand ? { expand } : {}), ...(collapse ? { collapse } : {}) };
+    await this.runMutation(
+      file,
+      opts,
+      (fo) => this.cli.useCases.relayoutDiagram.relayout({ ...fo, ...layoutOpts, source: { file } }),
+      (doc, fo) => this.cli.useCases.relayoutDiagram.relayout({ ...fo, ...layoutOpts, source: { doc } }),
+    );
   }
 }

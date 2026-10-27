@@ -28,19 +28,17 @@ export class NewFileCommand extends MutationCommand {
   /** `new -` (or -o -) writes the new model to stdout. */
   private async run(file: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const stdout = file === '-' || opts.out === '-';
-      const result = await this.cli.useCases.createDocument.create({
-        ...opts,
-        ...(file === '-' ? {} : { destination: file }),
-        processName: options['name'] as string | undefined,
-        processId: options['id'] as string | undefined,
-        executable: options['executable'] !== false,
-        target: options['target'] as Target | undefined,
-        mustNotExist: true,
-        ...(stdout ? { out: undefined, dryRun: true } : {}),
-      });
-      await this.emit(result, opts, stdout);
-    }, opts.json);
+    const stdout = file === '-' || opts.out === '-';
+    const result = await this.cli.useCases.createDocument.create({
+      ...opts,
+      ...(file === '-' ? {} : { destination: file }),
+      processName: options['name'] as string | undefined,
+      processId: options['id'] as string | undefined,
+      executable: options['executable'] !== false,
+      target: options['target'] as Target | undefined,
+      mustNotExist: true,
+      ...(stdout ? { out: undefined, dryRun: true } : {}),
+    });
+    await this.emit(result, opts, stdout);
   }
 }

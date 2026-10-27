@@ -18,12 +18,10 @@ export class InsertSpaceCommand extends FormatCommand {
           if (!parseSpaceAmount(raw)) throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
           return /^\s*-?\d+\s*$/.test(raw) ? Number(raw) : raw;
         }),
-    ).action((file: string, options: RawOpts) =>
-      this.cli.guarded(async () => {
-        this.checkFlagGroups(options, [['after', 'below']], 'space needs --after <id> (horizontal space) or --below <id> (vertical space)');
-        const op: InsertSpace = { op: 'space', ...this.pick(options, ['after', 'below'] as const), ...(options['by'] !== undefined ? { by: options['by'] as InsertSpace['by'] } : {}) };
-        await this.runFormat(file, op, options);
-      }, !!options['json']),
-    );
+    ).action(async (file: string, options: RawOpts) => {
+      this.checkFlagGroups(options, [['after', 'below']], 'space needs --after <id> (horizontal space) or --below <id> (vertical space)');
+      const op: InsertSpace = { op: 'space', ...this.pick(options, ['after', 'below'] as const), ...(options['by'] !== undefined ? { by: options['by'] as InsertSpace['by'] } : {}) };
+      await this.runFormat(file, op, options);
+    });
   }
 }

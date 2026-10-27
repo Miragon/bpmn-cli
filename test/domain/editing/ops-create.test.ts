@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { allLanes } from '../../../src/domain/document/utils/lanes.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { is, many, type El } from '../../../src/domain/document/utils/moddle.js';
 import { AssociationService, PLACEHOLDER_PROPERTY } from '../../../src/domain/editing/AssociationService.js';
@@ -543,7 +544,7 @@ describe('lanes', () => {
     add(doc, { kind: 'lane', name: 'Outbound', in: 'Lane_Sales', members: ['Task_A'] });
     expect(ids(many(doc.require('Lane_Inbound'), 'flowNodeRef'))).toEqual(['Start']);
     expect(laneOf(doc, doc.require('Task_A'))?.get('id')).toBe('Lane_Outbound');
-    expect(ids(doc.allLanes(doc.require('Process_1')))).toEqual(['Lane_Sales', 'Lane_Inbound', 'Lane_Outbound', 'Lane_Backoffice']);
+    expect(ids(allLanes(doc.require('Process_1')))).toEqual(['Lane_Sales', 'Lane_Inbound', 'Lane_Outbound', 'Lane_Backoffice']);
     // parent lanes with children cannot take members directly
     expect(codeOf(() => new LaneService(doc, new EditContext(doc)).assign(doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
     // nodes added after a member inherit the nested lane

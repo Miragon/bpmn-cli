@@ -64,9 +64,10 @@ function generate(target) {
 ${licence.split('\n').map((licenceLine) => (licenceLine ? ` * ${licenceLine}` : ' *')).join('\n')}
  */
 
-/** ${target.pkg}'s descriptor, verbatim. */
+/** @internal */
 export const ${target.constant}_VERSION = ${JSON.stringify(version)};
 
+/** ${target.pkg}'s descriptor, verbatim. */
 export const ${target.constant}: { types: unknown[]; [key: string]: unknown } = ${render(json)};
 `;
   return { text, version, types: json.types.length, out: join(ROOT, 'src', 'domain', 'document', 'vendor', target.file) };

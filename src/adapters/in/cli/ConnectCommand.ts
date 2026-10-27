@@ -2,6 +2,7 @@ import type { Command as CommandType } from 'commander';
 import type { ConnectElements } from '../../../domain/commands/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
+import { givenFlags, givenStrings } from './utils/flags.js';
 
 /**
  * Connects two elements; the kind of connection is inferred (`bpmn connect`).
@@ -22,21 +23,15 @@ export class ConnectCommand extends MutationCommand {
 
   private async run(file: string, source: string, target: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      this.checkFlowFlags(options, false);
-      const op: ConnectElements = {
-        op: 'connect',
-        source,
-        target,
-        ...(options['name'] ? { name: String(options['name']) } : {}),
-        ...(options['id'] ? { id: String(options['id']) } : {}),
-        ...(options['condition'] !== undefined ? { condition: String(options['condition']) } : {}),
-        ...(options['language'] ? { language: String(options['language']) } : {}),
-        ...(options['default'] ? { default: true } : {}),
-        ...(options['message'] ? { message: String(options['message']) } : {}),
-        ...(options['ifAbsent'] ? { ifAbsent: true } : {}),
-      };
-      await this.mutate(file, [op], opts);
-    }, opts.json);
+    this.checkFlowFlags(options, false);
+    const op: ConnectElements = {
+      op: 'connect',
+      source,
+      target,
+      ...givenStrings(options, ['name', 'id', 'language', 'message']),
+      ...givenFlags(options, ['default', 'ifAbsent']),
+      ...(options['condition'] !== undefined ? { condition: String(options['condition']) } : {}),
+    };
+    await this.mutate(file, [op], opts);
   }
 }

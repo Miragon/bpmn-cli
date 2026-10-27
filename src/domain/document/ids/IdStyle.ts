@@ -1,6 +1,6 @@
 import { camelSlug, cutAt, cutName, hasIdWords, idWords, isFiller, isValidId, MAX_ID, MAX_SLUG, nameWords, pascalSnakeSlug, slugify, snakeSlug, withSuffix } from '../utils/slug.js';
 import type { IdRegistry } from './IdRegistry.js';
-import { FORM_JOIN, IdFitter, LEGACY_BASE } from './IdFitter.js';
+import { FORM_JOIN, IdFitter } from './IdFitter.js';
 import { caseLike, CONTEXT_WORDS, kindWord, PREFIXED, speakingStem, stemWords } from '../utils/id-words.js';
 import { CONNECTIONS, connectionRequest, kindRequest, typeRequest, type IdRequest } from '../utils/requests.js';
 import type { IdConventions } from './IdConventionsReader.js';
@@ -283,8 +283,8 @@ export class IdStyle {
   }
 
   /**
-   * Every id the request may have been given before (uncut, cut for a suffix, as 0.6 cut it, in
-   * every other flow style the file shows), so a flow named earlier still names its ends.
+   * Every id the request may have been given before (uncut, cut for a suffix, in every other
+   * flow style the file shows), so a flow named earlier still names its ends.
    * `id` limits this to the styles it can belong to.
    */
   derivedBases(req: IdRequest, id?: string): string[] {
@@ -304,10 +304,9 @@ export class IdStyle {
   }
 
   private connectionBases(req: IdRequest, style: FlowStyle): string[] {
-    const at = (max: number, legacy = false): string => this.connectionBase(req, max, legacy, style).base;
+    const at = (max: number): string => this.connectionBase(req, max, style).base;
     const uncut = at(Infinity);
-    const legacy = at(LEGACY_BASE, true);
-    return [...(uncut.length <= MAX_ID - 4 ? [] : [0, 1, 2, 3, 4].map((suffix) => at(MAX_ID - suffix))), legacy, cutAt(legacy, MAX_ID - 4, true), at(Infinity, true), uncut];
+    return [...(uncut.length <= MAX_ID - 4 ? [] : [0, 1, 2, 3, 4].map((suffix) => at(MAX_ID - suffix))), uncut];
   }
 
   private wanted(req: IdRequest, max = MAX_ID): { base: string; sep: string } {
@@ -426,29 +425,28 @@ export class IdStyle {
 
   /**
    * A head that leaves the ends under 16 characters stays per flow where they fit beside it at
-   * whole words, else gives way to Flow_, so one file can hold both forms (0.6 kept the head).
+   * whole words, else gives way to Flow_, so one file can hold both forms.
    */
-  private connectionBase(req: IdRequest, max: number, legacy = false, style = this.flowOf(req.key)): { base: string; sep: string } {
+  private connectionBase(req: IdRequest, max: number, style = this.flowOf(req.key)): { base: string; sep: string } {
     const { form, prefix, sep, scope, head } = style;
-    if (head !== undefined) return this.declaredFlowBase(req, max, form, head, legacy);
-    if (form === 'named') return { base: this.namedBase(req, max, prefix, sep, legacy), sep: '_' };
-    const long = (head: string, join: string): boolean => !legacy && MAX_ID - head.length - join.length < 16;
+    if (head !== undefined) return this.declaredFlowBase(req, max, form, head);
+    if (form === 'named') return { base: this.namedBase(req, max, prefix, sep), sep: '_' };
+    const long = (head: string, join: string): boolean => MAX_ID - head.length - join.length < 16;
     if (form === 'scopedTo') {
       const sourceId = req.source!;
       const targetId = req.target!;
       const own = this.scopeOf(req, scope!);
       const head = `${prefix}_${own}_`;
-      const fitter = new IdFitter({ legacy, suffixSep: '' });
+      const fitter = new IdFitter({ suffixSep: '' });
       const [sourceWord, targetWord] = [fitter.endWord(sourceId, own, 'Start'), fitter.endWord(targetId, own, 'End')];
-      if (legacy) return { base: cutAt(`${head}${sourceWord}To${targetWord}`, max, true), sep: '' };
       const base = long(head, 'To') ? fitter.whole(head, sourceWord, 'To', targetWord, max) : fitter.pair(head, sourceWord, 'To', targetWord, max);
-      return base !== undefined ? { base, sep: '' } : { base: this.namedBase({ ...req, sourceLabel: sourceWord, targetLabel: targetWord }, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
+      return base !== undefined ? { base, sep: '' } : { base: this.namedBase({ ...req, sourceLabel: sourceWord, targetLabel: targetWord }, max, DEFAULT_FLOW.prefix, undefined), sep: '_' };
     }
     const own = form === 'stemTo' ? '' : '_';
-    const fitter = new IdFitter({ legacy });
+    const fitter = new IdFitter();
     if (!long(`${prefix}_`, FORM_JOIN[form])) return { base: fitter.idForm(form, `${prefix}_`, req, max), sep: own };
     const base = fitter.wholeIdForm(form, `${prefix}_`, req, max);
-    return base !== undefined ? { base, sep: own } : { base: this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, false), sep: '_' };
+    return base !== undefined ? { base, sep: own } : { base: this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined), sep: '_' };
   }
 
   /** The scope an end names in its id (KotO in serviceTask_KotO_Validate), else the most used. */
@@ -461,7 +459,7 @@ export class IdStyle {
    * A declared head never gives way to Flow_. The ends leave out the file's scope segment, and
    * one that begins with a number is written `From...` where the case wants a letter first.
    */
-  private declaredFlowBase(req: IdRequest, max: number, form: FlowForm, head: string, legacy: boolean): { base: string; sep: string } {
+  private declaredFlowBase(req: IdRequest, max: number, form: FlowForm, head: string): { base: string; sep: string } {
     const sep = this.sepFor(req);
     if (form === 'named') {
       const bodyCase = this.caseFor(req);
@@ -472,29 +470,29 @@ export class IdStyle {
       };
       const source = label(req.source!, req.sourceLabel);
       const target = label(req.target!, req.targetLabel);
-      const fitter = new IdFitter({ body: bodyCase, legacy, suffixSep: sep, ...(bodyCase === 'camel' ? { names: nameWords(source) } : {}) });
+      const fitter = new IdFitter({ body: bodyCase, suffixSep: sep, ...(bodyCase === 'camel' ? { names: nameWords(source) } : {}) });
       let [sourceEnd, join, targetEnd] = fitter.ends(source, target, false);
       if (this.lettersOnly(req) && /^[0-9]/.test(sourceEnd)) sourceEnd = fitter.ends(`From ${source}`, target, false)[0];
       return { base: fitter.pair(head, sourceEnd, join, targetEnd, max), sep };
     }
     if (form === 'scopedTo') {
       const own = this.scopeOf(req, this.flowOf(req.key).scope!);
-      const fitter = new IdFitter({ legacy, suffixSep: sep });
+      const fitter = new IdFitter({ suffixSep: sep });
       const [sourceWord, targetWord] = [fitter.endWord(req.source!, own, 'Start'), fitter.endWord(req.target!, own, 'End')];
-      return { base: legacy ? cutAt(`${head}${own}_${sourceWord}To${targetWord}`, max, true) : fitter.pair(`${head}${own}_`, sourceWord, 'To', targetWord, max), sep };
+      return { base: fitter.pair(`${head}${own}_`, sourceWord, 'To', targetWord, max), sep };
     }
-    return { base: new IdFitter({ legacy }).idForm(form, head, req, max), sep };
+    return { base: new IdFitter().idForm(form, head, req, max), sep };
   }
 
-  private namedBase(req: IdRequest, max: number, prefix: string, sep: string | undefined, legacy: boolean): string {
+  private namedBase(req: IdRequest, max: number, prefix: string, sep: string | undefined): string {
     const label = (id: string, given: string | undefined): string => (given && nameWords(given).length ? given : (speakingStem(id) ?? id));
     const bodyCase = this.caseFor(req);
-    const { head, glued, long } = new IdFitter({ body: bodyCase, legacy }).namedHead(prefix, sep);
+    const { head, glued, long } = new IdFitter({ body: bodyCase }).namedHead(prefix, sep);
     const source = label(req.source!, req.sourceLabel);
-    const fitter = new IdFitter({ body: bodyCase, legacy, ...(bodyCase === 'camel' && !glued ? { names: nameWords(source) } : {}) });
+    const fitter = new IdFitter({ body: bodyCase, ...(bodyCase === 'camel' && !glued ? { names: nameWords(source) } : {}) });
     const [sourceEnd, join, targetEnd] = fitter.ends(source, label(req.target!, req.targetLabel), glued);
     if (!long) return fitter.pair(head, sourceEnd, join, targetEnd, max);
-    return fitter.whole(head, sourceEnd, join, targetEnd, max) ?? this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined, legacy);
+    return fitter.whole(head, sourceEnd, join, targetEnd, max) ?? this.namedBase(req, max, DEFAULT_FLOW.prefix, undefined);
   }
 
   private isConnection(req: IdRequest): boolean {

@@ -77,6 +77,7 @@ export function wrapLines(text: string, maxWidth: number): string[] {
 
 const PADDING = 7;
 
+/** @internal */
 export const innerLines = (name: string, width: number): number => wrapLines(name, width - 2 * PADDING).length;
 
 /** Where bpmn-js draws an expanded sub-process's name: centred, starting 7 px below the top. */
@@ -97,6 +98,7 @@ export function titleDepth(name: string | undefined, width: number): number {
  */
 export const BOTTOM_ROOM = 17;
 
+/** @internal */
 export function fitsInside(name: string, size: { width: number; height: number }, bottomRoom = 0): boolean {
   return innerLines(name, size.width) * LINE_HEIGHT <= size.height - 2 * Math.max(4, bottomRoom) + 0.01;
 }
