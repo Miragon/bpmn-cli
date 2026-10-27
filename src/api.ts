@@ -137,13 +137,8 @@ export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): P
   return new ValidationReportBuilder(await new ValidateDocumentService(NO_PROJECT).validate({ ...opts, source: { doc: await parseXml(xml, opts.file) } })).report();
 }
 
-/** `bpmn show` on a parsed document. */
-export function viewDoc(doc: Doc, opts: ViewOptions = {}): ShownView {
-  return new ShowModelService().show({ ...opts, doc });
-}
-
 /** The text of a view as `bpmn show` prints it, without the final newline. */
-export function renderShown(shown: ShownView): string {
+function renderShown(shown: ShownView): string {
   return new ShownText(shown).text();
 }
 

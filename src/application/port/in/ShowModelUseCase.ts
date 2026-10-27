@@ -1,6 +1,5 @@
 import type { Doc } from '../../../domain/document/Doc.js';
 import type { ExtensionInfo } from '../../../domain/document/ExtensionLister.js';
-import type { DecisionLink } from '../../../domain/document/DecisionLinkReader.js';
 import type { El } from '../../../domain/document/utils/moddle.js';
 import type { AroundOptions, AroundView, ElementContext, Implementation } from '../../../domain/views/context.js';
 import type { LayoutView } from '../../../domain/views/layout-view.js';
@@ -14,9 +13,6 @@ export interface ShowModelUseCase {
 
   modelView(command: ShowModelUseCase.DocumentCommand): ModelView;
 
-  /** The view narrowed to one scope (`show --scope`). */
-  scopeView(command: ShowModelUseCase.ScopeCommand): ModelView;
-
   elementDetail(command: ShowModelUseCase.DetailCommand): ElementDetail;
 
   aroundView(command: ShowModelUseCase.AroundCommand): AroundView;
@@ -26,8 +22,6 @@ export interface ShowModelUseCase {
   layoutView(command: ShowModelUseCase.DefinitionsCommand): LayoutView;
 
   implementation(command: ShowModelUseCase.ElementCommand): Implementation | undefined;
-
-  decisionLink(command: ShowModelUseCase.DecisionLinkCommand): DecisionLink | undefined;
 
   /** The extension elements of an element, in order. */
   extensions(command: ShowModelUseCase.ElementCommand): ExtensionInfo[];
@@ -51,12 +45,6 @@ export declare namespace ShowModelUseCase {
     doc: Doc;
   }
 
-  /** A model view to narrow to one scope. */
-  interface ScopeCommand extends DocumentCommand {
-    view: ModelView;
-    scopeId: string;
-  }
-
   /** An element of the document to detail. */
   interface DetailCommand extends DocumentCommand {
     element: El;
@@ -78,10 +66,5 @@ export declare namespace ShowModelUseCase {
   /** One element. */
   interface ElementCommand {
     element: El;
-  }
-
-  /** An element whose decision link is resolved, in its document if given. */
-  interface DecisionLinkCommand extends ElementCommand {
-    doc?: Doc;
   }
 }

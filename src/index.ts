@@ -36,13 +36,9 @@ import { AnalyzeLayoutService } from './application/service/AnalyzeLayoutService
 import { RenderSvgService } from './application/service/RenderSvgService.js';
 import { EditDocumentService } from './application/service/EditDocumentService.js';
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
-import { ReadDocumentService } from './application/service/ReadDocumentService.js';
 import { NoProjectSettings } from './adapters/out/memory/NoProjectSettings.js';
-import { AroundText } from './adapters/in/report/AroundText.js';
-import { ContextText } from './adapters/in/report/ContextText.js';
 import { DetailText } from './adapters/in/report/DetailText.js';
 import { LayoutText } from './adapters/in/report/LayoutText.js';
-import { MetricsText } from './adapters/in/report/MetricsText.js';
 import { ModelViewText } from './adapters/in/report/ModelViewText.js';
 import type { MutationReport, MutationReportLike, MutationSummary, ValidationReport } from './adapters/in/report/command-report.js';
 import { MutationReportBuilder } from './adapters/in/report/MutationReportBuilder.js';
@@ -53,18 +49,14 @@ import { ValidationReportBuilder } from './adapters/in/report/ValidationReportBu
 import { ValidationText } from './adapters/in/report/ValidationText.js';
 import { WarningLines } from './adapters/in/report/WarningLines.js';
 import { advisoryOf } from './adapters/in/report/utils/findings.js';
-import type { DecisionLink } from './domain/document/DecisionLinkReader.js';
 import type { ExtensionInfo } from './domain/document/ExtensionLister.js';
 import type { LayoutOptions, LayoutResult } from './domain/diagram/layout/FullLayout.js';
-import type { FormatEntry, FormatResult } from './domain/diagram/DiagramCommandService.js';
 const NO_PROJECT = new NoProjectSettings();
 /* the in-memory API: strings in, strings / data out */
-export { mutateDoc, layoutDoc, checkDoc, applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, viewDoc, renderShown, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
+export { mutateDoc, layoutDoc, checkDoc, applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './adapters/in/report/command-report.js';
 export { conventionsLines } from './adapters/in/report/utils/mutation-lines.js';
 export function mutationReport(result: MutationResult): MutationReport { return new MutationReportBuilder(result).report(); }
-export function mutationWarnings(result: MutationResult): Warning[] { return new MutationReportBuilder(result).warnings(); }
-export function opWarnings(result: MutationResult): Warning[] { return new MutationReportBuilder(result).opWarnings(); }
 export function renderMutation(result: MutationReportLike, opts: { dryRun?: boolean } = {}): string { return new MutationText(result, opts).text(); }
 export function mutationSummary(report: MutationReportLike): MutationSummary { return new MutationSummaryBuilder(report).summary(); }
 export function renderSummary(summary: MutationSummary, opts: { dryRun?: boolean; advisory?: ReadonlySet<string> } = {}): string { return new SummaryText(summary, opts).text(); }
@@ -76,10 +68,7 @@ export { renderFind, renderExtensionList } from './adapters/in/report/utils/view
 export { renderProblems } from './adapters/in/report/utils/result-lines.js';
 export function renderView(view: ModelView): string { return new ModelViewText(view).text(); }
 export function renderDetail(detail: ElementDetail): string { return new DetailText(detail).text(); }
-export function renderAround(view: AroundView): string { return new AroundText(view).text(); }
-export function renderContext(context: ElementContext): string { return new ContextText(context).text(); }
 export function renderLayoutView(view: LayoutView): string { return new LayoutText(view).text(); }
-export function renderMetrics(metrics: LayoutMetrics): string { return new MetricsText(metrics).text(); }
 export { setLayoutDebug } from './api.js';
 export { type DebugSink } from './domain/diagram/layout/LayoutDebug.js';
 export { GUIDE_TOPICS } from './adapters/in/report/AgentGuide.js';
@@ -158,11 +147,6 @@ export function conventionsView(
 
 export type { DecisionLink } from './domain/document/DecisionLinkReader.js';
 
-/** The decision link of a business rule task in any spelling. */
-export function decisionLinkOf(el: El, doc?: Doc): DecisionLink | undefined {
-  return new ShowModelService().decisionLink({ element: el, ...(doc !== undefined ? { doc } : {}) });
-}
-
 export { ChangeSet, type Change } from './domain/document/ChangeSet.js';
 export type { ValidateOptions, ValidationResult } from './domain/validation/StructuralValidator.js';
 /** Structural validation and lint of a document, with the platform profile on request. */
@@ -176,7 +160,6 @@ export { type ModelView, type ElementDetail, type DetailMessageFlow, type Detail
 export function buildView(doc: Doc): ModelView { return new ShowModelService().modelView({ doc }); }
 export function elementDetail(doc: Doc, el: El): ElementDetail { return new ShowModelService().elementDetail({ doc, element: el }); }
 export function findElements(doc: Doc, text: string, kind?: string): FindHit[] { return new FindElementsService().find({ doc, text, ...(kind !== undefined ? { kind } : {}) }); }
-export function scopeView(doc: Doc, view: ModelView, scopeId: string): ModelView { return new ShowModelService().scopeView({ doc, view, scopeId }); }
 export { OPS_SCHEMA } from './domain/commands/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './domain/diagram/utils/problems.js';
@@ -216,11 +199,6 @@ export function runOps(doc: Doc, ops: EditCommand[]): ChangeSet {
 /** Validates the ops JSON (an array or `{ ops }`); a usage error names the op index. */
 export function parseOps(input: unknown): EditCommand[] {
   return new RunCommandsService().parseCommands({ input });
-}
-
-/** Throws E_IMPORT_LOSSY when bpmn-moddle dropped content on import, unless `force`. */
-export function assertLossless(doc: Doc, opts: { force?: boolean } = {}): void {
-  new ReadDocumentService().assertLossless({ ...opts, doc });
 }
 
 /**
@@ -284,11 +262,6 @@ export function kindsSectionText(sections: string[]): string {
   return new KindsReference().sectionText(sections);
 }
 
-/** `bpmn kinds --section <names> --json`: only those keys of kindsJson(). */
-export function kindsSectionJson(sections: string[]): Record<string, unknown> {
-  return new KindsReference().sectionJson(sections);
-}
-
 /** The layout problems of every diagram; `importWarnings` count as one `failed` problem. */
 export function layoutProblems(defs: El, opts: { importWarnings?: number } = {}): LayoutMetrics {
   return new AnalyzeLayoutService().measure({ ...opts, definitions: defs });
@@ -302,14 +275,6 @@ export function layoutProblemsOfXml(xml: string): Promise<LayoutMetrics> {
 /** The problems with where each shows on its plane. */
 export function locateProblems(defs: El, problems: readonly LayoutProblem[]): LayoutProblem[] {
   return new AnalyzeLayoutService().locateProblems({ definitions: defs, problems });
-}
-
-/**
- * Runs the format ops of a batch on the drawing of `doc`; with `asFile` (a format-only batch)
- * the first op's refusal may name a runnable command.
- */
-export function runFormatOps(doc: Doc, entries: readonly FormatEntry[], asFile = false): FormatResult[] {
-  return new RunCommandsService().runDiagramCommands({ doc, entries, asFile });
 }
 
 /**

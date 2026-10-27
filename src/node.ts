@@ -42,8 +42,6 @@ export function mutateFile(file: string, ops: EditCommand[], opts: FileMutationO
 export function mutateDocToFile(doc: Doc, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES, FILES).edit({ ...opts, source: { doc }, commands: ops }); }
 /** `bpmn layout`: redraws a file (or with `tidy` only removes overlaps) and writes it back. */
 export function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> { return new RelayoutDiagramService(PROJECT, FILES, FILES).relayout({ ...opts, source: { file } }); }
-/** `bpmn layout` on a loaded document, written to opts.out ?? doc.file unless dryRun. */
-export function layoutDocToFile(doc: Doc, opts: FileLayoutOptions = {}): Promise<MutationResult> { return new RelayoutDiagramService(PROJECT, FILES, FILES).relayout({ ...opts, source: { doc } }); }
 /** `bpmn validate`: validates a file and dry-runs the layout without writing anything. */
 export function checkFile(file: string, opts: FileCheckOptions = {}): Promise<CheckResult> { return new ValidateDocumentService(PROJECT, FILES).validate({ ...opts, source: { file } }); }
 /**

@@ -6,7 +6,6 @@ import { AroundWindow } from '../../domain/views/AroundWindow.js';
 import { ElementContextBuilder } from '../../domain/views/ElementContextBuilder.js';
 import { LayoutViewBuilder } from '../../domain/views/LayoutViewBuilder.js';
 import { ElementFacts } from '../../domain/views/ElementFacts.js';
-import { DecisionLinkReader, type DecisionLink } from '../../domain/document/DecisionLinkReader.js';
 import { ExtensionLister, type ExtensionInfo } from '../../domain/document/ExtensionLister.js';
 import type { AroundView, ElementContext, Implementation } from '../../domain/views/context.js';
 import type { LayoutView } from '../../domain/views/layout-view.js';
@@ -20,10 +19,6 @@ export class ShowModelService implements ShowModelUseCase {
 
   modelView(command: ShowModelUseCase.DocumentCommand): ModelView {
     return new ModelViewBuilder(command.doc).build();
-  }
-
-  scopeView(command: ShowModelUseCase.ScopeCommand): ModelView {
-    return new ModelViewBuilder(command.doc).scope(command.view, command.scopeId);
   }
 
   elementDetail(command: ShowModelUseCase.DetailCommand): ElementDetail {
@@ -45,10 +40,6 @@ export class ShowModelService implements ShowModelUseCase {
 
   implementation(command: ShowModelUseCase.ElementCommand): Implementation | undefined {
     return new ElementFacts(command.element).implementation();
-  }
-
-  decisionLink(command: ShowModelUseCase.DecisionLinkCommand): DecisionLink | undefined {
-    return new DecisionLinkReader(command.doc).linkOf(command.element);
   }
 
   extensions(command: ShowModelUseCase.ElementCommand): ExtensionInfo[] {
