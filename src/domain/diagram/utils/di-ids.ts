@@ -71,30 +71,30 @@ const MAX_DI = MAX_ID - 3;
 
 /**
  * A long element id is cut at a word boundary like element ids, leaving room for a collision
- * suffix. `legacy` cuts as 0.6 did, to recognise the DI ids it wrote.
+ * suffix.
  */
-export function styledId(style: Style, kind: 'Shape' | 'Edge', id: string, legacy = false): string {
+export function styledId(style: Style, kind: 'Shape' | 'Edge', id: string): string {
   const [head, tail] = style === 'suffix' ? ['', '_di'] : style === 'bpmn' ? [`BPMN${kind}_`, ''] : [`${kind}_`, ''];
   const room = MAX_DI - head.length - tail.length;
-  return `${head}${id.length > room ? cutAt(id, room, legacy) : id}${tail}`;
+  return `${head}${id.length > room ? cutAt(id, room) : id}${tail}`;
 }
 
 function isOrSuffixed(diId: string, base: string): boolean {
   return diId === base || (diId.startsWith(`${base}_`) && /^\d+$/.test(diId.slice(base.length + 1)));
 }
 
-/** Recognises cut ids (now or as 0.6 cut) and collision suffixes too. */
+/** Recognises cut ids and collision suffixes too. */
 function diStyleOf(diId: string, elId: string, kind: 'Shape' | 'Edge'): Style | undefined {
-  return styleOf(diId, elId, kind) ?? (['suffix', 'bpmn', 'short'] as Style[]).find((style) => isOrSuffixed(diId, styledId(style, kind, elId)) || isOrSuffixed(diId, styledId(style, kind, elId, true)));
+  return styleOf(diId, elId, kind) ?? (['suffix', 'bpmn', 'short'] as Style[]).find((style) => isOrSuffixed(diId, styledId(style, kind, elId)));
 }
 
-export function rootDiId(kind: 'Plane' | 'Diagram', root: string, legacy = false): string {
+export function rootDiId(kind: 'Plane' | 'Diagram', root: string): string {
   const head = `BPMN${kind}_`;
-  return `${head}${cutAt(root, MAX_DI - head.length, legacy)}`;
+  return `${head}${cutAt(root, MAX_DI - head.length)}`;
 }
 
 export function namesRoot(kind: 'Plane' | 'Diagram', diId: string | undefined, root: string): boolean {
-  return diId === `BPMN${kind}_${root}` || diId === rootDiId(kind, root) || diId === rootDiId(kind, root, true);
+  return diId === `BPMN${kind}_${root}` || diId === rootDiId(kind, root);
 }
 
 /** Then DiIdMemo keeps the engine's ids for a drawing without old DI. */

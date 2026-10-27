@@ -79,27 +79,26 @@ const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|_[Jj]oin)?(?:(?<=[A-Za-z])\d+|_\d+)?$/;
 
 /**
  * Cuts at the last word boundary that fits, keeping a join or number tail. A cut keeps a letter
- * and never runs a number into the kept one (`1010`). `legacy` cuts as 0.6 did, to recognise
- * the ids it wrote.
+ * and never runs a number into the kept one (`1010`).
  * A filler word between a number and the number tail keeps them apart (`StartAfter2Und2`).
  */
-export function cutAt(slug: string, max: number, legacy = false, names = false): string {
+export function cutAt(slug: string, max: number, names = false): string {
   if (slug.length <= max) return slug;
   const tail = keptTail(slug);
   if (tail && max - tail.length >= 8) {
     const head = slug.slice(0, -tail.length);
-    const cut = cutWords(head, max - tail.length, legacy, names);
-    if (legacy || readsApart(cut, tail)) return `${cut}${tail}`;
+    const cut = cutWords(head, max - tail.length, names);
+    if (readsApart(cut, tail)) return `${cut}${tail}`;
     const kept = names ? cutWords(head, max - tail.length) : cut;
     if (readsApart(kept, tail)) return `${kept}${tail}`;
     const inside = trimSeparators(head.slice(0, max - tail.length));
     if (readsApart(inside, tail)) return `${inside}${tail}`;
   }
-  return cutWords(slug, max, legacy, names);
+  return cutWords(slug, max, names);
 }
 
 export function cutName(slug: string, max: number): string {
-  return cutAt(slug, max, false, true);
+  return cutAt(slug, max, true);
 }
 
 /** The head has a letter and does not run into a number tail as one number (`Stufe2` + `3`). */
@@ -109,9 +108,8 @@ export function readsApart(head: string, tail: string): boolean {
 
 const trimSeparators = (slug: string): string => slug.replace(/[_.-]+$/, '');
 
-function cutWords(slug: string, max: number, legacy = false, names = false): string {
+function cutWords(slug: string, max: number, names = false): string {
   if (slug.length <= max) return slug;
-  if (legacy) return legacyCutWords(slug, max);
   const words: string[] = [];
   let length = 0;
   for (const word of idWords(slug)) {
@@ -122,7 +120,7 @@ function cutWords(slug: string, max: number, legacy = false, names = false): str
   if (names) while (words.length > 1 && isFiller(words[words.length - 1]!) && words.slice(0, -1).some((word) => /[A-Za-z]/.test(word))) words.pop();
   const out = words.join('');
   if (out && /[A-Za-z]/.test(out)) return trimSeparators(out);
-  return trimSeparators(withLetter(slug, slug.slice(0, Math.max(max, 0)), (rest) => cutWords(rest, max, false, names)));
+  return trimSeparators(withLetter(slug, slug.slice(0, Math.max(max, 0)), (rest) => cutWords(rest, max, names)));
 }
 
 /** A cut that keeps no letter (a leading number) starts at the first word with a letter instead. */
@@ -131,18 +129,6 @@ export function withLetter(slug: string, cut: string, again: (rest: string) => s
   const words = idWords(slug);
   const at = words.findIndex((word) => /[A-Za-z]/.test(word));
   return at > 0 ? again(words.slice(at).join('').replace(/^[_.-]+/, '')) : cut;
-}
-
-/** cutWords as 0.6 cut: also at the boundary right after a separator. */
-function legacyCutWords(slug: string, max: number): string {
-  let best = 0;
-  for (let index = 1; index <= max; index++) {
-    const prev = slug.charAt(index - 1);
-    const character = slug.charAt(index);
-    const boundary = /[_.-]/.test(character) || (/[A-Z]/.test(character) && /[a-z0-9]/.test(prev)) || (/[0-9]/.test(character) && /[A-Za-z]/.test(prev)) || /[_.-]/.test(prev);
-    if (boundary) best = index;
-  }
-  return trimSeparators(best > 0 ? slug.slice(0, best) : slug.slice(0, max));
 }
 
 /** Each word keeps the separator before it, so joined they give the slug again. */
@@ -168,33 +154,32 @@ export function keptTail(slug: string): string {
   return tail.length < slug.length ? tail : '';
 }
 
-function cut(slug: string, legacy = false): string {
-  return legacy ? cutAt(slug, MAX_SLUG, true) : cutName(slug, MAX_SLUG);
+function cut(slug: string): string {
+  return cutName(slug, MAX_SLUG);
 }
 
-export function slugify(name: string | undefined, legacy = false): string {
-  return cut(nameWords(name).map(cap).join(''), legacy);
+export function slugify(name: string | undefined): string {
+  return cut(nameWords(name).map(cap).join(''));
 }
 
-export function camelSlug(name: string | undefined, legacy = false): string {
+export function camelSlug(name: string | undefined): string {
   const words = nameWords(name);
   if (!words.length) return '';
   const [first, ...rest] = words;
   const head = /^[A-Z0-9]+$/.test(first!) ? first!.toLowerCase() : first!.charAt(0).toLowerCase() + first!.slice(1);
-  return cut(head + rest.map(cap).join(''), legacy);
+  return cut(head + rest.map(cap).join(''));
 }
 
-export function snakeSlug(name: string | undefined, legacy = false): string {
+export function snakeSlug(name: string | undefined): string {
   return cut(
     nameWords(name)
       .map((word) => word.toLowerCase())
       .join('_'),
-    legacy,
   );
 }
 
-export function pascalSnakeSlug(name: string | undefined, legacy = false): string {
-  return cut(nameWords(name).map(cap).join('_'), legacy);
+export function pascalSnakeSlug(name: string | undefined): string {
+  return cut(nameWords(name).map(cap).join('_'));
 }
 
 /** `step1No2`, never `step12`, which reads as the id of Step 12. */

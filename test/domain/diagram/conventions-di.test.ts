@@ -194,7 +194,7 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
     expect(diOf(await write(xml, [], { layout: 'full' })).shapes.get('A')).toBe(long);
   });
 
-  it('a plane and diagram id cut from a long process id follow a new collaboration root, also as 0.6 cut them (both engines)', async () => {
+  it('a plane and diagram id cut from a long process id follow a new collaboration root (both engines)', async () => {
     const ops: EditCommand[] = [
       { op: 'add', kind: 'startEvent', id: 'S', name: 'Start' },
       { op: 'add', kind: 'task', id: 'A', name: 'Check', after: 'S' },
@@ -212,36 +212,11 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
         }
       }
     }
-    // a plane 0.6 cut in an incremental drawing (diIds), its root ending in a number
-    const pid = 'Process_Pruefung10Lieferantenbestellungsuebersichtsverwaltung20';
-    const fresh = (await mutateDoc(Doc.create({ processId: pid }), ops, { dryRun: true })).xml;
-    const legacy = fresh.replace(/id="BPMNPlane_[^"]+"/, `id="BPMNPlane_${cutAt(pid, 51, true)}"`).replace(/id="BPMNDiagram_[^"]+"/, `id="BPMNDiagram_${cutAt(pid, 49, true)}"`);
-    expect(cutAt(pid, 51, true)).not.toBe(cutAt(pid, 51));
-    const after = diOf(await write(legacy, [pool], { layout: 'full' }));
-    expect(after.planes[0]).toMatch(/^BPMNPlane_Collaboration_/);
   });
 
   it('a sub-process collapsed without a drawing (--no-layout) records it under a plane and diagram id within 64 characters', async () => {
     const outcome = await mutateDoc(Doc.create({ processId: LONG_PROCESS }), [{ op: 'add', kind: 'subProcess', id: 'Sub', name: 'Sub', collapsed: true }], { dryRun: true, layout: false });
     expect(diOf(outcome.xml).planes).toEqual([`BPMNPlane_${cutAt(LONG_PROCESS, 51)}`]);
     expect(diOf(outcome.xml).diagrams).toEqual([`BPMNDiagram_${cutAt(LONG_PROCESS, 49)}`]);
-  });
-
-  it('a DI edge id 0.6 cut to bare numbers (BPMNEdge_Flow_Pruefung10To2030) follows its flow renamed after new ends', async () => {
-    const ops: EditCommand[] = [
-      { op: 'add', kind: 'task', name: 'Prüfung 10 Lieferantenbestellungsuebersicht', as: '$a' },
-      { op: 'add', kind: 'task', name: '20 Lieferantenbestellungsuebersicht 30', after: '$a' },
-    ];
-    const drawn = (await mutateDoc(Doc.create({ processId: 'P' }), ops, { dryRun: true })).xml;
-    const flow = 'Flow_Pruefung10To20Lieferantenbestellungsuebersicht30';
-    // as 0.6 cut it (now: BPMNEdge_Flow_Pruefung10To20Lieferantenbestellungsuebersich30)
-    const old = drawn.replace(/id="BPMNEdge_Flow_Pruefung10To[^"]+"/, 'id="BPMNEdge_Flow_Pruefung10To2030"');
-    expect(diOf(old).shapes.get(flow)).toBe('BPMNEdge_Flow_Pruefung10To2030');
-    const outcome = await mutateDoc(await Doc.fromXml(old, 'x.bpmn'), [{ op: 'add', kind: 'task', name: 'Freigabe', flow }], { dryRun: true });
-    expect(outcome.xml).toContain('<bpmn:sequenceFlow id="Flow_Pruefung10ToFreigabe" sourceRef="Activity_Pruefung10" targetRef="Activity_Freigabe" />');
-    expect(diOf(outcome.xml).shapes.get('Flow_Pruefung10ToFreigabe')).toBe('BPMNEdge_Flow_Pruefung10ToFreigabe');
-    // and with `set id=`
-    const set = await mutateDoc(await Doc.fromXml(old, 'x.bpmn'), [{ op: 'set', id: flow, values: { id: 'Flow_Check' } }], { dryRun: true });
-    expect(diOf(set.xml).shapes.get('Flow_Check')).toBe('BPMNEdge_Flow_Check');
   });
 });

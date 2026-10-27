@@ -627,32 +627,6 @@ describe('a file\'s flow form stays put, and flows named after their ends follow
     const moved = runOps(await Doc.fromXml(forms), [{ op: 'add', kind: 'task', name: 'Log', after: 'Activity_E' }]);
     expect(moved.renames).toEqual([expect.objectContaining({ from: 'SF_Activity_E_Activity_F', to: 'Flow_EToLog' })]);
   });
-
-  it("0.6's scopedTo flows cut to an empty target word vote for the form: a 0.6 file keeps it, and they follow their ends", async () => {
-    const long = ['Warenwirtschaftssystemabgleich', 'Kundenstammdatenaktualisierung', 'Lieferantenbestellungsuebersicht', 'Zahlungseingangsbestaetigung'];
-    const short = ['Validate', 'Reserve', 'Ship'];
-    const els: string[] = [];
-    const flows: Array<[string, string, string]> = [];
-    short.forEach((word, wordIndex) => {
-      els.push(`<bpmn:serviceTask id="serviceTask_KotO_${word}${wordIndex}x" name="${word}" />`, `<bpmn:serviceTask id="serviceTask_KotO_${short[(wordIndex + 1) % 3]}Y${wordIndex}" name="${short[(wordIndex + 1) % 3]}" />`);
-      flows.push([`Flow_KotO_${word}${wordIndex}xTo${short[(wordIndex + 1) % 3]}Y${wordIndex}`, `serviceTask_KotO_${word}${wordIndex}x`, `serviceTask_KotO_${short[(wordIndex + 1) % 3]}Y${wordIndex}`]);
-    });
-    long.forEach((word, wordIndex) => {
-      els.push(`<bpmn:serviceTask id="serviceTask_KotO_${word}_${wordIndex}" name="${word}" />`, `<bpmn:serviceTask id="serviceTask_KotO_${long[(wordIndex + 1) % 4]}_${wordIndex}" name="${long[(wordIndex + 1) % 4]}" />`);
-      // 0.6 cut Flow_KotO_<A>To<B> to 61 characters at whole words: the target went
-      flows.push([`Flow_KotO_${word}To`, `serviceTask_KotO_${word}_${wordIndex}`, `serviceTask_KotO_${long[(wordIndex + 1) % 4]}_${wordIndex}`]);
-    });
-    const xml = definitionsXml([...els, ...flows.map(([id, source, target]) => `<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`)].join('\n'));
-    // before: four of seven flows matched no form, and the file read as named Flow_
-    const doc = await Doc.fromXml(xml);
-    expect(doc.ownIdStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope: 'KotO' });
-    const cs = runOps(doc, [{ op: 'add', kind: 'serviceTask', id: 'serviceTask_KotO_Pack', name: 'Pack', flow: 'Flow_KotO_WarenwirtschaftssystemabgleichTo' }]);
-    expect(cs.renames).toEqual([expect.objectContaining({ from: 'Flow_KotO_WarenwirtschaftssystemabgleichTo', to: 'Flow_KotO_WarenwirtschaftssystemabgleichToPack' })]);
-    expect(cs.created.map((created) => created.id)).toEqual(['serviceTask_KotO_Pack', 'Flow_KotO_PackToKundenstammdatenaktualisierung']);
-    // a shape alone is no vote: `<scope>_<A>To` whose A is not the source's end word
-    const other = xml.replace(/Flow_KotO_([A-Za-z]+)To"/g, 'Flow_KotO_Other$1To"');
-    expect((await Doc.fromXml(other)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'named', prefix: 'Flow' });
-  });
 });
 
 describe('flow ids kept (keepFlowIds): a stale id is recognised in every flow form', () => {
