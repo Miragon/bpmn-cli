@@ -2,6 +2,7 @@ import type { Command as CommandType } from 'commander';
 import type { RemoveElements } from '../../../domain/commands/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
+import { givenFlags } from './utils/flags.js';
 
 /**
  * Removes elements and bridges the gaps they leave (`bpmn remove`).
@@ -23,9 +24,7 @@ export class RemoveElementsCommand extends MutationCommand {
       op: 'remove',
       ids,
       bridge: options['bridge'] !== false,
-      ...(options['bridgeAll'] ? { bridgeAll: true } : {}),
-      ...(options['withBranch'] ? { withBranch: true } : {}),
-      ...(options['ifExists'] ? { ifExists: true } : {}),
+      ...givenFlags(options, ['bridgeAll', 'withBranch', 'ifExists']),
     };
     await this.mutate(file, [op], opts);
   }

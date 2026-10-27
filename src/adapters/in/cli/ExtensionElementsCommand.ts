@@ -1,9 +1,10 @@
 import type { Command as CommandType } from 'commander';
 import { ExtensionLister } from '../../../domain/document/ExtensionLister.js';
 import type { EditExtensionElements } from '../../../domain/commands/types.js';
-import { CliCommand, type RawOpts } from './CliCommand.js';
+import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
-import { parseKeyValues } from './utils/flags.js';
+import { commandDoc } from '../report/CommandCatalogue.js';
+import { givenFlags, givenStrings, parseKeyValues } from './utils/flags.js';
 import { renderExtensionList } from '../report/utils/view-lines.js';
 
 /**
@@ -23,7 +24,7 @@ export class ExtensionElementsCommand extends MutationCommand {
   }
 
   private subcommand(ext: CommandType, name: string): CommandType {
-    return this.defineSignature(ext, CliCommand.catalogue.command('ext').subcommands!.find((subcommand) => subcommand.name === name)!);
+    return this.defineSignature(ext, commandDoc('ext').subcommands!.find((subcommand) => subcommand.name === name)!);
   }
 
   private async add(file: string, id: string, type: string, attrs: string[], options: RawOpts): Promise<void> {
@@ -34,9 +35,8 @@ export class ExtensionElementsCommand extends MutationCommand {
       action: 'add',
       type,
       ...(attrs.length ? { attrs: parseKeyValues(attrs, 'attribute') } : {}),
-      ...(options['body'] ? { body: String(options['body']) } : {}),
-      ...(options['xml'] ? { xml: String(options['xml']) } : {}),
-      ...(options['replace'] ? { replace: true } : {}),
+      ...givenStrings(options, ['body', 'xml']),
+      ...givenFlags(options, ['replace']),
     };
     await this.mutate(file, [op], opts);
   }

@@ -1,6 +1,4 @@
 import { SWATCHES } from '../../../domain/diagram/utils/colors.js';
-import type { TriggerOptions } from '../../../domain/commands/types.js';
-import { triggerFlag } from './utils/option-flags.js';
 import { LAYOUT_MODES } from '../../../domain/diagram/types.js';
 
 export interface CommandSignature {
@@ -17,6 +15,10 @@ export interface CommandDoc extends CommandSignature {
   examples: string[];
 }
 
+/**
+ * The commands of `bpmn`, registered with commander and listed by `bpmn guide`. Where the two
+ * read differently an entry keeps both: `help` for `--help`, `usage` / `summary` for the guide.
+ */
 export const COMMANDS: CommandDoc[] = [
   { name: 'new', arguments: '<file>', help: 'create a new .bpmn file with one empty process', usage: 'bpmn new <file> [--name <text>] [--id <processId>] [--no-executable] [--target camunda8|camunda7]', summary: 'Create a file with one empty process. --target camunda7 (also for CIB seven and Operaton) writes what Camunda Modeler writes: the camunda / modeler namespaces, the platform version and camunda:historyTimeToLive=180 (the engines refuse an executable process without it). --target camunda8 writes the zeebe / modeler namespaces and the platform (Camunda Cloud, 8.9.0); in a Camunda 8 file new user tasks are Camunda user tasks (zeebe:userTask) and new event definitions get an id, like the Modeler. The process id is Process_<Name> (Process_1 without a name) unless element-id-naming of the .bpmnlintrc names a bpmn:Process prefix (process_orderHandling, process_main without a name; see CONVENTIONS).', examples: ['bpmn new order.bpmn --name "Order handling" --target camunda8', 'bpmn new order.bpmn --name "Order handling" --target camunda7'] },
   { name: 'show', arguments: '<file> [id]', help: 'print the model (or one element) as the AI sees it: no coordinates (file - = stdin)', usage: 'bpmn show <file> [<id> [--context]] [--json] [--scope <id>] | bpmn show <file> --around <id> [--depth <n>] [--inner] [--json] | bpmn show <file> --layout [--json] | bpmn show <file> --conventions [--json] [--lint-config <path> | --no-lint-config]', summary: 'Print the model in flow order (no coordinates), or every detail of one element. Every node carries its lane (lane=<id>); vendor attributes appear with their values next to the properties (nested ones under their set keys: loop.camunda:collection=${items}), extension types as `ext: camunda:taskListener x3`; the process line carries the process\'s own; a business rule task shows its decision link as calledDecision=<id> in every spelling; message flows name their endpoints, the collaboration lists its annotations. --around <id> prints only the neighbourhood of an element (--depth flow steps both ways, default 2; see READING LARGE MODELS), <id> --context the element in its context (where, lane, before / after, catching events, message flows). --layout prints the drawing instead: per pool / lane the rows of node ids (left to right) with their column across the diagram (c0..cN; " … " where a wide gap splits a row), the wide empty gaps between columns, colours, labels off their default side and the layout problems with ids. --conventions prints the id conventions new ids follow in the file: per pattern the kinds and where it comes from (element-id-naming of the .bpmnlintrc, the file\'s ids, bpmn-cli\'s default), also for a file that does not exist yet (see CONVENTIONS). `-` as the file reads stdin.', examples: ['bpmn show order.bpmn', 'bpmn show order.bpmn --around Activity_CheckInvoice', 'bpmn show order.bpmn Activity_CheckInvoice --context', 'bpmn show order.bpmn Activity_CheckInvoice --json', 'bpmn show order.bpmn --layout', 'bpmn show order.bpmn --conventions'] },
@@ -74,26 +76,11 @@ export const COMMON_OPTIONS: CommonOptionDoc[] = [
   { option: '--engine <clean|auto>', description: 'layout engine: clean (built-in, default: straight happy path, branches as bands below, loops underneath) or auto (bpmn-auto-layout)', flags: '--engine <engine>', help: 'layout engine: clean (default) or auto (bpmn-auto-layout)' },
 ];
 
-/**
- * The commands of `bpmn`, registered with commander and listed by `bpmn guide`. Where the two
- * read differently an entry keeps both: `help` for `--help`, `usage` / `summary` for the guide.
- */
-export class CommandCatalogue {
-  constructor(
-    readonly commands: readonly CommandDoc[] = COMMANDS,
-    readonly commonOptions: readonly CommonOptionDoc[] = COMMON_OPTIONS,
-  ) {}
+export function commandDoc(name: string): CommandDoc {
+  return COMMANDS.find((command) => command.name === name)!;
+}
 
-  command(name: string): CommandDoc {
-    return this.commands.find((command) => command.name === name)!;
-  }
-
-  commonOption(longFlag: string): [flags: string, help: string] {
-    const doc = this.commonOptions.find((option) => (option.flags ?? option.option).split(/[ ,]+/).includes(longFlag))!;
-    return [doc.flags ?? doc.option, doc.help ?? doc.description];
-  }
-
-  triggerOption(key: keyof TriggerOptions): [flags: string, help: string] {
-    return triggerFlag(key);
-  }
+export function commonOption(longFlag: string): [flags: string, help: string] {
+  const doc = COMMON_OPTIONS.find((option) => (option.flags ?? option.option).split(/[ ,]+/).includes(longFlag))!;
+  return [doc.flags ?? doc.option, doc.help ?? doc.description];
 }

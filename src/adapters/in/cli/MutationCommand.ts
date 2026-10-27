@@ -15,7 +15,8 @@ import { isCliError, usageError } from '../../../domain/document/utils/errors.js
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import type { CliStream } from './Cli.js';
 import { renderFormat, renderTarget } from './utils/flags.js';
-import { flag } from '../report/utils/option-flags.js';
+import { flag, triggerFlag } from '../report/utils/option-flags.js';
+import { commonOption } from '../report/CommandCatalogue.js';
 import { ModelViewText } from '../report/ModelViewText.js';
 import { MutationReportBuilder } from '../report/MutationReportBuilder.js';
 import { MutationSummaryBuilder } from '../report/MutationSummaryBuilder.js';
@@ -46,32 +47,31 @@ const FLOW_FLAGS: Record<string, string> = { flowName: '--flow-name', flowId: '-
  */
 export abstract class MutationCommand extends CliCommand {
   protected withMutationOptions(cmd: CommandType, { layoutToggle = true } = {}): CommandType {
-    const option = (long: string) => CliCommand.catalogue.commonOption(long);
-    this.withJsonOptions(cmd).option(...option('--summary')).option(...option('--out')).option(...option('--dry-run')).option(...option('--render'), renderTarget);
+    this.withJsonOptions(cmd).option(...commonOption('--summary')).option(...commonOption('--out')).option(...commonOption('--dry-run')).option(...commonOption('--render'), renderTarget);
     if (layoutToggle) {
       cmd
-        .option(...option('--layout'), (raw: string) => {
+        .option(...commonOption('--layout'), (raw: string) => {
           if (!(LAYOUT_MODES as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${LAYOUT_MODES.join(', ')}`);
           return raw;
         })
-        .option(...option('--relayout'))
-        .option(...option('--no-layout'));
+        .option(...commonOption('--relayout'))
+        .option(...commonOption('--no-layout'));
     }
     return this.withLintOptions(cmd)
-      .option(...option('--force'))
-      .option(...option('--backup'))
-      .option(...option('--show'))
-      .option(...option('--strict'))
-      .option(...option('--keep-flow-ids'))
-      .option(...option('--no-keep-flow-ids'))
-      .option(...option('--engine'), (raw: string) => {
+      .option(...commonOption('--force'))
+      .option(...commonOption('--backup'))
+      .option(...commonOption('--show'))
+      .option(...commonOption('--strict'))
+      .option(...commonOption('--keep-flow-ids'))
+      .option(...commonOption('--no-keep-flow-ids'))
+      .option(...commonOption('--engine'), (raw: string) => {
         if (raw !== 'clean' && raw !== 'auto') throw new InvalidArgumentError('expected clean or auto');
         return raw;
       });
   }
 
   protected withTriggerOptions(cmd: CommandType): CommandType {
-    for (const key of TRIGGER_KEYS) cmd.option(...CliCommand.catalogue.triggerOption(key));
+    for (const key of TRIGGER_KEYS) cmd.option(...triggerFlag(key));
     return cmd;
   }
 

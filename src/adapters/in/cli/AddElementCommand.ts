@@ -3,7 +3,7 @@ import type { AddElement } from '../../../domain/commands/types.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
-import { parseKeyValues, splitList } from './utils/flags.js';
+import { givenFlags, givenStrings, parseKeyValues, splitList } from './utils/flags.js';
 
 /**
  * Creates an element and wires it into the process (`bpmn add`).
@@ -53,25 +53,9 @@ export class AddElementCommand extends MutationCommand {
       op: 'add',
       kind,
       ...(name !== undefined ? { name } : {}),
-      ...(options['id'] ? { id: String(options['id']) } : {}),
-      ...(options['after'] ? { after: String(options['after']) } : {}),
-      ...(options['before'] ? { before: String(options['before']) } : {}),
-      ...(options['flow'] ? { flow: String(options['flow']) } : {}),
-      ...(options['in'] ? { in: String(options['in']) } : {}),
-      ...(options['on'] ? { on: String(options['on']) } : {}),
-      ...(options['to'] ? { to: String(options['to']) } : {}),
-      ...(options['lane'] ? { lane: String(options['lane']) } : {}),
-      ...(options['flowName'] ? { flowName: String(options['flowName']) } : {}),
-      ...(options['flowId'] ? { flowId: String(options['flowId']) } : {}),
+      ...givenStrings(options, ['id', 'after', 'before', 'flow', 'in', 'on', 'to', 'lane', 'flowName', 'flowId', 'language', 'doc', 'text', 'process']),
+      ...givenFlags(options, ['default', 'collapsed', 'ifAbsent', 'blackBox']),
       ...(options['condition'] !== undefined ? { condition: String(options['condition']) } : {}),
-      ...(options['language'] ? { language: String(options['language']) } : {}),
-      ...(options['default'] ? { default: true } : {}),
-      ...(options['collapsed'] ? { collapsed: true } : {}),
-      ...(options['ifAbsent'] ? { ifAbsent: true } : {}),
-      ...(options['doc'] ? { doc: String(options['doc']) } : {}),
-      ...(options['text'] ? { text: String(options['text']) } : {}),
-      ...(options['process'] ? { process: String(options['process']) } : {}),
-      ...(options['blackBox'] ? { blackBox: true } : {}),
       ...(options['members'] ? { members: splitList(String(options['members'])) } : {}),
       ...(kv.length ? { set: parseKeyValues(kv) } : {}),
       ...this.triggerOptions(options),

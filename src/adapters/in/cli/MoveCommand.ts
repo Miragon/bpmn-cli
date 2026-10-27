@@ -3,6 +3,7 @@ import type { MoveElements } from '../../../domain/commands/types.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
+import { givenStrings } from './utils/flags.js';
 
 /**
  * Relocates nodes to another flow, scope, activity or lane (`bpmn move`).
@@ -26,11 +27,7 @@ export class MoveCommand extends MutationCommand {
     const op: MoveElements = {
       op: 'move',
       ids,
-      ...(options['after'] ? { after: String(options['after']) } : {}),
-      ...(options['before'] ? { before: String(options['before']) } : {}),
-      ...(options['flow'] ? { flow: String(options['flow']) } : {}),
-      ...(options['in'] ? { in: String(options['in']) } : {}),
-      ...(options['on'] ? { on: String(options['on']) } : {}),
+      ...givenStrings(options, ['after', 'before', 'flow', 'in', 'on']),
       ...(options['lane'] !== undefined ? { lane: String(options['lane']) } : {}),
     };
     if (!op.after && !op.before && !op.flow && !op.in && !op.on && op.lane === undefined) {

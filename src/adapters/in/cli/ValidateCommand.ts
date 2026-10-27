@@ -1,6 +1,7 @@
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import { PLATFORM_CHOICES, type PlatformChoice } from '../../../domain/document/vendor/PlatformDetection.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
+import { commonOption } from '../report/CommandCatalogue.js';
 import { ValidationReportBuilder } from '../report/ValidationReportBuilder.js';
 import { ValidationText } from '../report/ValidationText.js';
 
@@ -13,7 +14,7 @@ export class ValidateCommand extends CliCommand {
   register(program: CommandType): void {
     this.withLintOptions(
       this.withJsonOptions(this.define(program, 'validate'))
-        .option(...CliCommand.catalogue.commonOption('--strict'))
+        .option(...commonOption('--strict'))
         .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (raw: string) => {
           if (!(PLATFORM_CHOICES as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
           return raw;

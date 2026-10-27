@@ -1,6 +1,6 @@
 import type { Command as CommandType } from 'commander';
 import type { FileMutationOptions } from '../../../application/port/in/EditDocumentUseCase.js';
-import { CommandCatalogue, type CommandSignature } from '../report/CommandCatalogue.js';
+import { commandDoc, commonOption, type CommandSignature } from '../report/CommandCatalogue.js';
 import type { Cli } from './Cli.js';
 
 export interface RawOpts {
@@ -12,14 +12,13 @@ export interface RawOpts {
  * and maps the flags all commands share.
  */
 export abstract class CliCommand {
-  protected static readonly catalogue = new CommandCatalogue();
 
   constructor(protected readonly cli: Cli) {}
 
   abstract register(program: CommandType): void;
 
   protected define(parent: CommandType, name: string): CommandType {
-    return this.defineSignature(parent, CliCommand.catalogue.command(name));
+    return this.defineSignature(parent, commandDoc(name));
   }
 
   protected defineSignature(parent: CommandType, doc: CommandSignature): CommandType {
@@ -29,12 +28,12 @@ export abstract class CliCommand {
   }
 
   protected withJsonOptions(cmd: CommandType): CommandType {
-    return cmd.option(...CliCommand.catalogue.commonOption('--json')).option(...CliCommand.catalogue.commonOption('--pretty'));
+    return cmd.option(...commonOption('--json')).option(...commonOption('--pretty'));
   }
 
   /** In this order, so that the default stays undefined (like --layout / --no-layout). */
   protected withLintOptions(cmd: CommandType): CommandType {
-    return cmd.option(...CliCommand.catalogue.commonOption('--lint-config')).option(...CliCommand.catalogue.commonOption('--no-lint-config'));
+    return cmd.option(...commonOption('--lint-config')).option(...commonOption('--no-lint-config'));
   }
 
   /** Paths and stdin resolve from the working directory; project plugins run. */

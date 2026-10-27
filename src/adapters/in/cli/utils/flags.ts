@@ -14,6 +14,18 @@ export function parseKeyValues(items: string[], what = 'property'): Record<strin
   return out;
 }
 
+export function givenStrings<TKey extends string>(options: Record<string, unknown>, keys: readonly TKey[]): Partial<Record<TKey, string>> {
+  const out: Partial<Record<TKey, string>> = {};
+  for (const key of keys) if (options[key]) out[key] = String(options[key]);
+  return out;
+}
+
+export function givenFlags<TKey extends string>(options: Record<string, unknown>, keys: readonly TKey[]): Partial<Record<TKey, true>> {
+  const out: Partial<Record<TKey, true>> = {};
+  for (const key of keys) if (options[key]) out[key] = true;
+  return out;
+}
+
 export function splitList(value: string | undefined): string[] | undefined {
   if (!value) return undefined;
   return value
