@@ -17,6 +17,7 @@ import { ZEEBE, ZEEBE_URI } from '../document/vendor/ZeebeDescriptor.js';
 import { SequenceFlowService } from './flows/SequenceFlowService.js';
 import { RootElementService } from './events/RootElementService.js';
 import { ElementRemovalService } from './ElementRemovalService.js';
+import { detachFromParent } from './utils/containment.js';
 
 const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
 
@@ -234,25 +235,6 @@ export class ElementTypeChangeService {
     }
   }
 
-  private static replaceInParent(parent: El, el: El, next: El): void {
-    for (const property of descriptorOf(parent).properties ?? []) {
-      if (property.isReference) continue;
-      const propValue = ownValue(parent, property.name);
-      if (Array.isArray(propValue)) {
-        const index = propValue.indexOf(el);
-        if (index !== -1) {
-          propValue[index] = next;
-          next.$parent = parent;
-          return;
-        }
-      } else if (propValue === el) {
-        parent.set(property.name, next);
-        next.$parent = parent;
-        return;
-      }
-    }
-  }
-
   /** A kind prop is not copied over: applyKindProps sets it for the new kind. */
   private static isReappliedKindProp(name: string): boolean {
     return name === 'triggeredByEvent';
@@ -274,8 +256,7 @@ export class ElementTypeChangeService {
       else this.dropProp(el, property, value, to, cs);
     }
     Object.assign(next.$attrs, el.$attrs);
-    const parent = el.$parent as El | undefined;
-    if (parent) ElementTypeChangeService.replaceInParent(parent, el, next);
+    detachFromParent(el, next);
     for (const ref of findReferences(this.doc.definitions, el)) {
       if (is(ref.holder, 'bpmndi:BPMNPlane') && !is(next, 'bpmn:SubProcess')) {
         this.dropDiagram(ref.holder.$parent as El | undefined);

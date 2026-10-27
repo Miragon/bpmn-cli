@@ -152,7 +152,7 @@ export class CommandParser {
           out[key] = this.checkMap(ctx, key, raw);
           break;
         case 'branches':
-          out[key] = this.checkBranches(ctx, key, spec, raw);
+          out[key] = this.checkBranches(ctx, key, raw, spec.minItems);
           break;
         case 'nodes':
           out[key] = this.checkNodes(ctx, key, raw);
@@ -182,9 +182,9 @@ export class CommandParser {
     });
   }
 
-  private checkBranches(ctx: CommandLocation, key: string, spec: FieldSpec, value: unknown): SplitBranch[] {
+  private checkBranches(ctx: CommandLocation, key: string, value: unknown, minItems?: number): SplitBranch[] {
     if (!Array.isArray(value)) throw this.fail(ctx, `"${key}" must be an array of branch objects, got ${this.describe(value)}`, 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].');
-    if (spec.minItems && value.length < spec.minItems) throw this.fail(ctx, `"${key}" needs at least ${spec.minItems} branch`);
+    if (minItems && value.length < minItems) throw this.fail(ctx, `"${key}" needs at least ${minItems} branch`);
     return value.map((branch, index) => {
       const bctx: CommandLocation = { index: ctx.index, path: `${ctx.path} ${key}[${index}]` };
       const out = this.checkFields(bctx, branch, BRANCH_FIELDS);
@@ -213,6 +213,10 @@ export class CommandParser {
   }
 
   /** Validates the ops JSON (an array or `{ ops: [...] }`) and returns typed ops. */
+  parseBranches(branches: unknown): SplitBranch[] {
+    return this.checkBranches({ index: 0, path: 'split' }, 'branches', branches);
+  }
+
   parse(input: unknown): EditCommand[] {
     let ops: unknown;
     if (Array.isArray(input)) ops = input;

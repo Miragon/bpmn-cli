@@ -2,7 +2,7 @@ import type { BpmnlintSeverity } from './bpmnlint-rule-setting.js';
 import type { Doc } from '../Doc.js';
 import { KINDS } from '../utils/kinds.js';
 import type { ValidatorFinding } from '../validator-finding.js';
-import { IdStyle, type Body, type FlowForm, type PrefixSource } from './IdStyle.js';
+import { IdStyle, type FlowForm, type PrefixSource } from './IdStyle.js';
 import type { IdConventions, QualifierMode } from './IdConventionsReader.js';
 import { kindRequest, typeRequest, type IdRequest } from '../utils/requests.js';
 import { UNQUALIFIED_NOTE } from '../utils/conventions-text.js';
@@ -40,8 +40,6 @@ export interface ConventionsView {
   qualified?: { mode: 'optional' | 'required'; examples: string[] };
   notes: ValidatorFinding[];
 }
-
-const CASE_WORD: Record<Body, string> = { pascal: 'pascal', camel: 'camel', snake: 'snake', pascalSnake: 'pascalSnake' };
 
 const IGNORED_NOTE = 'checked; prefix ignored (W_CONFIG_IGNORED)';
 
@@ -96,7 +94,7 @@ export class ConventionsTable {
   private element(kind: string, type: string, req: IdRequest): void {
     const { head, source, body } = this.style.explain(req);
     const own = head.toLowerCase() === `${kind.toLowerCase()}_` ? (/^[a-z]/.test(head) ? '<kind>_' : '<Kind>_') : head;
-    const tail = `{name:${CASE_WORD[body]}}`;
+    const tail = `{name:${body}}`;
     this.add(kind, `${head}${tail}`, `${own}${tail}`, source, source !== 'lint' ? this.unnamed(type) : this.unqualified(type));
   }
 
