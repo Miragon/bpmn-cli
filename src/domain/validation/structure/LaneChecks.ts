@@ -1,5 +1,6 @@
 import type { Doc } from '../../document/Doc.js';
 import { is, type El, list, shownId } from '../../document/utils/moddle.js';
+import { allLanes } from '../../document/utils/lanes.js';
 import type { StructureFindings } from './StructureFindings.js';
 
 /** Lane membership: flow nodes of the process only, one lane each, none left out. */
@@ -11,7 +12,7 @@ export class LaneChecks {
 
   checkLanes(process: El): void {
     const { doc } = this;
-    const lanes = doc.allLanes(process);
+    const lanes = allLanes(process);
     if (!lanes.length) return;
     const direct = doc.flowElements(process);
     const seen = new Map<El, El[]>();

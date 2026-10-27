@@ -12,6 +12,7 @@ import { LayoutRequests } from './LayoutRequests.js';
 import { kindLabel } from './utils/kinds.js';
 import { IdSuggestions } from './IdSuggestions.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './utils/mirror.js';
+import { allLanes } from './utils/lanes.js';
 import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
 import { ModelError } from './ModelError.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from './vendor/CamundaDescriptor.js';
@@ -436,24 +437,10 @@ export class Doc {
     return this.flowElements(scope).filter((element) => is(element, 'bpmn:BoundaryEvent') && element.get<El | undefined>('attachedToRef') === activity);
   }
 
-  /** Nested lanes included, deepest last. */
-  allLanes(process: El): El[] {
-    const out: El[] = [];
-    const visit = (laneSet: El | undefined): void => {
-      if (!laneSet) return;
-      for (const lane of many(laneSet, 'lanes')) {
-        out.push(lane);
-        visit(lane.get<El | undefined>('childLaneSet'));
-      }
-    };
-    for (const ls of many(process, 'laneSets')) visit(ls);
-    return out;
-  }
-
   lanesOf(node: El): El[] {
     const process = this.processOf(node);
     if (!process) return [];
-    return this.allLanes(process).filter((lane) => (lane.get<El[] | undefined>('flowNodeRef') ?? []).includes(node));
+    return allLanes(process).filter((lane) => (lane.get<El[] | undefined>('flowNodeRef') ?? []).includes(node));
   }
 
   messageFlows(): El[] {

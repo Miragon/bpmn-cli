@@ -1,5 +1,19 @@
 import type { Doc } from '../Doc.js';
-import { is, type El } from './moddle.js';
+import { is, many, type El } from './moddle.js';
+
+/** Nested lanes included, deepest last. */
+export function allLanes(process: El): El[] {
+  const out: El[] = [];
+  const visit = (laneSet: El | undefined): void => {
+    if (!laneSet) return;
+    for (const lane of many(laneSet, 'lanes')) {
+      out.push(lane);
+      visit(lane.get<El | undefined>('childLaneSet'));
+    }
+  };
+  for (const ls of many(process, 'laneSets')) visit(ls);
+  return out;
+}
 
 export function laneSetOf(owner: El): El | undefined {
   if (is(owner, 'bpmn:Lane')) return owner.get<El | undefined>('childLaneSet');
