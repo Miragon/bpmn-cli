@@ -12,11 +12,6 @@ export class CreateDocumentService implements CreateDocumentUseCase {
     private readonly save?: SaveDocumentPort,
   ) {}
 
-  private savePort(): SaveDocumentPort {
-    if (!this.save) throw ioError('E_NO_FILE', 'No output file given');
-    return this.save;
-  }
-
   /** An existing file fails before the .bpmnlintrc is read. */
   async create(command: CreateDocumentUseCase.Command): Promise<CreateDocumentUseCase.Result> {
     const { destination, ...opts } = command;
@@ -28,7 +23,7 @@ export class CreateDocumentService implements CreateDocumentUseCase {
     const conventions = opts.conventions ?? (await this.settings.idConventions(target, opts))?.conventions;
     const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target, ...(conventions ? { conventions } : {}) }, destination);
     const result = await new EditBatchService(doc, [], lint.applyTo(opts, target)).run(target);
-    if (!opts.dryRun && target) result.written = await this.savePort().save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
+    if (!opts.dryRun && target) result.written = await this.save!.save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
     result.changes.create(newProcessChange(doc, opts.processName));
     return result;
   }

@@ -17,11 +17,9 @@ export class SetPropertiesCommand extends MutationCommand {
 
   private async run(file: string, id: string, keyValues: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const unset = (options['unset'] as string[]) ?? [];
-      if (!keyValues.length && !unset.length) throw new CliError('E_USAGE', 'Nothing to set: pass key=value pairs or --unset <key>', 'usage');
-      const op: SetProperties = { op: 'set', id, values: parseKeyValues(keyValues), ...(unset.length ? { unset } : {}) };
-      await this.mutate(file, [op], opts);
-    }, opts.json);
+    const unset = (options['unset'] as string[]) ?? [];
+    if (!keyValues.length && !unset.length) throw new CliError('E_USAGE', 'Nothing to set: pass key=value pairs or --unset <key>', 'usage');
+    const op: SetProperties = { op: 'set', id, values: parseKeyValues(keyValues), ...(unset.length ? { unset } : {}) };
+    await this.mutate(file, [op], opts);
   }
 }

@@ -16,7 +16,6 @@ import { once } from '../../domain/validation/utils/once.js';
 import type { ValidatorReport, ValidatorRun } from '../../domain/validation/validators.js';
 import { toCliError } from '../../domain/document/utils/cli-error.js';
 import type { CheckOptions, CheckResult, ValidateDocumentUseCase } from '../port/in/ValidateDocumentUseCase.js';
-import { ioError } from '../../domain/document/utils/errors.js';
 import type { LoadDocumentPort } from '../port/out/LoadDocumentPort.js';
 import type { LoadProjectSettingsPort } from '../port/out/LoadProjectSettingsPort.js';
 
@@ -27,14 +26,9 @@ export class ValidateDocumentService implements ValidateDocumentUseCase {
     private readonly load?: LoadDocumentPort,
   ) {}
 
-  private loadPort(file: string): LoadDocumentPort {
-    if (!this.load) throw ioError('E_FILE_NOT_FOUND', `Cannot read ${file}: no such document`, { file });
-    return this.load;
-  }
-
   async validate(command: ValidateDocumentUseCase.Command): Promise<ValidateDocumentUseCase.Result> {
     const { source, ...opts } = command;
-    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file);
+    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.load!.read(source.file), source.file);
     return this.check(doc, (await this.settings.lint(opts.file ?? doc.file, opts)).applyTo(opts, doc.file));
   }
 

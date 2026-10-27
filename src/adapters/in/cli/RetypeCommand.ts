@@ -13,9 +13,7 @@ export class RetypeCommand extends MutationCommand {
 
   private async run(file: string, id: string, kind: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const op: ChangeElementType = { op: 'retype', id, kind, ...this.triggerOptions(options) };
-      await this.mutate(file, [op], opts);
-    }, opts.json);
+    const op: ChangeElementType = { op: 'retype', id, kind, ...this.triggerOptions(options) };
+    await this.mutate(file, [op], opts);
   }
 }

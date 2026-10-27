@@ -20,20 +20,10 @@ export class RelayoutDiagramService implements RelayoutDiagramUseCase {
     private readonly save?: SaveDocumentPort,
   ) {}
 
-  private loadPort(file: string): LoadDocumentPort {
-    if (!this.load) throw ioError('E_FILE_NOT_FOUND', `Cannot read ${file}: no such document`, { file });
-    return this.load;
-  }
-
-  private savePort(): SaveDocumentPort {
-    if (!this.save) throw ioError('E_NO_FILE', 'No output file given');
-    return this.save;
-  }
-
   async relayout(command: RelayoutDiagramUseCase.Command): Promise<RelayoutDiagramUseCase.Result> {
     const { source, ...opts } = command;
     RelayoutDiagramService.assertOptions(opts);
-    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file);
+    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.load!.read(source.file), source.file);
     doc.assertLossless(opts);
     const target = opts.out ?? doc.file;
     if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
@@ -76,7 +66,7 @@ export class RelayoutDiagramService implements RelayoutDiagramUseCase {
 
   private async write(doc: Doc, batch: EditBatchService, target: string | undefined, opts: FileWriteOptions): Promise<MutationResult> {
     const result = await batch.run(target);
-    if (!opts.dryRun && target) result.written = await this.savePort().save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
+    if (!opts.dryRun && target) result.written = await this.save!.save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
     return result;
   }
 }

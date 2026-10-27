@@ -28,40 +28,34 @@ export class ExtensionElementsCommand extends MutationCommand {
 
   private async add(file: string, id: string, type: string, attrs: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const op: EditExtensionElements = {
-        op: 'ext',
-        id,
-        action: 'add',
-        type,
-        ...(attrs.length ? { attrs: parseKeyValues(attrs, 'attribute') } : {}),
-        ...(options['body'] ? { body: String(options['body']) } : {}),
-        ...(options['xml'] ? { xml: String(options['xml']) } : {}),
-        ...(options['replace'] ? { replace: true } : {}),
-      };
-      await this.mutate(file, [op], opts);
-    }, opts.json);
+    const op: EditExtensionElements = {
+      op: 'ext',
+      id,
+      action: 'add',
+      type,
+      ...(attrs.length ? { attrs: parseKeyValues(attrs, 'attribute') } : {}),
+      ...(options['body'] ? { body: String(options['body']) } : {}),
+      ...(options['xml'] ? { xml: String(options['xml']) } : {}),
+      ...(options['replace'] ? { replace: true } : {}),
+    };
+    await this.mutate(file, [op], opts);
   }
 
   /** `2` or `loop.2` is an index into the extension elements; anything else a selector. */
   private async remove(file: string, id: string, typeOrIndex: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const indexed = /^(?:(definition|loop|condition)\.)?(\d+)$/.exec(typeOrIndex.trim());
-      const op: EditExtensionElements = indexed
-        ? { op: 'ext', id, action: 'remove', index: Number(indexed[2]), ...(indexed[1] ? { slot: indexed[1] as EditExtensionElements['slot'] } : {}) }
-        : { op: 'ext', id, action: 'remove', type: typeOrIndex };
-      await this.mutate(file, [op], opts);
-    }, opts.json);
+    const indexed = /^(?:(definition|loop|condition)\.)?(\d+)$/.exec(typeOrIndex.trim());
+    const op: EditExtensionElements = indexed
+      ? { op: 'ext', id, action: 'remove', index: Number(indexed[2]), ...(indexed[1] ? { slot: indexed[1] as EditExtensionElements['slot'] } : {}) }
+      : { op: 'ext', id, action: 'remove', type: typeOrIndex };
+    await this.mutate(file, [op], opts);
   }
 
   private async list(file: string, id: string, options: RawOpts): Promise<void> {
-    await this.cli.guarded(async () => {
-      const doc = await this.cli.readDocArg(file);
-      const el = doc.require(id);
-      const items = new ExtensionLister().listAll(el);
-      if (options['json']) this.cli.printJson(items, !!options['pretty']);
-      else this.cli.print(renderExtensionList(items));
-    }, !!options['json']);
+    const doc = await this.cli.readDocArg(file);
+    const el = doc.require(id);
+    const items = new ExtensionLister().listAll(el);
+    if (options['json']) this.cli.printJson(items, !!options['pretty']);
+    else this.cli.print(renderExtensionList(items));
   }
 }

@@ -31,7 +31,7 @@ export class RenderCommand extends CliCommand {
         .option('--tiles', 'when the image would be unreadable (labels below 0.75): split it at the diagram columns into readable tiles')
         .option('--max-size <px>', `the longest edge in px (default ${RENDER_MAX_SIZE}); a larger drawing is scaled down`, this.boundedNumber('px', 50, 20000, true))
         .option('--scale <n>', 'zoom factor (default 1); the image still stays within --max-size', this.boundedNumber('zoom', 0.05, 10, false)),
-    ).action((file: string, ids: string[], options: RawOpts) => this.cli.guarded(() => this.run(file, ids, options), !!options['json']));
+    ).action((file: string, ids: string[], options: RawOpts) => this.run(file, ids, options));
   }
 
   private async run(file: string, ids: string[], options: RawOpts): Promise<void> {

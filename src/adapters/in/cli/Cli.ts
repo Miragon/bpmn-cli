@@ -150,14 +150,6 @@ export class Cli {
     }
   }
 
-  async guarded(fn: () => Promise<void>, json?: boolean): Promise<void> {
-    try {
-      await fn();
-    } catch (err) {
-      this.printError(err, json);
-    }
-  }
-
   print(text: string, out: CliStream = this.io.stdout): void {
     out.write(text.endsWith('\n') ? text : `${text}\n`);
   }

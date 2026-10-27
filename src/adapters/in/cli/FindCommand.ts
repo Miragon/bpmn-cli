@@ -8,14 +8,12 @@ import { renderFind } from '../report/utils/view-lines.js';
  */
 export class FindCommand extends CliCommand {
   register(program: CommandType): void {
-    this.withJsonOptions(this.define(program, 'find').option('--kind <kind>', 'restrict to a kind', (raw: string) => this.kindArg(raw))).action((file: string, text: string, options: RawOpts) =>
-      this.cli.guarded(async () => {
-        const doc = await this.cli.readDocArg(file);
-        const hits = this.cli.useCases.findElements.find({ doc, text, ...(options['kind'] !== undefined ? { kind: options['kind'] as string } : {}) });
-        if (options['json']) this.cli.printJson(hits, !!options['pretty']);
-        else this.cli.print(renderFind(hits));
-      }, !!options['json']),
-    );
+    this.withJsonOptions(this.define(program, 'find').option('--kind <kind>', 'restrict to a kind', (raw: string) => this.kindArg(raw))).action(async (file: string, text: string, options: RawOpts) => {
+      const doc = await this.cli.readDocArg(file);
+      const hits = this.cli.useCases.findElements.find({ doc, text, ...(options['kind'] !== undefined ? { kind: options['kind'] as string } : {}) });
+      if (options['json']) this.cli.printJson(hits, !!options['pretty']);
+      else this.cli.print(renderFind(hits));
+    });
   }
 
   /** Kind tokens fail with the documented kind codes (like `add`), not commander's text. */

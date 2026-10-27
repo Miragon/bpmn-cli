@@ -18,19 +18,17 @@ export class ValidateCommand extends CliCommand {
           if (!(PLATFORM_CHOICES as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
           return raw;
         }),
-    ).action((file: string, options: RawOpts) =>
-      this.cli.guarded(async () => {
-        const checkOpts = { platform: (options['platform'] as PlatformChoice | undefined) ?? 'auto', ...this.lintOptions(options) };
-        const report = new ValidationReportBuilder(await this.cli.useCases.validateDocument.validate({ ...checkOpts, source: file === '-' ? { doc: await this.cli.readDocArg(file) } : { file } })).report();
-        if (options['json']) {
-          const { ok, ...rest } = report;
-          this.cli.printJson({ ok, file, ...rest }, !!options['pretty']);
-        } else {
-          this.cli.print(new ValidationText(report).text());
-        }
-        if (report.errors.length) this.cli.exitCode = 2;
-        else if (options['strict'] && (report.warnings.length || report.importWarnings.length)) this.cli.exitCode = 5;
-      }, !!options['json']),
-    );
+    ).action(async (file: string, options: RawOpts) => {
+      const checkOpts = { platform: (options['platform'] as PlatformChoice | undefined) ?? 'auto', ...this.lintOptions(options) };
+      const report = new ValidationReportBuilder(await this.cli.useCases.validateDocument.validate({ ...checkOpts, source: file === '-' ? { doc: await this.cli.readDocArg(file) } : { file } })).report();
+      if (options['json']) {
+        const { ok, ...rest } = report;
+        this.cli.printJson({ ok, file, ...rest }, !!options['pretty']);
+      } else {
+        this.cli.print(new ValidationText(report).text());
+      }
+      if (report.errors.length) this.cli.exitCode = 2;
+      else if (options['strict'] && (report.warnings.length || report.importWarnings.length)) this.cli.exitCode = 5;
+    });
   }
 }

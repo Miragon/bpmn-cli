@@ -100,23 +100,21 @@ export class AddElementCommand extends MutationCommand {
     options: RawOpts,
   ) {
     const opts = this.mutationOptions(options)
-    await this.cli.guarded(async () => {
-      this.checkPlacementFlags(options)
-      const op: AddElement = {
-        op: 'add',
-        kind,                       // 'userTask'
-        name,                       // 'Check invoice'
-        after: options['after'],    // 'Event_OrderReceived'
-        // …
-      }
-      await this.mutate(file, [op], opts)
-    }, opts.json)
+    this.checkPlacementFlags(options)
+    const op: AddElement = {
+      op: 'add',
+      kind,                       // 'userTask'
+      name,                       // 'Check invoice'
+      after: options['after'],    // 'Event_OrderReceived'
+      // …
+    }
+    await this.mutate(file, [op], opts)
   }
 }
 ```
 
-`guarded()` catches any error and prints it with its code and hint. From here on nobody knows
-about flags any more.
+An error thrown here reaches `Cli.run`, which prints it with its code and hint. From here on
+nobody knows about flags any more.
 
 ### 2. Through the port
 
@@ -174,7 +172,7 @@ export class EditDocumentService implements EditDocumentUseCase {
     // step 7: read the file
     const doc = 'doc' in source
       ? source.doc
-      : await Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file)
+      : await Doc.fromXml(await this.load!.read(source.file), source.file)
     const target = opts.out ?? doc.file
 
     // the project's .bpmnlintrc, if any
@@ -187,7 +185,7 @@ export class EditDocumentService implements EditDocumentUseCase {
 
     // step 7: write the file
     if (!opts.dryRun) {
-      result.written = await this.savePort().save(target, result.xml, { … })
+      result.written = await this.save!.save(target, result.xml, { … })
     }
     return result
   }

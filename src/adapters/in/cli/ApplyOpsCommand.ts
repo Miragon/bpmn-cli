@@ -17,10 +17,8 @@ export class ApplyOpsCommand extends MutationCommand {
 
   private async run(file: string, opsFile: string | undefined, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.cli.guarded(async () => {
-      const ops: EditCommand[] = new CommandParser().parse(parseOpsJson(await this.readOpsText(file, opsFile)));
-      await this.mutate(file, ops, opts);
-    }, opts.json);
+    const ops: EditCommand[] = new CommandParser().parse(parseOpsJson(await this.readOpsText(file, opsFile)));
+    await this.mutate(file, ops, opts);
   }
 
   private async readOpsText(file: string, opsFile: string | undefined): Promise<string> {
