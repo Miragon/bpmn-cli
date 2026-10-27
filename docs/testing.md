@@ -31,9 +31,6 @@ rename flows as by default, and the fuzzer, the benchmark, the layout
 regression and the demo run the CLI without it (`CLI_ENV` in
 `tools/fuzz/lib/setup.mjs`). A test that needs it sets it for its own spawn.
 
-The audit that motivated this tooling is summarised in
-[audit-2026-10.md](audit-2026-10.md).
-
 ## Invariants
 
 The fuzzer and the property test check after every step
@@ -408,8 +405,7 @@ npx vitest run test/e2e/isomorphic.test.ts
   entry chunk is the output whose metafile `entryPoint` is the requested
   entry (esbuild gives every `import()` target an `entryPoint` too).
   esbuild itself never shows the hang (it puts shared modules into chunks
-  of their own); the check models what Rollup does, and the Vite run in
-  HANDOVER.md ("Profile rules on demand") proved it in Chrome.
+  of their own); the check models what Rollup does.
 - `test/e2e/isomorphic.test.ts` bundles `src/index.ts` the same way (no build
   needed), checks that the check sees a planted `node:fs` import and
   `process` read, and runs the bundle in a `vm` context without any Node
@@ -696,8 +692,7 @@ one message name at the same time.
 The other C7 regression tests (`test/domain/editing/c7-semantic.test.ts`,
 `test/domain/editing/c7-ext-structure.test.ts`, `test/e2e/camunda7.test.ts`,
 `test/domain/editing/c7-ops.test.ts`) run without engines; their engine evidence (deploy and run the CLI-built models, real
-customer files before and after edits) was collected outside the repository,
-see [audit-2026-10.md](audit-2026-10.md#camunda-7-audit-2026-10-09). When you
+customer files before and after edits) was collected outside the repository. When you
 change how vendor content is written, build a small model with the CLI, deploy
 it to a Camunda 7 compatible engine and run it (start, fetch-and-lock /
 complete, correlate), and run the real-file battery on your private corpus:
