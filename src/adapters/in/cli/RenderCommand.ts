@@ -61,7 +61,7 @@ export class RenderCommand extends CliCommand {
     };
     const stem = file === '-' ? 'stdin' : basename(file).replace(/\.(bpmn|xml)$/i, '');
     const source = file === '-' ? { bytes: await this.cli.readStdin('the model'), name: 'stdin' } : { file };
-    const shot = await this.cli.useCases.render.render({ source, opts, format, out, stem, stdout: this.cli.io.stdout });
+    const shot = await this.cli.useCases.renderDiagram.render({ source, opts, format, out, stem, stdout: this.cli.io.stdout });
     const report = out === '-' ? this.cli.io.stderr : this.cli.io.stdout;
     if (options['json']) {
       this.cli.printJson({ file, ...shot }, !!options['pretty'], report);

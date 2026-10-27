@@ -130,9 +130,9 @@ export abstract class MutationCommand extends CliCommand {
       await this.runMutation(
         file,
         opts,
-        (fileOptions) => this.cli.useCases.edit.edit({ ...fileOptions, source: { file }, commands: ops }),
+        (fileOptions) => this.cli.useCases.editDocument.edit({ ...fileOptions, source: { file }, commands: ops }),
         (doc, fileOptions) => {
-          return this.cli.useCases.edit.edit({ ...fileOptions, source: { doc }, commands: ops });
+          return this.cli.useCases.editDocument.edit({ ...fileOptions, source: { doc }, commands: ops });
         },
       );
     } catch (err) {
@@ -195,7 +195,7 @@ export abstract class MutationCommand extends CliCommand {
     const touched = [...highlight.created, ...highlight.changed, ...highlight.moved];
     const opts: RenderOptions = { maxSize: RENDER_MAX_SIZE, highlight, problems: report.layout.metrics?.added ?? [], ...(touched.length ? { focus: touched } : {}) };
     try {
-      const shot = await this.cli.useCases.render.render({ source: { xml }, opts, format: renderFormat(undefined, target), out: target, stem: 'result', stdout: this.cli.io.stdout });
+      const shot = await this.cli.useCases.renderDiagram.render({ source: { xml }, opts, format: renderFormat(undefined, target), out: target, stem: 'result', stdout: this.cli.io.stdout });
       return { shot, lines: new RenderReport(shot).resultLines(highlight), json: { ...shot } };
     } catch (err) {
       if (!isCliError(err)) throw err;

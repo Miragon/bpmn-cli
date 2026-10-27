@@ -21,7 +21,7 @@ export class ValidateCommand extends CliCommand {
     ).action((file: string, options: RawOpts) =>
       this.cli.guarded(async () => {
         const checkOpts = { platform: (options['platform'] as PlatformChoice | undefined) ?? 'auto', ...this.lintOptions(options) };
-        const report = new ValidationReportBuilder(await this.cli.useCases.validate.validate({ ...checkOpts, source: file === '-' ? { doc: await this.cli.readDocArg(file) } : { file } })).report();
+        const report = new ValidationReportBuilder(await this.cli.useCases.validateDocument.validate({ ...checkOpts, source: file === '-' ? { doc: await this.cli.readDocArg(file) } : { file } })).report();
         if (options['json']) {
           const { ok, ...rest } = report;
           this.cli.printJson({ ok, file, ...rest }, !!options['pretty']);

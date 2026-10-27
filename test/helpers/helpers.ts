@@ -18,15 +18,15 @@ const project = new BpmnlintProjectSettings();
 
 /** The use cases on the file system, as src/cli.ts wires them. */
 export const FILE_USE_CASES: CliUseCases = {
-  edit: new EditDocumentService(files, files, project),
-  create: new CreateDocumentService(files, project),
-  relayout: new RelayoutDiagramService(files, files, project),
-  validate: new ValidateDocumentService(files, project),
-  read: new ReadDocumentService(files),
+  editDocument: new EditDocumentService(files, files, project),
+  createDocument: new CreateDocumentService(files, project),
+  relayoutDiagram: new RelayoutDiagramService(files, files, project),
+  validateDocument: new ValidateDocumentService(files, project),
+  readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),
   findElements: new FindElementsService(),
-  render: new RenderDiagramService(files, new FileImageWriter()),
+  renderDiagram: new RenderDiagramService(files, new FileImageWriter()),
 };
 
 export const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';

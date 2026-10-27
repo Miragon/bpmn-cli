@@ -52,15 +52,15 @@ export interface CliIo {
 
 /** The use cases the commands run; cli.ts wires them to the file system. */
 export interface CliUseCases {
-  edit: EditDocumentUseCase;
-  create: CreateDocumentUseCase;
-  relayout: RelayoutDiagramUseCase;
-  validate: ValidateDocumentUseCase;
-  read: ReadDocumentUseCase;
+  editDocument: EditDocumentUseCase;
+  createDocument: CreateDocumentUseCase;
+  relayoutDiagram: RelayoutDiagramUseCase;
+  validateDocument: ValidateDocumentUseCase;
+  readDocument: ReadDocumentUseCase;
   showModel: ShowModelUseCase;
   showConventions: ShowConventionsUseCase;
   findElements: FindElementsUseCase;
-  render: RenderDiagramUseCase;
+  renderDiagram: RenderDiagramUseCase;
 }
 
 const PROCESS_IO: CliIo = {
@@ -186,7 +186,7 @@ export class Cli {
   /** `-` reads the model from stdin (it then has no file name). */
   async readDocArg(file: string): Promise<Doc> {
     const source = file === '-' ? { bytes: await this.readStdin('the model'), name: 'stdin' } : { file };
-    return this.useCases.read.read({ source });
+    return this.useCases.readDocument.read({ source });
   }
 
   /** Writes the error to stderr and sets the exit code. */

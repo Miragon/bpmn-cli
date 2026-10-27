@@ -27,8 +27,8 @@ export class LayoutCommand extends MutationCommand {
       await this.runMutation(
         file,
         opts,
-        (fo) => this.cli.useCases.relayout.relayout({ ...fo, ...layoutOpts, source: { file } }),
-        (doc, fo) => this.cli.useCases.relayout.relayout({ ...fo, ...layoutOpts, source: { doc } }),
+        (fo) => this.cli.useCases.relayoutDiagram.relayout({ ...fo, ...layoutOpts, source: { file } }),
+        (doc, fo) => this.cli.useCases.relayoutDiagram.relayout({ ...fo, ...layoutOpts, source: { doc } }),
       );
     }, opts.json);
   }
