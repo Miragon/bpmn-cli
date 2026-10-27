@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { isCliError } from '../../../src/domain/document/utils/errors.js';
 import { is, many, type El } from '../../../src/domain/document/utils/moddle.js';
-import { LaneService } from '../../../src/domain/editing/participants/LaneService.js';
 import { listExtensions } from '../../../src/index.js';
 import { ExtensionElementService } from '../../../src/domain/editing/extensions/ExtensionElementService.js';
 import { ElementOrderService } from '../../../src/domain/editing/ElementOrderService.js';
 import { IdRenameService } from '../../../src/domain/editing/IdRenameService.js';
 import { ChangeSet } from '../../../src/domain/document/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from '../../helpers/helpers.js';
-import { EventDefinitionService } from '../../../src/domain/editing/events/EventDefinitionService.js';
 import { ElementRemovalService } from '../../../src/domain/editing/ElementRemovalService.js';
 import { ElementTypeChangeService } from '../../../src/domain/editing/ElementTypeChangeService.js';
 import { ElementMoveService } from '../../../src/domain/editing/ElementMoveService.js';
@@ -125,35 +123,6 @@ function errorCode(fn: () => unknown): string | undefined {
   }
   return undefined;
 }
-
-/** Functions of concurrently implemented packages: their tests become it.todo while they are stubs. */
-function implemented(fn: () => void): boolean {
-  try {
-    fn();
-    return true;
-  } catch (err) {
-    return !/not implemented/.test((err as Error).message);
-  }
-}
-
-const triggersReady = implemented(() => {
-  const doc = Doc.create();
-  const ev = doc.create('bpmn:StartEvent', { id: 'Probe' });
-  many(doc.defaultScope(), 'flowElements').push(ev);
-  ev.$parent = doc.defaultScope();
-  new EventDefinitionService(doc, new EditContext(doc), ev).apply('timer', { timer: 'PT1M' });
-});
-
-const lanesReady = implemented(() => {
-  const doc = Doc.create();
-  const task = doc.create('bpmn:Task', { id: 'Probe' });
-  many(doc.defaultScope(), 'flowElements').push(task);
-  task.$parent = doc.defaultScope();
-  new LaneService(doc, new EditContext(doc)).assign(task, undefined, new ChangeSet());
-});
-
-const itTriggers = triggersReady ? it : it.todo;
-const itLanes = lanesReady ? it : it.todo;
 
 /* ------------------------------------------------------------------ */
 /* set                                                                  */
@@ -345,7 +314,7 @@ describe('set: event keys', () => {
     expect(errorCode(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Task_A', values: { timer: 'PT1M' } }))).toBe('E_UNKNOWN_KEY');
   });
 
-  itTriggers('changes triggers through applyTrigger (timer value, message, trigger=none)', async () => {
+  it('changes triggers through applyTrigger (timer value, message, trigger=none)', async () => {
     const doc = await fullDoc();
     new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'Timer_A', values: { timer: 'PT2D' } });
     expect(new ElementProperties(doc).read(doc.require('Timer_A'))).toMatchObject({ trigger: 'timer', timer: 'PT2D' });
@@ -746,7 +715,7 @@ describe('retype', () => {
     await expectRoundTrip(doc);
   });
 
-  itTriggers('changes an event trigger via applyTrigger', async () => {
+  it('changes an event trigger via applyTrigger', async () => {
     const doc = await fullDoc();
     const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Timer_A', kind: 'boundaryEvent:message', message: 'Reminder' });
     const ev = doc.require('Timer_A');
@@ -907,7 +876,7 @@ describe('move', () => {
     expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
   });
 
-  itLanes('move --lane assigns lanes (alone and combined with a placement)', async () => {
+  it('move --lane assigns lanes (alone and combined with a placement)', async () => {
     const doc = await fullDoc();
     new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Task_B'], lane: 'Lane_Sales' });
     expect(ids(doc.lanesOf(doc.require('Task_B')))).toEqual(['Lane_Sales']);

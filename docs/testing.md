@@ -787,9 +787,9 @@ node bin/bpmn.js add file.bpmn task "X" --after <id> --render /tmp/png/after.png
 reviews and blind judging, render with real bpmn-js:
 
 ```
-tools/render.sh /tmp/png file1.bpmn file2.bpmn            # any files
+tools/bench/render.sh /tmp/png file1.bpmn file2.bpmn      # any files
 tools/bench/render.sh /tmp/png tools/bench/results/latest/work/edits/<arm>/<corpus>/<model>/*/model.bpmn
 ```
 
-Both need Google Chrome (`PUPPETEER_EXECUTABLE_PATH` overrides the macOS
-default path) and fetch `bpmn-to-image` with npx.
+It needs Google Chrome (`PUPPETEER_EXECUTABLE_PATH` overrides the macOS
+default path) and fetches `bpmn-to-image` with npx.
