@@ -1,15 +1,13 @@
-import type { Warning } from '../../../domain/document/CliError.js';
-import type { DebugSink } from '../../../domain/diagram/layout/LayoutDebug.js';
 import type { Doc } from '../../../domain/document/Doc.js';
 import type { Platform, PlatformChoice, PlatformInfo } from '../../../domain/document/vendor/PlatformDetection.js';
 import type { ValidateOptions, ValidationResult } from '../../../domain/validation/StructuralValidator.js';
-import type { NamedValidator, Validator } from '../../../domain/validation/validators.js';
+import type { NamedValidator } from '../../../domain/validation/validators.js';
 import type { ProfileReport } from '../../../domain/validation/profiles/PlatformProfiles.js';
 import type { BpmnlintValidatorOptions } from '../../../domain/validation/BpmnlintValidator.js';
 import type { BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from '../../../domain/validation/bpmnlint-validator.js';
 import type { FileBpmnlintOptions } from '../out/LoadProjectSettingsPort.js';
+import type { CheckOptions, CheckResult } from '../../../domain/validation/DocumentCheck.js';
 import type { DocumentSource } from './DocumentSource.js';
-import type { LayoutStatus } from '../../../domain/diagram/types.js';
 
 /**
  * `bpmn validate`: what is wrong with a document,
@@ -88,28 +86,7 @@ export declare namespace ValidateDocumentUseCase {
   }
 }
 
-/** Options of `bpmn validate` (checkDoc, checkFile, validateXml). */
-export interface CheckOptions {
-
-  platform?: PlatformChoice;
-
-  /** their errors fail the check, an advisory one's too */
-  validators?: Validator[];
-
-  /** the file being checked, for the validators (default doc.file) */
-  file?: string;
-
-  /** receives the layout engines' diagnostic lines during this call */
-  debug?: DebugSink;
-}
-
-/** What `bpmn validate` finds in a document (checkDoc). */
-export interface CheckResult {
-
-  validation: ValidationResult;
-  layout: LayoutStatus | { status: 'failed'; error: Warning };
-  importWarnings: string[];
-}
+export type { CheckOptions, CheckResult };
 
 /** Everything `bpmn validate` takes for a file. */
 export interface FileCheckOptions extends CheckOptions, FileBpmnlintOptions {}

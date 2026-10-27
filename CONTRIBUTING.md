@@ -62,7 +62,7 @@ them on a private corpus without copying it into the repository, are described i
   | `adapters/in/cli/` | the driving adapter: the `Cli` (commander, streams, exit codes, errors) and one class per command; it knows the use cases only by their contracts |
   | `adapters/in/report/` | what a use case's result looks like to the one who asked: text and JSON reports (`MutationText`, `MutationReportBuilder`, `ValidationText`, ...), the views as text, and the reference the guide and `bpmn kinds` print; the CLI prints them and `index.ts` / `api.ts` return them |
   | `adapters/out/files/` | the driven adapters on disk, Node only: `FileDocumentStore`, `BpmnlintProjectSettings`, `FileImageWriter` (PNG) |
-  | `adapters/out/memory/` | the driven adapters of the in-memory API: `InMemoryDocumentStore`, `NoProjectSettings` |
+  | `adapters/out/memory/` | the driven adapters of the in-memory API: `NoDocumentFiles`, `NoProjectSettings` |
   | `types/` | type shims for the bpmn-io packages that ship no usable declarations |
 
   Where new code goes: a new command is a type in `domain/commands/` and a `...Service` of the

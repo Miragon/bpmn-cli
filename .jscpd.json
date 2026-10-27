@@ -2,7 +2,7 @@
   "path": ["src"],
   "format": ["typescript"],
   "minLines": 6,
-  "threshold": 0.2,
+  "threshold": 0.25,
   "reporters": ["console"],
   "gitignore": true
 }

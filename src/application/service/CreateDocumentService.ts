@@ -5,26 +5,37 @@ import type { CreateDocumentUseCase } from '../port/in/CreateDocumentUseCase.js'
 import type { LoadProjectSettingsPort } from '../port/out/LoadProjectSettingsPort.js';
 import type { SaveDocumentPort } from '../port/out/SaveDocumentPort.js';
 import { EditBatchService } from '../../domain/batch/EditBatchService.js';
+import type { MutationResult } from '../../domain/batch/types.js';
+import type { FileMutationOptions, FileWriteOptions } from '../port/in/EditDocumentUseCase.js';
 
 export class CreateDocumentService implements CreateDocumentUseCase {
   constructor(
     private readonly settings: LoadProjectSettingsPort,
-    private readonly save?: SaveDocumentPort,
+    private readonly save: SaveDocumentPort,
   ) {}
 
   /** An existing file fails before the .bpmnlintrc is read. */
   async create(command: CreateDocumentUseCase.Command): Promise<CreateDocumentUseCase.Result> {
     const { destination, ...opts } = command;
     if (opts.processId !== undefined) Doc.assertProcessId(opts.processId);
-    const target = opts.out ?? destination;
-    if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
-    if (opts.mustNotExist) await this.save?.assertNew(target, opts);
-    const lint = await this.settings.lint(opts.file ?? target, opts);
+    const target = await this.targetOf(destination, opts);
+    const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo(opts, target);
     const conventions = opts.conventions ?? (await this.settings.idConventions(target, opts))?.conventions;
     const doc = Doc.create({ processName: opts.processName, processId: opts.processId, executable: opts.executable, target: opts.target, ...(conventions ? { conventions } : {}) }, destination);
-    const result = await new EditBatchService(doc, [], lint.applyTo(opts, target)).run(target);
-    if (!opts.dryRun && target) result.written = await this.save!.save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
+    const result = await new EditBatchService(doc, [], project).run(target);
     result.changes.create(newProcessChange(doc, opts.processName));
+    await this.write(result, doc, target, opts);
     return result;
+  }
+
+  private async targetOf(destination: string | undefined, opts: FileMutationOptions): Promise<string | undefined> {
+    const target = opts.out ?? destination;
+    if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
+    if (opts.mustNotExist) await this.save.assertNew(target, opts);
+    return target;
+  }
+
+  private async write(result: MutationResult, doc: Doc, target: string | undefined, opts: FileWriteOptions): Promise<void> {
+    if (!opts.dryRun && target) result.written = await this.save.save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
   }
 }
