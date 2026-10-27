@@ -18,10 +18,10 @@ const project = new BpmnlintProjectSettings();
 
 /** The use cases on the file system, as src/cli.ts wires them. */
 export const FILE_USE_CASES: CliUseCases = {
-  editDocument: new EditDocumentService(files, files, project),
-  createDocument: new CreateDocumentService(files, project),
-  relayoutDiagram: new RelayoutDiagramService(files, files, project),
-  validateDocument: new ValidateDocumentService(files, project),
+  editDocument: new EditDocumentService(project, files, files),
+  createDocument: new CreateDocumentService(project, files),
+  relayoutDiagram: new RelayoutDiagramService(project, files, files),
+  validateDocument: new ValidateDocumentService(project, files),
   readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),

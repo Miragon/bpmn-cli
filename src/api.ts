@@ -19,7 +19,6 @@ import type { LayoutMode } from './domain/diagram/types.js';
 import type { CheckOptions, CheckResult } from './application/port/in/ValidateDocumentUseCase.js';
 import type { LayoutDocOptions } from './application/port/in/RelayoutDiagramUseCase.js';
 import { EditDocumentService } from './application/service/EditDocumentService.js';
-import { InMemoryDocumentStore } from './adapters/out/memory/InMemoryDocumentStore.js';
 import { NoProjectSettings } from './adapters/out/memory/NoProjectSettings.js';
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
 import { ValidateDocumentService } from './application/service/ValidateDocumentService.js';
@@ -41,9 +40,8 @@ import { MutationReportBuilder } from './adapters/in/report/MutationReportBuilde
 import { ShownText } from './adapters/in/report/ShownText.js';
 
 /** The in-memory API runs the use cases without files and without a project around the document. */
-const IN_MEMORY = new InMemoryDocumentStore();
 const NO_PROJECT = new NoProjectSettings();
-const READ_DOCUMENT = new ReadDocumentService(IN_MEMORY);
+const READ_DOCUMENT = new ReadDocumentService();
 
 export type { ShownView, ViewOptions } from './domain/views/ViewRequest.js';
 
@@ -104,12 +102,12 @@ function parseXml(xml: string, file?: string): Promise<Doc> {
 export async function applyToXml(xml: string, ops: unknown, opts: EditOptions = {}): Promise<EditResult> {
   const list = readOps(ops);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await new EditDocumentService(IN_MEMORY, IN_MEMORY, NO_PROJECT).edit({ ...opts, source: { doc }, commands: list, dryRun: true }));
+  return toEditResult(xml, await new EditDocumentService(NO_PROJECT).edit({ ...opts, source: { doc }, commands: list, dryRun: true }));
 }
 
 /** `bpmn new`: a laid-out document with one empty process. */
 export async function newXml(opts: NewDocOptions & EditOptions = {}): Promise<EditResult> {
-  return toEditResult(undefined, await new CreateDocumentService(IN_MEMORY, NO_PROJECT).create({ ...opts, dryRun: true }));
+  return toEditResult(undefined, await new CreateDocumentService(NO_PROJECT).create({ ...opts, dryRun: true }));
 }
 
 export interface LayoutXmlOptions extends Omit<EditOptions, 'layout'> {
@@ -123,7 +121,7 @@ export interface LayoutXmlOptions extends Omit<EditOptions, 'layout'> {
 export async function layoutXml(xml: string, opts: LayoutXmlOptions = {}): Promise<EditResult> {
   RelayoutDiagramService.assertOptions(opts);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await new RelayoutDiagramService(IN_MEMORY, IN_MEMORY, NO_PROJECT).relayout({ ...opts, source: { doc }, dryRun: true }));
+  return toEditResult(xml, await new RelayoutDiagramService(NO_PROJECT).relayout({ ...opts, source: { doc }, dryRun: true }));
 }
 
 export interface ValidateXmlOptions {
@@ -136,7 +134,7 @@ export interface ValidateXmlOptions {
 
 /** `bpmn validate --json`: structure, lint, platform profile, validators and a layout dry run. */
 export async function validateXml(xml: string, opts: ValidateXmlOptions = {}): Promise<ValidationReport> {
-  return new ValidationReportBuilder(await new ValidateDocumentService(IN_MEMORY, NO_PROJECT).validate({ ...opts, source: { doc: await parseXml(xml, opts.file) } })).report();
+  return new ValidationReportBuilder(await new ValidateDocumentService(NO_PROJECT).validate({ ...opts, source: { doc: await parseXml(xml, opts.file) } })).report();
 }
 
 /** `bpmn show` on a parsed document. */
@@ -187,20 +185,20 @@ export async function extensionsXml(xml: string, id: string): Promise<ExtensionI
 
 /** Sets or, without an argument, clears the process-wide sink of layout diagnostics. */
 export function setLayoutDebug(sink?: DebugSink): void {
-  new RelayoutDiagramService(IN_MEMORY, IN_MEMORY, NO_PROJECT).setDebugSink(sink !== undefined ? { sink } : {});
+  new RelayoutDiagramService(NO_PROJECT).setDebugSink(sink !== undefined ? { sink } : {});
 }
 
 /** Applies ops to an in-memory document in one batch. */
 export function mutateDoc(doc: Doc, ops: EditCommand[], opts: MutationOptions = {}): Promise<MutationResult> {
-  return new EditDocumentService(IN_MEMORY, IN_MEMORY, NO_PROJECT).edit({ ...opts, source: { doc }, commands: ops, dryRun: true });
+  return new EditDocumentService(NO_PROJECT).edit({ ...opts, source: { doc }, commands: ops, dryRun: true });
 }
 
 /** `bpmn layout` on an in-memory document. */
 export function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<MutationResult> {
-  return new RelayoutDiagramService(IN_MEMORY, IN_MEMORY, NO_PROJECT).relayout({ ...opts, source: { doc }, dryRun: true });
+  return new RelayoutDiagramService(NO_PROJECT).relayout({ ...opts, source: { doc }, dryRun: true });
 }
 
 /** What `bpmn validate` finds in a document. */
 export function checkDoc(doc: Doc, opts: CheckOptions = {}): Promise<CheckResult> {
-  return new ValidateDocumentService(IN_MEMORY, NO_PROJECT).validate({ ...opts, source: { doc } });
+  return new ValidateDocumentService(NO_PROJECT).validate({ ...opts, source: { doc } });
 }

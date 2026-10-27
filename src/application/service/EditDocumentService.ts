@@ -9,21 +9,31 @@ import { TextPreservation, type PreservedText } from '../../domain/document/xml/
 
 export class EditDocumentService implements EditDocumentUseCase {
   constructor(
-    private readonly load: LoadDocumentPort,
-    private readonly save: SaveDocumentPort,
     private readonly settings: LoadProjectSettingsPort,
+    private readonly load?: LoadDocumentPort,
+    private readonly save?: SaveDocumentPort,
   ) {}
+
+  private loadPort(file: string): LoadDocumentPort {
+    if (!this.load) throw ioError('E_FILE_NOT_FOUND', `Cannot read ${file}: no such document`, { file });
+    return this.load;
+  }
+
+  private savePort(): SaveDocumentPort {
+    if (!this.save) throw ioError('E_NO_FILE', 'No output file given');
+    return this.save;
+  }
 
   async edit(command: EditDocumentUseCase.Command): Promise<EditDocumentUseCase.Result> {
     const { source, commands, ...opts } = command;
-    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.load.read(source.file), source.file);
+    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file);
     doc.assertLossless(opts);
     const target = opts.out ?? doc.file;
     if (!opts.dryRun && !target) throw ioError('E_NO_FILE', 'No output file given');
-    if (opts.mustNotExist) await this.save.assertNew(target, opts);
+    if (opts.mustNotExist) await this.save?.assertNew(target, opts);
     const lint = await this.settings.lint(opts.file ?? target, opts);
     const result = await new EditBatchService(doc, commands, lint.applyTo(opts, target)).run(target);
-    if (!opts.dryRun && target) result.written = await this.save.save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
+    if (!opts.dryRun && target) result.written = await this.savePort().save(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
     return result;
   }
 

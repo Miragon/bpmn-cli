@@ -1,10 +1,17 @@
 import { Doc } from '../../domain/document/Doc.js';
 import type { ReadDocumentUseCase } from '../port/in/ReadDocumentUseCase.js';
+import { ioError } from '../../domain/document/utils/errors.js';
 import type { LoadDocumentPort } from '../port/out/LoadDocumentPort.js';
 
 /** Decoded in the encoding the XML declaration names, so ISO-8859-1 and Windows-1252 characters survive. */
 export class ReadDocumentService implements ReadDocumentUseCase {
-  constructor(private readonly load: LoadDocumentPort) {}
+  constructor(private readonly load?: LoadDocumentPort) {}
+
+  private loadPort(file: string): LoadDocumentPort {
+    if (!this.load) throw ioError('E_FILE_NOT_FOUND', `Cannot read ${file}: no such document`, { file });
+    return this.load;
+  }
+
 
   async read(command: ReadDocumentUseCase.Command): Promise<ReadDocumentUseCase.Result> {
     const doc = await this.parse(command.source);
@@ -18,6 +25,6 @@ export class ReadDocumentService implements ReadDocumentUseCase {
 
   private async parse(source: ReadDocumentUseCase.Command['source']): Promise<Doc> {
     if ('xml' in source) return Doc.fromXml(source.xml, source.file);
-    return 'file' in source ? Doc.fromXml(await this.load.read(source.file), source.file) : Doc.fromXml(this.load.decode(source.bytes, source.name));
+    return 'file' in source ? Doc.fromXml(await this.loadPort(source.file).read(source.file), source.file) : Doc.fromXml(this.loadPort(source.name).decode(source.bytes, source.name));
   }
 }
