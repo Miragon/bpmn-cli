@@ -14,7 +14,7 @@ At the edge, **adapters** translate between the outside world and those use case
 hexagonal architecture (ports and adapters).
 
 ```mermaid
-flowchart LR
+flowchart TB
   terminal(["Terminal"]) --> cli
   lib(["Node / browser code"]) --> portIn
 
@@ -33,8 +33,8 @@ flowchart LR
   class domain core
 ```
 
-Imports point inwards only: <span style="color:#2f80ed">adapters</span> →
-<span style="color:#f2994a">application</span> → <span style="color:#27ae60">domain</span>.
+The frame colour shows the layer: blue for adapters, orange for the application, green for the
+domain. Imports point inwards only: adapters → application → domain.
 The entries in the root of `src/` (`cli.ts`, `node.ts`, `api.ts`) are the only files that know
 every layer. They create the services with `new` and pass the adapters in. There is no
 container.
@@ -55,9 +55,9 @@ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 
 ```mermaid
 flowchart TB
-  user(["bpmn add"]) --> s1["① AddElementCommand"] --> s2{{"② EditDocumentUseCase"}} --> s3["③ EditDocumentService"] --> s4["④ EditBatchService"] --> s5["⑤ ModelCommandService"] --> s6["⑥ ElementCreationService"]
-  s3 <-- "read · write" --> s7[("⑦ FileDocumentStore")]
-  s3 -- result --> s8["⑧ MutationText"]
+  user(["bpmn add"]) --> s1["1 · AddElementCommand"] --> s2{{"2 · EditDocumentUseCase"}} --> s3["3 · EditDocumentService"] --> s4["4 · EditBatchService"] --> s5["5 · ModelCommandService"] --> s6["6 · ElementCreationService"]
+  s3 <-- "read · write" --> s7[("7 · FileDocumentStore")]
+  s3 -- result --> s8["8 · MutationText"]
 
   classDef adapter stroke:#2f80ed,stroke-width:2px
   classDef app stroke:#f2994a,stroke-width:2px
@@ -67,81 +67,189 @@ flowchart TB
   class s4,s5,s6 core
 ```
 
-Eight stops, coloured by layer as in the first picture: <span style="color:#2f80ed">adapters</span>, <span style="color:#f2994a">application</span>, <span style="color:#27ae60">domain</span>. The file system (⑦) is only touched by the
+Eight stops, framed in the colours of their layer. The file system (7) is only touched by the
 service, through a port; the domain never sees it.
 
-### ① Flags become data
+The snippets below are the real functions, shortened: checks, options and edge cases are left
+out (`…`), the calls that hand over to the next stop are kept.
 
-`adapters/in/cli/AddElementCommand.ts` registered `add` with commander when the CLI started.
-Now it checks the flags and turns them into a plain object, the same shape `bpmn apply` reads
-from JSON:
+### 1. Flags become data
 
-```ts
-const op: AddElement = {
-  op: 'add',
-  kind: 'userTask',
-  name: 'Check invoice',
-  after: 'Event_OrderReceived',
-}
-await this.mutate(file, [op], opts)
-```
-
-From here on nobody knows about flags any more.
-
-### ② Through the port
-
-`mutate()` in `adapters/in/cli/MutationCommand.ts` calls the use case. The CLI only knows the
-interface `EditDocumentUseCase`; which service is behind it, `cli.ts` decided at startup.
+When the CLI starts, `cli.ts` creates the `Cli`, and every command class registers its verb with
+commander. For `add`, commander later calls `run()` with the parsed flags. It turns them into a
+plain object, the same shape `bpmn apply` reads from JSON, and hands it on.
 
 ```ts
-this.cli.useCases.edit.edit({ source: { file }, commands: [op], ...opts })
-```
+// src/adapters/in/cli/AddElementCommand.ts
+export class AddElementCommand extends MutationCommand {
+  register(program: Command): void {
+    this.define(program, 'add')
+      .option('--after <id>')
+      .option('--before <id>')
+      // …
+      .action((file, kind, name, keyValues, options) => this.run(file, kind, name, keyValues, options))
+  }
 
-### ③ Load, run, save
-
-`application/service/EditDocumentService.ts` is short on purpose: get the document, let the
-domain work, write the result.
-
-```ts
-const doc = await Doc.fromXml(await this.load.read(file), file)   // ⑦ read
-const result = await new EditBatchService(doc, commands, opts).run(target)   // ④
-await this.save.save(target, result.xml, …)   // ⑦ write
-```
-
-`this.load` and `this.save` are ports. In the CLI they are a `FileDocumentStore`, in
-`applyToXml()` an `InMemoryDocumentStore`; the service cannot tell.
-
-### ④ The batch
-
-`domain/batch/EditBatchService.ts` runs all commands of one call on the `Doc` in memory, then
-validates, lays out the drawing and writes only the changed parts back into the original text.
-If anything fails, nothing is written.
-
-### ⑤ The right service for the op
-
-`domain/batch/ModelCommandService.ts` hands each command to the service that knows it:
-
-```ts
-switch (op.op) {
-  case 'add':     return new ElementCreationService(doc, this.edit).add(op)
-  case 'connect': return new ConnectionService(doc, this.edit).connect(op)
-  …
+  private async run(file: string, kind: string, name: string | undefined, keyValues: string[], options: RawOpts) {
+    const opts = this.mutationOptions(options)
+    await this.cli.guarded(async () => {
+      this.checkPlacementFlags(options)
+      const op: AddElement = {
+        op: 'add',
+        kind,                       // 'userTask'
+        name,                       // 'Check invoice'
+        after: options['after'],    // 'Event_OrderReceived'
+        // …
+      }
+      await this.mutate(file, [op], opts)
+    }, opts.json)
+  }
 }
 ```
 
-### ⑥ The model changes
+`guarded()` catches any error and prints it with its code and hint. From here on nobody knows
+about flags any more.
 
-`domain/editing/ElementCreationService.ts` creates the user task and the sequence flow from
-`Event_OrderReceived`, and reports what it did as a `ChangeSet` (created, changed, removed).
+### 2. Through the port
 
-### ⑦ The file
+`mutate()` lives in the base class of every changing command. It calls the use case and prints
+what comes back. The CLI only knows the interface `EditDocumentUseCase`; which service is
+behind it, `cli.ts` decided at startup.
 
-`adapters/out/files/FileDocumentStore.ts` reads the file at ③ and writes it back atomically at
-the end, through `LoadDocumentPort` and `SaveDocumentPort`.
+```ts
+// src/adapters/in/cli/MutationCommand.ts
+protected async mutate(file: string, ops: EditCommand[], opts: MutationFlags) {
+  const result = await this.cli.useCases.edit.edit({ ...opts, source: { file }, commands: ops })
+  await this.printMutation(result, opts, this.cli.io.stdout)   // step 8
+}
+```
 
-### ⑧ The answer
+```ts
+// src/application/port/in/EditDocumentUseCase.ts
+export interface EditDocumentUseCase {
+  edit(command: { source: DocumentSource; commands: EditCommand[] } & FileMutationOptions): Promise<MutationResult>
+}
+```
 
-Back in the CLI, `adapters/in/report/MutationText.ts` turns the result into what you see:
+### 3. Load, run, save
+
+The service is short on purpose: get the document, let the domain work, write the result.
+`load`, `save` and `settings` are outbound ports, handed in by the constructor.
+
+```ts
+// src/application/service/EditDocumentService.ts
+export class EditDocumentService implements EditDocumentUseCase {
+  constructor(
+    private readonly load: LoadDocumentPort,
+    private readonly save: SaveDocumentPort,
+    private readonly settings: LoadProjectSettingsPort,
+  ) {}
+
+  async edit({ source, commands, ...opts }: EditDocumentUseCase.Command) {
+    const doc = 'doc' in source ? source.doc : await Doc.fromXml(await this.load.read(source.file), source.file)  // step 7
+    const target = opts.out ?? doc.file
+    const lint = await this.settings.lint(target, opts)                                   // .bpmnlintrc
+    const result = await new EditBatchService(doc, commands, lint.applyTo(opts, target)).run(target)  // step 4
+    if (!opts.dryRun) result.written = await this.save.save(target, result.xml, { /* … */ })        // step 7
+    return result
+  }
+}
+```
+
+In the CLI the ports are a `FileDocumentStore` and `BpmnlintProjectSettings`; in `applyToXml()`
+they are an `InMemoryDocumentStore` and `NoProjectSettings`. The service cannot tell.
+
+### 4. The batch
+
+The domain starts here. `EditBatchService` runs all commands of one call on the `Doc` in
+memory, then validates, lays out the drawing and writes only the changed parts back into the
+original text. If anything throws, nothing is written: the caller keeps its input.
+
+```ts
+// src/domain/batch/EditBatchService.ts
+async run(file = this.doc.file): Promise<MutationResult> {
+  await this.guard()                                            // lossless import, C7/C8 rules loaded
+  const findings = await FindingBaseline.capture(this.doc, …)   // warnings that were already there
+  const diagram  = await BatchDrawing.capture(this.doc, …)      // the drawing before
+  const { batch } = await this.runCommands(diagram)             // step 5
+  await this.validate(findings, batch)                          // new errors refuse the write
+  const drawn = await diagram.apply(this.edit, batch.ops, batch.changes)  // layout
+  const xml = await this.keptText(drawn.xml, …)                 // rewrite only what changed
+  return this.result(file, batch, xml, drawn.layout, …)
+}
+```
+
+### 5. The right service for the op
+
+`ModelCommandService` runs the commands in order and hands each one to the service that knows
+it. Commands that only move shapes (`place`, `align`, `color`, …) are left for the layout in
+step 4.
+
+```ts
+// src/domain/batch/ModelCommandService.ts
+private dispatch(op: EditCommand): ChangeSet {
+  if (isDiagramCommand(op)) return new ChangeSet()
+  switch (op.op) {
+    case 'add':     return new ElementCreationService(this.doc, this.edit).add(op)
+    case 'connect': return new ConnectionService(this.doc, this.edit).connect(op)
+    case 'set':     return new PropertyService(this.doc, this.edit).set(op)
+    case 'remove':  return new ElementRemovalService(this.doc, this.edit).remove(op)
+    // … retype, move, order, ext, split
+  }
+}
+```
+
+### 6. The model changes
+
+`ElementCreationService` makes the new element in the bpmn-moddle tree of the `Doc`, places it
+after `Event_OrderReceived` (which creates the sequence flow), and records everything it did in
+a `ChangeSet`.
+
+```ts
+// src/domain/editing/ElementCreationService.ts
+add(op: AddElement): ChangeSet {
+  const cs = new ChangeSet()
+  const { def, trigger } = ElementCreationService.resolveKind(op.kind)   // 'userTask' → bpmn:UserTask
+  const el = this.addFlowNode(op, def, trigger, cs)
+  if (op.set) cs.merge(new PropertyService(this.doc, this.edit).set({ op: 'set', id: idOf(el), values: op.set }))
+  return cs
+}
+
+private addFlowNode(op: AddElement, def: KindDef, trigger: Trigger | undefined, cs: ChangeSet): El {
+  const id = this.edit.allocator.explicitOr(op.id, …)                 // 'Activity_CheckInvoice'
+  const el = this.doc.create(def.type, { id, name: op.name })
+  cs.create({ id, kind: def.kind, name: op.name })
+  new NodePlacementService(this.doc, this.edit, op).place(el, cs)      // --after: splice in, add the flow
+  return el
+}
+```
+
+### 7. The file
+
+`FileDocumentStore` implements both file ports. It is the only class on this path that imports
+`node:fs`.
+
+```ts
+// src/adapters/out/files/FileDocumentStore.ts
+export class FileDocumentStore implements LoadDocumentPort, SaveDocumentPort {
+  read(file: string): Promise<string> {
+    return readXml(file)                     // decoded in the encoding the XML declares
+  }
+
+  async save(target: string, xml: string, opts: { source?: string; unchanged: boolean; backup?: boolean }) {
+    if (opts.unchanged && target === opts.source) return false   // no-op: leave the file alone
+    if (opts.backup && opts.source) await FileDocumentStore.backup(opts.source)
+    await writeAtomic(target, xml)           // a failed write leaves the old file
+    return true
+  }
+}
+```
+
+### 8. The answer
+
+Back in `MutationCommand`, the result becomes a report (`MutationReportBuilder`) and then text
+(`MutationText`), both in `adapters/in/report/`. The library returns the same report, so the
+CLI and `applyToXml()` describe a change in the same words.
 
 ```text
 created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
@@ -152,12 +260,12 @@ written: order.bpmn
 
 ### Other ways in
 
-- `bpmn apply` differs only at ①: it reads the commands as JSON instead of flags.
-- `mutateFile()` (`node.ts`) starts at ②.
-- `applyToXml()` (`api.ts`) starts at ②, with memory at ⑦ and no project `.bpmnlintrc`, and
-  returns the XML instead of saving it.
+- `bpmn apply` differs only in step 1: it reads the commands as JSON instead of flags.
+- `mutateFile()` (`node.ts`) starts at step 2.
+- `applyToXml()` (`api.ts`) starts at step 2, with memory in step 7 and no project
+  `.bpmnlintrc`, and returns the XML instead of saving it.
 
-From ② onwards, all of them run the same code.
+From step 2 onwards, all of them run the same code.
 
 ## One definition per command
 
