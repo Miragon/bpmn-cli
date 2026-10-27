@@ -29,9 +29,10 @@
  * THE SOFTWARE.
  */
 
-/** zeebe-bpmn-moddle's descriptor, verbatim. */
+/** @internal */
 export const ZEEBE_DESCRIPTOR_VERSION = "2.0.0";
 
+/** zeebe-bpmn-moddle's descriptor, verbatim. */
 export const ZEEBE_DESCRIPTOR: { types: unknown[]; [key: string]: unknown } = {
   "name": "zeebe",
   "prefix": "zeebe",

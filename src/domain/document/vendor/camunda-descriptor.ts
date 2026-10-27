@@ -29,9 +29,10 @@
  * THE SOFTWARE.
  */
 
-/** camunda-bpmn-moddle's descriptor, verbatim. */
+/** @internal */
 export const CAMUNDA_DESCRIPTOR_VERSION = "8.0.2";
 
+/** camunda-bpmn-moddle's descriptor, verbatim. */
 export const CAMUNDA_DESCRIPTOR: { types: unknown[]; [key: string]: unknown } = {
   "name": "Camunda",
   "uri": "http://camunda.org/schema/1.0/bpmn",

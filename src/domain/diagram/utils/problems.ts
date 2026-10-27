@@ -1,8 +1,8 @@
 /** Layout problem kinds, their weights and the comparison of two measurements. */
-/** structural defects the regression harness does not measure, weighted like an overlap */
+/** structural defects the regression harness does not measure, weighted like an overlap @internal */
 export const EXTRA_KEYS = ['frameIntrusion', 'frameOverlap', 'degenerateEdge', 'detachedEdge'] as const;
 
-/** soft kinds the harness does not measure; weights below 6, so they never count as hard */
+/** soft kinds the harness does not measure; weights below 6, so they never count as hard @internal */
 export const QUALITY_KEYS = ['backwardFlow', 'segmentOverlap', 'labelOutsideFrame', 'labelOnTitle', 'messageLabelFar'] as const;
 
 export const KEYS = [
@@ -36,7 +36,7 @@ export const KEYS = [
 
 export type MetricKey = (typeof KEYS)[number];
 
-/** the regression harness's kinds, in its order */
+/** the regression harness's kinds, in its order @internal */
 export const HARNESS_KEYS: readonly MetricKey[] = KEYS.filter((key) => !(EXTRA_KEYS as readonly string[]).includes(key) && !(QUALITY_KEYS as readonly string[]).includes(key));
 
 export const WEIGHTS: Readonly<Record<MetricKey, number>> = {

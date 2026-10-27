@@ -28,8 +28,10 @@ npm test                # the vitest suite
 npm run gate            # everything a change has to pass before it is handed over
 ```
 
-`npm run gate` builds, runs knip and the tests, the isomorphism check of the browser-safe core, the
-layout-regression budget and a short fuzz campaign. CI runs `typecheck` and `gate` on every pull
+`npm run gate` builds, runs knip twice (the second time in production mode: code in `src/` that only
+tests use fails unless its export is tagged `@internal`), the duplication budget of `src/` (jscpd,
+`.jscpd.json`), the tests, the isomorphism check of the browser-safe core, the layout-regression
+budget and a short fuzz campaign. CI runs `typecheck` and `gate` on every pull
 request and every push to `main`. The test layers, the benchmark and the fuzzer, and how to run
 them on a private corpus without copying it into the repository, are described in
 [docs/testing.md](docs/testing.md).

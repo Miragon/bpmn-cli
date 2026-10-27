@@ -61,7 +61,7 @@
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run build && knip && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
+    "gate": "npm run build && knip && knip --production --exclude dependencies && jscpd && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
@@ -78,6 +78,7 @@
     "archunit": "2.5.4",
     "camunda-bpmn-moddle": "8.0.2",
     "esbuild": "^0.28.2",
+    "jscpd": "5.4.1",
     "knip": "6.43.0",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
