@@ -29,7 +29,7 @@ export class NewFileCommand extends MutationCommand {
     const opts = this.mutationOptions(options);
     await this.cli.guarded(async () => {
       const stdout = file === '-' || opts.out === '-';
-      const result = await this.cli.useCases.create.create({
+      const result = await this.cli.useCases.createDocument.create({
         ...opts,
         ...(file === '-' ? {} : { destination: file }),
         processName: options['name'] as string | undefined,

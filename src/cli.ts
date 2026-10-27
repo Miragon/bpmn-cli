@@ -38,15 +38,15 @@ function exitWhenWritten(): void {
 const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
 const cli = new Cli(VERSION, {
-  edit: new EditDocumentService(files, files, project),
-  create: new CreateDocumentService(files, project),
-  relayout: new RelayoutDiagramService(files, files, project),
-  validate: new ValidateDocumentService(files, project),
-  read: new ReadDocumentService(files),
+  editDocument: new EditDocumentService(files, files, project),
+  createDocument: new CreateDocumentService(files, project),
+  relayoutDiagram: new RelayoutDiagramService(files, files, project),
+  validateDocument: new ValidateDocumentService(files, project),
+  readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),
   findElements: new FindElementsService(),
-  render: new RenderDiagramService(files, new FileImageWriter()),
+  renderDiagram: new RenderDiagramService(files, new FileImageWriter()),
 });
 void cli.run(process.argv).then(() => {
   process.exitCode = cli.exitCode;
