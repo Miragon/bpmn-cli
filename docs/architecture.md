@@ -131,7 +131,7 @@ protected async mutate(
   ops: EditCommand[],
   opts: MutationFlags,
 ) {
-  const result = await this.cli.useCases.edit.edit({
+  const result = await this.cli.useCases.editDocument.edit({
     ...opts,
     source: { file },
     commands: ops,
