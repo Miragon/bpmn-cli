@@ -8,6 +8,7 @@ import { EditCommandDefinition } from './EditCommandDefinition.js';
 export class ColorElementsDefinition extends EditCommandDefinition<ColorElements> {
   readonly name = 'color' as const;
   readonly description = 'Diagram only: colour shapes and connections with a bpmn-js colour picker colour (= `bpmn color`).';
+  override readonly diagramOnly = true;
   readonly fields: FieldsOf<ColorElements> = {
     ids: list('Shapes and connections to colour.', { minItems: 1 }),
     ...SELECTOR_FIELDS,

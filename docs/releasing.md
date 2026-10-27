@@ -62,7 +62,7 @@ The version is set only in `plugin.json`, not in the marketplace entry. Installe
 this version changes, so a change to the skill reaches users with the next release, together with the
 CLI version it describes (until then the pinned `npx` version is the previous release). The `ci`
 workflow's `plugin` job runs `claude plugin validate --strict` on the plugin and the marketplace (no
-credentials needed), and `test/plugin.test.ts` fails when `plugin.json`, the pinned `npx` version and
+credentials needed), and `test/e2e/plugin.test.ts` fails when `plugin.json`, the pinned `npx` version and
 `package.json` disagree.
 
 ## Homebrew

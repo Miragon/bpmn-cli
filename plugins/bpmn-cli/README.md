@@ -57,7 +57,7 @@ version of this plugin (Node 22.12+). It pre-approves only those two commands.
 
 The plugin's version is the package version: release-please bumps
 `plugins/bpmn-cli/.claude-plugin/plugin.json` and the pinned `npx` version of the skill in each
-release PR ([docs/releasing.md](../../docs/releasing.md)). `test/plugin.test.ts` (part of `npm test`)
+release PR ([docs/releasing.md](../../docs/releasing.md)). `test/e2e/plugin.test.ts` (part of `npm test`)
 keeps the skill honest: it runs every recipe and reference example and the look step's render
 against the CLI built from `src/`, checks that every `bpmn <command> --option` the skill mentions
 exists, and that the versions agree. To work on the plugin:

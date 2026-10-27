@@ -10,13 +10,13 @@ export class ConnectCommand extends MutationCommand {
   register(program: CommandType): void {
     this.withMutationOptions(
       this.define(program, 'connect')
-        .option('--name <text>', 'flow name')
-        .option('--id <id>', 'flow id')
-        .option('--condition <expr>', 'condition expression (sequence flows)')
-        .option('--language <lang>', 'expression language')
-        .option('--default', 'default flow of the source gateway / activity')
-        .option('--message <name>', 'message flows: message name')
-        .option('--if-absent', 'succeed silently when the connection exists'),
+        .option('--name <text>')
+        .option('--id <id>')
+        .option('--condition <expr>')
+        .option('--language <lang>')
+        .option('--default')
+        .option('--message <name>')
+        .option('--if-absent'),
     ).action((file: string, source: string, target: string, options: RawOpts) => this.run(file, source, target, options));
   }
 

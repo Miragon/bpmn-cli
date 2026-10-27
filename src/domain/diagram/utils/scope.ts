@@ -69,7 +69,7 @@ export function shiftScope(layout: ScopeLayout, dx: number, dy: number): void {
   layout.height += dy;
 }
 
-export function shiftEdges(layout: ScopeLayout, dx: number, dy: number): void {
+function shiftEdges(layout: ScopeLayout, dx: number, dy: number): void {
   for (const edge of layout.edges) {
     for (const point of edge.points) {
       point.x += dx;

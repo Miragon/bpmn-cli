@@ -1,7 +1,7 @@
 /**
  * One seeded random walk: generate a step, run it, check every invariant,
  * repeat. Shared by the fuzz tool (tools/fuzz/walk.mjs, through the CLI or the
- * built library) and the property test (test/fuzz.test.ts, in-process on src/).
+ * built library) and the property test (test/e2e/fuzz.test.ts, in-process on src/).
  *
  * Contract: `runWalk(cfg)` resolves to a summary and never throws for a
  * failing step. cfg:

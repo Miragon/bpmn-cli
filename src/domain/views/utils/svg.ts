@@ -8,7 +8,7 @@ export function formatNumber(coordinate: number): string {
   return String(rounded === 0 ? 0 : rounded);
 }
 
-export function text(source: string): string {
+function text(source: string): string {
   return source.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 

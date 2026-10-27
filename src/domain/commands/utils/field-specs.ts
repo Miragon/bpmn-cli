@@ -1,6 +1,6 @@
 import type { SplitBranch } from '../types.js';
 
-export type FieldType = 'string' | 'boolean' | 'integer' | 'string[]' | 'map' | 'branches' | 'nodes' | 'size';
+type FieldType = 'string' | 'boolean' | 'integer' | 'string[]' | 'map' | 'branches' | 'nodes' | 'size';
 
 export interface FieldSpec {
   type: FieldType;

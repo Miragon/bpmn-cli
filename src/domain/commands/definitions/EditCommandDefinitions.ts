@@ -1,4 +1,3 @@
-import { OP_NAMES } from '../utils/op-names.js';
 import type { EditCommand } from '../types.js';
 import { AddElementDefinition } from './AddElementDefinition.js';
 import { AlignShapesDefinition } from './AlignShapesDefinition.js';
@@ -51,6 +50,6 @@ export class EditCommandDefinitions {
   }
 
   static all(): EditCommandDefinition[] {
-    return OP_NAMES.map((name) => EditCommandDefinitions.of(name));
+    return Object.values(DEFINITIONS) as unknown as EditCommandDefinition[];
   }
 }

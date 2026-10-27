@@ -1,5 +1,4 @@
 import { Option, type Command as CommandType } from 'commander';
-import { COLOR_VALUES } from '../../../domain/commands/utils/op-fields.js';
 import type { ColorElements } from '../../../domain/commands/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { FormatCommand } from './FormatCommand.js';
@@ -10,7 +9,7 @@ import { FormatCommand } from './FormatCommand.js';
 export class ColorCommand extends FormatCommand {
   register(program: CommandType): void {
     this.withMutationOptions(
-      this.withSelectors(this.define(program, 'color').addOption(new Option('--color <color>', COLOR_VALUES.join(' | ')).choices([...COLOR_VALUES]).makeOptionMandatory()), 'colour'),
+      this.withSelectors(this.define(program, 'color').addOption(new Option('--color <color>').makeOptionMandatory())),
     ).action((file: string, ids: string[], options: RawOpts) =>
       this.cli.guarded(async () => {
         const op: ColorElements = { op: 'color', ...this.selectorsOf(ids, options, true), color: options['color'] as ColorElements['color'] };

@@ -12,9 +12,8 @@ export class AlignCommand extends FormatCommand {
     this.withMutationOptions(
       this.withSelectors(
         this.define(program, 'align')
-          .addOption(new Option('--axis <axis>', 'row or column').choices(['row', 'column']).makeOptionMandatory())
-          .option('--to <id>', 'reference element that stays (default: the first id; with only --kind and --axis column: the rightmost one)'),
-        'align',
+          .addOption(new Option('--axis <axis>').makeOptionMandatory())
+          .option('--to <id>'),
       ),
     ).action((file: string, ids: string[], options: RawOpts) =>
       this.cli.guarded(async () => {

@@ -16,7 +16,7 @@ type ChosenChannel = { list: Channels; y: number; x1: number; x2: number };
 type Route = { pts: Point[]; channel?: ChosenChannel; runsBelow?: boolean; runsAbove?: boolean };
 
 /** How far a boundary event's run keeps from the shapes, labels and runs it passes. */
-export const RUN_CLEAR = 15;
+const RUN_CLEAR = 15;
 
 /** How far a straight rise into a node's bottom keeps from the shapes beside its line. */
 export const RISE_KEEP = 5;

@@ -56,7 +56,7 @@ export class MovedFlows {
 
   constructor(
     private readonly doc: Doc,
-    private readonly edit: EditContext,
+    edit: EditContext,
     private readonly cs: ChangeSet,
     nodes: El[],
   ) {

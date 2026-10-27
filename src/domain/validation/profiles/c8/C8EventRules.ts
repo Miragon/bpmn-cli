@@ -1,4 +1,5 @@
 import type { El } from '../../../document/utils/moddle.js';
+import { LinkEvents } from '../LinkEvents.js';
 import type { RuleRun } from '../RuleRun.js';
 import { TimerValue } from '../TimerValue.js';
 import { attr, idOf, list, localName, nameOf, peek, TIMER_ELEMENTS, triggerName } from '../../utils/element.js';
@@ -350,30 +351,21 @@ export class C8EventRules extends C8Rules {
    * unique in a process.
    */
   checkLinks(proc: El): void {
-    const catches = new Map<string, El[]>();
-    const walkScope = (scope: El): void => {
-      const nodes = this.doc.flowNodes(scope);
-      const linkName = (node: El): string | undefined => {
-        const defs = list(node, 'eventDefinitions');
-        return defs.length === 1 && this.kit.is(defs[0], 'bpmn:LinkEventDefinition') ? peek<string>(defs[0], 'name') : undefined;
-      };
-      const here = new Set(nodes.filter((node) => this.kit.is(node, 'bpmn:IntermediateCatchEvent')).map(linkName).filter((name): name is string => name !== undefined));
-      for (const node of nodes) {
-        if (this.kit.is(node, 'bpmn:SubProcess')) walkScope(node);
-        const name = linkName(node);
-        if (name === undefined) continue;
-        if (this.kit.is(node, 'bpmn:IntermediateCatchEvent')) catches.set(name, [...(catches.get(name) ?? []), node]);
-        else if (this.kit.is(node, 'bpmn:IntermediateThrowEvent') && !here.has(name)) {
-          this.push('deploy', 'W_C8_DEPLOY_LINK', node, undefined, `link:${name}`, `Link throw event ${idOf(node)} goes to "${name}", but ${idOf(scope)} has no link catch event of that name; Camunda 8 refuses the file`, `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${idOf(scope)} --link ${sh(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${idOf(node)} link=<Name>\`).`);
-        }
-      }
-    };
-    walkScope(proc);
-    for (const [name, els] of catches) {
-      for (const el of els.slice(1)) {
-        this.push('deploy', 'W_C8_DEPLOY_LINK', el, undefined, `linkCatch:${name}`, `Link catch events ${idOf(els[0])} and ${idOf(el)} share the name "${name}" in process ${idOf(proc)}; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(el)} link=<OtherName>\` (and its throw events).`, [idOf(els[0])!]);
-      }
+    const links = new LinkEvents(this.doc, this.kit, this.allFlowNodes(proc), (node) => {
+      const defs = list(node, 'eventDefinitions');
+      return defs.length === 1 && this.kit.is(defs[0], 'bpmn:LinkEventDefinition') ? peek<string>(defs[0], 'name') : undefined;
+    });
+    for (const { el, name, scope } of links.unmatchedThrows()) {
+      this.push('deploy', 'W_C8_DEPLOY_LINK', el, undefined, `link:${name}`, `Link throw event ${idOf(el)} goes to "${name}", but ${idOf(scope)} has no link catch event of that name; Camunda 8 refuses the file`, `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${idOf(scope)} --link ${sh(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${idOf(el)} link=<Name>\`).`);
     }
+    for (const { first, el, name } of links.duplicateCatches()) {
+      this.push('deploy', 'W_C8_DEPLOY_LINK', el, undefined, `linkCatch:${name}`, `Link catch events ${idOf(first)} and ${idOf(el)} share the name "${name}" in process ${idOf(proc)}; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(el)} link=<OtherName>\` (and its throw events).`, [idOf(first)!]);
+    }
+  }
+
+  /** Every flow node of a scope and of its nested sub-processes, in document order. */
+  private allFlowNodes(scope: El): El[] {
+    return this.doc.flowNodes(scope).flatMap((node) => (this.kit.is(node, 'bpmn:SubProcess') ? [node, ...this.allFlowNodes(node)] : [node]));
   }
 
   /**

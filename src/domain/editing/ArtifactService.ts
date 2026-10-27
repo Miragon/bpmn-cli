@@ -110,7 +110,6 @@ export class ArtifactService {
    * backing id gets `Object` / `Store` (as a tail word when the name gets cut).
    */
   private backingRequest(type: 'bpmn:DataObject' | 'bpmn:DataStore', refId: string, name: string | undefined): IdRequest {
-    const doc = this.doc;
     const context = speakingStem(refId) ?? '';
     const req = typeRequest(type, { ...(name ? { name } : {}), context });
     if (this.edit.idStyle.derivedBase(req) !== refId) return req;

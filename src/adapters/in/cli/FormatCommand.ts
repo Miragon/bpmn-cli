@@ -12,12 +12,8 @@ import { flag } from '../report/utils/option-flags.js';
  * compact): element selectors and flag groups.
  */
 export abstract class FormatCommand extends MutationCommand {
-  protected withSelectors(cmd: CommandType, what: string): CommandType {
-    return cmd
-      .option('--path <ids...>', `${what} every node${what === 'colour' ? ' and flow' : ''} on the shortest sequence-flow path <fromId> <toId>`)
-      .option('--via <flowIds...>', 'with --path: flows the path must pass, in order')
-      .option('--kind <kind>', `${what} every element of this kind (find --kind grammar: endEvent, userTask, ...)`)
-      .option('--branch <flowId>', `${what} the branch this sequence flow starts, up to the join`);
+  protected withSelectors(cmd: CommandType): CommandType {
+    return cmd.option('--path <ids...>').option('--via <flowIds...>').option('--kind <kind>').option('--branch <flowId>');
   }
 
   /** The ids and selectors of a format command; `need`: ids or a selector are required. */

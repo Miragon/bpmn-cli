@@ -46,7 +46,7 @@ export interface BpmnlintEngine {
 }
 
 export type { BpmnlintRuleSetting, BpmnlintSeverity } from '../document/ids/bpmnlint-rule-setting.js';
-import type { BpmnlintRuleSetting, BpmnlintSeverity } from '../document/ids/bpmnlint-rule-setting.js';
+import type { BpmnlintRuleSetting } from '../document/ids/bpmnlint-rule-setting.js';
 
 /** A config, rule, moddle extension or file left out, or bpmnlint that could not be loaded. */
 export interface BpmnlintUnavailable {

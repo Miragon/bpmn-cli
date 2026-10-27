@@ -20,7 +20,7 @@ const ARIAL: Record<string, number> = {
 };
 const DEFAULT_ADVANCE = 556;
 /** bpmn-js: line height 1.2 em */
-export const LINE_HEIGHT = 14.4;
+const LINE_HEIGHT = 14.4;
 const SOFT_BREAK = '­';
 
 /** Width at 12 px; the advances are in 1/1000 em. */

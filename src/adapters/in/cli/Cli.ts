@@ -12,6 +12,7 @@ import type { ShowModelUseCase } from '../../../application/port/in/ShowModelUse
 import type { ShowConventionsUseCase } from '../../../application/port/in/ShowConventionsUseCase.js';
 import type { FindElementsUseCase } from '../../../application/port/in/FindElementsUseCase.js';
 import type { RenderDiagramUseCase } from '../../../application/port/in/RenderDiagramUseCase.js';
+import { describeOptionsByDefinitions } from './utils/definition-help.js';
 import { AddElementCommand } from './AddElementCommand.js';
 import { AlignCommand } from './AlignCommand.js';
 import { ApplyOpsCommand } from './ApplyOpsCommand.js';
@@ -126,6 +127,7 @@ export class Cli {
       GuideCommand,
     ];
     for (const command of commands) new command(this).register(this.program);
+    describeOptionsByDefinitions(this.program);
   }
 
   /** After --help / --version / a bare `bpmn` commander printed what it wanted to; only the exit code is kept. */

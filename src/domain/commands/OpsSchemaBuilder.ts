@@ -6,7 +6,7 @@ import { defaultRule } from './utils/schema-rules.js';
 import { EditCommandDefinitions } from './definitions/EditCommandDefinitions.js';
 
 /** Builds the JSON Schema of the `bpmn apply` ops format from the op field specs. */
-export class OpsSchemaBuilder {
+class OpsSchemaBuilder {
   private fieldSchema(spec: FieldSpec): Record<string, unknown> {
     const described = { description: spec.description };
     switch (spec.type) {

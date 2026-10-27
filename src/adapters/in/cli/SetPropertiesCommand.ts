@@ -10,7 +10,7 @@ import { parseKeyValues } from './utils/flags.js';
  */
 export class SetPropertiesCommand extends MutationCommand {
   register(program: CommandType): void {
-    this.withMutationOptions(this.define(program, 'set').option('--unset <key>', 'remove a property (repeatable)', (key: string, prev: string[]) => [...prev, key], [] as string[])).action(
+    this.withMutationOptions(this.define(program, 'set').option('--unset <key>', '', (key: string, prev: string[]) => [...prev, key], [] as string[])).action(
       (file: string, id: string, keyValues: string[], options: RawOpts) => this.run(file, id, keyValues, options),
     );
   }

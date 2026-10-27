@@ -15,7 +15,7 @@ export const C7_DEFAULT_TTL = '180';
 /** The Modeler's current C7 default. */
 export const C7_PLATFORM_VERSION = '7.24.0';
 
-export interface CamundaProperty {
+interface CamundaProperty {
   name: string;
   type: string;
   isAttr: boolean;

@@ -5,28 +5,24 @@ export function flag(key: string): string {
   return `--${key.replace(/[A-Z]/g, (upper) => `-${upper.toLowerCase()}`)}`;
 }
 
-export interface TriggerFlagDoc {
-  value?: string;
-  help: string;
-}
-
-export const TRIGGER_FLAGS: { [Key in keyof TriggerOptions]-?: TriggerFlagDoc } = {
-  timer: { value: 'iso', help: 'timer: R/PT1H (cycle), PT5M (duration) or a date' },
-  timerKind: { value: 'kind', help: 'cycle | duration | date (default: classified from the value)' },
-  message: { value: 'name', help: 'message name (bpmn:Message is created when missing)' },
-  error: { value: 'name', help: 'error name' },
-  errorCode: { value: 'code', help: 'error code' },
-  signal: { value: 'name', help: 'signal name' },
-  escalation: { value: 'name', help: 'escalation name' },
-  escalationCode: { value: 'code', help: 'escalation code' },
-  when: { value: 'expr', help: 'condition of a conditional event' },
-  link: { value: 'name', help: 'link name' },
-  nonInterrupting: { help: 'non-interrupting boundary / start event' },
+/** The value placeholder of each trigger flag; `nonInterrupting` takes none. */
+const TRIGGER_VALUE_NAMES: Record<keyof TriggerOptions, string | undefined> = {
+  timer: 'iso',
+  timerKind: 'kind',
+  message: 'name',
+  error: 'name',
+  errorCode: 'code',
+  signal: 'name',
+  escalation: 'name',
+  escalationCode: 'code',
+  when: 'expr',
+  link: 'name',
+  nonInterrupting: undefined,
 };
 
 export function triggerFlag(key: keyof TriggerOptions): [flags: string, help: string] {
-  const doc = TRIGGER_FLAGS[key];
-  return [`${flag(key)}${doc.value ? ` <${doc.value}>` : ''}`, doc.help];
+  const valueName = TRIGGER_VALUE_NAMES[key];
+  return [`${flag(key)}${valueName ? ` <${valueName}>` : ''}`, TRIGGER_FIELDS[key].description];
 }
 
 export function triggerFlagUsage(keys: ReadonlyArray<keyof TriggerOptions>): string {
@@ -34,7 +30,7 @@ export function triggerFlagUsage(keys: ReadonlyArray<keyof TriggerOptions>): str
   return keys
     .map((key, index) => {
       const allowedValues = TRIGGER_FIELDS[key].values;
-      const spelled = `${flag(key)} ${allowedValues ? allowedValues.join('|') : `<${TRIGGER_FLAGS[key].value}>`}`;
+      const spelled = `${flag(key)} ${allowedValues ? allowedValues.join('|') : `<${TRIGGER_VALUE_NAMES[key]}>`}`;
       return index ? `[${spelled}]` : spelled;
     })
     .join(' ');

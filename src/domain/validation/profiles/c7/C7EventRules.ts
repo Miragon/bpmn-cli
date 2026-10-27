@@ -1,4 +1,5 @@
 import type { El } from '../../../document/utils/moddle.js';
+import { LinkEvents } from '../LinkEvents.js';
 import type { RuleRun } from '../RuleRun.js';
 import { idOf, list, nameOf, peek, TIMER_ELEMENTS, triggerName } from '../../utils/element.js';
 import { sh } from '../../utils/hint.js';
@@ -227,32 +228,19 @@ export class C7EventRules extends C7Rules {
    * A definition without name is skipped: that is a schema error.
    */
   checkLinks(proc: El): void {
-    const firstCatch = new Map<string, El>();
-    const catchesIn = new Map<El | undefined, Set<string>>();
-    const throws: Array<{ el: El; name: string }> = [];
-    for (const node of this.allFlowNodes(proc)) {
-      const def = this.definitionOf(node, 'bpmn:LinkEventDefinition');
-      if (!def) continue;
-      const id = idOf(node)!;
-      const name = peek<string>(def, 'name');
-      if (name === undefined || name === null) continue;
-      if (this.kit.is(node, 'bpmn:IntermediateCatchEvent')) {
-        const first = firstCatch.get(name);
-        if (first) {
-          this.push('deploy', 'W_C7_DEPLOY_LINK', node, undefined, `link:dup:${name}`, `Link catch events ${idOf(first)} and ${id} are both named "${name}"; the engines refuse two link catch events with one name in a process (sub-processes included)`, `\`bpmn set <file> ${id} link=<OtherName>\` (and its throw events too).`, [idOf(first)!]);
-        } else firstCatch.set(name, node);
-        const scope = this.doc.scopeOf(node);
-        catchesIn.set(scope, new Set([...(catchesIn.get(scope) ?? []), name]));
-      } else if (this.kit.is(node, 'bpmn:IntermediateThrowEvent') && (this.incoming.get(node) ?? []).length) {
-        throws.push({ el: node, name });
-      }
+    const links = new LinkEvents(this.doc, this.kit, this.allFlowNodes(proc), (node) => {
+      const name = peek<string>(this.definitionOf(node, 'bpmn:LinkEventDefinition'), 'name');
+      return name === null ? undefined : name;
+    });
+    for (const { first, el, name } of links.duplicateCatches()) {
+      const id = idOf(el)!;
+      this.push('deploy', 'W_C7_DEPLOY_LINK', el, undefined, `link:dup:${name}`, `Link catch events ${idOf(first)} and ${id} are both named "${name}"; the engines refuse two link catch events with one name in a process (sub-processes included)`, `\`bpmn set <file> ${id} link=<OtherName>\` (and its throw events too).`, [idOf(first)!]);
     }
-    for (const { el, name } of throws) {
-      const scope = this.doc.scopeOf(el);
-      if (catchesIn.get(scope)?.has(name)) continue;
+    for (const { el, name, scope } of links.unmatchedThrows()) {
+      if (!(this.incoming.get(el) ?? []).length) continue;
       const id = idOf(el)!;
       const sid = idOf(scope) ?? '<scopeId>';
-      const elsewhere = firstCatch.get(name);
+      const elsewhere = links.catchNamed(name);
       this.push('deploy', 'W_C7_DEPLOY_LINK', el, undefined, `link:target:${name}`, `Link throw event ${id} jumps to "${name}", but ${elsewhere ? `the catch event of that name (${idOf(elsewhere)}) is in another scope` : 'no link catch event has that name'}; the engines resolve links within one (sub-)process (${sid}) and refuse the file`, `Add the catching side in ${sid}: \`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${sid} --link ${sh(name)}\` and continue from it, or point the throw at an existing catch: \`bpmn set <file> ${id} link=<Name>\`.`, elsewhere ? [idOf(elsewhere)!] : []);
     }
   }

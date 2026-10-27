@@ -11,12 +11,12 @@ export class MoveCommand extends MutationCommand {
   register(program: CommandType): void {
     this.withMutationOptions(
       this.define(program, 'move')
-        .option('--after <id>', 'insert after this node')
-        .option('--before <id>', 'insert before this node')
-        .option('--flow <flowId>', 'insert into this flow')
-        .option('--in <scopeId>', 'move into this process / sub-process')
-        .option('--on <activityId>', 'boundary events: re-attach to this activity')
-        .option('--lane <laneId>', 'assign to this lane (empty string removes)'),
+        .option('--after <id>')
+        .option('--before <id>')
+        .option('--flow <flowId>')
+        .option('--in <scopeId>')
+        .option('--on <activityId>')
+        .option('--lane <laneId>'),
     ).action((file: string, ids: string[], options: RawOpts) => this.run(file, ids, options));
   }
 

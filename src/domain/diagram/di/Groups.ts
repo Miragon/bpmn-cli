@@ -4,7 +4,7 @@ import { bottom, containsPoint, cx, cy, inside, overlaps, right, union, unionAll
 import { boxOf, idOf, raw, rawList } from '../utils/raw.js';
 import { labelSize } from '../utils/text.js';
 
-export const GROUP_PAD = 20;
+const GROUP_PAD = 20;
 /** bpmn-js puts a group's 20 px label at the top of its box */
 const NAME_ROOM = 20;
 const ROUNDS = 8;

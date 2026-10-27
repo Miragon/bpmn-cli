@@ -8,11 +8,12 @@ import { EditCommandDefinition } from './EditCommandDefinition.js';
 export class AlignShapesDefinition extends EditCommandDefinition<AlignShapes> {
   readonly name = 'align' as const;
   readonly description = 'Diagram only: put shapes on one row or one column (= `bpmn align`).';
+  override readonly diagramOnly = true;
   readonly fields: FieldsOf<AlignShapes> = {
     ids: list('Shapes to align (each moves on its own).', { minItems: 1 }),
     ...SELECTOR_FIELDS,
     axis: str('row: same vertical centre (one horizontal line); column: same horizontal centre (one vertical line).', { required: true, values: ['row', 'column'] }),
-    to: ref('Reference element that stays (default: the first id).'),
+    to: ref('Reference element that stays (default: the first id; with only kind and axis column: the rightmost one).'),
   };
   readonly referenceKeys = ['ids', 'path', 'via', 'branch', 'to'];
 

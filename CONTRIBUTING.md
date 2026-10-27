@@ -22,12 +22,13 @@ build and the tests on Node 22.12).
 
 ```bash
 npm run dev -- <args>   # run the TypeScript sources directly (tsx src/cli.ts)
-npm run typecheck       # tsc, no emit
+npm run typecheck       # tsc, no emit (unused locals and parameters fail)
+npm run knip            # unused files, exports, types and dependencies
 npm test                # the vitest suite
 npm run gate            # everything a change has to pass before it is handed over
 ```
 
-`npm run gate` builds, runs the tests, the isomorphism check of the browser-safe core, the
+`npm run gate` builds, runs knip and the tests, the isomorphism check of the browser-safe core, the
 layout-regression budget and a short fuzz campaign. CI runs `typecheck` and `gate` on every pull
 request and every push to `main`. The test layers, the benchmark and the fuzzer, and how to run
 them on a private corpus without copying it into the repository, are described in
@@ -87,8 +88,12 @@ them on a private corpus without copying it into the repository, are described i
   error classes. Outside the entries (`api.ts`, `index.ts`, `node.ts`, which keep the
   package's public functions and delegate to the classes) there are no free functions. The
   domain terms the classes are named after are in [GLOSSARY.md](GLOSSARY.md).
-- `test/`: the vitest suite. It also pins the documentation: the README quick start and the
-  examples in `docs/` must match what the CLI prints. `test/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
+- `test/`: the vitest suite. Its folders mirror the module folders of `src/`
+  (`test/domain/batch/`, `test/adapters/in/cli/`, ...): a test sits with the module whose
+  interface it exercises. Black-box tests through the entries and the CLI are in `test/e2e/`,
+  shared helpers in `test/helpers/`; `test/repo-hygiene.test.ts` keeps it that way. Name a test
+  after what it tests, never after the work step that added it. The suite also pins the documentation: the README quick start and the
+  examples in `docs/` must match what the CLI prints. `test/helpers/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
   of your shell before every file, so the tests see the CLI's defaults.
 - `tools/`: benchmark, fuzzer, layout regression, isomorphism check, descriptor generator.
   The README demo (`docs/assets/demo.gif`) comes from the `product-shots` skill of the

@@ -84,7 +84,7 @@ function isOrSuffixed(diId: string, base: string): boolean {
 }
 
 /** Recognises cut ids (now or as 0.6 cut) and collision suffixes too. */
-export function diStyleOf(diId: string, elId: string, kind: 'Shape' | 'Edge'): Style | undefined {
+function diStyleOf(diId: string, elId: string, kind: 'Shape' | 'Edge'): Style | undefined {
   return styleOf(diId, elId, kind) ?? (['suffix', 'bpmn', 'short'] as Style[]).find((style) => isOrSuffixed(diId, styledId(style, kind, elId)) || isOrSuffixed(diId, styledId(style, kind, elId, true)));
 }
 
