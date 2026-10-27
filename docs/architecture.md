@@ -47,16 +47,6 @@ container.
 | `adapters/in` knows use cases only by their interface | the entry decides which service is behind it |
 | each service implements one use case and calls no other service | one way in, no hidden orchestration |
 
-## Where each entry comes in
-
-| entry | calls | adapters behind the ports | differs in |
-| --- | --- | --- | --- |
-| `bpmn add ...` (`cli.ts`) | `EditDocumentUseCase` through `AddElementCommand` | files + the project's `.bpmnlintrc` | reads and writes the file |
-| `mutateFile()` (`node.ts`) | `EditDocumentUseCase` directly | files + the project's `.bpmnlintrc` | no flags, no printing |
-| `applyToXml()` (`api.ts`) | `EditDocumentUseCase` directly | memory + no project settings | takes and returns XML, saves nothing, no `.bpmnlintrc` |
-
-From the use case onwards, all three run the same code.
-
 ## The journey of `bpmn add`
 
 ```sh
@@ -65,68 +55,109 @@ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 
 ```mermaid
 flowchart TB
-  user(["bpmn add order.bpmn userTask ..."])
-  s1["<b>1 · Read the flags</b><br/>build plain data:<br/>{ op: 'add', kind: 'userTask', name, after }<br/><code>adapters/in/cli/AddElementCommand.ts</code>"]
-  s2["<b>2 · Call the use case</b><br/>useCases.edit.edit({ source: file, commands })<br/><code>adapters/in/cli/MutationCommand.ts</code>"]
-  s3["<b>3 · Load</b><br/>read the file through LoadDocumentPort,<br/>parse it into a Doc, load the project settings<br/><code>application/service/EditDocumentService.ts</code>"]
-  s4["<b>4 · Run the batch</b><br/>validate, change, lay out, keep the text<br/><code>domain/batch/EditBatchService.ts</code>"]
-  s5["<b>5 · Pick the service for the op</b><br/>'add' → ElementCreationService<br/><code>domain/batch/ModelCommandService.ts</code>"]
-  s6["<b>6 · Change the model</b><br/>create the task, wire the sequence flow<br/><code>domain/editing/ElementCreationService.ts</code>"]
-  s7["<b>7 · Save</b><br/>write the XML through SaveDocumentPort<br/><code>adapters/out/files/FileDocumentStore.ts</code>"]
-  s8["<b>8 · Print</b><br/>created Activity_CheckInvoice … / layout: ok<br/><code>adapters/in/report/MutationText.ts</code>"]
-
-  user --> s1 --> s2 --> s3 --> s4 --> s5 --> s6
-  s6 -- "what changed" --> s4
-  s4 -- "new XML" --> s7 --> s8
+  user(["bpmn add"]) --> s1["① AddElementCommand"] --> s2{{"② EditDocumentUseCase"}} --> s3["③ EditDocumentService"] --> s4["④ EditBatchService"] --> s5["⑤ ModelCommandService"] --> s6["⑥ ElementCreationService"]
+  s3 <-- "read · write" --> s7[("⑦ FileDocumentStore")]
+  s3 -- result --> s8["⑧ MutationText"]
 
   classDef adapter stroke:#2f80ed,stroke-width:2px
   classDef app stroke:#f2994a,stroke-width:2px
   classDef core stroke:#27ae60,stroke-width:3px
-  class s1,s2,s7,s8 adapter
-  class s3 app
+  class s1,s7,s8 adapter
+  class s2,s3 app
   class s4,s5,s6 core
 ```
 
-The colours are the layers from the first picture. `bpmn apply` differs only in step 1: it
-reads a JSON list of the same commands instead of flags. `applyToXml()` starts at step 3,
-gets the XML as a string and skips step 7.
+Eight stops, coloured by layer as in the first picture: <span style="color:#2f80ed">adapters</span>, <span style="color:#f2994a">application</span>, <span style="color:#27ae60">domain</span>. The file system (⑦) is only touched by the
+service, through a port; the domain never sees it.
 
-The CLI learns about `add` at startup: `new Cli(...)` in `cli.ts` creates every command class,
-and each one registers its verb and flags with commander.
+### ① Flags become data
 
-## Inside the domain: one batch
+`adapters/in/cli/AddElementCommand.ts` registered `add` with commander when the CLI started.
+Now it checks the flags and turns them into a plain object, the same shape `bpmn apply` reads
+from JSON:
 
-A call can carry many commands (`bpmn apply`), so the domain always runs a **batch**.
-`EditBatchService.run()` never touches the file system, which lets the browser run the same
-code. Nothing is written unless the whole batch passes.
-
-```mermaid
-flowchart LR
-  in(["Doc + commands"]) --> before["Remember the state before<br/>drawing · findings · text"]
-  before --> each["Run each command<br/>in order"]
-  each --> check["Validate<br/>new errors refuse the write"]
-  check --> draw["Lay out<br/>the drawing"]
-  draw --> text["Keep the text<br/>rewrite only what changed"]
-  text --> out(["New XML + result"])
-
-  classDef core stroke:#27ae60,stroke-width:2px
-  class before,each,check,draw,text core
+```ts
+const op: AddElement = {
+  op: 'add',
+  kind: 'userTask',
+  name: 'Check invoice',
+  after: 'Event_OrderReceived',
+}
+await this.mutate(file, [op], opts)
 ```
 
-A few words you meet in this code:
+From here on nobody knows about flags any more.
 
-- **Model command / diagram command**: `add`, `connect`, `set`, … change what the process
-  *means*. `place`, `align`, `color`, `route`, … change only where things are *drawn*. Diagram
-  commands run on the drawing, after the model commands before them.
-- **Alias**: a name a batch gives to an element it creates (`"as": "check"`), so a later
-  command in the same batch can refer to it before its final id is known.
-- **Doc**: the parsed file, a tree of [bpmn-moddle](https://github.com/bpmn-io/bpmn-moddle)
-  objects plus the original text.
-- **Keep the text**: only the parts of the file that a command changed are rewritten.
-  Formatting, comments and attribute order everywhere else stay as they were.
+### ② Through the port
 
-The domain folders build on each other without a cycle. `document/` (the `Doc`, ids, errors)
-is at the bottom, and `batch/` is at the top, imported by nothing in the domain.
+`mutate()` in `adapters/in/cli/MutationCommand.ts` calls the use case. The CLI only knows the
+interface `EditDocumentUseCase`; which service is behind it, `cli.ts` decided at startup.
+
+```ts
+this.cli.useCases.edit.edit({ source: { file }, commands: [op], ...opts })
+```
+
+### ③ Load, run, save
+
+`application/service/EditDocumentService.ts` is short on purpose: get the document, let the
+domain work, write the result.
+
+```ts
+const doc = await Doc.fromXml(await this.load.read(file), file)   // ⑦ read
+const result = await new EditBatchService(doc, commands, opts).run(target)   // ④
+await this.save.save(target, result.xml, …)   // ⑦ write
+```
+
+`this.load` and `this.save` are ports. In the CLI they are a `FileDocumentStore`, in
+`applyToXml()` an `InMemoryDocumentStore`; the service cannot tell.
+
+### ④ The batch
+
+`domain/batch/EditBatchService.ts` runs all commands of one call on the `Doc` in memory, then
+validates, lays out the drawing and writes only the changed parts back into the original text.
+If anything fails, nothing is written.
+
+### ⑤ The right service for the op
+
+`domain/batch/ModelCommandService.ts` hands each command to the service that knows it:
+
+```ts
+switch (op.op) {
+  case 'add':     return new ElementCreationService(doc, this.edit).add(op)
+  case 'connect': return new ConnectionService(doc, this.edit).connect(op)
+  …
+}
+```
+
+### ⑥ The model changes
+
+`domain/editing/ElementCreationService.ts` creates the user task and the sequence flow from
+`Event_OrderReceived`, and reports what it did as a `ChangeSet` (created, changed, removed).
+
+### ⑦ The file
+
+`adapters/out/files/FileDocumentStore.ts` reads the file at ③ and writes it back atomically at
+the end, through `LoadDocumentPort` and `SaveDocumentPort`.
+
+### ⑧ The answer
+
+Back in the CLI, `adapters/in/report/MutationText.ts` turns the result into what you see:
+
+```text
+created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
+created sequenceFlow Flow_OrderReceivedToCheckInvoice - Event_OrderReceived -> Activity_CheckInvoice
+layout: ok - full (engine-owned diagram: redrawn)
+written: order.bpmn
+```
+
+### Other ways in
+
+- `bpmn apply` differs only at ①: it reads the commands as JSON instead of flags.
+- `mutateFile()` (`node.ts`) starts at ②.
+- `applyToXml()` (`api.ts`) starts at ②, with memory at ⑦ and no project `.bpmnlintrc`, and
+  returns the XML instead of saving it.
+
+From ② onwards, all of them run the same code.
 
 ## One definition per command
 
