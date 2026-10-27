@@ -29,7 +29,7 @@ of kinds, keys and error codes.
 | Help | [`kinds`, `guide`](#kinds-and-guide) | reference tables, cheat sheet for agents |
 
 `-` as the file reads the model from stdin; a mutating command then writes to stdout. Ids, kinds and
-keys are in [Ids, kinds and keys](reference.md).
+keys are in [Syntax and output](reference.md).
 
 ## Options of every write
 
@@ -232,4 +232,4 @@ is its core, `guide <topic>` one part.
 
 - [Ops JSON](ops.md): many changes in one batch.
 - [Layout and formatting](layout.md): how the drawing is kept, and the format commands.
-- [Ids, kinds and keys](reference.md): every kind, trigger and key.
+- [Syntax and output](reference.md): every kind, trigger and key.

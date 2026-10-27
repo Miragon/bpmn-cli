@@ -77,5 +77,5 @@ merged file (`E_IMPORT_LOSSY`): rename one of them while resolving the merge.
 ## Next steps
 
 - [Layout](layout.md): modes, engines and the format commands.
-- [Ids, kinds and keys](reference.md): how ids are made.
+- [Syntax and output](reference.md): how ids are made.
 - [bpmnlint](bpmnlint.md): project rules on every write.

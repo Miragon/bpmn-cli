@@ -114,7 +114,7 @@ Details: [library use](https://miragon.github.io/bpmn-cli/library), [validators]
 The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), is built from [docs/](docs/):
 
 - [Command reference](https://miragon.github.io/bpmn-cli/commands): every command with its options
-- [Reference](https://miragon.github.io/bpmn-cli/reference): ids, kinds, triggers, placement, set keys, output, errors and exit codes
+- [Syntax and output](https://miragon.github.io/bpmn-cli/reference): ids, kinds, triggers, placement, set keys, output, errors and exit codes
 - [Ops JSON](https://miragon.github.io/bpmn-cli/ops): the batch format of `bpmn apply`
 - [Layout and formatting](https://miragon.github.io/bpmn-cli/layout): layout modes and the diagram-only commands
 - [The contract and its limits](https://miragon.github.io/bpmn-cli/contract): what the CLI guarantees, what a write changes, limitations

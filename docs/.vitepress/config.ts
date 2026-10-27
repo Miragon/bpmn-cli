@@ -23,9 +23,8 @@ export default miragonDocs({
       link: "/getting-started",
       activeMatch: "^/(getting-started|claude-code-plugin|walkthrough|contract)",
     },
-    { text: "Commands", link: "/commands", activeMatch: "^/(commands|ops|camunda|layout|bpmnlint)" },
+    { text: "Commands", link: "/commands", activeMatch: "^/(commands|reference|ops|camunda|layout|bpmnlint)" },
     { text: "Library", link: "/library", activeMatch: "^/(library|validators)" },
-    { text: "Reference", link: "/reference", activeMatch: "^/reference" },
   ],
 
   // One sidebar for every page: the CLI is small enough to show it all.
@@ -43,6 +42,7 @@ export default miragonDocs({
       text: "Using the CLI",
       items: [
         { text: "Commands", link: "/commands" },
+        { text: "Syntax and output", link: "/reference" },
         { text: "Ops JSON (bpmn apply)", link: "/ops" },
         { text: "Camunda 7 and Camunda 8", link: "/camunda" },
         { text: "Layout and formatting", link: "/layout" },
@@ -57,9 +57,9 @@ export default miragonDocs({
       ],
     },
     {
-      text: "Reference",
+      text: "Contributing",
       items: [
-        { text: "Ids, kinds and keys", link: "/reference" },
+        { text: "Architecture", link: "/architecture" },
       ],
     },
   ],

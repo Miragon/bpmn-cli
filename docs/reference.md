@@ -1,4 +1,4 @@
-# Ids, kinds and keys
+# Syntax and output
 
 How new ids are made, the element kinds and triggers, where a node goes, the keys `set` takes, and
 what a command prints and exits with.
