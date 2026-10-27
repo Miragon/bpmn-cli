@@ -15,7 +15,10 @@ export class ReferenceChecks {
     private readonly findings: StructureFindings,
   ) {}
 
-  /** Vendor extension ids (e.g. camunda:formField) are scoped by their vendor and not checked. */
+  /**
+   * Vendor extension ids (e.g. camunda:formField) are scoped by their vendor and not checked.
+   * Duplicates are also read from the import warnings, as bpmn-moddle keeps the first in the text and drops the later one.
+   */
   checkDuplicateIds(): void {
     const counts = new Map<string, number>();
     for (const el of walk(this.doc.definitions, { bpmnOnly: true })) {
@@ -29,7 +32,6 @@ export class ReferenceChecks {
         });
       }
     }
-    // bpmn-moddle keeps the first of a duplicate in the text and drops the later one
     const seen = new Set<string>();
     for (const warning of this.doc.importWarnings) {
       const match = /duplicate ID <([^>]*)>/.exec(warning.message);

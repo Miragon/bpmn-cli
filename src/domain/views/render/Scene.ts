@@ -27,6 +27,7 @@ export class Scene {
     this.addEdges();
   }
 
+  /** A frame that only moved or grew gets no halo (its content says what moved). */
   private addShapes(): void {
     const { plane, drawn, halo, items } = this;
     const around = this.framesAround();
@@ -37,7 +38,6 @@ export class Scene {
       const painter = new ShapePainter(shape);
       const label = painter.label();
       const layer = this.layerOf(shape);
-      // a frame that only moved or grew gets no halo (its content says what moved)
       const color = shape.container && halo(shape.id) === HALO_COLORS.moved ? undefined : halo(shape.id);
       if (color) items.push({ box: grow(shape.bounds, 9), layer, svg: painter.halo(color), id: shape.id, extra: true });
       const content = !full ? undefined : shape.container || shape.kind === 'group' ? painter.nameBox() : shape.bounds;
@@ -49,6 +49,7 @@ export class Scene {
     }
   }
 
+  /** An edge with one end outside the crop is drawn as a faded stub. */
   private addEdges(): void {
     const { plane, drawn, halo, items } = this;
     for (const edge of plane.edges.values()) {
@@ -58,7 +59,6 @@ export class Scene {
         const from = !!edge.sourceId && drawn.has(edge.sourceId);
         const to = !!edge.targetId && drawn.has(edge.targetId);
         if (from === to) continue;
-        // faded: it goes on to something the crop leaves out
         const stub = from ? Scene.cut(edge.points, STUB) : Scene.cut([...edge.points].reverse(), STUB).reverse();
         items.push({ box: painter.box(), fit: pointsBox(stub), layer: LAYER.edge, svg: `<g data-faded="${attr(edge.id)}" opacity="${FADED}">${painter.svg()}</g>`, id: edge.id });
         for (const label of [painter.label(), painter.messageLabel()]) if (label) items.push({ ...label, svg: `<g opacity="${FADED}">${label.svg}</g>`, id: edge.id, extra: true });

@@ -1,30 +1,18 @@
 import type { IdConventions } from '../document/ids/IdConventionsReader.js';
 import type { DebugSink } from '../diagram/layout/LayoutDebug.js';
-import type { LayoutWarningInfo, LayoutEngine } from '../diagram/layout/FullLayout.js';
-import type { MetricsDelta } from '../diagram/utils/problems.js';
+import type { DrawingOptions, LayoutStatus } from '../diagram/types.js';
 import type { ChangeSet } from '../document/ChangeSet.js';
 import type { PlatformChoice } from '../document/vendor/PlatformDetection.js';
 import type { ValidationResult } from '../validation/StructuralValidator.js';
 import type { ValidationDelta } from '../validation/FindingBaseline.js';
 import type { Validator } from '../validation/validators.js';
 import type { ModelView } from '../views/model-view.js';
-import type { FormatResult } from './DiagramCommandService.js';
 
 /** How one batch runs: its layout, guards, validators and id conventions. */
-export interface MutationOptions {
-  /**
-   * false skips the layout; true / 'auto' (default) keeps a hand-made drawing and redraws
-   * an engine-owned one
-   */
-  layout?: boolean | LayoutMode;
+export interface MutationOptions extends DrawingOptions {
   /** write despite lossy import / validation errors */
   force?: boolean;
   show?: boolean;
-  /** additional sub-process ids to expand / collapse */
-  expand?: string[];
-  collapse?: string[];
-  /** 'clean' (default) or 'auto' (bpmn-auto-layout) */
-  engine?: LayoutEngine;
   /** platform profile whose new findings are reported: 'auto' (default), 'none' switches it off */
   platform?: PlatformChoice;
   /** receives the layout engines' diagnostic lines during this call */
@@ -40,34 +28,6 @@ export interface MutationOptions {
   keepFlowIds?: boolean;
   /** declared id conventions, followed by generated ids where they declare a prefix */
   conventions?: IdConventions;
-}
-
-export type LayoutMode = 'auto' | 'incremental' | 'full';
-
-export const LAYOUT_MODES: readonly LayoutMode[] = ['auto', 'incremental', 'full'];
-
-export interface LayoutStatus {
-  status: 'ok' | 'skipped';
-  mode?: 'full' | 'incremental';
-  reason?: string;
-  warnings: LayoutWarningInfo[];
-  expanded: string[];
-  /** incremental: elements that got new DI */
-  placed?: string[];
-  /** incremental: pre-existing shapes whose bounds changed */
-  moved?: string[];
-  /** incremental: pre-existing connections that were routed again */
-  rerouted?: string[];
-  /** incremental: pre-existing connections stretched or shortened without being routed again */
-  reshaped?: string[];
-  pruned?: string[];
-  notes?: string[];
-  /** layout problems before / after, and the difference */
-  metrics?: MetricsDelta;
-  /** in batch order */
-  format?: FormatResult[];
-  /** design-iq stickies moved along with their flow node (`<processId>#<n>` without id) */
-  stickies?: Array<{ sticky: string; node: string }>;
 }
 
 export interface MutationResult {

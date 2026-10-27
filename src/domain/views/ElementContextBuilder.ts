@@ -1,11 +1,11 @@
 import type { Doc } from '../document/Doc.js';
-import { isEventSubProcess } from '../document/utils/kinds.js';
+import { isEventSubProcess, kindOrTypeLabel } from '../document/utils/kinds.js';
 import { is, list, peek, shownId, walk, type El } from '../document/utils/moddle.js';
 import type { ContextCatch, ContextEventSubProcess, ContextLink, ContextMessage, ContextRef, ElementContext } from './context.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { DetailMessageFlow } from './model-view.js';
-import { compact, labelOf, nonEmpty, ownNameOf } from './utils/view.js';
+import { compact, nonEmpty, ownNameOf } from './utils/view.js';
 
 const USER_PROPS: Array<[string, string]> = [
   ['bpmn:Message', 'messageRef'],
@@ -28,6 +28,11 @@ export class ElementContextBuilder {
     this.links = new ElementLinks(doc);
   }
 
+  /**
+   * A message flow's ancestors end with its collaboration. Event sub-processes catch the element
+   * unless it is, or lies inside, that event sub-process. A send / receive task's message is the
+   * `message` line (with its id), not a prop.
+   */
   build(): ElementContext {
     const doc = this.doc;
     const el = doc.require(this.id);
@@ -43,7 +48,6 @@ export class ElementContextBuilder {
     if (process && !chain.includes(process) && process !== el) chain.push(process);
     const ancestors = [...chain].reverse().map((scope) => (is(scope, 'bpmn:Process') ? compact<ContextRef>({ id: shownId(scope), kind: 'process', name: ownNameOf(scope) }) : ElementContextBuilder.refOf(scope)));
     const isMessageFlow = is(el, 'bpmn:MessageFlow');
-    // a message flow lives in the collaboration
     const collaboration = isMessageFlow ? (el.$parent as El | undefined) : undefined;
     if (collaboration && is(collaboration, 'bpmn:Collaboration')) ancestors.push(ElementContextBuilder.refOf(collaboration));
     const pool = this.links.poolOf(el);
@@ -74,7 +78,6 @@ export class ElementContextBuilder {
     const eventSubProcesses: ContextEventSubProcess[] = [];
     for (const scope of chain) {
       for (const node of doc.flowNodes(scope)) {
-        // the element itself, or an event sub-process it is inside of, does not catch it
         if (!isEventSubProcess(node) || node === el || chain.includes(node)) continue;
         const start = doc.flowNodes(node).find((child) => is(child, 'bpmn:StartEvent'));
         eventSubProcesses.push(compact<ContextEventSubProcess>({ ...ElementContextBuilder.refOf(node), in: shownId(scope), start: start ? this.catchOf(start) : undefined }));
@@ -85,11 +88,10 @@ export class ElementContextBuilder {
     const parents = laneEl ? ElementContextBuilder.parentLanes(laneEl).map((parentLane) => compact({ id: shownId(parentLane), name: ownNameOf(parentLane) })) : [];
     return compact<ElementContext>({
       id: shownId(el),
-      kind: labelOf(el),
+      kind: kindOrTypeLabel(el),
       name: ownNameOf(el),
       trigger: is(el, 'bpmn:Event') ? facts.trigger() : undefined,
       nonInterrupting: facts.nonInterrupting(),
-      // a send / receive task's message is the `message` line (with its id), not a prop
       props: message ? ElementContextBuilder.withoutKey(facts.props({ zeebe: false }), 'message') : facts.props({ zeebe: false }),
       documentation: facts.documentation(),
       implementation: facts.implementation(),
@@ -156,7 +158,7 @@ export class ElementContextBuilder {
   }
 
   private static refOf(el: El): ContextRef {
-    return compact<ContextRef>({ id: shownId(el), kind: labelOf(el), name: ownNameOf(el) });
+    return compact<ContextRef>({ id: shownId(el), kind: kindOrTypeLabel(el), name: ownNameOf(el) });
   }
 
   private static conditionOf(flow: El): string | undefined {
@@ -190,12 +192,12 @@ export class ElementContextBuilder {
 
   private static parentLanes(lane: El): El[] {
     const out: El[] = [];
-    let parent = lane.$parent as El | undefined; // a laneSet
-    while (parent) {
-      const owner = parent.$parent as El | undefined;
+    let laneSet = lane.$parent as El | undefined;
+    while (laneSet) {
+      const owner = laneSet.$parent as El | undefined;
       if (!owner || !is(owner, 'bpmn:Lane')) break;
       out.unshift(owner);
-      parent = owner.$parent as El | undefined;
+      laneSet = owner.$parent as El | undefined;
     }
     return out;
   }

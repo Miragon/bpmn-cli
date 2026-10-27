@@ -27,6 +27,7 @@ export class Semantics {
     }
   }
 
+  /** Indexes lanes recursively; deeper lanes are visited later, so a node belongs to its deepest lane. */
   private indexLanes(lanes: El[], process: El, parent: El | undefined): void {
     for (const lane of lanes) {
       const id = idOf(lane);
@@ -35,7 +36,7 @@ export class Semantics {
       if (parent) this.laneParent.set(id, idOf(parent)!);
       for (const node of rawList(lane, 'flowNodeRef')) {
         const nid = idOf(node);
-        if (nid) this.laneOf.set(nid, id); // deeper lanes are visited later and win
+        if (nid) this.laneOf.set(nid, id);
       }
       const child = raw<El>(lane, 'childLaneSet');
       if (child) this.indexLanes(rawList(child, 'lanes'), process, lane);

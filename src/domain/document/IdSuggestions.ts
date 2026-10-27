@@ -2,10 +2,14 @@ import { editDistance, typoTolerance } from './utils/fuzzy.js';
 import { transliterate } from './utils/slug.js';
 import { suggestKinds } from './utils/kinds.js';
 import type { Doc } from './Doc.js';
+import type { BatchContext } from './EditContext.js';
 
 /** The ids of a document a mistyped id may have meant. */
 export class IdSuggestions {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly batch?: BatchContext,
+  ) {}
 
   /** Pruefung, Prufung and Prüfung fold to the same key. */
   private static foldUmlauts(text: string): string {
@@ -30,13 +34,15 @@ export class IdSuggestions {
   /**
    * "Did you mean" ids, best first: the batch's rename, another case / umlaut spelling / prefix,
    * containment, a typo, a matching name. Ids with the query's prefix come first (a mistyped
-   * `Flow_...` suggests flows), then ids the running batch created.
+   * `Flow_...` suggests flows), then ids the running batch created. A same-prefix id whose stem
+   * contains the query's (Flow_GatewayPurchaseApprovedToOrderGoods for Flow_PurchaseApprovedToOrderGoods)
+   * counts as close. Kind-alike suggestions are not ids, so without hits it returns nothing.
    */
   for(query: string, max = 5): string[] {
     const lowerQuery = query.toLowerCase();
     const fq = IdSuggestions.foldUmlauts(query);
     const fstem = IdSuggestions.foldUmlauts(IdSuggestions.stemOf(query));
-    const batch = this.doc.edit.batch;
+    const batch = this.batch;
     const recent = new Set(batch?.created ?? []);
     const renamed = batch?.renamed.get(query);
     const prefix = IdSuggestions.prefixOf(query);
@@ -52,7 +58,6 @@ export class IdSuggestions {
       else if (lid === lowerQuery) score = 0;
       else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) score = 1;
       else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) score = 2;
-      // Flow_GatewayPurchaseApprovedToOrderGoods -> Flow_PurchaseApprovedToOrderGoods
       else if (prefix && IdSuggestions.prefixOf(id) === prefix && fstem.length >= 3 && fidStem.length >= 6 && (fidStem.includes(fstem) || fstem.includes(fidStem))) score = 2;
       else {
         const whole = editDistance(fq, fid);
@@ -65,7 +70,6 @@ export class IdSuggestions {
       if (score < Infinity) hits.push({ id, score, dist });
     }
     if (!hits.length) {
-      // last resort: kind-alike suggestions are not ids; return nothing
       void suggestKinds;
     }
     const fresh = (id: string): number => (recent.has(id) ? 0 : 1);

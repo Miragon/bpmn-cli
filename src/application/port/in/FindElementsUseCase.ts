@@ -12,11 +12,16 @@ export interface FindElementsUseCase {
 
 export declare namespace FindElementsUseCase {
 
+  /** The document, the text to look for and an optional kind. */
   interface Command {
     doc: Doc;
     text: string;
     kind?: string;
+
+    /** an unknown or rejected `kind` fails with the same codes as `add` instead of matching nothing */
+    validateKind?: boolean;
   }
 
+  /** The matching elements, in document order. */
   type Result = FindHit[];
 }

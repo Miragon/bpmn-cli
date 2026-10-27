@@ -7,7 +7,6 @@ import type { DShape } from '../di/types.js';
 import { DrawingCheckpoint } from '../di/DrawingCheckpoint.js';
 import type { DrawnDiagram } from '../DrawnDiagram.js';
 import { ShapePlacementService } from './ShapePlacementService.js';
-import { ShapeAlignmentService } from './ShapeAlignmentService.js';
 import { SpaceInsertionService } from './SpaceInsertionService.js';
 
 /**
@@ -21,6 +20,10 @@ export class RoomHint {
     private readonly asFile: boolean,
   ) {}
 
+  /**
+   * Space ops that would make the room; for a row the moved shapes keep their column, so room goes
+   * right of what lies left of them on the row.
+   */
   private candidates(): InsertSpace[] {
     const out: InsertSpace[] = [];
     const cols = (after: string): void => {
@@ -39,7 +42,6 @@ export class RoomHint {
       if (this.op.below) for (const by of ['1row', '2row'] as const) out.push({ op: 'space', below: this.op.below, by });
     }
     if ((this.op.op === 'place' && this.op.rowOf && !this.op.after && !this.op.before && !this.op.columnOf) || (this.op.op === 'align' && this.op.axis === 'row')) {
-      // the moved shapes keep their column: room right of what lies left of them on the row
       const ref = shapeOf(this.op.op === 'place' ? this.op.rowOf : (this.op.to ?? this.op.ids?.[0]));
       const first = shapeOf(this.op.ids?.[0]);
       if (ref && first) {
@@ -71,7 +73,7 @@ export class RoomHint {
         try {
           new SpaceInsertionService(this.diagram, candidate, this.diagram.snapshot(), []).run();
           if (this.op.op === 'place') new ShapePlacementService(this.diagram, this.op, this.diagram.snapshot(), []).run();
-          else new ShapeAlignmentService(this.diagram, this.op, this.diagram.snapshot(), []).run();
+          else this.diagram.alignShapes(this.op, this.diagram.snapshot(), []);
         } catch {
           continue;
         }

@@ -5,7 +5,8 @@ import { ExtensionLister, type ExtensionInfo } from '../document/ExtensionLister
 import { nestedEntries } from '../document/utils/nested-slots.js';
 import { ElementFacts } from './ElementFacts.js';
 import type { FindHit } from './model-view.js';
-import { compact, kindFilter, labelOf, nameOf, truncate } from './utils/view.js';
+import { compact, nameOf, truncate } from './utils/view.js';
+import { kindFilter, kindOrTypeLabel } from '../document/utils/kinds.js';
 
 /**
  * `bpmn find`: case-insensitive substring search over ids, names, annotation texts and vendor
@@ -30,7 +31,7 @@ export class ElementFinder {
         if (!match) continue;
       }
       if (filter && !filter(el)) continue;
-      out.push(compact<FindHit>({ id, kind: labelOf(el), name, scope: is(el, 'bpmn:Process') ? undefined : this.doc.scopeOf(el)?.get<string>('id'), match }));
+      out.push(compact<FindHit>({ id, kind: kindOrTypeLabel(el), name, scope: is(el, 'bpmn:Process') ? undefined : this.doc.scopeOf(el)?.get<string>('id'), match }));
     }
     return out;
   }

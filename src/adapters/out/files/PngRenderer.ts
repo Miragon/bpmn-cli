@@ -68,6 +68,7 @@ export class PngRenderer {
     return { images, scale: drawn.scale, plane: drawn.plane, planes: drawn.planes, notes: drawn.notes, problems: drawn.problems, ...(drawn.nodes ? { nodes: drawn.nodes } : {}) };
   }
 
+  /** A trapped instance cannot free; the rasteriser error is what counts. */
   async rasterize(svg: string, opts: { pixels?: boolean } = {}): Promise<{ png: Uint8Array; width: number; height: number; pixels?: Uint8Array }> {
     let loaded: Engine;
     try {
@@ -90,9 +91,7 @@ export class PngRenderer {
       for (const owner of [image, doc]) {
         try {
           owner?.free();
-        } catch {
-          // a trapped instance cannot free; the error above is what counts
-        }
+        } catch {}
       }
     }
   }

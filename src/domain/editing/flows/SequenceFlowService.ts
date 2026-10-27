@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { FlowRules } from '../../document/FlowRules.js';
 import { modelError } from '../../document/utils/errors.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
@@ -26,7 +27,10 @@ export interface FlowAttrs {
 export class SequenceFlowService {
   private readonly rules: FlowRules;
 
-  constructor(private readonly doc: Doc) {
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {
     this.rules = new FlowRules(doc);
   }
 
@@ -48,7 +52,7 @@ export class SequenceFlowService {
       flow.set('sourceRef', source);
       flow.set('targetRef', target);
     } else {
-      const id = doc.edit.allocator.explicitOr(attrs.id, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target));
+      const id = this.edit.allocator.explicitOr(attrs.id, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target));
       flow = doc.create('bpmn:SequenceFlow', {
         id,
         ...(attrs.name ? { name: attrs.name } : {}),
@@ -62,7 +66,7 @@ export class SequenceFlowService {
     insertAfterInScope(scope, declareAfter ?? lastFlowOf(scope, source) ?? source, flow);
     if (attrs.isDefault) this.setDefault(flow, true);
     doc.invalidate();
-    if (reuse) new FlowIdFollower(doc).follow(flow, oldSource, oldTarget);
+    if (reuse) new FlowIdFollower(doc, this.edit).follow(flow, oldSource, oldTarget);
     return flow;
   }
 
@@ -105,7 +109,7 @@ export class SequenceFlowService {
     addTo(source, 'outgoing', flow);
     addTo(target, 'incoming', flow);
     doc.invalidate();
-    return new FlowIdFollower(doc).follow(flow, oldSource, oldTarget);
+    return new FlowIdFollower(doc, this.edit).follow(flow, oldSource, oldTarget);
   }
 
   /**
@@ -123,7 +127,7 @@ export class SequenceFlowService {
     removeFrom(target, 'incoming', flow);
     flow.set('targetRef', node);
     addTo(node, 'incoming', flow);
-    const renamedFrom = new FlowIdFollower(doc).follow(flow, source, target, flowId);
+    const renamedFrom = new FlowIdFollower(doc, this.edit).follow(flow, source, target, flowId);
     const second = this.create(node, target, reuse ? { reuse } : {}, node);
     doc.invalidate();
     return { first: flow, second, ...(renamedFrom !== undefined ? { renamedFrom } : {}) };

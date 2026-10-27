@@ -112,6 +112,7 @@ export class Stickies {
   /**
    * Run on the final document: each sticky moves by its node's shift, rounded. A sticky whose
    * node did not move or is gone stays, so a write that moves nothing never touches one.
+   * A sticky is a generic (untyped) element, so its x / y are set as plain string properties.
    */
   follow(anchors: readonly ResolvedAnchor[]): Array<{ sticky: string; node: string }> {
     if (!anchors.length) return [];
@@ -133,7 +134,6 @@ export class Stickies {
       const dx = Math.round(nowCenter.x - anchor.centre.x);
       const dy = Math.round(nowCenter.y - anchor.centre.y);
       if (!dx && !dy) continue;
-      // a generic (untyped) element: its attributes are plain string properties
       const attrs = sticky as unknown as Record<string, unknown>;
       if (dx) attrs['x'] = String(Math.round(box.x + dx));
       if (dy) attrs['y'] = String(Math.round(box.y + dy));

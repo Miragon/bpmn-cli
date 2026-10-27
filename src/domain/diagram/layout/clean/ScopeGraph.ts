@@ -7,6 +7,7 @@ export class ScopeGraph {
   readonly layout: ScopeLayout;
   readonly byId = new Map<string, GNode>();
 
+  /** A dangling boundary event, one without a host, is treated as a normal node. */
   constructor(scope: El, nest: (node: GNode) => void) {
     const flowElements = many(scope, 'flowElements');
     const { byId } = this;
@@ -31,7 +32,7 @@ export class ScopeGraph {
         node.host = host;
         host.boundary.push(node);
       } else {
-        nodes.push(node); // dangling boundary event: treat as a normal node
+        nodes.push(node);
       }
       byId.set(node.id, node);
     }
@@ -84,6 +85,7 @@ export class ScopeGraph {
   /**
    * Cuts each cycle at the edge back to its shallowest node, so the loop is drawn from the late
    * node back to the early one. Ties: the deepest source, then the later declared edge.
+   * Depths start from the roots, then from the nodes only reachable through cycles.
    */
   private markBackEdges(): void {
     const { nodes, edges } = this.layout;
@@ -108,7 +110,7 @@ export class ScopeGraph {
         }
       };
       for (const root of roots) bfs(root);
-      for (const node of nodes) bfs(node); // nodes only reachable through cycles
+      for (const node of nodes) bfs(node);
       return depth;
     };
     const reaches = (from: GNode, to: GNode): boolean => {

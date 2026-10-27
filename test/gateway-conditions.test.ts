@@ -7,6 +7,7 @@ import { ElementTypeChangeService } from '../src/domain/editing/ElementTypeChang
 import { ElementCreationService } from '../src/domain/editing/ElementCreationService.js';
 import { ConnectionService } from '../src/domain/editing/ConnectionService.js';
 import { PropertyService } from '../src/domain/editing/PropertyService.js';
+import { EditContext } from '../src/domain/document/EditContext.js';
 
 const forkXml = (gateway: string, conditionOnA = '') =>
   definitionsXml(`
@@ -40,37 +41,37 @@ describe('conditions on flows out of parallel and event-based gateways', () => {
   for (const gateway of ['parallelGateway', 'eventBasedGateway']) {
     it(`set condition= on a flow out of a ${gateway} is refused`, async () => {
       const doc = await docFromXml(forkXml(gateway));
-      expect(errorCodeOf(() => new PropertyService(doc).set({ op: 'set', id: 'FA', values: { condition: '${x}' } }))).toBe('E_INVALID_VALUE');
+      expect(errorCodeOf(() => new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'FA', values: { condition: '${x}' } }))).toBe('E_INVALID_VALUE');
       expect(conditionOf(doc, 'FA')).toBeUndefined();
     });
   }
 
   it('add --after a parallel gateway with --condition is refused', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
-    expect(errorCodeOf(() => new ElementCreationService(doc).add({ op: 'add', kind: 'task', name: 'D', after: 'Gw', condition: '${x}' }))).toBe('E_INVALID_VALUE');
+    expect(errorCodeOf(() => new ElementCreationService(doc, new EditContext(doc)).add({ op: 'add', kind: 'task', name: 'D', after: 'Gw', condition: '${x}' }))).toBe('E_INVALID_VALUE');
   });
 
   it('connect from a parallel gateway with a condition is refused', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
-    expect(errorCodeOf(() => new ConnectionService(doc).connect({ op: 'connect', source: 'Gw', target: 'C', condition: '${x}' }))).toBe('E_INVALID_VALUE');
+    expect(errorCodeOf(() => new ConnectionService(doc, new EditContext(doc)).connect({ op: 'connect', source: 'Gw', target: 'C', condition: '${x}' }))).toBe('E_INVALID_VALUE');
   });
 
   it('removing the condition of such a flow still works', async () => {
     const doc = await docFromXml(forkXml('parallelGateway', CONDITION));
-    new PropertyService(doc).set({ op: 'set', id: 'FA', values: { condition: '' } });
+    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'FA', values: { condition: '' } });
     expect(conditionOf(doc, 'FA')).toBeUndefined();
   });
 
   it('retype exclusive -> event-based drops the conditions with W_CONDITION_DROPPED', async () => {
     const doc = await docFromXml(forkXml('exclusiveGateway', CONDITION));
-    const cs = new ElementTypeChangeService(doc).retype({ op: 'retype', id: 'Gw', kind: 'eventBasedGateway' });
+    const cs = new ElementTypeChangeService(doc, new EditContext(doc)).retype({ op: 'retype', id: 'Gw', kind: 'eventBasedGateway' });
     expect(cs.warnings.map((warning) => [warning.code, warning.element])).toEqual([['W_CONDITION_DROPPED', 'FA']]);
     expect(conditionOf(doc, 'FA')).toBeUndefined();
   });
 
   it('set source= behind a parallel gateway drops the condition with W_CONDITION_DROPPED', async () => {
     const doc = await docFromXml(forkXml('parallelGateway'));
-    const cs = new PropertyService(doc).set({ op: 'set', id: 'FX', values: { source: 'Gw' } });
+    const cs = new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: 'FX', values: { source: 'Gw' } });
     expect(cs.warnings.map((warning) => [warning.code, warning.element])).toEqual([['W_CONDITION_DROPPED', 'FX']]);
     expect(conditionOf(doc, 'FX')).toBeUndefined();
   });

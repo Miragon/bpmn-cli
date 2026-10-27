@@ -8,12 +8,14 @@ interface FlowEnds {
   outgoing: Map<string, number>;
 }
 
-/** Rules that read the incoming / outgoing lists, and when the node's flows contradict them. */
+/**
+ * Rules that read the incoming / outgoing lists, and when the node's flows contradict them.
+ * The other event-based-gateway finding is about a conditional flow, which the lists never contradict.
+ */
 const LIST_RULES: Record<string, (id: string, ends: FlowEnds) => boolean> = {
   'no-implicit-end': (id, ends) => ends.outgoing.has(id),
   'no-implicit-start': (id, ends) => ends.incoming.has(id),
   'no-disconnected': (id, ends) => ends.outgoing.has(id) || ends.incoming.has(id),
-  // its other finding is about a conditional flow, which the lists never contradict
   'event-based-gateway': (id, ends) => (ends.outgoing.get(id) ?? 0) >= 2,
 };
 
@@ -44,10 +46,14 @@ export class LintRun {
     private readonly out: ValidatorFinding[],
   ) {}
 
+  /**
+   * Runs the rules on the root element. An async check that never settles does not hold the run,
+   * which waits one event loop turn for it; outside the check phase a finding about lists the file
+   * does not keep is left out, as it is no news to a write.
+   */
   async lint(rules: Record<string, unknown>, rootElement: unknown): Promise<void> {
     const linter = new this.engine.Linter({ config: { rules }, resolver: this.guardedResolver(), transformRule: (rule, info) => this.guardRule(rule, info) });
     const results = await linter.lint(rootElement);
-    // an async check that never settles must not hold the run: wait one event loop turn
     if (this.pending.length) await Promise.race([Promise.all(this.pending), new Promise<void>((done) => (typeof setTimeout === 'function' ? setTimeout(done, 0) : done()))]);
     for (const [rule, reports] of Object.entries(results)) {
       if (this.failures.has(rule)) continue;
@@ -64,7 +70,6 @@ export class LintRun {
           this.ends ??= this.flowEnds(rootElement as ModdleNode);
           if (list(id, this.ends)) {
             hint = `The element has sequence flows the file does not list under incoming / outgoing, which ${rule} reads (bpmnlint in CI reports it too); bpmn-cli writes those lists only where the file keeps them.`;
-            // a finding about lists the file does not keep is not news to a write
             if (this.ctx.phase !== 'check') leftOut = LISTS_LEFT_OUT;
           }
         }

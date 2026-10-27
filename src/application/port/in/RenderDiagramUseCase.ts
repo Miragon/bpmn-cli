@@ -11,9 +11,11 @@ export interface RenderDiagramUseCase {
 
 export declare namespace RenderDiagramUseCase {
 
+  /** The document to draw and the image request for it. */
   interface Command extends Omit<ImageRequest, 'xml'> {
     source: { file: string } | { bytes: Uint8Array; name: string } | { xml: string };
   }
 
+  /** The image that was drawn and where it went. */
   type Result = Shot;
 }

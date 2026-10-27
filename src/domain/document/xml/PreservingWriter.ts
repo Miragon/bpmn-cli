@@ -44,6 +44,7 @@ export class PreservingWriter {
     return text.slice(0, original.root.start) + this.element(next.root, this.indentOf(original.root.start) ?? '') + text.slice(original.root.end);
   }
 
+  /** Mixed content is not merged: such an element is written as bpmn-moddle's text. */
   private element(nextEl: XElement, indent: string): string {
     const n0 = this.toBase.get(nextEl);
     const origEl = n0 && this.toOriginal.get(n0);
@@ -57,7 +58,6 @@ export class PreservingWriter {
     const nData = hasCharacterData(next, nextEl);
     const oData = hasCharacterData(original, origEl);
     if (nData || oData) {
-      // mixed content is not merged: bpmn-moddle's text of the element
       if (nKids.length || oKids.length) return rawOf(next, nextEl);
       const content = next.text.slice(nextEl.tagEnd, nextEl.closeStart);
       if (!content) return this.startTag(origEl, n0, nextEl, name, true);
@@ -207,6 +207,7 @@ export class PreservingWriter {
     return best;
   }
 
+  /** In CRLF files a gap's line break starts at its \r. */
   private gapsOf(el: XElement, kids: XElement[]): Gaps {
     const text = this.original.text;
     const lead = new Map<XElement, string>();
@@ -219,7 +220,6 @@ export class PreservingWriter {
       const to = index < kids.length ? kids[index]!.start : el.closeStart;
       const gap = text.slice(from, to);
       const lf = gap.indexOf('\n');
-      // the line break starts at its \r (CRLF files)
       const br = lf > 0 && gap[lf - 1] === '\r' ? lf - 1 : lf;
       if (br >= 0) inline = false;
       const before = br >= 0 ? gap.slice(0, br) : '';

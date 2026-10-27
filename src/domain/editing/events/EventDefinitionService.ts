@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { modelError } from '../../document/utils/errors.js';
 import { type Warning } from '../../document/CliError.js';
 import { isEventSubProcess, kindOf, TRIGGER_TYPES, type Trigger } from '../../document/utils/kinds.js';
@@ -34,12 +35,16 @@ export class EventDefinitionService {
 
   constructor(
     private readonly doc: Doc,
+    private readonly edit: EditContext,
     private readonly event: El,
   ) {
-    this.roots = new RootElementService(doc);
+    this.roots = new RootElementService(doc, edit);
   }
 
-  /** Returns the warnings about vendor content a swap dropped. */
+  /**
+   * Sets the trigger of the event, keeping its one definition of that trigger and dropping the
+   * others. Returns the warnings about vendor content a swap dropped.
+   */
   apply(trigger: Trigger, opts: TriggerOptions = {}): Warning[] {
     if (!is(this.event, 'bpmn:Event')) {
       throw modelError('E_WRONG_KIND', `${idOf(this.event)} is not an event and cannot have a trigger`, { element: idOf(this.event) });
@@ -60,7 +65,6 @@ export class EventDefinitionService {
     }
     this.applyInterrupting(trigger, opts);
     const defs = this.event.get<El[] | undefined>('eventDefinitions') ?? [];
-    // the one definition of that trigger is kept, the event's other definitions go
     const matching = trigger !== 'none' ? defs.filter((definition) => is(definition, TRIGGER_TYPES[trigger])) : [];
     const same = matching.length === 1 ? matching[0] : undefined;
     if (same && trigger !== 'none') {
@@ -73,7 +77,7 @@ export class EventDefinitionService {
     const warnings = this.dropDefinitions(trigger);
     if (fresh) {
       addTo(this.event, 'eventDefinitions', fresh);
-      new Camunda8Defaults(this.doc).definitionId(this.event, fresh);
+      new Camunda8Defaults(this.doc, this.edit).definitionId(this.event, fresh);
     }
     this.doc.invalidate();
     return warnings;

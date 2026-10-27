@@ -19,10 +19,10 @@ export function stem(id: string): string {
 /**
  * The part of an id that says what the element is; undefined for tool defaults,
  * Camunda Modeler hashes (Activity_0k3x9qa), numbers and machine ids (sid-6F1C..., UUIDs).
+ * A collision suffix belongs to the stem (reviewOrder_2); `Task_12` is a number, not a suffix.
  */
 export function speakingStem(id: string): string | undefined {
   if (TOOL_DEFAULTS.has(id) || GLUED.test(id)) return undefined;
-  // a collision suffix belongs to the stem (reviewOrder_2); `Task_12` is a number, not a suffix
   const suffixed = /^(.+)_(\d+)$/.exec(id);
   if (suffixed && (suffixed[1]!.includes('_') || nameWords(suffixed[1]).length > 1)) {
     const base = speakingStem(suffixed[1]!);

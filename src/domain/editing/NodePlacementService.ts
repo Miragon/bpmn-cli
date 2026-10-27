@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { FlowRules } from '../document/FlowRules.js';
 import { modelError } from '../document/utils/errors.js';
 import { kindLabel } from '../document/utils/kinds.js';
@@ -24,9 +25,10 @@ export class NodePlacementService {
 
   constructor(
     private readonly doc: Doc,
+    private readonly edit: EditContext,
     private readonly placement: PlacementOptions,
   ) {
-    this.flows = new SequenceFlowService(doc);
+    this.flows = new SequenceFlowService(doc, edit);
   }
 
   static modeOf(placement: Placement): PlacementMode {
@@ -48,15 +50,15 @@ export class NodePlacementService {
     switch (this.mode) {
       case 'after':
       case 'between':
-        return doc.scopeOf(doc.require(placement.after!, 'bpmn:FlowNode')) ?? doc.defaultScope();
+        return doc.scopeOf(this.edit.require(placement.after!, 'bpmn:FlowNode')) ?? doc.defaultScope();
       case 'before':
-        return doc.scopeOf(doc.require(placement.before!, 'bpmn:FlowNode')) ?? doc.defaultScope();
+        return doc.scopeOf(this.edit.require(placement.before!, 'bpmn:FlowNode')) ?? doc.defaultScope();
       case 'flow':
-        return doc.scopeOf(doc.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow')) ?? doc.defaultScope();
+        return doc.scopeOf(this.edit.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow')) ?? doc.defaultScope();
       case 'on':
-        return doc.scopeOf(doc.require(placement.on!, 'bpmn:Activity', 'activity')) ?? doc.defaultScope();
+        return doc.scopeOf(this.edit.require(placement.on!, 'bpmn:Activity', 'activity')) ?? doc.defaultScope();
       case 'in':
-        return doc.requireScope(placement.in);
+        return this.edit.requireScope(placement.in);
       default:
         return doc.defaultScope();
     }
@@ -66,6 +68,7 @@ export class NodePlacementService {
    * The node must not be connected yet; returns the flow into it. `after X` appends when X is
    * a gateway or has no outgoing flow, splices into its one flow, else E_HAS_SUCCESSOR;
    * `before` mirrors it. `reuse`: a moved node's old out-flow, put back instead of a new one.
+   * On a prepend the flow options go to the one flow it creates (node -> anchor).
    */
   place(node: El, cs: ChangeSet, reuse?: (source: El) => El | undefined): El | undefined {
     const { doc, placement } = this;
@@ -79,7 +82,7 @@ export class NodePlacementService {
     };
 
     if (mode === 'on') {
-      const host = doc.require(placement.on!, 'bpmn:Activity', 'activity');
+      const host = this.edit.require(placement.on!, 'bpmn:Activity', 'activity');
       if (!is(node, 'bpmn:BoundaryEvent')) {
         throw modelError('E_INVALID_PLACEMENT', `--on attaches boundary events only; ${kindLabel(node)} cannot be attached to ${idOf(host)}`, {
           element: idOf(node),
@@ -96,15 +99,15 @@ export class NodePlacementService {
     } else if (mode === 'in' || mode === 'none') {
       insertAfterInScope(scope, undefined, node);
     } else if (mode === 'flow') {
-      const flow = doc.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow');
+      const flow = this.edit.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow');
       entryFlow = this.spliceWithOptions(node, flow, cs, outFlow);
     } else if (mode === 'between') {
-      const afterNode = doc.require(placement.after!, 'bpmn:FlowNode');
-      const beforeNode = doc.require(placement.before!, 'bpmn:FlowNode');
+      const afterNode = this.edit.require(placement.after!, 'bpmn:FlowNode');
+      const beforeNode = this.edit.require(placement.before!, 'bpmn:FlowNode');
       const flow = this.requireFlowBetween(afterNode, beforeNode);
       entryFlow = this.spliceWithOptions(node, flow, cs, outFlow);
     } else if (mode === 'after') {
-      const anchor = doc.require(placement.after!, 'bpmn:FlowNode');
+      const anchor = this.edit.require(placement.after!, 'bpmn:FlowNode');
       const out = doc.outgoing(anchor);
       if (is(anchor, 'bpmn:Gateway') || out.length === 0) {
         insertAfterInScope(scope, lastFlowOf(scope, anchor) ?? anchor, node);
@@ -121,11 +124,10 @@ export class NodePlacementService {
         });
       }
     } else if (mode === 'before') {
-      const anchor = doc.require(placement.before!, 'bpmn:FlowNode');
+      const anchor = this.edit.require(placement.before!, 'bpmn:FlowNode');
       const inc = doc.incoming(anchor);
       const isJoin = is(anchor, 'bpmn:Gateway') && inc.length >= 2;
       if (inc.length === 0 || isJoin) {
-        // prepend: the flow options go to the one flow this creates (node -> anchor)
         insertBeforeInScope(scope, anchor, node);
         const flow = this.flows.create(node, anchor, { ...new FlowOptions(placement).toAttrs(), ...reused(node) }, node);
         cs.create(ChangeSet.flowEntryOf(flow));
@@ -146,7 +148,7 @@ export class NodePlacementService {
     }
 
     if (placement.to) {
-      const target = doc.require(placement.to, 'bpmn:FlowNode');
+      const target = this.edit.require(placement.to, 'bpmn:FlowNode');
       const flow = this.flows.create(node, target, {}, undefined);
       cs.create(ChangeSet.flowEntryOf(flow));
       if (!is(target, 'bpmn:Gateway') && doc.incoming(target).length > 1) {
@@ -227,7 +229,7 @@ export class NodePlacementService {
     cs.create(ChangeSet.flowEntryOf(second));
     cs.change(ChangeSet.flowEntryOf(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
     cs.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
-    new FlowOptions(this.placement).apply(this.doc, flow, cs);
+    new FlowOptions(this.placement).apply(this.doc, this.edit, flow, cs);
     return flow;
   }
 }

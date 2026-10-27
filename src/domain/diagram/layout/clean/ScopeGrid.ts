@@ -53,16 +53,20 @@ export class ScopeGrid {
     });
   }
 
-  /** Returns the columns without the shifts: RowAssigner chooses the chains by them. */
+  /**
+   * Returns the columns without the shifts: RowAssigner chooses the chains by them.
+   * The unshifted columns are stable once the loops are marked, so they are computed once per
+   * scope. A compensation handler takes its host's column. A node in an unexpected cycle counts
+   * as column 0 while its own column is computed.
+   */
   private assignLayers(shifts: ReadonlyMap<GNode, number>): ReadonlyMap<GNode, number> {
     const { nodes } = this.layout;
-    // stable once the loops are marked, so computed once per scope
     const layers = (moves: ReadonlyMap<GNode, number>): Map<GNode, number> => {
       const memo = new Map<GNode, number>();
       const layerOf = (node: GNode): number => {
         const known = memo.get(node);
         if (known !== undefined) return known;
-        memo.set(node, 0); // guard against unexpected cycles
+        memo.set(node, 0);
         let layer = 0;
         for (const edge of node.in) {
           if (edge.back) continue;
@@ -80,7 +84,6 @@ export class ScopeGrid {
     if (!natural) naturalLayers.set(this.layout, (natural = layers(new Map())));
     const moved = shifts.size ? layers(shifts) : natural;
     for (const node of nodes) node.layer = moved.get(node)!;
-    // handler under its host
     for (const node of nodes) if (node.compensatedBy?.host) node.layer = node.compensatedBy.host.layer;
     for (const node of nodes) for (const event of node.boundary) event.layer = node.layer;
     return natural;
@@ -129,6 +132,10 @@ export class ScopeGrid {
     return Math.ceil(gap);
   }
 
+  /**
+   * Every node is centred on its row centre so same-row flows are straight; compensation handlers
+   * sit centred under their boundary event.
+   */
   private positionNodes(): void {
     const { layout } = this;
     const { nodes } = layout;
@@ -172,13 +179,11 @@ export class ScopeGrid {
       const cw = colWidth[node.layer]!;
       const rh = rowHeight[node.row]!;
       const bx = colX[node.layer]! + (cw - node.width) / 2;
-      // every node is centred on the row centre so same-row flows are straight
       const by = rowY[node.row]! + rh / 2 - node.height / 2;
       node.box = { x: Math.round(bx), y: Math.round(by), width: node.width, height: node.height };
       ScopeGrid.placeBoundaryEvents(node);
     }
     for (const edge of layout.edges) if (edge.bandRow !== undefined) edge.bandY = rowY[edge.bandRow]! + rowHeight[edge.bandRow]! / 2;
-    // compensation handlers sit centred under their boundary event
     for (const node of nodes) {
       const ev = node.compensatedBy;
       if (ev) {

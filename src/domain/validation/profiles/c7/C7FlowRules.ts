@@ -30,6 +30,7 @@ export class C7FlowRules extends C7Rules {
     this.push('runtime', 'W_C7_EMPTY_CONDITION', flow, undefined, 'emptyCondition', `Sequence flow ${id} has an empty condition (no expression and no ${this.prefix}:resource): it deploys, but the engines fail when they evaluate it`, `Give it one: \`bpmn set <file> ${id} ${sh('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${id} condition=\`.`);
   }
 
+  /** Checks the targets of an event-based gateway; of several definitions the engines act on one, so a link is refused only when it wins. */
   checkEventGateway(gw: El): void {
     const id = idOf(gw)!;
     const names = new Map<string, El>();
@@ -43,7 +44,6 @@ export class C7FlowRules extends C7Rules {
         this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `target:${tid}`, `${leadsTo}; the engines accept only intermediate catch events (message, timer, signal, conditional) there and refuse the file`, `Put a catch event in front of it: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${fid} --message <MessageName>\` (or :timer --timer PT1H).`, [tid, fid]);
         continue;
       }
-      // of several definitions the engines act on one (a link is refused only when it wins)
       const defs = this.actedOn(target);
       const trigger = defs.length === 1 ? triggerName(defs[0]!) : '';
       const kind = this.kit.EVENT_GATEWAY_TRIGGERS.find((knownTrigger) => knownTrigger === trigger) ?? '';

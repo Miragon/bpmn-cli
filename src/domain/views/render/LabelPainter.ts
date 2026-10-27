@@ -14,13 +14,12 @@ export class LabelPainter {
 
   /**
    * Like bpmn-js 18: laid out at max(90, the DI label width), then again at the width of its
-   * widest line, which can break it differently.
+   * widest line (plus a hair of slack, so it fits despite rounding), which can break it differently.
    */
   external(id: string, value: string, cx: number, top: number, labelWidth = EXT_WIDTH): Item {
     const scale = SIZE / EXT_SIZE;
     const first = wrapLines(value, Math.max(EXT_WIDTH, labelWidth) * scale);
     const widest = Math.ceil(Math.max(...first.map((line) => textWidth(line) / scale)) - 1e-9);
-    // (a hair of slack: the widest line fits its own width despite rounding)
     const ls = wrapLines(value, widest * scale + 1e-6);
     const width = Math.max(...ls.map((line) => textWidth(line) / scale), 1);
     return {

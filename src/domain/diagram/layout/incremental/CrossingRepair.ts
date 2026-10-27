@@ -48,6 +48,10 @@ export class CrossingRepair {
     return out;
   }
 
+  /**
+   * Gives elements without DI their old one back, dropping a label the replaced drawing gave it and
+   * this one does not.
+   */
   private giveDi(di: ReadonlyMap<string, El>): void {
     for (const plane of this.run.planes) {
       for (const element of [...plane.shapes.values(), ...plane.edges.values()]) {
@@ -55,7 +59,6 @@ export class CrossingRepair {
         const diagramElement = di.get(`${plane.rootId}|${'points' in element ? 'e' : 's'}|${element.id}`);
         if (!diagramElement) continue;
         element.di = diagramElement;
-        // a label the replaced drawing gave it and this one does not
         if (!element.label && raw(diagramElement, 'label')) diagramElement.set('label', undefined);
       }
     }
@@ -77,6 +80,7 @@ export class CrossingRepair {
     return undefined;
   }
 
+  /** A route that still crosses is skipped without measuring, as the guard would reject it anyway. */
   async repair(rerouted: string[], start: Checkpoint, redraw: () => Promise<string[]>): Promise<string[]> {
     if (!this.newCrossings().length) return rerouted;
     let trials = 0;
@@ -108,7 +112,6 @@ export class CrossingRepair {
           const drawing = this.run.drawing(plane);
           const pts = drawing.route(target, { lines: drawing.routingLines(target.id) });
           if (!pts || pts.length < 2 || samePoints(pts, target.points)) continue;
-          // skips the measurement the guard would reject anyway
           const other = target === freshEdge ? keptEdge : freshEdge;
           if (polylinesCross(pts, other.points) || (target === keptEdge && crossesNewDrawnLine(plane, target, pts))) {
             if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${target.id} routed again (it crossed: ${freshEdge.id} x ${keptEdge.id}): still crossing, not measured`);

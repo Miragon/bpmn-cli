@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError, usageError } from '../document/utils/errors.js';
 import type { El } from '../document/utils/moddle.js';
 import { kindLabel } from '../document/utils/kinds.js';
@@ -59,7 +60,7 @@ export class NestedHosts {
    * Adding a zeebe:loopCharacteristics to an activity without loop creates a parallel
    * multi-instance loop for it, like `set loop.<key>=` does.
    */
-  resolve(doc: Doc, owner: El, op: EditExtensionElements, notes: string[] = []): { host: El; op: EditExtensionElements } {
+  resolve(doc: Doc, edit: EditContext, owner: El, op: EditExtensionElements, notes: string[] = []): { host: El; op: EditExtensionElements } {
     const split = op.type ? this.splitSlot(op.type) : undefined;
     if (split && op.slot && op.slot !== split.slot) {
       throw usageError(`"slot": "${op.slot}" and the type prefix ${split.slot}. disagree`, { element: idOf(owner), hint: 'Give the slot once: as the type prefix (loop.camunda:...) or as "slot".' });
@@ -91,7 +92,7 @@ export class NestedHosts {
       const first: Record<NestedSlot, string> = {
         definition: `give it a trigger first: \`bpmn set <file> ${id} trigger=<message|timer|error|signal|...>\``,
         loop:
-          doc.platform() === 'camunda8'
+          edit.platform() === 'camunda8'
             ? `make it a multi-instance first: \`bpmn ext add <file> ${id} loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>\` (creates a parallel loop; \`bpmn set <file> ${id} loop=sequential\` for one after the other)`
             : `make it a loop first: \`bpmn set <file> ${id} loop=parallel\` (or sequential, or 'loop.camunda:collection=\${items}')`,
         condition: `give it a condition first: \`bpmn set <file> ${id} 'condition=\${...}'\` (conditional events: when=)`,

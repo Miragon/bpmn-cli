@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import type { ChangeSet } from '../../document/ChangeSet.js';
 import type { IdState } from '../../document/ids/IdStyle.js';
 import { modelError } from '../../document/utils/errors.js';
@@ -25,6 +26,7 @@ export class TriggerChange {
 
   constructor(
     private readonly doc: Doc,
+    private readonly edit: EditContext,
     private readonly el: El,
   ) {
     this.before = is(el, 'bpmn:Event') ? new EventTrigger(el).read() : { trigger: 'none', opts: {} };
@@ -54,11 +56,11 @@ export class TriggerChange {
         } else if (strict) merged.nonInterrupting = true;
       }
       if (strict && merged.nonInterrupting) this.assertNonInterruptingAllowed(on, trigger);
-      for (const warning of new EventDefinitionService(this.doc, on).apply(trigger, merged)) cs.warn(warning);
+      for (const warning of new EventDefinitionService(this.doc, this.edit, on).apply(trigger, merged)) cs.warn(warning);
     }
     this.assertMessageFlowsFit(on);
     if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(cs, on, trigger);
-    new IdRenameService(this.doc).recordState(on, this.state, this.label);
+    new IdRenameService(this.doc, this.edit).recordState(on, this.state, this.label);
   }
 
   setNonInterrupting(value: boolean): void {

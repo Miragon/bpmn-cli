@@ -26,6 +26,12 @@ export class JoinColumnTrial extends ArrangementTrial {
     super(layout);
   }
 
+  /**
+   * Joins are tried first, so a node entered from below may then move under a join already in
+   * place; one entered over the top needs no column below. A node moves right until its column is
+   * free (the chain that blocks it may go on), pushing at most MAX_PUSHED others: larger pushes
+   * never drew better, and each costs a routing. A kept trial's taken columns are the next trial's.
+   */
   run(): void {
     const { layout, arrange } = this;
     const shifts = new Map<GNode, number>();
@@ -36,13 +42,11 @@ export class JoinColumnTrial extends ArrangementTrial {
     let taken: Map<GNode, Array<GNode | undefined>> | undefined;
     for (;;) {
       const blocked = (taken ??= this.takenColumns());
-      // joins first: a node entered from below may then move under a join already in place
       const open = layout.nodes.filter((node) => blocked.has(node) && !tried.has(node));
       const candidate = open.find((node) => ChannelRouter.entriesFromBelow(node).length) ?? open[0];
       if (!candidate) break;
       tried.add(candidate);
       const before = routed ?? route();
-      // an entry drawn over the top enters the node's top and needs no column below
       if (before.above.size && !this.takenColumns(before.above).has(candidate)) {
         if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${candidate.id} stays: entered over the top`);
         routed = before;
@@ -67,7 +71,6 @@ export class JoinColumnTrial extends ArrangementTrial {
       /** The columns this trial took (something new or moved is there) whose nodes can move on. */
       const took = (cols: ReadonlyMap<GNode, Array<GNode | undefined>>): GNode[] =>
         [...cols].filter(([node, owners]) => (node === candidate || owners.some((owner) => !blocked.get(node)?.includes(owner) || (!!owner && dx(owner) !== dx(node)))) && step(node) < MAX_JOIN_SHIFT).map(([node]) => node);
-      // right until the column is free (the chain that blocks it may go on)
       let now: Map<GNode, Array<GNode | undefined>>;
       do {
         shifts.set(candidate, (shifts.get(candidate) ?? 0) + 1);
@@ -76,7 +79,6 @@ export class JoinColumnTrial extends ArrangementTrial {
       } while (step(candidate) < MAX_JOIN_SHIFT && now.has(candidate));
       const alone = new Map(shifts);
       const first = took(now);
-      // a kept trial's taken columns are the next trial's
       let last = now;
       let others = '';
       let together: Routes | undefined;
@@ -85,7 +87,6 @@ export class JoinColumnTrial extends ArrangementTrial {
         let next = first;
         for (let round = 0; next.length && round < 3 * MAX_JOIN_SHIFT; round++, next = took((last = this.takenColumns()))) {
           for (const node of next) shifts.set(node, (shifts.get(node) ?? 0) + 1);
-          // larger pushes never drew better, and each costs a routing
           if ([...shifts.keys()].filter((node) => node !== candidate && step(node)).length > MAX_PUSHED) {
             if (round) back();
             else reset(alone);

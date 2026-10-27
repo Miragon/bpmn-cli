@@ -7,26 +7,29 @@ a new concept gets its line here first.
 | --- | --- |
 | **Doc** | One loaded BPMN document: the moddle tree, its id index and the lookups over it (`domain/document/Doc.ts`). |
 | **Edit command** | One change a caller asks for, named after what it does: a model command (`AddElement`, `ConnectElements`, `SetProperties`, `RemoveElements`, `ChangeElementType`, `MoveElements`, `ReorderElements`, `EditExtensionElements`, `SplitIntoBranches`) or a diagram command (`PlaceShapes`, `AlignShapes`, `ColorElements`, `PlaceLabel`, `RerouteFlow`, `InsertSpace`, `TidyShapes`, `CompactDiagram`); the ops JSON of `apply` spells them as ops (`"op": "add"`) (`domain/commands/types.ts`). |
-| **Use case** | The contract of one command line verb or API function: an interface with its `Command` and `Result` in `application/port/in/` (`EditDocumentUseCase`, `CreateDocumentUseCase`, `RelayoutDiagramUseCase`, `ValidateDocumentUseCase`, `ReadDocumentUseCase`, `ShowModelUseCase`, `ShowConventionsUseCase`, `FindElementsUseCase`, `RenderDiagramUseCase`), implemented by the service of the same name in `application/service/` (`EditDocumentService`, ...). |
+| **Use case** | The contract of one command line verb or API function: an interface with its `Command` and `Result` in `application/port/in/` (`EditDocumentUseCase`, `CreateDocumentUseCase`, `RelayoutDiagramUseCase`, `ValidateDocumentUseCase`, `ReadDocumentUseCase`, `ShowModelUseCase`, `ShowConventionsUseCase`, `FindElementsUseCase`, `RenderDiagramUseCase`, `RenderSvgUseCase`, `RunCommandsUseCase`, `AnalyzeLayoutUseCase`), implemented by the service of the same name in `application/service/` (`EditDocumentService`, ...). Every public function of the library that works on a document goes through one, even where the service only forwards to the domain. |
 | **Service** | A class named `...Service`: in the domain, work the commands share or run (`ElementCreationService`, `SequenceFlowService`, ...); in `application/service/`, the implementation of one use case. |
 | **Port** / **adapter** | The way in (`application/port/in/`, the use cases) and out (`application/port/out/`: `LoadDocumentPort`, `SaveDocumentPort`, `LoadProjectSettingsPort`, `WriteImagePort`) / what drives the application (`adapters/in/cli/`) or provides an outbound port (`adapters/out/files/` on disk, `adapters/out/memory/` for the in-memory API); only the entries wire them together. |
 | **Batch** | The commands of one `apply` call (or of one changing command), run on the document in memory in their order: a diagram command runs after the layout of the model commands before it. Guard, commands, validation, layout, validators, result, all or nothing (`domain/batch/EditBatchService.ts`); the use case then saves the result through `SaveDocumentPort`. |
-| **Edit context** | The state of one edit: the call's settings (id conventions, platform, kept flow ids) and what the running batch recorded (`domain/document/EditContext.ts`). |
-| **Model command service** | Hands each model command of a batch to its domain service, step by step, in an edit context (`domain/batch/ModelCommandService.ts`). |
-| **Diagram command service** | Hands each diagram command to its domain service on a document's drawing (`domain/batch/DiagramCommandService.ts`). |
+| **Edit context** | The state of one edit: the call's settings (id conventions, platform, kept flow ids) and what the running batch recorded (`domain/document/EditContext.ts`). The editing services receive it next to the document; `new EditContext(doc)` starts a fresh one. |
+| **Model command service** | Hands each model command of a batch to its domain service in an edit context; a batch runs in segments, the drawing brought up to date between them (`domain/batch/ModelCommandService.ts`). |
+| **Diagram command service** | Hands each diagram command to its domain service on a document's drawing (`domain/diagram/DiagramCommandService.ts`). |
 | **Drawn diagram** | The drawing the diagram commands change: its planes, one drawing per plane, the refusals for what is not drawn (`domain/diagram/DrawnDiagram.ts`). |
-| **Batch layout service** | What a batch does to the drawing: the layout mode, the layouts between its commands, the diagram commands, the stickies, the text it keeps (`domain/batch/BatchLayoutService.ts`). |
+| **Batch drawing** | What a batch does to the drawing, the one way the batch reaches it: the layout mode, the layouts between its commands, the diagram commands, the stickies (`domain/diagram/BatchDrawing.ts`). |
 | **Layout request** | A sub-process an op asked to lay out expanded or collapsed, kept with the document until a layout reads it (`domain/document/LayoutRequests.ts`). |
 | **Relayout diagram** | `bpmn layout` of a document: a full redraw (expanding / collapsing sub-processes) or a tidy (`application/service/RelayoutDiagramService.ts`). |
 | **Validate document** | `bpmn validate` of a document: validation, the validators and a layout dry run (`application/service/ValidateDocumentService.ts`). |
 | **Reorder elements** | An `order` command on a document: the outgoing flows of a node, the lanes of a pool or lane, or the pools of a collaboration (`domain/editing/ElementOrderService.ts`). |
+| **Reorder target** | What an `order` command reorders; lanes and pools are bands the drawing follows (`domain/commands/ReorderTarget.ts`). |
 | **Id suggestions** | The ids of a document a mistyped id may have meant: the batch rename, another spelling, a typo, a matching name (`domain/document/IdSuggestions.ts`). |
 | **Alias** | A `$name` an op gives to what it creates, so later ops of the batch can name it. |
-| **Op aliases** | Where one op defines aliases and where it may name one, and the op with its aliases resolved (`domain/commands/OpAliases.ts`). |
+| **Op aliases** | Where one op defines aliases and where it may name one, read from its edit command definition, and the op with its aliases resolved (`domain/commands/OpAliases.ts`). |
 | **Alias table** | The aliases of a running batch: each bound to its element, so it follows renames and retypes (`domain/commands/AliasTable.ts`). |
-| **Field spec** | Type, description and rules of one key of an op in the ops JSON; one table per op (`domain/commands/utils/op-fields.ts`). |
-| **Command parser** | Checks the ops JSON of `apply` against the field specs and the batch aliases and returns typed ops (`domain/commands/CommandParser.ts`). |
-| **Ops schema** | The JSON Schema of the ops JSON, built from the field specs (`domain/commands/OpsSchemaBuilder.ts`). |
+| **Field spec** | Type, description and rules of one key of an op in the ops JSON; one table per op in its edit command definition, the shared ones (placement, flow and trigger options, split nodes and branches, selectors) in `domain/commands/utils/op-fields.ts`. |
+| **Edit command definition** | Everything the ops JSON knows of one edit command: its name, description, field specs, the keys that hold element ids, its checks across keys and its schema rules; one class per command (`domain/commands/definitions/`, e.g. `SplitIntoBranchesDefinition.ts`), listed by `EditCommandDefinitions`. |
+| **Command field check** | The checks across the keys of one parsed command (placement, flow options, kind and trigger, selectors) the edit command definitions call (`domain/commands/CommandFieldCheck.ts`). |
+| **Command parser** | Checks the ops JSON of `apply` against the field specs and checks of each edit command definition and the batch aliases and returns typed ops (`domain/commands/CommandParser.ts`). |
+| **Ops schema** | The JSON Schema of the ops JSON, built from the field specs and schema rules of the edit command definitions (`domain/commands/OpsSchemaBuilder.ts`). |
 | **Change set** | What one op created, changed and removed, and the warnings it raised (`domain/document/ChangeSet.ts`). |
 | **Pool service** | Creates a participant (pool): wraps the one process, binds one, creates a new or a black-box one (`domain/editing/participants/PoolService.ts`). |
 | **Lane service** | Creates lanes (nested ones inherit the parent's members) and assigns flow nodes to a lane (`domain/editing/participants/LaneService.ts`). |
@@ -51,9 +54,10 @@ a new concept gets its line here first.
 | **Trigger change** | A change of an element's trigger or kind: merged options, a dropped non-interrupting flag, the message-flow check, the id state (`domain/editing/events/TriggerChange.ts`). |
 | **Event definition service** | The event definitions of one event, updated in place or replaced when its trigger changes (`domain/editing/events/EventDefinitionService.ts`). |
 | **Root element service** | The root Message, Error, Signal and Escalation elements events, tasks and message flows reference (`domain/editing/events/RootElementService.ts`). |
-| **Property coercer** | The keys `set` takes and the values it writes: documented keys, settable BPMN attributes, typed values, vendor attributes (`domain/editing/PropertyCoercer.ts`). |
+| **Property coercer** | The keys `set` takes and the values it writes: settable BPMN attributes, typed values, vendor attributes (`domain/editing/PropertyCoercer.ts`). |
+| **Set key catalog** | Every documented `set` key in one definition: its description, where it applies, how `show <id>` reads it back and how `set` writes it (`domain/editing/SetKeyCatalog.ts`). |
 | **Nested slots** | The `definition.` / `loop.` / `condition.` keys of the nested elements without an id of their own (`domain/editing/NestedSlots.ts`). |
-| **Element properties** | The settable view of an element's properties that `show <id>` prints (`domain/editing/ElementProperties.ts`). |
+| **Element properties** | The settable view of an element's properties that `show <id>` prints: the set key catalog's reads around the generic and vendor attributes (`domain/editing/ElementProperties.ts`). |
 | **Id allocator** | The ids one edit gives out (new, explicit, with a collision suffix) and what it recorded about them (`domain/document/IdAllocator.ts`). |
 | **Id rename service** | Renaming an id with every reference, and the ids a retype or a trigger change leaves a stale prefix (`domain/editing/IdRenameService.ts`). |
 | **Plane** | The drawing of one BPMN diagram: its shapes, edges and labels (`domain/diagram/di/types.ts`; read by `domain/diagram/di/DiagramReader.ts`, written by `domain/diagram/di/PlaneWriter.ts`). |
@@ -77,7 +81,7 @@ a new concept gets its line here first.
 | **Layout analysis** | The measurement of a drawing's layout problems, one plane analysis per BPMNPlane (`domain/diagram/di/LayoutAnalysis.ts`, `domain/diagram/di/PlaneAnalysis.ts`; kinds and weights in `domain/diagram/utils/problems.ts`). |
 | **Problem locator** | Finds where a layout problem shows on its plane, for the numbered badges of `render --problems` (`domain/diagram/di/ProblemLocator.ts`). |
 | **Node placer** | Gives new and relocated elements a shape in a kept drawing, next to their neighbours, making room where needed (`domain/diagram/layout/incremental/NodePlacer.ts`). |
-| **Diagram commands** | `place`, `align`, `color`, `label`, `route`, `space`, `tidy` and `compact` run in `ShapePlacementService`, `ShapeAlignmentService`, `ColoringService`, `LabelPlacementService`, `FlowRoutingService`, `SpaceInsertionService`, `OverlapRemovalService` and `DiagramCompactionService` (`domain/diagram/format/`); the lane bands of `order` in the `LaneBandService` (`domain/editing/LaneBandService.ts`). |
+| **Diagram commands** | `place` and `space` run in `ShapePlacementService` and `SpaceInsertionService` (`domain/diagram/format/`), `align`, `color`, `label`, `route`, `tidy` and `compact` in the drawn diagram itself (`alignShapes`, `colorElements`, `placeLabel`, `rerouteFlow`, `removeOverlaps`, `compactDiagram`); the lane bands of `order` in the `LaneBandService` (`domain/diagram/format/LaneBandService.ts`). |
 | **Room service** | Keeps the shapes a format op moved on request where they are and lets the others give way, refusing a move out of its frame (`domain/diagram/format/RoomService.ts`). |
 | **Room hint** | The space-tool run an `E_NO_ROOM` refusal of `place` / `align` names, found by a dry run (`domain/diagram/format/RoomHint.ts`). |
 | **Compaction service** | Closing the empty rows and columns of a drawing and shrinking its frames to their content (`domain/diagram/format/CompactionService.ts`). |
@@ -146,7 +150,7 @@ a new concept gets its line here first.
 | **Element links** | How an element is tied to the rest of its document: pool, message flows, annotations, data, effective lane (`domain/views/ElementLinks.ts`). |
 | **Window** | The neighbourhood `show --around` shows: the flow nodes within `depth` flow steps of an element (`domain/views/AroundWindow.ts`). |
 | **Element context** | Where an element is and what surrounds it, as `show <id> --context` prints it (`domain/views/ElementContextBuilder.ts`). |
-| **Selector** | `--path`, `--kind` or `--branch`: the elements a format op works on (`domain/views/ElementSelector.ts`). |
+| **Selector** | `--path`, `--kind` or `--branch`: the elements a format op works on (`domain/diagram/format/ElementSelector.ts`). |
 | **Column** | The flow nodes of a diagram clustered by centre x, numbered `c0..` left to right (`domain/views/DiagramColumns.ts`). |
 | **Flood** | Three or more warnings of one code (and validator) printed as one line (`adapters/in/report/WarningLines.ts`). |
 | **Mutation report** | What a write reports: its changes, its warnings as a delta, the layout and the validation (`adapters/in/report/MutationReportBuilder.ts`; text `MutationText`, `--summary` `MutationSummaryBuilder` / `SummaryText`). |

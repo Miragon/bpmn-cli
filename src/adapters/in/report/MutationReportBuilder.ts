@@ -17,9 +17,9 @@ export class MutationReportBuilder {
     return [...this.opWarnings(), ...this.result.validation.warnings, ...layoutWarnings(this.result.layout)];
   }
 
+  /** A result built without the pipeline's delta reports every validation warning as added. */
   report(): MutationReport {
     const result = this.result;
-    // a result built without the pipeline's delta reports every validation warning as added
     const delta = result.delta ?? { added: result.validation.warnings, resolved: [], preexisting: 0 };
     const { warnings: _all, ...validation } = result.validation;
     const renamed = this.renamedIds();
@@ -45,7 +45,8 @@ export class MutationReportBuilder {
 
   /**
    * A chain A -> B -> C reads A -> C. A takeover (the id of an element the change removed)
-   * is no rename: the old id is listed as removed, the taken one as changed.
+   * is no rename: the old id is listed as removed, the taken one as changed. Only ids the
+   * file had before count.
    */
   private renamedIds(): Record<string, string> | undefined {
     const result = this.result;
@@ -63,14 +64,13 @@ export class MutationReportBuilder {
       }
       if (!chained) out.set(from, to);
     }
-    // only ids the file had before count
     const created = new Set(result.changes.created.map((change) => change.id));
     for (const [old, now] of out) if (old === now || created.has(now)) out.delete(old);
     return out.size ? Object.fromEntries(out) : undefined;
   }
 
+  /** An event-gateway finding is about one branch: another target is another finding. */
   private static findingKey(warning: Warning): string {
-    // an event-gateway finding is about one branch: another target is another finding
     return `${warning.code}|${warning.element ?? ''}${warning.code === 'W_EVENT_GATEWAY_TARGET' ? `|${warning.related?.[0] ?? ''}` : ''}`;
   }
 }

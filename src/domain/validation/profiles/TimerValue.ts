@@ -15,14 +15,16 @@ interface CronField {
   quartz?: RegExp;
 }
 
+/**
+ * The six cron fields. Quartz day-of-month takes L, W (last day, nearest weekday); day-of-week
+ * counts 0 and 7 as Sunday and takes L, # (last / nth weekday of the month).
+ */
 const CRON_FIELDS: CronField[] = [
   { name: 'second', min: 0, max: 59 },
   { name: 'minute', min: 0, max: 59 },
   { name: 'hour', min: 0, max: 23 },
-  // L, W: last day, nearest weekday
   { name: 'day-of-month', min: 1, max: 31, question: true, quartz: /[LW]/i },
   { name: 'month', min: 1, max: 12, names: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'] },
-  // 0 and 7 are Sunday; L, #: last / nth weekday of the month
   { name: 'day-of-week', min: 0, max: 7, names: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'], question: true, quartz: /[L#]/i },
 ];
 
@@ -92,12 +94,12 @@ export class TimerValue {
     return undefined;
   }
 
+  /** Whether a cron field fits its spec; month and weekday names count from 1 (JAN = 1, MON = 1). */
   private validCronField(field: string, spec: CronField): boolean {
     if (spec.quartz?.test(field)) return /^[0-9A-Za-z#?,\-/]+$/.test(field);
     if (spec.question && field === '?') return true;
     const value = (text: string): number | undefined => {
       const nameIndex = spec.names?.indexOf(text.toUpperCase()) ?? -1;
-      // names: 1-based (JAN = 1, MON = 1)
       const number = nameIndex >= 0 ? nameIndex + 1 : /^\d+$/.test(text) ? Number(text) : undefined;
       return number !== undefined && number >= spec.min && number <= spec.max ? number : undefined;
     };

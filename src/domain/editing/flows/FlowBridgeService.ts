@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { modelError } from '../../document/utils/errors.js';
 import { kindOf, synchronises } from '../../document/utils/kinds.js';
 import { is, type El, idOf } from '../../document/utils/moddle.js';
@@ -28,10 +29,11 @@ export class FlowBridgeService {
 
   constructor(
     private readonly doc: Doc,
+    private readonly edit: EditContext,
     private readonly cs: ChangeSet,
     private readonly command: BridgeCommand = 'remove',
   ) {
-    this.flows = new SequenceFlowService(doc);
+    this.flows = new SequenceFlowService(doc, edit);
   }
 
   /** A plain remove joins a non-synchronising merge and refuses a synchronising one. */
@@ -92,6 +94,7 @@ export class FlowBridgeService {
     return is(node, 'bpmn:Activity');
   }
 
+  /** Detaches the flows of the node; a self-loop, both incoming and outgoing, is removed and reported once. */
   private detach(node: El, bridge: boolean): BridgedFlow | undefined {
     const { doc, cs } = this;
     const incoming = doc.incoming(node);
@@ -101,7 +104,6 @@ export class FlowBridgeService {
       const outFlow = outgoing[0]!;
       if (outFlow.get<El>('targetRef') !== node && inFlow.get<El>('sourceRef') !== node) return this.carry(inFlow, outFlow, idOf(node), 'node');
     }
-    // a self-loop is both incoming and outgoing: remove and report it once
     for (const flow of new Set([...incoming, ...outgoing])) {
       cs.remove(ChangeSet.flowEntryOf(flow));
       this.flows.remove(flow, cs);
@@ -109,6 +111,7 @@ export class FlowBridgeService {
     return undefined;
   }
 
+  /** Carries the in-flow on to the out-flow's target; under the group policy the out-flow's id stays claimed, so a flow the move creates afterwards does not reuse it. */
   private carry(inFlow: El, outFlow: El, via: string, policy: CarryPolicy): BridgedFlow {
     const { doc, cs } = this;
     const predecessor = inFlow.get<El>('sourceRef');
@@ -137,7 +140,6 @@ export class FlowBridgeService {
     took.associations = this.flows.carryAssociations(outFlow, inFlow, cs);
     this.flows.remove(outFlow, cs);
     cs.remove(ChangeSet.flowEntryOf(outFlow));
-    // a flow the move creates afterwards must not reuse the out-flow's id
     if (policy === 'group' && idOf(outFlow) && !doc.has(idOf(outFlow))) doc.ids.claim(idOf(outFlow));
     const renamed = this.flows.redirect(inFlow, { target: successor });
     cs.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
@@ -232,7 +234,7 @@ export class FlowBridgeService {
     const successor = outFlow.get<El>('targetRef');
     if (!is(predecessor, 'bpmn:EventBasedGateway') || successor === node) return;
     if (removing?.has(idOf(successor))) return;
-    const rule = new EventGatewayRule(this.doc);
+    const rule = new EventGatewayRule(this.doc, this.edit);
     const problem = rule.targetProblem(predecessor, successor, [outFlow, inFlow]);
     if (!problem) return;
     const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${idOf(successor)} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${idOf(outFlow)} --timer PT1H\`)`;

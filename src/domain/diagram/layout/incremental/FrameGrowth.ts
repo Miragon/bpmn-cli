@@ -33,16 +33,16 @@ export class FrameGrowth {
    * A renamed expanded sub-process whose title now takes more lines and reaches down to what is
    * drawn under it: the content moves down by the difference, at most by the depth the title
    * gained (space tool in frame mode).
+   * Where no title was drawn the whole title counts as gained. A message flow's label between the
+   * pools is no content, even when the flow leaves the content.
    */
   private growForTitle(plane: Plane, shape: DShape): void {
     const title = Frames.title(shape);
     if (!title) return;
     const old = this.run.oldTitle(shape);
-    // the depth the title gained: its new lines, all of it where none was drawn
     const gained = old ? title.height - old.height : bottom(title) - shape.bounds.y;
     if (gained <= 0) return;
     const { shapes, edges } = PlaneQuery.contentOf(plane, shape.id);
-    // a message flow's label between the pools is no content, even when the flow leaves the content
     const under = (box: Box): boolean => box.y >= shape.bounds.y && box.y < bottom(shape.bounds) && box.x < right(title) + 2 && right(box) > title.x - 2;
     const boxes = [...shapes.flatMap((child) => [child.bounds, ...(child.label ? [child.label] : [])]), ...edges.flatMap((edge) => (edge.label ? [edge.label] : []))].filter(under);
     if (!boxes.length) return;
@@ -57,6 +57,9 @@ export class FrameGrowth {
   /**
    * An activity whose new name does not fit grows (wider up to 200 px, then higher, never smaller;
    * the space tool makes room on its row); an expanded sub-process grows for its title.
+   * What follows on the row keeps the drawing's gap (at most 40 px), else space is made (in frame
+   * mode inside a sub-process). A shape never grows above its frame's interior, as fitInFrame grows
+   * the frame only at the right / bottom.
    */
   growForNames(): void {
     for (const plane of this.run.planes) {
@@ -75,14 +78,12 @@ export class FrameGrowth {
         const own = new Set([shape.id, ...PlaneQuery.boundariesOf(plane, shape.id).map((boundary) => boundary.id)]);
         const dw = size.width - old.width;
         if (dw > 0) {
-          // what follows on the row keeps the drawing's gap (at most 40 px), else space is made
           const top = cy(old) - size.height / 2;
           const onRow = (box: Box): boolean => box.y < top + size.height + 10 && bottom(box) > top - 10;
           const next = [...plane.shapes.values()].filter((other) => !own.has(other.id) && (PlaneQuery.isLeaf(other) || (other.kind === 'subProcess' && other.container && !Frames.within(plane, shape, other))) && other.bounds.x >= right(old) - 0.5 && onRow(other.bounds));
           const lefts = next.flatMap((other) => [other.bounds.x, ...(other.label && onRow(other.label) && right(other.label) > right(old) ? [Math.max(right(old), other.label.x)] : [])]);
           const free = Math.min(Infinity, ...lefts.map((left) => left - right(old)));
           if (free - dw < Math.min(sp.gap, 40)) {
-            // inside a sub-process: frame mode, it never grows over foreign shapes
             const sub = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
             const frame = sub ?? (shape.poolId ? plane.shapes.get(shape.poolId) : undefined);
             const result = this.run.drawing(plane).makeSpace({ axis: 'x', line: right(old) + 0.5, delta: dw, keep: own, anchors: [shape.id], ...(frame ? { within: copyBox(frame.bounds) } : {}), ...(sub ? { frame: sub.id } : {}) });
@@ -90,7 +91,6 @@ export class FrameGrowth {
           }
         }
         shape.bounds = { x: old.x, y: Math.round(cy(old) - size.height / 2), width: size.width, height: size.height };
-        // never above its frame's interior (fitInFrame grows the frame at the right / bottom)
         const frame = Frames.of(plane, shape);
         const inner = frame ? Frames.interior(frame, 15) : undefined;
         if (inner && shape.bounds.y < inner.y) shape.bounds.y = Math.round(inner.y);

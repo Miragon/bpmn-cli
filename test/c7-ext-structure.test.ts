@@ -34,6 +34,7 @@ import { EventGatewayRule } from '../src/domain/editing/events/EventGatewayRule.
 import { ElementRemovalService } from '../src/domain/editing/ElementRemovalService.js';
 import { ConnectionService } from '../src/domain/editing/ConnectionService.js';
 import { ElementMoveService } from '../src/domain/editing/ElementMoveService.js';
+import { EditContext } from '../src/domain/document/EditContext.js';
 
 const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
@@ -50,7 +51,7 @@ function caught(fn: () => unknown): { code?: string; message: string; details: R
 }
 
 function ext(doc: Doc, op: Omit<EditExtensionElements, 'op'>) {
-  return new ExtensionElementService(doc).apply({ op: 'ext', ...op } as EditExtensionElements);
+  return new ExtensionElementService(doc, new EditContext(doc)).apply({ op: 'ext', ...op } as EditExtensionElements);
 }
 
 function add(doc: Doc, id: string, type: string, attrs: Record<string, string> = {}, extra: Partial<EditExtensionElements> = {}) {
@@ -537,7 +538,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    const err = caught(() => new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Event_Paid'] }));
+    const err = caught(() => new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Event_Paid'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Gateway_Wait to End_A/);
     expect(String(err.details['hint'])).toMatch(/--no-bridge/);
@@ -549,13 +550,13 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    new ElementRemovalService(nb).remove({ op: 'remove', ids: ['Event_Paid'], bridge: false });
+    new ElementRemovalService(nb, new EditContext(nb)).remove({ op: 'remove', ids: ['Event_Paid'], bridge: false });
     expect(nb.outgoing(nb.require('Gateway_Wait')).map((flow) => flow.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
     const both = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    new ElementRemovalService(both).remove({ op: 'remove', ids: ['Event_Paid', 'End_A'] });
+    new ElementRemovalService(both, new EditContext(both)).remove({ op: 'remove', ids: ['Event_Paid', 'End_A'] });
     expect(both.outgoing(both.require('Gateway_Wait')).map((flow) => flow.get<El>('targetRef').get('id'))).toEqual(['Event_Timeout']);
   });
 
@@ -571,7 +572,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_B2" sourceRef="Event_FinishedB" targetRef="End_B" />
     <bpmn:endEvent id="End_B" />`,
     );
-    const err = caught(() => new ElementRemovalService(doc).remove({ op: 'remove', ids: ['Event_Received'] }));
+    const err = caught(() => new ElementRemovalService(doc, new EditContext(doc)).remove({ op: 'remove', ids: ['Event_Received'] }));
     expect(err.code).toBe('E_INVALID_BRIDGE');
     expect(err.message).toMatch(/Event_FinishedB .* already waits for the message "Finished"/);
   });
@@ -583,7 +584,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:receiveTask id="Task_Receive" messageRef="Message_Confirmed" />
     <bpmn:sequenceFlow id="F_A3" sourceRef="Task_Receive" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    expect(caught(() => new ElementRemovalService(receive).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/Task_Receive.* is not an intermediate catch event/);
+    expect(caught(() => new ElementRemovalService(receive, new EditContext(receive)).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/Task_Receive.* is not an intermediate catch event/);
 
     const joined = await gatewayDoc(
       `
@@ -593,7 +594,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:endEvent id="End_A" />`,
       `<bpmn:sequenceFlow id="F_X" sourceRef="End_T_Pre" targetRef="Event_Confirmed" /><bpmn:task id="End_T_Pre" />`,
     );
-    expect(caught(() => new ElementRemovalService(joined).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/already has the incoming flow F_X/);
+    expect(caught(() => new ElementRemovalService(joined, new EditContext(joined)).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/already has the incoming flow F_X/);
 
     const signals = await gatewayDoc(
       `
@@ -608,14 +609,14 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_B2" sourceRef="Event_Go2" targetRef="End_B" />
     <bpmn:endEvent id="End_B" />`,
     );
-    expect(caught(() => new ElementRemovalService(signals).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/waits for the signal "Go"/);
+    expect(caught(() => new ElementRemovalService(signals, new EditContext(signals)).remove({ op: 'remove', ids: ['Event_Paid'] })).message).toMatch(/waits for the signal "Go"/);
 
     const ok = await gatewayDoc(`
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="Event_Confirmed" />${catchMsg('Event_Confirmed', 'Message_Confirmed')}
     <bpmn:sequenceFlow id="F_A3" sourceRef="Event_Confirmed" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    const cs = new ElementRemovalService(ok).remove({ op: 'remove', ids: ['Event_Paid'] });
+    const cs = new ElementRemovalService(ok, new EditContext(ok)).remove({ op: 'remove', ids: ['Event_Paid'] });
     expect(cs.notes).toContain('bridged: Gateway_Wait -> Event_Confirmed');
     const result = await mutateDoc(ok, [], { dryRun: true, layout: false });
     expect(result.validation.errors).toEqual([]);
@@ -626,7 +627,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:sequenceFlow id="F_A" sourceRef="Gateway_Wait" targetRef="Event_Paid" />${catchMsg('Event_Paid', 'Message_Paid')}
     <bpmn:sequenceFlow id="F_A2" sourceRef="Event_Paid" targetRef="End_A" />
     <bpmn:endEvent id="End_A" />`);
-    expect(caught(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' })).code).toBe('E_INVALID_BRIDGE');
+    expect(caught(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Event_Paid'], after: 'Event_Timeout' })).code).toBe('E_INVALID_BRIDGE');
   });
 
   it('eventGatewayTargetProblem follows the engines: message/timer/signal/conditional catch events only', async () => {
@@ -640,7 +641,7 @@ describe('remove: no bridge from an event-based gateway to a target the engines 
     <bpmn:userTask id="C_Task" />`,
     );
     const gateway = doc.require('Gateway_Wait');
-    const problem = (id: string) => new EventGatewayRule(doc).targetProblem(gateway, doc.require(id));
+    const problem = (id: string) => new EventGatewayRule(doc, new EditContext(doc)).targetProblem(gateway, doc.require(id));
     expect(problem('C_Cond')).toBeUndefined();
     expect(problem('C_Link')).toMatch(/link catch event/);
     expect(problem('C_None')).toMatch(/plain catch event/);
@@ -678,7 +679,7 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
     const err = caught(() => runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', on: 'Activity_Revoke', timer: 'PT1H' } as EditCommand]));
     expect(err.code).toBe('E_INVALID_HOST');
     expect(err.message).toMatch(/compensation handler/);
-    expect(caught(() => new ElementMoveService(doc).move({ op: 'move', ids: ['Event_Other'], on: 'Activity_Revoke' })).code).toBe('E_INVALID_HOST');
+    expect(caught(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Event_Other'], on: 'Activity_Revoke' })).code).toBe('E_INVALID_HOST');
     expect(doc.require('Event_Other').get<El>('attachedToRef').get('id')).toBe('Activity_Book');
     // a normal activity still takes boundary events
     runOps(doc, [{ op: 'add', kind: 'boundaryEvent:timer', id: 'Event_New', on: 'Activity_Book', timer: 'PT2H' } as EditCommand]);
@@ -687,16 +688,16 @@ describe('boundary events on compensation handlers, duplicate flows (3)', () => 
 
   it('warns W_DUPLICATE_FLOW when connect adds a second flow between the same nodes', async () => {
     const doc = await compDoc();
-    const first = new ConnectionService(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
+    const first = new ConnectionService(doc, new EditContext(doc)).connect({ op: 'connect', source: 'Start', target: 'End' });
     expect(first.warnings.map((warning) => warning.code)).not.toContain('W_DUPLICATE_FLOW');
-    const second = new ConnectionService(doc).connect({ op: 'connect', source: 'Start', target: 'End' });
+    const second = new ConnectionService(doc, new EditContext(doc)).connect({ op: 'connect', source: 'Start', target: 'End' });
     const dup = second.warnings.find((warning) => warning.code === 'W_DUPLICATE_FLOW');
     // the file numbers its flows F1, F2: new ones keep the prefix and name their ends; the second one takes a suffix
     expect(dup?.message).toMatch(/Start -> End is already connected by the sequenceFlow F_StartToEnd\b/);
     expect(second.created.map((created) => created.id)).toEqual(['F_StartToEnd_2']);
     expect(second.warnings.map((warning) => warning.code)).toContain('W_ID_SUFFIXED');
     expect(dup?.hint).toMatch(/--if-absent/);
-    const skipped = new ConnectionService(doc).connect({ op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
+    const skipped = new ConnectionService(doc, new EditContext(doc)).connect({ op: 'connect', source: 'Start', target: 'End', ifAbsent: true });
     expect(skipped.warnings).toEqual([]);
     expect(skipped.created).toEqual([]);
     expect(many(doc.require('Process_1'), 'flowElements').filter((element) => is(element, 'bpmn:SequenceFlow') && element.get<El>('targetRef').get('id') === 'End')).toHaveLength(3);

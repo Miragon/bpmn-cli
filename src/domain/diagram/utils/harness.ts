@@ -181,13 +181,13 @@ function runs(list: Seg[]): Run[] {
 /**
  * The common tail of two flows entering one gateway's top or bottom vertex vertically, back to
  * where they part. bpmn-js draws a join's entries sharing that vertex, so the tail is no merge.
+ * Two flows drawn on top of each other from start to end are no join.
  */
 export function joinTail(first: Edge, second: Edge, target: Shape | undefined): Set<string> {
   const tail = new Set<string>();
   if (!target || !is(target.el, 'bpmn:Gateway')) return tail;
   const targetBounds = target.bounds;
   const near = (here: Point, there: Point): boolean => Math.abs(here.x - there.x) <= 2 && Math.abs(here.y - there.y) <= 2;
-  // 1: enters the bottom vertex, -1: the top one, 0: neither
   const entry = (run: Run | undefined): number => {
     if (!run) return 0;
     const [start, end] = run.seg;
@@ -205,7 +205,6 @@ export function joinTail(first: Edge, second: Edge, target: Shape | undefined): 
     if (collinear(firstRun.seg, secondRun.seg) <= 0) break;
     for (const firstSegmentIndex of firstRun.idx) for (const secondSegmentIndex of secondRun.idx) tail.add(`${firstSegmentIndex},${secondSegmentIndex}`);
     if (!near(firstRun.seg[0], secondRun.seg[0])) break;
-    // two flows drawn on top of each other from start to end are no join
     if (firstIndex === 0 && secondIndex === 0) return new Set();
   }
   return tail;

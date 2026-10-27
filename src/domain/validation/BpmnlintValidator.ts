@@ -64,6 +64,7 @@ export class BpmnlintValidator {
     };
   }
 
+  /** Runs bpmnlint; when it fails, a W_LINT_FAILED warning says no rule ran, which a write counts as left out. */
   async validate(xml: string, ctx: ValidatorContext): Promise<ValidatorFinding[]> {
     const out: ValidatorFinding[] = [...this.notes];
     if (!Object.keys(this.rules).length) return out;
@@ -74,7 +75,6 @@ export class BpmnlintValidator {
       await run.lint(this.rules, rootElement);
       if (warnings?.length) await this.importWarnings(warnings, ctx, out);
     } catch (err) {
-      // a write counts it as left out: its validator line says that no rule ran
       out.push({ severity: 'warning', code: 'W_LINT_FAILED', message: `bpmnlint could not lint the model: ${firstLine(err)}`, key: 'failed|', hint: "No rule ran. Check the .bpmnlintrc's moddleExtensions (a descriptor bpmnlint cannot load fails in CI too); else report the file and the .bpmnlintrc. --no-lint-config skips bpmnlint.", ...(ctx.phase === 'check' ? {} : { leftOut: NOT_LINTED }) });
     }
     return out;

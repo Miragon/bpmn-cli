@@ -5,9 +5,9 @@ import { hasIdWords, isValidId } from './utils/slug.js';
 import { IdRegistry } from './ids/IdRegistry.js';
 import type { IdConventions } from './ids/IdConventionsReader.js';
 import { IdStyle } from './ids/IdStyle.js';
-import { typeRequest, type IdRequest } from './utils/requests.js';
+import { typeRequest } from './utils/requests.js';
 import { speakingStem } from './utils/id-words.js';
-import { EditContext } from './EditContext.js';
+import type { BatchContext } from './EditContext.js';
 import { LayoutRequests } from './LayoutRequests.js';
 import { kindLabel } from './utils/kinds.js';
 import { IdSuggestions } from './IdSuggestions.js';
@@ -18,9 +18,9 @@ import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from './vendor/CamundaDescriptor.
 import { C8_PLATFORM_VERSION } from './vendor/ZeebeDescriptor.js';
 import { PlatformDetection } from './vendor/PlatformDetection.js';
 
+/** `operaton` is Operaton's copy of the camunda namespace (only Operaton reads it). */
 export const KNOWN_NAMESPACES: Record<string, string> = {
   camunda: 'http://camunda.org/schema/1.0/bpmn',
-  // Operaton's copy of the camunda namespace (only Operaton reads it)
   operaton: 'http://operaton.org/schema/1.0/bpmn',
   zeebe: 'http://camunda.org/schema/zeebe/1.0',
   modeler: 'http://camunda.org/schema/modeler/1.0',
@@ -58,8 +58,6 @@ export class Doc {
   private index: Map<string, El> | null = null;
   private style: IdStyle | undefined;
   private declared: IdConventions | undefined;
-  /** ModelCommandService swaps in the batch's edit while ops run; between runs the document's own. */
-  edit: EditContext = new EditContext(this);
   readonly layoutRequests = new LayoutRequests();
   /**
    * Whether a flow whose id names its ends is renamed when an op changes them.
@@ -111,7 +109,10 @@ export class Doc {
     return false;
   }
 
-  /** `file` only names the document in messages: the core never touches the file system. */
+  /**
+   * `file` only names the document in messages: the core never touches the file system.
+   * The mirror lists as read decide what a write keeps; in memory they are completed.
+   */
   static async fromXml(xml: string, file?: string): Promise<Doc> {
     let model: Model;
     try {
@@ -121,12 +122,12 @@ export class Doc {
       throw err;
     }
     const ids = new IdRegistry(indexById(model.definitions).keys());
-    // the mirror lists as read decide what a write keeps; in memory they are complete
     const mirror = takeMirrorSnapshot(model.definitions);
     completeMirrorLists(model.definitions);
     return new Doc(model, ids, file, { text: xml, mirror });
   }
 
+  /** A new file has no own id style to differ from, so given conventions are taken without a `conventions:` line. */
   static create(opts: NewDocOptions = {}, file?: string): Doc {
     Doc.assertTarget(opts.target);
     const moddle = createModdle();
@@ -140,7 +141,6 @@ export class Doc {
       executable: opts.executable ?? true,
     });
     const doc = new Doc({ moddle, definitions, importWarnings: [] }, ids, file);
-    // a new file has no own id style to differ from: no `conventions:` line
     if (opts.conventions) doc.conventions = opts.conventions;
     if (opts.target === 'camunda8') {
       doc.declareNamespace('zeebe');
@@ -158,8 +158,6 @@ export class Doc {
   }
 
   platform(): 'camunda7' | 'camunda8' | undefined {
-    const choice = this.edit.platformChoice;
-    if (choice) return choice === 'c7' ? 'camunda7' : choice === 'c8' ? 'camunda8' : undefined;
     return new PlatformDetection(this.definitions).target();
   }
 
@@ -168,8 +166,8 @@ export class Doc {
    * historyTimeToLive, so a new process gets the Modeler's default (operaton: prefix in
    * Operaton-only files). An existing value is never touched.
    */
-  initProcess(process: El): void {
-    if (this.platform() !== 'camunda7') return;
+  initProcess(process: El, platform = this.platform()): void {
+    if (platform !== 'camunda7') return;
     const camunda = KNOWN_NAMESPACES['camunda']!;
     const operaton = KNOWN_NAMESPACES['operaton']!;
     const uri = !this.prefixFor(camunda) && this.prefixFor(operaton) ? operaton : camunda;
@@ -236,7 +234,7 @@ export class Doc {
   }
 
   /** Throws E_NOT_FOUND with "did you mean" candidates, E_WRONG_KIND when not of `expect`. */
-  require(id: string, expect?: string | string[], what = 'element'): El {
+  require(id: string, expect?: string | string[], what = 'element', batch?: BatchContext): El {
     const el = this.get(id);
     if (!el) {
       const vendor = this.vendorUses(id);
@@ -248,9 +246,8 @@ export class Doc {
           hint: `Vendor extension elements are edited through their BPMN element: \`bpmn ext list <file> ${owners[0]}\`, then \`bpmn ext add|remove <file> ${owners[0]} ...\`.`,
         });
       }
-      const batch = this.edit.batch;
       const renamed = batch?.renamed.get(id);
-      const candidates = this.suggest(id);
+      const candidates = this.suggest(id, 5, batch);
       const alias = batch && Object.keys(batch.aliases()).find((aliasKey) => aliasKey.slice(1).toLowerCase() === id.toLowerCase());
       const recent = (batch?.created ?? []).filter((createdId) => this.has(createdId));
       const because = batch?.retyped?.has(id) ? 'a retype or a trigger change gave it the prefix of its new kind' : 'its id named its old ends';
@@ -290,8 +287,8 @@ export class Doc {
   }
 
   /** "Did you mean" ids, best first (`IdSuggestions`). */
-  suggest(query: string, max = 5): string[] {
-    return new IdSuggestions(this).for(query, max);
+  suggest(query: string, max = 5, batch?: BatchContext): string[] {
+    return new IdSuggestions(this, batch).for(query, max);
   }
 
   /** New ids follow these where they declare a prefix, the file's own style elsewhere. */
@@ -305,10 +302,6 @@ export class Doc {
     this.style = undefined;
   }
 
-  get idStyle(): IdStyle {
-    return this.edit.idStyle;
-  }
-
   /** Learned from the document's ids on first use, the declared conventions over them. */
   get ownIdStyle(): IdStyle {
     return (this.style ??= IdStyle.infer(this.definitions, this.declared));
@@ -318,15 +311,7 @@ export class Doc {
     this.style = undefined;
   }
 
-  allocateId(req: IdRequest): { id: string; base: string } {
-    return this.edit.allocator.allocate(req);
-  }
-
-  newId(prefix: string, name?: string): string {
-    return this.allocateId({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
-  }
-
-  /** An explicit id is the caller's, so it no longer counts as generated. */
+  /** Refuses an invalid or taken id. */
   claimId(id: string): void {
     if (!isValidId(id)) {
       throw modelError('E_INVALID_ID', `"${id}" is not a valid id: must match [A-Za-z_][A-Za-z0-9_.-]*`, { element: id });
@@ -335,7 +320,6 @@ export class Doc {
       throw modelError('E_DUPLICATE_ID', `An element with id "${id}" already exists`, { element: id, hint: 'Choose another --id or omit it.' });
     }
     this.ids.claim(id);
-    this.edit.allocator.forgetGenerated(id);
   }
 
   create(type: string, attrs: Record<string, unknown> = {}): El {
@@ -412,9 +396,9 @@ export class Doc {
   }
 
   /** A participant resolves to its process. */
-  requireScope(id: string | undefined): El {
+  requireScope(id: string | undefined, batch?: BatchContext): El {
     if (!id) return this.defaultScope();
-    const el = this.require(id, ['bpmn:Process', 'bpmn:SubProcess', 'bpmn:Participant'], 'scope');
+    const el = this.require(id, ['bpmn:Process', 'bpmn:SubProcess', 'bpmn:Participant'], 'scope', batch);
     if (is(el, 'bpmn:Participant')) {
       const proc = el.get<El | undefined>('processRef');
       if (!proc) throw modelError('E_BLACK_BOX', `Participant "${id}" has no process (black box)`, { element: id });

@@ -141,6 +141,7 @@ export class Separation {
   /**
    * Resolves each conflict by the smallest allowed push: right, down, or up within the frame.
    * Never left, so a new node never ends up left of its predecessor.
+   * An active boundary event stays itself: only its own box is checked.
    */
   separate(opts: SeparateOptions): SeparateResult {
     const gap = opts.gap ?? 20;
@@ -148,7 +149,6 @@ export class Separation {
     const res: SeparateResult = { moved: new Set(), resized: new Set(), unresolved: [] };
     const units = this.unitsOf();
     const toUnits = (ids: Iterable<string>): Set<string> => new Set([...ids].map((id) => this.unitOf(units, id)).filter((unitId): unitId is string => !!unitId));
-    // an active boundary event stays itself: only its own box is checked
     const active = new Set([...opts.active].filter((id) => this.plane.shapes.has(id)));
     const movable = opts.movable ? toUnits(opts.movable) : toUnits(active);
     for (const id of toUnits(active)) movable.add(id);

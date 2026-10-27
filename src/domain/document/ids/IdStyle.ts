@@ -213,7 +213,10 @@ export class IdStyle {
     return `${head === undefined ? word : this.unsaid(word, head)} ${context}`.trim();
   }
 
-  /** `qualified`: the context ends with the anchor's kind, which a cut leaves in place. */
+  /**
+   * `qualified`: the context ends with the anchor's kind, which a cut leaves in place.
+   * An unnamed element keeps a prefix in a file whose named ids have none.
+   */
   private derived(req: IdRequest, spelled = false, qualified = false, max = MAX_ID): string {
     const named = hasIdWords(req.name);
     const bodyCase = this.caseFor(req);
@@ -230,7 +233,6 @@ export class IdStyle {
       const bare = this.bareBody(req.name);
       if (bare) return req.tailWord ? this.withWord(bare, req.tailWord, max, this.learned.bareBody) : this.cutBody(bare, max, this.learned.bareBody);
     }
-    // an unnamed element keeps a prefix in a file whose named ids have none
     let chosenPrefix = prefix === '' ? this.prefixFor(req, false) : prefix;
     const body = this.bodyOf(named ? req.name : this.unnamedText(req, spelled), bodyCase) || this.bodyOf(kindWord(req.key, req.trigger), bodyCase);
     /**
@@ -333,7 +335,9 @@ export class IdStyle {
   /**
    * W_ID_PREFIX_STALE: a retype or trigger change kept an id whose prefix the declared conventions
    * no longer accept. Suggests the new prefix with the rest of the id where that passed the rule,
-   * else the id `now` wants (never the old kind's words). Ids are never renamed for this.
+   * else the id `now` wants (never the old kind's words). Ids are never renamed for this. An id
+   * that starts with the prefix by accident (userTask_checkOrder under `user`, Task_ completing the
+   * type name) is suggested from the words after the type name.
    */
   stalePrefix(id: string, from: IdState, to: IdState, now?: IdRequest): { was?: string; heads: string[]; suggested: string } | undefined {
     const declared = this.declaredConventions;
@@ -342,7 +346,6 @@ export class IdStyle {
     if (!heads.length || declared.acceptsId(id, to)) return undefined;
     const was = declared.headOf(id, from);
     if (was === undefined && declared.headsOf(from).length) return undefined;
-    // userTask_checkOrder under the prefix `user` starts with it by accident (Task_ completes it)
     const rest = was === undefined ? undefined : id.slice(was.length);
     const own = rest !== undefined && /[A-Za-z0-9]$/.test(was!) ? PREFIXED.exec(rest) : null;
     const accidental = own && `${was}${own[1]}`.toLowerCase() === from.type.slice(from.type.indexOf(':') + 1).toLowerCase() ? own : null;
@@ -387,7 +390,9 @@ export class IdStyle {
   /**
    * A free id (not claimed) and the id it wanted. A taken unnamed gateway or activity first
    * spells its kind, then names its anchor's kind, before a collision suffix; the same request
-   * on the same document always gives the same id.
+   * on the same document always gives the same id. When the base is taken only by its body, the
+   * form that names the anchor is suffixed; when a long head gives way to Flow_ in the cut for the
+   * suffix, the whole id takes that form.
    */
   next(req: IdRequest, ids: IdRegistry): { id: string; base: string } {
     const wanted = this.wanted(req);
@@ -399,7 +404,6 @@ export class IdStyle {
     if (others.length && clash(base)) {
       const pick = others.find((candidate) => !clash(candidate)) ?? others.find((candidate) => !ids.has(candidate));
       if (pick) return { id: pick, base: pick };
-      // the base is taken only by its body: suffix the form that names the anchor
       if (qualified && !ids.has(base)) base = qualified;
     }
     let id = base;
@@ -412,7 +416,6 @@ export class IdStyle {
         return recutBase.base;
       });
       if (!given) return out;
-      // a long head that gives way to Flow_ in the cut for the suffix: the whole id takes that form
       const suffix = `${given.sep}${suffixNumber}`;
       const room = recut(MAX_ID - suffix.length);
       return `${room.sep === given.sep ? room.base : given.base}${suffix}`;

@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { type Warning } from '../../document/CliError.js';
 import { is, type El } from '../../document/utils/moddle.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
@@ -55,10 +56,11 @@ export class MovedFlows {
 
   constructor(
     private readonly doc: Doc,
+    private readonly edit: EditContext,
     private readonly cs: ChangeSet,
     nodes: El[],
   ) {
-    this.before = doc.edit.followFlowEnds ? undefined : MovedFlows.labelsBefore(doc, nodes);
+    this.before = edit.followFlowEnds ? undefined : MovedFlows.labelsBefore(doc, edit, nodes);
   }
 
   /** The flow taken out at `source`, to put back where the placement connects it. */
@@ -151,10 +153,10 @@ export class MovedFlows {
     }
   }
 
-  private static labelsBefore(doc: Doc, nodes: El[]): Map<El, LabelBefore> {
+  private static labelsBefore(doc: Doc, edit: EditContext, nodes: El[]): Map<El, LabelBefore> {
     const out = new Map<El, LabelBefore>();
     for (const movedNode of nodes) {
-      for (const flow of doc.outgoing(movedNode)) if (doc.edit.keepsFlowId(flow)) out.set(flow, { name: flow.get<string | undefined>('name'), condition: flow.get<El | undefined>('conditionExpression'), associations: [] });
+      for (const flow of doc.outgoing(movedNode)) if (edit.keepsFlowId(flow)) out.set(flow, { name: flow.get<string | undefined>('name'), condition: flow.get<El | undefined>('conditionExpression'), associations: [] });
     }
     if (!out.size) return out;
     for (const element of doc.byId().values()) {

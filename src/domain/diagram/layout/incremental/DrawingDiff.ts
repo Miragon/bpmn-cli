@@ -38,6 +38,9 @@ export class DrawingDiff {
    * Prunes removed lanes and pools, and takes nodes that left their place in the flow, scope or
    * plane (and boundary events on another host) off the drawing to be placed again with their DI.
    * Returns the strips removed and relocated nodes leave.
+   * A re-attached boundary event (`move --on`) is placed again on the new host. Scopes are compared
+   * by their ids now, so renaming a process or sub-process (`set id=`) relocates nothing; a strip
+   * lies in the frame the node had before the ops.
    */
   removedAndRelocated(relocated: Set<string>): Strip[] {
     const strips: Strip[] = [];
@@ -70,14 +73,12 @@ export class DrawingDiff {
         if (shape.kind === 'boundary') {
           const hostBefore = this.run.cur(this.snap.hostOf.get(this.run.oldId(shape)));
           if (!shape.di || !this.snap.byDi.has(shape.di) || hostBefore === undefined || hostBefore === shape.hostId || !plane.shapes.has(shape.id)) continue;
-          // re-attached (`move --on`): placed again on the new host, its DI reused
           plane.shapes.delete(shape.id);
           this.run.place.reuse.set(shape.id, { shape, boundaries: [], from: plane });
           this.run.relocated.add(shape.id);
           for (const edge of plane.edges.values()) if (edge.sourceId === shape.id || edge.targetId === shape.id) this.run.reroute.add(edge.id);
           continue;
         }
-        // compared by the ids now: renaming a process or sub-process (`set id=`) relocates nothing
         const scopeNow = idOf(this.run.sem.scopeOf.get(shape.id));
         const scopeBefore = this.run.cur(this.snap.scopeOf.get(this.run.oldId(shape)));
         const home = this.run.sem.homePlane(this.run.planes, shape.id);
@@ -89,7 +90,6 @@ export class DrawingDiff {
         for (const contentShape of content?.shapes ?? []) plane.shapes.delete(contentShape.id);
         this.run.place.reuse.set(shape.id, { shape, boundaries, from: plane, ...(content ? { content } : {}) });
         this.run.relocated.add(shape.id);
-        // the strip is in the frame the node had before the ops (it may have moved into another)
         const was = shape.di ? this.snap.byDi.get(shape.di) : undefined;
         const poolId = was ? this.run.cur(was.poolId) : shape.poolId;
         const parentId = was ? this.run.cur(was.parentId) : shape.parentId;
@@ -105,7 +105,11 @@ export class DrawingDiff {
     return strips;
   }
 
-  /** Closes each empty strip; when something in another row reaches into it, only its own row. */
+  /**
+   * Closes each empty strip; when something in another row reaches into it, only its own row.
+   * Inside an expanded sub-process only its content closes up (it shrinks) and the outside stays;
+   * with nothing to pull back the frame stays as it is.
+   */
   closeStrips(strips: Strip[], ignore: Set<string>): void {
     const sorted = [...strips].sort((leftStrip, rightStrip) => rightStrip.box.x - leftStrip.box.x);
     for (const st of sorted) {
@@ -114,10 +118,8 @@ export class DrawingDiff {
       const from = st.box.x - sp.gap;
       const to = right(st.box) + sp.gap;
       const band = frame?.bounds;
-      // inside an expanded sub-process only its content closes up (it shrinks); the outside stays
       const sub = frame?.kind === 'subProcess' ? frame : undefined;
       const keep = sub ? new Set([...st.plane.shapes.values()].filter((shape) => shape !== sub && shape.hostId !== sub.id && !Frames.within(st.plane, shape, sub)).map((shape) => shape.id)) : undefined;
-      // nothing to pull back: leave the frame as it is
       const beyond = [...st.plane.shapes.values()].some((shape) => PlaneQuery.isLeaf(shape) && shape.bounds.x >= to && (!band || (cy(shape.bounds) >= band.y && cy(shape.bounds) <= band.y + band.height)) && !keep?.has(shape.id));
       if (!beyond) continue;
       const result = this.run.drawing(st.plane).closeStrip({ axis: 'x', from, to, gap: sp.gap, ignore, ...(band ? { within: { ...band } } : {}), ...(keep ? { keep } : {}) }) ?? (sub ? undefined : this.closeRow(st.plane, st.box, frame, from, to, sp.gap, ignore));
@@ -130,13 +132,14 @@ export class DrawingDiff {
    * The strip closes within the removed node's row only, unless a moved shape would come within
    * 10 px of one that stays, cross the border of a group or frame that stays, or stay connected
    * to a shape beyond the strip in the frame or to an artifact (then nothing moves).
+   * The strip on the row ends where the next shape starts (its gap may be below the median), and a
+   * moved expanded sub-process must not come over a shape of another row either.
    */
   private closeRow(plane: Plane, box: Box, frame: DShape | undefined, from: number, to: number, gap: number, ignore: ReadonlySet<string>): SpaceResult | undefined {
     const pad = 10;
     const fb = frame?.bounds;
     const row: Box = { x: fb ? fb.x : -1e7, y: box.y - pad, width: fb ? fb.width : 2e7, height: box.height + 2 * pad };
     const onRow = [...plane.shapes.values()].filter((shape) => PlaneQuery.isLeaf(shape) && shape.bounds.y < row.y + row.height && shape.bounds.y + shape.bounds.height > row.y && (!fb || (shape.bounds.x >= fb.x && shape.bounds.x <= right(fb))));
-    // the strip on this row ends where the next shape starts (its gap may be below the median)
     const end = Math.min(to, ...onRow.filter((shape) => shape.bounds.x >= right(box) - 1).map((shape) => shape.bounds.x));
     if (!onRow.some((shape) => shape.bounds.x >= end - 3)) return undefined;
     const saved = new DrawingCheckpoint(plane);
@@ -146,15 +149,12 @@ export class DrawingDiff {
     const before = (shape: DShape): Box => saved.boundsOf(shape);
     const moved = leaves.filter((leaf) => result.moved.has(leaf.id));
     const clash = moved.some((movedLeaf) => leaves.some((otherLeaf) => !result.moved.has(otherLeaf.id) && otherLeaf.id !== movedLeaf.hostId && otherLeaf.hostId !== movedLeaf.id && overlaps(movedLeaf.bounds, otherLeaf.bounds, 10) && !overlaps(before(movedLeaf), before(otherLeaf), 10)));
-    // a moved expanded sub-process must not come over a shape that stays (one of another row)
     const covers = [...plane.shapes.values()].some(
       (frame) => frame.container && frame.kind === 'subProcess' && result.moved.has(frame.id) && leaves.some((otherLeaf) => !result.moved.has(otherLeaf.id) && otherLeaf.hostId !== frame.id && overlaps(frame.bounds, otherLeaf.bounds, 10) && !overlaps(before(frame), before(otherLeaf), 10)),
     );
-    // inside / across / outside a group or frame that stayed
     const relation = (box: Box, frameBox: Box): number => (inside(box, frameBox) ? 2 : overlaps(box, frameBox) ? 1 : 0);
     const frames = [...plane.shapes.values()].filter((frame) => (frame.kind === 'group' || frame.container) && !result.moved.has(frame.id));
     const crossed = moved.some((movedLeaf) => frames.some((frame) => relation(movedLeaf.bounds, frame.bounds) !== relation(before(movedLeaf), frame.bounds)));
-    // what a full close would have moved too (beyond the strip, in the frame), and artifacts
     const behind = (id: string): boolean => {
       const other = plane.shapes.get(id);
       if (!other) return false;

@@ -4,7 +4,7 @@ import type { PlaceShapes } from '../../../domain/commands/types.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import type { RawOpts } from './CliCommand.js';
 import { FormatCommand } from './FormatCommand.js';
-import { flag } from './utils/flags.js';
+import { flag } from '../report/utils/option-flags.js';
 
 /**
  * Diagram only: moves shapes to the row and/or column of another element (`bpmn place`).

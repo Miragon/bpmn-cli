@@ -143,32 +143,34 @@ export class RowAssigner {
     this.enter(iv);
   }
 
-  /** Shifts only the colliding bands down (transitively); false when a drop line would be cut. */
+  /**
+   * Shifts only the colliding bands down (transitively); false when a drop line would be cut.
+   * A moved band's drop line then also passes row `at`.
+   */
   private tryInsert(at: number, iv: Branch): boolean {
-    const moving = new Map<Branch, number>(); // branch -> new row
+    const newRowByBranch = new Map<Branch, number>();
     const queue: Branch[] = this.inRow(at).filter((other) => this.overlapsRange(other, iv));
-    for (const other of queue) moving.set(other, at + 1);
+    for (const other of queue) newRowByBranch.set(other, at + 1);
     while (queue.length) {
       const moved = queue.shift()!;
-      const newRow = moving.get(moved)!;
+      const newRow = newRowByBranch.get(moved)!;
       for (const other of this.inRow(newRow)) {
-        if (moving.has(other) || !this.overlapsRange(other, moved)) continue;
-        moving.set(other, newRow + 1);
+        if (newRowByBranch.has(other) || !this.overlapsRange(other, moved)) continue;
+        newRowByBranch.set(other, newRow + 1);
         queue.push(other);
       }
     }
-    const cuts = (branch: Branch): boolean => !moving.has(branch) && this.dropPasses(branch, at) && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to;
+    const cuts = (branch: Branch): boolean => !newRowByBranch.has(branch) && this.dropPasses(branch, at) && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to;
     if (iv.to - iv.from < this.branches.length) {
       for (let column = iv.from; column <= iv.to; column++) if (this.byDrop.get(column)?.some(cuts)) return false;
     } else if (this.branches.some(cuts)) return false;
-    // a moved band's drop line now also passes row `at`
-    for (const [branch] of moving) {
+    for (const [branch] of newRowByBranch) {
       if (branch.originRow < at && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to) return false;
     }
     for (let passedRow = iv.originRow + 1; passedRow < at; passedRow++) {
-      if (this.inRow(passedRow).some((other) => !moving.has(other) && other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) return false;
+      if (this.inRow(passedRow).some((other) => !newRowByBranch.has(other) && other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) return false;
     }
-    for (const [branch, newRow] of moving) this.move(branch, newRow);
+    for (const [branch, newRow] of newRowByBranch) this.move(branch, newRow);
     this.commit(iv, at);
     return true;
   }
@@ -208,7 +210,10 @@ export class RowAssigner {
     return best;
   }
 
-  /** Follows unplaced forward flows, farthest reach first, up to the join it runs into. */
+  /**
+   * Follows unplaced forward flows, farthest reach first, up to the join it runs into.
+   * Only a node's own flows continue the chain: boundary handlers are bands below the host.
+   */
   private chain(start: GNode): { nodes: GNode[]; join?: GNode } {
     const { placed, chainNext } = this;
     const out: GNode[] = [];
@@ -216,7 +221,6 @@ export class RowAssigner {
     while (cur && !placed.has(cur)) {
       out.push(cur);
       placed.add(cur);
-      // only the node's own flows continue the chain: boundary handlers are bands below the host
       const candidates: GEdge[] = cur.out.filter((edge) => !edge.back && !placed.has(edge.target));
       let next: GNode | undefined;
       let bestReach = -1;
@@ -238,15 +242,17 @@ export class RowAssigner {
     return { nodes: out, join: cur };
   }
 
+  /**
+   * Regular branches are queued first, so they get the rows right below the chain; an empty branch
+   * (skip) is placed at once as a band of its own, entering the join from below.
+   */
   private enqueueBranches(chainNodes: GNode[]): void {
     const { placed, queue } = this;
-    // regular branches first, so they get the rows right below the chain
     for (const node of chainNodes) {
       for (const edge of node.out) {
         if (edge.back) continue;
         if (!placed.has(edge.target)) queue.push({ origin: node, first: edge.target });
         else if (edge.target !== this.chainNext.get(node) && edge.target.row === node.row && edge.target.layer > node.layer + 1 && node.out.length > 1) {
-          // empty branch / skip: a band of its own, entering the join from below
           const iv: Branch = { owner: node.id, from: node.layer, to: edge.target.layer, row: 0, originRow: node.row, dropColumn: node.layer, nodes: [], edge };
           this.place(iv);
         }

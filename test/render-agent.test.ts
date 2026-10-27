@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../src/domain/document/Doc.js';
 import { type LayoutProblem, diffProblems } from '../src/domain/diagram/utils/problems.js';
 import type { Plane } from '../src/domain/diagram/di/types.js';
-import { ElementSelector } from '../src/domain/views/ElementSelector.js';
+import { ElementSelector } from '../src/domain/diagram/format/ElementSelector.js';
 import { changeHighlight, CliError, HALO_COLORS, MIN_LABEL_SCALE, mutateDoc, parseOps, renderDocSvg, renderSvg, aroundView, mutationReport } from '../src/index.js';
 import { LayoutAnalysis } from '../src/domain/diagram/di/LayoutAnalysis.js';
 import { ProblemLocator } from '../src/domain/diagram/di/ProblemLocator.js';

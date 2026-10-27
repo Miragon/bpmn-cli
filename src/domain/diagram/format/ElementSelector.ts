@@ -1,7 +1,7 @@
-import type { Doc } from '../document/Doc.js';
-import { modelError, usageError } from '../document/utils/errors.js';
-import { is, type El } from '../document/utils/moddle.js';
-import { kindFilter } from './utils/view.js';
+import type { Doc } from '../../document/Doc.js';
+import { modelError, usageError } from '../../document/utils/errors.js';
+import { is, type El } from '../../document/utils/moddle.js';
+import { kindFilter } from '../../document/utils/kinds.js';
 
 export interface Selection {
   ids?: string[];
@@ -120,6 +120,10 @@ export class ElementSelector {
     return out;
   }
 
+  /**
+   * With `shapesOnly` connections and boundary events are left out: shape ops move hosts, and
+   * boundary events follow them.
+   */
   select(sel: Selection, opts: { shapesOnly: boolean; drawn: (id: string) => boolean; centreX: (id: string) => number | undefined }): string[] {
     if (sel.path && sel.path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${sel.path.length}`, { hint: 'Example: --path Event_Start Event_Done (with --via <flowId> to choose a branch).' });
     if (sel.via?.length && !sel.path) throw usageError('--via needs --path', { hint: 'Example: --path Event_Start Event_Done --via Flow_Yes.' });
@@ -128,7 +132,6 @@ export class ElementSelector {
     if (sel.path) found.push(...this.path(sel.path[0]!, sel.path[1]!, sel.via ?? []));
     if (sel.kind) found.push(...this.ofKind(sel.kind));
     const connection = (el: El): boolean => is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow') || is(el, 'bpmn:Association') || is(el, 'bpmn:DataAssociation');
-    // shape ops move hosts: boundary events follow them
     const picked = found
       .filter((el) => !opts.shapesOnly || (!connection(el) && !is(el, 'bpmn:BoundaryEvent')))
       .map((el) => ElementSelector.idOf(el)!)

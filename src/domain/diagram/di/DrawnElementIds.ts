@@ -71,7 +71,10 @@ export class DrawnElementIds {
     return typeRequest(el.$type, { ...named, context });
   }
 
-  /** A collaboration is told apart by its first process, a process by its pool. */
+  /**
+   * A collaboration is told apart by its first process, a process by its pool.
+   * Other elements by their nearest parent with an id that is no lane set.
+   */
   private contextOf(el: El): string {
     if (is(el, 'bpmn:Collaboration')) {
       const participants = el.get<El[] | undefined>('participants') ?? [];
@@ -82,13 +85,15 @@ export class DrawnElementIds {
       const pool = [...walk(this.defs, { bpmnOnly: true })].find((participant) => is(participant, 'bpmn:Participant') && participant.get<El | undefined>('processRef') === el);
       return pool && (this.idOf(pool) || pool.get<string | undefined>('name')) ? new ElementLabels(pool).label() : '';
     }
-    // a lane set or an id-less parent names nothing
     let parent = el.$parent as El | undefined;
     while (parent && (!this.idOf(parent) || is(parent, 'bpmn:LaneSet')) && !is(parent, 'bpmn:Definitions')) parent = parent.$parent as El | undefined;
     return parent && !is(parent, 'bpmn:Definitions') ? new ElementLabels(parent).context('In') : '';
   }
 
-  /** Returns the given ids in document order; extension elements and DI are never touched. */
+  /**
+   * Returns the given ids in document order; extension elements and DI are never touched.
+   * Nodes and containers get theirs first: a connection is named after its ends.
+   */
   give(allocate?: (req: IdRequest) => string): GivenId[] {
     const idless: El[] = [];
     for (const el of walk(this.defs, { bpmnOnly: true })) {
@@ -106,7 +111,6 @@ export class DrawnElementIds {
         return id;
       };
     }
-    // nodes and containers first: a connection is named after its ends
     const ordered = [...idless.filter((el) => !CONNECTIONS.some((type) => is(el, type))), ...idless.filter((el) => CONNECTIONS.some((type) => is(el, type)))];
     const given: GivenId[] = [];
     for (const el of ordered) {

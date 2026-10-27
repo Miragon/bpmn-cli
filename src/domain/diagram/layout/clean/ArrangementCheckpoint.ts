@@ -27,9 +27,12 @@ export class ArrangementCheckpoint {
     this.laneBands = layout.laneBands?.map((band) => ({ ...band }));
   }
 
+  /**
+   * Puts the saved arrangement back; missing properties get undefined, as deleting one slows every
+   * later access to the object.
+   */
   restore(): void {
     const { layout } = this;
-    // deleting a property slows every later access to the object: missing ones get undefined
     for (const saved of this.shapes) {
       Object.assign(saved.node, { layer: saved.layer, row: saved.row, band: saved.band, width: saved.width, box: saved.box, topUsed: saved.topUsed });
       if (saved.node.onTop !== saved.onTop) saved.node.onTop = saved.onTop;

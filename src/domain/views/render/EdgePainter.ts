@@ -23,6 +23,10 @@ export class EdgePainter {
     this.style = new Style(edge.di);
   }
 
+  /**
+   * A default flow gets its slash 10 px from the source, at 45 degrees to the line; a conditional
+   * flow from an activity gets its diamond at the source.
+   */
   svg(): string {
     const edge = this.edge;
     const st = this.style;
@@ -36,14 +40,12 @@ export class EdgePainter {
       if (end) out += this.arrow(end, 'filled');
       const source = raw<El>(edge.el, 'sourceRef');
       if (start && source && raw(source, 'default') === edge.el) {
-        // the default slash, 10 px from the source, at 45 degrees to the line
         const cx = start.tip.x - start.ux * 10;
         const cy = start.tip.y - start.uy * 10;
         const vx = (-start.ux - start.uy) * 4.5;
         const vy = (-start.uy + start.ux) * 4.5;
         out += `<path d="M${formatNumber(cx - vx)} ${formatNumber(cy - vy)}L${formatNumber(cx + vx)} ${formatNumber(cy + vy)}" stroke="${ink}" stroke-width="1.5"/>`;
       } else if (start && source && raw(edge.el, 'conditionExpression') && is(source, 'bpmn:Activity')) {
-        // the conditional diamond at the source
         const ux = -start.ux;
         const uy = -start.uy;
         const origin = start.tip;

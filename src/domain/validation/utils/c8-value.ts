@@ -20,11 +20,13 @@ export function isFeel(value: string | undefined): boolean {
   return value !== undefined && value.trim().startsWith('=');
 }
 
-/** `${a && b}` -> ` a and b` (a starting point for FEEL; the hint asks to check it). */
+/**
+ * `${a && b}` -> ` a and b` (a starting point for FEEL; the hint asks to check it).
+ * Single-quoted JUEL strings become double-quoted FEEL strings.
+ */
 export function feelOf(juel: string): string {
   const match = /^\s*[$#]\{([\s\S]*)\}\s*$/.exec(juel);
   const inner = (match ? match[1]! : juel).trim();
-  // JUEL strings may be single-quoted, FEEL strings are double-quoted
   const quoted = inner.replace(/'((?:[^'\\]|\\.)*)'/g, (_m, text: string) => `"${text.replace(/"/g, '\\"')}"`);
   return ` ${quoted.replace(/&&/g, 'and').replace(/\|\|/g, 'or').replace(/==/g, '=').replace(/!\s*\((?!=)/g, 'not(').replace(/!(?!=)\s*([\w.]+)/g, 'not($1)')}`;
 }

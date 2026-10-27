@@ -37,13 +37,13 @@ export function growToFit(layout: ScopeLayout): void {
   }
 }
 
+/** Shifts the whole scope; a flow anchor is the same object as the link end using it and moves once. */
 export function shiftScope(layout: ScopeLayout, dx: number, dy: number): void {
   for (const node of layout.nodes) shiftNode(node, dx, dy);
   for (const es of layout.eventSubs) {
     es.box.x += dx;
     es.box.y += dy;
   }
-  // an anchor on a flow is the same object as the link end that uses it: move it once
   const movedEnds = new Set<LinkEnd>();
   const moveEnd = (end: LinkEnd | undefined): void => {
     if (!end?.flow || movedEnds.has(end)) return;

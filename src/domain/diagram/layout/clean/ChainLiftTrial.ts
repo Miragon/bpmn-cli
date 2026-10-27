@@ -17,6 +17,10 @@ export class ChainLiftTrial extends ArrangementTrial {
     super(layout);
   }
 
+  /**
+   * Lifts chains into free rows of their lane; a flow along a row occupies the cells it passes,
+   * like a node.
+   */
   run(): void {
     const { layout, arrange } = this;
     const lanes = layout.laneBands;
@@ -34,7 +38,6 @@ export class ChainLiftTrial extends ArrangementTrial {
     };
     let routed: Routes | undefined;
     for (;;) {
-      // a flow along a row occupies the cells it passes, like a node
       const cells = new Set<string>();
       const cell = (lane: number, row: number, layer: number): string => `${lane}/${row}/${layer}`;
       for (const node of layout.nodes) cells.add(cell(lane(node), node.row, node.layer));

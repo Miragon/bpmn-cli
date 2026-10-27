@@ -1,33 +1,12 @@
 import type { EditCommand } from './types.js';
 import type { AliasTable } from './AliasTable.js';
 import { isAlias } from './utils/aliases.js';
-import { NODE_FIELDS, OP_FIELDS } from './utils/op-fields.js';
-
-/** Keys that hold an element id (or a list of them) per op: where an alias may stand. */
-const REF_KEYS: Record<EditCommand['op'], readonly string[]> = {
-  add: ['after', 'before', 'flow', 'in', 'on', 'to', 'lane', 'process', 'members'],
-  connect: ['source', 'target'],
-  set: ['id'],
-  remove: ['ids'],
-  retype: ['id'],
-  move: ['ids', 'after', 'before', 'flow', 'in', 'lane'],
-  order: ['id', 'flows', 'lanes', 'pools'],
-  ext: ['id'],
-  split: ['after'],
-  place: ['ids', 'path', 'via', 'branch', 'rowOf', 'below', 'above', 'columnOf', 'after', 'before'],
-  align: ['ids', 'path', 'via', 'branch', 'to'],
-  color: ['ids', 'path', 'via', 'branch'],
-  label: ['id'],
-  route: ['id'],
-  space: ['after', 'below'],
-  tidy: ['ids', 'path', 'via', 'branch'],
-  compact: ['ids'],
-};
+import { NODE_FIELDS } from './utils/op-fields.js';
+import { EditCommandDefinitions } from './definitions/EditCommandDefinitions.js';
+import type { EditCommandDefinition } from './definitions/EditCommandDefinition.js';
 
 /** `set` keys whose value is an element id. */
 const SET_REF_KEYS: readonly string[] = ['default', 'source', 'target', 'lane'];
-
-const DEF_KEYS = Object.fromEntries(Object.entries(OP_FIELDS).map(([name, fields]) => [name, Object.keys(fields).filter((key) => fields[key]!.alias)])) as Partial<Record<EditCommand['op'], readonly string[]>>;
 
 const NODE_DEF_KEYS = Object.keys(NODE_FIELDS).filter((key) => NODE_FIELDS[key as keyof typeof NODE_FIELDS].alias);
 
@@ -45,16 +24,13 @@ export class OpAliases {
 
   /** The aliases the op defines (a split: also its branch nodes'). */
   defined(): string[] {
-    const op = this.op;
-    const raw = op as unknown as Raw;
-    const out = (DEF_KEYS[op.op] ?? []).map((defKey) => raw[defKey]).filter((definedId): definedId is string => typeof definedId === 'string');
-    if (op.op === 'split') {
-      this.eachObject(op.branches, (branch) =>
-        this.eachObject(branch['nodes'], (node) => {
-          for (const defKey of NODE_DEF_KEYS) if (typeof node[defKey] === 'string') out.push(node[defKey] as string);
-        }),
-      );
-    }
+    const raw = this.op as unknown as Raw;
+    const definition = EditCommandDefinitions.find(this.op.op);
+    const definingKeys = definition ? Object.keys(definition.fields).filter((key) => definition.fields[key]!.alias) : [];
+    const out = definingKeys.map((defKey) => raw[defKey]).filter((definedId): definedId is string => typeof definedId === 'string');
+    this.eachBranchNode(definition, raw, (node) => {
+      for (const defKey of NODE_DEF_KEYS) if (typeof node[defKey] === 'string') out.push(node[defKey] as string);
+    });
     return out;
   }
 
@@ -98,22 +74,26 @@ export class OpAliases {
       out.push({ key, holder, name, get: () => holder[name], put: (slotValue) => (holder[name] = slotValue) });
     };
     const raw = op as unknown as Raw;
-    for (const key of REF_KEYS[op.op] ?? []) slot(raw, key, key);
+    const definition = EditCommandDefinitions.find(op.op);
+    for (const key of definition?.referenceKeys ?? []) slot(raw, key, key);
     const map = (holder: Raw, name: string, path: string): void => {
       const member = holder[name];
       if (member && typeof member === 'object') for (const refKey of SET_REF_KEYS) slot(member as Raw, refKey, `${path}.${refKey}`);
     };
-    if (op.op === 'set') map(raw, 'values', 'values');
-    if (op.op === 'add') map(raw, 'set', 'set');
-    if (op.op === 'split') {
-      this.eachObject(op.branches, (branch, branchIndex) =>
-        this.eachObject(branch['nodes'], (node, nodeIndex) => {
-          slot(node, 'lane', `branches[${branchIndex}].nodes[${nodeIndex}].lane`);
-          map(node, 'set', `branches[${branchIndex}].nodes[${nodeIndex}].set`);
-        }),
-      );
-    }
+    if (definition?.propertyMapKey) map(raw, definition.propertyMapKey, definition.propertyMapKey);
+    this.eachBranchNode(definition, raw, (node, path) => {
+      slot(node, 'lane', `${path}.lane`);
+      map(node, 'set', `${path}.set`);
+    });
     return out;
+  }
+
+  private eachBranchNode(definition: EditCommandDefinition | undefined, raw: Raw, fn: (node: Raw, path: string) => void): void {
+    if (!definition) return;
+    for (const [key, spec] of Object.entries(definition.fields)) {
+      if (spec.type !== 'branches') continue;
+      this.eachObject(raw[key], (branch, branchIndex) => this.eachObject(branch['nodes'], (node, nodeIndex) => fn(node, `${key}[${branchIndex}].nodes[${nodeIndex}]`)));
+    }
   }
 
   /** Typed library ops skip parsing: a malformed split list must reach splitFlow's own check. */

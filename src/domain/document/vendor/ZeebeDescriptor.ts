@@ -105,14 +105,18 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
     return Object.fromEntries(this.typeNames().flatMap((typeName) => (this.nestedOnly(typeName) ? [[typeName, this.containersOf(typeName)[0]!]] : [])));
   }
 
+  /**
+   * Indexes the zeebe types. Mixins are types that `extends` others: extending BPMN types adds
+   * attributes to BPMN elements (zeebe:modelerTemplate), extending zeebe types adds attributes to
+   * those (bindingType). Neither mixins nor abstract super types (zeebe:InputOutputParameter) are
+   * elements, and a self-referencing property (zeebe:IoMapping.ioMapping) is no child element.
+   */
   protected override buildIndex(): VendorIndex<ZeebeElementType> {
     const prefix = this.prefix;
     const raw = [...((ZEEBE_DESCRIPTOR as unknown as { types: RawType[] }).types ?? []), ...EXTRA_TYPES];
     const types = new Map<string, RawType>();
     for (const rawType of raw) types.set(this.typeKey(rawType.name), rawType);
 
-    // mixins: types that `extends` others. Extending BPMN types adds attributes to BPMN elements
-    // (zeebe:modelerTemplate); extending zeebe types adds attributes to those (bindingType)
     const mixinAttrs = new Map<string, ZeebeProperty[]>();
     const hostsOfMixin = new Map<string, string[]>();
     const attrs = new Map<string, VendorAttr>();
@@ -150,7 +154,6 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
       return [...inherited, ...own, ...(mixinAttrs.get(key) ?? [])];
     };
 
-    // abstract super types (zeebe:InputOutputParameter) are no elements either
     const supers = new Set(
       [...types.values()].flatMap((rawType) =>
         (rawType.superClass ?? [])
@@ -161,7 +164,8 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
     );
     const elements = new Map<string, ZeebeElementType>();
     for (const [key, rawType] of types) {
-      if (rawType.extends?.length) continue; // a mixin, not an element type
+      const mixin = !!rawType.extends?.length;
+      if (mixin) continue;
       if (supers.has(key) && !rawType.meta?.allowedIn) continue;
       const props = ownProps(key);
       const allowedIn: string[] = [];
@@ -184,7 +188,6 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
         body: props.some((property) => property.isBody),
       });
     }
-    // a self-referencing property (zeebe:IoMapping.ioMapping) is no child element
     for (const element of elements.values()) element.children = element.children.filter((child) => child !== element.name);
     return { elements, attrs };
   }

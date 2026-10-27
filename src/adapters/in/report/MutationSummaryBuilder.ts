@@ -6,6 +6,7 @@ import { keptOf } from './utils/mutation-lines.js';
 export class MutationSummaryBuilder {
   constructor(private readonly report: MutationReportLike) {}
 
+  /** An element the change created is listed once, as created; the full report has the rest. The summary prints no validator line, so an advisory validator's old findings count as preexisting, and leftOut lists the findings a validator did not compare (bpmnlint in CI reports them). */
   summary(): MutationSummary {
     const report = this.report;
     const created: Record<string, string[]> = {};
@@ -22,14 +23,11 @@ export class MutationSummaryBuilder {
       unchanged: report.unchanged,
       created,
       ...(report.aliases && Object.keys(report.aliases).length ? { aliases: report.aliases } : {}),
-      // an element the change created is listed once, as created; the full report has the rest
       changed: MutationSummaryBuilder.uniqueIds(report.changed).filter((id) => !report.created.some((created) => created.id === id)),
       ...(report.renamed ? { renamed: report.renamed } : {}),
       removed: MutationSummaryBuilder.uniqueIds(report.removed),
       ...(report.validation.errors.length ? { forced: report.validation.errors } : {}),
-      // the summary prints no validator line: an advisory validator's old findings are counted here
       warnings: { added: report.warnings.added, resolvedCount: report.warnings.resolved.length, preexistingCount: report.warnings.preexistingCount + (report.validation.validators ?? []).filter((validatorReport) => validatorReport.blocks === false).reduce((sum, kept) => sum + keptOf(kept), 0) },
-      // the findings a validator did not compare (bpmnlint in CI reports them)
       ...(left.length ? { leftOut: left } : {}),
       layout: {
         status: report.layout.status,

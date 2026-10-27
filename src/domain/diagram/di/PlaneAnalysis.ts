@@ -296,7 +296,8 @@ export class PlaneAnalysis {
       if (!home) continue;
       for (const frame of frames) {
         if (frame === shape || !this.centreInside(shape.bounds, frame.bounds) || this.frameIsHome(sem, home, frame)) continue;
-        if (this.scopesOf(frame.el).includes(shape.el)) continue; // a frame inside the shape itself
+        const frameInsideShape = this.scopesOf(frame.el).includes(shape.el);
+        if (frameInsideShape) continue;
         add('frameIntrusion', `${shape.id}@${frame.id}`, [shape.id, frame.id]);
       }
     }

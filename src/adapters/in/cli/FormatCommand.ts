@@ -4,7 +4,8 @@ import { usageError } from '../../../domain/document/utils/errors.js';
 import { groupViolation } from '../../../domain/commands/utils/op-rules.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
-import { assertPathFlags, flag } from './utils/flags.js';
+import { assertPathFlags } from './utils/flags.js';
+import { flag } from '../report/utils/option-flags.js';
 
 /**
  * Base of the diagram-only commands (place, align, color, label, route, space, tidy,

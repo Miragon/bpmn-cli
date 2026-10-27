@@ -48,11 +48,11 @@ them on a private corpus without copying it into the repository, are described i
   | --- | --- |
   | `domain/document/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator`, the errors; `ids/` (id words, the file's id style, the declared id conventions), `xml/` (the text-preserving write, the encoding), `vendor/` (Camunda 7 / 8 knowledge) |
   | `domain/commands/` | the commands a caller can ask for (`EditCommand`: `AddElement`, `PlaceShapes`, ...), the ops JSON of `apply` and its aliases |
-  | `domain/diagram/` | the drawing (BPMN DI): `di/` reads and writes planes, frames, groups and the checkpoint every engine shares, `layout/` holds the engines (`clean/` redraws with `FullLayout`, `incremental/` keeps a hand-made drawing), `DrawnDiagram` is the drawing the diagram commands change and `format/` the services that change it (`ShapePlacementService`, `SpaceInsertionService`, ...) |
+  | `domain/diagram/` | the drawing (BPMN DI): `di/` reads and writes planes, frames, groups and the checkpoint every engine shares, `layout/` holds the engines (`clean/` redraws with `FullLayout`, `incremental/` keeps a hand-made drawing), `DrawnDiagram` is the drawing the diagram commands change, `DiagramCommandService` runs them and `format/` holds the services that change it (`ShapePlacementService`, `SpaceInsertionService`, ...); `BatchDrawing` is all a batch does to the drawing |
   | `domain/editing/` | the services that change the model (`ElementCreationService`, `ElementMoveService`, `PropertyService`, ...; `flows/`, `events/`, `extensions/`, `participants/`) |
   | `domain/validation/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with; `profiles/` holds the engine rules that load on demand |
-  | `domain/views/` | the read views (`show`, `find`, `--around`, `--context`, the selectors) and `render/`, the SVG of a diagram |
-  | `domain/batch/` | one batch of commands on a document in memory: `EditBatchService` (guard, commands, validation, layout, result), `ModelCommandService` and `DiagramCommandService` hand each command to its domain service, `BatchLayoutService` lays the drawing out between them; the top of the domain, nothing imports it back |
+  | `domain/views/` | the read views (`show`, `find`, `--around`, `--context`) and `render/`, the SVG of a diagram |
+  | `domain/batch/` | one batch of commands on a document in memory: `EditBatchService` (guard, commands, validation, layout, kept text, result), `ModelCommandService` hands each model command to its domain service and `BatchDrawing` (`domain/diagram/`) lays the drawing out between them; the top of the domain, nothing imports it back |
   | `application/port/in/` | one contract per use case, the way in: an interface with its `Command` and `Result` (`EditDocumentUseCase`, `RelayoutDiagramUseCase`, `ValidateDocumentUseCase`, `ShowModelUseCase`, ...) |
   | `application/port/out/` | what the application needs from outside, named after what it does: `LoadDocumentPort`, `SaveDocumentPort`, `LoadProjectSettingsPort` (the `.bpmnlintrc`), `WriteImagePort` |
   | `application/service/` | one service per use case that implements its contract (`EditDocumentService implements EditDocumentUseCase`): load, let the domain work, save, all through the outbound ports |
@@ -69,11 +69,16 @@ them on a private corpus without copying it into the repository, are described i
   user is `adapters/in/report/`; anything that touches the file system or `process` is an
   adapter behind a port of `application/port/out/`; mapping flags to options and printing a
   command's result is `adapters/in/cli/`. The entries (`cli.ts`, `node.ts`, `api.ts`) create
-  the services with their adapters. `test/architecture.test.ts` checks the rings: the domain
+  the services with their adapters. Every public function that works on a document goes
+  through a use case, even one that only forwards to the domain: the library entries
+  (`index.ts`, `api.ts`, `node.ts`) import values only from `application/` and `adapters/`, and
+  from `domain/` only types, re-exporting just the public classes, constants and pure helpers
+  the test lists. `test/architecture.test.ts` checks the rings: the domain
   imports neither the application nor the adapters, the application no adapter, an adapter no
   other adapter (the CLI only the reports), the driving adapter no service, only adapters and entries import `node:*`, the
   domain modules import each other without a cycle, and every service of `application/service/`
-  implements its contract and calls no other.
+  implements its contract and calls no other, and the entries reach the domain only through the
+  use cases.
 
   **Classes first, helpers in `utils/`.** Each module builds on classes, one per file, the file
   named like the class (`domain/document/ModelError.ts`, `domain/diagram/di/DrawingCheckpoint.ts`). Stateless helper

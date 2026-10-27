@@ -198,10 +198,10 @@ export class LearnedStyle {
 
   /**
    * '' only with `bare`: a named element's id can do without a prefix, an unnamed one cannot.
-   * The declared prefixes shape a prefix nothing declares where the file shows none.
+   * The declared prefixes shape a prefix nothing declares where the file shows none, so a new
+   * file looks like one that follows the declared conventions.
    */
   prefixOf(req: IdRequest, bare: boolean, declared: DeclaredConventions | undefined): { prefix: string; source: PrefixSource } {
-    // a new file looks like one that follows the declared conventions
     const dv = declared && this.lowerFirst + this.upperFirst < MIN_EVIDENCE ? declared.votes : NO_VOTES;
     const lowerFile = this.lowerFirst + dv.lower >= MIN_EVIDENCE && this.lowerFirst + dv.lower > this.upperFirst + dv.upper;
     const min = this.strong ? 1 : MIN_EVIDENCE;
@@ -244,11 +244,15 @@ export class LearnedStyle {
     return this.lowerFirst > this.upperFirst ? votes.upper > votes.lower : this.upperFirst > this.lowerFirst && votes.lower > votes.upper;
   }
 
+  /**
+   * Collects a flow's vote. A message flow with the prefix bpmn-cli borrowed from the declared
+   * conventions does not vote, as that would end the borrowing. Glued snake ids are held back
+   * (fweigh_parcel_to_label_parcel reads like the prefix fweigh until the glued prefixes are known).
+   */
   private readFlow(el: El, id: string, flowVotes: Map<string, FlowVotes>, declared: DeclaredConventions | undefined): void {
     if (declared && !this.rejected && declared.rejects({ type: el.$type }, id)) this.rejected = true;
     const source = el.get<El | undefined>('sourceRef')?.get<string | undefined>('id');
     const target = el.get<El | undefined>('targetRef')?.get<string | undefined>('id');
-    // bpmn-cli wrote a borrowed prefix from the declared conventions: a vote would end borrowing
     const borrowed = declared && el.$type === 'bpmn:MessageFlow' ? declared.borrowedHead(el.$type) : undefined;
     if (borrowed !== undefined && id.startsWith(borrowed)) return;
     let votes = flowVotes.get(el.$type);
@@ -262,7 +266,6 @@ export class LearnedStyle {
       votes.gluedNamed.push(id);
       return;
     }
-    // fweigh_parcel_to_label_parcel reads like the prefix fweigh until the glued prefixes are known
     if (source && target && GLUED_JOINED.test(id)) {
       votes.joined.push({ el, id, source, target });
       return;
@@ -270,6 +273,11 @@ export class LearnedStyle {
     this.countFlow(votes, el, id, source, target);
   }
 
+  /**
+   * Counts an element's id for the learned style. A bare id counts only where it spells the name
+   * (`GW` or `Start` for "Started" say nothing); a generic prefix naming the type (`Task_` on a
+   * plain task) is neither for nor against type-named prefixes.
+   */
   private readElement(el: El, id: string, read: IdsRead, declared: DeclaredConventions | undefined): void {
     if (TOOL_DEFAULTS.has(id)) return;
     if (el.$type === 'bpmn:Process') {
@@ -294,7 +302,6 @@ export class LearnedStyle {
     let fam = this.family.get(sample.family);
     if (!fam) this.family.set(sample.family, (fam = { kindish: new Tally(), generic: new Tally(), prefixed: 0 }));
     if (!prefixedMatch) {
-      // a bare id counts only where it spells the name: `GW` or `Start` for "Started" say nothing
       if (!sample.spellsName) return;
       this.tallyOf(this.byKey, sample.key).add('');
       if (sample.trigger) this.tallyOf(this.byKeyTrigger, `${sample.key}|${sample.trigger}`).add('');
@@ -313,7 +320,6 @@ export class LearnedStyle {
     this.tallyOf(this.byKey, sample.key).add(prefix);
     if (sample.trigger) this.tallyOf(this.byKeyTrigger, `${sample.key}|${sample.trigger}`).add(prefix);
     this.tallyOf(this.classByKey, sample.key).add(cls);
-    // `Task_` on a plain task: neither for nor against type-named prefixes
     if (!(GENERIC.has(prefix.toLowerCase()) && sample.typeNames.some((typeName) => typeName.toLowerCase() === prefix.toLowerCase()))) this.classes.add(cls);
     if (/^[a-z]/.test(prefix)) this.lowerFirst++;
     else this.upperFirst++;
@@ -322,8 +328,13 @@ export class LearnedStyle {
     if (sample.named) (sample.flowNode ? read.nodeBodies : read.otherBodies).add(this.bodyClass(body));
   }
 
+  /**
+   * Decides the flow style of `type`. Glued flows in a file of flow12 ids vote for the longest
+   * glued prefix they start with. Ties never go by document order, except between scopes, which
+   * keep the first one counted. Hashed and numbered flows lend new flows their prefix and
+   * separator (flow12 -> flowAToB).
+   */
   private voteFlows(type: string, votes: FlowVotes): void {
-    // glued flows in a file of flow12 ids vote for the longest glued prefix they start with
     const glued = [...votes.seps].filter(([prefix, sep]) => sep === '' && /[a-z]/.test(prefix)).map(([prefix]) => prefix).sort((first, second) => second.length - first.length);
     const gluedTo = (id: string): string | undefined => glued.find((prefix) => id.startsWith(prefix) && /^[A-Z0-9]/.test(id.charAt(prefix.length)));
     const voteNumbered = (prefix: string | undefined): void => {
@@ -350,7 +361,6 @@ export class LearnedStyle {
       else this.countFlow(votes, el, id, source, target);
     }
     if (!votes.count) return;
-    // ties never go by document order, except between scopes, which keep the first one counted
     const form = votes.forms.top(MIN_EVIDENCE, (first, second) => FORM_ORDER.indexOf(first) < FORM_ORDER.indexOf(second));
     const prefix = form ? votes.prefixes.get(form)!.top(MIN_EVIDENCE, (first, second) => votes.uses.get(first) > votes.uses.get(second) || (votes.uses.get(first) === votes.uses.get(second) && first < second)) : undefined;
     const scope = form === 'scopedTo' ? votes.scopes.top() : undefined;
@@ -358,7 +368,6 @@ export class LearnedStyle {
     let style: FlowStyle;
     if (form && prefix && votes.forms.get(form) * 2 >= votes.count && (form !== 'scopedTo' || scope)) {
       const sep = votes.seps.get(prefix);
-      // hashed and numbered flows lend new flows their prefix and separator (flow12 -> flowAToB)
       const named = form === 'hash' || form === 'numbered';
       style = { form: named ? 'named' : form, prefix, ...(form === 'numbered' && sep !== undefined ? { sep } : {}), ...(scope ? { scope } : {}) };
       if (form === 'scopedTo') this.scopes.set(type, [...votes.scopes.counts.keys()].sort((first, second) => votes.scopes.get(second) - votes.scopes.get(first)));
@@ -371,6 +380,7 @@ export class LearnedStyle {
     this.flowStyles.set(type, this.otherStyles(votes, style));
   }
 
+  /** Counts a flow's form; one the length cap cut votes for its form too, else enough of them flip the file's form. */
   private countFlow(votes: FlowVotes, el: El, id: string, source: string | undefined, target: string | undefined): void {
     const prefix = PREFIXED.exec(id)?.[1];
     if (prefix) votes.any.add(prefix);
@@ -378,7 +388,6 @@ export class LearnedStyle {
     if (own) votes.uses.add(own);
     if (!source || !target) return;
     const seen = this.flowForms(id, source, target);
-    // a flow the length cap cut votes for its form too, else enough of them flip the file's form
     if (prefix) {
       let req: IdRequest | undefined;
       const request = (): IdRequest => (req ??= connectionRequest(el.$type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', source, target, { sourceLabel: new ElementLabels(el.get<El>('sourceRef')).label(), targetLabel: new ElementLabels(el.get<El>('targetRef')).label() }));
@@ -467,11 +476,11 @@ export class LearnedStyle {
   /**
    * Whether `id` is a flow bpmn-cli named by its ends after a glued prefix in a snake_case or
    * Pascal_Snake body, uncut, cut, or naming only its source whole (its target changed since).
+   * Every cut keeps the source's first letter after the prefix, which is tested first.
    */
   private gluedJoinedOf(id: string, prefix: string, ends: { source: () => string; target: () => string }): boolean {
     const fits = (base: string): boolean => id === base || (id.startsWith(base) && isSuffix(base, id.slice(base.length), '_'));
     for (const [join, slug] of [['_to_', snakeSlug], ['_To_', pascalSnakeSlug]] as const) {
-      // cheap test first: every cut keeps the source's first letter after the prefix
       if (!id.includes(join) || id.charAt(prefix.length) !== slug(ends.source()).charAt(0)) continue;
       if (id.startsWith(`${prefix}${slug(ends.source())}${join}`)) return true;
       const at = (max: number, legacy = false): string => new IdFitter({ legacy }).pair(prefix, slug(ends.source(), legacy), join, slug(ends.target(), legacy), max);
@@ -503,11 +512,14 @@ export class LearnedStyle {
     return [...out.values()];
   }
 
-  /** Whether a flow id is a cut of a form built from its ends, so that it still votes for it. */
+  /**
+   * Whether a flow id is a cut of a form built from its ends, so that it still votes for it.
+   * A cut keeps the join, and a stemTo source begins in lower case, which is tested first. A
+   * suffix of up to 4 characters cut the base; a glued one may be any of the last digits.
+   */
   private cutOfForm(id: string, form: IdForm, prefix: string, request: () => IdRequest): boolean {
     const rest = id.slice(prefix.length + 1);
     const join = FORM_JOIN[form];
-    // cheap tests first: a cut keeps the join, and a stemTo source begins in lower case
     if (id.length > MAX_ID || !rest.includes(join) || (form === 'stemTo' && /^[A-Z]/.test(rest) && !rest.startsWith(join))) return false;
     const req = request();
     if (form === 'stemTo' || form === 'stemSnake') {
@@ -521,7 +533,6 @@ export class LearnedStyle {
     const legacy = new IdFitter({ legacy: true }).idForm(form, `${prefix}_`, req, LEGACY_BASE);
     if (id === legacy || suffixed(legacy) || suffixed(cutAt(legacy, MAX_ID - 4, true))) return true;
     if (id === fitter.idForm(form, `${prefix}_`, req, MAX_ID)) return true;
-    // a suffix of up to 4 characters cut the base; a glued one may be any of the last digits
     const digits = (sep === '' ? /\d+$/ : /_\d+$/).exec(id)?.[0] ?? '';
     const ks: number[] = [];
     for (let digitCount = sep === '' ? 1 : digits.length; digitCount <= Math.min(digits.length, 4); digitCount++) ks.push(digitCount);

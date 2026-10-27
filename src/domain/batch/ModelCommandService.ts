@@ -8,6 +8,7 @@ import { AliasTable } from '../commands/AliasTable.js';
 import { OpAliases } from '../commands/OpAliases.js';
 import { isDiagramCommand } from '../commands/utils/op-names.js';
 import type { EditCommand } from '../commands/types.js';
+import type { BatchDrawing, DrawingSegment } from '../diagram/BatchDrawing.js';
 import { ElementCreationService } from '../editing/ElementCreationService.js';
 import { ConnectionService } from '../editing/ConnectionService.js';
 import { PropertyService } from '../editing/PropertyService.js';
@@ -40,7 +41,7 @@ interface RunningBatch {
 
 /**
  * Dispatches ops: every CLI command and `apply` run through here, inside one edit context
- * that is the document's while they run.
+ * handed to every editing service; without one given, a fresh one for the document.
  */
 export class ModelCommandService {
   private batch: RunningBatch | undefined;
@@ -52,18 +53,16 @@ export class ModelCommandService {
 
   /** Runs one op on its own; stale flow ids and id prefixes are reported at its end. */
   runOp(op: EditCommand): ChangeSet {
-    return this.within(() => {
-      this.edit.begin();
-      const cs = this.step(op);
-      new StaleFlowReport(this.doc).report(cs, this.edit.flowsBefore);
-      new IdRenameService(this.doc).reportStalePrefixes(cs);
-      return cs;
-    });
+    this.edit.begin();
+    const cs = this.step(op);
+    new StaleFlowReport(this.doc, this.edit).report(cs, this.edit.flowsBefore);
+    new IdRenameService(this.doc, this.edit).reportStalePrefixes(cs);
+    return cs;
   }
 
   /**
    * Runs a batch in order. Aliases resolve to the current ids before each op; the diagram
-   * commands get theirs when resolveDiagramCommands runs. Stale flow ids and id prefixes
+   * commands get theirs once the model commands before them ran. Stale flow ids and id prefixes
    * are reported once, against the state before and after the whole batch.
    */
   runBatch(ops: EditCommand[]): BatchRun {
@@ -73,17 +72,63 @@ export class ModelCommandService {
     return this.finishBatch();
   }
 
-  /** Starts a batch that runCommands works off in steps, so the diagram can be drawn in between. */
-  beginBatch(ops: EditCommand[]): void {
-    const table = new AliasTable(this.doc);
-    // what the batch did so far, so E_NOT_FOUND can explain a missing id
-    const context: BatchContext = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => table.toRecord() };
-    this.batch = { ops, all: new ChangeSet(), table, resolved: [...ops], pending: [], context };
-    this.within(() => this.edit.begin());
+  /**
+   * Runs a batch in order and draws in between: where a model command follows a diagram
+   * command the drawing is brought up to date first, so every diagram command sees the
+   * commands before it; `last` is then the segment the final layout still has to draw.
+   */
+  async runBatchDrawnBetween(ops: EditCommand[], drawing: BatchDrawing): Promise<{ batch: BatchRun; last?: DrawingSegment }> {
+    const segments = ModelCommandService.segmentsOf(ops);
+    let last: DrawingSegment | undefined;
+    this.beginBatch(ops);
+    for (const [position, segment] of segments.entries()) {
+      const before = new Set(this.changesSoFar.created.map((created) => this.doc.get(created.id)));
+      this.runCommands(segment.start, segment.end);
+      const created = this.changesSoFar.created.map((change) => change.id).filter((id) => !before.has(this.doc.get(id)));
+      if (position === segments.length - 1) {
+        if (segments.length > 1) last = { ...segment, created };
+        break;
+      }
+      await drawing.drawBetween(this.edit, this.resolveDiagramCommands(), this.changesSoFar, { ...segment, created });
+    }
+    this.resolveDiagramCommands();
+    const batch = this.finishBatch();
+    return { batch, ...(last ? { last } : {}) };
   }
 
-  /** Runs the model commands from `from` to before `to`; a diagram command only has its aliases checked (one defined later is an error). */
-  runCommands(from: number, to: number): void {
+  /**
+   * The batch cut where a model command follows a diagram command: the diagram commands
+   * of a segment see the drawing of every command before them.
+   */
+  private static segmentsOf(ops: readonly EditCommand[]): Array<Omit<DrawingSegment, 'created'>> {
+    const segments: Array<Omit<DrawingSegment, 'created'>> = [];
+    let start = 0;
+    const segment = (end: number) => ({ start, end, model: ops.slice(start, end).some((op) => !isDiagramCommand(op)) });
+    ops.forEach((op, index) => {
+      if (index === 0 || isDiagramCommand(op) || !isDiagramCommand(ops[index - 1]!)) return;
+      segments.push(segment(index));
+      start = index;
+    });
+    segments.push(segment(ops.length));
+    return segments;
+  }
+
+  /**
+   * Starts a batch that runCommands works off in steps, so the diagram can be drawn in between.
+   * Its context records what the batch did so far, so E_NOT_FOUND can explain a missing id.
+   */
+  private beginBatch(ops: EditCommand[]): void {
+    const table = new AliasTable(this.doc);
+    const context: BatchContext = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => table.toRecord() };
+    this.batch = { ops, all: new ChangeSet(), table, resolved: [...ops], pending: [], context };
+    this.edit.begin();
+  }
+
+  /**
+   * Runs the model commands from `from` to before `to`; a diagram command only has its aliases checked (one defined later is an error).
+   * An element created and then retyped in the batch is listed by E_NOT_FOUND under its new id.
+   */
+  private runCommands(from: number, to: number): void {
     const batch = this.openBatch();
     this.inBatch(() => {
       for (let opIndex = from; opIndex < to; opIndex++) {
@@ -105,7 +150,6 @@ export class ModelCommandService {
           for (const rename of cs.renames) {
             for (const [old, now] of context.renamed) if (now === rename.from) context.renamed.set(old, rename.to);
             context.renamed.set(rename.from, rename.to);
-            // created and retyped in the batch: E_NOT_FOUND lists it under its new id
             if (!rename.regenerated) continue;
             if (!rename.was) context.retyped!.add(rename.from);
             context.created = context.created.map((createdId) => (createdId === rename.from ? rename.to : createdId));
@@ -115,16 +159,18 @@ export class ModelCommandService {
     });
   }
 
-  /** The diagram commands runCommands passed since the last call, with their aliases resolved to the current ids. */
-  resolveDiagramCommands(): EditCommand[] {
+  /**
+   * The diagram commands runCommands passed since the last call, with their aliases resolved to the current ids.
+   * They run outside the batch, so a lost id they reference is reported (E_NOT_FOUND) only here.
+   */
+  private resolveDiagramCommands(): EditCommand[] {
     const batch = this.openBatch();
     const pending = batch.pending.splice(0);
     this.inBatch(() => {
       for (const pendingIndex of pending) {
         this.atOp(pendingIndex, () => {
           const ready = (batch.resolved[pendingIndex] = new OpAliases(batch.ops[pendingIndex]!).resolve(batch.table, pendingIndex));
-          // the diagram commands run outside the batch: E_NOT_FOUND can explain a lost id only now
-          for (const id of new OpAliases(ready).referencedIds()) if (!this.doc.get(id)) this.doc.require(id);
+          for (const id of new OpAliases(ready).referencedIds()) if (!this.doc.get(id)) this.edit.require(id);
         });
       }
     });
@@ -132,22 +178,20 @@ export class ModelCommandService {
   }
 
   /** The merged changes; model-state warnings describe the final state (a lane added before its pool). */
-  finishBatch(): BatchRun {
+  private finishBatch(): BatchRun {
     const batch = this.openBatch();
     this.batch = undefined;
-    return this.within(() => {
-      const all = batch.all;
-      all.bindings = [];
-      all.replaced = [];
-      all.warnings = all.warnings.filter((warning) => this.stillHolds(warning));
-      new StaleFlowReport(this.doc).report(all, this.edit.flowsBefore);
-      new IdRenameService(this.doc).reportStalePrefixes(all);
-      return { changes: all, ops: batch.resolved, aliases: batch.table.toRecord() };
-    });
+    const all = batch.all;
+    all.bindings = [];
+    all.replaced = [];
+    all.warnings = all.warnings.filter((warning) => this.stillHolds(warning));
+    new StaleFlowReport(this.doc, this.edit).report(all, this.edit.flowsBefore);
+    new IdRenameService(this.doc, this.edit).reportStalePrefixes(all);
+    return { changes: all, ops: batch.resolved, aliases: batch.table.toRecord() };
   }
 
   /** The changes of the batch so far, e.g. the ids created since the drawing was last updated. */
-  get changesSoFar(): ChangeSet {
+  private get changesSoFar(): ChangeSet {
     return this.openBatch().all;
   }
 
@@ -157,23 +201,11 @@ export class ModelCommandService {
   }
 
   private inBatch(run: () => void): void {
-    this.within(() => {
-      this.edit.batch = this.openBatch().context;
-      try {
-        run();
-      } finally {
-        this.edit.batch = undefined;
-      }
-    });
-  }
-
-  private within<TResult>(run: () => TResult): TResult {
-    const outer = this.doc.edit;
-    this.doc.edit = this.edit;
+    this.edit.batch = this.openBatch().context;
     try {
-      return run();
+      run();
     } finally {
-      this.doc.edit = outer;
+      this.edit.batch = undefined;
     }
   }
 
@@ -185,27 +217,28 @@ export class ModelCommandService {
     return cs;
   }
 
+  /** Diagram-only commands (tidy, compact) change nothing here: DiagramCommandService runs them once the drawing is up to date. */
   private dispatch(op: EditCommand): ChangeSet {
     const doc = this.doc;
     switch (op.op) {
       case 'add':
-        return new ElementCreationService(doc).add(op);
+        return new ElementCreationService(doc, this.edit).add(op);
       case 'connect':
-        return new ConnectionService(doc).connect(op);
+        return new ConnectionService(doc, this.edit).connect(op);
       case 'set':
-        return new PropertyService(doc).set(op);
+        return new PropertyService(doc, this.edit).set(op);
       case 'remove':
-        return new ElementRemovalService(doc).remove(op);
+        return new ElementRemovalService(doc, this.edit).remove(op);
       case 'retype':
-        return new ElementTypeChangeService(doc).retype(op);
+        return new ElementTypeChangeService(doc, this.edit).retype(op);
       case 'move':
-        return new ElementMoveService(doc).move(op);
+        return new ElementMoveService(doc, this.edit).move(op);
       case 'order':
-        return new ElementOrderService(doc, op).apply();
+        return new ElementOrderService(doc, this.edit, op).apply();
       case 'ext':
-        return new ExtensionElementService(doc).apply(op);
+        return new ExtensionElementService(doc, this.edit).apply(op);
       case 'split':
-        return new BranchSplitService(doc).split(op);
+        return new BranchSplitService(doc, this.edit).split(op);
       case 'place':
       case 'align':
       case 'color':
@@ -214,7 +247,6 @@ export class ModelCommandService {
       case 'space':
       case 'tidy':
       case 'compact':
-        // diagram only: DiagramCommandService runs them once the drawing is up to date
         return new ChangeSet();
       default:
         throw usageError(`Unknown operation "${String((op as { op?: unknown }).op)}"`);

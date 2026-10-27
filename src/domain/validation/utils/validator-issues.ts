@@ -44,12 +44,14 @@ export function validatorRefusal(errors: ValidatorIssue[]) {
   });
 }
 
-/** A lint warning a finding repeats is dropped; a finding without a hint takes its hint. */
+/**
+ * A lint warning a finding repeats is dropped; a finding without a hint takes its hint.
+ * A finding a write left out is not reported, so it covers no lint warning.
+ */
 export function withValidatorReports(result: ValidationResult, reports: ValidatorReport[], runs: ValidatorRun[]): ValidationResult {
   if (!reports.length) return result;
   const covering = new Map<string, ValidatorIssue[]>();
   runs.forEach((run, index) => {
-    // a finding a write left out is not reported, so it covers nothing
     const write = reports[index]?.leftOut !== undefined;
     for (const issue of run.issues) {
       const key = coveredLint(run, issue);

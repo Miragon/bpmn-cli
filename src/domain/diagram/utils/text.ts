@@ -23,10 +23,10 @@ const DEFAULT_ADVANCE = 556;
 export const LINE_HEIGHT = 14.4;
 const SOFT_BREAK = '­';
 
+/** Width at 12 px; the advances are in 1/1000 em. */
 export function textWidth(text: string): number {
   let units = 0;
   for (const ch of text.trim()) units += ARIAL[ch] ?? DEFAULT_ADVANCE;
-  // 12 px: units are 1/1000 em
   return (units * 12) / 1000;
 }
 
@@ -105,7 +105,10 @@ const STEP = 20;
 const MAX_WIDTH = 200;
 const MAX_HEIGHT_STEPS = 5;
 
-/** Undefined when the name fits; else wider in 20 px steps up to 200, then higher. */
+/**
+ * Undefined when the name fits; else wider in 20 px steps up to 200, then higher.
+ * Higher at the narrowest width that still gives the line count of the widest step.
+ */
 export function activitySize(name: string, size: { width: number; height: number }, bottomRoom = 0): { width: number; height: number } | undefined {
   if (!name.trim() || fitsInside(name, size, bottomRoom)) return undefined;
   const widths: number[] = [];
@@ -113,7 +116,6 @@ export function activitySize(name: string, size: { width: number; height: number
     if (fitsInside(name, { width: candidateWidth, height: size.height }, bottomRoom)) return { width: candidateWidth, height: size.height };
     widths.push(candidateWidth);
   }
-  // as narrow as still gives the line count of the widest step
   const fewest = innerLines(name, widths.at(-1) ?? size.width);
   const width = [size.width, ...widths].find((width) => innerLines(name, width) <= fewest) ?? size.width;
   let height = size.height;
@@ -139,12 +141,13 @@ export function labelSize(name: string, maxWidth = 90): { width: number; height:
   return size;
 }
 
+/** Wraps the words into lines of at most maxWidth, widened to the longest word: a word is never broken. */
 function measureLabel(name: string, maxWidth: number): { width: number; height: number; lines: number } {
   const words = name.split(/\s+/).filter(Boolean);
   const charW = 7;
   const pad = 12;
   const longest = Math.max(0, ...words.map((word) => word.length * charW + pad));
-  const limit = Math.max(maxWidth, longest); // never break inside a word
+  const limit = Math.max(maxWidth, longest);
   const lines: number[] = [];
   let cur = 0;
   for (const word of words) {

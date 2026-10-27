@@ -47,6 +47,7 @@ export class BpmnlintLoader {
     this.where = opts.explicit ? `--lint-config ${shown(this.abs, opts.from)}` : `${BPMNLINT_CONFIG_FILE} in ${shown(dirname(this.abs), opts.from)}`;
   }
 
+  /** The repository is part of the cache key: a .git that appears, goes or changes its owner changes what project code may run. */
   async load(): Promise<LoadedBpmnlint> {
     const { abs, opts } = this;
     let text: string;
@@ -62,7 +63,6 @@ export class BpmnlintLoader {
     } catch (err) {
       return this.broken(`${shown(abs, opts.from)} is not JSON (${firstLine(err)}; bpmnlint reads it with JSON.parse: no comments, no trailing commas)`, `Write it as strict JSON, as bpmnlint reads it; ${SKIP_HINT}`);
     }
-    // a .git that appears, goes or changes its owner changes what project code may run
     const repo = new RepoTrust().repoOf(dirname(abs));
     const key = [abs, !!opts.explicit, !!opts.projectCode, opts.from ?? '', repo ? `${repo.root}:${repo.off ?? ''}` : ''].join('|');
     return LoadCache.shared.loaded(key, text, dirname(abs), () => this.resolve(config, repo));
@@ -73,12 +73,12 @@ export class BpmnlintLoader {
     return { ok: false, path: this.abs, where: this.where, unavailable: [{ kind: 'file', name: this.abs, pkg: this.abs, reason, hint }], detail: `${this.where}; bpmnlint did not run (bpmn validate lists why)` };
   }
 
+  /** Whatever throws here, the write goes ahead with one W_LINT_UNAVAILABLE. */
   private async resolve(config: BpmnlintConfig, repo: Repo | undefined): Promise<{ loaded: LoadedBpmnlint; deps: LoadDeps }> {
     const { abs, where, opts } = this;
     const notRun = `${where}; bpmnlint did not run (bpmn validate lists why)`;
     const libs = BpmnlintLibs.load();
     if (!(libs instanceof BpmnlintLibs)) return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable(libs, opts.from)], detail: notRun }, deps: [] };
-    // whatever throws here, the write goes ahead with one W_LINT_UNAVAILABLE
     try {
       const rcDir = dirname(abs);
       const root = real(gitRoot(rcDir) ?? rcDir);

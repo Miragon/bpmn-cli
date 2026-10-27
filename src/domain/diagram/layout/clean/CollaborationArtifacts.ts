@@ -33,6 +33,7 @@ export class CollaborationArtifacts {
     }
   }
 
+  /** A note goes inside its anchor's pool, and in its lane when it has one. */
   private notes(): Array<{ el: El; box?: Box }> {
     const { pools } = this;
     const { absBoxes } = this.writer;
@@ -48,7 +49,6 @@ export class CollaborationArtifacts {
         const other = source === note ? target : target === note ? source : undefined;
         const anchor = this.endBox(other, edges, poolBoxes);
         if (!other || !anchor) continue;
-        // inside the anchor's pool, and in its lane when it has one
         const pool = is(other, 'bpmn:Participant') || !absBoxes.has(idOf(other)) ? undefined : poolOf(pools, other);
         return { ...size, anchor, ...(pool ? { pool: this.clip(this.poolContent(pool), this.laneBoxOf(other)) } : {}) };
       }

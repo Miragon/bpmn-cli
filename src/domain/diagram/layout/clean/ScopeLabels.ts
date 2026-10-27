@@ -64,6 +64,8 @@ export class ScopeLabels {
   /**
    * A boundary event's label hangs beside the event below its host (above it on the top border);
    * a second event's goes left, more step outwards. Matches the incremental layout's placement.
+   * The top border's events run right to left, as do the bottom border's except on a collapsed
+   * sub-process.
    */
   static of(element: { box: Box; el: GNode['el']; host?: GNode; topUsed?: boolean; onTop?: boolean; labelLeft?: boolean } | GArtifact, kind: 'event' | 'gateway' | 'boundary' | 'data', opts: LabelOptions = {}): Box | undefined {
     const name = nameOf(element);
@@ -90,7 +92,6 @@ export class ScopeLabels {
         const top = !!host && 'onTop' in element && !!element.onTop;
         const siblings = (host?.boundary ?? []).filter((sibling) => !!sibling.onTop === top);
         if (top) {
-          // the top border's events run right to left
           const rightward = siblings.filter((sibling) => sibling.box.x > box.x).length;
           const labelY = host.box.y - 2 - height;
           if ((siblings.length === 2 && rightward === 1) || ('labelLeft' in element && element.labelLeft)) return { x: box.x - 4 - width, y: labelY, width, height };
@@ -98,7 +99,6 @@ export class ScopeLabels {
         }
         const position = Math.max(0, siblings.findIndex((sibling) => sibling.box === box));
         const hostBottom = host ? bottom(host.box) : box.y + box.height / 2;
-        // a collapsed sub-process has its events left to right
         const order = host && boundaryLeft(host) ? siblings.length - 1 - position : position;
         if (siblings.length === 2 && order === 1) return { x: box.x - 4 - width, y: hostBottom + 2, width, height };
         const stagger = siblings.length >= 3 ? order * (LABEL_LINE + 2) : 0;

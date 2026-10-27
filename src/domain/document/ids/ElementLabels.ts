@@ -51,7 +51,8 @@ export class ElementLabels {
 
   /**
    * context, plus the anchor's kind word where it passes on its own context (`Gateway`),
-   * so a new id that would repeat the anchor's body can be told apart.
+   * so a new id that would repeat the anchor's body can be told apart. An anchor labelled only by
+   * its own name gets its kind word in the context (Check Join).
    */
   anchorContext(word: ContextWord): AnchorContext {
     const label = this.label();
@@ -60,7 +61,6 @@ export class ElementLabels {
     const parts = this.contextParts(own);
     if (!parts) return { context: `${word} ${label}` };
     if (parts.word === word && (word === 'After' || word === 'Before')) return { context: `${word} ${parts.tail.join(' ')}`, anchorKind: this.kindLabel() };
-    // the join's label says its kind (Check Join)
     if (!parts.head.length && label === own) return { context: `${word} ${this.kindLabel()} ${label}` };
     return { context: `${word} ${label}` };
   }

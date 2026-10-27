@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ChangeSet } from '../src/domain/document/ChangeSet.js';
 import { renderChanges } from '../src/adapters/in/report/utils/result-lines.js';
 import { renderDetail, renderProblems, renderView, buildView, elementDetail, findElements } from '../src/index.js';
-import { labelOf } from '../src/domain/views/utils/view.js';
+import { kindOrTypeLabel } from '../src/domain/document/utils/kinds.js';
 import type { ViewNode } from '../src/domain/views/model-view.js';
 import { BPMN_NS, definitionsXml, docFromXml, linearDoc } from './helpers.js';
 
@@ -619,11 +619,11 @@ describe('findElements', () => {
     }
   });
 
-  it('labelOf gives canonical kinds and lowerCamel types', async () => {
+  it('kindOrTypeLabel gives canonical kinds and lowerCamel types', async () => {
     const doc = await linearDoc();
-    expect(labelOf(doc.require('Task_A'))).toBe('userTask');
-    expect(labelOf(doc.require('F1'))).toBe('sequenceFlow');
-    expect(labelOf(doc.require('Process_1'))).toBe('process');
+    expect(kindOrTypeLabel(doc.require('Task_A'))).toBe('userTask');
+    expect(kindOrTypeLabel(doc.require('F1'))).toBe('sequenceFlow');
+    expect(kindOrTypeLabel(doc.require('Process_1'))).toBe('process');
   });
 });
 

@@ -1,5 +1,5 @@
 import type { Doc } from '../document/Doc.js';
-import { isEventSubProcess, triggerOf } from '../document/utils/kinds.js';
+import { isEventSubProcess, kindOrTypeLabel, triggerOf } from '../document/utils/kinds.js';
 import { diExpansionState } from '../diagram/utils/expansion.js';
 import { Groups } from '../diagram/di/Groups.js';
 import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
@@ -13,7 +13,7 @@ import { StructuralValidator } from '../validation/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
 import type { ElementDetail, NestedDetail } from './model-view.js';
-import { bodyOf, compact, labelOf, nameOf, nonEmpty, refLabel, resourceOf } from './utils/view.js';
+import { bodyOf, compact, nameOf, nonEmpty, refLabel, resourceOf } from './utils/view.js';
 
 /**
  * `bpmn show <id>`: everything about one element. Missing incoming / outgoing mirror entries
@@ -67,7 +67,7 @@ export class ElementDetailBuilder {
       : [];
     return compact<ElementDetail>({
       id: shownId(el),
-      kind: labelOf(el),
+      kind: kindOrTypeLabel(el),
       type: el.$type,
       name: nameOf(el),
       scope: is(el, 'bpmn:Process') ? undefined : doc.scopeOf(el)?.get<string>('id'),

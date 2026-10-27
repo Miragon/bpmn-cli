@@ -64,11 +64,11 @@ export class PlatformDetection {
     return { platform: 'none', source: 'none', detail: declared !== undefined ? `unknown modeler:executionPlatform "${declared}", no vendor content` : 'no executionPlatform and no vendor namespace' };
   }
 
+  /** The choice picks the profile; whether content is read as Operaton's still comes from the file. */
   resolve(choice: PlatformChoice = 'auto'): PlatformInfo {
     if (choice === 'auto') return this.info();
     const info: PlatformInfo = { platform: choice, source: 'option', detail: '--platform option' };
     if (choice !== 'c7') return info;
-    // the choice picks the profile; how Operaton content is read still comes from the file
     const detected = this.info();
     return detected.operaton ? { ...info, operaton: true, detail: `--platform option; the file uses the operaton namespace: ${OPERATON_NOTE}` } : info;
   }

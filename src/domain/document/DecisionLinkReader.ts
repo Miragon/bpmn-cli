@@ -56,8 +56,8 @@ export class DecisionLinkReader {
     return out.sort((left, right) => Number(this.uriOf(el, left[0].split(':')[0]!) === OPERATON_URI) - Number(this.uriOf(el, right[0].split(':')[0]!) === OPERATON_URI));
   }
 
+  /** Reads without creating the lazy extensionElements collection: views and profiles read the live document. */
   zeebeCalls(el: El): El[] {
-    // read without creating the lazy collection (views and profiles read the live document)
     const values = (el.get<El | undefined>('extensionElements') as unknown as { values?: El[] } | undefined)?.values;
     if (!Array.isArray(values)) return [];
     return values.filter((value) => {

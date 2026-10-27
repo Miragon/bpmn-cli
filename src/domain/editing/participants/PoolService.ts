@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { modelError } from '../../document/utils/errors.js';
 import { kindByName } from '../../document/utils/kinds.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
@@ -13,17 +14,20 @@ import type { AddElement } from '../../commands/types.js';
  * wraps that process; further ones get a new empty process unless bound or black-box.
  */
 export class PoolService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   createParticipant(op: AddElement, cs: ChangeSet): El {
     const doc = this.doc;
     const resolved = this.resolveParticipantProcess(op);
     const context = resolved.process ? new ElementLabels(resolved.process).label() : resolved.mode === 'blackBox' ? 'Black box' : 'Pool';
-    const id = allocateId(doc, kindRequest(kindByName('participant')!, { ...(op.name ? { name: op.name } : {}), context }), op.id);
+    const id = allocateId(this.edit, kindRequest(kindByName('participant')!, { ...(op.name ? { name: op.name } : {}), context }), op.id);
     const collab = this.ensureCollaboration(cs);
     let process = resolved.process;
     if (resolved.mode === 'new') {
-      const processId = doc.allocateId(typeRequest('bpmn:Process', { ...(op.name ? { name: op.name } : {}), context: id.slice(id.indexOf('_') + 1) })).id;
+      const processId = this.edit.allocator.allocate(typeRequest('bpmn:Process', { ...(op.name ? { name: op.name } : {}), context: id.slice(id.indexOf('_') + 1) })).id;
       process = doc.create('bpmn:Process', { id: processId, isExecutable: false });
       this.insertProcess(process);
       cs.create({ id: processId, kind: 'process', detail: `for participant ${id} (not executable)` });
@@ -48,7 +52,7 @@ export class PoolService {
     const existing = doc.collaboration();
     if (existing) return existing;
     const first = doc.processes()[0];
-    const collab = doc.create('bpmn:Collaboration', { id: doc.allocateId(typeRequest('bpmn:Collaboration', { context: first ? new ElementLabels(first).label() : '' })).id });
+    const collab = doc.create('bpmn:Collaboration', { id: this.edit.allocator.allocate(typeRequest('bpmn:Collaboration', { context: first ? new ElementLabels(first).label() : '' })).id });
     insertInto(doc.definitions, 'rootElements', 0, collab);
     cs.create({ id: idOf(collab), kind: 'collaboration' });
     doc.invalidate();
@@ -73,7 +77,7 @@ export class PoolService {
       return { mode: 'blackBox' };
     }
     if (op.process) {
-      const process = doc.require(op.process, 'bpmn:Process', 'process');
+      const process = this.edit.require(op.process, 'bpmn:Process', 'process');
       const bound = doc.participantOf(process);
       if (bound) {
         throw modelError('E_PROCESS_BOUND', `Process ${op.process} is already bound to participant ${idOf(bound)}`, {

@@ -99,6 +99,10 @@ export class LabelPlacer {
     return this.firstFree(shape, clutter, cands) ?? cands[0]!;
   }
 
+  /**
+   * Spots for a boundary event's label by the border it sits on; on the bottom border it hangs
+   * below the host.
+   */
   private boundaryLabelCandidates(boundary: Box, host: Box, size: { width: number; height: number }, step: number): Box[] {
     const box = (left: number, top: number): Box => ({ x: Math.round(left), y: Math.round(top), ...size });
     switch (attachedSide(boundary, host)) {
@@ -115,14 +119,16 @@ export class LabelPlacer {
         return [box(Math.min(left, boundary.x - 4 - size.width), bottom(boundary) + 4 + step * (size.height + 4)), box(Math.min(left, boundary.x - 4 - size.width), boundary.y - 4 - size.height - step * (size.height + 4)), box(Math.min(left, boundary.x - 4 - size.width), cy(boundary) - size.height / 2)];
       }
       default: {
-        // hanging below the host
         const top = bottom(host) + 2 + step * (size.height + 4);
         return [box(right(boundary) + 4, top), box(boundary.x - 4 - size.width, top), box(cx(boundary) - size.width / 2, Math.max(top, bottom(boundary) + 4))];
       }
     }
   }
 
-  /** `prefer` first, then the kind's conventional sides, then further out and shifted spots. */
+  /**
+   * `prefer` first, then the kind's conventional sides, then further out and shifted spots.
+   * The host blocks a boundary label too, except where the label hangs below it.
+   */
   placeShapeLabel(shape: DShape, prefer?: LabelSide): Box | undefined {
     const name = this.nameOf(shape.el);
     if (!name || !hasExternalLabel(shape)) return undefined;
@@ -131,7 +137,6 @@ export class LabelPlacer {
     const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
     const ignore = new Set([shape.id, ...(host ? [host.id] : [])]);
     const clutter = this.clutter(shape.id, ignore);
-    // the host blocks a boundary label too, except where the label hangs below it
     if (host) clutter.shapes.push(host.bounds);
     const order = ORDER[shape.kind] ?? ORDER['event']!;
     const sides = prefer ? [prefer, ...order.filter((side) => side !== prefer)] : order;
@@ -154,13 +159,16 @@ export class LabelPlacer {
     return shape.label;
   }
 
-  /** Above or below the first long enough horizontal segment, else beside a vertical one. */
+  /**
+   * Above or below the first long enough horizontal segment, else beside a vertical one.
+   * On a segment near the start first (BPMN convention), then the middle and the end. The edge's
+   * own segments count as clutter: bpmn-js text must not sit on its own line either.
+   */
   placeEdgeLabel(edge: DEdge): Box | undefined {
     const name = this.nameOf(edge.el);
     if (!name || edge.points.length < 2 || !(is(edge.el, 'bpmn:SequenceFlow') || is(edge.el, 'bpmn:MessageFlow'))) return undefined;
     const { width, height } = labelSize(name);
     const size = { width, height };
-    // the edge's own segments count too: bpmn-js text must not sit on its own line either
     const clutter = this.clutter(edge.id, new Set());
     const cands: Box[] = [];
     const pts = edge.points;
@@ -171,7 +179,6 @@ export class LabelPlacer {
         const lo = Math.min(start.x, end.x);
         const hi = Math.max(start.x, end.x);
         if (hi - lo < size.width / 2) continue;
-        // near the start first (BPMN convention), then the middle and the end of the segment
         const xs = [Math.min(lo + 8, Math.max(lo + 2, hi - size.width - 4)), (lo + hi) / 2 - size.width / 2, hi - size.width - 8];
         for (const left of xs) cands.push({ x: Math.round(left), y: Math.round(start.y - size.height - 4), ...size }, { x: Math.round(left), y: Math.round(start.y + 4), ...size });
       }

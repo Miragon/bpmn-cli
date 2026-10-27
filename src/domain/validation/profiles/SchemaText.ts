@@ -48,7 +48,11 @@ export interface SchemaTextIssue {
 export class SchemaText {
   constructor(private readonly kit: RuleKit) {}
 
-  /** [] when the text cannot be read: the model is then all there is. */
+  /**
+   * [] when the text cannot be read: the model is then all there is. An xsd:boolean attribute
+   * with another value is an issue, as bpmn-moddle reads it as false; on a diagram element it is
+   * the issue of its BPMN element.
+   */
   issues(xml: string, moddle: BpmnModdle): SchemaTextIssue[] {
     let root: XElement;
     try {
@@ -69,13 +73,11 @@ export class SchemaText {
           if (!NCNAME.test(id.trim())) out.push({ kind: 'id', owner: id.trim(), element: el.local, value: id.trim() });
           here = id.trim();
         }
-        // bpmn-moddle reads any other xsd:boolean value as false
         const type = schema.typeOf(el.local, el.uri, undefined);
         const booleans = type ? schema.booleanAttrs(type) : undefined;
         for (const attribute of booleans?.size ? el.attrs : []) {
           if (!booleans!.has(attribute.name)) continue;
           const decoded = this.kit.decodeXml(attribute.raw);
-          // a diagram element's issue is its BPMN element's
           if (!XSD_BOOLEAN.test(decoded)) out.push({ kind: 'boolean', owner: el.uri === this.kit.BPMN_NS ? here : (this.attr(el, 'bpmnElement')?.trim() ?? owner), element: el.local, ref: attribute.name, value: decoded, attribute: true });
         }
       }

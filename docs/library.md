@@ -153,8 +153,8 @@ only.
 
 | bundle (minified / gzip) | size |
 | --- | ---: |
-| everything `@miragon/bpmn-cli` exports | 1090.0 / 342.0 KB |
-| `applyToXml` only | 786.0 / 244.9 KB |
+| everything `@miragon/bpmn-cli` exports | 1103.8 / 346.9 KB |
+| `applyToXml` only | 799.7 / 250.3 KB |
 | Camunda 7 rules, on demand | 64.0 / 18.6 KB |
 | Camunda 8 rules, on demand | 87.8 / 24.9 KB |
 

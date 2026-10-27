@@ -139,6 +139,7 @@ export class RowChooser {
   /**
    * The cheapest candidate, or the one the local repair asked for (skip). The head and its number
    * of candidates are recorded (heads), so the repair knows what it can retry.
+   * Equal costs keep the candidates' order.
    */
   cheapest(id: string, plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): Cand {
     const ranked: Array<{ cand: Cand; cost: number }> = [];
@@ -149,7 +150,6 @@ export class RowChooser {
       if (LayoutDebug.on()) LayoutDebug.log(`[place] from ${from.id} x=${cand.x} c=${cand.centre} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ` insert ${cand.insert.delta}` : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}${cand.top ? ' top' : ''}`);
       ranked.push({ cand, cost });
     }
-    // stable: equal costs keep the candidates' order
     ranked.sort((first, second) => first.cost - second.cost);
     (this.placer.heads ??= new Map()).set(id, ranked.length);
     const chosenIndex = Math.min(this.placer.skip?.get(id) ?? 0, ranked.length - 1);
@@ -160,6 +160,8 @@ export class RowChooser {
   /**
    * Horizontal segments between `floor` and `below` over [x0, x1] that a route from the anchor
    * down to a row would cross (bypass and loop-back lines), and the shapes they dock on.
+   * A segment docking on a shape below the anchor brings that shape's top along, as the shape moves
+   * with it.
    */
   private linesUnder(plane: Plane, x0: number, x1: number, floor: number, below: number): number[] {
     const out: number[] = [];
@@ -171,7 +173,6 @@ export class RowChooser {
         if (Math.abs(segmentStart.y - segmentEnd.y) > 0.5 || segmentStart.y <= floor + 0.5 || segmentStart.y > below) continue;
         if (Math.max(segmentStart.x, segmentEnd.x) < x0 || Math.min(segmentStart.x, segmentEnd.x) > x1) continue;
         out.push(segmentStart.y);
-        // a segment docking on a shape below the anchor: the shape moves with it
         for (const end of [index === 0 ? edge.sourceId : undefined, index + 1 === pointCount - 1 ? edge.targetId : undefined]) {
           const shape = end ? plane.shapes.get(end) : undefined;
           if (shape && PlaneQuery.isLeaf(shape) && shape.bounds.y > floor + 0.5) out.push(shape.bounds.y);
@@ -264,6 +265,7 @@ export class RowChooser {
   /**
    * A free row centre in `lane`: rows of `prefer` (neighbours) first, then the lane's rows (most
    * populated first), its centre when empty, else a new row below its content.
+   * The lane's own rows are used as tightly as the drawing does; others keep 10 px off its borders.
    */
   rowInLane(plane: Plane, lane: DShape, left: number, width: number, height: number, prefer: number[], exclude: ReadonlySet<string>): number {
     const sp = this.placer.spacingFor(plane);
@@ -271,7 +273,6 @@ export class RowChooser {
     const inner = Frames.interior(lane, 10);
     const fitsIn = (centre: number, box: Box): boolean => centre - height / 2 >= box.y - 0.5 && centre + height / 2 <= bottom(box) + 0.5;
     const rows = this.laneRows(plane, lane, sp.rowTol, exclude);
-    // the lane's own rows are used as tightly as the drawing does; others keep 10 px off borders
     const candidates = [...prefer.filter((centre) => fitsIn(centre, inner)), ...rows.filter((centre) => fitsIn(centre, lane.bounds))];
     if (!rows.length) candidates.push(Math.round(cy(inner)));
     for (const centre of candidates) {

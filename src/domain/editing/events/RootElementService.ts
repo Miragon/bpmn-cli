@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import { modelError, usageError } from '../../document/utils/errors.js';
 import { typeRequest } from '../../document/utils/requests.js';
 import { kindLabel } from '../../document/utils/kinds.js';
@@ -26,7 +27,10 @@ const DEFINITION_REFS: Array<[string, string]> = [
  * send / receive tasks and message flows reference.
  */
 export class RootElementService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   /** `extra` (errorCode / escalationCode) is applied to a found element too. */
   ensure(type: RootRefType, nameOrId: string, extra: Record<string, string | undefined> = {}): { el: El; created: boolean } {
@@ -39,7 +43,7 @@ export class RootElementService {
     let el = existing.find((candidate) => idOf(candidate) === key) ?? existing.find((candidate) => candidate.get<string | undefined>('name') === key);
     let created = false;
     if (!el) {
-      el = doc.create(type, { id: doc.edit.allocator.allocate(typeRequest(type, { name: key, prefix: ROOT_PREFIX[type] })).id, name: key });
+      el = doc.create(type, { id: this.edit.allocator.allocate(typeRequest(type, { name: key, prefix: ROOT_PREFIX[type] })).id, name: key });
       addTo(doc.definitions, 'rootElements', el);
       created = true;
     }

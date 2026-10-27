@@ -31,9 +31,9 @@ function extensionList(types: readonly string[]): string {
   return [...counts].map(([type, count]) => (count > 1 ? `${type} x${count}` : type)).join(', ');
 }
 
+/** Views built without extensionElements fall back to the type names in `extensions`. */
 export function vendorFlags(item: { attrs?: Record<string, string>; extensions?: string[]; extensionElements?: string[] }): string[] {
   const flags = Object.entries(item.attrs ?? {}).map(([key, value]) => `${key}=${flagValue(value)}`);
-  // views built without extensionElements fall back to the type names in `extensions`
   const types = item.extensionElements ?? (item.extensions ?? []).filter((extension) => !(extension in (item.attrs ?? {})));
   if (types.length) flags.push(`ext: ${extensionList(types)}`);
   return flags;

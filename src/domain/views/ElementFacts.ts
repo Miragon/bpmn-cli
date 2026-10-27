@@ -57,7 +57,11 @@ export class ElementFacts {
     return texts.length ? texts.join(' ') : undefined;
   }
 
-  /** `zeebe: false` leaves out the Camunda 8 settings, which the reading views print in full. */
+  /**
+   * `zeebe: false` leaves out the Camunda 8 settings, which the reading views print in full.
+   * `calledDecision` comes from calledDecision, camunda:decisionRef or zeebe:calledDecision;
+   * `definitions` lists all triggers of several event definitions, as the label shows only the first.
+   */
   props(opts: { zeebe?: boolean } = {}): Record<string, unknown> | undefined {
     const el = this.el;
     const props: Record<string, unknown> = {};
@@ -70,7 +74,6 @@ export class ElementFacts {
     }
     const called = peek<string>(el, 'calledElement');
     if (called) props['calledElement'] = called;
-    // calledDecision, camunda:decisionRef or zeebe:calledDecision
     const decision = new DecisionLinkReader().linkOf(el);
     if (decision) props['calledDecision'] = decision.value;
     if (peek<boolean>(el, 'isForCompensation') === true) props['isForCompensation'] = true;
@@ -78,7 +81,6 @@ export class ElementFacts {
     if (messageRef && (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'))) props['message'] = refLabel(messageRef);
     const scriptFormat = peek<string>(el, 'scriptFormat');
     if (scriptFormat) props['scriptFormat'] = scriptFormat;
-    // the label shows only the first trigger of several event definitions
     const defs = definitionsOf(el);
     if (defs.length > 1) props['definitions'] = defs.map((definition) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, triggerType]) => is(definition, triggerType))?.[0] ?? definition.$type).join('+');
     if (opts.zeebe !== false) this.zeebeProps(props);

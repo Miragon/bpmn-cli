@@ -1,22 +1,16 @@
 import type { Doc } from '../document/Doc.js';
 import { CliError } from '../document/CliError.js';
 import type { DiagramCommand, ReorderElements } from '../commands/types.js';
-import { cx } from '../diagram/utils/geom.js';
-import type { DShape } from '../diagram/di/types.js';
-import { DrawnDiagram } from '../diagram/DrawnDiagram.js';
-import { unique } from '../diagram/utils/frames.js';
-import { ShapePlacementService } from '../diagram/format/ShapePlacementService.js';
-import { ShapeAlignmentService } from '../diagram/format/ShapeAlignmentService.js';
-import { ColoringService } from '../diagram/format/ColoringService.js';
-import { LabelPlacementService } from '../diagram/format/LabelPlacementService.js';
-import { FlowRoutingService } from '../diagram/format/FlowRoutingService.js';
-import { SpaceInsertionService } from '../diagram/format/SpaceInsertionService.js';
-import { OverlapRemovalService } from '../diagram/format/OverlapRemovalService.js';
-import { DiagramCompactionService } from '../diagram/format/DiagramCompactionService.js';
-import { RoomHint } from '../diagram/format/RoomHint.js';
-import { ElementOrderService } from '../editing/ElementOrderService.js';
-import { LaneBandService } from '../editing/LaneBandService.js';
-import { ElementSelector } from '../views/ElementSelector.js';
+import { ReorderTarget } from '../commands/ReorderTarget.js';
+import { cx } from './utils/geom.js';
+import type { DShape } from './di/types.js';
+import { DrawnDiagram } from './DrawnDiagram.js';
+import { unique } from './utils/frames.js';
+import { ShapePlacementService } from './format/ShapePlacementService.js';
+import { SpaceInsertionService } from './format/SpaceInsertionService.js';
+import { RoomHint } from './format/RoomHint.js';
+import { LaneBandService } from './format/LaneBandService.js';
+import { ElementSelector } from './format/ElementSelector.js';
 
 export interface FormatResult {
   op: DiagramCommand['op'] | 'order';
@@ -47,13 +41,17 @@ export class DiagramCommandService {
     this.diagram = new DrawnDiagram(doc);
   }
 
-  /** `asFile`: `doc` holds the file's own drawing, so the first refusal may name a command. */
+  /**
+   * `asFile`: `doc` holds the file's own drawing, so the first refusal may name a command.
+   * An `order` of a node's outgoing flows leaves the drawing alone: only bands are redrawn.
+   */
   run(entries: readonly FormatEntry[], asFile = false): FormatResult[] {
+    const drawn = entries.filter((entry) => entry.op.op !== 'order' || new ReorderTarget(this.doc, entry.op).ordersBands());
+    if (entries.length && !drawn.length) return [];
     const results: FormatResult[] = [];
-    for (const [position, entry] of entries.entries()) {
+    for (const [position, entry] of drawn.entries()) {
       try {
-        const result = this.runOne(entry, asFile && position === 0 && entry.index === 0);
-        if (result) results.push(result);
+        results.push(this.runOne(entry, asFile && position === 0 && entry.index === 0));
       } catch (err) {
         if (err instanceof CliError) err.details['op'] = entry.index;
         throw err;
@@ -91,11 +89,10 @@ export class DiagramCommandService {
     return { op: { ...op, ids }, picked };
   }
 
-  private runOne(entry: FormatEntry, asFile: boolean): FormatResult | undefined {
+  private runOne(entry: FormatEntry, asFile: boolean): FormatResult {
     const index = entry.index;
     const resolved = entry.op.op === 'order' ? { op: entry.op, picked: new Set<string>() } : this.resolveSelection(entry.op);
     const op = resolved.op;
-    if (op.op === 'order' && !new ElementOrderService(this.doc, op).ordersBands()) return undefined;
     const snap = this.diagram.snapshot();
     const notes: string[] = [];
     let rerouted: string[] = [];
@@ -108,28 +105,28 @@ export class DiagramCommandService {
         break;
       }
       case 'align':
-        rerouted = new RoomHint(diagram, op, asFile).run(() => new ShapeAlignmentService(diagram, op, snap, notes, resolved.picked).run());
+        rerouted = new RoomHint(diagram, op, asFile).run(() => diagram.alignShapes(op, snap, notes, resolved.picked));
         break;
       case 'color':
-        extra.colored = new ColoringService(diagram, op).run();
+        extra.colored = diagram.colorElements(op);
         break;
       case 'label': {
-        const labelled = new LabelPlacementService(diagram, op, snap, notes).run();
+        const labelled = diagram.placeLabel(op, snap, notes);
         extra.labels = labelled.labels;
         rerouted = labelled.rerouted;
         break;
       }
       case 'route':
-        rerouted = new FlowRoutingService(diagram, op).run();
+        rerouted = diagram.rerouteFlow(op);
         break;
       case 'space':
         rerouted = new SpaceInsertionService(diagram, op, snap, notes).run();
         break;
       case 'tidy':
-        rerouted = new OverlapRemovalService(diagram, op, snap, notes).run();
+        rerouted = diagram.removeOverlaps(op, snap, notes);
         break;
       case 'compact':
-        rerouted = new DiagramCompactionService(diagram, op, snap, notes).run();
+        rerouted = diagram.compactDiagram(op, snap, notes);
         break;
       case 'order':
         rerouted = new LaneBandService(diagram, op, snap, notes).run();

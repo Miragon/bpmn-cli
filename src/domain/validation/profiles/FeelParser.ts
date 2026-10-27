@@ -170,9 +170,9 @@ export class FeelParser {
     }
   }
 
+  /** Parses an if / for / some / every form; the word is a name where its form does not follow. */
   private textual(): void {
     const token = this.peek();
-    // if / for / some / every are names where their form does not follow
     if (token.kind === 'word') {
       for (const [word, form] of [
         ['if', () => this.ifExpr()],
@@ -236,6 +236,7 @@ export class FeelParser {
     }
   }
 
+  /** Parses a comparison; `instance of` is tried before `in`, as Camunda's parser does. */
   private comparison(): void {
     if (['<', '<=', '>', '>='].some((operator) => this.isOp(operator))) {
       this.next();
@@ -256,7 +257,6 @@ export class FeelParser {
       this.expectKw('and', 'between needs and: x between 1 and 5');
       this.sum();
     } else if (this.isWord() && this.peek().text.startsWith('in')) {
-      // instance of before in, as Camunda's parser tries them
       this.either(
         () => {
           if (!this.kw('instance')) this.unexpected();
@@ -287,11 +287,11 @@ export class FeelParser {
     }
   }
 
+  /** Parses an interval; in its upper bound a `[` without its `]` closes the interval ([1..5[) instead of starting a filter. */
   private range(): void {
     this.next();
     this.sum();
     this.expectOp('..', 'expected .. in an interval: [1..5]');
-    // in the upper bound a `[` without its `]` closes the interval ([1..5[), it is no filter
     this.rangeEnd++;
     try {
       this.sum();
@@ -379,8 +379,8 @@ export class FeelParser {
     else this.unexpected('expected a name after .');
   }
 
+  /** Parses a primary and what follows it; a call may follow once, after a name or a path of names: a.b(1) but not f(1)(2). */
   private postfix(): void {
-    // once, after a name or a path of names: a.b(1) but not f(1)(2)
     let callable = this.primary();
     for (;;) {
       if (this.isOp('.')) {
@@ -398,7 +398,10 @@ export class FeelParser {
     }
   }
 
-  /** true when a call may follow */
+  /**
+   * Parses a primary; true when a call may follow. A function name may contain spaces
+   * (string length(x)), else the first word alone is the name.
+   */
   private primary(): boolean {
     const token = this.peek();
     if (token.kind === 'num' || token.kind === 'str' || token.kind === 'temporal') {
@@ -433,7 +436,6 @@ export class FeelParser {
     }
     const words = this.callWordsAhead();
     if (!words) return this.name();
-    // a function name with spaces (string length(x)), else the first word alone
     let callable = false;
     this.either(
       () => {

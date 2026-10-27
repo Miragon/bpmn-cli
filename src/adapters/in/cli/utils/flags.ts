@@ -4,10 +4,6 @@ import type { ImageFormat } from '../../../../application/port/out/WriteImagePor
 import { CliError } from '../../../../domain/document/CliError.js';
 import { usageError } from '../../../../domain/document/utils/errors.js';
 
-export function flag(key: string): string {
-  return `--${key.replace(/[A-Z]/g, (upper) => `-${upper.toLowerCase()}`)}`;
-}
-
 export function parseKeyValues(items: string[], what = 'property'): Record<string, string> {
   const out: Record<string, string> = {};
   for (const item of items) {

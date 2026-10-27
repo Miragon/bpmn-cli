@@ -6,10 +6,12 @@ function leftOutCount(report: ValidatorReport): number {
   return (report.leftOut ?? []).reduce((sum, group) => sum + group.count, 0);
 }
 
-/** `7 left out (incoming / outgoing lists the file does not keep; ...)` */
+/**
+ * `7 left out (incoming / outgoing lists the file does not keep; ...)`
+ * 'bpmnlint' is BPMNLINT_VALIDATOR spelled out: the report does not import the validator.
+ */
 export function leftOutText(validator: string, group: { reason: string; count: number }): string {
   const it = group.count === 1 ? 'it' : 'them';
-  // BPMNLINT_VALIDATOR, spelled out: the report does not import the validator
   return `${group.count} left out (${group.reason}; ${validator === 'bpmnlint' ? `\`bpmn validate <file>\` lists ${it}` : `a check lists ${it}`})`;
 }
 

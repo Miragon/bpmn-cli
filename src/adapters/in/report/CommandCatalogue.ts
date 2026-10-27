@@ -1,5 +1,7 @@
 import { SWATCHES } from '../../../domain/diagram/utils/colors.js';
-import { LAYOUT_MODES } from '../../../domain/batch/types.js';
+import type { TriggerOptions } from '../../../domain/commands/types.js';
+import { triggerFlag } from './utils/option-flags.js';
+import { LAYOUT_MODES } from '../../../domain/diagram/types.js';
 
 export interface CommandSignature {
   name: string;
@@ -89,5 +91,9 @@ export class CommandCatalogue {
   commonOption(longFlag: string): [flags: string, help: string] {
     const doc = this.commonOptions.find((option) => (option.flags ?? option.option).split(/[ ,]+/).includes(longFlag))!;
     return [doc.flags ?? doc.option, doc.help ?? doc.description];
+  }
+
+  triggerOption(key: keyof TriggerOptions): [flags: string, help: string] {
+    return triggerFlag(key);
   }
 }

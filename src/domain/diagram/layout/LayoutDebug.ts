@@ -24,9 +24,12 @@ export class LayoutDebug {
     for (const sink of LayoutDebug.callSinks) sink(line);
   }
 
+  /**
+   * Routes the log to `sink` while `fn` runs; a wrapper per call keeps a sink shared by two
+   * overlapping calls active until both are done.
+   */
   static async during<TResult>(sink: DebugSink | undefined, fn: () => Promise<TResult>): Promise<TResult> {
     if (!sink) return fn();
-    // a wrapper per call keeps a sink shared by two overlapping calls active until both are done
     const own: DebugSink = (line) => sink(line);
     LayoutDebug.callSinks.add(own);
     try {

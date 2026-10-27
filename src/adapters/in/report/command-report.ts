@@ -3,10 +3,11 @@
  * a host that embeds the library hands its agent exactly what the CLI would print.
  */
 import type { LayoutProblem } from '../../../domain/diagram/utils/problems.js';
-import type { FormatResult } from '../../../domain/batch/DiagramCommandService.js';
+import type { FormatResult } from '../../../domain/diagram/DiagramCommandService.js';
 import type { Warning } from '../../../domain/document/CliError.js';
 import type { CheckResult } from '../../../application/port/in/ValidateDocumentUseCase.js';
-import type { ConventionsReport, LayoutStatus } from '../../../domain/batch/types.js';
+import type { ConventionsReport } from '../../../domain/batch/types.js';
+import type { LayoutStatus } from '../../../domain/diagram/types.js';
 import type { PlatformSummary } from '../../../domain/validation/profiles/PlatformProfiles.js';
 import type { Change } from '../../../domain/document/ChangeSet.js';
 import type { ValidationResult } from '../../../domain/validation/StructuralValidator.js';

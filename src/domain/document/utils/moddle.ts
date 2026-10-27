@@ -247,6 +247,7 @@ export async function parseXml(xml: string, moddle: BpmnModdle = createModdle())
 /**
  * The XSD types IDREF and QName collapse whitespace, but bpmn-moddle looks up a padded reference
  * as written and drops it ("unresolved reference"). Resolves those by the trimmed id instead.
+ * Each property's references are set in document order, each resolved as written or trimmed.
  */
 function resolvePaddedReferences(result: ImportResult): ImportWarning[] {
   const byId = result.elementsById;
@@ -264,7 +265,6 @@ function resolvePaddedReferences(result: ImportResult): ImportWarning[] {
     rebuilt.set(reference.element, seen);
     if (seen.has(reference.property)) continue;
     seen.add(reference.property);
-    // the property's references in document order, each resolved as written or trimmed
     const list = result.references.filter((sibling) => sibling.element === reference.element && sibling.property === reference.property).map((sibling) => byId[sibling.id] ?? byId[sibling.id.trim()]).filter((sibling): sibling is El => !!sibling);
     const collection = reference.element.get<El[]>(property.name);
     collection.splice(0, collection.length, ...list);

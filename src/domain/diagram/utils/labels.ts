@@ -40,12 +40,14 @@ export function defaultLabelSide(kind: DShape['kind']): LabelSide {
   return ORDER[kind]?.[0] ?? 'below';
 }
 
-/** 'inside' when the label overlaps the shape. */
+/**
+ * 'inside' when the label overlaps the shape.
+ * A boundary event's label below its host's border is 'below'.
+ */
 export function labelSideOf(shape: Pick<DShape, 'bounds' | 'label' | 'kind' | 'hostId'>, host?: Box): LabelSide | 'inside' | undefined {
   const label = shape.label;
   if (!label) return undefined;
   const bounds = shape.bounds;
-  // a boundary event's label hangs below its host border
   if (host && shape.kind === 'boundary' && label.y >= bottom(host) - 2) return 'below';
   if (label.y >= bottom(bounds) - 2) return 'below';
   if (bottom(label) <= bounds.y + 2) return 'above';

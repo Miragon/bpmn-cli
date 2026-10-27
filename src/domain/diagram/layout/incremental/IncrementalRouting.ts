@@ -38,6 +38,8 @@ export class IncrementalRouting {
    * the placement broke (not message flows) are routed now, and the spacing is measured again, so
    * the next placement sees what the next single command would. Step 8 routes such a flow again
    * only when it broke since.
+   * What the placement broke (the space tool, a new shape on a line) is routed again now; a flow
+   * whose end changes later (into a node still to be placed) is routed then.
    */
   routeNow(plane: Plane, id: string): void {
     const shape = plane.shapes.get(id);
@@ -61,12 +63,10 @@ export class IncrementalRouting {
       if (LayoutDebug.on()) LayoutDebug.log(`[route] ${fid}: ${this.run.newEdges.has(fid) ? 'new' : 'end placed'}, routed when ${id} was placed`);
       this.routeKept(plane, edge);
     }
-    // what the placement broke (the space tool, a new shape on a line) is routed again now
     const detached = !PlaneQuery.verticalBand(plane);
     for (const edge of plane.edges.values()) {
       if (edge.kind === 'messageFlow' || edge.points.length < 2 || edge.sourceId === id || edge.targetId === id || !edge.sourceId || !edge.targetId) continue;
       const ends = DiagramReader.edgeEnds(edge.el);
-      // an end that changes later (a flow into a node still to be placed) is routed then
       if (ends.sourceId !== edge.sourceId || ends.targetId !== edge.targetId || !plane.shapes.has(edge.sourceId) || !plane.shapes.has(edge.targetId)) continue;
       const was = this.run.routedNow.get(edge.id) ?? this.edgesBefore.get(edge);
       if (!was || (!this.run.drawing(plane).brokenEdge(edge, was, { detached }) && !(this.run.place.continued?.has(id) && this.grazes(plane, edge, [id])))) continue;
@@ -74,7 +74,6 @@ export class IncrementalRouting {
       this.routeKept(plane, edge);
     }
     if (!shape.label && hasExternalLabel(shape) && raw<string>(el, 'name')) this.run.drawing(plane).placeShapeLabel(shape);
-    // the next command would measure the drawing's gap and row spacing again, with these flows
     this.run.place.spacing.set(plane, PlaneQuery.spacingOf(plane));
   }
 
@@ -85,7 +84,12 @@ export class IncrementalRouting {
     this.run.routedNow.set(edge.id, drawing.edgeBefore(edge));
   }
 
-  /** Creates DEdges for connections without DI and collects every edge to (re)route. */
+  /**
+   * Creates DEdges for connections without DI and collects every edge to (re)route.
+   * A line not reaching its ends is routed again, except on vertical pools / lanes; one routed when
+   * its second end was placed is kept unless it broke since. Ends are compared by their ids now, so
+   * renaming an end (`set id=`) changes nothing.
+   */
   collectEdges(before: Map<DEdge, EdgeBefore>): void {
     const edges = this.edgeIndex(this.run.planes);
     for (const el of this.run.modelOrder(this.run.doc.definitions)) {
@@ -105,11 +109,9 @@ export class IncrementalRouting {
       }
     }
     for (const plane of this.run.planes) {
-      // a line not reaching its ends is routed again, except on vertical pools / lanes
       const detached = !PlaneQuery.verticalBand(plane);
       for (const edge of plane.edges.values()) {
         if (this.run.fromEngine.has(edge.id)) continue;
-        // routed when its second end was placed: kept unless it broke since
         const now = this.run.routedNow.get(edge.id);
         if (now) {
           const ends = DiagramReader.edgeEnds(edge.el);
@@ -126,7 +128,6 @@ export class IncrementalRouting {
         const ends = DiagramReader.edgeEnds(edge.el);
         edge.sourceId = ends.sourceId;
         edge.targetId = ends.targetId;
-        // the ends compared by their ids now: renaming an end (`set id=`) changes nothing here
         const why =
           old && (this.run.cur(old.sourceId) !== ends.sourceId || this.run.cur(old.targetId) !== ends.targetId)
             ? 'ends changed'
@@ -168,11 +169,13 @@ export class IncrementalRouting {
     return false;
   }
 
-  /** Routes every collected edge; returns the kept ones routed again. */
+  /**
+   * Routes every collected edge; returns the kept ones routed again.
+   * Message flows go after the sequence flows (they see the final ones), edges on edges last.
+   */
   routeAll(): string[] {
     const rerouted: string[] = [];
     for (const plane of this.run.planes) {
-      // message flows after the sequence flows (they see the final ones), edges on edges last
       const drawing = this.run.drawing(plane);
       const pending = drawing.routeOrder([...plane.edges.values()].filter((edge) => this.run.reroute.has(edge.id)));
       const waiting = new Set(pending.map((edge) => edge.id));

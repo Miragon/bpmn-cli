@@ -85,6 +85,7 @@ export class Cli {
   exitCode: number | undefined;
   private stdinUsed: string | undefined;
 
+  /** Parser errors (unknown command / option, missing argument) go through printError too. */
   constructor(
     version: string,
     readonly useCases: CliUseCases,
@@ -94,7 +95,6 @@ export class Cli {
       .name('bpmn')
       .description('Edit BPMN 2.0 models semantically; the diagram is laid out automatically (bpmn.io).')
       .version(version)
-      // parser errors (unknown command / option, missing argument) go through printError too
       .exitOverride()
       .configureOutput({ writeOut: (text) => io.stdout.write(text), writeErr: (text) => io.stderr.write(text), outputError: () => undefined });
     const commands = [
@@ -128,13 +128,13 @@ export class Cli {
     for (const command of commands) new command(this).register(this.program);
   }
 
+  /** After --help / --version / a bare `bpmn` commander printed what it wanted to; only the exit code is kept. */
   async run(argv: string[]): Promise<void> {
     try {
       await this.program.parseAsync(argv);
     } catch (err: unknown) {
       const json = argv.includes('--json');
       if (err instanceof CommanderError) {
-        // --help / --version / bare `bpmn`: commander printed what it wanted to
         if (['commander.helpDisplayed', 'commander.help', 'commander.version'].includes(err.code)) {
           this.exitCode = err.exitCode;
           return;

@@ -21,7 +21,10 @@ export class C7ExtensionContentRules extends C7Rules {
     super(run, prefix);
   }
 
-  /** Engine rules on the content of one (allowed, top-level) camunda extension element. */
+  /**
+   * Engine rules on the content of one (allowed, top-level) camunda extension element.
+   * The fields of a class / delegateExpression listener are checked, as the engines parse them on deploy.
+   */
   checkContent(host: El, owner: El | undefined, extension: El, local: string): void {
     const where = this.describe(host, owner);
     const rebuild = (fix: Record<string, string> = {}): string => this.extHint(host, owner, extension, local, fix);
@@ -46,7 +49,6 @@ export class C7ExtensionContentRules extends C7Rules {
         if (!timer) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:timeout:timer`, `${label} has no bpmn:timerEventDefinition; the engines refuse the file`, rebuild());
         if (attr(extension, 'id') === undefined) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:timeout:id`, `${label} has no id, which the engines require on timeout task listeners; they refuse the file`, rebuild({ id: '<listenerId>' }));
       }
-      // fields of a class / delegateExpression listener are parsed when the file is deployed
       const fieldsHere = this.children(extension, 'field');
       if (fieldsHere.length && this.implementation.fieldsRead(extension)) {
         const addr = this.addressOf(host, owner);

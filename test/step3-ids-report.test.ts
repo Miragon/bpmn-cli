@@ -790,7 +790,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     for (const [name, after] of steps) {
       // before: the 7th splice found the style flipped to named (5 of 9 flows cut), renamed nothing and named its flow
       // Flow_MahnungVersendenToBestellungStornieren
-      expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow, name).toEqual({ form: 'idPair', prefix: 'Flow' });
+      expect((await Doc.fromXml(xml)).ownIdStyle.info().sequenceFlow, name).toEqual({ form: 'idPair', prefix: 'Flow' });
       const applied = await applyToXml(xml, [{ op: 'add', kind: 'task', name, after }], { layout: false });
       expect(Object.keys(applied.result.renamed ?? {}), name).toHaveLength(1);
       xml = applied.xml;
@@ -807,7 +807,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     <bpmn:sequenceFlow id="Flow_checkOrderToShipOrder" sourceRef="Activity_checkOrder" targetRef="Activity_shipOrder" />
     <bpmn:sequenceFlow id="Flow_shipOrderToBillOrder" sourceRef="Activity_shipOrder" targetRef="Activity_billOrder" />
     <bpmn:sequenceFlow id="Flow_billOrderToCheckOrderJoin" sourceRef="Activity_billOrder" targetRef="Gateway_afterCheckOrderJoin" />`);
-    expect((await Doc.fromXml(camel)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'Flow' });
+    expect((await Doc.fromXml(camel)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'Flow' });
     const spliced = await applyToXml(camel, [{ op: 'add', kind: 'task', name: 'Archive order', flow: 'Flow_billOrderToCheckOrderJoin' }], { layout: false });
     expect(spliced.result.renamed).toEqual({ Flow_billOrderToCheckOrderJoin: 'Flow_billOrderToArchiveOrder' });
   });
@@ -834,7 +834,7 @@ describe('id quality: context once, length cap, transliteration', () => {
       ],
       ['Flow_Activity_CheckOrder_Activity_ShipOrder', 'Flow_Activity_ShipOrder_Activity_BillOrder', 'Flow_Activity_BillOrder_ActivityPruefen', 'Flow_Activity_ZahlungseingangsbestaetigungenPruefen_Activity', 'Flow_Activity_ActivityAnstossen', 'Flow_KundenstammdatenaktualisierungAnstossenToPackOrder', 'Flow_PackOrderToArchiveOrder'],
     );
-    expect((await Doc.fromXml(idPair)).idStyle.info().sequenceFlow).toEqual({ form: 'idPair', prefix: 'Flow' });
+    expect((await Doc.fromXml(idPair)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'idPair', prefix: 'Flow' });
     const pack = await applyToXml(idPair, [{ op: 'add', kind: 'task', name: 'Weigh parcel', after: 'Activity_PackOrder' }], { layout: false });
     expect(pack.result.renamed).toEqual({ Flow_PackOrderToArchiveOrder: 'Flow_Activity_PackOrder_Activity_WeighParcel' });
     const before = await applyToXml(idPair, [{ op: 'add', kind: 'task', name: 'Weigh parcel', flow: 'Flow_KundenstammdatenaktualisierungAnstossenToPackOrder' }], { layout: false });
@@ -844,7 +844,7 @@ describe('id quality: context once, length cap, transliteration', () => {
       [['Task_check', 'Check'], ['Task_ship', 'Ship'], ['Task_bill', 'Bill'], ['Task_pay', 'Pay'], ['Task_done', 'Done']],
       ['Flow_Task_check_to_Task_ship', 'Flow_Task_ship_to_Task_bill', 'Flow_Task_bill_to_Task_pay', 'Flow_pay_to_done'],
     );
-    expect((await Doc.fromXml(idSnake)).idStyle.info().sequenceFlow).toEqual({ form: 'idSnake', prefix: 'Flow' });
+    expect((await Doc.fromXml(idSnake)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'idSnake', prefix: 'Flow' });
     const log = await applyToXml(idSnake, [{ op: 'add', kind: 'task', name: 'Log', flow: 'Flow_pay_to_done' }], { layout: false });
     expect(log.result.renamed).toEqual({ Flow_pay_to_done: 'Flow_Task_pay_to_Task_log' });
     // a camelCase file that reads as stemTo, with flows 0.6 named and cut at 61 characters to an end with a suffix
@@ -860,7 +860,7 @@ describe('id quality: context once, length cap, transliteration', () => {
       ],
       ['Flow_checkOrderToShipOrder', 'Flow_shipOrderToBillOrder', 'Flow_billOrderToLieferantenbestellungsuebersicht', 'Flow_lieferantenbestellungsueberToLieferantenbestellungsuebe2', 'Flow_lieferantenbestellungsuebe2ToKundenstammdatenaktualisier'],
     );
-    expect((await Doc.fromXml(stem)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'Flow' });
+    expect((await Doc.fromXml(stem)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'Flow' });
     const weigh = await applyToXml(
       stem,
       [
@@ -882,7 +882,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     <bpmn:sequenceFlow id="flow_eventOrderReceivedToCheckOrder" sourceRef="start_event_order_received" targetRef="serviceTask_checkOrder" />
     <bpmn:sequenceFlow id="flow_checkOrderToShipOrder" sourceRef="serviceTask_checkOrder" targetRef="serviceTask_shipOrder" />
     <bpmn:sequenceFlow id="flow_shipOrderToOrderShipped" sourceRef="serviceTask_shipOrder" targetRef="endEvent_orderShipped" />`);
-    expect((await Doc.fromXml(handWritten)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
+    expect((await Doc.fromXml(handWritten)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
     const gate = await applyToXml(handWritten, [{ op: 'add', kind: 'serviceTask', name: 'Check gate', after: 'start_event_order_received' }], { layout: false });
     expect(gate.result.renamed).toEqual({ flow_eventOrderReceivedToCheckOrder: 'flow_event_order_receivedToCheckGate' });
     expect(ID_CONVENTIONS.renames).toMatch(/or the one any other flow prefix or form the file's flows use gives it, also the named Flow_<Source>To<Target> id in the file's case, which earlier versions gave its flows, whoever wrote it/);
@@ -900,7 +900,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     <bpmn:serviceTask id="${task('Invoicing')}" name="Invoicing"><bpmn:incoming>Flow_${scope}_ShippingToInvoicing</bpmn:incoming></bpmn:serviceTask>
     <bpmn:sequenceFlow id="Flow_${scope}_ValidateToShipping" sourceRef="${task('Validate')}" targetRef="${task('Shipping')}" />
     <bpmn:sequenceFlow id="Flow_${scope}_ShippingToInvoicing" sourceRef="${task('Shipping')}" targetRef="${task('Invoicing')}" />`);
-    expect((await Doc.fromXml(xml)).idStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope });
+    expect((await Doc.fromXml(xml)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'scopedTo', prefix: 'Flow', scope });
     const applied = await applyToXml(xml, [{ op: 'add', kind: 'serviceTask', name: 'Pack', after: task('Validate') }], { layout: false });
     expect(applied.result.renamed).toEqual({ [`Flow_${scope}_ValidateToShipping`]: `Flow_${scope}_ValidateToPack` });
     expect(flowIds(applied.xml)).toContain(`Flow_${scope}_PackToShipping`);
@@ -1037,7 +1037,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     <bpmn:sequenceFlow id="Flow_ship_order_to_bill_order" sourceRef="Task_ship_order" targetRef="Task_bill_order" />
     <bpmn:sequenceFlow id="${separated}" sourceRef="${reviewTask}" targetRef="${reconcileTask}" />`),
     );
-    expect(doc3.idStyle.info().sequenceFlow.form).toBe('stemSnake');
+    expect(doc3.ownIdStyle.info().sequenceFlow.form).toBe('stemSnake');
     const cs = runOps(doc3, [{ op: 'add', kind: 'task', name: 'Scan', after: reviewTask }]);
     expect(cs.renames).toEqual([expect.objectContaining({ from: separated, to: 'Flow__lieferantenbestellungsuebersichtenpruefung_to_scan' })]);
   });
@@ -1103,7 +1103,7 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect(Object.values(applied.result.aliases!)).toEqual([base, `${base}No2`, `${base}No3`, `${base}No4`]);
     expect(`${base}No2`).toHaveLength(63);
     // four of the six flows are cut: they vote for stemTo (cutOfForm), and a splice renames the suffixed one
-    expect((await Doc.fromXml(applied.xml)).idStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
+    expect((await Doc.fromXml(applied.xml)).ownIdStyle.info().sequenceFlow).toEqual({ form: 'stemTo', prefix: 'flow' });
     const r2 = await applyToXml(applied.xml, [{ op: 'add', kind: 'task', name: 'Pruefen', flow: `${base}No3` }], { layout: false });
     expect(r2.result.renamed).toEqual({ [`${base}No3`]: 'flow_lieferantenbestellungSynchronisierenToPruefen' });
   });

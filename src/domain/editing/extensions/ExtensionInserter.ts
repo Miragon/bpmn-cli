@@ -41,6 +41,7 @@ export class ExtensionInserter {
     this.snippets = new ExtensionSnippetReader(this.names, this.hosts);
   }
 
+  /** Adds extension values; they are built and checked before anything in the document changes. */
   add(el: El, op: EditExtensionElements): ChangeSet {
     const cs = new ChangeSet();
     this.assertCanHoldExtensions(el);
@@ -57,7 +58,6 @@ export class ExtensionInserter {
     const notes: string[] = [];
     const nested = steps.length > 1;
 
-    // built and checked before anything in the document changes
     let values: El[];
     if (hasXml) {
       values = this.snippets.parse(el, op.xml!, nested);
@@ -151,6 +151,7 @@ export class ExtensionInserter {
     for (const kid of this.names.kidsOf(incoming)) this.checkInsert(host, this.names.kidsOf(existing), this.names.typeOf(existing), kid, false);
   }
 
+  /** Inserts a value at its level; a missing container is written with the prefix the file binds to its namespace. */
   private insert(level: ExtensionLevel, value: El, replace: boolean, out: Outcome[], notes: string[], drops: Warning[] = []): void {
     const typeName = this.names.typeOf(value);
     const where = level.parent ? ` in ${level.label}` : '';
@@ -158,7 +159,6 @@ export class ExtensionInserter {
     if (home) {
       let container = level.items().find((item) => this.names.typeOf(item) === home);
       if (!container) {
-        // a canonical name: written with the prefix the file binds to its namespace
         const [prefix, local] = home.split(':') as [string, string];
         const uri = this.names.canonicalUri(prefix);
         const ns = this.names.resolvePrefix(level.host, prefix, uri ? { [prefix]: uri } : {});

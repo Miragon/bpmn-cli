@@ -30,12 +30,16 @@ export class C8EventRules extends C8Rules {
     }
   }
 
+  /**
+   * Checks a timer definition. Two timer kinds on one definition are left to the schema error
+   * the engine reports first; a value that fails tells the right form without a real date-time
+   * or with a cron field out of its range apart.
+   */
   private checkTimer(el: El, def: El): void {
     const id = idOf(el)!;
     const label = this.describe(el);
     const kinds = TIMER_ELEMENTS.filter((timerKind) => peek<El>(def, timerKind));
     if (kinds.length !== 1) {
-      // two of them is a schema error the engine reports first
       if (!kinds.length) this.push('deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer', `Timer of ${label} has no date, cycle or duration; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} timer=PT1H\` (a duration; R/PT1H is a cycle, an ISO date-time with offset a date).`);
       return;
     }
@@ -56,7 +60,6 @@ export class C8EventRules extends C8Rules {
     }
     const timer = new TimerValue(value);
     const ok = kind === 'timeDuration' ? timer.isDuration() : kind === 'timeDate' ? timer.isDateTime() : timer.isCycle();
-    // the right form, but no real date-time or a cron field out of its range
     const range = ok ? undefined : kind === 'timeDate' ? timer.dateTimeRangeProblem() : kind === 'timeCycle' ? timer.cycleRangeProblem() : undefined;
     if (range) {
       this.push('deploy', 'W_C8_DEPLOY_TIMER', el, undefined, 'timer:value', `The ${kind} "${value}" of ${label} is no valid ${kind === 'timeDate' || !/^\S+( +\S+){5}$/.test(value) ? 'date-time' : 'cron expression'}: ${range}; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} ${sh(`timer=${kind === 'timeDate' ? '2030-12-31T10:00:00Z' : 'R/PT1H'}`)}\` (with a value in range).`);
@@ -202,6 +205,7 @@ export class C8EventRules extends C8Rules {
     this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'condition', `The condition "${(body ?? '').trim()}" of conditional event ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, `\`bpmn set <file> ${id} ${sh(`when==${feelOf(body ?? '')}`)}\` (check the FEEL syntax).`);
   }
 
+  /** Checks a message catch event; two subscriptions are reported as W_C8_DEPLOY_DUPLICATE_EXTENSION on the message, not here. */
   checkMessageCatch(el: El): void {
     const id = idOf(el)!;
     const label = this.describe(el);
@@ -222,7 +226,6 @@ export class C8EventRules extends C8Rules {
       return;
     }
     const subs = this.zeebe(msg, 'subscription');
-    // two of them: W_C8_DEPLOY_DUPLICATE_EXTENSION on the message
     if (subs.length > 1) return;
     if (!subs.length) {
       this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, `subscription:${mid}`, `Message ${mid} ("${name}") of ${label} has no ${this.zeebeName('subscription')}: Camunda 8 needs one with the correlation key that matches a message to an instance and refuses the file`, `\`bpmn ext add <file> ${mid} ${this.zeebeName('subscription')} correlationKey==<expression>\` (e.g. correlationKey==orderId).`, [mid]);
@@ -277,6 +280,9 @@ export class C8EventRules extends C8Rules {
   /**
    * Message names caught twice in one scope, signal names on two starts / one activity's
    * boundaries, error codes twice in one scope.
+   * The groups are the boundary events of one activity (with the activity itself when it is a
+   * receive task), the branches of an event-based gateway, the event sub-process starts of the
+   * scope and the start events of a process.
    */
   checkSubscriptionScopes(scope: El): void {
     const nodes = this.doc.flowNodes(scope);
@@ -301,7 +307,6 @@ export class C8EventRules extends C8Rules {
       }
       for (const [name, list_] of byName) if (list_.length > 1) report(list_, kind, name, where, code, subjectPrefix);
     };
-    // boundary events of one activity (with the activity itself when it is a receive task)
     for (const act of nodes.filter((node) => this.kit.is(node, 'bpmn:Activity'))) {
       const boundaries = nodes.filter((node) => this.kit.is(node, 'bpmn:BoundaryEvent') && peek<El>(node, 'attachedToRef') === act);
       if (!boundaries.length) continue;
@@ -309,16 +314,13 @@ export class C8EventRules extends C8Rules {
       group(boundaries, 'signal', `on ${idOf(act)}`, 'W_C8_DEPLOY_SIGNAL', `boundarySignal:${idOf(act)}`);
       this.checkErrorCodes(boundaries, `the boundary events of ${idOf(act)}`);
     }
-    // branches of an event-based gateway
     for (const gw of nodes.filter((node) => this.kit.is(node, 'bpmn:EventBasedGateway'))) {
       const targets = (this.outgoing.get(gw) ?? []).map((flow) => peek<El>(flow, 'targetRef')).filter((target): target is El => !!target && this.kit.is(target, 'bpmn:IntermediateCatchEvent'));
       group(targets, 'message', `after event-based gateway ${idOf(gw)}`, 'W_C8_DEPLOY_MESSAGE', `gatewayMessage:${idOf(gw)}`);
     }
-    // start events of the event sub-processes of this scope
     const eventSubStarts = nodes.filter((node) => this.kit.isEventSubProcess(node)).flatMap((sp) => this.doc.flowNodes(sp).filter((node) => this.kit.is(node, 'bpmn:StartEvent')));
     group(eventSubStarts, 'message', `in the event sub-processes of ${idOf(scope)}`, 'W_C8_DEPLOY_MESSAGE', `eventSubMessage:${idOf(scope)}`);
     this.checkErrorCodes(eventSubStarts, `the event sub-processes of ${idOf(scope)}`);
-    // process start events
     if (this.kit.is(scope, 'bpmn:Process')) {
       const starts = nodes.filter((node) => this.kit.is(node, 'bpmn:StartEvent'));
       group(starts, 'message', `in process ${idOf(scope)}`, 'W_C8_DEPLOY_MESSAGE', 'startMessage');

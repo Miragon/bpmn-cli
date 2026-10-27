@@ -66,10 +66,10 @@ export class ConventionsTable {
     for (const [kind, type] of [['sequenceFlow', 'bpmn:SequenceFlow'], ['messageFlow', 'bpmn:MessageFlow']] as const) this.flow(kind, type);
   }
 
+  /** A row of one kind shows its concrete pattern (Process_{name:pascal}, not <Kind>_). */
   view(opts: { file?: string; severity?: BpmnlintSeverity; notes?: ValidatorFinding[]; where?: string; undeclared?: Undeclared } = {}): ConventionsView {
     const declared = this.declared;
     const conventions = this.conventions;
-    // a pattern of one kind reads as it is (Process_{name:pascal}, not <Kind>_)
     const rows: ConventionsRow[] = this.groups.map(({ concrete, ...row }) => (row.kinds.length === 1 ? { ...row, pattern: concrete } : row));
     const examples = ['bpmn:StartEvent:timer', 'bpmn:BoundaryEvent:message', 'bpmn:EndEvent:error'].map((key) => declared?.prefixes[key]).filter((prefix): prefix is string => !!prefix);
     const mode = declared?.qualifier ?? 'optional';
@@ -100,12 +100,14 @@ export class ConventionsTable {
     this.add(kind, `${head}${tail}`, `${own}${tail}`, source, source !== 'lint' ? this.unnamed(type) : this.unqualified(type));
   }
 
+  /**
+   * Message flows the rule does not name take the sequence flows' prefix, unchecked. A long head
+   * is noted with its fallback (Flow_) where the ends do not fit beside it.
+   */
   private flow(kind: 'sequenceFlow' | 'messageFlow', type: 'bpmn:SequenceFlow' | 'bpmn:MessageFlow'): void {
     const flowExplanation = this.style.explainFlow(type);
-    // message flows the rule does not name: they take the sequence flows' prefix, unchecked
     const borrowed = kind === 'messageFlow' && flowExplanation.source === 'lint' && !this.declared?.prefixes['bpmn:MessageFlow'];
     const pattern = `${flowExplanation.head}${this.flowTail(flowExplanation.form, flowExplanation.style.scope)}`;
-    // a long head stays where the ends fit beside it: Flow_ elsewhere
     const notes = [borrowed || flowExplanation.source !== 'lint' ? this.unnamed(type) : undefined, flowExplanation.fallback ? `${flowExplanation.fallback} where the ends do not fit` : undefined].filter((note): note is string => !!note);
     this.add(kind, pattern, pattern, borrowed ? 'lint shape' : flowExplanation.source, notes.length ? notes.join('; ') : undefined);
   }

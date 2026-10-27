@@ -73,13 +73,16 @@ interface Attempt extends Found {
 export class OrthogonalRouter {
   private constructor(private readonly context: Ctx) {}
 
+  /**
+   * Tries again with a thin margin when a route hits something: gaps narrower than two margins have
+   * no grid line.
+   */
   static route(req: RouteRequest): Point[] {
     const context = OrthogonalRouter.context(req);
     const router = new OrthogonalRouter(context);
     const frame = req.frame && OrthogonalRouter.finiteBox(req.frame) ? union(req.frame, union(context.source, context.target)) : undefined;
     let best = router.attempt(false, frame);
     if (!best || best.hits > 0) best = OrthogonalRouter.better(best, router.attempt(true, frame));
-    // gaps narrower than two margins have no grid line: look again with a thin margin
     const thin = context.margin > THIN_MARGIN ? new OrthogonalRouter({ ...context, margin: THIN_MARGIN }) : undefined;
     if (thin && (!best || best.hits > 0)) best = OrthogonalRouter.better(best, thin.attempt(true, frame));
     if (frame && (!best || best.hits > 0)) {
@@ -356,6 +359,8 @@ export class OrthogonalRouter {
    * A* over (node, direction, run: 0 free, 1 overlap, 2 shared tail) states. The heuristic adds
    * the unavoidable bends to the Manhattan distance and stays consistent, so the first goal
    * popped is optimal.
+   * A shared tail left before the vertex costs as an overlap after all.
+   * The goals map node·4 + inward direction to the port cost.
    */
   private astar(grid: RouteGrid): Found | undefined {
     const { xs, ys, nx, ny } = grid;
@@ -363,7 +368,7 @@ export class OrthogonalRouter {
     const nOv = grid.anyMg ? 3 : grid.anyOv ? 2 : 1;
 
     const goalNode = new Uint8Array(nx * ny);
-    const goals = new Map<number, number>(); // node·4 + inward direction -> port cost
+    const goals = new Map<number, number>();
     const tx: number[] = [], ty: number[] = [], te: number[] = [];
     for (const port of this.context.tgt) {
       const node = grid.nodeOf(port);
@@ -441,7 +446,6 @@ export class OrthogonalRouter {
           nov = 1;
           if (!(ov === 1 && direction === dir)) ng += OVERLAP;
         } else if (mgEdge) nov = 2;
-        // a shared tail left before the vertex was an overlap after all
         if (ov === 2 && nov !== 2) ng += OVERLAP;
         const nn = nj * nx + ni;
         const goalCost = goalNode[nn] ? goals.get(nn * 4 + direction) : undefined;

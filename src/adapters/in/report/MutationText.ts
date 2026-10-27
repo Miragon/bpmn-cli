@@ -15,15 +15,14 @@ export class MutationText {
     private readonly opts: { dryRun?: boolean } = {},
   ) {}
 
+  /** Format ops change the drawing only: their lines follow in the layout block. Errors only remain in a result written with --force. */
   text(): string {
     const result = this.result;
     const lines: string[] = [];
     const text = renderChanges({ created: result.created, changed: result.changed, removed: result.removed, warnings: [], notes: result.notes }).trimEnd();
-    // format ops change the drawing only: their lines follow in the layout block
     const formatOnly = hasNoEntries(result) && !!result.layout.format?.length && !result.notes.length;
     if (text && !formatOnly) lines.push(text);
     if (result.aliases && Object.keys(result.aliases).length) lines.push(aliasLine(result.aliases));
-    // errors only remain in a result written with --force
     for (const error of result.validation.errors) lines.push(`forced ${validatorTag(error)}${error.code}${error.element ? ` ${error.element}` : ''}: ${error.message}`);
     lines.push(...new WarningLines(advisoryOf(result.validation.validators)).lines(result.warnings.added));
     if (result.warnings.resolved.length) lines.push(`resolved: ${findingList(result.warnings.resolved)}`);

@@ -51,10 +51,10 @@ export class IdFitter {
 
   /**
    * `long`: the head leaves the ends fewer than 16 characters, so it stays only where they fit
-   * beside it at whole words (else Flow_; 0.6 always kept it).
+   * beside it at whole words (else Flow_; 0.6 always kept it). `glued`: a lower-case prefix
+   * without separator glues the words too (flowCheckToShip); an upper-case one reads apart (F_CheckToShip).
    */
   namedHead(prefix: string, sep: string | undefined): { head: string; glued: boolean; long: boolean } {
-    // flow12 glues the words too (flowCheckToShip); an upper-case one reads apart (F_CheckToShip)
     const glued = sep === '' && /[a-z]/.test(prefix);
     const joined = this.body === 'snake' || this.body === 'pascalSnake' ? 4 : 2;
     return { head: `${prefix}${glued ? '' : '_'}`, glued, long: !this.legacy && MAX_ID - prefix.length - (glued ? 0 : 1) - joined < 16 };
@@ -134,7 +134,8 @@ export class IdFitter {
   /**
    * Each end gives up words one by one, never its first or its last word with a letter, never a
    * word between two numbers (`Stufe23`); of the pairs that fit, most words, then most
-   * characters, then the more even wins. Only when nothing fits is a word cut inside.
+   * characters, then the more even wins. Only when nothing fits is a word cut inside, and the
+   * other end takes back what fits beside the cut.
    */
   private fitPair(sourceEnd: string, targetEnd: string, room: number): [string, string] {
     if (sourceEnd.length + targetEnd.length <= room) return [sourceEnd, targetEnd];
@@ -145,7 +146,6 @@ export class IdFitter {
     const keep = room - (long ? shortestSource : shortestTarget).length;
     if (keep < 8) return this.sharePair(shortestSource, shortestTarget, room, (slug, max) => this.cutInside(slug, max));
     const cut = this.cutInside(long ? shortestTarget : shortestSource, keep);
-    // the other end takes back what fits beside the cut
     const other = (long ? fa : fb).find((form) => form.text.length + cut.length <= room)!.text;
     return long ? [other, cut] : [cut, other];
   }
@@ -155,10 +155,10 @@ export class IdFitter {
     return this.bestPair(sourceEnd, targetEnd, room).best;
   }
 
+  /** The pair of end forms that scores best; later pairs win a full tie, as the source has given up more. */
   private bestPair(sourceEnd: string, targetEnd: string, room: number): { best?: [string, string]; fa: EndForm[]; fb: EndForm[] } {
     const keepLast = beginAlike(sourceEnd, targetEnd);
     const [fa, fb] = [this.endForms(sourceEnd, keepLast, room, this.names), this.endForms(targetEnd, keepLast, room, undefined, this.closes)];
-    // later pairs win a full tie: the source has given up more
     const score = (sourceForm: EndForm, targetForm: EndForm): number[] => [sourceForm.words + targetForm.words, sourceForm.text.length + targetForm.text.length, -Math.abs(sourceForm.text.length - targetForm.text.length)];
     let best: { x: EndForm; y: EndForm; score: number[] } | undefined;
     for (const sourceForm of fa) {
@@ -172,7 +172,11 @@ export class IdFitter {
     return { ...(best ? { best: [best.x.text, best.y.text] as [string, string] } : {}), fa, fb };
   }
 
-  /** An end after each word it gives up, shortest last; of the forms over `room` only the last. */
+  /**
+   * An end after each word it gives up, shortest last; of the forms over `room` only the last.
+   * A number followed only by numbers is kept (zahlungseingang_2_2 never shrinks to zahlungseingang_2,
+   * another element's id); a trailing number that reads like a collision suffix goes too, as does a filler word.
+   */
   private endForms(end: string, keepLast: boolean, room: number, names?: string[], closes?: RegExp): EndForm[] {
     const words = idWords(end);
     const tail = idWords(keptTail(end)).length;
@@ -189,7 +193,6 @@ export class IdFitter {
       const head = words.length - tail;
       for (let index = words.length - 1 - kept; index >= (keepLast ? 0 : 1); index--) {
         if (letter(words[index]!) && !words.some((other, otherIndex) => otherIndex !== index && otherIndex < head && letter(other))) continue;
-        // zahlungseingang_2_2 never shrinks to zahlungseingang_2, another element's id
         if (number(words[index]!) && index + 1 < words.length && words.slice(index + 1).every(number)) continue;
         if (index === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[index - 1]!) && /^[_.-]*\d/.test(words[index + 1] ?? ''))) return index;
       }
@@ -205,7 +208,6 @@ export class IdFitter {
         length -= words[0]!.length - next.length;
         words[0] = /^[a-z]/.test(dropped!) ? this.lowerFirst(next, words.slice(1).join(''), names) : next;
       }
-      // a trailing number that reads like a collision suffix goes too, and so does a filler word
       for (let more = true; more; ) {
         more = false;
         while (closes && !kept && words.length > 1 && closes.test(words[words.length - 1]!)) {
@@ -245,10 +247,12 @@ export class IdFitter {
     return withLetter(slug, slug.slice(0, Math.max(max, 0)).replace(/[_.-]+$/, ''), (rest) => this.cutInside(rest, max));
   }
 
-  /** fitPair as 0.6 cut the ends, to recognise the flows it named. */
+  /**
+   * fitPair as 0.6 cut the ends, to recognise the flows it named. Ends that begin alike differ at
+   * their ends, so each keeps its last word.
+   */
   private legacyFitPair(sourceEnd: string, targetEnd: string, room: number): [string, string] {
     if (sourceEnd.length + targetEnd.length <= room) return [sourceEnd, targetEnd];
-    // ends that begin alike differ at their ends, so each keeps its last word
     return this.sharePair(sourceEnd, targetEnd, room, beginAlike(sourceEnd, targetEnd) ? (slug, max) => this.cutKeepingLast(slug, max) : (slug, max) => this.legacyCut(slug, max));
   }
 

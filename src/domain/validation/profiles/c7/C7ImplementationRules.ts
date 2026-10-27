@@ -131,7 +131,10 @@ export class C7ImplementationRules extends C7Rules {
     this.checkImplementation(el, undefined, this.describe(el, undefined), { decisionRef: this.kit.is(el, 'bpmn:BusinessRuleTask') });
   }
 
-  /** Implementation of a task, or of the message definition of a message throw / end event. */
+  /**
+   * Implementation of a task, or of the message definition of a message throw / end event.
+   * Hints that add a camunda:field pass an `ext add` type argument keyed by name, so it replaces the field.
+   */
   checkImplementation(el: El, owner: El | undefined, label: string, opts: { decisionRef?: boolean; event?: El } = {}): void {
     const addr = this.addressOf(el, owner);
     const set = (kv: string): string => (addr ? `\`bpmn set <file> ${addr.id} ${kv.split(' ').map((assignment) => sh(`${addr.prefix}${assignment}`)).join(' ')}\`` : 'edit the XML');
@@ -140,7 +143,6 @@ export class C7ImplementationRules extends C7Rules {
     const external = type !== undefined && type.toLowerCase() === 'external';
     const shell = type !== undefined && type.toLowerCase() === 'shell';
     const prefix = this.prefix;
-    // `ext add` type argument for one camunda:field of this element (keyed by name: replaces it)
     const fieldAdd = addr ? `${addr.id} ${sh(`${addr.prefix}${prefix}:field`)}` : undefined;
     if (type !== undefined && !external && !shell) {
       const mail = type.toLowerCase() === 'mail' ? ' (the standard engine distributions cannot load the mail task)' : '';
@@ -233,6 +235,7 @@ export class C7ImplementationRules extends C7Rules {
     }
   }
 
+  /** Checks the multi-instance settings; the engines read loopDataInputRef as a variable name, so one bpmn-moddle reported on import counts as set. */
   checkMultiInstance(activity: El): void {
     const loop = peek<El>(activity, 'loopCharacteristics');
     if (!this.kit.is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) return;
@@ -240,7 +243,6 @@ export class C7ImplementationRules extends C7Rules {
     const prefix = this.prefix;
     const card = peek<El>(loop, 'loopCardinality');
     const collection = this.c7(loop, 'collection');
-    // the engines read loopDataInputRef as a variable name, which bpmn-moddle reports on import
     const dataInput = peek<unknown>(loop, 'loopDataInputRef') ?? this.doc.importWarnings.some((warning) => (warning as { element?: unknown }).element === loop && /loopDataInputRef/.test(String((warning as { property?: unknown }).property ?? '')));
     const elementVariable = this.c7(loop, 'elementVariable');
     if (!card && collection === undefined && !dataInput) {

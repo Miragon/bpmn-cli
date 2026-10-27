@@ -1,4 +1,5 @@
 import type { Doc } from '../document/Doc.js';
+import type { EditContext } from '../document/EditContext.js';
 import { modelError } from '../document/utils/errors.js';
 import { type Warning } from '../document/CliError.js';
 import { KindError } from '../document/KindError.js';
@@ -25,7 +26,10 @@ const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
  * Content the new kind cannot hold is recorded so the write refuses it without --force.
  */
 export class ElementTypeChangeService {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   private static eventPosition(def: KindDef): string {
     return def.kind === 'intermediateCatchEvent' || def.kind === 'intermediateThrowEvent' ? 'intermediate' : def.kind;
@@ -52,9 +56,13 @@ export class ElementTypeChangeService {
     });
   }
 
+  /**
+   * Changes the kind of an element. The old trigger state is read before the swap moves the
+   * definitions over; a batch alias of the element follows it to the new one.
+   */
   retype(op: ChangeElementType): ChangeSet {
     const cs = new ChangeSet();
-    const el = this.doc.require(op.id);
+    const el = this.edit.require(op.id);
     const id = idOf(el);
     const from = kindOf(el);
     if (!from) {
@@ -96,7 +104,7 @@ export class ElementTypeChangeService {
     const sameTrigger = trigger === oldTrigger;
     if (from === to && sameTrigger && !hasTriggerOptions) {
       cs.note(`${id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
-      new RootElementService(this.doc).bindRefAs(cs, op.refAs, el);
+      new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, el);
       return cs;
     }
     if (to.kind === 'eventSubProcess' && (this.doc.incoming(el).length || this.doc.outgoing(el).length)) {
@@ -107,18 +115,16 @@ export class ElementTypeChangeService {
       });
     }
 
-    // read the old trigger state before the swap moves the definitions over
-    const change = new TriggerChange(this.doc, el);
+    const change = new TriggerChange(this.doc, this.edit, el);
     const target = to.type === el.$type ? el : this.swapType(el, to, cs);
     ElementTypeChangeService.applyKindProps(target, from, to);
     if (target !== el) {
-      // a batch alias of the element follows it to the new one
       cs.replaced.push({ from: el, to: target });
       const inapplicable = this.inapplicableCamundaContent(target, to);
       if (inapplicable) cs.warn(inapplicable);
-      if (new Camunda8Defaults(this.doc).userTask(target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
+      if (new Camunda8Defaults(this.doc, this.edit).userTask(target)) cs.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
     }
-    new SequenceFlowService(this.doc).dropIgnoredConditions(target, cs);
+    new SequenceFlowService(this.doc, this.edit).dropIgnoredConditions(target, cs);
     change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, cs, { on: target });
     this.doc.invalidate();
     const detail =
@@ -126,7 +132,7 @@ export class ElementTypeChangeService {
         ? `trigger options updated (${givenKeys.map((givenKey) => `${givenKey}=${String(given[givenKey])}`).join(' ')})`
         : `retyped from ${oldLabel} to ${kindLabel(target)}`;
     cs.change(ChangeSet.entryOf(target, detail));
-    new RootElementService(this.doc).bindRefAs(cs, op.refAs, target);
+    new RootElementService(this.doc, this.edit).bindRefAs(cs, op.refAs, target);
     return cs;
   }
 
@@ -143,7 +149,10 @@ export class ElementTypeChangeService {
     return name.slice(idx + 1);
   }
 
-  /** Vendor content the new kind cannot use is kept (dropping it would lose data), only named. */
+  /**
+   * Vendor content the new kind cannot use is kept (dropping it would lose data), only named.
+   * The Camunda 7 / 8 profile reports these item by item, so a write drops this summary there.
+   */
   private inapplicableCamundaContent(el: El, to: KindDef): Warning | undefined {
     const attrs = Object.keys(vendorAttributes(el)).filter((key) => {
       const name = this.camundaName(key);
@@ -172,7 +181,6 @@ export class ElementTypeChangeService {
       element: id,
       hint: `The ${names.every((extName) => this.zeebeLocal(extName)) ? 'Zeebe (Camunda 8)' : names.some((extName) => this.zeebeLocal(extName)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
     };
-    // the Camunda 7 / 8 profile reports these item by item, so a write drops this summary there
     return coversProfileSubjects(warning, [...attrs.map((attr) => `attr:${attr}`), ...exts.map((extType) => `ext:${extType.slice(extType.indexOf(':') + 1)}`)]);
   }
 
@@ -205,9 +213,9 @@ export class ElementTypeChangeService {
     if (!property.isReference) {
       const children = (Array.isArray(value) ? value : [value]).filter((child): child is El => isEl(child) && !!child.get<string | undefined>('id'));
       const before = cs.removed.length;
-      for (const child of children) new ElementRemovalService(this.doc).cascade(child, cs);
+      for (const child of children) new ElementRemovalService(this.doc, this.edit).cascade(child, cs);
       const removed = cs.removed.slice(before).map((change) => change.id);
-      if (removed.length) this.doc.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
+      if (removed.length) this.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
     }
     cs.warn({
       code: 'W_PROPERTY_DROPPED',
@@ -245,6 +253,15 @@ export class ElementTypeChangeService {
     }
   }
 
+  /** A kind prop is not copied over: applyKindProps sets it for the new kind. */
+  private static isReappliedKindProp(name: string): boolean {
+    return name === 'triggeredByEvent';
+  }
+
+  /**
+   * Replaces the element by one of the new type. A diagram plane it roots is dropped unless the
+   * new one is a sub-process: only processes, sub-processes and collaborations may root a plane.
+   */
   private swapType(el: El, to: KindDef, cs: ChangeSet): El {
     const next = this.doc.moddle.create(to.type, { id: idOf(el) });
     const nextProps = descriptorOf(next).propertiesByName ?? {};
@@ -252,7 +269,7 @@ export class ElementTypeChangeService {
       if (property.name === 'id') continue;
       const value = ownValue(el, property.name);
       if (value === undefined || value === null || (Array.isArray(value) && !value.length)) continue;
-      if (property.name === 'triggeredByEvent') continue; // kind prop, re-applied by applyKindProps
+      if (ElementTypeChangeService.isReappliedKindProp(property.name)) continue;
       if (nextProps[property.name]) ElementTypeChangeService.copyProp(next, property, value);
       else this.dropProp(el, property, value, to, cs);
     }
@@ -261,7 +278,6 @@ export class ElementTypeChangeService {
     if (parent) ElementTypeChangeService.replaceInParent(parent, el, next);
     for (const ref of findReferences(this.doc.definitions, el)) {
       if (is(ref.holder, 'bpmndi:BPMNPlane') && !is(next, 'bpmn:SubProcess')) {
-        // only processes, sub-processes and collaborations may root a plane
         this.dropDiagram(ref.holder.$parent as El | undefined);
         continue;
       }
@@ -273,7 +289,7 @@ export class ElementTypeChangeService {
         ref.holder.set(ref.prop, next);
       }
     }
-    this.doc.edit.replaceElement(el, next);
+    this.edit.replaceElement(el, next);
     this.doc.invalidate();
     return next;
   }

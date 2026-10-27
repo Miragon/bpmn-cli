@@ -1,4 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
+import type { EditContext } from '../../document/EditContext.js';
 import type { ChangeSet } from '../../document/ChangeSet.js';
 import { EVENT_GATEWAY_TRIGGERS, triggerOf } from '../../document/utils/kinds.js';
 import { is, type El, idOf } from '../../document/utils/moddle.js';
@@ -11,10 +12,13 @@ import { labelOf } from '../../document/utils/elements.js';
  * Other files follow BPMN 2.0 (10.6.6): receive tasks too, but not mixed with message events.
  */
 export class EventGatewayRule {
-  constructor(private readonly doc: Doc) {}
+  constructor(
+    private readonly doc: Doc,
+    private readonly edit: EditContext,
+  ) {}
 
   get rule(): 'engines' | 'bpmn' {
-    return this.doc.platform() === 'camunda7' ? 'engines' : 'bpmn';
+    return this.edit.platform() === 'camunda7' ? 'engines' : 'bpmn';
   }
 
   /** `leaving` are the flows that disappear with the change (e.g. the flow a bridge replaces). */

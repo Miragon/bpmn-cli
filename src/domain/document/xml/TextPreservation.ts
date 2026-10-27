@@ -22,6 +22,7 @@ export class TextPreservation {
     private readonly next: string,
   ) {}
 
+  /** Tries the original order of children first, bpmn-moddle's when that does not read back. */
   async result(): Promise<PreservedText> {
     const { original, baseline, next } = this;
     if (next === baseline) return { xml: original, mode: 'unchanged', droppedComments: 0 };
@@ -31,7 +32,6 @@ export class TextPreservation {
     } catch (err) {
       return this.plain(firstLine(err));
     }
-    // the original order of children first, bpmn-moddle's when that does not read back
     let reason = '';
     for (const keepOrder of [true, false]) {
       let xml: string;
@@ -58,10 +58,13 @@ export class TextPreservation {
     return this.original.split('<!--').length - 1;
   }
 
+  /**
+   * Whether `xml` reads back as `next`, read like Doc.fromXml (references with whitespace around
+   * the id resolve). `next` is normally a fixed point of read + write; else its round trip counts.
+   */
   private async readsAs(xml: string): Promise<boolean> {
     const write = async (text: string): Promise<string | undefined> => {
       try {
-        // read like Doc.fromXml: references with whitespace around the id resolve
         const { moddle, definitions } = await parseXml(text);
         return (await moddle.toXML(definitions, { format: true })).xml;
       } catch {
@@ -70,7 +73,6 @@ export class TextPreservation {
     };
     const written = await write(xml);
     if (written === undefined) return false;
-    // `next` is normally a fixed point of read + write; else compare with its round trip
     return written === this.next || written === (await write(this.next));
   }
 }

@@ -45,12 +45,12 @@ const SPELLED: Record<string, string> = {
 };
 const SPELLED_RE = new RegExp(`[${Object.keys(SPELLED).join('')}]`, 'g');
 
+/** Spells out special letters; in an upper-case word both letters are upper case (ÄNDERUNG -> AENDERUNG, ØRE -> OERE). */
 export function transliterate(name: string): string {
   return name
     .normalize('NFC')
     .replace(SPELLED_RE, (character, at: number, all: string) => {
       const out = SPELLED[character]!;
-      // Ä in an upper-case word (ÄNDERUNG) -> AE, Ø in ØRE -> OE
       const next = all.charAt(at + 1);
       return out.length === 2 && character === character.toUpperCase() && next && next !== next.toLowerCase() ? out.toUpperCase() : out;
     })
@@ -81,6 +81,7 @@ const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|_[Jj]oin)?(?:(?<=[A-Za-z])\d+|_\d+)?$/;
  * Cuts at the last word boundary that fits, keeping a join or number tail. A cut keeps a letter
  * and never runs a number into the kept one (`1010`). `legacy` cuts as 0.6 did, to recognise
  * the ids it wrote.
+ * A filler word between a number and the number tail keeps them apart (`StartAfter2Und2`).
  */
 export function cutAt(slug: string, max: number, legacy = false, names = false): string {
   if (slug.length <= max) return slug;
@@ -89,7 +90,6 @@ export function cutAt(slug: string, max: number, legacy = false, names = false):
     const head = slug.slice(0, -tail.length);
     const cut = cutWords(head, max - tail.length, legacy, names);
     if (legacy || readsApart(cut, tail)) return `${cut}${tail}`;
-    // a filler word between a number and the number tail keeps them apart (`StartAfter2Und2`)
     const kept = names ? cutWords(head, max - tail.length) : cut;
     if (readsApart(kept, tail)) return `${kept}${tail}`;
     const inside = trimSeparators(head.slice(0, max - tail.length));
