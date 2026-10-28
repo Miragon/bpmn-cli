@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { RENDER_MAX_SIZE, type RenderOptions, type RenderProblem, type RenderTile } from '../../../domain/views/render/types.js';
+import type { RenderProblem, RenderResult, RenderTile } from '../../../application/port/in/RenderSvgUseCase.js';
 import { BpmnError } from '../../../domain/document/BpmnError.js';
-import { DocRenderer } from '../../../domain/views/render/DocRenderer.js';
 
 export interface PngImage {
   png: Uint8Array;
@@ -57,8 +56,7 @@ export class PngRenderer {
   private static engine: Promise<Engine> | undefined;
 
   /** Any rasteriser failure, including a wasm trap, becomes E_RENDER, never an abort. */
-  async render(xml: string, opts: RenderOptions = {}): Promise<PngRenderResult> {
-    const drawn = await DocRenderer.renderXml(xml, { ...opts, maxSize: opts.maxSize ?? RENDER_MAX_SIZE });
+  async render(drawn: RenderResult): Promise<PngRenderResult> {
     const images: PngImage[] = [];
     const parts: Array<Pick<RenderTile, 'svg' | 'columns' | 'band'>> = drawn.tiles ?? [{ svg: drawn.svg }];
     for (const part of parts) {

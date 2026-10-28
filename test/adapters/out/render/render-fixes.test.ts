@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../../src/domain/document/Doc.js';
 import { MIN_LABEL_SCALE, renderSvg } from '../../../../src/index.js';
-import { MAX_TILES } from '../../../../src/domain/views/render/types.js';
+import { MAX_TILES } from '../../../../src/adapters/out/render/types.js';
 import { scaleText } from '../../../../src/domain/views/utils/scale.js';
 import { textWidth } from '../../../../src/domain/diagram/utils/text.js';
 import { PngRenderer } from '../../../../src/adapters/out/files/PngRenderer.js';

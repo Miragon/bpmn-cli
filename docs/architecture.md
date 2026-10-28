@@ -26,6 +26,7 @@ flowchart TB
   service --> portOut{{"Port<br/>application/port/out"}}
   portOut --> files["Files<br/>adapters/out/files"]
   portOut --> memory["No project, no files<br/>adapters/out/memory"]
+  portOut --> render["SVG renderer<br/>adapters/out/render"]
   files --> store["Loading and saving a document<br/>adapters/out/document"]
   memory --> store
   files --> bpmnlint["bpmnlint<br/>adapters/out/bpmnlint"]
@@ -34,7 +35,7 @@ flowchart TB
   classDef adapter stroke:#2f80ed,stroke-width:2px
   classDef app stroke:#f2994a,stroke-width:2px
   classDef core stroke:#27ae60,stroke-width:3px
-  class cli,files,memory,store,bpmnlint adapter
+  class cli,files,memory,store,bpmnlint,render adapter
   class portIn,service,portOut app
   class domain core
 ```
@@ -48,6 +49,8 @@ container.
 adapters hand it the `.bpmnlintrc` they load; `index.ts` hands it to hosts that bring their own
 bpmnlint. `adapters/out/document/` is what the file store and the in-memory store share behind
 the `DocumentPort`: a source parsed into a `Doc`, the target of a write, the save.
+`adapters/out/render/` draws a plane as SVG behind the `RenderDiagramPort`, browser-safe; the
+file adapters only write or rasterise what it drew.
 
 | rule (checked by the test) | why |
 | --- | --- |

@@ -1,9 +1,10 @@
-import type { Point } from '../../diagram/utils/geom.js';
-import { grow } from '../../diagram/utils/geom.js';
-import type { DShape, Plane } from '../../diagram/di/types.js';
+import type { Point } from '../../../../domain/diagram/utils/geom.js';
+import { grow } from '../../../../domain/diagram/utils/geom.js';
+import type { DShape, Plane } from '../../../../domain/diagram/di/types.js';
 import { EdgePainter } from './EdgePainter.js';
 import { ShapePainter } from './ShapePainter.js';
-import { HALO_COLORS, LAYER, type Item } from './types.js';
+import { HALO_COLORS } from '../../../../application/port/in/RenderSvgUseCase.js';
+import { LAYER, type Item } from '../types.js';
 import { pointsBox } from '../utils/boxes.js';
 import { attr, formatNumber } from '../utils/svg.js';
 

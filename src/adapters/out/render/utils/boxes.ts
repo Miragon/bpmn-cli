@@ -1,4 +1,4 @@
-import { unionAll, type Box, type Point } from '../../diagram/utils/geom.js';
+import { unionAll, type Box, type Point } from '../../../../domain/diagram/utils/geom.js';
 
 export function meets(first: Box, second: Box): boolean {
   return first.x <= second.x + second.width && second.x <= first.x + first.width && first.y <= second.y + second.height && second.y <= first.y + first.height;

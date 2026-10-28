@@ -1,12 +1,12 @@
 /**
  * `bpmn render` (issue #12): the SVG renderer of the core
- * (src/domain/views/render/DocRenderer.ts), the PNG rasteriser of the node layer
+ * (src/adapters/out/render/DocRenderer.ts), the PNG rasteriser of the node layer
  * (src/adapters/out/files/PngRenderer.ts: resvg-wasm with the bundled Arimo font) and the
  * command. Every scenario and fixture renders to SVG and PNG with the same
  * bytes twice; labels are laid out like bpmn-js; a rasteriser failure is
  * E_RENDER, never a process abort. The agent features (crops, halos,
  * numbered problems, tiles, `--render`) are tested in
- * test/domain/views/render/render-agent.test.ts. Synthetic models only.
+ * test/adapters/out/render/render-agent.test.ts. Synthetic models only.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -152,7 +152,7 @@ describe('renderSvg', () => {
   it('lays out external labels like bpmn-js 18: label bounds, max(90, their width) in 11 px then the widest line, 13.2 px lines', async () => {
     const { svg } = await renderSvg(LABELS);
     // the start event: centred on its label bounds (x 73, width 90), top at y 143, first baseline 3/4 line lower
-    // (more cases of the two passes: test/domain/views/render/render-fixes.test.ts)
+    // (more cases of the two passes: test/adapters/out/render/render-fixes.test.ts)
     const expected = ['A rather long', 'start event name', 'that wraps'];
     const start = labelOf(svg, 'Event_Start');
     expect(start.map((line) => line.text)).toEqual(expected);
@@ -245,7 +245,7 @@ describe('renderSvg', () => {
     expect(lean.chunks.flatMap((chunk: { inputs: string[] }) => chunk.inputs).filter((input: string) => /render/.test(input))).toEqual([]);
     // (not vacuous: an entry that imports renderSvg has it)
     const render = await bundleCore({ stdin: { contents: "export { renderSvg } from './src/index.ts';", sourcefile: 'render-only.ts' }, minify: false });
-    expect(render.chunks.flatMap((chunk: { inputs: string[] }) => chunk.inputs)).toContain('src/domain/views/render/DocRenderer.ts');
+    expect(render.chunks.flatMap((chunk: { inputs: string[] }) => chunk.inputs)).toContain('src/adapters/out/render/DocRenderer.ts');
   }, 60000);
 });
 

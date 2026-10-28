@@ -1,10 +1,10 @@
-import type { Box } from '../../diagram/utils/geom.js';
-import { containsPoint } from '../../diagram/utils/geom.js';
-import type { LayoutProblem } from '../../diagram/utils/problems.js';
-import type { DShape } from '../../diagram/di/types.js';
-import { is } from '../../document/utils/moddle.js';
-import { DiagramColumns } from '../DiagramColumns.js';
-import { MARGIN, MAX_TILES, type RenderFrame, type Item } from './types.js';
+import type { Box } from '../../../../domain/diagram/utils/geom.js';
+import { containsPoint } from '../../../../domain/diagram/utils/geom.js';
+import type { LayoutProblem } from '../../../../domain/diagram/utils/problems.js';
+import type { DShape } from '../../../../domain/diagram/di/types.js';
+import { is } from '../../../../domain/document/utils/moddle.js';
+import { DiagramColumns } from '../../../../domain/views/DiagramColumns.js';
+import { MARGIN, MAX_TILES, type RenderFrame, type Item } from '../types.js';
 import { meets } from '../utils/boxes.js';
 
 export interface TileView {

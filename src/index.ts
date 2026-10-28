@@ -25,7 +25,7 @@ import type { PreservedText } from './domain/document/xml/TextPreservation.js';
 import { BpmnlintValidator, type BpmnlintValidatorOptions } from './adapters/out/bpmnlint/BpmnlintValidator.js';
 import { BpmnlintConfigResolution } from './adapters/out/bpmnlint/BpmnlintConfigResolution.js';
 import { IdConventionsReader, type IdNamingHelpers } from './adapters/out/bpmnlint/IdConventionsReader.js';
-import type { RenderOptions, RenderResult } from './domain/views/render/types.js';
+import type { RenderOptions, RenderResult } from './application/port/in/RenderSvgUseCase.js';
 import type { AroundOptions, AroundView, ElementContext, Implementation } from './domain/views/around-view.js';
 import type { ElementDetail, FindHit, ModelView } from './domain/views/model-view.js';
 import type { LayoutView } from './domain/views/layout-view.js';
@@ -36,6 +36,7 @@ import { ShowConventionsService } from './application/service/ShowConventionsSer
 import { RunCommandsService } from './application/service/RunCommandsService.js';
 import { AnalyzeLayoutService } from './application/service/AnalyzeLayoutService.js';
 import { RenderSvgService } from './application/service/RenderSvgService.js';
+import { SvgRenderer } from './adapters/out/render/SvgRenderer.js';
 import { EditDocumentService } from './application/service/EditDocumentService.js';
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
 import { NoProjectSettings } from './adapters/out/memory/NoProjectSettings.js';
@@ -175,12 +176,12 @@ export function layoutView(defs: El): LayoutView { return new ShowModelService()
 export type { DiagramCommandResult as FormatResult, DiagramCommandEntry as FormatEntry } from './domain/diagram/commands/DiagramCommands.js';
 export { SWATCHES, type SwatchName } from './domain/diagram/utils/colors.js';
 /* the drawing as SVG; PNG: renderPng in @miragon/bpmn-cli/node */
-export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './domain/views/render/types.js';
+export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './application/port/in/RenderSvgUseCase.js';
 export { changeHighlight } from './adapters/in/report/utils/highlight.js';
 /** `bpmn render --format svg`: one plane of the document as SVG. */
-export function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> { return new RenderSvgService().renderXml({ ...opts, xml }); }
+export function renderSvg(xml: string, opts: RenderOptions = {}): Promise<RenderResult> { return new RenderSvgService(new SvgRenderer()).renderXml({ ...opts, xml }); }
 /** One plane of a parsed document as SVG (no layout). */
-export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult { return new RenderSvgService().renderDoc({ ...opts, doc }); }
+export function renderDocSvg(doc: Doc, opts: RenderOptions = {}): RenderResult { return new RenderSvgService(new SvgRenderer()).renderDoc({ ...opts, doc }); }
 
 
 /** The extension elements of an element, in order. */

@@ -1,28 +1,22 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join } from 'node:path';
-import { type RenderProblem } from '../../../domain/views/render/types.js';
 import { ioError } from '../../../domain/document/utils/errors.js';
 import { PngRenderer } from './PngRenderer.js';
 import type { ImageRequest, WriteImagePort, Shot, ShotImage } from '../../../application/port/out/WriteImagePort.js';
-import { DocRenderer } from '../../../domain/views/render/DocRenderer.js';
 
 export class FileImageWriter implements WriteImagePort {
   /**
    * Writes to `out`, stdout (`-`) or the temp directory's bpmn-cli/<stem>.<format>;
    * tiles get -1, -2, ... before the extension.
    */
-  async write({ xml, opts, format, out, stem, stdout }: ImageRequest): Promise<Shot> {
+  async write({ drawn, format, out, stem, stdout }: ImageRequest): Promise<Shot> {
     let parts: Array<{ bytes: string | Uint8Array; width: number; height: number; tokens: number; columns?: [number, number]; band?: number }>;
-    let rendered: { scale: number; plane: string; planes: string[]; notes: string[]; problems: RenderProblem[]; nodes?: string[] };
     if (format === 'svg') {
-      const svg = await DocRenderer.renderXml(xml, opts);
-      parts = (svg.tiles ?? [svg]).map((tile) => ({ bytes: tile.svg, width: tile.width, height: tile.height, tokens: tile.tokens, ...('columns' in tile && tile.columns ? { columns: tile.columns } : {}), ...('band' in tile && tile.band ? { band: tile.band } : {}) }));
-      rendered = svg;
+      parts = (drawn.tiles ?? [drawn]).map((tile) => ({ bytes: tile.svg, width: tile.width, height: tile.height, tokens: tile.tokens, ...('columns' in tile && tile.columns ? { columns: tile.columns } : {}), ...('band' in tile && tile.band ? { band: tile.band } : {}) }));
     } else {
-      const png = await new PngRenderer().render(xml, opts);
+      const png = await new PngRenderer().render(drawn);
       parts = png.images.map((image) => ({ bytes: image.png, width: image.width, height: image.height, tokens: image.tokens, ...(image.columns ? { columns: image.columns } : {}), ...(image.band ? { band: image.band } : {}) }));
-      rendered = png;
     }
     const images: ShotImage[] = [];
     if (out === '-') {
@@ -49,12 +43,12 @@ export class FileImageWriter implements WriteImagePort {
       width: first.width,
       height: first.height,
       tokens: first.tokens,
-      scale: rendered.scale,
-      plane: rendered.plane,
-      planes: rendered.planes,
-      notes: rendered.notes,
-      problems: rendered.problems,
-      ...(rendered.nodes ? { nodes: rendered.nodes } : {}),
+      scale: drawn.scale,
+      plane: drawn.plane,
+      planes: drawn.planes,
+      notes: drawn.notes,
+      problems: drawn.problems,
+      ...(drawn.nodes ? { nodes: drawn.nodes } : {}),
       ...(images.length > 1 ? { images } : {}),
     };
   }

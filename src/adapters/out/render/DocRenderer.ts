@@ -1,18 +1,17 @@
-import { Doc } from '../../document/Doc.js';
-import { ioError, modelError } from '../../document/utils/errors.js';
-import { FullLayout } from '../../diagram/layout/FullLayout.js';
-import type { Box } from '../../diagram/utils/geom.js';
-import { LayoutAnalysis } from '../../diagram/di/LayoutAnalysis.js';
-import type { LayoutProblem } from '../../diagram/utils/problems.js';
-import { DiagramReader } from '../../diagram/di/DiagramReader.js';
-import { Semantics } from '../../diagram/di/Semantics.js';
-import type { DEdge, DShape, Plane } from '../../diagram/di/types.js';
-import { is } from '../../document/utils/moddle.js';
-import { Composer } from './Composer.js';
-import { Crop } from './Crop.js';
-import { Scene } from './Scene.js';
-import { COORD_LIMIT, HALO_COLORS, type RenderOptions, type RenderResult } from './types.js';
-import { planeOfId } from '../utils/planes.js';
+import type { Doc } from '../../../domain/document/Doc.js';
+import { ioError, modelError } from '../../../domain/document/utils/errors.js';
+import type { Box } from '../../../domain/diagram/utils/geom.js';
+import type { LayoutProblem } from '../../../domain/diagram/utils/problems.js';
+import { DiagramReader } from '../../../domain/diagram/di/DiagramReader.js';
+import { Semantics } from '../../../domain/diagram/di/Semantics.js';
+import type { DEdge, DShape, Plane } from '../../../domain/diagram/di/types.js';
+import { is } from '../../../domain/document/utils/moddle.js';
+import { Composer } from './compose/Composer.js';
+import { Crop } from './crop/Crop.js';
+import { Scene } from './paint/Scene.js';
+import { HALO_COLORS, type RenderOptions, type RenderResult } from '../../../application/port/in/RenderSvgUseCase.js';
+import { COORD_LIMIT } from './types.js';
+import { planeOfId } from './crop/planes.js';
 
 /**
  * Draws one diagram plane as SVG without a browser, close to bpmn-js (not pixel-identical), so
@@ -27,19 +26,6 @@ export class DocRenderer {
     private readonly opts: RenderOptions = {},
   ) {
     this.sem = Semantics.of(doc.definitions);
-  }
-
-  /** A document without any diagram is laid out in memory first; its problems stay the file's. */
-  static async renderXml(xml: string, opts: RenderOptions = {}): Promise<RenderResult> {
-    let doc = await Doc.fromXml(xml);
-    if (new DiagramReader(doc.definitions).planes().length) return new DocRenderer(doc, opts).render();
-    const fileProblems = opts.problems ? LayoutAnalysis.of(doc.definitions).problems : [];
-    const { xml: drawn } = await new FullLayout(doc.model).run();
-    doc = await Doc.fromXml(drawn);
-    const result = new DocRenderer(doc, opts).render(fileProblems);
-    const notes = ['the file has no diagram: it is drawn by the layout engine in memory (nothing is written; `bpmn layout <file>` saves a drawing)'];
-    if (opts.problems) notes.push("the problems are the file's (`bpmn metrics <file>`), not the in-memory drawing's: none is in the image");
-    return { ...result, notes: [...notes, ...result.notes] };
   }
 
   /** `fileProblems`: those of a file drawn in memory, listed instead of the drawing's. */

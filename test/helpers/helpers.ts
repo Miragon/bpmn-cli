@@ -3,6 +3,7 @@ import type { CliUseCases } from '../../src/adapters/in/cli/Cli.js';
 import { BpmnlintProjectSettings } from '../../src/adapters/out/files/BpmnlintProjectSettings.js';
 import { FileDocumentStore } from '../../src/adapters/out/files/FileDocumentStore.js';
 import { FileImageWriter } from '../../src/adapters/out/files/FileImageWriter.js';
+import { SvgRenderer } from '../../src/adapters/out/render/SvgRenderer.js';
 import { EditDocumentService } from '../../src/application/service/EditDocumentService.js';
 import { CreateDocumentService } from '../../src/application/service/CreateDocumentService.js';
 import { RelayoutDiagramService } from '../../src/application/service/RelayoutDiagramService.js';
@@ -30,7 +31,7 @@ export const FILE_USE_CASES: CliUseCases = {
   findElements: new FindElementsService(),
   analyzeLayout: new AnalyzeLayoutService(),
   runCommands: new RunCommandsService(),
-  renderDiagram: new RenderDiagramService(files, new FileImageWriter()),
+  renderDiagram: new RenderDiagramService(files, new SvgRenderer(), new FileImageWriter()),
 };
 
 export const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
