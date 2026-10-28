@@ -1,7 +1,8 @@
-import { camunda8 } from '@miragon/bpmnlint-plugin-rules/camunda-8';
+import { compatRules, moddleExtensions } from '@miragon/bpmnlint-plugin-rules/camunda-8';
 import type { EngineKit } from '../../../engine-kit.js';
 import type { EngineEntry } from '../../EngineRun.js';
 import { ElementKinds } from '../describe.js';
+import { RuleEntries } from '../RuleEntries.js';
 import { ZeebeSchema } from './extensions/ZeebeSchema.js';
 import c8BoundaryHost from './c8-boundary-host.js';
 import c8EventDefinition from './c8-event-definition.js';
@@ -30,10 +31,13 @@ import c8TimerValue from './c8-timer-value.js';
 export class Camunda8Rules {
   static readonly RULES = [c8BoundaryHost, c8EventDefinition, c8LinkEvent, c8AdHocSubProcess, c8EventGateway, c8Message, c8Signal, c8Error, c8StartEvent, c8FeelExpression, c8FeelCompletionCondition, c8Implementation, c8BadValue, c8Schema, c8Listener, c8Extension, c8DuplicateExtension, c8ForeignContent, c8UnknownAttribute, c8MisplacedAttribute, c8MisplacedExtension, c8TimerValue];
 
-  /** camunda-compat's lint for Camunda 8 with these rules, as `bpmn-cli/<rule>`. */
-  static lint(kit: EngineKit): EngineEntry {
+  /** camunda-compat's rules for an engine version with these, as `bpmn-cli/<rule>`, and the moddle extension they read. */
+  static entry(kit: EngineKit): EngineEntry {
     ElementKinds.use(kit.kindLabel);
     ZeebeSchema.use(kit.ZEEBE_DESCRIPTOR);
-    return camunda8.withRules('bpmn-cli', Camunda8Rules.RULES);
+    return {
+      moddleExtensions,
+      rules: (version) => [...compatRules(version), ...RuleEntries.of(Camunda8Rules.RULES, version)],
+    };
   }
 }

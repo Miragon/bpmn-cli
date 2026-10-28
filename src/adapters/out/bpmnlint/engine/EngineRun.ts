@@ -3,7 +3,7 @@ import type { Doc } from '../../../../domain/document/Doc.js';
 import type { DocumentNamespaces } from '../../../../domain/document/vendor/DocumentNamespaces.js';
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { EnginePlatformInfo } from '../../../../domain/validation/EngineLint.js';
-import type { EngineLint } from '@miragon/bpmnlint-plugin-rules/camunda-8';
+import { lint as lintRules, type RuleEntry } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
 import type { EngineKit } from '../engine-kit.js';
 import { CamundaBooleans } from './CamundaBooleans.js';
@@ -17,8 +17,10 @@ import { UnprefixedAttributes } from './UnprefixedAttributes.js';
 
 type Engine = EnginePlatformInfo['platform'];
 
-/** One engine's rules and their config, as `rules/c7` and `rules/c8` build them. */
-export interface EngineEntry extends Pick<EngineLint, 'lint' | 'lintConfig'> {
+/** One engine's rules for an engine version and the moddle extension they read, as `rules/c7` and `rules/c8` build them. */
+export interface EngineEntry {
+  moddleExtensions: Record<string, unknown>;
+  rules(version: string | undefined): RuleEntry[];
   /** What the rules need of the file that the parse for them no longer shows. */
   afterParse?(definitions: unknown, warnings: readonly ImportWarning[], vendor: { operaton: boolean; prefix: string }): void;
 }
@@ -32,7 +34,7 @@ const EXECUTION_PLATFORMS: Record<Engine, string> = { c7: 'Camunda Platform', c8
  * refuses a process without a history time to live unless the engine sets a default.
  * c8-feel-expression checks FEEL with the grammar Camunda 8 accepts, names and values without = too.
  */
-const SEVERITY_OVERRIDES: Record<Engine, Record<string, 'off' | 'info' | 'warn' | 'error'>> = {
+const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 'off'>> = {
   c7: { 'camunda-compat/history-time-to-live': 'error' },
   c8: {
     'camunda-compat/feel': 'off',
@@ -64,17 +66,15 @@ export class EngineRun {
     private readonly engine: Engine,
     private readonly entry: EngineEntry,
   ) {
-    this.moddle = new kit.BpmnModdle(entry.lintConfig().moddleExtensions as Record<string, unknown>);
+    this.moddle = new kit.BpmnModdle(entry.moddleExtensions);
   }
 
   async findings(doc: Doc, info: EnginePlatformInfo): Promise<ProfileFinding[]> {
-    const engineConfig = this.entry.lintConfig(info.version);
-    const config = { ...engineConfig, rules: { ...engineConfig.rules, ...SEVERITY_OVERRIDES[this.engine] } };
     const ns = new this.kit.DocumentNamespaces(doc);
     const { rootElement, elementsById, warnings } = await this.moddle.fromXML(this.lintedXml(await doc.toXml(), info, ns));
     this.entry.afterParse?.(rootElement, warnings, this.vendor(ns, info));
     (rootElement as unknown as { $attrs: Record<string, unknown> }).$attrs['modeler:executionPlatform'] = EXECUTION_PLATFORMS[this.engine];
-    const results = (await this.entry.lint(rootElement, config)) as Record<string, BpmnlintEngineReport[]>;
+    const results = lintRules(rootElement, this.withOverrides(this.entry.rules(info.version))) as Record<string, BpmnlintEngineReport[]>;
     const failures = this.failuresOf(results);
     this.withoutUnresolvedLoopInputs(results, warnings);
     this.withoutNonExecutableProcesses(results, doc);
@@ -171,6 +171,16 @@ export class EngineRun {
   private withoutPublishedImplementations(results: Record<string, BpmnlintEngineReport[]>, published: PublishMessages): void {
     const reports = results[COMPAT_IMPLEMENTATION];
     if (reports) results[COMPAT_IMPLEMENTATION] = reports.filter((report) => !report.id || !published.hosts.has(report.id));
+  }
+
+  /** The rules at bpmn-cli's category where it reads camunda-compat's differently, without the ones it turns off. */
+  private withOverrides(rules: RuleEntry[]): RuleEntry[] {
+    const overrides = SEVERITY_OVERRIDES[this.engine];
+    return rules.flatMap((entry) => {
+      const category = overrides[entry.name];
+      if (!category) return [entry];
+      return category === 'off' ? [] : [{ ...entry, category }];
+    });
   }
 
   /** A rule that threw reports one rule-error and no findings: it is named in a finding of its own. */

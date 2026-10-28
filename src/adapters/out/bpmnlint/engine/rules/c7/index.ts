@@ -1,7 +1,8 @@
-import { camunda7 } from '@miragon/bpmnlint-plugin-rules/camunda-7';
+import { compatRules, moddleExtensions } from '@miragon/bpmnlint-plugin-rules/camunda-7';
 import type { EngineKit } from '../../../engine-kit.js';
 import type { EngineEntry } from '../../EngineRun.js';
 import { ElementKinds } from '../describe.js';
+import { RuleEntries } from '../RuleEntries.js';
 import { C7Diagram } from './C7Diagram.js';
 import { CamundaDescriptor } from './extensions/CamundaDescriptor.js';
 import c7DefinitionsExtension from './c7-definitions-extension.js';
@@ -48,14 +49,13 @@ import c7DanglingReference from './c7-dangling-reference.js';
 export class Camunda7Rules {
   static readonly RULES = [c7DefinitionsExtension, c7EventGateway, c7ExclusiveGateway, c7ImplicitDefaultFlow, c7ComplexGateway, c7AdHocSubProcess, c7EmptyCondition, c7Implementation, c7HistoryTimeToLive, c7AttributeValue, c7MessageImplementation, c7ExternalTopic, c7BadValue, c7ResultVariable, c7BindingVersion, c7CalledElement, c7Form, c7MultiInstance, c7Script, c7BoundaryHost, c7EventDefinition, c7LinkEvent, c7MultipleEventDefinitions, c7Message, c7Signal, c7Error, c7Escalation, c7StartEvent, c7TransactionStart, c7Extension, c7Listener, c7InputOutput, c7DuplicateExtension, c7AsyncDuplicateExtension, c7ForeignContent, c7UnknownAttribute, c7MisplacedAttribute, c7MisplacedExtension, c7DanglingReference];
 
-  /** camunda-compat's lint for Camunda 7 with these rules, as `bpmn-cli/<rule>`. */
-  static lint(kit: EngineKit): EngineEntry {
+  /** camunda-compat's rules for an engine version with these, as `bpmn-cli/<rule>`, and the moddle extension they read. */
+  static entry(kit: EngineKit): EngineEntry {
     ElementKinds.use(kit.kindLabel);
     CamundaDescriptor.use(kit.CAMUNDA_DESCRIPTOR);
-    const lint = camunda7.withRules('bpmn-cli', Camunda7Rules.RULES);
     return {
-      lint: (root, config) => lint.lint(root, config),
-      lintConfig: (version) => lint.lintConfig(version),
+      moddleExtensions,
+      rules: (version) => [...compatRules(version), ...RuleEntries.of(Camunda7Rules.RULES, version)],
       afterParse: (definitions, warnings, vendor) => C7Diagram.record(definitions, vendor, warnings),
     };
   }
