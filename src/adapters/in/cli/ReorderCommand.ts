@@ -14,7 +14,7 @@ export class ReorderCommand extends MutationCommand {
 
   private async run(file: string, nodeId: string, flowIds: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    const op: ReorderElements = { op: 'order', id: nodeId, flows: flowIds };
-    await this.mutate(file, [op], opts);
+    const command: ReorderElements = { op: 'order', id: nodeId, flows: flowIds };
+    await this.mutate(file, [command], opts);
   }
 }

@@ -38,8 +38,8 @@ export abstract class FormatCommand extends MutationCommand {
     return out;
   }
 
-  protected async runFormat(file: string, op: EditCommand, options: RawOpts): Promise<void> {
+  protected async runFormat(file: string, command: EditCommand, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 }

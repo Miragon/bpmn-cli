@@ -1,6 +1,6 @@
 import { LayoutDebug } from '../LayoutDebug.js';
 import { titleBox } from '../../utils/text.js';
-import { center, equalBoxes, overlaps, segmentHitsBox } from '../../utils/geom.js';
+import { center, equalBoxes, overlaps, segmentHitsBox, hitCount, properCross, toSegments, type Segment } from '../../utils/geom.js';
 import type { Box, GEdge, GNode, LaneBandInfo, LinkEnd, Point } from '../../di/types.js';
 import { is, many, type El, idOf } from '../../../document/utils/moddle.js';
 import { ArrangementCheckpoint } from './ArrangementCheckpoint.js';
@@ -9,7 +9,6 @@ import { LinkRouter } from './LinkRouter.js';
 import { ScopeGrid } from './ScopeGrid.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
-import { hitCount, properCross, toSegments, type Segment } from '../../utils/geometry.js';
 import { nameOf } from '../../utils/names.js';
 import { obstacles, routedArtifacts } from '../../utils/scope.js';
 

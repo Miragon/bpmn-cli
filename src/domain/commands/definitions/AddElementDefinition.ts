@@ -1,4 +1,4 @@
-import { FLOW_NODE_FAMILIES, type Family } from '../../document/utils/kinds.js';
+import { FLOW_NODE_FAMILIES, type Family } from '../../document/Kinds.js';
 import type { CommandFieldCheck } from '../CommandFieldCheck.js';
 import { alias, bool, ref, type FieldsOf } from '../utils/field-specs.js';
 import { FLOW_FIELDS, NODE_FIELDS, PLACEMENT_FIELDS, TRIGGER_FIELDS } from '../utils/op-fields.js';

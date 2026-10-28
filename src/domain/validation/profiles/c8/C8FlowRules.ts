@@ -1,4 +1,4 @@
-import type { Trigger } from '../../../document/utils/kinds.js';
+import type { Trigger } from '../../../document/Kinds.js';
 import type { El } from '../../../document/utils/moddle.js';
 import type { RuleRun } from '../RuleRun.js';
 import { idOf, list, nameOf, peek, triggerName } from '../../utils/element.js';

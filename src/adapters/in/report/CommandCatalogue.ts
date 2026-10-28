@@ -73,7 +73,6 @@ export const COMMON_OPTIONS: CommonOptionDoc[] = [
   { option: '--strict', description: 'exit 5 when the result has warnings', help: 'exit with code 5 when there are warnings' },
   { option: '--keep-flow-ids', description: 'keep the id of every existing sequence flow the change gives other ends, where flow ids are API (generated code, process tests); W_FLOW_ID_STALE names each flow whose id no longer names its ends, with the `bpmn set <file> <flowId> id=<newId>` that renames it. Default: a flow whose id names its old ends is renamed after its new ones (`renamed:`). BPMN_KEEP_FLOW_IDS=1 (true, yes, on) makes keeping the default, 0 (false, no, off) or unset renames, any other value is E_USAGE', help: 'keep the id of every existing sequence flow the change gives other ends, instead of renaming a flow whose id names its old ends after its new ones; W_FLOW_ID_STALE names each flow whose id no longer names its ends. BPMN_KEEP_FLOW_IDS=1 makes keeping the default' },
   { option: '--no-keep-flow-ids', description: 'rename such flows after their new ends, also when BPMN_KEEP_FLOW_IDS=1' },
-  { option: '--engine <clean|auto>', description: 'layout engine: clean (built-in, default: straight happy path, branches as bands below, loops underneath) or auto (bpmn-auto-layout)', flags: '--engine <engine>', help: 'layout engine: clean (default) or auto (bpmn-auto-layout)' },
 ];
 
 export function commandDoc(name: string): CommandDoc {

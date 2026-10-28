@@ -3,15 +3,15 @@ import type { ChangeSet } from '../../domain/document/ChangeSet.js';
 import type { EditCommand } from '../../domain/commands/types.js';
 import { CommandParser } from '../../domain/commands/CommandParser.js';
 import { parseOpsJson } from '../../domain/commands/utils/ops-json.js';
-import { ModelCommandService } from '../../domain/batch/ModelCommandService.js';
+import { ModelCommands } from '../../domain/batch/ModelCommands.js';
 
 export class RunCommandsService implements RunCommandsUseCase {
   runModelCommand(command: RunCommandsUseCase.ModelCommand): ChangeSet {
-    return new ModelCommandService(command.doc).runOp(command.command);
+    return new ModelCommands(command.doc).runCommand(command.command);
   }
 
   runModelCommands(command: RunCommandsUseCase.ModelCommands): ChangeSet {
-    return new ModelCommandService(command.doc).runBatch(command.commands).changes;
+    return new ModelCommands(command.doc).runBatch(command.commands).changes;
   }
 
   parseCommands(command: RunCommandsUseCase.ParseCommand): EditCommand[] {

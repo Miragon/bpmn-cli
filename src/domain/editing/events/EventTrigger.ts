@@ -1,6 +1,7 @@
-import { triggerOf, type Trigger } from '../../document/utils/kinds.js';
+import { triggerOf, TRIGGERS, type RootReference, type Trigger } from '../../document/Kinds.js';
 import { is, many, type El, idOf } from '../../document/utils/moddle.js';
 import type { TriggerOptions } from '../../commands/types.js';
+import { TRIGGER_KEYS } from '../../commands/utils/op-fields.js';
 
 export interface TriggerDetails {
   trigger: Trigger;
@@ -16,8 +17,6 @@ export interface TriggerDetails {
 
 /** Triggers that always interrupt: never on a non-interrupting boundary or start event. */
 export const ALWAYS_INTERRUPTING: Trigger[] = ['error', 'cancel', 'compensate'];
-
-export const TRIGGER_OPTION_KEYS: ReadonlyArray<keyof TriggerOptions> = ['timer', 'timerKind', 'message', 'error', 'errorCode', 'signal', 'escalation', 'escalationCode', 'when', 'link', 'nonInterrupting'];
 
 export const TIMER_PROPS: Record<'cycle' | 'duration' | 'date', string> = {
   cycle: 'timeCycle',
@@ -43,7 +42,7 @@ export class EventTrigger {
 
   static optionsOf(source: TriggerOptions): TriggerOptions {
     const out: Record<string, unknown> = {};
-    for (const key of TRIGGER_OPTION_KEYS) if (source[key] !== undefined) out[key] = source[key];
+    for (const key of TRIGGER_KEYS) if (source[key] !== undefined) out[key] = source[key];
     return out as TriggerOptions;
   }
 
@@ -53,8 +52,6 @@ export class EventTrigger {
     const opts: TriggerOptions = {};
     const def = (el.get<El[] | undefined>('eventDefinitions') ?? [])[0];
     const body = (propName: string): string | undefined => def?.get<El | undefined>(propName)?.get<string | undefined>('body');
-    const ref = (propName: string): El | undefined => def?.get<El | undefined>(propName);
-    const named = (propName: string): string | undefined => ref(propName)?.get<string | undefined>('name') ?? ref(propName)?.get<string | undefined>('id');
     if (def) {
       switch (trigger) {
         case 'timer': {
@@ -66,28 +63,17 @@ export class EventTrigger {
           else if (date) Object.assign(opts, { timer: date, timerKind: 'date' });
           break;
         }
-        case 'message':
-          opts.message = named('messageRef');
-          break;
-        case 'error':
-          opts.error = named('errorRef');
-          opts.errorCode = ref('errorRef')?.get<string | undefined>('errorCode');
-          break;
-        case 'signal':
-          opts.signal = named('signalRef');
-          break;
-        case 'escalation':
-          opts.escalation = named('escalationRef');
-          opts.escalationCode = ref('escalationRef')?.get<string | undefined>('escalationCode');
-          break;
         case 'conditional':
           opts.when = body('condition');
           break;
         case 'link':
           opts.link = def.get<string | undefined>('name');
           break;
-        default:
+        default: {
+          const root = EventTrigger.rootReferenceOf(trigger);
+          if (root) EventTrigger.readRoot(def, root, opts);
           break;
+        }
       }
     }
     if (is(el, 'bpmn:BoundaryEvent') && el.get<boolean | undefined>('cancelActivity') === false) opts.nonInterrupting = true;
@@ -111,26 +97,6 @@ export class EventTrigger {
           }
           break;
         }
-        case 'message': {
-          const info = EventTrigger.refInfo(def.get<El | undefined>('messageRef'));
-          if (info) details.message = info;
-          break;
-        }
-        case 'error': {
-          const info = EventTrigger.refInfo(def.get<El | undefined>('errorRef'), 'errorCode');
-          if (info) details.error = info;
-          break;
-        }
-        case 'signal': {
-          const info = EventTrigger.refInfo(def.get<El | undefined>('signalRef'));
-          if (info) details.signal = info;
-          break;
-        }
-        case 'escalation': {
-          const info = EventTrigger.refInfo(def.get<El | undefined>('escalationRef'), 'escalationCode');
-          if (info) details.escalation = info;
-          break;
-        }
         case 'conditional': {
           const condition = EventTrigger.bodyOf(def.get<El | undefined>('condition'));
           if (condition) details.condition = condition;
@@ -141,8 +107,12 @@ export class EventTrigger {
           if (link) details.link = link;
           break;
         }
-        default:
+        default: {
+          const root = EventTrigger.rootReferenceOf(trigger);
+          const info = root && EventTrigger.refInfo(def.get<El | undefined>(root.refProperty), root.codeProperty);
+          if (root && info) details[root.option] = info;
           break;
+        }
       }
     }
     if (is(event, 'bpmn:BoundaryEvent') && event.get<boolean>('cancelActivity') === false) details.nonInterrupting = true;
@@ -156,21 +126,25 @@ export class EventTrigger {
     switch (details.trigger) {
       case 'timer':
         return details.timer ? details.timer.value : 'timer';
-      case 'message':
-        return EventTrigger.named(details.message, 'message');
-      case 'error':
-        return EventTrigger.named(details.error, 'error');
-      case 'signal':
-        return EventTrigger.named(details.signal, 'signal');
-      case 'escalation':
-        return EventTrigger.named(details.escalation, 'escalation');
       case 'conditional':
         return details.condition ? `condition ${details.condition}` : 'conditional';
       case 'link':
         return details.link ? `link ${details.link}` : 'link';
-      default:
-        return details.trigger;
+      default: {
+        const root = EventTrigger.rootReferenceOf(details.trigger);
+        return root ? EventTrigger.named(details[root.option], root.option) : details.trigger;
+      }
     }
+  }
+
+  private static readRoot(def: El, root: RootReference, opts: TriggerOptions): void {
+    const ref = def.get<El | undefined>(root.refProperty);
+    opts[root.option] = ref?.get<string | undefined>('name') ?? ref?.get<string | undefined>('id');
+    if (root.codeProperty) opts[root.codeProperty] = ref?.get<string | undefined>(root.codeProperty);
+  }
+
+  private static rootReferenceOf(trigger: Trigger): RootReference | undefined {
+    return trigger === 'none' ? undefined : TRIGGERS[trigger].root;
   }
 
   private static refInfo(ref: El | undefined, codeProp?: string): RefInfo | undefined {

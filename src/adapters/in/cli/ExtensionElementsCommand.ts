@@ -1,5 +1,4 @@
 import type { Command as CommandType } from 'commander';
-import { ExtensionLister } from '../../../domain/document/ExtensionLister.js';
 import type { EditExtensionElements } from '../../../domain/commands/types.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
@@ -29,7 +28,7 @@ export class ExtensionElementsCommand extends MutationCommand {
 
   private async add(file: string, id: string, type: string, attrs: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    const op: EditExtensionElements = {
+    const command: EditExtensionElements = {
       op: 'ext',
       id,
       action: 'add',
@@ -38,23 +37,23 @@ export class ExtensionElementsCommand extends MutationCommand {
       ...givenStrings(options, ['body', 'xml']),
       ...givenFlags(options, ['replace']),
     };
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 
   /** `2` or `loop.2` is an index into the extension elements; anything else a selector. */
   private async remove(file: string, id: string, typeOrIndex: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
     const indexed = /^(?:(definition|loop|condition)\.)?(\d+)$/.exec(typeOrIndex.trim());
-    const op: EditExtensionElements = indexed
+    const command: EditExtensionElements = indexed
       ? { op: 'ext', id, action: 'remove', index: Number(indexed[2]), ...(indexed[1] ? { slot: indexed[1] as EditExtensionElements['slot'] } : {}) }
       : { op: 'ext', id, action: 'remove', type: typeOrIndex };
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 
   private async list(file: string, id: string, options: RawOpts): Promise<void> {
     const doc = await this.cli.readDocArg(file);
     const el = doc.require(id);
-    const items = new ExtensionLister().listAll(el);
+    const items = this.cli.useCases.showModel.allExtensions({ element: el });
     if (options['json']) this.cli.printJson(items, !!options['pretty']);
     else this.cli.print(renderExtensionList(items));
   }

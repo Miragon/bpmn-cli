@@ -1,13 +1,13 @@
-import { TRIGGER_TYPES } from '../document/utils/kinds.js';
+import { triggerOfDefinition } from '../document/Kinds.js';
 import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
-import { DecisionLinkReader } from '../document/DecisionLinkReader.js';
+import { DecisionLinkReader } from '../editing/properties/DecisionLinkReader.js';
 import { EventTrigger } from '../editing/events/EventTrigger.js';
 import { ExtensionLister, type ExtensionInfo } from '../document/ExtensionLister.js';
 import { definitionsOf, nestedEntries } from '../document/utils/nested-slots.js';
 import { vendorAttributes } from '../document/utils/elements.js';
 import { ZEEBE_URI } from '../document/vendor/ZeebeDescriptor.js';
-import type { Implementation } from './context.js';
-import type { ViewFlow } from './model-view.js';
+import type { Implementation } from './around-view.js';
+import type { FlowRef, ViewFlow } from './model-view.js';
 import { bodyOf, compact, nameOf, nonEmpty, refLabel, resourceOf, truncate } from './utils/view.js';
 
 const MAX_CHILDREN = 6;
@@ -16,33 +16,9 @@ export class ElementFacts {
   constructor(private readonly el: El) {}
 
   trigger(): string | undefined {
-    const described = new EventTrigger(this.el).describe();
-    if (described) return described;
-    const def = list(this.el, 'eventDefinitions')[0];
-    if (!def) return undefined;
-    if (is(def, 'bpmn:TimerEventDefinition')) {
-      for (const key of ['timeCycle', 'timeDuration', 'timeDate']) {
-        const value = bodyOf(peek<El>(def, key));
-        if (value) return value;
-      }
-      return undefined;
-    }
-    if (is(def, 'bpmn:MessageEventDefinition')) return `message ${refLabel(peek<El>(def, 'messageRef'))}`;
-    if (is(def, 'bpmn:SignalEventDefinition')) return `signal ${refLabel(peek<El>(def, 'signalRef'))}`;
-    if (is(def, 'bpmn:ErrorEventDefinition')) {
-      const ref = peek<El>(def, 'errorRef');
-      const code = ref ? peek<string>(ref, 'errorCode') : undefined;
-      return `error ${refLabel(ref)}${code ? ` (${code})` : ''}`;
-    }
-    if (is(def, 'bpmn:EscalationEventDefinition')) {
-      const ref = peek<El>(def, 'escalationRef');
-      const code = ref ? peek<string>(ref, 'escalationCode') : undefined;
-      return `escalation ${refLabel(ref)}${code ? ` (${code})` : ''}`;
-    }
-    if (is(def, 'bpmn:ConditionalEventDefinition')) return `if ${bodyOf(peek<El>(def, 'condition')) ?? '?'}`;
-    if (is(def, 'bpmn:LinkEventDefinition')) return `link ${peek<string>(def, 'name') ?? '?'}`;
-    return undefined;
+    return new EventTrigger(this.el).describe() || undefined;
   }
+
 
   nonInterrupting(): boolean | undefined {
     if (is(this.el, 'bpmn:BoundaryEvent')) return peek<boolean>(this.el, 'cancelActivity') === false ? true : undefined;
@@ -82,7 +58,7 @@ export class ElementFacts {
     const scriptFormat = peek<string>(el, 'scriptFormat');
     if (scriptFormat) props['scriptFormat'] = scriptFormat;
     const defs = definitionsOf(el);
-    if (defs.length > 1) props['definitions'] = defs.map((definition) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, triggerType]) => is(definition, triggerType))?.[0] ?? definition.$type).join('+');
+    if (defs.length > 1) props['definitions'] = defs.map((definition) => triggerOfDefinition(definition) ?? definition.$type).join('+');
     if (opts.zeebe !== false) this.zeebeProps(props);
     return Object.keys(props).length ? props : undefined;
   }
@@ -106,19 +82,32 @@ export class ElementFacts {
     return mentions.length ? [...new Set(mentions)] : undefined;
   }
 
-  flow(): ViewFlow {
+  flowRef(): FlowRef {
     const flow = this.el;
     const source = peek<El>(flow, 'sourceRef');
     const cond = peek<El>(flow, 'conditionExpression');
-    const resource = resourceOf(cond);
-    return compact({
+    return compact<FlowRef>({
       id: shownId(flow),
-      target: shownId(peek<El>(flow, 'targetRef')),
       name: nameOf(flow),
       condition: bodyOf(cond),
-      conditionResource: resource?.value,
-      language: cond ? peek<string>(cond, 'language') || undefined : undefined,
+      conditionResource: resourceOf(cond)?.value,
       default: source && peek<El>(source, 'default') === flow ? true : undefined,
+    });
+  }
+
+  flow(): ViewFlow {
+    const flow = this.el;
+    const cond = peek<El>(flow, 'conditionExpression');
+    const resource = resourceOf(cond);
+    const { id, name, condition, conditionResource, default: isDefault } = this.flowRef();
+    return compact({
+      id,
+      target: shownId(peek<El>(flow, 'targetRef')),
+      name,
+      condition,
+      conditionResource,
+      language: cond ? peek<string>(cond, 'language') || undefined : undefined,
+      default: isDefault,
       attrs: this.vendorValues((slot, key) => slot === 'condition' && key === resource?.key),
       extensions: this.extensionMentions(),
       extensionElements: nonEmpty(this.extensionTypes()),

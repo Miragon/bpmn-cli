@@ -20,12 +20,12 @@ export class RemoveElementsCommand extends MutationCommand {
 
   private async run(file: string, ids: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    const op: RemoveElements = {
+    const command: RemoveElements = {
       op: 'remove',
       ids,
       bridge: options['bridge'] !== false,
       ...givenFlags(options, ['bridgeAll', 'withBranch', 'ifExists']),
     };
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 }

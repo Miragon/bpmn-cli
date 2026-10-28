@@ -10,8 +10,8 @@ export class LabelSideCommand extends FormatCommand {
   register(program: CommandType): void {
     this.withMutationOptions(this.define(program, 'label').addOption(new Option('--side <side>').makeOptionMandatory())).action(
       (file: string, id: string, options: RawOpts) => {
-        const op: PlaceLabel = { op: 'label', id, side: options['side'] as PlaceLabel['side'] };
-        return this.runFormat(file, op, options);
+        const command: PlaceLabel = { op: 'label', id, side: options['side'] as PlaceLabel['side'] };
+        return this.runFormat(file, command, options);
       },
     );
   }

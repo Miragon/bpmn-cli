@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Second step of `npm run build`: ships the hand-written type shims
- * (src/types/*.d.ts: bpmn-moddle and bpmn-auto-layout ship no usable
+ * (src/types/*.d.ts: bpmn-moddle ships no usable
  * declarations) with dist, which tsc does not copy, and points the
  * `/// <reference path=... preserve="true" />` of dist/index.d.ts at the
  * copy (tsc writes it relative to the source, ../src/types/...). Without it

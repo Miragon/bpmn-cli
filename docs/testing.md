@@ -123,8 +123,10 @@ Every fixture must be synthetic. To keep a defect found on a private model,
 rebuild a minimal model that shows it (the minimiser's repro tells you which
 ops matter) and add that.
 
-`test/adapters/out/files/bpmnlint.test.ts` checks the project's bpmnlint configuration (issue
-#33) with the real bpmnlint and @miragon/bpmnlint-plugin-rules, offline:
+The tests of the project's bpmnlint configuration (issue #33) run with the real bpmnlint and
+@miragon/bpmnlint-plugin-rules, offline: `test/adapters/out/bpmnlint/` the effective rules and
+the advisory validator, `test/adapters/out/files/bpmnlint.test.ts` the lookup, the loading and
+the resolver chain, `test/e2e/bpmnlint-cli.test.ts` the CLI;
 each case writes a repository of its own into a temporary directory (a
 `.git` directory, a `.bpmnlintrc`, models, and a `node_modules` with
 project plugins where the case needs them), except the cases about a model
@@ -133,7 +135,7 @@ directory, a link to `/`, a hard link to a gitfile or to `/etc/hosts` where
 the system allows one; the `.bpmnlintrc` applies, the plugin must not run)
 mock the uid (skipped as root and on Windows), and the case of a system
 without uids (Windows: only a repository inside the home directory runs
-plugins) mocks `process.getuid` away and sets `HOME`. Its CLI cases build
+plugins) mocks `process.getuid` away and sets `HOME`. The CLI cases build
 `src/` with tsc into a temporary directory and run it under plain node,
 which loads bpmnlint and the plugin as the published package does
 (vitest's module loader would hide a load failure); they also run as root
@@ -170,7 +172,7 @@ named after it (also in the entries of an op before its retype), an id
 freed and then claimed explicitly, the `conventions`
 of a result (none in a new file or one that follows the rule), the view of
 `show --conventions` with its reasons).
-`test/adapters/out/files/bpmnlint.test.ts` checks the lookup, the notes in validate and writes
+`test/adapters/out/files/bpmnlint.test.ts` and `test/e2e/bpmnlint-cli.test.ts` check the lookup, the notes in validate and writes
 (also the one for a prefix declared for a DI type),
 `show --conventions` and `new` on the command line (its own errors before
 the `.bpmnlintrc`'s), and that a `.bpmnlintrc` without the rule, or
@@ -195,11 +197,11 @@ unchanged file shows none of them, the `E_VALIDATION` advice (the
 catalogue fix, the `guide --short` line, the plugin skill's row) does not
 send the reader to `bpmn validate`, and the guide's JSON error shape lists
 the `errors` that advice points to),
-`test/domain/views/decision-link.test.ts` the decision link (`calledDecision`) in models
+`test/domain/editing/properties/decision-link.test.ts` the decision link (`calledDecision`) in models
 without an engine (the unprefixed attribute; with `platform: 'none'` the
 spelling of the task's link or of the file's other links kept), Camunda 7,
 Operaton and Camunda 8 files.
-`test/domain/views/views.test.ts` checks the reading views (`show --around`, `show <id>
+`test/domain/views/reading-views.test.ts` checks the reading views (`show --around`, `show <id>
 --context`, lanes and message-flow names in `show`, message flows and
 annotations in `show <id>`) on the synthetic `test/fixtures/views/claims.bpmn`
 and holds a byte budget: on a generated 120-task model the neighbourhood
@@ -221,7 +223,7 @@ profile in the warnings delta; and the strip of a removed node that must not
 pull an expanded sub-process over a shape of another row (found by the gate's
 fuzz campaign on the integrated build).
 The round 1 verifier's findings, each with a test that fails on round 1:
-`test/domain/document/id-quality.test.ts` (ids and the report: flows at unnamed
+`test/domain/document/ids/id-quality.test.ts` (ids and the report: flows at unnamed
 gateways named by their speaking ids (no `_2`), unnamed elements in a row
 (the nearest named anchor once; where the prefix says the kind, `Task_`,
 `task_`, the anchor's kind where an id would repeat the anchor's,
@@ -240,11 +242,11 @@ delta: platform findings counted, a shrinking `W_DUPLICATE_NAME`, a bridge
 that takes over a removed flow's id, warnings of a batch's final state, `new`
 with the platform's findings),
 `test/domain/validation/c8-feel-and-deploy.test.ts` (Camunda 8, see "Engine checks (Camunda 8)"),
-`test/domain/views/views-context.test.ts` (`show <id> --context` on a synthetic shop
+`test/domain/views/element-context.test.ts` (`show <id> --context` on a synthetic shop
 model: every boundary event of the sub-processes around an element, the
 message of a message element with the flows of that message drawn to its
 pool, a message flow's ends, what uses a message / signal / error /
-escalation), `test/domain/diagram/format-frames.test.ts` (align / place with selector sets
+escalation), `test/domain/diagram/commands/format-frames.test.ts` (align / place with selector sets
 and explicit ids never take a shape out of its sub-process, also on the two
 scenarios the fuzzer hit), `test/domain/editing/move-lanes.test.ts` (a node moved into a
 flow between two lanes gets add's lane when it has none, keeps its own
@@ -255,11 +257,11 @@ fixes together (the message of `refAs` and speaking ids in `--summary`,
 created elements not also listed as changed, the subscription redirect in the
 warnings delta, a plain remove of a merge and `move` into a cross-lane flow
 renaming flows after their new ends).
-`test/domain/document/drawn-ids.test.ts` checks that a full redraw gives id-less elements
+`test/domain/document/ids/drawn-ids.test.ts` checks that a full redraw gives id-less elements
 ids before drawing them, and that an op giving a sequence flow without id
 other ends gives it one from them, and `test/e2e/node-files.test.ts` the encodings (a file
 is read as it declares, a write is UTF-8 and says so).
-`test/domain/diagram/layout-batch-parity.test.ts` checks issue #18, stage A, on the
+`test/domain/diagram/layout/incremental/batch-parity.test.ts` checks issue #18, stage A, on the
 synthetic hand-drawn model of the plugin eval `edit-hand-drawn-model`: the
 agent's batches (decision + "no" to the existing node, decision + a new "no"
 branch, `split`, a merge gateway; each with and without the timer reminder
@@ -287,7 +289,7 @@ grows at its bottom), and next to an annotation on a flow the move
 reroutes (no `through`); `E_NO_ROOM` names the space-tool run with the
 fewest layout problems, and after other ops of a batch only the batch op
 (no command for the file).
-`test/domain/diagram/layout-room-making.test.ts` checks issue #18, stage B, on synthetic
+`test/domain/diagram/layout/incremental/room-making.test.ts` checks issue #18, stage B, on synthetic
 hand-drawn models (`test/fixtures/layout-room/`), the eval's model and a
 public scenario: a boundary path above a line from an earlier boundary event
 opens the row below its host (the line and its end move down), a decision
@@ -325,7 +327,7 @@ not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
 `-o -`, `--json`, `--plane`, the usage errors). The synthetic
 `test/fixtures/render/gallery.bpmn` has every element kind the renderer
 draws (built with the CLI, then a group and multiple events added by hand).
-`test/domain/views/render-agent.test.ts` checks the agent features (stage 2): every layout
+`test/domain/views/render/render-agent.test.ts` checks the agent features (stage 2): every layout
 problem of every scenario and fixture located inside the bounding box of its
 elements on its plane (`locateProblems`; `layoutProblems` unchanged);
 `--problems` listing every metrics problem in its order with the same ids,
@@ -340,7 +342,7 @@ mutating commands (text, JSON, the region of a large drawing, a failed render
 that leaves the change standing); and the fuzz walk's render oracle. The
 synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
 wide, built with the CLI) is the tiles and focus model.
-`test/domain/views/render-fixes.test.ts` checks the fixes after the verification of
+`test/domain/views/render/render-fixes.test.ts` checks the fixes after the verification of
 issue #12 on synthetic models: broken or far-flung coordinates (NaN,
 1e308, Infinity, 1e9, a negative size, far label bounds) are left out with a
 note and never give `width="NaN"`, an all-broken plane is `E_RENDER`;
@@ -388,8 +390,8 @@ npx vitest run test/e2e/isomorphic.test.ts
   not compile. It prints the minified and gzipped sizes, split like a host's
   bundler would split them: the initial chunks of the whole entry and of an
   `applyToXml`-only entry, and the chunks loaded on demand (the Camunda 7
-  rules, the Camunda 8 rules with the FEEL, timer and schema-text checks,
-  bpmn-auto-layout). It fails when a rule module
+  rules, the Camunda 8 rules with the FEEL, timer and schema-text checks).
+  It fails when a rule module
   (`dist/platform/profiles/`: the profiles, their base, utils and checks) is in the initial chunks of
   either entry, naming it; when a rule module imports a module the entry
   loads, naming both (Rollup / Vite would put that module into the host's
@@ -644,8 +646,8 @@ node tools/speaking-ids.mjs                                   # tools/scenarios
 node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
 ```
 
-The regression tests: `test/domain/document/speaking-ids.test.ts` and
-`test/domain/document/conventions-ids.test.ts` (ids in every file style, renamed flows and
+The regression tests: `test/domain/document/ids/speaking-ids.test.ts` and
+`test/domain/document/ids/id-style.test.ts` (ids in every file style, renamed flows and
 their DI, also after an end got another id earlier in the batch; a flow
 form that stays put over many edits, also in snake_case and Pascal_Snake
 bodies, ties, flows under an outvoted prefix or scope),

@@ -1,7 +1,6 @@
-import { borderPoint, bottom, center, cx, right } from '../../utils/geom.js';
+import { borderPoint, bottom, center, cx, right, dedupe, hitCount, toSegments, type Segment } from '../../utils/geom.js';
 import type { Box, GNode, Point, ScopeLayout } from '../../di/types.js';
 import { ChannelRouter } from './ChannelRouter.js';
-import { dedupe, hitCount, toSegments, type Segment } from '../../utils/geometry.js';
 import { obstacles, routedSegments } from '../../utils/scope.js';
 
 /** Compensation links, associations and data associations. */

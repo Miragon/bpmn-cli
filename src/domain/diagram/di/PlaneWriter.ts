@@ -1,7 +1,7 @@
 import type { BpmnModdle } from 'bpmn-moddle';
 import { addTo, is, removeFrom, type El } from '../../document/utils/moddle.js';
 import { roundPoints, sameBox, samePoints, type Box, type Point } from '../utils/geom.js';
-import { idOf, raw, rawList } from '../utils/raw.js';
+import { boxOf, idOf, raw, rawList } from '../utils/raw.js';
 import type { DEdge, DShape, Plane } from './types.js';
 import { DiIds } from './DiIds.js';
 
@@ -16,14 +16,9 @@ export class PlaneWriter {
     return { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) };
   }
 
-  private readBox(bounds: unknown): Box | undefined {
-    if (!bounds) return undefined;
-    return { x: raw<number>(bounds, 'x') ?? NaN, y: raw<number>(bounds, 'y') ?? NaN, width: raw<number>(bounds, 'width') ?? NaN, height: raw<number>(bounds, 'height') ?? NaN };
-  }
-
   private setBounds(owner: El, box: Box): void {
     const current = raw<El>(owner, 'bounds');
-    if (current && sameBox(this.readBox(current), box)) return;
+    if (current && sameBox(boxOf(current), box)) return;
     const rounded = this.rounded(box);
     if (current) {
       current.set('x', rounded.x);

@@ -1,5 +1,5 @@
 import { modelError } from '../document/utils/errors.js';
-import { ISSUE_KEY, LEFT_OUT, type KeyedIssue } from './utils/validator-issues.js';
+import { withUnserialised } from '../document/utils/finding.js';
 import type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorInput, ValidatorIssue, ValidatorRun, ValidatorSeverity } from './validators.js';
 
 /** The validators of one call, each with a name. */
@@ -45,13 +45,11 @@ export class ValidatorSet {
   }
 
   private static issueOf(name: string, finding: ValidatorFinding): ValidatorIssue {
-    const issue: KeyedIssue = { code: String(finding.code ?? finding.ruleId ?? 'FINDING'), message: String(finding.message ?? ''), validator: name, severity: ValidatorSet.severityOf(finding.severity) };
+    const issue: ValidatorIssue = { code: String(finding.code ?? finding.ruleId ?? 'FINDING'), message: String(finding.message ?? ''), validator: name, severity: ValidatorSet.severityOf(finding.severity) };
     if (finding.element) issue.element = String(finding.element);
     if (finding.related?.length) issue.related = finding.related.map(String);
     if (finding.hint) issue.hint = String(finding.hint);
-    if (finding.key) Object.defineProperty(issue, ISSUE_KEY, { value: String(finding.key), enumerable: false });
-    if (finding.leftOut) Object.defineProperty(issue, LEFT_OUT, { value: String(finding.leftOut), enumerable: false });
-    return issue;
+    return withUnserialised(issue, { ...(finding.key ? { key: String(finding.key) } : {}), ...(finding.leftOut ? { leftOut: String(finding.leftOut) } : {}) });
   }
 
   private static severityOf(raw: unknown): ValidatorSeverity {

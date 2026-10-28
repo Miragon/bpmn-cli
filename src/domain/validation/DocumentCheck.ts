@@ -1,5 +1,6 @@
 import type { Doc } from '../document/Doc.js';
-import type { CliError, Warning } from '../document/CliError.js';
+import type { BpmnError } from '../document/BpmnError.js';
+import type { Finding } from '../document/Finding.js';
 import type { LayoutStatus } from '../diagram/types.js';
 import { LayoutDebug, type DebugSink } from '../diagram/layout/LayoutDebug.js';
 import { FullLayout } from '../diagram/layout/FullLayout.js';
@@ -11,7 +12,7 @@ import { ValidatorSet } from './ValidatorSet.js';
 import { counts, withValidatorReports } from './utils/validator-issues.js';
 import { once } from './utils/once.js';
 import type { Validator, ValidatorReport, ValidatorRun } from './validators.js';
-import { toCliError } from '../document/utils/cli-error.js';
+import { toBpmnError } from '../document/utils/bpmn-error.js';
 
 /** Options of `bpmn validate` (checkDoc, checkFile, validateXml). */
 export interface CheckOptions {
@@ -32,7 +33,7 @@ export interface CheckOptions {
 export interface CheckResult {
 
   validation: ValidationResult;
-  layout: LayoutStatus | { status: 'failed'; error: Warning };
+  layout: LayoutStatus | { status: 'failed'; error: Finding };
   importWarnings: string[];
 }
 
@@ -75,8 +76,8 @@ export class DocumentCheck {
       const layoutResult = await new FullLayout(this.doc.model, {}).run();
       return { status: 'ok', warnings: layoutResult.warnings, expanded: layoutResult.expanded };
     } catch (err) {
-      const cliError = toCliError(err) as CliError;
-      return { status: 'failed', error: { code: cliError.code, message: cliError.message, element: cliError.details?.element as string | undefined } };
+      const bpmnError = toBpmnError(err) as BpmnError;
+      return { status: 'failed', error: { code: bpmnError.code, message: bpmnError.message, element: bpmnError.details?.element as string | undefined } };
     }
   }
 

@@ -1,6 +1,5 @@
-import type { CliError } from '../document/CliError.js';
-import { kindByName, gatewayKindList, normalizeTrigger, parseKind, type Family } from '../document/utils/kinds.js';
-import { KindError } from '../document/KindError.js';
+import { BpmnError } from '../document/BpmnError.js';
+import { kindByName, gatewayKindList, normalizeTrigger, parseKind, type Family } from '../document/Kinds.js';
 import { commandUsageError, type CommandLocation } from './utils/command-location.js';
 import { defaultWithConditionViolation, groupViolation, placementViolation } from './utils/op-rules.js';
 import { FLOW_KEYS, PLACEMENT_KEYS, TRIGGER_KEYS } from './utils/op-fields.js';
@@ -11,7 +10,7 @@ export class CommandFieldCheck {
     readonly fields: Record<string, unknown>,
   ) {}
 
-  fail(message: string, hint?: string, candidates?: string[]): CliError {
+  fail(message: string, hint?: string, candidates?: string[]): BpmnError {
     return commandUsageError(this.location, message, hint, candidates);
   }
 
@@ -63,7 +62,7 @@ export class CommandFieldCheck {
     try {
       family = parseKind(kind).def.family;
     } catch (err) {
-      if (err instanceof KindError) throw this.fail(err.message, 'Run `bpmn kinds` for the list of kinds and triggers.', err.candidates);
+      if (err instanceof BpmnError) throw this.fail(err.message, 'Run `bpmn kinds` for the list of kinds and triggers.', err.details.candidates ?? []);
       throw err;
     }
     if (expectFamily && family !== expectFamily) {

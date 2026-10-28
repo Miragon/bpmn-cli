@@ -11,8 +11,8 @@ import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { mutateDoc } from '../../../src/index.js';
 import { validateDoc } from '../../../src/index.js';
 import { definitionsXml } from '../../helpers/helpers.js';
-import { ElementMoveService } from '../../../src/domain/editing/ElementMoveService.js';
-import { EditContext } from '../../../src/domain/document/EditContext.js';
+import { ElementMove } from '../../../src/domain/editing/elements/ElementMove.js';
+import { EditSession } from '../../../src/domain/document/EditSession.js';
 import { caught } from '../../helpers/errors.js';
 
 const TIMER = '<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>';
@@ -53,7 +53,7 @@ describe('boundary events on an event sub-process (#75)', () => {
 
   it('move --on an event sub-process is refused with E_INVALID_HOST', async () => {
     const doc = await Doc.fromXml(ORDER);
-    expect(caught(() => new ElementMoveService(doc, new EditContext(doc)).move({ op: 'move', ids: ['Event_ShipTimeout'], on: 'Activity_CancelOrder' })).code).toBe('E_INVALID_HOST');
+    expect(caught(() => new ElementMove(new EditSession(doc)).move({ op: 'move', ids: ['Event_ShipTimeout'], on: 'Activity_CancelOrder' })).code).toBe('E_INVALID_HOST');
     expect(doc.require('Event_ShipTimeout').get<El>('attachedToRef').get('id')).toBe('Activity_Ship');
   });
 

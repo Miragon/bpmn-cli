@@ -1,6 +1,6 @@
-import type { ElementDetail, ViewFlow } from '../../../domain/views/model-view.js';
+import type { ElementDetail, FlowRef } from '../../../domain/views/model-view.js';
 import { truncate } from '../../../domain/views/utils/view.js';
-import { detailMessageFlowText, extensionLines, INDENT, named, quote, scalar } from './utils/view-lines.js';
+import { detailMessageFlowText, extensionLines, flowTraits, INDENT, named, quote, scalar } from './utils/view-lines.js';
 
 /** `bpmn show <id>` as `key: value` lines (property keys are `set` keys). */
 export class DetailText {
@@ -36,8 +36,8 @@ export class DetailText {
       out.push(`${key}: ${scalar(value)}`);
       printed.add(key);
     }
-    if (detail.incoming.length) out.push(`incoming: ${detail.incoming.map(DetailText.incomingText).join('; ')}`);
-    if (detail.outgoing.length) out.push(`outgoing: ${detail.outgoing.map(DetailText.outgoingText).join('; ')}`);
+    if (detail.incoming.length) out.push(`incoming: ${detail.incoming.map((flow) => DetailText.flowEndText(flow, 'from', flow.source)).join('; ')}`);
+    if (detail.outgoing.length) out.push(`outgoing: ${detail.outgoing.map((flow) => DetailText.flowEndText(flow, 'to', flow.target)).join('; ')}`);
     if (detail.boundary?.length) out.push(`boundary: ${detail.boundary.join(', ')}`);
     if (detail.children?.length) out.push(`children: ${detail.children.join(', ')}`);
     if (detail.messageFlows?.length) out.push(`message flows: ${detail.messageFlows.map(detailMessageFlowText).join('; ')}`);
@@ -68,21 +68,7 @@ export class DetailText {
     return out.join('\n');
   }
 
-  private static incomingText(flow: ElementDetail['incoming'][number] & { conditionResource?: string }): string {
-    const parts = [flow.id, 'from', flow.source];
-    if (flow.name) parts.push(quote(flow.name));
-    if (flow.condition) parts.push(`if ${flow.condition}`);
-    else if (flow.conditionResource) parts.push(`if resource ${flow.conditionResource}`);
-    if (flow.default) parts.push('default');
-    return parts.join(' ');
-  }
-
-  private static outgoingText(flow: ViewFlow): string {
-    const parts = [flow.id, 'to', flow.target];
-    if (flow.name) parts.push(quote(flow.name));
-    if (flow.condition) parts.push(`if ${flow.condition}`);
-    else if (flow.conditionResource) parts.push(`if resource ${flow.conditionResource}`);
-    if (flow.default) parts.push('default');
-    return parts.join(' ');
+  private static flowEndText(flow: FlowRef, side: 'from' | 'to', end: string): string {
+    return [flow.id, side, end, ...flowTraits(flow, true)].join(' ');
   }
 }

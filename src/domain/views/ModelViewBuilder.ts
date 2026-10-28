@@ -1,15 +1,15 @@
 import type { Doc } from '../document/Doc.js';
-import { kindLabel } from '../document/utils/kinds.js';
+import { kindLabel } from '../document/Kinds.js';
 import { diExpansionState } from '../diagram/utils/expansion.js';
 import { Groups } from '../diagram/di/Groups.js';
 import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
-import { laneOf } from '../document/utils/lanes.js';
 import { FlowOrder } from '../validation/FlowOrder.js';
 import { StructuralValidator } from '../validation/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
-import type { ModelView, ViewData, ViewGroup, ViewLane, ViewMessageFlow, ViewNode, ViewProcess } from './model-view.js';
-import { compact, nameOf, nonEmpty, refLabel, scopesWithin } from './utils/view.js';
+import { ElementSummaryBuilder } from './ElementSummaryBuilder.js';
+import type { ModelView, ViewData, ViewGroup, ViewLane, ViewNode, ViewProcess } from './model-view.js';
+import { compact, nameOf, nonEmpty, scopesWithin } from './utils/view.js';
 
 const STANDARD_NS = new Set(['bpmn', 'bpmndi', 'di', 'dc', 'xsi', 'xml']);
 
@@ -28,9 +28,11 @@ const ROOT_KINDS: Array<[string, string]> = [
 export class ModelViewBuilder {
   private readonly links: ElementLinks;
   private readonly expansion: Map<string, boolean>;
+  private readonly summaries: ElementSummaryBuilder;
 
   constructor(private readonly doc: Doc) {
     this.links = new ElementLinks(doc);
+    this.summaries = new ElementSummaryBuilder(doc);
     this.expansion = diExpansionState(doc.definitions);
   }
 
@@ -90,25 +92,25 @@ export class ModelViewBuilder {
   private node(el: El, unreachable: Set<El>): ViewNode {
     const doc = this.doc;
     const facts = new ElementFacts(el);
-    const id = shownId(el);
+    const { id, kind, name, trigger, nonInterrupting, documentation, outgoing, lane, props } = this.summaries.build(el, { kindLabel });
     const isSub = is(el, 'bpmn:SubProcess');
     const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((boundaryEvent) => this.node(boundaryEvent, unreachable)) : [];
     return compact<ViewNode>({
       id,
-      kind: kindLabel(el),
+      kind,
       type: el.$type,
-      name: nameOf(el),
-      trigger: is(el, 'bpmn:Event') ? facts.trigger() : undefined,
-      nonInterrupting: facts.nonInterrupting(),
-      documentation: facts.documentation(),
-      outgoing: doc.outgoing(el).map((flow) => new ElementFacts(flow).flow()),
+      name,
+      trigger,
+      nonInterrupting,
+      documentation,
+      outgoing,
       incoming: doc.incoming(el).map(shownId),
-      lane: is(el, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, el)?.get<string>('id'),
+      lane,
       boundary: boundary.length ? boundary : undefined,
       children: isSub ? this.nodes(el) : undefined,
       expanded: isSub ? this.expansion.get(id) !== false : undefined,
       unreachable: unreachable.has(el) ? true : undefined,
-      props: facts.props(),
+      props,
       attrs: facts.vendorValues(),
       extensions: facts.extensionMentions(),
       extensionElements: nonEmpty(facts.extensionTypes()),
@@ -134,15 +136,14 @@ export class ModelViewBuilder {
     const out: ViewData[] = [];
     for (const scope of scopes) {
       for (const el of this.doc.flowElements(scope)) {
-        const kind = is(el, 'bpmn:DataObjectReference') ? 'dataObject' : is(el, 'bpmn:DataStoreReference') ? 'dataStore' : undefined;
-        if (!kind) continue;
-        const from: string[] = [];
-        const to: string[] = [];
+        if (!is(el, 'bpmn:DataObjectReference') && !is(el, 'bpmn:DataStoreReference')) continue;
+        const entry = this.links.viewDataOf(el);
         for (const node of nodes) {
-          if (list(node, 'dataOutputAssociations').some((association) => peek<El>(association, 'targetRef') === el)) from.push(shownId(node));
-          if (list(node, 'dataInputAssociations').some((association) => list(association, 'sourceRef').includes(el))) to.push(shownId(node));
+          const { reads, writes } = this.links.dataRefsOf(node);
+          if (writes.includes(el)) entry.from.push(shownId(node));
+          if (reads.includes(el)) entry.to.push(shownId(node));
         }
-        out.push(compact<ViewData>({ id: shownId(el), kind, name: nameOf(el), from, to }));
+        out.push(entry);
       }
     }
     return out;
@@ -184,19 +185,7 @@ export class ModelViewBuilder {
     return compact({
       id: shownId(collab),
       participants: doc.participants().map((participant) => compact({ id: shownId(participant), name: nameOf(participant), process: peek<El>(participant, 'processRef')?.get<string>('id') })),
-      messageFlows: doc.messageFlows().map((mf) => {
-        const source = peek<El>(mf, 'sourceRef');
-        const target = peek<El>(mf, 'targetRef');
-        return compact<ViewMessageFlow>({
-          id: shownId(mf),
-          source: shownId(source),
-          target: shownId(target),
-          name: nameOf(mf),
-          message: peek<El>(mf, 'messageRef') ? refLabel(peek<El>(mf, 'messageRef')) : undefined,
-          sourceName: source ? nameOf(source) : undefined,
-          targetName: target ? nameOf(target) : undefined,
-        });
-      }),
+      messageFlows: doc.messageFlows().map((mf) => this.links.viewMessageFlowOf(mf, nameOf)),
       annotations: nonEmpty(annotations),
     });
   }

@@ -7,7 +7,7 @@ import type { CheckResult } from './application/port/in/ValidateDocumentUseCase.
 import type { MutationResult } from './domain/batch/types.js';
 import type { RenderOptions } from './domain/views/render/types.js';
 import { PngRenderer, type PngRenderResult } from './adapters/out/files/PngRenderer.js';
-import type { BpmnlintEngine } from './domain/validation/bpmnlint-validator.js';
+import type { BpmnlintEngine } from './adapters/out/bpmnlint/bpmnlint-contract.js';
 import type { NamedValidator, Validator } from './domain/validation/validators.js';
 import { BpmnlintLibs, type BpmnlintPlugin } from './adapters/out/files/BpmnlintLibs.js';
 import { BpmnlintLoader, type LoadedBpmnlint } from './adapters/out/files/BpmnlintLoader.js';
@@ -37,11 +37,11 @@ export function readDoc(file: string): Promise<Doc> { return new ReadDocumentSer
 /** Loads a file; fails with E_IMPORT_LOSSY when bpmn-moddle dropped content, unless force. */
 export function loadDoc(file: string, opts: { force?: boolean } = {}): Promise<Doc> { return new ReadDocumentService(FILES).read({ source: { file }, lossless: true, ...opts }); }
 /** Loads a file, applies ops and writes it back (or to opts.out). */
-export function mutateFile(file: string, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES, FILES).edit({ ...opts, source: { file }, commands: ops }); }
+export function mutateFile(file: string, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES).edit({ ...opts, source: { file }, commands: ops }); }
 /** Applies ops to a loaded document and writes it to opts.out ?? doc.file. */
-export function mutateDocToFile(doc: Doc, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES, FILES).edit({ ...opts, source: { doc }, commands: ops }); }
+export function mutateDocToFile(doc: Doc, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES).edit({ ...opts, source: { doc }, commands: ops }); }
 /** `bpmn layout`: redraws a file (or with `tidy` only removes overlaps) and writes it back. */
-export function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> { return new RelayoutDiagramService(PROJECT, FILES, FILES).relayout({ ...opts, source: { file } }); }
+export function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> { return new RelayoutDiagramService(PROJECT, FILES).relayout({ ...opts, source: { file } }); }
 /** `bpmn validate`: validates a file and dry-runs the layout without writing anything. */
 export function checkFile(file: string, opts: FileCheckOptions = {}): Promise<CheckResult> { return new ValidateDocumentService(PROJECT, FILES).validate({ ...opts, source: { file } }); }
 /**

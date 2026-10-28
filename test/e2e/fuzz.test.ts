@@ -16,7 +16,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CliError, Doc, mutateDoc, parseOps } from '../../src/index.js';
+import { BpmnError, Doc, mutateDoc, parseOps } from '../../src/index.js';
 import { LayoutAnalysis } from '../../src/domain/diagram/di/LayoutAnalysis.js';
 import * as problems from '../../src/domain/diagram/utils/problems.js';
 // @ts-expect-error plain ESM tooling without type declarations
@@ -35,7 +35,7 @@ const ROOT = join(__dirname, '..', '..');
 const FIXTURES = join(ROOT, 'test', 'fixtures', 'incremental');
 const SCENARIOS = join(ROOT, 'tools', 'scenarios');
 
-const exec: Executor = libExecutor({ Doc, parseOps, mutateDoc, CliError });
+const exec: Executor = libExecutor({ Doc, parseOps, mutateDoc, BpmnError });
 const metrics = { measure: (xml: string) => LayoutAnalysis.ofXml(xml), diff: problems.diffProblems, hard: hardKinds(problems, {}) as string[] };
 
 type Mode = 'auto' | 'incremental';

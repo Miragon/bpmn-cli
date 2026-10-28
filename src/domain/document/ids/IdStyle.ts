@@ -3,10 +3,10 @@ import type { IdRegistry } from './IdRegistry.js';
 import { FORM_JOIN, IdFitter } from './IdFitter.js';
 import { caseLike, CONTEXT_WORDS, kindWord, PREFIXED, speakingStem, stemWords } from '../utils/id-words.js';
 import { CONNECTIONS, connectionRequest, kindRequest, typeRequest, type IdRequest } from '../utils/requests.js';
-import type { IdConventions } from './IdConventionsReader.js';
+import type { IdConventions } from './IdConventions.js';
 import { DeclaredConventions } from './DeclaredConventions.js';
 import { DEFAULT_FLOW, LearnedStyle } from './LearnedStyle.js';
-import { kindByName } from '../utils/kinds.js';
+import { FLOW_NODE_FAMILIES, KINDS, kindByName } from '../Kinds.js';
 import type { El } from '../utils/moddle.js';
 
 /** The case of the bodies of new ids. */
@@ -42,25 +42,7 @@ export interface IdState {
 const FILE_LEVEL = new Set(['bpmn:Process', 'bpmn:Definitions']);
 
 /** Their prefix says the kind, so an unnamed one's id leaves it out (Gateway_AfterCheck). */
-const SPELLABLE = new Set([
-  'task',
-  'userTask',
-  'serviceTask',
-  'scriptTask',
-  'sendTask',
-  'receiveTask',
-  'manualTask',
-  'businessRuleTask',
-  'subProcess',
-  'adHocSubProcess',
-  'transaction',
-  'callActivity',
-  'exclusiveGateway',
-  'parallelGateway',
-  'inclusiveGateway',
-  'complexGateway',
-  'eventBasedGateway',
-]);
+const SPELLABLE = new Set(KINDS.filter((def) => FLOW_NODE_FAMILIES.has(def.family) && def.family !== 'event' && def.kind !== 'eventSubProcess').map((def) => def.kind));
 
 /**
  * The id conventions of a document, so that new ids look like the ones it already has and every

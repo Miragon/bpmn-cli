@@ -1,5 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
-import { isEventSubProcess, kindLabel, kindOf, triggerOf, type Trigger } from '../../document/utils/kinds.js';
+import { isEventSubProcess, kindLabel, kindOf, triggerOf, type Trigger } from '../../document/Kinds.js';
 import { is, type El, peek, list, shownId } from '../../document/utils/moddle.js';
 import { ALWAYS_INTERRUPTING as NON_INTERRUPTING_FORBIDDEN } from '../../editing/events/EventTrigger.js';
 import type { StructureFindings } from './StructureFindings.js';

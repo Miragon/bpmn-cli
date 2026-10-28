@@ -1,13 +1,14 @@
 import type { Doc } from '../document/Doc.js';
 import { usageError } from '../document/utils/errors.js';
-import { kindLabel, kindOrTypeLabel, triggerOf } from '../document/utils/kinds.js';
+import { isLinkCatch, isLinkThrow, kindLabel, kindOrTypeLabel } from '../document/Kinds.js';
 import { diExpansionState } from '../diagram/utils/expansion.js';
-import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
-import { laneOf } from '../document/utils/lanes.js';
+import { is, peek, shownId, type El } from '../document/utils/moddle.js';
 import { FlowOrder } from '../validation/FlowOrder.js';
-import { AROUND_DEFAULT_DEPTH, type AroundNode, type AroundOptions, type AroundScope, type AroundView } from './context.js';
+import { linkNameOf } from '../validation/utils/flow-nodes.js';
+import { AROUND_DEFAULT_DEPTH, type AroundNode, type AroundOptions, type AroundScope, type AroundView } from './around-view.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
+import { ElementSummaryBuilder } from './ElementSummaryBuilder.js';
 import type { ViewAnnotation, ViewData, ViewMessageFlow } from './model-view.js';
 import { compact, nonEmpty, ownNameOf, scopesWithin } from './utils/view.js';
 
@@ -67,33 +68,37 @@ export class AroundWindow {
       }
     }
     const expansion = diExpansionState(doc.definitions);
+    const summaries = new ElementSummaryBuilder(doc);
     const scopes: AroundScope[] = [];
     const nodes: AroundNode[] = [];
 
     const nodeOf = (node: El): AroundNode => {
-      const facts = new ElementFacts(node);
+      const { id, kind, name, lane, trigger, nonInterrupting, props, documentation, outgoing } = summaries.build(node, { kindLabel, zeebe: false });
       const sub = is(node, 'bpmn:SubProcess');
       const children = sub ? doc.flowNodes(node).filter((child) => !is(child, 'bpmn:BoundaryEvent')) : [];
       const from = doc
         .incoming(node)
         .filter((flow) => !inWindow(peek<El>(flow, 'sourceRef')))
-        .map((flow) => compact({ id: shownId(flow), source: shownId(peek<El>(flow, 'sourceRef')), name: ownNameOf(flow) }));
+        .map((flow) => {
+          const { id, name } = new ElementFacts(flow).flowRef();
+          return compact({ id, source: shownId(peek<El>(flow, 'sourceRef')), name });
+        });
       return compact<AroundNode>({
-        id: shownId(node),
-        kind: kindLabel(node),
-        name: ownNameOf(node),
+        id,
+        kind,
+        name,
         scope: shownId(doc.scopeOf(node)),
         distance: distance.get(node)!,
         host: is(node, 'bpmn:BoundaryEvent') ? shownId(peek<El>(node, 'attachedToRef')) : undefined,
-        lane: is(node, 'bpmn:BoundaryEvent') ? undefined : laneOf(doc, node)?.get<string>('id'),
-        trigger: is(node, 'bpmn:Event') ? facts.trigger() : undefined,
-        nonInterrupting: facts.nonInterrupting(),
-        expanded: sub ? expansion.get(shownId(node)) !== false : undefined,
+        lane,
+        trigger,
+        nonInterrupting,
+        expanded: sub ? expansion.get(id) !== false : undefined,
         content: sub && children.length && !children.some((child) => inWindow(child)) ? children.length : undefined,
-        props: facts.props({ zeebe: false }),
-        impl: facts.implementation(),
-        documentation: facts.documentation(),
-        outgoing: doc.outgoing(node).map((flow) => new ElementFacts(flow).flow()),
+        props,
+        impl: new ElementFacts(node).implementation(),
+        documentation,
+        outgoing,
         from: nonEmpty(from),
       });
     };
@@ -176,10 +181,10 @@ export class AroundWindow {
     const host = is(node, 'bpmn:BoundaryEvent') ? peek<El>(node, 'attachedToRef') : undefined;
     if (host) out.push(host);
     const scope = doc.scopeOf(node);
-    if (scope && (AroundWindow.isLink(node, 'throw') || AroundWindow.isLink(node, 'catch'))) {
-      const name = AroundWindow.linkName(node);
-      const other = AroundWindow.isLink(node, 'throw') ? 'catch' : 'throw';
-      if (name) out.push(...doc.flowNodes(scope).filter((candidate) => AroundWindow.isLink(candidate, other) && AroundWindow.linkName(candidate) === name));
+    if (scope && (isLinkThrow(node) || isLinkCatch(node))) {
+      const name = linkNameOf(node);
+      const isPartner = isLinkThrow(node) ? isLinkCatch : isLinkThrow;
+      if (name) out.push(...doc.flowNodes(scope).filter((candidate) => isPartner(candidate) && linkNameOf(candidate) === name));
     }
     if (scope && is(scope, 'bpmn:SubProcess') && this.isEntryOrExit(node)) out.push(scope);
     if (inner && is(node, 'bpmn:SubProcess')) out.push(...doc.flowNodes(node).filter((child) => this.isEntryOrExit(child)));
@@ -203,20 +208,7 @@ export class AroundWindow {
     return this.doc
       .messageFlows()
       .filter((mf) => windowEls.includes(peek<El>(mf, 'sourceRef')!) || windowEls.includes(peek<El>(mf, 'targetRef')!))
-      .map((mf) => {
-        const source = peek<El>(mf, 'sourceRef');
-        const target = peek<El>(mf, 'targetRef');
-        const message = peek<El>(mf, 'messageRef');
-        return compact<ViewMessageFlow>({
-          id: shownId(mf),
-          source: shownId(source),
-          target: shownId(target),
-          name: ownNameOf(mf),
-          message: message ? (ownNameOf(message) ?? shownId(message)) : undefined,
-          sourceName: ownNameOf(source),
-          targetName: ownNameOf(target),
-        });
-      });
+      .map((mf) => this.links.viewMessageFlowOf(mf, ownNameOf));
   }
 
   private annotations(windowEls: El[]): ViewAnnotation[] {
@@ -234,13 +226,12 @@ export class AroundWindow {
   private data(windowEls: El[]): ViewData[] {
     const data: ViewData[] = [];
     for (const element of windowEls) {
-      const links = this.links.dataLinksOf(element);
-      for (const [side, refs] of [['to', links?.reads ?? []], ['from', links?.writes ?? []]] as const) {
+      const { reads, writes } = this.links.dataRefsOf(element);
+      for (const [side, refs] of [['to', reads], ['from', writes]] as const) {
         for (const dataRef of refs) {
-          const ref = this.doc.get(dataRef.id);
-          let entry = data.find((dataEntry) => dataEntry.id === dataRef.id);
+          let entry = data.find((dataEntry) => dataEntry.id === shownId(dataRef));
           if (!entry) {
-            entry = compact<ViewData>({ id: dataRef.id, kind: ref && is(ref, 'bpmn:DataStoreReference') ? 'dataStore' : 'dataObject', name: dataRef.name, from: [], to: [] });
+            entry = this.links.viewDataOf(dataRef);
             data.push(entry);
           }
           entry[side].push(shownId(element));
@@ -248,15 +239,5 @@ export class AroundWindow {
       }
     }
     return data;
-  }
-
-  private static isLink(el: El, side: 'throw' | 'catch'): boolean {
-    return is(el, side === 'throw' ? 'bpmn:IntermediateThrowEvent' : 'bpmn:IntermediateCatchEvent') && triggerOf(el) === 'link';
-  }
-
-  private static linkName(el: El): string | undefined {
-    const def = list(el, 'eventDefinitions').find((definition) => is(definition, 'bpmn:LinkEventDefinition'));
-    const name = def ? peek<unknown>(def, 'name') : undefined;
-    return typeof name === 'string' && name ? name : undefined;
   }
 }

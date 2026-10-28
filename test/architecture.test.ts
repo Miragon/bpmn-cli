@@ -35,13 +35,13 @@ const sourceFiles = (readdirSync('src', { recursive: true }) as string[]).filter
 
 const ENTRIES = ['src/api.ts', 'src/cli.ts', 'src/index.ts', 'src/node.ts'];
 const DOMAIN_MODULES = ['document', 'commands', 'diagram', 'editing', 'validation', 'views', 'batch'];
-const ADAPTERS = ['in/cli', 'in/report', 'out/files', 'out/memory'];
-/** adapter -> the adapters it may use: the CLI prints through the reports the library also returns */
-const ADAPTER_USES: Record<string, string[]> = { 'in/cli': ['in/report'] };
-/** the public API's classes (Doc, CliError, ChangeSet), constants and pure helpers on kinds, op names, metrics and conventions text */
+const ADAPTERS = ['in/cli', 'in/report', 'out/bpmnlint', 'out/document', 'out/files', 'out/memory'];
+/** adapter -> the adapters it may use: the CLI prints through the reports the library also returns, the files load the .bpmnlintrc bpmnlint runs, the files and memory stores share how a document is loaded and saved */
+const ADAPTER_USES: Record<string, string[]> = { 'in/cli': ['in/report'], 'out/files': ['out/bpmnlint', 'out/document'], 'out/memory': ['out/document'] };
+/** the public API's classes (Doc, BpmnError, ChangeSet), constants and pure helpers on kinds, op names and metrics */
 const DOMAIN_VALUES_ENTRIES_REEXPORT = [
-  'Doc', 'TARGETS', 'CliError', 'EXIT_CODES', 'ChangeSet', 'KINDS', 'parseKind', 'kindOf', 'kindLabel', 'FORMAT_OP_NAMES', 'isDiagramCommand', 'LAYOUT_MODES',
-  'AROUND_DEFAULT_DEPTH', 'BPMNLINT_COVERS', 'BPMNLINT_VALIDATOR', 'renderConventions', 'ID_NAMING_RULE', 'PLATFORM_CHOICES', 'OPS_SCHEMA',
+  'Doc', 'TARGETS', 'BpmnError', 'EXIT_CODES', 'ChangeSet', 'KINDS', 'parseKind', 'kindOf', 'kindLabel', 'DIAGRAM_COMMAND_NAMES', 'isDiagramCommand', 'LAYOUT_MODES',
+  'AROUND_DEFAULT_DEPTH', 'PLATFORM_CHOICES',
   'diffProblems', 'metricsDelta', 'KEYS', 'WEIGHTS', 'SWATCHES', 'RENDER_MAX_SIZE', 'MIN_LABEL_SCALE', 'HALO_COLORS',
 ];
 const inFolder =(file: string, folder: string) => file.startsWith(join('src', folder) + sep);
@@ -105,7 +105,7 @@ describe('architecture', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('an adapter imports no other adapter but the reports: the entries wire them', async () => {
+  it('an adapter imports no other adapter but the ones ADAPTER_USES names: the entries wire them', async () => {
     for (const adapter of ADAPTERS) {
       const forbidden = ADAPTERS.filter((other) => other !== adapter && !(ADAPTER_USES[adapter] ?? []).includes(other));
       await expectNoDependency(`adapters/${adapter}`, forbidden.map((other) => `adapters/${other}`));
@@ -130,9 +130,8 @@ describe('architecture', () => {
       [...readFileSync(entry, 'utf8').matchAll(new RegExp(`^${keyword}\\s+(type\\s+)?(?:\\{([^}]*)\\}|\\*|\\w+)\\s+from\\s+'([^']+)'`, 'gm'))]
         .filter((statement) => !statement[1] && inFolder(join(entry, '..', statement[3]!), 'domain'))
         .flatMap((statement) => (statement[2] ?? '*').split(',').map((specifier) => specifier.trim()).filter((specifier) => specifier && !specifier.startsWith('type ')).map((specifier) => specifier.split(/\s+as\s+/)[0]!));
-    const entries = ENTRIES.filter((entry) => entry !== 'src/cli.ts');
-    expect(entries.flatMap((entry) => valueNamesFromDomain(entry, 'import').map((name) => `${entry}: ${name}`))).toEqual([]);
-    expect(entries.flatMap((entry) => valueNamesFromDomain(entry, 'export')).filter((name) => !DOMAIN_VALUES_ENTRIES_REEXPORT.includes(name))).toEqual([]);
+    expect(ENTRIES.flatMap((entry) => valueNamesFromDomain(entry, 'import').map((name) => `${entry}: ${name}`))).toEqual([]);
+    expect(ENTRIES.flatMap((entry) => valueNamesFromDomain(entry, 'export')).filter((name) => !DOMAIN_VALUES_ENTRIES_REEXPORT.includes(name))).toEqual([]);
   });
 
   it('application/ holds only the ports and the services that implement them', () => {
@@ -144,14 +143,15 @@ describe('architecture', () => {
     expect(portsOut.filter((file) => !file.endsWith('Port.ts'))).toEqual([]);
   });
 
-  it('every service of application/service implements its use case and calls no other service of it', () => {
+  it('application/service holds only the services, each implementing its use case and using no other class of application/service', () => {
     const services = sourceFiles.filter((file) => inFolder(file, join('application', 'service')));
     for (const file of services) {
+      expect(file, file).toMatch(/Service\.ts$/);
       const useCase = file.split(sep).pop()!.replace('Service.ts', 'UseCase');
       expect(readFileSync(file, 'utf8'), file).toMatch(new RegExp(`implements ${useCase}\\b`));
       expect(existsSync(join('src', 'application', 'port', 'in', `${useCase}.ts`)), useCase).toBe(true);
     }
-    expect(services.filter((file) => importsOf(file).some((specifier) => /Service\.js$/.test(specifier) && !specifier.includes('domain/')))).toEqual([]);
+    expect(services.filter((file) => importsOf(file).some((specifier) => specifier.startsWith('./')))).toEqual([]);
   });
 
   it('the driving adapters know the use cases only by their ports: the entries hand them the services', async () => {
@@ -166,7 +166,7 @@ describe('architecture', () => {
   it('only the kind definitions group gateway types by behaviour (the engine rule chunks load on demand and keep their own)', () => {
     const gatewayType = String.raw`'bpmn:(?:Exclusive|Inclusive|Parallel|Complex)Gateway'`;
     const groupedGatewayTypes = new RegExp(`${gatewayType}.*${gatewayType}`);
-    const ownedElsewhere = (file: string) => file === join('src', 'domain', 'document', 'utils', 'kinds.ts') || file.startsWith(join('src', 'domain', 'validation', 'profiles'));
+    const ownedElsewhere = (file: string) => file === join('src', 'domain', 'document', 'Kinds.ts') || file.startsWith(join('src', 'domain', 'validation', 'profiles'));
     const offenders = sourceFiles
       .filter((file) => !ownedElsewhere(file))
       .flatMap((file) => readFileSync(file, 'utf8').split('\n').map((line, lineIndex) => (groupedGatewayTypes.test(line) ? `${file}:${lineIndex + 1}` : undefined)))
@@ -188,7 +188,7 @@ describe('architecture', () => {
   });
 
   it('only the modules owning group names and memberships touch a category value reference', () => {
-    const owners = ['domain/document/utils/moddle.ts', 'domain/editing/ArtifactService.ts', 'domain/editing/ElementRemovalService.ts', 'domain/diagram/di/Groups.ts'];
+    const owners = ['domain/document/utils/moddle.ts', 'domain/editing/elements/Artifacts.ts', 'domain/editing/elements/ElementRemoval.ts', 'domain/diagram/di/Groups.ts'];
     const touching = readdirSync('src', { recursive: true, encoding: 'utf8' })
       .filter((file) => file.endsWith('.ts') && !file.startsWith('domain/validation/profiles/'))
       .filter((file) => readFileSync(join('src', file), 'utf8').includes("'categoryValueRef'"));

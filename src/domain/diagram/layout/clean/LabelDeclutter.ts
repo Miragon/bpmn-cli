@@ -1,8 +1,7 @@
 import { titleBox } from '../../utils/text.js';
-import { overlaps } from '../../utils/geom.js';
+import { overlaps, segmentHitsBox, toSegments, type Segment } from '../../utils/geom.js';
 import type { Box, Point } from '../../di/types.js';
 import { is, many, type El } from '../../../document/utils/moddle.js';
-import { toSegments, type Segment } from '../../utils/geometry.js';
 
 const RUN_KEEP = 2;
 
@@ -123,10 +122,6 @@ export class LabelDeclutter {
     return { x: bounds.get<number>('x'), y: bounds.get<number>('y'), width: bounds.get<number>('width'), height: bounds.get<number>('height') };
   }
 
-  private hitsBox([start, end]: Segment, box: Box, shrink = 0): boolean {
-    return Math.min(start.x, end.x) < box.x + box.width - shrink && Math.max(start.x, end.x) > box.x + shrink && Math.min(start.y, end.y) < box.y + box.height - shrink && Math.max(start.y, end.y) > box.y + shrink;
-  }
-
   private holds(frame: Box, point: Point): boolean {
     return point.x >= frame.x && point.x <= frame.x + frame.width && point.y >= frame.y && point.y <= frame.y + frame.height;
   }
@@ -153,7 +148,7 @@ export class LabelDeclutter {
     return (
       this.shapes.some((shape) => shape !== own && overlaps(shape, box, 2)) ||
       this.placed.some((other) => overlaps(other, box, 2)) ||
-      this.lines.some((seg) => this.hitsBox(seg, box, seg[0].y === seg[1].y ? -RUN_KEEP : 1)) ||
+      this.lines.some(([start, end]) => segmentHitsBox(start, end, box, start.y === end.y ? -RUN_KEEP : 1)) ||
       this.titleBoxes.some((title) => overlaps(title, box, 2))
     );
   }

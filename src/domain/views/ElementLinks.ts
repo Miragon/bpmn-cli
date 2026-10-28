@@ -1,7 +1,7 @@
 import type { Doc } from '../document/Doc.js';
 import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
 import { laneOf } from '../document/utils/lanes.js';
-import type { DetailData, DetailMessageFlow, ViewAnnotation } from './model-view.js';
+import type { DetailData, DetailMessageFlow, ViewAnnotation, ViewData, ViewMessageFlow } from './model-view.js';
 import { compact, nameOf, nonEmpty, refLabel, scopesWithin } from './utils/view.js';
 
 export class ElementLinks {
@@ -81,6 +81,34 @@ export class ElementLinks {
     });
   }
 
+  viewMessageFlowOf(mf: El, nameOf: (el: El) => string | undefined): ViewMessageFlow {
+    const named = (el: El | undefined) => (el ? nameOf(el) : undefined);
+    const source = peek<El>(mf, 'sourceRef');
+    const target = peek<El>(mf, 'targetRef');
+    const message = peek<El>(mf, 'messageRef');
+    return compact<ViewMessageFlow>({
+      id: shownId(mf),
+      source: shownId(source),
+      target: shownId(target),
+      name: named(mf),
+      message: message ? (named(message) ?? shownId(message)) : undefined,
+      sourceName: named(source),
+      targetName: named(target),
+    });
+  }
+
+  viewDataOf(data: El): ViewData {
+    const kind = is(data, 'bpmn:DataStoreReference') ? 'dataStore' : 'dataObject';
+    return compact<ViewData>({ id: shownId(data), kind, name: nameOf(data), from: [], to: [] });
+  }
+
+  dataRefsOf(el: El): { reads: El[]; writes: El[] } {
+    const isData = (data: El | undefined): data is El => !!data && (is(data, 'bpmn:DataObjectReference') || is(data, 'bpmn:DataStoreReference'));
+    const reads = list(el, 'dataInputAssociations').flatMap((association) => list(association, 'sourceRef')).filter(isData);
+    const writes = list(el, 'dataOutputAssociations').map((association) => peek<El>(association, 'targetRef')).filter(isData);
+    return { reads, writes };
+  }
+
   dataLinksOf(el: El): DetailData | undefined {
     const ref = (data: El | undefined) => (data ? compact({ id: shownId(data), name: nameOf(data) }) : undefined);
     if (is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference')) {
@@ -90,9 +118,9 @@ export class ElementLinks {
       const readBy = nodes.filter((node) => list(node, 'dataInputAssociations').some((association) => list(association, 'sourceRef').includes(el))).map(shownId);
       return readBy.length || writtenBy.length ? compact<DetailData>({ readBy: nonEmpty(readBy), writtenBy: nonEmpty(writtenBy) }) : undefined;
     }
-    const isData = (data: El | undefined): data is El => !!data && (is(data, 'bpmn:DataObjectReference') || is(data, 'bpmn:DataStoreReference'));
-    const reads = list(el, 'dataInputAssociations').flatMap((association) => list(association, 'sourceRef')).filter(isData).map((data) => ref(data)!);
-    const writes = list(el, 'dataOutputAssociations').map((association) => peek<El>(association, 'targetRef')).filter(isData).map((data) => ref(data)!);
+    const refs = this.dataRefsOf(el);
+    const reads = refs.reads.map((data) => ref(data)!);
+    const writes = refs.writes.map((data) => ref(data)!);
     return reads.length || writes.length ? compact<DetailData>({ reads: nonEmpty(reads), writes: nonEmpty(writes) }) : undefined;
   }
 

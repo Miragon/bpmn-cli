@@ -4,11 +4,11 @@
  * there; the rest of the file keeps its own style, stable over many writes;
  * W_ID_PREFIX_STALE after a retype or a trigger change; the `conventions`
  * of a result; the view of `bpmn show --conventions`. The conventions come
- * from the real plugin's naming helpers (src/domain/document/ids/IdConventionsReader.ts).
+ * from the real plugin's naming helpers (src/adapters/out/bpmnlint/IdConventionsReader.ts).
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, conventionsXml } from '../../../src/api.js';
-import type { BpmnlintRuleSetting } from '../../../src/domain/validation/bpmnlint-validator.js';
+import type { BpmnlintRuleSetting } from '../../../src/domain/document/ids/bpmnlint-rule-setting.js';
 import { conventionsView, idConventionsFromLint, renderConventions, type IdConventions, mutateDoc, mutationReport, mutationSummary, renderMutation, renderSummary } from '../../../src/index.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { bpmnlintEngine } from '../../../src/node.js';

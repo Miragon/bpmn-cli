@@ -20,7 +20,7 @@ import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { definitionsXml, flowBetween } from '../../helpers/helpers.js';
 import { CAMUNDA as C7_DESCRIPTOR } from '../../../src/domain/document/vendor/CamundaDescriptor.js';
 import { VendorDescriptor } from '../../../src/domain/document/vendor/VendorDescriptor.js';
-import { ElementProperties } from '../../../src/domain/editing/ElementProperties.js';
+import { ElementProperties } from '../../../src/domain/views/ElementProperties.js';
 import { caught } from '../../helpers/errors.js';
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';

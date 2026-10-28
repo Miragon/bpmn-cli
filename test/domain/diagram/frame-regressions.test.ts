@@ -28,7 +28,7 @@ import { ProblemLocator } from '../../../src/domain/diagram/di/ProblemLocator.js
 import { DiagramReader } from '../../../src/domain/diagram/di/DiagramReader.js';
 import { Drawing } from '../../../src/domain/diagram/layout/incremental/Drawing.js';
 import { PlaneWriter } from '../../../src/domain/diagram/di/PlaneWriter.js';
-import { isCliError } from '../../../src/domain/document/utils/errors.js';
+import { isBpmnError } from '../../../src/domain/document/utils/errors.js';
 import type { El } from '../../../src/domain/document/utils/moddle.js';
 import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { mutateFile } from '../../../src/node.js';
@@ -53,7 +53,7 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
-    if (isCliError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
     throw err;
   }
   throw new Error('expected the mutation to fail');

@@ -1,20 +1,20 @@
 import { LAYOUT_MODES } from '../../../domain/diagram/types.js';
 import { Doc } from '../../../domain/document/Doc.js';
-import { EditContext } from '../../../domain/document/EditContext.js';
-import { KINDS, TRIGGER_TYPES, type Family, type KindDef, type Trigger } from '../../../domain/document/utils/kinds.js';
+import { EditSession } from '../../../domain/document/EditSession.js';
+import { KINDS, TRIGGERS, type Family, type KindDef, type Trigger } from '../../../domain/document/Kinds.js';
 import { SWATCHES } from '../../../domain/diagram/utils/colors.js';
-import { OPS_SCHEMA } from '../../../domain/commands/OpsSchemaBuilder.js';
+import { OPS_SCHEMA } from './OpsSchemaBuilder.js';
 import { opsExample } from '../../../domain/commands/utils/op-fields.js';
 import { EditCommandDefinitions } from '../../../domain/commands/definitions/EditCommandDefinitions.js';
 import { EXTENSION_STRUCTURE } from '../../../domain/editing/extensions/ExtensionStructure.js';
 import { NESTED_SLOTS, NESTED_TYPES, type NestedSlot } from '../../../domain/document/utils/nested-slots.js';
-import { SET_KEYS, SetKeyCatalog, type SetKeyDoc } from '../../../domain/editing/SetKeyCatalog.js';
-import { OP_NAMES } from '../../../domain/commands/utils/op-names.js';
+import { SET_KEYS, SetKeyCatalog, type SetKeyDoc } from '../../../domain/editing/properties/SetKeyCatalog.js';
+import { COMMAND_NAMES } from '../../../domain/commands/utils/command-names.js';
 import { ZEEBE } from '../../../domain/document/vendor/ZeebeDescriptor.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import { ERROR_CATALOGUE, EXIT_CODE_DOCS, ID_CONVENTIONS, NESTED_SELECTORS, NON_INTERRUPTING_DOC, PLACEMENT_DOCS, PLACEMENT_NOTES, TRIGGER_OPTIONS } from './guide.js';
 import { heading, table } from './utils/table.js';
-import { NestedSlots } from '../../../domain/editing/NestedSlots.js';
+import { NestedSlots } from '../../../domain/editing/properties/NestedSlots.js';
 
 const FAMILY_LABELS: Record<Family, string> = {
   task: 'Tasks',
@@ -80,7 +80,7 @@ export class KindsReference {
         TRIGGER_OPTIONS.map((trigger) => [
           trigger.trigger,
           {
-            ...(trigger.trigger !== 'none' ? { type: TRIGGER_TYPES[trigger.trigger] } : {}),
+            ...(trigger.trigger !== 'none' ? { type: TRIGGERS[trigger.trigger].definition } : {}),
             option: trigger.option,
             keys: trigger.keys,
             description: trigger.description,
@@ -145,10 +145,10 @@ export class KindsReference {
 
   opsSection(): string {
     const out: string[] = [heading('OPS JSON  (bpmn apply <file> ops.json; keys = CLI flags in lowerCamelCase; full schema: bpmn kinds --json -> ops)')];
-    for (const opName of OP_NAMES) {
-      const required = Object.entries(EditCommandDefinitions.of(opName).fields).filter(([, spec]) => spec.required).map(([key]) => key);
-      out.push(`  ${opName.padEnd(8)} ${EditCommandDefinitions.of(opName).description}`);
-      out.push(`           keys: ${Object.keys(EditCommandDefinitions.of(opName).fields).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
+    for (const commandName of COMMAND_NAMES) {
+      const required = Object.entries(EditCommandDefinitions.of(commandName).fields).filter(([, spec]) => spec.required).map(([key]) => key);
+      out.push(`  ${commandName.padEnd(8)} ${EditCommandDefinitions.of(commandName).description}`);
+      out.push(`           keys: ${Object.keys(EditCommandDefinitions.of(commandName).fields).join(', ')}${required.length ? `  (required: ${required.join(', ')})` : ''}`);
     }
     out.push('\nBatch aliases: "as": "$name" on add / connect / split / split nodes ("flowAs" on add and split nodes: the flow into the');
     out.push('node, on a prepend before a join or a node without incoming flow the flow out of it; "outAs" on add: the one flow');
@@ -259,11 +259,11 @@ export class KindsReference {
 
   private nestedKeyTable(): Record<NestedSlot, Record<string, string[]>> {
     const doc = Doc.create();
-    const edit = new EditContext(doc);
+    const edit = new EditSession(doc);
     const table = {} as Record<NestedSlot, Record<string, string[]>>;
     for (const slot of NESTED_SLOTS) {
       table[slot] = {};
-      for (const type of NESTED_TYPES[slot]) table[slot][type] = new NestedSlots(doc, edit).keysOf(slot, doc.moddle.create(type));
+      for (const type of NESTED_TYPES[slot]) table[slot][type] = new NestedSlots(edit).keysOf(slot, doc.moddle.create(type));
     }
     return table;
   }

@@ -1,21 +1,16 @@
 import type { RenderDiagramUseCase } from '../port/in/RenderDiagramUseCase.js';
-import type { LoadDocumentPort } from '../port/out/LoadDocumentPort.js';
+import type { DocumentPort } from '../port/out/DocumentPort.js';
 import type { WriteImagePort } from '../port/out/WriteImagePort.js';
 
 export class RenderDiagramService implements RenderDiagramUseCase {
   constructor(
-    private readonly load: LoadDocumentPort,
+    private readonly documents: DocumentPort,
     private readonly images: WriteImagePort,
   ) {}
 
   async render(command: RenderDiagramUseCase.Command): Promise<RenderDiagramUseCase.Result> {
     const { source, ...request } = command;
-    const xml = await this.textOf(source);
+    const xml = await this.documents.text(source);
     return this.images.write({ xml, ...request });
-  }
-
-  private async textOf(source: RenderDiagramUseCase.Command['source']): Promise<string> {
-    if ('xml' in source) return source.xml;
-    return 'file' in source ? this.load.read(source.file) : this.load.decode(source.bytes, source.name);
   }
 }

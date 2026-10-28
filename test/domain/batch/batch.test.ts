@@ -1,29 +1,29 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { OPS_SCHEMA } from '../../../src/domain/commands/OpsSchemaBuilder.js';
+import { OPS_SCHEMA } from '../../../src/adapters/in/report/OpsSchemaBuilder.js';
 import { opsExample } from '../../../src/domain/commands/utils/op-fields.js';
 import { EditCommandDefinitions } from '../../../src/domain/commands/definitions/EditCommandDefinitions.js';
 import { parseOps } from '../../../src/index.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
-import { isCliError } from '../../../src/domain/document/utils/errors.js';
+import { isBpmnError } from '../../../src/domain/document/utils/errors.js';
 import { renderView, guideShort, guideText, kindsJson, kindsSectionText, kindsText } from '../../../src/index.js';
 import { Cli } from '../../../src/adapters/in/cli/Cli.js';
 import { FILE_USE_CASES } from '../../helpers/helpers.js';
 import { COMMANDS, COMMON_OPTIONS } from '../../../src/adapters/in/report/CommandCatalogue.js';
 import { ERROR_CATALOGUE, PLACEMENT_NOTES } from '../../../src/adapters/in/report/guide.js';
 import { MAX_ID, MAX_SLUG } from '../../../src/domain/document/utils/slug.js';
-import { KINDS } from '../../../src/domain/document/utils/kinds.js';
-import { OP_NAMES } from '../../../src/domain/commands/utils/op-names.js';
+import { KINDS } from '../../../src/domain/document/Kinds.js';
+import { COMMAND_NAMES } from '../../../src/domain/commands/utils/command-names.js';
 import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { mutateDoc } from '../../../src/index.js';
 
-/** Runs parseOps and returns the thrown CliError. */
+/** Runs parseOps and returns the thrown BpmnError. */
 function failure(input: unknown): { code: string; message: string; op?: number; hint?: string; candidates?: string[] } {
   try {
     parseOps(input);
   } catch (err) {
-    if (isCliError(err)) return { code: err.code, message: err.message, ...err.details } as ReturnType<typeof failure>;
+    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as ReturnType<typeof failure>;
     throw err;
   }
   throw new Error('expected parseOps to throw');
@@ -288,7 +288,7 @@ describe('parseOps: shapes', () => {
     ];
     expect(parseOps(full)).toEqual(full);
     const used = new Set(full.map((operation) => operation.op));
-    for (const name of OP_NAMES) expect(used.has(name), `no full-shape test for op ${name}`).toBe(true);
+    for (const name of COMMAND_NAMES) expect(used.has(name), `no full-shape test for op ${name}`).toBe(true);
   });
 
   it('fills set.values when only unset is given and converts primitives in maps', () => {
@@ -408,11 +408,11 @@ describe('OPS_SCHEMA', () => {
 
   it('is a draft 2020-12 schema with a definition per op, branch and node', () => {
     expect(OPS_SCHEMA['$schema']).toBe('https://json-schema.org/draft/2020-12/schema');
-    for (const name of [...OP_NAMES, 'branch', 'node', 'op']) expect(defs[name], name).toBeDefined();
+    for (const name of [...COMMAND_NAMES, 'branch', 'node', 'op']) expect(defs[name], name).toBeDefined();
   });
 
   it('lists exactly the keys the parser accepts, with op as a const', () => {
-    for (const name of OP_NAMES) {
+    for (const name of COMMAND_NAMES) {
       const def = defs[name]!;
       expect(Object.keys(def.properties)).toEqual(['op', ...Object.keys(EditCommandDefinitions.of(name).fields)]);
       expect(def.properties['op']).toEqual({ const: name });
@@ -510,7 +510,7 @@ describe('guide', () => {
       '',
     ]);
     // the rule itself: an option first is a name, stdin is a file, a command without the file is found
-    expect(commandsWithoutFile('`bpmn layout --engine auto` `bpmn validate --platform c7` `bpmn set - x=1` `bpmn help add`')).toEqual([]);
+    expect(commandsWithoutFile('`bpmn layout --tidy` `bpmn validate --platform c7` `bpmn set - x=1` `bpmn help add`')).toEqual([]);
     expect(commandsWithoutFile("`bpmn move <id> --in <scope>` `bpmn set <id> 'a=b'`")).toEqual(['`bpmn move <id> --in <scope>`', "`bpmn set <id> 'a=b'`"]);
     expect(problems).toEqual([]);
   });

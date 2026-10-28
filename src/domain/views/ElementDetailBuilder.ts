@@ -1,24 +1,20 @@
 import type { Doc } from '../document/Doc.js';
-import { isEventSubProcess, kindOrTypeLabel, triggerOf } from '../document/utils/kinds.js';
+import { isEventSubProcess, triggerOf } from '../document/Kinds.js';
 import { diExpansionState } from '../diagram/utils/expansion.js';
 import { Groups } from '../diagram/di/Groups.js';
 import { is, list, peek, shownId, type El } from '../document/utils/moddle.js';
-import { laneOf } from '../document/utils/lanes.js';
 import { ExtensionLister } from '../document/ExtensionLister.js';
 import { nestedEntries } from '../document/utils/nested-slots.js';
-import { ElementProperties } from '../editing/ElementProperties.js';
+import { ElementProperties } from './ElementProperties.js';
 import { vendorAttributes } from '../document/utils/elements.js';
 import { FlowOrder } from '../validation/FlowOrder.js';
-import { StructuralValidator } from '../validation/StructuralValidator.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
-import type { ElementDetail, NestedDetail } from './model-view.js';
-import { bodyOf, compact, nameOf, nonEmpty, refLabel, resourceOf } from './utils/view.js';
+import { ElementSummaryBuilder } from './ElementSummaryBuilder.js';
+import type { ElementDetail, ElementSummary, NestedDetail } from './model-view.js';
+import { bodyOf, compact, nonEmpty, refLabel } from './utils/view.js';
 
-/**
- * `bpmn show <id>`: everything about one element. Missing incoming / outgoing mirror entries
- * are added first, so flows of hand-written files show up.
- */
+/** `bpmn show <id>`: everything about one element. */
 export class ElementDetailBuilder {
   private readonly links: ElementLinks;
   private readonly facts: ElementFacts;
@@ -33,18 +29,10 @@ export class ElementDetailBuilder {
 
   build(): ElementDetail {
     const { doc, el } = this;
-    new StructuralValidator(doc).repairFlowLinks();
-    const isNode = is(el, 'bpmn:FlowNode');
+    const summary = new ElementSummaryBuilder(doc).build(el);
     const incoming = doc.incoming(el).map((flow) => {
-      const source = peek<El>(flow, 'sourceRef');
-      return compact({
-        id: shownId(flow),
-        source: shownId(source),
-        name: nameOf(flow),
-        condition: bodyOf(peek<El>(flow, 'conditionExpression')),
-        conditionResource: resourceOf(peek<El>(flow, 'conditionExpression'))?.value,
-        default: source && peek<El>(source, 'default') === flow ? true : undefined,
-      });
+      const { id, ...traits } = new ElementFacts(flow).flowRef();
+      return { id, source: shownId(peek<El>(flow, 'sourceRef')), ...traits };
     });
     const nested: Record<string, NestedDetail> = {};
     for (const { prefix, el: nestedElement } of nestedEntries(el)) {
@@ -66,17 +54,17 @@ export class ElementDetailBuilder {
         })
       : [];
     return compact<ElementDetail>({
-      id: shownId(el),
-      kind: kindOrTypeLabel(el),
+      id: summary.id,
+      kind: summary.kind,
       type: el.$type,
-      name: nameOf(el),
+      name: summary.name,
       scope: is(el, 'bpmn:Process') ? undefined : doc.scopeOf(el)?.get<string>('id'),
       process: is(el, 'bpmn:Participant') ? peek<El>(el, 'processRef')?.get<string>('id') : doc.processOf(el)?.get<string>('id'),
-      lane: isNode && !is(el, 'bpmn:BoundaryEvent') ? laneOf(doc, el)?.get<string>('id') : undefined,
+      lane: summary.lane,
       host: host ? shownId(host) : undefined,
-      properties: { ...this.baseProperties(), ...new ElementProperties(doc).read(el) },
+      properties: { ...this.baseProperties(summary), ...new ElementProperties(doc).read(el) },
       incoming,
-      outgoing: doc.outgoing(el).map((flow) => new ElementFacts(flow).flow()),
+      outgoing: summary.outgoing,
       boundary: boundary.length ? boundary : undefined,
       children: children.length ? children : undefined,
       extensions,
@@ -90,23 +78,21 @@ export class ElementDetailBuilder {
   }
 
   /** ElementProperties.read() overrides these key by key. */
-  private baseProperties(): Record<string, unknown> {
-    const { doc, el, facts } = this;
+  private baseProperties(summary: ElementSummary): Record<string, unknown> {
+    const { doc, el } = this;
     const props: Record<string, unknown> = {};
-    const documentation = facts.documentation();
-    if (documentation) props['documentation'] = documentation;
+    if (summary.documentation) props['documentation'] = summary.documentation;
     if (is(el, 'bpmn:Event')) {
       const trigger = triggerOf(el);
       if (trigger) props['trigger'] = trigger;
-      const details = facts.trigger();
-      if (details) props['triggerDetails'] = details;
-      if (facts.nonInterrupting()) props['nonInterrupting'] = true;
+      if (summary.trigger) props['triggerDetails'] = summary.trigger;
+      if (summary.nonInterrupting) props['nonInterrupting'] = true;
     }
     if (is(el, 'bpmn:SubProcess')) {
       props['expanded'] = diExpansionState(doc.definitions).get(shownId(el)) !== false;
       if (isEventSubProcess(el)) props['triggeredByEvent'] = true;
     }
-    Object.assign(props, facts.props() ?? {});
+    Object.assign(props, summary.props ?? {});
     if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow') || is(el, 'bpmn:Association')) {
       props['source'] = shownId(peek<El>(el, 'sourceRef'));
       props['target'] = shownId(peek<El>(el, 'targetRef'));

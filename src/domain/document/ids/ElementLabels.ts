@@ -1,4 +1,4 @@
-import { kindOf, triggerOf } from '../utils/kinds.js';
+import { kindOf, triggerOf } from '../Kinds.js';
 import { is, type El } from '../utils/moddle.js';
 import { hasIdWords, nameWords } from '../utils/slug.js';
 import { CONTEXT_WORDS, kindWord, localName, speakingStem, stemWords, ucfirst, type ContextWord } from '../utils/id-words.js';

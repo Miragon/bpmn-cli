@@ -1,4 +1,4 @@
-import { CliError } from '../../src/domain/document/CliError.js';
+import { BpmnError } from '../../src/domain/document/BpmnError.js';
 
 /** The code, message and details of what `fn` throws; fails when it throws nothing. */
 export function caught(fn: () => unknown): { code?: string; message: string; details: Record<string, unknown> } {
@@ -11,23 +11,23 @@ export function caught(fn: () => unknown): { code?: string; message: string; det
   throw new Error('expected an error');
 }
 
-/** The CliError `fn` throws; any other error is thrown on. */
-export function failure(fn: () => unknown): CliError {
+/** The BpmnError `fn` throws; any other error is thrown on. */
+export function failure(fn: () => unknown): BpmnError {
   try {
     fn();
   } catch (err) {
-    if (err instanceof CliError) return err;
+    if (err instanceof BpmnError) return err;
     throw err;
   }
   throw new Error('expected a failure');
 }
 
 /** The error `pending` rejects with; fails when it resolves. */
-export async function rejected(pending: Promise<unknown>): Promise<CliError> {
+export async function rejected(pending: Promise<unknown>): Promise<BpmnError> {
   try {
     await pending;
   } catch (err) {
-    return err as CliError;
+    return err as BpmnError;
   }
   throw new Error('expected a rejection');
 }

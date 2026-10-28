@@ -13,14 +13,14 @@ import { describe, expect, it } from 'vitest';
 import { applyToXml, layoutXml, newXml } from '../../../src/api.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import type { El } from '../../../src/domain/document/utils/moddle.js';
-import type { Warning } from '../../../src/domain/document/CliError.js';
+import type { Finding } from '../../../src/domain/document/Finding.js';
 import { runOp, runOps } from '../../../src/index.js';
 import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { mutateDoc, renderMutation } from '../../../src/index.js';
 import type { ChangeSet } from '../../../src/domain/document/ChangeSet.js';
 import { definitionsXml, flowBetween } from '../../helpers/helpers.js';
-import { FlowIdFollower } from '../../../src/domain/editing/flows/FlowIdFollower.js';
-import { EditContext } from '../../../src/domain/document/EditContext.js';
+import { FlowIdFollower } from '../../../src/domain/editing/connections/FlowIdFollower.js';
+import { EditSession } from '../../../src/domain/document/EditSession.js';
 
 /** A file of the default style with `<id>_di` DI (`bpmn`: the engine's `BPMNShape_<id>`): start -> Check -> Ok? -> Book (default) -> Done. */
 async function drawnDefault(style: 'suffix' | 'bpmn' = 'suffix'): Promise<string> {
@@ -126,12 +126,12 @@ const MODELER = definitionsXml(`
     <bpmn:sequenceFlow id="Flow_0a1b2c3" sourceRef="StartEvent_1" targetRef="Activity_0k3x9qa" />
     <bpmn:sequenceFlow id="Flow_1q2w3e4" sourceRef="Activity_0k3x9qa" targetRef="Event_0zz81aa" />`);
 
-const stale = (ws: readonly Warning[]): Warning[] => ws.filter((warning) => warning.code === 'W_FLOW_ID_STALE');
+const stale = (ws: readonly Finding[]): Finding[] => ws.filter((warning) => warning.code === 'W_FLOW_ID_STALE');
 /** `<flow> <source>-><target> => <suggested id>` of each W_FLOW_ID_STALE. */
-const staleLines = (ws: readonly Warning[]): string[] => stale(ws).map((warning) => `${warning.element} ${warning.related!.join('->')} => ${/ id=(\S+)`/.exec(warning.hint!)![1]}`);
+const staleLines = (ws: readonly Finding[]): string[] => stale(ws).map((warning) => `${warning.element} ${warning.related!.join('->')} => ${/ id=(\S+)`/.exec(warning.hint!)![1]}`);
 
 /** Runs ops on CHAIN (or `xml`) with ids kept, without the pipeline. */
-async function kept(ops: EditCommand[], xml = CHAIN): Promise<{ doc: Doc; warnings: Warning[]; renames: number; cs: ChangeSet }> {
+async function kept(ops: EditCommand[], xml = CHAIN): Promise<{ doc: Doc; warnings: Finding[]; renames: number; cs: ChangeSet }> {
   const doc = await Doc.fromXml(xml);
   doc.followFlowEnds = false;
   const cs = runOps(doc, ops);
@@ -556,7 +556,7 @@ describe('an end renamed or named earlier in the change, and --flow-id on a spli
   });
 
   it('--flow-id with ids kept where no W_FLOW_ID_STALE comes: W_OPTION_IGNORED names its own command, or none where it could not be followed', async () => {
-    const hints = (ws: readonly Warning[]): string[] => ws.map((warning) => `${warning.code}: ${warning.hint}`);
+    const hints = (ws: readonly Finding[]): string[] => ws.map((warning) => `${warning.code}: ${warning.hint}`);
     const own = (flow: string, id: string): string =>
       `W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node); rename the existing one with \`bpmn set <file> ${flow} id=${id}\`.`;
     const none = 'W_OPTION_IGNORED: --flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node).';
@@ -807,14 +807,14 @@ describe('mixed id styles: a followed hint still names its ends on the next read
   const fixture = (...path: string[]): string => readFileSync(join(join(dirname(fileURLToPath(import.meta.url)), '..', '..'), 'fixtures', ...path), 'utf8');
 
   /** Follows every W_FLOW_ID_STALE hint of `res` (`bpmn set <file> <flow> id=<suggested>`) and reads the result again. */
-  async function follow(xml: string, warnings: readonly Warning[]): Promise<{ followed: string[]; naming: string[]; before: unknown; after: unknown }> {
+  async function follow(xml: string, warnings: readonly Finding[]): Promise<{ followed: string[]; naming: string[]; before: unknown; after: unknown }> {
     const ops: EditCommand[] = stale(warnings).map((warning) => ({ op: 'set', id: warning.element!, values: { id: / id=(\S+)`/.exec(warning.hint!)![1]! } }));
     const done = await applyToXml(xml, ops, { keepFlowIds: true, layout: false });
     const doc = await Doc.fromXml(done.xml);
     const naming = ops.flatMap((op) => {
       const id = (op as { values: { id: string } }).values.id;
       const flow = doc.get(id)!;
-      return new FlowIdFollower(doc, new EditContext(doc)).namesEnds(id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
+      return new FlowIdFollower(new EditSession(doc)).namesEnds(id, flow.get<El>('sourceRef'), flow.get<El>('targetRef')) ? [id] : [];
     });
     return { followed: ops.map((op) => (op as { values: { id: string } }).values.id), naming, before: (await Doc.fromXml(xml)).ownIdStyle.info().sequenceFlow, after: doc.ownIdStyle.info().sequenceFlow };
   }
@@ -847,7 +847,7 @@ describe('mixed id styles: a followed hint still names its ends on the next read
       { op: 'split', after: 'Activity_Fz5Review', branches: [{ nodes: [{ kind: 'task', name: 'Fz6 a' }] }, { nodes: [{ kind: 'task', name: 'Fz6 b' }] }] },
     ];
     let xml = fixture('incremental', 'polish-remove.bpmn');
-    let warnings: readonly Warning[] = [];
+    let warnings: readonly Finding[] = [];
     for (const op of ops) {
       const res = await applyToXml(xml, [op], { keepFlowIds: true, layout: false });
       xml = res.xml;

@@ -1,5 +1,5 @@
 import { is, many, type El, idOf } from '../../../document/utils/moddle.js';
-import { METRICS, SIZES, annotationSize } from '../../utils/sizes.js';
+import { METRICS, defaultSizeOf } from '../../utils/sizes.js';
 import { overlaps } from '../../utils/geom.js';
 import type { Box, GArtifact, GEdge, GNode, LinkEnd, Point, ScopeLayout } from '../../di/types.js';
 import { ChannelRouter } from './ChannelRouter.js';
@@ -25,11 +25,11 @@ export class ScopeArtifactPlacer {
       return artifact;
     };
     for (const el of many(scope, 'flowElements')) {
-      if (is(el, 'bpmn:DataObjectReference')) add(el, 'dataObject', { ...SIZES.dataObject });
-      else if (is(el, 'bpmn:DataStoreReference')) add(el, 'dataStore', { ...SIZES.dataStore });
+      if (is(el, 'bpmn:DataObjectReference')) add(el, 'dataObject', defaultSizeOf(el));
+      else if (is(el, 'bpmn:DataStoreReference')) add(el, 'dataStore', defaultSizeOf(el));
     }
     for (const el of many(scope, 'artifacts')) {
-      if (is(el, 'bpmn:TextAnnotation')) add(el, 'annotation', annotationSize(el.get<string | undefined>('text')));
+      if (is(el, 'bpmn:TextAnnotation')) add(el, 'annotation', defaultSizeOf(el));
     }
     const flowsById = new Map(layout.edges.map((edge) => [edge.id, edge]));
     const flowEnds = new Map<GEdge, LinkEnd>();

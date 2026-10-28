@@ -24,7 +24,7 @@ export class ConnectCommand extends MutationCommand {
   private async run(file: string, source: string, target: string, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
     this.checkFlowFlags(options, false);
-    const op: ConnectElements = {
+    const command: ConnectElements = {
       op: 'connect',
       source,
       target,
@@ -32,6 +32,6 @@ export class ConnectCommand extends MutationCommand {
       ...givenFlags(options, ['default', 'ifAbsent']),
       ...(options['condition'] !== undefined ? { condition: String(options['condition']) } : {}),
     };
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 }

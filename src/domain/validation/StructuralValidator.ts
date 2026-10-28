@@ -1,14 +1,14 @@
 import type { Doc } from '../document/Doc.js';
-import { type Warning } from '../document/CliError.js';
-import { isEventSubProcess, isRejectedType } from '../document/utils/kinds.js';
+import type { Finding } from '../document/Finding.js';
+import { isEventSubProcess, isRejectedType } from '../document/Kinds.js';
 import { completeMirrorLists } from '../document/utils/mirror.js';
 import { is, walk, type El, shownId } from '../document/utils/moddle.js';
 import type { PlatformChoice } from '../document/vendor/PlatformDetection.js';
-import type { ProfileFinding } from '../document/utils/finding.js';
+import type { ProfileFinding } from '../document/Finding.js';
 import { PLATFORM_PROFILES, type PlatformSummary, type ProfileReport } from './profiles/PlatformProfiles.js';
 import type { ValidatorReport } from './validators.js';
 import { FlowOrder } from './FlowOrder.js';
-import { lintCoveredBy } from './utils/lint-coverage.js';
+import { lintCoveredBy } from './utils/finding-coverage.js';
 import { EventChecks } from './structure/EventChecks.js';
 import { FlowChecks } from './structure/FlowChecks.js';
 import { LaneChecks } from './structure/LaneChecks.js';
@@ -17,8 +17,8 @@ import { ScopeLint } from './structure/ScopeLint.js';
 import { StructureFindings } from './structure/StructureFindings.js';
 
 export interface ValidationResult {
-  errors: Warning[];
-  warnings: Warning[];
+  errors: Finding[];
+  warnings: Finding[];
   /** its findings are among the warnings */
   platform?: PlatformSummary;
   /** their findings are among the errors / warnings */

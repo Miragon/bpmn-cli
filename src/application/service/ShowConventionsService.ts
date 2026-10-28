@@ -1,6 +1,4 @@
 import { ConventionsTable, type Undeclared } from '../../domain/document/ids/ConventionsTable.js';
-import { IdConventionsReader, type IdConventions } from '../../domain/document/ids/IdConventionsReader.js';
-import type { ValidatorFinding } from '../../domain/validation/validators.js';
 import type { ShowConventionsUseCase } from '../port/in/ShowConventionsUseCase.js';
 import type { LoadProjectSettingsPort, ProjectIdConventions } from '../port/out/LoadProjectSettingsPort.js';
 
@@ -22,10 +20,6 @@ export class ShowConventionsService implements ShowConventionsUseCase {
   view(command: ShowConventionsUseCase.ViewCommand): ShowConventionsUseCase.Result {
     const { doc, conventions, ...opts } = command;
     return new ConventionsTable(doc, conventions).view(opts);
-  }
-
-  readFromLint(command: ShowConventionsUseCase.ReadFromLintCommand): { conventions?: IdConventions; notes: ValidatorFinding[] } {
-    return new IdConventionsReader(command.naming, command.source).read(command.setting);
   }
 
   private static undeclared(found: ProjectIdConventions | undefined, skipped: boolean): Undeclared {

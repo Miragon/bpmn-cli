@@ -1,10 +1,19 @@
-import type { DetailMessageFlow, FindHit, ViewAnnotation, ViewFlow, ViewMessageFlow } from '../../../../domain/views/model-view.js';
-import type { Implementation } from '../../../../domain/views/context.js';
+import type { DetailMessageFlow, FindHit, FlowRef, ViewAnnotation, ViewFlow, ViewMessageFlow } from '../../../../domain/views/model-view.js';
+import type { Implementation } from '../../../../domain/views/around-view.js';
 import { truncate } from '../../../../domain/views/utils/view.js';
 
 export const INDENT = '  ';
-export const DOC_MAX = 80;
+const DOC_MAX = 80;
 const VALUE_MAX = 60;
+
+interface ElementFlagSource {
+  lane?: string;
+  trigger?: string;
+  nonInterrupting?: boolean;
+  expanded?: boolean;
+  props?: Record<string, unknown>;
+  documentation?: string;
+}
 
 /** Identifiers (topics, classes) up to this length stay whole in the around / context views. */
 const IMPL_VALUE_MAX = 120;
@@ -39,12 +48,18 @@ export function vendorFlags(item: { attrs?: Record<string, string>; extensions?:
   return flags;
 }
 
+/** What follows a flow's id: `"name" if <condition> default`; `fullCondition` keeps the condition as written. */
+export function flowTraits(flow: Omit<FlowRef, 'id'>, fullCondition = false): string[] {
+  const traits: string[] = [];
+  if (flow.name) traits.push(quote(flow.name));
+  if (flow.condition) traits.push(`if ${fullCondition ? flow.condition : truncate(flow.condition, 120)}`);
+  else if (flow.conditionResource) traits.push(`if resource ${flow.conditionResource}`);
+  if (flow.default) traits.push('default');
+  return traits;
+}
+
 export function flowText(flow: ViewFlow): string {
-  const parts = [flow.id];
-  if (flow.name) parts.push(quote(flow.name));
-  if (flow.condition) parts.push(`if ${truncate(flow.condition, 120)}`);
-  else if (flow.conditionResource) parts.push(`if resource ${flow.conditionResource}`);
-  if (flow.default) parts.push('default');
+  const parts = [flow.id, ...flowTraits(flow)];
   const flags = [...(flow.language ? [`language=${flow.language}`] : []), ...vendorFlags(flow)];
   if (flags.length) parts.push(`[${flags.join(', ')}]`);
   return `${flow.target} (${parts.join(' ')})`;
@@ -52,6 +67,28 @@ export function flowText(flow: ViewFlow): string {
 
 export function named(id: string, name?: string): string {
   return name ? `${id} ${quote(name)}` : id;
+}
+
+/** `<kind> <id> ["name"] [<flags>]` */
+export function elementLine(element: { kind: string; id: string; name?: string }, flags: string[]): string {
+  return `${element.kind} ${named(element.id, element.name)}${flags.length ? ` [${flags.join(', ')}]` : ''}`;
+}
+
+/**
+ * An element's flags in the order every view prints them: `leading`, lane, trigger, state,
+ * `afterState`, props, `vendor` (its attributes or its implementation), documentation.
+ */
+export function elementFlags(element: ElementFlagSource, extra: { leading?: string[]; afterState?: string[]; vendor?: string[] } = {}): string[] {
+  const flags = [...(extra.leading ?? [])];
+  if (element.lane) flags.push(`lane=${element.lane}`);
+  if (element.trigger) flags.push(element.trigger);
+  if (element.nonInterrupting) flags.push('non-interrupting');
+  if (element.expanded !== undefined) flags.push(element.expanded ? 'expanded' : 'collapsed');
+  flags.push(...(extra.afterState ?? []));
+  for (const [key, value] of Object.entries(element.props ?? {})) flags.push(`${key}=${scalar(value)}`);
+  flags.push(...(extra.vendor ?? []));
+  if (element.documentation) flags.push(`doc: ${quote(truncate(element.documentation, DOC_MAX))}`);
+  return flags;
 }
 
 /** `messageFlow <id> ["name"]: <source> ["name"] -> <target> ["name"] [message M]` */

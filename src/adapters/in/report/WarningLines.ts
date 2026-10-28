@@ -1,6 +1,6 @@
-import type { Warning } from '../../../domain/document/CliError.js';
+import type { Finding } from '../../../domain/document/Finding.js';
 import { renderProblems } from './utils/result-lines.js';
-import { FLOOD_MIN, floodKey, idsText, validatorOf, validatorTag, warningTag } from './utils/findings.js';
+import { FLOOD_MIN, floodKey, idsText, validatorTag, warningTag } from './utils/findings.js';
 
 /** Never flooded: each hint is the command for that one element. */
 const NEVER_FLOOD = new Set(['W_FLOW_ID_STALE']);
@@ -15,12 +15,12 @@ export class WarningLines {
    * FLOOD_MIN or more warnings of one code become one line at the place of the first;
    * an advisory validator's findings group by code and message.
    */
-  lines(warnings: readonly Warning[]): string[] {
-    const keyOf = (warning: Warning): string => {
-      const validator = validatorOf(warning);
+  lines(warnings: readonly Finding[]): string[] {
+    const keyOf = (warning: Finding): string => {
+      const validator = warning.validator;
       return validator && this.advisory.has(validator) ? `${warningTag(warning)}${warning.code}\n${warning.message}` : floodKey(warning);
     };
-    const groups = new Map<string, Warning[]>();
+    const groups = new Map<string, Finding[]>();
     for (const warning of warnings) groups.set(keyOf(warning), [...(groups.get(keyOf(warning)) ?? []), warning]);
     const out: string[] = [];
     const done = new Set<string>();
@@ -44,17 +44,17 @@ export class WarningLines {
    * line naming the most common message.
    * Advisory rule names carry no E_ / W_, so their errors read `[bpmnlint error]`.
    */
-  problems(problems: readonly Warning[]): string {
-    const isAdvisory = (problem: Warning): boolean => {
-      const validator = validatorOf(problem);
+  problems(problems: readonly Finding[]): string {
+    const isAdvisory = (problem: Finding): boolean => {
+      const validator = problem.validator;
       return !!validator && this.advisory.has(validator);
     };
-    const keyOf = (problem: Warning): string | undefined => {
+    const keyOf = (problem: Finding): string | undefined => {
       if (!isAdvisory(problem) || NO_RULE.has(problem.code)) return undefined;
-      return `${validatorOf(problem)}\n${problem.code}\n${problem.hint ?? ''}`;
+      return `${problem.validator}\n${problem.code}\n${problem.hint ?? ''}`;
     };
-    const tag = (problem: Warning): string => (isAdvisory(problem) ? warningTag(problem) : validatorTag(problem));
-    const groups = new Map<string, Warning[]>();
+    const tag = (problem: Finding): string => (isAdvisory(problem) ? warningTag(problem) : validatorTag(problem));
+    const groups = new Map<string, Finding[]>();
     for (const problem of problems) {
       const key = keyOf(problem);
       if (key) groups.set(key, [...(groups.get(key) ?? []), problem]);
@@ -70,7 +70,7 @@ export class WarningLines {
       }
       if (done.has(key!)) continue;
       done.add(key!);
-      const byMessage = new Map<string, Warning[]>();
+      const byMessage = new Map<string, Finding[]>();
       for (const member of group) byMessage.set(member.message, [...(byMessage.get(member.message) ?? []), member]);
       const [message, same] = [...byMessage].reduce((best, candidate) => (candidate[1].length > best[1].length ? candidate : best));
       const others = byMessage.size - 1;
@@ -81,7 +81,7 @@ export class WarningLines {
     return out.join('\n');
   }
 
-  private static warningLine(warning: Warning): string {
+  private static warningLine(warning: Finding): string {
     return `warning ${warningTag(warning)}${warning.code}${warning.element ? ` ${warning.element}` : ''}: ${warning.message}${warning.hint ? `  (${warning.hint})` : ''}`;
   }
 }

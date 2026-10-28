@@ -17,10 +17,10 @@
  *    that has `--no-lint-config` gets it: a .bpmnlintrc above the work
  *    directory never changes a walk.
  *  - `libExecutor(api)` runs in-process: `api` = { Doc, parseOps, mutateDoc,
- *    CliError } from src/index.ts (tests) or dist/index.js (tool). A lossy
+ *    BpmnError } from src/index.ts (tests) or dist/index.js (tool). A lossy
  *    import is refused like the CLI's loadDoc does (E_IMPORT_LOSSY); the ops go
  *    through parseOps like `bpmn apply`, then mutateDoc with dryRun, so nothing
- *    touches the disk. A CliError of category usage = usage, E_INTERNAL or any
+ *    touches the disk. A BpmnError of category usage = usage, E_INTERNAL or any
  *    other exception = crash.
  */
 import { spawnSync } from 'node:child_process';
@@ -86,7 +86,7 @@ export function libExecutor(api, { label = 'lib' } = {}) {
         const result = await api.mutateDoc(doc, api.parseOps(ops), { dryRun: true, layout: mode });
         return { status: 'ok', xml: result.xml, layout: result.layout, ms: ms(t0) };
       } catch (error) {
-        if (!(error instanceof api.CliError)) return { status: 'crash', code: 'E_EXCEPTION', message: String(error?.stack ?? error).slice(0, 500), ms: ms(t0) };
+        if (!(error instanceof api.BpmnError)) return { status: 'crash', code: 'E_EXCEPTION', message: String(error?.stack ?? error).slice(0, 500), ms: ms(t0) };
         const status = error.code === 'E_INTERNAL' || error.category === 'internal' ? 'crash' : error.category === 'usage' ? 'usage' : 'refused';
         return { status, code: error.code, message: String(error.message).slice(0, 300), ms: ms(t0) };
       }

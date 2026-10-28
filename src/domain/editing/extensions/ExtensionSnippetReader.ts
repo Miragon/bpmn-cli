@@ -1,9 +1,9 @@
 import { modelError } from '../../document/utils/errors.js';
 import type { El } from '../../document/utils/moddle.js';
 import { decodeXml } from '../../document/utils/text-reader.js';
-import type { NestedHosts } from '../NestedHosts.js';
+import type { NestedHosts } from '../properties/NestedHosts.js';
 import { SnippetError } from './SnippetError.js';
-import type { VendorElements } from '../VendorElements.js';
+import type { VendorElements } from '../properties/VendorElements.js';
 
 interface RawNode {
   name: string;

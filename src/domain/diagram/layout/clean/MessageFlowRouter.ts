@@ -1,9 +1,8 @@
 import { is, type El } from '../../../document/utils/moddle.js';
 import { SIZES } from '../../utils/sizes.js';
-import { center } from '../../utils/geom.js';
+import { center, properCross, roundPoints, segmentHitsBox, toSegments, type Segment } from '../../utils/geom.js';
 import type { Box, Point } from '../../di/types.js';
-import { properCross, toSegments, type Segment } from '../../utils/geometry.js';
-import { crossings } from '../../utils/routing.js';
+import { crossings, simplify } from '../../utils/routing.js';
 
 export interface MessagePool {
   box: Box;
@@ -147,7 +146,7 @@ export class MessageFlowRouter {
         middle = [{ x: sx, y: y1 }, { x: outX, y: y1 }, { x: outX, y: y2 }, { x: tx, y: y2 }];
         channelY = y1;
       }
-      return { el: job.el, points: this.simplify([...lead, ...middle, ...tail]), ...(channelY !== undefined ? { channelY } : {}) };
+      return { el: job.el, points: simplify(roundPoints([...lead, ...middle, ...tail])), ...(channelY !== undefined ? { channelY } : {}) };
     });
   }
 
@@ -165,13 +164,9 @@ export class MessageFlowRouter {
     return { x: first.x + 6, y: labelCenterY - height / 2, width, height };
   }
 
-  private cuts([start, end]: Segment, box: Box): boolean {
-    return Math.min(start.x, end.x) < box.x + box.width - 1 && Math.max(start.x, end.x) > box.x + 1 && Math.min(start.y, end.y) < box.y + box.height - 1 && Math.max(start.y, end.y) > box.y + 1;
-  }
-
   private hits(points: Point[], boxes: Box[]): number {
     let hitCount = 0;
-    for (const box of boxes) if (toSegments(points).some((segment) => this.cuts(segment, box))) hitCount++;
+    for (const box of boxes) if (toSegments(points).some(([start, end]) => segmentHitsBox(start, end, box, 1))) hitCount++;
     return hitCount;
   }
 
@@ -347,16 +342,4 @@ export class MessageFlowRouter {
     return { points: [{ x: dockX, y: up ? box.y : box.y + box.height }], x: dockX };
   }
 
-  private simplify(points: Point[]): Point[] {
-    const out: Point[] = [];
-    for (const point of points) {
-      const rounded = { x: Math.round(point.x), y: Math.round(point.y) };
-      const last = out[out.length - 1];
-      if (last && last.x === rounded.x && last.y === rounded.y) continue;
-      const prev = out[out.length - 2];
-      if (last && prev && ((prev.x === last.x && last.x === rounded.x) || (prev.y === last.y && last.y === rounded.y))) out.pop();
-      out.push(rounded);
-    }
-    return out;
-  }
 }

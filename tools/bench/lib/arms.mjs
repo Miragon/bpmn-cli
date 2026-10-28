@@ -13,7 +13,7 @@
  * are feature-detected from `--help`: `--layout <mode>` is passed only when the
  * build has it (key `<name>-<mode>`, else `<name>`), `--no-lint-config` too (a
  * .bpmnlintrc above the work directory never changes a run), global variants are
- * `layout` (full redraw) plus `tidy` and `engine-auto` when supported. A run
+ * `layout` (full redraw) plus `tidy` when supported. A run
  * refused with a FORCEABLE code is repeated with --force by the runner.
  * Throws when a requested arm's variable is not set.
  */
@@ -29,7 +29,7 @@ const help = (bin, cmd) => spawnSync(process.execPath, [bin, cmd, '--help'], { e
 function cliFeatures(bin) {
   const layout = help(bin, 'layout');
   const apply = help(bin, 'apply');
-  return { layoutModes: /--layout <mode>/.test(apply), noLint: /--no-lint-config/.test(apply), tidy: /--tidy/.test(layout), engine: /--engine/.test(layout) };
+  return { layoutModes: /--layout <mode>/.test(apply), noLint: /--no-lint-config/.test(apply), tidy: /--tidy/.test(layout) };
 }
 
 function cliError(stderr) {
@@ -58,7 +58,6 @@ function cliArm(name, bin, layout) {
   const noLint = features.noLint ? ['--no-lint-config'] : [];
   const global = { layout: (file) => [bin, 'layout', file, '--force', '--json', ...noLint] };
   if (features.tidy) global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint];
-  if (features.engine) global['engine-auto'] = (file) => [bin, 'layout', file, '--force', '--engine', 'auto', '--json', ...noLint];
   return {
     name, key: features.layoutModes ? `${name}-${layout}` : name, path: bin, kind: 'cli', features, forceable: true, global,
     edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', ...mode, ...noLint, ...(force ? ['--force'] : [])],

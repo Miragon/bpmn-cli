@@ -5,7 +5,7 @@ import { ProblemLocator } from '../../diagram/di/ProblemLocator.js';
 import { problemKey, type LayoutProblem } from '../../diagram/utils/problems.js';
 import type { Plane } from '../../diagram/di/types.js';
 import { TileGrid } from './TileGrid.js';
-import { LAYER, MARGIN, MAX_TILES, MIN_LABEL_SCALE, type Frame, type Item, type RenderOptions, type RenderProblem, type RenderResult } from './types.js';
+import { LAYER, MARGIN, MAX_TILES, MIN_LABEL_SCALE, type RenderFrame, type Item, type RenderOptions, type RenderProblem, type RenderResult } from './types.js';
 import { meets, pointsBox } from '../utils/boxes.js';
 import { scaleText } from '../utils/scale.js';
 import { FILL, formatNumber } from '../utils/svg.js';
@@ -19,7 +19,7 @@ const FONT = 'Arial, Arimo, sans-serif';
 export class Composer {
   constructor(
     private readonly items: Item[],
-    private readonly frame: Frame,
+    private readonly frame: RenderFrame,
     private readonly opts: RenderOptions,
   ) {}
 

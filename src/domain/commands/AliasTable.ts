@@ -1,5 +1,5 @@
 import type { Doc } from '../document/Doc.js';
-import { CliError } from '../document/CliError.js';
+import { BpmnError } from '../document/BpmnError.js';
 import { usageError } from '../document/utils/errors.js';
 import type { El } from '../document/utils/moddle.js';
 import { isAlias, unknownAlias } from './utils/aliases.js';
@@ -20,7 +20,7 @@ export class AliasTable {
 
   define(alias: string, el: El, op: number): void {
     const prev = this.map.get(alias);
-    if (prev) throw new CliError('E_DUPLICATE_ALIAS', `ops[${op}]: alias ${alias} is already defined by ops[${prev.op}]`, 'usage', { op, hint: 'Every alias names one element of the batch: pick another name.' });
+    if (prev) throw new BpmnError('E_DUPLICATE_ALIAS', `ops[${op}]: alias ${alias} is already defined by ops[${prev.op}]`, 'usage', { op, hint: 'Every alias names one element of the batch: pick another name.' });
     if (!isAlias(alias)) throw usageError(`ops[${op}]: alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op });
     this.map.set(alias, { el, op });
   }
@@ -29,12 +29,12 @@ export class AliasTable {
     for (const entry of this.map.values()) if (entry.el === from) entry.el = to;
   }
 
-  idOf(alias: string, index: number, op: EditCommand, key: string): string {
+  idOf(alias: string, index: number, command: EditCommand, key: string): string {
     const entry = this.map.get(alias);
-    if (!entry) throw unknownAlias(index, op, key, alias, new Map([...this.map].map(([aliasName, aliasEntry]) => [aliasName, aliasEntry.op])));
+    if (!entry) throw unknownAlias(index, command, key, alias, new Map([...this.map].map(([aliasName, aliasEntry]) => [aliasName, aliasEntry.op])));
     const id = entry.el.get<string | undefined>('id');
     if (!id || this.doc.get(id) !== entry.el) {
-      throw new CliError('E_NOT_FOUND', `ops[${index}] (${op.op}): "${key}": ${alias} named ${id ?? 'an element'}, which an op before this one removed`, 'model', { op: index, element: id, hint: 'Refer to an element that still exists.' });
+      throw new BpmnError('E_NOT_FOUND', `ops[${index}] (${command.op}): "${key}": ${alias} named ${id ?? 'an element'}, which an op before this one removed`, 'model', { op: index, element: id, hint: 'Refer to an element that still exists.' });
     }
     return id;
   }

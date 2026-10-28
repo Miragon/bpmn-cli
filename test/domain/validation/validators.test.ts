@@ -13,7 +13,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateXml } from '../../../src/api.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { ERROR_CATALOGUE } from '../../../src/adapters/in/report/guide.js';
-import type { CliError, Warning } from '../../../src/domain/document/CliError.js';
+import type { BpmnError } from '../../../src/domain/document/BpmnError.js';
+import type { Finding } from '../../../src/domain/document/Finding.js';
 import { is, type El } from '../../../src/domain/document/utils/moddle.js';
 import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { checkFile, mutateFile } from '../../../src/node.js';
@@ -54,19 +55,19 @@ async function drawn(name: string, source: string): Promise<string> {
   return file;
 }
 
-async function refusal(file: string, ops: EditCommand[], opts: MutationOptions): Promise<{ code: string; errors: Array<Warning & { validator?: string }> }> {
+async function refusal(file: string, ops: EditCommand[], opts: MutationOptions): Promise<{ code: string; errors: Array<Finding & { validator?: string }> }> {
   const before = readFileSync(file, 'utf8');
   try {
     await mutateFile(file, ops, opts);
   } catch (err) {
     expect(readFileSync(file, 'utf8'), 'nothing written').toBe(before);
-    const failure = err as { code: string; details: { errors?: Array<Warning & { validator?: string }> } };
+    const failure = err as { code: string; details: { errors?: Array<Finding & { validator?: string }> } };
     return { code: failure.code, errors: failure.details.errors ?? [] };
   }
   throw new Error('the write was not refused');
 }
 
-const codes = (ws: Warning[]): string[] => ws.map((warning) => `${(warning as { validator?: string }).validator ? `[${(warning as { validator?: string }).validator}] ` : ''}${warning.code}${warning.element ? ` ${warning.element}` : ''}`);
+const codes = (ws: Finding[]): string[] => ws.map((warning) => `${(warning as { validator?: string }).validator ? `[${(warning as { validator?: string }).validator}] ` : ''}${warning.code}${warning.element ? ` ${warning.element}` : ''}`);
 
 /** A many-valued property as it is: reading it does not create it (a validator reads the live document before a change). */
 function raw(el: El, prop: string): El[] {
@@ -309,13 +310,13 @@ describe('validator findings in a refusal, a result and their text (library use)
     const before = readFileSync(file, 'utf8');
     const err = await mutateFile(file, LOOSE, { validators: [gate()] }).then(
       () => undefined,
-      (error: unknown) => error as CliError,
+      (error: unknown) => error as BpmnError,
     );
     expect(err?.code).toBe('E_VALIDATION');
     expect(err?.message).toBe('The change would introduce 2 error(s) reported by validator gate; nothing was written');
     expect(err?.details.hint).not.toContain('--profile');
     // each finding with its validator tag (validatorTag; the CLI's own refusal output is tested below)
-    expect((err?.details['errors'] as Warning[]).map((error) => `${validatorTag(error)}${error.code} ${error.element}: ${error.message}`)).toEqual([
+    expect((err?.details['errors'] as Finding[]).map((error) => `${validatorTag(error)}${error.code} ${error.element}: ${error.message}`)).toEqual([
       '[gate] E_GATE_UNREACHABLE Activity_Loose: Activity_Loose has no incoming sequence flow',
       '[gate] E_GATE_DEAD_END Activity_Loose: Activity_Loose has no outgoing sequence flow',
     ]);

@@ -3,7 +3,7 @@ import { is, many, walk, type El, type Model, idOf } from '../../document/utils/
 
 export const SUB_PROCESS_TYPES = ['bpmn:SubProcess', 'bpmn:AdHocSubProcess', 'bpmn:Transaction'];
 
-export function subProcesses(root: El): El[] {
+function subProcesses(root: El): El[] {
   return [...walk(root)].filter((element) => SUB_PROCESS_TYPES.some((type) => is(element, type)) && !!element.get('id'));
 }
 

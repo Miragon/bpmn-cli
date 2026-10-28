@@ -4,19 +4,19 @@ import { IdRegistry } from '../../../src/domain/document/ids/IdRegistry.js';
 import { isValidId, slugify } from '../../../src/domain/document/utils/slug.js';
 import { connectionRequest, kindRequest, typeRequest } from '../../../src/domain/document/utils/requests.js';
 import { IdStyle } from '../../../src/domain/document/ids/IdStyle.js';
-import { kindByName } from '../../../src/domain/document/utils/kinds.js';
-import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../../../src/domain/document/utils/kinds.js';
+import { kindByName } from '../../../src/domain/document/Kinds.js';
+import { kindLabel, kindOf, parseKind, suggestKinds, triggerOf } from '../../../src/domain/document/Kinds.js';
 import { FullLayout } from '../../../src/domain/diagram/layout/FullLayout.js';
 import { diExpansionState, resolveExpanded } from '../../../src/domain/diagram/utils/expansion.js';
 import { many } from '../../../src/domain/document/utils/moddle.js';
-import { FlowBridgeService } from '../../../src/domain/editing/flows/FlowBridgeService.js';
-import { NodePlacementService } from '../../../src/domain/editing/NodePlacementService.js';
+import { FlowBridge } from '../../../src/domain/editing/connections/FlowBridge.js';
+import { NodePlacement } from '../../../src/domain/editing/elements/NodePlacement.js';
 import { runOps } from '../../../src/index.js';
 import { mutateDoc } from '../../../src/index.js';
 import { ChangeSet } from '../../../src/domain/document/ChangeSet.js';
 import { definitionsXml, flowBetween, linearDoc } from '../../helpers/helpers.js';
-import { SequenceFlowService } from '../../../src/domain/editing/flows/SequenceFlowService.js';
-import { EditContext } from '../../../src/domain/document/EditContext.js';
+import { SequenceFlows } from '../../../src/domain/editing/connections/SequenceFlows.js';
+import { EditSession } from '../../../src/domain/document/EditSession.js';
 import { caught } from '../../helpers/errors.js';
 
 /** start -> "Charge card" -> end, a compensate boundary event on the task and an unconnected compensation handler. */
@@ -175,16 +175,16 @@ describe('flows & placement', () => {
   it('splices after a connected task and appends after a gateway', async () => {
     const doc = await linearDoc();
     const cs = new ChangeSet();
-    const task = doc.create('bpmn:ServiceTask', { id: new EditContext(doc).newId('Activity', 'Check stock'), name: 'Check stock' });
-    new NodePlacementService(doc, new EditContext(doc), { after: 'Task_A', flowName: 'ok' }).place(task, cs);
+    const task = doc.create('bpmn:ServiceTask', { id: new EditSession(doc).newId('Activity', 'Check stock'), name: 'Check stock' });
+    new NodePlacement(new EditSession(doc), { after: 'Task_A', flowName: 'ok' }).place(task, cs);
     expect(cs.notes).toContain('inserted between Task_A and End');
     expect(doc.outgoing(doc.get('Task_A')!).map((flow) => flow.get<any>('targetRef').id)).toEqual(['Activity_CheckStock']);
     expect(doc.get('F2')!.get('name')).toBe('ok');
     const gw = doc.create('bpmn:ExclusiveGateway', { id: 'G', name: 'ok?' });
-    new NodePlacementService(doc, new EditContext(doc), { after: 'Activity_CheckStock' }).place(gw, new ChangeSet());
+    new NodePlacement(new EditSession(doc), { after: 'Activity_CheckStock' }).place(gw, new ChangeSet());
     const e2 = doc.create('bpmn:EndEvent', { id: 'E2' });
     const cs2 = new ChangeSet();
-    new NodePlacementService(doc, new EditContext(doc), { after: 'G', flowName: 'no', default: true }).place(e2, cs2);
+    new NodePlacement(new EditSession(doc), { after: 'G', flowName: 'no', default: true }).place(e2, cs2);
     expect(cs2.notes).toContain('appended after G');
     expect(gw.get<any>('default').id).toBe(cs2.created[0]!.id);
     const xml = await doc.toXml();
@@ -194,36 +194,36 @@ describe('flows & placement', () => {
   it('refuses to fork a non-gateway silently', async () => {
     const doc = await linearDoc();
     const task = doc.create('bpmn:Task', { id: 'T2' });
-    new NodePlacementService(doc, new EditContext(doc), { in: 'Process_1' }).place(task, new ChangeSet());
-    new SequenceFlowService(doc, new EditContext(doc)).create(doc.get('Task_A')!, task, {});
+    new NodePlacement(new EditSession(doc), { in: 'Process_1' }).place(task, new ChangeSet());
+    new SequenceFlows(new EditSession(doc)).create(doc.get('Task_A')!, task, {});
     const t3 = doc.create('bpmn:Task', { id: 'T3' });
-    expect(() => new NodePlacementService(doc, new EditContext(doc), { after: 'Task_A' }).place(t3, new ChangeSet())).toThrow(/E_HAS_SUCCESSOR|outgoing flows/);
+    expect(() => new NodePlacement(new EditSession(doc), { after: 'Task_A' }).place(t3, new ChangeSet())).toThrow(/E_HAS_SUCCESSOR|outgoing flows/);
   });
 
   it('places before, between and into a flow; attaches boundary events', async () => {
     const doc = await linearDoc();
     const taskA = doc.create('bpmn:Task', { id: 'A' });
     const cs = new ChangeSet();
-    new NodePlacementService(doc, new EditContext(doc), { before: 'End' }).place(taskA, cs);
+    new NodePlacement(new EditSession(doc), { before: 'End' }).place(taskA, cs);
     expect(cs.notes[0]).toMatch(/inserted between Task_A and End/);
     const taskB = doc.create('bpmn:Task', { id: 'B' });
-    new NodePlacementService(doc, new EditContext(doc), { after: 'Start', before: 'Task_A' }).place(taskB, new ChangeSet());
+    new NodePlacement(new EditSession(doc), { after: 'Start', before: 'Task_A' }).place(taskB, new ChangeSet());
     expect(doc.outgoing(doc.get('Start')!)[0]!.get<any>('targetRef').id).toBe('B');
     const taskC = doc.create('bpmn:Task', { id: 'C' });
-    new NodePlacementService(doc, new EditContext(doc), { flow: 'F1' }).place(taskC, new ChangeSet());
+    new NodePlacement(new EditSession(doc), { flow: 'F1' }).place(taskC, new ChangeSet());
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('C');
     const be = doc.create('bpmn:BoundaryEvent', { id: 'BE' });
-    new NodePlacementService(doc, new EditContext(doc), { on: 'Task_A' }).place(be, new ChangeSet());
+    new NodePlacement(new EditSession(doc), { on: 'Task_A' }).place(be, new ChangeSet());
     expect(be.get<any>('attachedToRef').id).toBe('Task_A');
-    expect(() => new NodePlacementService(doc, new EditContext(doc), { on: 'Task_A' }).place(doc.create('bpmn:Task', { id: 'D' }), new ChangeSet())).toThrow(/boundary/);
-    expect(() => new NodePlacementService(doc, new EditContext(doc), { after: 'Task_A' }).place(doc.create('bpmn:BoundaryEvent', { id: 'BE2' }), new ChangeSet())).toThrow(/--on/);
+    expect(() => new NodePlacement(new EditSession(doc), { on: 'Task_A' }).place(doc.create('bpmn:Task', { id: 'D' }), new ChangeSet())).toThrow(/boundary/);
+    expect(() => new NodePlacement(new EditSession(doc), { after: 'Task_A' }).place(doc.create('bpmn:BoundaryEvent', { id: 'BE2' }), new ChangeSet())).toThrow(/--on/);
   });
 
   it('bridges on detach and carries labels over', async () => {
     const doc = await linearDoc();
     doc.get('F2')!.set('name', 'done');
     const cs = new ChangeSet();
-    new FlowBridgeService(doc, new EditContext(doc), cs).single(doc.get('Task_A')!, true);
+    new FlowBridge(new EditSession(doc), cs).single(doc.get('Task_A')!, true);
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('End');
     expect(doc.get('F1')!.get('name')).toBe('done');
     expect(doc.get('F2')).toBeUndefined();
@@ -237,16 +237,16 @@ describe('flows & placement', () => {
     <bpmn:endEvent id="E" />
     <bpmn:subProcess id="Sub"><bpmn:task id="Inner" /></bpmn:subProcess>`),
     );
-    expect(() => new SequenceFlowService(doc, new EditContext(doc)).create(doc.get('E')!, doc.get('S')!, {})).toThrow(/End event/);
-    expect(() => new SequenceFlowService(doc, new EditContext(doc)).create(doc.get('S')!, doc.get('Inner')!, {})).toThrow(/cross scopes/);
-    expect(() => new SequenceFlowService(doc, new EditContext(doc)).create(doc.get('S')!, doc.get('E')!, { condition: '  ' })).toThrow(/empty/);
+    expect(() => new SequenceFlows(new EditSession(doc)).create(doc.get('E')!, doc.get('S')!, {})).toThrow(/End event/);
+    expect(() => new SequenceFlows(new EditSession(doc)).create(doc.get('S')!, doc.get('Inner')!, {})).toThrow(/cross scopes/);
+    expect(() => new SequenceFlows(new EditSession(doc)).create(doc.get('S')!, doc.get('E')!, { condition: '  ' })).toThrow(/empty/);
   });
 
   it('applies flow options of --before to the flow INTO the new node', async () => {
     const doc = await linearDoc();
     const task = doc.create('bpmn:ServiceTask', { id: 'Book' });
     const cs = new ChangeSet();
-    new NodePlacementService(doc, new EditContext(doc), { before: 'End', flowName: 'yes', condition: '${ok}' }).place(task, cs);
+    new NodePlacement(new EditSession(doc), { before: 'End', flowName: 'yes', condition: '${ok}' }).place(task, cs);
     const into = doc.get('F2')!; // Task_A -> Book, the spliced flow
     expect(into.get<any>('targetRef').id).toBe('Book');
     expect(into.get('name')).toBe('yes');
@@ -260,10 +260,10 @@ describe('flows & placement', () => {
   it('prepending applies flow options to the one flow it creates and says so', async () => {
     const doc = await linearDoc();
     const taskX = doc.create('bpmn:Task', { id: 'X' });
-    new NodePlacementService(doc, new EditContext(doc), { in: 'Process_1' }).place(taskX, new ChangeSet());
+    new NodePlacement(new EditSession(doc), { in: 'Process_1' }).place(taskX, new ChangeSet());
     const taskY = doc.create('bpmn:Task', { id: 'Y' });
     const cs = new ChangeSet();
-    new NodePlacementService(doc, new EditContext(doc), { before: 'X', flowName: 'go', flowId: 'Flow_Go' }).place(taskY, cs);
+    new NodePlacement(new EditSession(doc), { before: 'X', flowName: 'go', flowId: 'Flow_Go' }).place(taskY, cs);
     expect(doc.get('Flow_Go')!.get<any>('targetRef').id).toBe('X');
     expect(doc.get('Flow_Go')!.get('name')).toBe('go');
     expect(cs.notes.some((note) => /--flow-name, --flow-id applied to Flow_Go/.test(note))).toBe(true);
@@ -273,30 +273,30 @@ describe('flows & placement', () => {
     const doc = await linearDoc();
     const before = doc.flowElements(doc.processes()[0]!).length;
     const end = doc.create('bpmn:EndEvent', { id: 'E2' });
-    let err = caught(() => new NodePlacementService(doc, new EditContext(doc), { after: 'Task_A' }).place(end, new ChangeSet()));
+    let err = caught(() => new NodePlacement(new EditSession(doc), { after: 'Task_A' }).place(end, new ChangeSet()));
     expect(err.code).toBe('E_INVALID_PLACEMENT');
     expect(err.message).toMatch(/endEvent E2 cannot be inserted into the flow Task_A -> End/);
     expect(String(err.details['hint'])).toMatch(/--in Process_1/);
     expect(String(err.details['hint'])).toMatch(/bpmn connect <file> Task_A <newId>/);
     const start = doc.create('bpmn:StartEvent', { id: 'S2' });
-    err = caught(() => new NodePlacementService(doc, new EditContext(doc), { before: 'Task_A' }).place(start, new ChangeSet()));
+    err = caught(() => new NodePlacement(new EditSession(doc), { before: 'Task_A' }).place(start, new ChangeSet()));
     expect(err.code).toBe('E_INVALID_PLACEMENT');
     expect(err.message).toMatch(/cannot have incoming sequence flows/);
-    err = caught(() => new NodePlacementService(doc, new EditContext(doc), { flow: 'F1' }).place(start, new ChangeSet()));
+    err = caught(() => new NodePlacement(new EditSession(doc), { flow: 'F1' }).place(start, new ChangeSet()));
     expect(err.code).toBe('E_INVALID_PLACEMENT');
     // nothing was retargeted or created
     expect(doc.get('F1')!.get<any>('targetRef').id).toBe('Task_A');
     expect(doc.get('F2')!.get<any>('targetRef').id).toBe('End');
     expect(doc.flowElements(doc.processes()[0]!).length).toBe(before);
-    expect(caught(() => new SequenceFlowService(doc, new EditContext(doc)).splice(doc.get('F2')!, end)).code).toBe('E_INVALID_SOURCE');
+    expect(caught(() => new SequenceFlows(new EditSession(doc)).splice(doc.get('F2')!, end)).code).toBe('E_INVALID_SOURCE');
     expect(doc.get('F2')!.get<any>('targetRef').id).toBe('End');
   });
 
   it('removes and reports a self-loop flow once on detach', async () => {
     const doc = await linearDoc();
-    new SequenceFlowService(doc, new EditContext(doc)).redirect(doc.get('F2')!, { target: doc.get('Task_A')! });
+    new SequenceFlows(new EditSession(doc)).redirect(doc.get('F2')!, { target: doc.get('Task_A')! });
     const cs = new ChangeSet();
-    new FlowBridgeService(doc, new EditContext(doc), cs).single(doc.get('Task_A')!, true);
+    new FlowBridge(new EditSession(doc), cs).single(doc.get('Task_A')!, true);
     expect(cs.removed.map((change) => change.id)).toEqual(['F1', 'F2']);
     expect(doc.get('F2')).toBeUndefined();
   });
@@ -304,7 +304,7 @@ describe('flows & placement', () => {
   it('keeps declaration order: node after its source, flows after the node', async () => {
     const doc = await linearDoc();
     const task = doc.create('bpmn:Task', { id: 'T' });
-    new SequenceFlowService(doc, new EditContext(doc)).splice(doc.get('F2')!, task);
+    new SequenceFlows(new EditSession(doc)).splice(doc.get('F2')!, task);
     const order = doc.flowElements(doc.processes()[0]!).map((element) => element.get('id'));
     expect(order.indexOf('T')).toBeGreaterThan(order.indexOf('Task_A'));
     expect(order.indexOf(flowBetween(doc, 'T', 'End'))).toBeGreaterThan(order.indexOf('T'));
@@ -331,11 +331,6 @@ describe('layout', () => {
     expect(diExpansionState(doc3.definitions).get('Sub')).toBe(false);
     expect([...resolveExpanded(doc3.model)]).toEqual([]);
     expect(r2.xml).toMatch(/BPMNPlane_Sub/);
-  });
-
-  it('maps layout errors to codes', async () => {
-    const doc = await Doc.fromXml(definitionsXml(`<bpmn:complexGateway id="CG" />`));
-    await expect(new FullLayout(doc.model, { engine: 'auto' }).run()).rejects.toMatchObject({ code: 'LAYOUT_UNSUPPORTED_ELEMENT', details: { element: 'CG' } });
   });
 
   it('ignores expand/collapse ids that are not sub-processes', async () => {

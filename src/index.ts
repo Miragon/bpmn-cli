@@ -10,21 +10,23 @@ import type { EditCommand } from './domain/commands/types.js';
 import type { CheckResult } from './application/port/in/ValidateDocumentUseCase.js';
 import type { MutationResult } from './domain/batch/types.js';
 import type { ValidateOptions, ValidationResult } from './domain/validation/StructuralValidator.js';
-import type { IdConventions, IdNamingHelpers } from './domain/document/ids/IdConventionsReader.js';
+import type { IdConventions } from './domain/document/ids/IdConventions.js';
 import type { ConventionsView, Undeclared } from './domain/document/ids/ConventionsTable.js';
-import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './domain/validation/bpmnlint-validator.js';
+import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './adapters/out/bpmnlint/bpmnlint-contract.js';
 import type { NamedValidator, ValidatorFinding } from './domain/validation/validators.js';
 import type { El, Model } from './domain/document/utils/moddle.js';
 import type { LayoutMetrics, LayoutProblem } from './domain/diagram/utils/problems.js';
-import type { Warning } from './domain/document/CliError.js';
+import type { Warning } from './domain/document/BpmnError.js';
 import type { Platform, PlatformChoice, PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
 import type { ProfileReport } from './domain/validation/profiles/PlatformProfiles.js';
 import { AgentGuide } from './adapters/in/report/AgentGuide.js';
 import { KindsReference } from './adapters/in/report/KindsReference.js';
 import type { PreservedText } from './domain/document/xml/TextPreservation.js';
-import type { BpmnlintValidatorOptions } from './domain/validation/BpmnlintValidator.js';
+import { BpmnlintValidator, type BpmnlintValidatorOptions } from './adapters/out/bpmnlint/BpmnlintValidator.js';
+import { BpmnlintConfigResolution } from './adapters/out/bpmnlint/BpmnlintConfigResolution.js';
+import { IdConventionsReader, type IdNamingHelpers } from './adapters/out/bpmnlint/IdConventionsReader.js';
 import type { RenderOptions, RenderResult } from './domain/views/render/types.js';
-import type { AroundOptions, AroundView, ElementContext, Implementation } from './domain/views/context.js';
+import type { AroundOptions, AroundView, ElementContext, Implementation } from './domain/views/around-view.js';
 import type { ElementDetail, FindHit, ModelView } from './domain/views/model-view.js';
 import type { LayoutView } from './domain/views/layout-view.js';
 import { FindElementsService } from './application/service/FindElementsService.js';
@@ -76,15 +78,17 @@ export { type DebugSink } from './domain/diagram/layout/LayoutDebug.js';
 export { GUIDE_TOPICS } from './adapters/in/report/AgentGuide.js';
 export { ERROR_CATALOGUE } from './adapters/in/report/guide.js';
 /* reading views of large models: show --around and show <id> --context */
-export { AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './domain/views/context.js';
+export { AROUND_DEFAULT_DEPTH, type AroundOptions, type AroundView, type AroundNode, type AroundScope, type ElementContext, type ContextRef, type ContextLink, type ContextCatch, type ContextEventSubProcess, type Implementation } from './domain/views/around-view.js';
 export function aroundView(doc: Doc, id: string, opts: AroundOptions = {}): AroundView { return new ShowModelService().aroundView({ ...opts, doc, id }); }
 export function elementContext(doc: Doc, id: string): ElementContext { return new ShowModelService().elementContext({ doc, id }); }
 export function implementationOf(el: El): Implementation | undefined { return new ShowModelService().implementation({ element: el }); }
 /* the building blocks */
 export { Doc, type DocSource, type NewDocOptions } from './domain/document/Doc.js';
-export { CliError, EXIT_CODES, type ErrorCategory, type Warning } from './domain/document/CliError.js';
-export { KINDS, parseKind, kindOf, kindLabel } from './domain/document/utils/kinds.js';
-export { FORMAT_OP_NAMES, isDiagramCommand } from './domain/commands/utils/op-names.js';
+export { BpmnError, EXIT_CODES, type ErrorCategory, type Warning } from './domain/document/BpmnError.js';
+/** @deprecated renamed to BpmnError */
+export { BpmnError as CliError } from './domain/document/BpmnError.js';
+export { KINDS, parseKind, kindOf, kindLabel } from './domain/document/Kinds.js';
+export { DIAGRAM_COMMAND_NAMES as FORMAT_OP_NAMES, isDiagramCommand } from './domain/commands/utils/command-names.js';
 export type {
   EditCommand,
   AddElement,
@@ -112,22 +116,23 @@ export { type LayoutDocOptions } from './application/port/in/RelayoutDiagramUseC
 export type { ValidationDelta } from './domain/validation/FindingBaseline.js';
 /* text-preserving output, for hosts that serialise models themselves */
 export { type PreservedText } from './domain/document/xml/TextPreservation.js';
-export function preserveText(original: string, baseline: string, next: string): Promise<PreservedText> { return new EditDocumentService(NO_PROJECT, NO_FILES, NO_FILES).preserveText({ original, baseline, next }); }
+export function preserveText(original: string, baseline: string, next: string): Promise<PreservedText> { return new EditDocumentService(NO_PROJECT, NO_FILES).preserveText({ original, baseline, next }); }
 /* a host's validators, run inside the write transaction and by validate */
 export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorFn, ValidatorIssue, ValidatorReport, ValidatorSeverity } from './domain/validation/validators.js';
 /* the project's bpmnlint configuration as an advisory validator; bpmnlint itself is injected */
-export { BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintValidatorOptions } from './domain/validation/BpmnlintValidator.js';
-export type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinter, BpmnlintLinterClass, BpmnlintReport, BpmnlintResolver, BpmnlintRule, BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintUnavailable, ResolvedBpmnlintConfig } from './domain/validation/bpmnlint-validator.js';
+export { BPMNLINT_COVERS, BPMNLINT_VALIDATOR, type BpmnlintValidatorOptions } from './adapters/out/bpmnlint/BpmnlintValidator.js';
+export type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinter, BpmnlintLinterClass, BpmnlintReport, BpmnlintResolver, BpmnlintRule, BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintUnavailable, ResolvedBpmnlintConfig } from './adapters/out/bpmnlint/bpmnlint-contract.js';
 /** The advisory validator of a resolved bpmnlint configuration. */
-export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmnlintConfig, opts: BpmnlintValidatorOptions = {}): NamedValidator { return new ValidateDocumentService(NO_PROJECT, NO_FILES).bpmnlintValidator({ ...opts, engine, resolved }); }
+export function bpmnlintValidator(engine: BpmnlintEngine, resolved: ResolvedBpmnlintConfig, opts: BpmnlintValidatorOptions = {}): NamedValidator { return new BpmnlintValidator(engine, resolved, opts).named(); }
 /**
  * The effective bpmnlint configuration; `opts.moddleExtensions` holds the descriptors the host
  * resolved for the module paths of `config.moddleExtensions`.
  */
-export async function resolveBpmnlintConfig(engine: BpmnlintEngine, config: BpmnlintConfig, opts: { moddleExtensions?: Record<string, object> } = {}): Promise<ResolvedBpmnlintConfig> { return new ValidateDocumentService(NO_PROJECT, NO_FILES).resolveBpmnlintConfig({ ...opts, engine, config }); }
+export async function resolveBpmnlintConfig(engine: BpmnlintEngine, config: BpmnlintConfig, opts: { moddleExtensions?: Record<string, object> } = {}): Promise<ResolvedBpmnlintConfig> { return new BpmnlintConfigResolution(engine, config, opts).resolve(); }
 /* declared id conventions: what element-id-naming in the .bpmnlintrc says about new ids */
-export { renderConventions } from './domain/document/utils/conventions-text.js';
-export { ID_NAMING_RULE, type IdConventions, type IdNamingHelpers, type QualifierMode } from './domain/document/ids/IdConventionsReader.js';
+export { renderConventions } from './adapters/in/report/utils/conventions-text.js';
+export type { IdConventions, QualifierMode } from './domain/document/ids/IdConventions.js';
+export { ID_NAMING_RULE, type IdNamingHelpers } from './adapters/out/bpmnlint/IdConventionsReader.js';
 export { type ConventionsView, type ConventionsRow, type Undeclared } from './domain/document/ids/ConventionsTable.js';
 
 /**
@@ -135,7 +140,7 @@ export { type ConventionsView, type ConventionsRow, type Undeclared } from './do
  * new ids cannot follow; `conventions` is undefined where nothing is declared.
  */
 export function idConventionsFromLint(setting: BpmnlintRuleSetting | undefined, naming: IdNamingHelpers, opts: { source?: string } = {}): { conventions?: IdConventions; notes: ValidatorFinding[] } {
-  return new ShowConventionsService(NO_PROJECT).readFromLint({ setting, naming, ...opts });
+  return new IdConventionsReader(naming, opts.source).read(setting);
 }
 
 /** The id conventions new ids follow in a document (undefined: a new file), one row per pattern. */
@@ -147,7 +152,7 @@ export function conventionsView(
   return new ShowConventionsService(NO_PROJECT).view({ ...opts, ...(doc !== undefined ? { doc } : {}), ...(conventions !== undefined ? { conventions } : {}) });
 }
 
-export type { DecisionLink } from './domain/document/DecisionLinkReader.js';
+export type { DecisionLink } from './domain/editing/properties/DecisionLinkReader.js';
 
 export { ChangeSet, type Change } from './domain/document/ChangeSet.js';
 export type { ValidateOptions, ValidationResult } from './domain/validation/StructuralValidator.js';
@@ -156,18 +161,18 @@ export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationRes
 /* the platform profile: Camunda 7 / 8 rules, loaded on demand */
 export { PLATFORM_CHOICES, TARGETS, type Platform, type PlatformChoice, type PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
 export type { PlatformSummary, ProfileReport } from './domain/validation/profiles/PlatformProfiles.js';
-export type { ProfileFinding, Severity } from './domain/document/utils/finding.js';
+export type { ProfileFinding, Severity } from './domain/document/Finding.js';
 export type { ExtensionInfo } from './domain/document/ExtensionLister.js';
 export { type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './domain/views/model-view.js';
 export function buildView(doc: Doc): ModelView { return new ShowModelService().modelView({ doc }); }
 export function elementDetail(doc: Doc, el: El): ElementDetail { return new ShowModelService().elementDetail({ doc, element: el }); }
 export function findElements(doc: Doc, text: string, kind?: string): FindHit[] { return new FindElementsService().find({ doc, text, ...(kind !== undefined ? { kind } : {}) }); }
-export { OPS_SCHEMA } from './domain/commands/OpsSchemaBuilder.js';
+export { OPS_SCHEMA } from './adapters/in/report/OpsSchemaBuilder.js';
 /* the diagram API: read-only views of a drawing and the format operations */
 export { diffProblems, metricsDelta, KEYS as METRIC_KEYS, WEIGHTS as METRIC_WEIGHTS, type LayoutMetrics, type LayoutProblem, type ProblemLocation, type MetricKey, type MetricsDelta, type MetricsSummary } from './domain/diagram/utils/problems.js';
 export { type LayoutView, type LayoutDiagram, type LayoutGroup, type LayoutColor, type LayoutLabel } from './domain/views/layout-view.js';
 export function layoutView(defs: El): LayoutView { return new ShowModelService().layoutView({ definitions: defs }); }
-export type { FormatResult, FormatEntry } from './domain/diagram/DiagramCommandService.js';
+export type { DiagramCommandResult as FormatResult, DiagramCommandEntry as FormatEntry } from './domain/diagram/commands/DiagramCommands.js';
 export { SWATCHES, type SwatchName } from './domain/diagram/utils/colors.js';
 /* the drawing as SVG; PNG: renderPng in @miragon/bpmn-cli/node */
 export { RENDER_MAX_SIZE, MIN_LABEL_SCALE, HALO_COLORS, type RenderOptions, type RenderResult, type RenderHighlight, type RenderProblem, type RenderTile } from './domain/views/render/types.js';
@@ -284,5 +289,5 @@ export function locateProblems(defs: El, problems: readonly LayoutProblem[]): La
  * treat the returned XML as the truth and re-parse it if you need DI.
  */
 export function layoutModel(model: Model, opts: LayoutOptions = {}): Promise<LayoutResult> {
-  return new RelayoutDiagramService(NO_PROJECT, NO_FILES, NO_FILES).layoutModel({ ...opts, model });
+  return new RelayoutDiagramService(NO_PROJECT, NO_FILES).layoutModel({ ...opts, model });
 }

@@ -1,4 +1,4 @@
-import { kindOf, triggerOf } from '../utils/kinds.js';
+import { kindOf, triggerOf } from '../Kinds.js';
 import { is, isBpmnElement, walk, type El } from '../utils/moddle.js';
 import { isSuffix, MAX_ID, nameWords, pascalSnakeSlug, snakeSlug, SUFFIX_WORD } from '../utils/slug.js';
 import { beginAlike, caseLike, GENERIC, GLUED, HASH, lcfirst, localName, PREFIXED, prefixClass, stem, TOOL_DEFAULTS, ucfirst, type PrefixClass } from '../utils/id-words.js';

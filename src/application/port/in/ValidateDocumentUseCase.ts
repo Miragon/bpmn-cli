@@ -1,10 +1,7 @@
 import type { Doc } from '../../../domain/document/Doc.js';
 import type { Platform, PlatformChoice, PlatformInfo } from '../../../domain/document/vendor/PlatformDetection.js';
 import type { ValidateOptions, ValidationResult } from '../../../domain/validation/StructuralValidator.js';
-import type { NamedValidator } from '../../../domain/validation/validators.js';
 import type { ProfileReport } from '../../../domain/validation/profiles/PlatformProfiles.js';
-import type { BpmnlintValidatorOptions } from '../../../domain/validation/BpmnlintValidator.js';
-import type { BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from '../../../domain/validation/bpmnlint-validator.js';
 import type { FileBpmnlintOptions } from '../out/LoadProjectSettingsPort.js';
 import type { CheckOptions, CheckResult } from '../../../domain/validation/DocumentCheck.js';
 import type { DocumentSource } from './DocumentSource.js';
@@ -30,11 +27,6 @@ export interface ValidateDocumentUseCase {
   runProfile(command: ValidateDocumentUseCase.ProfileCommand): ProfileReport;
 
   detectPlatform(command: ValidateDocumentUseCase.DocumentCommand): PlatformInfo;
-
-  /** The advisory validator of a resolved bpmnlint configuration. */
-  bpmnlintValidator(command: ValidateDocumentUseCase.BpmnlintValidatorCommand): NamedValidator;
-
-  resolveBpmnlintConfig(command: ValidateDocumentUseCase.ResolveBpmnlintCommand): Promise<ResolvedBpmnlintConfig>;
 }
 
 export declare namespace ValidateDocumentUseCase {
@@ -70,19 +62,6 @@ export declare namespace ValidateDocumentUseCase {
   interface LoadProfilesCommand {
     /** default: all */
     platforms?: readonly Exclude<Platform, 'none'>[];
-  }
-
-  /** A bpmnlint engine and the resolved configuration it runs. */
-  interface BpmnlintValidatorCommand extends BpmnlintValidatorOptions {
-    engine: BpmnlintEngine;
-    resolved: ResolvedBpmnlintConfig;
-  }
-
-  /** A bpmnlint configuration to resolve with an engine. */
-  interface ResolveBpmnlintCommand {
-    engine: BpmnlintEngine;
-    config: BpmnlintConfig;
-    moddleExtensions?: Record<string, object>;
   }
 }
 

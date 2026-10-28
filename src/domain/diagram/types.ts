@@ -1,8 +1,8 @@
-import type { LayoutWarningInfo, LayoutEngine } from './layout/FullLayout.js';
+import type { LayoutWarningInfo } from './layout/FullLayout.js';
 import type { MetricsDelta } from './utils/problems.js';
-import type { FormatResult } from './DiagramCommandService.js';
+import type { DiagramCommandResult } from './commands/DiagramCommands.js';
 
-/** How a batch draws: its layout mode, engine and the sub-processes to expand or collapse. */
+/** How a batch draws: its layout mode and the sub-processes to expand or collapse. */
 export interface DrawingOptions {
   /**
    * false skips the layout; true / 'auto' (default) keeps a hand-made drawing and redraws
@@ -12,8 +12,6 @@ export interface DrawingOptions {
   /** additional sub-process ids to expand / collapse */
   expand?: string[];
   collapse?: string[];
-  /** 'clean' (default) or 'auto' (bpmn-auto-layout) */
-  engine?: LayoutEngine;
 }
 
 export type LayoutMode = 'auto' | 'incremental' | 'full';
@@ -39,7 +37,7 @@ export interface LayoutStatus {
   /** layout problems before / after, and the difference */
   metrics?: MetricsDelta;
   /** in batch order */
-  format?: FormatResult[];
+  format?: DiagramCommandResult[];
   /** design-iq stickies moved along with their flow node (`<processId>#<n>` without id) */
   stickies?: Array<{ sticky: string; node: string }>;
 }

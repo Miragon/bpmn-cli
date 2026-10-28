@@ -2,7 +2,7 @@ import type { Doc } from '../../document/Doc.js';
 import { addTo, many, removeFrom, type El } from '../../document/utils/moddle.js';
 import { EXTENSION_STRUCTURE } from './ExtensionStructure.js';
 import type { Step } from './SelectorParser.js';
-import type { VendorElements } from '../VendorElements.js';
+import type { VendorElements } from '../properties/VendorElements.js';
 import { ruleName } from '../utils/vendor-family.js';
 
 type Raw = Record<string, unknown>;

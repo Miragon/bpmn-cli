@@ -1,4 +1,4 @@
-import type { IdConventions } from '../document/ids/IdConventionsReader.js';
+import type { IdConventions } from '../document/ids/IdConventions.js';
 import type { NamedValidator, Validator } from './validators.js';
 
 /** The project's validator for a document and the id conventions it declares. */

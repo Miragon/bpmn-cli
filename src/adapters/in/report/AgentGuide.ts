@@ -1,5 +1,5 @@
 import { EditCommandDefinitions } from '../../../domain/commands/definitions/EditCommandDefinitions.js';
-import { FORMAT_OP_NAMES, OP_NAMES } from '../../../domain/commands/utils/op-names.js';
+import { DIAGRAM_COMMAND_NAMES, COMMAND_NAMES } from '../../../domain/commands/utils/command-names.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import { COMMANDS, COMMON_OPTIONS } from './CommandCatalogue.js';
 import { COMMON_ERRORS, ERROR_CATALOGUE, TOP_ERRORS, TRIGGER_OPTIONS } from './guide.js';
@@ -191,7 +191,7 @@ export const GUIDE_TOPICS: Record<string, { sections: string[]; summary: string 
   reading: { sections: ['READING LARGE MODELS'], summary: 'show --around, --context, find' },
   output: { sections: ['OUTPUT'], summary: 'results, warnings delta, --summary, JSON, stdin / stdout' },
   layout: { sections: ['LAYOUT MODES'], summary: 'auto / incremental / full' },
-  format: { sections: ['FORMATTING WITHOUT XML'], summary: FORMAT_OP_NAMES.join(', ') },
+  format: { sections: ['FORMATTING WITHOUT XML'], summary: DIAGRAM_COMMAND_NAMES.join(', ') },
   render: { sections: ['LOOKING AT THE DRAWING'], summary: 'bpmn render: crops, halos, numbered problems, tiles, --render' },
   ops: { sections: ['OPS JSON'], summary: 'apply and its ops' },
   placement: { sections: ['PLACEMENT'], summary: '--after / --before / --flow / --in / --on' },
@@ -220,7 +220,7 @@ export class AgentGuide {
         '  - You never see or write DI (shapes, edges, coordinates). The CLI keeps the drawing: a hand-made (or formatted)',
         '    diagram stays as it is, new elements are placed locally and only affected flows rerouted; a new file, or a',
         '    drawing the engine made and nobody changed, is redrawn by the built-in engine (see LAYOUT MODES).',
-        `  - To change the picture, use the format commands (${FORMAT_OP_NAMES.join(', ')}, order of lanes and pools);`,
+        `  - To change the picture, use the format commands (${DIAGRAM_COMMAND_NAMES.join(', ')}, order of lanes and pools);`,
         '    they name other elements, never coordinates (see FORMATTING WITHOUT XML).',
         '  - Elements are addressed by id only (names may repeat). Ids speak and follow the file: a new id says what it',
         '    names (Activity_CheckInvoice; unnamed: kind + place, Gateway_AfterCheckInvoice, Event_TimerOnReview; flows',
@@ -501,12 +501,12 @@ export class AgentGuide {
   /** `*` = required; add / retype fold their trigger keys into `<trigger keys>`. */
   private opKeyLines(): string[] {
     const triggerKeys = new Set([...TRIGGER_OPTIONS.flatMap((trigger) => trigger.keys), 'nonInterrupting']);
-    return OP_NAMES.map((opName) => {
-      const fields = Object.entries(EditCommandDefinitions.of(opName).fields).filter(([key]) => !FULL_GUIDE_ONLY_KEYS.has(key));
+    return COMMAND_NAMES.map((commandName) => {
+      const fields = Object.entries(EditCommandDefinitions.of(commandName).fields).filter(([key]) => !FULL_GUIDE_ONLY_KEYS.has(key));
       const folds = fields.filter(([key]) => triggerKeys.has(key)).length > 3;
       const keys = fields.filter(([key]) => !folds || !triggerKeys.has(key)).map(([key, spec]) => (spec.required ? `${key}*` : key));
       if (folds) keys.push('<trigger keys>');
-      return `  ${opName.padEnd(8)} ${keys.join(' ')}`;
+      return `  ${commandName.padEnd(8)} ${keys.join(' ')}`;
     });
   }
 }

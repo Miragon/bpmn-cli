@@ -1,4 +1,4 @@
-// bpmn-moddle@10 types only its element interfaces and bpmn-auto-layout ships no declarations
+// bpmn-moddle@10 types only its element interfaces
 
 declare module 'bpmn-moddle' {
   import type { ModdleElement } from 'moddle';
@@ -29,20 +29,4 @@ declare module 'bpmn-moddle' {
     fromXML(xml: string, options?: { lax?: boolean }): Promise<ImportResult>;
     toXML(element: ModdleElement, options?: { format?: boolean; preamble?: boolean }): Promise<{ xml: string }>;
   }
-}
-
-declare module 'bpmn-auto-layout' {
-  export class LayoutError extends Error {
-    override name: 'LayoutError';
-    code: string;
-    elementId: string;
-    relatedElementIds: string[];
-  }
-  export class LayoutWarning extends Error {
-    override name: 'LayoutWarning';
-    code: string;
-    elementId: string;
-    relatedElementIds: string[];
-  }
-  export function layoutProcess(xml: string): Promise<{ xml: string; warnings: LayoutWarning[] }>;
 }

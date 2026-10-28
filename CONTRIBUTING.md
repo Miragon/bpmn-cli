@@ -40,8 +40,8 @@ them on a private corpus without copying it into the repository, are described i
 
 - `src/`: the four entries in the root and three rings around the domain (ports and adapters).
   The entries wire the rings: `cli.ts` starts the `Cli` with the file adapters, `node.ts` is
-  `@miragon/bpmn-cli/node`, `api.ts` the in-memory functions (the only place they wire the services to the in-memory adapters; `index.ts` re-exports them), and `index.ts` the browser-safe
-  core. `src/adapters/in/report/CommandCatalogue.ts` lists every command with its arguments,
+  `@miragon/bpmn-cli/node`, `api.ts` the in-memory functions (they wire the services to the in-memory adapters; `index.ts` re-exports them), and `index.ts` the browser-safe
+  core, which wires the services of its own functions to the in-memory adapters too. `src/adapters/in/report/CommandCatalogue.ts` lists every command with its arguments,
   its `--help` text and its guide usage, and the options of every write: the commander wiring in
   `src/adapters/in/cli/` and `bpmn guide` both read it. `src/adapters/in/report/guide.ts` holds the
   error catalogue and the other hand-written tables that `bpmn guide` (`AgentGuide.ts`) and
@@ -51,36 +51,37 @@ them on a private corpus without copying it into the repository, are described i
   | --- | --- |
   | `domain/document/` | the moddle tree, kinds, `Doc`, the `ChangeSet` of a mutation, the `FlowRules`, an edit's `IdAllocator`, the errors; `ids/` (id words, the file's id style, the declared id conventions), `xml/` (the text-preserving write, the encoding), `vendor/` (Camunda 7 / 8 knowledge) |
   | `domain/commands/` | the commands a caller can ask for (`EditCommand`: `AddElement`, `PlaceShapes`, ...), the ops JSON of `apply` and its aliases |
-  | `domain/diagram/` | the drawing (BPMN DI): `di/` reads and writes planes, frames, groups and the checkpoint every engine shares, `layout/` holds the engines (`clean/` redraws with `FullLayout`, `incremental/` keeps a hand-made drawing), `DrawnDiagram` is the drawing the diagram commands change, `DiagramCommandService` runs them and `format/` holds the services that change it (`ShapePlacementService`, `SpaceInsertionService`, ...); `BatchDrawing` is all a batch does to the drawing |
-  | `domain/editing/` | the services that change the model (`ElementCreationService`, `ElementMoveService`, `PropertyService`, ...; `flows/`, `events/`, `extensions/`, `participants/`) |
-  | `domain/validation/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the bpmnlint validator, the `FindingBaseline` a write compares with; `profiles/` holds the engine rules that load on demand |
+  | `domain/diagram/` | the drawing (BPMN DI): `di/` reads and writes planes, frames, groups and the checkpoint every engine shares, `layout/` holds the engines (`clean/` redraws with `FullLayout`, `incremental/` keeps a hand-made drawing), `DrawnDiagram` is the drawing the diagram commands change, `commands/` holds one handler per diagram command (`ShapePlacement`, `ShapeAlignment`, `SpaceInsertion`, ...) and `DiagramCommands`, which dispatches them; `BatchDrawing` is all a batch does to the drawing |
+  | `domain/editing/` | what changes the model, one folder per concern: `elements/` (add, remove, retype, move, order, placement, artifacts, pools, lanes), `connections/` (connect, associations, sequence flows, bridges, flow ids, split), `properties/` (set, value coercion, the set keys, nested slots, vendor elements, decision links), `events/` (triggers, event definitions, root elements, the event-gateway rule), `extensions/` (ext), `ids/` (id renames); a command is a class created with the `EditSession` (`new ElementCreation(edit).add(op)`, `new Connections(edit).connect(op)`, ...) |
+  | `domain/validation/` | structural validation (`StructuralValidator`, `FlowOrder`), the validator hook, the `FindingBaseline` a write compares with and the `FindingMatcher` that tells the same finding before and after an edit; `profiles/` holds the engine rules that load on demand |
   | `domain/views/` | the read views (`show`, `find`, `--around`, `--context`) and `render/`, the SVG of a diagram |
-  | `domain/batch/` | one batch of commands on a document in memory: `EditBatchService` (guard, commands, validation, layout, kept text, result), `ModelCommandService` hands each model command to its domain service and `BatchDrawing` (`domain/diagram/`) lays the drawing out between them; the top of the domain, nothing imports it back |
-  | `application/port/in/` | one contract per use case, the way in: an interface with its `Command` and `Result` (`EditDocumentUseCase`, `RelayoutDiagramUseCase`, `ValidateDocumentUseCase`, `ShowModelUseCase`, ...) |
-  | `application/port/out/` | what the application needs from outside, named after what it does: `LoadDocumentPort`, `SaveDocumentPort`, `LoadProjectSettingsPort` (the `.bpmnlintrc`), `WriteImagePort` |
-  | `application/service/` | one service per use case that implements its contract (`EditDocumentService implements EditDocumentUseCase`): load, let the domain work, save, all through the outbound ports |
-  | `adapters/in/cli/` | the driving adapter: the `Cli` (commander, streams, exit codes, errors) and one class per command; it knows the use cases only by their contracts |
+  | `domain/batch/` | one batch of commands on a document in memory: `EditBatch` (guard, commands, validation, layout, kept text, result), `ModelCommands` hands each model command to its domain service and `BatchDrawing` (`domain/diagram/`) lays the drawing out between them; the top of the domain, nothing imports it back |
+  | `application/port/in/` | one contract per use case, the way in: an interface with its `Command` and `Result` (`EditDocumentUseCase`, `RelayoutDiagramUseCase`, `ValidateDocumentUseCase`, `ShowModelUseCase`, ...), also for a pure query that needs no outbound port |
+  | `application/port/out/` | what the application needs from outside, named after what it does: `DocumentPort` (load a document, resolve where a result goes, save it), `LoadProjectSettingsPort` (the `.bpmnlintrc`), `WriteImagePort` |
+  | `application/service/` | one service per use case that implements its contract (`EditDocumentService implements EditDocumentUseCase`): load, let the domain work, save, all through the outbound ports; a query asks the domain and returns its answer |
+  | `adapters/in/cli/` | the driving adapter: the `Cli` (commander, streams, exit codes, errors) and one class per command; it knows the use cases only by their contracts and reaches the domain only through them; from the domain it takes the command vocabulary to check its flags (errors, op rules, flag values) |
   | `adapters/in/report/` | what a use case's result looks like to the one who asked: text and JSON reports (`MutationText`, `MutationReportBuilder`, `ValidationText`, ...), the views as text, and the reference the guide and `bpmn kinds` print; the CLI prints them and `index.ts` / `api.ts` return them |
-  | `adapters/out/files/` | the driven adapters on disk, Node only: `FileDocumentStore`, `BpmnlintProjectSettings`, `FileImageWriter` (PNG) |
+  | `adapters/out/bpmnlint/` | the injected bpmnlint as a validator of the domain, browser-safe: `BpmnlintConfigResolution` (the effective `.bpmnlintrc`), `BpmnlintValidator`, `IdConventionsReader` (the id conventions of `element-id-naming`) |
+  | `adapters/out/files/` | the driven adapters on disk, Node only: `FileDocumentStore`, `BpmnlintProjectSettings` (loads the `.bpmnlintrc` and its plugins for `adapters/out/bpmnlint/`), `FileImageWriter` (PNG) |
+  | `adapters/out/document/` | `DocumentStore`, what the file store and the in-memory store share behind the `DocumentPort`: a source parsed into a `Doc`, the lossless check, the target of a write and whether to write; browser-safe |
   | `adapters/out/memory/` | the driven adapters of the in-memory API: `NoDocumentFiles`, `NoProjectSettings` |
   | `types/` | type shims for the bpmn-io packages that ship no usable declarations |
 
-  Where new code goes: a new command is a type in `domain/commands/` and a `...Service` of the
-  domain that `domain/batch/` hands it to; a new command line verb or API function is a contract in
+  Where new code goes: a new command is a type in `domain/commands/` and a class of
+  `domain/editing/` created with the `EditSession` that `domain/batch/` hands it; a new command line verb or API function is a contract in
   `application/port/in/` and a service that implements it; reading the model without changing
   it is a view (`domain/views/`); deciding positions is `domain/diagram/`; text or JSON for the
   user is `adapters/in/report/`; anything that touches the file system or `process` is an
   adapter behind a port of `application/port/out/`; mapping flags to options and printing a
-  command's result is `adapters/in/cli/`. The entries (`cli.ts`, `node.ts`, `api.ts`) create
+  command's result is `adapters/in/cli/`. The entries (`cli.ts`, `index.ts`, `node.ts`, `api.ts`) create
   the services with their adapters. Every public function that works on a document goes
-  through a use case, even one that only forwards to the domain: the library entries
-  (`index.ts`, `api.ts`, `node.ts`) import values only from `application/` and `adapters/`, and
-  from `domain/` only types, re-exporting just the public classes, constants and pure helpers
-  the test lists. `test/architecture.test.ts` checks the rings: the domain
+  through a use case, even one that only forwards to the domain: the entries import values only
+  from `application/` and `adapters/`, and from `domain/` only types, re-exporting just the
+  public classes, constants and pure helpers the test lists. `test/architecture.test.ts` checks the rings: the domain
   imports neither the application nor the adapters, the application no adapter, an adapter no
-  other adapter (the CLI only the reports), the driving adapter no service, only adapters and entries import `node:*`, the
-  domain modules import each other without a cycle, and every service of `application/service/`
-  implements its contract and calls no other, and the entries reach the domain only through the
+  other adapter (the CLI only the reports, the files only bpmnlint and the document store, the memory adapters only the document store), the driving adapter no service, only adapters and entries import `node:*`, the
+  domain modules import each other without a cycle, `application/service/` holds only services,
+  each implementing its contract and using no other class of that folder, and the entries reach the domain only through the
   use cases.
 
   **Classes first, helpers in `utils/`.** Each module builds on classes, one per file, the file
@@ -117,8 +118,7 @@ them on a private corpus without copying it into the repository, are described i
 
 ### Dependencies
 
-`bpmn-moddle` (the semantic model; `moddle` for its types), `bpmn-auto-layout` (pinned to
-`2.0.0-alpha.2`, loaded only for `--engine auto`), `@resvg/resvg-wasm` (the PNG rasteriser of
+`bpmn-moddle` (the semantic model; `moddle` for its types), `@resvg/resvg-wasm` (the PNG rasteriser of
 `bpmn render`), `commander` (the CLI only), and `bpmnlint` (pinned to `11.15.0`) with
 `@miragon/bpmnlint-plugin-rules` (pinned to `0.12.1`: bpmnlint's rules, camunda-compat and
 Miragon's rules behind one resolver), loaded only when a `.bpmnlintrc` applies (see

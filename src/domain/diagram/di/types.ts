@@ -116,7 +116,9 @@ export interface LaneBox {
   children: LaneBox[];
 }
 
-export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation' | 'other';
+export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
+
+export type EdgeKind = ConnectionKind | 'other';
 
 export interface DShape {
   id: string;

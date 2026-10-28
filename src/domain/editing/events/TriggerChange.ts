@@ -1,14 +1,14 @@
 import type { Doc } from '../../document/Doc.js';
-import type { EditContext } from '../../document/EditContext.js';
+import type { EditSession } from '../../document/EditSession.js';
 import type { ChangeSet } from '../../document/ChangeSet.js';
 import type { IdState } from '../../document/ids/IdStyle.js';
 import { modelError } from '../../document/utils/errors.js';
-import { kindLabel, triggerOf, type Trigger } from '../../document/utils/kinds.js';
+import { kindLabel, triggerOf, type Trigger } from '../../document/Kinds.js';
 import { is, type El } from '../../document/utils/moddle.js';
-import { EventDefinitionService } from './EventDefinitionService.js';
+import { EventDefinitions } from './EventDefinitions.js';
 import { EventTrigger, ALWAYS_INTERRUPTING } from './EventTrigger.js';
-import { IdRenameService } from '../IdRenameService.js';
-import { PropertyCoercer } from '../PropertyCoercer.js';
+import { IdRename } from '../ids/IdRename.js';
+import { PropertyCoercer } from '../properties/PropertyCoercer.js';
 import { idOf } from '../../document/utils/elements.js';
 import type { TriggerOptions } from '../../commands/types.js';
 
@@ -25,14 +25,13 @@ export class TriggerChange {
   private readonly label: string;
 
   constructor(
-    private readonly doc: Doc,
-    private readonly edit: EditContext,
+    private readonly edit: EditSession,
     private readonly el: El,
   ) {
     this.before = is(el, 'bpmn:Event') ? new EventTrigger(el).read() : { trigger: 'none', opts: {} };
     this.was = triggerOf(el);
-    this.conflicts = new Set(TriggerChange.messageFlowConflicts(doc, el).map((conflict) => idOf(conflict.flow)));
-    this.state = IdRenameService.stateOf(el);
+    this.conflicts = new Set(TriggerChange.messageFlowConflicts(edit.doc, el).map((conflict) => idOf(conflict.flow)));
+    this.state = IdRename.stateOf(el);
     this.label = kindLabel(el);
   }
 
@@ -44,7 +43,7 @@ export class TriggerChange {
    * `on` is the element or the one a retype built in its place; no `trigger` means
    * only the kind changed. `strict` (set) checks a re-given non-interrupting flag first.
    */
-  change(trigger: Trigger | undefined, given: TriggerOptions, cs: ChangeSet, { on = this.el, strict = false }: { on?: El; strict?: boolean } = {}): void {
+  change(trigger: Trigger | undefined, given: TriggerOptions, changes: ChangeSet, { on = this.el, strict = false }: { on?: El; strict?: boolean } = {}): void {
     let dropNonInterrupting = false;
     if (trigger !== undefined) {
       const merged: TriggerOptions = trigger === this.was ? { ...this.before.opts, ...given } : { ...given };
@@ -56,11 +55,11 @@ export class TriggerChange {
         } else if (strict) merged.nonInterrupting = true;
       }
       if (strict && merged.nonInterrupting) this.assertNonInterruptingAllowed(on, trigger);
-      for (const warning of new EventDefinitionService(this.doc, this.edit, on).apply(trigger, merged)) cs.warn(warning);
+      for (const warning of new EventDefinitions(this.edit).setTrigger(on, trigger, merged)) changes.warn(warning);
     }
     this.assertMessageFlowsFit(on);
-    if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(cs, on, trigger);
-    new IdRenameService(this.doc, this.edit).recordState(on, this.state, this.label);
+    if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(changes, on, trigger);
+    new IdRename(this.edit).recordState(on, this.state, this.label);
   }
 
   setNonInterrupting(value: boolean): void {
@@ -91,7 +90,7 @@ export class TriggerChange {
 
   /** So the model never ends up with a message flow `connect` would refuse. */
   private assertMessageFlowsFit(event: El): void {
-    const broken = TriggerChange.messageFlowConflicts(this.doc, event).filter((conflict) => !this.conflicts.has(idOf(conflict.flow)));
+    const broken = TriggerChange.messageFlowConflicts(this.edit.doc, event).filter((conflict) => !this.conflicts.has(idOf(conflict.flow)));
     const first = broken[0];
     if (!first) return;
     const src = first.flow.get<El | undefined>('sourceRef');
@@ -107,9 +106,9 @@ export class TriggerChange {
     );
   }
 
-  private warnNonInterruptingDropped(cs: ChangeSet, el: El, trigger: Trigger): void {
+  private warnNonInterruptingDropped(changes: ChangeSet, el: El, trigger: Trigger): void {
     const position = is(el, 'bpmn:BoundaryEvent') ? 'boundary' : 'start';
-    cs.warn({
+    changes.warn({
       code: 'W_PROPERTY_DROPPED',
       message: `nonInterrupting of ${idOf(el)} was dropped: ${trigger === 'none' ? 'untyped' : trigger} ${position} events are always interrupting`,
       element: idOf(el),
@@ -128,7 +127,7 @@ export class TriggerChange {
       return;
     }
     if (is(el, 'bpmn:StartEvent')) {
-      const scope = this.doc.scopeOf(el);
+      const scope = this.edit.doc.scopeOf(el);
       if (!scope || !is(scope, 'bpmn:SubProcess') || !scope.get<boolean | undefined>('triggeredByEvent')) {
         throw modelError('E_INVALID_TRIGGER', `Start event ${idOf(el)} is not inside an event sub-process and cannot be non-interrupting`, {
           element: idOf(el),

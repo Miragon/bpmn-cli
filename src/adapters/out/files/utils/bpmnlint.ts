@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import type { BpmnlintUnavailable } from '../../../../domain/validation/bpmnlint-validator.js';
+import type { BpmnlintUnavailable } from '../../bpmnlint/bpmnlint-contract.js';
 import { shown } from './paths.js';
 
 export const PLUGIN = '@miragon/bpmnlint-plugin-rules';

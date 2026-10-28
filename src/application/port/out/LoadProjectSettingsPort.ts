@@ -1,6 +1,6 @@
 import type { BpmnlintRuleSetting } from '../../../domain/document/ids/bpmnlint-rule-setting.js';
-import type { IdConventions } from '../../../domain/document/ids/IdConventionsReader.js';
-import type { ValidatorFinding } from '../../../domain/document/validator-finding.js';
+import type { IdConventions } from '../../../domain/document/ids/IdConventions.js';
+import type { ValidatorFinding } from '../../../domain/document/Finding.js';
 import type { ProjectLint } from '../../../domain/validation/ProjectLint.js';
 import type { Validator } from '../../../domain/validation/validators.js';
 

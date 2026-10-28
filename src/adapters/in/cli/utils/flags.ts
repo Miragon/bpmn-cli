@@ -1,14 +1,14 @@
 import { extname } from 'node:path';
 import { InvalidArgumentError } from 'commander';
 import type { ImageFormat } from '../../../../application/port/out/WriteImagePort.js';
-import { CliError } from '../../../../domain/document/CliError.js';
+import { BpmnError } from '../../../../domain/document/BpmnError.js';
 import { usageError } from '../../../../domain/document/utils/errors.js';
 
 export function parseKeyValues(items: string[], what = 'property'): Record<string, string> {
   const out: Record<string, string> = {};
   for (const item of items) {
     const idx = item.indexOf('=');
-    if (idx <= 0) throw new CliError('E_USAGE', `Expected ${what} as key=value, got "${item}"`, 'usage');
+    if (idx <= 0) throw new BpmnError('E_USAGE', `Expected ${what} as key=value, got "${item}"`, 'usage');
     out[item.slice(0, idx).trim()] = item.slice(idx + 1);
   }
   return out;

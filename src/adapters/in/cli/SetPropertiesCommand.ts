@@ -1,6 +1,6 @@
 import type { Command as CommandType } from 'commander';
 import type { SetProperties } from '../../../domain/commands/types.js';
-import { CliError } from '../../../domain/document/CliError.js';
+import { BpmnError } from '../../../domain/document/BpmnError.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 import { parseKeyValues } from './utils/flags.js';
@@ -18,8 +18,8 @@ export class SetPropertiesCommand extends MutationCommand {
   private async run(file: string, id: string, keyValues: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
     const unset = (options['unset'] as string[]) ?? [];
-    if (!keyValues.length && !unset.length) throw new CliError('E_USAGE', 'Nothing to set: pass key=value pairs or --unset <key>', 'usage');
-    const op: SetProperties = { op: 'set', id, values: parseKeyValues(keyValues), ...(unset.length ? { unset } : {}) };
-    await this.mutate(file, [op], opts);
+    if (!keyValues.length && !unset.length) throw new BpmnError('E_USAGE', 'Nothing to set: pass key=value pairs or --unset <key>', 'usage');
+    const command: SetProperties = { op: 'set', id, values: parseKeyValues(keyValues), ...(unset.length ? { unset } : {}) };
+    await this.mutate(file, [command], opts);
   }
 }

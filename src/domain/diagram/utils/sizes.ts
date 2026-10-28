@@ -1,4 +1,7 @@
 /** The engine's default shape sizes and gaps, shared by both layout engines. */
+import { is, type El } from '../../document/utils/moddle.js';
+import { raw } from './raw.js';
+
 export interface LayoutGaps {
   hGap: number;
   vGap: number;
@@ -28,6 +31,15 @@ export const SIZES = {
   poolGap: 80,
   outerMargin: 80,
 } as const;
+
+export function defaultSizeOf(el: El): { width: number; height: number } {
+  if (is(el, 'bpmn:Event')) return { ...SIZES.event };
+  if (is(el, 'bpmn:Gateway')) return { ...SIZES.gateway };
+  if (is(el, 'bpmn:DataObjectReference')) return { ...SIZES.dataObject };
+  if (is(el, 'bpmn:DataStoreReference')) return { ...SIZES.dataStore };
+  if (is(el, 'bpmn:TextAnnotation')) return annotationSize(raw<string>(el, 'text'));
+  return { ...SIZES.task };
+}
 
 export function annotationSize(text: string | undefined): { width: number; height: number } {
   const len = (text ?? '').length;

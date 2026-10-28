@@ -1,9 +1,9 @@
 import type { Doc } from '../../document/Doc.js';
-import { CliError } from '../../document/CliError.js';
+import { BpmnError } from '../../document/BpmnError.js';
 import { ioError, usageError } from '../../document/utils/errors.js';
-import type { El } from '../../document/utils/moddle.js';
 import { PlatformDetection, type Platform, type PlatformChoice, type PlatformInfo } from '../../document/vendor/PlatformDetection.js';
-import { SEVERITIES, subjectOf, type ProfileFinding, type Severity } from '../../document/utils/finding.js';
+import { SEVERITIES } from '../../document/utils/finding.js';
+import type { ProfileFinding, Severity } from '../../document/Finding.js';
 import type { EngineProfile } from './EngineProfile.js';
 import { RULE_KIT } from './rule-kit.js';
 
@@ -16,12 +16,6 @@ export interface PlatformSummary extends PlatformInfo {
   counts: Record<Severity, number>;
   added?: ProfileFinding[];
   resolved?: ProfileFinding[];
-}
-
-/** Keeps the elements themselves, so a renamed element keeps its findings. */
-export interface ProfileBaseline {
-  report: ProfileReport;
-  elements: Array<El | undefined>;
 }
 
 type EnginePlatform = Exclude<Platform, 'none'>;
@@ -88,7 +82,7 @@ class PlatformProfiles {
     if (info.platform === 'none') return { ...info, findings: [] };
     const rules = this.rules[info.platform];
     if (!rules) {
-      throw new CliError('E_PROFILE_NOT_LOADED', `The ${ENGINE_NAMES[info.platform]} profile rules are not loaded (they load on demand)`, 'usage', {
+      throw new BpmnError('E_PROFILE_NOT_LOADED', `The ${ENGINE_NAMES[info.platform]} profile rules are not loaded (they load on demand)`, 'usage', {
         platform: info.platform,
         hint: `await loadProfile('${info.platform}') (or loadProfiles()) before runProfile / validateDoc(doc, { platform }); applyToXml, validateXml, mutateDoc and checkDoc load them themselves.`,
       });
@@ -102,32 +96,8 @@ class PlatformProfiles {
     return { platform: report.platform, source: report.source, detail: report.detail, ...(report.operaton ? { operaton: true } : {}), counts };
   }
 
-  baseline(doc: Doc, choice: PlatformChoice = 'auto'): ProfileBaseline {
-    const report = this.run(doc, choice);
-    return { report, elements: report.findings.map((finding) => (finding.element ? doc.get(finding.element) : undefined)) };
-  }
-
-  /** Each finding is matched at most once, by code, element identity and subject. */
-  delta(doc: Doc, before: ProfileBaseline, after: ProfileReport): { added: ProfileFinding[]; resolved: ProfileFinding[] } {
-    const left = before.report.findings.map((finding, index) => ({ finding, el: before.elements[index] }));
-    const added: ProfileFinding[] = [];
-    for (const finding of after.findings) {
-      const el = finding.element ? doc.get(finding.element) : undefined;
-      const matchIndex = left.findIndex((candidate) => this.sameFinding(candidate.finding, candidate.el, finding, el));
-      if (matchIndex === -1) added.push(finding);
-      else left.splice(matchIndex, 1);
-    }
-    return { added, resolved: left.map((remaining) => remaining.finding) };
-  }
-
   private isEnginePlatform(platform: string): platform is EnginePlatform {
     return Object.hasOwn(LOADERS, platform);
-  }
-
-  private sameFinding(first: ProfileFinding, aEl: El | undefined, second: ProfileFinding, bEl: El | undefined): boolean {
-    if (first.code !== second.code || subjectOf(first) !== subjectOf(second)) return false;
-    if (aEl && bEl) return aEl === bEl;
-    return first.element === second.element;
   }
 }
 

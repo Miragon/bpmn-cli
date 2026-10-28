@@ -29,8 +29,8 @@ export class PlaceCommand extends FormatCommand {
         return;
       }
       this.checkFlagGroups(options, [['rowOf', 'below', 'above'], ['columnOf', 'after', 'before']], 'place needs a row (--row-of, --below, --above) and/or a column (--column-of, --after, --before), or --side for a boundary event');
-      const op: PlaceShapes = { op: 'place', ...this.selectorsOf(ids, options, true), ...this.pick(options, ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'] as const) };
-      await this.runFormat(file, op, options);
+      const command: PlaceShapes = { op: 'place', ...this.selectorsOf(ids, options, true), ...this.pick(options, ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'] as const) };
+      await this.runFormat(file, command, options);
     });
   }
 }

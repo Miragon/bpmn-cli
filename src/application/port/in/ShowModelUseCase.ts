@@ -1,7 +1,7 @@
 import type { Doc } from '../../../domain/document/Doc.js';
 import type { ExtensionInfo } from '../../../domain/document/ExtensionLister.js';
 import type { El } from '../../../domain/document/utils/moddle.js';
-import type { AroundOptions, AroundView, ElementContext, Implementation } from '../../../domain/views/context.js';
+import type { AroundOptions, AroundView, ElementContext, Implementation } from '../../../domain/views/around-view.js';
 import type { LayoutView } from '../../../domain/views/layout-view.js';
 import type { ElementDetail, ModelView } from '../../../domain/views/model-view.js';
 import type { ShownView, ViewOptions } from '../../../domain/views/ViewRequest.js';

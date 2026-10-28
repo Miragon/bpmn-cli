@@ -1,6 +1,6 @@
-import { is, parseXml, type El } from '../../document/utils/moddle.js';
+import { enclosingProcess, is, parseXml, type El } from '../../document/utils/moddle.js';
 import { PlaneAnalysis, type Add } from './PlaneAnalysis.js';
-import { enclosingProcess, type MetricIndex } from '../utils/harness.js';
+import type { MetricIndex } from '../utils/harness.js';
 import { idOf, raw, rawList } from '../utils/raw.js';
 import { KEYS, perKey, scoreOf, type LayoutMetrics, type LayoutProblem } from '../utils/problems.js';
 

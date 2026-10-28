@@ -3,8 +3,8 @@
  * a host that embeds the library hands its agent exactly what the CLI would print.
  */
 import type { LayoutProblem } from '../../../domain/diagram/utils/problems.js';
-import type { FormatResult } from '../../../domain/diagram/DiagramCommandService.js';
-import type { Warning } from '../../../domain/document/CliError.js';
+import type { DiagramCommandResult } from '../../../domain/diagram/commands/DiagramCommands.js';
+import type { Finding } from '../../../domain/document/Finding.js';
 import type { CheckResult } from '../../../application/port/in/ValidateDocumentUseCase.js';
 import type { ConventionsReport } from '../../../domain/batch/types.js';
 import type { LayoutStatus } from '../../../domain/diagram/types.js';
@@ -19,8 +19,8 @@ import type { ModelView } from '../../../domain/views/model-view.js';
  * is only counted (`bpmn validate` lists it).
  */
 export interface WarningReport {
-  added: Warning[];
-  resolved: Warning[];
+  added: Finding[];
+  resolved: Finding[];
   preexistingCount: number;
 }
 
@@ -52,8 +52,8 @@ export interface MutationReport {
 /** The JSON of `bpmn validate`. */
 export interface ValidationReport {
   ok: boolean;
-  errors: Warning[];
-  warnings: Warning[];
+  errors: Finding[];
+  warnings: Finding[];
   platform?: PlatformSummary;
   /** every finding of each validator that ran; they are among errors / warnings too */
   validators?: ValidatorReport[];
@@ -74,13 +74,13 @@ export interface MutationSummary {
   changed: string[];
   renamed?: Record<string, string>;
   removed: string[];
-  forced?: Warning[];
+  forced?: Finding[];
   /** preexistingCount includes the advisory validators' findings the file already had */
-  warnings: { added: Warning[]; resolvedCount: number; preexistingCount: number };
+  warnings: { added: Finding[]; resolvedCount: number; preexistingCount: number };
   /** the findings validators left out of the comparison, per validator and reason */
   leftOut?: Array<{ validator: string; reason: string; count: number }>;
   /** without a drawing before, only how many problems the result has */
   layout: { status: 'ok' | 'skipped'; mode?: 'full' | 'incremental'; score?: { before?: number; after: number }; added?: LayoutProblem[]; problems?: number };
-  format?: FormatResult[];
+  format?: DiagramCommandResult[];
   conventions?: ConventionsReport;
 }

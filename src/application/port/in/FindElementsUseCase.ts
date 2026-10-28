@@ -8,6 +8,9 @@ import type { FindHit } from '../../../domain/views/model-view.js';
 export interface FindElementsUseCase {
 
   find(command: FindElementsUseCase.Command): FindElementsUseCase.Result;
+
+  /** An unknown or rejected kind fails with the same codes as `add` instead of matching nothing. */
+  assertKind(command: FindElementsUseCase.KindCommand): void;
 }
 
 export declare namespace FindElementsUseCase {
@@ -17,11 +20,13 @@ export declare namespace FindElementsUseCase {
     doc: Doc;
     text: string;
     kind?: string;
-
-    /** an unknown or rejected `kind` fails with the same codes as `add` instead of matching nothing */
-    validateKind?: boolean;
   }
 
   /** The matching elements, in document order. */
   type Result = FindHit[];
+
+  /** The kind a search is restricted to. */
+  interface KindCommand {
+    kind: string;
+  }
 }

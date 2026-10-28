@@ -104,7 +104,7 @@ export interface Item {
 
 export const LAYER = { participant: 0, lane: 1, subProcess: 2, leaf: 3, group: 4, boundary: 5, edge: 6, label: 7, badge: 8 } as const;
 
-export interface Frame {
+export interface RenderFrame {
   plane: string;
   planes: string[];
   notes: string[];

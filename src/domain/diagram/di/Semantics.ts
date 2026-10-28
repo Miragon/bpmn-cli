@@ -1,7 +1,7 @@
 import { is, type El } from '../../document/utils/moddle.js';
 import type { Plane } from './types.js';
 import { SUB_PROCESS_TYPES } from '../utils/expansion.js';
-import { idOf, raw, rawList } from '../utils/raw.js';
+import { idOf, raw, rawList, rawTree } from '../utils/raw.js';
 
 /** The semantic model a drawing is read against: elements by id, lanes, pools, scopes, flows. */
 export class Semantics {
@@ -44,24 +44,9 @@ export class Semantics {
   }
 
   private static indexAll(root: El, byId: Map<string, El>): void {
-    const stack: El[] = [root];
-    const seen = new Set<El>();
-    while (stack.length) {
-      const el = stack.pop()!;
-      if (seen.has(el)) continue;
-      seen.add(el);
-      if (/^(bpmndi|dc|di):/.test(el.$type)) continue;
+    for (const el of rawTree(root, (candidate) => /^(bpmndi|dc|di):/.test(candidate.$type))) {
       const id = idOf(el);
       if (id) byId.set(id, el);
-      const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
-      if (descriptor.isGeneric) continue;
-      for (const property of descriptor.properties ?? []) {
-        if (property.isReference) continue;
-        const value = raw<unknown>(el, property.name);
-        if (Array.isArray(value)) {
-          for (const child of value) if (child && typeof child === 'object' && '$type' in child) stack.push(child as El);
-        } else if (value && typeof value === 'object' && '$type' in value) stack.push(value as El);
-      }
     }
   }
 

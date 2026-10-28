@@ -1,6 +1,6 @@
-import type { Warning } from './CliError.js';
-import { kindLabel, kindOf } from './utils/kinds.js';
-import { idOf, is, nameOf, type El } from './utils/moddle.js';
+import type { Finding } from './Finding.js';
+import { kindOrTypeLabel } from './Kinds.js';
+import { idOf, nameOf, type El } from './utils/moddle.js';
 import { renamedNote } from './utils/renames.js';
 
 export interface Change {
@@ -47,7 +47,7 @@ export class ChangeSet {
 
   static entryOf(el: El, detail?: string): Change {
     const name = nameOf(el);
-    return ChangeSet.about({ id: el.get<string | undefined>('id') ?? '', kind: ChangeSet.kindOf(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
+    return ChangeSet.about({ id: el.get<string | undefined>('id') ?? '', kind: kindOrTypeLabel(el), ...(name ? { name } : {}), ...(detail ? { detail } : {}) }, el);
   }
 
   static flowEntryOf(flow: El, detail?: string): { id: string; kind: string; name?: string; detail: string } {
@@ -63,16 +63,6 @@ export class ChangeSet {
       },
       flow,
     );
-  }
-
-  private static kindOf(el: El): string {
-    if (kindOf(el)) return kindLabel(el);
-    if (is(el, 'bpmn:SequenceFlow')) return 'sequenceFlow';
-    if (is(el, 'bpmn:MessageFlow')) return 'messageFlow';
-    if (is(el, 'bpmn:DataAssociation')) return 'dataAssociation';
-    if (is(el, 'bpmn:Association')) return 'association';
-    const local = el.$type.split(':')[1] ?? el.$type;
-    return local.charAt(0).toLowerCase() + local.slice(1);
   }
 
   /** A rename recorded for `next` also renames the entries an earlier op made for `old`. */
@@ -92,7 +82,7 @@ export class ChangeSet {
   created: Change[] = [];
   changed: Change[] = [];
   removed: Change[] = [];
-  warnings: Warning[] = [];
+  warnings: Finding[] = [];
   notes: string[] = [];
   renames: Rename[] = [];
   bindings: Array<{ alias: string; el: El }> = [];
@@ -116,7 +106,7 @@ export class ChangeSet {
     return this;
   }
 
-  warn(warning: Warning): this {
+  warn(warning: Finding): this {
     this.warnings.push(warning);
     return this;
   }

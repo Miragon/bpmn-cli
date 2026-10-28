@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { definitionsXml, docFromXml } from '../../helpers/helpers.js';
-import { PropertyService } from '../../../src/domain/editing/PropertyService.js';
-import { ElementProperties } from '../../../src/domain/editing/ElementProperties.js';
-import { SET_KEYS } from '../../../src/domain/editing/SetKeyCatalog.js';
-import { EditContext } from '../../../src/domain/document/EditContext.js';
+import { Properties } from '../../../src/domain/editing/properties/Properties.js';
+import { ElementProperties } from '../../../src/domain/views/ElementProperties.js';
+import { SET_KEYS } from '../../../src/domain/editing/properties/SetKeyCatalog.js';
+import { EditSession } from '../../../src/domain/document/EditSession.js';
 
 const PROCESS = definitionsXml(`
     <bpmn:laneSet id="LaneSet_1">
@@ -48,7 +48,7 @@ const SPECIAL_KEY_CASES: Array<{ key: string; elementId: string; value: string; 
 describe('set keys round trip', () => {
   it.each(SPECIAL_KEY_CASES)('set $key=$value on $elementId reads back', async ({ key, elementId, value, readBack }) => {
     const doc = await docFromXml(PROCESS);
-    new PropertyService(doc, new EditContext(doc)).set({ op: 'set', id: elementId, values: { [key]: value } });
+    new Properties(new EditSession(doc)).set({ op: 'set', id: elementId, values: { [key]: value } });
     const shownId = key === 'id' ? value : elementId;
     expect(new ElementProperties(doc).read(doc.require(shownId))).toMatchObject(readBack);
   });

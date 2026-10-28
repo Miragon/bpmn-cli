@@ -11,8 +11,8 @@ export class ColorCommand extends FormatCommand {
     this.withMutationOptions(
       this.withSelectors(this.define(program, 'color').addOption(new Option('--color <color>').makeOptionMandatory())),
     ).action(async (file: string, ids: string[], options: RawOpts) => {
-      const op: ColorElements = { op: 'color', ...this.selectorsOf(ids, options, true), color: options['color'] as ColorElements['color'] };
-      await this.runFormat(file, op, options);
+      const command: ColorElements = { op: 'color', ...this.selectorsOf(ids, options, true), color: options['color'] as ColorElements['color'] };
+      await this.runFormat(file, command, options);
     });
   }
 }

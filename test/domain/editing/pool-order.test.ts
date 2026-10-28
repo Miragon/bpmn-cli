@@ -1,6 +1,6 @@
 /**
  * Pool order (`order <collaborationId> <participantId...>`,
- * src/domain/editing/ElementOrderService.ts and src/domain/diagram/format/LaneBandService.ts orderPoolBands): the participants
+ * src/domain/editing/elements/ElementOrder.ts and src/domain/diagram/commands/BandReordering.ts orderPoolBands): the participants
  * of a collaboration are reordered top to bottom, black-box partner pools
  * included; a kept drawing gets its pool bands restacked with their content
  * and the message flows routed again.
@@ -15,7 +15,7 @@ import { Doc } from '../../../src/domain/document/Doc.js';
 import type { DEdge, DShape } from '../../../src/domain/diagram/di/types.js';
 import { LayoutAnalysis } from '../../../src/domain/diagram/di/LayoutAnalysis.js';
 import { DiagramReader } from '../../../src/domain/diagram/di/DiagramReader.js';
-import { isCliError } from '../../../src/domain/document/utils/errors.js';
+import { isBpmnError } from '../../../src/domain/document/utils/errors.js';
 import type { El } from '../../../src/domain/document/utils/moddle.js';
 import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { mutateDoc } from '../../../src/index.js';
@@ -59,7 +59,7 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
-    if (isCliError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
     throw err;
   }
   throw new Error('expected the mutation to fail');

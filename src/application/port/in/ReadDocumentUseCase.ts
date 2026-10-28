@@ -1,4 +1,5 @@
 import type { Doc } from '../../../domain/document/Doc.js';
+import type { DocumentText } from './DocumentSource.js';
 
 /** Opens a document from its file, from bytes read elsewhere (stdin) or from its XML text. */
 export interface ReadDocumentUseCase {
@@ -12,7 +13,7 @@ export declare namespace ReadDocumentUseCase {
   interface Command {
 
     /** `xml` with the `file` it names (`doc.file`), if any */
-    source: { file: string } | { bytes: Uint8Array; name: string } | { xml: string; file?: string };
+    source: DocumentText;
 
     /**
      * E_IMPORT_LOSSY when bpmn-moddle dropped content, unless `force`

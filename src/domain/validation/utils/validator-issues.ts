@@ -1,20 +1,8 @@
 import { modelError } from '../../document/utils/errors.js';
-import type { Warning } from '../../document/CliError.js';
+import type { Finding } from '../../document/Finding.js';
 import type { ValidationResult } from '../StructuralValidator.js';
 import type { ValidatorIssue, ValidatorReport, ValidatorRun } from '../validators.js';
-
-/** Not enumerable, so never serialised. */
-export const ISSUE_KEY: unique symbol = Symbol('validator-issue-key');
-export const LEFT_OUT: unique symbol = Symbol('validator-issue-left-out');
-export type KeyedIssue = ValidatorIssue & { [ISSUE_KEY]?: string; [LEFT_OUT]?: string };
-
-export function keyOf(issue: ValidatorIssue): string | undefined {
-  return (issue as KeyedIssue)[ISSUE_KEY];
-}
-
-export function leftOutOf(issue: ValidatorIssue): string | undefined {
-  return (issue as KeyedIssue)[LEFT_OUT];
-}
+import { coveredLint, lintKey } from './finding-coverage.js';
 
 export function counts(issues: ValidatorIssue[]): { errors: number; warnings: number } {
   const errors = issues.filter((issue) => issue.severity === 'error').length;
@@ -22,18 +10,8 @@ export function counts(issues: ValidatorIssue[]): { errors: number; warnings: nu
 }
 
 /** An error the document already had does not block the write. */
-export function preexisting<TFinding extends Warning>(finding: TFinding): TFinding {
+export function preexisting<TFinding extends Finding>(finding: TFinding): TFinding {
   return { ...finding, code: 'W_PREEXISTING_ERROR', message: `${finding.code}: ${finding.message} (already in the model before this change)` };
-}
-
-/** The lintKey of the lint warning the issue says again about the same element. */
-export function coveredLint(run: Pick<ValidatorRun, 'covers'>, issue: ValidatorIssue): string | undefined {
-  const lint = run.covers?.[issue.code];
-  return lint && issue.element ? `${lint}|${issue.element}` : undefined;
-}
-
-export function lintKey(warning: Warning): string {
-  return `${warning.code}|${warning.element ?? ''}`;
 }
 
 export function validatorRefusal(errors: ValidatorIssue[]) {
@@ -55,7 +33,7 @@ export function withValidatorReports(result: ValidationResult, reports: Validato
     const write = reports[index]?.leftOut !== undefined;
     for (const issue of run.issues) {
       const key = coveredLint(run, issue);
-      if (!key || (write && leftOutOf(issue) !== undefined)) continue;
+      if (!key || (write && issue.leftOut !== undefined)) continue;
       covering.set(key, [...(covering.get(key) ?? []), issue]);
     }
   });

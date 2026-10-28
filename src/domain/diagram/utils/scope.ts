@@ -1,6 +1,5 @@
 import type { Box, GArtifact, GNode, LinkEnd, ScopeLayout } from '../di/types.js';
-import { toSegments, type Segment } from './geometry.js';
-import { translate, translateEdge, translatePoints } from './geom.js';
+import { toSegments, translate, translateEdge, translatePoints, type Segment } from './geom.js';
 
 /** data objects and notes of boundary events are placed before routing */
 export function routedArtifacts(layout: ScopeLayout): GArtifact[] {

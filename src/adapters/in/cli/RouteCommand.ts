@@ -13,8 +13,8 @@ export class RouteCommand extends FormatCommand {
         .option('--exit <side>')
         .option('--entry <side>'),
     ).action((file: string, flowId: string, options: RawOpts) => {
-      const op: RerouteFlow = { op: 'route', id: flowId, ...(this.pick(options, ['exit', 'entry'] as const) as Pick<RerouteFlow, 'exit' | 'entry'>) };
-      return this.runFormat(file, op, options);
+      const command: RerouteFlow = { op: 'route', id: flowId, ...(this.pick(options, ['exit', 'entry'] as const) as Pick<RerouteFlow, 'exit' | 'entry'>) };
+      return this.runFormat(file, command, options);
     });
   }
 }

@@ -116,9 +116,9 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(JSON.stringify(there.result)).toBe(JSON.stringify((await core.applyToXml(xml, splice, { keepFlowIds: true })).result));
   });
 
-  it('redraws with both engines (bpmn-auto-layout loaded on demand) and formats', async () => {
+  it('redraws and formats', async () => {
     const xml = fixture('orders.bpmn');
-    for (const opts of [{ engine: 'clean' as const }, { engine: 'auto' as const }, { tidy: true }]) {
+    for (const opts of [{}, { tidy: true }]) {
       const there = await browser.layoutXml(xml, opts);
       expect(there.xml, JSON.stringify(opts)).toBe((await core.layoutXml(xml, opts)).xml);
     }
@@ -225,7 +225,7 @@ describe('the browser bundle in a context without Node globals', () => {
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(here.xml, { validators: [await validator(core)] })));
   });
 
-  it('refuses like Node: CliError codes cross the realm boundary', async () => {
+  it('refuses like Node: BpmnError codes cross the realm boundary', async () => {
     await expect(browser.applyToXml(fixture('orders.bpmn'), [{ op: 'add', kind: 'userTask', after: 'Nope' }])).rejects.toMatchObject({ code: 'E_NOT_FOUND', name: 'CliError' });
     await expect(browser.applyToXml('<not-bpmn/>', [{ op: 'tidy' }])).rejects.toMatchObject({ code: 'E_PARSE' });
   });

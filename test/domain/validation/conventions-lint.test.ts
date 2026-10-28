@@ -4,11 +4,11 @@
  * bpmnlint and @miragon/bpmnlint-plugin-rules (the ones the node layer
  * loads), in a new file and in files of other styles; and
  * idConventionsFromLint reads the rule's options as the rule does
- * (src/domain/document/ids/IdConventionsReader.ts).
+ * (src/adapters/out/bpmnlint/IdConventionsReader.ts).
  */
 import { BpmnModdle } from 'bpmn-moddle';
 import { describe, expect, it } from 'vitest';
-import type { BpmnlintRuleSetting } from '../../../src/domain/validation/bpmnlint-validator.js';
+import type { BpmnlintRuleSetting } from '../../../src/domain/document/ids/bpmnlint-rule-setting.js';
 import { idConventionsFromLint, ID_NAMING_RULE, type IdConventions } from '../../../src/index.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { bpmnlintEngine } from '../../../src/node.js';

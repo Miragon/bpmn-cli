@@ -1,8 +1,8 @@
-import { KINDS } from '../utils/kinds.js';
+import { KINDS } from '../Kinds.js';
 import { isUsablePrefix } from '../utils/slug.js';
 import { PREFIXED, prefixClass } from '../utils/id-words.js';
 import { kindTypeNames } from '../utils/requests.js';
-import type { IdConventions } from './IdConventionsReader.js';
+import type { IdConventions } from './IdConventions.js';
 import type { Body, IdState } from './IdStyle.js';
 
 /** The declared prefixes as votes on the shape of a prefix nothing declares. */

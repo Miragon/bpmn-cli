@@ -1,7 +1,6 @@
 import type { ModelView, ViewLane, ViewNode } from '../../../domain/views/model-view.js';
-import { truncate } from '../../../domain/views/utils/view.js';
 import { renderProblems } from './utils/result-lines.js';
-import { annotationLine, DOC_MAX, flagValue, flowText, INDENT, messageFlowLine, quote, scalar, vendorFlags } from './utils/view-lines.js';
+import { annotationLine, elementFlags, elementLine, flagValue, flowText, INDENT, messageFlowLine, quote, vendorFlags } from './utils/view-lines.js';
 
 /**
  * The model view as text, the default output of `show`: one line per node with its flows inline
@@ -85,24 +84,8 @@ export class ModelViewText {
   }
 
   private static nodeLine(node: ViewNode): string {
-    const parts = [node.kind, node.id];
-    if (node.name) parts.push(quote(node.name));
-    const flags = ModelViewText.nodeFlags(node);
-    if (flags.length) parts.push(`[${flags.join(', ')}]`);
-    let line = parts.join(' ');
+    let line = elementLine(node, elementFlags(node, { vendor: vendorFlags(node) }));
     if (node.outgoing.length) line += ` -> ${node.outgoing.map(flowText).join(', ')}`;
     return node.unreachable ? `! unreachable: ${line}` : line;
-  }
-
-  private static nodeFlags(node: ViewNode): string[] {
-    const flags: string[] = [];
-    if (node.lane) flags.push(`lane=${node.lane}`);
-    if (node.trigger) flags.push(node.trigger);
-    if (node.nonInterrupting) flags.push('non-interrupting');
-    if (node.expanded !== undefined) flags.push(node.expanded ? 'expanded' : 'collapsed');
-    for (const [key, value] of Object.entries(node.props ?? {})) flags.push(`${key}=${scalar(value)}`);
-    flags.push(...vendorFlags(node));
-    if (node.documentation) flags.push(`doc: ${quote(truncate(node.documentation, DOC_MAX))}`);
-    return flags;
   }
 }

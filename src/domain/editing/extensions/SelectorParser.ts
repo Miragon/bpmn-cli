@@ -1,6 +1,6 @@
 import { modelError } from '../../document/utils/errors.js';
 import type { El } from '../../document/utils/moddle.js';
-import type { NestedHosts } from '../NestedHosts.js';
+import type { NestedHosts } from '../properties/NestedHosts.js';
 
 export interface Step {
   name: string;

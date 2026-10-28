@@ -6,7 +6,7 @@
  * bytes twice; labels are laid out like bpmn-js; a rasteriser failure is
  * E_RENDER, never a process abort. The agent features (crops, halos,
  * numbered problems, tiles, `--render`) are tested in
- * test/domain/views/render-agent.test.ts. Synthetic models only.
+ * test/domain/views/render/render-agent.test.ts. Synthetic models only.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIN_LABEL_SCALE, RENDER_MAX_SIZE, renderSvg } from '../../src/index.js';
 import { innerLines, wrapLines } from '../../src/domain/diagram/utils/text.js';
-import { CliError } from '../../src/domain/document/CliError.js';
+import { BpmnError } from '../../src/domain/document/BpmnError.js';
 import { renderPng } from '../../src/node.js';
 import { PngRenderer } from '../../src/adapters/out/files/PngRenderer.js';
 // @ts-expect-error plain ESM tooling without type declarations
@@ -139,9 +139,9 @@ describe('the PNG rasteriser', () => {
         () => undefined,
         (error: unknown) => error,
       );
-      expect(err, svg.slice(0, 20)).toBeInstanceOf(CliError);
-      expect((err as CliError).code).toBe('E_RENDER');
-      expect((err as CliError).exitCode).toBe(4);
+      expect(err, svg.slice(0, 20)).toBeInstanceOf(BpmnError);
+      expect((err as BpmnError).code).toBe('E_RENDER');
+      expect((err as BpmnError).exitCode).toBe(4);
     }
     const after = await new PngRenderer().rasterize('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>');
     expect(pngSize(after.png)).toEqual({ width: 10, height: 10 });
@@ -152,7 +152,7 @@ describe('renderSvg', () => {
   it('lays out external labels like bpmn-js 18: label bounds, max(90, their width) in 11 px then the widest line, 13.2 px lines', async () => {
     const { svg } = await renderSvg(LABELS);
     // the start event: centred on its label bounds (x 73, width 90), top at y 143, first baseline 3/4 line lower
-    // (more cases of the two passes: test/domain/views/render-fixes.test.ts)
+    // (more cases of the two passes: test/domain/views/render/render-fixes.test.ts)
     const expected = ['A rather long', 'start event name', 'that wraps'];
     const start = labelOf(svg, 'Event_Start');
     expect(start.map((line) => line.text)).toEqual(expected);
