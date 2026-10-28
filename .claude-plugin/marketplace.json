@@ -8,7 +8,12 @@
   "plugins": [
     {
       "name": "bpmn-cli",
-      "source": "./plugins/bpmn-cli",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/Miragon/bpmn-cli.git",
+        "path": "plugins/bpmn-cli",
+        "ref": "release"
+      },
       "description": "A skill that creates, reads, changes, formats and validates BPMN 2.0 models (.bpmn) with @miragon/bpmn-cli: semantic edits by id, the drawing kept, Camunda 7 and Camunda 8 details, no XML by hand.",
       "category": "development",
       "tags": ["bpmn", "process-modeling", "camunda", "camunda-7", "camunda-8", "workflow"]

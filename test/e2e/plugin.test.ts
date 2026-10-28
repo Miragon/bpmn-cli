@@ -148,12 +148,13 @@ describe('plugin metadata', () => {
     expect(manifest.repository).toBe('https://github.com/Miragon/bpmn-cli');
   });
 
-  it('the marketplace lists the plugin under its own name, from its directory', () => {
+  it('the marketplace lists the plugin under its own name, from its directory on the release branch', () => {
     expect(market.name).toBe('miragon-bpmn');
     expect(market.owner.name).toBe('Miragon GmbH');
     expect(market.plugins).toHaveLength(1);
     expect(market.plugins[0].name).toBe(manifest.name);
-    expect(market.plugins[0].source).toBe('./plugins/bpmn-cli');
+    expect(market.plugins[0].source).toEqual({ source: 'git-subdir', url: 'https://github.com/Miragon/bpmn-cli.git', path: 'plugins/bpmn-cli', ref: 'release' });
+    expect(existsSync(join(ROOT, market.plugins[0].source.path, '.claude-plugin', 'plugin.json'))).toBe(true);
     // the version lives in plugin.json only (two versions make `claude plugin validate` warn)
     expect(market.plugins[0].version).toBeUndefined();
   });
