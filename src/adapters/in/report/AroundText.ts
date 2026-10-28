@@ -1,6 +1,5 @@
-import type { AroundNode, AroundScope, AroundView } from '../../../domain/views/context.js';
-import { truncate } from '../../../domain/views/utils/view.js';
-import { annotationLine, DOC_MAX, flowText, implementationFlags, INDENT, messageFlowLine, named, quote, scalar } from './utils/view-lines.js';
+import type { AroundNode, AroundScope, AroundView } from '../../../domain/views/around-view.js';
+import { annotationLine, elementFlags, elementLine, flowText, flowTraits, implementationFlags, INDENT, messageFlowLine, named } from './utils/view-lines.js';
 
 /**
  * `bpmn show <file> --around <id>`: a header with what is shown and left out, then the window's
@@ -28,12 +27,8 @@ export class AroundText {
     for (const node of view.nodes) {
       this.heading(node.scope);
       const hostShown = !!node.host && shownIds.has(node.host);
-      const parts = [node.kind, node.id];
-      if (node.name) parts.push(quote(node.name));
-      const flags = AroundText.flags(node, hostShown);
-      if (flags.length) parts.push(`[${flags.join(', ')}]`);
-      let line = parts.join(' ');
-      if (node.from?.length) line += ` <- ${node.from.map((flow) => `${flow.source} (${flow.id}${flow.name ? ` ${quote(flow.name)}` : ''})`).join(', ')}`;
+      let line = elementLine(node, AroundText.flags(node, hostShown));
+      if (node.from?.length) line += ` <- ${node.from.map((flow) => `${flow.source} (${[flow.id, ...flowTraits(flow)].join(' ')})`).join(', ')}`;
       if (node.outgoing.length) line += ` -> ${node.outgoing.map(flowText).join(', ')}`;
       out.push(INDENT.repeat(this.level(node.scope) + 1 + (hostShown ? 1 : 0)) + line);
     }
@@ -69,16 +64,10 @@ export class AroundText {
   }
 
   private static flags(node: AroundNode, hostShown: boolean): string[] {
-    const flags: string[] = [];
-    if (node.host && !hostShown) flags.push(`on ${node.host}`);
-    if (node.lane) flags.push(`lane=${node.lane}`);
-    if (node.trigger) flags.push(node.trigger);
-    if (node.nonInterrupting) flags.push('non-interrupting');
-    if (node.expanded !== undefined) flags.push(node.expanded ? 'expanded' : 'collapsed');
-    if (node.content) flags.push(`content: ${node.content} node${node.content === 1 ? '' : 's'}`);
-    for (const [key, value] of Object.entries(node.props ?? {})) flags.push(`${key}=${scalar(value)}`);
-    flags.push(...implementationFlags(node.impl));
-    if (node.documentation) flags.push(`doc: ${quote(truncate(node.documentation, DOC_MAX))}`);
-    return flags;
+    return elementFlags(node, {
+      leading: node.host && !hostShown ? [`on ${node.host}`] : [],
+      afterState: node.content ? [`content: ${node.content} node${node.content === 1 ? '' : 's'}`] : [],
+      vendor: implementationFlags(node.impl),
+    });
   }
 }

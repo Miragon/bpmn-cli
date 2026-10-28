@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { Command as CommandType } from 'commander';
 import { ShownText } from '../report/ShownText.js';
-import { renderConventions } from '../../../domain/document/utils/conventions-text.js';
+import { renderConventions } from '../report/utils/conventions-text.js';
 import type { ViewOptions } from '../../../domain/views/ViewRequest.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';

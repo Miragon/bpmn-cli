@@ -1,17 +1,16 @@
 /**
  * The in-memory API: strings in, strings and data out. Each function runs the same code as the
  * CLI command it names, without files or environment, so it runs in Node and in the browser.
- * Errors are CliError instances, exactly what the CLI prints with --json.
+ * Errors are BpmnError instances, exactly what the CLI prints with --json.
  */
 import type { DebugSink } from './domain/diagram/layout/LayoutDebug.js';
 import type { LayoutMetrics } from './domain/diagram/utils/problems.js';
 import type { LayoutView } from './domain/views/layout-view.js';
-import type { AroundView, ElementContext } from './domain/views/context.js';
+import type { AroundView, ElementContext } from './domain/views/around-view.js';
 import type { ConventionsView, ConventionsXmlOptions } from './domain/document/ids/ConventionsTable.js';
 export type { ConventionsXmlOptions } from './domain/document/ids/ConventionsTable.js';
-import type { IdConventions } from './domain/document/ids/IdConventionsReader.js';
+import type { IdConventions } from './domain/document/ids/IdConventions.js';
 import type { Doc, NewDocOptions } from './domain/document/Doc.js';
-import type { LayoutEngine } from './domain/diagram/layout/FullLayout.js';
 import type { ExtensionInfo } from './domain/document/ExtensionLister.js';
 import type { EditCommand } from './domain/commands/types.js';
 import type { MutationOptions, MutationResult } from './domain/batch/types.js';
@@ -51,8 +50,6 @@ export type { ShownView, ViewOptions } from './domain/views/ViewRequest.js';
 export interface EditOptions {
   /** 'auto' (default): keep a hand-made drawing, redraw an engine-owned one; false: no layout */
   layout?: boolean | LayoutMode;
-  /** layout engine of full redraws: 'clean' (default) or 'auto' (bpmn-auto-layout) */
-  engine?: LayoutEngine;
   /** write despite a lossy import, new validation errors or content a retype would delete */
   force?: boolean;
   /** platform profile whose new findings are reported: 'auto' (default), 'c7', 'c8', 'none' */
@@ -104,7 +101,7 @@ function parseXml(xml: string, file?: string): Promise<Doc> {
 export async function applyToXml(xml: string, ops: unknown, opts: EditOptions = {}): Promise<EditResult> {
   const list = readOps(ops);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await new EditDocumentService(NO_PROJECT, NO_FILES, NO_FILES).edit({ ...opts, source: { doc }, commands: list, dryRun: true }));
+  return toEditResult(xml, await new EditDocumentService(NO_PROJECT, NO_FILES).edit({ ...opts, source: { doc }, commands: list, dryRun: true }));
 }
 
 /** `bpmn new`: a laid-out document with one empty process. */
@@ -123,7 +120,7 @@ export interface LayoutXmlOptions extends Omit<EditOptions, 'layout'> {
 export async function layoutXml(xml: string, opts: LayoutXmlOptions = {}): Promise<EditResult> {
   RelayoutDiagramService.assertOptions(opts);
   const doc = await loadXml(xml, opts);
-  return toEditResult(xml, await new RelayoutDiagramService(NO_PROJECT, NO_FILES, NO_FILES).relayout({ ...opts, source: { doc }, dryRun: true }));
+  return toEditResult(xml, await new RelayoutDiagramService(NO_PROJECT, NO_FILES).relayout({ ...opts, source: { doc }, dryRun: true }));
 }
 
 export interface ValidateXmlOptions {
@@ -171,7 +168,9 @@ export async function metricsXml(xml: string): Promise<Pick<LayoutMetrics, 'scor
 
 /** `bpmn find --json`: elements whose id, name or vendor value contains `text` (any case). */
 export async function findXml(xml: string, text: string, opts: { kind?: string } = {}): Promise<FindHit[]> {
-  return new FindElementsService().find({ doc: await parseXml(xml), text, ...(opts.kind !== undefined ? { kind: opts.kind, validateKind: true } : {}) });
+  const findElements = new FindElementsService();
+  if (opts.kind !== undefined) findElements.assertKind({ kind: opts.kind });
+  return findElements.find({ doc: await parseXml(xml), text, ...(opts.kind !== undefined ? { kind: opts.kind } : {}) });
 }
 
 /** `bpmn ext list --json`: the extension elements of an element and its definitions. */
@@ -182,17 +181,17 @@ export async function extensionsXml(xml: string, id: string): Promise<ExtensionI
 
 /** Sets or, without an argument, clears the process-wide sink of layout diagnostics. */
 export function setLayoutDebug(sink?: DebugSink): void {
-  new RelayoutDiagramService(NO_PROJECT, NO_FILES, NO_FILES).setDebugSink(sink !== undefined ? { sink } : {});
+  new RelayoutDiagramService(NO_PROJECT, NO_FILES).setDebugSink(sink !== undefined ? { sink } : {});
 }
 
 /** Applies ops to an in-memory document in one batch. */
 export function mutateDoc(doc: Doc, ops: EditCommand[], opts: MutationOptions = {}): Promise<MutationResult> {
-  return new EditDocumentService(NO_PROJECT, NO_FILES, NO_FILES).edit({ ...opts, source: { doc }, commands: ops, dryRun: true });
+  return new EditDocumentService(NO_PROJECT, NO_FILES).edit({ ...opts, source: { doc }, commands: ops, dryRun: true });
 }
 
 /** `bpmn layout` on an in-memory document. */
 export function layoutDoc(doc: Doc, opts: LayoutDocOptions = {}): Promise<MutationResult> {
-  return new RelayoutDiagramService(NO_PROJECT, NO_FILES, NO_FILES).relayout({ ...opts, source: { doc }, dryRun: true });
+  return new RelayoutDiagramService(NO_PROJECT, NO_FILES).relayout({ ...opts, source: { doc }, dryRun: true });
 }
 
 /** What `bpmn validate` finds in a document. */

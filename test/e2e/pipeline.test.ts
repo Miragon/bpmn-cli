@@ -19,7 +19,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { applyToXml, layoutXml, validateXml, type CliError, type ValidatorContext, type ValidatorFinding } from '../../src/index.js';
+import { applyToXml, layoutXml, validateXml, type BpmnError, type ValidatorContext, type ValidatorFinding } from '../../src/index.js';
 import { checkFile, mutateFile } from '../../src/node.js';
 
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -43,11 +43,11 @@ const semantic = (xml: string): string => xml.split('<bpmndi:BPMNDiagram')[0]!;
 /** The start tags of every DI element, in order. */
 const diTags = (xml: string): string[] => [...xml.matchAll(/<bpmndi:(?:BPMNShape|BPMNEdge|BPMNPlane|BPMNDiagram) [^>]*>/g)].map((match) => match[0]);
 
-async function rejected(promise: Promise<unknown>): Promise<CliError> {
+async function rejected(promise: Promise<unknown>): Promise<BpmnError> {
   try {
     await promise;
   } catch (err) {
-    return err as CliError;
+    return err as BpmnError;
   }
   throw new Error('expected a rejection');
 }

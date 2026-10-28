@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { join, sep } from 'node:path';
-import type { BpmnlintResolver } from '../../../domain/validation/bpmnlint-validator.js';
+import type { BpmnlintResolver } from '../bpmnlint/bpmnlint-contract.js';
 import type { BpmnlintLibs } from './BpmnlintLibs.js';
 import type { Repo } from './RepoTrust.js';
 import { lazy, SHIPPED, SKIP_HINT, versionOf, type Require } from './utils/bpmnlint.js';

@@ -3,17 +3,17 @@ import type { BpmnModdle } from 'bpmn-moddle';
 import { modelError, ioError, usageError } from './utils/errors.js';
 import { hasIdWords, isValidId } from './utils/slug.js';
 import { IdRegistry } from './ids/IdRegistry.js';
-import type { IdConventions } from './ids/IdConventionsReader.js';
+import type { IdConventions } from './ids/IdConventions.js';
 import { IdStyle } from './ids/IdStyle.js';
 import { typeRequest } from './utils/requests.js';
 import { speakingStem } from './utils/id-words.js';
-import type { BatchContext } from './EditContext.js';
+import type { BatchContext } from './EditSession.js';
 import { LayoutRequests } from './LayoutRequests.js';
-import { kindLabel } from './utils/kinds.js';
+import { kindLabel } from './Kinds.js';
 import { IdSuggestions } from './IdSuggestions.js';
 import { completeMirrorLists, takeMirrorSnapshot, type MirrorSnapshot } from './utils/mirror.js';
 import { allLanes } from './utils/lanes.js';
-import { createDefinitions, createModdle, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
+import { createDefinitions, createModdle, enclosingProcess, indexById, is, isBpmnElement, many, parseXml, processes as rootProcesses, collaboration as rootCollaboration, layoutRoot as pickLayoutRoot, serialize, walk, type El, type Model } from './utils/moddle.js';
 import { ModelError } from './ModelError.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from './vendor/CamundaDescriptor.js';
 import { C8_PLATFORM_VERSION } from './vendor/ZeebeDescriptor.js';
@@ -381,9 +381,7 @@ export class Doc {
   }
 
   processOf(el: El): El | undefined {
-    let ancestor: El | undefined = is(el, 'bpmn:Process') ? el : (el.$parent as El | undefined);
-    while (ancestor && !is(ancestor, 'bpmn:Process')) ancestor = ancestor.$parent as El | undefined;
-    return ancestor;
+    return enclosingProcess(el);
   }
 
   defaultScope(): El {

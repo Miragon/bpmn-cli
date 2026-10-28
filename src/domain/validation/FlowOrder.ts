@@ -1,5 +1,5 @@
 import type { Doc } from '../document/Doc.js';
-import { isEventSubProcess, isLinkCatch, isLinkThrow } from '../document/utils/kinds.js';
+import { isEventSubProcess, isLinkCatch, isLinkThrow } from '../document/Kinds.js';
 import { is, type El, peek } from '../document/utils/moddle.js';
 import { linkNameOf } from './utils/flow-nodes.js';
 

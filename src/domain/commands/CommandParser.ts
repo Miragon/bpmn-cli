@@ -1,12 +1,12 @@
 import { usageError } from '../document/utils/errors.js';
-import { CliError } from '../document/CliError.js';
+import { BpmnError } from '../document/BpmnError.js';
 import { closestKey } from '../document/utils/fuzzy.js';
 import { CommandFieldCheck } from './CommandFieldCheck.js';
 import { EditCommandDefinitions } from './definitions/EditCommandDefinitions.js';
-import { OpAliases } from './OpAliases.js';
+import { CommandAliases } from './CommandAliases.js';
 import { ALIAS, unknownAlias } from './utils/aliases.js';
 import { commandUsageError, type CommandLocation } from './utils/command-location.js';
-import { OP_NAMES } from './utils/op-names.js';
+import { COMMAND_NAMES } from './utils/command-names.js';
 import { parseSpaceAmount } from './utils/space-amount.js';
 import type { FieldSpec, SplitNode } from './utils/field-specs.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from './utils/op-fields.js';
@@ -20,7 +20,7 @@ const ID_LIKE = new Set(['flowId', 'flow', 'elementId', 'element', 'nodeId', 'no
  * library. Every problem is a usage error naming `ops[<index>] (<op>)`.
  */
 export class CommandParser {
-  private fail(ctx: CommandLocation, message: string, hint?: string, candidates?: string[]): CliError {
+  private fail(ctx: CommandLocation, message: string, hint?: string, candidates?: string[]): BpmnError {
     return commandUsageError(ctx, message, hint, candidates);
   }
 
@@ -193,7 +193,7 @@ export class CommandParser {
     });
   }
 
-  private checkOp(ctx: CommandLocation, name: EditCommand['op'], raw: Record<string, unknown>): EditCommand {
+  private checkCommand(ctx: CommandLocation, name: EditCommand['op'], raw: Record<string, unknown>): EditCommand {
     const definition = EditCommandDefinitions.of(name);
     const out = this.checkFields(ctx, raw, definition.fields);
     definition.check(new CommandFieldCheck(ctx, out));
@@ -204,12 +204,12 @@ export class CommandParser {
     const base: CommandLocation = { index, path: `ops[${index}]` };
     if (!this.isPlainObject(raw)) throw this.fail(base, `expected an op object, got ${this.describe(raw)}`, 'Every entry looks like {"op": "add", ...}.');
     const name = raw['op'];
-    if (name === undefined) throw this.fail(base, `missing "op"; one of: ${OP_NAMES.join(', ')}`);
-    if (typeof name !== 'string' || !(OP_NAMES as string[]).includes(name)) {
-      const alt = typeof name === 'string' ? closestKey(name, OP_NAMES) : undefined;
-      throw this.fail(base, `unknown op ${JSON.stringify(name)}${alt ? ` (did you mean "${alt}"?)` : ''}; one of: ${OP_NAMES.join(', ')}`, undefined, alt ? [alt] : []);
+    if (name === undefined) throw this.fail(base, `missing "op"; one of: ${COMMAND_NAMES.join(', ')}`);
+    if (typeof name !== 'string' || !(COMMAND_NAMES as string[]).includes(name)) {
+      const alt = typeof name === 'string' ? closestKey(name, COMMAND_NAMES) : undefined;
+      throw this.fail(base, `unknown op ${JSON.stringify(name)}${alt ? ` (did you mean "${alt}"?)` : ''}; one of: ${COMMAND_NAMES.join(', ')}`, undefined, alt ? [alt] : []);
     }
-    return this.checkOp({ index, path: `ops[${index}] (${name})` }, name as EditCommand['op'], raw);
+    return this.checkCommand({ index, path: `ops[${index}] (${name})` }, name as EditCommand['op'], raw);
   }
 
   /** Validates the ops JSON (an array or `{ ops: [...] }`) and returns typed ops. */
@@ -237,28 +237,28 @@ export class CommandParser {
   }
 
   /** Before anything runs: every alias defined once and used only after the op defining it. */
-  private checkAliases(ops: readonly EditCommand[]): void {
+  private checkAliases(commands: readonly EditCommand[]): void {
     const defined = new Map<string, number>();
     const all = new Map<string, number>();
-    ops.forEach((op, opIndex) => {
-      for (const alias of new OpAliases(op).defined()) if (!all.has(alias)) all.set(alias, opIndex);
+    commands.forEach((command, commandIndex) => {
+      for (const alias of new CommandAliases(command).defined()) if (!all.has(alias)) all.set(alias, commandIndex);
     });
-    ops.forEach((op, opIndex) => {
-      const raw = op as unknown as Record<string, unknown>;
-      for (const [key, aliasKey] of Object.entries(EditCommandDefinitions.of(op.op).aliasKeyOfNewId)) {
+    commands.forEach((command, commandIndex) => {
+      const raw = command as unknown as Record<string, unknown>;
+      for (const [key, aliasKey] of Object.entries(EditCommandDefinitions.of(command.op).aliasKeyOfNewId)) {
         if (typeof raw[key] === 'string' && (raw[key] as string).startsWith('$')) {
-          throw usageError(`ops[${opIndex}] (${op.op}): "${key}" is the id of the new element, not an alias; give the alias with "${aliasKey}": "${raw[key]}"`, { op: opIndex });
+          throw usageError(`ops[${commandIndex}] (${command.op}): "${key}" is the id of the new element, not an alias; give the alias with "${aliasKey}": "${raw[key]}"`, { op: commandIndex });
         }
       }
-      for (const { key, alias } of new OpAliases(op).references()) {
-        if (!defined.has(alias)) throw unknownAlias(opIndex, op, key, alias, defined, all.get(alias));
+      for (const { key, alias } of new CommandAliases(command).references()) {
+        if (!defined.has(alias)) throw unknownAlias(commandIndex, command, key, alias, defined, all.get(alias));
       }
-      for (const alias of new OpAliases(op).defined()) {
-        if (!ALIAS.test(alias)) throw usageError(`ops[${opIndex}] (${op.op}): alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op: opIndex, hint: 'Example: "as": "$check", then "after": "$check".' });
+      for (const alias of new CommandAliases(command).defined()) {
+        if (!ALIAS.test(alias)) throw usageError(`ops[${commandIndex}] (${command.op}): alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op: commandIndex, hint: 'Example: "as": "$check", then "after": "$check".' });
         if (defined.has(alias)) {
-          throw new CliError('E_DUPLICATE_ALIAS', `ops[${opIndex}] (${op.op}): alias ${alias} is already defined by ops[${defined.get(alias)}]`, 'usage', { op: opIndex, hint: 'Every alias names one element of the batch: pick another name.' });
+          throw new BpmnError('E_DUPLICATE_ALIAS', `ops[${commandIndex}] (${command.op}): alias ${alias} is already defined by ops[${defined.get(alias)}]`, 'usage', { op: commandIndex, hint: 'Every alias names one element of the batch: pick another name.' });
         }
-        defined.set(alias, opIndex);
+        defined.set(alias, commandIndex);
       }
     });
   }

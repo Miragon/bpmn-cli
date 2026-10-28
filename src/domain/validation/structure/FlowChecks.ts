@@ -1,6 +1,6 @@
 import type { Doc } from '../../document/Doc.js';
-import { isCliError } from '../../document/utils/errors.js';
-import { triggerOf } from '../../document/utils/kinds.js';
+import { isBpmnError } from '../../document/utils/errors.js';
+import { triggerOf } from '../../document/Kinds.js';
 import { is, type El, peek, list, shownId } from '../../document/utils/moddle.js';
 import { FlowRules } from '../../document/FlowRules.js';
 import type { StructureFindings } from './StructureFindings.js';
@@ -22,7 +22,7 @@ export class FlowChecks {
     try {
       new FlowRules(this.doc).assertEndpoints(source, target);
     } catch (err) {
-      if (!isCliError(err)) throw err;
+      if (!isBpmnError(err)) throw err;
       this.findings.error(err.code, err.message, shownId(flow), { related: [shownId(source), shownId(target)], hint: err.details.hint });
       return;
     }

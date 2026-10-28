@@ -8,7 +8,7 @@ import { EditCommandDefinition } from './EditCommandDefinition.js';
 export class AlignShapesDefinition extends EditCommandDefinition<AlignShapes> {
   readonly name = 'align' as const;
   readonly description = 'Diagram only: put shapes on one row or one column (= `bpmn align`).';
-  override readonly diagramOnly = true;
+  override readonly diagramCommand = true;
   readonly fields: FieldsOf<AlignShapes> = {
     ids: list('Shapes to align (each moves on its own).', { minItems: 1 }),
     ...SELECTOR_FIELDS,

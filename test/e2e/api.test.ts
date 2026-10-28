@@ -129,10 +129,10 @@ describe('applyToXml = bpmn apply', () => {
     expect(renderMutation(mutationReport(direct))).toBe(renderMutation(api.result));
   });
 
-  it('takes the layout, engine and show flags like the CLI', async () => {
+  it('takes the layout and show flags like the CLI', async () => {
     const cases: Array<[string[], Parameters<typeof applyToXml>[2]]> = [
       [['--no-layout', '--show'], { layout: false, show: true }],
-      [['--layout', 'full', '--engine', 'auto'], { layout: 'full', engine: 'auto' }],
+      [['--layout', 'full'], { layout: 'full' }],
       [['--relayout'], { layout: 'full' }],
       [['--layout', 'incremental'], { layout: 'incremental' }],
     ];

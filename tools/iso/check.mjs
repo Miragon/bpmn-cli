@@ -32,7 +32,7 @@
  * like a host's bundler would: the initial chunks (the entry chunk and what
  * it imports statically), and what is loaded on demand (the Camunda 7 /
  * Camunda 8 rules, the first time a document of that platform is
- * validated; bpmn-auto-layout, only for engine 'auto'). `--table` prints the
+ * validated). `--table` prints the
  * "Browser bundles" table of docs/library.md instead, `--json` everything as JSON.
  */
 import { spawnSync } from 'node:child_process';
@@ -50,7 +50,6 @@ const problems = [];
 const ON_DEMAND = [
   { name: 'c7', label: 'Camunda 7 rules', marker: 'dist/domain/validation/profiles/C7Profile.js', rules: ['dist/domain/validation/profiles/C7Profile.js', 'dist/domain/validation/profiles/EngineProfile.js', 'dist/domain/validation/profiles/EngineRules.js', 'dist/domain/validation/profiles/RuleRun.js', 'dist/domain/validation/utils/value.js', 'dist/domain/validation/profiles/c7/C7DescriptorNames.js', 'dist/domain/validation/profiles/c7/C7EventRules.js', 'dist/domain/validation/profiles/c7/C7ExtensionContentRules.js', 'dist/domain/validation/profiles/c7/C7ExtensionRules.js', 'dist/domain/validation/profiles/c7/C7FlowRules.js', 'dist/domain/validation/profiles/c7/C7ImplementationRules.js', 'dist/domain/validation/profiles/c7/C7Rules.js', 'dist/domain/validation/profiles/c7/C7SchemaRules.js', 'dist/domain/validation/utils/c7-hint.js', 'dist/domain/validation/utils/element.js', 'dist/domain/validation/utils/hint.js'], when: "the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it)" },
   { name: 'c8', label: 'Camunda 8 rules', marker: 'dist/domain/validation/profiles/C8Profile.js', rules: ['dist/domain/validation/profiles/C8Profile.js', 'dist/domain/validation/profiles/EngineProfile.js', 'dist/domain/validation/profiles/EngineRules.js', 'dist/domain/validation/profiles/RuleRun.js', 'dist/domain/validation/utils/value.js', 'dist/domain/validation/profiles/c8/C8EventRules.js', 'dist/domain/validation/profiles/c8/C8ExtensionRules.js', 'dist/domain/validation/profiles/c8/C8FlowRules.js', 'dist/domain/validation/profiles/c8/C8Rules.js', 'dist/domain/validation/profiles/c8/C8SchemaRules.js', 'dist/domain/validation/profiles/c8/C8TaskRules.js', 'dist/domain/validation/utils/c8-value.js', 'dist/domain/validation/utils/element.js', 'dist/domain/validation/utils/hint.js', 'dist/domain/validation/profiles/FeelExpression.js', 'dist/domain/validation/profiles/FeelParser.js', 'dist/domain/validation/profiles/FeelError.js', 'dist/domain/validation/profiles/TimerValue.js', 'dist/domain/validation/profiles/SchemaText.js', 'dist/domain/validation/profiles/BpmnSchema.js'], when: "the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it)" },
-  { name: 'bpmn-auto-layout', label: 'bpmn-auto-layout', marker: /node_modules\/bpmn-auto-layout\//, rules: [], when: "only for `engine: 'auto'`" },
 ];
 const ENTRIES = [
   { key: 'core', label: 'whole entry', name: 'the whole entry', title: 'everything `@miragon/bpmn-cli` exports' },

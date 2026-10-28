@@ -1,8 +1,8 @@
 import type { LayoutProblem } from '../../../../domain/diagram/utils/problems.js';
-import type { FormatResult } from '../../../../domain/diagram/DiagramCommandService.js';
+import type { DiagramCommandResult } from '../../../../domain/diagram/commands/DiagramCommands.js';
 import type { Change, ChangeSet } from '../../../../domain/document/ChangeSet.js';
 import type { LayoutStatus } from '../../../../domain/diagram/types.js';
-import type { Warning } from '../../../../domain/document/CliError.js';
+import type { Finding } from '../../../../domain/document/Finding.js';
 import { INDENT, quote } from './view-lines.js';
 
 export type ChangeEntries = Pick<ChangeSet, 'created' | 'changed' | 'removed' | 'warnings' | 'notes'>;
@@ -30,8 +30,8 @@ export function hasNoEntries(cs: Pick<ChangeEntries, 'created' | 'changed' | 're
   return !cs.created.length && !cs.changed.length && !cs.removed.length;
 }
 
-function problemLine(problem: Warning): string {
-  const validator = (problem as Warning & { validator?: string }).validator;
+function problemLine(problem: Finding): string {
+  const { validator } = problem;
   let head = validator ? `[${validator}] ${problem.code}` : problem.code;
   if (problem.element) head += ` ${problem.element}`;
   if (problem.related?.length) head += ` [${problem.related.join(', ')}]`;
@@ -39,7 +39,7 @@ function problemLine(problem: Warning): string {
 }
 
 /** `[validator] CODE element [related]: message  (hint)` */
-export function renderProblems(problems: Warning[]): string {
+export function renderProblems(problems: Finding[]): string {
   if (!problems.length) return 'no problems';
   return problems.map(problemLine).join('\n');
 }
@@ -58,7 +58,7 @@ function problemList(list: readonly LayoutProblem[], max = 6): string {
 }
 
 /** `  format place #0: moved A, B; rerouted F; note: ...`; `--summary` prints it unindented. */
-export function formatLine(format: FormatResult): string {
+export function formatLine(format: DiagramCommandResult): string {
   const parts: string[] = [];
   if (format.colored?.length) parts.push(`colored ${idList(format.colored)}`);
   if (format.labels?.length) parts.push(`label placed ${idList(format.labels)}`);

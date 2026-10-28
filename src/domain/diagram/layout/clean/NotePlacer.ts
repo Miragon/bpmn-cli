@@ -1,6 +1,5 @@
 import type { Box } from '../../di/types.js';
-import { overlaps } from '../../utils/geom.js';
-import type { Segment } from '../../utils/geometry.js';
+import { overlaps, segmentHitsBox, type Segment } from '../../utils/geom.js';
 
 export interface NoteJob {
   width: number;
@@ -42,7 +41,7 @@ export class NotePlacer {
       if (box.x < 0 || box.y < 0) return false;
       if (job.pool ? !this.inside(box, job.pool) : world.pools.some((pool) => overlaps(box, pool, 0))) return false;
       if ([...world.obstacles, ...taken].some((obstacle) => overlaps(box, obstacle, MARGIN))) return false;
-      return !world.lines.some((line) => this.lineThrough(line, box));
+      return !world.lines.some(([start, end]) => segmentHitsBox(start, end, box, -2));
     };
     return jobs.map((job) => {
       const spot = job.anchor ? this.candidates(job, job.anchor).find((candidate) => free(job, candidate)) : undefined;
@@ -59,10 +58,6 @@ export class NotePlacer {
 
   private inside(inner: Box, outer: Box): boolean {
     return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
-  }
-
-  private lineThrough([start, end]: Segment, box: Box): boolean {
-    return Math.min(start.x, end.x) < box.x + box.width + 2 && Math.max(start.x, end.x) > box.x - 2 && Math.min(start.y, end.y) < box.y + box.height + 2 && Math.max(start.y, end.y) > box.y - 2;
   }
 
   private candidates(job: NoteJob, anchor: Box): Box[] {

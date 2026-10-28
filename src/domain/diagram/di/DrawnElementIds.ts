@@ -2,7 +2,7 @@ import { IdRegistry } from '../../document/ids/IdRegistry.js';
 import { IdStyle } from '../../document/ids/IdStyle.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
 import { kindRequest, typeRequest, type IdRequest } from '../../document/utils/requests.js';
-import { kindLabel, kindOf, triggerOf } from '../../document/utils/kinds.js';
+import { kindLabel, kindOf, triggerOf } from '../../document/Kinds.js';
 import { indexById, is, isDiElement, walk, type El } from '../../document/utils/moddle.js';
 
 const DRAWN = [

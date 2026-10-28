@@ -6,7 +6,7 @@ import { EditCommandDefinition } from './EditCommandDefinition.js';
 export class InsertSpaceDefinition extends EditCommandDefinition<InsertSpace> {
   readonly name = 'space' as const;
   readonly description = 'Diagram only: insert space right of / below an element like the modeler\'s space tool (= `bpmn space`).';
-  override readonly diagramOnly = true;
+  override readonly diagramCommand = true;
   readonly fields: FieldsOf<InsertSpace> = {
     after: ref('Insert horizontal space right of this element (everything starting right of it moves right, frames grow).'),
     below: ref('Insert vertical space below this element (everything starting below it moves down, frames grow).'),

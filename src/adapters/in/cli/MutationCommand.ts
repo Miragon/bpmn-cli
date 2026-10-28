@@ -11,7 +11,7 @@ import { RENDER_MAX_SIZE, type RenderOptions } from '../../../domain/views/rende
 import { changeHighlight } from '../report/utils/highlight.js';
 import { type MutationReport, type MutationSummary } from '../report/command-report.js';
 import { RenderReport } from './RenderReport.js';
-import { isCliError, usageError } from '../../../domain/document/utils/errors.js';
+import { isBpmnError, usageError } from '../../../domain/document/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import type { CliStream } from './Cli.js';
 import { renderFormat, renderTarget } from './utils/flags.js';
@@ -63,11 +63,7 @@ export abstract class MutationCommand extends CliCommand {
       .option(...commonOption('--show'))
       .option(...commonOption('--strict'))
       .option(...commonOption('--keep-flow-ids'))
-      .option(...commonOption('--no-keep-flow-ids'))
-      .option(...commonOption('--engine'), (raw: string) => {
-        if (raw !== 'clean' && raw !== 'auto') throw new InvalidArgumentError('expected clean or auto');
-        return raw;
-      });
+      .option(...commonOption('--no-keep-flow-ids'));
   }
 
   protected withTriggerOptions(cmd: CommandType): CommandType {
@@ -97,7 +93,6 @@ export abstract class MutationCommand extends CliCommand {
       show: !!options['show'],
       strict: !!options['strict'],
       ...(options['render'] !== undefined ? { render: String(options['render']) } : {}),
-      ...(options['engine'] ? { engine: options['engine'] as 'clean' | 'auto' } : {}),
       ...(keepFlowIds !== undefined ? { keepFlowIds } : {}),
       ...(keepFlowIdsEnv !== undefined ? { keepFlowIdsEnv } : {}),
       ...this.lintOptions(options),
@@ -125,18 +120,18 @@ export abstract class MutationCommand extends CliCommand {
   }
 
   /** Applies `ops` to `file` (`-`: stdin). */
-  protected async mutate(file: string, ops: EditCommand[], opts: MutationFlags): Promise<void> {
+  protected async mutate(file: string, commands: EditCommand[], opts: MutationFlags): Promise<void> {
     try {
       await this.runMutation(
         file,
         opts,
-        (fileOptions) => this.cli.useCases.editDocument.edit({ ...fileOptions, source: { file }, commands: ops }),
+        (fileOptions) => this.cli.useCases.editDocument.edit({ ...fileOptions, source: { file }, commands }),
         (doc, fileOptions) => {
-          return this.cli.useCases.editDocument.edit({ ...fileOptions, source: { doc }, commands: ops });
+          return this.cli.useCases.editDocument.edit({ ...fileOptions, source: { doc }, commands });
         },
       );
     } catch (err) {
-      throw this.withFile(this.keptIdsHint(err, ops, opts.keepFlowIdsEnv), file);
+      throw this.withFile(this.keptIdsHint(err, commands, opts.keepFlowIdsEnv), file);
     }
   }
 
@@ -198,7 +193,7 @@ export abstract class MutationCommand extends CliCommand {
       const shot = await this.cli.useCases.renderDiagram.render({ source: { xml }, opts, format: renderFormat(undefined, target), out: target, stem: 'result', stdout: this.cli.io.stdout });
       return { shot, lines: new RenderReport(shot).resultLines(highlight), json: { ...shot } };
     } catch (err) {
-      if (!isCliError(err)) throw err;
+      if (!isBpmnError(err)) throw err;
       return { lines: [RenderReport.failureLine(err)], json: { error: err.toJSON() } };
     }
   }
@@ -234,8 +229,8 @@ export abstract class MutationCommand extends CliCommand {
    * With kept flow ids, a missing id may be the one the default gives a flow an earlier op
    * rewired; the hint says so, as whoever reads the error may not see the variable.
    */
-  private keptIdsHint(err: unknown, ops: readonly EditCommand[], value: string | undefined): unknown {
-    if (value === undefined || ops.length < 2 || !isCliError(err) || err.code !== 'E_NOT_FOUND') return err;
+  private keptIdsHint(err: unknown, commands: readonly EditCommand[], value: string | undefined): unknown {
+    if (value === undefined || commands.length < 2 || !isBpmnError(err) || err.code !== 'E_NOT_FOUND') return err;
     const kept = `If it is the id a flow an earlier op gave other ends would be renamed to: flow ids are kept here (BPMN_KEEP_FLOW_IDS=${value}), so that flow kept its old id; use the old id, or --no-keep-flow-ids to rename it after its new ends.`;
     const hint = err.details.hint;
     err.details.hint = typeof hint === 'string' && hint ? `${hint} ${kept}` : kept;
@@ -244,7 +239,7 @@ export abstract class MutationCommand extends CliCommand {
 
   /** Puts the file name into a refusal's runnable command (E_NO_ROOM) and its hint. */
   private withFile(err: unknown, file: string): unknown {
-    if (!isCliError(err) || typeof err.details['command'] !== 'string' || file === '-') return err;
+    if (!isBpmnError(err) || typeof err.details['command'] !== 'string' || file === '-') return err;
     const quoted = /^[\w./@%+=:,-]+$/.test(file) ? file : `'${file.replace(/'/g, `'\\''`)}'`;
     err.details['command'] = String(err.details['command']).replaceAll('<file>', quoted);
     if (typeof err.details.hint === 'string') err.details.hint = err.details.hint.replaceAll('bpmn space <file>', `bpmn space ${quoted}`);

@@ -1,8 +1,8 @@
 import { editDistance, typoTolerance } from './utils/fuzzy.js';
 import { transliterate } from './utils/slug.js';
-import { suggestKinds } from './utils/kinds.js';
+import { suggestKinds } from './Kinds.js';
 import type { Doc } from './Doc.js';
-import type { BatchContext } from './EditContext.js';
+import type { BatchContext } from './EditSession.js';
 
 /** The ids of a document a mistyped id may have meant. */
 export class IdSuggestions {

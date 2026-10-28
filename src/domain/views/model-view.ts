@@ -3,40 +3,47 @@
  * `definition.` / `loop.` / `condition.` set keys), `extensions` the deduplicated extension
  * types and vendor attribute names, `extensionElements` the types in document order.
  */
-import type { Warning } from '../document/CliError.js';
+import type { Finding } from '../document/Finding.js';
 import type { ExtensionInfo } from '../document/ExtensionLister.js';
 
-export interface ViewFlow {
+export interface FlowRef {
   id: string;
-  target: string;
   name?: string;
   condition?: string;
   /** camunda:resource of a script resource condition (it has no body) */
   conditionResource?: string;
-  language?: string;
   default?: boolean;
+}
+
+export interface ViewFlow extends FlowRef {
+  target: string;
+  language?: string;
   attrs?: Record<string, string>;
   extensions?: string[];
   extensionElements?: string[];
 }
 
-export interface ViewNode {
+export interface ElementSummary {
   id: string;
   kind: string;
-  type: string;
   name?: string;
   trigger?: string;
   nonInterrupting?: boolean;
   documentation?: string;
-  outgoing: ViewFlow[];
-  incoming: string[];
+  /** e.g. loop=parallel, calledElement=X */
+  props?: Record<string, unknown>;
+  /** nodes in a sub-process are in its lane */
   lane?: string;
+  outgoing: ViewFlow[];
+}
+
+export interface ViewNode extends ElementSummary {
+  type: string;
+  incoming: string[];
   boundary?: ViewNode[];
   children?: ViewNode[];
   expanded?: boolean;
   unreachable?: boolean;
-  /** e.g. loop=parallel, calledElement=X */
-  props?: Record<string, unknown>;
   attrs?: Record<string, string>;
   extensions?: string[];
   extensionElements?: string[];
@@ -107,7 +114,7 @@ export interface ModelView {
   processes: ViewProcess[];
   groups?: ViewGroup[];
   rootElements: Array<{ id: string; kind: string; name?: string; code?: string; correlationKey?: string }>;
-  problems: Warning[];
+  problems: Finding[];
   /** content the reader could not keep; a write needs --force and drops it */
   importWarnings?: string[];
 }
@@ -120,18 +127,13 @@ export interface NestedDetail {
   extensions: ExtensionInfo[];
 }
 
-export interface ElementDetail {
-  id: string;
-  kind: string;
+export interface ElementDetail extends Pick<ElementSummary, 'id' | 'kind' | 'name' | 'lane' | 'outgoing'> {
   type: string;
-  name?: string;
   scope?: string;
   process?: string;
-  lane?: string;
   host?: string;
   properties: Record<string, unknown>;
-  incoming: Array<{ id: string; source: string; name?: string; condition?: string; default?: boolean }>;
-  outgoing: ViewFlow[];
+  incoming: Array<FlowRef & { source: string }>;
   boundary?: string[];
   children?: string[];
   extensions: unknown[];

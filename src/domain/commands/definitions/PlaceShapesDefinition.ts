@@ -14,7 +14,7 @@ const PLACE_GROUPS = [
 export class PlaceShapesDefinition extends EditCommandDefinition<PlaceShapes> {
   readonly name = 'place' as const;
   readonly description = 'Diagram only: move shapes (rigid group) to the row and/or column of another element (= `bpmn place`).';
-  override readonly diagramOnly = true;
+  override readonly diagramCommand = true;
   readonly fields: FieldsOf<PlaceShapes> = {
     ids: list('Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.', { minItems: 1 }),
     ...SELECTOR_FIELDS,

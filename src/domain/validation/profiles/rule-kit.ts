@@ -1,7 +1,7 @@
-import { EVENT_GATEWAY_TRIGGERS, ignoresConditions, isEventSubProcess, kindLabel } from '../../document/utils/kinds.js';
+import { EVENT_GATEWAY_TRIGGERS, ignoresConditions, isEventSubProcess, kindLabel } from '../../document/Kinds.js';
 import { unkeptEntries } from '../../document/utils/mirror.js';
 import { BPMN_NS, createModdle, is, isBpmnElement, isDiElement, walk } from '../../document/utils/moddle.js';
-import { DecisionLinkReader } from '../../document/DecisionLinkReader.js';
+import { DecisionLinkReader } from '../../editing/properties/DecisionLinkReader.js';
 import { decodeXml, elementChildren, readXmlText } from '../../document/utils/text-reader.js';
 import { XmlTextError } from '../../document/xml/XmlTextError.js';
 import { CAMUNDA, OPERATON_URI } from '../../document/vendor/CamundaDescriptor.js';

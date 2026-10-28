@@ -1,5 +1,5 @@
 import type { Doc } from '../../document/Doc.js';
-import { ignoresConditions, namedAsQuestion } from '../../document/utils/kinds.js';
+import { ignoresConditions, namedAsQuestion } from '../../document/Kinds.js';
 import { is, type El, peek, shownId } from '../../document/utils/moddle.js';
 import type { StructureFindings } from './StructureFindings.js';
 

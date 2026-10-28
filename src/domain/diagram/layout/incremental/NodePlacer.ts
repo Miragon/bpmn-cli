@@ -1,6 +1,6 @@
 import { LayoutDebug } from '../LayoutDebug.js';
-import { annotationSize, SIZES } from '../../utils/sizes.js';
-import { is, type El } from '../../../document/utils/moddle.js';
+import { defaultSizeOf } from '../../utils/sizes.js';
+import { is } from '../../../document/utils/moddle.js';
 import { bottom, clamp, cx, cy, median, right, translateEdge, translateShape, type Box } from '../../utils/geom.js';
 import { defaultLabelSide, hasExternalLabel, labelAt } from '../../utils/labels.js';
 import { idOf, raw } from '../../utils/raw.js';
@@ -156,15 +156,6 @@ export class NodePlacer {
     return spacing;
   }
 
-  private defaultSize(el: El): { width: number; height: number } {
-    if (is(el, 'bpmn:Event')) return { ...SIZES.event };
-    if (is(el, 'bpmn:Gateway')) return { ...SIZES.gateway };
-    if (is(el, 'bpmn:DataObjectReference')) return { ...SIZES.dataObject };
-    if (is(el, 'bpmn:DataStoreReference')) return { ...SIZES.dataStore };
-    if (is(el, 'bpmn:TextAnnotation')) return annotationSize(raw<string>(el, 'text'));
-    return { ...SIZES.task };
-  }
-
   /**
    * Size of a new shape: the median of its kind on the plane, else the engine default.
    * A relocated node keeps its size. Events and boundary events count as one kind, so do tasks and
@@ -179,13 +170,13 @@ export class NodePlacer {
     const el = this.sem.byId.get(id)!;
     const kind = DiagramReader.shapeKind(el);
     if (kind === 'subProcess' && this.expandedByDefault(id)) return { width: 350, height: 200 };
-    if (kind === 'annotation') return this.defaultSize(el);
+    if (kind === 'annotation') return defaultSizeOf(el);
     const family = (shapeKind: ShapeKind): string => (shapeKind === 'boundary' ? 'event' : shapeKind === 'subProcess' ? 'task' : shapeKind);
     const sameKind = (shape: DShape): boolean => !shape.container && family(shape.kind) === family(kind) && (kind !== 'data' || shape.el.$type === el.$type);
     const peers = [...plane.shapes.values()].filter(sameKind);
     const medianWidth = median(peers.map((shape) => shape.bounds.width));
     const medianHeight = median(peers.map((shape) => shape.bounds.height));
-    const fallback = this.defaultSize(el);
+    const fallback = defaultSizeOf(el);
     if (medianWidth === undefined || medianHeight === undefined) return fallback;
     return { width: Math.round(clamp(medianWidth, fallback.width * 0.6, fallback.width * 1.6)), height: Math.round(clamp(medianHeight, fallback.height * 0.6, fallback.height * 1.6)) };
   }
@@ -202,23 +193,13 @@ export class NodePlacer {
   newShape(plane: Plane, id: string, bounds: Box): DShape {
     const reuse = this.reuse.get(id);
     const el = this.sem.byId.get(id)!;
-    const kind = DiagramReader.shapeKind(el);
-    const expanded = kind === 'subProcess' ? (reuse ? reuse.shape.expanded === true : this.expandedByDefault(id) || this.blockSize.has(id)) : undefined;
-    const shape: DShape = { id, el, bounds, kind, container: kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true) };
+    const expanded = Semantics.isSubProcess(el) ? (reuse ? reuse.shape.expanded === true : this.expandedByDefault(id) || this.blockSize.has(id)) : undefined;
+    const shape = DiagramReader.shapeOf(this.sem, id, el, bounds, expanded);
     if (reuse?.shape.di) shape.di = reuse.shape.di;
     else if (!reuse) {
       const di = this.planes.map((candidate) => candidate.unbounded?.get(id)).find((unbounded) => !!unbounded);
       if (di) shape.di = di;
     }
-    if (expanded !== undefined) shape.expanded = expanded;
-    if (kind === 'boundary') {
-      const host = idOf(raw(el, 'attachedToRef'));
-      if (host) shape.hostId = host;
-    }
-    const lane = kind === 'lane' ? this.sem.laneParent.get(id) : this.sem.laneOf.get(id);
-    if (lane) shape.laneId = lane;
-    const pool = this.sem.poolOf(id);
-    if (pool) shape.poolId = pool;
     const scope = this.sem.scopeOf.get(id);
     const sid = idOf(scope);
     if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) shape.parentId = sid;

@@ -1,10 +1,9 @@
 import { labelSize } from '../../utils/text.js';
 import { METRICS } from '../../utils/sizes.js';
-import { bottom, center, right, segmentHitsBox } from '../../utils/geom.js';
+import { bottom, center, right, segmentHitsBox, dedupe, hitCount, pathHitsAny, properCross, toSegments, type Segment } from '../../utils/geom.js';
 import type { Box, GEdge, GNode, LaneBandInfo, Point, ScopeLayout } from '../../di/types.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
-import { dedupe, hitCount, pathHits, properCross, toSegments, type Segment } from '../../utils/geometry.js';
 import { nameOf } from '../../utils/names.js';
 import { boundaryLeft } from '../../utils/nodes.js';
 import { obstacles, routedArtifacts } from '../../utils/scope.js';
@@ -80,7 +79,7 @@ export class ChannelRouter {
     }
     this.labelSpots = [...this.labelsBelow, ...this.labelsAbove, ...this.gatewaySpots.values(), ...routedArtifacts(layout).map((artifact) => (artifact.kind === 'annotation' ? undefined : ScopeLabels.of(artifact, 'data')))].filter((box): box is Box => !!box);
     this.spotIndex = this.boxIndex(this.labelSpots);
-    this.openRow = new Set(layout.edges.filter((edge) => !edge.back && edge.bandY !== undefined && Math.abs(center(edge.source.box).y - center(edge.target.box).y) < 1 && !pathHits(this.straightLine(edge.source, edge.target), [...this.obstacleList, ...this.labelSpots], [edge.source.box, edge.target.box])));
+    this.openRow = new Set(layout.edges.filter((edge) => !edge.back && edge.bandY !== undefined && Math.abs(center(edge.source.box).y - center(edge.target.box).y) < 1 && !pathHitsAny(this.straightLine(edge.source, edge.target), [...this.obstacleList, ...this.labelSpots], [edge.source.box, edge.target.box])));
   }
 
   /**
@@ -224,7 +223,7 @@ export class ChannelRouter {
 
   private bottomSlot(node: GNode, len: number): number {
     const cands = ChannelRouter.bottomCandidates(node);
-    const ok = (slotX: number): boolean => !pathHits([{ x: slotX, y: bottom(node.box) }, { x: slotX, y: bottom(node.box) + len }], this.boxes, [node.box]);
+    const ok = (slotX: number): boolean => !pathHitsAny([{ x: slotX, y: bottom(node.box) }, { x: slotX, y: bottom(node.box) + len }], this.boxes, [node.box]);
     return cands.find((slotX) => ok(slotX) && !this.usedBottom.taken(node, slotX)) ?? cands.find(ok) ?? cands[0]!;
   }
 
@@ -283,11 +282,11 @@ export class ChannelRouter {
   private exitToBelow(source: GNode, ex: number, channelY: number): Point[] {
     const sb = source.box;
     const direct: Point[] = [{ x: ex, y: bottom(sb) }, { x: ex, y: channelY }];
-    if (!pathHits(direct, this.boxes, [sb])) return direct;
+    if (!pathHitsAny(direct, this.boxes, [sb])) return direct;
     const gapX = right(sb) + METRICS.hGap / 2;
     const sideY = sb.y + sb.height * 0.75;
     const viaGap: Point[] = [{ x: right(sb), y: sideY }, { x: gapX, y: sideY }, { x: gapX, y: channelY }];
-    return pathHits(viaGap, this.boxes, [sb]) ? direct : viaGap;
+    return pathHitsAny(viaGap, this.boxes, [sb]) ? direct : viaGap;
   }
 
   /**
@@ -299,10 +298,10 @@ export class ChannelRouter {
     const tx = this.bottomSlot(target, 30);
     const hookY = bottom(tb) + 15;
     const direct: Point[] = [{ x: tx, y: fromY }, { x: tx, y: bottom(tb) }];
-    if (fromY <= hookY || !pathHits(direct, this.boxes, [tb])) return direct;
+    if (fromY <= hookY || !pathHitsAny(direct, this.boxes, [tb])) return direct;
     for (const gapX of [right(tb) + METRICS.hGap / 2, tb.x - METRICS.hGap / 2]) {
       const path: Point[] = [{ x: gapX, y: fromY }, { x: gapX, y: hookY }, { x: tx, y: hookY }, { x: tx, y: bottom(tb) }];
-      if (!pathHits(path, this.boxes, [tb])) return path;
+      if (!pathHitsAny(path, this.boxes, [tb])) return path;
     }
     return direct;
   }
@@ -317,7 +316,7 @@ export class ChannelRouter {
   private lineFree(line: Point[]): boolean {
     const [start, end] = line as [Point, Point];
     const on = ([segStart, segEnd]: Segment): boolean => Math.min(segStart.y, segEnd.y) <= start.y && Math.max(segStart.y, segEnd.y) >= start.y && Math.min(segStart.x, segEnd.x) <= end.x && Math.max(segStart.x, segEnd.x) >= start.x && (segStart.y === segEnd.y || segStart.x === start.x || segStart.x === end.x);
-    return !this.routed.near(Math.min(start.x, end.x), Math.max(start.x, end.x)).some(on) && !pathHits(line, this.flowLabels, []);
+    return !this.routed.near(Math.min(start.x, end.x), Math.max(start.x, end.x)).some(on) && !pathHitsAny(line, this.flowLabels, []);
   }
 
   /**
@@ -500,7 +499,7 @@ export class ChannelRouter {
         pts = band;
         this.usedBottom.take(source, ex, true);
       }
-    } else if (pathHits(pts, this.boxes, ignore)) {
+    } else if (pathHitsAny(pts, this.boxes, ignore)) {
       const base = this.spanBottom(source.layer, target.layer) + METRICS.loopGap;
       const channelY = this.channelFor(this.exitX(source), tb.x - 20, base);
       pts = [...this.exitToBelow(source, this.exitX(source), channelY), ...this.hookFromBelow(target, channelY)];
@@ -524,19 +523,19 @@ export class ChannelRouter {
     const ex = source.host ? sc.x : this.exitX(source);
     let pts: Point[] = [{ x: ex, y: bottom(sb) }, { x: ex, y: tc.y }, { x: tb.x, y: tc.y }];
     const sideAt = (dropX: number): Point[] => [{ x: right(sb), y: sc.y }, { x: dropX, y: sc.y }, { x: dropX, y: tc.y }, { x: tb.x, y: tc.y }];
-    const joinSide = this.joinFromBelow(source) ? [METRICS.hGap / 4, METRICS.hGap / 2].map((offset) => sideAt(right(sb) + offset)).find((path) => !pathHits(path, this.boxes, ignore)) : undefined;
+    const joinSide = this.joinFromBelow(source) ? [METRICS.hGap / 4, METRICS.hGap / 2].map((offset) => sideAt(right(sb) + offset)).find((path) => !pathHitsAny(path, this.boxes, ignore)) : undefined;
     if (joinSide) pts = joinSide;
-    else if (pathHits(pts, this.boxes, ignore)) {
+    else if (pathHitsAny(pts, this.boxes, ignore)) {
       pts = sideAt(right(sb) + METRICS.hGap / 2);
       if (source.host) {
         const gx = right(source.host.box) + METRICS.hGap / 2, runY = this.runBelow(sc.x, gx, bottom(sb));
         const down = [{ x: sc.x, y: bottom(sb) }, { x: sc.x, y: runY }, { x: gx, y: runY }, { x: gx, y: tc.y }, { x: tb.x, y: tc.y }];
-        if (runY < tc.y && !pathHits(down, this.boxes, ignore)) {
+        if (runY < tc.y && !pathHitsAny(down, this.boxes, ignore)) {
           pts = down;
           runsBelow = true;
         }
       }
-      if (pathHits(pts, this.boxes, ignore)) {
+      if (pathHitsAny(pts, this.boxes, ignore)) {
         runsBelow = source.host && this.bandOf(source) === this.bandOf(target) ? true : undefined;
         const base = this.spanBottom(source.host ? source.host.layer : source.layer, target.layer) + METRICS.loopGap;
         const channelY = this.channelFor(ex, tb.x - 20, base);
@@ -585,7 +584,7 @@ export class ChannelRouter {
       ];
     };
     const overWay = (way: Point[], runY: number, x1: number, end: OverEnd, below?: boolean): Way | undefined => {
-      if (pathHits(way, this.boxes, ignore) || this.onRouted(way)) return undefined;
+      if (pathHitsAny(way, this.boxes, ignore) || this.onRouted(way)) return undefined;
       const spare = end.top !== undefined ? this.gatewaySpots.get(target) : undefined;
       return { pts: way, ...(below ? { below } : {}), over: { y: runY, from: Math.min(x1, end.to), to: Math.max(x1, end.to) }, ...(end.top !== undefined ? { top: end.top } : {}), ...(spare ? { spare } : {}) };
     };

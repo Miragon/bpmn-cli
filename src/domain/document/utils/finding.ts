@@ -1,24 +1,13 @@
-import type { Warning } from '../CliError.js';
-
-/**
- * deploy: the engines refuse the deployment; runtime: it deploys, but the setting is ignored
- * or fails when the process runs; practice: works, but the engine warns or the model is fragile.
- */
-export type Severity = 'deploy' | 'runtime' | 'practice';
+import type { Finding, ProfileFinding, Severity } from '../Finding.js';
 
 export const SEVERITIES: readonly Severity[] = ['deploy', 'runtime', 'practice'];
 
-export interface ProfileFinding extends Warning {
-  severity: Severity;
+type UnserialisedFields = Pick<Finding, 'key' | 'leftOut' | 'subject' | 'covers'>;
+
+export function withUnserialised<TFinding extends Finding>(finding: TFinding, fields: UnserialisedFields): TFinding {
+  for (const [name, value] of Object.entries(fields)) if (value !== undefined) Object.defineProperty(finding, name, { value, enumerable: false });
+  return finding;
 }
-
-/**
- * What exactly is wrong on the element, so a mutation can tell the findings it introduced
- * from those the file already had, without it showing up in JSON output.
- */
-const SUBJECT: unique symbol = Symbol('profile-finding-subject');
-
-type WithSubject = ProfileFinding & { [SUBJECT]?: string };
 
 export function makeFinding(
   severity: Severity,
@@ -27,14 +16,9 @@ export function makeFinding(
   element: string | undefined,
   extra: { related?: string[]; hint?: string; subject?: string } = {},
 ): ProfileFinding {
-  const finding: WithSubject = { code, message, severity };
+  const finding: ProfileFinding = { code, message, severity };
   if (element) finding.element = element;
   if (extra.related?.length) finding.related = extra.related;
   if (extra.hint) finding.hint = extra.hint;
-  Object.defineProperty(finding, SUBJECT, { value: extra.subject ?? '', enumerable: false });
-  return finding;
-}
-
-export function subjectOf(finding: ProfileFinding): string {
-  return (finding as WithSubject)[SUBJECT] ?? '';
+  return withUnserialised(finding, { subject: extra.subject ?? '' });
 }

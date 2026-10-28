@@ -1,7 +1,7 @@
 import type { Doc } from '../../document/Doc.js';
 import type { DocumentNamespaces } from '../../document/vendor/DocumentNamespaces.js';
 import type { El } from '../../document/utils/moddle.js';
-import type { ProfileFinding } from '../../document/utils/finding.js';
+import type { ProfileFinding } from '../../document/Finding.js';
 import type { RuleKit } from './rule-kit.js';
 import { peek } from '../utils/element.js';
 

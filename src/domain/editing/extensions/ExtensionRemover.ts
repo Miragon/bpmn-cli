@@ -4,9 +4,9 @@ import { is, many, removeFrom, type El } from '../../document/utils/moddle.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
 import { EXTENSION_STRUCTURE } from './ExtensionStructure.js';
 import { ExtensionLevel } from './ExtensionLevel.js';
-import { NESTED_HOSTS } from '../NestedHosts.js';
+import { NESTED_HOSTS } from '../properties/NestedHosts.js';
 import { SelectorParser, type Step } from './SelectorParser.js';
-import { VendorElements } from '../VendorElements.js';
+import { VendorElements } from '../properties/VendorElements.js';
 import type { EditExtensionElements } from '../../commands/types.js';
 
 export class ExtensionRemover {
@@ -20,8 +20,8 @@ export class ExtensionRemover {
     this.selectors = new SelectorParser(this.hosts);
   }
 
-  remove(el: El, op: EditExtensionElements): ChangeSet {
-    const cs = new ChangeSet();
+  remove(el: El, command: EditExtensionElements): ChangeSet {
+    const changes = new ChangeSet();
     const container = el.get<El | undefined>('extensionElements');
     const list = container ? many(container, 'values') : [];
     const present = list.map((value) => value.$type);
@@ -30,17 +30,17 @@ export class ExtensionRemover {
     }
     const top = new ExtensionLevel(this.doc, this.names, el);
     let victims: Array<{ el: El; level: ExtensionLevel }>;
-    if (op.index !== undefined) {
-      const victim = list[op.index];
+    if (command.index !== undefined) {
+      const victim = list[command.index];
       if (!victim) {
-        throw modelError('E_NO_EXTENSION', `${this.hosts.labelOf(el)} has no extension element at index ${op.index} (0..${list.length - 1})`, {
+        throw modelError('E_NO_EXTENSION', `${this.hosts.labelOf(el)} has no extension element at index ${command.index} (0..${list.length - 1})`, {
           element: this.hosts.idOf(el),
           hint: `Present: ${present.map((typeName, index) => `${index}: ${typeName}`).join(', ')}.`,
         });
       }
       victims = [{ el: victim, level: top }];
-    } else if (op.type) {
-      victims = this.select(el, top, this.selectors.parse(op.type, el), op.type);
+    } else if (command.type) {
+      victims = this.select(el, top, this.selectors.parse(command.type, el), command.type);
     } else {
       throw usageError('ext remove needs --type <prefix:localName> or --index <n>', { element: this.hosts.idOf(el) });
     }
@@ -48,13 +48,13 @@ export class ExtensionRemover {
     for (const { el: victim, level } of victims) {
       level.remove(victim);
       texts.push(`${this.names.itemLabel(victim)}${level.parent ? ` from ${level.label}` : ''}`);
-      this.pruneEmpty(el, level, cs);
+      this.pruneEmpty(el, level, changes);
     }
     const extensionElements = el.get<El | undefined>('extensionElements');
     if (extensionElements && !many(extensionElements, 'values').length) el.set('extensionElements', undefined);
     this.doc.invalidate();
-    cs.change(ChangeSet.entryOf(this.hosts.ownerOf(el), `ext removed ${texts.map((text) => this.hosts.slotPrefix(el) + text).join(', ')}`));
-    return cs;
+    changes.change(ChangeSet.entryOf(this.hosts.ownerOf(el), `ext removed ${texts.map((text) => this.hosts.slotPrefix(el) + text).join(', ')}`));
+    return changes;
   }
 
   /**
@@ -97,7 +97,7 @@ export class ExtensionRemover {
   }
 
   /** Bottom up, e.g. a camunda:inputOutput left without parameters. */
-  private pruneEmpty(host: El, level: ExtensionLevel, cs: ChangeSet): void {
+  private pruneEmpty(host: El, level: ExtensionLevel, changes: ChangeSet): void {
     let cur: El | undefined = level.parent;
     while (cur && this.names.isGeneric(cur)) {
       if (this.names.kidsOf(cur).length || this.names.bodyOf(cur) !== undefined || Object.keys(this.names.attrsOf(cur)).length) return;
@@ -106,11 +106,11 @@ export class ExtensionRemover {
       if (!parent) return;
       if (is(parent, 'bpmn:ExtensionElements')) {
         removeFrom(parent, 'values', cur);
-        cs.note(`removed the empty ${cur.$type} of ${this.hosts.labelOf(host)}`);
+        changes.note(`removed the empty ${cur.$type} of ${this.hosts.labelOf(host)}`);
         return;
       }
       level.inside(parent).remove(cur);
-      cs.note(`removed the empty ${cur.$type} of ${this.hosts.labelOf(host)}`);
+      changes.note(`removed the empty ${cur.$type} of ${this.hosts.labelOf(host)}`);
       cur = parent;
     }
   }

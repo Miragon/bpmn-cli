@@ -1,8 +1,7 @@
-import { is, type El } from '../../document/utils/moddle.js';
+import { enclosingProcess, is, type El } from '../../document/utils/moddle.js';
 import type { Box, Point } from './types.js';
-import { containsPoint, cx, cy, overlaps, segmentHits, segmentsCross } from '../utils/geom.js';
-import type { Segment } from '../utils/geometry.js';
-import { collinear, drawnEnds, enclosingProcess, glyph, hits, inside, joinTail, lookup, readDrawnPlane, subTitleOf, type Edge, type MetricIndex, type Shape } from '../utils/harness.js';
+import { containsPoint, cx, cy, overlaps, segmentHits, segmentsCross, type Segment } from '../utils/geom.js';
+import { collinear, drawnEnds, glyph, hits, inside, joinTail, lookup, readDrawnPlane, subTitleOf, type Edge, type MetricIndex, type Shape } from '../utils/harness.js';
 import { idOf, raw, rawList } from '../utils/raw.js';
 import type { MetricKey } from '../utils/problems.js';
 
@@ -194,11 +193,11 @@ export class PlaneAnalysis {
   private checkSequenceFlow(edge: Edge): void {
     const { sem, byId, add } = this;
     const frame = this.flowFrame(edge.id);
-    if (frame && edge.pts.some((point) => !containsPoint(frame.bounds, point))) add('edgeOutside', edge.id, [edge.id, frame.id]);
+    if (frame && edge.points.some((point) => !containsPoint(frame.bounds, point))) add('edgeOutside', edge.id, [edge.id, frame.id]);
     const sl = lookup(sem.laneOf, idOf(raw(edge.el, 'sourceRef')));
     const tl = lookup(sem.laneOf, idOf(raw(edge.el, 'targetRef')));
     const lane = sl && sl === tl ? lookup(byId, idOf(sl)) : undefined;
-    if (lane && edge.pts.some((point) => !containsPoint(lane.bounds, point))) add('edgeLeavesLane', edge.id, [edge.id, lane.id]);
+    if (lane && edge.points.some((point) => !containsPoint(lane.bounds, point))) add('edgeLeavesLane', edge.id, [edge.id, lane.id]);
   }
 
   private checkMessageFlow(edge: Edge): void {
@@ -336,19 +335,19 @@ export class PlaneAnalysis {
     const { edges, add } = this;
     for (const edge of edges) {
       const length = edge.segs.reduce((sum, [start, end]) => sum + Math.abs(end.x - start.x) + Math.abs(end.y - start.y), 0);
-      if (edge.pts.length < 2 || !(length > 0)) add('degenerateEdge', edge.id, [edge.id]);
+      if (edge.points.length < 2 || !(length > 0)) add('degenerateEdge', edge.id, [edge.id]);
     }
   }
 
   private checkDetached(): void {
     const { edges, byId, add } = this;
     for (const edge of edges) {
-      if (edge.pts.length < 2) continue;
+      if (edge.points.length < 2) continue;
       const [sid, tid] = drawnEnds(edge.el);
       const missed: string[] = [];
       for (const [id, endPoint] of [
-        [sid, edge.pts[0]!],
-        [tid, edge.pts[edge.pts.length - 1]!],
+        [sid, edge.points[0]!],
+        [tid, edge.points[edge.points.length - 1]!],
       ] as const) {
         const endShape = lookup(byId, id);
         if (endShape && (endPoint.x < endShape.bounds.x - DETACHED_GAP || endPoint.x > endShape.bounds.x + endShape.bounds.width + DETACHED_GAP || endPoint.y < endShape.bounds.y - DETACHED_GAP || endPoint.y > endShape.bounds.y + endShape.bounds.height + DETACHED_GAP)) missed.push(endShape.id);

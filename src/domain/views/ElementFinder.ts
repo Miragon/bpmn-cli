@@ -1,12 +1,12 @@
 import type { Doc } from '../document/Doc.js';
 import { is, peek, walk, type El } from '../document/utils/moddle.js';
-import { DecisionLinkReader } from '../document/DecisionLinkReader.js';
+import { DecisionLinkReader } from '../editing/properties/DecisionLinkReader.js';
 import { ExtensionLister, type ExtensionInfo } from '../document/ExtensionLister.js';
 import { nestedEntries } from '../document/utils/nested-slots.js';
 import { ElementFacts } from './ElementFacts.js';
 import type { FindHit } from './model-view.js';
 import { compact, nameOf, truncate } from './utils/view.js';
-import { kindFilter, kindOrTypeLabel } from '../document/utils/kinds.js';
+import { kindFilter, kindOrTypeLabel } from '../document/Kinds.js';
 
 /**
  * `bpmn find`: case-insensitive substring search over ids, names, annotation texts and vendor

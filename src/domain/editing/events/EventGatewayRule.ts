@@ -1,7 +1,6 @@
-import type { Doc } from '../../document/Doc.js';
-import type { EditContext } from '../../document/EditContext.js';
+import type { EditSession } from '../../document/EditSession.js';
 import type { ChangeSet } from '../../document/ChangeSet.js';
-import { EVENT_GATEWAY_TRIGGERS, triggerOf } from '../../document/utils/kinds.js';
+import { EVENT_GATEWAY_TRIGGERS, triggerOf } from '../../document/Kinds.js';
 import { is, type El, idOf } from '../../document/utils/moddle.js';
 import { labelOf } from '../../document/utils/elements.js';
 
@@ -12,10 +11,7 @@ import { labelOf } from '../../document/utils/elements.js';
  * Other files follow BPMN 2.0 (10.6.6): receive tasks too, but not mixed with message events.
  */
 export class EventGatewayRule {
-  constructor(
-    private readonly doc: Doc,
-    private readonly edit: EditContext,
-  ) {}
+  constructor(private readonly edit: EditSession) {}
 
   get rule(): 'engines' | 'bpmn' {
     return this.edit.platform() === 'c7' ? 'engines' : 'bpmn';
@@ -30,13 +26,13 @@ export class EventGatewayRule {
    * An explicit edge is the agent's call and only warned about (a bridge is refused).
    * Camunda 7 files are left to the platform profile, which reports the engines' rule.
    */
-  warnFlow(flow: El, cs: ChangeSet): void {
+  warnFlow(flow: El, changes: ChangeSet): void {
     const gateway = flow.get<El | undefined>('sourceRef');
     const target = flow.get<El | undefined>('targetRef');
     if (!gateway || !target || !is(gateway, 'bpmn:EventBasedGateway') || this.rule === 'engines') return;
     const problem = this.bpmnTargetProblem(gateway, target, [flow]);
     if (!problem) return;
-    cs.warn({
+    changes.warn({
       code: 'W_EVENT_GATEWAY_TARGET',
       message: `Event-based gateway ${idOf(gateway)} now leads to ${idOf(target)} (${idOf(flow)}): ${problem}`,
       element: idOf(gateway),
@@ -46,7 +42,7 @@ export class EventGatewayRule {
   }
 
   private otherIncoming(target: El, leaving: El[], what: string): string | undefined {
-    const others = this.doc.incoming(target).filter((flow) => !leaving.includes(flow));
+    const others = this.edit.doc.incoming(target).filter((flow) => !leaving.includes(flow));
     if (!others.length) return undefined;
     return `${labelOf(target)} already has the incoming flow ${others.map(idOf).join(', ')}; ${what} after an event-based gateway can have no other incoming flow`;
   }
@@ -63,7 +59,7 @@ export class EventGatewayRule {
     if (incoming) return incoming;
     const mine = EventGatewayRule.subscriptionOf(target);
     if (mine) {
-      for (const flow of this.doc.outgoing(gateway)) {
+      for (const flow of this.edit.doc.outgoing(gateway)) {
         if (leaving.includes(flow)) continue;
         const flowTarget = flow.get<El | undefined>('targetRef');
         if (!flowTarget || flowTarget === target) continue;
@@ -91,11 +87,11 @@ export class EventGatewayRule {
     }
     const incoming = this.otherIncoming(target, leaving, receive ? 'a receive task' : 'a catch event');
     if (incoming) return incoming;
-    if (receive && this.doc.boundaryEventsOf(target).length) {
-      return `${labelOf(target)} has boundary events (${this.doc.boundaryEventsOf(target).map(idOf).join(', ')}); BPMN 2.0 does not allow them on a receive task after an event-based gateway`;
+    if (receive && this.edit.doc.boundaryEventsOf(target).length) {
+      return `${labelOf(target)} has boundary events (${this.edit.doc.boundaryEventsOf(target).map(idOf).join(', ')}); BPMN 2.0 does not allow them on a receive task after an event-based gateway`;
     }
     if (receive || EventGatewayRule.waitsForMessage(target)) {
-      for (const flow of this.doc.outgoing(gateway)) {
+      for (const flow of this.edit.doc.outgoing(gateway)) {
         if (leaving.includes(flow)) continue;
         const flowTarget = flow.get<El | undefined>('targetRef');
         if (!flowTarget || flowTarget === target) continue;

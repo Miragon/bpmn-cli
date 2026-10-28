@@ -1,4 +1,4 @@
-import type { IdConventions } from '../document/ids/IdConventionsReader.js';
+import type { IdConventions } from '../document/ids/IdConventions.js';
 import type { DebugSink } from '../diagram/layout/LayoutDebug.js';
 import type { DrawingOptions, LayoutStatus } from '../diagram/types.js';
 import type { ChangeSet } from '../document/ChangeSet.js';

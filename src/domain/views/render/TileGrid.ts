@@ -4,7 +4,7 @@ import type { LayoutProblem } from '../../diagram/utils/problems.js';
 import type { DShape } from '../../diagram/di/types.js';
 import { is } from '../../document/utils/moddle.js';
 import { DiagramColumns } from '../DiagramColumns.js';
-import { MARGIN, MAX_TILES, type Frame, type Item } from './types.js';
+import { MARGIN, MAX_TILES, type RenderFrame, type Item } from './types.js';
 import { meets } from '../utils/boxes.js';
 
 export interface TileView {
@@ -26,7 +26,7 @@ export class TileGrid {
   constructor(
     private readonly items: Item[],
     private readonly view: Box,
-    private readonly frame: Frame,
+    private readonly frame: RenderFrame,
     private readonly budget: number,
     private readonly problems: LayoutProblem[],
   ) {}

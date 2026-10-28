@@ -7,7 +7,7 @@ import { ElementContextBuilder } from '../../domain/views/ElementContextBuilder.
 import { LayoutViewBuilder } from '../../domain/views/LayoutViewBuilder.js';
 import { ElementFacts } from '../../domain/views/ElementFacts.js';
 import { ExtensionLister, type ExtensionInfo } from '../../domain/document/ExtensionLister.js';
-import type { AroundView, ElementContext, Implementation } from '../../domain/views/context.js';
+import type { AroundView, ElementContext, Implementation } from '../../domain/views/around-view.js';
 import type { LayoutView } from '../../domain/views/layout-view.js';
 import type { ElementDetail, ModelView } from '../../domain/views/model-view.js';
 

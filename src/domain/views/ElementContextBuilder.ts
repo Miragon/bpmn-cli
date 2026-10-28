@@ -1,9 +1,10 @@
 import type { Doc } from '../document/Doc.js';
-import { isEventSubProcess, kindOrTypeLabel } from '../document/utils/kinds.js';
+import { isEventSubProcess, kindOrTypeLabel } from '../document/Kinds.js';
 import { is, list, peek, shownId, walk, type El } from '../document/utils/moddle.js';
-import type { ContextCatch, ContextEventSubProcess, ContextLink, ContextMessage, ContextRef, ElementContext } from './context.js';
+import type { ContextCatch, ContextEventSubProcess, ContextLink, ContextMessage, ContextRef, ElementContext } from './around-view.js';
 import { ElementFacts } from './ElementFacts.js';
 import { ElementLinks } from './ElementLinks.js';
+import { ElementSummaryBuilder } from './ElementSummaryBuilder.js';
 import type { DetailMessageFlow } from './model-view.js';
 import { compact, nonEmpty, ownNameOf } from './utils/view.js';
 
@@ -36,7 +37,7 @@ export class ElementContextBuilder {
   build(): ElementContext {
     const doc = this.doc;
     const el = doc.require(this.id);
-    const facts = new ElementFacts(el);
+    const { id, kind, trigger, nonInterrupting, props, documentation } = new ElementSummaryBuilder(doc).build(el, { zeebe: false });
     const isFlow = is(el, 'bpmn:SequenceFlow');
     const chain: El[] = [];
     let scope = doc.scopeOf(el);
@@ -87,14 +88,14 @@ export class ElementContextBuilder {
     const laneEl = lane?.lane;
     const parents = laneEl ? ElementContextBuilder.parentLanes(laneEl).map((parentLane) => compact({ id: shownId(parentLane), name: ownNameOf(parentLane) })) : [];
     return compact<ElementContext>({
-      id: shownId(el),
-      kind: kindOrTypeLabel(el),
+      id,
+      kind,
       name: ownNameOf(el),
-      trigger: is(el, 'bpmn:Event') ? facts.trigger() : undefined,
-      nonInterrupting: facts.nonInterrupting(),
-      props: message ? ElementContextBuilder.withoutKey(facts.props({ zeebe: false }), 'message') : facts.props({ zeebe: false }),
-      documentation: facts.documentation(),
-      implementation: facts.implementation(),
+      trigger,
+      nonInterrupting,
+      props: message ? ElementContextBuilder.withoutKey(props, 'message') : props,
+      documentation,
+      implementation: new ElementFacts(el).implementation(),
       ancestors,
       pool: pool && pool !== el ? compact({ id: shownId(pool), name: ownNameOf(pool) }) : undefined,
       lane: laneEl ? compact({ id: shownId(laneEl), name: ownNameOf(laneEl), via: lane?.via ? shownId(lane.via) : undefined, parents: nonEmpty(parents) }) : undefined,
@@ -161,20 +162,9 @@ export class ElementContextBuilder {
     return compact<ContextRef>({ id: shownId(el), kind: kindOrTypeLabel(el), name: ownNameOf(el) });
   }
 
-  private static conditionOf(flow: El): string | undefined {
-    const body = peek<El>(flow, 'conditionExpression') ? peek<unknown>(peek<El>(flow, 'conditionExpression')!, 'body') : undefined;
-    return typeof body === 'string' && body ? body : undefined;
-  }
-
   private static linkOf(node: El, flow: El): ContextLink {
-    const source = peek<El>(flow, 'sourceRef');
-    return compact<ContextLink>({
-      ...ElementContextBuilder.refOf(node),
-      flow: shownId(flow),
-      flowName: ownNameOf(flow),
-      condition: ElementContextBuilder.conditionOf(flow),
-      default: source && peek<El>(source, 'default') === flow ? true : undefined,
-    });
+    const { id, name, condition, default: isDefault } = new ElementFacts(flow).flowRef();
+    return compact<ContextLink>({ ...ElementContextBuilder.refOf(node), flow: id, flowName: name, condition, default: isDefault });
   }
 
   private static messageOf(el: El): El | undefined {

@@ -1,5 +1,5 @@
 import { is, type El } from '../../document/utils/moddle.js';
-import type { DEdge, DShape, EdgeKind, Plane, ShapeKind } from './types.js';
+import type { Box, DEdge, DShape, EdgeKind, Plane, ShapeKind } from './types.js';
 import { Semantics } from './Semantics.js';
 import { boxOf, idOf, raw, rawList } from '../utils/raw.js';
 
@@ -51,25 +51,31 @@ export class DiagramReader {
     return rawList(defs, 'rootElements').find((root) => is(root, 'bpmn:Process') || is(root, 'bpmn:Collaboration'));
   }
 
-  /** Undefined without valid bounds: the element counts as undrawn. */
-  private readShape(di: El, el: El, id: string): DShape | undefined {
-    const bounds = boxOf(raw(di, 'bounds'));
-    if (!bounds) return undefined;
+  /** A shape with its membership (host, lane, pool) from the semantic model; `expanded` only for sub-processes. */
+  static shapeOf(sem: Semantics, id: string, el: El, bounds: Box, expanded: boolean | undefined): DShape {
     const kind = DiagramReader.shapeKind(el);
-    const expanded = kind === 'subProcess' ? raw<boolean>(di, 'isExpanded') === true : undefined;
-    const container = kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true);
-    const label = boxOf(raw(raw(di, 'label'), 'bounds'));
-    const shape: DShape = { id, el, di, bounds, kind, container };
+    const shape: DShape = { id, el, bounds, kind, container: kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true) };
     if (expanded !== undefined) shape.expanded = expanded;
-    if (label) shape.label = label;
     if (kind === 'boundary') {
       const host = idOf(raw(el, 'attachedToRef'));
       if (host) shape.hostId = host;
     }
-    const lane = kind === 'lane' ? this.sem.laneParent.get(id) : this.sem.laneOf.get(id);
+    const lane = kind === 'lane' ? sem.laneParent.get(id) : sem.laneOf.get(id);
     if (lane) shape.laneId = lane;
-    const pool = this.sem.poolOf(id);
+    const pool = sem.poolOf(id);
     if (pool) shape.poolId = pool;
+    return shape;
+  }
+
+  /** Undefined without valid bounds: the element counts as undrawn. */
+  private readShape(di: El, el: El, id: string): DShape | undefined {
+    const bounds = boxOf(raw(di, 'bounds'));
+    if (!bounds) return undefined;
+    const expanded = Semantics.isSubProcess(el) ? raw<boolean>(di, 'isExpanded') === true : undefined;
+    const shape = DiagramReader.shapeOf(this.sem, id, el, bounds, expanded);
+    shape.di = di;
+    const label = boxOf(raw(raw(di, 'label'), 'bounds'));
+    if (label) shape.label = label;
     return shape;
   }
 

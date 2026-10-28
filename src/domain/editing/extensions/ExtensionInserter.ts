@@ -1,16 +1,16 @@
 import type { Doc } from '../../document/Doc.js';
 import { modelError, usageError } from '../../document/utils/errors.js';
-import { type Warning } from '../../document/CliError.js';
+import type { Finding } from '../../document/Finding.js';
 import { is, type El } from '../../document/utils/moddle.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
-import { coversProfileSubjects } from '../utils/covers.js';
+import { withUnserialised } from '../../document/utils/finding.js';
 import { familyPath, isCamunda, ruleName } from '../utils/vendor-family.js';
 import { EXTENSION_STRUCTURE } from './ExtensionStructure.js';
 import { ExtensionLevel } from './ExtensionLevel.js';
 import { ExtensionSnippetReader } from './ExtensionSnippetReader.js';
-import { NESTED_HOSTS } from '../NestedHosts.js';
+import { NESTED_HOSTS } from '../properties/NestedHosts.js';
 import { SelectorParser, type Step } from './SelectorParser.js';
-import { VendorElements } from '../VendorElements.js';
+import { VendorElements } from '../properties/VendorElements.js';
 import type { EditExtensionElements } from '../../commands/types.js';
 import { CAMUNDA } from '../../document/vendor/CamundaDescriptor.js';
 import { ZEEBE } from '../../document/vendor/ZeebeDescriptor.js';
@@ -42,17 +42,17 @@ export class ExtensionInserter {
   }
 
   /** Adds extension values; they are built and checked before anything in the document changes. */
-  add(el: El, op: EditExtensionElements): ChangeSet {
-    const cs = new ChangeSet();
+  add(el: El, command: EditExtensionElements): ChangeSet {
+    const changes = new ChangeSet();
     this.assertCanHoldExtensions(el);
-    const hasXml = op.xml !== undefined && op.xml.trim() !== '';
-    if (hasXml && ((op.attrs && Object.keys(op.attrs).length) || (op.body !== undefined && op.body !== ''))) {
+    const hasXml = command.xml !== undefined && command.xml.trim() !== '';
+    if (hasXml && ((command.attrs && Object.keys(command.attrs).length) || (command.body !== undefined && command.body !== ''))) {
       throw usageError('--xml cannot be combined with attr=value or --body', { element: this.hosts.idOf(el), hint: 'Put everything into the XML snippet, or use <type> attr=value --body <text>.' });
     }
-    if (!hasXml && !op.type) {
+    if (!hasXml && !command.type) {
       throw usageError('ext add needs --type <prefix:localName> (with --attr key=value / --body) or --xml <snippet>', { element: this.hosts.idOf(el) });
     }
-    const steps = op.type ? this.selectors.parse(op.type, el) : [];
+    const steps = command.type ? this.selectors.parse(command.type, el) : [];
     const last = steps[steps.length - 1];
     const out: Outcome[] = [];
     const notes: string[] = [];
@@ -60,7 +60,7 @@ export class ExtensionInserter {
 
     let values: El[];
     if (hasXml) {
-      values = this.snippets.parse(el, op.xml!, nested);
+      values = this.snippets.parse(el, command.xml!, nested);
       if (last) {
         const wanted = this.names.canonicalName(last.name);
         const wrong = values.filter((snippet) => this.names.typeOf(snippet) !== wanted);
@@ -73,29 +73,29 @@ export class ExtensionInserter {
         for (const snippet of values) this.applyStepKey(snippet, last, el);
       }
     } else {
-      const attrs = { ...(op.attrs ?? {}) };
-      if (last!.index !== undefined) this.selectors.fail(op.type!, 'an [index] only selects existing elements; give the attributes as attr=value', el);
+      const attrs = { ...(command.attrs ?? {}) };
+      if (last!.index !== undefined) this.selectors.fail(command.type!, 'an [index] only selects existing elements; give the attributes as attr=value', el);
       if (last!.attr !== undefined) {
         if (attrs[last!.attr] !== undefined && attrs[last!.attr] !== last!.value) {
           throw modelError('E_INVALID_VALUE', `${last!.text} and ${last!.attr}=${attrs[last!.attr]} disagree`, { element: this.hosts.idOf(el) });
         }
         attrs[last!.attr] = last!.value!;
       }
-      values = [this.names.createGeneric(el, last!.name, attrs, op.body, {}, nested)];
+      values = [this.names.createGeneric(el, last!.name, attrs, command.body, {}, nested)];
     }
 
     const level = this.parentLevel(el, steps.slice(0, -1), out, notes);
-    const drops: Warning[] = [];
+    const drops: Finding[] = [];
     for (const snippet of values) {
-      this.checkInsert(el, level.items(), level.type, snippet, !!op.replace);
-      this.insert(level, snippet, !!op.replace, out, notes, drops);
-      this.misplacedWarning(el, snippet, cs);
+      this.checkInsert(el, level.items(), level.type, snippet, !!command.replace);
+      this.insert(level, snippet, !!command.replace, out, notes, drops);
+      this.misplacedWarning(el, snippet, changes);
     }
-    for (const warning of drops) cs.warn(warning);
+    for (const warning of drops) changes.warn(warning);
     this.doc.invalidate();
-    for (const note of notes) cs.note(note);
-    if (out.some((outcome) => outcome.verb !== 'unchanged')) cs.change(ChangeSet.entryOf(this.hosts.ownerOf(el), this.describeOutcomes(out.filter((outcome) => outcome.verb !== 'unchanged'), this.hosts.slotPrefix(el))));
-    return cs;
+    for (const note of notes) changes.note(note);
+    if (out.some((outcome) => outcome.verb !== 'unchanged')) changes.change(ChangeSet.entryOf(this.hosts.ownerOf(el), this.describeOutcomes(out.filter((outcome) => outcome.verb !== 'unchanged'), this.hosts.slotPrefix(el))));
+    return changes;
   }
 
   private assertCanHoldExtensions(el: El): void {
@@ -152,7 +152,7 @@ export class ExtensionInserter {
   }
 
   /** Inserts a value at its level; a missing container is written with the prefix the file binds to its namespace. */
-  private insert(level: ExtensionLevel, value: El, replace: boolean, out: Outcome[], notes: string[], drops: Warning[] = []): void {
+  private insert(level: ExtensionLevel, value: El, replace: boolean, out: Outcome[], notes: string[], drops: Finding[] = []): void {
     const typeName = this.names.typeOf(value);
     const where = level.parent ? ` in ${level.label}` : '';
     const home = this.structure.homeAt(typeName, level.type);
@@ -253,7 +253,7 @@ export class ExtensionInserter {
     return filed ? value.$type : `${this.names.pathOf(level.parent)}/${value.$type}`;
   }
 
-  private keyedDrop(level: ExtensionLevel, match: El[], value: El): Warning | undefined {
+  private keyedDrop(level: ExtensionLevel, match: El[], value: El): Finding | undefined {
     const old = match[0]!;
     const lost: string[] = [];
     const now = this.names.attrsOf(value);
@@ -280,7 +280,7 @@ export class ExtensionInserter {
     };
   }
 
-  private merge(level: ExtensionLevel, existing: El, incoming: El, notes: string[], drops: Warning[] = []): Outcome {
+  private merge(level: ExtensionLevel, existing: El, incoming: El, notes: string[], drops: Finding[] = []): Outcome {
     const raw = existing as unknown as Raw;
     const changes: string[] = [];
     const have = this.names.attrsOf(existing);
@@ -359,7 +359,7 @@ export class ExtensionInserter {
    * Vendor content the engines never read where it was put. In a Camunda 8 file the profile's
    * W_C8_MISPLACED_EXTENSION replaces this warning for zeebe elements.
    */
-  private misplacedWarning(host: El, snippet: El, cs: ChangeSet): void {
+  private misplacedWarning(host: El, snippet: El, changes: ChangeSet): void {
     if (!snippet.$parent || snippet.$parent !== host.get<El | undefined>('extensionElements')) return;
     const typeName = this.names.typeOf(snippet);
     if (typeName.startsWith('zeebe:')) {
@@ -367,15 +367,15 @@ export class ExtensionInserter {
       const zeebeType = ZEEBE.type(local);
       if (!zeebeType || ZEEBE.allowedOn(local, host) !== false) return;
       const hosts = zeebeType.allowedIn.filter((allowedType) => allowedType.startsWith('bpmn:')).map((allowedType) => allowedType.slice(5).replace(/^./, (firstChar) => firstChar.toLowerCase()));
-      cs.warn(
-        coversProfileSubjects(
+      changes.warn(
+        withUnserialised(
           {
             code: 'W_MISPLACED_EXTENSION',
             message: `${snippet.$type} on ${this.hosts.labelOf(host)} (${host.$type}) is not read by Camunda 8: it belongs on ${hosts.length > 5 ? `${hosts.slice(0, 5).join(', ')}, ...` : hosts.join(', ')}`,
             element: this.hosts.idOf(host),
             hint: `Remove it (\`bpmn ext remove <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}${snippet.$type}\`) and add it where it is read (\`bpmn kinds\` lists the zeebe elements per kind).`,
           },
-          [`ext:${local}`],
+          { covers: [`ext:${local}`] },
         ),
       );
       return;
@@ -383,7 +383,7 @@ export class ExtensionInserter {
     if (!isCamunda(typeName)) return;
     if (this.structure.nestedOnly(typeName)) {
       const containers = this.structure.containersOf(typeName);
-      cs.warn({
+      changes.warn({
         code: 'W_MISPLACED_EXTENSION',
         message: `${snippet.$type} was added at the top level of the extensionElements of ${this.hosts.labelOf(host)}, where the engines do not read it; it belongs inside ${containers.join(' / ')}`,
         element: this.hosts.idOf(host),
@@ -392,7 +392,7 @@ export class ExtensionInserter {
       return;
     }
     if (ruleName(typeName) === 'camunda:field' && CAMUNDA.allowedOn(ruleName(typeName), host) === false) {
-      cs.warn({
+      changes.warn({
         code: 'W_MISPLACED_EXTENSION',
         message: `${snippet.$type} on ${this.hosts.labelOf(host)} (${host.$type}) is not read by the engines: field injection belongs to service, send and business rule tasks, a message event definition or a listener`,
         element: this.hosts.idOf(host),

@@ -3,9 +3,9 @@
  * prefix: `definition.` (or `definition[<n>]` / `definition[<trigger>]`), `loop.`, `condition.`.
  */
 import { modelError } from './errors.js';
-import { kindLabel, normalizeTrigger, TRIGGER_TYPES, type Trigger } from './kinds.js';
-import { is, type El } from './moddle.js';
-import { idOf, ownValue, typeLabel } from './elements.js';
+import { kindLabel, normalizeTrigger, TRIGGERS, triggerOfDefinition, type Trigger } from '../Kinds.js';
+import { is, typeLabel, type El } from './moddle.js';
+import { idOf, ownValue } from './elements.js';
 
 export const NESTED_SLOTS = ['definition', 'loop', 'condition'] as const;
 export type NestedSlot = (typeof NESTED_SLOTS)[number];
@@ -140,7 +140,7 @@ export function resolveNested(el: El, ref: SlotRef, what: string, example?: (pre
   const defs = definitionsOf(el);
   const listing = defs.map((definition, index) => `definition[${index}] = ${definitionText(definition)}`).join(', ');
   if (ref.index !== undefined || ref.trigger) {
-    const hits = ref.index !== undefined ? (defs[ref.index] ? [defs[ref.index]!] : []) : defs.filter((definition) => is(definition, TRIGGER_TYPES[ref.trigger!]));
+    const hits = ref.index !== undefined ? (defs[ref.index] ? [defs[ref.index]!] : []) : defs.filter((definition) => is(definition, TRIGGERS[ref.trigger!].definition));
     if (hits.length === 1) return hits[0];
     if (!hits.length) {
       throw modelError('E_NO_NESTED_ELEMENT', `${kindLabel(el)} ${id} has no event definition ${ref.text} (${what})`, {
@@ -157,7 +157,7 @@ export function resolveNested(el: El, ref: SlotRef, what: string, example?: (pre
 function ambiguousNested(el: El, defs: El[], what: string, count: string, example?: (prefix: string) => string) {
   const id = idOf(el);
   const listing = defs.map((definition, index) => `definition[${index}] = ${definitionText(definition)}`).join(', ');
-  const triggers = defs.map((definition) => (Object.entries(TRIGGER_TYPES) as Array<[string, string]>).find(([, type]) => is(definition, type))?.[0]).filter((trigger): trigger is string => !!trigger);
+  const triggers = defs.map(triggerOfDefinition).filter((trigger): trigger is Exclude<Trigger, 'none'> => !!trigger);
   const unique = triggers.filter((trigger, index) => triggers.indexOf(trigger) === index && triggers.lastIndexOf(trigger) === index);
   const rest = what.replace(/^definition(\[[^\]]*\])?\./, '');
   const show = example ?? ((prefix: string) => `bpmn set <file> ${id} '${prefix}.${rest}=<value>'`);

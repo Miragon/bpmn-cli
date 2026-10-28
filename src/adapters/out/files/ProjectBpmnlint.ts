@@ -1,8 +1,8 @@
 import { dirname, resolve } from 'node:path';
-import type { BpmnlintRuleSetting, BpmnlintUnavailable, ResolvedBpmnlintConfig } from '../../../domain/validation/bpmnlint-validator.js';
-import { BpmnlintValidator, BPMNLINT_VALIDATOR } from '../../../domain/validation/BpmnlintValidator.js';
-import { bpmnlintUnavailableFindings } from '../../../domain/validation/utils/bpmnlint.js';
-import { IdConventionsReader, ID_NAMING_RULE } from '../../../domain/document/ids/IdConventionsReader.js';
+import type { BpmnlintRuleSetting, BpmnlintUnavailable, ResolvedBpmnlintConfig } from '../bpmnlint/bpmnlint-contract.js';
+import { BpmnlintValidator, BPMNLINT_VALIDATOR } from '../bpmnlint/BpmnlintValidator.js';
+import { bpmnlintUnavailableFindings } from '../bpmnlint/utils/bpmnlint.js';
+import { IdConventionsReader, ID_NAMING_RULE } from '../bpmnlint/IdConventionsReader.js';
 import type { NamedValidator, Validator, ValidatorFinding } from '../../../domain/validation/validators.js';
 import { BpmnlintLibs } from './BpmnlintLibs.js';
 import { BpmnlintLoader, type LoadedBpmnlint } from './BpmnlintLoader.js';

@@ -1,9 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Command as CommandType } from 'commander';
-import { CommandParser } from '../../../domain/commands/CommandParser.js';
 import type { EditCommand } from '../../../domain/commands/types.js';
 import { ioError, usageError } from '../../../domain/document/utils/errors.js';
-import { parseOpsJson } from '../../../domain/commands/utils/ops-json.js';
 import type { RawOpts } from './CliCommand.js';
 import { MutationCommand } from './MutationCommand.js';
 
@@ -17,8 +15,8 @@ export class ApplyOpsCommand extends MutationCommand {
 
   private async run(file: string, opsFile: string | undefined, options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
-    const ops: EditCommand[] = new CommandParser().parse(parseOpsJson(await this.readOpsText(file, opsFile)));
-    await this.mutate(file, ops, opts);
+    const commands: EditCommand[] = this.cli.useCases.runCommands.parseCommandsJson({ json: await this.readOpsText(file, opsFile) });
+    await this.mutate(file, commands, opts);
   }
 
   private async readOpsText(file: string, opsFile: string | undefined): Promise<string> {

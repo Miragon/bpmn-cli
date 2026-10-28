@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { RENDER_MAX_SIZE, type RenderOptions, type RenderProblem, type RenderTile } from '../../../domain/views/render/types.js';
-import { CliError } from '../../../domain/document/CliError.js';
+import { BpmnError } from '../../../domain/document/BpmnError.js';
 import { DocRenderer } from '../../../domain/views/render/DocRenderer.js';
 
 export interface PngImage {
@@ -96,9 +96,9 @@ export class PngRenderer {
     }
   }
 
-  private renderError(message: string, cause: unknown): CliError {
+  private renderError(message: string, cause: unknown): BpmnError {
     const reason = cause instanceof Error ? cause.message : String(cause);
-    return new CliError('E_RENDER', `${message}: ${reason}`, 'io', {
+    return new BpmnError('E_RENDER', `${message}: ${reason}`, 'io', {
       hint: 'Write the SVG instead (`--format svg`), or render a smaller part; report the file if it keeps failing.',
     });
   }

@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
-import type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinterClass, BpmnlintResolver } from '../../../domain/validation/bpmnlint-validator.js';
-import type { IdNamingHelpers } from '../../../domain/document/ids/IdConventionsReader.js';
+import type { BpmnlintConfig, BpmnlintEngine, BpmnlintLinterClass, BpmnlintResolver } from '../bpmnlint/bpmnlint-contract.js';
+import type { IdNamingHelpers } from '../bpmnlint/IdConventionsReader.js';
 import { engineUnavailable, lazy, PLUGIN, SHIPPED, versionOf, type LoadFailure, type Require } from './utils/bpmnlint.js';
 import { firstLine } from '../../../domain/document/utils/text.js';
 

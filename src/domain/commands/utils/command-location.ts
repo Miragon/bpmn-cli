@@ -1,5 +1,5 @@
 import { usageError } from '../../document/utils/errors.js';
-import type { CliError } from '../../document/CliError.js';
+import type { BpmnError } from '../../document/BpmnError.js';
 
 export interface CommandLocation {
   index: number;
@@ -7,7 +7,7 @@ export interface CommandLocation {
   path: string;
 }
 
-export function commandUsageError(location: CommandLocation, message: string, hint?: string, candidates?: string[]): CliError {
+export function commandUsageError(location: CommandLocation, message: string, hint?: string, candidates?: string[]): BpmnError {
   return usageError(`${location.path}: ${message}`, {
     op: location.index,
     ...(hint ? { hint } : {}),

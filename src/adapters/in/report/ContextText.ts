@@ -1,6 +1,6 @@
-import type { ContextCatch, ContextLink, ContextMessage, ContextRef, ElementContext } from '../../../domain/views/context.js';
+import type { ContextCatch, ContextLink, ContextMessage, ContextRef, ElementContext } from '../../../domain/views/around-view.js';
 import { truncate } from '../../../domain/views/utils/view.js';
-import { detailMessageFlowText, DOC_MAX, flagValue, implementationFlags, named, quote, scalar } from './utils/view-lines.js';
+import { detailMessageFlowText, elementFlags, elementLine, flagValue, flowTraits, implementationFlags, named, quote } from './utils/view-lines.js';
 
 /**
  * `bpmn show <file> <id> --context`: the element's line, then one line per context
@@ -12,12 +12,8 @@ export class ContextText {
   text(): string {
     const context = this.context;
     const out: string[] = [];
-    const flags: string[] = [];
-    if (context.trigger) flags.push(context.trigger);
-    if (context.nonInterrupting) flags.push('non-interrupting');
-    for (const [key, value] of Object.entries(context.props ?? {})) flags.push(`${key}=${scalar(value)}`);
-    if (context.documentation) flags.push(`doc: ${quote(truncate(context.documentation, DOC_MAX))}`);
-    out.push(`${context.kind} ${named(context.id, context.name)}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
+    const { trigger, nonInterrupting, props, documentation } = context;
+    out.push(elementLine(context, elementFlags({ trigger, nonInterrupting, props, documentation })));
     const impl = implementationFlags(context.implementation);
     if (impl.length) out.push(`implementation: ${impl.join(', ')}`);
     if (context.message) out.push(`message: ${ContextText.messageText(context.message)}`);
@@ -50,10 +46,7 @@ export class ContextText {
   }
 
   private static linkText(link: ContextLink): string {
-    const flow = [link.flow];
-    if (link.flowName) flow.push(quote(link.flowName));
-    if (link.condition) flow.push(`if ${truncate(link.condition, 120)}`);
-    if (link.default) flow.push('default');
+    const flow = [link.flow, ...flowTraits({ name: link.flowName, condition: link.condition, default: link.default })];
     return `${ContextText.refText(link)} (${flow.join(' ')})${link.pool ? ` in ${named(link.pool, link.poolName)}` : ''}`;
   }
 

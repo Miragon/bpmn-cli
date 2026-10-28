@@ -14,7 +14,7 @@ The functions take the XML as a string and return the new XML with the result th
 ```ts
 import {
   applyToXml,
-  CliError,
+  BpmnError,
   newXml,
   renderMutation,
   showXml,
@@ -52,13 +52,13 @@ try {
     { op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' },
   ]);
 } catch (err) {
-  if (!(err instanceof CliError)) throw err;
+  if (!(err instanceof BpmnError)) throw err;
   err.code;               // 'E_NOT_FOUND'
   err.details.candidates; // ['Activity_CheckInvoice']
 }
 ```
 
-A failure throws a `CliError` (`code`, `details`, `toJSON()` for the CLI's `--json` error). Nothing
+A failure throws a `BpmnError` (`code`, `details`, `toJSON()` for the CLI's `--json` error). Nothing
 is half done: the caller still has its input.
 
 ## Two entries
@@ -95,7 +95,6 @@ the CLI prints with `--json`. `renderMutation(result)` gives the CLI's text.
 | option | values | CLI |
 | --- | --- | --- |
 | `layout` | `'auto'` (default), `'incremental'`, `'full'`, `false` | `--layout`, `--no-layout` |
-| `engine` | `'clean'` (default), `'auto'` | `--engine` |
 | `force` | write despite a guard | `--force` |
 | `platform` | `'auto'`, `'c7'`, `'c8'`, `'none'` | `--platform` |
 | `keepFlowIds` | keep flow ids; `W_FLOW_ID_STALE` names each stale one | `--keep-flow-ids` |
@@ -103,11 +102,6 @@ the CLI prints with `--json`. `renderMutation(result)` gives the CLI's text.
 | `conventions` | declared id conventions (below) | the `.bpmnlintrc` |
 
 The full signatures ship as TypeScript types with the package.
-
-::: warning engine: 'auto' and top-level await
-`engine: 'auto'` loads bpmn-auto-layout on demand. A host bundled with Rollup or Vite must not
-await such a call at the top level of its entry module (it hangs): call it from a function.
-:::
 
 ## File helpers (`@miragon/bpmn-cli/node`) {#file-helpers-miragon-bpmn-cli-node}
 

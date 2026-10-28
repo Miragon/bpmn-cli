@@ -1,6 +1,6 @@
 import type { Doc } from '../document/Doc.js';
 import { usageError } from '../document/utils/errors.js';
-import { type AroundView, type ElementContext } from './context.js';
+import { type AroundView, type ElementContext } from './around-view.js';
 import { type LayoutView } from './layout-view.js';
 import { type ElementDetail, type ModelView } from './model-view.js';
 import { AroundWindow } from './AroundWindow.js';

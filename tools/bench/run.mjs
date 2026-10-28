@@ -23,7 +23,7 @@
  *    E_IMPORT_LOSSY / E_VALIDATION is repeated with --force as a separate
  *    record (variant `force`). E7 runs the applicable edits E1-E6 of a model
  *    one invocation after the other.
- *  - Global: every global variant of the arm (layout, tidy, engine-auto / the
+ *  - Global: every global variant of the arm (layout, tidy / the
  *    PR's layout and tidy modes) on the unedited model.
  *  - Per record (JSONL, <out>/<track>-<arm key>.jsonl): exit, steps, ms,
  *    semantic check, stability (all flow nodes and without the intentionally

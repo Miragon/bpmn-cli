@@ -3,12 +3,11 @@
  * XML that would be written. Only error findings the change introduced block the write.
  */
 import type { Doc } from '../document/Doc.js';
-import type { Warning } from '../document/CliError.js';
 import type { EditCommand } from '../commands/types.js';
 import type { Platform } from '../document/vendor/PlatformDetection.js';
 
-export type { ValidatorFinding, ValidatorSeverity } from '../document/validator-finding.js';
-import type { ValidatorFinding, ValidatorSeverity } from '../document/validator-finding.js';
+export type { ValidatorFinding, ValidatorIssue, ValidatorSeverity } from '../document/Finding.js';
+import type { ValidatorFinding, ValidatorIssue } from '../document/Finding.js';
 
 export interface ValidatorContext {
   file?: string;
@@ -39,11 +38,6 @@ export interface NamedValidator {
 
 /** A function (named by its function name) or a named validator. */
 export type Validator = ValidatorFn | NamedValidator;
-
-export interface ValidatorIssue extends Warning {
-  validator: string;
-  severity: ValidatorSeverity;
-}
 
 /** One validator's findings in a result; a mutation lists only what the change introduced. */
 export interface ValidatorReport {

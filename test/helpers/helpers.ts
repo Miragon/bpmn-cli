@@ -8,24 +8,28 @@ import { CreateDocumentService } from '../../src/application/service/CreateDocum
 import { RelayoutDiagramService } from '../../src/application/service/RelayoutDiagramService.js';
 import { ValidateDocumentService } from '../../src/application/service/ValidateDocumentService.js';
 import { ReadDocumentService } from '../../src/application/service/ReadDocumentService.js';
-import { ShowModelService } from '../../src/application/service/ShowModelService.js';
 import { ShowConventionsService } from '../../src/application/service/ShowConventionsService.js';
-import { FindElementsService } from '../../src/application/service/FindElementsService.js';
 import { RenderDiagramService } from '../../src/application/service/RenderDiagramService.js';
+import { ShowModelService } from '../../src/application/service/ShowModelService.js';
+import { FindElementsService } from '../../src/application/service/FindElementsService.js';
+import { AnalyzeLayoutService } from '../../src/application/service/AnalyzeLayoutService.js';
+import { RunCommandsService } from '../../src/application/service/RunCommandsService.js';
 
 const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
 
 /** The use cases on the file system, as src/cli.ts wires them. */
 export const FILE_USE_CASES: CliUseCases = {
-  editDocument: new EditDocumentService(project, files, files),
+  editDocument: new EditDocumentService(project, files),
   createDocument: new CreateDocumentService(project, files),
-  relayoutDiagram: new RelayoutDiagramService(project, files, files),
+  relayoutDiagram: new RelayoutDiagramService(project, files),
   validateDocument: new ValidateDocumentService(project, files),
   readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),
   findElements: new FindElementsService(),
+  analyzeLayout: new AnalyzeLayoutService(),
+  runCommands: new RunCommandsService(),
   renderDiagram: new RenderDiagramService(files, new FileImageWriter()),
 };
 

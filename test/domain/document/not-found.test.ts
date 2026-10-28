@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../../../src/api.js';
-import { CliError } from '../../../src/domain/document/CliError.js';
+import { BpmnError } from '../../../src/domain/document/BpmnError.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { runOps } from '../../../src/index.js';
 
@@ -21,11 +21,11 @@ async function invoice(): Promise<string> {
   ).xml;
 }
 
-async function notFound(xml: string, ops: unknown): Promise<CliError> {
+async function notFound(xml: string, ops: unknown): Promise<BpmnError> {
   try {
     await applyToXml(xml, ops);
   } catch (err) {
-    if (err instanceof CliError) return err;
+    if (err instanceof BpmnError) return err;
     throw err;
   }
   throw new Error('expected E_NOT_FOUND');
@@ -79,12 +79,12 @@ describe('E_NOT_FOUND candidates', () => {
 
   it('a batch that fails at its first op: the plain hint afterwards', async () => {
     const doc = await Doc.fromXml(await invoice());
-    let err: CliError | undefined;
+    let err: BpmnError | undefined;
     try {
       runOps(doc, [{ op: 'remove', ids: ['Activity_ChekInvoice'] }]);
       doc.require('Activity_Chek');
     } catch (error) {
-      err = error as CliError;
+      err = error as BpmnError;
     }
     expect(err?.details.candidates?.[0]).toBe('Activity_CheckInvoice');
     expect(err?.details.hint).toBe('Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.');

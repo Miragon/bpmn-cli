@@ -7,7 +7,7 @@ export abstract class EditCommandDefinition<TCommand extends EditCommand = EditC
   abstract readonly description: string;
   abstract readonly fields: FieldsOf<TCommand> & Record<string, FieldSpec>;
   /** Changes only the drawing: runs after the layout of the model commands before it. */
-  readonly diagramOnly: boolean = false;
+  readonly diagramCommand: boolean = false;
   /** Keys that hold an element id (or a list of them): where an alias may stand. */
   abstract readonly referenceKeys: readonly string[];
   /** An alias in a new-id key is a mistake: the alias key it belongs in. */

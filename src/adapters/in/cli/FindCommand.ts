@@ -1,5 +1,4 @@
 import type { Command as CommandType } from 'commander';
-import { assertKindToken } from '../../../domain/document/utils/kinds.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
 import { renderFind } from '../report/utils/view-lines.js';
 
@@ -18,7 +17,7 @@ export class FindCommand extends CliCommand {
 
   /** Kind tokens fail with the documented kind codes (like `add`), not commander's text. */
   private kindArg(value: string): string {
-    assertKindToken(value);
+    this.cli.useCases.findElements.assertKind({ kind: value });
     return value;
   }
 }

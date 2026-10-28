@@ -4,7 +4,7 @@ import type { Semantics } from '../../diagram/di/Semantics.js';
 import type { Doc } from '../../document/Doc.js';
 import { is } from '../../document/utils/moddle.js';
 import { AroundWindow } from '../AroundWindow.js';
-import { ElementSelector } from '../../diagram/format/ElementSelector.js';
+import { ElementSelector } from '../../diagram/commands/ElementSelector.js';
 import { modelError, usageError } from '../../document/utils/errors.js';
 import type { RenderOptions } from './types.js';
 import { planeOfId } from '../utils/planes.js';

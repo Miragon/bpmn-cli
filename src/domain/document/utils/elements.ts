@@ -1,5 +1,5 @@
-import { kindLabel } from './kinds.js';
-import { localType, type El } from './moddle.js';
+import { kindLabel } from '../Kinds.js';
+import type { El } from './moddle.js';
 
 /** The subset of a moddle property descriptor the mutations rely on. */
 export interface PropDescriptor {
@@ -39,12 +39,6 @@ export function labelOf(el: El): string {
 
 export function isEl(value: unknown): value is El {
   return !!value && typeof value === 'object' && typeof (value as El).$type === 'string';
-}
-
-/** `multiInstanceLoopCharacteristics` */
-export function typeLabel(el: El): string {
-  const local = localType(el);
-  return local.charAt(0).toLowerCase() + local.slice(1);
 }
 
 export function vendorAttributes(el: El): Record<string, string> {

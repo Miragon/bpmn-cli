@@ -4,7 +4,7 @@
  */
 import { cutAt, MAX_ID } from '../../document/utils/slug.js';
 import { is, type El } from '../../document/utils/moddle.js';
-import { idOf, raw, rawList } from './raw.js';
+import { idOf, raw, rawList, rawTree } from './raw.js';
 
 export type Style = 'suffix' | 'bpmn' | 'short';
 
@@ -17,23 +17,9 @@ function styleOf(diId: string, elId: string, kind: 'Shape' | 'Edge'): Style | un
 
 export function allIds(defs: El): Set<string> {
   const ids = new Set<string>();
-  const stack: El[] = [defs];
-  const seen = new Set<El>();
-  while (stack.length) {
-    const el = stack.pop()!;
-    if (seen.has(el)) continue;
-    seen.add(el);
+  for (const el of rawTree(defs)) {
     const id = idOf(el);
     if (id) ids.add(id);
-    const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
-    if (descriptor.isGeneric) continue;
-    for (const property of descriptor.properties ?? []) {
-      if (property.isReference) continue;
-      const value = raw<unknown>(el, property.name);
-      if (Array.isArray(value)) {
-        for (const child of value) if (child && typeof child === 'object' && '$type' in child) stack.push(child as El);
-      } else if (value && typeof value === 'object' && '$type' in value) stack.push(value as El);
-    }
   }
   return ids;
 }
@@ -95,12 +81,6 @@ export function rootDiId(kind: 'Plane' | 'Diagram', root: string): string {
 
 export function namesRoot(kind: 'Plane' | 'Diagram', diId: string | undefined, root: string): boolean {
   return diId === `BPMN${kind}_${root}` || diId === rootDiId(kind, root);
-}
-
-/** Then DiIdMemo keeps the engine's ids for a drawing without old DI. */
-export function diIdsFit(defs: El): boolean {
-  for (const id of allIds(defs)) if (id.length > MAX_DI - 'BPMNDiagram_'.length) return false;
-  return true;
 }
 
 export interface IdClaims {

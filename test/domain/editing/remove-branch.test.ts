@@ -8,8 +8,8 @@ import { applyToXml } from '../../../src/api.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { runOps } from '../../../src/index.js';
 import { definitionsXml } from '../../helpers/helpers.js';
-import { ElementRemovalService } from '../../../src/domain/editing/ElementRemovalService.js';
-import { EditContext } from '../../../src/domain/document/EditContext.js';
+import { ElementRemoval } from '../../../src/domain/editing/elements/ElementRemoval.js';
+import { EditSession } from '../../../src/domain/document/EditSession.js';
 import { failure } from '../../helpers/errors.js';
 
 /** Nodes `[tag, id, extra attrs]` and flows `[id, source, target]` (incoming / outgoing written). */
@@ -140,7 +140,7 @@ describe('remove --with-branch', () => {
 
   it('branchOf reports the stops in document order', async () => {
     const doc = await Doc.fromXml(SPLIT);
-    const branch = new ElementRemovalService(doc, new EditContext(doc)).branchOf(doc.require('D1'));
+    const branch = new ElementRemoval(new EditSession(doc)).branchOf(doc.require('D1'));
     expect(branch.nodes.map((node) => node.get('id'))).toEqual(['D1']);
     expect(branch.stops.map((node) => node.get('id'))).toEqual(['J']);
   });

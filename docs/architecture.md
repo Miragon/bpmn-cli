@@ -9,9 +9,11 @@ goes are in [CONTRIBUTING.md](https://github.com/Miragon/bpmn-cli/blob/main/CONT
 bpmn-cli runs as the `bpmn` command, as a Node library (`@miragon/bpmn-cli/node`) and as a
 browser library (`@miragon/bpmn-cli`). All three must change a model in exactly the same way.
 So what a change means lives once, in the **domain**, which knows nothing about files, flags
-or `process`. Around it, the **application** offers one use case per thing a caller can do.
-At the edge, **adapters** translate between the outside world and those use cases. This is a
-hexagonal architecture (ports and adapters).
+or `process`. Around it, the **application** offers one use case per thing a caller can do,
+also a pure query (`show`, `find`, `metrics`, an SVG in memory) that needs no outbound port.
+At the edge, **adapters** translate between the outside world and those use cases; neither the
+CLI nor the library skips the use case to call the domain. This is a hexagonal architecture
+(ports and adapters).
 
 ```mermaid
 flowchart TB
@@ -24,20 +26,28 @@ flowchart TB
   service --> portOut{{"Port<br/>application/port/out"}}
   portOut --> files["Files<br/>adapters/out/files"]
   portOut --> memory["No project, no files<br/>adapters/out/memory"]
+  files --> store["Loading and saving a document<br/>adapters/out/document"]
+  memory --> store
+  files --> bpmnlint["bpmnlint<br/>adapters/out/bpmnlint"]
+  lib --> bpmnlint
 
   classDef adapter stroke:#2f80ed,stroke-width:2px
   classDef app stroke:#f2994a,stroke-width:2px
   classDef core stroke:#27ae60,stroke-width:3px
-  class cli,files,memory adapter
+  class cli,files,memory,store,bpmnlint adapter
   class portIn,service,portOut app
   class domain core
 ```
 
 The frame colour shows the layer: blue for adapters, orange for the application, green for the
 domain. Imports point inwards only: adapters → application → domain.
-The entries in the root of `src/` (`cli.ts`, `node.ts`, `api.ts`) are the only files that know
+The entries in the root of `src/` (`cli.ts`, `index.ts`, `node.ts`, `api.ts`) are the only files that know
 every layer. They create the services with `new` and pass the adapters in. There is no
 container.
+`adapters/out/bpmnlint/` wraps an injected bpmnlint as a `Validator` of the domain. The file
+adapters hand it the `.bpmnlintrc` they load; `index.ts` hands it to hosts that bring their own
+bpmnlint. `adapters/out/document/` is what the file store and the in-memory store share behind
+the `DocumentPort`: a source parsed into a `Doc`, the target of a write, the save.
 
 | rule (checked by the test) | why |
 | --- | --- |
@@ -45,7 +55,9 @@ container.
 | `application/` imports no adapter | a service does not know whether it writes to disk or does not write at all |
 | only adapters and entries import `node:*` | the browser bundle stays free of Node |
 | `adapters/in` knows use cases only by their interface | the entry decides which service is behind it |
-| each service implements one use case and calls no other service | one way in, no hidden orchestration |
+| the entries import only types from `domain/` and re-export only the public classes and constants the test lists | the entries reach the domain only through the use cases, so the CLI and the library run the same way in |
+| an adapter imports another only where the test names it (the CLI the reports, the files bpmnlint, the files and the memory store the shared document store) | the entries wire the adapters |
+| `application/service/` holds only services; each implements one use case and uses no other class of `application/service/` | one way in, no hidden orchestration |
 
 ## The journey of `bpmn add`
 
@@ -55,7 +67,7 @@ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
 
 ```mermaid
 flowchart TB
-  user(["bpmn add"]) --> s1["1 · AddElementCommand"] --> s2{{"2 · EditDocumentUseCase"}} --> s3["3 · EditDocumentService"] --> s4["4 · EditBatchService"] --> s5["5 · ModelCommandService"] --> s6["6 · ElementCreationService"]
+  user(["bpmn add"]) --> s1["1 · AddElementCommand"] --> s2{{"2 · EditDocumentUseCase"}} --> s3["3 · EditDocumentService"] --> s4["4 · EditBatch"] --> s5["5 · ModelCommands"] --> s6["6 · ElementCreation"]
   s3 <-- "read · write" --> s7[("7 · FileDocumentStore")]
   s3 -- result --> s8["8 · MutationText"]
 
@@ -101,14 +113,14 @@ export class AddElementCommand extends MutationCommand {
   ) {
     const opts = this.mutationOptions(options)
     this.checkPlacementFlags(options)
-    const op: AddElement = {
+    const command: AddElement = {
       op: 'add',
       kind,                       // 'userTask'
       name,                       // 'Check invoice'
       after: options['after'],    // 'Event_OrderReceived'
       // …
     }
-    await this.mutate(file, [op], opts)
+    await this.mutate(file, [command], opts)
   }
 }
 ```
@@ -126,13 +138,13 @@ behind it, `cli.ts` decided at startup.
 // src/adapters/in/cli/MutationCommand.ts
 protected async mutate(
   file: string,
-  ops: EditCommand[],
+  commands: EditCommand[],
   opts: MutationFlags,
 ) {
   const result = await this.cli.useCases.editDocument.edit({
     ...opts,
     source: { file },
-    commands: ops,
+    commands,
   })
   // step 8
   await this.printMutation(result, opts, this.cli.io.stdout)
@@ -156,25 +168,25 @@ export declare namespace EditDocumentUseCase {
 ### 3. Load, run, save
 
 The service is short on purpose: get the document, let the domain work, write the result.
-`settings`, `load` and `save` are outbound ports, handed in by the constructor. The call into
-the domain stands on a line of its own; reading and writing the file are small steps around it.
+`settings` and `documents` are outbound ports, handed in by the constructor. The call into
+the domain stands on a line of its own; reading and writing the file are calls of the port
+around it.
 
 ```ts
 // src/application/service/EditDocumentService.ts
 export class EditDocumentService implements EditDocumentUseCase {
   constructor(
     private readonly settings: LoadProjectSettingsPort,
-    private readonly load: LoadDocumentPort,
-    private readonly save: SaveDocumentPort,
+    private readonly documents: DocumentPort,
   ) {}
 
   async edit(command: EditDocumentUseCase.Command) {
     const { source, commands, ...opts } = command
-    const doc = await this.open(source, opts)            // step 7: read the file
-    const target = await this.targetOf(doc, opts)
+    const doc = await this.documents.load(source, { ...opts, lossless: true })   // step 7: read the file
+    const target = await this.documents.target(doc.file, opts)
     const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo(opts, target)
-    const result = await new EditBatchService(doc, commands, project).run(target)   // step 4: the domain
-    await this.write(result, doc, target, opts)          // step 7: write the file
+    const result = await new EditBatch(doc, commands, project).run(target)      // step 4: the domain
+    await this.documents.save(result, doc, target, opts)                        // step 7: write the file
     return result
   }
 }
@@ -186,12 +198,12 @@ or written.
 
 ### 4. The batch
 
-The domain starts here. `EditBatchService` runs all commands of one call on the `Doc` in
+The domain starts here. `EditBatch` runs all commands of one call on the `Doc` in
 memory, then validates, lays out the drawing and writes only the changed parts back into the
 original text. If anything throws, nothing is written: the caller keeps its input.
 
 ```ts
-// src/domain/batch/EditBatchService.ts
+// src/domain/batch/EditBatch.ts
 async run(file = this.doc.file): Promise<MutationResult> {
   // lossless import, Camunda 7 / 8 rules loaded
   await this.guard()
@@ -204,10 +216,10 @@ async run(file = this.doc.file): Promise<MutationResult> {
   const { batch } = await this.runCommands(diagram)
 
   // new errors refuse the write
-  await this.validate(findings, batch)
+  await this.validateAndDropProfileDuplicates(findings, batch)
 
   // lay out the drawing, rewrite only what changed in the text
-  const drawn = await diagram.apply(this.edit, batch.ops, batch.changes)
+  const drawn = await diagram.apply(this.edit, batch.commands, batch.changes)
   const xml = await this.keptText(drawn.xml, …)
 
   return this.result(file, batch, xml, drawn.layout, …)
@@ -216,24 +228,23 @@ async run(file = this.doc.file): Promise<MutationResult> {
 
 ### 5. The right service for the op
 
-`ModelCommandService` runs the commands in order and hands each one to the service that knows
-it. Commands that only move shapes (`place`, `align`, `color`, …) are left for the layout in
+`ModelCommands` runs the commands in order and hands each one to the class that knows
+it, created with the `EditSession`: the `Doc` and what the running batch recorded so far. Commands that only move shapes (`place`, `align`, `color`, …) are left for the layout in
 step 4.
 
 ```ts
-// src/domain/batch/ModelCommandService.ts
-private dispatch(op: EditCommand): ChangeSet {
-  if (isDiagramCommand(op)) return new ChangeSet()
-  const { doc, edit } = this
-  switch (op.op) {
+// src/domain/batch/ModelCommands.ts
+private dispatch(command: EditCommand): ChangeSet {
+  if (isDiagramCommand(command)) return new ChangeSet()
+  switch (command.op) {
     case 'add':
-      return new ElementCreationService(doc, edit).add(op)
+      return new ElementCreation(this.edit).add(command)
     case 'connect':
-      return new ConnectionService(doc, edit).connect(op)
+      return new Connections(this.edit).connect(command)
     case 'set':
-      return new PropertyService(doc, edit).set(op)
+      return new Properties(this.edit).set(command)
     case 'remove':
-      return new ElementRemovalService(doc, edit).remove(op)
+      return new ElementRemoval(this.edit).remove(command)
     // … retype, move, order, ext, split
   }
 }
@@ -241,61 +252,77 @@ private dispatch(op: EditCommand): ChangeSet {
 
 ### 6. The model changes
 
-`ElementCreationService` makes the new element in the bpmn-moddle tree of the `Doc`, places it
+`ElementCreation` makes the new element in the bpmn-moddle tree of the `Doc`, places it
 after `Event_OrderReceived` (which creates the sequence flow), and records everything it did in
 a `ChangeSet`.
 
 ```ts
-// src/domain/editing/ElementCreationService.ts
-add(op: AddElement): ChangeSet {
-  const cs = new ChangeSet()
-  // 'userTask' → bpmn:UserTask
-  const { def, trigger } = ElementCreationService.resolveKind(op.kind)
-  const el = this.addFlowNode(op, def, trigger, cs)
-  if (op.set) {
-    const values = { op: 'set', id: idOf(el), values: op.set }
-    cs.merge(new PropertyService(this.doc, this.edit).set(values))
+// src/domain/editing/elements/ElementCreation.ts
+export class ElementCreation {
+  constructor(private readonly edit: EditSession) {}
+
+  add(command: AddElement): ChangeSet {
+    const cs = new ChangeSet()
+    // 'userTask' → bpmn:UserTask
+    const { def, trigger } = parseKindToAdd(command.kind)
+    const el = this.addFlowNode(command, def, trigger, cs)
+    if (command.set) {
+      const values = { op: 'set', id: idOf(el), values: command.set }
+      cs.merge(new Properties(this.edit).set(values))
+    }
+    return cs
   }
-  return cs
-}
 
-private addFlowNode(
-  op: AddElement,
-  def: KindDef,
-  trigger: Trigger | undefined,
-  cs: ChangeSet,
-): El {
-  // 'Activity_CheckInvoice'
-  const id = this.edit.allocator.explicitOr(op.id, …)
-  const el = this.doc.create(def.type, { id, name: op.name })
-  cs.create({ id, kind: def.kind, name: op.name })
+  private addFlowNode(
+    command: AddElement,
+    def: KindDef,
+    trigger: Trigger | undefined,
+    cs: ChangeSet,
+  ): El {
+    // 'Activity_CheckInvoice'
+    const id = this.edit.allocator.explicitOr(command.id, …)
+    const el = this.edit.doc.create(def.type, { id, name: command.name })
+    cs.create({ id, kind: def.kind, name: command.name })
 
-  // --after: splice in behind the anchor and add the sequence flow
-  new NodePlacementService(this.doc, this.edit, op).place(el, cs)
-  return el
+    // --after: splice in behind the anchor and add the sequence flow
+    new NodePlacement(this.edit, command).place(el, cs)
+    return el
+  }
 }
 ```
 
 ### 7. The file
 
-`FileDocumentStore` implements both file ports. It is the only class on this path that imports
-`node:fs`.
+`FileDocumentStore` implements the `DocumentPort`. What it shares with the in-memory
+`NoDocumentFiles` (parsing a source into a `Doc`, the lossless check, the target of a write,
+whether to write at all) is their base class `DocumentStore` in `adapters/out/document/`; the
+file store only adds the bytes on disk. It is the only class on this path that imports `node:fs`.
 
 ```ts
+// src/adapters/out/document/DocumentStore.ts
+export abstract class DocumentStore implements DocumentPort {
+  async load(source, opts = {}) {
+    const doc = await this.parse(source)   // a { doc }, its XML or the bytes of a file
+    if (opts.lossless) doc.assertLossless(opts)
+    return doc
+  }
+
+  async save(result, doc, target, opts) {
+    if (!opts.dryRun && target) result.written = await this.write(target, result.xml, …)
+  }
+}
+
 // src/adapters/out/files/FileDocumentStore.ts
-export class FileDocumentStore
-  implements LoadDocumentPort, SaveDocumentPort
-{
+export class FileDocumentStore extends DocumentStore {
   // decoded in the encoding the XML declares
-  read(file: string): Promise<string> {
+  protected read(file: string): Promise<string> {
     return readXml(file)
   }
 
-  async save(target: string, xml: string, opts: SaveOptions) {
-    const { source, unchanged, backup } = opts
+  protected async write(target: string, xml: string, opts: WriteOptions) {
     // a no-op leaves the file alone
-    if (unchanged && target === source) return false
-    if (backup && source) await FileDocumentStore.backup(source)
+    if (opts.unchanged && inPlace) return false
+    if (opts.backup && opts.source) await FileDocumentStore.backup(opts.source)
     // a failed write leaves the old file
     await writeAtomic(target, xml)
     return true
@@ -342,6 +369,6 @@ flowchart LR
   class def core
 ```
 
-A new command therefore needs a definition, a `case` in `ModelCommandService` and a service in
-`domain/editing/`. `bpmn apply` and `applyToXml()` accept it from then on. A verb of its own on
+A new command therefore needs a definition, a `case` in `ModelCommands` and a class of
+`domain/editing/` created with the `EditSession`. `bpmn apply` and `applyToXml()` accept it from then on. A verb of its own on
 the command line (`bpmn <verb>`) is optional and lives in `adapters/in/cli/`.

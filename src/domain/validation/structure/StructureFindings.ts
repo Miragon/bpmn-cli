@@ -1,13 +1,13 @@
-import type { Warning } from '../../document/CliError.js';
-import { kindLabel } from '../../document/utils/kinds.js';
+import type { Finding } from '../../document/Finding.js';
+import { kindLabel } from '../../document/Kinds.js';
 import { peek, shownId, type El } from '../../document/utils/moddle.js';
 
 type Extra = { related?: string[]; hint?: string };
 
 /** The errors (block writes) and warnings (lint) one structural validation collects. */
 export class StructureFindings {
-  readonly errors: Warning[] = [];
-  readonly warnings: Warning[] = [];
+  readonly errors: Finding[] = [];
+  readonly warnings: Finding[] = [];
 
   error(code: string, message: string, element: string | undefined, extra: Extra = {}): void {
     StructureFindings.push(this.errors, code, message, element, extra);
@@ -28,8 +28,8 @@ export class StructureFindings {
     return `${kindLabel(el)} ${shownId(el)}${name ? ` "${name}"` : ''}`;
   }
 
-  private static push(target: Warning[], code: string, message: string, element: string | undefined, extra: Extra): void {
-    const finding: Warning = { code, message };
+  private static push(target: Finding[], code: string, message: string, element: string | undefined, extra: Extra): void {
+    const finding: Finding = { code, message };
     if (element) finding.element = element;
     if (extra.related?.length) finding.related = extra.related;
     if (extra.hint) finding.hint = extra.hint;

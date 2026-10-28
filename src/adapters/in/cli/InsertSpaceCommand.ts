@@ -20,8 +20,8 @@ export class InsertSpaceCommand extends FormatCommand {
         }),
     ).action(async (file: string, options: RawOpts) => {
       this.checkFlagGroups(options, [['after', 'below']], 'space needs --after <id> (horizontal space) or --below <id> (vertical space)');
-      const op: InsertSpace = { op: 'space', ...this.pick(options, ['after', 'below'] as const), ...(options['by'] !== undefined ? { by: options['by'] as InsertSpace['by'] } : {}) };
-      await this.runFormat(file, op, options);
+      const command: InsertSpace = { op: 'space', ...this.pick(options, ['after', 'below'] as const), ...(options['by'] !== undefined ? { by: options['by'] as InsertSpace['by'] } : {}) };
+      await this.runFormat(file, command, options);
     });
   }
 }

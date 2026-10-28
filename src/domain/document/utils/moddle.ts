@@ -44,6 +44,12 @@ export function is(el: unknown, type: string): boolean {
   return !!el && typeof el === 'object' && typeof (el as El).$instanceOf === 'function' && (el as El).$instanceOf(type);
 }
 
+export function enclosingProcess(scope: El | undefined): El | undefined {
+  let current: El | undefined = scope;
+  while (current && !is(current, 'bpmn:Process')) current = current.$parent as El | undefined;
+  return current;
+}
+
 /** A group has no `name`: it is the value of its category value. */
 export function groupName(group: El): string | undefined {
   return group.get<El | undefined>('categoryValueRef')?.get<string | undefined>('value') || undefined;
@@ -53,8 +59,14 @@ export function nameOf(el: El): string | undefined {
   return is(el, 'bpmn:Group') ? groupName(el) : el.get<string | undefined>('name');
 }
 
-export function localType(el: El): string {
+function localType(el: El): string {
   return el.$type.split(':')[1] ?? el.$type;
+}
+
+/** `multiInstanceLoopCharacteristics` */
+export function typeLabel(el: El): string {
+  const local = localType(el);
+  return local.charAt(0).toLowerCase() + local.slice(1);
 }
 
 export function many(el: El, prop: string): El[] {
@@ -153,24 +165,6 @@ export function indexById(root: El, opts: { semanticOnly?: boolean } = {}): Map<
   return map;
 }
 
-export function findReferences(root: El, target: El): Array<{ holder: El; prop: string; isMany: boolean }> {
-  const refs: Array<{ holder: El; prop: string; isMany: boolean }> = [];
-  for (const el of walk(root)) {
-    const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean; isMany?: boolean }> };
-    if (descriptor.isGeneric) continue;
-    for (const property of descriptor.properties ?? []) {
-      if (!property.isReference) continue;
-      const value = el.get<unknown>(property.name);
-      if (property.isMany) {
-        if (Array.isArray(value) && value.includes(target)) refs.push({ holder: el, prop: property.name, isMany: true });
-      } else if (value === target) {
-        refs.push({ holder: el, prop: property.name, isMany: false });
-      }
-    }
-  }
-  return refs;
-}
-
 function rootElements(defs: El): El[] {
   return many(defs, 'rootElements');
 }
@@ -183,7 +177,7 @@ export function collaboration(defs: El): El | undefined {
   return rootElements(defs).find((element) => is(element, 'bpmn:Collaboration'));
 }
 
-/** What bpmn-auto-layout lays out. */
+/** What a full layout lays out. */
 export function layoutRoot(defs: El): El | undefined {
   return collaboration(defs) ?? processes(defs)[0];
 }

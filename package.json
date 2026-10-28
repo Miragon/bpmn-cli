@@ -52,6 +52,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "knip": "knip",
+    "lint": "biome lint",
     "layout:regress": "node tools/layout-regress.mjs",
     "bench": "node tools/bench/run.mjs",
     "bench:summary": "node tools/bench/summary.mjs",
@@ -61,19 +62,19 @@
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run build && knip && knip --production --exclude dependencies && jscpd && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
+    "gate": "npm run build && biome lint && knip && knip --production --exclude dependencies && jscpd && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@miragon/bpmnlint-plugin-rules": "0.14.0",
     "@resvg/resvg-wasm": "2.6.2",
-    "bpmn-auto-layout": "2.0.0-alpha.2",
     "bpmn-moddle": "^10.2.0",
     "bpmnlint": "11.15.0",
     "commander": "^15.0.0",
     "moddle": "^8.2.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "^26.0.0",
     "archunit": "2.5.4",
     "camunda-bpmn-moddle": "8.0.2",

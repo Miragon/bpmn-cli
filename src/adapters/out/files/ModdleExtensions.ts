@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { extname, join } from 'node:path';
-import type { BpmnlintConfig, BpmnlintUnavailable } from '../../../domain/validation/bpmnlint-validator.js';
-import { moddleEntries } from '../../../domain/validation/utils/bpmnlint.js';
+import type { BpmnlintConfig, BpmnlintUnavailable } from '../bpmnlint/bpmnlint-contract.js';
+import { moddleEntries } from '../bpmnlint/utils/bpmnlint.js';
 import type { BpmnlintLibs } from './BpmnlintLibs.js';
 import { depState, resolveFirst, type Dep } from './utils/dependencies.js';
 import { inside, shown } from './utils/paths.js';

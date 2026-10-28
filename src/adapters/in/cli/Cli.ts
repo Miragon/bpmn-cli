@@ -1,7 +1,7 @@
 import { Command, CommanderError, type Command as CommandType } from 'commander';
 import { Doc } from '../../../domain/document/Doc.js';
-import { type Warning } from '../../../domain/document/CliError.js';
-import { ioError, isCliError, usageError } from '../../../domain/document/utils/errors.js';
+import type { Finding } from '../../../domain/document/Finding.js';
+import { ioError, isBpmnError, usageError } from '../../../domain/document/utils/errors.js';
 import { validatorTag } from '../report/utils/findings.js';
 import type { EditDocumentUseCase } from '../../../application/port/in/EditDocumentUseCase.js';
 import type { CreateDocumentUseCase } from '../../../application/port/in/CreateDocumentUseCase.js';
@@ -11,6 +11,8 @@ import type { ReadDocumentUseCase } from '../../../application/port/in/ReadDocum
 import type { ShowModelUseCase } from '../../../application/port/in/ShowModelUseCase.js';
 import type { ShowConventionsUseCase } from '../../../application/port/in/ShowConventionsUseCase.js';
 import type { FindElementsUseCase } from '../../../application/port/in/FindElementsUseCase.js';
+import type { AnalyzeLayoutUseCase } from '../../../application/port/in/AnalyzeLayoutUseCase.js';
+import type { RunCommandsUseCase } from '../../../application/port/in/RunCommandsUseCase.js';
 import type { RenderDiagramUseCase } from '../../../application/port/in/RenderDiagramUseCase.js';
 import { describeOptionsByDefinitions } from './utils/definition-help.js';
 import { AddElementCommand } from './AddElementCommand.js';
@@ -60,6 +62,8 @@ export interface CliUseCases {
   showModel: ShowModelUseCase;
   showConventions: ShowConventionsUseCase;
   findElements: FindElementsUseCase;
+  analyzeLayout: AnalyzeLayoutUseCase;
+  runCommands: RunCommandsUseCase;
   renderDiagram: RenderDiagramUseCase;
 }
 
@@ -184,7 +188,7 @@ export class Cli {
   /** Writes the error to stderr and sets the exit code. */
   printError(err: unknown, json: boolean | undefined): void {
     const stderr = this.io.stderr;
-    if (isCliError(err)) {
+    if (isBpmnError(err)) {
       if (json) {
         stderr.write(`${JSON.stringify({ ok: false, error: err.toJSON() })}\n`);
       } else {
@@ -193,7 +197,7 @@ export class Cli {
         if (details.element) lines.push(`  element: ${String(details.element)}`);
         if (Array.isArray(details.related) && details.related.length) lines.push(`  related: ${details.related.join(', ')}`);
         if (Array.isArray(details.candidates) && details.candidates.length) lines.push(`  candidates: ${details.candidates.join(', ')}`);
-        if (Array.isArray(details.errors)) for (const issue of details.errors as Warning[]) lines.push(`  ${validatorTag(issue)}${issue.code}${issue.element ? ` ${issue.element}` : ''}: ${issue.message}${issue.hint ? `  (${issue.hint})` : ''}`);
+        if (Array.isArray(details.errors)) for (const issue of details.errors as Finding[]) lines.push(`  ${validatorTag(issue)}${issue.code}${issue.element ? ` ${issue.element}` : ''}: ${issue.message}${issue.hint ? `  (${issue.hint})` : ''}`);
         if (Array.isArray(details.warnings)) for (const warning of details.warnings as string[]) lines.push(`  ${warning}`);
         if (details.op !== undefined) lines.push(`  op: #${String(details.op)}`);
         if (details.hint) lines.push(`  hint: ${String(details.hint)}`);

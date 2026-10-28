@@ -1,8 +1,8 @@
 import type { Shot } from '../../../application/port/out/WriteImagePort.js';
-import { AROUND_DEFAULT_DEPTH } from '../../../domain/views/context.js';
+import { AROUND_DEFAULT_DEPTH } from '../../../domain/views/around-view.js';
 import type { RenderHighlight, RenderOptions } from '../../../domain/views/render/types.js';
 import { scaleText } from '../../../domain/views/utils/scale.js';
-import type { CliError } from '../../../domain/document/CliError.js';
+import type { BpmnError } from '../../../domain/document/BpmnError.js';
 
 export class RenderReport {
   constructor(private readonly shot: Shot) {}
@@ -18,7 +18,7 @@ export class RenderReport {
     return [`render: ${lines[0]!}`, ...lines.slice(1).map((line) => `  ${line}`)];
   }
 
-  static failureLine(err: CliError): string {
+  static failureLine(err: BpmnError): string {
     return `render: failed ${err.code}: ${err.message}${err.details.hint ? `  (${String(err.details.hint)})` : ''}`;
   }
 

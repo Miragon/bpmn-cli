@@ -1,5 +1,4 @@
-import type { Doc } from '../Doc.js';
-import type { EditContext } from '../EditContext.js';
+import type { EditSession } from '../EditSession.js';
 import { ElementLabels } from '../ids/ElementLabels.js';
 import { typeRequest } from '../utils/requests.js';
 import { speakingStem } from '../utils/id-words.js';
@@ -11,10 +10,7 @@ import { ZEEBE_URI } from './ZeebeDescriptor.js';
  * `<zeebe:userTask />` on new user tasks and speaking ids on new event definitions.
  */
 export class Camunda8Defaults {
-  constructor(
-    private readonly doc: Doc,
-    private readonly edit: EditContext,
-  ) {}
+  constructor(private readonly edit: EditSession) {}
 
   /**
    * Without `<zeebe:userTask />` Camunda 8 runs a job worker user task,
@@ -24,16 +20,16 @@ export class Camunda8Defaults {
     if (this.edit.platform() !== 'c8' || !is(el, 'bpmn:UserTask')) return false;
     const container = el.get<El | undefined>('extensionElements');
     const values = container ? many(container, 'values') : [];
-    if (values.some((extension) => extension.$type.endsWith(':userTask') && this.doc.namespaceUri(extension.$type.slice(0, extension.$type.indexOf(':'))) === ZEEBE_URI)) return false;
-    const prefix = this.doc.prefixFor(ZEEBE_URI) ?? 'zeebe';
-    this.doc.declareNamespace(prefix, ZEEBE_URI);
+    if (values.some((extension) => extension.$type.endsWith(':userTask') && this.edit.doc.namespaceUri(extension.$type.slice(0, extension.$type.indexOf(':'))) === ZEEBE_URI)) return false;
+    const prefix = this.edit.doc.prefixFor(ZEEBE_URI) ?? 'zeebe';
+    this.edit.doc.declareNamespace(prefix, ZEEBE_URI);
     let ext = container;
     if (!ext) {
-      ext = this.doc.moddle.create('bpmn:ExtensionElements');
+      ext = this.edit.doc.moddle.create('bpmn:ExtensionElements');
       ext.$parent = el;
       el.set('extensionElements', ext);
     }
-    addTo(ext, 'values', this.doc.moddle.createAny(`${prefix}:userTask`, ZEEBE_URI, {}) as unknown as El);
+    addTo(ext, 'values', this.edit.doc.moddle.createAny(`${prefix}:userTask`, ZEEBE_URI, {}) as unknown as El);
     return true;
   }
 

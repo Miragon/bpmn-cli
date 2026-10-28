@@ -1,12 +1,11 @@
-import { is, many, type El, idOf } from '../../../document/utils/moddle.js';
+import { enclosingProcess, is, many, type El, idOf } from '../../../document/utils/moddle.js';
 import { SIZES, annotationSize } from '../../utils/sizes.js';
-import { center, borderPoint } from '../../utils/geom.js';
+import { center, borderPoint, type Segment } from '../../utils/geom.js';
 import type { Box, Point } from '../../di/types.js';
 import type { EngineWarning } from './CleanEngine.js';
 import type { DiWriter } from './DiWriter.js';
 import { NotePlacer, type NoteJob } from './NotePlacer.js';
 import type { PoolLayout } from './PoolStacker.js';
-import type { Segment } from '../../utils/geometry.js';
 import { laneDepth } from '../../utils/lanes.js';
 import { isContainerShape, poolOf } from '../../utils/pools.js';
 
@@ -134,8 +133,7 @@ export class CollaborationArtifacts {
 
   private laneBoxOf(el: El): Box | undefined {
     const { absBoxes } = this.writer;
-    let process: El | undefined = el.$parent as El | undefined;
-    while (process && !is(process, 'bpmn:Process')) process = process.$parent as El | undefined;
+    const process = enclosingProcess(el.$parent as El | undefined);
     if (!process) return undefined;
     const visit = (laneSet: El | undefined): Box | undefined => {
       for (const lane of laneSet ? many(laneSet, 'lanes') : []) {

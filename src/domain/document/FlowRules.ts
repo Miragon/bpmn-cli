@@ -1,6 +1,6 @@
 import type { Doc } from './Doc.js';
 import { modelError } from './utils/errors.js';
-import { ignoresConditions, isEventSubProcess, isLinkCatch, isLinkThrow, kindLabel } from './utils/kinds.js';
+import { ignoresConditions, isEventSubProcess, isLinkCatch, isLinkThrow, kindLabel } from './Kinds.js';
 import { idOf, is, type El } from './utils/moddle.js';
 
 type Role = 'source' | 'target';

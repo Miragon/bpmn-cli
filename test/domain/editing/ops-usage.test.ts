@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../../../src/api.js';
 import { parseOps } from '../../../src/index.js';
-import { CliError } from '../../../src/domain/document/CliError.js';
+import { BpmnError } from '../../../src/domain/document/BpmnError.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { parseSpaceAmount } from '../../../src/domain/commands/utils/space-amount.js';
 
@@ -30,11 +30,11 @@ const ROOT = join(import.meta.dirname, '..', '..', '..');
 const BIN = join(ROOT, 'dist', 'cli.js');
 const CLAIM = readFileSync(join(ROOT, 'tools', 'scenarios', 'agent__claim.bpmn'), 'utf8');
 
-async function rejected(promise: Promise<unknown>): Promise<CliError> {
+async function rejected(promise: Promise<unknown>): Promise<BpmnError> {
   try {
     await promise;
   } catch (err) {
-    if (err instanceof CliError) return err;
+    if (err instanceof BpmnError) return err;
     throw err;
   }
   throw new Error('expected an error');
@@ -143,7 +143,7 @@ describe('wrong op shapes: a hint with the right one', () => {
     try {
       parseOps(ops);
     } catch (err) {
-      const failure = err as CliError;
+      const failure = err as BpmnError;
       return { message: failure.message, hint: failure.details.hint as string | undefined };
     }
     throw new Error('expected E_USAGE');

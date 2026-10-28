@@ -103,8 +103,8 @@ written: order.bpmn
 
 ## Layout conventions of the built-in engine
 
-The default engine (`--engine clean`) draws every diagram the same way, so you can predict the
-picture from the model.
+The built-in engine draws every diagram the same way, so you can predict the picture from the
+model.
 
 | element | where it goes |
 | --- | --- |

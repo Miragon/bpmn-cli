@@ -14,7 +14,7 @@ export interface FieldSpec {
   alias?: boolean;
 }
 
-export type FieldsOf<TOp> = { [TKey in Exclude<keyof TOp, 'op'>]-?: FieldSpec };
+export type FieldsOf<TCommand> = { [TKey in Exclude<keyof TCommand, 'op'>]-?: FieldSpec };
 
 export type SplitNode = SplitBranch['nodes'][number];
 

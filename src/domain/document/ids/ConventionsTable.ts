@@ -1,11 +1,16 @@
 import type { BpmnlintSeverity } from './bpmnlint-rule-setting.js';
 import type { Doc } from '../Doc.js';
-import { KINDS } from '../utils/kinds.js';
-import type { ValidatorFinding } from '../validator-finding.js';
+import { KINDS } from '../Kinds.js';
+import type { ValidatorFinding } from '../Finding.js';
 import { IdStyle, type FlowForm, type PrefixSource } from './IdStyle.js';
-import type { IdConventions, QualifierMode } from './IdConventionsReader.js';
+import type { IdConventions, QualifierMode } from './IdConventions.js';
 import { kindRequest, typeRequest, type IdRequest } from '../utils/requests.js';
-import { UNQUALIFIED_NOTE } from '../utils/conventions-text.js';
+
+/**
+ * Notes event triggers whose required qualified prefix new ids cannot have:
+ * they follow the file's style.
+ */
+export const UNQUALIFIED_NOTE = "qualified prefix ignored, the file's style (W_CONFIG_IGNORED)";
 
 export interface ConventionsRow {
   /** `serviceTask_{name:camel}`; `<kind>_{name:camel}` for kinds whose prefix is their own name */

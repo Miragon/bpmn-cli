@@ -7,7 +7,7 @@ import { EditCommandDefinition } from './EditCommandDefinition.js';
 export class TidyShapesDefinition extends EditCommandDefinition<TidyShapes> {
   readonly name = 'tidy' as const;
   readonly description = 'Diagram only: remove overlaps and gaps < 20 px with minimal moves, keeping the order (= `bpmn tidy`, `bpmn layout --tidy`).';
-  override readonly diagramOnly = true;
+  override readonly diagramCommand = true;
   readonly fields: FieldsOf<TidyShapes> = {
     ids: list('Only these shapes (default: every shape of every diagram).', { minItems: 1 }),
     ...SELECTOR_FIELDS,

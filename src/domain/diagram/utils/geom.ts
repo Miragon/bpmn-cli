@@ -1,7 +1,10 @@
 /** Pure geometry on plain boxes and points in diagram pixels, y growing downwards. */
 import type { Box, Point } from '../di/types.js';
+import type { XIndex } from '../layout/clean/XIndex.js';
 
 export type { Box, Point };
+
+export type Segment = [Point, Point];
 
 export function center(box: Box): Point {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -92,7 +95,7 @@ function slab(origin: number, direction: number, lo: number, hi: number): [numbe
  * so a straight association passing beside a shape does not hit it.
  */
 export function segmentHits(start: Point, end: Point, box: Box, shrink = 2): boolean {
-  const boxHit = Math.min(start.x, end.x) < right(box) - shrink && Math.max(start.x, end.x) > box.x + shrink && Math.min(start.y, end.y) < bottom(box) - shrink && Math.max(start.y, end.y) > box.y + shrink;
+  const boxHit = segmentHitsBox(start, end, box, shrink);
   if (!boxHit || start.x === end.x || start.y === end.y) return boxHit;
   if (right(box) - shrink <= box.x + shrink || bottom(box) - shrink <= box.y + shrink) return false;
   const [ax, bx] = slab(start.x, end.x - start.x, box.x + shrink, right(box) - shrink);
@@ -103,8 +106,8 @@ export function segmentHits(start: Point, end: Point, box: Box, shrink = 2): boo
 }
 
 /** Touching the border does not count. */
-export function segmentHitsBox(start: Point, end: Point, box: Box): boolean {
-  return Math.min(start.x, end.x) < right(box) && Math.max(start.x, end.x) > box.x && Math.min(start.y, end.y) < bottom(box) && Math.max(start.y, end.y) > box.y;
+export function segmentHitsBox(start: Point, end: Point, box: Box, shrink = 0): boolean {
+  return Math.min(start.x, end.x) < right(box) - shrink && Math.max(start.x, end.x) > box.x + shrink && Math.min(start.y, end.y) < bottom(box) - shrink && Math.max(start.y, end.y) > box.y + shrink;
 }
 
 const orient = (first: Point, second: Point, third: Point): number => Math.sign((second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x));
@@ -118,6 +121,11 @@ export function segmentsCross(firstStart: Point, firstEnd: Point, secondStart: P
   return o1 !== o2 && o3 !== o4 && !!o1 && !!o2 && !!o3 && !!o4;
 }
 
+/** shared endpoints and collinear overlaps do not count */
+export function properCross([firstStart, firstEnd]: Segment, [secondStart, secondEnd]: Segment): boolean {
+  return segmentsCross(firstStart, firstEnd, secondStart, secondEnd);
+}
+
 export function polylinesCross(first: readonly Point[], second: readonly Point[]): boolean {
   for (let firstIndex = 0; firstIndex + 1 < first.length; firstIndex++) {
     for (let secondIndex = 0; secondIndex + 1 < second.length; secondIndex++) if (segmentsCross(first[firstIndex]!, first[firstIndex + 1]!, second[secondIndex]!, second[secondIndex + 1]!)) return true;
@@ -127,6 +135,56 @@ export function polylinesCross(first: readonly Point[], second: readonly Point[]
 
 export function pathHits(points: readonly Point[], box: Box, shrink = 2): boolean {
   for (let index = 0; index + 1 < points.length; index++) if (segmentHits(points[index]!, points[index + 1]!, box, shrink)) return true;
+  return false;
+}
+
+export function toSegments(points: Point[]): Segment[] {
+  const out: Segment[] = [];
+  for (let index = 0; index + 1 < points.length; index++) out.push([points[index]!, points[index + 1]!]);
+  return out;
+}
+
+export function dedupe(points: Point[]): Point[] {
+  return points.filter((point, index) => index === 0 || point.x !== points[index - 1]!.x || point.y !== points[index - 1]!.y);
+}
+
+interface Span {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+}
+
+function innerSpan(start: Point, end: Point): Span {
+  const dx = Math.sign(end.x - start.x), dy = Math.sign(end.y - start.y);
+  const ax = start.x + dx * 2, ay = start.y + dy * 2, bx = end.x - dx * 2, by = end.y - dy * 2;
+  return { x1: Math.min(ax, bx), x2: Math.max(ax, bx), y1: Math.min(ay, by), y2: Math.max(ay, by) };
+}
+
+function spanCuts({ x1, x2, y1, y2 }: Span, box: Box): boolean {
+  return x1 < box.x + box.width && x2 > box.x && y1 < box.y + box.height && y2 > box.y;
+}
+
+/** touching a box's own border does not count */
+export function hitCount(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Box[]): number {
+  let hit: Set<Box> | undefined;
+  for (let index = 0; index + 1 < points.length; index++) {
+    const span = innerSpan(points[index]!, points[index + 1]!);
+    const test = (box: Box): void => {
+      if (spanCuts(span, box) && !ignore.includes(box)) (hit ??= new Set()).add(box);
+    };
+    if (Array.isArray(boxes)) boxes.forEach(test);
+    else boxes.each(span.x1, span.x2, test);
+  }
+  return hit?.size ?? 0;
+}
+
+export function pathHitsAny(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Box[]): boolean {
+  for (let index = 0; index + 1 < points.length; index++) {
+    const span = innerSpan(points[index]!, points[index + 1]!);
+    const cuts = (box: Box): boolean => spanCuts(span, box) && !ignore.includes(box);
+    if (Array.isArray(boxes) ? boxes.some(cuts) : boxes.each(span.x1, span.x2, cuts)) return true;
+  }
   return false;
 }
 

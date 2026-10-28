@@ -1,7 +1,6 @@
 import { is, type El } from '../../document/utils/moddle.js';
 import type { Box, Point } from './types.js';
-import { containsPoint, cx, cy, segmentHits, segmentsCross } from '../utils/geom.js';
-import { toSegments, type Segment } from '../utils/geometry.js';
+import { containsPoint, cx, cy, segmentHits, segmentsCross, toSegments, type Segment } from '../utils/geom.js';
 import { collinear, drawnEnds, glyph, hits, joinTail, readDrawnPlane, subTitleOf, type Edge, type Shape } from '../utils/harness.js';
 import { idOf, raw, rawList } from '../utils/raw.js';
 import type { LayoutProblem } from '../utils/problems.js';
@@ -147,10 +146,10 @@ export class ProblemLocator {
         return seg ? this.midpoint(seg[0], seg[1]) : undefined;
       }
       case 'degenerateEdge':
-        return ea?.pts[0];
+        return ea?.points[0];
       case 'detachedEdge': {
-        if (!ea || ea.pts.length < 2) return undefined;
-        return drawnEnds(ea.el)[0] === secondId ? ea.pts[0] : ea.pts[ea.pts.length - 1];
+        if (!ea || ea.points.length < 2) return undefined;
+        return drawnEnds(ea.el)[0] === secondId ? ea.points[0] : ea.points[ea.points.length - 1];
       }
       case 'labelClash': {
         const own = labelOf(firstId);
@@ -172,12 +171,12 @@ export class ProblemLocator {
         return ea && eb ? this.sharedAt(ea, eb, joinTail(ea, eb, pl.shapes.get(problem.ids[2] ?? ''))) : undefined;
       case 'edgeLeavesLane':
       case 'edgeOutside':
-        return sb ? ea?.pts.find((point) => !containsPoint(sb.bounds, point)) : undefined;
+        return sb ? ea?.points.find((point) => !containsPoint(sb.bounds, point)) : undefined;
       case 'laneGap':
         if (!sa || !sb) return undefined;
         return problem.detail === 'bottom' ? { x: cx(sa.bounds), y: (sa.bounds.y + sa.bounds.height + sb.bounds.y + sb.bounds.height) / 2 } : { x: cx(sa.bounds), y: (sa.bounds.y + sb.bounds.y) / 2 };
       case 'backwardFlow':
-        return ea ? this.halfway(ea.pts) : undefined;
+        return ea ? this.halfway(ea.points) : undefined;
       case 'labelOutsideFrame':
       case 'messageLabelFar': {
         const own = labelOf(firstId);

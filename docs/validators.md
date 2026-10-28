@@ -12,7 +12,7 @@ flow and is refused; the second one passes.
 ```ts
 import {
   applyToXml,
-  CliError,
+  BpmnError,
   newXml,
   type NamedValidator,
 } from '@miragon/bpmn-cli';
@@ -50,7 +50,7 @@ try {
   };
   await applyToXml(xml, [archive], { validators: [houseRules] });
 } catch (err) {
-  if (!(err instanceof CliError)) throw err;
+  if (!(err instanceof BpmnError)) throw err;
   err.code;
   // 'E_VALIDATION'
   err.message;

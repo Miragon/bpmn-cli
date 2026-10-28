@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import type { BpmnlintConfig, BpmnlintEngine, BpmnlintUnavailable, ResolvedBpmnlintConfig } from '../../../domain/validation/bpmnlint-validator.js';
-import { BpmnlintConfigResolution } from '../../../domain/validation/BpmnlintConfigResolution.js';
-import { bpmnlintUnavailableFindings } from '../../../domain/validation/utils/bpmnlint.js';
+import type { BpmnlintConfig, BpmnlintEngine, BpmnlintUnavailable, ResolvedBpmnlintConfig } from '../bpmnlint/bpmnlint-contract.js';
+import { BpmnlintConfigResolution } from '../bpmnlint/BpmnlintConfigResolution.js';
+import { bpmnlintUnavailableFindings } from '../bpmnlint/utils/bpmnlint.js';
 import { BpmnlintLibs } from './BpmnlintLibs.js';
 import { ChainResolver, type BpmnlintChain } from './ChainResolver.js';
 import { BPMNLINT_CONFIG_FILE } from './ConfigLookup.js';

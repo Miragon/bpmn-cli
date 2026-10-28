@@ -24,15 +24,15 @@ export class MoveCommand extends MutationCommand {
   private async run(file: string, ids: string[], options: RawOpts): Promise<void> {
     const opts = this.mutationOptions(options);
     this.checkPlacementFlags(options);
-    const op: MoveElements = {
+    const command: MoveElements = {
       op: 'move',
       ids,
       ...givenStrings(options, ['after', 'before', 'flow', 'in', 'on']),
       ...(options['lane'] !== undefined ? { lane: String(options['lane']) } : {}),
     };
-    if (!op.after && !op.before && !op.flow && !op.in && !op.on && op.lane === undefined) {
+    if (!command.after && !command.before && !command.flow && !command.in && !command.on && command.lane === undefined) {
       throw usageError('move needs one of --after, --before, --flow, --in, --on or --lane');
     }
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 }

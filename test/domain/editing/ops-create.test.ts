@@ -2,22 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { allLanes } from '../../../src/domain/document/utils/lanes.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { is, many, type El } from '../../../src/domain/document/utils/moddle.js';
-import { AssociationService, PLACEHOLDER_PROPERTY } from '../../../src/domain/editing/AssociationService.js';
-import { LaneService } from '../../../src/domain/editing/participants/LaneService.js';
+import { PLACEHOLDER_PROPERTY, Associations } from '../../../src/domain/editing/connections/Associations.js';
+import { Connections } from '../../../src/domain/editing/connections/Connections.js';
+import { Lanes } from '../../../src/domain/editing/elements/Lanes.js';
 import { laneOf } from '../../../src/domain/document/utils/lanes.js';
 import { EventTrigger } from '../../../src/domain/editing/events/EventTrigger.js';
 import type { AddElement, ConnectElements, SplitIntoBranches } from '../../../src/domain/commands/types.js';
 import { BRANCH_FIELDS, NODE_FIELDS } from '../../../src/domain/commands/utils/op-fields.js';
 import { parseOps } from '../../../src/index.js';
-import type { CliError } from '../../../src/domain/document/CliError.js';
+import type { BpmnError } from '../../../src/domain/document/BpmnError.js';
 import { mutateDoc } from '../../../src/index.js';
 import { ChangeSet } from '../../../src/domain/document/ChangeSet.js';
 import { definitionsXml, docFromXml, flowBetween, linearDoc } from '../../helpers/helpers.js';
-import { EventDefinitionService } from '../../../src/domain/editing/events/EventDefinitionService.js';
-import { ElementCreationService } from '../../../src/domain/editing/ElementCreationService.js';
-import { ConnectionService } from '../../../src/domain/editing/ConnectionService.js';
-import { BranchSplitService } from '../../../src/domain/editing/flows/BranchSplitService.js';
-import { EditContext } from '../../../src/domain/document/EditContext.js';
+import { EventDefinitions } from '../../../src/domain/editing/events/EventDefinitions.js';
+import { ElementCreation } from '../../../src/domain/editing/elements/ElementCreation.js';
+import { BranchSplit } from '../../../src/domain/editing/connections/BranchSplit.js';
+import { EditSession } from '../../../src/domain/document/EditSession.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -32,11 +32,11 @@ async function roundTrip(doc: Doc): Promise<{ xml: string; doc: Doc }> {
 }
 
 function add(doc: Doc, op: Omit<AddElement, 'op'>): ChangeSet {
-  return new ElementCreationService(doc, new EditContext(doc)).add({ op: 'add', ...op });
+  return new ElementCreation(new EditSession(doc)).add({ op: 'add', ...op });
 }
 
 function connect(doc: Doc, op: Omit<ConnectElements, 'op'>): ChangeSet {
-  return new ConnectionService(doc, new EditContext(doc)).connect({ op: 'connect', ...op });
+  return new Connections(new EditSession(doc)).connect({ op: 'connect', ...op });
 }
 
 function ids(els: El[]): string[] {
@@ -409,10 +409,10 @@ describe('triggers', () => {
     expect(codeOf(() => add(doc, { kind: 'startEvent:message', message: 'M', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
     expect(codeOf(() => add(doc, { kind: 'endEvent', nonInterrupting: true }))).toBe('E_INVALID_TRIGGER');
     // retriggering a non-interrupting boundary event to error makes it interrupting again
-    new EventDefinitionService(doc, new EditContext(doc), doc.require('Event_NI')).apply('error', { error: 'E' });
+    new EventDefinitions(new EditSession(doc)).setTrigger(doc.require('Event_NI'), 'error', { error: 'E' });
     expect(doc.require('Event_NI').get('cancelActivity')).toBe(true);
-    new EventDefinitionService(doc, new EditContext(doc), doc.require('Event_NI')).apply('timer', { timer: 'PT1H', nonInterrupting: true });
-    new EventDefinitionService(doc, new EditContext(doc), doc.require('Event_NI')).apply('timer', { timer: 'PT1H', nonInterrupting: false });
+    new EventDefinitions(new EditSession(doc)).setTrigger(doc.require('Event_NI'), 'timer', { timer: 'PT1H', nonInterrupting: true });
+    new EventDefinitions(new EditSession(doc)).setTrigger(doc.require('Event_NI'), 'timer', { timer: 'PT1H', nonInterrupting: false });
     expect(doc.require('Event_NI').get('cancelActivity')).toBe(true);
     await roundTrip(doc);
   });
@@ -446,11 +446,11 @@ describe('triggers', () => {
     const cs = add(doc, { kind: 'userTask', name: 'T', in: 'Process_1', timer: 'PT1H' });
     expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_OPTION_IGNORED']);
     add(doc, { kind: 'startEvent:message', name: 'M', message: 'X', in: 'Process_1' });
-    new EventDefinitionService(doc, new EditContext(doc), doc.require('Event_M')).apply('none');
+    new EventDefinitions(new EditSession(doc)).setTrigger(doc.require('Event_M'), 'none');
     expect(many(doc.require('Event_M'), 'eventDefinitions')).toHaveLength(0);
     expect(new EventTrigger(doc.require('Event_M')).describe()).toBe('');
-    expect(codeOf(() => new EventDefinitionService(doc, new EditContext(doc), doc.require('Task_A')).apply('timer'))).toBe('E_WRONG_KIND');
-    expect(codeOf(() => new EventDefinitionService(doc, new EditContext(doc), doc.require('Start')).apply('terminate'))).toBe('E_INVALID_TRIGGER');
+    expect(codeOf(() => new EventDefinitions(new EditSession(doc)).setTrigger(doc.require('Task_A'), 'timer'))).toBe('E_WRONG_KIND');
+    expect(codeOf(() => new EventDefinitions(new EditSession(doc)).setTrigger(doc.require('Start'), 'terminate'))).toBe('E_INVALID_TRIGGER');
     await roundTrip(doc);
   });
 });
@@ -546,7 +546,7 @@ describe('lanes', () => {
     expect(laneOf(doc, doc.require('Task_A'))?.get('id')).toBe('Lane_Outbound');
     expect(ids(allLanes(doc.require('Process_1')))).toEqual(['Lane_Sales', 'Lane_Inbound', 'Lane_Outbound', 'Lane_Backoffice']);
     // parent lanes with children cannot take members directly
-    expect(codeOf(() => new LaneService(doc, new EditContext(doc)).assign(doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
+    expect(codeOf(() => new Lanes(new EditSession(doc)).assign(doc.require('End'), doc.require('Lane_Sales'), new ChangeSet()))).toBe('E_INVALID_LANE_MEMBERSHIP');
     // nodes added after a member inherit the nested lane
     add(doc, { kind: 'task', name: 'Ship', after: 'Task_A' });
     expect(laneOf(doc, doc.require('Task_Ship'))?.get('id')).toBe('Lane_Outbound');
@@ -554,14 +554,14 @@ describe('lanes', () => {
     expect(xml).toMatch(/<bpmn:lane id="Lane_Sales" name="Sales">\s*<bpmn:childLaneSet id="LaneSet_Sales">\s*<bpmn:lane id="Lane_Inbound" name="Inbound">/);
   });
 
-  it('LaneService.assign moves nodes with their boundary events and rejects sub-process children', async () => {
+  it('Lanes.assign moves nodes with their boundary events and rejects sub-process children', async () => {
     const doc = await docFromXml(WITH_LANES);
     add(doc, { kind: 'boundaryEvent:timer', name: 'BE', on: 'Task_A', timer: 'PT1H' });
     const cs = new ChangeSet();
-    new LaneService(doc, new EditContext(doc)).assign(doc.require('Task_A'), doc.require('Lane_Backoffice'), cs);
+    new Lanes(new EditSession(doc)).assign(doc.require('Task_A'), doc.require('Lane_Backoffice'), cs);
     expect(ids(many(doc.require('Lane_Backoffice'), 'flowNodeRef'))).toEqual(['End', 'Task_A', 'Event_BE']);
     expect(ids(many(doc.require('Lane_Sales'), 'flowNodeRef'))).toEqual(['Start']);
-    new LaneService(doc, new EditContext(doc)).assign(doc.require('Task_A'), undefined, cs);
+    new Lanes(new EditSession(doc)).assign(doc.require('Task_A'), undefined, cs);
     expect(doc.lanesOf(doc.require('Task_A'))).toHaveLength(0);
     expect(doc.lanesOf(doc.require('Event_BE'))).toHaveLength(0);
     expect(cs.changed.some((change) => change.id === 'Task_A' && change.detail === 'removed from lanes')).toBe(true);
@@ -617,7 +617,7 @@ describe('data objects, stores and annotations', () => {
     expect(xml).toMatch(new RegExp(`<bpmn:dataOutputAssociation id="${outId}">\\s*<bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>`));
 
     // removal cleans the placeholder property
-    new AssociationService(doc, new EditContext(doc)).removeDataAssociation(doc.require(inId));
+    new Associations(new EditSession(doc)).removeDataAssociation(doc.require(inId));
     expect(many(task, 'properties')).toHaveLength(0);
     expect(many(task, 'dataInputAssociations')).toHaveLength(0);
     expect(doc.has(inId)).toBe(false);
@@ -684,9 +684,9 @@ describe('data objects, stores and annotations', () => {
     const doc = await linearDoc();
     add(doc, { kind: 'dataObject', name: 'D' });
     const cs = new ChangeSet();
-    expect(codeOf(() => new AssociationService(doc, new EditContext(doc)).createDataAssociation(doc.require('DataObjectReference_D'), doc.require('End'), {}, cs))).toBe('NO_ERROR');
-    expect(codeOf(() => new AssociationService(doc, new EditContext(doc)).createDataAssociation(doc.require('End'), doc.require('DataObjectReference_D'), {}, cs))).toBe('E_INVALID_ENDPOINT');
-    expect(codeOf(() => new AssociationService(doc, new EditContext(doc)).createDataAssociation(doc.require('Start'), doc.require('DataObjectReference_D'), {}, cs))).toBe('NO_ERROR');
+    expect(codeOf(() => new Associations(new EditSession(doc)).createDataAssociation(doc.require('DataObjectReference_D'), doc.require('End'), {}, cs))).toBe('NO_ERROR');
+    expect(codeOf(() => new Associations(new EditSession(doc)).createDataAssociation(doc.require('End'), doc.require('DataObjectReference_D'), {}, cs))).toBe('E_INVALID_ENDPOINT');
+    expect(codeOf(() => new Associations(new EditSession(doc)).createDataAssociation(doc.require('Start'), doc.require('DataObjectReference_D'), {}, cs))).toBe('NO_ERROR');
     await roundTrip(doc);
   });
 });
@@ -793,7 +793,7 @@ describe('split', () => {
         { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Clarify' }] },
       ],
     };
-    const cs = new BranchSplitService(doc, new EditContext(doc)).split(op);
+    const cs = new BranchSplit(new EditSession(doc)).split(op);
     const created = cs.created.filter((change) => change.kind !== 'sequenceFlow').map((change) => change.id);
     expect(created).toEqual(['Gateway_InvoiceOk', 'Activity_Book', 'Activity_Archive', 'Activity_Clarify', 'Gateway_InvoiceOk_join']);
     expect(cs.created.find((change) => change.id === 'Gateway_InvoiceOk')!.detail).toBe('between Task_A and End');
@@ -821,7 +821,7 @@ describe('split', () => {
 
   it('without a join every branch end connects to the old successor (implicit join warnings)', async () => {
     const doc = await linearDoc();
-    const cs = new BranchSplitService(doc, new EditContext(doc)).split({
+    const cs = new BranchSplit(new EditSession(doc)).split({
       op: 'split',
       after: 'Task_A',
       kind: 'parallel',
@@ -839,7 +839,7 @@ describe('split', () => {
 
   it('appends after gateways / unconnected nodes and supports empty branches', async () => {
     const doc = await docFromXml(WITH_GATEWAY);
-    const cs = new BranchSplitService(doc, new EditContext(doc)).split({
+    const cs = new BranchSplit(new EditSession(doc)).split({
       op: 'split',
       after: 'Loose',
       id: 'Gateway_Split',
@@ -856,7 +856,7 @@ describe('split', () => {
     expect(doc.require('Gateway_Merge').get('name')).toBe('merge');
 
     // after a gateway: appended as another branch, old branches untouched
-    new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'GW', name: 'Nested?', branches: [{ nodes: [{ kind: 'task', name: 'N1' }] }] });
+    new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'GW', name: 'Nested?', branches: [{ nodes: [{ kind: 'task', name: 'N1' }] }] });
     expect(ids(doc.outgoing(doc.require('GW')))).toHaveLength(2);
     expect(edge(doc, 'F2')).toBe('GW->Task_A');
     await roundTrip(doc);
@@ -864,12 +864,12 @@ describe('split', () => {
 
   it('validates kind, branches and anchors', async () => {
     const doc = await linearDoc();
-    expect(codeOf(() => new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'Task_A', kind: 'userTask', branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'Task_A', branches: [] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
+    expect(codeOf(() => new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'Task_A', kind: 'userTask', branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'Task_A', branches: [] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'Nope', branches: [{ nodes: [] }] }))).toBe('E_NOT_FOUND');
     add(doc, { kind: 'task', name: 'Alone', in: 'Process_1' });
-    expect(codeOf(() => new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
-    expect(codeOf(() => new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
+    expect(codeOf(() => new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'Activity_Alone', join: false, branches: [{ nodes: [] }] }))).toBe('E_INVALID_VALUE');
+    expect(codeOf(() => new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'Task_A', kind: 'choreographyTask', branches: [{ nodes: [] }] }))).toBe('E_UNKNOWN_KIND');
   });
 
   it('typed ops (mutateDoc, no parseOps): a branch without a nodes array is E_USAGE in parseOps\' words, and the document stays as it was', async () => {
@@ -880,8 +880,8 @@ describe('split', () => {
       try {
         parseOps([{ op: 'split', after: 'Task_A', branches }]);
       } catch (err) {
-        const cliError = err as CliError;
-        return [cliError.message.replace(/^ops\[0\] \(split\)/, 'split'), cliError.details?.hint];
+        const bpmnError = err as BpmnError;
+        return [bpmnError.message.replace(/^ops\[0\] \(split\)/, 'split'), bpmnError.details?.hint];
       }
       return ['NO_ERROR', undefined];
     };
@@ -889,9 +889,9 @@ describe('split', () => {
       try {
         await mutateDoc(doc, [{ op: 'split', after: 'Task_A', branches } as unknown as SplitIntoBranches]);
       } catch (err) {
-        const cliError = err as CliError;
-        expect([cliError.message, cliError.details?.hint]).toEqual(cli(branches));
-        return [cliError.code, cliError.message, cliError.details?.op];
+        const bpmnError = err as BpmnError;
+        expect([bpmnError.message, bpmnError.details?.hint]).toEqual(cli(branches));
+        return [bpmnError.code, bpmnError.message, bpmnError.details?.op];
       }
       return ['NO_ERROR', '', undefined];
     };
@@ -899,7 +899,7 @@ describe('split', () => {
     const nodesKey = `missing required key "nodes" (${BRANCH_FIELDS.nodes.description})`;
     expect(await refused([{ flowName: 'yes' }, { flowName: 'no' }])).toEqual(['E_USAGE', `split branches[0]: ${nodesKey}`, 0]);
     expect(await refused([{ nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: null }])).toEqual(['E_USAGE', `split branches[1]: ${nodesKey}`, 0]);
-    // no TypeError: the batch aliases read only arrays of objects (domain/commands/OpAliases.ts), the split checks the shape
+    // no TypeError: the batch aliases read only arrays of objects (domain/commands/CommandAliases.ts), the split checks the shape
     expect(await refused([{ nodes: 'abc' }, { nodes: [] }])).toEqual(['E_USAGE', 'split branches[0]: "nodes" must be an array of node objects, got string "abc"', 0]);
     expect(await refused('oops')).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got string "oops"', 0]);
     expect(await refused({ nodes: [] })).toEqual(['E_USAGE', 'split: "branches" must be an array of branch objects, got an object', 0]);
@@ -920,7 +920,7 @@ describe('split', () => {
 
   it('branch nodes inherit the anchor lane and can carry triggers', async () => {
     const doc = await docFromXml(WITH_LANES);
-    const cs = new BranchSplitService(doc, new EditContext(doc)).split({
+    const cs = new BranchSplit(new EditSession(doc)).split({
       op: 'split',
       after: 'Task_A',
       kind: 'eventBased',
@@ -1123,7 +1123,7 @@ describe('connect: self-loops', () => {
 describe('split: terminating branches', () => {
   it('a branch ending in an end event stops there; the one that continues runs on without a pass-through join', async () => {
     const doc = await linearDoc();
-    const cs = new BranchSplitService(doc, new EditContext(doc)).split({
+    const cs = new BranchSplit(new EditSession(doc)).split({
       op: 'split',
       after: 'Task_A',
       name: 'Ok?',
@@ -1145,14 +1145,14 @@ describe('split: terminating branches', () => {
 
   it('with every branch terminating no join is created and the lost successor is noted; join:false stops the end branch too', async () => {
     const doc = await linearDoc();
-    const cs = new BranchSplitService(doc, new EditContext(doc)).split({ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
+    const cs = new BranchSplit(new EditSession(doc)).split({ op: 'split', after: 'Task_A', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] });
     expect(doc.has('Gateway_1_join')).toBe(false);
     expect(doc.incoming(doc.require('End'))).toHaveLength(0);
     expect(cs.notes.some((note) => note.includes('no join gateway created'))).toBe(true);
     expect(cs.notes.some((note) => note.includes('End is no longer reached'))).toBe(true);
 
     const doc2 = await linearDoc();
-    const cs2 = new BranchSplitService(doc2, new EditContext(doc2)).split({ op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
+    const cs2 = new BranchSplit(new EditSession(doc2)).split({ op: 'split', after: 'Task_A', join: false, branches: [{ nodes: [{ kind: 'task', name: 'Go' }] }, { nodes: [{ kind: 'end', name: 'Stop' }] }] });
     expect(doc2.incoming(doc2.require('End')).map((flow) => flow.get<El>('sourceRef').get('id'))).toEqual(['Activity_Go']);
     expect(doc2.outgoing(doc2.require('Event_Stop'))).toHaveLength(0);
     expect(cs2.warnings).toHaveLength(0);

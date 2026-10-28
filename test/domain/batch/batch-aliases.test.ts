@@ -10,11 +10,11 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { applyToXml, newXml } from '../../../src/api.js';
 import { renderMutation, parseOps } from '../../../src/index.js';
-import { OPS_SCHEMA } from '../../../src/domain/commands/OpsSchemaBuilder.js';
+import { OPS_SCHEMA } from '../../../src/adapters/in/report/OpsSchemaBuilder.js';
 import { opsExample } from '../../../src/domain/commands/utils/op-fields.js';
 import { idConventionsFromLint } from '../../../src/index.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
-import { CliError } from '../../../src/domain/document/CliError.js';
+import { BpmnError } from '../../../src/domain/document/BpmnError.js';
 import { ERROR_CATALOGUE } from '../../../src/adapters/in/report/guide.js';
 import { guideShort, guideText } from '../../../src/index.js';
 import { bpmnlintEngine } from '../../../src/node.js';
@@ -22,11 +22,11 @@ import type { EditCommand } from '../../../src/domain/commands/types.js';
 import { mutateDoc } from '../../../src/index.js';
 import { failure } from '../../helpers/errors.js';
 
-async function rejection(pending: Promise<unknown>): Promise<CliError> {
+async function rejection(pending: Promise<unknown>): Promise<BpmnError> {
   try {
     await pending;
   } catch (err) {
-    if (err instanceof CliError) return err;
+    if (err instanceof BpmnError) return err;
     throw err;
   }
   throw new Error('expected a failure');
@@ -204,16 +204,16 @@ describe('batch aliases', () => {
   it('typed ops of the library are resolved and checked the same way while they run', async () => {
     const doc = await Doc.fromXml((await newXml({ processName: 'P' })).xml);
     const ops = [{ op: 'add', kind: 'startEvent', name: 'S', as: '$s' }, { op: 'add', kind: 'task', name: 'T', after: '$x' }] as EditCommand[];
-    const cliError = await rejection(mutateDoc(doc, ops));
-    expect([cliError.code, cliError.details.op, cliError.details.candidates]).toEqual(['E_UNKNOWN_ALIAS', 1, ['$s']]);
+    const bpmnError = await rejection(mutateDoc(doc, ops));
+    expect([bpmnError.code, bpmnError.details.op, bpmnError.details.candidates]).toEqual(['E_UNKNOWN_ALIAS', 1, ['$s']]);
     const removed = await rejection(mutateDoc(await Doc.fromXml((await newXml({ processName: 'P' })).xml), [{ op: 'add', kind: 'task', name: 'T', as: '$t' }, { op: 'remove', ids: ['$t'] }, { op: 'set', id: '$t', values: { name: 'x' } }] as EditCommand[]));
     expect([removed.code, removed.message]).toEqual(['E_NOT_FOUND', 'ops[2] (set): "id": $t named Activity_T, which an op before this one removed']);
   });
 
   it('joinAs without a join gateway is refused', async () => {
     const xml = (await applyToXml((await newXml({ processName: 'P' })).xml, [{ op: 'add', kind: 'start', name: 'S' }, { op: 'add', kind: 'task', name: 'T', after: 'Event_S' }])).xml;
-    const cliError = await rejection(applyToXml(xml, [{ op: 'split', after: 'Activity_T', join: false, joinAs: '$j', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] }]));
-    expect([cliError.code, cliError.message]).toEqual(['E_USAGE', 'joinAs $j: split Gateway_AfterT creates no join gateway (join is false)']);
+    const bpmnError = await rejection(applyToXml(xml, [{ op: 'split', after: 'Activity_T', join: false, joinAs: '$j', branches: [{ nodes: [{ kind: 'end', name: 'A' }] }, { nodes: [{ kind: 'end', name: 'B' }] }] }]));
+    expect([bpmnError.code, bpmnError.message]).toEqual(['E_USAGE', 'joinAs $j: split Gateway_AfterT creates no join gateway (join is false)']);
   });
 
   it('the documented example (bpmn kinds --json -> opsExample) runs on the file it describes', async () => {

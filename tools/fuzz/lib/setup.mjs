@@ -55,7 +55,7 @@ export async function loadRender() {
 export async function makeExecutor({ exec = 'cli', via = 'commands', workDir, bin }) {
   if (exec === 'lib') {
     const api = await importDist('index.js');
-    return libExecutor({ Doc: api.Doc, parseOps: api.parseOps, mutateDoc: api.mutateDoc, CliError: api.CliError }, { label: 'lib:dist' });
+    return libExecutor({ Doc: api.Doc, parseOps: api.parseOps, mutateDoc: api.mutateDoc, BpmnError: api.BpmnError }, { label: 'lib:dist' });
   }
   return cliExecutor({ bin: bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir, via, env: CLI_ENV });
 }

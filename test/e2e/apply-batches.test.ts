@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyToXml, newXml, showXml } from '../../src/api.js';
-import { CliError } from '../../src/domain/document/CliError.js';
+import { BpmnError } from '../../src/domain/document/BpmnError.js';
 import { mutationSummary, renderSummary } from '../../src/index.js';
 
 /** The bounds of an element's shape. */
@@ -18,11 +18,11 @@ function overlap(first: ReturnType<typeof bounds>, second: ReturnType<typeof bou
   return first.x < second.x + second.width && second.x < first.x + first.width && first.y < second.y + second.height && second.y < first.y + first.height;
 }
 
-async function rejection(pending: Promise<unknown>): Promise<CliError> {
+async function rejection(pending: Promise<unknown>): Promise<BpmnError> {
   try {
     await pending;
   } catch (err) {
-    if (err instanceof CliError) return err;
+    if (err instanceof BpmnError) return err;
     throw err;
   }
   throw new Error('expected a failure');

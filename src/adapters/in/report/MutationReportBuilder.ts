@@ -1,5 +1,5 @@
 import type { MutationResult } from '../../../domain/batch/types.js';
-import type { Warning } from '../../../domain/document/CliError.js';
+import type { Finding } from '../../../domain/document/Finding.js';
 import type { MutationReport } from './command-report.js';
 import { layoutWarnings } from './utils/findings.js';
 
@@ -7,13 +7,13 @@ export class MutationReportBuilder {
   constructor(private readonly result: MutationResult) {}
 
   /** Without those the validator reports too: the validator's has the richer hint. */
-  opWarnings(): Warning[] {
+  opWarnings(): Finding[] {
     const validationKeys = new Set(this.result.validation.warnings.map(MutationReportBuilder.findingKey));
     return this.result.changes.warnings.filter((warning) => !validationKeys.has(MutationReportBuilder.findingKey(warning)));
   }
 
   /** What --strict counts. */
-  warnings(): Warning[] {
+  warnings(): Finding[] {
     return [...this.opWarnings(), ...this.result.validation.warnings, ...layoutWarnings(this.result.layout)];
   }
 
@@ -70,7 +70,7 @@ export class MutationReportBuilder {
   }
 
   /** An event-gateway finding is about one branch: another target is another finding. */
-  private static findingKey(warning: Warning): string {
+  private static findingKey(warning: Finding): string {
     return `${warning.code}|${warning.element ?? ''}${warning.code === 'W_EVENT_GATEWAY_TARGET' ? `|${warning.related?.[0] ?? ''}` : ''}`;
   }
 }

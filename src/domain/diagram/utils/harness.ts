@@ -1,13 +1,12 @@
-import { cx } from './geom.js';
+import { cx, toSegments, type Segment } from './geom.js';
 /**
  * Geometry and lenient DI reading of the layout metrics, matching the regression harness:
  * every shape and edge counts and bounds and waypoints are taken without a finite check.
  */
 import { is, type El } from '../../document/utils/moddle.js';
-import type { Box, Point } from '../di/types.js';
+import type { Box, DEdge, DShape, Point } from '../di/types.js';
 import { idOf, raw, rawList } from './raw.js';
 import { titleBox } from './text.js';
-import { toSegments, type Segment } from './geometry.js';
 
 export const hits = ([start, end]: Segment, box: Box, shrink = 2): boolean =>
   Math.min(start.x, end.x) < box.x + box.width - shrink &&
@@ -57,30 +56,13 @@ export interface MetricIndex {
   next: Map<string, string[]>;
 }
 
-export function enclosingProcess(scope: El | undefined): El | undefined {
-  let current: El | undefined = scope;
-  while (current && !is(current, 'bpmn:Process')) current = current.$parent as El | undefined;
-  return current;
-}
+export type Shape = Pick<DShape, 'id' | 'el' | 'bounds' | 'container' | 'label'> & Required<Pick<DShape, 'expanded'>>;
 
-export interface Shape {
-  id: string;
-  el: El;
-  bounds: Box;
-  container: boolean;
-  expanded: boolean;
-  label?: Box;
-}
-
-export interface Edge {
-  id: string;
-  el: El;
-  pts: Point[];
+export type Edge = Pick<DEdge, 'id' | 'el' | 'points' | 'label'> & {
   segs: Segment[];
   /** `undefined` is an unresolved end and makes edges related, as in the harness */
   ends: Set<string | undefined>;
-  label?: Box;
-}
+};
 
 function endsOf(el: El): Set<string | undefined> {
   const source = raw<unknown>(el, 'sourceRef');
@@ -107,8 +89,8 @@ export function readDrawnPlane(plane: unknown, seen: Set<string>): { shapes: Sha
       const container = (is(el, 'bpmn:SubProcess') && expanded) || is(el, 'bpmn:Participant') || is(el, 'bpmn:Lane');
       shapes.push({ id, el, bounds, container, expanded, ...(label ? { label } : {}) });
     } else if (is(pe, 'bpmndi:BPMNEdge')) {
-      const pts = rawList(pe, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x')!, y: raw<number>(waypoint, 'y')! }));
-      edges.push({ id, el, pts, segs: toSegments(pts), ends: endsOf(el), ...(label ? { label } : {}) });
+      const points = rawList(pe, 'waypoint').map((waypoint) => ({ x: raw<number>(waypoint, 'x')!, y: raw<number>(waypoint, 'y')! }));
+      edges.push({ id, el, points, segs: toSegments(points), ends: endsOf(el), ...(label ? { label } : {}) });
     }
   }
   return { shapes, edges };

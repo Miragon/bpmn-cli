@@ -7,7 +7,7 @@ import { LaneArranger } from './LaneArranger.js';
 import { MessageFlowRouter, type MessageFlowJob, type MessagePool } from './MessageFlowRouter.js';
 import { ScopeFrame } from './ScopeFrame.js';
 import type { ScopePlacer } from './ScopePlacer.js';
-import type { Segment } from '../../utils/geometry.js';
+import type { Segment } from '../../utils/geom.js';
 import { laneDepth, stretchLane } from '../../utils/lanes.js';
 import { isContainerShape, poolOf } from '../../utils/pools.js';
 

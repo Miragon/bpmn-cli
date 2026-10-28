@@ -49,7 +49,7 @@ export class AddElementCommand extends MutationCommand {
     if (options['ifAbsent'] && !options['id']) {
       throw usageError('--if-absent needs an explicit --id to check for', { hint: 'Pass --id <Prefix>_<Name> (the id add would generate), or drop --if-absent.' });
     }
-    const op: AddElement = {
+    const command: AddElement = {
       op: 'add',
       kind,
       ...(name !== undefined ? { name } : {}),
@@ -60,6 +60,6 @@ export class AddElementCommand extends MutationCommand {
       ...(kv.length ? { set: parseKeyValues(kv) } : {}),
       ...this.triggerOptions(options),
     };
-    await this.mutate(file, [op], opts);
+    await this.mutate(file, [command], opts);
   }
 }
