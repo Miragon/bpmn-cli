@@ -1,4 +1,5 @@
 import { PropertyCoercer } from './PropertyCoercer.js';
+import { SetKeyCatalog } from './SetKeyCatalog.js';
 import type { EditSession } from '../../document/EditSession.js';
 import { modelError } from '../../document/utils/errors.js';
 import { IdRename } from '../ids/IdRename.js';
@@ -148,7 +149,7 @@ export class NestedSlots {
     const slots = slotsOf(el);
     const ref = parseSlotRef(slot);
     if (!ref || !slots.includes(ref.slot) || !key) {
-      throw PropertyCoercer.unknownKey(this.edit.doc, el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((slotName) => `${slotName}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
+      throw SetKeyCatalog.unknownKey(this.edit.doc, el, full, slots.length ? `nested keys of a ${kindLabel(el)} start with ${slots.map((slotName) => `${slotName}.`).join(' or ')}` : `a ${kindLabel(el)} has no nested element to address`);
     }
     const refSlot = ref.slot;
     let target = resolveNested(el, ref, full);
@@ -161,6 +162,7 @@ export class NestedSlots {
     if (refSlot === 'condition' && value && new PropertyCoercer(this.edit).isResourceKey(key)) NestedSlots.dropConditionBody(el, target, changes, key);
     if (refSlot === 'condition' && !value && !replacing) this.assertConditionKept(el, target, key, full);
     if (key.includes(':')) {
+      SetKeyCatalog.assertVendorKey(this.edit.doc, target, key);
       new PropertyCoercer(this.edit).setVendorAttribute(target, key, value);
     } else if (key === 'id') {
       if (!value) throw PropertyCoercer.invalid(el, full, 'an id cannot be empty');

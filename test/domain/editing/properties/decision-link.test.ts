@@ -18,7 +18,7 @@ import { ERROR_CATALOGUE } from '../../../../src/adapters/in/report/guide.js';
 import { guideText, kindsJson } from '../../../../src/index.js';
 import { checkFile } from '../../../../src/node.js';
 import { mutateDoc, type MutationOptions, loadProfiles, runProfile, buildView, elementDetail, findElements } from '../../../../src/index.js';
-import { PropertyCoercer } from '../../../../src/domain/editing/properties/PropertyCoercer.js';
+import { SetKeyCatalog } from '../../../../src/domain/editing/properties/SetKeyCatalog.js';
 import { cli } from '../../../helpers/cli.js';
 
 // the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
@@ -167,8 +167,8 @@ describe('set <id> calledDecision=<decision>', () => {
 
   it('is a documented set key of business rule tasks (kinds --json)', async () => {
     const doc = await Doc.fromXml(model('<bpmn:businessRuleTask id="R" />'));
-    expect(PropertyCoercer.settableKeys(doc, doc.require('R'))).toContain('calledDecision');
-    expect(PropertyCoercer.settableKeys(doc, doc.require('S'))).not.toContain('calledDecision');
+    expect(SetKeyCatalog.settableKeys(doc, doc.require('R'))).toContain('calledDecision');
+    expect(SetKeyCatalog.settableKeys(doc, doc.require('S'))).not.toContain('calledDecision');
     const keys = (kindsJson()['setKeys'] as Array<{ key: string; appliesTo: string }>).filter((setKey) => setKey.key === 'calledDecision');
     expect(keys.map((setKey) => setKey.appliesTo)).toEqual(['businessRuleTask']);
   });

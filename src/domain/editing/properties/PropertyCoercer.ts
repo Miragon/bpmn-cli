@@ -1,11 +1,9 @@
 import type { Doc } from '../../document/Doc.js';
 import type { EditSession } from '../../document/EditSession.js';
 import { modelError } from '../../document/utils/errors.js';
-import { kindLabel } from '../../document/Kinds.js';
 import type { El } from '../../document/utils/moddle.js';
 import { descriptorOf, idOf, type PropDescriptor } from '../../document/utils/elements.js';
 import { CAMUNDA } from '../../document/vendor/CamundaDescriptor.js';
-import { SET_KEYS, SetKeyCatalog } from './SetKeyCatalog.js';
 
 /** Properties with a dedicated command or key: never set generically. */
 const BLOCKED_PROPS: Record<string, string> = {
@@ -52,16 +50,6 @@ export class PropertyCoercer {
     return (descriptorOf(el).properties ?? []).filter((property) => property.name !== 'id' && PropertyCoercer.isSettable(doc, property)).map((property) => property.name);
   }
 
-  static settableKeys(doc: Doc, el: El): string[] {
-    const keys = new Set<string>();
-    for (const definition of SET_KEYS) {
-      if (!SetKeyCatalog.isPlaceholder(definition) && SetKeyCatalog.appliesTo(definition, el)) keys.add(definition.key);
-    }
-    for (const genericKey of PropertyCoercer.genericKeys(doc, el)) keys.add(genericKey);
-    keys.add('<prefix>:<attr>');
-    return [...keys];
-  }
-
   static invalid(el: El, key: string, message: string, hint?: string) {
     return modelError('E_INVALID_VALUE', `Invalid value for ${key} on ${idOf(el)}: ${message}`, { element: idOf(el), ...(hint ? { hint } : {}) });
   }
@@ -99,15 +87,6 @@ export class PropertyCoercer {
     }
   }
 
-  static unknownKey(doc: Doc, el: El, key: string, reason?: string) {
-    const keys = PropertyCoercer.settableKeys(doc, el);
-    return modelError('E_UNKNOWN_KEY', `Unknown key "${key}" for ${kindLabel(el)} ${idOf(el)}${reason ? ` (${reason})` : ''}`, {
-      element: idOf(el),
-      candidates: keys,
-      hint: `Settable keys for this element: ${keys.join(', ')}.`,
-    });
-  }
-
   /**
    * Boolean camunda attributes are written as exactly true / false: the engines read only the
    * exact value "true" (asyncBefore=yes would silently stay off).
@@ -120,15 +99,11 @@ export class PropertyCoercer {
   }
 
   setVendorAttribute(el: El, key: string, value: string): void {
-    const idx = key.indexOf(':');
-    const prefix = key.slice(0, idx);
-    const local = key.slice(idx + 1);
-    if (!prefix || !local || prefix === 'xmlns') throw PropertyCoercer.unknownKey(this.edit.doc, el, key, 'vendor attributes look like prefix:name');
     if (!value) {
       delete el.$attrs[key];
       return;
     }
-    this.edit.doc.declareNamespace(prefix);
+    this.edit.doc.declareNamespace(key.slice(0, key.indexOf(':')));
     el.$attrs[key] = value;
   }
 

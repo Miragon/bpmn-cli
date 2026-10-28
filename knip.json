@@ -2,5 +2,5 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["src/api.ts!", "tools/**/*.mjs", "test/**/*.test.ts"],
   "project": ["src/**/*.ts!", "tools/**/*.mjs", "test/**/*.ts"],
-  "ignoreDependencies": ["@resvg/resvg-wasm"]
+  "ignoreDependencies": ["@resvg/resvg-wasm", "@swc/core"]
 }

@@ -17,18 +17,8 @@ import { createDefinitions, createModdle, enclosingProcess, indexById, is, isBpm
 import { ModelError } from './ModelError.js';
 import { C7_DEFAULT_TTL, C7_PLATFORM_VERSION } from './vendor/CamundaDescriptor.js';
 import { C8_PLATFORM_VERSION } from './vendor/ZeebeDescriptor.js';
+import { KNOWN_NAMESPACES } from './vendor/DocumentNamespaces.js';
 import { PlatformDetection, platformOfTarget, TARGETS, type Platform, type Target } from './vendor/PlatformDetection.js';
-
-/** `operaton` is Operaton's copy of the camunda namespace (only Operaton reads it). */
-export const KNOWN_NAMESPACES: Record<string, string> = {
-  camunda: 'http://camunda.org/schema/1.0/bpmn',
-  operaton: 'http://operaton.org/schema/1.0/bpmn',
-  zeebe: 'http://camunda.org/schema/zeebe/1.0',
-  modeler: 'http://camunda.org/schema/modeler/1.0',
-  bioc: 'http://bpmn.io/schema/bpmn/biocolor/1.0',
-  color: 'http://www.omg.org/spec/BPMN/non-normative/color/1.0',
-  xsi: 'http://www.w3.org/2001/XMLSchema-instance',
-};
 
 // `duplicate element`: an element the schema allows once appears twice; the reader keeps the last
 const LOSSY_PATTERNS = [/unparsable content/i, /unrecognized element/i, /unresolved reference/i, /duplicate ID/i, /^duplicate element/i];
