@@ -516,39 +516,3 @@ describe('c7-script', () => {
     ],
   });
 });
-
-describe('c7-bad-value', () => {
-  verifyEngineRule('c7-bad-value', rule, {
-    valid: [],
-    invalid: [
-      {
-        name: 'an external task with an empty topic',
-        moddleElement: engineModel(
-          'c7',
-          '<bpmn:serviceTask id="serviceTask_a" camunda:type="external" camunda:topic="" />',
-        ),
-        report: {
-          id: 'serviceTask_a',
-          message:
-            'serviceTask serviceTask_a is an external task with an empty camunda:topic; no worker can fetch it',
-          path: ['topic'],
-          type: ERROR_TYPES.PROPERTY_VALUE_REQUIRED,
-        },
-      },
-      {
-        name: 'an external message end event with an empty topic',
-        moddleElement: engineModel(
-          'c7',
-          '<bpmn:endEvent id="endEvent_done"><bpmn:messageEventDefinition camunda:type="external" camunda:topic="" /></bpmn:endEvent>',
-        ),
-        report: {
-          id: 'endEvent_done',
-          message:
-            'endEvent:message endEvent_done is an external task with an empty camunda:topic; no worker can fetch it',
-          path: ['eventDefinitions', 0, 'topic'],
-          type: ERROR_TYPES.PROPERTY_VALUE_REQUIRED,
-        },
-      },
-    ],
-  });
-});

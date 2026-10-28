@@ -4,9 +4,7 @@
  *
  *  - A timer date that is no real instant (2030-02-30, 25:00, an offset over
  *    18 hours), a cron field out of its range (hour 25, month 13, a step of
- *    0, a reversed range, `?` outside the day fields) and an attribute the
- *    BPMN schema types xsd:boolean with another value (cancelActivity=
- *    "maybe", isExpanded="TRUE") are W_C8_DEPLOY_TIMER / W_C8_DEPLOY_SCHEMA;
+ *    0, a reversed range, `?` outside the day fields) are W_C8_DEPLOY_TIMER;
  *    the Quartz day forms (L, W, #), names, 0 / 7 for Sunday, a leap day,
  *    white space around a boolean and 1 / 0 pass.
  *  - A duplicate element id (bpmn-moddle keeps the first element and drops
@@ -68,15 +66,6 @@ const expanded = (value: string): string =>
     <bpmn:endEvent id="End" />`,
     `  <bpmndi:BPMNDiagram id="D1"><bpmndi:BPMNPlane id="PL1" bpmnElement="P_Test"><bpmndi:BPMNShape id="X_di" bpmnElement="X" isExpanded="${value}"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>\n`,
   );
-/** an event sub-process with a message start, isInterrupting as given */
-const eventSub = (value: string): string => `    <bpmn:startEvent id="Start" />
-    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="End" />
-    <bpmn:endEvent id="End" />
-    <bpmn:subProcess id="ES" triggeredByEvent="true">
-      <bpmn:startEvent id="ESS" isInterrupting="${value}">${TIMER('timeDuration', 'PT1H')}</bpmn:startEvent>
-      <bpmn:sequenceFlow id="EF" sourceRef="ESS" targetRef="ESE" />
-      <bpmn:endEvent id="ESE" />
-    </bpmn:subProcess>`;
 /** a Camunda user task X with a static due date */
 const dueDate = (value: string): string => `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
@@ -119,12 +108,8 @@ const MODELS: Model[] = [
     codes: [],
   },
   // xsd:boolean
-  { name: 'cancelActivity="maybe"', xml: xml(boundary('maybe')), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
-  { name: 'cancelActivity="TRUE"', xml: xml(boundary('TRUE')), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
   { name: 'cancelActivity=" true "', xml: xml(boundary(' true ')), engine: 'accept', codes: [] },
   { name: 'cancelActivity="1"', xml: xml(boundary('1')), engine: 'accept', codes: [] },
-  { name: 'isInterrupting="yes"', xml: xml(eventSub('yes')), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
-  { name: 'isExpanded="maybe" on a shape', xml: expanded('maybe'), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
   { name: 'isExpanded="0" on a shape', xml: expanded('0'), engine: 'accept', codes: [] },
   // a due date that is no real instant
   { name: 'dueDate 2030-02-30', xml: xml(dueDate('2030-02-30T10:00:00Z')), engine: 'reject', codes: ['W_C8_DEPLOY_USER_TASK'] },
@@ -158,10 +143,6 @@ describe('timer values and xsd:booleans Camunda 8 refuses', () => {
   });
 
   it('validate names the value and the reason', async () => {
-    const result = await validateXml(xml(boundary('maybe')));
-    const finding = result.warnings.find((warning) => warning.code === 'W_C8_DEPLOY_SCHEMA')!;
-    expect(finding.element).toBe('B');
-    expect(finding.message).toContain('cancelActivity="maybe"');
     const invalidDate = await validateXml(xml(dateCatch('2030-02-30T10:00:00Z')));
     expect(invalidDate.warnings.find((warning) => warning.code === 'W_C8_DEPLOY_TIMER')!.message).toContain('February 2030 has no day 30');
   });

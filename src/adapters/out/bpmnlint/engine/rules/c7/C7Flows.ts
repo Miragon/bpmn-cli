@@ -15,8 +15,8 @@ const REFERENCE_BY_TRIGGER: Record<string, string> = { message: 'messageRef', si
 
 /**
  * Gateways, conditions and start events that leave Camunda 7 no single well-defined path.
- * Camunda 7 refuses to deploy most of them; an empty condition or a transaction without start event
- * fails when the process runs, and a lone flow without condition is taken as the default flow.
+ * Camunda 7 refuses to deploy most of them; a transaction without start event fails when the
+ * process runs, and a lone flow without condition is taken as the default flow.
  *
  * - `c7-event-gateway`: a target other than a message, timer, signal or conditional catch event; a
  *   target with other incoming flows; two branches waiting for one message or signal name.
@@ -27,8 +27,6 @@ const REFERENCE_BY_TRIGGER: Record<string, string> = { message: 'messageRef', si
  * - `c7-complex-gateway`: a complex gateway with sequence flows.
  * - `c7-ad-hoc-sub-process`: an ad-hoc sub-process with sequence flows, boundary events or a
  *   multi-instance loop.
- * - `c7-empty-condition`: a condition with neither expression nor resource, on a flow the engine
- *   evaluates or on a conditional event.
  * - `c7-start-event`: a process or sub-process (not an event sub-process) without start event; a
  *   second none or timer start event of a process; a second start event of a sub-process.
  * - `c7-transaction-start`: a transaction without start event.
@@ -45,8 +43,6 @@ class C7Flows extends C7Rule {
     if (is(node, 'bpmn:ExclusiveGateway')) this.checkExclusiveGateway(node, C7FlowGraph.forElement(node).outgoing(node));
     if (is(node, 'bpmn:ComplexGateway')) this.checkComplexGateway(node);
     if (is(node, 'bpmn:AdHocSubProcess')) this.checkAdHocSubProcess(node);
-    if (is(node, 'bpmn:SequenceFlow')) this.checkEmptyFlowCondition(node);
-    else if (is(node, 'bpmn:Event')) this.checkEmptyEventCondition(node);
     if (isAny(node, ['bpmn:Process', 'bpmn:SubProcess']) && !is(node, 'bpmn:AdHocSubProcess')) this.checkStartEvents(node);
     return !is(node, 'bpmn:AdHocSubProcess');
   }
@@ -133,27 +129,6 @@ class C7Flows extends C7Rule {
     return elements.length ? `${kind}${elements.length > 1 ? 's' : ''} ${elements.map((element) => element.id).join(', ')}` : '';
   }
 
-  /** A condition without expression or script on a flow the engines evaluate (not a default flow, not out of a parallel or event-based gateway) deploys and fails when evaluated. */
-  private checkEmptyFlowCondition(flow: ModdleElement): void {
-    const condition = flow.conditionExpression;
-    const source = flow.sourceRef;
-    if (!condition || !this.isEmpty(condition) || (source && (isAny(source, ['bpmn:ParallelGateway', 'bpmn:EventBasedGateway']) || source.default === flow))) return;
-    this.report('c7-empty-condition', flow, `Sequence flow ${flow.id} has an empty condition (no expression and no ${C7Diagram.of(flow).prefix}:resource): it deploys, but the engines fail when they evaluate it`, { path: ['conditionExpression'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: condition, property: 'conditionExpression', hint: `Give it one: \`bpmn set <file> ${flow.id} ${Shell.quote('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${flow.id} condition=\`.` });
-  }
-
-  private checkEmptyEventCondition(event: ModdleElement): void {
-    const definitions = new C7EventDefinitions(event);
-    const prefix = C7Diagram.of(event).prefix;
-    for (const definition of definitions.actedOn()) {
-      const condition = is(definition, 'bpmn:ConditionalEventDefinition') ? definition.condition : undefined;
-      if (condition && this.isEmpty(condition)) this.report('c7-empty-condition', event, `Conditional event ${event.id} has an empty condition (no expression and no ${prefix}:resource): it deploys, but evaluating it fails when the process runs`, { path: ['eventDefinitions', definitions.all().indexOf(definition), 'condition'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: condition, property: 'condition', hint: `\`bpmn set <file> ${event.id} ${Shell.quote('when=${expression}')}\` (or a script: \`bpmn set <file> ${event.id} condition.${prefix}:resource=deployment://<script>.groovy condition.language=groovy\`).` });
-    }
-  }
-
-  private isEmpty(expression: ModdleElement): boolean {
-    return ![expression.body, expression.get('camunda:resource')].some((text) => typeof text === 'string' && text.trim() !== '');
-  }
-
   /**
    * A process or sub-process without a start event (an empty one too) is refused, a transaction
    * fails when reached; a second none or timer start event of a process, a second start event of a
@@ -194,7 +169,6 @@ export default defineRule(
       'c7-implicit-default-flow': ['W_C7_EXCLUSIVE_GATEWAY_DEFAULT', 'practice'],
       'c7-complex-gateway': ['W_C7_DEPLOY_COMPLEX_GATEWAY', 'deploy'],
       'c7-ad-hoc-sub-process': ['W_C7_DEPLOY_AD_HOC_SUBPROCESS', 'deploy'],
-      'c7-empty-condition': ['W_C7_EMPTY_CONDITION', 'runtime'],
       'c7-start-event': ['W_C7_DEPLOY_START_EVENT', 'deploy'],
       'c7-transaction-start': ['W_C7_TRANSACTION_NO_START', 'runtime'],
     },

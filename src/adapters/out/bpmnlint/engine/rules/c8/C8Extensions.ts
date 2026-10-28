@@ -3,7 +3,6 @@ import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData, t
 import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
-import { FirstOfKey } from '../FirstOfKey.js';
 import { ModdlePath } from '../ModdlePath.js';
 import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
@@ -33,7 +32,7 @@ const TASK_LISTENER_EVENTS = ['creating', 'assigning', 'updating', 'completing',
  *   boundary event; an end listener on a gateway.
  * - `c8-extension`: an unknown binding type; a versionTag binding without version tag; a linked
  *   resource without resource type; conditional filter variable events other than create and
- *   update; one task header key twice.
+ *   update.
  * - `c8-duplicate-extension`: two of an extension element Camunda 8 reads once per element.
  *
  * @example retries that are no number
@@ -49,7 +48,7 @@ class C8Extensions extends C8Rule {
     const values = host.zeebeValues();
     for (const value of values) this.checkListeners(host, value, values);
     const read = values.filter(({ placement }) => placement === 'read');
-    for (const value of read) this.checkExtension(host, value, read);
+    for (const value of read) this.checkExtension(host, value);
     this.checkDuplicates(host, read);
   }
 
@@ -143,14 +142,11 @@ class C8Extensions extends C8Rule {
     return `${lead}: ${hint.extRemove(`${listener}[${listenerIndex}]`)}, then ${hint.extAdd(`${listener} ${fix}`)}.`;
   }
 
-  private checkExtension(host: C8Host, zeebeValue: ZeebeValue, read: ZeebeValue[]): void {
+  private checkExtension(host: C8Host, zeebeValue: ZeebeValue): void {
     const { value, index, type } = zeebeValue;
-    const first = read.find((other) => other.type.name === type.name) === zeebeValue;
     if (type.name in VERSION_TAG_CHECKED_BY_COMPAT) this.checkBinding(host, zeebeValue);
     else if (type.name === 'zeebe:linkedResources') this.checkLinkedResources(host, value, index);
     else if (type.name === 'zeebe:conditionalFilter') this.checkConditionalFilter(host, value, index);
-    else if (type.name === 'zeebe:taskHeaders' && !first) this.checkHeaderKeys(host, value, host.extensionPath(index), '');
-    else if (type.name === 'zeebe:executionListeners' && !first) (value.listeners ?? []).forEach((listener: ModdleElement, listenerIndex: number) => listener.headers && this.checkHeaderKeys(host, listener.headers, host.extensionPath(index, 'listeners', listenerIndex, 'headers'), `execution listener ${listenerIndex + 1}`));
   }
 
   private checkBinding(host: C8Host, { value, index, type }: ZeebeValue): void {
@@ -177,17 +173,6 @@ class C8Extensions extends C8Rule {
   private checkConditionalFilter(host: C8Host, value: ModdleElement, index: number): void {
     const unknown = (value.variableEvents as string | undefined)?.split(',').map((eventName) => eventName.trim()).filter((eventName) => eventName && eventName !== 'create' && eventName !== 'update') ?? [];
     if (unknown.length) this.reportOn(host, 'c8-extension', `${host.spell('zeebe:conditionalFilter')} of ${host.describe()} lists the variable events ${unknown.join(', ')}; Camunda 8 knows create and update only and refuses the file`, { path: host.extensionPath(index, 'variableEvents'), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: value, property: 'variableEvents', hint: `${this.rebuildHint(host, value)} (variableEvents=create,update)` });
-  }
-
-  /** A header key twice in a header list camunda-compat skips (a second zeebe:taskHeaders, the headers of a second listener list). */
-  private checkHeaderKeys(host: C8Host, headers: ModdleElement, headersPath: ReportPath, listenerLabel: string): void {
-    const where = `${listenerLabel ? `${listenerLabel} of ` : ''}${host.describe()}`;
-    const hint = host.hint();
-    const firsts = new FirstOfKey<ModdleElement>();
-    (headers.values ?? []).forEach((header: ModdleElement, headerIndex: number) => {
-      const key: string | undefined = header.key;
-      if (key?.trim() && firsts.repeats(key, header)) this.reportOn(host, 'c8-extension', `${where} has the task header "${key}" twice; Camunda 8 refuses the file`, { path: [...headersPath, 'values', headerIndex, 'key'], type: ERROR_TYPES.PROPERTY_VALUE_DUPLICATED, node: headers, duplicatedProperty: 'key', duplicatedPropertyValue: key, propertiesName: 'values', hint: hint && host.node.id && !listenerLabel ? `Keep one: \`bpmn ext remove <file> ${host.node.id} ${Shell.quote(`${hint.name('taskHeaders')}/${hint.name('header')}[${headerIndex}]`)}\`.` : 'Remove one in the XML.' });
-    });
   }
 
   private reportBindingType(host: C8Host, element: ModdleElement, subject: string, path: ReportPath, hint: string): void {

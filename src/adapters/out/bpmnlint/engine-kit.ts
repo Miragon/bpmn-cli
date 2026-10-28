@@ -2,12 +2,10 @@ import { BpmnModdle } from 'bpmn-moddle';
 import { kindLabel } from '../../../domain/document/Kinds.js';
 import { makeFinding } from '../../../domain/document/utils/finding.js';
 import { editDistance } from '../../../domain/document/utils/fuzzy.js';
-import { BPMN_NS, is, isBpmnElement, isDiElement, list, peek, walk } from '../../../domain/document/utils/moddle.js';
-import { decodeXml, elementChildren, readXmlText } from '../../../domain/document/utils/text-reader.js';
+import { is, isDiElement, list, peek, walk } from '../../../domain/document/utils/moddle.js';
 import { C7_URIS, CAMUNDA, CAMUNDA_URI, OPERATON_URI } from '../../../domain/document/vendor/CamundaDescriptor.js';
 import { DocumentNamespaces } from '../../../domain/document/vendor/DocumentNamespaces.js';
 import { ZEEBE } from '../../../domain/document/vendor/ZeebeDescriptor.js';
-import { XmlTextError } from '../../../domain/document/xml/XmlTextError.js';
 import { DecisionLinkReader } from '../../../domain/editing/properties/DecisionLinkReader.js';
 
 /**
@@ -20,23 +18,17 @@ export const ENGINE_KIT = {
   kindLabel,
   makeFinding,
   editDistance,
-  BPMN_NS,
   is,
-  isBpmnElement,
   isDiElement,
   list,
   peek,
   walk,
-  decodeXml,
-  elementChildren,
-  readXmlText,
   C7_URIS,
   CAMUNDA,
   CAMUNDA_URI,
   OPERATON_URI,
   DocumentNamespaces,
   ZEEBE,
-  XmlTextError,
   DecisionLinkReader,
 };
 

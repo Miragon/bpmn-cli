@@ -35,8 +35,7 @@ interface Binding {
  * - `c7-attribute-value`: a job or task priority that is neither an integer nor an expression; an
  *   unknown decision result mapper.
  * - `c7-bad-value`: an unknown called element, case or decision binding; a user task priority that
- *   is neither a number nor an expression; variable events other than create, update and delete; a
- *   call activity with an empty called element.
+ *   is neither a number nor an expression; variable events other than create, update and delete.
  * - `c7-binding-version`: a version or versionTag binding without the version or version tag it
  *   binds to, also of a form reference.
  * - `c7-called-element`: a call activity with neither called element nor case reference, or with
@@ -56,7 +55,6 @@ class C7Values extends C7Rule {
     const attributes = new CamundaAttributes(node);
     if (is(node, 'bpmn:Process')) this.checkHistoryTimeToLive(node, attributes.defined('historyTimeToLive'), prefix);
     this.checkAttributeValues(node, attributes, prefix);
-    if (is(node, 'bpmn:CallActivity') && node.get('calledElement') === '' && attributes.defined('caseRef') === undefined) this.report('c7-bad-value', node, `Call activity ${node.id} has an empty calledElement; it fails when it runs`, { path: ['calledElement'], type: ERROR_TYPES.PROPERTY_VALUE_REQUIRED, property: 'calledElement', hint: `${new SetCommand(node.id).of('calledElement=<processId>')}.` });
     const bindings = this.bindingsOf(node, attributes);
     for (const { binding, allowed } of bindings.filter((candidate) => this.bindingProblem(attributes, candidate) === 'value')) this.report('c7-bad-value', node, `${prefix}:${binding}="${attributes.defined(binding)}" on ${ElementKinds.describe(node)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, { path: [binding], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: binding, hint: `${new SetCommand(node.id).of(`${prefix}:${binding}=latest`)}.` });
     const priority = is(node, 'bpmn:UserTask') ? attributes.defined('priority') : undefined;

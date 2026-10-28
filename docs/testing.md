@@ -671,9 +671,8 @@ element by element.
 
 The Camunda 8 rules are camunda-compat's config for the file's version and the `c8-*` rules of
 `@miragon/bpmnlint-plugin-rules` (the FEEL check with its 762 engine verdicts lives there). bpmn-cli
-makes the checks a typed parse cannot see itself: unknown zeebe elements, unprefixed attributes,
-`zeebe:publishMessage` and the schema rules of the file's text (child order, IDREFs, booleans);
-placement and known names come from the Zeebe descriptor
+makes the checks a typed parse cannot see itself: unknown zeebe elements, unprefixed attributes
+and `zeebe:publishMessage`; placement and known names come from the Zeebe descriptor
 (`src/domain/document/vendor/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
 `node tools/gen-camunda-descriptor.mjs`, `test/e2e/isomorphic.test.ts` fails while it is stale).
 `test/domain/editing/c8-ops.test.ts` covers `set` / `ext` / `retype` / `show` in Camunda 8 files and

@@ -29,17 +29,14 @@ const GATEWAY_TRIGGERS = ['bpmn:MessageEventDefinition', 'bpmn:TimerEventDefinit
  * Events, event-based gateways and sub-process start events Camunda 8 cannot execute.
  * Camunda 8 refuses to deploy the file.
  *
- * - `c8-boundary-host`: a boundary event on a compensation handler.
- * - `c8-event-definition`: a conditional event without condition; an event with several event
- *   definitions; an event sub-process start without trigger; a conditional, compensation or link
- *   catch definition without id; a compensation throw naming an activity of another scope; a
- *   compensation boundary event without association to its handler, or with an outgoing flow.
+ * - `c8-event-definition`: a conditional event without condition; an event sub-process start
+ *   without trigger; a compensation throw naming an activity of another scope; a compensation
+ *   boundary event without association to its handler, or with an outgoing flow.
  * - `c8-link-event`: a link event without name or with an empty one; a link throw without a catch
  *   of its name in its scope.
  * - `c8-ad-hoc-sub-process`: a start or end event in an ad-hoc sub-process.
- * - `c8-event-gateway`: fewer than two outgoing flows, or fewer than two listed as the gateway's
- *   outgoing; a target other than a receive task or a message, timer, signal or conditional catch
- *   event.
+ * - `c8-event-gateway`: fewer than two outgoing flows; a target other than a receive task or a
+ *   message, timer, signal or conditional catch event.
  * - `c8-start-event`: a start event with a trigger in an embedded sub-process; a sub-process with
  *   several start events.
  * - `c8-timer-value`: a static timer value that is empty, no ISO 8601 date, duration or cycle nor a
@@ -54,7 +51,6 @@ class C8Events extends C8Rule {
   private readonly flows = new FlowIndex();
 
   protected visit(node: ModdleElement): void {
-    if (is(node, 'bpmn:BoundaryEvent')) this.checkBoundaryHost(node);
     if (is(node, 'bpmn:ConditionalEventDefinition')) this.checkCondition(node);
     const runs = EngineScope.C8.contains(node);
     if (is(node, 'bpmn:Event') && runs) this.checkEvent(node);
@@ -67,34 +63,16 @@ class C8Events extends C8Rule {
     if (is(node, 'bpmn:Event') && EngineScope.inExecutableProcess(node)) (node.get('eventDefinitions') as ModdleElement[]).forEach((definition, index) => this.checkTimer(node, definition, index));
   }
 
-  private checkBoundaryHost(event: ModdleElement): void {
-    const host = event.get('attachedToRef');
-    if (host?.get('isForCompensation') !== true) return;
-    this.report('c8-boundary-host', event, `Boundary event ${event.id} is attached to the compensation handler ${host.id}; Camunda 8 refuses boundary events on compensation handlers`, { path: ['attachedToRef'], type: ERROR_TYPES.ATTACHED_TO_REF_ELEMENT_TYPE_NOT_ALLOWED, attachedToRef: host, hint: `Remove it: \`bpmn remove <file> ${event.id}\` (or attach it to a normal activity: \`bpmn move <file> ${event.id} --on <activityId>\`).` });
-  }
-
   private checkEvent(event: ModdleElement): void {
     const definitions = event.get('eventDefinitions') ?? [];
-    if (definitions.length > 1) {
-      const triggers = definitions.map(ElementKinds.trigger);
-      this.report('c8-event-definition', event, `${ElementKinds.describe(event)} has ${definitions.length} event definitions (${triggers.join(', ')}); Camunda 8 allows one and refuses the file`, { path: ['eventDefinitions'], type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, hint: `Keep one: \`bpmn set <file> ${event.id} trigger=<${triggers.join('|')}>\` (keeps that definition, drops the others), and model each other trigger as its own event.` });
-      return;
-    }
     if (!definitions.length) {
       if (is(event, 'bpmn:StartEvent') && EngineScope.isEventSubProcess(event.$parent)) this.report('c8-event-definition', event, `Start event ${event.id} of event sub-process ${event.$parent.id} has no trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file`, { path: ['eventDefinitions'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'eventDefinitions', hint: `\`bpmn set <file> ${event.id} trigger=message message=<MessageName>\` (or timer, error, signal, escalation, conditional).` });
       return;
     }
     const definition = C8EventDefinitions.definitionOf(event);
     if (!definition) return;
-    this.checkDefinitionId(event, definition);
     if (is(definition, 'bpmn:CompensateEventDefinition') && is(event, 'bpmn:ThrowEvent')) this.checkActivityRef(event, definition);
     if (is(definition, 'bpmn:CompensateEventDefinition') && is(event, 'bpmn:BoundaryEvent')) this.checkCompensationBoundary(event);
-  }
-
-  private checkDefinitionId(event: ModdleElement, definition: ModdleElement): void {
-    const needsId = isAny(definition, ['bpmn:ConditionalEventDefinition', 'bpmn:CompensateEventDefinition']) || (is(definition, 'bpmn:LinkEventDefinition') && is(event, 'bpmn:CatchEvent'));
-    if (!needsId || definition.id) return;
-    this.report('c8-event-definition', event, `The ${ElementKinds.trigger(definition)} event definition of ${ElementKinds.describe(event)} has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")`, { path: ['eventDefinitions', 0, 'id'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: 'id', hint: `\`bpmn set <file> ${event.id} definition.id=${String(definition.$type).replace(/^[^:]*:/, '')}_${String(event.id).replace(/^[A-Za-z]+_/, '')}\` (Camunda Modeler gives every event definition an id).` });
   }
 
   /** A compensation throw event's activityRef must name an activity of its own scope. */
@@ -149,13 +127,10 @@ class C8Events extends C8Rule {
     });
   }
 
-  /** The engine counts the branches by the gateway's `<bpmn:outgoing>` entries; a receive task after it is camunda-compat's `event-based-gateway-target`. */
+  /** A receive task after it is camunda-compat's `event-based-gateway-target`. */
   private checkGateway(gateway: ModdleElement): void {
     const flows = this.flows.outgoing(gateway);
-    const listed = (gateway.get('outgoing') ?? []).filter((flow: ModdleElement) => flow.get('sourceRef') === gateway);
-    const branchCount = (message: string, hint: string) => this.report('c8-event-gateway', gateway, message, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'outgoing', hint });
-    if (flows.length < 2) branchCount(`Event-based gateway ${gateway.id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${gateway.id} --timer PT1H\`.`);
-    else if (listed.length < 2) branchCount(`Event-based gateway ${gateway.id} has ${flows.length} outgoing flows, but the file lists ${listed.length} of them as its <bpmn:outgoing> entries; Camunda 8 counts the listed ones and refuses the file`, `Add the missing <bpmn:outgoing>${flows.filter((flow) => !listed.includes(flow)).map((flow) => flow.id).join('</bpmn:outgoing>, <bpmn:outgoing>')}</bpmn:outgoing> entries to ${gateway.id} in the XML (Camunda Modeler writes them; this file leaves the lists out, and \`bpmn\` keeps a file's style).`);
+    if (flows.length < 2) this.report('c8-event-gateway', gateway, `Event-based gateway ${gateway.id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'outgoing', hint: `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${gateway.id} --timer PT1H\`.` });
     for (const flow of flows) {
       const target = flow.get('targetRef');
       if (!target || is(target, 'bpmn:ReceiveTask') || (is(target, 'bpmn:IntermediateCatchEvent') && GATEWAY_TRIGGERS.some((type) => C8EventDefinitions.onlyDefinition(target, type)))) continue;
@@ -204,7 +179,6 @@ export default defineRule(
     kind: 'engine-specific',
     targetEngine: 'c8',
     findings: {
-      'c8-boundary-host': ['W_C8_DEPLOY_BOUNDARY_HOST', 'deploy'],
       'c8-event-definition': ['W_C8_DEPLOY_EVENT_DEFINITION', 'deploy'],
       'c8-link-event': ['W_C8_DEPLOY_LINK', 'deploy'],
       'c8-ad-hoc-sub-process': ['W_C8_DEPLOY_AD_HOC_SUBPROCESS', 'deploy'],

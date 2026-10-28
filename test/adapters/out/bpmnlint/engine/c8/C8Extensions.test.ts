@@ -180,34 +180,6 @@ describe('c8-extension', () => {
           type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED,
         },
       },
-      {
-        name: 'a task header key twice in a second header list',
-        moddleElement: engineModel('c8', SERVICE_TASK(HEADERS('region') + HEADERS('tier', 'tier'))),
-        report: {
-          id: 'serviceTask_charge',
-          message:
-            'serviceTask serviceTask_charge has the task header "tier" twice; Camunda 8 refuses the file',
-          path: ['extensionElements', 'values', 2, 'values', 1, 'key'],
-          type: ERROR_TYPES.PROPERTY_VALUE_DUPLICATED,
-        },
-      },
-      {
-        name: 'a task header key twice in a listener of a second listener list',
-        moddleElement: engineModel(
-          'c8',
-          SERVICE_TASK(
-            `<zeebe:executionListeners><zeebe:executionListener eventType="start" type="audit" /></zeebe:executionListeners>
-            <zeebe:executionListeners><zeebe:executionListener eventType="end" type="audit">${HEADERS('tier', 'tier')}</zeebe:executionListener></zeebe:executionListeners>`,
-          ),
-        ),
-        report: {
-          id: 'serviceTask_charge',
-          message:
-            'execution listener 1 of serviceTask serviceTask_charge has the task header "tier" twice; Camunda 8 refuses the file',
-          path: ['extensionElements', 'values', 2, 'listeners', 0, 'headers', 'values', 1, 'key'],
-          type: ERROR_TYPES.PROPERTY_VALUE_DUPLICATED,
-        },
-      },
     ],
   });
 });

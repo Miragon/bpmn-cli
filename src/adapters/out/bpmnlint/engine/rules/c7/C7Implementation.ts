@@ -14,7 +14,7 @@ const IMPLEMENTATIONS = ['class', 'delegateExpression', 'expression', 'type'];
  * Tasks and message throw events that do not tell Camunda 7 what to run, or tell it in a way it
  * cannot run.
  * Camunda 7 refuses to deploy most of them; a message throw event without implementation deploys
- * and sends nothing, and no worker fetches an external task with an empty topic.
+ * and sends nothing.
  *
  * - `c7-implementation`: a service, send or business rule task without class, expression, delegate
  *   expression, external type, decision or connector; a camunda:type other than external or shell;
@@ -24,7 +24,6 @@ const IMPLEMENTATIONS = ['class', 'delegateExpression', 'expression', 'type'];
  * - `c7-external-topic`: an external task without topic.
  * - `c7-result-variable`: a result variable next to a class or delegate expression.
  * - `c7-script`: a script task with neither script nor resource.
- * - `c7-bad-value`: an external task with an empty topic.
  *
  * @example a service task without implementation
  * <bpmn:serviceTask id="Charge" />  <!-- no camunda:class, expression or type -->
@@ -53,7 +52,6 @@ class C7Implementation extends C7Rule {
     if (host.isEvent && !host.hasImplementation && !this.hasMisplacedImplementation(node)) this.report('c7-message-implementation', node, `${label} has no implementation: it sends nothing and behaves like a none event at run time`, { path: host.pathTo('type'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: IMPLEMENTATIONS, hint: `Give it one: ${command.of(`${prefix}:type=external`, `${prefix}:topic=<topic>`)} (or ${prefix}:delegateExpression=\${...}).` });
     const topic = host.attributes.defined('topic');
     if (host.isExternal && topic === undefined) this.report('c7-external-topic', node, `${label} is an external task without ${prefix}:topic; the engines refuse the file`, { path: host.pathTo('topic'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: 'topic', hint: `${command.of(`${prefix}:topic=<topic>`)}.` });
-    if (host.isExternal && topic === '') this.report('c7-bad-value', node, `${label} is an external task with an empty ${prefix}:topic; no worker can fetch it`, { path: host.pathTo('topic'), type: ERROR_TYPES.PROPERTY_VALUE_REQUIRED, node: host.element, property: 'topic', hint: `${command.of(`${prefix}:topic=<topic>`)}.` });
     const delegate = ['class', 'delegateExpression'].find((local) => Values.nonEmpty(host.attributes.defined(local)));
     if (delegate && host.attributes.defined('resultVariable') !== undefined) this.report('c7-result-variable', node, `${label} combines ${prefix}:resultVariable with ${prefix}:${delegate}; the engines support a result variable only with ${prefix}:expression and refuse the file`, { path: host.pathTo('resultVariable'), type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: host.element, property: 'resultVariable', hint: `Remove it: ${command.of(`${prefix}:resultVariable=`)} (or switch to ${prefix}:expression=\${...}).` });
   }
@@ -105,7 +103,6 @@ export default defineRule(
       'c7-external-topic': ['W_C7_DEPLOY_EXTERNAL_TOPIC', 'deploy'],
       'c7-result-variable': ['W_C7_DEPLOY_RESULT_VARIABLE', 'deploy'],
       'c7-script': ['W_C7_DEPLOY_SCRIPT', 'deploy'],
-      'c7-bad-value': ['W_C7_BAD_VALUE', 'runtime'],
     },
   },
   C7Implementation,

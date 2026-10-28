@@ -148,18 +148,10 @@ const MODELS: Model[] = [
   ...['PT0.5S', 'PT1,5S', 'PT90M'].map((timerValue): Model => ({ name: `duration ${timerValue}`, xml: xml(chain(`<bpmn:intermediateCatchEvent id="X">${TIMER('timeDuration', timerValue)}</bpmn:intermediateCatchEvent>`)), codes: [], engine: 'accept' })),
   ...['2030-12-31t10:00:00z', '2030-12-31T10:00:00z'].map((timerValue): Model => ({ name: `date ${timerValue}`, xml: xml(chain(`<bpmn:intermediateCatchEvent id="X">${TIMER('timeDate', timerValue)}</bpmn:intermediateCatchEvent>`)), codes: [], engine: 'accept' })),
   // ids and IDREFs
-  { name: 'a task id with a colon', xml: xml(chain(ST()).replace(/"X"/g, '"a:b"')), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'a flow id bpmn-moddle cannot read (F:1)', xml: xml(ordered(ext(TD()) + '<bpmn:incoming>F:1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>').replace('<bpmn:outgoing>F1</bpmn:outgoing>', '<bpmn:outgoing>F:1</bpmn:outgoing>').replace('id="F1"', 'id="F:1"')), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'a lane flowNodeRef to a missing id', xml: xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Nope</bpmn:flowNodeRef><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>X</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   { name: 'a lane flowNodeRef with white space around the id', xml: xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef> Start </bpmn:flowNodeRef><bpmn:flowNodeRef>X</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`), codes: [], engine: 'accept' },
-  { name: 'a task default to a missing flow', xml: xml(chain(ST()).replace('<bpmn:serviceTask id="X">', '<bpmn:serviceTask id="X" default="Nope">')), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   // the child order of the BPMN schema
   { name: 'order: documentation, extensions, incoming, outgoing', xml: xml(ordered(`<bpmn:documentation>d</bpmn:documentation>${ext(TD())}<bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>`)), codes: [], engine: 'accept' },
-  { name: 'order: extensionElements after incoming', xml: xml(ordered(`<bpmn:incoming>F1</bpmn:incoming>${ext(TD())}<bpmn:outgoing>F2</bpmn:outgoing>`)), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'order: documentation after extensionElements', xml: xml(ordered(`${ext(TD())}<bpmn:documentation>d</bpmn:documentation>`)), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'order: a laneSet after the flow elements', xml: xml(`${chain(ST())}\n    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>X</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>`), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   { name: 'order: an annotation after the flow elements, a message after the process', xml: xml(`${chain(ST())}\n    <bpmn:textAnnotation id="TA"><bpmn:text>t</bpmn:text></bpmn:textAnnotation>`, { after: '  <bpmn:message id="M9" name="m9" />\n' }), codes: [], engine: 'accept' },
-  { name: 'order: a message after the diagram', xml: xml(chain(ST()), { after: '  <bpmndi:BPMNDiagram id="D1"><bpmndi:BPMNPlane id="PL" bpmnElement="P_Test" /></bpmndi:BPMNDiagram>\n  <bpmn:message id="M9" name="m9" />\n' }), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   // white space and empty values
   ...[
     ['job type', ST(ext(TD(BLANK)))],
@@ -194,21 +186,8 @@ describe('deploy rules: the profile flags exactly what Camunda 8.9.22 refuses', 
     const adhoc = await find(xml(ADHOC('<bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${done}</bpmn:completionCondition>')));
     expect(adhoc.message).toBe('The completion condition "${done}" of ad-hoc sub-process X is no FEEL expression; Camunda 8 needs one starting with = and refuses the file');
     expect(adhoc.hint).toBe("`bpmn set <file> X 'completion== done'` (check the FEEL syntax), or remove it: `bpmn set <file> X completion=`.");
-    const order = await find(xml(ordered(`<bpmn:incoming>F1</bpmn:incoming>${ext(TD())}<bpmn:outgoing>F2</bpmn:outgoing>`)));
-    expect(order.message).toBe('In serviceTask X, <bpmn:extensionElements> comes after <bpmn:incoming>; the BPMN schema puts extensionElements before incoming, and Camunda 8 validates the file against the schema and refuses it');
-    const colon = await find(xml(chain(ST()).replace(/"X"/g, '"a:b"')));
-    expect(colon.hint).toBe('`bpmn set <file> a:b id=a_b`.');
-    const lane = await find(xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Nope</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`));
-    expect(lane.message).toBe('Lane L1 has <bpmn:flowNodeRef>Nope</bpmn:flowNodeRef>, but the file has no element with the id Nope; Camunda 8 checks such references against the ids of the file (cvc-id.1) and refuses it');
     const link = await find(xml(LINKS('')));
     expect(link.message).toBe('Element of type <bpmn:LinkEventDefinition> must have property <name>');
-  });
-
-  it('an edit that removes the element with the issue resolves it', async () => {
-    const doc = await Doc.fromXml(xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Nope</bpmn:flowNodeRef><bpmn:flowNodeRef>X</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`));
-    const mutated = await mutateDoc(doc, [{ op: 'remove', ids: ['LS'] }], { force: true });
-    expect(mutated.delta!.resolved.map((warning) => warning.code)).toContain('W_C8_DEPLOY_SCHEMA');
-    expect((await runProfile(await Doc.fromXml(mutated.xml))).findings.filter((finding) => finding.code === 'W_C8_DEPLOY_SCHEMA')).toEqual([]);
   });
 });
 

@@ -44,24 +44,8 @@ export class StructuralValidator {
     return completeMirrorLists(this.doc.definitions);
   }
 
-  /**
-   * A lint warning a shown platform finding repeats is dropped (it adds the engine's verdict),
-   * and so is a platform finding an E_INVALID_HOST already reports.
-   */
+  /** A lint warning a shown platform finding repeats is dropped (it adds the engine's verdict). */
   withProfile(result: ValidationResult, report: ProfileReport, shown: ProfileFinding[], delta?: { added: ProfileFinding[]; resolved: ProfileFinding[] }): ValidationResult {
-    const invalidHost = new Set(
-      [...result.errors, ...result.warnings]
-        .filter((error) => error.code === 'E_INVALID_HOST' || (error.code === 'W_PREEXISTING_ERROR' && error.message.startsWith('E_INVALID_HOST')))
-        .map((error) => error.element),
-    );
-    const repeated = (finding: ProfileFinding): boolean => (finding.code === 'W_C7_DEPLOY_BOUNDARY_HOST' || finding.code === 'W_C8_DEPLOY_BOUNDARY_HOST') && invalidHost.has(finding.element);
-    if (invalidHost.size) {
-      shown = shown.filter((finding) => !repeated(finding));
-      report = { ...report, findings: report.findings.filter((finding) => !repeated(finding)) };
-      if (delta) {
-        delta = { added: delta.added.filter((finding) => !repeated(finding)), resolved: delta.resolved };
-      }
-    }
     const covered = lintCoveredBy(shown);
     const warnings = result.warnings.filter((warning) => !covered(warning));
     const platform: PlatformSummary = { ...PlatformCheck.summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };

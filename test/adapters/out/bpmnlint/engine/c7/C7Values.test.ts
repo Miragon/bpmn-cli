@@ -254,19 +254,6 @@ describe('c7-bad-value', () => {
         },
       },
       {
-        name: 'a call activity with an empty calledElement',
-        moddleElement: engineModel(
-          'c7',
-          '<bpmn:callActivity id="callActivity_d" calledElement="" />',
-        ),
-        report: {
-          id: 'callActivity_d',
-          message: 'Call activity callActivity_d has an empty calledElement; it fails when it runs',
-          path: ['calledElement'],
-          type: ERROR_TYPES.PROPERTY_VALUE_REQUIRED,
-        },
-      },
-      {
         name: 'a user task priority that is not a number or expression',
         moddleElement: engineModel('c7', '<bpmn:userTask id="userTask_b" camunda:priority="high" />'),
         report: {

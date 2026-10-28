@@ -159,10 +159,6 @@ const CASES: Case[] = [
   { name: 'elementVariable without collection', xml: xml(chain('<bpmn:userTask id="X"><bpmn:multiInstanceLoopCharacteristics camunda:elementVariable="item" /></bpmn:userTask>')), codes: ['W_C7_DEPLOY_MULTI_INSTANCE'], engine: 'reject' },
   { name: 'multi-instance with collection on the loop', xml: xml(chain(`<bpmn:userTask id="X">${MI_COLLECTION}</bpmn:userTask>`)), codes: [], engine: 'accept' },
   // duplicated and misplaced extension elements
-  { name: 'two camunda:inputOutput', xml: xml(chain(ST('', ext(IO + IO)))), codes: ['W_C7_DEPLOY_DUPLICATE_EXTENSION'], engine: 'reject' },
-  { name: 'two camunda:formData', xml: xml(chain('<bpmn:userTask id="X">' + ext('<camunda:formData><camunda:formField id="a" type="string" /></camunda:formData><camunda:formData><camunda:formField id="b" type="string" /></camunda:formData>') + '</bpmn:userTask>')), codes: ['W_C7_DEPLOY_DUPLICATE_EXTENSION'], engine: 'reject' },
-  { name: 'two retry cycles on an async task', xml: xml(chain(ST('camunda:asyncBefore="true"', ext('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:failedJobRetryTimeCycle>R5/PT1M</camunda:failedJobRetryTimeCycle>')))), codes: ['W_C7_DEPLOY_DUPLICATE_EXTENSION'], engine: 'reject' },
-  { name: 'two retry cycles on a synchronous task', xml: xml(chain(ST('', ext('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:failedJobRetryTimeCycle>R5/PT1M</camunda:failedJobRetryTimeCycle>')))), codes: ['W_C7_DUPLICATE_EXTENSION'], engine: 'accept' },
   { name: 'inputParameter loose in extensionElements', xml: xml(chain(ST('', ext('<camunda:inputParameter name="a">x</camunda:inputParameter>')))), codes: ['W_C7_MISPLACED_EXTENSION'], engine: 'accept' },
   { name: 'taskListener, camunda:in and formData on a service task', xml: xml(chain(ST('', ext('<camunda:taskListener event="create" class="a.B" /><camunda:in variables="all" /><camunda:formData />')))), codes: ['W_C7_MISPLACED_EXTENSION', 'W_C7_MISPLACED_EXTENSION', 'W_C7_MISPLACED_EXTENSION'], engine: 'accept' },
   { name: 'inputOutput on the process', xml: xml(chain(ST()), { head: `    ${ext(IO)}\n` }), codes: ['W_C7_MISPLACED_EXTENSION'], engine: 'accept' },
@@ -211,20 +207,6 @@ const CASES: Case[] = [
   { name: 'error boundary event without errorCode catches everything', xml: xml(boundary('<bpmn:userTask id="X" />', '<bpmn:errorEventDefinition errorRef="Err" />'), { roots: '  <bpmn:error id="Err" name="Err" />\n' }), codes: [], engine: 'accept' },
   { name: 'escalation end event without escalationCode', xml: xml(toEnd('<bpmn:escalationEventDefinition escalationRef="Esc" />'), { roots: '  <bpmn:escalation id="Esc" name="Esc" />\n' }), codes: ['W_C7_DEPLOY_ESCALATION'], engine: 'reject' },
   { name: 'escalation boundary event on a service task', xml: xml(boundary(ST(), '<bpmn:escalationEventDefinition escalationRef="Esc" />'), { roots: '  <bpmn:escalation id="Esc" name="Esc" escalationCode="E" />\n' }), codes: ['W_C7_DEPLOY_ESCALATION'], engine: 'reject' },
-  {
-    name: 'boundary event on a compensation handler',
-    xml: xml(
-      chain(ST(), `    <bpmn:boundaryEvent id="BC" attachedToRef="X"><bpmn:compensateEventDefinition /></bpmn:boundaryEvent>
-    <bpmn:serviceTask id="H" isForCompensation="true" camunda:expression="\${true}" />
-    <bpmn:boundaryEvent id="BT" attachedToRef="H">${TIMER}</bpmn:boundaryEvent>
-    <bpmn:sequenceFlow id="F3" sourceRef="BT" targetRef="End2" />
-    <bpmn:endEvent id="End2" />
-    <bpmn:association id="A1" associationDirection="One" sourceRef="BC" targetRef="H" />`),
-    ),
-    codes: ['W_C7_DEPLOY_BOUNDARY_HOST'],
-    engine: 'reject',
-    structural: 'E_INVALID_HOST',
-  },
   { name: 'timer without value', xml: xml(chain('<bpmn:intermediateCatchEvent id="X"><bpmn:timerEventDefinition /></bpmn:intermediateCatchEvent>')), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject' },
   { name: 'script task without script', xml: xml(chain('<bpmn:scriptTask id="X" scriptFormat="groovy" />')), codes: ['W_C7_DEPLOY_SCRIPT'], engine: 'reject' },
   // exclusive gateways
@@ -235,7 +217,6 @@ const CASES: Case[] = [
   { name: 'one flow without condition and no default', xml: exclusive(['${a}', null]), codes: ['W_C7_EXCLUSIVE_GATEWAY_DEFAULT'], engine: 'accept' },
   { name: 'conditions plus a default flow', xml: exclusive(['${a}', null], 'S1'), codes: [], engine: 'accept' },
   // file level, attributes, foreign content
-  { name: 'extensionElements under bpmn:definitions', xml: xml(chain(ST()), { defsHead: `  ${ext('<camunda:properties><camunda:property name="a" value="b" /></camunda:properties>')}\n` }), codes: ['W_C7_DEPLOY_DEFINITIONS_EXTENSION'], engine: 'reject' },
   { name: 'camunda:assignee on a service task', xml: xml(chain(ST('camunda:assignee="demo"'))), codes: ['W_C7_MISPLACED_ATTRIBUTE'], engine: 'accept' },
   { name: 'typo camunda:asignee on a user task', xml: xml(chain('<bpmn:userTask id="X" camunda:asignee="demo" />')), codes: ['W_C7_UNKNOWN_ATTRIBUTE'], engine: 'accept' },
   { name: 'errorCodeVariable on the event instead of its definition', xml: xml(boundary(ST(), '<bpmn:errorEventDefinition errorRef="Err" />').replace('<bpmn:boundaryEvent id="B"', '<bpmn:boundaryEvent id="B" camunda:errorCodeVariable="code"'), { roots: '  <bpmn:error id="Err" name="Err" errorCode="E" />\n' }), codes: ['W_C7_MISPLACED_ATTRIBUTE'], engine: 'accept' },

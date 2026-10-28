@@ -104,27 +104,18 @@ interface Case {
   before?: boolean;
 }
 
-const MULTIPLE = 'W_C7_MULTIPLE_EVENT_DEFINITIONS';
-
 const CASES: Case[] = [
   // 1. schema rules on every event definition
-  { name: 'timer + conditional without condition (intermediate catch)', xml: xml(catchWith(TIMER + COND_NONE)), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'conditional without condition + timer (intermediate catch, the timer acts)', xml: xml(catchWith(COND_NONE + TIMER)), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'timer + conditional without condition (boundary event)', xml: xml(beside(`<bpmn:boundaryEvent id="W" attachedToRef="U">${TIMER}${COND_NONE}</bpmn:boundaryEvent>${flow('FB', 'W', 'EB')}<bpmn:endEvent id="EB" />`)), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'timer + conditional without condition (process start event)', xml: xml(`<bpmn:startEvent id="W">${TIMER}${COND_NONE}</bpmn:startEvent>${flow('F1', 'W', 'End')}<bpmn:endEvent id="End" />`), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'timer + link without name (intermediate catch)', xml: xml(catchWith(TIMER + LINK_NONAME)), codes: [MULTIPLE, 'W_C7_DEPLOY_LINK'], engine: 'reject', before: true },
+  { name: 'timer + conditional without condition (intermediate catch)', xml: xml(catchWith(TIMER + COND_NONE)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'conditional without condition + timer (intermediate catch, the timer acts)', xml: xml(catchWith(COND_NONE + TIMER)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'timer + conditional without condition (boundary event)', xml: xml(beside(`<bpmn:boundaryEvent id="W" attachedToRef="U">${TIMER}${COND_NONE}</bpmn:boundaryEvent>${flow('FB', 'W', 'EB')}<bpmn:endEvent id="EB" />`)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'timer + conditional without condition (process start event)', xml: xml(`<bpmn:startEvent id="W">${TIMER}${COND_NONE}</bpmn:startEvent>${flow('F1', 'W', 'End')}<bpmn:endEvent id="End" />`), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'timer + link without name (intermediate catch)', xml: xml(catchWith(TIMER + LINK_NONAME)), codes: ['W_C7_DEPLOY_LINK'], engine: 'reject', before: true },
   { name: 'timer with timeDate and timeDuration', xml: xml(catchWith(TWO_TIMES)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'event sub-process start: message acts, an ignored timer with two time elements', xml: xml(beside(`<bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="W" isInterrupting="false"><bpmn:messageEventDefinition messageRef="M1" />${TWO_TIMES}</bpmn:startEvent>${flow('e1', 'W', 'ESE')}<bpmn:endEvent id="ESE" /></bpmn:subProcess>`), { roots: MSG }), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'event sub-process start: message acts, an ignored timer with two time elements', xml: xml(beside(`<bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="W" isInterrupting="false"><bpmn:messageEventDefinition messageRef="M1" />${TWO_TIMES}</bpmn:startEvent>${flow('e1', 'W', 'ESE')}<bpmn:endEvent id="ESE" /></bpmn:subProcess>`), { roots: MSG }), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
   { name: 'conditional without condition in a non-executable process', xml: xml(beside(''), { extra: NON_EXECUTABLE(`<bpmn:intermediateCatchEvent id="O_W">${COND_NONE}</bpmn:intermediateCatchEvent>${flow('O_F', 'O_S', 'O_W')}`) }), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
   { name: 'link without name in a non-executable process', xml: xml(beside(''), { extra: NON_EXECUTABLE(`<bpmn:intermediateThrowEvent id="O_W">${LINK_NONAME}</bpmn:intermediateThrowEvent>${flow('O_F', 'O_S', 'O_W')}`) }), codes: ['W_C7_DEPLOY_LINK'], engine: 'reject', before: true },
-  { name: 'semantic rules stay on the acting definition: timer + message without messageRef', xml: xml(catchWith(`${TIMER}<bpmn:messageEventDefinition id="MDef" />`)), codes: [MULTIPLE], engine: 'accept' },
-  // 2. a duplicate on a loop with an id of its own (the hints are followed below)
-  {
-    name: 'two failedJobRetryTimeCycle on an asynchronous multi-instance loop',
-    xml: xml(around(`<bpmn:userTask id="SP"><bpmn:multiInstanceLoopCharacteristics camunda:asyncBefore="true" camunda:collection="\${items}" camunda:elementVariable="item"><bpmn:extensionElements><camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:failedJobRetryTimeCycle>R5/PT1M</camunda:failedJobRetryTimeCycle></bpmn:extensionElements></bpmn:multiInstanceLoopCharacteristics></bpmn:userTask>`)),
-    codes: ['W_C7_DEPLOY_DUPLICATE_EXTENSION'],
-    engine: 'reject',
-  },
+  { name: 'semantic rules stay on the acting definition: timer + message without messageRef', xml: xml(catchWith(`${TIMER}<bpmn:messageEventDefinition id="MDef" />`)), codes: [], engine: 'accept' },
   // 3. start events of transactions, sub-processes, processes; ad-hoc sub-processes
   { name: 'transaction with a task but no start event', xml: xml(around(`<bpmn:transaction id="SP">${UT('T')}</bpmn:transaction>`)), codes: ['W_C7_TRANSACTION_NO_START'], engine: 'accept', run: 'fails', before: true },
   { name: 'empty transaction', xml: xml(around('<bpmn:transaction id="SP" />')), codes: ['W_C7_TRANSACTION_NO_START'], engine: 'accept', run: 'fails', before: true },
@@ -302,13 +293,6 @@ describe('hints run through the CLI', () => {
     it('W_C7_UNKNOWN_ELEMENT on a multi-instance loop: the remove command works', async () => {
       const { hint, after } = await follow(`unknown-loop-${tag}`, loopHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'SP', { pick: (testCase) => testCase.slice(0, 1) });
       expect(hint).toContain('`bpmn ext remove <file> SP loop.0`');
-      expect((await runProfile(after)).findings).toEqual([]);
-    }, 60000);
-
-    it('W_C7_DEPLOY_DUPLICATE_EXTENSION on an asynchronous loop: the merge goes to the loop', async () => {
-      const content = loopHost('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:failedJobRetryTimeCycle>R5/PT1M</camunda:failedJobRetryTimeCycle>', ownId).replace('<bpmn:multiInstanceLoopCharacteristics', '<bpmn:multiInstanceLoopCharacteristics camunda:asyncBefore="true"');
-      const { hint, after } = await follow(`dup-loop-${tag}`, content, 'W_C7_DEPLOY_DUPLICATE_EXTENSION', 'SP', { fill: { '...': 'R3/PT1M' } });
-      expect(hint).toContain('`bpmn ext add <file> SP loop.camunda:failedJobRetryTimeCycle --replace');
       expect((await runProfile(after)).findings).toEqual([]);
     }, 60000);
   });

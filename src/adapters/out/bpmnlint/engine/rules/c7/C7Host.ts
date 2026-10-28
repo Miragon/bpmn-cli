@@ -24,7 +24,7 @@ export interface HostExtension {
 
 /**
  * A BPMN element as the Camunda 7 checks of camunda content see it: whether they look at it at
- * all, its camunda content, and the `bpmn` commands of the hints that rebuild, remove or merge its
+ * all, its camunda content, and the `bpmn` commands of the hints that rebuild or remove its
  * extension elements and unset its attributes, through the slot of the flow node.
  */
 export class C7Host extends VendorHost {
@@ -92,13 +92,6 @@ export class C7Host extends VendorHost {
     const flat = C7Host.extAddArguments(extension.value, type, fix);
     const again = flat ? `\`bpmn ext add <file> ${id} ${Shell.slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${id} ${Shell.slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn ext list <file> ${id} --json\` shows it)`;
     return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${id} ${Shell.quote(`${slot}${this.selector(extension)}`)}\`, then ${again}.`;
-  }
-
-  /** `Merge them into one: ...` for duplicates of a single-instance type. */
-  merge(local: string): string {
-    if (!this.address) return 'Merge them in the XML.';
-    const type = this.typeName(local);
-    return `Merge them into one: \`bpmn ext list <file> ${this.address.id} --json\`, then \`bpmn ext add <file> ${this.address.id} ${Shell.slotted(this.address.slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
   }
 
   /** `bpmn ext remove` of an extension element by its position. */

@@ -101,8 +101,8 @@ interface Case {
 const CASES: Case[] = [
   // conditions: a script resource is a condition; an empty one deploys and fails when evaluated (runtime)
   { name: 'conditional event with a camunda:resource script condition', xml: xml(chain([catchEvent('W', cond('<bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://c.groovy" />'))])), codes: [], engine: 'accept' },
-  { name: 'conditional event with an empty condition', xml: xml(chain([catchEvent('W', cond('<bpmn:condition xsi:type="bpmn:tFormalExpression" />'))])), codes: ['W_C7_EMPTY_CONDITION'], engine: 'accept' },
-  { name: 'conditional start event with an empty groovy condition', xml: xml(chain([UT()], '', `<bpmn:startEvent id="Start">${cond('<bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" />')}</bpmn:startEvent>`)), codes: ['W_C7_EMPTY_CONDITION'], engine: 'accept' },
+  { name: 'conditional event with an empty condition', xml: xml(chain([catchEvent('W', cond('<bpmn:condition xsi:type="bpmn:tFormalExpression" />'))])), codes: [], engine: 'accept' },
+  { name: 'conditional start event with an empty groovy condition', xml: xml(chain([UT()], '', `<bpmn:startEvent id="Start">${cond('<bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" />')}</bpmn:startEvent>`)), codes: [], engine: 'accept' },
   { name: 'conditional event without a condition element', xml: xml(chain([catchEvent('W', cond(''))])), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject' },
   {
     name: 'sequence flow with an empty condition (not on a default flow)',
@@ -111,7 +111,7 @@ const CASES: Case[] = [
 <bpmn:sequenceFlow id="F1" sourceRef="T" targetRef="E1"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" /></bpmn:sequenceFlow>
 <bpmn:sequenceFlow id="F2" sourceRef="T" targetRef="E2"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${a}</bpmn:conditionExpression></bpmn:sequenceFlow>
 <bpmn:sequenceFlow id="F3" sourceRef="T" targetRef="E3" />`),
-    codes: ['W_C7_EMPTY_CONDITION'],
+    codes: [],
     engine: 'accept',
   },
   // camunda:type
@@ -204,7 +204,6 @@ const CASES: Case[] = [
   { name: 'Operaton-only file', xml: xml(chain([['X', '<bpmn:serviceTask id="X" operaton:type="external" operaton:topic="t" />']]), { ns: OPERATON, attrs: 'operaton:historyTimeToLive="180"' }), codes: [], engine: 'reject', operaton: 'accept' },
   { name: 'Operaton reads operaton:historyTimeToLive before camunda:historyTimeToLive', xml: xml(chain([UT()]), { ns: `${CAMUNDA} ${OPERATON}`, attrs: 'camunda:historyTimeToLive="180" operaton:historyTimeToLive="abc"' }), codes: ['W_C7_DEPLOY_HISTORY_TTL'], engine: 'accept', operaton: 'reject' },
   { name: 'one camunda:inputOutput and one operaton:inputOutput', xml: xml(chain([UT('T', ext('<camunda:inputOutput><camunda:inputParameter name="a">1</camunda:inputParameter></camunda:inputOutput><operaton:inputOutput><operaton:inputParameter name="b">2</operaton:inputParameter></operaton:inputOutput>'))]), { ns: `${CAMUNDA} ${OPERATON}` }), codes: [], engine: 'accept' },
-  { name: 'two operaton:inputOutput', xml: xml(chain([UT('T', ext('<operaton:inputOutput><operaton:inputParameter name="a">1</operaton:inputParameter></operaton:inputOutput><operaton:inputOutput><operaton:inputParameter name="b">2</operaton:inputParameter></operaton:inputOutput>'))]), { ns: OPERATON, attrs: 'operaton:historyTimeToLive="180"' }), codes: ['W_C7_DEPLOY_DUPLICATE_EXTENSION'], engine: 'reject' },
 ];
 
 describe('profile follow-ups: one synthetic model per rule', () => {

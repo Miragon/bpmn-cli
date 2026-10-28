@@ -22,16 +22,13 @@ const REFERENCES: Array<{ finding: string; kind: string; events: string[]; missi
 
 /**
  * Events whose trigger is incomplete, or clashes with another event in the same scope.
- * Camunda 7 refuses to deploy the file; an event with several event definitions deploys but reacts
- * to one of them only.
+ * Camunda 7 refuses to deploy the file.
  *
- * - `c7-boundary-host`: a boundary event on a compensation handler.
  * - `c7-event-definition`: a conditional event without condition; a timer with none or more than
  *   one of date, duration and cycle; a compensation throw naming an activity outside its own
  *   (sub-)process.
  * - `c7-link-event`: a link event without name; two link catch events with one name in a process; a
  *   connected link throw without a catch of its name in its own (sub-)process.
- * - `c7-multiple-event-definitions`: an event with several event definitions.
  * - `c7-message`: a message catch event without message; a message (also of a receive task) without
  *   name; one message name twice among the events waiting in one scope.
  * - `c7-signal`: a signal event without signal; a signal without name; one signal name twice among
@@ -61,7 +58,6 @@ class C7Events extends C7Rule {
     const runs = EngineScope.C7.contains(event);
     const definitions = new C7EventDefinitions(event);
     if (runs) {
-      this.checkBoundaryHost(event);
       for (const definition of definitions.actedOn()) {
         if (is(definition, 'bpmn:TimerEventDefinition') && !TIMER_ELEMENTS.some((timeElement) => definition[timeElement])) this.report('c7-event-definition', event, `Timer of ${ElementKinds.describe(event)} has no date, cycle or duration; the engines refuse the file`, { path: definitions.pathTo(definition), type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: TIMER_ELEMENTS, hint: `\`bpmn set <file> ${event.id} timer=PT1H\` (or R/PT1H, or a date).` });
         if (is(definition, 'bpmn:CompensateEventDefinition') && isAny(event, ['bpmn:IntermediateThrowEvent', 'bpmn:EndEvent'])) this.checkCompensation(event, definition, definitions);
@@ -69,7 +65,6 @@ class C7Events extends C7Rule {
     }
     this.checkDefinitions(definitions.all());
     if (!runs) return;
-    this.checkMultipleDefinitions(event, definitions);
     for (const reference of REFERENCES) if (isAny(event, reference.events)) for (const definition of definitions.actedOn()) if (is(definition, `bpmn:${reference.kind}EventDefinition`)) this.checkReference(event, definition, definitions, reference);
     if (is(event, 'bpmn:BoundaryEvent') && definitions.ofType('bpmn:EscalationEventDefinition')) this.checkEscalationHost(event);
   }
@@ -140,26 +135,10 @@ class C7Events extends C7Rule {
     this.report(finding, owner, `${subject} has no name; the engines refuse the file`, { path: [...path, 'name'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: referenced, requiredProperty: 'name', hint: `\`bpmn set <file> ${referenced.id} name=<${referenced.$type.slice('bpmn:'.length)}Name>\`.` });
   }
 
-  private checkBoundaryHost(event: ModdleElement): void {
-    const host = is(event, 'bpmn:BoundaryEvent') ? event.get('attachedToRef') : undefined;
-    if (host?.get('isForCompensation') !== true) return;
-    this.report('c7-boundary-host', event, `Boundary event ${event.id} is attached to the compensation handler ${host.id}; the engines refuse boundary events on compensation handlers`, { path: ['attachedToRef'], type: ERROR_TYPES.ATTACHED_TO_REF_ELEMENT_TYPE_NOT_ALLOWED, attachedToRef: host, hint: `Remove it: \`bpmn remove <file> ${event.id}\` (or attach it to a normal activity: \`bpmn move <file> ${event.id} --on <activityId>\`).` });
-  }
-
   private checkEscalationHost(event: ModdleElement): void {
     const host = event.attachedToRef;
     if (!host || isAny(host, ESCALATION_HOSTS)) return;
     this.report('c7-escalation', event, `Escalation boundary event ${event.id} is attached to ${ElementKinds.describe(host)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, { path: ['attachedToRef'], type: ERROR_TYPES.ATTACHED_TO_REF_ELEMENT_TYPE_NOT_ALLOWED, attachedToRef: host, hint: `Attach it elsewhere (\`bpmn move <file> ${event.id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${event.id}\`.` });
-  }
-
-  /** An event with several definitions: the engines act on one and ignore the others. It deploys. */
-  private checkMultipleDefinitions(event: ModdleElement, definitions: C7EventDefinitions): void {
-    const all = definitions.all();
-    if (all.length < 2) return;
-    const acting = definitions.acting();
-    const ignored = all.filter((definition) => definition !== acting).map((definition) => ElementKinds.trigger(definition));
-    const consequence = acting ? `the engines act on the ${ElementKinds.trigger(acting)} only and ignore the ${ignored.join(' and ')}` : 'the engines act on one of them only and ignore the others';
-    this.report('c7-multiple-event-definitions', event, `${ElementKinds.describe(event)} has ${all.length} event definitions (${all.map((definition) => ElementKinds.trigger(definition)).join(', ')}); ${consequence}`, { path: ['eventDefinitions'], type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, kept: acting, hint: `Keep one: \`bpmn set <file> ${event.id} trigger=${acting ? ElementKinds.trigger(acting) : '<trigger>'}\` (keeps that definition, drops the others), and model each other trigger as its own event (behind an event-based gateway, or another boundary / start event). One definition is edited with \`bpmn set <file> ${event.id} 'definition[<n>].<key>=<value>'\`.` });
   }
 
   /** The activities a compensation throw event may name: those of its own (sub-)process, for an event sub-process also those of its parent scope. */
@@ -258,10 +237,8 @@ export default defineRule(
     kind: 'engine-specific',
     targetEngine: 'c7',
     findings: {
-      'c7-boundary-host': ['W_C7_DEPLOY_BOUNDARY_HOST', 'deploy'],
       'c7-event-definition': ['W_C7_DEPLOY_EVENT_DEFINITION', 'deploy'],
       'c7-link-event': ['W_C7_DEPLOY_LINK', 'deploy'],
-      'c7-multiple-event-definitions': ['W_C7_MULTIPLE_EVENT_DEFINITIONS', 'runtime'],
       'c7-message': ['W_C7_DEPLOY_MESSAGE', 'deploy'],
       'c7-signal': ['W_C7_DEPLOY_SIGNAL', 'deploy'],
       'c7-error': ['W_C7_DEPLOY_ERROR', 'deploy'],

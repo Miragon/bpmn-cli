@@ -145,14 +145,13 @@ engine is checked and run in one walk of the file by the engine entry point of
 - camunda-compat's rules for the file's `modeler:executionPlatformVersion` (`compatRules` of the
   plugin's `camunda-7` / `camunda-8` entry; the latest without one; `--json` platform names the
   version);
-- bpmn-cli's own rules for what camunda-compat leaves out, six per engine in
+- bpmn-cli's own rules for what camunda-compat leaves out, six for Camunda 7 and five for Camunda 8 in
   `src/adapters/out/bpmnlint/engine/rules/`, written on the plugin's `EngineRule`: `c7-events`,
   `c7-flows`, `c7-implementation`, `c7-values`, `c7-extension-content`, `c7-vendor-content` and
-  `c8-events`, `c8-subscriptions`, `c8-extensions`, `c8-vendor-content`, `c8-feel-expression`,
-  `c8-schema` (`bpmn-cli/<rule>`). Each declares the checks it reports with their code and
+  `c8-events`, `c8-subscriptions`, `c8-extensions`, `c8-vendor-content`, `c8-feel-expression`
+  (`bpmn-cli/<rule>`). Each declares the checks it reports with their code and
   severity, and gives its hint with the finding;
-- a few checks that need the file's text or content the engine's parser drops (`bpmn-cli` in the
-  tables).
+- a few checks on content the engine's parser drops (`bpmn-cli` in the tables).
 
 bpmn-cli maps each camunda-compat rule to its code. The hint of a camunda-compat finding is built
 from where it points; its message is camunda-compat's. A rule's severity says what the finding
@@ -193,11 +192,8 @@ camunda-compat's `feel` is off).
 | `W_C7_DEPLOY_AD_HOC_SUBPROCESS` | `bpmn-cli/c7-flows` |
 | `W_C7_DEPLOY_BAD_VALUE` | `bpmn-cli/c7-values` |
 | `W_C7_DEPLOY_BINDING_VERSION` | `bpmn-cli/c7-values` |
-| `W_C7_DEPLOY_BOUNDARY_HOST` | `bpmn-cli/c7-events` |
 | `W_C7_DEPLOY_CALLED_ELEMENT` | `bpmn-cli/c7-values` |
 | `W_C7_DEPLOY_COMPLEX_GATEWAY` | `bpmn-cli/c7-flows` |
-| `W_C7_DEPLOY_DEFINITIONS_EXTENSION` | `bpmn-cli/c7-extension-content` |
-| `W_C7_DEPLOY_DUPLICATE_EXTENSION` | `bpmn-cli/c7-extension-content` |
 | `W_C7_DEPLOY_ERROR` | `bpmn-cli/c7-events` |
 | `W_C7_DEPLOY_ESCALATION` | `bpmn-cli/c7-events` |
 | `W_C7_DEPLOY_EVENT_DEFINITION` | `bpmn-cli/c7-events` |
@@ -218,14 +214,11 @@ camunda-compat's `feel` is off).
 | `W_C7_DEPLOY_SCRIPT` | `bpmn-cli/c7-implementation` |
 | `W_C7_DEPLOY_SIGNAL` | `bpmn-cli/c7-events` |
 | `W_C7_DEPLOY_START_EVENT` | `bpmn-cli/c7-flows` |
-| `W_C7_DUPLICATE_EXTENSION` | `bpmn-cli/c7-extension-content` |
-| `W_C7_EMPTY_CONDITION` | `bpmn-cli/c7-flows` |
 | `W_C7_EXCLUSIVE_GATEWAY_DEFAULT` | `bpmn-cli/c7-flows` |
 | `W_C7_FOREIGN_CONTENT` | `bpmn-cli/c7-vendor-content` |
 | `W_C7_MESSAGE_NO_IMPLEMENTATION` | `bpmn-cli/c7-implementation` |
 | `W_C7_MISPLACED_ATTRIBUTE` | `bpmn-cli/c7-vendor-content` |
 | `W_C7_MISPLACED_EXTENSION` | `bpmn-cli/c7-vendor-content` |
-| `W_C7_MULTIPLE_EVENT_DEFINITIONS` | `bpmn-cli/c7-events` |
 | `W_C7_TRANSACTION_NO_START` | `bpmn-cli/c7-flows` |
 | `W_C7_UNKNOWN_ATTRIBUTE` | `bpmn-cli/c7-vendor-content` |
 | `W_C7_UNKNOWN_ELEMENT` | bpmn-cli |
@@ -240,7 +233,6 @@ camunda-compat's `feel` is off).
 | `W_C8_BAD_VALUE` | `bpmn-cli/c8-extensions` |
 | `W_C8_CONDITION_IGNORED` | `camunda-compat/sequence-flow-condition` |
 | `W_C8_DEPLOY_AD_HOC_SUBPROCESS` | `camunda-compat/ad-hoc-sub-process`, `bpmn-cli/c8-events` |
-| `W_C8_DEPLOY_BOUNDARY_HOST` | `bpmn-cli/c8-events` |
 | `W_C8_DEPLOY_CALLED_ELEMENT` | `camunda-compat/called-element`, `camunda-compat/no-business-id`, `camunda-compat/no-propagate-all-parent-variables` |
 | `W_C8_DEPLOY_DUPLICATE_EXTENSION` | `bpmn-cli/c8-extensions` |
 | `W_C8_DEPLOY_ERROR` | `camunda-compat/error-reference`, `bpmn-cli/c8-subscriptions` |
@@ -255,7 +247,7 @@ camunda-compat's `feel` is off).
 | `W_C8_DEPLOY_LISTENER` | `camunda-compat/before-all-execution-listener`, `camunda-compat/cancel-execution-listener`, `camunda-compat/duplicate-execution-listener-headers`, `camunda-compat/duplicate-execution-listeners`, `camunda-compat/execution-listener`, `camunda-compat/no-before-all-execution-listener`, `camunda-compat/no-cancel-execution-listener`, `camunda-compat/no-execution-listener-headers`, `camunda-compat/no-execution-listeners`, `camunda-compat/no-task-listeners`, `camunda-compat/task-listener`, `bpmn-cli/c8-extensions` |
 | `W_C8_DEPLOY_MESSAGE` | `camunda-compat/message-reference`, `camunda-compat/subscription`, `bpmn-cli/c8-subscriptions`, bpmn-cli (`zeebe:publishMessage`) |
 | `W_C8_DEPLOY_MULTI_INSTANCE` | `camunda-compat/loop-characteristics` |
-| `W_C8_DEPLOY_SCHEMA` | `bpmn-cli/c8-schema`, bpmn-cli (unprefixed attributes; the file text: child order, IDREFs, booleans, unreadable ids) |
+| `W_C8_DEPLOY_SCHEMA` | bpmn-cli (unprefixed attributes) |
 | `W_C8_DEPLOY_SIGNAL` | `camunda-compat/signal-reference`, `bpmn-cli/c8-subscriptions` |
 | `W_C8_DEPLOY_START_EVENT` | `bpmnlint/start-event-required`, `camunda-compat/no-multiple-none-start-events`, `bpmn-cli/c8-events` |
 | `W_C8_DEPLOY_TIMER` | `camunda-compat/timer`, `bpmn-cli/c8-events` |

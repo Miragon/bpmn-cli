@@ -96,26 +96,24 @@ interface Case {
   engine: 'reject' | 'accept';
 }
 
-const MULTIPLE = 'W_C7_MULTIPLE_EVENT_DEFINITIONS';
-
 const CASES: Case[] = [
   // the engines act on the timer (intermediate catch, process start, boundary), on the message (event sub-process start)
-  { name: 'message + timer catch event', xml: xml(chain([catchEvent('W', MSG + TIMER)]), { roots: ROOTS }), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'timer + a message without messageRef: the ignored message is not parsed', xml: xml(chain([catchEvent('W', TIMER + MSG_NOREF)]), { roots: ROOTS }), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'message + an empty timer: the acting timer is parsed', xml: xml(chain([catchEvent('W', MSG + EMPTY_TIMER)]), { roots: ROOTS }), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject' },
-  { name: 'event sub-process start: the message acts, an empty timer is ignored', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], eventSub(MSG + EMPTY_TIMER)), { roots: ROOTS }), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'event sub-process start: a message without messageRef acts', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], eventSub(TIMER + MSG_NOREF)), { roots: ROOTS }), codes: [MULTIPLE, 'W_C7_DEPLOY_MESSAGE'], engine: 'reject' },
-  { name: 'a message + timer start event is a second timer start event', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], `<bpmn:startEvent id="S2">${MSG}${TIMER}</bpmn:startEvent><bpmn:sequenceFlow id="FS2" sourceRef="S2" targetRef="U" />`), { roots: ROOTS }), codes: [MULTIPLE, 'W_C7_DEPLOY_START_EVENT'], engine: 'reject' },
-  { name: 'boundary event: signal + message, the signal acts', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], `<bpmn:boundaryEvent id="B" attachedToRef="U"><bpmn:messageEventDefinition messageRef="M" /><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:boundaryEvent><bpmn:sequenceFlow id="FB" sourceRef="B" targetRef="EB" /><bpmn:endEvent id="EB" />`), { roots: ROOTS }), codes: [MULTIPLE], engine: 'accept' },
+  { name: 'message + timer catch event', xml: xml(chain([catchEvent('W', MSG + TIMER)]), { roots: ROOTS }), codes: [], engine: 'accept' },
+  { name: 'timer + a message without messageRef: the ignored message is not parsed', xml: xml(chain([catchEvent('W', TIMER + MSG_NOREF)]), { roots: ROOTS }), codes: [], engine: 'accept' },
+  { name: 'message + an empty timer: the acting timer is parsed', xml: xml(chain([catchEvent('W', MSG + EMPTY_TIMER)]), { roots: ROOTS }), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject' },
+  { name: 'event sub-process start: the message acts, an empty timer is ignored', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], eventSub(MSG + EMPTY_TIMER)), { roots: ROOTS }), codes: [], engine: 'accept' },
+  { name: 'event sub-process start: a message without messageRef acts', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], eventSub(TIMER + MSG_NOREF)), { roots: ROOTS }), codes: ['W_C7_DEPLOY_MESSAGE'], engine: 'reject' },
+  { name: 'a message + timer start event is a second timer start event', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], `<bpmn:startEvent id="S2">${MSG}${TIMER}</bpmn:startEvent><bpmn:sequenceFlow id="FS2" sourceRef="S2" targetRef="U" />`), { roots: ROOTS }), codes: ['W_C7_DEPLOY_START_EVENT'], engine: 'reject' },
+  { name: 'boundary event: signal + message, the signal acts', xml: xml(chain([['U', '<bpmn:userTask id="U" />']], `<bpmn:boundaryEvent id="B" attachedToRef="U"><bpmn:messageEventDefinition messageRef="M" /><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:boundaryEvent><bpmn:sequenceFlow id="FB" sourceRef="B" targetRef="EB" /><bpmn:endEvent id="EB" />`), { roots: ROOTS }), codes: [], engine: 'accept' },
   // throw events act on one definition too: an end event on the message, an intermediate throw event on the signal
-  { name: 'end event: message + signal, the message acts', xml: xml(chain([['U', '<bpmn:userTask id="U" />']]).replace('<bpmn:endEvent id="End" />', `<bpmn:endEvent id="End"><bpmn:messageEventDefinition camunda:expression="\${true}" /><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:endEvent>`), { roots: ROOTS }), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'end event: the ignored signal definition without signalRef is not parsed', xml: xml(chain([['U', '<bpmn:userTask id="U" />']]).replace('<bpmn:endEvent id="End" />', '<bpmn:endEvent id="End"><bpmn:messageEventDefinition camunda:expression="${true}" /><bpmn:signalEventDefinition /></bpmn:endEvent>')), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'intermediate throw event: the acting signal without signalRef is refused', xml: xml(chain([['T', '<bpmn:intermediateThrowEvent id="T"><bpmn:signalEventDefinition /><bpmn:messageEventDefinition camunda:expression="${true}" /></bpmn:intermediateThrowEvent>']])), codes: [MULTIPLE, 'W_C7_DEPLOY_SIGNAL'], engine: 'reject' },
-  { name: 'intermediate throw event: an ignored mail message definition is not parsed', xml: xml(chain([['T', '<bpmn:intermediateThrowEvent id="T"><bpmn:signalEventDefinition signalRef="Sig" /><bpmn:messageEventDefinition camunda:type="mail" /></bpmn:intermediateThrowEvent>']]), { roots: ROOTS }), codes: [MULTIPLE], engine: 'accept' },
+  { name: 'end event: message + signal, the message acts', xml: xml(chain([['U', '<bpmn:userTask id="U" />']]).replace('<bpmn:endEvent id="End" />', `<bpmn:endEvent id="End"><bpmn:messageEventDefinition camunda:expression="\${true}" /><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:endEvent>`), { roots: ROOTS }), codes: [], engine: 'accept' },
+  { name: 'end event: the ignored signal definition without signalRef is not parsed', xml: xml(chain([['U', '<bpmn:userTask id="U" />']]).replace('<bpmn:endEvent id="End" />', '<bpmn:endEvent id="End"><bpmn:messageEventDefinition camunda:expression="${true}" /><bpmn:signalEventDefinition /></bpmn:endEvent>')), codes: [], engine: 'accept' },
+  { name: 'intermediate throw event: the acting signal without signalRef is refused', xml: xml(chain([['T', '<bpmn:intermediateThrowEvent id="T"><bpmn:signalEventDefinition /><bpmn:messageEventDefinition camunda:expression="${true}" /></bpmn:intermediateThrowEvent>']])), codes: ['W_C7_DEPLOY_SIGNAL'], engine: 'reject' },
+  { name: 'intermediate throw event: an ignored mail message definition is not parsed', xml: xml(chain([['T', '<bpmn:intermediateThrowEvent id="T"><bpmn:signalEventDefinition signalRef="Sig" /><bpmn:messageEventDefinition camunda:type="mail" /></bpmn:intermediateThrowEvent>']]), { roots: ROOTS }), codes: [], engine: 'accept' },
   // behind an event-based gateway: the acting definition decides
-  { name: 'event-based gateway -> message + timer catch event', xml: gateway(MSG + TIMER), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'event-based gateway -> link + timer catch event (the timer acts)', xml: gateway(LINK + TIMER), codes: [MULTIPLE], engine: 'accept' },
-  { name: 'event-based gateway -> link + conditional catch event (the link acts)', xml: gateway(LINK + COND), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_GATEWAY'], engine: 'reject' },
+  { name: 'event-based gateway -> message + timer catch event', xml: gateway(MSG + TIMER), codes: [], engine: 'accept' },
+  { name: 'event-based gateway -> link + timer catch event (the timer acts)', xml: gateway(LINK + TIMER), codes: [], engine: 'accept' },
+  { name: 'event-based gateway -> link + conditional catch event (the link acts)', xml: gateway(LINK + COND), codes: ['W_C7_DEPLOY_EVENT_GATEWAY'], engine: 'reject' },
   // attributes BPMN does not define
   { name: 'unprefixed attributes on a task and on an event definition', xml: xml(chain([['R', '<bpmn:businessRuleTask id="R" calledDecision="d1" camunda:decisionRef="d1" />'], catchEvent('W', TIMER.replace('<bpmn:timerEventDefinition id="TDef">', '<bpmn:timerEventDefinition id="TDef" foo="bar">'))])), codes: ['W_C7_DEPLOY_SCHEMA', 'W_C7_DEPLOY_SCHEMA'], engine: 'reject' },
 ];
@@ -128,15 +126,6 @@ describe('integration follow-ups: one synthetic model per rule', () => {
     for (const finding of findings) {
       expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
     }
-  });
-
-  it('names the definition the engines act on and how to keep only it', async () => {
-    const [finding] = (await runProfile(await Doc.fromXml(xml(chain([catchEvent('W', MSG + TIMER)]), { roots: ROOTS })))).findings;
-    expect(finding).toMatchObject({ code: MULTIPLE, element: 'W', severity: 'runtime' });
-    expect(finding!.message).toContain('the engines act on the timer only and ignore the message');
-    expect(finding!.hint).toContain('`bpmn set <file> W trigger=timer`');
-    const end = (await runProfile(await Doc.fromXml(CASES.find((testCase) => testCase.name.startsWith('end event'))!.xml))).findings[0]!;
-    expect(end.message).toContain('the engines act on the message only and ignore the signal');
   });
 });
 
@@ -193,7 +182,7 @@ describe('hints name one of several event definitions with definition[<n>].', ()
         expect(result.code, `${argv.join(' ')}\n${result.out}\n${result.err}`).toBe(0);
       }
     }
-    expect((await runProfile(await Doc.fromXml(readFileSync(file, 'utf8')))).findings.map((finding) => finding.code)).toEqual([MULTIPLE]);
+    expect((await runProfile(await Doc.fromXml(readFileSync(file, 'utf8')))).findings.map((finding) => finding.code)).toEqual([]);
   }, 60000);
 });
 
@@ -217,8 +206,6 @@ describe('a boundary event on a compensation handler is reported once', () => {
     expect(report.errors.map((validationError) => `${validationError.code} ${validationError.element}`)).toContain('E_INVALID_HOST BT');
     expect(report.warnings.map((warning) => warning.code)).not.toContain('W_C7_DEPLOY_BOUNDARY_HOST');
     expect(report.platform!.counts.deploy).toBe(0);
-    // the profile on its own (library) still knows the engine rule
-    expect((await runProfile(await Doc.fromXml(XML))).findings.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_BOUNDARY_HOST']);
   });
 });
 
@@ -454,7 +441,7 @@ describe('self-description', () => {
     const json = kindsJson() as { nestedSelectors: Record<string, string>; errors: Array<{ code: string }> };
     expect(Object.keys(json.nestedSelectors)).toEqual(['definition[<n>].<key>', 'definition[<trigger>].<key>']);
     expect(kindsText()).toContain('definition[<n>].<key>: one of several event definitions');
-    for (const code of ['E_AMBIGUOUS_NESTED', 'W_C7_DEPLOY_START_EVENT', 'W_C7_DEPLOY_LINK', 'W_C7_DEPLOY_SCHEMA', 'W_C7_EMPTY_CONDITION', MULTIPLE]) {
+    for (const code of ['E_AMBIGUOUS_NESTED', 'W_C7_DEPLOY_START_EVENT', 'W_C7_DEPLOY_LINK', 'W_C7_DEPLOY_SCHEMA']) {
       expect(json.errors.map((validationError) => validationError.code)).toContain(code);
     }
   });

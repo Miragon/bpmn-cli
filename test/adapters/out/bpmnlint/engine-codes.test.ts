@@ -20,7 +20,7 @@ describe('every engine rule has a bpmn-cli code', () => {
       expect([...rules].filter((rule) => !EngineCodes.TABLE[platform][rule]).sort()).toEqual([]);
       expect(Object.keys(EngineCodes.TABLE[platform]).filter((rule) => !rules.has(rule)).sort()).toEqual([]);
       const own = entry.rules(undefined).filter((rule) => rule.name.startsWith('bpmn-cli/'));
-      expect(own.length).toBeGreaterThan(5);
+      expect(own.length).toBeGreaterThan(4);
       expect(Object.values(entry.findings).filter(([code]) => !code.startsWith(`W_${platform.toUpperCase()}_`))).toEqual([]);
     });
   }

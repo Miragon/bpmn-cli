@@ -153,17 +153,6 @@ describe('c8-event-definition', () => {
     ],
     invalid: [
       {
-        name: 'an event with two event definitions',
-        moddleElement: engineModel('c8', TWO_DEFINITIONS, { roots: MESSAGE }),
-        report: {
-          id: 'X',
-          message:
-            'intermediateCatchEvent:timer X has 2 event definitions (timer, message); Camunda 8 allows one and refuses the file',
-          path: ['eventDefinitions'],
-          type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED,
-        },
-      },
-      {
         name: 'an event sub-process with a none start event',
         moddleElement: engineModel('c8', eventSubProcess('<bpmn:startEvent id="ESP_S" />')),
         report: {
@@ -171,59 +160,6 @@ describe('c8-event-definition', () => {
           message:
             'Start event ESP_S of event sub-process ESP has no trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file',
           path: ['eventDefinitions'],
-          type: ERROR_TYPES.PROPERTY_REQUIRED,
-        },
-      },
-      {
-        name: 'a conditional event definition without id',
-        moddleElement: engineModel(
-          'c8',
-          chain(
-            `<bpmn:intermediateCatchEvent id="X"><bpmn:conditionalEventDefinition>${CONDITION}</bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent>`,
-          ),
-        ),
-        report: {
-          id: 'X',
-          message:
-            'The conditional event definition of intermediateCatchEvent:conditional X has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")',
-          path: ['eventDefinitions', 0, 'id'],
-          type: ERROR_TYPES.PROPERTY_REQUIRED,
-        },
-      },
-      {
-        name: 'compensation definitions without id',
-        moddleElement: engineModel(
-          'c8',
-          COMPENSATION('<bpmn:compensateEventDefinition />', '<bpmn:compensateEventDefinition />'),
-        ),
-        report: [
-          {
-            id: 'B',
-            message:
-              'The compensate event definition of boundaryEvent:compensate B has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")',
-            path: ['eventDefinitions', 0, 'id'],
-            type: ERROR_TYPES.PROPERTY_REQUIRED,
-          },
-          {
-            id: 'T',
-            message:
-              'The compensate event definition of intermediateThrowEvent:compensate T has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")',
-            path: ['eventDefinitions', 0, 'id'],
-            type: ERROR_TYPES.PROPERTY_REQUIRED,
-          },
-        ],
-      },
-      {
-        name: 'a link catch definition without id',
-        moddleElement: engineModel(
-          'c8',
-          LINKS('<bpmn:linkEventDefinition name="L" />', '<bpmn:linkEventDefinition name="L" />'),
-        ),
-        report: {
-          id: 'C',
-          message:
-            'The link event definition of intermediateCatchEvent:link C has no id; Camunda 8.9 refuses the file (an internal error: "Cannot invoke String.getBytes ... value is null")',
-          path: ['eventDefinitions', 0, 'id'],
           type: ERROR_TYPES.PROPERTY_REQUIRED,
         },
       },
@@ -476,58 +412,6 @@ describe('c8-ad-hoc-sub-process', () => {
   });
 });
 
-describe('c8-boundary-host', () => {
-  const COMPENSATION = (handlerAttributes: string) => `
-    <bpmn:serviceTask id="serviceTask_chargeCard">
-      <bpmn:extensionElements><zeebe:taskDefinition type="charge-card" /></bpmn:extensionElements>
-    </bpmn:serviceTask>
-    <bpmn:boundaryEvent id="boundaryEvent_compensate" attachedToRef="serviceTask_chargeCard">
-      <bpmn:compensateEventDefinition id="compensateEventDefinition_compensate" />
-    </bpmn:boundaryEvent>
-    <bpmn:serviceTask id="serviceTask_refundCard" ${handlerAttributes}>
-      <bpmn:extensionElements><zeebe:taskDefinition type="refund-card" /></bpmn:extensionElements>
-    </bpmn:serviceTask>
-    <bpmn:boundaryEvent id="boundaryEvent_refundTimeout" attachedToRef="serviceTask_refundCard">
-      <bpmn:timerEventDefinition id="timerEventDefinition_refundTimeout">
-        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
-      </bpmn:timerEventDefinition>
-    </bpmn:boundaryEvent>
-    <bpmn:association id="association_compensate" associationDirection="One"
-        sourceRef="boundaryEvent_compensate" targetRef="serviceTask_refundCard" />`;
-
-  verifyEngineRule('c8-boundary-host', rule, {
-    valid: [
-      {
-        name: 'a boundary event on a normal activity',
-        moddleElement: engineModel('c8', COMPENSATION('')),
-      },
-      {
-        name: 'a Camunda 7 diagram',
-        moddleElement: engineModel(
-          'c7',
-          COMPENSATION('isForCompensation="true"').replace(
-            /<bpmn:extensionElements>.*?<\/bpmn:extensionElements>/g,
-            '',
-          ),
-        ),
-      },
-    ],
-    invalid: [
-      {
-        name: 'a boundary event on a compensation handler',
-        moddleElement: engineModel('c8', COMPENSATION('isForCompensation="true"')),
-        report: {
-          id: 'boundaryEvent_refundTimeout',
-          message:
-            'Boundary event boundaryEvent_refundTimeout is attached to the compensation handler serviceTask_refundCard; Camunda 8 refuses boundary events on compensation handlers',
-          path: ['attachedToRef'],
-          type: ERROR_TYPES.ATTACHED_TO_REF_ELEMENT_TYPE_NOT_ALLOWED,
-        },
-      },
-    ],
-  });
-});
-
 describe('c8-event-gateway', () => {
   const TIMER_CATCH =
     '<bpmn:intermediateCatchEvent id="{id}">{in}<bpmn:timerEventDefinition id="timer_{id}"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>';
@@ -591,19 +475,6 @@ describe('c8-event-gateway', () => {
           id: 'G',
           message:
             'Event-based gateway G has 1 outgoing flow; Camunda 8 needs at least two and refuses the file',
-          path: ['outgoing'],
-          type: ERROR_TYPES.PROPERTY_REQUIRED,
-        },
-      },
-      {
-        name: 'an event-based gateway that lists one of its two outgoing flows',
-        moddleElement: engineModel('c8', eventGateway([TIMER_CATCH, MESSAGE_CATCH], 1), {
-          roots: MESSAGE,
-        }),
-        report: {
-          id: 'G',
-          message:
-            'Event-based gateway G has 2 outgoing flows, but the file lists 1 of them as its <bpmn:outgoing> entries; Camunda 8 counts the listed ones and refuses the file',
           path: ['outgoing'],
           type: ERROR_TYPES.PROPERTY_REQUIRED,
         },

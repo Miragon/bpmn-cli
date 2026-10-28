@@ -11,8 +11,6 @@ import { CompatVerdicts } from './CompatVerdicts.js';
 import { EngineFindings } from './EngineFindings.js';
 import type { Findings } from './rules/CamundaRules.js';
 import { PublishMessages } from './PublishMessages.js';
-import { SchemaText, type SchemaTextIssue } from './SchemaText.js';
-import { SchemaTextFindings } from './SchemaTextFindings.js';
 import { UnknownVendorElements } from './UnknownVendorElements.js';
 import { UnprefixedAttributes } from './UnprefixedAttributes.js';
 
@@ -35,13 +33,10 @@ const EXECUTION_PLATFORMS: Record<Engine, string> = { c7: 'Camunda Platform', c8
  * One engine's rules on a document, loaded on demand: camunda-compat's config for the file's
  * engine version and bpmn-cli's own rules, on the document parsed again
  * with the engine's moddle extension. The checks a typed parse cannot see (unknown vendor
- * elements, unprefixed attributes, publishMessage, the schema rules of the file's text) are
- * bpmn-cli's own.
+ * elements, unprefixed attributes, publishMessage) are bpmn-cli's own.
  */
 export class EngineRun {
   private readonly moddle: BpmnModdle;
-  /** read once per text: an edit lints before and after */
-  private readonly textIssues = new WeakMap<object, SchemaTextIssue[]>();
 
   constructor(
     private readonly kit: EngineKit,
@@ -69,7 +64,6 @@ export class EngineRun {
       ...ownFindings,
       ...[...failures].map(([rule, message]) => this.kit.makeFinding('practice', 'W_LINT_FAILED', `The ${ENGINE_NAMES[this.engine]} rule ${rule} failed: ${message}; its findings are left out`, undefined, { subject: `failed:${rule}`, hint: 'Report the file and the rule: it is a bug of the rule, not of the model.' })),
       ...new UnknownVendorElements(this.kit, doc, ns, this.engine, this.moddle).findings(),
-      ...(this.engine === 'c8' ? new SchemaTextFindings(this.kit, doc).findings(this.schemaTextIssues(doc)) : []),
     ];
     return this.inDocumentOrder(doc, findings);
   }
@@ -129,16 +123,5 @@ export class EngineRun {
       delete results[rule];
     }
     return failures;
-  }
-
-  private schemaTextIssues(doc: Doc): SchemaTextIssue[] {
-    const source = doc.source;
-    if (!source) return [];
-    let issues = this.textIssues.get(source);
-    if (!issues) {
-      issues = new SchemaText(this.kit).issues(source.text, doc.moddle);
-      this.textIssues.set(source, issues);
-    }
-    return issues;
   }
 }

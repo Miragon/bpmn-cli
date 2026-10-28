@@ -16,7 +16,6 @@ const ACTING_ORDER: Record<string, string[]> = { 'bpmn:IntermediateThrowEvent': 
 const EXECUTION_EVENTS = ['start', 'end'];
 const TASK_EVENTS = ['create', 'assignment', 'complete', 'update', 'delete', 'timeout'];
 const LISTENER_IMPLEMENTATIONS = ['class', 'expression', 'delegateExpression'];
-const ASYNC_ATTRIBUTES = ['async', 'asyncBefore', 'asyncAfter'];
 
 /** Where camunda:field elements sit: how messages name their holder, their path, and the `ext add` type argument that replaces one of them by name. */
 interface FieldsAt {
@@ -30,11 +29,9 @@ interface FieldsAt {
 
 /**
  * camunda extension elements (listeners, input/output mappings, fields, forms, connectors) with
- * required parts missing, unknown values, a placement Camunda 7 forbids, or twice.
- * Camunda 7 refuses to deploy the file; a second retry time cycle on an element that is not
- * asynchronous deploys until the element becomes asynchronous.
+ * required parts missing, unknown values or a placement Camunda 7 forbids.
+ * Camunda 7 refuses to deploy the file.
  *
- * - `c7-definitions-extension`: extension elements on bpmn:definitions.
  * - `c7-extension`: camunda:in or camunda:out without source or target; an input or output
  *   parameter without name; a connector without connector id; a form field without id, without type
  *   or with an unknown type; a field the engine reads without value, or with both stringValue and
@@ -44,10 +41,6 @@ interface FieldsAt {
  *   listener without timer or id.
  * - `c7-input-output`: input/output mappings on a start or boundary event, a gateway or an event
  *   sub-process; output mappings on an end event or a multi-instance activity.
- * - `c7-duplicate-extension`: a second input/output mapping, connector, form data or retry time
- *   cycle where the engine reads one.
- * - `c7-async-duplicate-extension`: a second retry time cycle on an element that is not
- *   asynchronous.
  *
  * @example a listener that runs nothing
  * <camunda:executionListener event="start" />  <!-- no class, expression or script -->
@@ -55,7 +48,6 @@ interface FieldsAt {
 class C7ExtensionContent extends C7Rule {
   protected visit(node: ModdleElement): boolean | void {
     if (!C7Host.visits(node)) return false;
-    if (is(node, 'bpmn:Definitions')) return this.checkDefinitionsExtension(node);
     if (!EngineScope.inExecutableProcess(node)) return;
     const host = new C7Host(node);
     const read = new CamundaPlacement(host).readExtensions();
@@ -64,19 +56,10 @@ class C7ExtensionContent extends C7Rule {
     if (this.isActingMessageThrow(host)) this.checkImplementationFields(host, ElementKinds.describe(host.owner));
     for (const extension of read) if (extension.local === 'executionListener' || extension.local === 'taskListener') this.checkListener(host, extension);
     if (is(node, 'bpmn:FlowNode')) this.checkInputOutput(host);
-    this.checkDuplicates(host);
   }
 
   private reportOn(host: C7Host, finding: string, message: string, data: ReportData): void {
     this.report(finding, host.target, message, data);
-  }
-
-  /** The BPMN schema does not allow extension elements under `bpmn:definitions`; the engines validate against it and refuse the file. */
-  private checkDefinitionsExtension(node: ModdleElement): void {
-    const values: ModdleElement[] = node.extensionElements?.values ?? [];
-    if (!values.length) return;
-    const types = values.map(({ $type: type }) => `${type.slice(0, type.indexOf(':') + 1)}${type.charAt(type.indexOf(':') + 1).toLowerCase()}${type.slice(type.indexOf(':') + 2)}`).join(', ');
-    this.report('c7-definitions-extension', node, `bpmn:definitions carries bpmn:extensionElements (${types}), which the BPMN schema does not allow there; the engines refuse the file`, { path: ['extensionElements'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'extensionElements', hint: `Move the content to the process: \`bpmn ext remove <file> ${node.id ?? '<definitionsId>'} <type>\`, then \`bpmn ext add <file> <processId> <type> ...\`.` });
   }
 
   private checkContent(host: C7Host, extension: HostExtension): void {
@@ -221,35 +204,6 @@ class C7ExtensionContent extends C7Rule {
     if (is(node, 'bpmn:SubProcess') && node.triggeredByEvent === true) return 'an event sub-process';
     return is(node, 'bpmn:StartEvent') || is(node, 'bpmn:BoundaryEvent') || is(node, 'bpmn:Gateway') ? `a ${ElementKinds.of(node)}` : undefined;
   }
-
-  /**
-   * A second camunda extension element of a type the engines read with a single-element lookup
-   * (ENGINE-01009): inputOutput on flow nodes, connector on service-like tasks, formData on user
-   * tasks and start events, failedJobRetryTimeCycle on asynchronous elements and timer events; of
-   * the last on an element not asynchronous yet, the file deploys until it is.
-   */
-  private checkDuplicates(host: C7Host): void {
-    const byLocal = new Map<string, HostExtension[]>();
-    for (const extension of host.camundaExtensions()) byLocal.set(extension.local, [...(byLocal.get(extension.local) ?? []), extension]);
-    for (const reportsRead of [true, false]) {
-      for (const [local, extensions] of byLocal) {
-        const [, second] = extensions;
-        if (!second || this.isRead(host.node, local) !== reportsRead) continue;
-        const typeName = host.typeName(local);
-        const message = reportsRead ? `${host.describe()} has ${extensions.length} ${typeName} elements; the engines refuse the file (ENGINE-01009 multiple elements with tag name ${local})` : `${host.describe()} has ${extensions.length} ${typeName} elements; once it runs asynchronously the engines refuse the file`;
-        this.reportOn(host, reportsRead ? 'c7-duplicate-extension' : 'c7-async-duplicate-extension', message, { path: host.extensionPath(second.index), type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, node: second.value, hint: host.merge(local) });
-      }
-    }
-  }
-
-  /** Whether the engines read the extension type `local` on `node` now, or only once it runs asynchronously; undefined for one whose duplicates do not matter there. */
-  private isRead(node: ModdleElement, local: string): boolean | undefined {
-    if (local === 'inputOutput') return is(node, 'bpmn:FlowNode') || undefined;
-    if (local === 'connector') return SERVICE_LIKE.some((type) => is(node, type)) || undefined;
-    if (local === 'formData') return is(node, 'bpmn:UserTask') || is(node, 'bpmn:StartEvent') || undefined;
-    if (local !== 'failedJobRetryTimeCycle') return undefined;
-    return ASYNC_ATTRIBUTES.some((name) => [true, 'true'].includes(node.get(`camunda:${name}`))) || (node.eventDefinitions ?? []).some((definition: ModdleElement) => is(definition, 'bpmn:TimerEventDefinition'));
-  }
 }
 
 export default defineRule(
@@ -258,12 +212,9 @@ export default defineRule(
     kind: 'engine-specific',
     targetEngine: 'c7',
     findings: {
-      'c7-definitions-extension': ['W_C7_DEPLOY_DEFINITIONS_EXTENSION', 'deploy'],
       'c7-extension': ['W_C7_DEPLOY_EXTENSION', 'deploy'],
       'c7-listener': ['W_C7_DEPLOY_LISTENER', 'deploy'],
       'c7-input-output': ['W_C7_DEPLOY_INPUT_OUTPUT', 'deploy'],
-      'c7-duplicate-extension': ['W_C7_DEPLOY_DUPLICATE_EXTENSION', 'deploy'],
-      'c7-async-duplicate-extension': ['W_C7_DUPLICATE_EXTENSION', 'practice'],
     },
   },
   C7ExtensionContent,
