@@ -1,17 +1,12 @@
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
+import { RuleKit } from './RuleKit.js';
 
-/** How bpmn-cli names a BPMN element's kind (`endEvent:message`), handed over by the engine run. */
+/** How bpmn-cli names a BPMN element's kind (`endEvent:message`). */
 export class ElementKinds {
-  private static label: ((el: ModdleElement) => string) | undefined;
-
-  static use(label: (el: ModdleElement) => string): void {
-    ElementKinds.label = label;
-  }
-
   /** `userTask`, `endEvent:message`; `camunda:InputOutput` for a vendor element. */
   static of(el: ModdleElement): string {
     const type = String(el.$type ?? '');
-    const kind = type.startsWith('bpmn:') && ElementKinds.label ? ElementKinds.label(el).replace(/^bpmn:/, '') : type.replace(/^bpmn:/, '');
+    const kind = type.startsWith('bpmn:') ? RuleKit.kit.kindLabel(el).replace(/^bpmn:/, '') : type.replace(/^bpmn:/, '');
     return kind.charAt(0).toLowerCase() + kind.slice(1);
   }
 

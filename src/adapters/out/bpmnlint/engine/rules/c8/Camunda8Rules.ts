@@ -1,9 +1,7 @@
 import { compatRules, moddleExtensions } from '@miragon/bpmnlint-plugin-rules/camunda-8';
 import type { EngineKit } from '../../../engine-kit.js';
 import type { EngineEntry } from '../../EngineRun.js';
-import { ElementKinds } from '../ElementKinds.js';
 import { RuleEntries } from '../RuleEntries.js';
-import { C8Host } from './C8Host.js';
 import c8Events from './C8Events.js';
 import c8Extensions from './C8Extensions.js';
 import c8FeelExpression from './C8FeelExpression.js';
@@ -16,12 +14,6 @@ export class Camunda8Rules {
 
   /** camunda-compat's rules for an engine version with these, as `bpmn-cli/<rule>`, and the moddle extension they read. */
   static entry(kit: EngineKit): EngineEntry {
-    ElementKinds.use(kit.kindLabel);
-    C8Host.use(kit.ZEEBE);
-    return {
-      moddleExtensions,
-      findings: RuleEntries.findingsOf(Camunda8Rules.RULES),
-      rules: (version) => [...compatRules(version), ...RuleEntries.of(Camunda8Rules.RULES, version)],
-    };
+    return RuleEntries.entry(kit, Camunda8Rules.RULES, { compatRules, moddleExtensions });
   }
 }

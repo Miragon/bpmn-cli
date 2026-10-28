@@ -1,8 +1,15 @@
 import { is } from 'bpmnlint-utils';
 
+import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
 import { ElementKinds } from '../ElementKinds.js';
+import { RuleKit } from '../RuleKit.js';
 import type { C7Host, HostExtension } from './C7Host.js';
-import { CamundaDescriptor } from './CamundaDescriptor.js';
+
+/** Hosts the descriptor misses but the engines read. */
+const EXTRA_HOSTS: Record<string, string[]> = {
+  potentialStarter: ['bpmn:Process'],
+  errorEventDefinition: ['bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:BusinessRuleTask', 'bpmn:MessageEventDefinition', 'bpmn:IntermediateThrowEvent', 'bpmn:EndEvent'],
+};
 
 /**
  * Content of an event definition the engines read on one side only (the descriptor allows it on
@@ -21,9 +28,17 @@ export type Misplacement = { kind: 'side' | 'host'; readOn: string } | { kind: '
 
 /** Whether the Camunda 7 engines read camunda content where a host carries it. */
 export class CamundaPlacement {
-  private readonly descriptor = CamundaDescriptor.get();
-
   constructor(private readonly host: C7Host) {}
+
+  /** The hosts the engines read the extension element `local` on, the descriptor's and the extra ones. */
+  static hostsOf(local: string): string[] {
+    return [...RuleKit.kit.CAMUNDA.allowedParents(local), ...(EXTRA_HOSTS[local] ?? [])];
+  }
+
+  /** Whether the engines read the extension element `local` directly in the extension elements of `host`. */
+  static isReadOn(local: string, host: ModdleElement): boolean {
+    return CamundaPlacement.hostsOf(local).some((allowed) => allowed === '*' || (allowed.startsWith('bpmn:') && host.$instanceOf(allowed)));
+  }
 
   /** The camunda attributes the descriptor allows on the host's event definition but the engines read on the other side only. */
   static sideAttributes(): string[] {
@@ -47,10 +62,10 @@ export class CamundaPlacement {
   misplacementOf({ local }: HostExtension): Misplacement | undefined {
     const side = this.wrongSide(local, 'extensions');
     if (side) return { kind: 'side', readOn: side };
-    if (this.descriptor.isReadOn(local, this.host.node)) return undefined;
-    const containers = this.descriptor.isNestedOnly(local) ? this.descriptor.containersOf(local) : [];
+    if (CamundaPlacement.isReadOn(local, this.host.node)) return undefined;
+    const containers = RuleKit.kit.CAMUNDA.allowedParents(local).length === 0 ? RuleKit.kit.CAMUNDA.containersOf(local) : [];
     if (containers.length) return { kind: 'loose', containers: containers.map((container) => container.replace(/^camunda:/, `${this.host.prefix}:`)).join(' / ') };
-    return { kind: 'host', readOn: ElementKinds.list(this.descriptor.hostsOf(local), 4) };
+    return { kind: 'host', readOn: ElementKinds.list(CamundaPlacement.hostsOf(local), 4) };
   }
 
   /** The camunda extension elements the engines read where they sit. */

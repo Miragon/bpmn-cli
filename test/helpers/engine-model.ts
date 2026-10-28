@@ -1,20 +1,14 @@
 import Linter from 'bpmnlint/lib/linter.js';
 import { createModdle } from 'bpmnlint/lib/testers/helper.js';
 import { describe, expect, it } from 'vitest';
-import { CamundaDescriptor } from '../../src/adapters/out/bpmnlint/engine/rules/c7/CamundaDescriptor.js';
-import { C8Host } from '../../src/adapters/out/bpmnlint/engine/rules/c8/C8Host.js';
-import { ElementKinds } from '../../src/adapters/out/bpmnlint/engine/rules/ElementKinds.js';
-import { kindLabel } from '../../src/domain/document/Kinds.js';
-import { CAMUNDA } from '../../src/domain/document/vendor/CamundaDescriptor.js';
-import { ZEEBE } from '../../src/domain/document/vendor/ZeebeDescriptor.js';
+import { ENGINE_KIT } from '../../src/adapters/out/bpmnlint/engine-kit.js';
+import { RuleKit } from '../../src/adapters/out/bpmnlint/engine/rules/RuleKit.js';
 import type { DeclaredRuleFactory } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { Engine } from '@miragon/bpmnlint-plugin-rules/engine';
 import { moddleExtensions as camundaModdle } from '@miragon/bpmnlint-plugin-rules/camunda-7';
 import { moddleExtensions as zeebeModdle } from '@miragon/bpmnlint-plugin-rules/camunda-8';
 
-CamundaDescriptor.use(CAMUNDA);
-ElementKinds.use(kindLabel);
-C8Host.use(ZEEBE);
+RuleKit.use(ENGINE_KIT);
 
 const ENGINES: Record<
   Engine,

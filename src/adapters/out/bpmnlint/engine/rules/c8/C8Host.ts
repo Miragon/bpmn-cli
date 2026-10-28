@@ -4,12 +4,12 @@ import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { EngineKit } from '../../../engine-kit.js';
 import { ZEEBE_URI } from '../DiagramNamespaces.js';
 import { EngineScope } from '../EngineScope.js';
+import { RuleKit } from '../RuleKit.js';
 import { VendorHost } from '../VendorHost.js';
 import { C8EventDefinitions } from './C8EventDefinitions.js';
 import { ZeebeHint } from './ZeebeHint.js';
 
-type ZeebeDescriptor = EngineKit['ZEEBE'];
-export type ZeebeType = NonNullable<ReturnType<ZeebeDescriptor['type']>>;
+export type ZeebeType = NonNullable<ReturnType<EngineKit['ZEEBE']['type']>>;
 
 /**
  * How Camunda 8 treats a zeebe extension element where it sits: `read`, `loose` (a child element
@@ -30,21 +30,9 @@ export interface ZeebeValue {
 /**
  * A BPMN element whose vendor content Camunda 8 reads: an element of an executable process (not
  * inside a transaction, which Camunda 8 refuses as a whole) or a message that process uses, with
- * an id of its own or of an element around it to report on. The zeebe descriptor is bpmn-cli's,
- * handed over by the engine run.
+ * an id of its own or of an element around it to report on.
  */
 export class C8Host extends VendorHost {
-  private static descriptor: ZeebeDescriptor | undefined;
-
-  static use(descriptor: ZeebeDescriptor): void {
-    C8Host.descriptor = descriptor;
-  }
-
-  static get zeebe(): ZeebeDescriptor {
-    if (!C8Host.descriptor) throw new Error('C8Host.use(ZEEBE) runs before the Camunda 8 rules');
-    return C8Host.descriptor;
-  }
-
   static of(node: ModdleElement): C8Host | undefined {
     const type = String(node?.$type ?? '');
     if (!type.startsWith('bpmn:') || is(node, 'bpmn:ExtensionElements') || is(node, 'bpmn:Definitions') || node.$descriptor?.isGeneric || !C8Host.isChecked(node)) return undefined;
@@ -92,15 +80,15 @@ export class C8Host extends VendorHost {
   /** The typed zeebe elements in the extension elements, with how Camunda 8 treats each. */
   zeebeValues(): ZeebeValue[] {
     return this.extensionValues().flatMap((value, index) => {
-      const type = value.$descriptor?.isGeneric || !String(value.$type).startsWith('zeebe:') ? undefined : C8Host.zeebe.type(value.$type);
+      const type = value.$descriptor?.isGeneric || !String(value.$type).startsWith('zeebe:') ? undefined : RuleKit.kit.ZEEBE.type(value.$type);
       return type ? [{ value, index, type, placement: this.placementOf(type) }] : [];
     });
   }
 
   private placementOf(type: ZeebeType): ZeebePlacement {
-    if (C8Host.zeebe.nestedOnly(type.name)) return 'loose';
+    if (RuleKit.kit.ZEEBE.nestedOnly(type.name)) return 'loose';
     if (type.name === 'zeebe:executionListeners' && is(this.node, 'bpmn:SequenceFlow')) return 'flowListeners';
-    return C8Host.zeebe.allowedOn(type.name, this.node) === false ? 'misplaced' : 'read';
+    return RuleKit.kit.ZEEBE.allowedOn(type.name, this.node) === false ? 'misplaced' : 'read';
   }
 
   private static isChecked(node: ModdleElement): boolean {

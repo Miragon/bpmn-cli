@@ -4,6 +4,7 @@ import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { ModdlePath } from '../ModdlePath.js';
+import { RuleKit } from '../RuleKit.js';
 import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
 import { C8EventDefinitions } from './C8EventDefinitions.js';
@@ -202,7 +203,7 @@ class C8Extensions extends C8Rule {
   /** Two or more of an element Camunda 8 reads once per element: reported on the second. */
   private checkDuplicates(host: C8Host, read: ZeebeValue[]): void {
     const byName = new Map<string, ZeebeValue[]>();
-    for (const value of read) if (C8Host.zeebe.isSingle(value.type.name)) byName.set(value.type.name, [...(byName.get(value.type.name) ?? []), value]);
+    for (const value of read) if (RuleKit.kit.ZEEBE.isSingle(value.type.name)) byName.set(value.type.name, [...(byName.get(value.type.name) ?? []), value]);
     const hint = host.hint();
     for (const [name, values] of byName) {
       const [, second] = values;

@@ -1,7 +1,7 @@
 import { BpmnModdle } from 'bpmn-moddle';
 import { kindLabel } from '../../../domain/document/Kinds.js';
 import { makeFinding } from '../../../domain/document/utils/finding.js';
-import { editDistance } from '../../../domain/document/utils/fuzzy.js';
+import { levenshtein } from '../../../domain/document/utils/fuzzy.js';
 import { is, isDiElement, list, peek, walk } from '../../../domain/document/utils/moddle.js';
 import { C7_URIS, CAMUNDA, CAMUNDA_URI, OPERATON_URI } from '../../../domain/document/vendor/CamundaDescriptor.js';
 import { DocumentNamespaces } from '../../../domain/document/vendor/DocumentNamespaces.js';
@@ -17,7 +17,7 @@ export const ENGINE_KIT = {
   BpmnModdle,
   kindLabel,
   makeFinding,
-  editDistance,
+  levenshtein,
   is,
   isDiElement,
   list,

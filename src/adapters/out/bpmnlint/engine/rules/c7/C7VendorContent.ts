@@ -4,11 +4,11 @@ import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData } 
 import { ElementKinds } from '../ElementKinds.js';
 import { CAMUNDA_URI, ZEEBE_URI } from '../DiagramNamespaces.js';
 import { DidYouMean } from '../DidYouMean.js';
+import { RuleKit } from '../RuleKit.js';
 import { Shell } from '../Shell.js';
 import type { VendorHost } from '../VendorHost.js';
 import { C7Diagram } from './C7Diagram.js';
 import { C7Host, type HostExtension } from './C7Host.js';
-import { CamundaDescriptor } from './CamundaDescriptor.js';
 import { CamundaPlacement, type Misplacement } from './CamundaPlacement.js';
 
 /** Attributes the engines read that the descriptor knows as child elements only. */
@@ -34,7 +34,7 @@ const EXTRA_ATTRIBUTES: Record<string, string[]> = { 'camunda:Field': ['expressi
  * <bpmn:userTask id="Review" camunda:asignee="demo" />  <!-- nobody gets assigned -->
  */
 class C7VendorContent extends C7Rule {
-  private readonly descriptor = CamundaDescriptor.get();
+  private readonly camunda = RuleKit.kit.CAMUNDA;
 
   protected visit(node: ModdleElement): boolean | void {
     if (!C7Host.visits(node)) return false;
@@ -67,15 +67,16 @@ class C7VendorContent extends C7Rule {
   /** A camunda attribute the descriptor does not know: rename it to the one it most likely means, else remove it. */
   private checkUnknownAttributes(host: C7Host): void {
     for (const { key, local, uri } of host.foreignAttributes()) {
-      if (uri !== CAMUNDA_URI || this.descriptor.ownersOf(local)) continue;
+      if (uri !== CAMUNDA_URI || this.camunda.attr(local)) continue;
       const prefix = key.slice(0, key.indexOf(':'));
-      const applicable = this.descriptor.attributeNamesFor(host.node);
-      const guess = DidYouMean.of(local, this.descriptor.attributeNames(), applicable);
+      const names = this.camunda.attrs().map(({ name }) => name.slice(name.indexOf(':') + 1));
+      const applicable = names.filter((name) => this.camunda.attr(name)!.owners.some((owner) => host.node.$instanceOf(owner)));
+      const guess = DidYouMean.of(local, names, applicable);
       const fits = guess !== undefined && applicable.includes(guess);
       const unset = host.address && `bpmn set <file> ${host.address.id} ${Shell.quote(`${host.address.slot}${key}=`)}`;
       const rename = fits ? ` ${Shell.quote(`${host.address?.slot}${prefix}:${guess}=${String(host.node.$attrs[key] ?? '')}`)}` : '';
       const hint = unset ? `${rename ? 'Rename' : 'Remove'} it: \`${unset}${rename}\`.` : 'Remove it: edit the XML.';
-      this.reportUnknownAttribute(host, host.describe(), key, { property: `camunda:${local}`, path: host.path(`camunda:${local}`), hint }, guess ? ` (did you mean ${prefix}:${guess}?${fits ? '' : ` It applies to ${ElementKinds.list(this.descriptor.ownersOf(guess) ?? [], 4)} only.`})` : '');
+      this.reportUnknownAttribute(host, host.describe(), key, { property: `camunda:${local}`, path: host.path(`camunda:${local}`), hint }, guess ? ` (did you mean ${prefix}:${guess}?${fits ? '' : ` It applies to ${ElementKinds.list(this.camunda.attr(guess)?.owners ?? [], 4)} only.`})` : '');
     }
   }
 
@@ -90,8 +91,8 @@ class C7VendorContent extends C7Rule {
     const remove = (key: string, withoutAddress: string) => (host.unset(key) ? `Remove it: ${host.unset(key)}.` : withoutAddress);
     const report = (key: string, local: string, readOn: string, hint: string) => this.reportOn(host, 'c7-misplaced-attribute', `${key} on ${host.describe()} has no effect: the engines read it on ${readOn} only`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: `camunda:${local}`, path: host.path(`camunda:${local}`), hint });
     for (const { key, local, uri } of host.foreignAttributes()) {
-      const owners = uri === CAMUNDA_URI ? this.descriptor.ownersOf(local) : undefined;
-      if (owners && !this.descriptor.appliesTo(local, host.node)) report(key, local, ElementKinds.list(owners, 4), this.moveHint(host, key, `${local}=${String(host.node.$attrs[key] ?? '')}`, owners) ?? remove(key, 'Remove it from the XML.'));
+      const owners = uri === CAMUNDA_URI ? this.camunda.attr(local)?.owners : undefined;
+      if (owners && !owners.some((owner) => host.node.$instanceOf(owner))) report(key, local, ElementKinds.list(owners, 4), this.moveHint(host, key, `${local}=${String(host.node.$attrs[key] ?? '')}`, owners) ?? remove(key, 'Remove it from the XML.'));
     }
     const placement = new CamundaPlacement(host);
     for (const local of CamundaPlacement.sideAttributes()) {
@@ -135,7 +136,7 @@ class C7VendorContent extends C7Rule {
     const again = C7Host.extAddArguments(extension.value, type);
     if (kind === 'loose') return `Remove it (${host.removeAt(extension)}) and add it again, \`bpmn ext add\` files it into its container: ${again ? `\`bpmn ext add <file> ${address.id} ${Shell.slotted(address.slot, again)}\`` : `\`bpmn ext add <file> ${address.id} ${Shell.slotted(address.slot, type)} --xml '...'\``}.`;
     const owner = host.owner;
-    const moves = owner?.id && again && this.descriptor.isReadOn(extension.local, owner) && !new C7Host(owner).camundaExtensions(extension.local).length;
+    const moves = owner?.id && again && CamundaPlacement.isReadOn(extension.local, owner) && !new C7Host(owner).camundaExtensions(extension.local).length;
     return `Remove it: ${host.removeAt(extension)}${moves ? `, then add it to ${ElementKinds.describe(owner)}, where the engines read it: \`bpmn ext add <file> ${owner.id} ${again}\`` : ''}.`;
   }
 

@@ -1,7 +1,7 @@
 import { defineRule as declareRule, EngineRule, type DeclaredRuleFactory, type Engine, type ModdleElement, type Reporter, type ReportPath, type RuleDeclaration } from '@miragon/bpmnlint-plugin-rules/engine';
 import { reportErrors } from 'bpmnlint-plugin-camunda-compat/rules/utils/reporter.js';
 
-export type { ModdleElement, Reporter, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
+export type { ModdleElement, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
 export { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
 
 /** What the engine does with a file the rule reports: refuses it, fails or ignores a setting when it runs, or runs it other than a reader expects. */
@@ -29,7 +29,7 @@ export interface ReportData {
 }
 
 /** A bpmn-cli engine rule: every report in camunda-compat's shape, with the finding it is in `data.finding`. */
-export abstract class CamundaRule extends EngineRule {
+abstract class CamundaRule extends EngineRule {
   private reporter!: Reporter;
 
   protected checkElement(node: ModdleElement, reporter: Reporter): boolean | void {

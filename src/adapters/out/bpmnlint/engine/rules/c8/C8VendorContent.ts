@@ -4,6 +4,7 @@ import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData } 
 import { ElementKinds } from '../ElementKinds.js';
 import { C7_URIS, DiagramNamespaces } from '../DiagramNamespaces.js';
 import { DidYouMean } from '../DidYouMean.js';
+import { RuleKit } from '../RuleKit.js';
 import { Shell } from '../Shell.js';
 import type { VendorHost } from '../VendorHost.js';
 import { C8Host } from './C8Host.js';
@@ -87,7 +88,7 @@ class C8VendorContent extends C8Rule {
 
   /** A zeebe attribute of the BPMN element the descriptor does not define, moved to the extension element that has it. */
   private checkUnknownAttributes(host: C8Host): void {
-    const zeebe = C8Host.zeebe;
+    const zeebe = RuleKit.kit.ZEEBE;
     const hint = host.hint();
     const prefix = ZeebeHint.prefixOf(host.node);
     for (const key of host.zeebeAttributeKeys()) {
@@ -110,7 +111,7 @@ class C8VendorContent extends C8Rule {
       if (placement !== 'read') continue;
       const rebuild = hint ? hint.rebuild(hint.nameOf(value)) : 'Fix it in the XML.';
       for (const element of host.tree(value, prefix, host.extensionPath(index))) {
-        const names = C8Host.zeebe.type(element.element.$type)?.attributes.map(({ name }) => name);
+        const names = RuleKit.kit.ZEEBE.type(element.element.$type)?.attributes.map(({ name }) => name);
         for (const key of names ? Object.keys(element.element.$attrs ?? {}) : []) if (!key.includes(':') && !key.startsWith('xmlns')) this.reportUnknownAttribute(host, element.where, key, { property: key, path: [...element.path, key], node: element.element, hint: rebuild }, DidYouMean.suggestion(key, names!));
       }
     }
@@ -122,7 +123,7 @@ class C8VendorContent extends C8Rule {
     const prefix = ZeebeHint.prefixOf(host.node);
     for (const key of host.zeebeAttributeKeys()) {
       const local = key.slice(key.indexOf(':') + 1);
-      const owners = C8Host.zeebe.attr(local)?.owners;
+      const owners = RuleKit.kit.ZEEBE.attr(local)?.owners;
       if (owners && !owners.some((owner) => host.node.$instanceOf(owner))) this.reportOn(host, 'c8-misplaced-attribute', `${prefix}:${local} on ${host.describe()} has no effect: Camunda 8 reads it on ${ElementKinds.list(owners)} only`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: key, path: host.path(key), hint: `Remove it: ${hint ? hint.unset(`${prefix}:${local}`) : 'edit the XML'}.` });
     }
   }
@@ -131,7 +132,7 @@ class C8VendorContent extends C8Rule {
     const hint = host.hint();
     for (const { value, index, type, placement } of host.zeebeValues()) {
       const finding = { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: value, path: host.extensionPath(index), node: host.node };
-      if (placement === 'loose') this.reportOn(host, 'c8-misplaced-extension', `${host.spell(type.name)} sits directly in the extension elements of ${host.describe()}, but belongs inside ${host.spell(C8Host.zeebe.containersOf(type.name)[0] ?? '')}; Camunda 8 ignores it`, { ...finding, hint: hint ? `Remove it (${hint.extRemove(index)}) and add it again, \`bpmn ext add\` files it into its container: ${hint.extAdd(`${hint.nameOf(value)} ...`)}.` : 'Remove it (remove it from the XML) and add it again, `bpmn ext add` files it into its container: edit the XML.' });
+      if (placement === 'loose') this.reportOn(host, 'c8-misplaced-extension', `${host.spell(type.name)} sits directly in the extension elements of ${host.describe()}, but belongs inside ${host.spell(RuleKit.kit.ZEEBE.containersOf(type.name)[0] ?? '')}; Camunda 8 ignores it`, { ...finding, hint: hint ? `Remove it (${hint.extRemove(index)}) and add it again, \`bpmn ext add\` files it into its container: ${hint.extAdd(`${hint.nameOf(value)} ...`)}.` : 'Remove it (remove it from the XML) and add it again, `bpmn ext add` files it into its container: edit the XML.' });
       if (placement === 'misplaced') this.reportOn(host, 'c8-misplaced-extension', `${host.spell(type.name)} on ${host.describe()} has no effect: Camunda 8 reads it on ${ElementKinds.list(type.allowedIn.filter((allowed) => allowed.startsWith('bpmn:')), 5)} only`, { ...finding, hint: `Remove it: ${hint ? hint.extRemove(index) : 'remove it from the XML'}.` });
     }
     this.checkIgnoredInputs(host);
