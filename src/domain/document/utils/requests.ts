@@ -19,11 +19,6 @@ export interface IdRequest {
   target?: string;
   sourceLabel?: string;
   targetLabel?: string;
-  /**
-   * a word after the body that a cut keeps (a backing bpmn:DataObject's `Object`):
-   * the body is cut so the word fits within the 64 characters
-   */
-  tailWord?: string;
 }
 
 export function kindRequest(def: KindDef, opts: { trigger?: string; name?: string; context?: string; anchorKind?: string } = {}): IdRequest {

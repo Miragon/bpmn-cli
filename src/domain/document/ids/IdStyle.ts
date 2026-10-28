@@ -103,7 +103,6 @@ export class IdStyle {
     const room = max - head.length;
     const body = this.bodyFor(named ? req.name! : this.unnamedText(req, head, spelled), req, head);
     if (qualified && !named && req.anchorKind) return `${head}${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG))}`;
-    if (req.tailWord) return `${head}${this.withWord(body, req.tailWord, room)}`;
     return `${head}${this.cutBody(body, room)}`;
   }
 
