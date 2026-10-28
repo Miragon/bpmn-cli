@@ -71,11 +71,11 @@ class C8VendorContent extends C8Rule {
 
   private checkForeignContent(host: C8Host): void {
     const hint = host.hint();
-    for (const { key, uri } of host.foreignAttributes()) if (C7_URIS.includes(uri ?? '')) this.reportOn(host, 'c8-foreign-content', `${host.describe()} carries the Camunda 7 attribute ${key}, which Camunda 8 ignores`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: key, path: host.path(key), hint: this.removeHint(hint, key, hint ? hint.unset(key) : 'edit the XML') });
+    for (const { key, uri } of host.foreignAttributes()) if (C7_URIS.includes(uri ?? '')) this.reportContent(host, 'c8-foreign-content', `${host.describe()} carries the Camunda 7 attribute ${key}, which Camunda 8 ignores`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: key, path: host.path(key), hint: this.removeHint(hint, key, hint ? hint.unset(key) : 'edit the XML') });
     const namespaces = DiagramNamespaces.forElement(host.node);
     host.extensionValues().forEach((value, index) => {
       const type = String(value.$type ?? '');
-      if (value.$descriptor?.isGeneric && C7_URIS.includes(namespaces.uriOf(type) ?? '')) this.reportOn(host, 'c8-foreign-content', `${host.describe()} contains the Camunda 7 extension ${type}, which Camunda 8 ignores`, { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: value, path: host.extensionPath(index), hint: this.removeHint(hint, type, hint ? hint.extRemove(index) : 'remove it from the XML') });
+      if (value.$descriptor?.isGeneric && C7_URIS.includes(namespaces.uriOf(type) ?? '')) this.reportContent(host, 'c8-foreign-content', `${host.describe()} contains the Camunda 7 extension ${type}, which Camunda 8 ignores`, { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: value, path: host.extensionPath(index), hint: this.removeHint(hint, type, hint ? hint.extRemove(index) : 'remove it from the XML') });
     });
   }
 
@@ -124,7 +124,7 @@ class C8VendorContent extends C8Rule {
     for (const key of host.zeebeAttributeKeys()) {
       const local = key.slice(key.indexOf(':') + 1);
       const owners = RuleKit.kit.ZEEBE.attr(local)?.owners;
-      if (owners && !owners.some((owner) => host.node.$instanceOf(owner))) this.reportOn(host, 'c8-misplaced-attribute', `${prefix}:${local} on ${host.describe()} has no effect: Camunda 8 reads it on ${ElementKinds.list(owners)} only`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: key, path: host.path(key), hint: `Remove it: ${hint ? hint.unset(`${prefix}:${local}`) : 'edit the XML'}.` });
+      if (owners && !owners.some((owner) => host.node.$instanceOf(owner))) this.reportContent(host, 'c8-misplaced-attribute', `${prefix}:${local} on ${host.describe()} has no effect: Camunda 8 reads it on ${ElementKinds.list(owners)} only`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: key, path: host.path(key), hint: `Remove it: ${hint ? hint.unset(`${prefix}:${local}`) : 'edit the XML'}.` });
     }
   }
 
@@ -132,8 +132,8 @@ class C8VendorContent extends C8Rule {
     const hint = host.hint();
     for (const { value, index, type, placement } of host.zeebeValues()) {
       const finding = { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: value, path: host.extensionPath(index), node: host.node };
-      if (placement === 'loose') this.reportOn(host, 'c8-misplaced-extension', `${host.spell(type.name)} sits directly in the extension elements of ${host.describe()}, but belongs inside ${host.spell(RuleKit.kit.ZEEBE.containersOf(type.name)[0] ?? '')}; Camunda 8 ignores it`, { ...finding, hint: hint ? `Remove it (${hint.extRemove(index)}) and add it again, \`bpmn ext add\` files it into its container: ${hint.extAdd(`${hint.nameOf(value)} ...`)}.` : 'Remove it (remove it from the XML) and add it again, `bpmn ext add` files it into its container: edit the XML.' });
-      if (placement === 'misplaced') this.reportOn(host, 'c8-misplaced-extension', `${host.spell(type.name)} on ${host.describe()} has no effect: Camunda 8 reads it on ${ElementKinds.list(type.allowedIn.filter((allowed) => allowed.startsWith('bpmn:')), 5)} only`, { ...finding, hint: `Remove it: ${hint ? hint.extRemove(index) : 'remove it from the XML'}.` });
+      if (placement === 'loose') this.reportContent(host, 'c8-misplaced-extension', `${host.spell(type.name)} sits directly in the extension elements of ${host.describe()}, but belongs inside ${host.spell(RuleKit.kit.ZEEBE.containersOf(type.name)[0] ?? '')}; Camunda 8 ignores it`, { ...finding, hint: hint ? `Remove it (${hint.extRemove(index)}) and add it again, \`bpmn ext add\` files it into its container: ${hint.extAdd(`${hint.nameOf(value)} ...`)}.` : 'Remove it (remove it from the XML) and add it again, `bpmn ext add` files it into its container: edit the XML.' });
+      if (placement === 'misplaced') this.reportContent(host, 'c8-misplaced-extension', `${host.spell(type.name)} on ${host.describe()} has no effect: Camunda 8 reads it on ${ElementKinds.list(type.allowedIn.filter((allowed) => allowed.startsWith('bpmn:')), 5)} only`, { ...finding, hint: `Remove it: ${hint ? hint.extRemove(index) : 'remove it from the XML'}.` });
     }
     this.checkIgnoredInputs(host);
   }
@@ -148,17 +148,17 @@ class C8VendorContent extends C8Rule {
     for (const { value, index, type } of host.zeebeValues()) {
       if (type.name !== 'zeebe:ioMapping') continue;
       (value.inputParameters ?? []).forEach((input: ModdleElement, inputIndex: number) => {
-        this.reportOn(host, 'c8-misplaced-extension', `The input mapping ${input.target ? `to ${input.target} ` : ''}on ${host.describe()} has no effect: Camunda 8 ignores input mappings on ${ignoredOn} (output mappings work there)`, { path: host.extensionPath(index, 'inputParameters', inputIndex), type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, node: value, extensionElement: input, hint: hint ? `Remove it: ${hint.extRemove(`${hint.name('input')}[target=${input.target ?? ''}]`)} (set the variable in an activity before it, or as an output mapping of the element before).` : 'Remove it from the XML.' });
+        this.reportContent(host, 'c8-misplaced-extension', `The input mapping ${input.target ? `to ${input.target} ` : ''}on ${host.describe()} has no effect: Camunda 8 ignores input mappings on ${ignoredOn} (output mappings work there)`, { path: host.extensionPath(index, 'inputParameters', inputIndex), type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, node: value, extensionElement: input, hint: hint ? `Remove it: ${hint.extRemove(`${hint.name('input')}[target=${input.target ?? ''}]`)} (set the variable in an activity before it, or as an output mapping of the element before).` : 'Remove it from the XML.' });
       });
     }
   }
 
   /** `name` on `where`, which the descriptor does not know; `suggestion` names the one it most likely means, `after` where Camunda 8 reads it. */
   private reportUnknownAttribute(host: VendorHost, where: string, name: string, data: Pick<ReportData, 'path'> & Record<string, unknown>, suggestion: string, after = ''): void {
-    this.reportOn(host, 'c8-unknown-attribute', `${where} has the unknown attribute ${name}${suggestion}; Camunda 8 ignores it${after}`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, ...data });
+    this.reportContent(host, 'c8-unknown-attribute', `${where} has the unknown attribute ${name}${suggestion}; Camunda 8 ignores it${after}`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, ...data });
   }
 
-  private reportOn(host: VendorHost, finding: string, message: string, { path, ...data }: ReportData): void {
+  private reportContent(host: VendorHost, finding: string, message: string, { path, ...data }: ReportData): void {
     this.report(finding, host.target, message, { node: host.node, path, ...data });
   }
 }

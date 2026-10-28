@@ -1,5 +1,5 @@
 import { is, isAny } from 'bpmnlint-utils';
-import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
+import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
 import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
@@ -83,7 +83,7 @@ class C8Extensions extends C8Rule {
     const where = `${inListener}${host.id ? ElementKinds.describe(host) : ElementKinds.describe(host, owner)}`;
     const hint = host.id && !inListener ? ZeebeHint.of(host) : undefined;
     (headers.values ?? []).forEach((header: ModdleElement, index: number) => {
-      const missing = (['key', 'value'] as const).find((property) => Values.isBlank(header[property]));
+      const missing = (['key', 'value'] as const).find((property) => !Values.nonEmpty(header[property]));
       if (missing) this.report('c8-bad-value', owner, `Task header ${header.key ? `"${header.key}"` : index + 1} of ${where} has no ${missing}; Camunda 8 drops it, the job does not carry it`, { path: [...ModdlePath.between(owner, header), missing], type: ERROR_TYPES.PROPERTY_REQUIRED, node: header, requiredProperty: missing, hint: hint ? this.headerValueHint(hint, header, index, missing) : 'Fix it in the XML.' });
     });
   }
@@ -93,10 +93,6 @@ class C8Extensions extends C8Rule {
     const add = hint.extAdd(`${hint.name('header')} key=${header.key ?? '<key>'} value=<value>`);
     if (missing === 'value') return `Give it a value: ${add}.`;
     return `Remove it (\`bpmn ext remove <file> ${hint.id} ${Shell.quote(`${hint.name('taskHeaders')}/${hint.name('header')}[${index}]`)}\`) and add it with a key: ${add}.`;
-  }
-
-  private reportOn(host: C8Host, finding: string, message: string, data: ReportData): void {
-    this.report(finding, host.target, message, data);
   }
 
   private checkListeners(host: C8Host, { value, index, type, placement }: ZeebeValue, values: ZeebeValue[]): void {

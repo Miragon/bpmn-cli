@@ -1,18 +1,17 @@
-import { is } from 'bpmnlint-utils';
-import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
+import { is, isAny } from 'bpmnlint-utils';
+import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
 
 import { ElementKinds } from '../ElementKinds.js';
 import { EngineScope } from '../EngineScope.js';
 import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
+import { C7EventDefinitions } from './C7EventDefinitions.js';
 import { C7Host, type HostExtension } from './C7Host.js';
 import { CamundaPlacement } from './CamundaPlacement.js';
 
 const SERVICE_LIKE = ['bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:BusinessRuleTask'];
 /** The form field types every engine knows (more only through a custom form type plugin). */
 const FORM_TYPES = ['string', 'long', 'boolean', 'date', 'enum'];
-/** The order in which the engines pick the definition a throw event with several acts on. */
-const ACTING_ORDER: Record<string, string[]> = { 'bpmn:IntermediateThrowEvent': ['Signal', 'Message'], 'bpmn:EndEvent': ['Message', 'Signal'] };
 const EXECUTION_EVENTS = ['start', 'end'];
 const TASK_EVENTS = ['create', 'assignment', 'complete', 'update', 'delete', 'timeout'];
 const LISTENER_IMPLEMENTATIONS = ['class', 'expression', 'delegateExpression'];
@@ -53,13 +52,10 @@ class C7ExtensionContent extends C7Rule {
     const read = new CamundaPlacement(host).readExtensions();
     for (const extension of read) this.checkContent(host, extension);
     if (SERVICE_LIKE.some((type) => is(node, type))) this.checkImplementationFields(host, host.describe());
-    if (this.isActingMessageThrow(host)) this.checkImplementationFields(host, ElementKinds.describe(host.owner));
+    const event = host.owner;
+    if (is(node, 'bpmn:MessageEventDefinition') && event && isAny(event, ['bpmn:IntermediateThrowEvent', 'bpmn:EndEvent']) && new C7EventDefinitions(event).actedOn().includes(node)) this.checkImplementationFields(host, ElementKinds.describe(host.owner));
     for (const extension of read) if (extension.local === 'executionListener' || extension.local === 'taskListener') this.checkListener(host, extension);
     if (is(node, 'bpmn:FlowNode')) this.checkInputOutput(host);
-  }
-
-  private reportOn(host: C7Host, finding: string, message: string, data: ReportData): void {
-    this.report(finding, host.target, message, data);
   }
 
   private checkContent(host: C7Host, extension: HostExtension): void {
@@ -151,16 +147,6 @@ class C7ExtensionContent extends C7Rule {
     return stringElement !== undefined || (stringValue !== undefined && stringValue.length > 0) || field.get('expression') !== undefined ? undefined : 'no value';
   }
 
-  /** Whether the host is the message definition a throw or end event acts on. */
-  private isActingMessageThrow(host: C7Host): boolean {
-    const event = host.owner;
-    if (!is(host.node, 'bpmn:MessageEventDefinition') || !event || !(event.eventDefinitions ?? []).includes(host.node)) return false;
-    const order = ACTING_ORDER[event.$type];
-    if (!order) return false;
-    const definitions: ModdleElement[] = event.eventDefinitions;
-    const ranks = definitions.map((definition) => order.findIndex((kind) => is(definition, `bpmn:${kind}EventDefinition`)));
-    return definitions.length < 2 || ranks.includes(-1) || definitions[ranks.indexOf(Math.min(...ranks))] === host.node;
-  }
 
   /** A listener needs an implementation, an event the engines know (none on a flow), a script format; a timeout task listener a timer and an id. */
   private checkListener(host: C7Host, extension: HostExtension): void {

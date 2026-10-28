@@ -67,11 +67,6 @@ export class ImplementationHost {
     return this.type?.toLowerCase() === 'shell';
   }
 
-  /** A `camunda:type` the engines do not run: neither external nor shell. */
-  get hasUnsupportedType(): boolean {
-    return this.type !== undefined && !this.isExternal && !this.isShell;
-  }
-
   /** Whether the engines find an implementation: a delegate, an external or shell task, a connector or a decision. */
   get hasImplementation(): boolean {
     return ['class', 'delegateExpression', 'expression'].some((local) => Values.nonEmpty(this.attributes.defined(local))) || this.isExternal || this.isShell || this.hasConnector() || (this.readsDecisionRef && this.attributes.defined('decisionRef') !== undefined);

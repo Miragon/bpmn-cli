@@ -1,5 +1,6 @@
 import { defineRule as declareRule, EngineRule, type DeclaredRuleFactory, type Engine, type ModdleElement, type Reporter, type ReportPath, type RuleDeclaration } from '@miragon/bpmnlint-plugin-rules/engine';
 import { reportErrors } from 'bpmnlint-plugin-camunda-compat/rules/utils/reporter.js';
+import type { VendorHost } from './VendorHost.js';
 
 export type { ModdleElement, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
 export { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
@@ -42,6 +43,11 @@ abstract class CamundaRule extends EngineRule {
   protected report(finding: string, at: ModdleElement, message: string, { path, ...data }: ReportData): void {
     const node = data.node ?? at;
     reportErrors(at, this.reporter, { message, path, data: { ...data, node, parentNode: node === at ? null : at, finding } });
+  }
+
+  /** A finding on the element a finding about `host` lands on. */
+  protected reportOn(host: VendorHost, finding: string, message: string, data: ReportData): void {
+    this.report(finding, host.target, message, data);
   }
 }
 

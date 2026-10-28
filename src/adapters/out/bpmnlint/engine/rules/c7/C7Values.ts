@@ -58,7 +58,7 @@ class C7Values extends C7Rule {
     const bindings = this.bindingsOf(node, attributes);
     for (const { binding, allowed } of bindings.filter((candidate) => this.bindingProblem(attributes, candidate) === 'value')) this.report('c7-bad-value', node, `${prefix}:${binding}="${attributes.defined(binding)}" on ${ElementKinds.describe(node)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, { path: [binding], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: binding, hint: `${new SetCommand(node.id).of(`${prefix}:${binding}=latest`)}.` });
     const priority = is(node, 'bpmn:UserTask') ? attributes.defined('priority') : undefined;
-    if (priority !== undefined && !Values.isInteger(priority) && !Values.isExpression(priority)) this.report('c7-bad-value', node, `${prefix}:priority="${priority}" on ${ElementKinds.describe(node)} is not a number or expression; creating the task fails`, { path: ['priority'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'priority', hint: `${new SetCommand(node.id).of(`${prefix}:priority=50`)}.` });
+    if (priority !== undefined && !Values.isPriority(priority)) this.report('c7-bad-value', node, `${prefix}:priority="${priority}" on ${ElementKinds.describe(node)} is not a number or expression; creating the task fails`, { path: ['priority'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'priority', hint: `${new SetCommand(node.id).of(`${prefix}:priority=50`)}.` });
     if (is(node, 'bpmn:Event')) this.checkVariableEvents(node, prefix);
     for (const binding of bindings) {
       const problem = this.bindingProblem(attributes, binding);
@@ -96,7 +96,7 @@ class C7Values extends C7Rule {
   /** `element` carries the priority; `reported` is the element it sits on, or the element itself. */
   private checkPriority(element: ModdleElement, reported: ModdleElement, path: ReportPath, command: SetCommand, name: string, prefix: string): void {
     const value = new CamundaAttributes(element).defined(name);
-    if (value === undefined || Values.isInteger(value) || Values.isExpression(value)) return;
+    if (value === undefined || Values.isPriority(value)) return;
     this.report('c7-attribute-value', reported, `${prefix}:${name}="${value}" on ${ElementKinds.describe(element, element === reported ? undefined : reported)} is not a number or expression; the engines refuse it`, { path: [...path, name], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: reported.id ? `${command.of(`${prefix}:${name}=50`)} (an integer or \${...}).` : 'Use an integer.' });
   }
 

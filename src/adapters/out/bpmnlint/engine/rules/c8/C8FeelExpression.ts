@@ -115,7 +115,7 @@ class C8FeelExpression extends C8Rule {
     if (!loop || !is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) return;
     const label = `multi-instance ${ElementKinds.describe(activity)}`;
     const [zeebeLoop] = C8Host.valuesOf(loop, 'zeebe:LoopCharacteristics');
-    if (zeebeLoop && !Values.isBlank(zeebeLoop.inputCollection) && !Values.isFeel(zeebeLoop.inputCollection)) this.reportStatic(activity, zeebeLoop, 'inputCollection', label);
+    if (zeebeLoop && Values.nonEmpty(zeebeLoop.inputCollection) && !Values.isFeel(zeebeLoop.inputCollection)) this.reportStatic(activity, zeebeLoop, 'inputCollection', label);
     if (zeebeLoop && zeebeLoop.outputCollection !== undefined && zeebeLoop.outputElement !== undefined && !Values.isFeel(zeebeLoop.outputElement)) this.reportStatic(activity, zeebeLoop, 'outputElement', label);
     if (!loop.completionCondition) return;
     const body: string = loop.completionCondition.body ?? '';
@@ -130,7 +130,7 @@ class C8FeelExpression extends C8Rule {
   private checkScript(task: ModdleElement): void {
     const [script] = C8Host.valuesOf(task, 'zeebe:Script');
     const expression = script?.expression;
-    if (!script || C8Host.valuesOf(task, 'zeebe:TaskDefinition').length || Values.isBlank(expression) || Values.isFeel(expression)) return;
+    if (!script || C8Host.valuesOf(task, 'zeebe:TaskDefinition').length || !Values.nonEmpty(expression) || Values.isFeel(expression)) return;
     this.reportAt(this.siteOf(task, script, 'expression'), `The zeebe:script expression "${expression}" of ${ElementKinds.describe(task)} is a static value; Camunda 8 needs a FEEL expression starting with = and refuses the file`, ERROR_TYPES.EXPRESSION_REQUIRED, ZeebeHint.fix(task, script, { expression: `=${expression.trim()}` }));
   }
 
@@ -166,7 +166,7 @@ class C8FeelExpression extends C8Rule {
     const subscriptions = C8Host.valuesOf(message, 'zeebe:Subscription');
     const [subscription] = subscriptions;
     const key = subscription?.correlationKey;
-    if (subscriptions.length !== 1 || Values.isBlank(key) || Values.isFeel(key)) return;
+    if (subscriptions.length !== 1 || !Values.nonEmpty(key) || Values.isFeel(key)) return;
     const site = { owner: el, holder: subscription, property: 'correlationKey', path: [...ModdlePath.between(el, holder), 'messageRef', ...ModdlePath.between(message, subscription), 'correlationKey'], related: message };
     this.reportAt(site, `The correlationKey "${key}" of message ${message.id} is a static value; Camunda 8 needs a FEEL expression (=${key.trim()}) and refuses the file`, ERROR_TYPES.EXPRESSION_REQUIRED, ZeebeHint.fix(message, subscription, { correlationKey: `=${key.trim()}` }));
   }

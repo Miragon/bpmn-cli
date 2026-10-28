@@ -5,7 +5,6 @@ import { ElementKinds } from '../ElementKinds.js';
 import { EngineScope } from '../EngineScope.js';
 import { LinkEvents } from '../LinkEvents.js';
 import { Shell } from '../Shell.js';
-import { Values } from '../Values.js';
 import { C8EventDefinitions } from './C8EventDefinitions.js';
 import { FlowIndex } from './FlowIndex.js';
 import { TimerValue } from './TimerValue.js';
@@ -110,7 +109,7 @@ class C8Events extends C8Rule {
     const name = definition.get('name');
     const event = definition.$parent;
     const checkedByCompat = isAny(event, ['bpmn:IntermediateCatchEvent', 'bpmn:IntermediateThrowEvent']) && event.get('eventDefinitions')[0] === definition && EngineScope.inExecutableProcess(event);
-    if (!Values.isMissing(name) || checkedByCompat) return;
+    if ((name !== undefined && name !== null && name !== '') || checkedByCompat) return;
     const { owner, path } = C8EventDefinitions.definitionOwner(definition);
     this.report('c8-link-event', owner, `The link event definition of ${owner === definition ? definition.$type : ElementKinds.describe(owner)} has ${name === '' ? 'an empty name' : 'no name, which the BPMN schema requires'}; Camunda 8 refuses the file`, { path: [...path, 'name'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: 'name', hint: owner.id ? `\`bpmn set <file> ${owner.id} link=<Name>\` (the throw and the catch event of a pair share the name).` : 'Fix it in the XML.' });
   }

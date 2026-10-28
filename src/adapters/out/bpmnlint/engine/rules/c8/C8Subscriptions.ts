@@ -1,15 +1,35 @@
 import { is, isAny } from 'bpmnlint-utils';
 import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
 import { ElementKinds } from '../ElementKinds.js';
+import { FirstOfKey } from '../FirstOfKey.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { ModdlePath } from '../ModdlePath.js';
 import { Values } from '../Values.js';
 import { C8EventDefinitions } from './C8EventDefinitions.js';
 import { FlowIndex } from './FlowIndex.js';
-import { type Duplicate, SubscriptionGroups } from './SubscriptionGroups.js';
 
 type Trigger = 'message' | 'signal';
+
+/**
+ * The events of one (sub-)process that Camunda 8 subscribes to together, so a message name, signal
+ * name or error code may occur only once among them: the boundary events of one activity, the
+ * targets of one event-based gateway, the start events of the scope's event sub-processes and the
+ * start events of a process (none for a sub-process).
+ */
+interface SubscriptionGroups {
+  boundaryGroups: Array<{ activity: ModdleElement; boundaries: ModdleElement[] }>;
+  gatewayTargets: Array<{ gateway: ModdleElement; targets: ModdleElement[] }>;
+  eventSubProcessStarts: ModdleElement[];
+  processStarts: ModdleElement[];
+}
+
+/** An element whose key an earlier element of its group already has. */
+interface Duplicate {
+  first: ModdleElement;
+  el: ModdleElement;
+  key: string;
+}
 
 /** The start events Camunda 8 needs a static name on, and what the duplicate hint adds. */
 const NAMED: Record<Trigger, { starts: string; note: string }> = {
@@ -42,7 +62,7 @@ class C8Subscriptions extends C8Rule {
 
   protected visit(node: ModdleElement): void {
     if (!EngineScope.C8.contains(node)) return;
-    const groups = is(node, 'bpmn:Process') || is(node, 'bpmn:SubProcess') ? new SubscriptionGroups(node, this.flows) : undefined;
+    const groups = is(node, 'bpmn:Process') || is(node, 'bpmn:SubProcess') ? this.groupsOf(node) : undefined;
     if (is(node, 'bpmn:StartEvent') && is(node.$parent, 'bpmn:Process')) this.checkStartName(node, 'message');
     if (groups) this.checkMessageScope(groups, node);
     if (is(node, 'bpmn:StartEvent')) this.checkStartName(node, 'signal');
@@ -50,6 +70,31 @@ class C8Subscriptions extends C8Rule {
     if (is(node, 'bpmn:CatchEvent')) this.checkErrorCatch(node);
     if (groups) this.checkErrorScope(groups, node);
     this.checkThrownMessage(node);
+  }
+
+  private groupsOf(scope: ModdleElement): SubscriptionGroups {
+    const nodes: ModdleElement[] = (scope.get('flowElements') ?? []).filter((element: ModdleElement) => is(element, 'bpmn:FlowNode'));
+    const boundariesByActivity = new Map<ModdleElement, ModdleElement[]>();
+    for (const node of nodes) {
+      const host = is(node, 'bpmn:BoundaryEvent') ? node.get('attachedToRef') : undefined;
+      if (host) boundariesByActivity.set(host, [...(boundariesByActivity.get(host) ?? []), node]);
+    }
+    return {
+      boundaryGroups: nodes.filter((node) => is(node, 'bpmn:Activity') && boundariesByActivity.has(node)).map((activity) => ({ activity, boundaries: boundariesByActivity.get(activity)! })),
+      gatewayTargets: nodes.filter((node) => is(node, 'bpmn:EventBasedGateway')).map((gateway) => ({ gateway, targets: this.flows.outgoing(gateway).map((flow) => flow.get('targetRef')).filter((target) => target && is(target, 'bpmn:IntermediateCatchEvent')) })),
+      eventSubProcessStarts: nodes.filter((node) => EngineScope.isEventSubProcess(node)).flatMap((subProcess) => (subProcess.get('flowElements') ?? []).filter((element: ModdleElement) => is(element, 'bpmn:StartEvent'))),
+      processStarts: is(scope, 'bpmn:Process') ? nodes.filter((node) => is(node, 'bpmn:StartEvent')) : [],
+    };
+  }
+
+  /** The 2nd and later elements of `elements` whose key (`undefined`: none) an earlier one has. */
+  private duplicates(elements: ModdleElement[], keyOf: (el: ModdleElement) => string | undefined): Duplicate[] {
+    const firsts = new FirstOfKey<ModdleElement>();
+    return elements.flatMap((el) => {
+      const key = keyOf(el);
+      const first = key === undefined ? undefined : firsts.repeats(key, el);
+      return first && key !== undefined ? [{ first, el, key }] : [];
+    });
   }
 
   /** A start event that waits for a FEEL name. */
@@ -61,15 +106,15 @@ class C8Subscriptions extends C8Rule {
   }
 
   private checkMessageScope(groups: SubscriptionGroups, scope: ModdleElement): void {
-    for (const { activity, boundaries } of groups.boundaryGroups()) this.reportNamed('message', is(activity, 'bpmn:ReceiveTask') ? [activity, ...boundaries] : boundaries, `on ${activity.id}`);
-    for (const { gateway, targets } of groups.gatewayTargets()) this.reportNamed('message', targets, `after event-based gateway ${gateway.id}`);
-    this.reportNamed('message', groups.eventSubProcessStarts(), `in the event sub-processes of ${scope.id}`);
-    this.reportNamed('message', groups.processStarts(), `in process ${scope.id}`);
+    for (const { activity, boundaries } of groups.boundaryGroups) this.reportNamed('message', is(activity, 'bpmn:ReceiveTask') ? [activity, ...boundaries] : boundaries, `on ${activity.id}`);
+    for (const { gateway, targets } of groups.gatewayTargets) this.reportNamed('message', targets, `after event-based gateway ${gateway.id}`);
+    this.reportNamed('message', groups.eventSubProcessStarts, `in the event sub-processes of ${scope.id}`);
+    this.reportNamed('message', groups.processStarts, `in process ${scope.id}`);
   }
 
   private checkSignalScope(groups: SubscriptionGroups, scope: ModdleElement): void {
-    for (const { activity, boundaries } of groups.boundaryGroups()) this.reportNamed('signal', boundaries, `on ${activity.id}`);
-    this.reportNamed('signal', groups.processStarts(), `in process ${scope.id}`);
+    for (const { activity, boundaries } of groups.boundaryGroups) this.reportNamed('signal', boundaries, `on ${activity.id}`);
+    this.reportNamed('signal', groups.processStarts, `in process ${scope.id}`);
   }
 
   /** One static name twice among `events`; a receive task waits for its own message. */
@@ -77,9 +122,9 @@ class C8Subscriptions extends C8Rule {
     const holderOf = (el: ModdleElement) => (trigger === 'message' && is(el, 'bpmn:ReceiveTask') ? el : C8EventDefinitions.onlyDefinition(el, `bpmn:${trigger === 'message' ? 'Message' : 'Signal'}EventDefinition`));
     const keyOf = (el: ModdleElement) => {
       const name = holderOf(el)?.get(`${trigger}Ref`)?.get('name');
-      return Values.isBlank(name) || Values.isFeel(name) ? undefined : name;
+      return !Values.nonEmpty(name) || Values.isFeel(name) ? undefined : name;
     };
-    for (const duplicate of SubscriptionGroups.duplicates(events, keyOf)) {
+    for (const duplicate of this.duplicates(events, keyOf)) {
       const { first, el, key } = duplicate;
       const path = is(el, 'bpmn:ReceiveTask') ? ['messageRef'] : ['eventDefinitions', 0, `${trigger}Ref`];
       this.reportDuplicate(`c8-${trigger}`, duplicate, `${ElementKinds.describe(el)} waits for the ${trigger} "${key}" like ${ElementKinds.describe(first)} ${where}; Camunda 8 refuses one ${trigger} name twice there`, path, 'name', `Use another ${trigger}: \`bpmn set <file> ${el.id} ${trigger}=<Other${trigger.charAt(0).toUpperCase()}${trigger.slice(1)}>\`${NAMED[trigger].note}.`);
@@ -99,8 +144,8 @@ class C8Subscriptions extends C8Rule {
   }
 
   private checkErrorScope(groups: SubscriptionGroups, scope: ModdleElement): void {
-    for (const { activity, boundaries } of groups.boundaryGroups()) this.reportErrorCodes(boundaries, `the boundary events of ${activity.id}`);
-    this.reportErrorCodes(groups.eventSubProcessStarts(), `the event sub-processes of ${scope.id}`);
+    for (const { activity, boundaries } of groups.boundaryGroups) this.reportErrorCodes(boundaries, `the boundary events of ${activity.id}`);
+    this.reportErrorCodes(groups.eventSubProcessStarts, `the event sub-processes of ${scope.id}`);
   }
 
   /** One error code twice; no code (`''`) catches every error. */
@@ -109,9 +154,9 @@ class C8Subscriptions extends C8Rule {
       const definition = C8EventDefinitions.onlyDefinition(el, 'bpmn:ErrorEventDefinition');
       const code = definition?.get('errorRef')?.get('errorCode');
       if (!definition) return undefined;
-      return Values.isBlank(code) ? '' : code;
+      return Values.nonEmpty(code) ? code : '';
     };
-    for (const duplicate of SubscriptionGroups.duplicates(events, keyOf)) {
+    for (const duplicate of this.duplicates(events, keyOf)) {
       const { first, el, key } = duplicate;
       const message = key ? `${ElementKinds.describe(el)} catches the error code "${key}" like ${ElementKinds.describe(first)} (${where}); Camunda 8 refuses one code twice in a scope` : `${ElementKinds.describe(el)} and ${ElementKinds.describe(first)} both catch every error (no error code) (${where}); Camunda 8 allows one catch-all per scope`;
       this.reportDuplicate('c8-error', duplicate, message, ['eventDefinitions', 0, 'errorRef'], 'errorCode', `Catch another error: \`bpmn set <file> ${el.id} error=<OtherError> errorCode=<OTHER_CODE>\` (the events share no bpmn:Error then), or remove one of them.`);

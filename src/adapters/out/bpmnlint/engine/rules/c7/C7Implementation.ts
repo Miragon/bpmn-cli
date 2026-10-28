@@ -38,7 +38,7 @@ class C7Implementation extends C7Rule {
 
   private checkHost(node: ModdleElement, host: ImplementationHost): void {
     const { prefix, command, label } = host;
-    if (host.hasUnsupportedType) {
+    if (host.type !== undefined && !host.isExternal && !host.isShell) {
       const mail = host.type!.toLowerCase() === 'mail' ? ' (the standard engine distributions cannot load the mail task)' : '';
       this.report('c7-implementation', node, `${prefix}:type="${host.type}" on ${label} is not supported (only "external" and "shell")${mail}; the engines refuse the file`, { path: host.pathTo('type'), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: host.element, property: 'type', hint: `Use an external task: ${command.of(`${prefix}:type=external`, `${prefix}:topic=<topic>`)}, or remove it: ${command.of(`${prefix}:type=`)}.` });
       return;

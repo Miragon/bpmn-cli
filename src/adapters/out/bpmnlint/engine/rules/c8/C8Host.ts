@@ -35,7 +35,8 @@ export interface ZeebeValue {
 export class C8Host extends VendorHost {
   static of(node: ModdleElement): C8Host | undefined {
     const type = String(node?.$type ?? '');
-    if (!type.startsWith('bpmn:') || is(node, 'bpmn:ExtensionElements') || is(node, 'bpmn:Definitions') || node.$descriptor?.isGeneric || !C8Host.isChecked(node)) return undefined;
+    if (!type.startsWith('bpmn:') || is(node, 'bpmn:Definitions') || node.$descriptor?.isGeneric || !C8Host.readsExtensionsOf(node)) return undefined;
+    for (let ancestor = node; ancestor; ancestor = ancestor.$parent) if (is(ancestor, 'bpmn:ExtensionElements')) return undefined;
     const host = new C8Host(node);
     return node.id || host.owner ? host : undefined;
   }
@@ -89,10 +90,5 @@ export class C8Host extends VendorHost {
     if (RuleKit.kit.ZEEBE.nestedOnly(type.name)) return 'loose';
     if (type.name === 'zeebe:executionListeners' && is(this.node, 'bpmn:SequenceFlow')) return 'flowListeners';
     return RuleKit.kit.ZEEBE.allowedOn(type.name, this.node) === false ? 'misplaced' : 'read';
-  }
-
-  private static isChecked(node: ModdleElement): boolean {
-    for (let ancestor = node; ancestor; ancestor = ancestor.$parent) if (is(ancestor, 'bpmn:ExtensionElements')) return false;
-    return C8Host.readsExtensionsOf(node);
   }
 }
