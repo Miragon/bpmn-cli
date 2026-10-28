@@ -57,7 +57,7 @@ keys are in [Syntax and output](reference.md).
 bpmn new order.bpmn --name "Order handling" --target camunda8
 ```
 
-`--name` gives `Process_OrderHandling`; without it the id is `Process_1`. `--target camunda8`
+`--name` gives `orderHandling`; without it the id is `Process_1`. `--target camunda8`
 declares the `zeebe:` and `modeler:` namespaces, `--target camunda7` the `camunda:` and `modeler:` namespaces plus the
 `historyTimeToLive` the engine needs. Use `camunda7` for CIB seven and Operaton too
 ([Camunda 7 and Camunda 8](camunda.md)).
@@ -83,14 +83,14 @@ Creates one element and wires it in. A placement option says where; trailing `ke
 like `set`.
 
 ```sh
-bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived \
+bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived \
   camunda:assignee=kermit
-bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice \
+bpmn add order.bpmn boundary:timer "2 days" --on userTask_checkInvoice \
   --timer PT2D --non-interrupting
 ```
 
 - Placement: `--after`, `--before`, `--flow`, `--in`, `--on`, `--lane` ([Placement grammar](reference.md#placement-grammar)).
-- The id comes from the name (`Activity_CheckInvoice`). `--id` with `--if-absent` makes the add idempotent.
+- The id comes from the name (`userTask_checkInvoice`). `--id` with `--if-absent` makes the add idempotent.
 - Lanes, data and annotations take `--in` only; wire them afterwards with `connect`.
 - A group takes no placement: `--members <id,...>` names what it is drawn around.
 - The first `participant` wraps the existing process. `--black-box` creates an empty pool and never
@@ -99,7 +99,7 @@ bpmn add order.bpmn boundary:timer "2 days" --on Activity_CheckInvoice \
 ## `connect`
 
 ```sh
-bpmn connect order.bpmn Gateway_InvoiceOk Activity_BookInvoice --name yes
+bpmn connect order.bpmn gateway_invoiceOk serviceTask_bookInvoice --name yes
 ```
 
 The endpoints decide the kind: sequence flow, message flow (different pools), association
@@ -109,13 +109,13 @@ The endpoints decide the kind: sequence flow, message flow (different pools), as
 ## `set`
 
 ```sh
-bpmn set order.bpmn Activity_CheckInvoice name="Check the invoice" \
+bpmn set order.bpmn userTask_checkInvoice name="Check the invoice" \
   camunda:asyncBefore=true
-bpmn set order.bpmn Activity_CheckInvoice \
+bpmn set order.bpmn userTask_checkInvoice \
   'loop.camunda:collection=${invoices}'
 ```
 
-`key=` or `--unset key` removes a property. `id=New_Id` renames and re-points every reference. Parts
+`key=` or `--unset key` removes a property. `id=<newId>` renames and re-points every reference. Parts
 without an id take a prefix: `definition.`, `loop.`, `condition.`. In a Camunda 8 file most settings
 are extension elements: `set` refuses them and the hint names the `ext add` to use.
 
@@ -135,10 +135,10 @@ Removes elements with everything that depends on them, then bridges the gap.
 Changes the kind within a family and keeps id, name, flows, boundary events and lane.
 
 ```sh
-bpmn retype order.bpmn Event_X startEvent:message --message OrderReceived
+bpmn retype order.bpmn startEvent_orderReceived startEvent:message --message OrderReceived
 ```
 
-A kind without trigger keeps the current trigger. To drop it, write `retype Event_X startEvent:none`.
+A kind without trigger keeps the current trigger. To drop it, write `retype startEvent_orderReceived startEvent:none`.
 A sub-process with content becomes a task only with `--force`.
 
 ## `move` and `order`
@@ -147,9 +147,9 @@ A sub-process with content becomes a task only with `--force`.
 `add`. `order` sets the order of a node's outgoing flows, a pool's lanes or a collaboration's pools.
 
 ```sh
-bpmn move order.bpmn Activity_ClarifyInvoice --before Activity_BookInvoice
-bpmn order order.bpmn Gateway_InvoiceOk Flow_InvoiceOkToClarifyInvoice \
-  Flow_InvoiceOkToBookInvoice
+bpmn move order.bpmn userTask_clarifyInvoice --before serviceTask_bookInvoice
+bpmn order order.bpmn gateway_invoiceOk flow_invoiceOkToClarifyInvoice \
+  flow_invoiceOkToBookInvoice
 ```
 
 The flow order drives the picture: the default flow (else the first) continues straight, the others
@@ -160,11 +160,11 @@ go alternately below and above it. To pin a branch as the continuation, make it 
 Reads and writes vendor extension elements. The sub-command comes first.
 
 ```console
-$ bpmn ext add order.bpmn Activity_BookInvoice camunda:inputParameter name=amount --body '${order.total}'
-$ bpmn ext list order.bpmn Activity_BookInvoice
+$ bpmn ext add order.bpmn serviceTask_bookInvoice camunda:inputParameter name=amount --body '${order.total}'
+$ bpmn ext list order.bpmn serviceTask_bookInvoice
 0: camunda:inputOutput
      camunda:inputParameter name="amount" body="${order.total}"
-$ bpmn ext remove order.bpmn Activity_BookInvoice 'camunda:inputParameter[name=amount]'
+$ bpmn ext remove order.bpmn serviceTask_bookInvoice 'camunda:inputParameter[name=amount]'
 ```
 
 Containers such as `camunda:inputOutput` are created and removed for you. Quote selectors: `[` and
@@ -178,7 +178,7 @@ what an op creates. See [Ops JSON](ops.md).
 ```json [ops.json]
 [
   { "op": "add", "kind": "userTask", "name": "Ship order",
-    "after": "Activity_BookInvoice", "as": "$ship" },
+    "after": "serviceTask_bookInvoice", "as": "$ship" },
   { "op": "set", "id": "$ship", "values": { "camunda:assignee": "piggy" } }
 ]
 ```
@@ -206,16 +206,16 @@ removes overlaps.
 ## `metrics`
 
 Scores the drawing: `score 0: no layout problems`, or one line per problem with its ids, such as
-`crossings [Flow_1, Flow_7]`. Every write prints the same score before and after.
+`crossings [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]`. Every write prints the same score before and after.
 
 ## `render`
 
 Draws a diagram as PNG or SVG, without a browser, so you or an agent can look at it.
 
 ```console
-$ bpmn render order.bpmn --around Gateway_InvoiceOk --depth 1 --problems -o ok.png
-wrote ok.png  490x305 px  ~191 image tokens  scale 1.00  plane Collaboration_OrderHandling
-crop: around Gateway_InvoiceOk (depth 1): 4 nodes
+$ bpmn render order.bpmn --around gateway_invoiceOk --depth 1 --problems -o ok.png
+wrote ok.png  490x305 px  ~191 image tokens  scale 1.00  plane collaboration_orderHandling
+crop: around gateway_invoiceOk (depth 1): 4 nodes
 problems: none
 ```
 

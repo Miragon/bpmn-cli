@@ -43,10 +43,10 @@ const inside = (inner: Box, outer: Box): boolean => inner.y >= outer.y && inner.
 async function claims(reminder = false): Promise<string> {
   const result = await applyToXml((await newXml({ processName: 'Claims' })).xml, [
     { op: 'add', kind: 'participant', name: 'Claims' },
-    { op: 'add', kind: 'lane', name: 'Clerk', in: 'Participant_Claims', as: '$clerk' },
-    { op: 'add', kind: 'lane', name: 'Accounting', in: 'Participant_Claims', as: '$acc' },
-    { op: 'add', kind: 'lane', name: 'Archive', in: 'Participant_Claims', as: '$arc' },
-    { op: 'add', kind: 'start', name: 'Claim received', lane: '$clerk', in: 'Process_Claims', as: '$s' },
+    { op: 'add', kind: 'lane', name: 'Clerk', in: 'participant_claims', as: '$clerk' },
+    { op: 'add', kind: 'lane', name: 'Accounting', in: 'participant_claims', as: '$acc' },
+    { op: 'add', kind: 'lane', name: 'Archive', in: 'participant_claims', as: '$arc' },
+    { op: 'add', kind: 'start', name: 'Claim received', lane: '$clerk', in: 'claims', as: '$s' },
     { op: 'add', kind: 'userTask', name: 'Check claim', after: '$s', as: '$check' },
     { op: 'add', kind: 'subProcess', name: 'Prepare', after: '$check', as: '$prep' },
     { op: 'add', kind: 'startEvent', name: 'Prepare started', in: '$prep', as: '$ps' },
@@ -58,7 +58,7 @@ async function claims(reminder = false): Promise<string> {
     { op: 'add', kind: 'serviceTask', name: 'Refund', after: '$g', flowName: 'yes', lane: '$acc', as: '$refund' },
     { op: 'add', kind: 'serviceTask', name: 'Book refund', after: '$refund', lane: '$arc', as: '$book' },
     { op: 'add', kind: 'end', name: 'Refunded', after: '$book' },
-    { op: 'add', kind: 'task', name: 'Note', lane: '$arc', in: 'Process_Claims' },
+    { op: 'add', kind: 'task', name: 'Note', lane: '$arc', in: 'claims' },
     ...(reminder
       ? [
           { op: 'add', kind: 'boundaryEvent:timer', name: 'Late', on: '$reject', timer: 'P1D', nonInterrupting: true, as: '$late' },
@@ -78,73 +78,73 @@ const laneIdOf = async (xml: string, id: string): Promise<string | undefined> =>
 describe('move into a flow between two lanes (audit #14 for move)', () => {
   it('a node out of a sub-process into the flow after a branching gateway: the target lane, on its row, W_LANE_INHERITED', async () => {
     const xml = await claims();
-    const lanes = { clerk: bounds(xml, 'Lane_Clerk'), acc: bounds(xml, 'Lane_Accounting') };
-    const result = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CollectDocuments'], flow: 'Flow_GoodwillToRefund' }], { layout: 'incremental' });
-    expect(await laneIdOf(result.xml, 'Activity_CollectDocuments')).toBe('Lane_Accounting');
+    const lanes = { clerk: bounds(xml, 'lane_clerk'), acc: bounds(xml, 'lane_accounting') };
+    const result = await applyToXml(xml, [{ op: 'move', ids: ['task_collectDocuments'], flow: 'flow_goodwillToRefund' }], { layout: 'incremental' });
+    expect(await laneIdOf(result.xml, 'task_collectDocuments')).toBe('lane_accounting');
     const inherited = result.result.warnings.added.find((warning) => warning.code === 'W_LANE_INHERITED');
     expect(inherited?.message).toBe(
-      'Activity_CollectDocuments is in Lane_Accounting (the lane of Activity_Refund, on whose row the layout puts it after the branching Gateway_Goodwill); the flow it went into runs from Gateway_Goodwill in Lane_Clerk to Activity_Refund in Lane_Accounting',
+      'task_collectDocuments is in lane_accounting (the lane of serviceTask_refund, on whose row the layout puts it after the branching gateway_goodwill); the flow it went into runs from gateway_goodwill in lane_clerk to serviceTask_refund in lane_accounting',
     );
-    expect(inherited?.hint).toBe('If Lane_Clerk does it: `bpmn move <file> Activity_CollectDocuments --lane Lane_Clerk` (or --lane Lane_Clerk when adding).');
-    expect(inside(bounds(result.xml, 'Activity_CollectDocuments'), bounds(result.xml, 'Lane_Accounting'))).toBe(true);
+    expect(inherited?.hint).toBe('If lane_clerk does it: `bpmn move <file> task_collectDocuments --lane lane_clerk` (or --lane lane_clerk when adding).');
+    expect(inside(bounds(result.xml, 'task_collectDocuments'), bounds(result.xml, 'lane_accounting'))).toBe(true);
     // on the target's row; neither lane grew
-    const moved = bounds(result.xml, 'Activity_CollectDocuments');
-    const refund = bounds(result.xml, 'Activity_Refund');
+    const moved = bounds(result.xml, 'task_collectDocuments');
+    const refund = bounds(result.xml, 'serviceTask_refund');
     expect(moved.y + moved.height / 2).toBeCloseTo(refund.y + refund.height / 2, 0);
-    expect([bounds(result.xml, 'Lane_Clerk').height, bounds(result.xml, 'Lane_Accounting').height]).toEqual([lanes.clerk.height, lanes.acc.height]);
+    expect([bounds(result.xml, 'lane_clerk').height, bounds(result.xml, 'lane_accounting').height]).toEqual([lanes.clerk.height, lanes.acc.height]);
     expect((result.result.layout.metrics?.added ?? []).filter((problem) => problem.kind.startsWith('outside'))).toEqual([]);
   });
 
   it('--after a plain node whose flow crosses lanes: the anchor lane, W_LANE_INHERITED; --lane decides up front', async () => {
     const xml = await claims();
-    const result = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CollectDocuments'], after: 'Activity_Refund' }], { layout: 'incremental' });
-    expect(await laneIdOf(result.xml, 'Activity_CollectDocuments')).toBe('Lane_Accounting');
+    const result = await applyToXml(xml, [{ op: 'move', ids: ['task_collectDocuments'], after: 'serviceTask_refund' }], { layout: 'incremental' });
+    expect(await laneIdOf(result.xml, 'task_collectDocuments')).toBe('lane_accounting');
     expect(result.result.warnings.added.find((warning) => warning.code === 'W_LANE_INHERITED')?.message).toBe(
-      'Activity_CollectDocuments is in Lane_Accounting (the lane of Activity_Refund); the flow it went into runs from Activity_Refund in Lane_Accounting to Activity_BookRefund in Lane_Archive',
+      'task_collectDocuments is in lane_accounting (the lane of serviceTask_refund); the flow it went into runs from serviceTask_refund in lane_accounting to serviceTask_bookRefund in lane_archive',
     );
-    const explicit = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CollectDocuments'], after: 'Activity_Refund', lane: 'Lane_Archive' }], { layout: 'incremental' });
-    expect(await laneIdOf(explicit.xml, 'Activity_CollectDocuments')).toBe('Lane_Archive');
+    const explicit = await applyToXml(xml, [{ op: 'move', ids: ['task_collectDocuments'], after: 'serviceTask_refund', lane: 'lane_archive' }], { layout: 'incremental' });
+    expect(await laneIdOf(explicit.xml, 'task_collectDocuments')).toBe('lane_archive');
     expect(explicit.result.warnings.added.map((warning) => warning.code)).not.toContain('W_LANE_INHERITED');
-    expect(inside(bounds(explicit.xml, 'Activity_CollectDocuments'), bounds(explicit.xml, 'Lane_Archive'))).toBe(true);
+    expect(inside(bounds(explicit.xml, 'task_collectDocuments'), bounds(explicit.xml, 'lane_archive'))).toBe(true);
   });
 
   it('a node in a lane keeps it: a note when the flow runs between two other lanes, nothing when its lane is one of them', async () => {
     const xml = await claims();
-    const result = await applyToXml(xml, [{ op: 'move', ids: ['Activity_Note'], flow: 'Flow_GoodwillToRefund' }], { layout: 'incremental' });
-    expect(await laneIdOf(result.xml, 'Activity_Note')).toBe('Lane_Archive');
+    const result = await applyToXml(xml, [{ op: 'move', ids: ['task_note'], flow: 'flow_goodwillToRefund' }], { layout: 'incremental' });
+    expect(await laneIdOf(result.xml, 'task_note')).toBe('lane_archive');
     expect(result.result.warnings.added.map((warning) => warning.code)).not.toContain('W_LANE_INHERITED');
     expect(result.result.notes).toContain(
-      'Activity_Note stays in its lane Lane_Archive; the flow it went into runs from Gateway_Goodwill in Lane_Clerk to Activity_Refund in Lane_Accounting (`bpmn move <file> Activity_Note --lane Lane_Accounting` puts it on the row the layout gives a node there)',
+      'task_note stays in its lane lane_archive; the flow it went into runs from gateway_goodwill in lane_clerk to serviceTask_refund in lane_accounting (`bpmn move <file> task_note --lane lane_accounting` puts it on the row the layout gives a node there)',
     );
-    expect(inside(bounds(result.xml, 'Activity_Note'), bounds(result.xml, 'Lane_Archive'))).toBe(true);
-    const one = await applyToXml(xml, [{ op: 'move', ids: ['Activity_Note'], flow: 'Flow_RefundToBookRefund' }], { layout: 'incremental' });
-    expect(await laneIdOf(one.xml, 'Activity_Note')).toBe('Lane_Archive');
+    expect(inside(bounds(result.xml, 'task_note'), bounds(result.xml, 'lane_archive'))).toBe(true);
+    const one = await applyToXml(xml, [{ op: 'move', ids: ['task_note'], flow: 'flow_refundToBookRefund' }], { layout: 'incremental' });
+    expect(await laneIdOf(one.xml, 'task_note')).toBe('lane_archive');
     expect(one.result.notes.filter((note) => note.includes('stays in its lane'))).toEqual([]);
   });
 
   it('a node that keeps the branching anchor\'s lane goes on a row of that lane: the lane never stretches over to the target\'s row (move and add --lane)', async () => {
     // the reminder path keeps a row in Clerk below Goodwill?'s, free in the column the node goes to
     const xml = await claims(true);
-    const before = { clerk: bounds(xml, 'Lane_Clerk'), acc: bounds(xml, 'Lane_Accounting') };
-    const moved = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CheckClaim'], flow: 'Flow_GoodwillToRefund' }], { layout: 'incremental' });
-    const added = await applyToXml(xml, [{ op: 'add', kind: 'task', id: 'Activity_Log', name: 'Log', flow: 'Flow_GoodwillToRefund', lane: 'Lane_Clerk' }], { layout: 'incremental' });
+    const before = { clerk: bounds(xml, 'lane_clerk'), acc: bounds(xml, 'lane_accounting') };
+    const moved = await applyToXml(xml, [{ op: 'move', ids: ['userTask_checkClaim'], flow: 'flow_goodwillToRefund' }], { layout: 'incremental' });
+    const added = await applyToXml(xml, [{ op: 'add', kind: 'task', id: 'Activity_Log', name: 'Log', flow: 'flow_goodwillToRefund', lane: 'lane_clerk' }], { layout: 'incremental' });
     for (const [result, id] of [
-      [moved, 'Activity_CheckClaim'],
+      [moved, 'userTask_checkClaim'],
       [added, 'Activity_Log'],
     ] as const) {
-      expect(await laneIdOf(result.xml, id)).toBe('Lane_Clerk');
-      expect(inside(bounds(result.xml, id), bounds(result.xml, 'Lane_Clerk'))).toBe(true);
-      // before: drawn on Activity_Refund's row, Lane_Clerk stretched down over it and pushed Lane_Accounting away
-      expect(bounds(result.xml, 'Lane_Clerk').height).toBe(before.clerk.height);
-      expect(bounds(result.xml, 'Lane_Accounting').y).toBe(before.acc.y);
+      expect(await laneIdOf(result.xml, id)).toBe('lane_clerk');
+      expect(inside(bounds(result.xml, id), bounds(result.xml, 'lane_clerk'))).toBe(true);
+      // before: drawn on serviceTask_refund's row, lane_clerk stretched down over it and pushed lane_accounting away
+      expect(bounds(result.xml, 'lane_clerk').height).toBe(before.clerk.height);
+      expect(bounds(result.xml, 'lane_accounting').y).toBe(before.acc.y);
       expect((result.result.layout.metrics?.added ?? []).filter((problem) => problem.kind.startsWith('outside') || problem.kind === 'overlaps')).toEqual([]);
     }
   });
 
   it('a flow inside one lane: the lane of the anchor, no warning', async () => {
     const xml = await claims();
-    const result = await applyToXml(xml, [{ op: 'move', ids: ['Activity_CollectDocuments'], flow: 'Flow_GoodwillToReject' }], { layout: 'incremental' });
-    expect(await laneIdOf(result.xml, 'Activity_CollectDocuments')).toBe('Lane_Clerk');
+    const result = await applyToXml(xml, [{ op: 'move', ids: ['task_collectDocuments'], flow: 'flow_goodwillToReject' }], { layout: 'incremental' });
+    expect(await laneIdOf(result.xml, 'task_collectDocuments')).toBe('lane_clerk');
     expect(result.result.warnings.added.map((warning) => warning.code)).not.toContain('W_LANE_INHERITED');
   });
 });

@@ -96,42 +96,23 @@ export class EditSession {
     return this.doc.requireScope(id, this.batch);
   }
 
-  newId(prefix: string, name?: string): string {
-    return this.allocator.allocate({ key: prefix, prefix, typeNames: [prefix.charAt(0).toLowerCase() + prefix.slice(1)], ...(name ? { name } : {}) }).id;
-  }
-
   get followFlowEnds(): boolean {
     return this.settings.keepFlowIds === undefined ? this.doc.followFlowEnds : !this.settings.keepFlowIds;
   }
 
-  /** The document's own, or one learned on first use for conventions the call brings itself. */
+  /** The document's, or one for conventions the call brings itself. */
   get idStyle(): IdStyle {
-    if (this.style) return this.style;
-    const own = this.ownConventions;
-    return own ? (this.style = IdStyle.infer(this.doc.definitions, own)) : this.doc.ownIdStyle;
-  }
-
-  private get ownConventions(): IdConventions | undefined {
     const conventions = this.settings.conventions;
-    return conventions !== undefined && conventions !== this.doc.conventions ? conventions : undefined;
+    if (conventions === undefined || conventions === this.doc.conventions) return this.doc.idStyle;
+    return (this.style ??= IdStyle.of(conventions));
   }
 
-  /**
-   * Learns the id style now, before an op removes the elements it learns from: a batch whose
-   * first op removes flows could otherwise read another style from what is left.
-   */
   begin(): void {
     this.keptFlows.clear();
     this.idStates.clear();
     this.allocator.begin();
     this.formerEnds.clear();
-    this.style = this.idStyle;
     this.flows = this.followFlowEnds ? undefined : new Map(this.doc.allSequenceFlows().map((flow) => [flow, [flow.get<El | undefined>('sourceRef'), flow.get<El | undefined>('targetRef')]] as const));
-  }
-
-  /** Conventions the call brought itself must not stick: the document relearns its style. */
-  close(): void {
-    if (this.ownConventions) this.doc.forgetIdStyle();
   }
 
   /** With flow ids kept: the flows at begin(), the only ones keeping their id, with their ends. */

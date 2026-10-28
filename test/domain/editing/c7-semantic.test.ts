@@ -58,7 +58,7 @@ describe('C7 target: history time to live and platform version', () => {
   it('new --target camunda7 sets camunda:historyTimeToLive="180" and modeler:executionPlatformVersion', async () => {
     const doc = Doc.create({ target: 'camunda7', processName: 'Order' });
     const xml = await doc.toXml();
-    expect(xml).toMatch(/<bpmn:process id="Process_Order"[^>]*camunda:historyTimeToLive="180"/);
+    expect(xml).toMatch(/<bpmn:process id="order"[^>]*camunda:historyTimeToLive="180"/);
     expect(xml).toContain('modeler:executionPlatform="Camunda Platform"');
     expect(xml).toContain('modeler:executionPlatformVersion="7.24.0"');
     expect(doc.platform()).toBe('c7');
@@ -465,12 +465,12 @@ describe('receiveTask / sendTask take message=<name>', () => {
     const doc = await c7Doc();
     runOps(doc, [{ op: 'add', kind: 'receiveTask', name: 'Wait payment', id: 'Activity_Wait', after: 'Activity_Review' }]);
     const cs = set(doc, 'Activity_Wait', { message: 'PaymentReceived' });
-    expect(cs.created).toContainEqual(expect.objectContaining({ id: 'Message_PaymentReceived', kind: 'message' }));
-    expect(await doc.toXml()).toContain('<bpmn:receiveTask id="Activity_Wait" name="Wait payment" messageRef="Message_PaymentReceived">');
+    expect(cs.created).toContainEqual(expect.objectContaining({ id: 'message_paymentReceived', kind: 'message' }));
+    expect(await doc.toXml()).toContain('<bpmn:receiveTask id="Activity_Wait" name="Wait payment" messageRef="message_paymentReceived">');
     expect(new ElementProperties(doc).read(doc.require('Activity_Wait'))).toMatchObject({ message: 'PaymentReceived' });
     // an existing message by name is reused
     set(doc, 'Activity_Wait', { message: 'Notify' });
-    expect(doc.require('Activity_Wait').get('messageRef')?.get('id')).toBe('Message_Notify');
+    expect(doc.require('Activity_Wait').get('messageRef')?.get('id')).toBe('message_notify');
     set(doc, 'Activity_Wait', { message: '' });
     expect(doc.require('Activity_Wait').get('messageRef')).toBeUndefined();
   });
@@ -479,7 +479,7 @@ describe('receiveTask / sendTask take message=<name>', () => {
     const doc = await c7Doc();
     const cs = runOps(doc, [{ op: 'add', kind: 'receiveTask', name: 'Wait', id: 'Activity_Wait', after: 'Activity_Review', message: 'Paid' }]);
     expect(codes(cs)).not.toContain('W_OPTION_IGNORED');
-    expect(cs.created).toContainEqual(expect.objectContaining({ id: 'Message_Paid', kind: 'message' }));
+    expect(cs.created).toContainEqual(expect.objectContaining({ id: 'message_paid', kind: 'message' }));
     expect(doc.require('Activity_Wait').get('messageRef')?.get('name')).toBe('Paid');
     runOps(doc, [{ op: 'add', kind: 'sendTask', name: 'Send', id: 'Activity_Send', after: 'Activity_Wait', set: { message: 'Sent' } }]);
     expect(doc.require('Activity_Send').get('messageRef')?.get('name')).toBe('Sent');

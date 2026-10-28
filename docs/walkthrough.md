@@ -9,7 +9,7 @@ the [plugin](./claude-code-plugin.md). A line `...` stands for output left out.
 
 ```console
 $ bpmn new order.bpmn --name "Order handling" --target camunda8
-created process Process_OrderHandling "Order handling"
+created process orderHandling "Order handling"
 ...
 ```
 
@@ -20,14 +20,14 @@ Each result names its new ids for the next command. A warning carries its fix.
 ```console{6,7}
 $ bpmn add order.bpmn start "Order received"
 ...
-$ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
-created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
+$ bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
+created userTask userTask_checkInvoice "Check invoice" - after startEvent_orderReceived
 ...
-warning W_DEAD_END Activity_CheckInvoice: userTask Activity_CheckInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_CheckInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after Activity_CheckInvoice`).)
-resolved: W_DEAD_END Event_OrderReceived
+warning W_DEAD_END userTask_checkInvoice: userTask userTask_checkInvoice "Check invoice" has no outgoing flow  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after userTask_checkInvoice`) or end it (`bpmn add <file> endEvent "<Name>" --after userTask_checkInvoice`).)
+resolved: W_DEAD_END startEvent_orderReceived
 ...
 
-$ bpmn add order.bpmn end "Invoice handled" --after Activity_CheckInvoice
+$ bpmn add order.bpmn end "Invoice handled" --after userTask_checkInvoice
 ...
 ```
 
@@ -47,7 +47,7 @@ ops.
   "ops": [
     {
       "op": "split",
-      "after": "Activity_CheckInvoice",
+      "after": "userTask_checkInvoice",
       "name": "Invoice ok?",
       "branches": [
         {
@@ -83,10 +83,10 @@ ops.
 
 ```console{4,5}
 $ bpmn apply order.bpmn ops.json
-created exclusiveGateway Gateway_InvoiceOk "Invoice ok?" - between Activity_CheckInvoice and Event_InvoiceHandled
+created exclusiveGateway gateway_invoiceOk "Invoice ok?" - between userTask_checkInvoice and endEvent_invoiceHandled
 ...
-aliases: $book = Activity_BookInvoice, $ask = Activity_AskCustomer
-warning W_C8_DEPLOY_IMPLEMENTATION Activity_AskCustomer: sendTask Activity_AskCustomer has no zeebe:taskDefinition (nor a zeebe:publishMessage): Camunda 8 needs the job type a worker subscribes to and refuses the file  (Give it a job type: `bpmn ext add <file> Activity_AskCustomer zeebe:taskDefinition type=<jobType>`.)
+aliases: $book = serviceTask_bookInvoice, $ask = sendTask_askCustomer
+warning W_C8_DEPLOY_IMPLEMENTATION sendTask_askCustomer: sendTask sendTask_askCustomer has no zeebe:taskDefinition (nor a zeebe:publishMessage): Camunda 8 needs the job type a worker subscribes to and refuses the file  (Give it a job type: `bpmn ext add <file> sendTask_askCustomer zeebe:taskDefinition type=<jobType>`.)
 ...
 ```
 
@@ -100,8 +100,8 @@ warning W_C8_DEPLOY_IMPLEMENTATION Activity_AskCustomer: sendTask Activity_AskCu
 The `ext add` from the hint gives the send task its job type. `--summary` shortens the result.
 
 ```console
-$ bpmn ext add order.bpmn Activity_AskCustomer zeebe:taskDefinition type=ask-customer --summary
-changed: Activity_AskCustomer
+$ bpmn ext add order.bpmn sendTask_askCustomer zeebe:taskDefinition type=ask-customer --summary
+changed: sendTask_askCustomer
 warnings: 0 added, 1 resolved, 0 already in the file
 layout: full, score 0 -> 0
 written: order.bpmn
@@ -116,15 +116,15 @@ Only a normal pool wraps the existing process. A `--black-box` pool added first 
 
 ```console
 $ bpmn add order.bpmn participant "Order handling"
-created collaboration Collaboration_OrderHandling
-created participant Participant_OrderHandling "Order handling" - wraps process Process_OrderHandling
+created collaboration collaboration_orderHandling
+created participant participant_orderHandling "Order handling" - wraps process orderHandling
 ...
 $ bpmn add order.bpmn participant "Customer" --black-box
-created participant Participant_Customer "Customer" - black box (no process)
+created participant participant_customer "Customer" - black box (no process)
 ...
-$ bpmn connect order.bpmn Activity_AskCustomer Participant_Customer --message Question
-created message Message_Question "Question" - root element
-created messageFlow Flow_AskCustomerToCustomer - Activity_AskCustomer -> Participant_Customer
+$ bpmn connect order.bpmn sendTask_askCustomer participant_customer --message Question
+created message message_question "Question" - root element
+created messageFlow messageFlow_askCustomerToCustomer - sendTask_askCustomer -> participant_customer
 ...
 ```
 
@@ -140,18 +140,18 @@ created messageFlow Flow_AskCustomerToCustomer - Activity_AskCustomer -> Partici
 ```console
 $ bpmn show order.bpmn
 ...
-collaboration Collaboration_OrderHandling
-  participant Participant_OrderHandling "Order handling" = Process_OrderHandling
-  participant Participant_Customer "Customer" (black box)
-  messageFlow Flow_AskCustomerToCustomer: Activity_AskCustomer "Ask customer" -> Participant_Customer "Customer" [message Question]
-process Process_OrderHandling "Order handling" executable in Participant_OrderHandling
-  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_OrderReceivedToCheckInvoice)
-  userTask Activity_CheckInvoice "Check invoice" [ext: zeebe:userTask] -> Gateway_InvoiceOk (Flow_CheckInvoiceToInvoiceOk)
-  exclusiveGateway Gateway_InvoiceOk "Invoice ok?" -> Activity_BookInvoice (Flow_InvoiceOkToBookInvoice "yes" if = ok), Activity_AskCustomer (Flow_InvoiceOkToAskCustomer "no" default)
-  serviceTask Activity_BookInvoice "Book invoice" [job=book-invoice, ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_BookInvoiceToInvoiceOkJoin)
-  exclusiveGateway Gateway_InvoiceOk_join -> Event_InvoiceHandled (Flow_InvoiceOkJoinToInvoiceHandled)
-  endEvent Event_InvoiceHandled "Invoice handled"
-  sendTask Activity_AskCustomer "Ask customer" [job=ask-customer, ext: zeebe:taskDefinition] -> Gateway_InvoiceOk_join (Flow_AskCustomerToInvoiceOkJoin)
+collaboration collaboration_orderHandling
+  participant participant_orderHandling "Order handling" = orderHandling
+  participant participant_customer "Customer" (black box)
+  messageFlow messageFlow_askCustomerToCustomer: sendTask_askCustomer "Ask customer" -> participant_customer "Customer" [message Question]
+process orderHandling "Order handling" executable in participant_orderHandling
+  startEvent startEvent_orderReceived "Order received" -> userTask_checkInvoice (flow_orderReceivedToCheckInvoice)
+  userTask userTask_checkInvoice "Check invoice" [ext: zeebe:userTask] -> gateway_invoiceOk (flow_checkInvoiceToInvoiceOk)
+  exclusiveGateway gateway_invoiceOk "Invoice ok?" -> serviceTask_bookInvoice (flow_invoiceOkToBookInvoice "yes" if = ok), sendTask_askCustomer (flow_invoiceOkToAskCustomer "no" default)
+  serviceTask serviceTask_bookInvoice "Book invoice" [job=book-invoice, ext: zeebe:taskDefinition] -> gateway_invoiceOkJoin (flow_bookInvoiceToInvoiceOkJoin)
+  exclusiveGateway gateway_invoiceOkJoin -> endEvent_invoiceHandled (flow_invoiceOkJoinToInvoiceHandled)
+  endEvent endEvent_invoiceHandled "Invoice handled"
+  sendTask sendTask_askCustomer "Ask customer" [job=ask-customer, ext: zeebe:taskDefinition] -> gateway_invoiceOkJoin (flow_askCustomerToInvoiceOkJoin)
 ...
 
 $ bpmn validate order.bpmn

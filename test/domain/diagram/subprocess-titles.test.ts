@@ -98,15 +98,15 @@ function expectLabelsClear(xml: string, subId: string, name: string): void {
 }
 
 const MAIN = [
-  { op: 'add', kind: 'startEvent', name: 'Kündigung eingegangen', in: 'Process_Kuendigung', as: '$s' },
+  { op: 'add', kind: 'startEvent', name: 'Kündigung eingegangen', in: 'kuendigung', as: '$s' },
   { op: 'add', kind: 'userTask', name: 'Kündigung prüfen', after: '$s', as: '$t' },
   { op: 'add', kind: 'endEvent', name: 'Kündigung bestätigt', after: '$t' },
-  { op: 'add', kind: 'eventSubProcess', name: 'Kündigung zurückgezogen', in: 'Process_Kuendigung', as: '$esp' },
+  { op: 'add', kind: 'eventSubProcess', name: 'Kündigung zurückgezogen', in: 'kuendigung', as: '$esp' },
   { op: 'add', kind: 'startEvent:message', name: 'Chef zieht zurück', in: '$esp', as: '$ms', message: 'Rueckzug' },
 ];
 const THROW = { op: 'add', kind: 'intermediateThrowEvent:compensate', name: 'Beendigung rückabwickeln' };
 const END = { op: 'add', kind: 'endEvent', name: 'Prozess abgebrochen' };
-const ESP = 'Activity_KuendigungZurueckgezogen';
+const ESP = 'subProcess_kuendigungZurueckgezogen';
 const ESP_NAME = 'Kündigung zurückgezogen';
 
 async function drawnNew(ops: unknown[]): Promise<string> {
@@ -128,18 +128,18 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
     expect((await metricsXml(batch)).score).toBe(0);
     // the throw event between the start and the end, its label below it as the convention says
     const drawing = drawn(batch);
-    const ev = drawing.get('Event_BeendigungRueckabwickeln')!;
+    const ev = drawing.get('event_beendigungRueckabwickeln')!;
     expect(ev.label!.y).toBeGreaterThanOrEqual(bottom(ev.bounds!));
-    const later = await applyToXml(await drawnNew([...MAIN, { ...END, after: '$ms' }]), [{ ...THROW, after: 'Event_ChefZiehtZurueck' }]);
+    const later = await applyToXml(await drawnNew([...MAIN, { ...END, after: '$ms' }]), [{ ...THROW, after: 'startEvent_chefZiehtZurueck' }]);
     expect(later.result.layout.mode).toBe('full');
     expect(later.xml).toBe(batch);
   });
 
   it('a gateway in the first row: its label above it, below the title (the frame grows at the top)', async () => {
     const result = await applyToXml((await newXml({ processName: 'Bestellung' })).xml, [
-      { op: 'add', kind: 'startEvent', name: 'Bestellung eingegangen', in: 'Process_Bestellung', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Bestellung eingegangen', in: 'bestellung', as: '$s' },
       { op: 'add', kind: 'endEvent', name: 'Bestellung erledigt', after: '$s' },
-      { op: 'add', kind: 'eventSubProcess', name: 'Stornierung durch den Kunden', in: 'Process_Bestellung', as: '$esp' },
+      { op: 'add', kind: 'eventSubProcess', name: 'Stornierung durch den Kunden', in: 'bestellung', as: '$esp' },
       { op: 'add', kind: 'startEvent:message', name: 'Storno angefragt', in: '$esp', as: '$ms', message: 'Storno' },
       {
         op: 'split',
@@ -152,10 +152,10 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
         ],
       },
     ]);
-    const sub = 'Activity_StornierungDurchDenKunden';
+    const sub = 'subProcess_stornierungDurchDenKunden';
     expectLabelsClear(result.xml, sub, 'Stornierung durch den Kunden');
     const { frame, title } = frameOf(result.xml, sub, 'Stornierung durch den Kunden');
-    const gw = drawn(result.xml).get('Gateway_StornoMoeglich')!;
+    const gw = drawn(result.xml).get('gateway_stornoMoeglich')!;
     expect(bottom(gw.label!)).toBeLessThanOrEqual(gw.bounds!.y);
     expect(gw.label!.y).toBeGreaterThanOrEqual(bottom(title));
     // more than the 45 px the top padding has without a label above the first row
@@ -167,7 +167,7 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
     const name = 'Rücknahme der Kündigung durch den Mitarbeiter innerhalb der gesetzlichen Widerrufsfrist von zwei Wochen';
     const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
       ...MAIN.slice(0, 3),
-      { op: 'add', kind: 'eventSubProcess', name, in: 'Process_Kuendigung', as: '$esp' },
+      { op: 'add', kind: 'eventSubProcess', name, in: 'kuendigung', as: '$esp' },
       { op: 'add', kind: 'startEvent:message', name: 'Rücknahme eingegangen', in: '$esp', as: '$ms', message: 'Ruecknahme' },
       { op: 'add', kind: 'endEvent', name: 'Kündigung storniert', after: '$ms' },
     ]);
@@ -182,15 +182,15 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
   it('labels wider than their events stay inside the frame on the left, the right and below', async () => {
     const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
       ...MAIN.slice(0, 3),
-      { op: 'add', kind: 'eventSubProcess', name: 'Rücknahme', in: 'Process_Kuendigung', as: '$esp' },
+      { op: 'add', kind: 'eventSubProcess', name: 'Rücknahme', in: 'kuendigung', as: '$esp' },
       { op: 'add', kind: 'startEvent:message', name: 'Kündigungsrücknahmeerklärung eingegangen', in: '$esp', as: '$ms', message: 'Ruecknahme' },
       { op: 'add', kind: 'intermediateThrowEvent:escalation', name: 'Personalabteilungsleitung informieren', after: '$ms', as: '$x', escalation: 'Info' },
       { op: 'add', kind: 'endEvent', name: 'Arbeitsvertragsfortsetzung', after: '$x' },
     ]);
-    expectLabelsClear(result.xml, 'Activity_Ruecknahme', 'Rücknahme');
+    expectLabelsClear(result.xml, 'subProcess_ruecknahme', 'Rücknahme');
     // the labels below their events, as the convention says (none moved onto the title row)
     const drawing = drawn(result.xml);
-    for (const id of ['Event_Kuendigungsruecknahmeerklaerung', 'Event_PersonalabteilungsleitungInformieren', 'Event_Arbeitsvertragsfortsetzung']) {
+    for (const id of ['startEvent_kuendigungsruecknahmeerklaerung', 'event_personalabteilungsleitungInformieren', 'endEvent_arbeitsvertragsfortsetzung']) {
       expect(drawing.get(id)!.label!.y).toBeGreaterThanOrEqual(bottom(drawing.get(id)!.bounds!));
     }
     expect((await metricsXml(result.xml)).score).toBe(0);
@@ -199,7 +199,7 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
   it('a loop under an event keeps below its label: the label stays at its spot below the event, inside the frame', async () => {
     // the reminder loop "no" runs back from Paid? to Send invoice under the timer, whose label takes three lines
     const result = await applyToXml((await newXml({ processName: 'Rechnung' })).xml, [
-      { op: 'add', kind: 'startEvent', in: 'Process_Rechnung', as: '$s' },
+      { op: 'add', kind: 'startEvent', in: 'rechnung', as: '$s' },
       { op: 'add', kind: 'subProcess', name: 'Wait for the payment', after: '$s', as: '$sp' },
       { op: 'add', kind: 'endEvent', name: 'Done', after: '$sp' },
       { op: 'add', kind: 'startEvent', name: 'Started', in: '$sp', as: '$a' },
@@ -210,10 +210,10 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'connect', source: '$g', target: '$t', name: 'no' },
     ]);
     expect(result.result.layout.mode).toBe('full');
-    const sub = 'Activity_WaitForThePayment';
+    const sub = 'subProcess_waitForThePayment';
     expectLabelsClear(result.xml, sub, 'Wait for the payment');
     const drawing = drawn(result.xml);
-    const timer = drawing.get('Event_TwoWeeksHavePassedSinceSending')!;
+    const timer = drawing.get('event_twoWeeksHavePassedSinceSending')!;
     expect(timer.label!.y).toBeGreaterThanOrEqual(bottom(timer.bounds!));
     const loop = [...drawing.values()].find((candidate) => candidate.points && candidate.label && candidate.points.length > 3)!;
     expect(Math.max(...loop.points!.map((point) => point.y))).toBeGreaterThan(bottom(timer.label!));
@@ -222,26 +222,26 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
 
   it('data objects and stores with names of several lines below the last row: the frame holds their labels', async () => {
     const result = await applyToXml((await newXml({ processName: 'Application' })).xml, [
-      { op: 'add', kind: 'startEvent', name: 'Application received', in: 'Process_Application', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Application received', in: 'application', as: '$s' },
       { op: 'add', kind: 'subProcess', name: 'Score', after: '$s', as: '$sp' },
       { op: 'add', kind: 'startEvent', in: '$sp', as: '$a' },
       { op: 'add', kind: 'task', name: 'Score applicant', after: '$a', as: '$t' },
       { op: 'add', kind: 'endEvent', after: '$t' },
       { op: 'add', kind: 'dataObject', name: "The applicant's complete score sheet with every detail", in: '$sp', to: '$t' },
       { op: 'add', kind: 'endEvent', name: 'Application scored', after: '$sp' },
-      { op: 'add', kind: 'eventSubProcess', name: 'Handle cancel', in: 'Process_Application', as: '$esp' },
+      { op: 'add', kind: 'eventSubProcess', name: 'Handle cancel', in: 'application', as: '$esp' },
       { op: 'add', kind: 'startEvent:message', name: 'Cancelled', in: '$esp', as: '$ms', message: 'Cancel' },
       { op: 'add', kind: 'task', name: 'Log cancel', after: '$ms', as: '$log' },
       { op: 'add', kind: 'endEvent', name: 'Logged', after: '$log' },
       { op: 'add', kind: 'dataStore', name: 'Cancellation audit store', in: '$esp', to: '$log' },
     ]);
     expect(result.result.layout.mode).toBe('full');
-    expectLabelsClear(result.xml, 'Activity_Score', 'Score');
-    expectLabelsClear(result.xml, 'Activity_HandleCancel', 'Handle cancel');
+    expectLabelsClear(result.xml, 'subProcess_score', 'Score');
+    expectLabelsClear(result.xml, 'subProcess_handleCancel', 'Handle cancel');
     const drawing = drawn(result.xml);
     for (const [kind, sub] of [
-      ['dataObjectReference', 'Activity_Score'],
-      ['dataStoreReference', 'Activity_HandleCancel'],
+      ['dataObjectReference', 'subProcess_score'],
+      ['dataStoreReference', 'subProcess_handleCancel'],
     ] as const) {
       const id = new RegExp(`<bpmn:${kind} id="([^"]+)"`).exec(result.xml)![1]!;
       expect(drawing.get(id)?.label, id).toBeDefined();
@@ -254,7 +254,7 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
     // the split makes the sub-process tall enough for a spot far below the data object inside it: that one must not win over the near one
     // above the event, beside the narrow title (it took the data label's spot and pushed it out of the frame)
     const result = await applyToXml((await newXml({ processName: 'M' })).xml, [
-      { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_M', id: 'S0' },
+      { op: 'add', kind: 'startEvent', name: 'Start', in: 'm', id: 'S0' },
       { op: 'add', kind: 'subProcess', name: 'Dunning', after: 'S0', id: 'SP' },
       { op: 'add', kind: 'endEvent', name: 'End', after: 'SP', id: 'E0' },
       { op: 'add', kind: 'startEvent', name: 'Payment overdue', in: 'SP', id: 'ES' },
@@ -310,7 +310,7 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
 
   it('a transaction and a plain sub-process alike', async () => {
     const result = await applyToXml((await newXml({ processName: 'Kuendigung' })).xml, [
-      { op: 'add', kind: 'startEvent', name: 'Kündigung eingegangen', in: 'Process_Kuendigung', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Kündigung eingegangen', in: 'kuendigung', as: '$s' },
       { op: 'add', kind: 'transaction', name: 'Kündigung rückabwickeln', after: '$s', as: '$tx' },
       { op: 'add', kind: 'startEvent', name: 'Rückabwicklung gestartet', in: '$tx', as: '$a' },
       { op: 'add', kind: 'intermediateThrowEvent:compensate', name: 'Beendigung rückabwickeln', after: '$a', as: '$b' },
@@ -321,8 +321,8 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
       { op: 'add', kind: 'intermediateThrowEvent:signal', name: 'Personalakte aktualisieren', after: '$c', as: '$d', signal: 'Akte' },
       { op: 'add', kind: 'endEvent', name: 'Aufräumen beendet', after: '$d' },
     ]);
-    expectLabelsClear(result.xml, 'Activity_KuendigungRueckabwickeln', 'Kündigung rückabwickeln');
-    expectLabelsClear(result.xml, 'Activity_ProzessAufraeumen', 'Prozess aufräumen');
+    expectLabelsClear(result.xml, 'subProcess_kuendigungRueckabwickeln', 'Kündigung rückabwickeln');
+    expectLabelsClear(result.xml, 'subProcess_prozessAufraeumen', 'Prozess aufräumen');
     expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
@@ -441,11 +441,11 @@ describe('incremental layout: a kept event sub-process', () => {
   it('`label --side above` makes room below the title instead of putting the label on it', async () => {
     const xml = await drawnNew([...MAIN, { ...END, after: '$ms' }, { ...THROW, after: '$ms' }]);
     const before = drawn(xml);
-    const result = await applyToXml(xml, [{ op: 'label', id: 'Event_BeendigungRueckabwickeln', side: 'above' }]);
+    const result = await applyToXml(xml, [{ op: 'label', id: 'event_beendigungRueckabwickeln', side: 'above' }]);
     expect(result.result.layout.mode).toBe('incremental');
-    expect(result.result.layout.format?.[0]?.notes?.join(' ')).toMatch(/^made \d+ px of room above Event_BeendigungRueckabwickeln in its sub-process Activity_KuendigungZurueckgezogen/);
+    expect(result.result.layout.format?.[0]?.notes?.join(' ')).toMatch(/^made \d+ px of room above event_beendigungRueckabwickeln in its sub-process subProcess_kuendigungZurueckgezogen/);
     const drawing = drawn(result.xml);
-    const ev = drawing.get('Event_BeendigungRueckabwickeln')!;
+    const ev = drawing.get('event_beendigungRueckabwickeln')!;
     expect(bottom(ev.label!)).toBeLessThanOrEqual(ev.bounds!.y);
     expect(drawing.get(ESP)!.bounds!.height).toBeGreaterThan(before.get(ESP)!.bounds!.height);
     expectLabelsClear(result.xml, ESP, ESP_NAME);
@@ -457,7 +457,7 @@ describe('incremental layout: a new event in the title row of a sub-process', ()
   it('a branch going up from a new gateway in the first row: the label of its end event stays inside the frame, off the title', async () => {
     const name = 'Cancellation by the customer while the order is processed';
     const init = await applyToXml((await newXml({ processName: 'M' })).xml, [
-      { op: 'add', kind: 'startEvent', name: 'Order received', in: 'Process_M', id: 'S0' },
+      { op: 'add', kind: 'startEvent', name: 'Order received', in: 'm', id: 'S0' },
       { op: 'add', kind: 'task', name: 'Fill in the inspection report for quality assurance', after: 'S0', id: 'T0' },
       { op: 'add', kind: 'subProcess', name, after: 'T0', id: 'SP' },
       { op: 'add', kind: 'startEvent', name: 'Start', in: 'SP', id: 'S' },

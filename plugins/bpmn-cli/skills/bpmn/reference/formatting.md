@@ -34,18 +34,18 @@ delete it or add it to `.gitignore`).
 # the whole diagram; every `metrics` problem numbered on the defect
 bpmn render order-to-cash.bpmn --problems -o .bpmn-render/order-to-cash.png
 # crops: the nodes of `show --around`, a sequence-flow path, a lane / pool / sub-process, these ids
-bpmn render order-to-cash.bpmn --around Gateway_OrderOk --depth 2 --problems -o .bpmn-render/around.png
-bpmn render order-to-cash.bpmn --path Event_OrderReceived Event_OrderCompleted -o .bpmn-render/path.png
-bpmn render order-to-cash.bpmn --scope Lane_Accounting -o .bpmn-render/accounting.png
-bpmn render order-to-cash.bpmn Activity_ReceivePayment Activity_SendPaymentReminder -o .bpmn-render/ids.png
+bpmn render order-to-cash.bpmn --around gateway_orderOk --depth 2 --problems -o .bpmn-render/around.png
+bpmn render order-to-cash.bpmn --path startEvent_orderReceived endEvent_orderCompleted -o .bpmn-render/path.png
+bpmn render order-to-cash.bpmn --scope lane_accounting -o .bpmn-render/accounting.png
+bpmn render order-to-cash.bpmn receiveTask_receivePayment sendTask_sendPaymentReminder -o .bpmn-render/ids.png
 # an orange halo around elements
-bpmn render order-to-cash.bpmn --highlight Activity_SendInvoice,Activity_ReceivePayment -o .bpmn-render/halo.png
+bpmn render order-to-cash.bpmn --highlight sendTask_sendInvoice,receiveTask_receivePayment -o .bpmn-render/halo.png
 ```
 
 ```text
-wrote .bpmn-render/order-to-cash.png  1382x727 px  ~1,282 image tokens  scale 1.00  plane Collaboration_OrderToCash
+wrote .bpmn-render/order-to-cash.png  1382x727 px  ~1,282 image tokens  scale 1.00  plane collaboration_orderToCash
 problems (numbered in the image):
-  1 labelOnLine [Flow_CustomerToReceivePayment, Flow_SendPaymentReminderToCustomer]
+  1 labelOnLine [messageFlow_customerToReceivePayment, messageFlow_sendPaymentReminderToCustomer]
 ```
 
 - The `wrote` line gives the size and the cost: image tokens = width x height
@@ -56,7 +56,7 @@ problems (numbered in the image):
   only those with something in them, at most 40).
 - `--problems` lists the problems under the line, `<n> <kind> [<ids>]
   <detail>` in `metrics` order (a crop: those of its elements), each number
-  drawn on the defect: `1 labelClash [Gateway_OrderOk, Activity_SendRejection]
+  drawn on the defect: `1 labelClash [gateway_orderOk, sendTask_sendRejection]
   label on shape`. Fix them by those ids with the commands below.
 - A crop draws flows to elements it leaves out faded, pools and lanes as
   context. A collapsed sub-process is its own plane: the result lists it
@@ -78,7 +78,7 @@ to the ids:
 | `--branch <flowId>` | what only that branch reaches, up to the join or its ends |
 | `--kind <kind>` | every element of a kind (`endEvent`, `userTask`, `sequenceFlow`, ...) |
 
-In ops JSON: `"path": ["Event_A", "Event_B"]`, `"via": [...]`, `"branch": "Flow_X"`,
+In ops JSON: `"path": ["startEvent_a", "endEvent_b"]`, `"via": [...]`, `"branch": "flow_x"`,
 `"kind": "endEvent"`. Shape commands leave boundary events out of a selection
 (they follow their host).
 
@@ -86,27 +86,27 @@ In ops JSON: `"path": ["Event_A", "Event_B"]`, `"via": [...]`, `"branch": "Flow_
 
 ```bash
 # colours (bpmn-js palette: blue, orange, green, red, purple; default removes)
-bpmn color order-to-cash.bpmn --path Event_OrderReceived Event_OrderCompleted --color green
-bpmn color order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --color red
-bpmn color order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --color default
+bpmn color order-to-cash.bpmn --path startEvent_orderReceived endEvent_orderCompleted --color green
+bpmn color order-to-cash.bpmn --branch flow_orderOkToSendRejection --color red
+bpmn color order-to-cash.bpmn --branch flow_orderOkToSendRejection --color default
 
 # the space tool: one column more right of a node, then close it again
-bpmn space order-to-cash.bpmn --after Activity_CheckOrder
-bpmn space order-to-cash.bpmn --after Activity_CheckOrder --by -column
+bpmn space order-to-cash.bpmn --after userTask_checkOrder
+bpmn space order-to-cash.bpmn --after userTask_checkOrder --by -column
 
 # external labels of events, gateways, data and flows
-bpmn label order-to-cash.bpmn Gateway_OrderOk --side below
+bpmn label order-to-cash.bpmn gateway_orderOk --side below
 
 # route one flow again, forcing the sides it leaves and enters by
-bpmn route order-to-cash.bpmn Flow_PaymentOverdueToSendPaymentReminder --exit bottom --entry left
+bpmn route order-to-cash.bpmn flow_paymentOverdueToSendPaymentReminder --exit bottom --entry left
 
 # same column (horizontal centre) as the reference given with --to
-bpmn align order-to-cash.bpmn Event_ReminderSent Event_OrderCompleted --axis column --to Event_OrderCompleted
+bpmn align order-to-cash.bpmn endEvent_reminderSent endEvent_orderCompleted --axis column --to endEvent_orderCompleted
 
 # order of branches (top to bottom), lanes and pools
-bpmn order order-to-cash.bpmn Gateway_OrderOk Flow_OrderOkToSendRejection Flow_OrderOkToPickAndPackGoods
-bpmn order order-to-cash.bpmn Participant_OrderToCash Lane_Sales Lane_Warehouse Lane_Accounting
-bpmn order order-to-cash.bpmn Collaboration_OrderToCash Participant_Customer Participant_OrderToCash
+bpmn order order-to-cash.bpmn gateway_orderOk flow_orderOkToSendRejection flow_orderOkToPickAndPackGoods
+bpmn order order-to-cash.bpmn participant_orderToCash lane_sales lane_warehouse lane_accounting
+bpmn order order-to-cash.bpmn collaboration_orderToCash participant_customer participant_orderToCash
 
 # overlaps away, then close empty rows / columns and shrink frames
 bpmn tidy order-to-cash.bpmn
@@ -144,9 +144,9 @@ run shows what moves):
 
 ```bash
 bpmn show order-to-cash.bpmn --layout
-bpmn space order-to-cash.bpmn --below Lane_Sales
-bpmn place order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --below Activity_CheckOrder --dry-run
-bpmn place order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --below Activity_CheckOrder
+bpmn space order-to-cash.bpmn --below lane_sales
+bpmn place order-to-cash.bpmn --branch flow_orderOkToSendRejection --below userTask_checkOrder --dry-run
+bpmn place order-to-cash.bpmn --branch flow_orderOkToSendRejection --below userTask_checkOrder
 bpmn show order-to-cash.bpmn --layout
 ```
 
@@ -154,9 +154,9 @@ When a node should land in another lane, change its lane first: `place`
 refuses to move a node out of its lane, pool or sub-process.
 
 ```text
-$ bpmn place order-to-cash.bpmn Activity_SendInvoice --row-of Activity_ReceivePayment
-error E_LEAVES_CONTAINER: Placing Activity_SendInvoice in the row of Activity_ReceivePayment would move it out of its lane Lane_Sales (into lane Lane_Accounting)
-  hint: That position is in lane Lane_Accounting. Assign the lane first (`bpmn move <file> Activity_SendInvoice --lane Lane_Accounting`, in a batch a move op with "lane" before this op), or make room in Lane_Sales first (`bpmn space <file> --below Lane_Sales`).
+$ bpmn place order-to-cash.bpmn sendTask_sendInvoice --row-of receiveTask_receivePayment
+error E_LEAVES_CONTAINER: Placing sendTask_sendInvoice in the row of receiveTask_receivePayment would move it out of its lane lane_sales (into lane lane_accounting)
+  hint: That position is in lane lane_accounting. Assign the lane first (`bpmn move <file> sendTask_sendInvoice --lane lane_accounting`, in a batch a move op with "lane" before this op), or make room in lane_sales first (`bpmn space <file> --below lane_sales`).
 ```
 
 Fixes: `move <id> --lane <laneId>` when the node really belongs to the other
@@ -182,10 +182,10 @@ model op keeps what they drew:
 
 ```bash
 printf '%s' '[
-  { "op": "move", "ids": ["Activity_SendInvoice"], "lane": "Lane_Accounting" },
-  { "op": "color", "path": ["Event_OrderReceived", "Event_OrderCompleted"], "color": "green" },
-  { "op": "color", "ids": ["Activity_SendPaymentReminder", "Event_ReminderSent"], "color": "orange" },
-  { "op": "label", "id": "Gateway_OrderOk", "side": "above" },
+  { "op": "move", "ids": ["sendTask_sendInvoice"], "lane": "lane_accounting" },
+  { "op": "color", "path": ["startEvent_orderReceived", "endEvent_orderCompleted"], "color": "green" },
+  { "op": "color", "ids": ["sendTask_sendPaymentReminder", "endEvent_reminderSent"], "color": "orange" },
+  { "op": "label", "id": "gateway_orderOk", "side": "above" },
   { "op": "compact" }
 ]' | bpmn apply order-to-cash.bpmn - --summary --render .bpmn-render/order-to-cash.png
 bpmn metrics order-to-cash.bpmn

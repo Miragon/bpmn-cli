@@ -95,7 +95,7 @@ describe('the browser bundle in a context without Node globals', () => {
     const there = await browser.applyToXml(xml, JSON.stringify(ops), { debug: (line) => lines.push(line) });
     const here = await core.applyToXml(xml, ops);
     expect(there.result.layout.mode).toBe('incremental');
-    expect(there.result.created.map((change) => change.id)).toContain('Task_ShipGoods'); // the file's id style (Task_)
+    expect(there.result.created.map((change) => change.id)).toContain('userTask_shipGoods');
     expect(there.unchanged).toBe(false);
     expect(there.xml).toBe(here.xml);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify(here.result));
@@ -106,13 +106,13 @@ describe('the browser bundle in a context without Node globals', () => {
   it('keeps flow ids (keepFlowIds) and reports the stale one like Node', async () => {
     const ops = [
       { op: 'add', kind: 'start', name: 'Received' },
-      { op: 'add', kind: 'task', name: 'Check', after: 'Event_Received' },
-      { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Check' },
+      { op: 'add', kind: 'task', name: 'Check', after: 'startEvent_received' },
+      { op: 'add', kind: 'end', name: 'Done', after: 'task_check' },
     ];
     const xml = (await core.applyToXml((await core.newXml({ processName: 'Order' })).xml, ops)).xml;
-    const splice = [{ op: 'add', kind: 'task', name: 'Book', after: 'Activity_Check' }];
+    const splice = [{ op: 'add', kind: 'task', name: 'Book', after: 'task_check' }];
     const there = await browser.applyToXml(xml, splice, { keepFlowIds: true });
-    expect(there.result.warnings.added.map((warning) => `${warning.code} ${warning.element}`)).toEqual(['W_FLOW_ID_STALE Flow_CheckToDone']);
+    expect(there.result.warnings.added.map((warning) => `${warning.code} ${warning.element}`)).toEqual(['W_FLOW_ID_STALE flow_checkToDone']);
     expect(JSON.stringify(there.result)).toBe(JSON.stringify((await core.applyToXml(xml, splice, { keepFlowIds: true })).result));
   });
 
@@ -130,21 +130,21 @@ describe('the browser bundle in a context without Node globals', () => {
     const created = await browser.newXml({ processName: 'Order', target: 'camunda7' });
     const edited = await browser.applyToXml(created.xml, [
       { op: 'add', kind: 'start', name: 'Received' },
-      { op: 'add', kind: 'userTask', name: 'Check', after: 'Event_Received', set: { 'camunda:assignee': 'demo' } },
+      { op: 'add', kind: 'userTask', name: 'Check', after: 'startEvent_received', set: { 'camunda:assignee': 'demo' } },
     ]);
     expect(edited.xml).toBe((await core.applyToXml((await core.newXml({ processName: 'Order', target: 'camunda7' })).xml, [
       { op: 'add', kind: 'start', name: 'Received' },
-      { op: 'add', kind: 'userTask', name: 'Check', after: 'Event_Received', set: { 'camunda:assignee': 'demo' } },
+      { op: 'add', kind: 'userTask', name: 'Check', after: 'startEvent_received', set: { 'camunda:assignee': 'demo' } },
     ])).xml);
     const report = await browser.validateXml(edited.xml);
     expect(report.platform?.platform).toBe('c7');
     expect(JSON.stringify(report)).toBe(JSON.stringify(await core.validateXml(edited.xml)));
     expect(await browser.showXml(edited.xml)).toBe(await core.showXml(edited.xml));
-    expect(await browser.showXml(edited.xml, { id: 'Activity_Check' })).toContain('camunda:assignee');
+    expect(await browser.showXml(edited.xml, { id: 'userTask_check' })).toContain('camunda:assignee');
     // the reading views of large models (step 3)
-    expect(await browser.showXml(edited.xml, { around: 'Activity_Check', depth: 1 })).toBe(await core.showXml(edited.xml, { around: 'Activity_Check', depth: 1 }));
-    expect(await browser.showXml(edited.xml, { id: 'Activity_Check', context: true })).toBe(await core.showXml(edited.xml, { id: 'Activity_Check', context: true }));
-    expect(await browser.showXml(edited.xml, { around: 'Activity_Check' })).toContain('camunda:assignee=demo');
+    expect(await browser.showXml(edited.xml, { around: 'userTask_check', depth: 1 })).toBe(await core.showXml(edited.xml, { around: 'userTask_check', depth: 1 }));
+    expect(await browser.showXml(edited.xml, { id: 'userTask_check', context: true })).toBe(await core.showXml(edited.xml, { id: 'userTask_check', context: true }));
+    expect(await browser.showXml(edited.xml, { around: 'userTask_check' })).toContain('camunda:assignee=demo');
     expect(await browser.findXml(edited.xml, 'demo')).toEqual(await core.findXml(edited.xml, 'demo'));
     expect(await browser.metricsXml(edited.xml)).toEqual(await core.metricsXml(edited.xml));
   });
@@ -163,10 +163,10 @@ describe('the browser bundle in a context without Node globals', () => {
   it('creates and validates Camunda 8 files (zeebe descriptor, Camunda 8 profile) like Node', async () => {
     const ops = [
       { op: 'add', kind: 'start', name: 'Received' },
-      { op: 'add', kind: 'serviceTask', name: 'Check', after: 'Event_Received' },
-      { op: 'ext', id: 'Activity_Check', action: 'add', type: 'loop.zeebe:loopCharacteristics', attrs: { inputCollection: '=items' } },
-      { op: 'add', kind: 'userTask', name: 'Approve', after: 'Activity_Check' },
-      { op: 'ext', id: 'Activity_Approve', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' } },
+      { op: 'add', kind: 'serviceTask', name: 'Check', after: 'startEvent_received' },
+      { op: 'ext', id: 'serviceTask_check', action: 'add', type: 'loop.zeebe:loopCharacteristics', attrs: { inputCollection: '=items' } },
+      { op: 'add', kind: 'userTask', name: 'Approve', after: 'serviceTask_check' },
+      { op: 'ext', id: 'userTask_approve', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'x' } },
     ];
     const edited = await browser.applyToXml((await browser.newXml({ processName: 'Order', target: 'camunda8' })).xml, ops);
     expect(edited.xml).toBe((await core.applyToXml((await core.newXml({ processName: 'Order', target: 'camunda8' })).xml, ops)).xml);
@@ -193,7 +193,7 @@ describe('the browser bundle in a context without Node globals', () => {
     const opts = { validators: [host, reached] };
     const there = await browser.applyToXml(styled, ops, opts);
     expect(phases).toEqual(['before:true', 'after:true']);
-    expect(there.result.created.map((change) => change.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
+    expect(there.result.created.map((change) => change.id)).toEqual(['userTask_auditOrder', 'flow_auditOrderToOrderOk']);
     expect(there.result.validation.validators?.map((validator) => validator.name)).toEqual(['host', 'reached']);
     const here = await core.applyToXml(styled, ops, opts);
     expect(there.xml).toBe(here.xml);

@@ -79,11 +79,11 @@ An error reads `[bpmnlint error] <rule>` and fails the check (exit 2). A warning
 $ bpmn validate models/order.bpmn
 [bpmnlint error] local/external-task-topic serviceTask_bookOrder: External task has no topic
 W_C7_DEPLOY_EXTERNAL_TOPIC serviceTask_bookOrder: serviceTask serviceTask_bookOrder is an external task without camunda:topic; the engines refuse the file  (`bpmn set <file> serviceTask_bookOrder camunda:topic=<topic>`.)
-[bpmnlint] @miragon/rules/element-id-naming x4 [Event_OrderReceived]: Element id must match the naming convention <startEvent_camelCase> (1 of 4; 3 others with 3 other messages, --json lists them)
+[bpmnlint] @miragon/rules/element-id-naming x3 [Event_OrderReceived]: Element id must match the naming convention <startEvent_camelCase> (1 of 3; 2 others with 2 other messages, --json lists them)
 platform: c7 (modeler:executionPlatform "Camunda Platform") - 1 refused at deploy, 0 runtime, 0 practice finding(s)
-validator bpmnlint (.bpmnlintrc in .; project plugins: bpmnlint-plugin-local@1.0.0): 1 error(s), 4 warning(s) in the file
+validator bpmnlint (.bpmnlintrc in .; project plugins: bpmnlint-plugin-local@1.0.0): 1 error(s), 3 warning(s) in the file
 layout: ok
-1 error(s), 5 warning(s)
+1 error(s), 4 warning(s)
 ```
 
 ## Writes
@@ -97,9 +97,7 @@ created serviceTask serviceTask_bookOrder "Book order" - after Activity_CheckOrd
 ...
 warning W_C7_DEPLOY_EXTERNAL_TOPIC serviceTask_bookOrder: serviceTask serviceTask_bookOrder is an external task without camunda:topic; the engines refuse the file  (`bpmn set <file> serviceTask_bookOrder camunda:topic=<topic>`.)
 warning [bpmnlint error] local/external-task-topic serviceTask_bookOrder: External task has no topic
-resolved: [bpmnlint] @miragon/rules/element-id-naming Flow_CheckOrderToOrderChecked
-validator bpmnlint (.bpmnlintrc in .; project plugins: bpmnlint-plugin-local@1.0.0): 1 error(s), 4 warning(s) in the result (1 added, 1 resolved, 4 already in the file)
-conventions: serviceTask_bookOrder, flow_checkOrderToBookOrder, flow_bookOrderToOrderChecked follow element-id-naming (.bpmnlintrc in .), not the file's own id style  (`bpmn show <file> --conventions`)
+validator bpmnlint (.bpmnlintrc in .; project plugins: bpmnlint-plugin-local@1.0.0): 1 error(s), 3 warning(s) in the result (1 added, 0 resolved, 3 already in the file)
 layout: ok - full (engine-owned diagram: redrawn)
 written: models/order.bpmn
 ```
@@ -110,9 +108,83 @@ exits 2 until the first `apply` batch adds them.
 
 ## Id conventions
 
-`@miragon/rules/element-id-naming` sets a prefix per BPMN type (`serviceTask_`, `gateway_`, `flow_`)
-and the case of the rest. When the `.bpmnlintrc` turns it on, the ids bpmn-cli generates follow it.
-Ids the file already has are never renamed; `bpmn set <file> <id> id=<newId>` renames one.
+`@miragon/rules/element-id-naming` sets a prefix per BPMN type (`serviceTask_`, `gateway_`,
+`flow_`) and the case of the rest. The ids bpmn-cli generates always follow it, so they pass the
+rule as soon as someone turns it on.
+
+### Without a .bpmnlintrc
+
+New ids follow the rule's defaults, in camelCase, whatever ids the file already has:
+
+| element | prefix | example |
+| --- | --- | --- |
+| start / end event | `startEvent_`, `endEvent_` | `startEvent_orderReceived` |
+| boundary and intermediate event | `event_` | `event_paymentOverdue` |
+| task of each type | `task_`, `userTask_`, `serviceTask_`, `sendTask_`, ... | `userTask_checkOrder` |
+| call activity, sub-process | `callActivity_`, `subProcess_` | `subProcess_archiveInvoice` |
+| every gateway | `gateway_` | `gateway_orderOk` |
+| sequence flow, message flow | `flow_`, `messageFlow_` | `flow_checkOrderToShipOrder` |
+| pool, lane, collaboration | `participant_`, `lane_`, `collaboration_` | `lane_accounting` |
+| data object, data store (reference) | `dataObject_`, `dataStore_` | `dataObject_invoice` |
+| text annotation, group, association | `textAnnotation_`, `group_`, `association_` | `group_payment` |
+
+An event with a trigger takes the plain prefix (`event_paymentOverdue`); the qualified one
+(`timerEvent_paymentOverdue`) passes the rule too.
+
+### With element-id-naming in the .bpmnlintrc
+
+Its `prefixes`, `case` (`camelCase`, `PascalCase`, `snake_case`, `kebab-case`, `any`) and
+`eventDefinitionQualifier` decide. The configured prefixes replace the defaults per type; `false`
+switches a type off.
+
+```json
+{
+  "extends": ["bpmnlint:recommended"],
+  "rules": {
+    "@miragon/rules/element-id-naming": ["warn", {
+      "case": "snake_case",
+      "eventDefinitionQualifier": "required",
+      "prefixes": { "bpmn:UserTask": "ut_", "bpmn:Lane": false }
+    }]
+  }
+}
+```
+
+With it, a user task "Check order" becomes `ut_check_order`, a timer boundary event
+`timerEvent_payment_overdue` and the flow between two tasks `flow_check_order_to_ship_order`. A
+taken id gets `_2` under snake_case (`ut_check_order_2`), `2` under camelCase and PascalCase
+(`userTask_checkOrder2`) and `-2` under kebab-case. Under `any` the body is camelCase.
+
+### Types the rule does not check
+
+The rule leaves some types out on purpose, and a `.bpmnlintrc` can switch more off. Their new ids
+take bpmn-cli's own prefix: the type's name in lower camelCase, with the first letter of the
+declared prefixes (`Message_` next to `Activity_`) and the body in the declared case.
+
+| type | prefix | why |
+| --- | --- | --- |
+| process | none: a named process is its name (`orderToCash`), an unnamed one `Process_1` | the process id is the deployment key and the target of call activities, so it names the business process; a new pool's process takes the pool's name; a declared `bpmn:Process` prefix wins |
+| definitions | `definitions_` (unnamed: `Definitions_1`) | |
+| message, signal, error, escalation | `message_`, `signal_`, `error_`, `escalation_` | root elements, found and named by their name |
+| lane set, category, category value, property | `laneSet_`, `category_`, `categoryValue_`, `property_` | |
+| data object, data store (the backing element) | `dataObjectItem_`, `dataStoreItem_` | apart from the reference's `dataObject_`, so both get the same name without a suffix |
+| event definition and any other type | its name: `timerEventDefinition_` | |
+
+### Existing ids
+
+Ids the file already has are never renamed, also where they break the rule:
+`bpmn set <file> <id> id=<newId>` renames one, and its flows and DI follow. After a `retype` or a
+trigger change under declared conventions, `W_ID_PREFIX_STALE` names an id whose prefix no longer
+fits, with the `bpmn set` that renames it. A flow whose id names its ends in the form above
+(`flow_checkOrderToShipOrder`) is renamed when an edit gives it other ends; an older one
+(`Flow_CheckOrderToShipOrder`, `SequenceFlow_1`) keeps its id.
+
+### Choosing ids yourself
+
+An explicit id is taken as given: `--id` on `bpmn add`, `"id"` in an `apply` op, `--flow-id` /
+`"flowId"` for the flow into a new node and `"joinId"` for the join of a split.
+
+### Checking
 
 `bpmn show <file> --conventions` lists the patterns new ids follow and where each comes from, also
 for a file that does not exist yet:
@@ -121,22 +193,30 @@ for a file that does not exist yet:
 $ bpmn show models/order.bpmn --conventions
 conventions of models/order.bpmn
 element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional
-  <kind>_{name:camel}                lint        task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent
-  subProcess_{name:camel}            lint        eventSubProcess adHocSubProcess transaction
-  gateway_{name:camel}               lint        exclusiveGateway parallelGateway inclusiveGateway complexGateway eventBasedGateway
-  event_{name:camel}                 lint        intermediateCatchEvent intermediateThrowEvent boundaryEvent
-  <Kind>_{name:pascal}               file        participant lane textAnnotation group collaboration message (not checked)
-  DataObjectReference_{name:pascal}  file        dataObject (not checked)
-  DataStoreReference_{name:pascal}   file        dataStore (not checked)
-  Process_{name:pascal}              default     process (not checked)
-  flow_{source}To{target}            lint        sequenceFlow
-  flow_{source}To{target}            lint shape  messageFlow (not checked)
+  <kind>_{name:camel}             lint      task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent participant lane dataObject dataStore textAnnotation group collaboration
+  subProcess_{name:camel}         lint      eventSubProcess adHocSubProcess transaction
+  gateway_{name:camel}            lint      exclusiveGateway parallelGateway inclusiveGateway complexGateway eventBasedGateway
+  event_{name:camel}              lint      intermediateCatchEvent intermediateThrowEvent boundaryEvent
+  {name:camel}                    bpmn-cli  process (not checked; unnamed: Process_1)
+  message_{name:camel}            bpmn-cli  message (not checked)
+  flow_{source}To{target}         lint      sequenceFlow
+  messageFlow_{source}To{target}  lint      messageFlow
   events with a trigger: <trigger><Prefix> (timerStartEvent_, messageEvent_, errorEndEvent_) also accepted, new ids take the plain prefix
-sources: lint = element-id-naming; file = the file's ids; default = bpmn-cli's default; lint shape = shaped like the declared prefixes (the file shows none)
+sources: lint = element-id-naming; bpmn-cli = bpmn-cli's own prefix for a type element-id-naming does not check
 ```
 
-What the rule does not name (pools, lanes, data) follows the file's own id style. After a `retype`,
-`W_ID_PREFIX_STALE` names an id whose prefix no longer fits, with the `bpmn set` that renames it.
+The sources: `lint` is the `.bpmnlintrc`'s `element-id-naming`, `default` its defaults with nothing
+declared (no `.bpmnlintrc`, `--no-lint-config`, the rule off), `bpmn-cli` a type the rule does not
+check. `bpmn validate` reports ids that break the rule.
+A value new ids cannot follow (a prefix that cannot start an id, an unknown case) gets a
+`W_CONFIG_IGNORED` note.
+
+::: warning Breaking change
+Earlier versions learned the id style from the file's own ids (`Activity_CheckOrder`,
+`Flow_CheckOrderToShipOrder`). A file without a `.bpmnlintrc` now gets the defaults above even
+where its existing ids look different. Library hosts that call `idConventionsFromLint` pass the
+`naming` namespace of `@miragon/bpmnlint-plugin-rules` 0.19 or later.
+:::
 
 ## Project code
 

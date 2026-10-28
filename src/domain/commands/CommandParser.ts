@@ -230,7 +230,7 @@ export class CommandParser {
       });
     }
     const list = ops as unknown[];
-    if (!list.length) throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "Event_Start"}.' });
+    if (!list.length) throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "startEvent_orderReceived"}.' });
     const parsed = list.map((raw, index) => this.parseOne(raw, index));
     this.checkAliases(parsed);
     return parsed;

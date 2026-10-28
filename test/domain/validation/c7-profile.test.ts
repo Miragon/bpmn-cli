@@ -364,10 +364,10 @@ describe('mutations report only the findings they introduce', () => {
     expect(added.validation.warnings.map((warning) => warning.code)).toContain('W_C7_DEPLOY_IMPLEMENTATION');
     expect(added.validation.platform).toMatchObject({ platform: 'c7', counts: { deploy: 1 }, resolved: [] });
     expect(added.validation.platform!.added!.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_IMPLEMENTATION']);
-    const next = await mutateDoc(doc, [{ op: 'set', id: 'Activity_Charge', values: { name: 'Charge card' } }], { dryRun: true, layout: false });
+    const next = await mutateDoc(doc, [{ op: 'set', id: 'serviceTask_charge', values: { name: 'Charge card' } }], { dryRun: true, layout: false });
     expect(next.validation.warnings.map((warning) => warning.code)).not.toContain('W_C7_DEPLOY_IMPLEMENTATION');
     expect(next.validation.platform).toMatchObject({ counts: { deploy: 1 }, added: [], resolved: [] });
-    const fixed = await mutateDoc(doc, [{ op: 'set', id: 'Activity_Charge', values: { 'camunda:type': 'external', 'camunda:topic': 'charge' } }], { dryRun: true, layout: false });
+    const fixed = await mutateDoc(doc, [{ op: 'set', id: 'serviceTask_charge', values: { 'camunda:type': 'external', 'camunda:topic': 'charge' } }], { dryRun: true, layout: false });
     expect(fixed.validation.platform!.resolved!.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_IMPLEMENTATION']);
     expect(fixed.validation.platform!.counts.deploy).toBe(0);
   });

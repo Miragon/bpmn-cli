@@ -32,7 +32,7 @@ export class RootElements {
     let el = existing.find((candidate) => idOf(candidate) === key) ?? existing.find((candidate) => candidate.get<string | undefined>('name') === key);
     let created = false;
     if (!el) {
-      el = doc.create(type, { id: this.edit.allocator.allocate(typeRequest(type, { name: key, prefix: ROOT_PREFIX[type] })).id, name: key });
+      el = doc.create(type, { id: this.edit.allocator.allocate(typeRequest(type, { name: key })).id, name: key });
       addTo(doc.definitions, 'rootElements', el);
       created = true;
     }

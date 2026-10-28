@@ -41,17 +41,17 @@ Check it with `bpmn --version`.
 ```sh
 bpmn new order.bpmn --name "Order handling"
 bpmn add order.bpmn start "Order received"
-bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
-bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
+bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
+bpmn add order.bpmn end "Done" --after userTask_checkInvoice
 ```
 
 Each command prints the ids it created for the next one to use. The last one prints:
 
 ```txt
-created endEvent Event_Done "Done" - after Activity_CheckInvoice
-created sequenceFlow Flow_CheckInvoiceToDone - Activity_CheckInvoice -> Event_Done
+created endEvent endEvent_done "Done" - after userTask_checkInvoice
+created sequenceFlow flow_checkInvoiceToDone - userTask_checkInvoice -> endEvent_done
 ...
-resolved: W_NO_END Process_OrderHandling, W_DEAD_END Activity_CheckInvoice
+resolved: W_NO_END orderHandling, W_DEAD_END userTask_checkInvoice
 ...
 written: order.bpmn
 ```
@@ -67,10 +67,10 @@ bpmn show order.bpmn
 ```
 
 ```txt
-process Process_OrderHandling "Order handling" executable
-  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_OrderReceivedToCheckInvoice)
-  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_CheckInvoiceToDone)
-  endEvent Event_Done "Done"
+process orderHandling "Order handling" executable
+  startEvent startEvent_orderReceived "Order received" -> userTask_checkInvoice (flow_orderReceivedToCheckInvoice)
+  userTask userTask_checkInvoice "Check invoice" -> endEvent_done (flow_checkInvoiceToDone)
+  endEvent endEvent_done "Done"
 problems: none
 ```
 

@@ -156,7 +156,7 @@ export class BatchDrawing {
   private static noteGivenIds(changes: ChangeSet, givenIds: GivenId[] | undefined): void {
     if (!givenIds?.length) return;
     for (const given of givenIds) changes.change({ id: given.id, kind: given.kind, ...(given.name ? { name: given.name } : {}), detail: 'id added (it had none; the diagram refers to elements by id)' });
-    changes.note(`${givenIds.length} element(s) without id got one in the file's id style so that the redrawn diagram can show them: ${givenIds.map((given) => given.id).join(', ')}`);
+    changes.note(`${givenIds.length} element(s) without id got one in the id conventions so that the redrawn diagram can show them: ${givenIds.map((given) => given.id).join(', ')}`);
   }
 
   /** The last layout with what drawBetween drew before it: the first layout's mode and reason, every id and diagram command. */

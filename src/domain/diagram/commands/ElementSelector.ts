@@ -125,8 +125,8 @@ export class ElementSelector {
    * boundary events follow them.
    */
   select(sel: Selection, opts: { shapesOnly: boolean; drawn: (id: string) => boolean; centreX: (id: string) => number | undefined }): string[] {
-    if (sel.path && sel.path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${sel.path.length}`, { hint: 'Example: --path Event_Start Event_Done (with --via <flowId> to choose a branch).' });
-    if (sel.via?.length && !sel.path) throw usageError('--via needs --path', { hint: 'Example: --path Event_Start Event_Done --via Flow_Yes.' });
+    if (sel.path && sel.path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${sel.path.length}`, { hint: 'Example: --path startEvent_start endEvent_done (with --via <flowId> to choose a branch).' });
+    if (sel.via?.length && !sel.path) throw usageError('--via needs --path', { hint: 'Example: --path startEvent_start endEvent_done --via flow_okToBook.' });
     const found: El[] = [];
     if (sel.branch) found.push(...this.branch(sel.branch, opts.centreX));
     if (sel.path) found.push(...this.path(sel.path[0]!, sel.path[1]!, sel.via ?? []));

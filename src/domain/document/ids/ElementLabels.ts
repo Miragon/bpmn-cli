@@ -85,8 +85,8 @@ export class ElementLabels {
   }
 
   /**
-   * An unnamed join named after its split (Gateway_AfterCheck_join -> `Check Join`;
-   * Gateway_InvoiceOk_join keeps `InvoiceOk_join`).
+   * An unnamed join named after its split (gateway_afterCheckJoin -> `Check Join`;
+   * gateway_invoiceOkJoin keeps `invoiceOkJoin`).
    */
   private joinLabel(own: string): string | undefined {
     const match = /^(.+?)_?join$/i.exec(own);

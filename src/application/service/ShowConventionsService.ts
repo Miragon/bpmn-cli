@@ -23,6 +23,6 @@ export class ShowConventionsService implements ShowConventionsUseCase {
   }
 
   private static undeclared(found: ProjectIdConventions | undefined, skipped: boolean): Undeclared {
-    return skipped ? 'skipped' : !found ? 'no config' : found.unavailable ? 'not loaded' : !found.setting || found.setting.severity === 'off' ? 'off' : 'no prefixes';
+    return skipped ? 'skipped' : !found ? 'no config' : found.unavailable ? 'not loaded' : 'off';
   }
 }

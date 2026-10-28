@@ -27,16 +27,16 @@ const edit = await applyToXml(xml, [
     op: 'add',
     kind: 'userTask',
     name: 'Check invoice',
-    after: 'Event_OrderReceived',
+    after: 'startEvent_orderReceived',
   },
-  { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
+  { op: 'add', kind: 'end', name: 'Done', after: 'userTask_checkInvoice' },
 ]);
 if (!edit.unchanged) xml = edit.xml; // and save it
 
 edit.result.created.map((c) => c.id);
-// ['Event_OrderReceived', 'Activity_CheckInvoice',
-//  'Flow_OrderReceivedToCheckInvoice', 'Event_Done',
-//  'Flow_CheckInvoiceToDone']
+// ['startEvent_orderReceived', 'userTask_checkInvoice',
+//  'flow_orderReceivedToCheckInvoice', 'endEvent_done',
+//  'flow_checkInvoiceToDone']
 
 edit.result.layout.mode;
 // 'full' (no diagram before: drawn from scratch)
@@ -49,12 +49,12 @@ await showXml(xml);
 
 try {
   await applyToXml(xml, [
-    { op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' },
+    { op: 'add', kind: 'userTask', name: 'Ship', after: 'userTask_check' },
   ]);
 } catch (err) {
   if (!(err instanceof BpmnError)) throw err;
   err.code;               // 'E_NOT_FOUND'
-  err.details.candidates; // ['Activity_CheckInvoice']
+  err.details.candidates; // ['userTask_checkInvoice']
 }
 ```
 
@@ -157,9 +157,12 @@ edit.result.warnings.added;
 
 ### Declared id conventions
 
-A host whose lint runs `@miragon/rules/element-id-naming` passes the same configuration's
-conventions, or its lint reports bpmn-cli's new ids. A table of your own works too
-([bpmnlint](bpmnlint.md#id-conventions) has the rules):
+Without `conventions` new ids follow the defaults of `@miragon/rules/element-id-naming`. A host
+whose lint configures that rule otherwise passes the same configuration's conventions, or its lint
+reports bpmn-cli's new ids. `idConventionsFromLint` takes the `naming` namespace of
+`@miragon/bpmnlint-plugin-rules` 0.19 or later (`engine.plugin.naming`; earlier plugins lack its
+`ElementIdConvention`). A table of your own works too ([bpmnlint](bpmnlint.md#id-conventions) has
+the rules):
 
 ```ts
 const automation = await resolveBpmnlintConfig(
@@ -171,14 +174,10 @@ const { conventions, notes } = idConventionsFromLint(
   engine.plugin.naming,
   { source: 'our rules' },
 );
-const named = await applyToXml(xml, ops, {
+await applyToXml(xml, ops, {
   validators: [bpmnlintValidator(engine, automation, { notes })],
   conventions,
 });
-
-named.result.conventions;
-// { ids: [...], source: 'our rules' }:
-// the new ids that follow the rule, not the file's style
 
 await applyToXml(xml, ops, {
   conventions: {

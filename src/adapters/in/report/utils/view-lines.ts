@@ -137,7 +137,7 @@ export function renderExtensionList(items: ReadonlyArray<{ index: number; slot?:
   return items.flatMap((item) => extensionLines(item, '', `${item.slot ? `${item.slot}.` : ''}${item.index}: `)).join('\n');
 }
 
-/** `out Flow_9 "Order" -> Activity_Receive "Receive" in Participant_Bank "Bank" [message Order]` */
+/** `out messageFlow_sendOrderToReceive "Order" -> receiveTask_receive "Receive" in participant_bank "Bank" [message Order]` */
 export function detailMessageFlowText(mf: DetailMessageFlow): string {
   const pool = mf.pool ? ` in ${named(mf.pool, mf.poolName)}` : '';
   return `${mf.direction} ${mf.id}${mf.name ? ` ${quote(mf.name)}` : ''} ${mf.direction === 'out' ? '->' : '<-'} ${named(mf.partner, mf.partnerName)}${pool}${mf.message ? ` [message ${mf.message}]` : ''}${mf.at ? ` (at pool ${mf.at})` : ''}`;

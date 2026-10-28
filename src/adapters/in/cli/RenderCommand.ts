@@ -45,7 +45,7 @@ export class RenderCommand extends CliCommand {
     ViewRequest.assertAroundFlags(around, options['depth'] !== undefined ? ['--depth'] : options['inner'] ? ['--inner'] : [], 'render');
     const path = options['path'] as string[] | undefined;
     const via = options['via'] as string[] | undefined;
-    assertPathFlags(path, via, { path: 'Put element ids before --path, or end the list with --: `bpmn render f.bpmn --path Event_Start Event_Done -o path.png`.', via: 'Example: --path Event_Start Event_Done --via Flow_Yes.' });
+    assertPathFlags(path, via, { path: 'Put element ids before --path, or end the list with --: `bpmn render f.bpmn --path startEvent_start endEvent_done -o path.png`.', via: 'Example: --path startEvent_start endEvent_done --via flow_okToBook.' });
     const highlight = options['highlight'] as string[] | undefined;
     const opts: RenderOptions = {
       maxSize: (options['maxSize'] as number | undefined) ?? RENDER_MAX_SIZE,

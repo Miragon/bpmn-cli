@@ -1,6 +1,4 @@
-import type { ConventionsReport } from '../../../../domain/batch/types.js';
 import type { ValidatorReport } from '../../../../domain/validation/validators.js';
-import { FLOOD_IDS } from './findings.js';
 
 function leftOutCount(report: ValidatorReport): number {
   return (report.leftOut ?? []).reduce((sum, group) => sum + group.count, 0);
@@ -34,16 +32,7 @@ export function validatorLines(reports: readonly ValidatorReport[] | undefined, 
   });
 }
 
-/**
- * Only for new ids under a declared prefix that differ from what the file's own style gives.
- */
-export function conventionsLines(conventions: ConventionsReport | undefined): string[] {
-  if (!conventions?.ids.length) return [];
-  const ids = conventions.ids.length > FLOOD_IDS ? `${conventions.ids.slice(0, FLOOD_IDS).join(', ')}, +${conventions.ids.length - FLOOD_IDS} more` : conventions.ids.join(', ');
-  return [`conventions: ${ids} follow${conventions.ids.length === 1 ? 's' : ''} element-id-naming (${conventions.source ?? 'the host'}), not the file's own id style  (\`bpmn show <file> --conventions\`)`];
-}
-
-/** `aliases: $check = Activity_CheckInvoice, $ok = Gateway_InvoiceOk` */
+/** `aliases: $check = userTask_checkInvoice, $ok = gateway_invoiceOk` */
 export function aliasLine(aliases: Record<string, string>): string {
   return `aliases: ${Object.entries(aliases).map(([alias, id]) => `${alias} = ${id}`).join(', ')}`;
 }

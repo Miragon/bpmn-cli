@@ -7,7 +7,7 @@ import { hasIdWords, slugify } from '../../document/utils/slug.js';
 import { is, many, type El, idOf } from '../../document/utils/moddle.js';
 
 /**
- * Keeps speaking flow ids (Flow_CheckInvoiceToDone) true: a flow named after its ends is
+ * Keeps speaking flow ids (flow_checkInvoiceToDone) true: a flow named after its ends is
  * renamed after its new ends when they change. Other ids stay; with `--keep-flow-ids`
  * the document's flows keep theirs and get reported as stale.
  */
@@ -24,8 +24,8 @@ export class FlowIdFollower {
   }
 
   /**
-   * Whether `id` is one any id style (also of earlier versions, with a collision suffix)
-   * gives a flow between `source` and `target`, by their current or former names and ids. @internal
+   * Whether `id` is the one the id conventions give a flow between `source` and `target` (also
+   * with a collision suffix), by their current or former names and ids. @internal
    */
   namesEnds(id: string | undefined, source: El, target: El): boolean {
     if (!id) return false;

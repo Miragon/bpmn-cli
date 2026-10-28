@@ -59,24 +59,23 @@ export class IdRename {
   /**
    * An id the batch generated is nobody's API yet, so where a retype leaves it a stale
    * prefix it takes the id of what the element is now (serviceTask_check -> userTask_check),
-   * and so do the flows named after it. Any other id is recorded for W_ID_PREFIX_STALE.
+   * and so do the flows named after it. Under declared conventions any other id is recorded for W_ID_PREFIX_STALE.
    * The stale prefix is judged from the id it wanted: a collision suffix under the old prefix is
    * not the new one's.
    */
   recordState(el: El, before: IdState, wasLabel: string): void {
     const style = this.edit.idStyle;
-    if (!style.declared) return;
     const id = idOf(el);
     const allocator = this.edit.allocator;
     const base = allocator.generatedBase(id);
     if (base === undefined) {
-      this.edit.recordIdState(id, before, wasLabel);
+      if (style.declared) this.edit.recordIdState(id, before, wasLabel);
       return;
     }
     const stale = style.stalePrefix(base, before, IdRename.stateOf(el), IdRename.requestOf(el));
     if (!stale) return;
     const wanted = cutAt(stale.suggested, MAX_ID);
-    const next = allocator.regenerated(id, wanted, style.suffixSep(kindOf(el)?.kind ?? el.$type));
+    const next = allocator.regenerated(wanted, style.suffixSep());
     const flows = new FlowIdFollower(this.edit).namedAfter(el).map((flow) => ({ flow, was: `${idOf(flow.get<El>('sourceRef'))} -> ${idOf(flow.get<El>('targetRef'))}` }));
     this.rename(el, next);
     allocator.markGenerated(next, wanted);
@@ -98,7 +97,7 @@ export class IdRename {
       const el = doc.get(id);
       const stale = el && style.stalePrefix(id, before, IdRename.stateOf(el), IdRename.requestOf(el));
       if (!el || !stale) continue;
-      const sep = style.suffixSep(kindOf(el)?.kind ?? el.$type);
+      const sep = style.suffixSep();
       const suggested = this.edit.allocator.suffixed(stale.suggested, sep, (taken) => hinted.has(taken), () => stale.suggested);
       hinted.claim(suggested);
       const rule = `element-id-naming (${this.edit.conventions?.source ?? 'the host'})`;

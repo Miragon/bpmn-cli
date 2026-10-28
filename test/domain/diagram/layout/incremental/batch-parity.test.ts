@@ -45,7 +45,7 @@ const fixture = (name: string): string => readFileSync(join(ROOT, 'test', 'fixtu
 
 const approve = { op: 'add', kind: 'userTask', name: 'Approve purchase', id: 'Activity_ApprovePurchase', flow: 'Flow_0yq6cfd' };
 const decision = { op: 'add', kind: 'exclusiveGateway', name: 'Purchase approved?', id: 'Gateway_PurchaseApproved', after: 'Activity_ApprovePurchase', before: 'Activity_1v0w8zr' };
-const yes = { op: 'set', id: 'Flow_PurchaseApprovedToOrderGoods', values: { name: 'yes', condition: '${purchaseApproved}' } };
+const yes = { op: 'set', id: 'flow_purchaseApprovedToOrderGoods', values: { name: 'yes', condition: '${purchaseApproved}' } };
 const reminder = [
   { op: 'add', kind: 'boundaryEvent:timer', name: '3 days', id: 'Event_ApprovalOverdue', on: 'Activity_ApprovePurchase', timer: 'P3D', nonInterrupting: true },
   { op: 'add', kind: 'sendTask', name: 'Send reminder to manager', id: 'Activity_SendApprovalReminder', after: 'Event_ApprovalOverdue' },
@@ -173,14 +173,14 @@ describe('place --side: a boundary event on the other border of its host (issue 
         const evb = boundsOf(down.xml, 'Event_ApprovalOverdue');
         expect(Math.round(evb.y + evb.height / 2)).toBe(host.y + host.height);
         expect(boundsOf(down.xml, 'Activity_SendApprovalReminder').y).toBeGreaterThanOrEqual(host.y + host.height);
-        expect(down.result.layout?.format?.[0]?.rerouted).toContain('Flow_ApprovalOverdueToSendApprovalReminder');
+        expect(down.result.layout?.format?.[0]?.rerouted).toContain('flow_approvalOverdueToSendApprovalReminder');
         const applied = await applyToXml(down.xml, [{ op: 'place', ids: ['Event_ApprovalOverdue'], side: 'top' }]);
         const ev = boundsOf(applied.xml, 'Event_ApprovalOverdue');
         expect(Math.round(ev.y + ev.height / 2)).toBe(host.y);
         expect(boundsOf(applied.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
         expect(boundsOf(applied.xml, 'Event_ReminderSent').y + 36).toBeLessThanOrEqual(host.y);
         expect((await metricsXml(applied.xml)).score).toBe(0);
-        expect(applied.result.layout?.format?.[0]?.rerouted).toContain('Flow_ApprovalOverdueToSendApprovalReminder');
+        expect(applied.result.layout?.format?.[0]?.rerouted).toContain('flow_approvalOverdueToSendApprovalReminder');
       }
     });
   }
@@ -197,22 +197,22 @@ describe('place --side: a boundary event on the other border of its host (issue 
       { op: 'add', kind: 'endEvent', name: 'Invoiced', after: '$i', lane: 'Lane_Billing' },
     ]);
     // a format command makes the drawing hand-made; the reminder path goes below the task, in its lane
-    const kept = (await applyToXml(drawn.xml, [{ op: 'space', after: 'Activity_CheckOrder', by: 10 }])).xml;
+    const kept = (await applyToXml(drawn.xml, [{ op: 'space', after: 'userTask_checkOrder', by: 10 }])).xml;
     const path = [
-      { op: 'add', kind: 'boundaryEvent:timer', name: '2 days', id: 'Event_CheckOverdue', on: 'Activity_CheckOrder', timer: 'P2D', nonInterrupting: true },
+      { op: 'add', kind: 'boundaryEvent:timer', name: '2 days', id: 'Event_CheckOverdue', on: 'userTask_checkOrder', timer: 'P2D', nonInterrupting: true },
       { op: 'add', kind: 'sendTask', name: 'Remind sales', id: 'Activity_RemindSales', after: 'Event_CheckOverdue' },
       { op: 'add', kind: 'endEvent', name: 'Sales reminded', id: 'Event_SalesReminded', after: 'Activity_RemindSales' },
     ];
     const below = (await applyToXml(kept, path)).xml;
     const applied = await applyToXml(below, [{ op: 'place', ids: ['Event_CheckOverdue'], side: 'top' }]);
     const lane = boundsOf(applied.xml, 'Lane_Sales');
-    const host = boundsOf(applied.xml, 'Activity_CheckOrder');
+    const host = boundsOf(applied.xml, 'userTask_checkOrder');
     const remind = boundsOf(applied.xml, 'Activity_RemindSales');
     expect(remind.y + remind.height).toBeLessThanOrEqual(host.y);
     expect(remind.y).toBeGreaterThanOrEqual(lane.y);
     expect(boundsOf(applied.xml, 'Event_SalesReminded').y).toBeGreaterThanOrEqual(lane.y);
     expect(lane.height).toBeGreaterThan(boundsOf(below, 'Lane_Sales').height);
-    expect(applied.result.layout?.format?.[0]?.notes?.join(' ')).toMatch(/made \d+ px of room above Activity_CheckOrder in its lane Lane_Sales/);
+    expect(applied.result.layout?.format?.[0]?.notes?.join(' ')).toMatch(/made \d+ px of room above userTask_checkOrder in its lane Lane_Sales/);
     const hard = ['overlaps', 'through', 'outsideLane', 'outsidePool', 'frameIntrusion', 'frameOverlap'];
     expect((await added(below, applied.xml)).filter((kind) => hard.includes(kind))).toEqual([]);
   });
@@ -434,10 +434,10 @@ describe('stage A verification findings (issue #18)', () => {
       { op: 'add', kind: 'serviceTask', name: 'Send invoice', after: '$c', lane: 'Lane_Billing', as: '$i' },
       { op: 'add', kind: 'endEvent', name: 'Invoiced', after: '$i', lane: 'Lane_Billing' },
     ]);
-    const kept = (await applyToXml(drawn.xml, [{ op: 'space', after: 'Activity_CheckOrder', by: 10 }])).xml;
+    const kept = (await applyToXml(drawn.xml, [{ op: 'space', after: 'userTask_checkOrder', by: 10 }])).xml;
     const below = await batch(
       [
-        { op: 'add', kind: 'boundaryEvent:timer', name: '2 days', id: 'Event_CheckOverdue', on: 'Activity_CheckOrder', timer: 'P2D', nonInterrupting: true },
+        { op: 'add', kind: 'boundaryEvent:timer', name: '2 days', id: 'Event_CheckOverdue', on: 'userTask_checkOrder', timer: 'P2D', nonInterrupting: true },
         { op: 'add', kind: 'sendTask', name: 'Remind sales', id: 'Activity_RemindSales', after: 'Event_CheckOverdue' },
         { op: 'add', kind: 'endEvent', name: 'Sales reminded', id: 'Event_SalesReminded', after: 'Activity_RemindSales' },
       ],
@@ -446,17 +446,17 @@ describe('stage A verification findings (issue #18)', () => {
     // the path above the task, then the empty rows of the lane closed: no room below the task in its lane
     const top = (await applyToXml(below, [{ op: 'place', ids: ['Event_CheckOverdue'], side: 'top' }])).xml;
     const tight = (await applyToXml(top, [{ op: 'compact', ids: ['Lane_Sales'] }])).xml;
-    const host = boundsOf(tight, 'Activity_CheckOrder');
+    const host = boundsOf(tight, 'userTask_checkOrder');
     expect(bottomOf(boundsOf(tight, 'Lane_Sales')) - (host.y + host.height)).toBeLessThan(80);
     const applied = await applyToXml(tight, [{ op: 'place', ids: ['Event_CheckOverdue'], side: 'bottom' }]);
     const lane = boundsOf(applied.xml, 'Lane_Sales');
     expect(boundsOf(applied.xml, 'Activity_RemindSales').y).toBeGreaterThanOrEqual(host.y + host.height);
     expect(bottomOf(boundsOf(applied.xml, 'Activity_RemindSales'))).toBeLessThanOrEqual(bottomOf(lane));
     expect(boundsOf(applied.xml, 'Lane_Billing').y).toBeGreaterThanOrEqual(bottomOf(lane));
-    expect(applied.result.layout?.format?.[0]?.notes?.join(' ')).toMatch(/made \d+ px of room below Activity_CheckOrder in its lane Lane_Sales/);
+    expect(applied.result.layout?.format?.[0]?.notes?.join(' ')).toMatch(/made \d+ px of room below userTask_checkOrder in its lane Lane_Sales/);
     expect((await added(tight, applied.xml)).filter((kind) => hard.includes(kind))).toEqual([]);
     // a position below the lane, in no lane: the hint does not claim it lies in the shape's own lane
-    const err = (await applyToXml(kept, [{ op: 'place', ids: ['Activity_CheckOrder'], below: 'Event_Invoiced' }]).catch((error: unknown) => error)) as BpmnError;
+    const err = (await applyToXml(kept, [{ op: 'place', ids: ['userTask_checkOrder'], below: 'endEvent_invoiced' }]).catch((error: unknown) => error)) as BpmnError;
     expect(err.code).toBe('E_LEAVES_CONTAINER');
     expect(String(err.details.hint)).not.toContain('That position is in lane Lane_Sales');
     expect(String(err.details.hint)).toContain('below lane Lane_Sales, in no lane of its pool');

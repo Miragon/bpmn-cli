@@ -68,7 +68,7 @@ describe('bpmn layout modes on the command line', () => {
     const cliRun = bpmn('add', file, 'userTask', 'Review', '--after', 'A');
     expect(cliRun.code, cliRun.err).toBe(0);
     expect(cliRun.out).toMatch(/^layout: ok - incremental \(hand-made diagram: kept, changes placed locally\)$/m);
-    expect(cliRun.out).toMatch(/^ {2}placed: Activity_Review, Flow_ReviewToDone$/m);
+    expect(cliRun.out).toMatch(/^ {2}placed: userTask_review, flow_reviewToDone$/m);
     expect(cliRun.out).toMatch(/^layout quality: score 0 -> 0$/m);
     expect(await boxOf(file, 'S')).toEqual(before);
   });
@@ -78,7 +78,7 @@ describe('bpmn layout modes on the command line', () => {
     const cliRun = bpmn('add', file, 'task', 'Second', '--after', 'A', '--json');
     expect(cliRun.code, cliRun.err).toBe(0);
     const json = JSON.parse(cliRun.out);
-    expect(json.layout).toMatchObject({ status: 'ok', mode: 'incremental', placed: ['Activity_Second', expect.stringMatching(/^Flow_/)], rerouted: [expect.any(String)], pruned: [] });
+    expect(json.layout).toMatchObject({ status: 'ok', mode: 'incremental', placed: ['task_second', expect.stringMatching(/^flow_/)], rerouted: [expect.any(String)], pruned: [] });
     expect(json.layout.metrics).toMatchObject({ before: { score: 0 }, after: { score: 0 }, added: [], resolved: [] });
     expect(json.layout.metrics.after.counts).toHaveProperty('crossings', 0);
   });

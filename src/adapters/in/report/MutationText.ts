@@ -1,7 +1,7 @@
 import type { MutationReportLike } from './command-report.js';
 import { WarningLines } from './WarningLines.js';
 import { advisoryOf, findingList, validatorTag } from './utils/findings.js';
-import { aliasLine, conventionsLines, fileLines, validatorLines } from './utils/mutation-lines.js';
+import { aliasLine, fileLines, validatorLines } from './utils/mutation-lines.js';
 import { hasNoEntries, renderChanges, renderLayout } from './utils/result-lines.js';
 import { ModelViewText } from './ModelViewText.js';
 
@@ -28,7 +28,6 @@ export class MutationText {
     if (result.warnings.resolved.length) lines.push(`resolved: ${findingList(result.warnings.resolved)}`);
     if (result.warnings.preexistingCount) lines.push(MutationText.preexistingLine(result.warnings.preexistingCount));
     lines.push(...validatorLines(result.validation.validators, 'result'));
-    lines.push(...conventionsLines(result.conventions));
     lines.push(...renderLayout(result.layout));
     lines.push(...fileLines(result, this.opts));
     if (result.view) lines.push('', new ModelViewText(result.view).text().trimEnd());

@@ -6,7 +6,6 @@ import type { LayoutProblem } from '../../../domain/diagram/utils/problems.js';
 import type { DiagramCommandResult } from '../../../domain/diagram/commands/DiagramCommands.js';
 import type { Finding } from '../../../domain/document/Finding.js';
 import type { CheckResult } from '../../../application/port/in/ValidateDocumentUseCase.js';
-import type { ConventionsReport } from '../../../domain/batch/types.js';
 import type { LayoutStatus } from '../../../domain/diagram/types.js';
 import type { PlatformSummary } from '../../../domain/validation/profiles/PlatformProfiles.js';
 import type { Change } from '../../../domain/document/ChangeSet.js';
@@ -45,8 +44,6 @@ export interface MutationReport {
   validation: Omit<ValidationResult, 'warnings'>;
   importWarnings: string[];
   view?: ModelView;
-  /** new ids that follow the declared id conventions rather than the file's own style */
-  conventions?: ConventionsReport;
 }
 
 /** The JSON of `bpmn validate`. */
@@ -82,5 +79,4 @@ export interface MutationSummary {
   /** without a drawing before, only how many problems the result has */
   layout: { status: 'ok' | 'skipped'; mode?: 'full' | 'incremental'; score?: { before?: number; after: number }; added?: LayoutProblem[]; problems?: number };
   format?: DiagramCommandResult[];
-  conventions?: ConventionsReport;
 }

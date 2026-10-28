@@ -39,11 +39,11 @@ describe('Cli in-process', () => {
     const file = join(dir, 'order.bpmn');
     expect((await bpmn(['new', file, '--name', 'Order', '--no-lint-config'])).code).toBe(0);
     expect((await bpmn(['add', file, 'startEvent', 'Start', '--no-lint-config'])).code).toBe(0);
-    const added = await bpmn(['add', file, 'userTask', 'Check invoice', '--after', 'Event_Start', '--summary', '--json', '--no-lint-config']);
+    const added = await bpmn(['add', file, 'userTask', 'Check invoice', '--after', 'startEvent_start', '--summary', '--json', '--no-lint-config']);
     expect(added.code).toBe(0);
-    expect(JSON.parse(added.out).created).toEqual({ userTask: ['Activity_CheckInvoice'], sequenceFlow: [expect.any(String)] });
+    expect(JSON.parse(added.out).created).toEqual({ userTask: ['userTask_checkInvoice'], sequenceFlow: [expect.any(String)] });
     const shown = await bpmn(['show', '-', '--json'], readFileSync(file, 'utf8'));
-    expect(JSON.stringify(JSON.parse(shown.out))).toContain('Activity_CheckInvoice');
+    expect(JSON.stringify(JSON.parse(shown.out))).toContain('userTask_checkInvoice');
     const twice = await bpmn(['apply', '-', '-'], readFileSync(file, 'utf8'));
     expect(twice.code).toBe(1);
     expect(twice.err).toContain('error E_USAGE: the model and the ops cannot both come from stdin');

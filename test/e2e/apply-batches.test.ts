@@ -49,7 +49,7 @@ const ORDER_BATCH: unknown[] = [
   { op: 'connect', source: '$ship', target: '$customer', as: '$msg' },
   // selectors and frames by alias: the happy path through the "no" branch, the pool order, compact of one pool
   { op: 'color', path: ['$start', '$end'], via: ['$no'], color: 'green' },
-  { op: 'order', id: 'Collaboration_OrderHandling', pools: ['$customer', '$org'] },
+  { op: 'order', id: 'collaboration_orderHandling', pools: ['$customer', '$org'] },
   { op: 'compact', ids: ['$org'] },
 ];
 
@@ -63,26 +63,26 @@ describe('apply batches: aliases, speaking ids and the format selectors together
     const base = await newXml({ processName: 'Order handling' });
     const result = await applyToXml(base.xml, ORDER_BATCH);
     expect(result.result.aliases).toEqual({
-      $org: 'Participant_OrderHandling',
-      $customer: 'Participant_Customer',
-      $start: 'Event_OrderReceived',
-      $check: 'Activity_CheckOrder',
-      $ok: 'Gateway_OrderOk',
-      $ship: 'Activity_ShipOrder',
-      $no: 'Flow_OrderOkToClarifyOrder',
-      $clarify: 'Activity_ClarifyOrder',
-      $wait: 'Activity_Wait',
-      $join: 'Gateway_OrderOk_join',
-      $end: 'Event_OrderHandled',
-      $msg: 'Flow_ShipOrderToCustomer',
+      $org: 'participant_orderHandling',
+      $customer: 'participant_customer',
+      $start: 'startEvent_orderReceived',
+      $check: 'userTask_checkOrder',
+      $ok: 'gateway_orderOk',
+      $ship: 'serviceTask_shipOrder',
+      $no: 'flow_orderOkToClarifyOrder',
+      $clarify: 'userTask_clarifyOrder',
+      $wait: 'task_wait',
+      $join: 'gateway_orderOkJoin',
+      $end: 'endEvent_orderHandled',
+      $msg: 'messageFlow_shipOrderToCustomer',
     });
     const color = result.result.layout.format?.find((format) => format.op === 'color');
     // the path through the "no" branch, flows included; the "yes" branch is not on it
-    expect(color?.colored).toEqual(expect.arrayContaining(['Event_OrderReceived', 'Flow_OrderOkToClarifyOrder', 'Activity_ClarifyOrder', 'Activity_Wait', 'Event_OrderHandled']));
-    expect(color?.colored).not.toContain('Activity_ShipOrder');
-    expect(result.result.changed.map((change) => change.id)).toContain('Collaboration_OrderHandling');
+    expect(color?.colored).toEqual(expect.arrayContaining(['startEvent_orderReceived', 'flow_orderOkToClarifyOrder', 'userTask_clarifyOrder', 'task_wait', 'endEvent_orderHandled']));
+    expect(color?.colored).not.toContain('serviceTask_shipOrder');
+    expect(result.result.changed.map((change) => change.id)).toContain('collaboration_orderHandling');
     const layout = await showXml(result.xml, { layout: true });
-    expect(layout.indexOf('participant Participant_Customer')).toBeLessThan(layout.indexOf('participant Participant_OrderHandling'));
+    expect(layout.indexOf('participant participant_customer')).toBeLessThan(layout.indexOf('participant participant_orderHandling'));
     expect(result.result.layout.format?.map((format) => format.op)).toEqual(['color', 'order', 'compact']);
   });
 
@@ -97,18 +97,18 @@ describe('apply batches: aliases, speaking ids and the format selectors together
 
   it('a flow renamed after its new ends is followed by its alias into a format op', async () => {
     const xml = await orderModel();
-    // the splice renames Flow_OrderOkToClarifyOrder (its id named its old ends); flowAs is that flow
+    // the splice renames flow_orderOkToClarifyOrder (its id named its old ends); flowAs is that flow
     const result = await applyToXml(xml, [
-      { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder', as: '$log', flowAs: '$in' },
+      { op: 'add', kind: 'task', name: 'Log reason', flow: 'flow_orderOkToClarifyOrder', as: '$log', flowAs: '$in' },
       { op: 'color', ids: ['$in', '$log'], color: 'red' },
     ]);
-    expect(result.result.aliases).toEqual({ $log: 'Activity_LogReason', $in: 'Flow_OrderOkToLogReason' });
-    expect(result.result.layout.format?.[0]?.colored).toEqual(['Flow_OrderOkToLogReason', 'Activity_LogReason']);
+    expect(result.result.aliases).toEqual({ $log: 'task_logReason', $in: 'flow_orderOkToLogReason' });
+    expect(result.result.layout.format?.[0]?.colored).toEqual(['flow_orderOkToLogReason', 'task_logReason']);
     // the old id names the new one
-    const err = await rejection(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' }, { op: 'color', ids: ['Flow_OrderOkToClarifyOrder'], color: 'red' }]));
+    const err = await rejection(applyToXml(xml, [{ op: 'add', kind: 'task', name: 'Log reason', flow: 'flow_orderOkToClarifyOrder' }, { op: 'color', ids: ['flow_orderOkToClarifyOrder'], color: 'red' }]));
     expect(err.code).toBe('E_NOT_FOUND');
-    expect(err.details.candidates?.[0]).toBe('Flow_OrderOkToLogReason');
-    expect(err.message).toBe('No element with id "Flow_OrderOkToClarifyOrder": an op before this one renamed it to Flow_OrderOkToLogReason (its id named its old ends)');
+    expect(err.details.candidates?.[0]).toBe('flow_orderOkToLogReason');
+    expect(err.message).toBe('No element with id "flow_orderOkToClarifyOrder": an op before this one renamed it to flow_orderOkToLogReason (its id named its old ends)');
     expect(err.details.op).toBe(1);
   });
 });
@@ -117,35 +117,35 @@ describe('--summary: aliases and format ops', () => {
   it('lists the aliases and one line per format op (text and JSON)', async () => {
     const xml = await orderModel();
     const result = await applyToXml(xml, [
-      { op: 'add', kind: 'task', name: 'Archive', after: 'Event_OrderReceived', as: '$archive' },
-      { op: 'place', ids: ['Activity_Wait'], below: 'Activity_ShipOrder' },
+      { op: 'add', kind: 'task', name: 'Archive', after: 'startEvent_orderReceived', as: '$archive' },
+      { op: 'place', ids: ['task_wait'], below: 'serviceTask_shipOrder' },
       { op: 'color', ids: ['$archive'], color: 'blue' },
     ]);
     const summary = mutationSummary(result.result);
-    expect(summary.aliases).toEqual({ $archive: 'Activity_Archive' });
+    expect(summary.aliases).toEqual({ $archive: 'task_archive' });
     expect(summary.format?.map((format) => format.op)).toEqual(['place', 'color']);
     const text = renderSummary(summary);
-    expect(text).toMatch(/^aliases: \$archive = Activity_Archive$/m);
-    expect(text).toMatch(/^format color #2: colored Activity_Archive$/m);
+    expect(text).toMatch(/^aliases: \$archive = task_archive$/m);
+    expect(text).toMatch(/^format color #2: colored task_archive$/m);
     expect(text).toMatch(/^format place #1: /m);
   });
 
   it('names the old id of a flow the change renamed after its new ends (text and JSON)', async () => {
     const xml = await orderModel();
     const result = await applyToXml(xml, [
-      { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' },
-      { op: 'add', kind: 'task', name: 'Notify', after: 'Activity_LogReason' },
+      { op: 'add', kind: 'task', name: 'Log reason', flow: 'flow_orderOkToClarifyOrder' },
+      { op: 'add', kind: 'task', name: 'Notify', after: 'task_logReason' },
     ]);
-    // Flow_OrderOkToClarifyOrder -> Flow_OrderOkToLogReason (splice); Flow_LogReasonToClarifyOrder (new) -> Flow_LogReasonToNotify (second splice)
-    expect(result.result.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
+    // flow_orderOkToClarifyOrder -> flow_orderOkToLogReason (splice); flow_logReasonToClarifyOrder (new) -> flow_logReasonToNotify (second splice)
+    expect(result.result.renamed).toEqual({ flow_orderOkToClarifyOrder: 'flow_orderOkToLogReason' });
     const summary = mutationSummary(result.result);
-    expect(summary.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToLogReason' });
-    expect(renderSummary(summary)).toMatch(/^renamed: Flow_OrderOkToClarifyOrder -> Flow_OrderOkToLogReason$/m);
+    expect(summary.renamed).toEqual({ flow_orderOkToClarifyOrder: 'flow_orderOkToLogReason' });
+    expect(renderSummary(summary)).toMatch(/^renamed: flow_orderOkToClarifyOrder -> flow_orderOkToLogReason$/m);
     const chain = await applyToXml(xml, [
-      { op: 'add', kind: 'task', name: 'Log reason', flow: 'Flow_OrderOkToClarifyOrder' },
-      { op: 'add', kind: 'task', name: 'Prepare', before: 'Activity_LogReason' },
+      { op: 'add', kind: 'task', name: 'Log reason', flow: 'flow_orderOkToClarifyOrder' },
+      { op: 'add', kind: 'task', name: 'Prepare', before: 'task_logReason' },
     ]);
-    expect(chain.result.renamed).toEqual({ Flow_OrderOkToClarifyOrder: 'Flow_OrderOkToPrepare' });
+    expect(chain.result.renamed).toEqual({ flow_orderOkToClarifyOrder: 'flow_orderOkToPrepare' });
   });
 
   it('a format-only change is not "no changes": the line says what moved, or why nothing did', async () => {
@@ -176,19 +176,19 @@ const C8_MODELER = `<?xml version="1.0" encoding="UTF-8"?>
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_0k3x9qa" sourceRef="StartEvent_1" targetRef="Event_1q2w3e4" />
     <bpmn:sequenceFlow id="Flow_1m2n3b4" sourceRef="Event_1q2w3e4" targetRef="Event_0p9o8i7" />
-    <bpmn:task id="ConditionalEventDefinition_StockReadyAgain" name="Taken" />
+    <bpmn:task id="conditionalEventDefinition_stockReadyAgain" name="Taken" />
   </bpmn:process>
 </bpmn:definitions>
 `;
 
 describe('Camunda 8 with speaking ids and the reading views', () => {
-  it('a new event definition gets a speaking id in the file\'s style, never the hash of its event', async () => {
+  it('a new event definition gets a speaking id, never the hash of its event', async () => {
     const result = await applyToXml(C8_MODELER, [{ op: 'retype', id: 'Event_1q2w3e4', kind: 'intermediateCatchEvent:conditional', when: '= stock > 0' }], { layout: false });
-    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReady">');
-    expect(result.xml).not.toContain('ConditionalEventDefinition_1q2w3e4');
+    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="conditionalEventDefinition_stockReady">');
+    expect(result.xml).not.toContain('EventDefinition_1q2w3e4');
   });
 
-  it('a taken definition id gets _2 and W_ID_SUFFIXED like every generated id', async () => {
+  it('a taken definition id gets a number suffix and W_ID_SUFFIXED like every generated id', async () => {
     const result = await applyToXml(
       C8_MODELER,
       [
@@ -196,9 +196,9 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
       ],
       { layout: false },
     );
-    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReadyAgain_2">');
+    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="conditionalEventDefinition_stockReadyAgain2">');
     const warning = result.result.warnings.added.find((warning) => warning.code === 'W_ID_SUFFIXED');
-    expect(warning?.element).toBe('ConditionalEventDefinition_StockReadyAgain_2');
+    expect(warning?.element).toBe('conditionalEventDefinition_stockReadyAgain2');
   });
 
   it('show --around and show <id> --context print each zeebe setting once', async () => {
@@ -211,12 +211,12 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
       { op: 'ext', id: '$charge', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'charge-card', retries: '3' } },
       { op: 'ext', id: '$review', action: 'add', type: 'zeebe:assignmentDefinition', attrs: { candidateGroups: 'sales' } },
     ]);
-    const around = await showXml(result.xml, { around: 'Activity_Charge' });
-    expect(around).toContain('serviceTask Activity_Charge "Charge" [zeebe:taskDefinition type=charge-card retries=3]');
-    expect(around).toContain('userTask Activity_Review "Review" [zeebe:userTask, zeebe:assignmentDefinition candidateGroups=sales]');
+    const around = await showXml(result.xml, { around: 'serviceTask_charge' });
+    expect(around).toContain('serviceTask serviceTask_charge "Charge" [zeebe:taskDefinition type=charge-card retries=3]');
+    expect(around).toContain('userTask userTask_review "Review" [zeebe:userTask, zeebe:assignmentDefinition candidateGroups=sales]');
     expect(around).not.toContain('job=');
-    const context = await showXml(result.xml, { id: 'Activity_Review', context: true });
-    expect(context).toMatch(/^userTask Activity_Review "Review"$/m);
+    const context = await showXml(result.xml, { id: 'userTask_review', context: true });
+    expect(context).toMatch(/^userTask userTask_review "Review"$/m);
     expect(context).toContain('implementation: zeebe:userTask, zeebe:assignmentDefinition candidateGroups=sales');
     // the full show keeps the short facts (it has no extension summary)
     expect(await showXml(result.xml)).toContain('[job=charge-card, ext: zeebe:taskDefinition]');
@@ -233,10 +233,10 @@ describe('Camunda 8 with speaking ids and the reading views', () => {
     const one = await applyToXml(base.xml, [
       { op: 'add', kind: 'start', name: 'Received', as: '$start' },
       { op: 'add', kind: 'serviceTask', name: 'Charge', after: '$start' },
-      { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Charge' },
+      { op: 'add', kind: 'end', name: 'Done', after: 'serviceTask_charge' },
     ]);
     expect(one.result.warnings.added.map((warning) => warning.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
-    const two = await applyToXml(one.xml, [{ op: 'ext', id: 'Activity_Charge', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'charge-card' } }]);
+    const two = await applyToXml(one.xml, [{ op: 'ext', id: 'serviceTask_charge', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'charge-card' } }]);
     expect(two.result.warnings.added).toEqual([]);
     expect(two.result.warnings.resolved.map((warning) => warning.code)).toContain('W_C8_DEPLOY_IMPLEMENTATION');
     expect(renderSummary(mutationSummary(two.result))).toMatch(/^warnings: 0 added, 1 resolved, 0 already in the file$/m);

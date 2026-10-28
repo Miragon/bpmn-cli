@@ -112,8 +112,8 @@ describe('text-preserving output (#30, #31, #44)', () => {
     const out = (await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }])).xml;
     // the spliced flow keeps its place and its tight `/>`, the new elements are indented by the file's four spaces
     expect(out).toMatch(/\n {8}<bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Activity_Audit"\/>\n/);
-    expect(out).toMatch(/\n {8}<bpmn:task id="Activity_Audit" name="Audit">\n {12}<bpmn:incoming>Flow_2<\/bpmn:incoming>\n {12}<bpmn:outgoing>(Flow_\w+)<\/bpmn:outgoing>\n {8}<\/bpmn:task>\n/);
-    expect(out).toMatch(/\n {8}<bpmn:sequenceFlow id="Flow_\w+" sourceRef="Activity_Audit" targetRef="Gateway_Ok"\/>\n/);
+    expect(out).toMatch(/\n {8}<bpmn:task id="Activity_Audit" name="Audit">\n {12}<bpmn:incoming>Flow_2<\/bpmn:incoming>\n {12}<bpmn:outgoing>(flow_\w+)<\/bpmn:outgoing>\n {8}<\/bpmn:task>\n/);
+    expect(out).toMatch(/\n {8}<bpmn:sequenceFlow id="flow_\w+" sourceRef="Activity_Audit" targetRef="Gateway_Ok"\/>\n/);
     expect(out).toMatch(/\n {12}<bpmndi:BPMNShape id="Activity_Audit_di" bpmnElement="Activity_Audit">\n {16}<dc:Bounds x="\d+" y="\d+" width="100" height="80"\/>\n {12}<\/bpmndi:BPMNShape>/);
     // a label written on one line stays on one line when its bounds change
     expect(out).toMatch(/<bpmndi:BPMNShape id="End_di" bpmnElement="End">\n {16}<dc:Bounds [^\n]*\/>\n {16}<bpmndi:BPMNLabel><dc:Bounds [^\n]*\/><\/bpmndi:BPMNLabel>/);
@@ -169,7 +169,7 @@ describe('incoming / outgoing lists are written the way the file keeps them (#45
     expect(renamed.xml).toBe(LISTLESS.replace('name="Register request"', 'name="Register the request"'));
     const inserted = await dry(LISTLESS, [{ op: 'add', kind: 'task', name: 'Check request', after: 'Task_A' }]);
     expect(lists(inserted.xml)).toBe(0);
-    expect(inserted.xml).toMatch(/\n {4}<task id="Task_CheckRequest" name="Check request" \/>\n/); // the file's id style (Task_)
+    expect(inserted.xml).toMatch(/\n {4}<task id="task_checkRequest" name="Check request" \/>\n/);
   });
 
   it('in memory the lists are complete (the placement grammar and the views read them)', async () => {
@@ -186,14 +186,14 @@ describe('incoming / outgoing lists are written the way the file keeps them (#45
     const inserted = await dry(STYLED, [{ op: 'add', kind: 'task', name: 'Audit', id: 'Activity_Audit', after: 'Task_Check' }]);
     const after = await Doc.fromXml(inserted.xml);
     expect(after.source!.mirror.listed.get(after.require('Activity_Audit'))).toBeDefined();
-    expect(inserted.xml).toMatch(/<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok\?" default="Flow_No">\n {12}<bpmn:incoming>Flow_\w+<\/bpmn:incoming>/);
+    expect(inserted.xml).toMatch(/<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok\?" default="Flow_No">\n {12}<bpmn:incoming>flow_\w+<\/bpmn:incoming>/);
     expect(lists(inserted.xml)).toBe(lists(STYLED) + 2);
   });
 
   it('a file without any sequence flow, like a new one, gets the lists the Modeler writes', async () => {
     const result = await dry(definitionsXml('    <bpmn:startEvent id="Start" />'), [{ op: 'add', kind: 'task', name: 'Work', id: 'Activity_Work', after: 'Start' }], { layout: false });
-    expect(result.xml).toMatch(/<bpmn:startEvent id="Start">\s*<bpmn:outgoing>Flow_\w+<\/bpmn:outgoing>/);
-    expect(result.xml).toMatch(/<bpmn:task id="Activity_Work" name="Work">\s*<bpmn:incoming>Flow_\w+<\/bpmn:incoming>/);
+    expect(result.xml).toMatch(/<bpmn:startEvent id="Start">\s*<bpmn:outgoing>flow_\w+<\/bpmn:outgoing>/);
+    expect(result.xml).toMatch(/<bpmn:task id="Activity_Work" name="Work">\s*<bpmn:incoming>flow_\w+<\/bpmn:incoming>/);
   });
 });
 

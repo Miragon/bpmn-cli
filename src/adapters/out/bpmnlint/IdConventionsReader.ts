@@ -8,28 +8,33 @@ import type { ValidatorFinding } from '../../../domain/document/Finding.js';
 
 export const ID_NAMING_RULE = '@miragon/rules/element-id-naming';
 
-/** The helpers of the plugin's `naming` namespace that element-id-naming runs. */
-export interface IdNamingHelpers {
-  DEFAULT_PREFIXES: Record<string, string | false | null>;
-  resolvePrefix(element: unknown, prefixes: Record<string, string | false | null>): { type: string; prefix: string } | null;
-  acceptedPrefixes(element: unknown, prefix: string, mode: QualifierMode): string[];
-  resolveCase(caseName: string): { pattern: RegExp; label: string };
-  resolveQualifierMode(mode: string | undefined): QualifierMode;
+/** The resolution element-id-naming runs, as the plugin exports it from 0.19 on. */
+interface ElementIdConvention {
+  /** null: the type is not checked (no prefix, or switched off) */
+  prefixOf(node: unknown): string | null;
+  /** the plain prefix and the qualified ones the qualifier mode allows */
+  prefixesFor(node: unknown): string[];
+  readonly case: { label: string; pattern: RegExp };
+  readonly qualifier: QualifierMode;
 }
 
-const CASES = ['camelCase', 'PascalCase', 'snake_case', 'any'];
+/** What bpmn-cli uses of the plugin's `naming` namespace. */
+export interface IdNamingHelpers {
+  ElementIdConvention: new (config?: unknown) => ElementIdConvention;
+}
+
+const CASES = ['camelCase', 'PascalCase', 'snake_case', 'kebab-case', 'any'];
 
 /** A BPMNLabel is written without an id. */
 const DI_WITH_IDS = ['bpmndi:BPMNDiagram', 'bpmndi:BPMNPlane', 'bpmndi:BPMNShape', 'bpmndi:BPMNEdge'];
 const QUALIFIERS = ['off', 'optional', 'required'];
 
 type Moddle = ReturnType<typeof createModdle>;
-type Prefixes = Record<string, string | false | null>;
 
 /**
- * Reads element-id-naming's options from a .bpmnlintrc exactly as the rule does, with its own
- * helpers injected (the core never imports the plugin). What new ids cannot follow is left out,
- * each with a W_CONFIG_IGNORED note.
+ * Reads element-id-naming's options from a .bpmnlintrc through the rule's own resolution,
+ * injected (the core never imports the plugin). What new ids cannot follow is left out, each
+ * with a W_CONFIG_IGNORED note.
  */
 export class IdConventionsReader {
   private readonly where: string;
@@ -43,24 +48,20 @@ export class IdConventionsReader {
     this.where = source ?? '.bpmnlintrc';
   }
 
-  /**
-   * `conventions` is undefined for no setting, severity off or every prefix switched off.
-   * Options are read as element-id-naming's factory reads them.
-   */
+  /** `conventions` is undefined for no setting or severity off. */
   read(setting: BpmnlintRuleSetting | undefined): { conventions?: IdConventions; notes: ValidatorFinding[] } {
     const notes = this.notes;
     if (!setting || setting.severity === 'off') return { notes };
-    const options = (setting.config ?? {}) as { prefixes?: Prefixes; case?: string; eventDefinitionQualifier?: string };
-    const { prefixes: overrides = {}, case: caseName = 'camelCase' } = options;
-    const prefixes = { ...this.naming.DEFAULT_PREFIXES, ...overrides };
-    const label = this.caseOf(caseName);
-    const qualifier = this.qualifierOf(options.eventDefinitionQualifier);
+    const options = (setting.config ?? {}) as { prefixes?: Record<string, unknown>; case?: string; eventDefinitionQualifier?: string };
+    const convention = new this.naming.ElementIdConvention(setting.config);
+    const label = this.caseOf(options.case ?? 'camelCase', convention.case.label);
+    const qualifier = this.qualifierOf(options.eventDefinitionQualifier, convention.qualifier);
     const moddle = createModdle();
     const ignored: string[] = [];
-    const table = this.typePrefixes(moddle, prefixes, ignored);
-    if (qualifier !== 'off') this.qualifiedPrefixes(moddle, table, qualifier, ignored);
-    this.noteDiPrefixes(moddle, prefixes);
-    if (!Object.keys(table).length) return { notes };
+    this.noteUnusablePrefixes(options.prefixes ?? {});
+    const table = this.typePrefixes(moddle, convention, ignored);
+    if (qualifier !== 'off') this.qualifiedPrefixes(moddle, convention, table, qualifier, ignored);
+    this.noteDiPrefixes(moddle, convention);
     const conventions: IdConventions = {
       prefixes: table,
       qualifier,
@@ -81,68 +82,60 @@ export class IdConventionsReader {
     return near ? ` Did you mean ${near}?` : '';
   }
 
-  private caseOf(caseName: string): string {
-    /**
-     * An unknown case resolves to the rule's fallback, PascalCase. Plugins before 0.12.1 answer
-     * `toString` or `__proto__` with the Object.prototype property, which has no label.
-     */
-    const resolved = (this.naming.resolveCase(caseName) as { label?: unknown } | undefined)?.label;
-    const label = typeof resolved === 'string' && CASES.includes(resolved) ? resolved : 'PascalCase';
-    const caseHint = `Write one of ${CASES.join(', ')} in the .bpmnlintrc.${this.didYouMean(caseName, CASES)}`;
-    if (label !== resolved) this.note('case', caseName, 'is unknown, and the rule of a @miragon/bpmnlint-plugin-rules before 0.12.1 cannot check it: new ids take PascalCase, the fallback for an unknown case', caseHint);
-    else if (label !== caseName) this.note('case', caseName, `is unknown: the rule checks ${label}, and new ids take it`, caseHint);
+  /** An unknown case resolves to the rule's fallback, PascalCase. */
+  private caseOf(configured: string, label: string): string {
+    if (label !== configured) this.note('case', configured, `is unknown: the rule checks ${label}, and new ids take it`, `Write one of ${CASES.join(', ')} in the .bpmnlintrc.${this.didYouMean(configured, CASES)}`);
     return label;
   }
 
-  private qualifierOf(mode: string | undefined): QualifierMode {
-    const qualifier = this.naming.resolveQualifierMode(mode);
-    if (mode !== undefined && mode !== qualifier) {
-      this.note('eventDefinitionQualifier', mode, `is unknown: the rule and new ids take ${qualifier}`, `Write one of ${QUALIFIERS.join(', ')} in the .bpmnlintrc.${this.didYouMean(mode, QUALIFIERS)}`);
+  private qualifierOf(configured: string | undefined, qualifier: QualifierMode): QualifierMode {
+    if (configured !== undefined && configured !== qualifier) {
+      this.note('eventDefinitionQualifier', configured, `is unknown: the rule and new ids take ${qualifier}`, `Write one of ${QUALIFIERS.join(', ')} in the .bpmnlintrc.${this.didYouMean(configured, QUALIFIERS)}`);
     }
     return qualifier;
   }
 
-  private usable(hit: { type: string; prefix: unknown }): boolean {
-    if (isUsablePrefix(hit.prefix)) return true;
-    if (!this.noted.has(hit.type)) {
-      this.noted.add(hit.type);
+  /** Noted once per configured key: a supertype's prefix (bpmn:Gateway) covers several types. */
+  private noteUnusablePrefixes(prefixes: Record<string, unknown>): void {
+    for (const [type, prefix] of Object.entries(prefixes)) {
+      if (!prefix || isUsablePrefix(prefix)) continue;
       const problem =
-        typeof hit.prefix === 'string' && /[^\x00-\x7f]/.test(hit.prefix)
+        typeof prefix === 'string' && /[^\x00-\x7f]/.test(prefix)
           ? 'has a character outside ASCII, which bpmn-cli does not write in ids'
           : 'cannot start an id (a letter or _ first, then letters, digits, _ . -, at most 56 characters)';
-      this.note(`prefix of ${hit.type}`, hit.prefix, `${problem}: new ids of the type follow the learned id style, and the rule reports them`, `Fix the prefix in the .bpmnlintrc, or set it to false to switch ${hit.type} off.`);
+      this.note(`prefix of ${type}`, prefix, `${problem}: new ids of the type take bpmn-cli's own prefix, and the rule reports them`, `Fix the prefix in the .bpmnlintrc, or set it to false to switch ${type} off.`);
     }
-    return false;
   }
 
-  private typePrefixes(moddle: Moddle, prefixes: Prefixes, ignored: string[]): Record<string, string> {
+  private typePrefixes(moddle: Moddle, convention: ElementIdConvention, ignored: string[]): Record<string, string> {
     const table: Record<string, string> = {};
     const registry = (moddle as unknown as { registry: { packageMap: Record<string, { types: Array<{ name: string; isAbstract?: boolean }> }> } }).registry;
     for (const moddleType of registry.packageMap['bpmn']!.types) {
       if (moddleType.isAbstract) continue;
       const type = `bpmn:${moddleType.name}`;
-      const hit = this.naming.resolvePrefix(moddle.create(type, { id: 'x' }), prefixes);
-      if (hit && this.usable(hit)) table[type] = hit.prefix;
-      else if (hit) ignored.push(type);
+      const prefix = convention.prefixOf(moddle.create(type, { id: 'x' }));
+      if (prefix === null) continue;
+      if (isUsablePrefix(prefix)) table[type] = prefix;
+      else ignored.push(type);
     }
     return table;
   }
 
-  /** A required qualified prefix too long for new ids is ignored (noted once): those ids follow the learned style, which the rule reports. */
-  private qualifiedPrefixes(moddle: Moddle, table: Record<string, string>, qualifier: QualifierMode, ignored: string[]): void {
+  /** A required qualified prefix too long for new ids is ignored (noted once): those ids take the plain prefix, which the rule reports. */
+  private qualifiedPrefixes(moddle: Moddle, convention: ElementIdConvention, table: Record<string, string>, qualifier: QualifierMode, ignored: string[]): void {
     for (const def of KINDS) {
       const plain = table[def.type];
       if (plain === undefined || !def.triggers) continue;
       for (const trigger of def.triggers) {
         if (trigger === 'none') continue;
         const event = moddle.create(def.type, { id: 'x', eventDefinitions: [moddle.create(TRIGGERS[trigger].definition)] });
-        const qualified = this.naming.acceptedPrefixes(event, plain, qualifier).find((candidate) => candidate !== plain);
+        const qualified = convention.prefixesFor(event).find((candidate) => candidate !== plain);
         const key = `${def.type}:${trigger}`;
         if (isUsablePrefix(qualified)) table[key] = qualified;
         else if (qualified !== undefined && qualifier === 'required' && !this.noted.has(key)) {
           this.noted.add(key);
           ignored.push(key);
-          this.note(`prefix of ${key}`, qualified, `is longer than 56 characters (the ${def.type} prefix qualified with the trigger): new ids of such events follow the learned id style, and the rule reports them`, `Shorten the ${def.type} prefix in the .bpmnlintrc, or set eventDefinitionQualifier to optional.`);
+          this.note(`prefix of ${key}`, qualified, `is longer than 56 characters (the ${def.type} prefix qualified with the trigger): new ids of such events take the plain prefix, and the rule reports them`, `Shorten the ${def.type} prefix in the .bpmnlintrc, or set eventDefinitionQualifier to optional.`);
         }
       }
     }
@@ -152,10 +145,10 @@ export class IdConventionsReader {
    * bpmn-cli names DI after its element, never after a declared prefix, and the rule checks DI ids
    * too, so a declared DI prefix gets a note.
    */
-  private noteDiPrefixes(moddle: Moddle, prefixes: Prefixes): void {
+  private noteDiPrefixes(moddle: Moddle, convention: ElementIdConvention): void {
     for (const type of DI_WITH_IDS) {
-      const hit = this.naming.resolvePrefix(moddle.create(type, { id: 'x' }), prefixes);
-      if (hit) this.note(`prefix of ${type}`, hit.prefix, 'is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids', 'Set it to false or remove it; bpmn-js names DI <id>_di too.');
+      const prefix = convention.prefixOf(moddle.create(type, { id: 'x' }));
+      if (prefix !== null) this.note(`prefix of ${type}`, prefix, 'is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids', 'Set it to false or remove it; bpmn-js names DI <id>_di too.');
     }
   }
 }

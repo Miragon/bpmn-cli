@@ -89,7 +89,7 @@ describe('warnings as a delta', () => {
 
   it('a new document reports its warnings (there was no file before)', async () => {
     const created = await newXml({ processName: 'Fresh' });
-    expect(codes(created.result.warnings.added)).toEqual(['W_NO_START Process_Fresh', 'W_NO_END Process_Fresh']);
+    expect(codes(created.result.warnings.added)).toEqual(['W_NO_START fresh', 'W_NO_END fresh']);
     expect(created.result.warnings.preexistingCount).toBe(0);
   });
 

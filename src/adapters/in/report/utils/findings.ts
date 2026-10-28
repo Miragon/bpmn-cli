@@ -5,7 +5,7 @@ import type { ValidatorReport } from '../../../../domain/validation/validators.j
 /** This many warnings of one code (and validator) or more are printed as one line. */
 export const FLOOD_MIN = 3;
 
-export const FLOOD_IDS = 30;
+const FLOOD_IDS = 30;
 
 export function validatorTag(warning: Finding): string {
   return warning.validator ? `[${warning.validator}] ` : '';
@@ -24,7 +24,7 @@ export function floodKey(warning: Finding): string {
   return `${validatorTag(warning)}${warning.code}`;
 }
 
-/** `W_DEAD_END Activity_A, W_UNREACHABLE x5 [A, B, C, D, E]` */
+/** `W_DEAD_END task_a, W_UNREACHABLE x5 [A, B, C, D, E]` */
 export function findingList(findings: readonly Finding[]): string {
   const groups = new Map<string, Finding[]>();
   for (const finding of findings) groups.set(floodKey(finding), [...(groups.get(floodKey(finding)) ?? []), finding]);

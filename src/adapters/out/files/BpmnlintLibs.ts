@@ -9,10 +9,7 @@ export interface BpmnlintPlugin {
   createBundledResolver(): BpmnlintResolver;
   /** a host's default without a .bpmnlintrc: recommended rules, a preset and the engine's config */
   getDefaultLintConfig(options?: { engine?: 'c7' | 'c8'; preset?: 'modeling' | 'automation' }): BpmnlintConfig;
-  naming: IdNamingHelpers & {
-    eventQualifiers(element: unknown): string[];
-    isGeneratedId(id: string): boolean;
-  };
+  naming: IdNamingHelpers;
 }
 
 type NodeResolverClass = new (options: { require: Require }) => BpmnlintResolver;

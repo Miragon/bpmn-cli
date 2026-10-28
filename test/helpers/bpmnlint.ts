@@ -42,11 +42,11 @@ export async function model(ops: unknown[], name = 'Order'): Promise<string> {
   return (await applyToXml((await newXml({ processName: name })).xml, ops)).xml;
 }
 
-/** start "Received" -> userTask "Check" -> end "Done" in Process_Order. */
+/** start "Received" -> userTask "Check" -> end "Done" in the process order. */
 export const LINE = [
   { op: 'add', kind: 'start', name: 'Received' },
-  { op: 'add', kind: 'userTask', name: 'Check', after: 'Event_Received' },
-  { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Check' },
+  { op: 'add', kind: 'userTask', name: 'Check', after: 'startEvent_received' },
+  { op: 'add', kind: 'end', name: 'Done', after: 'userTask_check' },
 ];
 
 /** A moddle descriptor BpmnModdle takes, and fails on when it parses any file: a property that redefines one bpmn has not. */

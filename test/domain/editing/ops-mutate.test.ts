@@ -15,6 +15,7 @@ import { Properties } from '../../../src/domain/editing/properties/Properties.js
 import { ElementProperties } from '../../../src/domain/views/ElementProperties.js';
 import { SET_KEYS } from '../../../src/domain/editing/properties/SetKeyCatalog.js';
 import { EditSession } from '../../../src/domain/document/EditSession.js';
+import { typeRequest } from '../../../src/domain/document/utils/requests.js';
 
 /* ------------------------------------------------------------------ */
 /* fixtures                                                             */
@@ -452,8 +453,8 @@ describe('remove', () => {
     expect(ids(doc.outgoing(doc.require('Task_B')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Call')))).toEqual([]);
     expect(ids(doc.require('Lane_Ops').get<El[]>('flowNodeRef'))).not.toContain('Sub');
-    // a new id follows the file: its tasks are Task_*
-    expect(new EditSession(doc).newId('Activity', 'Sub')).toBe('Task_Sub');
+    // a new id follows the conventions, not the file's Task_* ids
+    expect(new EditSession(doc).allocator.allocate(typeRequest('bpmn:Task', { name: 'Sub' })).id).toBe('task_sub');
     // a gateway default is cleared when the default flow goes
     new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['F_no'] });
     expect(doc.require('Gw').get('default')).toBeUndefined();
@@ -1344,10 +1345,10 @@ describe('move: bridging with --in, no id recycling', () => {
     );
     const cs = new ElementMove(new EditSession(doc)).move({ op: 'move', ids: ['X'], after: 'B' });
     expect(cs.removed.map((change) => change.id)).toEqual(['Flow_4']);
-    expect(cs.created.map((change) => change.id)).toEqual(['Flow_XToC']);
+    expect(cs.created.map((change) => change.id)).toEqual(['flow_xToC']);
     expect(doc.get('Flow_4')).toBeUndefined();
-    expect(doc.require('Flow_XToC').get<El>('sourceRef').get('id')).toBe('X');
-    expect(doc.require('Flow_XToC').get<El>('targetRef').get('id')).toBe('C');
+    expect(doc.require('flow_xToC').get<El>('sourceRef').get('id')).toBe('X');
+    expect(doc.require('flow_xToC').get<El>('targetRef').get('id')).toBe('C');
     expect(doc.require('Flow_1').get<El>('targetRef').get('id')).toBe('A');
     await expectRoundTrip(doc);
   });

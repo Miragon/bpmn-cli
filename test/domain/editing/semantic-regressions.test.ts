@@ -148,7 +148,7 @@ describe('trigger detail changes keep the event definition', () => {
   it('message: a new message keeps the definition id and its vendor attributes', async () => {
     const result = await mutate(EVENTS, [{ op: 'set', id: 'E', values: { message: 'Notification2' } }]);
     expect(result.changes.warnings).toEqual([]);
-    expect(result.xml).toContain('<bpmn:messageEventDefinition id="MD" messageRef="Message_Notification2" camunda:type="external" camunda:topic="notify" />');
+    expect(result.xml).toContain('<bpmn:messageEventDefinition id="MD" messageRef="message_notification2" camunda:type="external" camunda:topic="notify" />');
   });
 
   it('conditional: a new condition keeps the definition and its expression element', async () => {
@@ -178,7 +178,7 @@ describe('trigger detail changes keep the event definition', () => {
 
   it('retype with options of the same trigger keeps the definition too', async () => {
     const result = await mutate(EVENTS, [{ op: 'retype', id: 'E', kind: 'endEvent:message', message: 'Other' }]);
-    expect(result.xml).toContain('<bpmn:messageEventDefinition id="MD" messageRef="Message_Other" camunda:type="external" camunda:topic="notify" />');
+    expect(result.xml).toContain('<bpmn:messageEventDefinition id="MD" messageRef="message_other" camunda:type="external" camunda:topic="notify" />');
   });
 
   it('a trigger kind change replaces the definition and reports the vendor content it drops', async () => {

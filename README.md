@@ -45,13 +45,13 @@ bpmn guide --short                 # the agent cheat sheet (`bpmn guide` for all
 ```
 $ bpmn new order.bpmn --name "Order handling"
 $ bpmn add order.bpmn start "Order received"
-$ bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
-$ bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
+$ bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
+$ bpmn add order.bpmn end "Done" --after userTask_checkInvoice
 $ bpmn show order.bpmn
-process Process_OrderHandling "Order handling" executable
-  startEvent Event_OrderReceived "Order received" -> Activity_CheckInvoice (Flow_OrderReceivedToCheckInvoice)
-  userTask Activity_CheckInvoice "Check invoice" -> Event_Done (Flow_CheckInvoiceToDone)
-  endEvent Event_Done "Done"
+process orderHandling "Order handling" executable
+  startEvent startEvent_orderReceived "Order received" -> userTask_checkInvoice (flow_orderReceivedToCheckInvoice)
+  userTask userTask_checkInvoice "Check invoice" -> endEvent_done (flow_checkInvoiceToDone)
+  endEvent endEvent_done "Done"
 problems: none
 ```
 
@@ -97,8 +97,10 @@ Details: [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda).
 ## bpmnlint
 
 A project's bpmnlint configuration (`.bpmnlintrc`) runs in `bpmn validate` and in every write: the
-agent sees the findings its change added and fixes them in the same batch, instead of in CI. Where
-it runs `@miragon/rules/element-id-naming`, the ids bpmn-cli generates follow its prefixes and case
+agent sees the findings its change added and fixes them in the same batch, instead of in CI. The
+ids bpmn-cli generates follow `@miragon/rules/element-id-naming`: the prefixes and case the
+`.bpmnlintrc` declares, else the rule's defaults (`userTask_checkInvoice`,
+`flow_checkInvoiceToBookInvoice`), so they pass the rule out of the box
 (`bpmn show <file> --conventions` lists them).
 
 Details: [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint).

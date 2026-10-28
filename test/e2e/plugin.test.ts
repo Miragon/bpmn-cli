@@ -351,28 +351,28 @@ const SOLUTIONS: Record<string, { file: string; script: string; changeGraders: s
   'build-order-to-cash': {
     file: 'order-to-cash.bpmn',
     changeGraders: ['lanes', 'pools-and-message-flows', 'diagram'],
-    script: `bpmn new order-to-cash.bpmn --name "Order to cash" --id Process_OrderToCash
+    script: `bpmn new order-to-cash.bpmn --name "Order to cash" --id orderToCash
 bpmn apply order-to-cash.bpmn - <<'EOF'
 [
-  { "op": "add", "kind": "participant", "name": "Order to cash", "id": "Participant_OrderToCash" },
-  { "op": "add", "kind": "participant", "name": "Customer", "id": "Participant_Customer", "blackBox": true },
-  { "op": "add", "kind": "lane", "name": "Vertrieb", "id": "Lane_Vertrieb", "in": "Participant_OrderToCash" },
-  { "op": "add", "kind": "lane", "name": "Lager", "id": "Lane_Lager", "in": "Participant_OrderToCash" },
-  { "op": "add", "kind": "lane", "name": "Buchhaltung", "id": "Lane_Buchhaltung", "in": "Participant_OrderToCash" },
-  { "op": "add", "kind": "startEvent:message", "name": "Order received", "id": "Event_OrderReceived", "message": "Order", "in": "Participant_OrderToCash", "lane": "Lane_Vertrieb" },
-  { "op": "add", "kind": "userTask", "name": "Check order", "id": "Activity_CheckOrder", "after": "Event_OrderReceived", "lane": "Lane_Vertrieb" },
-  { "op": "add", "kind": "exclusiveGateway", "name": "Order accepted?", "id": "Gateway_OrderAccepted", "after": "Activity_CheckOrder", "lane": "Lane_Vertrieb" },
-  { "op": "add", "kind": "userTask", "name": "Pick and pack goods", "id": "Activity_PickAndPackGoods", "after": "Gateway_OrderAccepted", "flowName": "yes", "condition": "\${accepted}", "lane": "Lane_Lager" },
-  { "op": "add", "kind": "userTask", "name": "Ship goods", "id": "Activity_ShipGoods", "after": "Activity_PickAndPackGoods", "lane": "Lane_Lager" },
-  { "op": "add", "kind": "sendTask", "name": "Send invoice", "id": "Activity_SendInvoice", "after": "Activity_ShipGoods", "lane": "Lane_Buchhaltung" },
-  { "op": "add", "kind": "receiveTask", "name": "Receive payment", "id": "Activity_ReceivePayment", "message": "Payment", "after": "Activity_SendInvoice", "lane": "Lane_Buchhaltung" },
-  { "op": "add", "kind": "endEvent", "name": "Order completed", "id": "Event_OrderCompleted", "after": "Activity_ReceivePayment", "lane": "Lane_Buchhaltung" },
-  { "op": "add", "kind": "sendTask", "name": "Send rejection", "id": "Activity_SendRejection", "after": "Gateway_OrderAccepted", "flowName": "no", "default": true, "lane": "Lane_Vertrieb" },
-  { "op": "add", "kind": "endEvent", "name": "Order rejected", "id": "Event_OrderRejected", "after": "Activity_SendRejection", "lane": "Lane_Vertrieb" },
-  { "op": "connect", "source": "Participant_Customer", "target": "Event_OrderReceived", "name": "Order" },
-  { "op": "connect", "source": "Activity_SendRejection", "target": "Participant_Customer", "name": "Rejection" },
-  { "op": "connect", "source": "Activity_SendInvoice", "target": "Participant_Customer", "name": "Invoice" },
-  { "op": "connect", "source": "Participant_Customer", "target": "Activity_ReceivePayment", "name": "Payment" }
+  { "op": "add", "kind": "participant", "name": "Order to cash", "id": "participant_orderToCash" },
+  { "op": "add", "kind": "participant", "name": "Customer", "id": "participant_customer", "blackBox": true },
+  { "op": "add", "kind": "lane", "name": "Vertrieb", "id": "lane_vertrieb", "in": "participant_orderToCash" },
+  { "op": "add", "kind": "lane", "name": "Lager", "id": "lane_lager", "in": "participant_orderToCash" },
+  { "op": "add", "kind": "lane", "name": "Buchhaltung", "id": "lane_buchhaltung", "in": "participant_orderToCash" },
+  { "op": "add", "kind": "startEvent:message", "name": "Order received", "id": "startEvent_orderReceived", "message": "Order", "in": "participant_orderToCash", "lane": "lane_vertrieb" },
+  { "op": "add", "kind": "userTask", "name": "Check order", "id": "userTask_checkOrder", "after": "startEvent_orderReceived", "lane": "lane_vertrieb" },
+  { "op": "add", "kind": "exclusiveGateway", "name": "Order accepted?", "id": "gateway_orderAccepted", "after": "userTask_checkOrder", "lane": "lane_vertrieb" },
+  { "op": "add", "kind": "userTask", "name": "Pick and pack goods", "id": "userTask_pickAndPackGoods", "after": "gateway_orderAccepted", "flowName": "yes", "condition": "\${accepted}", "lane": "lane_lager" },
+  { "op": "add", "kind": "userTask", "name": "Ship goods", "id": "userTask_shipGoods", "after": "userTask_pickAndPackGoods", "lane": "lane_lager" },
+  { "op": "add", "kind": "sendTask", "name": "Send invoice", "id": "sendTask_sendInvoice", "after": "userTask_shipGoods", "lane": "lane_buchhaltung" },
+  { "op": "add", "kind": "receiveTask", "name": "Receive payment", "id": "receiveTask_receivePayment", "message": "Payment", "after": "sendTask_sendInvoice", "lane": "lane_buchhaltung" },
+  { "op": "add", "kind": "endEvent", "name": "Order completed", "id": "endEvent_orderCompleted", "after": "receiveTask_receivePayment", "lane": "lane_buchhaltung" },
+  { "op": "add", "kind": "sendTask", "name": "Send rejection", "id": "sendTask_sendRejection", "after": "gateway_orderAccepted", "flowName": "no", "default": true, "lane": "lane_vertrieb" },
+  { "op": "add", "kind": "endEvent", "name": "Order rejected", "id": "endEvent_orderRejected", "after": "sendTask_sendRejection", "lane": "lane_vertrieb" },
+  { "op": "connect", "source": "participant_customer", "target": "startEvent_orderReceived", "name": "Order" },
+  { "op": "connect", "source": "sendTask_sendRejection", "target": "participant_customer", "name": "Rejection" },
+  { "op": "connect", "source": "sendTask_sendInvoice", "target": "participant_customer", "name": "Invoice" },
+  { "op": "connect", "source": "participant_customer", "target": "receiveTask_receivePayment", "name": "Payment" }
 ]
 EOF`,
   },
@@ -381,10 +381,10 @@ EOF`,
     changeGraders: ['approval-inserted', 'timer-reminder', 'reminder-path'],
     script: `bpmn apply purchase-request.bpmn - --layout incremental <<'EOF'
 [
-  { "op": "add", "kind": "userTask", "name": "Approve purchase", "id": "Activity_ApprovePurchase", "flow": "Flow_0yq6cfd" },
-  { "op": "add", "kind": "boundaryEvent:timer", "name": "3 days", "id": "Event_ApprovalOverdue", "on": "Activity_ApprovePurchase", "timer": "P3D", "nonInterrupting": true },
-  { "op": "add", "kind": "sendTask", "name": "Remind manager", "id": "Activity_RemindManager", "after": "Event_ApprovalOverdue" },
-  { "op": "add", "kind": "endEvent", "name": "Manager reminded", "id": "Event_ManagerReminded", "after": "Activity_RemindManager" }
+  { "op": "add", "kind": "userTask", "name": "Approve purchase", "id": "userTask_approvePurchase", "flow": "Flow_0yq6cfd" },
+  { "op": "add", "kind": "boundaryEvent:timer", "name": "3 days", "id": "event_approvalOverdue", "on": "userTask_approvePurchase", "timer": "P3D", "nonInterrupting": true },
+  { "op": "add", "kind": "sendTask", "name": "Remind manager", "id": "sendTask_remindManager", "after": "event_approvalOverdue" },
+  { "op": "add", "kind": "endEvent", "name": "Manager reminded", "id": "endEvent_managerReminded", "after": "sendTask_remindManager" }
 ]
 EOF`,
   },
@@ -393,12 +393,12 @@ EOF`,
     changeGraders: ['external-task', 'input-mapping', 'error-mapping', 'error-boundary-path'],
     script: `bpmn apply payment.bpmn - <<'EOF'
 [
-  { "op": "set", "id": "Activity_ChargeCreditCard", "values": { "camunda:type": "external", "camunda:topic": "charge-credit-card" } },
-  { "op": "ext", "id": "Activity_ChargeCreditCard", "action": "add", "type": "camunda:inputParameter", "attrs": { "name": "amount" }, "body": "\${order.total}" },
-  { "op": "add", "kind": "boundaryEvent:error", "name": "Card declined", "id": "Event_CardDeclined", "on": "Activity_ChargeCreditCard", "error": "Card declined", "errorCode": "CARD_DECLINED" },
-  { "op": "add", "kind": "userTask", "name": "Inform customer", "id": "Activity_InformCustomer", "after": "Event_CardDeclined" },
-  { "op": "add", "kind": "endEvent", "name": "Payment failed", "id": "Event_PaymentFailed", "after": "Activity_InformCustomer" },
-  { "op": "ext", "id": "Activity_ChargeCreditCard", "action": "add", "type": "camunda:errorEventDefinition", "attrs": { "id": "ErrorMapping_CardDeclined", "errorRef": "Error_CardDeclined", "expression": "\${declined}" } }
+  { "op": "set", "id": "serviceTask_chargeCreditCard", "values": { "camunda:type": "external", "camunda:topic": "charge-credit-card" } },
+  { "op": "ext", "id": "serviceTask_chargeCreditCard", "action": "add", "type": "camunda:inputParameter", "attrs": { "name": "amount" }, "body": "\${order.total}" },
+  { "op": "add", "kind": "boundaryEvent:error", "name": "Card declined", "id": "event_cardDeclined", "on": "serviceTask_chargeCreditCard", "error": "Card declined", "errorCode": "CARD_DECLINED" },
+  { "op": "add", "kind": "userTask", "name": "Inform customer", "id": "userTask_informCustomer", "after": "event_cardDeclined" },
+  { "op": "add", "kind": "endEvent", "name": "Payment failed", "id": "endEvent_paymentFailed", "after": "userTask_informCustomer" },
+  { "op": "ext", "id": "serviceTask_chargeCreditCard", "action": "add", "type": "camunda:errorEventDefinition", "attrs": { "id": "ErrorMapping_CardDeclined", "errorRef": "error_cardDeclined", "expression": "\${declined}" } }
 ]
 EOF`,
   },
@@ -407,19 +407,19 @@ EOF`,
     changeGraders: ['happy-path-green', 'rejection-below'],
     script: `bpmn apply claim-handling.bpmn - <<'EOF'
 [
-  { "op": "color", "path": ["Event_ClaimReceived", "Event_ClaimPaid"], "color": "green" },
-  { "op": "place", "branch": "Flow_ClaimCoveredNo", "below": "Activity_PayOutClaim" }
+  { "op": "color", "path": ["startEvent_claimReceived", "endEvent_claimPaid"], "color": "green" },
+  { "op": "place", "branch": "flow_claimCoveredToSendRejectionLetter", "below": "serviceTask_payOutClaim" }
 ]
 EOF`,
   },
   'tidy-after-edit': {
     file: 'invoice-approval.bpmn',
     changeGraders: ['inform-requester', 'gateway-label-clear', 'no-crossing'],
-    script: `bpmn add invoice-approval.bpmn sendTask "Inform requester" --id Activity_InformRequester --flow Flow_ReturnInvoiceToInvoiceReturned --render .bpmn-render/invoice-approval.png
+    script: `bpmn add invoice-approval.bpmn sendTask "Inform requester" --id sendTask_informRequester --flow flow_returnInvoiceToSupplierToInvoiceReturned --render .bpmn-render/invoice-approval.png
 bpmn apply invoice-approval.bpmn - --render .bpmn-render/invoice-approval.png <<'EOF'
 [
-  { "op": "label", "id": "Gateway_InvoiceCorrect", "side": "above" },
-  { "op": "place", "branch": "Flow_InvoiceCorrectNo", "below": "Activity_RemindApprover" }
+  { "op": "label", "id": "gateway_invoiceCorrect", "side": "above" },
+  { "op": "place", "branch": "flow_invoiceCorrectToReturnInvoiceToSupplier", "below": "sendTask_remindApprover" }
 ]
 EOF
 bpmn render invoice-approval.bpmn --problems -o .bpmn-render/invoice-approval.png`,
@@ -427,19 +427,19 @@ bpmn render invoice-approval.bpmn --problems -o .bpmn-render/invoice-approval.pn
   'camunda8-retoure-german': {
     file: 'retoure.bpmn',
     changeGraders: ['camunda8-file', 'job-workers', 'user-task-group', 'feel-gateway'],
-    script: `bpmn new retoure.bpmn --name "Retoure" --id Process_Retoure --target camunda8
+    script: `bpmn new retoure.bpmn --name "Retoure" --id retoure --target camunda8
 bpmn apply retoure.bpmn - <<'EOF'
 [
-  { "op": "add", "kind": "startEvent", "name": "Retoure angemeldet", "id": "Event_RetoureAngemeldet", "in": "Process_Retoure" },
-  { "op": "add", "kind": "userTask", "name": "Ware prüfen", "id": "Activity_WarePruefen", "after": "Event_RetoureAngemeldet" },
-  { "op": "ext", "id": "Activity_WarePruefen", "action": "add", "type": "zeebe:assignmentDefinition", "attrs": { "candidateGroups": "lager" } },
-  { "op": "add", "kind": "exclusiveGateway", "name": "Ware in Ordnung?", "id": "Gateway_WareInOrdnung", "after": "Activity_WarePruefen" },
-  { "op": "add", "kind": "serviceTask", "name": "Gutschrift erstellen", "id": "Activity_GutschriftErstellen", "after": "Gateway_WareInOrdnung", "flowName": "ja", "condition": "= wareInOrdnung" },
-  { "op": "ext", "id": "Activity_GutschriftErstellen", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "create-credit-note" } },
-  { "op": "add", "kind": "endEvent", "name": "Retoure abgeschlossen", "id": "Event_RetoureAbgeschlossen", "after": "Activity_GutschriftErstellen" },
-  { "op": "add", "kind": "serviceTask", "name": "Ablehnungsmail senden", "id": "Activity_AblehnungsmailSenden", "after": "Gateway_WareInOrdnung", "flowName": "nein", "condition": "= not(wareInOrdnung)" },
-  { "op": "ext", "id": "Activity_AblehnungsmailSenden", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "send-rejection-mail" } },
-  { "op": "add", "kind": "endEvent", "name": "Retoure abgelehnt", "id": "Event_RetoureAbgelehnt", "after": "Activity_AblehnungsmailSenden" }
+  { "op": "add", "kind": "startEvent", "name": "Retoure angemeldet", "id": "startEvent_retoureAngemeldet", "in": "retoure" },
+  { "op": "add", "kind": "userTask", "name": "Ware prüfen", "id": "userTask_warePruefen", "after": "startEvent_retoureAngemeldet" },
+  { "op": "ext", "id": "userTask_warePruefen", "action": "add", "type": "zeebe:assignmentDefinition", "attrs": { "candidateGroups": "lager" } },
+  { "op": "add", "kind": "exclusiveGateway", "name": "Ware in Ordnung?", "id": "gateway_wareInOrdnung", "after": "userTask_warePruefen" },
+  { "op": "add", "kind": "serviceTask", "name": "Gutschrift erstellen", "id": "serviceTask_gutschriftErstellen", "after": "gateway_wareInOrdnung", "flowName": "ja", "condition": "= wareInOrdnung" },
+  { "op": "ext", "id": "serviceTask_gutschriftErstellen", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "create-credit-note" } },
+  { "op": "add", "kind": "endEvent", "name": "Retoure abgeschlossen", "id": "endEvent_retoureAbgeschlossen", "after": "serviceTask_gutschriftErstellen" },
+  { "op": "add", "kind": "serviceTask", "name": "Ablehnungsmail senden", "id": "serviceTask_ablehnungsmailSenden", "after": "gateway_wareInOrdnung", "flowName": "nein", "condition": "= not(wareInOrdnung)" },
+  { "op": "ext", "id": "serviceTask_ablehnungsmailSenden", "action": "add", "type": "zeebe:taskDefinition", "attrs": { "type": "send-rejection-mail" } },
+  { "op": "add", "kind": "endEvent", "name": "Retoure abgelehnt", "id": "endEvent_retoureAbgelehnt", "after": "serviceTask_ablehnungsmailSenden" }
 ]
 EOF
 bpmn validate retoure.bpmn --strict`,
@@ -492,9 +492,9 @@ describe('the eval suite', () => {
     expect(matches(skill, { skill: 'bpmn' })).toBe(true);
     expect(matches(skill, { skill: 'pdf' })).toBe(false);
     const xml = graderOf('build-order-to-cash', 'no-xml-in-shell');
-    const cli = `bpmn apply order-to-cash.bpmn - <<'EOF'\n[{ "op": "add", "kind": "userTask", "name": "Check order", "id": "Activity_CheckOrder", "after": "Event_OrderReceived" }]\nEOF`;
+    const cli = `bpmn apply order-to-cash.bpmn - <<'EOF'\n[{ "op": "add", "kind": "userTask", "name": "Check order", "id": "userTask_checkOrder", "after": "startEvent_orderReceived" }]\nEOF`;
     expect(matches(xml, { command: cli })).toBe(false);
-    expect(matches(xml, { command: `bpmn ext add f.bpmn Activity_X zeebe:ioMapping --xml '<zeebe:ioMapping><zeebe:input source="=a" target="b"/></zeebe:ioMapping>'` })).toBe(false);
+    expect(matches(xml, { command: `bpmn ext add f.bpmn serviceTask_x zeebe:ioMapping --xml '<zeebe:ioMapping><zeebe:input source="=a" target="b"/></zeebe:ioMapping>'` })).toBe(false);
     expect(matches(xml, { command: `cat > order-to-cash.bpmn <<'EOF'\n<?xml version="1.0"?>\n<bpmn:definitions>` })).toBe(true);
     expect(matches(xml, { command: `sed -i '' 's/Task_1/Task_2/' order-to-cash.bpmn` })).toBe(true);
     expect(matches(xml, { command: `python3 -c "import xml.etree.ElementTree as ET"` })).toBe(true);
@@ -504,7 +504,7 @@ describe('the eval suite', () => {
     const built = graderOf('build-order-to-cash', 'built-with-the-cli');
     expect(matches(built, { command: `printf '%s' '[]' | bpmn apply order-to-cash.bpmn - --summary` })).toBe(true);
     expect(matches(built, { command: 'bpmn new order-to-cash.bpmn --name "Order to cash"' })).toBe(true);
-    expect(matches(built, { command: 'npx -y @miragon/bpmn-cli@1.2.3 add order-to-cash.bpmn userTask "Check order" --after Event_OrderReceived' })).toBe(true);
+    expect(matches(built, { command: 'npx -y @miragon/bpmn-cli@1.2.3 add order-to-cash.bpmn userTask "Check order" --after startEvent_orderReceived' })).toBe(true);
     expect(matches(built, { command: 'bpmn show order-to-cash.bpmn' })).toBe(false);
     expect(matches(built, { command: `cat > order-to-cash.bpmn <<'EOF'\n<bpmn:definitions>` })).toBe(false);
     const validated = graderOf('build-order-to-cash', 'validated');
@@ -555,7 +555,7 @@ describe('the eval suite', () => {
     const edit = SOLUTIONS['edit-hand-drawn-model']!;
     const dir = workDir('eval-hash-ids');
     expect(spawnSync('bash', [join(EVALS, 'edit-hand-drawn-model', 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
-    const hashed = edit.script.replaceAll('Activity_ApprovePurchase', 'Activity_1a7mq4e').replaceAll('Event_ApprovalOverdue', 'Event_1x6rt2w');
+    const hashed = edit.script.replaceAll('userTask_approvePurchase', 'Activity_1a7mq4e').replaceAll('event_approvalOverdue', 'Event_1x6rt2w');
     const result = sh(hashed, dir);
     expect(result.code, `${result.out}${result.err}`).toBe(0);
     const model = readFileSync(join(dir, edit.file), 'utf8');
@@ -570,7 +570,7 @@ describe('the eval suite', () => {
     expect(green).toMatch(/#205022/i);
     const otherGreen = green.replace(/#205022/gi, '#43a047');
     expect(regexPasses(grader('format-happy-path', 'happy-path-green'), otherGreen)).toBe(true);
-    const rejectionGreen = otherGreen.replace(/(bpmnElement="Activity_SendRejectionLetter")/, '$1 bioc:stroke="#43a047"');
+    const rejectionGreen = otherGreen.replace(/(bpmnElement="sendTask_sendRejectionLetter")/, '$1 bioc:stroke="#43a047"');
     expect(regexPasses(grader('format-happy-path', 'rejection-not-green'), rejectionGreen)).toBe(false);
   }, SLOW);
 
@@ -578,9 +578,9 @@ describe('the eval suite', () => {
     const caseDir = join(EVALS, 'tidy-after-edit');
     const file = 'invoice-approval.bpmn';
     const grader = (name: string) => graders(caseDir).find((warning) => warning.name === name)!;
-    const edit = `bpmn add ${file} sendTask "Inform requester" --id Activity_InformRequester --flow Flow_ReturnInvoiceToInvoiceReturned`;
-    const branchBelow = `bpmn place ${file} --branch Flow_InvoiceCorrectNo --below Activity_RemindApprover`;
-    const label = (side: string) => `bpmn label ${file} Gateway_InvoiceCorrect --side ${side}`;
+    const edit = `bpmn add ${file} sendTask "Inform requester" --id sendTask_informRequester --flow flow_returnInvoiceToSupplierToInvoiceReturned`;
+    const branchBelow = `bpmn place ${file} --branch flow_invoiceCorrectToReturnInvoiceToSupplier --below sendTask_remindApprover`;
+    const label = (side: string) => `bpmn label ${file} gateway_invoiceCorrect --side ${side}`;
     const variants: Record<string, string> = {
       'the fixture': 'true',
       'the edit only': edit,
@@ -602,16 +602,16 @@ describe('the eval suite', () => {
       const problems = (JSON.parse(metrics.out) as { problems: { kind: string; ids: string[] }[] }).problems;
       if (name === 'the fixture') {
         expect(problems.map((problem) => `${problem.kind} ${problem.ids.join(' ')}`).sort()).toEqual([
-          'crossings Flow_ReturnInvoiceToInvoiceReturned Flow_ApprovalOverdueToRemindApprover',
-          'labelClash Gateway_InvoiceCorrect Activity_ApproveInvoice',
+          'crossings flow_returnInvoiceToSupplierToInvoiceReturned flow_approvalOverdueToRemindApprover',
+          'labelClash gateway_invoiceCorrect userTask_approveInvoice',
         ]);
       }
       if (name.startsWith('the solution')) expect(problems, name).toEqual([]);
-      const labelProblem = problems.some((problem) => /^label/.test(problem.kind) && problem.ids.includes('Gateway_InvoiceCorrect'));
+      const labelProblem = problems.some((problem) => /^label/.test(problem.kind) && problem.ids.includes('gateway_invoiceCorrect'));
       const crossing = problems.some((problem) => problem.kind === 'crossings');
       const xml = readFileSync(join(dir, file), 'utf8');
       // compact moved the reminder path up: the rows are no longer the solution's
-      if (name === 'the solution, then compact') expect(xml).toMatch(/bpmnElement="Activity_RemindApprover"[^>]*>\s*<dc:Bounds x="720" y="327"/);
+      if (name === 'the solution, then compact') expect(xml).toMatch(/bpmnElement="sendTask_remindApprover"[^>]*>\s*<dc:Bounds x="720" y="327"/);
       expect(regexPasses(grader('gateway-label-clear'), xml), `${name}: gateway-label-clear`).toBe(!labelProblem);
       expect(regexPasses(grader('no-crossing'), xml), `${name}: no-crossing`).toBe(name !== 'the fixture' && !crossing);
       expect(regexPasses(grader('main-line-kept'), xml), `${name}: main-line-kept`).toBe(true);
@@ -624,9 +624,9 @@ describe('the eval suite', () => {
     expect(spawnSync('bash', [join(caseDir, 'scaffold.sh')], { cwd: dir, encoding: 'utf8' }).status).toBe(0);
     const result = sh(`bpmn apply purchase-request.bpmn - <<'EOF'
 [
-  { "op": "add", "kind": "userTask", "name": "Approve purchase", "id": "Activity_ApprovePurchase", "flow": "Flow_0yq6cfd" },
-  { "op": "add", "kind": "exclusiveGateway", "name": "Purchase approved?", "id": "Gateway_PurchaseApproved", "after": "Activity_ApprovePurchase" },
-  { "op": "connect", "source": "Gateway_PurchaseApproved", "target": "Activity_0f3j5ny", "name": "no", "default": true }
+  { "op": "add", "kind": "userTask", "name": "Approve purchase", "id": "userTask_approvePurchase", "flow": "Flow_0yq6cfd" },
+  { "op": "add", "kind": "exclusiveGateway", "name": "Purchase approved?", "id": "gateway_purchaseApproved", "after": "userTask_approvePurchase" },
+  { "op": "connect", "source": "gateway_purchaseApproved", "target": "Activity_0f3j5ny", "name": "no", "default": true }
 ]
 EOF`, dir);
     expect(result.code, `${result.out}${result.err}`).toBe(0);

@@ -8,7 +8,7 @@ export interface Change {
   /** canonical kind label, e.g. `userTask`, `startEvent:message`, `sequenceFlow` */
   kind: string;
   name?: string;
-  /** free-form context, e.g. "after Activity_CheckInvoice", "Event_A -> Activity_B" */
+  /** free-form context, e.g. "after userTask_checkInvoice", "startEvent_a -> task_b" */
   detail?: string;
 }
 

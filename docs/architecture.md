@@ -65,7 +65,7 @@ file adapters only write or rasterise what it drew.
 ## The journey of `bpmn add`
 
 ```sh
-bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
+bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
 ```
 
 ```mermaid
@@ -120,7 +120,7 @@ export class AddElementCommand extends MutationCommand {
       op: 'add',
       kind,                       // 'userTask'
       name,                       // 'Check invoice'
-      after: options['after'],    // 'Event_OrderReceived'
+      after: options['after'],    // 'startEvent_orderReceived'
       // …
     }
     await this.mutate(file, [command], opts)
@@ -256,7 +256,7 @@ private dispatch(command: EditCommand): ChangeSet {
 ### 6. The model changes
 
 `ElementCreation` makes the new element in the bpmn-moddle tree of the `Doc`, places it
-after `Event_OrderReceived` (which creates the sequence flow), and records everything it did in
+after `startEvent_orderReceived` (which creates the sequence flow), and records everything it did in
 a `ChangeSet`.
 
 ```ts
@@ -282,7 +282,7 @@ export class ElementCreation {
     trigger: Trigger | undefined,
     cs: ChangeSet,
   ): El {
-    // 'Activity_CheckInvoice'
+    // 'userTask_checkInvoice'
     const id = this.edit.allocator.explicitOr(command.id, …)
     const el = this.edit.doc.create(def.type, { id, name: command.name })
     cs.create({ id, kind: def.kind, name: command.name })
@@ -340,8 +340,8 @@ Back in `MutationCommand`, the result becomes a report (`MutationReportBuilder`)
 CLI and `applyToXml()` describe a change in the same words.
 
 ```txt
-created userTask Activity_CheckInvoice "Check invoice" - after Event_OrderReceived
-created sequenceFlow Flow_OrderReceivedToCheckInvoice - Event_OrderReceived -> Activity_CheckInvoice
+created userTask userTask_checkInvoice "Check invoice" - after startEvent_orderReceived
+created sequenceFlow flow_orderReceivedToCheckInvoice - startEvent_orderReceived -> userTask_checkInvoice
 layout: ok - full (engine-owned diagram: redrawn)
 written: order.bpmn
 ```

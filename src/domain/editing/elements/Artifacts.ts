@@ -100,18 +100,9 @@ export class Artifacts {
     }
   }
 
-  /**
-   * Where the file's id prefix is the same for reference and backing element, the
-   * backing id gets `Object` / `Store` (as a tail word when the name gets cut).
-   */
+  /** The backing element is named like its reference: dataObjectItem_invoice for dataObject_invoice. */
   private backingRequest(type: 'bpmn:DataObject' | 'bpmn:DataStore', refId: string, name: string | undefined): IdRequest {
-    const context = speakingStem(refId) ?? '';
-    const req = typeRequest(type, { ...(name ? { name } : {}), context });
-    if (this.edit.idStyle.derivedBase(req) !== refId) return req;
-    const word = type === 'bpmn:DataObject' ? 'Object' : 'Store';
-    const worded = typeRequest(type, name ? { name: `${name} ${word}` } : { context: `${context} ${word}` });
-    const id = this.edit.idStyle.derivedBase(worded);
-    return id !== refId && id.toLowerCase().endsWith(word.toLowerCase()) ? worded : { ...req, tailWord: word };
+    return typeRequest(type, { ...(name ? { name } : {}), context: speakingStem(refId) ?? '' });
   }
 
   private createCategoryValue(context: string, name: string | undefined): El {

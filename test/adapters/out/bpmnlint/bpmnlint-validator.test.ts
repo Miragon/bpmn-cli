@@ -20,25 +20,25 @@ describe('bpmnlintValidator: findings', () => {
 
   it('maps a report to code, element, severity and a key without array indices; nothing else of the report', async () => {
     const engine = bpmnlintEngine();
-    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]);
     const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended', rules: { 'fake-join': 'info', 'label-required': 'warn' } }), { detail: 'test' });
     expect(lintValidator).toMatchObject({ name: 'bpmnlint', detail: 'test', blocks: false, covers: BPMNLINT_COVERS });
     const found = (await lintValidator.validate!(xml, ctx(xml))) as ValidatorFinding[];
-    expect(found).toEqual([{ severity: 'warning', code: 'label-required', message: 'Element is missing label/name', element: 'Activity_AfterCheck', key: 'Activity_AfterCheck|name|Element is missing label/name' }]);
+    expect(found).toEqual([{ severity: 'warning', code: 'label-required', message: 'Element is missing label/name', element: 'task_afterCheck', key: 'task_afterCheck|name|Element is missing label/name' }]);
   });
 
   it('the key of a finding with a path leaves out the array indices: removing an earlier sibling changes nothing', async () => {
     const dir = repo({ extends: 'plugin:camunda-compat/camunda-cloud-8-10', moddleExtensions: { zeebe: 'zeebe-bpmn-moddle/resources/zeebe.json' } });
-    const xml = await model(LINE).then((modelXml) => applyToXml(modelXml, [{ op: 'ext', id: 'Activity_Check', action: 'add', type: 'zeebe:input', attrs: { source: '=a', target: 'a' } }]));
+    const xml = await model(LINE).then((modelXml) => applyToXml(modelXml, [{ op: 'ext', id: 'userTask_check', action: 'add', type: 'zeebe:input', attrs: { source: '=a', target: 'a' } }]));
     // a second input without target (the io-mapping rule reports it with its index in the path)
     const file = join(dir, 'c8.bpmn');
     writeFileSync(file, xml.xml.replace('<zeebe:input source="=a" target="a" />', '<zeebe:input source="=a" target="a" />\n          <zeebe:input source="=b" />'));
     const before = lintOf((await checkFile(file, { lintProjectCode: true })).validation.errors);
-    expect(codes(before)).toContain('camunda-compat/io-mapping Activity_Check');
-    const mutated = await mutateFile(file, [{ op: 'ext', id: 'Activity_Check', action: 'remove', type: 'zeebe:input[target=a]' }], { dryRun: true });
+    expect(codes(before)).toContain('camunda-compat/io-mapping userTask_check');
+    const mutated = await mutateFile(file, [{ op: 'ext', id: 'userTask_check', action: 'remove', type: 'zeebe:input[target=a]' }], { dryRun: true });
     const report = mutationReport(mutated);
-    expect(codes(report.warnings.added)).not.toContain('camunda-compat/io-mapping Activity_Check');
-    expect(codes(report.warnings.resolved)).not.toContain('camunda-compat/io-mapping Activity_Check');
+    expect(codes(report.warnings.added)).not.toContain('camunda-compat/io-mapping userTask_check');
+    expect(codes(report.warnings.resolved)).not.toContain('camunda-compat/io-mapping userTask_check');
   });
 
   it('a rule that throws (check or factory) is one W_LINT_FAILED; the others report, nothing goes to stderr', async () => {
@@ -53,14 +53,14 @@ describe('bpmnlintValidator: findings', () => {
     };
     const engine: BpmnlintEngine = { Linter, resolver: { resolveConfig: (pkg, name) => resolver.resolveConfig(pkg, name), resolveRule: (pkg, name) => (pkg === 'bpmnlint-plugin-local' ? local[name] : resolver.resolveRule(pkg, name)) } };
     const resolved = await resolveBpmnlintConfig(engine, { rules: { 'local/boom': 'warn', 'local/bad-options': ['error'], 'local/no-check': 'warn', 'local/leave': 'warn', 'label-required': 'error' } });
-    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]);
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const found = (await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))) as ValidatorFinding[];
       expect(error).not.toHaveBeenCalled();
       expect(found.map((finding) => `${finding.code}: ${finding.message}`).sort()).toEqual([
         'W_LINT_FAILED: bpmnlint rule local/bad-options failed: Cannot read properties of undefined (reading \'size\'); its findings are left out',
-        'W_LINT_FAILED: bpmnlint rule local/boom failed: kaboom on Event_Done; its findings are left out',
+        'W_LINT_FAILED: bpmnlint rule local/boom failed: kaboom on endEvent_done; its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/leave failed: on leave; its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/no-check failed: the rule has no check; its findings are left out',
         'label-required: Element is missing label/name',
@@ -92,7 +92,7 @@ describe('bpmnlintValidator: findings', () => {
     };
     const engine: BpmnlintEngine = { Linter, resolver: { resolveConfig: (pkg, name) => resolver.resolveConfig(pkg, name), resolveRule: (pkg, name) => (pkg === 'bpmnlint-plugin-local' ? local[name] : resolver.resolveRule(pkg, name)) } };
     const resolved = await resolveBpmnlintConfig(engine, { rules: Object.fromEntries([...Object.keys(local).map((name) => [`local/${name}`, 'warn']), ['label-required', 'error']]) });
-    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]);
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
     try {
@@ -104,8 +104,8 @@ describe('bpmnlintValidator: findings', () => {
         'W_LINT_FAILED: bpmnlint rule local/async-factory failed: the rule factory returned a promise (bpmnlint rules are synchronous); its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/async-factory-ok failed: the rule factory returned a promise (bpmnlint rules are synchronous); its findings are left out',
         'W_LINT_FAILED: bpmnlint rule local/async-later failed: later boom; its findings are left out',
-        'label-required Activity_AfterCheck: Element is missing label/name',
-        'local/async-ok Event_Done: reported before the first await',
+        'label-required task_afterCheck: Element is missing label/name',
+        'local/async-ok endEvent_done: reported before the first await',
       ]);
     } finally {
       process.off('unhandledRejection', unhandled);
@@ -132,7 +132,7 @@ describe('bpmnlintValidator: findings', () => {
 
   it('a moddle descriptor BpmnModdle rejects (a prefix or uri already defined, an extends of an unknown type) is left out alone: W_LINT_UNAVAILABLE, the other rules run', async () => {
     const engine = bpmnlintEngine();
-    const xml = await model([...LINE, { op: 'add', kind: 'task', in: 'Process_Order' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', in: 'order' }]);
     const ext = (prefix: string, more: object = {}) => ({ name: prefix.toUpperCase(), prefix, uri: `http://example.org/${prefix}`, types: [], ...more });
     const moddleExtensions = {
       dup: ext('bpmn'),
@@ -154,7 +154,7 @@ describe('bpmnlintValidator: findings', () => {
       { kind: 'moddle', name: 'second', pkg: 'descriptor object', reason: 'BpmnModdle rejects it (package with prefix <undefined> already defined)', hint },
     ]);
     const found = (await bpmnlintValidator(engine, resolved).validate!(xml, ctx(xml))) as ValidatorFinding[];
-    expect(codes(found.filter((finding) => !finding.code.startsWith('W_LINT_')))).toEqual(['label-required Activity_Task', 'no-disconnected Activity_Task', 'no-implicit-end Activity_Task', 'no-implicit-start Activity_Task']);
+    expect(codes(found.filter((finding) => !finding.code.startsWith('W_LINT_')))).toEqual(['label-required task_task', 'no-disconnected task_task', 'no-implicit-end task_task', 'no-implicit-start task_task']);
     expect(found.filter((finding) => finding.code.startsWith('W_LINT_')).map((finding) => finding.message)).toEqual([
       'moddle extension dup (descriptor object) left out: BpmnModdle rejects it (package with prefix <bpmn> already defined); rules reading dup: properties may report findings that are not there',
       expect.stringMatching(/^moddle extension nope \(descriptor object\) left out: BpmnModdle rejects it \(.+\); rules reading nope: properties may report findings that are not there$/),
@@ -198,21 +198,21 @@ describe('bpmnlintValidator: findings', () => {
       return { check: await checkDoc(await Doc.fromXml(xml)), found: (await lintValidator.validate!(xml, ctx(xml))) as ValidatorFinding[] };
     };
     // a model without an engine (no engine namespace): bpmn-cli's reader takes calledDecision as the decision link, bpmnlint's parse does not know it
-    const design = await model([...LINE, { op: 'add', kind: 'businessRuleTask', name: 'Decide', after: 'Activity_Check' }, { op: 'set', id: 'Activity_Decide', values: { calledDecision: 'risk' } }]);
+    const design = await model([...LINE, { op: 'add', kind: 'businessRuleTask', name: 'Decide', after: 'userTask_check' }, { op: 'set', id: 'businessRuleTask_decide', values: { calledDecision: 'risk' } }]);
     const linked = await run(design, { rules: { 'label-required': 'error' } });
     expect(linked.check.importWarnings).toEqual([]);
-    expect(linked.found).toEqual([{ severity: 'error', code: 'import-warning', message: 'Import warning: unknown attribute <calledDecision>', element: 'Activity_Decide', key: 'import|Activity_Decide|unknown attribute <calledDecision>', hint: expect.stringMatching(/^bpmn-cli's decision link in a model without an engine \(an unprefixed calledDecision on a business rule task; bpmn-cli's reader keeps it\): keep it\./) }]);
+    expect(linked.found).toEqual([{ severity: 'error', code: 'import-warning', message: 'Import warning: unknown attribute <calledDecision>', element: 'businessRuleTask_decide', key: 'import|businessRuleTask_decide|unknown attribute <calledDecision>', hint: expect.stringMatching(/^bpmn-cli's decision link in a model without an engine \(an unprefixed calledDecision on a business rule task; bpmn-cli's reader keeps it\): keep it\./) }]);
     // a moddle extension that declares the attribute: bpmnlint reads it
     const descriptor = { name: 'DesignIq', prefix: 'diq', uri: 'http://example.org/diq', types: [{ name: 'DecisionLink', extends: ['bpmn:BusinessRuleTask'], properties: [{ name: 'calledDecision', isAttr: true, type: 'String' }] }] };
     expect((await run(design, { rules: { 'label-required': 'error' }, moddleExtensions: { diq: descriptor } })).found).toEqual([]);
     // what bpmn-cli's reader reports itself is not listed again
-    const foo = (await model(LINE)).replace('<bpmn:userTask id="Activity_Check"', '<bpmn:userTask foo="bar" id="Activity_Check"');
+    const foo = (await model(LINE)).replace('<bpmn:userTask id="userTask_check"', '<bpmn:userTask foo="bar" id="userTask_check"');
     const own = await run(foo, { rules: { 'label-required': 'error' } });
     expect(own.check.importWarnings).toEqual(['unknown attribute <foo>']);
     expect(own.found).toEqual([]);
     // an unresolved reference only the lint parse sees (a camunda errorRef read through the camunda moddle extension)
-    const c7 = (await applyToXml((await newXml({ processName: 'Order', target: 'camunda7' })).xml, [...LINE, { op: 'add', kind: 'serviceTask', name: 'Call', after: 'Activity_Check' }])).xml
-      .replace('<bpmn:serviceTask id="Activity_Call" name="Call">', '<bpmn:serviceTask id="Activity_Call" name="Call">\n      <bpmn:extensionElements><camunda:errorEventDefinition id="Def_X" errorRef="Error_Missing" /></bpmn:extensionElements>');
+    const c7 = (await applyToXml((await newXml({ processName: 'Order', target: 'camunda7' })).xml, [...LINE, { op: 'add', kind: 'serviceTask', name: 'Call', after: 'userTask_check' }])).xml
+      .replace('<bpmn:serviceTask id="serviceTask_call" name="Call">', '<bpmn:serviceTask id="serviceTask_call" name="Call">\n      <bpmn:extensionElements><camunda:errorEventDefinition id="Def_X" errorRef="Error_Missing" /></bpmn:extensionElements>');
     const camunda = bpmnlintEngine().plugin.getDefaultLintConfig({ engine: 'c7' }).moddleExtensions!;
     const dangling = await run(c7, { rules: { 'label-required': 'error' }, moddleExtensions: camunda });
     expect(dangling.found).toEqual([expect.objectContaining({ severity: 'error', code: 'import-warning', message: 'Import warning: unresolved reference <Error_Missing>', element: 'Def_X', hint: expect.stringMatching(/^bpmnlint parses the file with the \.bpmnlintrc's moddle extensions only and reports this as an error; bpmnlint in CI fails on it too\./) })]);
@@ -241,22 +241,22 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     }
     // a rule that is off covers nothing
     const off = await run(noEnd, { 'no-implicit-end': 'off' });
-    expect(codes(off.validation.warnings)).toContain('W_DEAD_END Activity_Check');
+    expect(codes(off.validation.warnings)).toContain('W_DEAD_END userTask_check');
   });
 
   it('a file without incoming / outgoing lists: validate lists the list rules with a hint, a write leaves the false ones out', async () => {
     const xml = listless(await model(LINE));
     const checked = await run(xml);
     const lists = lintOf(checked.validation.errors).filter((finding) => ['no-implicit-end', 'no-implicit-start', 'no-disconnected'].includes(finding.code));
-    expect(codes(lists).sort()).toEqual(['no-disconnected Activity_Check', 'no-disconnected Event_Done', 'no-disconnected Event_Received', 'no-implicit-end Activity_Check', 'no-implicit-end Event_Received', 'no-implicit-start Activity_Check', 'no-implicit-start Event_Done']);
+    expect(codes(lists).sort()).toEqual(['no-disconnected endEvent_done', 'no-disconnected startEvent_received', 'no-disconnected userTask_check', 'no-implicit-end startEvent_received', 'no-implicit-end userTask_check', 'no-implicit-start endEvent_done', 'no-implicit-start userTask_check']);
     for (const finding of lists) expect(finding.hint).toMatch(/^The element has sequence flows the file does not list under incoming \/ outgoing, which no-/);
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'listless.bpmn': xml });
-    const added = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }], { dryRun: true })).warnings.added;
+    const added = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'userTask_check' }], { dryRun: true })).warnings.added;
     expect(lintOf(added)).toEqual([]);
     // a node that really has no flow is reported (and covers W_DEAD_END)
-    const loose = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Loose', in: 'Process_Order' }], { dryRun: true })).warnings.added;
-    expect(codes(lintOf(loose))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
-    expect(codes(loose)).not.toContain('W_DEAD_END Activity_Loose');
+    const loose = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Loose', in: 'order' }], { dryRun: true })).warnings.added;
+    expect(codes(lintOf(loose))).toEqual(['no-disconnected userTask_loose', 'no-implicit-end userTask_loose', 'no-implicit-start userTask_loose']);
+    expect(codes(loose)).not.toContain('W_DEAD_END userTask_loose');
     expect(lintOf(loose).find((finding) => finding.code === 'no-implicit-end')!.hint).toMatch(/^Continue the flow/);
   });
 
@@ -265,7 +265,7 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     const file = join(dir, 'listless.bpmn');
     expect((await checkFile(file)).validation.validators![0]!.counts).toEqual({ errors: 7, warnings: 0 });
     const lists = 'incoming / outgoing lists the file does not keep';
-    const renamed = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Check', values: { name: 'Check order' } }], { dryRun: true, lintFrom: dir }));
+    const renamed = mutationReport(await mutateFile(file, [{ op: 'set', id: 'userTask_check', values: { name: 'Check order' } }], { dryRun: true, lintFrom: dir }));
     expect(renamed.validation.validators).toEqual([{ name: 'bpmnlint', detail: '.bpmnlintrc in .', blocks: false, errors: [], warnings: [], preexisting: [], resolved: [], counts: { errors: 7, warnings: 0 }, leftOut: [{ reason: lists, count: 7 }] }]);
     expect(renderMutation(renamed)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 7 error(s), 0 warning(s) in the result (0 added, 0 resolved, 0 already in the file, 7 left out (incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them))\n');
     // --summary counts the findings the file already had among the warnings, and names the left-out ones in a line of its own
@@ -274,7 +274,7 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     expect(summary.leftOut).toEqual([{ validator: 'bpmnlint', reason: lists, count: 7 }]);
     expect(renderSummary(summary, { dryRun: true }).split('\n')).toContain('validator bpmnlint: 7 left out (incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them)');
     // a new element: its list-rule findings are left out too, none is added; validate on the written file gives the same totals
-    const added = await mutateFile(file, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }], { lintFrom: dir });
+    const added = await mutateFile(file, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'userTask_check' }], { lintFrom: dir });
     expect(lintOf(mutationReport(added).warnings.added)).toEqual([]);
     const after = added.validation.validators![0]!;
     const validate = (await checkFile(file)).validation.validators![0]!;
@@ -282,22 +282,22 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     expect(after.counts).toEqual({ errors: 10, warnings: 0 });
     expect(after.leftOut).toEqual([{ reason: lists, count: 10 }]);
     // lintBlocks: they do not block, and the line of a blocking validator names them too
-    const blocking = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Ship', values: { name: 'Ship order' } }], { dryRun: true, lintBlocks: true, lintFrom: dir }));
+    const blocking = mutationReport(await mutateFile(file, [{ op: 'set', id: 'userTask_ship', values: { name: 'Ship order' } }], { dryRun: true, lintBlocks: true, lintFrom: dir }));
     expect(renderMutation(blocking)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 10 error(s), 0 warning(s) in the result (10 left out (incoming / outgoing lists the file does not keep; `bpmn validate <file>` lists them))\n');
     // a file that keeps its lists: no leftOut, the line as before
     const kept = repo({ extends: 'bpmnlint:recommended' }, { 'lists.bpmn': await model(LINE) });
-    const plain = mutationReport(await mutateFile(join(kept, 'lists.bpmn'), [{ op: 'set', id: 'Activity_Check', values: { name: 'Check order' } }], { dryRun: true, lintFrom: kept }));
+    const plain = mutationReport(await mutateFile(join(kept, 'lists.bpmn'), [{ op: 'set', id: 'userTask_check', values: { name: 'Check order' } }], { dryRun: true, lintFrom: kept }));
     expect(plain.validation.validators![0]).not.toHaveProperty('leftOut');
     expect(renderMutation(plain)).toContain('\nvalidator bpmnlint (.bpmnlintrc in .): 0 error(s), 0 warning(s) in the result (0 added, 0 resolved, 0 already in the file)\n');
     expect(mutationSummary(plain)).not.toHaveProperty('leftOut');
   });
 
   it('a write on a file without the lists that gives a real dead end or a loose node a flow resolves no bpmnlint finding it still has; W_DEAD_END is resolved as itself', async () => {
-    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'loose.bpmn': listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }])) });
+    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'loose.bpmn': listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Loose', in: 'order' }])) });
     const file = join(dir, 'loose.bpmn');
     // the loose task: no-disconnected, no-implicit-end and no-implicit-start, real ones (it has no flow)
-    expect(codes(lintOf((await checkFile(file)).validation.errors)).filter((code) => code.endsWith('Activity_Loose'))).toEqual(['no-disconnected Activity_Loose', 'no-implicit-end Activity_Loose', 'no-implicit-start Activity_Loose']);
-    for (const ops of [[{ op: 'add', kind: 'end', name: 'Fin', after: 'Activity_Loose' }], [{ op: 'connect', source: 'Activity_Check', target: 'Activity_Loose' }]] as EditCommand[][]) {
+    expect(codes(lintOf((await checkFile(file)).validation.errors)).filter((code) => code.endsWith('task_loose'))).toEqual(['no-disconnected task_loose', 'no-implicit-end task_loose', 'no-implicit-start task_loose']);
+    for (const ops of [[{ op: 'add', kind: 'end', name: 'Fin', after: 'task_loose' }], [{ op: 'connect', source: 'userTask_check', target: 'task_loose' }]] as EditCommand[][]) {
       const mutation = mutationReport(await mutateFile(file, ops, { dryRun: true, lintFrom: dir }));
       const firstValidator = mutation.validation.validators![0]!;
       // bpmnlint in CI still reports them (the lists stay unwritten): left out, not resolved
@@ -307,30 +307,30 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
       const kept = firstValidator.counts.errors + firstValidator.counts.warnings - firstValidator.warnings.length - firstValidator.leftOut![0]!.count;
       expect(renderMutation(mutation), ops[0]!.op).toContain(` in the result (${firstValidator.warnings.length} added, 0 resolved, ${kept} already in the file, ${firstValidator.leftOut![0]!.count} left out (`);
     }
-    const ended = mutationReport(await mutateFile(file, [{ op: 'add', kind: 'end', name: 'Fin', after: 'Activity_Loose' }], { dryRun: true, lintFrom: dir }));
-    expect(codes(ended.warnings.resolved)).toEqual(['W_DEAD_END Activity_Loose']);
+    const ended = mutationReport(await mutateFile(file, [{ op: 'add', kind: 'end', name: 'Fin', after: 'task_loose' }], { dryRun: true, lintFrom: dir }));
+    expect(codes(ended.warnings.resolved)).toEqual(['W_DEAD_END task_loose']);
     expect(ended.validation.validators![0]).toMatchObject({ counts: { errors: 12, warnings: 0 }, leftOut: [{ count: 11 }] });
-    const connected = mutationReport(await mutateFile(file, [{ op: 'connect', source: 'Activity_Check', target: 'Activity_Loose' }], { dryRun: true, lintFrom: dir }));
-    expect(codes(connected.warnings.resolved)).toEqual(['W_UNREACHABLE Activity_Loose']);
+    const connected = mutationReport(await mutateFile(file, [{ op: 'connect', source: 'userTask_check', target: 'task_loose' }], { dryRun: true, lintFrom: dir }));
+    expect(codes(connected.warnings.resolved)).toEqual(['W_UNREACHABLE task_loose']);
     expect(connected.validation.validators![0]).toMatchObject({ counts: { errors: 10, warnings: 0 }, leftOut: [{ count: 9 }] });
   });
 
   it('validate folds a list rule by hint: a real dead end keeps its own line and the fixing command', async () => {
-    // Activity_Loose has an incoming flow and no outgoing one: a dead end among the findings of the missing lists
-    const xml = listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Ship', after: 'Activity_Check' }, { op: 'add', kind: 'task', name: 'Loose', in: 'Process_Order' }, { op: 'connect', source: 'Activity_Ship', target: 'Activity_Loose' }]));
+    // task_loose has an incoming flow and no outgoing one: a dead end among the findings of the missing lists
+    const xml = listless(await model([...LINE, { op: 'add', kind: 'task', name: 'Ship', after: 'userTask_check' }, { op: 'add', kind: 'task', name: 'Loose', in: 'order' }, { op: 'connect', source: 'task_ship', target: 'task_loose' }]));
     const engine = bpmnlintEngine();
     const lintValidator = bpmnlintValidator(engine, await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' }));
     const lines = renderValidation(validationReport(await checkDoc(await Doc.fromXml(xml), { validators: [lintValidator] }))).split('\n');
-    expect(lines).toContain('[bpmnlint error] no-implicit-end x3 [Event_Received, Activity_Check, Activity_Ship]: Element is an implicit end  (The element has sequence flows the file does not list under incoming / outgoing, which no-implicit-end reads (bpmnlint in CI reports it too); bpmn-cli writes those lists only where the file keeps them.)');
-    expect(lines.find((outputLine) => outputLine.startsWith('[bpmnlint error] no-implicit-end Activity_Loose: Element is an implicit end  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after Activity_Loose`)'))).toBeDefined();
+    expect(lines).toContain('[bpmnlint error] no-implicit-end x3 [startEvent_received, userTask_check, task_ship]: Element is an implicit end  (The element has sequence flows the file does not list under incoming / outgoing, which no-implicit-end reads (bpmnlint in CI reports it too); bpmn-cli writes those lists only where the file keeps them.)');
+    expect(lines.find((outputLine) => outputLine.startsWith('[bpmnlint error] no-implicit-end task_loose: Element is an implicit end  (Continue the flow (`bpmn add <file> <kind> "<Name>" --after task_loose`)'))).toBeDefined();
   });
 
   it('event-based-gateway counts the outgoing list: validate lists it with the hint, a write that draws two branches does not, one branch is reported in both', async () => {
-    const base = listless(await model([{ op: 'add', kind: 'start', name: 'Paid' }, { op: 'add', kind: 'end', name: 'Done', after: 'Event_Paid' }]));
+    const base = listless(await model([{ op: 'add', kind: 'start', name: 'Paid' }, { op: 'add', kind: 'end', name: 'Done', after: 'startEvent_paid' }]));
     const branches: EditCommand[] = [
-      { op: 'add', kind: 'eventBasedGateway', after: 'Event_Paid' },
-      { op: 'add', kind: 'catch:timer', name: 'Timeout', flow: 'Flow_AfterPaidToDone' },
-      { op: 'add', kind: 'catch:message', name: 'Answer', after: 'Gateway_AfterPaid', to: 'Event_Done' },
+      { op: 'add', kind: 'eventBasedGateway', after: 'startEvent_paid' },
+      { op: 'add', kind: 'catch:timer', name: 'Timeout', flow: 'flow_afterPaidToDone' },
+      { op: 'add', kind: 'catch:message', name: 'Answer', after: 'gateway_afterPaid', to: 'endEvent_done' },
     ];
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'paid.bpmn': base });
     const file = join(dir, 'paid.bpmn');
@@ -340,10 +340,10 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     }
     const two = await run((await mutateFile(file, branches, { dryRun: true })).xml);
     const gateway = lintOf(two.validation.errors).find((finding) => finding.code === 'event-based-gateway');
-    expect(gateway).toMatchObject({ element: 'Gateway_AfterPaid', hint: expect.stringMatching(/^The element has sequence flows the file does not list under incoming \/ outgoing, which event-based-gateway reads/) });
+    expect(gateway).toMatchObject({ element: 'gateway_afterPaid', hint: expect.stringMatching(/^The element has sequence flows the file does not list under incoming \/ outgoing, which event-based-gateway reads/) });
     // one branch: a finding of the model, not of the lists
     const one = mutationReport(await mutateFile(file, branches.slice(0, 2), { dryRun: true }));
-    expect(codes(lintOf(one.warnings.added))).toContain('event-based-gateway Gateway_AfterPaid');
+    expect(codes(lintOf(one.warnings.added))).toContain('event-based-gateway gateway_afterPaid');
     const single = lintOf((await run((await mutateFile(file, branches.slice(0, 2), { dryRun: true })).xml)).validation.errors).find((finding) => finding.code === 'event-based-gateway');
     expect(single?.hint).toBeUndefined();
   });

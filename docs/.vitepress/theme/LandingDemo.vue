@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from "vue"
 import { withBase } from "vitepress"
 
-const command = 'bpmn add order.bpmn userTask "Approve invoice" --after Activity_CheckInvoice'
+const command = 'bpmn add order.bpmn userTask "Approve invoice" --after userTask_checkInvoice'
 
 // The first paint (and reduced motion) shows the end state, so the demo never opens on an empty terminal.
 const typedChars = ref(command.length)
@@ -71,8 +71,8 @@ onBeforeUnmount(() => clearTimeout(timer))
     </div>
     <div class="terminal">
       <p class="line"><span class="prompt">$ </span>{{ command.slice(0, typedChars) }}<span v-if="typing" class="caret" aria-hidden="true" /></p>
-      <p class="line" :class="{ pending: shownLines < 1 }"><span class="ok">created</span> userTask Activity_ApproveInvoice "Approve invoice" - after Activity_CheckInvoice</p>
-      <p class="line quiet" :class="{ pending: shownLines < 2 }">note: inserted between Activity_CheckInvoice and Event_Done</p>
+      <p class="line" :class="{ pending: shownLines < 1 }"><span class="ok">created</span> userTask userTask_approveInvoice "Approve invoice" - after userTask_checkInvoice</p>
+      <p class="line quiet" :class="{ pending: shownLines < 2 }">note: inserted between userTask_checkInvoice and endEvent_done</p>
       <p class="line" :class="{ pending: shownLines < 3 }"><span class="ok">written:</span> order.bpmn</p>
     </div>
   </figure>

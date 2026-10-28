@@ -43,22 +43,18 @@ export class EditBatch {
    */
   async run(file = this.doc.file): Promise<MutationResult> {
     return LayoutDebug.during(this.opts.debug, async () => {
-      try {
-        await this.guard();
-        const asRead = await this.textAsRead();
-        const diagram = await BatchDrawing.capture(this.doc, this.commands, this.opts, asRead, EditBatch.removeElements);
-        const findings = await FindingBaseline.capture(this.doc, { platform: this.opts.platform, force: this.opts.force, validators: this.opts.validators, file: this.opts.file ?? this.doc.file, ops: this.commands });
-        const importWarnings = reportedImportWarnings(this.doc).map((warning) => warning.message.split('\n')[0]!);
-        const { batch, last } = await this.runCommands(diagram);
-        await this.validateAndDropProfileDuplicates(findings, batch);
-        const drawn = await diagram.apply(this.edit, batch.commands, batch.changes, last);
-        const xml = await this.keptText(drawn.xml, asRead, batch.changes);
-        const layout = drawn.layout;
-        const validation = await findings.onCandidate(xml);
-        return await this.result(file, batch, xml, layout, validation, findings.delta(), importWarnings);
-      } finally {
-        this.edit.close();
-      }
+      await this.guard();
+      const asRead = await this.textAsRead();
+      const diagram = await BatchDrawing.capture(this.doc, this.commands, this.opts, asRead, EditBatch.removeElements);
+      const findings = await FindingBaseline.capture(this.doc, { platform: this.opts.platform, force: this.opts.force, validators: this.opts.validators, file: this.opts.file ?? this.doc.file, ops: this.commands });
+      const importWarnings = reportedImportWarnings(this.doc).map((warning) => warning.message.split('\n')[0]!);
+      const { batch, last } = await this.runCommands(diagram);
+      await this.validateAndDropProfileDuplicates(findings, batch);
+      const drawn = await diagram.apply(this.edit, batch.commands, batch.changes, last);
+      const xml = await this.keptText(drawn.xml, asRead, batch.changes);
+      const layout = drawn.layout;
+      const validation = await findings.onCandidate(xml);
+      return await this.result(file, batch, xml, layout, validation, findings.delta(), importWarnings);
     });
   }
 
@@ -137,8 +133,6 @@ export class EditBatch {
   private async result(file: string | undefined, batch: BatchRun, xml: string, layout: LayoutStatus, validation: ValidationResult, delta: ValidationDelta | undefined, importWarnings: string[]): Promise<MutationResult> {
     const doc = this.doc;
     const unchanged = doc.source !== undefined && xml === doc.source.text;
-    const declared = this.edit.allocator.declaredIds.filter((id) => doc.has(id));
-    const conventions = this.edit.conventions;
     const result: MutationResult = {
       ok: true,
       ...(file ? { file } : {}),
@@ -151,7 +145,6 @@ export class EditBatch {
       importWarnings,
       ...(delta ? { delta } : {}),
       xml,
-      ...(declared.length ? { conventions: { ids: [...new Set(declared)], ...(conventions?.source ? { source: conventions.source } : {}) } } : {}),
     };
     if (this.opts.show) {
       const fresh = await Doc.fromXml(xml, file);

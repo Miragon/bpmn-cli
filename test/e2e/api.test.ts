@@ -81,10 +81,10 @@ describe('the docs/library.md example (Library use)', () => {
     let { xml } = await newXml({ processName: 'Order handling' });
     const edit = await applyToXml(xml, [
       { op: 'add', kind: 'start', name: 'Order received' },
-      { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_OrderReceived' },
-      { op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },
+      { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'startEvent_orderReceived' },
+      { op: 'add', kind: 'end', name: 'Done', after: 'userTask_checkInvoice' },
     ]);
-    expect(example).toContain("{ op: 'add', kind: 'end', name: 'Done', after: 'Activity_CheckInvoice' },");
+    expect(example).toContain("{ op: 'add', kind: 'end', name: 'Done', after: 'userTask_checkInvoice' },");
     if (!edit.unchanged) xml = edit.xml;
     const quote = (data: unknown): string => JSON.stringify(data).replaceAll('"', "'").replaceAll(',', ', ');
     expect(codeOf(example)).toContain(codeOf(quote(edit.result.created.map((change) => change.id))));
@@ -92,7 +92,7 @@ describe('the docs/library.md example (Library use)', () => {
     expect(renderMutation(edit.result)).toMatch(/^created startEvent [\s\S]*\nlayout: ok - full \(/m);
     const quickStart = /\$ bpmn show order\.bpmn\n([\s\S]*?)\n```/.exec(readme)?.[1];
     expect(await showXml(xml)).toBe(quickStart);
-    const err = await rejected(applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'Activity_Check' }]));
+    const err = await rejected(applyToXml(xml, [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'userTask_check' }]));
     expect(example).toContain(`err.code;               // '${err.code}'`);
     expect(example).toContain(`err.details.candidates; // ${quote(err.details.candidates)}`);
   });

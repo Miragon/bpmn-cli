@@ -237,7 +237,7 @@ describe('several diagrams, partial and unusual DI', () => {
     // C after D: the bridge F2 (A -> D) and D -> C (F4) get other ends, C -> D (F3) goes, C -> E is new
     const { result, after } = await run(xml, [{ op: 'move', ids: ['C'], after: 'D' }], { layout: 'incremental' });
     expect(viewEdges(after)).toEqual([
-      ['F1', 'F2', 'F4', 'F5', 'F_TaskCToE'],
+      ['F1', 'F2', 'F4', 'F5', 'flow_taskCToE'],
       ['F1', 'F5'],
     ]);
     expect(result.layout.notes).toEqual(['edge(s) of F2, F4 removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out']);

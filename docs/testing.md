@@ -159,19 +159,15 @@ gives another trigger, with the flows named after them, a split's join, the
 join after an explicit split id in another case), and expects no finding (a
 control without conventions has them); it also checks how
 `idConventionsFromLint` reads the options and the `W_CONFIG_IGNORED` notes.
-`test/domain/validation/conventions-declared.test.ts` checks the style around them (the rest of
-a file stable over many writes and learned from its own ids that do not
-follow the rule, single words (also under PascalCase), the kind word, glued
-suffixes and joins, also after an explicit split id, message flows and
-the processes of new pools over many writes and after the file's own
-process ids where two share a prefix, flows renamed into the declared
-form, `W_ID_PREFIX_STALE` alone and in a batch (also for a type the rule
+`test/domain/validation/conventions-declared.test.ts` checks the ids around them (pools, lanes,
+data and message flows with their defaults, the processes of new pools, single words (also under
+PascalCase), the kind word, glued suffixes and joins, also after an explicit split id, flows
+renamed in the current form while older flow ids stay, `W_ID_PREFIX_STALE` alone and in a batch (also for a type the rule
 switched off, and the id of what the element is now for an id that did not
 pass the rule), the new id of an element the batch created and of the flows
 named after it (also in the entries of an op before its retype), an id
-freed and then claimed explicitly, the `conventions`
-of a result (none in a new file or one that follows the rule), the view of
-`show --conventions` with its reasons).
+freed and then claimed explicitly, the view of `show --conventions` with its sources and
+reasons).
 `test/adapters/out/files/bpmnlint.test.ts` and `test/e2e/bpmnlint-cli.test.ts` check the lookup, the notes in validate and writes
 (also the one for a prefix declared for a DI type),
 `show --conventions` and `new` on the command line (its own errors before
@@ -180,7 +176,7 @@ with it off, writes every fixture byte for byte as without one.
 
 `test/e2e/pipeline.test.ts` checks that the parts of step 2 work as one
 pipeline: the in-memory API keeps the text (a no-op is the input string
-itself, an insert gets ids in the file's style and changes only what it
+itself, an insert gets ids in the id conventions and changes only what it
 touched, a full redraw keeps every DI start tag, a sticky keeps its text
 when it follows its node), validators see the text-preserving result, a
 host validator runs in memory (a write that adds its error is refused,
@@ -631,30 +627,17 @@ why) and deserves a synthetic fixture.
 
 ## Speaking ids
 
-`tools/speaking-ids.mjs` measures new ids on a corpus in-process (dry runs):
-per file a named task, an unnamed gateway and an unnamed boundary event at
-the first task with one outgoing flow. It prints the share of new ids that
-speak (no Camunda Modeler hash, no number), the flows renamed because their
-ids named their old ends, with `--baseline` the share that keeps the prefix
-another build gives the same element, and how often two independent edits
-of one file (two branches) share a new id (different names, the same name,
-unnamed elements).
-
-```
-npm run build
-node tools/speaking-ids.mjs                                   # tools/scenarios
-node tools/speaking-ids.mjs --baseline <old>/dist/index.js ~/corpora/hand
-```
-
-The regression tests: `test/domain/document/ids/speaking-ids.test.ts` and
-`test/domain/document/ids/id-style.test.ts` (ids in every file style, renamed flows and
-their DI, also after an end got another id earlier in the batch; a flow
-form that stays put over many edits, also in snake_case and Pascal_Snake
-bodies, ties, flows under an outvoted prefix or scope),
-`test/domain/editing/keep-flow-ids.test.ts` (flow ids kept with `--keep-flow-ids`,
-`W_FLOW_ID_STALE`, an end renamed or named earlier, `--flow-id` on a
-splice, followed hints in files of mixed flow prefixes:
-`test/fixtures/mixed-styles/`), `test/domain/batch/batch-aliases.test.ts` (aliases in `apply`, on the command
+The regression tests: `test/domain/document/ids/default-ids.test.ts` (new ids follow the declared
+conventions, else element-id-naming's defaults, whatever ids the file has; bpmn-cli's prefixes for
+the types the rule does not check; the guard that `DEFAULT_ID_CONVENTIONS` equals the plugin's
+defaults), `test/domain/document/ids/speaking-ids.test.ts` and
+`test/domain/document/ids/id-style.test.ts` (renamed flows and their DI, also after an end got
+another id earlier in the batch; a flow id in an older form that keeps its id),
+`test/domain/document/ids/id-quality.test.ts` (cuts to 64 characters, collisions,
+transliteration), `test/domain/editing/keep-flow-ids.test.ts` (flow ids kept with
+`--keep-flow-ids`, `W_FLOW_ID_STALE`, an end renamed or named earlier, `--flow-id` on a splice),
+`test/domain/validation/conventions-*.test.ts` (declared conventions and the reader of the
+`.bpmnlintrc`), `test/domain/batch/batch-aliases.test.ts` (aliases in `apply`, on the command
 line too), `test/domain/document/not-found.test.ts` (the candidates of `E_NOT_FOUND`),
 `test/domain/editing/remove-branch.test.ts` (`remove --with-branch` / `--bridge-all`) and
 `test/domain/editing/lane-splice.test.ts` (the lane and the geometry of a node added into a

@@ -1607,7 +1607,7 @@ describe('clean layout engine', () => {
     const flow = flowBetween(laid, 'BE12', 'F');
     // it crosses no line; the drawing keeps the crossing the lanes force (score 5)
     expect(crossingsOf(laid, flow.id)).toEqual([]);
-    expect(laid.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
+    expect(laid.report.crossings).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
     expect(LayoutAnalysis.of(laid.out.model.definitions).score).toBeLessThanOrEqual(5);
     // the label to the upper right of the event, clear of the flows into and out of Pick invoice
     const label = laid.shape('BE12').label!, host = laid.box('A1');
@@ -1899,7 +1899,7 @@ describe('clean layout engine', () => {
     expect(laid.report.overlaps).toEqual([]);
     expect(laid.report.labelClashes).toEqual([]);
     // from the bottom border: score 30 (the ways below cross the branches in the lanes below, the one over the top Start's flow)
-    expect(laid.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
+    expect(laid.report.crossings).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
     const host = laid.box('A1');
     expect(cx(laid.box('BE14')), 'Paid (into the join) on the right').toBe(right(host) - 25);
     expect(cx(laid.box('BE12')), 'Payment failed (into Pack data) left of it').toBe(right(host) - 69);
@@ -2247,7 +2247,7 @@ describe('clean layout engine', () => {
         end('CE', 'C2', 'Satisfied'),
         { op: 'add', kind: 'participant', id: 'Customer', name: 'Customer' },
         { op: 'add', kind: 'participant', id: 'Shop', name: 'Shop' },
-        { op: 'add', kind: 'startEvent:message', id: 'SS', name: 'Order received', in: 'Process_Shop', message: 'Order' },
+        { op: 'add', kind: 'startEvent:message', id: 'SS', name: 'Order received', in: 'shop', message: 'Order' },
         task('S1', 'Process order', 'SS'),
         { op: 'add', kind: 'sendTask', id: 'S2', name: 'Ship goods', after: 'S1' },
         end('SE', 'S2'),
@@ -2265,7 +2265,7 @@ describe('clean layout engine', () => {
     expect(laid.planes).toHaveLength(1);
     expect(idOf(laid.planes[0]!.el)).toBe(doc.collaboration()!.get('id'));
     // named after the process of its first pool
-    expect(idOf(laid.planes[0]!.el)).toBe('Collaboration_Customer');
+    expect(idOf(laid.planes[0]!.el)).toBe('collaboration_customer');
     const customer = laid.box('Customer'), shop = laid.box('Shop'), bank = laid.box('Bank');
     // stacked vertically in declaration order, left-aligned, same width
     expect(customer.y + customer.height).toBeLessThan(shop.y);
@@ -2652,10 +2652,10 @@ describe('clean layout engine', () => {
       expect(laid.report.overlaps, what).toEqual([]);
       // with the boundary paths the timer path goes over the top from Pick invoice's top border (it crosses nothing), and
       // the crossing the lanes force stays
-      if (full) expect(laid.report.crossings, what).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
+      if (full) expect(laid.report.crossings, what).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
       if (!full) {
         // only the crossing the lanes force: Pack order's way up into Inform order crosses Book data's into the join
-        expect(laid.report.crossings).toEqual(['Flow_PackOrderToInformOrderxFlow_BookDataToGateway']);
+        expect(laid.report.crossings).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
         expect(laid.report.inOutOverlaps).toEqual([]);
         expectLabelsClear(laid);
       }

@@ -66,7 +66,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@miragon/bpmnlint-plugin-rules": "0.14.0",
+    "@miragon/bpmnlint-plugin-rules": "0.19.0",
     "@resvg/resvg-wasm": "2.6.2",
     "bpmn-moddle": "^10.2.0",
     "bpmnlint": "11.15.0",

@@ -1,6 +1,7 @@
 import { LAYOUT_MODES } from '../../../domain/diagram/types.js';
 import { Doc } from '../../../domain/document/Doc.js';
 import { EditSession } from '../../../domain/document/EditSession.js';
+import { DEFAULT_ID_CONVENTIONS } from '../../../domain/document/ids/IdConventions.js';
 import { KINDS, TRIGGERS, type Family, type KindDef, type Trigger } from '../../../domain/document/Kinds.js';
 import { SWATCHES } from '../../../domain/diagram/utils/colors.js';
 import { OPS_SCHEMA } from './OpsSchemaBuilder.js';
@@ -71,7 +72,7 @@ export class KindsReference {
         type: kind.type,
         family: kind.family,
         aliases: kind.aliases,
-        prefix: kind.prefix,
+        prefix: DEFAULT_ID_CONVENTIONS.prefixes[kind.type],
         ...(kind.triggers ? { triggers: kind.triggers } : {}),
         ...(kind.props ? { props: kind.props } : {}),
         description: kind.description,
@@ -182,13 +183,13 @@ export class KindsReference {
   }
 
   private kindsSection(): string {
-    const out: string[] = [heading('KINDS  (bpmn add <file> <kind[:trigger]> [name] ...; aliases in parentheses; id prefix in the 2nd column)')];
+    const out: string[] = [heading('KINDS  (bpmn add <file> <kind[:trigger]> [name] ...; aliases in parentheses; id prefix without a .bpmnlintrc in the 2nd column)')];
     const families = [...new Set(KINDS.map((kind) => kind.family))];
     for (const family of families) {
       out.push(`\n${FAMILY_LABELS[family]}`);
       const rows: string[][] = [];
       for (const def of KINDS.filter((kind) => kind.family === family)) {
-        rows.push([this.kindLabelWithAliases(def), `${def.prefix}_`, def.description]);
+        rows.push([this.kindLabelWithAliases(def), DEFAULT_ID_CONVENTIONS.prefixes[def.type]!, def.description]);
         if (def.triggers) rows.push(['', '', `triggers: ${def.triggers.join(', ')}`]);
       }
       out.push(table(rows));

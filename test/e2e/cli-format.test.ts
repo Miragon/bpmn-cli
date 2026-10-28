@@ -178,7 +178,7 @@ describe('read side', () => {
     bpmn('color', file, 'A', '--color', 'blue');
     const cliRun = bpmn('show', file, '--layout');
     expect(cliRun.code, cliRun.err).toBe(0);
-    expect(cliRun.out).toMatch(/^diagram BPMNPlane_(Collaboration_P) \(\1\)\n {2}columns: c0\.\.c4\n {2}participant Pool "Org"\n {4}lane L1 "Clerk"\n {6}row 1: c0 S, c1 A, c2 G, c3 B, c4 E\n {6}row 2: c3 C\n {6}row 3: c4 E2\n {4}lane L2 "Boss"\n/);
+    expect(cliRun.out).toMatch(/^diagram BPMNPlane_(collaboration_p) \(\1\)\n {2}columns: c0\.\.c4\n {2}participant Pool "Org"\n {4}lane L1 "Clerk"\n {6}row 1: c0 S, c1 A, c2 G, c3 B, c4 E\n {6}row 2: c3 C\n {6}row 3: c4 E2\n {4}lane L2 "Boss"\n/);
     expect(cliRun.out).toMatch(/^colors: A blue$/m);
     expect(cliRun.out).toMatch(/^layout quality: score \d+: .*overlaps 1/m);
     expect(cliRun.out).toMatch(/^ {2}overlaps \[B, C\]$/m);

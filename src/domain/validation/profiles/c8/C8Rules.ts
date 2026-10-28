@@ -7,7 +7,7 @@ import { isFeel } from '../../utils/c8-value.js';
 
 /** Base of the Camunda 8 rule classes: how Zeebe reads zeebe content, and how hints rebuild it. */
 export abstract class C8Rules extends EngineRules {
-  /** `userTask Activity_X`, `the multiInstanceLoopCharacteristics of userTask Activity_X` */
+  /** `userTask userTask_x`, `the multiInstanceLoopCharacteristics of userTask userTask_x` */
   protected describe(el: El, owner?: El): string {
     const id = idOf(el);
     const kind = this.kit.isBpmnElement(el) ? lowerFirst(this.kit.kindLabel(el).replace(/^bpmn:/, '')) : el.$type;

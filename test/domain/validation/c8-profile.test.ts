@@ -429,18 +429,18 @@ describe('Camunda 8 files the CLI writes', () => {
       doc,
       [
         { op: 'add', kind: 'start', name: 'Go' },
-        { op: 'add', kind: 'userTask', name: 'Review', after: 'Event_Go' },
-        { op: 'add', kind: 'task', name: 'Ship', after: 'Activity_Review' },
-        { op: 'retype', id: 'Activity_Ship', kind: 'userTask' },
+        { op: 'add', kind: 'userTask', name: 'Review', after: 'startEvent_go' },
+        { op: 'add', kind: 'task', name: 'Ship', after: 'userTask_review' },
+        { op: 'retype', id: 'task_ship', kind: 'userTask' },
       ],
       { dryRun: true },
     );
-    expect(result.xml).toMatch(/<bpmn:userTask id="Activity_Review" name="Review">\s*<bpmn:extensionElements>\s*<zeebe:userTask \/>/);
-    expect(result.xml).toMatch(/<bpmn:userTask id="Activity_Ship" name="Ship">\s*<bpmn:extensionElements>\s*<zeebe:userTask \/>/);
-    expect(result.changes.notes.join('\n')).toMatch(/Activity_Review is a Camunda user task \(zeebe:userTask\)/);
+    expect(result.xml).toMatch(/<bpmn:userTask id="userTask_review" name="Review">\s*<bpmn:extensionElements>\s*<zeebe:userTask \/>/);
+    expect(result.xml).toMatch(/<bpmn:userTask id="userTask_ship" name="Ship">\s*<bpmn:extensionElements>\s*<zeebe:userTask \/>/);
+    expect(result.changes.notes.join('\n')).toMatch(/userTask_review is a Camunda user task \(zeebe:userTask\)/);
     expect(result.validation.warnings.map((warning) => warning.code)).not.toContain('W_C8_JOB_WORKER_USER_TASK');
     for (const target of [undefined, 'camunda7'] as const) {
-      const other = await mutateDoc(Doc.create({ target, processName: 'Order' }), [{ op: 'add', kind: 'userTask', name: 'Review', in: 'Process_Order' }], { dryRun: true });
+      const other = await mutateDoc(Doc.create({ target, processName: 'Order' }), [{ op: 'add', kind: 'userTask', name: 'Review', in: 'order' }], { dryRun: true });
       expect(other.xml).not.toContain('zeebe:userTask');
     }
   });
@@ -451,12 +451,12 @@ describe('Camunda 8 files the CLI writes', () => {
       doc,
       [
         { op: 'add', kind: 'start', name: 'Go' },
-        { op: 'add', kind: 'intermediateCatchEvent:conditional', name: 'Stock ready', after: 'Event_Go', when: '= stock > 0' },
-        { op: 'add', kind: 'end', name: 'Done', after: 'Event_StockReady' },
+        { op: 'add', kind: 'intermediateCatchEvent:conditional', name: 'Stock ready', after: 'startEvent_go', when: '= stock > 0' },
+        { op: 'add', kind: 'end', name: 'Done', after: 'event_stockReady' },
       ],
       { dryRun: true },
     );
-    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="ConditionalEventDefinition_StockReady">');
+    expect(result.xml).toContain('<bpmn:conditionalEventDefinition id="conditionalEventDefinition_stockReady">');
     expect(result.validation.platform).toMatchObject({ platform: 'c8', counts: { deploy: 0, runtime: 0, practice: 0 } });
     const plain = await mutateDoc(Doc.create({ processName: 'Order' }), [{ op: 'add', kind: 'start', name: 'Go', timer: 'PT1H' }], { dryRun: true });
     expect(plain.xml).toMatch(/<bpmn:timerEventDefinition>/);

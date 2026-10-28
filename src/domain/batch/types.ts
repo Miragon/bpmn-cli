@@ -50,12 +50,4 @@ export interface MutationResult {
   delta?: ValidationDelta;
   view?: ModelView;
   xml: string;
-  /** generated ids that follow the declared conventions rather than the file's own style */
-  conventions?: ConventionsReport;
-}
-
-export interface ConventionsReport {
-  ids: string[];
-  /** e.g. `.bpmnlintrc in models` */
-  source?: string;
 }

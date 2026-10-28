@@ -23,7 +23,7 @@ export class EditExtensionElementsDefinition extends EditCommandDefinition<EditE
     const obj = command.fields;
     const addOnly = ['attrs', 'body', 'xml', 'replace'];
     if (obj['action'] === 'add') {
-      if (obj['type'] === undefined && obj['xml'] === undefined) throw command.fail('ext add needs "type" (plus optional "attrs"/"body") or "xml"', 'Example: {"op":"ext","id":"Activity_X","action":"add","type":"zeebe:taskDefinition","attrs":{"type":"my-worker"}}.');
+      if (obj['type'] === undefined && obj['xml'] === undefined) throw command.fail('ext add needs "type" (plus optional "attrs"/"body") or "xml"', 'Example: {"op":"ext","id":"serviceTask_x","action":"add","type":"zeebe:taskDefinition","attrs":{"type":"my-worker"}}.');
       if (obj['index'] !== undefined) throw command.fail('"index" only applies to action "remove"');
       if (obj['xml'] !== undefined && (obj['attrs'] !== undefined || obj['body'] !== undefined)) throw command.fail('"xml" cannot be combined with "attrs" or "body"', 'Put everything into the XML snippet, or use type + attrs + body.');
     } else {

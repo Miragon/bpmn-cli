@@ -85,8 +85,8 @@ export class Doc {
   }
 
   /**
-   * The given process id, else one from its name, else Process_1; the definitions speak like the
-   * process (Definitions_OrderToCash), else the tool default Definitions_1.
+   * The given process id, else its name (orderToCash), else Process_1; the definitions speak like
+   * the process (definitions_orderToCash), else the tool default Definitions_1.
    */
   private static rootIds(opts: NewDocOptions, style: IdStyle, ids: IdRegistry): { processId: string; definitionsId: string } {
     const declared = (type: string): boolean => style.explain(typeRequest(type)).source === 'lint';
@@ -126,7 +126,6 @@ export class Doc {
     return new Doc(model, ids, file, { text: xml, mirror });
   }
 
-  /** A new file has no own id style to differ from, so given conventions are taken without a `conventions:` line. */
   static create(opts: NewDocOptions = {}, file?: string): Doc {
     Doc.assertTarget(opts.target);
     const moddle = createModdle();
@@ -291,7 +290,7 @@ export class Doc {
     return new IdSuggestions(this, batch).for(query, max);
   }
 
-  /** New ids follow these where they declare a prefix, the file's own style elsewhere. */
+  /** New ids follow these, else element-id-naming's defaults. */
   get conventions(): IdConventions | undefined {
     return this.declared;
   }
@@ -302,13 +301,9 @@ export class Doc {
     this.style = undefined;
   }
 
-  /** Learned from the document's ids on first use, the declared conventions over them. */
-  get ownIdStyle(): IdStyle {
-    return (this.style ??= IdStyle.infer(this.definitions, this.declared));
-  }
-
-  forgetIdStyle(): void {
-    this.style = undefined;
+  /** The declared conventions, else element-id-naming's defaults. */
+  get idStyle(): IdStyle {
+    return (this.style ??= IdStyle.of(this.declared));
   }
 
   /** Refuses an invalid or taken id. */

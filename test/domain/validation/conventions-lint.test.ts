@@ -154,16 +154,17 @@ describe('the ids of a new file pass element-id-naming (the real rule)', () => {
     }
   });
 
-  it('without declared conventions the same batch gives ids the rule reports (the control)', async () => {
+  it('without declared conventions the same batch passes the rule with its defaults', async () => {
     const doc = Doc.create({ processName: 'Invoice handling' }, 'invoice-handling.bpmn');
-    const result = await mutateDoc(doc, everyKind('Process_InvoiceHandling'), { layout: false, force: true });
-    expect((await lint(result.xml, { severity: 'warn', config: {} })).length).toBeGreaterThan(50);
+    const result = await mutateDoc(doc, everyKind(doc.processes()[0]!.get<string>('id')), { layout: false, force: true });
+    expect(result.changes.created.length).toBeGreaterThan(100);
+    expect(await lint(result.xml, { severity: 'warn', config: {} })).toEqual([]);
   });
 
-  it('the process and the definitions keep their ids unless a prefix names their type exactly', async () => {
+  it('a named process gets no prefix and the definitions take definitions_, unless a prefix names their type exactly', async () => {
     const bare = conventionsOf({ severity: 'warn', config: {} });
     const plain = Doc.create({ processName: 'Invoice handling', conventions: bare });
-    expect([plain.processes()[0]!.get('id'), plain.definitions.get('id')]).toEqual(['Process_InvoiceHandling', 'Definitions_InvoiceHandling']);
+    expect([plain.processes()[0]!.get('id'), plain.definitions.get('id')]).toEqual(['invoiceHandling', 'definitions_invoiceHandling']);
     const exact = conventionsOf({ severity: 'warn', config: { prefixes: { 'bpmn:Process': 'process_', 'bpmn:Definitions': 'definitions_' } } });
     const named = Doc.create({ processName: 'Invoice handling', conventions: exact });
     expect([named.processes()[0]!.get('id'), named.definitions.get('id')]).toEqual(['process_invoiceHandling', 'definitions_invoiceHandling']);
@@ -331,8 +332,8 @@ describe('idConventionsFromLint', () => {
     const bare = conventionsOf({ severity: 'warn', config: {} })!;
     const plain = Object.keys(bare.prefixes).filter((key) => key.split(':').length === 2);
     const qualified = Object.keys(bare.prefixes).filter((key) => key.split(':').length === 3);
-    // every task and sub-process, every gateway (complex too), every event, sequence flows
-    expect(plain.length).toBe(23);
+    // every task and sub-process, every gateway (complex too), every event, flows, pools, lanes, data, artifacts
+    expect(plain.length).toBe(34);
     expect(bare.prefixes).toMatchObject({
       'bpmn:ServiceTask': 'serviceTask_',
       'bpmn:AdHocSubProcess': 'subProcess_',
@@ -340,12 +341,18 @@ describe('idConventionsFromLint', () => {
       'bpmn:ComplexGateway': 'gateway_',
       'bpmn:BoundaryEvent': 'event_',
       'bpmn:SequenceFlow': 'flow_',
+      'bpmn:MessageFlow': 'messageFlow_',
+      'bpmn:Participant': 'participant_',
+      'bpmn:Lane': 'lane_',
+      'bpmn:DataObjectReference': 'dataObject_',
+      'bpmn:DataStoreReference': 'dataStore_',
+      'bpmn:Association': 'association_',
       'bpmn:StartEvent:timer': 'timerStartEvent_',
       'bpmn:BoundaryEvent:message': 'messageEvent_',
       'bpmn:EndEvent:cancel': 'cancelEndEvent_',
     });
     expect(qualified.length).toBe(32);
-    for (const type of ['bpmn:Process', 'bpmn:Definitions', 'bpmn:Lane', 'bpmn:Participant', 'bpmn:MessageFlow', 'bpmn:Message']) expect(bare.prefixes[type], type).toBeUndefined();
+    for (const type of ['bpmn:Process', 'bpmn:Definitions', 'bpmn:Message', 'bpmn:DataObject', 'bpmn:DataStore']) expect(bare.prefixes[type], type).toBeUndefined();
     expect(bare).toMatchObject({ case: 'camelCase', qualifier: 'optional', source: '.bpmnlintrc in .' });
     // the qualifier off: no qualified prefixes; case any: none declared
     const off = conventionsOf({ severity: 'error', config: { eventDefinitionQualifier: 'off', case: 'any' } })!;
@@ -358,11 +365,11 @@ describe('idConventionsFromLint', () => {
     expect(exact.prefixes['bpmn:Definitions']).toBe('definitions_');
   });
 
-  it('declares nothing for the severity off, no setting, or every prefix off', () => {
+  it('declares nothing for the severity off or no setting; every prefix off declares the case and no prefix', () => {
     expect(idConventionsFromLint(undefined, naming)).toEqual({ notes: [] });
     expect(idConventionsFromLint({ severity: 'off', config: { case: 'nonsense' } }, naming)).toEqual({ notes: [] });
     const all = Object.fromEntries(Object.keys(naming.DEFAULT_PREFIXES).map((key) => [key, false]));
-    expect(idConventionsFromLint({ severity: 'warn', config: { prefixes: all } }, naming).conventions).toBeUndefined();
+    expect(idConventionsFromLint({ severity: 'warn', config: { prefixes: all } }, naming).conventions).toEqual({ prefixes: {}, qualifier: 'optional', case: 'camelCase' });
   });
 
   it('a prefix new ids cannot start with is left out with one W_CONFIG_IGNORED naming the .bpmnlintrc, the key and the value', () => {
@@ -371,13 +378,13 @@ describe('idConventionsFromLint', () => {
     expect(conventions!.prefixes['bpmn:ScriptTask']).toBe('scriptTask_');
     // the concrete types the rule still checks with them (show --conventions marks them)
     expect(conventions!.ignored).toEqual(expect.arrayContaining(['bpmn:UserTask', 'bpmn:ExclusiveGateway', 'bpmn:ComplexGateway', 'bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:Task']));
-    // one note per configured type (every gateway falls back to bpmn:Gateway)
-    expect(notes.map((note) => note.code)).toEqual(Array(5).fill('W_CONFIG_IGNORED'));
     expect(notes[0]).toMatchObject({
       severity: 'warning',
-      message: ".bpmnlintrc in models: @miragon/rules/element-id-naming prefix of bpmn:UserTask \"user task_\" cannot start an id (a letter or _ first, then letters, digits, _ . -, at most 56 characters): new ids of the type follow the learned id style, and the rule reports them",
+      message: ".bpmnlintrc in models: @miragon/rules/element-id-naming prefix of bpmn:UserTask \"user task_\" cannot start an id (a letter or _ first, then letters, digits, _ . -, at most 56 characters): new ids of the type take bpmn-cli's own prefix, and the rule reports them",
       hint: 'Fix the prefix in the .bpmnlintrc, or set it to false to switch bpmn:UserTask off.',
     });
+    // one note per configured type (every gateway falls back to bpmn:Gateway)
+    expect(notes.map((note) => note.code)).toEqual(Array(5).fill('W_CONFIG_IGNORED'));
     expect(notes.map((note) => note.message.split(' "')[0])).toContain('.bpmnlintrc in models: @miragon/rules/element-id-naming prefix of bpmn:Gateway');
   });
 
@@ -407,7 +414,7 @@ describe('idConventionsFromLint', () => {
     const { conventions, notes } = idConventionsFromLint({ severity: 'warn', config: { case: 'camelcase', eventDefinitionQualifier: 'requried' } }, naming);
     expect(conventions).toMatchObject({ case: 'PascalCase', qualifier: 'optional' });
     expect(notes.map((note) => [note.message, note.hint])).toEqual([
-      ['.bpmnlintrc: @miragon/rules/element-id-naming case "camelcase" is unknown: the rule checks PascalCase, and new ids take it', 'Write one of camelCase, PascalCase, snake_case, any in the .bpmnlintrc. Did you mean camelCase?'],
+      ['.bpmnlintrc: @miragon/rules/element-id-naming case "camelcase" is unknown: the rule checks PascalCase, and new ids take it', 'Write one of camelCase, PascalCase, snake_case, kebab-case, any in the .bpmnlintrc. Did you mean camelCase?'],
       ['.bpmnlintrc: @miragon/rules/element-id-naming eventDefinitionQualifier "requried" is unknown: the rule and new ids take optional', 'Write one of off, optional, required in the .bpmnlintrc. Did you mean required?'],
     ]);
     // the hint's guess: any case, - or _, a prefix, a small typo; nothing for a value that means something else
@@ -418,42 +425,32 @@ describe('idConventionsFromLint', () => {
     expect(hint({ eventDefinitionQualifier: 'on' })).toBe('Write one of off, optional, required in the .bpmnlintrc.');
     expect(hint({ eventDefinitionQualifier: '' })).toBe('Write one of off, optional, required in the .bpmnlintrc.');
     // the rule's own spellings give no note; ["warn"] and the bare flag are its defaults
-    for (const config of [undefined, {}, { case: 'snake_case', eventDefinitionQualifier: 'off' }]) expect(idConventionsFromLint({ severity: 'warn', config }, naming).notes).toEqual([]);
+    for (const config of [undefined, {}, { case: 'snake_case', eventDefinitionQualifier: 'off' }, { case: 'kebab-case' }]) expect(idConventionsFromLint({ severity: 'warn', config }, naming).notes).toEqual([]);
   });
 
-  it('says why a value is ignored: a case named like a property of JavaScript\'s Object (unknown like any other; a plugin before 0.12.1 cannot check it), a prefix outside ASCII', async () => {
+  it('says why a value is ignored: a case named like a property of JavaScript\'s Object (unknown like any other), a prefix outside ASCII', async () => {
     const { conventions, notes } = idConventionsFromLint({ severity: 'warn', config: { case: 'toString', prefixes: { 'bpmn:UserTask': 'prüfung_' } } }, naming);
     expect(conventions).toMatchObject({ case: 'PascalCase', ignored: ['bpmn:UserTask'] });
     expect(notes.map((note) => note.message)).toEqual([
       '.bpmnlintrc: @miragon/rules/element-id-naming case "toString" is unknown: the rule checks PascalCase, and new ids take it',
-      '.bpmnlintrc: @miragon/rules/element-id-naming prefix of bpmn:UserTask "prüfung_" has a character outside ASCII, which bpmn-cli does not write in ids: new ids of the type follow the learned id style, and the rule reports them',
+      '.bpmnlintrc: @miragon/rules/element-id-naming prefix of bpmn:UserTask "prüfung_" has a character outside ASCII, which bpmn-cli does not write in ids: new ids of the type take bpmn-cli\'s own prefix, and the rule reports them',
     ]);
     expect(conventionsOf({ severity: 'warn', config: { case: 'constructor' } })?.case).toBe('PascalCase');
-    // the rule checks PascalCase there (since @miragon/bpmnlint-plugin-rules 0.12.1; 0.12.0 could not: it reported
-    // <userTask_undefined> for an id without the prefix and threw on the first id with it), for __proto__ too
+    // the rule checks PascalCase there, for __proto__ too
     const ids = wrap('<bpmn:userTask id="userTask_checkInvoice"/><bpmn:userTask id="userTask_CheckInvoice"/>');
     for (const name of ['toString', '__proto__']) {
       expect((await lint(ids, { severity: 'warn', config: { case: name } })).map((finding) => [finding.id, finding.message])).toEqual([['userTask_checkInvoice', 'Element id must match the naming convention <userTask_PascalCase>']]);
       expect(idConventionsFromLint({ severity: 'warn', config: { case: name } }, naming).notes.map((note) => note.message)).toEqual([`.bpmnlintrc: @miragon/rules/element-id-naming case "${name}" is unknown: the rule checks PascalCase, and new ids take it`]);
     }
-    // injected helpers of a plugin before 0.12.1 answer such a name with Object.prototype's property (a function, or
-    // Object.prototype itself), which has no label: new ids take the fallback, and the note says that rule cannot check it
-    const older = { ...naming, resolveCase: (caseName: string) => (({}) as Record<string, unknown>)[caseName] as ReturnType<typeof naming.resolveCase> ?? naming.resolveCase(caseName) };
-    for (const name of ['toString', '__proto__']) {
-      const old = idConventionsFromLint({ severity: 'warn', config: { case: name } }, older);
-      expect(old.conventions?.case).toBe('PascalCase');
-      expect(old.notes.map((note) => note.message)).toEqual([`.bpmnlintrc: @miragon/rules/element-id-naming case "${name}" is unknown, and the rule of a @miragon/bpmnlint-plugin-rules before 0.12.1 cannot check it: new ids take PascalCase, the fallback for an unknown case`]);
-    }
-    expect(idConventionsFromLint({ severity: 'warn', config: { case: 'snake_case' } }, older).notes).toEqual([]);
   });
 
-  it('under required, a qualified prefix too long for new ids is one note; such events follow the learned style, no W_ID_PREFIX_STALE names the plain prefix', async () => {
+  it('under required, a qualified prefix too long for new ids is one note; such events take the plain prefix, no W_ID_PREFIX_STALE names it', async () => {
     const plain = 'endEventOfTheOrderHandlingProcessInTheBackOffice_';
     const setting: BpmnlintRuleSetting = { severity: 'warn', config: { eventDefinitionQualifier: 'required', prefixes: { 'bpmn:EndEvent': plain } } };
     const { conventions, notes } = idConventionsFromLint(setting, naming);
     // escalation, terminate and compensate make it longer than 56 characters; error, signal and message do not
     expect(notes.map((note) => note.message.split(' "')[0])).toEqual(['escalation', 'terminate', 'compensate'].map((eventType) => `.bpmnlintrc: @miragon/rules/element-id-naming prefix of bpmn:EndEvent:${eventType}`));
-    expect(notes[0]?.message).toContain('is longer than 56 characters (the bpmn:EndEvent prefix qualified with the trigger): new ids of such events follow the learned id style');
+    expect(notes[0]?.message).toContain('is longer than 56 characters (the bpmn:EndEvent prefix qualified with the trigger): new ids of such events take the plain prefix, and the rule reports them');
     expect(conventions!.ignored).toEqual(['bpmn:EndEvent:escalation', 'bpmn:EndEvent:terminate', 'bpmn:EndEvent:compensate']);
     expect(conventions!.prefixes['bpmn:EndEvent:error']).toBe(`error${plain.charAt(0).toUpperCase()}${plain.slice(1)}`);
     const xml = wrap(`<bpmn:startEvent id="startEvent_start" name="Start"/><bpmn:endEvent id="errorEndEventOfTheOrderHandlingProcessInTheBackOffice_fail" name="Fail"><bpmn:errorEventDefinition id="E1"/></bpmn:endEvent>`);
@@ -462,8 +459,7 @@ describe('idConventionsFromLint', () => {
       { op: 'retype', id: 'errorEndEventOfTheOrderHandlingProcessInTheBackOffice_fail', kind: 'endEvent:escalation', escalation: 'Late' },
     ] as EditCommand[], { layout: false, conventions, force: true });
     const late = result.changes.created.find((created) => created.name === 'Late' && created.kind.startsWith('endEvent'))!.id;
-    expect(late.startsWith(plain)).toBe(false);
-    expect(result.conventions?.ids ?? []).not.toContain(late);
+    expect(late.startsWith(plain)).toBe(true);
     expect(result.changes.warnings.filter((warning) => warning.code === 'W_ID_PREFIX_STALE')).toEqual([]);
   });
 });

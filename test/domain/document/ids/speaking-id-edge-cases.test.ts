@@ -1,7 +1,7 @@
 /**
  * Speaking id edge cases: an anchor name with a number keeps its speaking
  * stem, a data reference and the element it stands for get distinct
- * speaking ids in a file with type-named prefixes, and DI ids derived from
+ * speaking ids, and DI ids derived from
  * long element ids keep the 64 character cap. Synthetic models only.
  */
 import { describe, expect, it } from 'vitest';
@@ -11,8 +11,8 @@ import { speakingStem } from '../../../../src/domain/document/utils/id-words.js'
 
 const flowIds = (xml: string): string[] => [...xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1]!);
 const allIds = (xml: string): string[] => [...xml.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]!);
-/** a flow id with a side that is only a word for a kind (Flow_CheckToGateway, Flow_GatewayToAfterGateway) */
-const GENERIC_SIDE = /(^Flow_|To)(Gateway|AfterGateway|Join|Task|Timer|Catch)(To|$|_\d+$)/;
+/** a flow id with a side that is only a word for a kind (flow_checkToGateway, flow_gatewayToAfterGateway) */
+const GENERIC_SIDE = /(^flow_|To)(gateway|Gateway|AfterGateway|Join|Task|Timer|Catch)(To|$|\d+$)/;
 
 describe('an anchor name with a number keeps its speaking stem', () => {
   it('speakingStem keeps names with numbers, not machine ids', () => {
@@ -29,7 +29,7 @@ describe('an anchor name with a number keeps its speaking stem', () => {
   for (const name of ['Check 2024', 'Order 01 001', 'BP 01 001 UI']) {
     it(`the split after "${name}": the flows and the unnamed task name the gateways, not their kind`, async () => {
       const ops = [
-        { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Bp', as: '$s' },
+        { op: 'add', kind: 'startEvent', name: 'Start', in: 'bp', as: '$s' },
         { op: 'add', kind: 'userTask', name, after: '$s', as: '$u' },
         { op: 'add', kind: 'endEvent', name: 'Done', after: '$u' },
         { op: 'split', after: '$u', kind: 'parallelGateway', branches: [{ nodes: [{ kind: 'serviceTask', name: 'Reserve stock' }] }, { nodes: [{ kind: 'serviceTask' }] }] },
@@ -37,7 +37,7 @@ describe('an anchor name with a number keeps its speaking stem', () => {
       const applied = await applyToXml((await newXml({ processName: 'Bp' })).xml, ops, { layout: false });
       const flows = flowIds(applied.xml);
       for (const id of flows) expect(id).not.toMatch(GENERIC_SIDE);
-      expect(allIds(applied.xml).filter((id) => /^Activity_/.test(id))).not.toContain('Activity_AfterGateway');
+      expect(allIds(applied.xml).filter((id) => /^serviceTask_/.test(id))).not.toContain('serviceTask_afterGateway');
       expect(new Set(flows).size).toBe(flows.length);
       expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
     });
@@ -45,7 +45,7 @@ describe('an anchor name with a number keeps its speaking stem', () => {
 
   it('the exact ids after Check 2024', async () => {
     const ops = [
-      { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Bp', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Start', in: 'bp', as: '$s' },
       { op: 'add', kind: 'userTask', name: 'Check 2024', after: '$s', as: '$u' },
       { op: 'add', kind: 'endEvent', name: 'Done', after: '$u' },
       { op: 'split', after: '$u', kind: 'parallelGateway', branches: [{ nodes: [{ kind: 'serviceTask', name: 'Reserve stock' }] }, { nodes: [{ kind: 'serviceTask' }] }] },
@@ -53,19 +53,19 @@ describe('an anchor name with a number keeps its speaking stem', () => {
     const applied = await applyToXml((await newXml({ processName: 'Bp' })).xml, ops, { layout: false });
     expect(flowIds(applied.xml).sort()).toEqual(
       [
-        'Flow_StartToCheck2024',
-        'Flow_Check2024ToAfterCheck2024',
-        'Flow_AfterCheck2024ToReserveStock',
-        'Flow_AfterCheck2024ToServiceTaskAfterCheck2024',
-        'Flow_ReserveStockToCheck2024Join',
-        'Flow_ServiceTaskAfterCheck2024ToCheck2024Join',
-        'Flow_Check2024JoinToDone',
+        'flow_startToCheck2024',
+        'flow_check2024ToAfterCheck2024',
+        'flow_afterCheck2024ToReserveStock',
+        'flow_afterCheck2024ToAfterCheck2024Gateway',
+        'flow_reserveStockToCheck2024Join',
+        'flow_afterCheck2024GatewayToCheck2024Join',
+        'flow_check2024JoinToDone',
       ].sort(),
     );
   });
 });
 
-/** A camelCase file whose prefixes are the element types (startEvent_, serviceTask_), without data. */
+/** A file in the defaults of element-id-naming (startEvent_, serviceTask_), without data. */
 const CAMEL = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="definitions_import" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="process_import" isExecutable="true">
@@ -78,35 +78,17 @@ const CAMEL = `<?xml version="1.0" encoding="UTF-8"?>
 </bpmn:definitions>`;
 
 describe('a data reference and the element it stands for get distinct speaking ids', () => {
-  it('type-named prefixes: dataObjectReference_invoice and dataObject_invoice, no suffix', async () => {
+  it('dataObject_invoice and its backing dataObjectItem_invoice, no suffix', async () => {
     const applied = await applyToXml(CAMEL, [{ op: 'add', kind: 'dataObjectReference', name: 'Invoice', in: 'process_import', as: '$d' }, { op: 'connect', source: 'serviceTask_importArticles', target: '$d' }], { layout: false });
-    expect(applied.xml).toContain('<bpmn:dataObjectReference id="dataObjectReference_invoice" name="Invoice" dataObjectRef="dataObject_invoice" />');
-    expect(applied.xml).toContain('<bpmn:dataObject id="dataObject_invoice" />');
-    expect(applied.result.aliases).toEqual({ $d: 'dataObjectReference_invoice' });
+    expect(applied.xml).toContain('<bpmn:dataObjectReference id="dataObject_invoice" name="Invoice" dataObjectRef="dataObjectItem_invoice" />');
+    expect(applied.xml).toContain('<bpmn:dataObject id="dataObjectItem_invoice" />');
+    expect(applied.result.aliases).toEqual({ $d: 'dataObject_invoice' });
     expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
   });
 
-  it('type-named prefixes: dataStoreReference_invoice and dataStore_invoice, no suffix', async () => {
+  it('dataStore_invoice and its backing dataStoreItem_invoice, no suffix', async () => {
     const applied = await applyToXml(CAMEL, [{ op: 'add', kind: 'dataStoreReference', name: 'Invoice', in: 'process_import' }], { layout: false });
-    expect(applied.xml).toContain('<bpmn:dataStoreReference id="dataStoreReference_invoice" name="Invoice" dataStoreRef="dataStore_invoice" />');
-    expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
-  });
-
-  it('a file that names references and data objects with one prefix: the data object says what it is, no suffix', async () => {
-    const xml = CAMEL.replace(
-      '<bpmn:sequenceFlow id="flow_importStartedToImportArticles"',
-      `<bpmn:dataObjectReference id="data_order" name="Order" dataObjectRef="data_orderObject" />
-    <bpmn:dataObject id="data_orderObject" />
-    <bpmn:dataObjectReference id="data_article" name="Article" dataObjectRef="data_articleObject" />
-    <bpmn:dataObject id="data_articleObject" />
-    <bpmn:sequenceFlow id="flow_importStartedToImportArticles"`,
-    );
-    const applied = await applyToXml(xml, [{ op: 'add', kind: 'dataObjectReference', name: 'Invoice', in: 'process_import', as: '$d' }], { layout: false });
-    const ref = applied.result.aliases!.$d!;
-    const object = /<bpmn:dataObjectReference id="[^"]+" name="Invoice" dataObjectRef="([^"]+)"/.exec(applied.xml)![1]!;
-    expect(ref).toBe('data_invoice');
-    expect(object).toBe('data_invoiceObject');
-    expect(object).not.toMatch(/_\d+$/);
+    expect(applied.xml).toContain('<bpmn:dataStoreReference id="dataStore_invoice" name="Invoice" dataStoreRef="dataStoreItem_invoice" />');
     expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
   });
 });
@@ -115,9 +97,9 @@ describe('DI ids derived from long element ids keep the 64 character cap', () =>
   for (const style of ['Shape_/Edge_', 'BPMNShape_/BPMNEdge_', '_di']) {
     it(`a file whose DI ids are ${style}`, async () => {
       const base = await applyToXml((await newXml({ processName: 'Meter' })).xml, [
-        { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Meter', as: '$s' },
+        { op: 'add', kind: 'startEvent', name: 'Start', in: 'meter', as: '$s' },
         { op: 'add', kind: 'userTask', name: '4-Augen-Prinzip: prüfen', after: '$s', as: '$a' },
-        { op: 'add', kind: 'endEvent', name: 'Done', after: '$a' },
+        { op: 'add', kind: 'endEvent', name: 'Done', after: 'userTask_userTask4AugenPrinzipPruefen' },
       ]);
       const xml =
         style === 'Shape_/Edge_'
@@ -126,7 +108,7 @@ describe('DI ids derived from long element ids keep the 64 character cap', () =>
             ? base.xml.replace(/id="BPMN(?:Shape|Edge)_([^"]+)"/g, (_m, id: string) => `id="${id}_di"`)
             : base.xml;
       const applied = await applyToXml(xml, [
-        { op: 'add', kind: 'userTask', name: '4-Augen-Prinzip: prüfen & freigeben (2. Stufe)?', after: 'Activity_4AugenPrinzipPruefen', as: '$q' },
+        { op: 'add', kind: 'userTask', name: '4-Augen-Prinzip: prüfen & freigeben (2. Stufe)?', after: 'userTask_userTask4AugenPrinzipPruefen', as: '$q' },
         { op: 'add', kind: 'serviceTask', name: '审批 订单', after: '$q' },
       ]);
       const ids = allIds(applied.xml);
@@ -136,7 +118,7 @@ describe('DI ids derived from long element ids keep the 64 character cap', () =>
       const flow = flowIds(applied.xml).sort((left, right) => right.length - left.length)[0]!;
       expect(flow.length).toBeGreaterThan(MAX_ID - 'Edge_'.length);
       const edge = new RegExp(`<bpmndi:BPMNEdge id="([^"]+)" bpmnElement="${flow}"`).exec(applied.xml)![1]!;
-      expect(edge.startsWith(style === 'Shape_/Edge_' ? 'Edge_' : style === '_di' ? 'Flow_' : 'BPMNEdge_')).toBe(true);
+      expect(edge.startsWith(style === 'Shape_/Edge_' ? 'Edge_' : style === '_di' ? 'flow_' : 'BPMNEdge_')).toBe(true);
     });
   }
 });

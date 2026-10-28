@@ -88,9 +88,9 @@ export class CommandFieldCheck {
 
   selection(needed: boolean): void {
     const obj = this.fields;
-    if (needed && obj['ids'] === undefined && !this.hasSelector()) throw this.fail('give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["Event_Start","Event_Done"],"color":"green"}.');
+    if (needed && obj['ids'] === undefined && !this.hasSelector()) throw this.fail('give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["startEvent_start","endEvent_done"],"color":"green"}.');
     const path = obj['path'] as string[] | undefined;
-    if (path && path.length !== 2) throw this.fail(`"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["Event_Start", "Event_Done"], "via": ["Flow_Yes"].');
+    if (path && path.length !== 2) throw this.fail(`"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["startEvent_start", "endEvent_done"], "via": ["flow_okToBook"].');
     if (obj['via'] !== undefined && !path) throw this.fail('"via" needs "path"');
   }
 }

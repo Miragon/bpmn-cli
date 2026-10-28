@@ -17,7 +17,7 @@ export class ReorderElementsDefinition extends EditCommandDefinition<ReorderElem
   override check(command: CommandFieldCheck): void {
     const given = ['flows', 'lanes', 'pools'].filter((givenKey) => command.fields[givenKey] !== undefined);
     if (given.length !== 1) {
-      throw command.fail(`give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"Gateway_Ok","flows":["Flow_OkToFix","Flow_OkToBook"]}, {"op":"order","id":"Participant_X","lanes":["Lane_B","Lane_A"]} or {"op":"order","id":"Collaboration_X","pools":["Participant_Customer","Participant_X"]}.');
+      throw command.fail(`give exactly one of "flows" (outgoing flows of a node), "lanes" (lanes of a pool / process / parent lane) or "pools" (participants of a collaboration)`, 'Example: {"op":"order","id":"gateway_ok","flows":["flow_okToFix","flow_okToBook"]}, {"op":"order","id":"participant_x","lanes":["lane_b","lane_a"]} or {"op":"order","id":"collaboration_x","pools":["participant_customer","participant_x"]}.');
     }
   }
 

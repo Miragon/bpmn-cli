@@ -22,7 +22,7 @@ export class StructureFindings {
     return name ? String(name) : undefined;
   }
 
-  /** `userTask Activity_X "name"` */
+  /** `userTask userTask_x "name"` */
   describe(el: El): string {
     const name = this.nameOf(el);
     return `${kindLabel(el)} ${shownId(el)}${name ? ` "${name}"` : ''}`;

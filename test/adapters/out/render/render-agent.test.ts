@@ -289,9 +289,9 @@ describe('halos', () => {
     const doc = await Doc.fromXml(readFileSync(O2C, 'utf8'));
     const result = await mutateDoc(doc, parseOps([{ op: 'add', kind: 'userTask', name: 'Approve credit', after: 'Activity_CheckCredit' }, { op: 'color', ids: ['Activity_ShipGoods'], color: 'green' }]), { dryRun: true });
     const highlight = changeHighlight(mutationReport(result));
-    expect(highlight.created).toEqual(expect.arrayContaining(['Activity_ApproveCredit', 'Flow_ApproveCreditToCreditOk']));
+    expect(highlight.created).toEqual(expect.arrayContaining(['userTask_approveCredit', 'flow_approveCreditToCreditOk']));
     expect(highlight.changed).toEqual(expect.arrayContaining(['Flow_5', 'Activity_ShipGoods']));
-    expect(highlight.changed).not.toContain('Activity_ApproveCredit');
+    expect(highlight.changed).not.toContain('userTask_approveCredit');
     expect(highlight.moved).toContain('Gateway_CreditOk');
     for (const id of highlight.moved) expect([...highlight.created, ...highlight.changed]).not.toContain(id);
   });
@@ -431,11 +431,11 @@ describe('the commands', () => {
     const run = cli(['add', file, 'task', 'Check limit', '--after', 'Activity_CheckCredit', '--render', join(blocker, 'x.png')]);
     expect(run.code).toBe(0);
     expect(run.out).toMatch(/\nrender: failed E_IO: Cannot write /);
-    expect(readFileSync(file, 'utf8')).toContain('Activity_CheckLimit');
-    const bad = cli(['add', file, 'task', 'Other', '--after', 'Activity_CheckLimit', '--render', join(dir, 'x.jpg')]);
+    expect(readFileSync(file, 'utf8')).toContain('task_checkLimit');
+    const bad = cli(['add', file, 'task', 'Other', '--after', 'task_checkLimit', '--render', join(dir, 'x.jpg')]);
     expect(bad.code).toBe(1);
     expect(bad.err).toContain('expected a file name ending in .png or .svg');
-    expect(readFileSync(file, 'utf8')).not.toContain('Activity_Other');
+    expect(readFileSync(file, 'utf8')).not.toContain('task_other');
   });
 });
 

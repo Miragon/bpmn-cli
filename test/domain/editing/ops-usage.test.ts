@@ -46,7 +46,7 @@ async function rejected(promise: Promise<unknown>): Promise<BpmnError> {
 
 describe('split: a join only where two branches reach it', () => {
   const start = [
-    { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Sj', as: '$s' },
+    { op: 'add', kind: 'startEvent', name: 'Start', in: 'sj', as: '$s' },
     { op: 'add', kind: 'task', name: 'Check', after: '$s', as: '$c' },
     { op: 'add', kind: 'endEvent', name: 'Done', after: '$c' },
   ];
@@ -54,23 +54,23 @@ describe('split: a join only where two branches reach it', () => {
 
   it('the other branch ends in an end event: no pass-through join, the branch runs on to the successor', async () => {
     const result = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'task', name: 'Book' }] }, rejectBranch] }], { layout: false });
-    expect(result.xml).not.toContain('Gateway_Ok_join');
-    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_BookToDone" sourceRef="Activity_Book" targetRef="Event_Done" />');
-    expect(result.result.notes).toContain('only the branch ending at Activity_Book continues; no join gateway created (it runs on to Event_Done)');
-    expect(result.result.notes).toContain('split Gateway_Ok: 2 branch(es) ending at Activity_Book, Event_Rejected (end event), continues to Event_Done');
+    expect(result.xml).not.toContain('gateway_okJoin');
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="flow_bookToDone" sourceRef="task_book" targetRef="endEvent_done" />');
+    expect(result.result.notes).toContain('only the branch ending at task_book continues; no join gateway created (it runs on to endEvent_done)');
+    expect(result.result.notes).toContain('split gateway_ok: 2 branch(es) ending at task_book, endEvent_rejected (end event), continues to endEvent_done');
     expect(result.result.validation.errors).toEqual([]);
   });
 
   it('a direct branch next to a terminating one: the gateway runs on to the successor', async () => {
     const result = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [] }, rejectBranch] }], { layout: false });
-    expect(result.xml).not.toMatch(/_join/);
-    expect(result.xml).toMatch(/<bpmn:sequenceFlow id="Flow_OkToDone" name="yes" sourceRef="Gateway_Ok" targetRef="Event_Done">/);
+    expect(result.xml).not.toContain('gateway_okJoin');
+    expect(result.xml).toMatch(/<bpmn:sequenceFlow id="flow_okToDone" name="yes" sourceRef="gateway_ok" targetRef="endEvent_done">/);
   });
 
   it('two continuing branches and a terminating one keep their join; joinAs with one continuing branch is refused', async () => {
     const result = await applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', kind: 'exclusiveGateway', name: 'Ok?', branches: [{ flowName: 'a', condition: '${a}', nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'b', condition: '${b}', nodes: [{ kind: 'task', name: 'B' }] }, rejectBranch] }], { layout: false });
-    expect(result.xml).toContain('id="Gateway_Ok_join"');
-    expect([...result.xml.matchAll(/targetRef="Gateway_Ok_join"/g)].length).toBe(2);
+    expect(result.xml).toContain('id="gateway_okJoin"');
+    expect([...result.xml.matchAll(/targetRef="gateway_okJoin"/g)].length).toBe(2);
     const failure = await rejected(applyToXml((await newXml({ processName: 'Sj' })).xml, [...start, { op: 'split', after: '$c', joinAs: '$j', branches: [{ condition: '${ok}', nodes: [{ kind: 'task', name: 'Book' }] }, rejectBranch] }], { layout: false }));
     expect(failure.code).toBe('E_USAGE');
     expect(failure.message).toContain('only one branch continues');
@@ -121,16 +121,16 @@ describe('space --by: columns, rows and pixels, the distance noted', () => {
 describe('E_NOT_FOUND: ids with the query prefix first', () => {
   it('a mistyped flow id suggests the flow, not the gateway its words contain', async () => {
     const result = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
-      { op: 'add', kind: 'startEvent', name: 'Start', in: 'Process_Purchase', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Start', in: 'purchase', as: '$s' },
       { op: 'add', kind: 'userTask', name: 'Approve purchase', after: '$s', as: '$a' },
       { op: 'split', after: '$a', name: 'Purchase approved?', branches: [{ flowName: 'yes', condition: '${ok}', nodes: [{ kind: 'task', name: 'Order goods' }] }, { flowName: 'no', default: true, nodes: [{ kind: 'endEvent', name: 'Rejected' }] }] },
     ]);
     const doc = await Doc.fromXml(result.xml);
-    expect(doc.has('Flow_PurchaseApprovedToOrderGoods')).toBe(true);
-    expect(doc.suggest('Flow_GatewayPurchaseApprovedToOrderGoods')[0]).toBe('Flow_PurchaseApprovedToOrderGoods');
+    expect(doc.has('flow_purchaseApprovedToOrderGoods')).toBe(true);
+    expect(doc.suggest('flow_gatewayPurchaseApprovedToOrderGoods')[0]).toBe('flow_purchaseApprovedToOrderGoods');
     // a query with another prefix still finds the element
-    expect(doc.suggest('Task_ApprovePurchase')[0]).toBe('Activity_ApprovePurchase');
-    expect(doc.suggest('Flow_ApprovePurchaseToPurchaseAproved')[0]).toBe('Flow_ApprovePurchaseToPurchaseApproved');
+    expect(doc.suggest('task_approvePurchase')[0]).toBe('userTask_approvePurchase');
+    expect(doc.suggest('flow_approvePurchaseToPurchaseAproved')[0]).toBe('flow_approvePurchaseToPurchaseApproved');
   });
 });
 

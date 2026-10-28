@@ -29,7 +29,7 @@ export class NestedHosts {
     return nestedHost ? `${nestedHost.prefix}.` : '';
   }
 
-  /** Its id, or `the loop characteristics of Activity_X`. */
+  /** Its id, or `the loop characteristics of task_x`. */
   labelOf(host: El): string {
     const nestedHost = this.nested.get(host);
     return nestedHost ? `the ${SLOT_TEXT[nestedHost.slot]}${nestedHost.prefix !== nestedHost.slot ? ` ${nestedHost.prefix}` : ''} of ${idOf(nestedHost.owner)}` : idOf(host);

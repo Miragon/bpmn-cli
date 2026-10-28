@@ -1,7 +1,7 @@
 /**
  * The pipeline: the four packages of the design-iq round (the
  * browser-safe core with its in-memory API, the text-preserving writes, the
- * file's id conventions and the validator hook) work as one pipeline:
+ * id conventions and the validator hook) work as one pipeline:
  *
  *  - the in-memory API runs the text-preserving step: a no-op is `unchanged`
  *    (the input string itself), an edit changes only what it touched;
@@ -85,22 +85,21 @@ describe('the in-memory API keeps the text (core + roundtrip + conventions)', ()
     expect(result.result.unchanged).toBe(true);
   });
 
-  it("an insert gets ids in the file's style and changes only the lines it touched", async () => {
+  it('an insert gets ids by the naming conventions and changes only the lines it touched', async () => {
     const result = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }]);
     expect(result.unchanged).toBe(false);
-    // Task_ + PascalCase like Task_Check / Task_Script; the file numbers its flows (Flow_1, Flow_2, Flow_4): a new one
-    // keeps the prefix and names its ends
-    expect(result.result.created.map((change) => change.id)).toEqual(['Task_AuditOrder', 'Flow_AuditOrderToOrderOk']);
+    // the default conventions, not the file's Task_ / Flow_ ids: a new flow names its ends
+    expect(result.result.created.map((change) => change.id)).toEqual(['userTask_auditOrder', 'flow_auditOrderToOrderOk']);
     // in the process only the spliced flow's target changed (its incoming entry moved to the new task); comments, CDATA and quoting stay
     expect(removedLines(semantic(STYLED), semantic(result.xml)).map((line) => line.trim())).toEqual(['<bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Gateway_Ok"/>']);
-    expect(result.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">\n            <bpmn:incoming>Flow_AuditOrderToOrderOk</bpmn:incoming>');
+    expect(result.xml).toContain('<bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">\n            <bpmn:incoming>flow_auditOrderToOrderOk</bpmn:incoming>');
     expect(result.xml.startsWith(STYLED.split('<bpmn:process')[0]!)).toBe(true);
-    expect(result.xml).toContain('<bpmn:userTask id="Task_AuditOrder" name="Audit order">\n            <bpmn:incoming>Flow_2</bpmn:incoming>');
-    expect(result.xml).toContain('<bpmn:sequenceFlow id="Flow_AuditOrderToOrderOk" sourceRef="Task_AuditOrder" targetRef="Gateway_Ok"/>');
+    expect(result.xml).toContain('<bpmn:userTask id="userTask_auditOrder" name="Audit order">\n            <bpmn:incoming>Flow_2</bpmn:incoming>');
+    expect(result.xml).toContain('<bpmn:sequenceFlow id="flow_auditOrderToOrderOk" sourceRef="userTask_auditOrder" targetRef="Gateway_Ok"/>');
     // new DI in the file's DI id style (<id>_di), the old DI keeps its start tags
-    expect(result.xml).toContain('<bpmndi:BPMNShape id="Task_AuditOrder_di" bpmnElement="Task_AuditOrder">');
-    expect(result.xml).toContain('<bpmndi:BPMNEdge id="Flow_AuditOrderToOrderOk_di" bpmnElement="Flow_AuditOrderToOrderOk">');
-    expect(diTags(result.xml).filter((tag) => !/Task_AuditOrder|Flow_AuditOrderToOrderOk/.test(tag))).toEqual(diTags(STYLED));
+    expect(result.xml).toContain('<bpmndi:BPMNShape id="userTask_auditOrder_di" bpmnElement="userTask_auditOrder">');
+    expect(result.xml).toContain('<bpmndi:BPMNEdge id="flow_auditOrderToOrderOk_di" bpmnElement="flow_auditOrderToOrderOk">');
+    expect(diTags(result.xml).filter((tag) => !/userTask_auditOrder|flow_auditOrderToOrderOk/.test(tag))).toEqual(diTags(STYLED));
     expect(result.xml.endsWith('<!-- end of the synthetic fixture -->\n</bpmn:definitions>')).toBe(true);
   });
 
@@ -129,7 +128,7 @@ describe('validators see what is written (validation + core + roundtrip)', () =>
     const seen: Array<{ phase: string; file?: string; comment: boolean; cdata: boolean }> = [];
     const spy = (xml: string, ctx: ValidatorContext): ValidatorFinding[] => {
       seen.push({ phase: ctx.phase, file: ctx.file, comment: xml.includes('<!-- the order starts here -->'), cdata: xml.includes('<![CDATA[var total') });
-      return ctx.phase === 'after' && xml.includes('Task_AuditOrder') ? [{ severity: 'WARN', ruleId: 'audit/seen', message: 'audit step added' }] : [];
+      return ctx.phase === 'after' && xml.includes('userTask_auditOrder') ? [{ severity: 'WARN', ruleId: 'audit/seen', message: 'audit step added' }] : [];
     };
     const result = await applyToXml(STYLED, [{ op: 'add', kind: 'userTask', name: 'Audit order', after: 'Task_Check' }], { validators: [spy], file: 'models/order.bpmn' });
     expect(seen).toEqual([

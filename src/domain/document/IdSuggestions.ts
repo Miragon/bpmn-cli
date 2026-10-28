@@ -34,8 +34,8 @@ export class IdSuggestions {
   /**
    * "Did you mean" ids, best first: the batch's rename, another case / umlaut spelling / prefix,
    * containment, a typo, a matching name. Ids with the query's prefix come first (a mistyped
-   * `Flow_...` suggests flows), then ids the running batch created. A same-prefix id whose stem
-   * contains the query's (Flow_GatewayPurchaseApprovedToOrderGoods for Flow_PurchaseApprovedToOrderGoods)
+   * `flow_...` suggests flows), then ids the running batch created. A same-prefix id whose stem
+   * contains the query's (flow_gatewayPurchaseApprovedToOrderGoods for flow_purchaseApprovedToOrderGoods)
    * counts as close. Kind-alike suggestions are not ids, so without hits it returns nothing.
    */
   for(query: string, max = 5): string[] {

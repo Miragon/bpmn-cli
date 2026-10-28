@@ -144,8 +144,8 @@ describe('stdin and stdout', () => {
     expect(cliRun.out).toContain('name="Pay out"');
     expect(cliRun.err).toContain('written: -');
     const created = ok(['new', '-', '--name', 'Fresh']);
-    expect((await Doc.fromXml(created.out)).processes().map((processElement) => processElement.get('id'))).toEqual(['Process_Fresh']);
-    expect(created.err).toContain('created process Process_Fresh "Fresh"');
+    expect((await Doc.fromXml(created.out)).processes().map((processElement) => processElement.get('id'))).toEqual(['fresh']);
+    expect(created.err).toContain('created process fresh "Fresh"');
     // a dry run on stdin writes nothing: the report stays on stdout
     const dry = ok(['set', '-', 'Activity_Pay', 'name=Y', '--dry-run', '--no-layout'], MODEL);
     expect(dry.out).toContain('changed serviceTask Activity_Pay "Y"');
@@ -193,14 +193,14 @@ describe('guide --short, guide <topic>, kinds --section', () => {
   it('the CAMUNDA 8 recipe of the guide runs', () => {
     const file = join(dir, 'c8.bpmn');
     ok(['new', file, '--name', 'Order', '--target', 'camunda8']);
-    ok(['add', file, 'start', 'Received', '--id', 'Event_Received']);
-    ok(['add', file, 'serviceTask', 'Charge', '--after', 'Event_Received', '--id', 'Activity_Charge']);
-    ok(['add', file, 'callActivity', 'Bill', '--after', 'Activity_Charge', '--id', 'Activity_Bill']);
-    ok(['add', file, 'userTask', 'Review', '--after', 'Activity_Bill', '--id', 'Activity_Review']);
-    ok(['add', file, 'businessRuleTask', 'Rate', '--after', 'Activity_Review', '--id', 'Activity_Rate']);
-    ok(['add', file, 'receiveTask', 'Wait for payment', '--after', 'Activity_Rate', '--id', 'Activity_Wait']);
-    ok(['add', file, 'sendTask', 'Inform', '--after', 'Activity_Wait', '--id', 'Activity_Inform']);
-    ok(['add', file, 'end', 'Done', '--after', 'Activity_Inform']);
+    ok(['add', file, 'start', 'Received', '--id', 'startEvent_received']);
+    ok(['add', file, 'serviceTask', 'Charge', '--after', 'startEvent_received', '--id', 'serviceTask_charge']);
+    ok(['add', file, 'callActivity', 'Bill', '--after', 'serviceTask_charge', '--id', 'callActivity_bill']);
+    ok(['add', file, 'userTask', 'Review', '--after', 'callActivity_bill', '--id', 'userTask_review']);
+    ok(['add', file, 'businessRuleTask', 'Rate', '--after', 'userTask_review', '--id', 'businessRuleTask_rate']);
+    ok(['add', file, 'receiveTask', 'Wait for payment', '--after', 'businessRuleTask_rate', '--id', 'receiveTask_waitForPayment']);
+    ok(['add', file, 'sendTask', 'Inform', '--after', 'receiveTask_waitForPayment', '--id', 'sendTask_inform']);
+    ok(['add', file, 'end', 'Done', '--after', 'sendTask_inform']);
     const recipe = guideTopic('camunda8')
       .split('\n')
       .map((line) => /^ {4}bpmn ((?:ext add|set) f\.bpmn .*?)(?: {2,}.*)?$/.exec(line)?.[1])
@@ -211,7 +211,7 @@ describe('guide --short, guide <topic>, kinds --section', () => {
       const words = [...command.matchAll(/(?:[^\s']+|'[^']*')+/g)].map((match) => match[0].replace(/'/g, ''));
       ok(words.map((word) => (word === 'f.bpmn' ? file : word)));
     }
-    const around = ok(['show', file, '--around', 'Activity_Charge', '--depth', '0']).out;
+    const around = ok(['show', file, '--around', 'serviceTask_charge', '--depth', '0']).out;
     expect(around).toContain('zeebe:taskDefinition type=charge-card retries=3, io: in amount; out receipt, zeebe:taskHeaders: channel');
   }, 120000);
 });

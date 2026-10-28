@@ -4,7 +4,6 @@ import { modelError, usageError } from '../../document/utils/errors.js';
 import { gatewayKindList, parseKind } from '../../document/Kinds.js';
 import { is, type El, idOf } from '../../document/utils/moddle.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
-import { IdStyle } from '../../document/ids/IdStyle.js';
 import { ElementLabels } from '../../document/ids/ElementLabels.js';
 import { CommandParser } from '../../commands/CommandParser.js';
 import { laneOf } from '../../document/utils/lanes.js';
@@ -49,22 +48,18 @@ export class BranchSplit {
   }
 
   /**
-   * op.joinId, else `<gatewayId>_join` in the file's id style. `base` (the id it wanted)
+   * op.joinId, else `<gatewayId>Join` in the id conventions. `base` (the id it wanted)
    * marks it generated, so a retype in the same batch gives it the new prefix.
-   * A join named by declared conventions rather than the file's style is recorded for the
-   * result's `conventions:` line.
    */
   private joinIdFor(command: SplitIntoBranches, gateway: El, changes: ChangeSet, kind: string): { id: string; base?: string } {
     if (command.joinId) return { id: command.joinId };
     const gatewayId = idOf(gateway);
     const base = this.edit.idStyle.joinId(gatewayId, kind, new ElementLabels(gateway).label());
-    const sep = this.edit.idStyle.suffixSep(kind);
+    const sep = this.edit.idStyle.suffixSep();
     const id = this.edit.allocator.suffixed(base, sep);
     if (id !== base) {
       changes.warn({ code: 'W_ID_SUFFIXED', message: `Id ${base} is already taken; using ${id}`, element: id, hint: 'Pass joinId to choose the join id yourself.' });
     }
-    const style = this.edit.idStyle;
-    if (style.declared && style.explain(IdStyle.keyRequest(kind)).source === 'lint' && base !== style.learnedOnly().joinId(gatewayId, kind)) this.edit.allocator.recordDeclared(id);
     return { id, base };
   }
 

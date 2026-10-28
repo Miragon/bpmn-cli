@@ -11,34 +11,36 @@ from the code.
 ## Ids
 
 Elements are addressed by id, never by name (names may repeat). A new id says what it names and
-follows the file's id style: prefix, case and flow form. A file without a style gets the defaults
-below. Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
+follows `@miragon/rules/element-id-naming`: the prefixes and case the project's `.bpmnlintrc`
+declares, else the rule's defaults below. The ids the file already has do not change that.
+Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
 
 | element | id | example |
 | --- | --- | --- |
-| named | prefix + name | `Activity_CheckInvoice` |
-| unnamed | prefix + kind and place | `Gateway_AfterArchive`, `Event_TimerOnArchive` |
-| flow | its two ends | `Flow_CheckInvoiceToBookInvoice` |
-| join of a split | split id + `_join` | `Gateway_InvoiceOk_join` |
+| named | prefix + name | `userTask_checkInvoice` |
+| unnamed | prefix + kind and place | `gateway_afterArchive`, `event_timerOnArchive` |
+| flow | its two ends | `flow_checkInvoiceToBookInvoice` |
+| join of a split | split id + `Join` | `gateway_invoiceOkJoin` |
+| named process | its name | `orderToCash` (unnamed: `Process_1`) |
 
-In a file with other conventions the same task becomes `serviceTask_checkStock` or
-`Task_check_stock`. Hashes and running numbers are never copied. An unknown id (`E_NOT_FOUND`)
-comes with the ids that were probably meant.
+Hashes and running numbers are never copied. An unknown id (`E_NOT_FOUND`) comes with the ids that
+were probably meant.
 
-A flow whose id names its ends is renamed when an edit changes them (`renamed:` in the result).
-`--keep-flow-ids` keeps the id and reports `W_FLOW_ID_STALE` with the `bpmn set` that renames it.
+A flow whose id names its ends in this form is renamed when an edit changes them (`renamed:` in the
+result); an older flow id (`Flow_AToB`) keeps its id. `--keep-flow-ids` keeps the id and reports
+`W_FLOW_ID_STALE` with the `bpmn set` that renames it.
 
-Names become ASCII words (`Prüfung buchen` gives `Activity_PruefungBuchen`), at most 40 characters
+Names become ASCII words (`Prüfung buchen` gives `userTask_pruefungBuchen`), at most 40 characters
 of them: a longer name loses its last words, and a single longer word is cut at 40. An id has at
 most 64 characters, a collision suffix included. An id within that is not cut again. A longer one
 loses whole words: of the cuts that fit, the one with the most words is taken, then the longest.
 A word is cut inside only when no whole word is left to give up.
 Also, a number a cut would leave at the end of the id goes too where it would read
-like a collision suffix. A taken id gets `_2`, `_3` and a `W_ID_SUFFIXED` warning.
+like a collision suffix. A taken id gets `2`, `3` (`_2` under snake_case, `-2` under kebab-case)
+and a `W_ID_SUFFIXED` warning.
 
-Where the project's `.bpmnlintrc` runs `@miragon/rules/element-id-naming`, its prefixes and case
-decide instead (`serviceTask_checkInvoice`). `bpmn show <file> --conventions` lists what applies.
-Existing ids never change for the rule. Details: [bpmnlint](bpmnlint.md#id-conventions).
+`bpmn show <file> --conventions` lists what applies. Existing ids never change for the rule.
+How to get ids that match: [bpmnlint](bpmnlint.md#id-conventions).
 
 ## Kinds
 
@@ -47,14 +49,14 @@ type (`bpmn:UserTask`). Events take a trigger suffix (`startEvent:message`, `bou
 
 | family | kinds (aliases) | id prefix |
 | --- | --- | --- |
-| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask`, `sendTask`, `receiveTask`, `manualTask`, `businessRuleTask` (`rule`) | `Activity_` |
-| sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess`, `transaction` | `Activity_` |
-| call activity | `callActivity` (`call`) | `Activity_` |
-| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` | `Gateway_` |
-| events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `Event_` |
-| pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `Participant_`, `Lane_` |
-| data | `dataObject` (`data`), `dataStore` (`store`) | `DataObjectReference_`, `DataStoreReference_` |
-| artifacts | `textAnnotation` (`note`), `group` (`--members <id,...>`) | `TextAnnotation_`, `Group_` |
+| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask`, `sendTask`, `receiveTask`, `manualTask`, `businessRuleTask` (`rule`) | the kind: `task_`, `userTask_`, ... |
+| sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess`, `transaction` | `subProcess_` |
+| call activity | `callActivity` (`call`) | `callActivity_` |
+| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` | `gateway_` |
+| events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `startEvent_`, `endEvent_`, else `event_` |
+| pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `participant_`, `lane_` |
+| data | `dataObject` (`data`), `dataStore` (`store`) | `dataObject_`, `dataStore_` |
+| artifacts | `textAnnotation` (`note`), `group` (`--members <id,...>`) | `textAnnotation_`, `group_` |
 
 Choreographies are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs a
 `complexGateway`: the Camunda profiles report it (`W_C7_DEPLOY_COMPLEX_GATEWAY`,
@@ -63,7 +65,7 @@ Choreographies are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs
 ## Triggers
 
 The trigger is the kind's suffix, its details an option: `bpmn add order.bpmn boundary:timer
-"Late" --on Activity_Archive --timer P2D`. Messages, errors and signals are found by name and
+"Late" --on task_archive --timer P2D`. Messages, errors and signals are found by name and
 created when missing.
 
 | trigger | option |
@@ -133,11 +135,11 @@ A mutating command prints what it created, changed and removed, then warnings, t
 file line:
 
 ```console
-$ bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
-created endEvent Event_Done "Done" - after Activity_CheckInvoice
-created sequenceFlow Flow_CheckInvoiceToDone - Activity_CheckInvoice -> Event_Done
-note: appended after Activity_CheckInvoice
-resolved: W_NO_END Process_OrderHandling, W_DEAD_END Activity_CheckInvoice
+$ bpmn add order.bpmn end "Done" --after userTask_checkInvoice
+created endEvent endEvent_done "Done" - after userTask_checkInvoice
+created sequenceFlow flow_checkInvoiceToDone - userTask_checkInvoice -> endEvent_done
+note: appended after userTask_checkInvoice
+resolved: W_NO_END orderHandling, W_DEAD_END userTask_checkInvoice
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -151,7 +153,7 @@ written: order.bpmn
   "file": "order.bpmn",
   "written": true,
   "unchanged": false,
-  "created": [{ "id": "Event_Done", "kind": "endEvent", "name": "Done" }],
+  "created": [{ "id": "endEvent_done", "kind": "endEvent", "name": "Done" }],
   "warnings": { "added": [], "resolved": [], "preexistingCount": 0 },
   "layout": { "status": "ok", "mode": "full" },
   "importWarnings": []
