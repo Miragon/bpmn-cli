@@ -79,8 +79,9 @@ with the version and, to only build and test the formula, `dry-run`.
 
 - Requirements for the `publish` job: GitHub-hosted runner, `id-token: write`, npm 11.5.1 or later (the
   job installs the latest npm). `repository.url` in `package.json` must match `Miragon/bpmn-cli` exactly.
-- The repository is private, so npm creates no provenance attestation. When the repository becomes
-  public, npm adds provenance to trusted publishes automatically.
+- npm adds a provenance attestation to every trusted publish from this public repository on its own,
+  so `npm publish` needs no `--provenance`. Every version since 0.1.1 has one; only 0.1.0, the manual
+  first publish, has none.
 - release-please uses the default `GITHUB_TOKEN`. Tags and releases created with it do not trigger other
   workflows, which is why `publish` runs as a job of the same workflow, gated on `release_created`.
 - The repository setting "Allow GitHub Actions to create and approve pull requests" must stay enabled.
