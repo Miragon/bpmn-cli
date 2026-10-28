@@ -1,8 +1,8 @@
 import { is } from 'bpmnlint-utils';
 
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
+import { CAMUNDA_URI } from '../DiagramNamespaces.js';
 
-const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
 const OPERATON = 'operaton';
 
 /** What the engine run knows of a file that its parse for the rules no longer shows. */

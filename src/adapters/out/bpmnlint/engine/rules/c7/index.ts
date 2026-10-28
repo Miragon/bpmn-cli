@@ -19,7 +19,7 @@ export class Camunda7Rules {
   /** camunda-compat's rules for an engine version with these, as `bpmn-cli/<rule>`, and the moddle extension they read. */
   static entry(kit: EngineKit): EngineEntry {
     ElementKinds.use(kit.kindLabel);
-    CamundaDescriptor.use(kit.CAMUNDA_DESCRIPTOR);
+    CamundaDescriptor.use(kit.CAMUNDA);
     return {
       moddleExtensions,
       findings: RuleEntries.findingsOf(Camunda7Rules.RULES),

@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { mutateDoc } from '../../../src/index.js';
 import { FeelExpression } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/feel/FeelExpression.js';
-import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/events/TimerValue.js';
+import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/TimerValue.js';
 import { ZEEBE as C8_DESCRIPTOR } from '../../../src/domain/document/vendor/ZeebeDescriptor.js';
 import { cli } from '../../helpers/cli.js';
 

@@ -87,12 +87,10 @@ export class EngineRun {
       this.withoutPublishedImplementations(results, published);
       new CompatVerdicts(elementsById, info.version).apply(results);
     }
-    const unprefixed = new UnprefixedAttributes(this.kit, doc, this.engine, ns).findings();
-    const schemaKeys = new Set(unprefixed.map((finding) => `${finding.element}|${finding.subject!.replace(/^schema:/, 'attr:')}`));
     const lint = new EngineFindings(this.kit, this.engine, elementsById, this.entry.findings, (id, key) => this.spelling(doc, ns, id, key), ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe').of(results);
     const findings = [
-      ...lint.filter((finding) => !(finding.code === 'W_C8_DEPLOY_SCHEMA' && schemaKeys.has(`${finding.element}|${finding.subject}`))),
-      ...unprefixed,
+      ...lint,
+      ...new UnprefixedAttributes(this.kit, doc, this.engine, ns).findings(),
       ...ownFindings,
       ...[...failures].map(([rule, message]) => this.kit.makeFinding('practice', 'W_LINT_FAILED', `The ${ENGINE_NAMES[this.engine]} rule ${rule} failed: ${message}; its findings are left out`, undefined, { subject: `failed:${rule}`, hint: 'Report the file and the rule: it is a bug of the rule, not of the model.' })),
       ...new UnknownVendorElements(this.kit, doc, this.engine, ns).findings(),

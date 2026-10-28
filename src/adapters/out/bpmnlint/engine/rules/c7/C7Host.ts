@@ -1,26 +1,16 @@
 import { is } from 'bpmnlint-utils';
 
-import type { ModdleElement, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
-import { DiagramNamespaces } from '../DiagramNamespaces.js';
-import { describeElement } from '../describe.js';
-import { SetCommand } from '../SetCommand.js';
+import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
+import { CAMUNDA_URI, DiagramNamespaces } from '../DiagramNamespaces.js';
 import { sh, slotted } from '../shell.js';
+import { EngineScope } from '../EngineScope.js';
+import { type ForeignAttribute, type TreeElement, VendorHost } from '../VendorHost.js';
 import { C7Diagram } from './C7Diagram.js';
-
-export const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
-export const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
 
 /** The camunda types the engines read as one element, which `bpmn ext add --replace` rebuilds as a whole. */
 const SINGLE_TYPES = ['inputOutput', 'formData', 'connector', 'failedJobRetryTimeCycle', 'properties'];
 /** Attributes that pick one item of a repeatable type, in the order a selector prefers them. */
 const SELECTOR_KEYS = ['id', 'name', 'event', 'target', 'source', 'errorRef'];
-
-/** A prefixed attribute the moddle left in `$attrs`, with the namespace its prefix stands for. */
-export interface ForeignAttribute {
-  key: string;
-  local: string;
-  uri: string | undefined;
-}
 
 /** One entry of a host's extension elements: a typed camunda element, or a generic one of another namespace. */
 export interface HostExtension {
@@ -32,40 +22,18 @@ export interface HostExtension {
   isCamunda: boolean;
 }
 
-/** One camunda element inside an extension element (the extension element included), as messages name it. */
-interface TreeElement {
-  element: ModdleElement;
-  /** `camunda:inputParameter (in camunda:connector > camunda:inputOutput) of serviceTask Activity_1` */
-  where: string;
-  /** The path from the host's reported element to this one. */
-  path: ReportPath;
-}
-
 /**
  * A BPMN element as the Camunda 7 checks of camunda content see it: whether they look at it at
- * all, the element its findings land on (an event definition, loop or condition on its flow node
- * or flow, anything without an id on the nearest element with one), how messages name it, its
- * camunda content, and the `bpmn` commands of the hints that rebuild, remove or merge its
+ * all, its camunda content, and the `bpmn` commands of the hints that rebuild, remove or merge its
  * extension elements and unset its attributes, through the slot of the flow node.
  */
-export class C7Host {
-  /** The nearest enclosing element with an id, below `bpmn:Definitions`. */
-  readonly owner: ModdleElement | undefined;
-  /** The element a finding about this host is reported on. */
-  readonly target: ModdleElement;
+export class C7Host extends VendorHost {
   /** The prefix the file writes camunda content with. */
   readonly prefix: string;
-  /** How `bpmn set` and `bpmn ext` address this host, undefined without an id to address it by. */
-  readonly address: SetCommand | undefined;
-  private readonly pathPrefix: ReportPath;
 
-  constructor(readonly node: ModdleElement) {
-    this.owner = C7Host.nearestWithId(node.$parent);
-    const slot = this.owner && this.owner !== node ? this.slotIn(this.owner) : '';
-    this.target = slot || !node.id ? (this.owner ?? node) : node;
-    this.pathPrefix = C7Host.pathBetween(this.target, node);
+  constructor(node: ModdleElement) {
+    super(node);
     this.prefix = C7Diagram.of(node).prefix;
-    this.address = slot || node.id ? new SetCommand(this.target.id, slot) : undefined;
   }
 
   /**
@@ -76,28 +44,11 @@ export class C7Host {
   static visits(node: ModdleElement): boolean {
     if (!String(node.$type).startsWith('bpmn:') || is(node, 'bpmn:ExtensionElements')) return false;
     if (is(node, 'bpmn:Process')) return node.isExecutable === true;
-    return !(is(node, 'bpmn:AdHocSubProcess') && C7Host.isExecutable(node));
-  }
-
-  /** Whether `node` lies in a process with `isExecutable="true"`. */
-  static isExecutable(node: ModdleElement): boolean {
-    let current = node;
-    while (current && !is(current, 'bpmn:Process')) current = current.$parent;
-    return current?.isExecutable === true;
-  }
-
-  /** `serviceTask Activity_1`, `the multiInstanceLoopCharacteristics of userTask Activity_1` */
-  describe(): string {
-    return describeElement(this.node, this.owner);
+    return !(is(node, 'bpmn:AdHocSubProcess') && EngineScope.inExecutableProcess(node));
   }
 
   isDefinitions(): boolean {
     return is(this.node, 'bpmn:Definitions');
-  }
-
-  /** The prefixed attributes the moddle did not type, in file order. */
-  foreignAttributes(): ForeignAttribute[] {
-    return C7Host.foreignAttributesOf(this.node).filter(({ key }) => key.includes(':'));
   }
 
   extensions(): HostExtension[] {
@@ -113,21 +64,9 @@ export class C7Host {
     return this.extensions().filter((extension) => extension.isCamunda && (local === undefined || extension.local === local));
   }
 
-  /** The path from the reported element to a property of this host. */
-  path(...steps: ReportPath): ReportPath {
-    return [...this.pathPrefix, ...steps];
-  }
-
-  /** The path from the reported element to a property of the extension element at `index`. */
-  extensionPath(index: number, ...steps: ReportPath): ReportPath {
-    return this.path('extensionElements', 'values', index, ...steps);
-  }
-
   /** The prefixed attributes the moddle left on the camunda elements of `extension`, depth first, each with its element. */
   treeAttributes(extension: HostExtension): Array<TreeElement & ForeignAttribute> {
-    const found: TreeElement[] = [];
-    this.collect(extension.value, '', this.extensionPath(extension.index), found);
-    return found.flatMap((treeElement) => C7Host.foreignAttributesOf(treeElement.element).map((attribute) => ({ ...treeElement, ...attribute })));
+    return this.tree(extension.value, this.prefix, this.extensionPath(extension.index)).flatMap((treeElement) => VendorHost.foreignAttributesOf(treeElement.element).map((attribute) => ({ ...treeElement, ...attribute })));
   }
 
   /** `camunda:inputOutput`, with the file's prefix. */
@@ -137,7 +76,7 @@ export class C7Host {
 
   /** `` `bpmn set <file> X camunda:asignee=` `` for the attribute `key` as the file spells it; undefined without an address. */
   unset(key: string): string | undefined {
-    return this.address && `\`bpmn set <file> ${this.address.id} ${sh(`${this.address.slot}${key}=`)}\``;
+    return this.address?.unset(key);
   }
 
   /**
@@ -193,12 +132,6 @@ export class C7Host {
     return [type, ...entries.map(([key, value]) => sh(`${key}=${fix[key] ?? value}`)), ...(body !== undefined ? ['--body', sh(String(body))] : [])].join(' ');
   }
 
-  /** The attributes of any element the moddle did not type, with their namespace when prefixed. */
-  private static foreignAttributesOf(el: ModdleElement): ForeignAttribute[] {
-    const namespaces = DiagramNamespaces.forElement(el);
-    return Object.keys(el.$attrs ?? {}).filter((key) => !key.startsWith('xmlns')).map((key) => ({ key, local: key.slice(key.indexOf(':') + 1), uri: namespaces.uriOf(key) }));
-  }
-
   /** The attributes of a typed camunda element in file order, an unresolved reference where the descriptor puts it; undefined with child elements. */
   private static attributesOf(element: ModdleElement): Array<[string, string]> | undefined {
     const properties: Array<{ name: string; isAttr?: boolean; isBody?: boolean }> = element.$descriptor?.properties ?? [];
@@ -226,48 +159,7 @@ export class C7Host {
     return typeof value === 'object' ? value.id : String(value);
   }
 
-  private collect(element: ModdleElement, trail: string, path: ReportPath, found: TreeElement[]): void {
-    const name = `${this.prefix}:${C7Host.lowerFirst(String(element.$type).replace(/^camunda:/, ''))}`;
-    found.push({ element, where: `${name}${trail ? ` (in ${trail})` : ''} of ${this.describe()}`, path });
-    for (const property of element.$descriptor?.properties ?? []) {
-      if (property.isAttr || property.isReference || !String(property.type).startsWith('camunda:')) continue;
-      const propertyName = property.ns?.localName ?? property.name;
-      const value = element.get(property.name);
-      const children: ModdleElement[] = (Array.isArray(value) ? value : [value]).filter(Boolean);
-      children.forEach((child, index) => this.collect(child, trail ? `${trail} > ${name}` : name, Array.isArray(value) ? [...path, propertyName, index] : [...path, propertyName], found));
-    }
-  }
-
-  /** The path from `ancestor` down to `el` through the properties that contain each step. */
-  private static pathBetween(ancestor: ModdleElement, el: ModdleElement): ReportPath {
-    const steps: ReportPath = [];
-    for (let child = el; child && child !== ancestor && child.$parent; child = child.$parent) steps.unshift(...C7Host.stepInto(child.$parent, child));
-    return steps;
-  }
-
-  private static stepInto(parent: ModdleElement, child: ModdleElement): ReportPath {
-    for (const property of parent.$descriptor?.properties ?? []) {
-      const value = parent.get(property.name);
-      if (value === child) return [property.ns?.localName ?? property.name];
-      if (Array.isArray(value) && value.includes(child)) return [property.ns?.localName ?? property.name, value.indexOf(child)];
-    }
-    return [];
-  }
-
-  private static nearestWithId(start: ModdleElement): ModdleElement | undefined {
-    for (let current = start; current && !is(current, 'bpmn:Definitions'); current = current.$parent) if (current.id) return current;
-    return undefined;
-  }
-
   private static lowerFirst(name: string): string {
     return name.charAt(0).toLowerCase() + name.slice(1);
-  }
-
-  /** The slot of the host in `owner` when it is an event definition, loop or condition of it, else ''. */
-  private slotIn(owner: ModdleElement): string {
-    const definitions: ModdleElement[] = owner.eventDefinitions ?? [];
-    if (definitions.includes(this.node)) return definitions.length > 1 ? `definition[${definitions.indexOf(this.node)}].` : 'definition.';
-    if (owner.loopCharacteristics === this.node) return 'loop.';
-    return owner.conditionExpression === this.node ? 'condition.' : '';
   }
 }

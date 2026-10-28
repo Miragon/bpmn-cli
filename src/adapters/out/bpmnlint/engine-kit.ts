@@ -4,7 +4,6 @@ import { makeFinding } from '../../../domain/document/utils/finding.js';
 import { editDistance } from '../../../domain/document/utils/fuzzy.js';
 import { BPMN_NS, is, isBpmnElement, isDiElement, list, peek, walk } from '../../../domain/document/utils/moddle.js';
 import { decodeXml, elementChildren, readXmlText } from '../../../domain/document/utils/text-reader.js';
-import { CAMUNDA_DESCRIPTOR } from '../../../domain/document/vendor/camunda-descriptor.js';
 import { C7_URIS, CAMUNDA, CAMUNDA_URI, OPERATON_URI } from '../../../domain/document/vendor/CamundaDescriptor.js';
 import { DocumentNamespaces } from '../../../domain/document/vendor/DocumentNamespaces.js';
 import { ZEEBE } from '../../../domain/document/vendor/ZeebeDescriptor.js';
@@ -34,7 +33,6 @@ export const ENGINE_KIT = {
   readXmlText,
   C7_URIS,
   CAMUNDA,
-  CAMUNDA_DESCRIPTOR,
   CAMUNDA_URI,
   OPERATON_URI,
   DocumentNamespaces,

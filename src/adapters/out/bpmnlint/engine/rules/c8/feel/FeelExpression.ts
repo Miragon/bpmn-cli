@@ -4,6 +4,16 @@ import { FeelParser } from './FeelParser.js';
 export class FeelExpression {
   constructor(private readonly expression: string) {}
 
+  /**
+   * `${a && b}` -> ` a and b`: a starting point for FEEL (the hint asks to check it). Single-quoted
+   * JUEL strings become double-quoted FEEL strings.
+   */
+  static fromJuel(juel: string): string {
+    const match = /^\s*[$#]\{([\s\S]*)\}\s*$/.exec(juel);
+    const quoted = (match ? match[1]! : juel).trim().replace(/'((?:[^'\\]|\\.)*)'/g, (_match, text: string) => `"${text.replace(/"/g, '\\"')}"`);
+    return ` ${quoted.replace(/&&/g, 'and').replace(/\|\|/g, 'or').replace(/==/g, '=').replace(/!\s*\((?!=)/g, 'not(').replace(/!(?!=)\s*([\w.]+)/g, 'not($1)')}`;
+  }
+
   /** Why Camunda 8 refuses the expression at deploy: JUEL habits first, then the FEEL syntax. */
   problem(): string | undefined {
     const expression = this.expression;

@@ -1,7 +1,5 @@
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
-import { DiagramNamespaces } from '../DiagramNamespaces.js';
-
-const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
+import { CAMUNDA_URI, DiagramNamespaces } from '../DiagramNamespaces.js';
 
 /** Reads the `camunda:*` attributes of an element, whatever prefix the file spells. */
 export class CamundaAttributes {

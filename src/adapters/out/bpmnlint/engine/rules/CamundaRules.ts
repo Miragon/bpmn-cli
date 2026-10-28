@@ -3,7 +3,6 @@ import { reportErrors } from 'bpmnlint-plugin-camunda-compat/rules/utils/reporte
 
 export type { ModdleElement, Reporter, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
 export { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
-export { reportErrors } from 'bpmnlint-plugin-camunda-compat/rules/utils/reporter.js';
 export { describeElement, triggerName } from './describe.js';
 
 /** What the engine does with a file the rule reports: refuses it, fails or ignores a setting when it runs, or runs it other than a reader expects. */
@@ -31,7 +30,7 @@ export interface ReportData {
 }
 
 /** A bpmn-cli engine rule: every report in camunda-compat's shape, with the finding it is in `data.finding`. */
-abstract class CamundaRule extends EngineRule {
+export abstract class CamundaRule extends EngineRule {
   private reporter!: Reporter;
 
   protected checkElement(node: ModdleElement, reporter: Reporter): boolean | void {
@@ -53,6 +52,6 @@ export abstract class C7Rule extends CamundaRule {
 }
 
 /** A rule that checks the diagrams targeting Camunda 8. */
-export abstract class C8Rule extends EngineRule {
+export abstract class C8Rule extends CamundaRule {
   protected readonly engine: Engine = 'c8';
 }

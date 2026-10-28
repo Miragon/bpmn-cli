@@ -2,6 +2,7 @@ import { is } from 'bpmnlint-utils';
 import { C7Rule, defineRule, describeElement, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
 
 import { ElementKinds } from '../describe.js';
+import { EngineScope } from '../EngineScope.js';
 import { sh } from '../shell.js';
 import { Values } from '../Values.js';
 import { C7Host, type HostExtension } from './C7Host.js';
@@ -40,7 +41,7 @@ class C7ExtensionContent extends C7Rule {
   protected visit(node: ModdleElement): boolean | void {
     if (!C7Host.visits(node)) return false;
     if (is(node, 'bpmn:Definitions')) return this.checkDefinitionsExtension(node);
-    if (!C7Host.isExecutable(node)) return;
+    if (!EngineScope.inExecutableProcess(node)) return;
     const host = new C7Host(node);
     const read = new CamundaPlacement(host).readExtensions();
     for (const extension of read) this.checkContent(host, extension);

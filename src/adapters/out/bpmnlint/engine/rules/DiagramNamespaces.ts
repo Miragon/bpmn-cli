@@ -2,14 +2,16 @@ import { is } from 'bpmnlint-utils';
 
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
 
+export const ZEEBE_URI = 'http://camunda.org/schema/zeebe/1.0';
+export const CAMUNDA_URI = 'http://camunda.org/schema/1.0/bpmn';
+/** Camunda 7 content, in its own namespace and in Operaton's copy of it. */
+export const C7_URIS = [CAMUNDA_URI, 'http://operaton.org/schema/1.0/bpmn'];
+
 /**
  * The prefixes a typed parse writes for the engine packages, whatever the file spells: an unknown
  * attribute of `xmlns:z="...zeebe/1.0"` lands in `$attrs` as `zeebe:foo`.
  */
-const PACKAGE_URIS: Record<string, string> = {
-  zeebe: 'http://camunda.org/schema/zeebe/1.0',
-  camunda: 'http://camunda.org/schema/1.0/bpmn',
-};
+const PACKAGE_URIS: Record<string, string> = { zeebe: ZEEBE_URI, camunda: CAMUNDA_URI };
 
 /**
  * The namespace prefixes a diagram declares, so a rule can tell which namespace an attribute the

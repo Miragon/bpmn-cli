@@ -1,5 +1,6 @@
 import { is } from 'bpmnlint-utils';
 
+import { ElementKinds } from '../describe.js';
 import type { C7Host, HostExtension } from './C7Host.js';
 import { CamundaDescriptor } from './CamundaDescriptor.js';
 
@@ -15,11 +16,8 @@ const SIDE_RULES: Array<{ definition: string; side: 'throw' | 'catch'; attribute
   { definition: 'bpmn:EscalationEventDefinition', side: 'catch', attributes: ['escalationCodeVariable'], extensions: [], where: 'escalation boundary and escalation start events' },
 ];
 
-/** Why the engines ignore an extension element: the side of the event, loose instead of in its container, or the host. */
-export interface Misplacement {
-  kind: 'side' | 'loose' | 'host';
-  message: string;
-}
+/** Why the engines ignore an extension element: the side of the event or the host (read on `readOn` only), or loose instead of in its `containers`. */
+export type Misplacement = { kind: 'side' | 'host'; readOn: string } | { kind: 'loose'; containers: string };
 
 /** Whether the Camunda 7 engines read camunda content where a host carries it. */
 export class CamundaPlacement {
@@ -47,14 +45,12 @@ export class CamundaPlacement {
    * it; undefined when they read it.
    */
   misplacementOf({ local }: HostExtension): Misplacement | undefined {
-    const where = this.host.describe();
-    const type = this.host.typeName(local);
     const side = this.wrongSide(local, 'extensions');
-    if (side) return { kind: 'side', message: `${type} on ${where} has no effect: the engines read it on ${side} only` };
+    if (side) return { kind: 'side', readOn: side };
     if (this.descriptor.isReadOn(local, this.host.node)) return undefined;
     const containers = this.descriptor.isNestedOnly(local) ? this.descriptor.containersOf(local) : [];
-    if (containers.length) return { kind: 'loose', message: `${type} sits directly in the extension elements of ${where}, but belongs inside ${containers.map((container) => container.replace(/^camunda:/, `${this.host.prefix}:`)).join(' / ')}; the engines ignore it` };
-    return { kind: 'host', message: `${type} on ${where} has no effect: the engines read it on ${CamundaDescriptor.kinds(this.descriptor.hostsOf(local))} only` };
+    if (containers.length) return { kind: 'loose', containers: containers.map((container) => container.replace(/^camunda:/, `${this.host.prefix}:`)).join(' / ') };
+    return { kind: 'host', readOn: ElementKinds.list(this.descriptor.hostsOf(local), 4) };
   }
 
   /** The camunda extension elements the engines read where they sit. */

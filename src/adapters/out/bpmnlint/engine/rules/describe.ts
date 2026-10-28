@@ -14,6 +14,12 @@ export class ElementKinds {
     const kind = type.startsWith('bpmn:') && ElementKinds.label ? ElementKinds.label(el).replace(/^bpmn:/, '') : type.replace(/^bpmn:/, '');
     return kind.charAt(0).toLowerCase() + kind.slice(1);
   }
+
+  /** `userTask`, `activity, gateway, event, ...`: BPMN types as a message lists them, the first `limit` only. */
+  static list(types: string[], limit = Number.POSITIVE_INFINITY): string {
+    const names = types.map((type) => type.replace(/^bpmn:/, '')).map((local) => local.charAt(0).toLowerCase() + local.slice(1));
+    return names.length > limit ? `${names.slice(0, limit).join(', ')}, ...` : names.join(', ');
+  }
 }
 
 /**

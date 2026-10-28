@@ -1,6 +1,8 @@
 import { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
+import { describe, expect, it } from 'vitest';
 
 import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c8/c8-schema.js';
+import { validateXml } from '../../../../../../src/api.js';
 import { engineModel, verifyEngineRule } from '../../../../../helpers/engine-model.js';
 
 const SCHEMA = 'Camunda 8 validates the file against the schema and refuses it';
@@ -11,13 +13,6 @@ const diagram = (shape: string) => `
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="process_test">${shape}</bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>`;
-
-const attribute = (id: string, where: string, key: string, path: (string | number)[]) => ({
-  id,
-  message: `${where} has the attribute ${key}, which the BPMN schema does not define; ${SCHEMA}`,
-  path,
-  type: ERROR_TYPES.PROPERTY_NOT_ALLOWED,
-});
 
 const badId = (id: string, what: string, reason: string) => ({
   id,
@@ -55,60 +50,6 @@ verifyEngineRule('c8-schema', rule, {
     },
   ],
   invalid: [
-    {
-      name: 'an unprefixed attribute on a task',
-      moddleElement: engineModel('c8', '<bpmn:serviceTask id="X" bad="x" />'),
-      report: attribute('X', 'serviceTask X', 'bad', ['bad']),
-    },
-    {
-      name: 'an unprefixed calledDecision on a business rule task, in a process that is not executable',
-      moddleElement: engineModel(
-        'c8',
-        '<bpmn:businessRuleTask id="X" calledDecision="d"><bpmn:extensionElements><zeebe:calledDecision decisionId="d" resultVariable="r" /></bpmn:extensionElements></bpmn:businessRuleTask>',
-        { processAttributes: 'isExecutable="false"' },
-      ),
-      report: attribute('X', 'businessRuleTask X', 'calledDecision', ['calledDecision']),
-    },
-    {
-      name: 'an unprefixed attribute on an event definition with an id, reported on its event',
-      moddleElement: engineModel(
-        'c8',
-        '<bpmn:intermediateCatchEvent id="X"><bpmn:timerEventDefinition id="TD" bad="x"><bpmn:timeDuration>PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>',
-      ),
-      report: attribute('X', 'bpmn:TimerEventDefinition in X', 'bad', [
-        'eventDefinitions',
-        0,
-        'bad',
-      ]),
-    },
-    {
-      name: 'an unprefixed attribute on a condition without id',
-      moddleElement: engineModel(
-        'c8',
-        '<bpmn:sequenceFlow id="X" sourceRef="A" targetRef="B"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="feel" bad="x">= true</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:exclusiveGateway id="A" /><bpmn:task id="B" />',
-      ),
-      report: attribute('X', 'bpmn:FormalExpression in X', 'bad', ['conditionExpression', 'bad']),
-    },
-    {
-      name: 'two unprefixed attributes on bpmn:definitions',
-      moddleElement: engineModel('c8', '<bpmn:task id="X" />', {
-        definitionsAttributes: 'bad="x" other="y"',
-      }),
-      report: [
-        attribute('definitions_test', 'definitions definitions_test', 'bad', ['bad']),
-        attribute('definitions_test', 'definitions definitions_test', 'other', ['other']),
-      ],
-    },
-    {
-      name: 'an unprefixed attribute on the bounds of a shape',
-      moddleElement: engineModel('c8', '<bpmn:task id="X" />', {
-        definitionsAttributes: DI_NAMESPACES,
-        roots: diagram(
-          '<bpmndi:BPMNShape id="X_di" bpmnElement="X"><dc:Bounds x="1" y="2" width="3" height="4" bad="x" /></bpmndi:BPMNShape>',
-        ),
-      }),
-      report: attribute('X_di', 'dc:Bounds in X_di', 'bad', ['bounds', 'bad']),
-    },
     {
       name: 'extension elements on bpmn:definitions',
       moddleElement: engineModel('c8', '<bpmn:task id="X" />', {
@@ -151,4 +92,25 @@ verifyEngineRule('c8-schema', rule, {
       report: badId('X:di', 'bpmndi:BPMNShape', COLON),
     },
   ],
+});
+
+describe('unprefixed attributes: bpmn-cli reads them from its own model (UnprefixedAttributes), once each', () => {
+  const xml = (content: string, { roots = '', definitions = '', executable = 'true' } = {}) => `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" ${DI_NAMESPACES} modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" ${definitions} id="definitions_test" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process_test" isExecutable="${executable}">${content}</bpmn:process>${roots}
+</bpmn:definitions>`;
+  const attribute = (element: string, where: string, key: string) => ({ element, message: `${where} has the attribute ${key}, which the BPMN schema does not define; ${SCHEMA}` });
+  const cases: Array<[name: string, xml: string, expected: Array<ReturnType<typeof attribute>>]> = [
+    ['an unprefixed attribute on a task', xml('<bpmn:serviceTask id="X" bad="x" />'), [attribute('X', 'serviceTask X', 'bad')]],
+    ['an unprefixed calledDecision on a business rule task, in a process that is not executable', xml('<bpmn:businessRuleTask id="X" calledDecision="d"><bpmn:extensionElements><zeebe:calledDecision decisionId="d" resultVariable="r" /></bpmn:extensionElements></bpmn:businessRuleTask>', { executable: 'false' }), [attribute('X', 'businessRuleTask X', 'calledDecision')]],
+    ['an unprefixed attribute on an event definition with an id, reported on its event', xml('<bpmn:intermediateCatchEvent id="X"><bpmn:timerEventDefinition id="TD" bad="x"><bpmn:timeDuration>PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>'), [attribute('X', 'bpmn:TimerEventDefinition in X', 'bad')]],
+    ['an unprefixed attribute on a condition without id', xml('<bpmn:exclusiveGateway id="A" /><bpmn:task id="B" /><bpmn:sequenceFlow id="X" sourceRef="A" targetRef="B"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="feel" bad="x">= true</bpmn:conditionExpression></bpmn:sequenceFlow>'), [attribute('X', 'bpmn:FormalExpression in X', 'bad')]],
+    ['two unprefixed attributes on bpmn:definitions', xml('<bpmn:task id="X" />', { definitions: 'bad="x" other="y"' }), [attribute('definitions_test', 'definitions definitions_test', 'bad'), attribute('definitions_test', 'definitions definitions_test', 'other')]],
+    ['an unprefixed attribute on the bounds of a shape', xml('<bpmn:task id="X" />', { roots: diagram('<bpmndi:BPMNShape id="X_di" bpmnElement="X"><dc:Bounds x="1" y="2" width="3" height="4" bad="x" /></bpmndi:BPMNShape>') }), [attribute('X_di', 'dc:Bounds in X_di', 'bad')]],
+  ];
+
+  it.each(cases)('%s', async (_name, model, expected) => {
+    const { warnings } = await validateXml(model);
+    expect(warnings.filter((warning) => warning.code === 'W_C8_DEPLOY_SCHEMA' && warning.message.includes('which the BPMN schema does not define')).map(({ element, message }) => ({ element, message }))).toEqual(expected);
+  });
 });

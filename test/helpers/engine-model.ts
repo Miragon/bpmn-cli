@@ -2,17 +2,19 @@ import Linter from 'bpmnlint/lib/linter.js';
 import { createModdle } from 'bpmnlint/lib/testers/helper.js';
 import { describe, expect, it } from 'vitest';
 import { CamundaDescriptor } from '../../src/adapters/out/bpmnlint/engine/rules/c7/CamundaDescriptor.js';
-import { ZeebeSchema } from '../../src/adapters/out/bpmnlint/engine/rules/c8/extensions/ZeebeSchema.js';
+import { C8Host } from '../../src/adapters/out/bpmnlint/engine/rules/c8/C8Host.js';
 import { ElementKinds } from '../../src/adapters/out/bpmnlint/engine/rules/describe.js';
 import { kindLabel } from '../../src/domain/document/Kinds.js';
+import { CAMUNDA } from '../../src/domain/document/vendor/CamundaDescriptor.js';
+import { ZEEBE } from '../../src/domain/document/vendor/ZeebeDescriptor.js';
 import type { DeclaredRuleFactory } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { Engine } from '@miragon/bpmnlint-plugin-rules/engine';
-import { CAMUNDA_DESCRIPTOR as camundaModdle } from '../../src/domain/document/vendor/camunda-descriptor.js';
-import { ZEEBE_DESCRIPTOR as zeebeModdle } from '../../src/domain/document/vendor/zeebe-descriptor.js';
+import { moddleExtensions as camundaModdle } from '@miragon/bpmnlint-plugin-rules/camunda-7';
+import { moddleExtensions as zeebeModdle } from '@miragon/bpmnlint-plugin-rules/camunda-8';
 
-CamundaDescriptor.use(camundaModdle);
+CamundaDescriptor.use(CAMUNDA);
 ElementKinds.use(kindLabel);
-ZeebeSchema.use(zeebeModdle);
+C8Host.use(ZEEBE);
 
 const ENGINES: Record<
   Engine,
@@ -22,13 +24,13 @@ const ENGINES: Record<
     platform: 'Camunda Platform',
     version: '7.24.0',
     namespace: 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"',
-    moddle: { camunda: camundaModdle },
+    moddle: camundaModdle,
   },
   c8: {
     platform: 'Camunda Cloud',
     version: '8.10.0',
     namespace: 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"',
-    moddle: { zeebe: zeebeModdle },
+    moddle: zeebeModdle,
   },
 };
 
