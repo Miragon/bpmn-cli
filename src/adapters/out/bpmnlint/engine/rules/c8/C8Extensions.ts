@@ -92,7 +92,7 @@ class C8Extensions extends C8Rule {
   private headerValueHint(hint: ZeebeHint, header: ModdleElement, index: number, missing: 'key' | 'value'): string {
     const add = hint.extAdd(`${hint.name('header')} key=${header.key ?? '<key>'} value=<value>`);
     if (missing === 'value') return `Give it a value: ${add}.`;
-    return `Remove it (\`bpmn ext remove <file> ${hint.target} ${Shell.quote(`${hint.name('taskHeaders')}/${hint.name('header')}[${index}]`)}\`) and add it with a key: ${add}.`;
+    return `Remove it (\`bpmn ext remove <file> ${hint.id} ${Shell.quote(`${hint.name('taskHeaders')}/${hint.name('header')}[${index}]`)}\`) and add it with a key: ${add}.`;
   }
 
   private reportOn(host: C8Host, finding: string, message: string, data: ReportData): void {
@@ -105,7 +105,7 @@ class C8Extensions extends C8Rule {
     if (placement !== 'read') return;
     if (type.name === 'zeebe:executionListeners') this.checkExecutionListeners(host, value, index);
     if (type.name !== 'zeebe:taskListeners') return;
-    if (!values.some((zeebeValue) => zeebeValue.type.name === 'zeebe:userTask')) this.reportOn(host, 'c8-listener', `${host.describe()} has task listeners but is a job worker user task (no ${host.spell('zeebe:userTask')}); Camunda 8 allows task listeners on Camunda user tasks only and refuses the file`, { path: host.path('extensionElements'), type: ERROR_TYPES.EXTENSION_ELEMENT_REQUIRED, node: host.node, requiredExtensionElement: 'zeebe:UserTask', hint: hint ? `Make it a Camunda user task: ${hint.extAdd(hint.name('userTask'))} (or remove the listeners: \`bpmn ext remove <file> ${hint.target} ${hint.name('taskListeners')}\`).` : 'Make it a Camunda user task in the XML (or remove the listeners).' });
+    if (!values.some((zeebeValue) => zeebeValue.type.name === 'zeebe:userTask')) this.reportOn(host, 'c8-listener', `${host.describe()} has task listeners but is a job worker user task (no ${host.spell('zeebe:userTask')}); Camunda 8 allows task listeners on Camunda user tasks only and refuses the file`, { path: host.path('extensionElements'), type: ERROR_TYPES.EXTENSION_ELEMENT_REQUIRED, node: host.node, requiredExtensionElement: 'zeebe:UserTask', hint: hint ? `Make it a Camunda user task: ${hint.extAdd(hint.name('userTask'))} (or remove the listeners: \`bpmn ext remove <file> ${hint.id} ${hint.name('taskListeners')}\`).` : 'Make it a Camunda user task in the XML (or remove the listeners).' });
     (value.listeners ?? []).forEach((listener: ModdleElement, listenerIndex: number) => {
       const eventType: string | undefined = listener.eventType;
       const rebuild = this.rebuildListenerHint(host, 'taskListener', listenerIndex, 'Rebuild it', `eventType=${TASK_LISTENER_EVENT_CHOICE} type=${listener.type ?? '<jobType>'}`);

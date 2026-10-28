@@ -45,6 +45,21 @@ export class SetCommand {
     return `\`bpmn set <file> ${this.id} ${Shell.quote(`${this.slot}${key}=`)}\``;
   }
 
+  /** `` `bpmn ext add <file> X 'definition.camunda:field' name=a` ``: the first of `args` through the slot. */
+  extAdd(args: string): string {
+    return `\`bpmn ext add <file> ${this.id} ${Shell.slotted(this.slot, args)}\``;
+  }
+
+  /** `` `bpmn ext remove <file> X 'definition.camunda:field[name=a]'` `` */
+  extRemove(selector: string | number): string {
+    return `\`bpmn ext remove <file> ${this.id} ${Shell.quote(`${this.slot}${selector}`)}\``;
+  }
+
+  /** How to rebuild an extension element `name` with child elements: list it, then add it again from its XML, `<open>` its start tag. */
+  rebuild(name: string, open = `${name} ...`): string {
+    return `See it with \`bpmn ext list <file> ${this.id} --json\`, then rebuild it: \`bpmn ext add <file> ${this.id} ${Shell.quote(`${this.slot}${name}`)} --replace --xml '<${open}>...</${name}>'\`.`;
+  }
+
   /** The `bpmn ext add` arguments that address `type` through the slot (`X 'definition.camunda:field'`). */
   extTarget(type: string): string | undefined {
     return this.id ? `${this.id} ${Shell.quote(`${this.slot}${type}`)}` : undefined;

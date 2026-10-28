@@ -86,22 +86,11 @@ export class C7Host extends VendorHost {
    */
   rebuild(extension: HostExtension, fix: Record<string, string> = {}): string {
     if (!this.address) return 'Fix it in the XML.';
-    const { id, slot } = this.address;
     const type = this.typeName(extension.local);
-    if (SINGLE_TYPES.includes(extension.local)) return `See it with \`bpmn ext list <file> ${id} --json\`, then rebuild it: \`bpmn ext add <file> ${id} ${Shell.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
+    if (SINGLE_TYPES.includes(extension.local)) return this.address.rebuild(type, type);
     const flat = C7Host.extAddArguments(extension.value, type, fix);
-    const again = flat ? `\`bpmn ext add <file> ${id} ${Shell.slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${id} ${Shell.slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn ext list <file> ${id} --json\` shows it)`;
-    return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${id} ${Shell.quote(`${slot}${this.selector(extension)}`)}\`, then ${again}.`;
-  }
-
-  /** `bpmn ext remove` of an extension element by its position. */
-  removeAt(extension: HostExtension): string | undefined {
-    return this.address && `\`bpmn ext remove <file> ${this.address.id} ${Shell.slotted(this.address.slot, String(extension.index))}\``;
-  }
-
-  /** `bpmn ext remove` of an extension element by its selector (`camunda:field[name=a]`). */
-  removeBySelector(extension: HostExtension): string | undefined {
-    return this.address && `\`bpmn ext remove <file> ${this.address.id} ${Shell.quote(`${this.address.slot}${this.selector(extension)}`)}\``;
+    const again = flat ? this.address.extAdd(flat) : `${this.address.extAdd(`${type} --xml '<${type} ...>...</${type}>'`)} (\`bpmn ext list <file> ${this.address.id} --json\` shows it)`;
+    return `Replace just this one (--replace would remove every ${type}): ${this.address.extRemove(this.selector(extension))}, then ${again}.`;
   }
 
   /** `ext remove` selector of a top-level extension element: a unique attribute, else its index among its type. */

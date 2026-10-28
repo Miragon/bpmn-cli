@@ -58,7 +58,7 @@ class C7VendorContent extends C7Rule {
   private checkForeignExtensions(host: C7Host, read: number[]): void {
     for (const extension of host.extensions()) {
       const type = String(extension.value.$type);
-      if (extension.uri === ZEEBE_URI) this.reportOn(host, 'c7-foreign-content', `${host.describe()} contains the Camunda 8 extension ${type}, which Camunda 7 ignores`, { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: extension.value, path: host.extensionPath(extension.index), node: extension.value, hint: host.address ? `Remove it: \`bpmn ext remove <file> ${host.address.id} ${Shell.slotted(host.address.slot, type)}\`.` : 'Remove it from the XML.' });
+      if (extension.uri === ZEEBE_URI) this.reportOn(host, 'c7-foreign-content', `${host.describe()} contains the Camunda 8 extension ${type}, which Camunda 7 ignores`, { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: extension.value, path: host.extensionPath(extension.index), node: extension.value, hint: host.address ? `Remove it: ${host.address.extRemove(type)}.` : 'Remove it from the XML.' });
       if (!read.includes(extension.index)) continue;
       for (const { element, where, path, key, local, uri } of host.treeAttributes(extension)) if (uri === ZEEBE_URI) this.reportForeignAttribute(host, where, key, { property: `zeebe:${local}`, path: [...path, `zeebe:${local}`], node: element, hint: host.rebuild(extension) });
     }
@@ -130,14 +130,14 @@ class C7VendorContent extends C7Rule {
   /** Remove it; a loose element is added again into its container, one the flow node reads is moved there. */
   private misplacedHint(host: C7Host, extension: HostExtension, { kind }: Misplacement): string {
     const address = host.address;
-    if (kind === 'side') return host.removeBySelector(extension) ? `Remove it: ${host.removeBySelector(extension)}.` : 'Remove it from the XML.';
+    if (kind === 'side') return host.address ? `Remove it: ${host.address.extRemove(host.selector(extension))}.` : 'Remove it from the XML.';
     if (!address) return kind === 'loose' ? 'Fix it in the XML.' : 'Remove it from the XML.';
     const type = host.typeName(extension.local);
     const again = C7Host.extAddArguments(extension.value, type);
-    if (kind === 'loose') return `Remove it (${host.removeAt(extension)}) and add it again, \`bpmn ext add\` files it into its container: ${again ? `\`bpmn ext add <file> ${address.id} ${Shell.slotted(address.slot, again)}\`` : `\`bpmn ext add <file> ${address.id} ${Shell.slotted(address.slot, type)} --xml '...'\``}.`;
+    if (kind === 'loose') return `Remove it (${address.extRemove(extension.index)}) and add it again, \`bpmn ext add\` files it into its container: ${address.extAdd(again ?? `${type} --xml '...'`)}.`;
     const owner = host.owner;
     const moves = owner?.id && again && CamundaPlacement.isReadOn(extension.local, owner) && !new C7Host(owner).camundaExtensions(extension.local).length;
-    return `Remove it: ${host.removeAt(extension)}${moves ? `, then add it to ${ElementKinds.describe(owner)}, where the engines read it: \`bpmn ext add <file> ${owner.id} ${again}\`` : ''}.`;
+    return `Remove it: ${address.extRemove(extension.index)}${moves ? `, then add it to ${ElementKinds.describe(owner)}, where the engines read it: \`bpmn ext add <file> ${owner.id} ${again}\`` : ''}.`;
   }
 
   /** An id reference of a camunda element (the errorRef of camunda:errorEventDefinition) that names no element of the type it needs: the engines ignore the mapping. */

@@ -10,18 +10,15 @@ import { Shell } from '../Shell.js';
  * id of its flow node or flow and a slot (`definition.`, `loop.`) for a nested one, with zeebe
  * elements spelled with the prefix the file declares.
  */
-export class ZeebeHint {
-  private constructor(private readonly address: SetCommand, private readonly prefix: string) {}
+export class ZeebeHint extends SetCommand {
+  private constructor(address: SetCommand, private readonly prefix: string) {
+    super(address.id, address.slot);
+  }
 
   /** The hint commands for `el`; undefined when `bpmn` cannot address it (no id, not nested). */
   static of(el: ModdleElement): ZeebeHint | undefined {
     const address = SetCommand.at(el);
     return address && new ZeebeHint(address, ZeebeHint.prefixOf(el));
-  }
-
-  /** The id `bpmn` addresses. */
-  get target(): string {
-    return String(this.address.id);
   }
 
   /** `zeebe:taskDefinition` for `taskDefinition`, in the file's spelling. */
@@ -32,26 +29,6 @@ export class ZeebeHint {
   /** The element name of a typed zeebe element, `zeebe:taskDefinition` for `zeebe:TaskDefinition`, in the file's spelling. */
   nameOf(element: ModdleElement): string {
     return ZeebeHint.typeName(element).replace(/^[^:]*:/, `${this.prefix}:`);
-  }
-
-  /** `` `bpmn ext add <file> <id> <slot><args>` `` */
-  extAdd(args: string): string {
-    return `\`bpmn ext add <file> ${this.target} ${Shell.slotted(this.address.slot, args)}\``;
-  }
-
-  /** `` `bpmn ext remove <file> <id> <slot><selector>` `` */
-  extRemove(selector: string | number): string {
-    return `\`bpmn ext remove <file> ${this.target} ${Shell.quote(`${this.address.slot}${selector}`)}\``;
-  }
-
-  /** `` `bpmn set <file> <id> <slot><key>=` ``, which removes an attribute. */
-  unset(key: string): string {
-    return this.address.unset(key);
-  }
-
-  /** How to rebuild a zeebe element with its content (`zeebe:taskListeners`): list it, then add it again. */
-  rebuild(name: string): string {
-    return `See it with \`bpmn ext list <file> ${this.target} --json\`, then rebuild it: \`bpmn ext add <file> ${this.target} ${Shell.quote(`${this.address.slot}${name}`)} --replace --xml '<${name} ...>...</${name}>'\`.`;
   }
 
   /** `bpmn ext add --replace` that writes the zeebe element anew with `fix` laid over its attributes, those the descriptor knows and the unknown ones; the rebuild hint when it has child elements. */
