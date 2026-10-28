@@ -186,7 +186,8 @@ export class IncrementalRouting {
       const pending = drawing.routeOrder([...plane.edges.values()].filter((edge) => this.run.reroute.has(edge.id)));
       const waiting = new Set(pending.map((edge) => edge.id));
       for (const edge of pending) {
-        const lines = drawing.routingLines(edge.id).filter((line) => ![...waiting].some((id) => plane.edges.get(id)?.points === line));
+        const waitingLines = new Set([...waiting].map((id) => plane.edges.get(id)?.points));
+        const lines = drawing.routingLines(edge.id).filter((line) => !waitingLines.has(line));
         const routed = drawing.reroute(edge, { lines });
         waiting.delete(edge.id);
         if (!routed) {
