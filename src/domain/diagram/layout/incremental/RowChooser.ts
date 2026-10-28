@@ -34,6 +34,8 @@ export interface Cand {
 const CROSSING = 300;
 /** an existing line through the room the new nodes take: it is routed around them */
 const LINE_HIT = 400;
+/** a trial route through a label, per segment that hits it */
+const LABEL_HIT = 100;
 /** an opened row: base, per shape it moves (capped: one crossing always costs more) */
 const OPEN_ROW = 100;
 const OPEN_PER_SHAPE = 3;
@@ -104,7 +106,7 @@ export class RowChooser {
       }
     }
     const labels = [...plane.shapes.values(), ...plane.edges.values()].map((owner) => owner.label).filter((label): label is Box => !!label);
-    for (const label of labels) for (let index = 0; index + 1 < pts.length; index++) if (segmentHits(pts[index]!, pts[index + 1]!, this.shiftedBox(label, shift), 0)) cost += 60;
+    for (const label of labels) for (let index = 0; index + 1 < pts.length; index++) if (segmentHits(pts[index]!, pts[index + 1]!, this.shiftedBox(label, shift), 0)) cost += LABEL_HIT;
     return cost;
   }
 

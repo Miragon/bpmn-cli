@@ -13,7 +13,7 @@ import type { DShape, Plane } from '../../di/types.js';
 import { attachedSide } from '../../utils/sides.js';
 import { labelSize } from '../../utils/text.js';
 import type { NodePlacer, Probe } from './NodePlacer.js';
-import type { PlacementObstacles } from './PlacementObstacles.js';
+import type { PlacementObstacles, PushRequest } from './PlacementObstacles.js';
 import { TOP_ROW, type Cand, type RowChooser } from './RowChooser.js';
 import type { BoundaryPlacer } from './BoundaryPlacer.js';
 
@@ -109,6 +109,43 @@ export class NeighbourPlacer {
       }
     }
     return false;
+  }
+
+  /**
+   * Makes room right of the line. Inside an expanded sub-process the frame grows (frame mode);
+   * elsewhere only the successor, what follows it and what that would run into moves. The shapes
+   * in `fixed` stay where they are, also beyond the line.
+   */
+  private push(plane: Plane, anchor: DShape, scope: Pick<DShape, 'parentId' | 'poolId'>, req: PushRequest): void {
+    const band = this.obstacles.spaceBand(plane, scope, anchor);
+    const push = band.frame ? undefined : this.obstacles.pushSet(plane, req);
+    const keep = req.fixed?.size ? { keep: req.fixed } : {};
+    /** inside the frame, so it grows instead of moving off its content */
+    const line = band.within && band.frame ? Math.max(req.line, band.within.x + 1) : req.line;
+    this.placer.recordSpace(this.placer.drawing(plane).makeSpace({ axis: 'x', line, delta: req.delta, anchors: [anchor.id, scope.parentId], ...band, ...(push ? { push } : {}), ...keep }));
+  }
+
+  /**
+   * A flow from `source` that enters `target` backwards (no loop return): the target and what
+   * follows it move right of the source, one gap away; what leads to the source stays. False when
+   * nothing moved.
+   */
+  pushBehind(plane: Plane, source: DShape, target: DShape): boolean {
+    if (cx(target.bounds) >= source.bounds.x || this.placer.leadsTo(target.id, source.id)) return false;
+    const fixed = new Set<string>();
+    const queue = [source.id];
+    for (let cur = queue.shift(); cur && fixed.size <= 500; cur = queue.shift()) {
+      if (fixed.has(cur)) continue;
+      fixed.add(cur);
+      PlaneQuery.boundariesOf(plane, cur).forEach((boundary) => fixed.add(boundary.id));
+      const host = idOf(raw(this.placer.sem.byId.get(cur), 'attachedToRef'));
+      queue.push(...this.placer.sem.predecessors(cur), ...(host ? [host] : []));
+    }
+    if (fixed.has(target.id)) return false;
+    const delta = Math.ceil(right(source.bounds) + this.placer.spacingWithout(plane, [source.id, target.id]).gap - target.bounds.x);
+    if (LayoutDebug.on()) LayoutDebug.log(`[place] ${target.id}: entered backwards from ${source.id}, pushed ${delta} px`);
+    this.push(plane, source, target, { line: target.bounds.x - 0.5, delta, successor: target, fixed });
+    return true;
   }
 
   /**
@@ -218,7 +255,14 @@ export class NeighbourPlacer {
       if (!this.obstacles.isFree(box, blockers) || !succRoom) {
         const full = size.width + gap + Math.max(sp.gap, sGap) - sp.gap;
         const delta = Math.min(full, this.localShift(plane, box, maxRight + 1, blockers, successor, Math.max(sp.gap, sGap)) ?? full);
-        this.placer.recordSpace(this.placer.drawing(plane).makeSpace({ axis: 'x', line: maxRight + 1, delta, anchors: [main.id, probe.parentId], ...this.obstacles.spaceBand(plane, probe, main) }));
+        /**
+         * S starts before the line (a merge placed right of its rightmost predecessor, S right of
+         * another one): S and what follows it move right of the node; a loop return stays
+         */
+        const behind = !!successor && successor.bounds.x < maxRight + 1 && preds.some((pred) => successor.bounds.x >= right(pred.bounds)) && !preds.some((pred) => this.placer.leadsTo(successor.id, pred.id));
+        const fixed = behind ? new Set(preds.flatMap((pred) => [pred.id, ...PlaneQuery.boundariesOf(plane, pred.id).map((boundary) => boundary.id)])) : undefined;
+        if (behind) this.push(plane, main, probe, { id, box, line: successor.bounds.x - 0.5, delta: Math.max(delta, Math.ceil(right(box) + Math.max(sp.gap, sGap) - successor.bounds.x)), successor, fixed });
+        else this.push(plane, main, probe, { id, box, line: maxRight + 1, delta, successor });
       }
       if (LayoutDebug.on()) LayoutDebug.log(`[place] ${id} after ${main.id}: ${successor ? `splice before ${successor.id}` : 'continuation'} at x=${left} c=${center}`);
       this.placer.placeAt(plane, id, left, center, size);
@@ -254,7 +298,8 @@ export class NeighbourPlacer {
         }
       }
     }
-    this.placer.recordSpace(this.placer.drawing(plane).makeSpace({ axis: 'x', line: succ.bounds.x - 0.5, delta: size.width + sp.gap, anchors: [succ.id, probe.parentId], ...this.obstacles.spaceBand(plane, probe, succ) }));
+    const at = { x: succ.bounds.x - 0.5, y: cy(succ.bounds) - size.height / 2, ...size };
+    this.push(plane, succ, probe, { id, box: at, line: at.x, delta: size.width + sp.gap, successor: succ });
     const center = this.rows.intoOwnLane(plane, probe, succ.bounds.x - sp.gap - size.width, cy(succ.bounds), size, [], succ);
     this.placer.placeAt(plane, id, succ.bounds.x - sp.gap - size.width, center, size);
   }

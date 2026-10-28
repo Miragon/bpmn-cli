@@ -3,7 +3,8 @@ import { LayoutDebug } from '../LayoutDebug.js';
 import { LayoutAnalysis } from '../../di/LayoutAnalysis.js';
 import { TrialGuard, type TrialPolicy } from '../../di/TrialGuard.js';
 import type { DEdge, Plane, Point } from '../../di/types.js';
-import { copyBox, polylinesCross, samePoints } from '../../utils/geom.js';
+import { copyBox, polylinesCross, samePoints, toSegments } from '../../utils/geom.js';
+import { collinear } from '../../utils/harness.js';
 import { raw } from '../../utils/raw.js';
 import { isHardProblem, problemKey, type LayoutMetrics } from '../../utils/problems.js';
 import { PlaneWriter } from '../../di/PlaneWriter.js';
@@ -14,10 +15,14 @@ const REPAIR_TRIALS = 8;
 
 const CHAIN_RETRIES = 2;
 
+/** px a rerouted hand-drawn line may run along more of the others, the length of a parallel run */
+const RUN_SLACK = 20;
+
 /**
  * Removes crossings between connections drawn in this run and existing ones: first by rerouting,
  * then by placing the new chain at its next row candidate. A trial stays only when it lowers the
- * score and adds no hard problem and no crossing among the hand-drawn lines.
+ * score and adds no hard problem and no crossing among the hand-drawn lines. A hand-drawn line is
+ * not laid on top of the others to save a crossing: it would read as their continuation.
  */
 export class CrossingRepair {
   constructor(private readonly run: IncrementalLayout) {}
@@ -80,7 +85,10 @@ export class CrossingRepair {
     return undefined;
   }
 
-  /** A route that still crosses is skipped without measuring, as the guard would reject it anyway. */
+  /**
+   * A route that still crosses is skipped without measuring, as the guard would reject it anyway; so
+   * is one that lays a hand-drawn line along more of the others.
+   */
   async repair(rerouted: string[], start: Checkpoint, redraw: () => Promise<string[]>): Promise<string[]> {
     if (!this.newCrossings().length) return rerouted;
     let trials = 0;
@@ -113,8 +121,9 @@ export class CrossingRepair {
           const pts = drawing.route(target, { lines: drawing.routingLines(target.id) });
           if (!pts || pts.length < 2 || samePoints(pts, target.points)) continue;
           const other = target === freshEdge ? keptEdge : freshEdge;
-          if (polylinesCross(pts, other.points) || (target === keptEdge && crossesNewDrawnLine(plane, target, pts))) {
-            if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${target.id} routed again (it crossed: ${freshEdge.id} x ${keptEdge.id}): still crossing, not measured`);
+          const crossing = polylinesCross(pts, other.points) || (target === keptEdge && crossesNewDrawnLine(plane, target, pts));
+          if (crossing || (target === keptEdge && runsAlongDrawnLines(plane, target, pts))) {
+            if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${target.id} routed again (it crossed: ${freshEdge.id} x ${keptEdge.id}): ${crossing ? 'still crossing' : 'along drawn lines'}, not measured`);
             continue;
           }
           trials++;
@@ -137,6 +146,19 @@ export class CrossingRepair {
     };
     const crossesNewDrawnLine = (plane: Plane, target: DEdge, pts: readonly Point[]): boolean =>
       [...plane.edges.values()].some((other) => other !== target && !this.run.newEdges.has(other.id) && other.points.length >= 2 && polylinesCross(pts, other.points) && !polylinesCross(target.points, other.points));
+    /** collinear with more of the drawn lines that share no end with the edge than its points are, measured like a parallel run */
+    const runsAlongDrawnLines = (plane: Plane, target: DEdge, pts: Point[]): boolean => {
+      const along = (points: Point[]): number => {
+        const segs = toSegments(points);
+        let len = 0;
+        for (const other of plane.edges.values()) {
+          if (other === target || this.run.newEdges.has(other.id) || [other.sourceId, other.targetId].some((end) => end === target.sourceId || end === target.targetId)) continue;
+          for (const sb of toSegments(other.points)) for (const sa of segs) len += Math.max(0, collinear(sa, sb));
+        }
+        return len;
+      };
+      return along(pts) > along(target.points) + RUN_SLACK;
+    };
     reroutes(rerouted);
     const tried = new Map<string, number>();
     while (trials < REPAIR_TRIALS && retries < CHAIN_RETRIES && !this.run.fromEngine.size && this.run.planes.length === start.planes.length) {

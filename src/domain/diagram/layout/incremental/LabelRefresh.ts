@@ -1,6 +1,6 @@
 import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout } from './IncrementalLayout.js';
-import { overlaps, segmentHits } from '../../utils/geom.js';
+import { overlaps, pathHits } from '../../utils/geom.js';
 import { hasExternalLabel } from '../../utils/labels.js';
 import { raw } from '../../utils/raw.js';
 import type { DEdge, DShape } from '../../di/types.js';
@@ -21,7 +21,7 @@ export class LabelRefresh {
    */
   labels(routed: ReadonlySet<string>): void {
     for (const plane of this.run.planes) {
-      const fresh = [...plane.edges.values()].filter((edge) => routed.has(edge.id)).flatMap((edge) => edge.points.slice(1).map((end, index) => [edge.points[index]!, end] as const));
+      const fresh = [...plane.edges.values()].filter((edge) => routed.has(edge.id));
       const grown = [...this.run.grown].map((id) => plane.shapes.get(id)).filter((shape): shape is DShape => !!shape);
       for (const shape of plane.shapes.values()) {
         if (this.run.fromEngine.has(shape.id)) continue;
@@ -29,7 +29,7 @@ export class LabelRefresh {
           this.run.drawing(plane).placeShapeLabel(shape);
           continue;
         }
-        if (shape.label && hasExternalLabel(shape) && fresh.some(([start, end]) => segmentHits(start, end, shape.label!, 1))) {
+        if (shape.label && hasExternalLabel(shape) && fresh.some((edge) => pathHits(edge.points, shape.label!, 1))) {
           this.run.drawing(plane).placeShapeLabel(shape);
           this.run.notes.push(`label of ${shape.id} moved off a new line`);
           continue;

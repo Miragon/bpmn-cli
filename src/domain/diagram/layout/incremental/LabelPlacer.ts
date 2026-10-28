@@ -1,6 +1,7 @@
 import { labelSize } from '../../utils/text.js';
+import { glyph } from '../../utils/harness.js';
 import { is } from '../../../document/utils/moddle.js';
-import { bottom, cx, cy, inside, overlaps, right, segmentHits, type Box } from '../../utils/geom.js';
+import { bottom, cx, cy, inside, overlaps, polylinesCross, right, segmentHits, toSegments, type Box } from '../../utils/geom.js';
 import { Frames } from '../../di/Frames.js';
 import { raw } from '../../utils/raw.js';
 import type { DEdge, DShape, Plane } from '../../di/types.js';
@@ -11,12 +12,15 @@ interface Clutter {
   shapes: Box[];
   labels: Box[];
   segments: Array<[{ x: number; y: number }, { x: number; y: number }]>;
+  /** of lines crossing a connection of the owner, which the crossing repair may route again */
+  crossing: Clutter['segments'];
 }
 
 /**
  * Places the external labels of shapes and connections into a kept drawing.
  * A label must keep 2 px off shapes, labels and sub-process titles and 1 px off lines and frame
- * borders, and should stay inside its home frame (the one checkLabelFrames expects).
+ * borders, and should stay inside its home frame (the one checkLabelFrames expects); a spot that
+ * keeps its drawn text off lines too comes first.
  */
 export class LabelPlacer {
   constructor(private readonly plane: Plane) {}
@@ -30,6 +34,7 @@ export class LabelPlacer {
     const shapes: Box[] = [];
     const labels: Box[] = [];
     const segments: Clutter['segments'] = [];
+    const crossing: Clutter['segments'] = [];
     for (const shape of this.plane.shapes.values()) {
       if (!shape.container && shape.kind !== 'group' && !ignoreShapes.has(shape.id)) shapes.push(shape.bounds);
       if (shape.label && shape.id !== ownerId) labels.push(shape.label);
@@ -44,31 +49,51 @@ export class LabelPlacer {
         segments.push([tl, tr], [tr, br], [br, bl], [bl, tl]);
       }
     }
+    const own = [...this.plane.edges.values()].filter((edge) => edge.sourceId === ownerId || edge.targetId === ownerId);
     for (const edge of this.plane.edges.values()) {
       if (edge.label && edge.id !== ownerId) labels.push(edge.label);
-      for (let index = 0; index + 1 < edge.points.length; index++) segments.push([edge.points[index]!, edge.points[index + 1]!]);
+      const into = !own.includes(edge) && own.some((mine) => polylinesCross(mine.points, edge.points)) ? crossing : segments;
+      into.push(...toSegments(edge.points));
     }
-    return { shapes, labels, segments };
-  }
-
-  private collides(candidate: Box, clutter: Clutter): boolean {
-    return clutter.shapes.some((shape) => overlaps(shape, candidate, 2)) || clutter.labels.some((label) => overlaps(label, candidate, 2)) || clutter.segments.some(([start, end]) => segmentHits(start, end, candidate, 1));
+    return { shapes, labels, segments, crossing };
   }
 
   /**
-   * Per list: a free spot in the frame's label area, else in the home frame;
-   * only then any free spot of all lists (a boundary event's label hangs outside its host).
+   * With `name` the drawn text keeps off shapes and lines too: bpmn-js draws a short name on one
+   * line up to 90 px wide, centred on the box, so it can reach a line beside the narrower wrapped
+   * box. Not off a line crossing the owner's connections: routed again, it would take the side the
+   * text dodged to.
+   */
+  private collides(candidate: Box, clutter: Clutter, name?: string): boolean {
+    const onLine = ([start, end]: Clutter['segments'][number]): boolean => segmentHits(start, end, candidate, 1);
+    if (clutter.shapes.some((shape) => overlaps(shape, candidate, 2)) || clutter.labels.some((label) => overlaps(label, candidate, 2)) || clutter.segments.some(onLine) || clutter.crossing.some(onLine)) return true;
+    if (!name) return false;
+    const text = glyph(candidate, name);
+    return clutter.shapes.some((shape) => overlaps(shape, text)) || clutter.segments.some(([start, end]) => segmentHits(start, end, text, 0));
+  }
+
+  /**
+   * Per list: a free spot in the frame's label area, else in the home frame; only then any free
+   * spot of all lists (a boundary event's label hangs outside its host). Each first with its text
+   * clear, then with the box alone.
    */
   private firstFree(shape: DShape, clutter: Clutter, ...lists: Array<readonly Box[]>): Box | undefined {
     const frame = shape.kind === 'boundary' ? undefined : Frames.of(this.plane, shape);
     const home = frame ? this.homeOf(shape) : undefined;
     const area = frame ? Frames.labelArea(frame) : undefined;
-    for (const cands of lists) {
-      const free = cands.filter((candidate) => !this.collides(candidate, clutter));
-      const win = (area ? free.find((candidate) => inside(candidate, area)) : undefined) ?? free.find((candidate) => !home || inside(candidate, home.bounds));
+    const tiers = [this.nameOf(shape.el), undefined];
+    for (const name of tiers) {
+      for (const cands of lists) {
+        const free = cands.filter((candidate) => !this.collides(candidate, clutter, name));
+        const win = (area ? free.find((candidate) => inside(candidate, area)) : undefined) ?? free.find((candidate) => !home || inside(candidate, home.bounds));
+        if (win) return win;
+      }
+    }
+    for (const name of tiers) {
+      const win = lists.flat().find((candidate) => !this.collides(candidate, clutter, name));
       if (win) return win;
     }
-    return lists.flat().find((candidate) => !this.collides(candidate, clutter));
+    return undefined;
   }
 
   /** The sub-process a shape lives in, else its pool; a flow's only when both ends share it. */
@@ -79,14 +104,20 @@ export class LabelPlacer {
     return source && source === of(owner.targetId ? this.plane.shapes.get(owner.targetId) : undefined) ? source : undefined;
   }
 
-  /** Centred, then shifted off a line leaving the shape on that side, at three steps out. */
+  /**
+   * Centred, then shifted off a line leaving the shape on that side, at three steps out; above and
+   * below also as far as a wider one-line text needs.
+   */
   private sideSpots(shape: DShape, side: LabelSide, size: { width: number; height: number }, host?: DShape): Box[] {
+    const name = this.nameOf(shape.el);
+    const over = name ? Math.max(0, glyph(shape.bounds, name).width - size.width) / 2 : 0;
     const cands: Box[] = [];
     for (let step = 0; step < 3; step++) {
       const base = labelAt(shape, size, side, host, step);
       cands.push(base);
-      if (side === 'below' || side === 'above') cands.push({ ...base, x: Math.round(cx(shape.bounds) + 6) }, { ...base, x: Math.round(cx(shape.bounds) - 6 - size.width) });
-      else cands.push({ ...base, y: Math.round(cy(shape.bounds) + 6) }, { ...base, y: Math.round(cy(shape.bounds) - 6 - size.height) });
+      if (side === 'below' || side === 'above') {
+        for (const shift of over ? [0, over] : [0]) cands.push({ ...base, x: Math.round(cx(shape.bounds) + 6 + shift) }, { ...base, x: Math.round(cx(shape.bounds) - 6 - size.width - shift) });
+      } else cands.push({ ...base, y: Math.round(cy(shape.bounds) + 6) }, { ...base, y: Math.round(cy(shape.bounds) - 6 - size.height) });
     }
     return cands;
   }
@@ -195,7 +226,7 @@ export class LabelPlacer {
       const start = pts[0]!;
       cands.push({ x: Math.round(start.x + 6), y: Math.round(start.y - size.height - 4), ...size });
     }
-    edge.label = cands.find((candidate) => !this.collides(candidate, clutter)) ?? cands[0]!;
+    edge.label = cands.find((candidate) => !this.collides(candidate, clutter, name)) ?? cands.find((candidate) => !this.collides(candidate, clutter)) ?? cands[0]!;
     return edge.label;
   }
 

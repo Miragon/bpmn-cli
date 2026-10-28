@@ -51,14 +51,15 @@ export class PlaneQuery {
     return [...plane.shapes.values()].filter((shape) => shape.hostId === hostId);
   }
 
-  /** Gap and row spacing of a plane, measured on its sequence flows. */
-  static spacingOf(plane: Plane): Spacing {
+  /** Gap and row spacing of a plane, measured on its sequence flows (between the ends `endsOf` names; none: skipped). */
+  static spacingOf(plane: Plane, endsOf: (edge: DEdge) => Pick<DEdge, 'sourceId' | 'targetId'> | undefined = (edge) => edge): Spacing {
     const gaps: number[] = [];
     const rows: number[] = [];
     for (const edge of plane.edges.values()) {
-      if (edge.kind !== 'sequenceFlow' || !edge.sourceId || !edge.targetId) continue;
-      const source = plane.shapes.get(edge.sourceId);
-      const target = plane.shapes.get(edge.targetId);
+      const ends = edge.kind === 'sequenceFlow' ? endsOf(edge) : undefined;
+      if (!ends?.sourceId || !ends.targetId) continue;
+      const source = plane.shapes.get(ends.sourceId);
+      const target = plane.shapes.get(ends.targetId);
       if (!source || !target || source.kind === 'boundary' || source.container || target.container) continue;
       const dy = Math.abs(cy(source.bounds) - cy(target.bounds));
       if (dy <= 5) {

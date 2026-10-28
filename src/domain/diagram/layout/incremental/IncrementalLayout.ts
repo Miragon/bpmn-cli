@@ -173,8 +173,10 @@ export class IncrementalLayout implements PlacementHooks {
     await this.placeContainers(wrapped);
     this.diff.laneChanges();
     this.joinPuller.pullJoins();
+    this.joinPuller.pushTargets();
     const start = this.checkpoint();
     const rerouted = await new CrossingRepair(this).repair(await this.draw(), start, () => this.draw());
+    for (const id of this.routing.routeGrazed()) if (!rerouted.includes(id)) rerouted.push(id);
     for (const id of new Set(rerouted)) {
       const ends = detached.get(id);
       if (ends) this.notes.push(`${id} routed again: it did not reach ${ends.join(' and ')}`);
@@ -317,9 +319,12 @@ export class IncrementalLayout implements PlacementHooks {
     return (this.engineRun ??= EngineDrawing.of(this.doc, this.opts));
   }
 
-  /** The drawing of a plane in this run: what its frame edits move counts as moved. */
+  /**
+   * The drawing of a plane in this run: what its frame edits move counts as moved, associations
+   * keep clear of the nodes placed.
+   */
   drawing(plane: Plane): Drawing {
-    return new Drawing(plane, this.place.moved);
+    return new Drawing(plane, this.place.moved, this.place.placed);
   }
 
   /** The id an element had before the ops (its DI object survives a `set id=` rename). */

@@ -240,9 +240,9 @@ describe('judged edits on hand drawings', () => {
     // mostly before the insertion line: untouched with its content and inner flows
     for (const id of ['ESP', 'ES', 'ET', 'EE']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
     expect(edges(after).get('EF2')!.points).toEqual(edges(before).get('EF2')!.points);
-    // mostly beyond it: moved as a whole
-    for (const id of ['ESP2', 'BS', 'BT', 'BE']) expect(shapesAfter.get(id)!.bounds, id).toEqual({ ...shapesBefore.get(id)!.bounds, x: shapesBefore.get(id)!.bounds.x + dx });
-    expect(edges(after).get('BF1')!.points).toEqual(edges(before).get('BF1')!.points.map((point) => ({ x: point.x + dx, y: point.y })));
+    // mostly beyond it, but neither following the new node nor in the way of what moves: kept as a whole
+    for (const id of ['ESP2', 'BS', 'BT', 'BE']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    expect(edges(after).get('BF1')!.points).toEqual(edges(before).get('BF1')!.points);
   });
 
   it('rename: a long name grows its task (wider, then higher), the boundary event stays on the border, what follows keeps its distance', async () => {

@@ -9,7 +9,7 @@ import type { DrawingSnapshot } from './DrawingSnapshot.js';
 import type { TrialGuard } from '../../di/TrialGuard.js';
 import type { Box, DEdge, DShape, Plane, Point, Side } from '../../di/types.js';
 import type { Semantics } from '../../di/Semantics.js';
-import { segmentHits, translateEdge } from '../../utils/geom.js';
+import { pathHits, translateEdge } from '../../utils/geom.js';
 import { hasExternalLabel, labelSideOf, type LabelSide } from '../../utils/labels.js';
 import { raw } from '../../utils/raw.js';
 
@@ -24,12 +24,14 @@ export class Drawing {
   private readonly separation: Separation;
   private readonly frames: FrameEditor;
 
+  /** `fresh`: the nodes placed in this run (EdgeRouter) */
   constructor(
     readonly plane: Plane,
     readonly touched: Set<string> = new Set(),
+    fresh?: ReadonlySet<string>,
   ) {
     this.space = new SpaceTool(plane);
-    this.routes = new EdgeRouter(plane);
+    this.routes = new EdgeRouter(plane, fresh);
     this.labels = new LabelPlacer(plane);
     this.separation = new Separation(plane, this.space);
     this.frames = new FrameEditor(plane, this.space, touched);
@@ -103,6 +105,14 @@ export class Drawing {
     return this.routes.detachedEnds(edge);
   }
 
+  grazes(edge: DEdge, ids: Iterable<string>): boolean {
+    return this.routes.grazes(edge, ids);
+  }
+
+  touchesFresh(edge: DEdge): boolean {
+    return this.routes.touchesFresh(edge);
+  }
+
   reroute(edge: DEdge, opts: { lines?: Point[][]; sourceSides?: Side[]; targetSides?: Side[] } = {}): boolean {
     const { lines, ...sides } = opts;
     const pts = this.routes.routeEdge(edge, { lines: lines ?? this.routes.routingLines(edge.id), ...sides });
@@ -137,10 +147,8 @@ export class Drawing {
   }
 
   clearLabels(fresh: readonly DEdge[]): void {
-    const segs = fresh.flatMap((edge) => edge.points.slice(1).map((end, index) => [edge.points[index]!, end] as const));
-    if (!segs.length) return;
     for (const shape of this.plane.shapes.values()) {
-      if (!shape.label || !hasExternalLabel(shape) || !segs.some(([start, end]) => segmentHits(start, end, shape.label!, 1))) continue;
+      if (!shape.label || !hasExternalLabel(shape) || !fresh.some((edge) => pathHits(edge.points, shape.label!, 1))) continue;
       const host = shape.hostId ? this.plane.shapes.get(shape.hostId)?.bounds : undefined;
       const side = labelSideOf(shape, host);
       this.labels.placeShapeLabel(shape, side === 'inside' ? undefined : side);
