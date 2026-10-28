@@ -41,15 +41,6 @@ const OWN_DUPLICATES = 'c8-duplicate-extension';
 /** Reported on every element of a group; the engine refuses the second and later ones. */
 const REPEATS = new Set(['camunda.elementMultipleNotAllowed', 'camunda.elementPropertyValueDuplicated']);
 
-/**
- * Findings camunda-compat reports as refused at deploy that Camunda 8.9 deploys (engine-checked):
- * the flow out of an exclusive or inclusive gateway is never taken, a standard loop runs once.
- */
-const DEPLOYS: Record<string, string> = {
-  'camunda-compat/sequence-flow-condition': 'camunda.propertyRequired',
-  'camunda-compat/loop-characteristics': 'camunda.propertyTypeNotAllowed',
-};
-
 type Results = Record<string, BpmnlintEngineReport[]>;
 
 interface Node {
@@ -59,7 +50,7 @@ interface Node {
   sourceRef?: Node;
 }
 
-/** Where camunda-compat's verdict is not the engine's: its rules at bpmn-cli's severity, its reports dropped or made runtime findings. */
+/** Where camunda-compat's verdict is not the engine's: its rules at bpmn-cli's severity, its reports dropped. */
 export class CompatVerdicts {
   constructor(
     private readonly kit: EngineKit,
@@ -88,9 +79,7 @@ export class CompatVerdicts {
     const duplicated = new Set(Object.entries(results).flatMap(([rule, reports]) => reports.filter((report) => EngineFindings.findingOf(rule, report) === OWN_DUPLICATES).map((report) => report.id)));
     for (const [rule, reports] of Object.entries(results)) {
       if (!rule.startsWith('camunda-compat/')) continue;
-      const kept = reports.filter((report) => !this.dropped(rule, report, duplicated));
-      for (const report of kept) if (DEPLOYS[rule] === report.data?.type && report.category === 'error') report.category = 'warn';
-      results[rule] = this.withoutFirstOfRepeats(kept);
+      results[rule] = this.withoutFirstOfRepeats(reports.filter((report) => !this.dropped(rule, report, duplicated)));
     }
   }
 

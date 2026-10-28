@@ -24,7 +24,6 @@ const REQUIRED_ATTRIBUTES: Record<string, string> = {
   'zeebe:loopCharacteristics': 'inputCollection==<items> inputElement=<item>',
   'zeebe:script': 'expression==<expression> resultVariable=<variable>',
   'zeebe:formDefinition': 'formId=<formId>',
-  'camunda:field': 'name=<name> stringValue=<value>',
 };
 
 /**
@@ -44,8 +43,6 @@ const SET_ALIASES: Record<string, string> = {
   messageRef: 'message=<MessageName>',
   conditionExpression: 'condition=<expression>',
   completionCondition: 'completion=<expression>',
-  'camunda:type': 'camunda:type=external camunda:topic=<topic>',
-  'definition.camunda:type': 'definition.camunda:type=external definition.camunda:topic=<topic>',
 };
 
 /** The placeholder a hint writes for a property, in the vocabulary of bpmn-cli's hints. */
@@ -67,27 +64,12 @@ const PLACEHOLDERS: Record<string, string> = {
   errorCode: '<CODE>',
   escalationCode: '<CODE>',
   messageName: '<MessageName>',
-  historyTimeToLive: '180',
 };
 
 /** The kind `bpmn retype` makes of an element type the engine does not support. */
 const REPLACEMENTS: Record<string, string> = {
   'bpmn:Transaction': '`bpmn retype <file> {id} subProcess` (an embedded sub-process).',
   'bpmn:ComplexGateway': '`bpmn retype <file> {id} inclusiveGateway` (or exclusiveGateway: one path).',
-};
-
-/** `bpmn set` keys of the event triggers, by event definition type. */
-const TRIGGERS: Record<string, string> = {
-  'bpmn:MessageEventDefinition': 'message',
-  'bpmn:TimerEventDefinition': 'timer',
-  'bpmn:SignalEventDefinition': 'signal',
-  'bpmn:ErrorEventDefinition': 'error',
-  'bpmn:EscalationEventDefinition': 'escalation',
-  'bpmn:ConditionalEventDefinition': 'conditional',
-  'bpmn:LinkEventDefinition': 'link',
-  'bpmn:CompensateEventDefinition': 'compensation',
-  'bpmn:TerminateEventDefinition': 'terminate',
-  'bpmn:CancelEventDefinition': 'cancel',
 };
 
 interface ModdleNode {
@@ -113,7 +95,7 @@ interface Address {
 export class EngineHint {
   constructor(private readonly elementsById: Readonly<Record<string, unknown>>) {}
 
-  of(report: BpmnlintEngineReport, rule = ''): string {
+  of(report: BpmnlintEngineReport, rule: string): string {
     const id = report.id;
     const type = report.data?.type;
     const host = id ? (this.elementsById[id] as ModdleNode | undefined) : undefined;
@@ -125,7 +107,6 @@ export class EngineHint {
     const path = report.path ?? [];
     const requiredType = report.data?.requiredType;
     if (type === 'camunda.childElementOfTypeRequired' && typeof requiredType === 'string' && requiredType.startsWith('bpmn:')) return this.addChild(id, host, requiredType);
-    if (type === 'camunda.elementMultipleNotAllowed' && path[path.length - 1] === 'eventDefinitions') return this.keepOneTrigger(id, report);
     if (!path.length && EXT_REMOVE.has(type)) return `Remove it (\`bpmn remove <file> ${id}\`), or give it another trigger (\`bpmn set <file> ${id} trigger=<trigger>\`).`;
     const address = this.address(host, path);
     if (!address) return this.fallback(id);
@@ -302,13 +283,6 @@ export class EngineHint {
     const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && typeof element[candidate.name] === 'string' && element[candidate.name] !== '').map((candidate) => Shell.quote(`${candidate.name}=${String(element[candidate.name])}`));
     const fixed = Shell.quote(`${property}=${PLACEHOLDERS[property] ?? `<${property}>`}`);
     return `Rebuild it: \`bpmn ext remove <file> ${address.target} ${Shell.quote(`${containerName}/${childName}[${position}]`)}\`, then \`bpmn ext add <file> ${address.target} ${[Shell.quote(`${address.slot}${added}`), ...attributes, fixed].join(' ')}\`.`;
-  }
-
-  /** Several event definitions: keep the one the engine acts on (the rule names it as `kept`). */
-  private keepOneTrigger(id: string, report: BpmnlintEngineReport): string {
-    const kept = report.data?.kept as ModdleNode | undefined;
-    const trigger = kept?.$type ? TRIGGERS[kept.$type] : undefined;
-    return `Keep one: \`bpmn set <file> ${id} trigger=${trigger ?? '<trigger>'}\` (the others are removed).`;
   }
 
   /** `bpmn add` of a BPMN element a process or sub-process lacks (a start event). */

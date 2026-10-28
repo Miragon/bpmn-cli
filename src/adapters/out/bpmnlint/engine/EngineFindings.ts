@@ -52,7 +52,7 @@ export class EngineFindings {
     const compat: Array<{ finding: ProfileFinding; identity: string }> = [];
     for (const [rule, reports] of Object.entries(results)) {
       for (const report of reports) {
-        const [code, severity] = this.findings[EngineFindings.findingOf(rule, report)] ?? [EngineCodes.codeOf(this.platform, rule, report), SEVERITY_OF_CATEGORY[report.category] ?? 'runtime'];
+        const [code, severity] = this.findings[EngineFindings.findingOf(rule, report)] ?? this.compatCodeOf(rule, report);
         const related = this.relatedIds(report);
         const subject = this.subjectOf(report);
         const finding = this.kit.makeFinding(severity, code, String(report.message), report.id ?? undefined, { hint: this.spelledHint(this.hint.of(report, rule), rule), subject, ...(related.length ? { related } : {}) });
@@ -74,6 +74,11 @@ export class EngineFindings {
       return true;
     };
     return [...out, ...compat.filter(firstOfSubject).map(({ finding }) => finding)];
+  }
+
+  private compatCodeOf(rule: string, report: BpmnlintEngineReport): readonly [string, Severity] {
+    const code = EngineCodes.codeOf(this.platform, rule, report);
+    return [code, EngineCodes.RUNTIME.includes(code) ? 'runtime' : (SEVERITY_OF_CATEGORY[report.category] ?? 'runtime')];
   }
 
   /** What an own rule's report is (`data.finding`, else the rule); '' for camunda-compat's. */
