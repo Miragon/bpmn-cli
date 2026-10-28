@@ -253,7 +253,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   beforeAll(async () => {
     bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
     expect(bundle.violations).toEqual([]);
-    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes(`${RULES}/c7/index.ts`) ? 'c7' : chunk.inputs.includes(`${RULES}/c8/index.ts`) ? 'c8' : undefined);
+    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes(`${RULES}/c7/Camunda7Rules.ts`) ? 'c7' : chunk.inputs.includes(`${RULES}/c8/Camunda8Rules.ts`) ? 'c8' : undefined);
     files = bundle.chunks.map((chunk) => {
       const text = chunk.text.replace(/(["'])\.\/([\w.-]+)\.js\1/g, (_m, quote: string, name: string) => `${quote}./${name}.mjs${quote}`);
       return { name: basename(chunk.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(chunk) };
@@ -298,7 +298,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   it('the entry chunk is the one of the requested entry, though esbuild makes every import() target an entry point', () => {
     expect(bundle.chunks.filter((chunk) => chunk.entry).map((chunk) => chunk.entryPoint)).toEqual(['src/index.ts']);
     expect(bundle.entry.entryPoint).toBe('src/index.ts');
-    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining([`${RULES}/c7/index.ts`, `${RULES}/c8/index.ts`, ENGINE_RUN]));
+    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining([`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`, ENGINE_RUN]));
   });
 
   it('the rule chunks import nothing the entry loads (a host whose entry module awaits a call at top level does not wait for itself)', () => {
@@ -324,7 +324,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     const own = [...reach(ENGINE_RUN)];
     expect(own.filter((module) => core.has(module))).toEqual([]);
     expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency))).toEqual([]);
-    for (const rules of [`${RULES}/c7/index.ts`, `${RULES}/c8/index.ts`]) expect([...reach(rules)].filter((module) => module.startsWith('src/') && core.has(module)), rules).toEqual([]);
+    for (const rules of [`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`]) expect([...reach(rules)].filter((module) => module.startsWith('src/') && core.has(module)), rules).toEqual([]);
     expect(bundle.chunks.find((chunk) => chunk.inputs.includes(ENGINE_RUN))!.inputs).toEqual(expect.arrayContaining(['src/adapters/out/bpmnlint/engine/SchemaText.ts', 'src/adapters/out/bpmnlint/engine/BpmnSchema.ts', 'src/adapters/out/bpmnlint/engine/EngineHint.ts']));
   });
 

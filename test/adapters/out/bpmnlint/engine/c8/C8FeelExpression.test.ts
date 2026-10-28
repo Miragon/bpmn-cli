@@ -1,6 +1,6 @@
 import { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
 
-import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c8/c8-feel-expression.js';
+import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c8/C8FeelExpression.js';
 import { engineModel, verifyEngineRule } from '../../../../../helpers/engine-model.js';
 
 const BAD = '= (a';

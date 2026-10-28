@@ -1,6 +1,6 @@
 import type { ModdleElement, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
 import { DiagramNamespaces } from './DiagramNamespaces.js';
-import { describeElement } from './describe.js';
+import { ElementKinds } from './ElementKinds.js';
 import { ModdlePath } from './ModdlePath.js';
 import { SetCommand } from './SetCommand.js';
 
@@ -44,7 +44,7 @@ export class VendorHost {
 
   /** `serviceTask Activity_1`, `the multiInstanceLoopCharacteristics of userTask Activity_1` */
   describe(): string {
-    return describeElement(this.node, this.owner);
+    return ElementKinds.describe(this.node, this.owner);
   }
 
   /** The path from the reported element to a property of this host. */

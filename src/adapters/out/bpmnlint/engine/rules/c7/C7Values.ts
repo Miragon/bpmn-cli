@@ -1,8 +1,9 @@
 import { is, isAny } from 'bpmnlint-utils';
-import { C7Rule, defineRule, describeElement, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
+import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
+import { ElementKinds } from '../ElementKinds.js';
 
 import { SetCommand } from '../SetCommand.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
 import { C7Diagram } from './C7Diagram.js';
 import { C7EventDefinitions } from './C7EventDefinitions.js';
@@ -40,9 +41,9 @@ class C7Values extends C7Rule {
     this.checkAttributeValues(node, attributes, prefix);
     if (is(node, 'bpmn:CallActivity') && node.get('calledElement') === '' && attributes.defined('caseRef') === undefined) this.report('c7-bad-value', node, `Call activity ${node.id} has an empty calledElement; it fails when it runs`, { path: ['calledElement'], type: ERROR_TYPES.PROPERTY_VALUE_REQUIRED, property: 'calledElement', hint: `${new SetCommand(node.id).of('calledElement=<processId>')}.` });
     const bindings = this.bindingsOf(node, attributes);
-    for (const { binding, allowed } of bindings.filter((candidate) => this.bindingProblem(attributes, candidate) === 'value')) this.report('c7-bad-value', node, `${prefix}:${binding}="${attributes.defined(binding)}" on ${describeElement(node)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, { path: [binding], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: binding, hint: `${new SetCommand(node.id).of(`${prefix}:${binding}=latest`)}.` });
+    for (const { binding, allowed } of bindings.filter((candidate) => this.bindingProblem(attributes, candidate) === 'value')) this.report('c7-bad-value', node, `${prefix}:${binding}="${attributes.defined(binding)}" on ${ElementKinds.describe(node)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, { path: [binding], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: binding, hint: `${new SetCommand(node.id).of(`${prefix}:${binding}=latest`)}.` });
     const priority = is(node, 'bpmn:UserTask') ? attributes.defined('priority') : undefined;
-    if (priority !== undefined && !Values.isInteger(priority) && !Values.isExpression(priority)) this.report('c7-bad-value', node, `${prefix}:priority="${priority}" on ${describeElement(node)} is not a number or expression; creating the task fails`, { path: ['priority'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'priority', hint: `${new SetCommand(node.id).of(`${prefix}:priority=50`)}.` });
+    if (priority !== undefined && !Values.isInteger(priority) && !Values.isExpression(priority)) this.report('c7-bad-value', node, `${prefix}:priority="${priority}" on ${ElementKinds.describe(node)} is not a number or expression; creating the task fails`, { path: ['priority'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'priority', hint: `${new SetCommand(node.id).of(`${prefix}:priority=50`)}.` });
     if (is(node, 'bpmn:Event')) this.checkVariableEvents(node, prefix);
     for (const binding of bindings) {
       const problem = this.bindingProblem(attributes, binding);
@@ -74,21 +75,21 @@ class C7Values extends C7Rule {
     }
     for (const host of ImplementationHost.forElement(node)) if (host.isExternal) this.checkPriority(host.element, node, host.path, host.command, 'taskPriority', prefix);
     const mapper = is(node, 'bpmn:BusinessRuleTask') && attributes.defined('decisionRef') !== undefined ? attributes.defined('mapDecisionResult') : undefined;
-    if (mapper !== undefined && !DECISION_MAPPERS.includes(mapper)) this.report('c7-attribute-value', node, `${prefix}:mapDecisionResult="${mapper}" on ${describeElement(node)} is not one of ${DECISION_MAPPERS.join(', ')}; the engines refuse the file`, { path: ['mapDecisionResult'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'mapDecisionResult', hint: `${command.of(`${prefix}:mapDecisionResult=singleEntry`)} (or another of the four).` });
+    if (mapper !== undefined && !DECISION_MAPPERS.includes(mapper)) this.report('c7-attribute-value', node, `${prefix}:mapDecisionResult="${mapper}" on ${ElementKinds.describe(node)} is not one of ${DECISION_MAPPERS.join(', ')}; the engines refuse the file`, { path: ['mapDecisionResult'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'mapDecisionResult', hint: `${command.of(`${prefix}:mapDecisionResult=singleEntry`)} (or another of the four).` });
   }
 
   /** `element` carries the priority; `reported` is the element it sits on, or the element itself. */
   private checkPriority(element: ModdleElement, reported: ModdleElement, path: ReportPath, command: SetCommand, name: string, prefix: string): void {
     const value = new CamundaAttributes(element).defined(name);
     if (value === undefined || Values.isInteger(value) || Values.isExpression(value)) return;
-    this.report('c7-attribute-value', reported, `${prefix}:${name}="${value}" on ${describeElement(element, element === reported ? undefined : reported)} is not a number or expression; the engines refuse it`, { path: [...path, name], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: reported.id ? `${command.of(`${prefix}:${name}=50`)} (an integer or \${...}).` : 'Use an integer.' });
+    this.report('c7-attribute-value', reported, `${prefix}:${name}="${value}" on ${ElementKinds.describe(element, element === reported ? undefined : reported)} is not a number or expression; the engines refuse it`, { path: [...path, name], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: reported.id ? `${command.of(`${prefix}:${name}=50`)} (an integer or \${...}).` : 'Use an integer.' });
   }
 
   private checkVariableEvents(node: ModdleElement, prefix: string): void {
     for (const { definition, index } of new C7EventDefinitions(node).indexedOfType('bpmn:ConditionalEventDefinition')) {
       const events = new CamundaAttributes(definition).defined('variableEvents');
       const unknown = (events ?? '').split(',').map((eventName) => eventName.trim()).filter((eventName) => eventName && !VARIABLE_EVENTS.includes(eventName));
-      if (unknown.length) this.report('c7-bad-value', node, `${prefix}:variableEvents="${events}" of ${describeElement(node)} lists ${unknown.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, { path: ['eventDefinitions', index, 'variableEvents'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: definition, property: 'variableEvents', hint: `${SetCommand.forDefinition(node, index).of(`${prefix}:variableEvents=create, update`)}.` });
+      if (unknown.length) this.report('c7-bad-value', node, `${prefix}:variableEvents="${events}" of ${ElementKinds.describe(node)} lists ${unknown.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, { path: ['eventDefinitions', index, 'variableEvents'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: definition, property: 'variableEvents', hint: `${SetCommand.forDefinition(node, index).of(`${prefix}:variableEvents=create, update`)}.` });
     }
   }
 
@@ -109,7 +110,7 @@ class C7Values extends C7Rule {
 
   private reportBindingVersion(node: ModdleElement, binding: string, value: string, missing: string, placeholder: string, prefix: string): void {
     const latest = `${prefix}:${binding}=latest`;
-    this.report('c7-binding-version', node, `${describeElement(node)} has ${prefix}:${binding}="${value}" but no ${prefix}:${missing}; the engines refuse the file`, { path: [missing], type: ERROR_TYPES.PROPERTY_DEPENDENT_REQUIRED, property: binding, dependentRequiredProperty: missing, hint: `\`bpmn set <file> ${node.id} ${prefix}:${missing}=${placeholder}\` (or ${binding === 'formRefBinding' ? latest : `\`${latest}\``}).` });
+    this.report('c7-binding-version', node, `${ElementKinds.describe(node)} has ${prefix}:${binding}="${value}" but no ${prefix}:${missing}; the engines refuse the file`, { path: [missing], type: ERROR_TYPES.PROPERTY_DEPENDENT_REQUIRED, property: binding, dependentRequiredProperty: missing, hint: `\`bpmn set <file> ${node.id} ${prefix}:${missing}=${placeholder}\` (or ${binding === 'formRefBinding' ? latest : `\`${latest}\``}).` });
   }
 
   private checkCalledElement(node: ModdleElement, caseRef: string | undefined, prefix: string): void {
@@ -120,12 +121,12 @@ class C7Values extends C7Rule {
 
   /** A `camunda:formRef` next to a `camunda:formKey`, or without a known `camunda:formRefBinding`. */
   private checkForm(node: ModdleElement, attributes: CamundaAttributes, prefix: string): void {
-    if (attributes.defined('formKey') !== undefined) this.report('c7-form', node, `${describeElement(node)} has both ${prefix}:formKey and ${prefix}:formRef; the engines refuse the file`, { path: ['formKey'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'formKey', hint: `Keep one: \`bpmn set <file> ${node.id} ${prefix}:formKey=\` (or ${prefix}:formRef=).` });
+    if (attributes.defined('formKey') !== undefined) this.report('c7-form', node, `${ElementKinds.describe(node)} has both ${prefix}:formKey and ${prefix}:formRef; the engines refuse the file`, { path: ['formKey'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'formKey', hint: `Keep one: \`bpmn set <file> ${node.id} ${prefix}:formKey=\` (or ${prefix}:formRef=).` });
     const binding = attributes.defined('formRefBinding');
     if (binding !== undefined && FORM_BINDINGS.includes(binding)) return;
     const found = binding === undefined ? `no ${prefix}:formRefBinding` : `${prefix}:formRefBinding="${binding}"`;
     const problem = binding === undefined ? { type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'formRefBinding' } : { type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'formRefBinding' };
-    this.report('c7-form', node, `${describeElement(node)} has ${prefix}:formRef but ${found} (one of ${FORM_BINDINGS.join(', ')} is required); the engines refuse the file`, { path: ['formRefBinding'], ...problem, hint: `\`bpmn set <file> ${node.id} ${prefix}:formRefBinding=latest\`.` });
+    this.report('c7-form', node, `${ElementKinds.describe(node)} has ${prefix}:formRef but ${found} (one of ${FORM_BINDINGS.join(', ')} is required); the engines refuse the file`, { path: ['formRefBinding'], ...problem, hint: `\`bpmn set <file> ${node.id} ${prefix}:formRefBinding=latest\`.` });
   }
 
   /** A loop needs a cardinality or a collection (a `loopDataInputRef` counts, the engines read it as a variable name, also one that is no id of the file), a non-empty cardinality, and a collection for an element variable. */
@@ -135,18 +136,18 @@ class C7Values extends C7Rule {
     const loopAttributes = new CamundaAttributes(loop);
     const cardinality = loop.get('loopCardinality');
     const hasCollection = loopAttributes.defined('collection') !== undefined || !!loop.get('loopDataInputRef') || C7Diagram.unresolved(loop).has('loopDataInputRef');
-    const label = describeElement(node);
+    const label = ElementKinds.describe(node);
     const id = node.id;
     if (!cardinality && !hasCollection) {
       const misplaced = new CamundaAttributes(node).any('collection');
       const elementVariable = new CamundaAttributes(node).any('elementVariable');
-      const variable = elementVariable !== undefined ? ` ${prefix}:elementVariable= ${sh(`loop.${prefix}:elementVariable=${elementVariable}`)}` : '';
-      const hint = misplaced !== undefined ? `Move it onto the loop: \`bpmn set <file> ${id} ${prefix}:collection= ${sh(`loop.${prefix}:collection=${misplaced}`)}${variable}\`.` : `\`bpmn set <file> ${id} ${sh(`loop.${prefix}:collection=\${items}`)} loop.${prefix}:elementVariable=item\` (or \`bpmn set <file> ${id} cardinality=3\`).`;
+      const variable = elementVariable !== undefined ? ` ${prefix}:elementVariable= ${Shell.quote(`loop.${prefix}:elementVariable=${elementVariable}`)}` : '';
+      const hint = misplaced !== undefined ? `Move it onto the loop: \`bpmn set <file> ${id} ${prefix}:collection= ${Shell.quote(`loop.${prefix}:collection=${misplaced}`)}${variable}\`.` : `\`bpmn set <file> ${id} ${Shell.quote(`loop.${prefix}:collection=\${items}`)} loop.${prefix}:elementVariable=item\` (or \`bpmn set <file> ${id} cardinality=3\`).`;
       this.report('c7-multi-instance', node, `Multi-instance ${label} has neither a loop cardinality nor ${prefix}:collection${misplaced !== undefined ? ` (${prefix}:collection sits on the activity, not on the loop)` : ''}; the engines refuse the file`, { path: ['loopCharacteristics', 'collection'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: loop, requiredProperty: ['loopCardinality', 'collection'], hint });
       return;
     }
     if (cardinality && !Values.nonEmpty(cardinality.get('body')) && !hasCollection) this.report('c7-multi-instance', node, `Multi-instance ${label} has an empty loop cardinality; the engines refuse the file`, { path: ['loopCharacteristics', 'loopCardinality'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: loop, property: 'loopCardinality', hint: `\`bpmn set <file> ${id} cardinality=3\` (a number or \${...}).` });
-    if (loopAttributes.defined('elementVariable') !== undefined && !hasCollection) this.report('c7-multi-instance', node, `Multi-instance ${label} has ${prefix}:elementVariable but no ${prefix}:collection; the engines refuse the file`, { path: ['loopCharacteristics', 'collection'], type: ERROR_TYPES.PROPERTY_DEPENDENT_REQUIRED, node: loop, property: 'elementVariable', dependentRequiredProperty: 'collection', hint: `\`bpmn set <file> ${id} ${sh(`loop.${prefix}:collection=\${items}`)}\` (or remove it: \`bpmn set <file> ${id} loop.${prefix}:elementVariable=\`).` });
+    if (loopAttributes.defined('elementVariable') !== undefined && !hasCollection) this.report('c7-multi-instance', node, `Multi-instance ${label} has ${prefix}:elementVariable but no ${prefix}:collection; the engines refuse the file`, { path: ['loopCharacteristics', 'collection'], type: ERROR_TYPES.PROPERTY_DEPENDENT_REQUIRED, node: loop, property: 'elementVariable', dependentRequiredProperty: 'collection', hint: `\`bpmn set <file> ${id} ${Shell.quote(`loop.${prefix}:collection=\${items}`)}\` (or remove it: \`bpmn set <file> ${id} loop.${prefix}:elementVariable=\`).` });
   }
 }
 

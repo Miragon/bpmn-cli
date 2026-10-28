@@ -1,9 +1,9 @@
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { El } from '../../../../domain/document/utils/moddle.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { describeElement } from './rules/describe.js';
+import { ElementKinds } from './rules/ElementKinds.js';
 import { SetCommand } from './rules/SetCommand.js';
-import { sh } from './rules/shell.js';
+import { Shell } from './rules/Shell.js';
 
 /**
  * Attributes without a namespace prefix that the BPMN schema does not define, which both engines
@@ -35,8 +35,8 @@ export class UnprefixedAttributes extends OwnModelCheck {
     const own = el === owner;
     const vendor = this.engine === 'c7' ? this.kit.CAMUNDA.attr(key) : undefined;
     const fits = !!vendor && own && !!id && vendor.owners.some((ownerType) => this.kit.is(el, ownerType));
-    const where = own ? describeElement(el) : `${el.$type}${id ? ` in ${id}` : ''}`;
-    const remove = id && slot !== undefined ? `\`bpmn set <file> ${id} ${sh(`${slot}${key}=`)}\`` : undefined;
+    const where = own ? ElementKinds.describe(el) : `${el.$type}${id ? ` in ${id}` : ''}`;
+    const remove = id && slot !== undefined ? `\`bpmn set <file> ${id} ${Shell.quote(`${slot}${key}=`)}\`` : undefined;
     const engines = this.engine === 'c8' ? 'Camunda 8 validates the file against the schema and refuses it' : 'the engines validate the file against the schema and refuse it';
     const message = `${where} has the attribute ${key}, which the BPMN schema does not define${fits ? ` (did you mean ${this.prefix}:${key}?)` : ''}; ${engines}`;
     return this.kit.makeFinding('deploy', this.code, message, id ?? this.kit.peek<string>(this.doc.definitions, 'id'), { subject: `schema:${key}`, hint: this.hint(el, id, key, fits, remove, di) });
@@ -45,10 +45,10 @@ export class UnprefixedAttributes extends OwnModelCheck {
   private hint(el: El, id: string | undefined, key: string, fits: boolean, remove: string | undefined, di: boolean): string {
     const link = id && this.kit.is(el, 'bpmn:BusinessRuleTask') && (key === 'calledDecision' || key === 'calledElement') && !this.implemented(el) ? new this.kit.DecisionLinkReader(this.doc).linkOf(el) : undefined;
     if (link) {
-      const command = `\`bpmn set <file> ${id} ${sh(`calledDecision=${link.value}`)}\``;
+      const command = `\`bpmn set <file> ${id} ${Shell.quote(`calledDecision=${link.value}`)}\``;
       return this.engine === 'c7' ? `Write the decision link in the engines' spelling: ${command} (${this.prefix}:decisionRef; the unprefixed ${key} is removed).` : `Write the decision link the Camunda 8 way: ${command} (${this.prefix}:calledDecision; the unprefixed ${key} is removed; give it a resultVariable).`;
     }
-    if (fits) return `Use the vendor attribute instead: \`bpmn set <file> ${id} ${sh(`${key}=`)} ${sh(`${this.prefix}:${key}=${String(el.$attrs[key] ?? '')}`)}\`.`;
+    if (fits) return `Use the vendor attribute instead: \`bpmn set <file> ${id} ${Shell.quote(`${key}=`)} ${Shell.quote(`${this.prefix}:${key}=${String(el.$attrs[key] ?? '')}`)}\`.`;
     const prefixed = this.engine === 'c8' ? 'vendor attributes need their namespace prefix; Camunda 8 settings are mostly zeebe: extension elements' : `vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>`;
     if (remove) return `Remove it: ${remove} (${prefixed}).`;
     if (di) return this.engine === 'c8' ? `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).` : `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`;

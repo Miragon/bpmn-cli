@@ -1,5 +1,5 @@
 import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
-import { sh } from './rules/shell.js';
+import { Shell } from './rules/Shell.js';
 
 /** camunda-compat's error types (`data.type`), the ones a hint tells apart. */
 const SET = new Set(['camunda.propertyRequired', 'camunda.propertyValueRequired', 'camunda.propertyDependentRequired', 'camunda.propertyValueNotAllowed', 'camunda.propertyTypeNotAllowed', 'camunda.expressionRequired', 'camunda.expressionValueNotAllowed', 'camunda.expressionNotAllowed', 'camunda.feelExpressionInvalid', 'camunda.feelExpressionUnsupportedFunction', 'camunda.propertyValueDuplicated', 'camunda.elementPropertyValueDuplicated', 'camunda.propertiesValuesDuplicated']);
@@ -133,15 +133,15 @@ export class EngineHint {
     if (EXT_ADD.has(type)) return this.extAdd(address, ext, report);
     const child = ext && !EXT_REMOVE.has(type) && !UNSET.has(type) ? this.childRebuild(address, ext.element) : undefined;
     if (child) return child;
-    if (ext) return EXT_REMOVE.has(type) || UNSET.has(type) ? `Remove it: \`bpmn ext remove <file> ${address.target} ${sh(`${address.slot}${ext.index}`)}\` (\`bpmn ext list <file> ${address.target}\` shows the extension elements).` : this.extRebuild(address.target, address.slot, ext.element, ext.property, FEEL.has(type));
+    if (ext) return EXT_REMOVE.has(type) || UNSET.has(type) ? `Remove it: \`bpmn ext remove <file> ${address.target} ${Shell.quote(`${address.slot}${ext.index}`)}\` (\`bpmn ext list <file> ${address.target}\` shows the extension elements).` : this.extRebuild(address.target, address.slot, ext.element, ext.property, FEEL.has(type));
     if (REMOVE.has(type)) return `Remove it (\`bpmn remove <file> ${id}\`), or change it to a kind the engine supports (\`bpmn retype <file> ${id} <kind>\`, \`bpmn kinds\` lists them).`;
     const key = this.attributeKey(address, report);
     if (!key) return this.fallback(id);
     const alias = SET_ALIASES[key.replace(/^definition\[\d+\]\./, 'definition.')];
-    if (alias && !UNSET.has(type)) return `\`bpmn set <file> ${address.target} ${alias.split(' ').map((pair) => sh(FEEL.has(type) ? pair.replace(/=<expression>$/, '==<expression>') : pair)).join(' ')}\`.`;
-    if (UNSET.has(type)) return `Remove it: \`bpmn set <file> ${address.target} ${sh(`${key}=`)}\`.`;
+    if (alias && !UNSET.has(type)) return `\`bpmn set <file> ${address.target} ${alias.split(' ').map((pair) => Shell.quote(FEEL.has(type) ? pair.replace(/=<expression>$/, '==<expression>') : pair)).join(' ')}\`.`;
+    if (UNSET.has(type)) return `Remove it: \`bpmn set <file> ${address.target} ${Shell.quote(`${key}=`)}\`.`;
     const suggested = report.data?.suggestedValue ?? report.data?.requiredValue;
-    if (SET.has(type)) return `\`bpmn set <file> ${address.target} ${sh(`${key}=${typeof suggested === 'string' || typeof suggested === 'boolean' ? String(suggested) : FEEL.has(type) ? '=<expression>' : this.placeholder(key, address.node)}`)}\`.`;
+    if (SET.has(type)) return `\`bpmn set <file> ${address.target} ${Shell.quote(`${key}=${typeof suggested === 'string' || typeof suggested === 'boolean' ? String(suggested) : FEEL.has(type) ? '=<expression>' : this.placeholder(key, address.node)}`)}\`.`;
     return this.fallback(id);
   }
 
@@ -265,7 +265,7 @@ export class EngineHint {
     const [first, ...others] = types;
     const command = (type: string): string => {
       const attributes = REQUIRED_ATTRIBUTES[type];
-      return `\`bpmn ext add <file> ${target} ${sh(`${slot}${type}`)}${attributes ? ` ${attributes}` : ''}\``;
+      return `\`bpmn ext add <file> ${target} ${Shell.quote(`${slot}${type}`)}${attributes ? ` ${attributes}` : ''}\``;
     };
     const lead = first === 'zeebe:taskDefinition' ? 'Give it a job type: ' : '';
     const alternatives = others.map((type) => ` (or ${ALTERNATIVES[type] ?? 'one'}: ${command(type)})`).join('');
@@ -279,12 +279,12 @@ export class EngineHint {
    */
   private extRebuild(target: string, slot: string, element: ModdleNode, property: string | undefined, feel: boolean): string {
     const type = this.xmlName(String(element.$type));
-    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && Object.hasOwn(element, candidate.name) && element[candidate.name] !== undefined && typeof element[candidate.name] !== 'object').map((candidate) => sh(`${candidate.name}=${String(element[candidate.name])}`));
+    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && Object.hasOwn(element, candidate.name) && element[candidate.name] !== undefined && typeof element[candidate.name] !== 'object').map((candidate) => Shell.quote(`${candidate.name}=${String(element[candidate.name])}`));
     const required = REQUIRED_ATTRIBUTES[type]?.split(' ').filter((pair) => !attributes.some((attribute) => attribute.startsWith(`${pair.split('=')[0]}=`))) ?? [];
-    const fixed = property ? [sh(`${property}=${feel ? '=<expression>' : (PLACEHOLDERS[property] ?? `<${property}>`)}`)] : required;
+    const fixed = property ? [Shell.quote(`${property}=${feel ? '=<expression>' : (PLACEHOLDERS[property] ?? `<${property}>`)}`)] : required;
     const hasChildren = (element.$descriptor?.properties ?? []).some((candidate) => !candidate.isAttr && element[candidate.name] !== undefined && typeof element[candidate.name] === 'object');
-    if (hasChildren) return `See it with \`bpmn ext list <file> ${target} --json\`, then rebuild it: \`bpmn ext add <file> ${target} ${sh(`${slot}${type}`)} --replace --xml '<${type} ...>...</${type}>'\`.`;
-    return `\`bpmn ext add <file> ${target} ${[sh(`${slot}${type}`), ...attributes, ...fixed, '--replace'].join(' ')}\`.`;
+    if (hasChildren) return `See it with \`bpmn ext list <file> ${target} --json\`, then rebuild it: \`bpmn ext add <file> ${target} ${Shell.quote(`${slot}${type}`)} --replace --xml '<${type} ...>...</${type}>'\`.`;
+    return `\`bpmn ext add <file> ${target} ${[Shell.quote(`${slot}${type}`), ...attributes, ...fixed, '--replace'].join(' ')}\`.`;
   }
 
   /**
@@ -299,9 +299,9 @@ export class EngineHint {
     const containerName = this.xmlName(String(container.$type));
     const childName = this.xmlName(String(element.$type));
     const added = containerName === 'zeebe:ioMapping' ? childName : `${containerName}/${childName}`;
-    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && typeof element[candidate.name] === 'string' && element[candidate.name] !== '').map((candidate) => sh(`${candidate.name}=${String(element[candidate.name])}`));
-    const fixed = sh(`${property}=${PLACEHOLDERS[property] ?? `<${property}>`}`);
-    return `Rebuild it: \`bpmn ext remove <file> ${address.target} ${sh(`${containerName}/${childName}[${position}]`)}\`, then \`bpmn ext add <file> ${address.target} ${[sh(`${address.slot}${added}`), ...attributes, fixed].join(' ')}\`.`;
+    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && typeof element[candidate.name] === 'string' && element[candidate.name] !== '').map((candidate) => Shell.quote(`${candidate.name}=${String(element[candidate.name])}`));
+    const fixed = Shell.quote(`${property}=${PLACEHOLDERS[property] ?? `<${property}>`}`);
+    return `Rebuild it: \`bpmn ext remove <file> ${address.target} ${Shell.quote(`${containerName}/${childName}[${position}]`)}\`, then \`bpmn ext add <file> ${address.target} ${[Shell.quote(`${address.slot}${added}`), ...attributes, fixed].join(' ')}\`.`;
   }
 
   /** Several event definitions: keep the one the engine acts on (the rule names it as `kept`). */

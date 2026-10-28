@@ -1,7 +1,7 @@
 import { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
 import { describe, expect, it } from 'vitest';
 
-import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c8/c8-schema.js';
+import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c8/C8Schema.js';
 import { validateXml } from '../../../../../../src/api.js';
 import { engineModel, verifyEngineRule } from '../../../../../helpers/engine-model.js';
 

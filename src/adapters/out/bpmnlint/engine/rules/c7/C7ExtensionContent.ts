@@ -1,9 +1,9 @@
 import { is } from 'bpmnlint-utils';
-import { C7Rule, defineRule, describeElement, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
+import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
 
-import { ElementKinds } from '../describe.js';
+import { ElementKinds } from '../ElementKinds.js';
 import { EngineScope } from '../EngineScope.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
 import { C7Host, type HostExtension } from './C7Host.js';
 import { CamundaPlacement } from './CamundaPlacement.js';
@@ -46,7 +46,7 @@ class C7ExtensionContent extends C7Rule {
     const read = new CamundaPlacement(host).readExtensions();
     for (const extension of read) this.checkContent(host, extension);
     if (SERVICE_LIKE.some((type) => is(node, type))) this.checkImplementationFields(host, host.describe());
-    if (this.isActingMessageThrow(host)) this.checkImplementationFields(host, describeElement(host.owner));
+    if (this.isActingMessageThrow(host)) this.checkImplementationFields(host, ElementKinds.describe(host.owner));
     for (const extension of read) if (extension.local === 'executionListener' || extension.local === 'taskListener') this.checkListener(host, extension);
     if (is(node, 'bpmn:FlowNode')) this.checkInputOutput(host);
     this.checkDuplicates(host);
@@ -68,7 +68,7 @@ class C7ExtensionContent extends C7Rule {
     const { value, index, local } = extension;
     if ((local === 'executionListener' || local === 'taskListener') && this.readsFields(value)) {
       const event: string | undefined = value.get('event');
-      const fieldOf = host.address ? `${host.address.id} ${sh(`${host.address.slot}${host.selector(extension)}/${host.typeName('field')}`)}` : undefined;
+      const fieldOf = host.address ? `${host.address.id} ${Shell.quote(`${host.address.slot}${host.selector(extension)}/${host.typeName('field')}`)}` : undefined;
       this.checkFields(host, value.get('fields'), { label: `${host.typeName(local)}${event ? ` (event ${event})` : ''} of ${host.describe()}`, path: host.extensionPath(index, 'fields'), fieldOf });
     } else if (local === 'in' || local === 'out') {
       this.checkBinding(host, extension);
@@ -120,7 +120,7 @@ class C7ExtensionContent extends C7Rule {
     const type: string | undefined = host.node.get('camunda:type');
     const shell = type?.toLowerCase() === 'shell';
     if (type !== undefined ? !shell : !this.readsFields(host.node, 'camunda:')) return;
-    const fieldOf = host.address ? `${host.address.id} ${sh(`${host.address.slot}${host.typeName('field')}`)}` : undefined;
+    const fieldOf = host.address ? `${host.address.id} ${Shell.quote(`${host.address.slot}${host.typeName('field')}`)}` : undefined;
     for (const { value, index } of host.camundaExtensions('field')) this.checkFields(host, [value], { label, path: host.extensionPath(index), fieldOf, indexed: false });
   }
 
@@ -135,7 +135,7 @@ class C7ExtensionContent extends C7Rule {
       if (!problem) return;
       const name: string | undefined = field.get('name');
       const fieldPath = indexed ? [...path, index] : path;
-      const hint = fieldOf && name !== undefined ? `Give it one: \`bpmn ext add <file> ${fieldOf} name=${sh(name)} stringValue=<value>\` (replaces the field of that name; or ${sh('expression=${...}')}).` : 'Give it a stringValue or an expression in the XML.';
+      const hint = fieldOf && name !== undefined ? `Give it one: \`bpmn ext add <file> ${fieldOf} name=${Shell.quote(name)} stringValue=<value>\` (replaces the field of that name; or ${Shell.quote('expression=${...}')}).` : 'Give it a stringValue or an expression in the XML.';
       const kind = problem === 'no value' ? { path: fieldPath, type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: ['stringValue', 'expression', 'string'] } : { path: [...fieldPath, 'string'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'string' };
       this.reportOn(host, 'c7-extension', `${host.typeName('field')}${name !== undefined ? ` "${name}"` : ''} of ${label} has ${problem}; the engines refuse the file (a field needs stringValue, expression, a ${host.typeName('string')} or a ${host.typeName('expression')})`, { node: field, hint, ...kind });
     });

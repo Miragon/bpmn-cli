@@ -1,10 +1,11 @@
 import { is, isAny } from 'bpmnlint-utils';
-import { C8Rule, defineRule, describeElement, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
+import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData, type ReportPath } from '../CamundaRules.js';
+import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { FirstOfKey } from '../FirstOfKey.js';
 import { ModdlePath } from '../ModdlePath.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
 import { C8EventDefinitions } from './C8EventDefinitions.js';
 import { C8Host, type ZeebeValue } from './C8Host.js';
@@ -49,7 +50,7 @@ class C8Extensions extends C8Rule {
     const loop = is(node, 'bpmn:Activity') && !is(node, 'bpmn:Transaction') ? node.loopCharacteristics : undefined;
     const condition = loop && is(loop, 'bpmn:MultiInstanceLoopCharacteristics') ? loop.completionCondition : undefined;
     if (!condition || Values.isFeel(condition.body) || !EngineScope.C8.runs(node)) return;
-    this.report('c8-feel-completion-condition', node, `The completion condition "${condition.body ?? ''}" of multi-instance ${describeElement(node)} is no FEEL expression (=...); it deploys, but every completed instance gets an incident (expected a boolean, got a string)`, { path: ['loopCharacteristics', 'completionCondition'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: loop, property: 'completionCondition', hint: `\`bpmn set <file> ${node.id} ${sh(`completion==${FeelExpression.fromJuel(condition.body ?? '')}`)}\` (check the FEEL syntax).` });
+    this.report('c8-feel-completion-condition', node, `The completion condition "${condition.body ?? ''}" of multi-instance ${ElementKinds.describe(node)} is no FEEL expression (=...); it deploys, but every completed instance gets an incident (expected a boolean, got a string)`, { path: ['loopCharacteristics', 'completionCondition'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: loop, property: 'completionCondition', hint: `\`bpmn set <file> ${node.id} ${Shell.quote(`completion==${FeelExpression.fromJuel(condition.body ?? '')}`)}\` (check the FEEL syntax).` });
   }
 
   private isJobHost(node: ModdleElement): boolean {
@@ -60,7 +61,7 @@ class C8Extensions extends C8Rule {
     const [taskDefinition] = C8Host.valuesOf(node, 'zeebe:TaskDefinition');
     const retries = taskDefinition?.retries;
     if (retries === undefined || Values.isFeel(retries) || /^\s*-?\d+\s*$/.test(retries)) return;
-    this.report('c8-bad-value', node, `The ${ZeebeHint.prefixOf(node)}:taskDefinition of ${describeElement(node)} has retries="${retries}", which is no number; it deploys, but every instance gets an incident when it reaches ${node.id}`, { path: [...ModdlePath.between(node, taskDefinition), 'retries'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: taskDefinition, property: 'retries', hint: ZeebeHint.of(node)?.replace(taskDefinition, { retries: '3' }) ?? 'edit the XML.' });
+    this.report('c8-bad-value', node, `The ${ZeebeHint.prefixOf(node)}:taskDefinition of ${ElementKinds.describe(node)} has retries="${retries}", which is no number; it deploys, but every instance gets an incident when it reaches ${node.id}`, { path: [...ModdlePath.between(node, taskDefinition), 'retries'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: taskDefinition, property: 'retries', hint: ZeebeHint.of(node)?.replace(taskDefinition, { retries: '3' }) ?? 'edit the XML.' });
   }
 
   /** Task headers without key or value, of the host or of its execution listeners (not on a sequence flow). */
@@ -71,7 +72,7 @@ class C8Extensions extends C8Rule {
 
   private checkHeaderValuesOf(headers: ModdleElement, host: ModdleElement, inListener: string): void {
     const owner = ModdlePath.ownerOf(host);
-    const where = `${inListener}${host.id ? describeElement(host) : describeElement(host, owner)}`;
+    const where = `${inListener}${host.id ? ElementKinds.describe(host) : ElementKinds.describe(host, owner)}`;
     const hint = host.id && !inListener ? ZeebeHint.of(host) : undefined;
     (headers.values ?? []).forEach((header: ModdleElement, index: number) => {
       const missing = (['key', 'value'] as const).find((property) => Values.isBlank(header[property]));
@@ -83,7 +84,7 @@ class C8Extensions extends C8Rule {
   private headerValueHint(hint: ZeebeHint, header: ModdleElement, index: number, missing: 'key' | 'value'): string {
     const add = hint.extAdd(`${hint.name('header')} key=${header.key ?? '<key>'} value=<value>`);
     if (missing === 'value') return `Give it a value: ${add}.`;
-    return `Remove it (\`bpmn ext remove <file> ${hint.target} ${sh(`${hint.name('taskHeaders')}/${hint.name('header')}[${index}]`)}\`) and add it with a key: ${add}.`;
+    return `Remove it (\`bpmn ext remove <file> ${hint.target} ${Shell.quote(`${hint.name('taskHeaders')}/${hint.name('header')}[${index}]`)}\`) and add it with a key: ${add}.`;
   }
 
   private reportOn(host: C8Host, finding: string, message: string, data: ReportData): void {
@@ -177,7 +178,7 @@ class C8Extensions extends C8Rule {
     const firsts = new FirstOfKey<ModdleElement>();
     (headers.values ?? []).forEach((header: ModdleElement, headerIndex: number) => {
       const key: string | undefined = header.key;
-      if (key?.trim() && firsts.repeats(key, header)) this.reportOn(host, 'c8-extension', `${where} has the task header "${key}" twice; Camunda 8 refuses the file`, { path: [...headersPath, 'values', headerIndex, 'key'], type: ERROR_TYPES.PROPERTY_VALUE_DUPLICATED, node: headers, duplicatedProperty: 'key', duplicatedPropertyValue: key, propertiesName: 'values', hint: hint && host.node.id && !listenerLabel ? `Keep one: \`bpmn ext remove <file> ${host.node.id} ${sh(`${hint.name('taskHeaders')}/${hint.name('header')}[${headerIndex}]`)}\`.` : 'Remove one in the XML.' });
+      if (key?.trim() && firsts.repeats(key, header)) this.reportOn(host, 'c8-extension', `${where} has the task header "${key}" twice; Camunda 8 refuses the file`, { path: [...headersPath, 'values', headerIndex, 'key'], type: ERROR_TYPES.PROPERTY_VALUE_DUPLICATED, node: headers, duplicatedProperty: 'key', duplicatedPropertyValue: key, propertiesName: 'values', hint: hint && host.node.id && !listenerLabel ? `Keep one: \`bpmn ext remove <file> ${host.node.id} ${Shell.quote(`${hint.name('taskHeaders')}/${hint.name('header')}[${headerIndex}]`)}\`.` : 'Remove one in the XML.' });
     });
   }
 

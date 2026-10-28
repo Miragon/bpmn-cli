@@ -3,8 +3,8 @@ import { compatRules as c8CompatRules } from '@miragon/bpmnlint-plugin-rules/cam
 import { describe, expect, it } from 'vitest';
 import { ENGINE_KIT } from '../../../../src/adapters/out/bpmnlint/engine-kit.js';
 import { EngineCodes } from '../../../../src/adapters/out/bpmnlint/engine/EngineCodes.js';
-import { Camunda7Rules } from '../../../../src/adapters/out/bpmnlint/engine/rules/c7/index.js';
-import { Camunda8Rules } from '../../../../src/adapters/out/bpmnlint/engine/rules/c8/index.js';
+import { Camunda7Rules } from '../../../../src/adapters/out/bpmnlint/engine/rules/c7/Camunda7Rules.js';
+import { Camunda8Rules } from '../../../../src/adapters/out/bpmnlint/engine/rules/c8/Camunda8Rules.js';
 
 const ENGINES = [
   { platform: 'c7', entry: Camunda7Rules.entry(ENGINE_KIT), compatRules: c7CompatRules, major: 7 },

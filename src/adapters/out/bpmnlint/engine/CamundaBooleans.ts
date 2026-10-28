@@ -1,7 +1,7 @@
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { El } from '../../../../domain/document/utils/moddle.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { describeElement } from './rules/describe.js';
+import { ElementKinds } from './rules/ElementKinds.js';
 import { SetCommand } from './rules/SetCommand.js';
 
 /**
@@ -27,7 +27,7 @@ export class CamundaBooleans extends OwnModelCheck {
       const value = String(raw ?? '');
       if (value === 'true' || value === 'false') continue;
       const address = SetCommand.at(el);
-      out.push(this.kit.makeFinding('runtime', 'W_C7_BAD_VALUE', `${key}="${value}" on ${describeElement(el)} is not true or false; the engines read only the exact value true (yes, TRUE or True leave it off)`, address?.id, { subject: `attr:${key}`, hint: address ? `\`bpmn set <file> ${address.id} ${address.slot}${key}=true\` (or =false).` : 'Use true or false in the XML.' }));
+      out.push(this.kit.makeFinding('runtime', 'W_C7_BAD_VALUE', `${key}="${value}" on ${ElementKinds.describe(el)} is not true or false; the engines read only the exact value true (yes, TRUE or True leave it off)`, address?.id, { subject: `attr:${key}`, hint: address ? `\`bpmn set <file> ${address.id} ${address.slot}${key}=true\` (or =false).` : 'Use true or false in the XML.' }));
     }
   }
 
@@ -41,7 +41,7 @@ export class CamundaBooleans extends OwnModelCheck {
       const raw = this.kit.peek<unknown>(vendorElement, property.name);
       if (raw === undefined || raw === true || raw === false || raw === 'true' || raw === 'false') continue;
       const address = SetCommand.at(host);
-      out.push(this.kit.makeFinding('runtime', 'W_C7_BAD_VALUE', `${property.name}="${String(raw)}" on ${vendorElement.$type}${path ? ` (in ${path})` : ''} of ${describeElement(host)} is not true or false; the engines read only the exact value true`, address?.id, { subject: `ext:${path}/${local}@${property.name}`, hint: address ? `See it with \`bpmn ext list <file> ${address.id} --json\`, then rebuild it with \`bpmn ext add <file> ${address.id} ... --replace\` and ${property.name}=true (or false).` : 'Use true or false in the XML.' }));
+      out.push(this.kit.makeFinding('runtime', 'W_C7_BAD_VALUE', `${property.name}="${String(raw)}" on ${vendorElement.$type}${path ? ` (in ${path})` : ''} of ${ElementKinds.describe(host)} is not true or false; the engines read only the exact value true`, address?.id, { subject: `ext:${path}/${local}@${property.name}`, hint: address ? `See it with \`bpmn ext list <file> ${address.id} --json\`, then rebuild it with \`bpmn ext add <file> ${address.id} ... --replace\` and ${property.name}=true (or false).` : 'Use true or false in the XML.' }));
     }
     for (const child of this.kit.list(vendorElement, '$children')) this.checkVendorElement(host, child, path ? `${path} > ${vendorElement.$type}` : vendorElement.$type, out);
   }

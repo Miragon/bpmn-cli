@@ -2,7 +2,7 @@ import { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-ty
 import { describe } from 'vitest';
 
 import { C7Diagram } from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c7/C7Diagram.js';
-import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c7/c7-vendor-content.js';
+import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c7/C7VendorContent.js';
 import { engineModel, verifyEngineRule } from '../../../../../helpers/engine-model.js';
 
 describe('c7-foreign-content', () => {

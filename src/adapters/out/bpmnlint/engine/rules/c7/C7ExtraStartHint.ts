@@ -1,9 +1,9 @@
 import { is } from 'bpmnlint-utils';
 
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
-import { triggerName } from '../describe.js';
+import { ElementKinds } from '../ElementKinds.js';
 import { EngineScope } from '../EngineScope.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { C7EventDefinitions } from './C7EventDefinitions.js';
 import { C7FlowGraph } from './C7FlowGraph.js';
 
@@ -74,7 +74,7 @@ export class C7ExtraStartHint {
     const definitions = new C7EventDefinitions(this.extra);
     const definition = definitions.acting() ?? definitions.all()[0];
     if (!definition) return '';
-    const trigger = triggerName(definition);
+    const trigger = ElementKinds.trigger(definition);
     const options = [this.triggerOption(trigger, definition), this.extra.isInterrupting === false ? '--non-interrupting' : ''].filter(Boolean).join(' ');
     const parentId = EngineScope.scopeOf(this.scope)?.id ?? '<parentId>';
     return `then keep its ${trigger} trigger in an event sub-process of its own: \`bpmn add <file> eventSubProcess:${trigger} "<Name>" --in ${parentId}${options ? ` ${options}` : ''}\``;
@@ -84,10 +84,10 @@ export class C7ExtraStartHint {
     const reference = TRIGGER_OPTIONS[trigger];
     if (reference) {
       const name = definition.get(reference)?.name;
-      return `--${trigger} ${sh(typeof name === 'string' && name.trim() ? name : '<Name>')}`;
+      return `--${trigger} ${Shell.quote(typeof name === 'string' && name.trim() ? name : '<Name>')}`;
     }
     if (trigger === 'timer') return '--timer <value>';
-    return trigger === 'conditional' ? `--when ${sh('${expression}')}` : '';
+    return trigger === 'conditional' ? `--when ${Shell.quote('${expression}')}` : '';
   }
 
   private ids(flows: ModdleElement[]): string {

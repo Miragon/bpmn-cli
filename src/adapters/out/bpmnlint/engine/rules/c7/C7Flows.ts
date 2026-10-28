@@ -1,9 +1,10 @@
 import { is, isAny } from 'bpmnlint-utils';
-import { C7Rule, defineRule, describeElement, ERROR_TYPES, triggerName, type ModdleElement } from '../CamundaRules.js';
+import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement } from '../CamundaRules.js';
+import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { FirstOfKey } from '../FirstOfKey.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { C7Diagram } from './C7Diagram.js';
 import { C7EventDefinitions } from './C7EventDefinitions.js';
 import { C7ExtraStartHint } from './C7ExtraStartHint.js';
@@ -49,7 +50,7 @@ class C7Flows extends C7Rule {
     if (!defaultFlow && unconditioned.length < 2) return;
     for (const flow of unconditioned) {
       const asDefault = defaultFlow ? '' : ` or make one of them the default: \`bpmn set <file> ${flow.id} default=true\``;
-      this.report('c7-exclusive-gateway', node, `Flow ${flow.id} of exclusive gateway ${node.id} has no condition and is not the default flow${defaultFlow ? '' : ` (${unconditioned.length} such flows)`}; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_REQUIRED, node: flow, requiredProperty: 'conditionExpression', hint: `\`bpmn set <file> ${flow.id} ${sh('condition=${...}')}\`${asDefault}.` });
+      this.report('c7-exclusive-gateway', node, `Flow ${flow.id} of exclusive gateway ${node.id} has no condition and is not the default flow${defaultFlow ? '' : ` (${unconditioned.length} such flows)`}; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_REQUIRED, node: flow, requiredProperty: 'conditionExpression', hint: `\`bpmn set <file> ${flow.id} ${Shell.quote('condition=${...}')}\`${asDefault}.` });
     }
   }
 
@@ -65,19 +66,19 @@ class C7Flows extends C7Rule {
     for (const flow of graph.outgoing(node)) {
       const target = flow.targetRef;
       if (!target) continue;
-      const leadsTo = `Event-based gateway ${node.id} leads to ${describeElement(target)}`;
+      const leadsTo = `Event-based gateway ${node.id} leads to ${ElementKinds.describe(target)}`;
       if (!is(target, 'bpmn:IntermediateCatchEvent')) {
         this.report('c7-event-gateway', node, `${leadsTo}; the engines accept only intermediate catch events (message, timer, signal, conditional) there and refuse the file`, { path: null, type: ERROR_TYPES.EVENT_BASED_GATEWAY_TARGET_NOT_ALLOWED, node: target, sequenceFlow: flow, hint: `Put a catch event in front of it: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${flow.id} --message <MessageName>\` (or :timer --timer PT1H).` });
         continue;
       }
       const definitions = new C7EventDefinitions(target).actedOn();
       const [definition] = definitions;
-      if (definitions.length !== 1 || !WAITING_TRIGGERS.includes(triggerName(definition))) {
+      if (definitions.length !== 1 || !WAITING_TRIGGERS.includes(ElementKinds.trigger(definition))) {
         this.report('c7-event-gateway', node, `${leadsTo}; after an event-based gateway the engines accept only message, timer, signal and conditional catch events and refuse the file`, { path: null, type: ERROR_TYPES.EVENT_BASED_GATEWAY_TARGET_NOT_ALLOWED, node: target, sequenceFlow: flow, hint: `\`bpmn set <file> ${target.id} trigger=message message=<MessageName>\` (or trigger=timer timer=PT1H).` });
         continue;
       }
-      if (graph.incoming(target).length > 1) this.report('c7-event-gateway', node, `${describeElement(target)} after event-based gateway ${node.id} has other incoming flows; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: target, sequenceFlow: flow, property: 'incoming', hint: `Join before the gateway instead, and keep only ${flow.id} into ${target.id} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).` });
-      const trigger = triggerName(definition);
+      if (graph.incoming(target).length > 1) this.report('c7-event-gateway', node, `${ElementKinds.describe(target)} after event-based gateway ${node.id} has other incoming flows; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: target, sequenceFlow: flow, property: 'incoming', hint: `Join before the gateway instead, and keep only ${flow.id} into ${target.id} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).` });
+      const trigger = ElementKinds.trigger(definition);
       const referenceProperty = REFERENCE_BY_TRIGGER[trigger];
       const name = referenceProperty ? definition.get(referenceProperty)?.name : undefined;
       const first = referenceProperty && name ? firsts.repeats(`${trigger}\u0000${name}`, target) : undefined;
@@ -119,7 +120,7 @@ class C7Flows extends C7Rule {
     const condition = flow.conditionExpression;
     const source = flow.sourceRef;
     if (!condition || !this.isEmpty(condition) || (source && (isAny(source, ['bpmn:ParallelGateway', 'bpmn:EventBasedGateway']) || source.default === flow))) return;
-    this.report('c7-empty-condition', flow, `Sequence flow ${flow.id} has an empty condition (no expression and no ${C7Diagram.of(flow).prefix}:resource): it deploys, but the engines fail when they evaluate it`, { path: ['conditionExpression'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: condition, property: 'conditionExpression', hint: `Give it one: \`bpmn set <file> ${flow.id} ${sh('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${flow.id} condition=\`.` });
+    this.report('c7-empty-condition', flow, `Sequence flow ${flow.id} has an empty condition (no expression and no ${C7Diagram.of(flow).prefix}:resource): it deploys, but the engines fail when they evaluate it`, { path: ['conditionExpression'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: condition, property: 'conditionExpression', hint: `Give it one: \`bpmn set <file> ${flow.id} ${Shell.quote('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${flow.id} condition=\`.` });
   }
 
   private checkEmptyEventCondition(event: ModdleElement): void {
@@ -127,7 +128,7 @@ class C7Flows extends C7Rule {
     const prefix = C7Diagram.of(event).prefix;
     for (const definition of definitions.actedOn()) {
       const condition = is(definition, 'bpmn:ConditionalEventDefinition') ? definition.condition : undefined;
-      if (condition && this.isEmpty(condition)) this.report('c7-empty-condition', event, `Conditional event ${event.id} has an empty condition (no expression and no ${prefix}:resource): it deploys, but evaluating it fails when the process runs`, { path: ['eventDefinitions', definitions.all().indexOf(definition), 'condition'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: condition, property: 'condition', hint: `\`bpmn set <file> ${event.id} ${sh('when=${expression}')}\` (or a script: \`bpmn set <file> ${event.id} condition.${prefix}:resource=deployment://<script>.groovy condition.language=groovy\`).` });
+      if (condition && this.isEmpty(condition)) this.report('c7-empty-condition', event, `Conditional event ${event.id} has an empty condition (no expression and no ${prefix}:resource): it deploys, but evaluating it fails when the process runs`, { path: ['eventDefinitions', definitions.all().indexOf(definition), 'condition'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: condition, property: 'condition', hint: `\`bpmn set <file> ${event.id} ${Shell.quote('when=${expression}')}\` (or a script: \`bpmn set <file> ${event.id} condition.${prefix}:resource=deployment://<script>.groovy condition.language=groovy\`).` });
     }
   }
 

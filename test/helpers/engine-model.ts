@@ -3,7 +3,7 @@ import { createModdle } from 'bpmnlint/lib/testers/helper.js';
 import { describe, expect, it } from 'vitest';
 import { CamundaDescriptor } from '../../src/adapters/out/bpmnlint/engine/rules/c7/CamundaDescriptor.js';
 import { C8Host } from '../../src/adapters/out/bpmnlint/engine/rules/c8/C8Host.js';
-import { ElementKinds } from '../../src/adapters/out/bpmnlint/engine/rules/describe.js';
+import { ElementKinds } from '../../src/adapters/out/bpmnlint/engine/rules/ElementKinds.js';
 import { kindLabel } from '../../src/domain/document/Kinds.js';
 import { CAMUNDA } from '../../src/domain/document/vendor/CamundaDescriptor.js';
 import { ZEEBE } from '../../src/domain/document/vendor/ZeebeDescriptor.js';

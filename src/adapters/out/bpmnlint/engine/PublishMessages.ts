@@ -1,7 +1,7 @@
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { El } from '../../../../domain/document/utils/moddle.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { describeElement } from './rules/describe.js';
+import { ElementKinds } from './rules/ElementKinds.js';
 
 /**
  * `zeebe:publishMessage`, which Camunda 8.9 checks but does not run. zeebe-bpmn-moddle does not
@@ -29,7 +29,7 @@ export class PublishMessages extends OwnModelCheck {
     const publish = this.zeebe(host, 'publishMessage')[0];
     if (!publish) return;
     const id = this.kit.peek<string>(el, 'id')!;
-    const label = describeElement(el);
+    const label = ElementKinds.describe(el);
     const name = `${this.prefix}:publishMessage`;
     const slot = host === el ? '' : 'definition.';
     this.hosts.add(id);

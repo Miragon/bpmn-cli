@@ -1,5 +1,5 @@
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
-import { sh } from './shell.js';
+import { Shell } from './Shell.js';
 
 /** The slot `bpmn set` gives a part of a flow node or flow. */
 const SLOTS: Array<[property: string, slot: string]> = [['eventDefinitions', 'definition'], ['loopCharacteristics', 'loop'], ['conditionExpression', 'condition']];
@@ -37,16 +37,16 @@ export class SetCommand {
 
   /** `` `bpmn set <file> X 'definition.camunda:type=external'` ``, or `edit the XML`. */
   of(...assignments: string[]): string {
-    return this.id ? `\`bpmn set <file> ${this.id} ${assignments.map((assignment) => sh(`${this.slot}${assignment}`)).join(' ')}\`` : 'edit the XML';
+    return this.id ? `\`bpmn set <file> ${this.id} ${assignments.map((assignment) => Shell.quote(`${this.slot}${assignment}`)).join(' ')}\`` : 'edit the XML';
   }
 
   /** `` `bpmn set <file> X camunda:asignee=` ``, which removes the attribute `key` as the file spells it. */
   unset(key: string): string {
-    return `\`bpmn set <file> ${this.id} ${sh(`${this.slot}${key}=`)}\``;
+    return `\`bpmn set <file> ${this.id} ${Shell.quote(`${this.slot}${key}=`)}\``;
   }
 
   /** The `bpmn ext add` arguments that address `type` through the slot (`X 'definition.camunda:field'`). */
   extTarget(type: string): string | undefined {
-    return this.id ? `${this.id} ${sh(`${this.slot}${type}`)}` : undefined;
+    return this.id ? `${this.id} ${Shell.quote(`${this.slot}${type}`)}` : undefined;
   }
 }

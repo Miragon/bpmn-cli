@@ -1,7 +1,7 @@
 import { is, isAny } from 'bpmnlint-utils';
 
 import type { ModdleElement, ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
-import { describeElement } from '../describe.js';
+import { ElementKinds } from '../ElementKinds.js';
 import { SetCommand } from '../SetCommand.js';
 import { Values } from '../Values.js';
 import { C7Diagram } from './C7Diagram.js';
@@ -44,7 +44,7 @@ export class ImplementationHost {
 
   /** `serviceTask X`, or `endEvent X` for a message definition. */
   get label(): string {
-    return describeElement(this.reported);
+    return ElementKinds.describe(this.reported);
   }
 
   get isEvent(): boolean {

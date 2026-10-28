@@ -3,7 +3,7 @@ import { is } from 'bpmnlint-utils';
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
 import { ZEEBE_URI } from '../DiagramNamespaces.js';
 import { SetCommand } from '../SetCommand.js';
-import { sh, slotted } from '../shell.js';
+import { Shell } from '../Shell.js';
 
 /**
  * The `bpmn` commands a Camunda 8 hint gives for one BPMN element: addressed by its id, or by the
@@ -36,12 +36,12 @@ export class ZeebeHint {
 
   /** `` `bpmn ext add <file> <id> <slot><args>` `` */
   extAdd(args: string): string {
-    return `\`bpmn ext add <file> ${this.target} ${slotted(this.address.slot, args)}\``;
+    return `\`bpmn ext add <file> ${this.target} ${Shell.slotted(this.address.slot, args)}\``;
   }
 
   /** `` `bpmn ext remove <file> <id> <slot><selector>` `` */
   extRemove(selector: string | number): string {
-    return `\`bpmn ext remove <file> ${this.target} ${sh(`${this.address.slot}${selector}`)}\``;
+    return `\`bpmn ext remove <file> ${this.target} ${Shell.quote(`${this.address.slot}${selector}`)}\``;
   }
 
   /** `` `bpmn set <file> <id> <slot><key>=` ``, which removes an attribute. */
@@ -51,7 +51,7 @@ export class ZeebeHint {
 
   /** How to rebuild a zeebe element with its content (`zeebe:taskListeners`): list it, then add it again. */
   rebuild(name: string): string {
-    return `See it with \`bpmn ext list <file> ${this.target} --json\`, then rebuild it: \`bpmn ext add <file> ${this.target} ${sh(`${this.address.slot}${name}`)} --replace --xml '<${name} ...>...</${name}>'\`.`;
+    return `See it with \`bpmn ext list <file> ${this.target} --json\`, then rebuild it: \`bpmn ext add <file> ${this.target} ${Shell.quote(`${this.address.slot}${name}`)} --replace --xml '<${name} ...>...</${name}>'\`.`;
   }
 
   /** `bpmn ext add --replace` that writes the zeebe element anew with `fix` laid over its attributes, those the descriptor knows and the unknown ones; the rebuild hint when it has child elements. */
@@ -88,7 +88,7 @@ export class ZeebeHint {
   }
 
   private replaceWith(name: string, attributes: Record<string, string>, fix: Record<string, string>): string {
-    const args = Object.entries({ ...attributes, ...fix }).map(([key, value]) => sh(`${key}=${value}`));
+    const args = Object.entries({ ...attributes, ...fix }).map(([key, value]) => Shell.quote(`${key}=${value}`));
     return `${this.extAdd([name, ...args, '--replace'].join(' '))}.`;
   }
 }

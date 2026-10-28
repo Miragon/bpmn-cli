@@ -53,8 +53,8 @@ const problems = [];
 const RULES = 'dist/adapters/out/bpmnlint/engine/rules';
 const ENGINE_RUN = ['EngineRun', 'EngineFindings', 'EngineCodes', 'EngineHint', 'CompatVerdicts', 'OwnModelCheck', 'CamundaBooleans', 'PublishMessages', 'SchemaText', 'BpmnSchema', 'SchemaTextFindings', 'UnknownVendorElements', 'UnprefixedAttributes'].map((name) => `dist/adapters/out/bpmnlint/engine/${name}.js`);
 const ON_DEMAND = [
-  { name: 'c7', label: 'Camunda 7 rules', marker: `${RULES}/c7/index.js`, rules: [`${RULES}/c7/index.js`], when: 'the first Camunda 7 document a call validates' },
-  { name: 'c8', label: 'Camunda 8 rules', marker: `${RULES}/c8/index.js`, rules: [`${RULES}/c8/index.js`], when: 'the first Camunda 8 document a call validates' },
+  { name: 'c7', label: 'Camunda 7 rules', marker: `${RULES}/c7/Camunda7Rules.js`, rules: [`${RULES}/c7/Camunda7Rules.js`], when: 'the first Camunda 7 document a call validates' },
+  { name: 'c8', label: 'Camunda 8 rules', marker: `${RULES}/c8/Camunda8Rules.js`, rules: [`${RULES}/c8/Camunda8Rules.js`], when: 'the first Camunda 8 document a call validates' },
   { name: 'engine', label: 'engine run (bpmnlint and the mapping to W_C7_* / W_C8_*)', marker: ENGINE_RUN[0], rules: [...ENGINE_RUN, 'node_modules/bpmnlint/lib/linter.js'], when: 'the first Camunda 7 or 8 document a call validates' },
 ];
 const ENTRIES = [

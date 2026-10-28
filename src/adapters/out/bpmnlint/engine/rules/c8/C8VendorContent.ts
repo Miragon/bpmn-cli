@@ -2,10 +2,10 @@ import { is } from 'bpmnlint-utils';
 import { defineRule, ERROR_TYPES, type ModdleElement } from '../CamundaRules.js';
 
 import type { Engine } from '@miragon/bpmnlint-plugin-rules/engine';
-import { ElementKinds } from '../describe.js';
+import { ElementKinds } from '../ElementKinds.js';
 import { C7_URIS, DiagramNamespaces } from '../DiagramNamespaces.js';
-import { didYouMean } from '../didYouMean.js';
-import { sh } from '../shell.js';
+import { DidYouMean } from '../DidYouMean.js';
+import { Shell } from '../Shell.js';
 import { VendorContentRule } from '../VendorContentRule.js';
 import { C8Host } from './C8Host.js';
 import { ZeebeHint } from './ZeebeHint.js';
@@ -88,9 +88,9 @@ class C8VendorContent extends VendorContentRule {
       if (zeebe.attr(local)) continue;
       const home = zeebe.typeNames().map((name) => zeebe.type(name)!).find((type) => !NOT_EXECUTED.includes(type.name) && zeebe.allowedOn(type.name, host.node) === true && type.attributes.some(({ name }) => name === local));
       const homeName = home && `${prefix}:${home.name.slice('zeebe:'.length)}`;
-      const guess = home ? undefined : didYouMean(local, zeebe.attrs().map(({ name }) => name.slice('zeebe:'.length)));
+      const guess = home ? undefined : DidYouMean.of(local, zeebe.attrs().map(({ name }) => name.slice('zeebe:'.length)));
       const unset = hint ? hint.unset(`${prefix}:${local}`) : 'edit the XML';
-      const move = home && hint ? hint.extAdd(`${homeName} ${sh(`${local}=${host.node.$attrs[key] ?? ''}`)}`) : 'edit the XML';
+      const move = home && hint ? hint.extAdd(`${homeName} ${Shell.quote(`${local}=${host.node.$attrs[key] ?? ''}`)}`) : 'edit the XML';
       this.reportUnknownAttribute(host, host.describe(), `${prefix}:${local}`, key, { path: host.path(key), hint: home ? `Move it: ${unset}, then ${move}.` : `Remove it: ${unset}.` }, guess ? ` (did you mean ${prefix}:${guess}?)` : '', home ? ` (it reads ${local} on the ${homeName} extension element)` : ' (most zeebe settings are extension elements: `bpmn kinds`, `bpmn guide`)');
     }
   }

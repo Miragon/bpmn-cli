@@ -1,5 +1,6 @@
 import { is, isAny } from 'bpmnlint-utils';
-import { C8Rule, defineRule, describeElement, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
+import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
+import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { ModdlePath } from '../ModdlePath.js';
@@ -68,7 +69,7 @@ class C8Subscriptions extends C8Rule {
     for (const duplicate of SubscriptionGroups.duplicates(events, keyOf)) {
       const { first, el, key } = duplicate;
       const path = is(el, 'bpmn:ReceiveTask') ? ['messageRef'] : ['eventDefinitions', 0, `${trigger}Ref`];
-      this.reportDuplicate(`c8-${trigger}`, duplicate, `${describeElement(el)} waits for the ${trigger} "${key}" like ${describeElement(first)} ${where}; Camunda 8 refuses one ${trigger} name twice there`, path, 'name', `Use another ${trigger}: \`bpmn set <file> ${el.id} ${trigger}=<Other${trigger.charAt(0).toUpperCase()}${trigger.slice(1)}>\`${NAMED[trigger].note}.`);
+      this.reportDuplicate(`c8-${trigger}`, duplicate, `${ElementKinds.describe(el)} waits for the ${trigger} "${key}" like ${ElementKinds.describe(first)} ${where}; Camunda 8 refuses one ${trigger} name twice there`, path, 'name', `Use another ${trigger}: \`bpmn set <file> ${el.id} ${trigger}=<Other${trigger.charAt(0).toUpperCase()}${trigger.slice(1)}>\`${NAMED[trigger].note}.`);
     }
   }
 
@@ -78,10 +79,10 @@ class C8Subscriptions extends C8Rule {
     if (!definition) return;
     const error = definition.get('errorRef');
     const code = error?.get('errorCode');
-    if (Values.isFeel(code)) this.report('c8-error', event, `${describeElement(event)} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, { path: ['eventDefinitions', 0, 'errorRef', 'errorCode'], type: ERROR_TYPES.EXPRESSION_NOT_ALLOWED, node: error, property: 'errorCode', hint: `\`bpmn set <file> ${event.id} errorCode=<CODE>\` (or no code: it catches every error).` });
+    if (Values.isFeel(code)) this.report('c8-error', event, `${ElementKinds.describe(event)} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, { path: ['eventDefinitions', 0, 'errorRef', 'errorCode'], type: ERROR_TYPES.EXPRESSION_NOT_ALLOWED, node: error, property: 'errorCode', hint: `\`bpmn set <file> ${event.id} errorCode=<CODE>\` (or no code: it catches every error).` });
     const interrupting = is(event, 'bpmn:BoundaryEvent') ? 'cancelActivity' : 'isInterrupting';
     if (is(event, 'bpmn:IntermediateCatchEvent') || event.get(interrupting) !== false) return;
-    this.report('c8-error', event, `${describeElement(event)} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, { path: [interrupting], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: interrupting, hint: `\`bpmn set <file> ${event.id} nonInterrupting=false\`.` });
+    this.report('c8-error', event, `${ElementKinds.describe(event)} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, { path: [interrupting], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: interrupting, hint: `\`bpmn set <file> ${event.id} nonInterrupting=false\`.` });
   }
 
   private checkErrorScope(groups: SubscriptionGroups, scope: ModdleElement): void {
@@ -99,7 +100,7 @@ class C8Subscriptions extends C8Rule {
     };
     for (const duplicate of SubscriptionGroups.duplicates(events, keyOf)) {
       const { first, el, key } = duplicate;
-      const message = key ? `${describeElement(el)} catches the error code "${key}" like ${describeElement(first)} (${where}); Camunda 8 refuses one code twice in a scope` : `${describeElement(el)} and ${describeElement(first)} both catch every error (no error code) (${where}); Camunda 8 allows one catch-all per scope`;
+      const message = key ? `${ElementKinds.describe(el)} catches the error code "${key}" like ${ElementKinds.describe(first)} (${where}); Camunda 8 refuses one code twice in a scope` : `${ElementKinds.describe(el)} and ${ElementKinds.describe(first)} both catch every error (no error code) (${where}); Camunda 8 allows one catch-all per scope`;
       this.reportDuplicate('c8-error', duplicate, message, ['eventDefinitions', 0, 'errorRef'], 'errorCode', `Catch another error: \`bpmn set <file> ${el.id} error=<OtherError> errorCode=<OTHER_CODE>\` (the events share no bpmn:Error then), or remove one of them.`);
     }
   }
@@ -114,7 +115,7 @@ class C8Subscriptions extends C8Rule {
     const holder = is(node, 'bpmn:SendTask') ? node : C8EventDefinitions.definitionOfType(node, 'bpmn:MessageEventDefinition');
     const message = holder?.messageRef;
     if (!message || Values.hasName(message)) return;
-    this.report('c8-implementation', node, `Message ${message.id} of ${describeElement(node)} has no name; Camunda 8 refuses the file`, { path: [...ModdlePath.between(node, holder), 'messageRef', 'name'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: message, requiredProperty: 'name', hint: `\`bpmn set <file> ${message.id} name=<MessageName>\`.` });
+    this.report('c8-implementation', node, `Message ${message.id} of ${ElementKinds.describe(node)} has no name; Camunda 8 refuses the file`, { path: [...ModdlePath.between(node, holder), 'messageRef', 'name'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: message, requiredProperty: 'name', hint: `\`bpmn set <file> ${message.id} name=<MessageName>\`.` });
   }
 }
 

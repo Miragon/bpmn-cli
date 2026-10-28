@@ -1,7 +1,7 @@
 import { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-types.js';
 import { describe } from 'vitest';
 
-import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c7/c7-events.js';
+import rule from '../../../../../../src/adapters/out/bpmnlint/engine/rules/c7/C7Events.js';
 import { engineModel, verifyEngineRule } from '../../../../../helpers/engine-model.js';
 
 describe('c7-message', () => {

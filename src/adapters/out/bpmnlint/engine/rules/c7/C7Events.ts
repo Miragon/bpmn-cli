@@ -1,11 +1,12 @@
 import { is, isAny } from 'bpmnlint-utils';
-import { C7Rule, defineRule, describeElement, ERROR_TYPES, triggerName, type ModdleElement } from '../CamundaRules.js';
+import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement } from '../CamundaRules.js';
+import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { FirstOfKey } from '../FirstOfKey.js';
 import { LinkEvents } from '../LinkEvents.js';
 import { SetCommand } from '../SetCommand.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { C7EventDefinitions } from './C7EventDefinitions.js';
 
 const TIMER_ELEMENTS = ['timeDate', 'timeCycle', 'timeDuration'];
@@ -47,7 +48,7 @@ class C7Events extends C7Rule {
     if (runs) {
       this.checkBoundaryHost(event);
       for (const definition of definitions.actedOn()) {
-        if (is(definition, 'bpmn:TimerEventDefinition') && !TIMER_ELEMENTS.some((timeElement) => definition[timeElement])) this.report('c7-event-definition', event, `Timer of ${describeElement(event)} has no date, cycle or duration; the engines refuse the file`, { path: definitions.pathTo(definition), type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: TIMER_ELEMENTS, hint: `\`bpmn set <file> ${event.id} timer=PT1H\` (or R/PT1H, or a date).` });
+        if (is(definition, 'bpmn:TimerEventDefinition') && !TIMER_ELEMENTS.some((timeElement) => definition[timeElement])) this.report('c7-event-definition', event, `Timer of ${ElementKinds.describe(event)} has no date, cycle or duration; the engines refuse the file`, { path: definitions.pathTo(definition), type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: TIMER_ELEMENTS, hint: `\`bpmn set <file> ${event.id} timer=PT1H\` (or R/PT1H, or a date).` });
         if (is(definition, 'bpmn:CompensateEventDefinition') && isAny(event, ['bpmn:IntermediateThrowEvent', 'bpmn:EndEvent'])) this.checkCompensation(event, definition, definitions);
       }
     }
@@ -61,7 +62,7 @@ class C7Events extends C7Rule {
   /** The BPMN schema checks of event definitions, also of one the engines ignore or do not run. */
   private checkDefinitions(definitions: ModdleElement[]): void {
     for (const definition of definitions) {
-      if (is(definition, 'bpmn:ConditionalEventDefinition') && !definition.condition) this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Conditional event')} has no condition element, which the BPMN schema requires; the engines refuse the file`, { path: this.subjectPath(definition, 'condition'), type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'condition', hint: this.subjectHint(definition, sh('when=${expression}')) });
+      if (is(definition, 'bpmn:ConditionalEventDefinition') && !definition.condition) this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Conditional event')} has no condition element, which the BPMN schema requires; the engines refuse the file`, { path: this.subjectPath(definition, 'condition'), type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'condition', hint: this.subjectHint(definition, Shell.quote('when=${expression}')) });
       const timeElements = TIMER_ELEMENTS.filter((timeElement) => definition[timeElement]);
       if (is(definition, 'bpmn:TimerEventDefinition') && timeElements.length > 1) this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Timer event')} has ${timeElements.join(' and ')}; the BPMN schema allows only one of timeDate, timeCycle and timeDuration, and the engines refuse the file`, { path: this.subjectPath(definition), type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, hint: this.subjectHint(definition, 'timer=<value>', 'R/PT1H is a cycle, PT1H a duration, else a date; the other elements go') });
     }
@@ -84,7 +85,7 @@ class C7Events extends C7Rule {
   private subjectName(definition: ModdleElement, single: string): string {
     const event = this.eventOf(definition);
     if (!event) return `${definition.$type}${definition.id ? ` ${definition.id}` : ''}`;
-    return new C7EventDefinitions(event).all().length > 1 ? `The ${triggerName(definition)} definition of ${describeElement(event)}` : `${single} ${event.id}`;
+    return new C7EventDefinitions(event).all().length > 1 ? `The ${ElementKinds.trigger(definition)} definition of ${ElementKinds.describe(event)}` : `${single} ${event.id}`;
   }
 
   private subjectPath(definition: ModdleElement, ...rest: string[]): (string | number)[] {
@@ -98,15 +99,15 @@ class C7Events extends C7Rule {
     if (!event) return 'Fix it in the XML.';
     const definitions = new C7EventDefinitions(event);
     if (definitions.all().length < 2) return `\`bpmn set <file> ${event.id} ${command}\`${keeps ? ` (${keeps})` : ''}.`;
-    const only = `\`bpmn set <file> ${event.id} ${command}\` (keeps only the ${triggerName(definition)} definition)`;
+    const only = `\`bpmn set <file> ${event.id} ${command}\` (keeps only the ${ElementKinds.trigger(definition)} definition)`;
     const acting = definitions.acting();
     if (!acting || acting === definition) return `${only}.`;
-    const trigger = triggerName(acting);
+    const trigger = ElementKinds.trigger(acting);
     return `The engines act on the ${trigger} definition and ignore this one, but they validate it too: drop it with \`bpmn set <file> ${event.id} trigger=${trigger}\` (keeps only the ${trigger}), or ${only}.`;
   }
 
   private checkReference(event: ModdleElement, definition: ModdleElement, definitions: C7EventDefinitions, { finding, kind, missing, set, after = '' }: (typeof REFERENCES)[number]): void {
-    const label = describeElement(event);
+    const label = ElementKinds.describe(event);
     const reference = `${kind.toLowerCase()}Ref`;
     const referenced = definition.get(reference);
     const path = definitions.pathTo(definition, reference);
@@ -133,7 +134,7 @@ class C7Events extends C7Rule {
   private checkEscalationHost(event: ModdleElement): void {
     const host = event.attachedToRef;
     if (!host || isAny(host, ESCALATION_HOSTS)) return;
-    this.report('c7-escalation', event, `Escalation boundary event ${event.id} is attached to ${describeElement(host)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, { path: ['attachedToRef'], type: ERROR_TYPES.ATTACHED_TO_REF_ELEMENT_TYPE_NOT_ALLOWED, attachedToRef: host, hint: `Attach it elsewhere (\`bpmn move <file> ${event.id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${event.id}\`.` });
+    this.report('c7-escalation', event, `Escalation boundary event ${event.id} is attached to ${ElementKinds.describe(host)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, { path: ['attachedToRef'], type: ERROR_TYPES.ATTACHED_TO_REF_ELEMENT_TYPE_NOT_ALLOWED, attachedToRef: host, hint: `Attach it elsewhere (\`bpmn move <file> ${event.id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${event.id}\`.` });
   }
 
   /** An event with several definitions: the engines act on one and ignore the others. It deploys. */
@@ -141,9 +142,9 @@ class C7Events extends C7Rule {
     const all = definitions.all();
     if (all.length < 2) return;
     const acting = definitions.acting();
-    const ignored = all.filter((definition) => definition !== acting).map((definition) => triggerName(definition));
-    const consequence = acting ? `the engines act on the ${triggerName(acting)} only and ignore the ${ignored.join(' and ')}` : 'the engines act on one of them only and ignore the others';
-    this.report('c7-multiple-event-definitions', event, `${describeElement(event)} has ${all.length} event definitions (${all.map((definition) => triggerName(definition)).join(', ')}); ${consequence}`, { path: ['eventDefinitions'], type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, kept: acting, hint: `Keep one: \`bpmn set <file> ${event.id} trigger=${acting ? triggerName(acting) : '<trigger>'}\` (keeps that definition, drops the others), and model each other trigger as its own event (behind an event-based gateway, or another boundary / start event). One definition is edited with \`bpmn set <file> ${event.id} 'definition[<n>].<key>=<value>'\`.` });
+    const ignored = all.filter((definition) => definition !== acting).map((definition) => ElementKinds.trigger(definition));
+    const consequence = acting ? `the engines act on the ${ElementKinds.trigger(acting)} only and ignore the ${ignored.join(' and ')}` : 'the engines act on one of them only and ignore the others';
+    this.report('c7-multiple-event-definitions', event, `${ElementKinds.describe(event)} has ${all.length} event definitions (${all.map((definition) => ElementKinds.trigger(definition)).join(', ')}); ${consequence}`, { path: ['eventDefinitions'], type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, kept: acting, hint: `Keep one: \`bpmn set <file> ${event.id} trigger=${acting ? ElementKinds.trigger(acting) : '<trigger>'}\` (keeps that definition, drops the others), and model each other trigger as its own event (behind an event-based gateway, or another boundary / start event). One definition is edited with \`bpmn set <file> ${event.id} 'definition[<n>].<key>=<value>'\`.` });
   }
 
   /** The activities a compensation throw event may name: those of its own (sub-)process, for an event sub-process also those of its parent scope. */
@@ -155,11 +156,11 @@ class C7Events extends C7Rule {
     const isFlowNode = is(activity, 'bpmn:FlowNode');
     if (isFlowNode && allowed.includes(EngineScope.scopeOf(activity))) return;
     const scopeId = scope.id ?? '<scopeId>';
-    const named = isFlowNode ? `${describeElement(activity)}, which is not in ${scopeId}` : `${activity.id}, which is not a flow node`;
+    const named = isFlowNode ? `${ElementKinds.describe(activity)}, which is not in ${scopeId}` : `${activity.id}, which is not a flow node`;
     const key = `${SetCommand.forDefinition(event, definitions.all().indexOf(definition)).slot}activityRef`;
     const candidates = (scope.flowElements ?? []).filter((element: ModdleElement) => is(element, 'bpmn:Activity') && !EngineScope.isEventSubProcess(element) && element.id).map((element: ModdleElement) => element.id).slice(0, 5);
     const listed = candidates.length ? ` (in ${scopeId}: ${candidates.join(', ')})` : '';
-    this.report('c7-event-definition', event, `Compensation event ${event.id} names activityRef ${named}; the engines compensate only activities of the throw event's own (sub-)process and refuse the file`, { path: definitions.pathTo(definition, 'activityRef'), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: definition, property: 'activityRef', activityRef: activity, hint: `\`bpmn set <file> ${event.id} ${sh(`${key}=<activityId>`)}\`${listed}, or compensate the whole scope: \`bpmn set <file> ${event.id} ${sh(`${key}=`)}\`.` });
+    this.report('c7-event-definition', event, `Compensation event ${event.id} names activityRef ${named}; the engines compensate only activities of the throw event's own (sub-)process and refuse the file`, { path: definitions.pathTo(definition, 'activityRef'), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: definition, property: 'activityRef', activityRef: activity, hint: `\`bpmn set <file> ${event.id} ${Shell.quote(`${key}=<activityId>`)}\`${listed}, or compensate the whole scope: \`bpmn set <file> ${event.id} ${Shell.quote(`${key}=`)}\`.` });
   }
 
   /**
@@ -183,7 +184,7 @@ class C7Events extends C7Rule {
   private checkSubscription(firsts: FirstOfKey<ModdleElement>, el: ModdleElement, kind: string, scope: string, name: string | undefined, path: (string | number)[]): void {
     const first = name ? firsts.repeats(`${kind}\u0000${scope}\u0000${name}`, el) : undefined;
     if (!first) return;
-    this.report(`c7-${kind}`, el, `${describeElement(el)} waits for ${kind} "${name}" like ${first.id} in the same scope; the engines refuse two ${kind} subscriptions with one name`, { path, type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, duplicatedProperty: 'name', duplicatedPropertyValue: name, first, hint: `Use another ${kind}: \`bpmn set <file> ${el.id} ${kind}=<OtherName>\`.` });
+    this.report(`c7-${kind}`, el, `${ElementKinds.describe(el)} waits for ${kind} "${name}" like ${first.id} in the same scope; the engines refuse two ${kind} subscriptions with one name`, { path, type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, duplicatedProperty: 'name', duplicatedPropertyValue: name, first, hint: `Use another ${kind}: \`bpmn set <file> ${el.id} ${kind}=<OtherName>\`.` });
   }
 
   private subscriptionScope(node: ModdleElement): string | undefined {
@@ -217,7 +218,7 @@ class C7Events extends C7Rule {
       const elsewhere = links.catchNamed(name);
       const scopeId = scope.id ?? '<scopeId>';
       const missing = elsewhere ? `the catch event of that name (${elsewhere.id}) is in another scope` : 'no link catch event has that name';
-      this.report('c7-link-event', el, `Link throw event ${el.id} jumps to "${name}", but ${missing}; the engines resolve links within one (sub-)process (${scopeId}) and refuse the file`, { path: this.linkNamePath(el), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'name', ...(elsewhere ? { elsewhere } : {}), hint: `Add the catching side in ${scopeId}: \`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${scopeId} --link ${sh(name)}\` and continue from it, or point the throw at an existing catch: \`bpmn set <file> ${el.id} link=<Name>\`.` });
+      this.report('c7-link-event', el, `Link throw event ${el.id} jumps to "${name}", but ${missing}; the engines resolve links within one (sub-)process (${scopeId}) and refuse the file`, { path: this.linkNamePath(el), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'name', ...(elsewhere ? { elsewhere } : {}), hint: `Add the catching side in ${scopeId}: \`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${scopeId} --link ${Shell.quote(name)}\` and continue from it, or point the throw at an existing catch: \`bpmn set <file> ${el.id} link=<Name>\`.` });
     }
   }
 

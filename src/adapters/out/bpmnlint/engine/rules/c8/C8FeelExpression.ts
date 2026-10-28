@@ -1,9 +1,10 @@
 import { is } from 'bpmnlint-utils';
-import { C8Rule, defineRule, describeElement, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
+import { C8Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportPath } from '../CamundaRules.js';
+import { ElementKinds } from '../ElementKinds.js';
 
 import { EngineScope } from '../EngineScope.js';
 import { ModdlePath } from '../ModdlePath.js';
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
 import { C8EventDefinitions } from './C8EventDefinitions.js';
 import { C8Host } from './C8Host.js';
@@ -62,7 +63,7 @@ class C8FeelExpression extends C8Rule {
 
   private checkFeelAttributes(element: ModdleElement, attributes: string[], host: ModdleElement, container: string): void {
     const owner = ModdlePath.ownerOf(host);
-    const where = `${ZeebeHint.typeName(element)}${container} of ${host.id ? describeElement(host) : describeElement(host, owner)}`;
+    const where = `${ZeebeHint.typeName(element)}${container} of ${host.id ? ElementKinds.describe(host) : ElementKinds.describe(host, owner)}`;
     for (const attribute of attributes) this.checkSyntax(`${attribute} of ${where}`, element[attribute], this.siteOf(owner, element, attribute), this.extensionHint(element, attribute, host, container !== ''));
   }
 
@@ -70,7 +71,7 @@ class C8FeelExpression extends C8Rule {
   private extensionHint(element: ModdleElement, attribute: string, host: ModdleElement, nested: boolean): string {
     const hint = ZeebeHint.of(host);
     if ((is(element, 'zeebe:Input') || is(element, 'zeebe:Output')) && element.target) {
-      const args = `${ZeebeHint.typeName(element)} ${sh(`${attribute}==${FeelExpression.fromJuel(String(element[attribute] ?? '').trim().slice(1)).trim()}`)} target=${sh(element.target)}`;
+      const args = `${ZeebeHint.typeName(element)} ${Shell.quote(`${attribute}==${FeelExpression.fromJuel(String(element[attribute] ?? '').trim().slice(1)).trim()}`)} target=${Shell.quote(element.target)}`;
       return `${hint ? hint.extAdd(args) : 'edit the XML'} (replaces the mapping of that target; check the FEEL syntax).`;
     }
     if (nested) return hint ? hint.rebuild(ZeebeHint.typeName(element.$parent)) : 'Fix it in the XML.';
@@ -91,26 +92,26 @@ class C8FeelExpression extends C8Rule {
 
   private flowConditionHints(id: string, body: string): { invalid: string; notFeel: string } {
     return {
-      invalid: `\`bpmn set <file> ${id} ${sh(`condition==${FeelExpression.fromJuel(body.trim().slice(1))}`)}\` (check the FEEL syntax: and / or, = for equality, not(...)).`,
-      notFeel: body.trim() ? `\`bpmn set <file> ${id} ${sh(`condition==${FeelExpression.fromJuel(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${id} ${sh('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${id} condition=\`).`,
+      invalid: `\`bpmn set <file> ${id} ${Shell.quote(`condition==${FeelExpression.fromJuel(body.trim().slice(1))}`)}\` (check the FEEL syntax: and / or, = for equality, not(...)).`,
+      notFeel: body.trim() ? `\`bpmn set <file> ${id} ${Shell.quote(`condition==${FeelExpression.fromJuel(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${id} ${Shell.quote('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${id} condition=\`).`,
     };
   }
 
   private completionHints(id: string, body: string): { invalid: string; notFeel: string } {
-    const fix = `\`bpmn set <file> ${id} ${sh(`completion==${FeelExpression.fromJuel(Values.isFeel(body) ? body.trim().slice(1) : body)}`)}\` (check the FEEL syntax)`;
+    const fix = `\`bpmn set <file> ${id} ${Shell.quote(`completion==${FeelExpression.fromJuel(Values.isFeel(body) ? body.trim().slice(1) : body)}`)}\` (check the FEEL syntax)`;
     return { invalid: `${fix}.`, notFeel: `${fix}, or remove it: \`bpmn set <file> ${id} completion=\`.` };
   }
 
   private checkMultiInstance(activity: ModdleElement): void {
     const loop = activity.loopCharacteristics;
     if (!loop || !is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) return;
-    const label = `multi-instance ${describeElement(activity)}`;
+    const label = `multi-instance ${ElementKinds.describe(activity)}`;
     const [zeebeLoop] = C8Host.valuesOf(loop, 'zeebe:LoopCharacteristics');
     if (zeebeLoop && !Values.isBlank(zeebeLoop.inputCollection) && !Values.isFeel(zeebeLoop.inputCollection)) this.reportStatic(activity, zeebeLoop, 'inputCollection', label);
     if (zeebeLoop && zeebeLoop.outputCollection !== undefined && zeebeLoop.outputElement !== undefined && !Values.isFeel(zeebeLoop.outputElement)) this.reportStatic(activity, zeebeLoop, 'outputElement', label);
     if (!loop.completionCondition) return;
     const body: string = loop.completionCondition.body ?? '';
-    this.checkSyntax(`The completion condition of ${label}`, body, { owner: activity, holder: loop, property: 'completionCondition', path: ['loopCharacteristics', 'completionCondition'] }, `\`bpmn set <file> ${activity.id} ${sh(`completion==${FeelExpression.fromJuel(body.trim().slice(1))}`)}\` (check the FEEL syntax).`);
+    this.checkSyntax(`The completion condition of ${label}`, body, { owner: activity, holder: loop, property: 'completionCondition', path: ['loopCharacteristics', 'completionCondition'] }, `\`bpmn set <file> ${activity.id} ${Shell.quote(`completion==${FeelExpression.fromJuel(body.trim().slice(1))}`)}\` (check the FEEL syntax).`);
   }
 
   private reportStatic(activity: ModdleElement, zeebeLoop: ModdleElement, property: string, label: string): void {
@@ -122,7 +123,7 @@ class C8FeelExpression extends C8Rule {
     const [script] = C8Host.valuesOf(task, 'zeebe:Script');
     const expression = script?.expression;
     if (!script || C8Host.valuesOf(task, 'zeebe:TaskDefinition').length || Values.isBlank(expression) || Values.isFeel(expression)) return;
-    this.reportAt(this.siteOf(task, script, 'expression'), `The zeebe:script expression "${expression}" of ${describeElement(task)} is a static value; Camunda 8 needs a FEEL expression starting with = and refuses the file`, ERROR_TYPES.EXPRESSION_REQUIRED, ZeebeHint.fix(task, script, { expression: `=${expression.trim()}` }));
+    this.reportAt(this.siteOf(task, script, 'expression'), `The zeebe:script expression "${expression}" of ${ElementKinds.describe(task)} is a static value; Camunda 8 needs a FEEL expression starting with = and refuses the file`, ERROR_TYPES.EXPRESSION_REQUIRED, ZeebeHint.fix(task, script, { expression: `=${expression.trim()}` }));
   }
 
   private checkEvent(event: ModdleElement): void {
@@ -137,7 +138,7 @@ class C8FeelExpression extends C8Rule {
     const kinds = TIMER_KINDS.filter((kind) => definition[kind]);
     const [kind] = kinds;
     if (kinds.length !== 1 || !kind || (kind === 'timeCycle' && is(event, 'bpmn:IntermediateCatchEvent'))) return;
-    this.checkSyntax(`The ${kind} of ${describeElement(event)}`, definition[kind].body, this.siteOf(event, definition, kind), `\`bpmn set <file> ${event.id} ${sh('timer==<FEEL expression>')}\` (check the FEEL syntax).`);
+    this.checkSyntax(`The ${kind} of ${ElementKinds.describe(event)}`, definition[kind].body, this.siteOf(event, definition, kind), `\`bpmn set <file> ${event.id} ${Shell.quote('timer==<FEEL expression>')}\` (check the FEEL syntax).`);
   }
 
   private checkConditionalEvent(event: ModdleElement, definition: ModdleElement): void {
@@ -145,7 +146,7 @@ class C8FeelExpression extends C8Rule {
     if (!condition) return;
     const site = this.siteOf(event, definition, 'condition');
     const body: string = condition.body ?? '';
-    const fix = (expression: string) => `\`bpmn set <file> ${event.id} ${sh(`when==${FeelExpression.fromJuel(expression)}`)}\` (check the FEEL syntax).`;
+    const fix = (expression: string) => `\`bpmn set <file> ${event.id} ${Shell.quote(`when==${FeelExpression.fromJuel(expression)}`)}\` (check the FEEL syntax).`;
     if (Values.isFeel(body)) this.checkSyntax(`The condition of conditional event ${event.id}`, body, site, fix(body.trim().slice(1)));
     else this.reportAt(site, `The condition "${body.trim()}" of conditional event ${event.id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, ERROR_TYPES.EXPRESSION_REQUIRED, fix(body));
   }
@@ -165,7 +166,7 @@ class C8FeelExpression extends C8Rule {
   private checkMessageAndSignalNames(definitions: ModdleElement): void {
     for (const used of this.usedMessagesAndSignals(definitions)) {
       const kind = is(used, 'bpmn:Signal') ? 'signal' : 'message';
-      if (used.id && Values.hasName(used)) this.checkSyntax(`The name of ${kind} ${used.id}`, used.name, { owner: used, holder: used, property: 'name', path: ['name'] }, `\`bpmn set <file> ${used.id} ${sh('name==<FEEL expression>')}\` (check the FEEL syntax), or a static name.`);
+      if (used.id && Values.hasName(used)) this.checkSyntax(`The name of ${kind} ${used.id}`, used.name, { owner: used, holder: used, property: 'name', path: ['name'] }, `\`bpmn set <file> ${used.id} ${Shell.quote('name==<FEEL expression>')}\` (check the FEEL syntax), or a static name.`);
     }
   }
 

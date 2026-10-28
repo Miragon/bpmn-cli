@@ -1,6 +1,6 @@
 import type { Engine } from '@miragon/bpmnlint-plugin-rules/engine';
 import { CamundaRule, ERROR_TYPES, type ModdleElement, type ReportPath } from './CamundaRules.js';
-import { didYouMean } from './didYouMean.js';
+import { DidYouMean } from './DidYouMean.js';
 import type { TreeElement, VendorHost } from './VendorHost.js';
 
 /** How an engine's vendor-content findings name it and the other engine. */
@@ -43,7 +43,7 @@ export abstract class VendorContentRule extends CamundaRule {
 
   /** An unprefixed attribute `key` of a vendor element inside an extension element, the closest of `names` as the guess. */
   protected reportUnknownTreeAttribute(host: VendorHost, { element, where, path }: TreeElement, key: string, names: string[], hint: string): void {
-    const guess = didYouMean(key, names);
+    const guess = DidYouMean.of(key, names);
     this.reportUnknownAttribute(host, where, key, key, { path: [...path, key], node: element, hint }, guess ? ` (did you mean ${guess}?)` : '');
   }
 

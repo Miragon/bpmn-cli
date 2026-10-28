@@ -2,7 +2,7 @@ import { is } from 'bpmnlint-utils';
 
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
 import { CAMUNDA_URI, DiagramNamespaces } from '../DiagramNamespaces.js';
-import { sh, slotted } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { EngineScope } from '../EngineScope.js';
 import { type ForeignAttribute, type TreeElement, VendorHost } from '../VendorHost.js';
 import { C7Diagram } from './C7Diagram.js';
@@ -88,27 +88,27 @@ export class C7Host extends VendorHost {
     if (!this.address) return 'Fix it in the XML.';
     const { id, slot } = this.address;
     const type = this.typeName(extension.local);
-    if (SINGLE_TYPES.includes(extension.local)) return `See it with \`bpmn ext list <file> ${id} --json\`, then rebuild it: \`bpmn ext add <file> ${id} ${slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
+    if (SINGLE_TYPES.includes(extension.local)) return `See it with \`bpmn ext list <file> ${id} --json\`, then rebuild it: \`bpmn ext add <file> ${id} ${Shell.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
     const flat = C7Host.extAddArguments(extension.value, type, fix);
-    const again = flat ? `\`bpmn ext add <file> ${id} ${slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${id} ${slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn ext list <file> ${id} --json\` shows it)`;
-    return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${id} ${sh(`${slot}${this.selector(extension)}`)}\`, then ${again}.`;
+    const again = flat ? `\`bpmn ext add <file> ${id} ${Shell.slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${id} ${Shell.slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn ext list <file> ${id} --json\` shows it)`;
+    return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${id} ${Shell.quote(`${slot}${this.selector(extension)}`)}\`, then ${again}.`;
   }
 
   /** `Merge them into one: ...` for duplicates of a single-instance type. */
   merge(local: string): string {
     if (!this.address) return 'Merge them in the XML.';
     const type = this.typeName(local);
-    return `Merge them into one: \`bpmn ext list <file> ${this.address.id} --json\`, then \`bpmn ext add <file> ${this.address.id} ${slotted(this.address.slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
+    return `Merge them into one: \`bpmn ext list <file> ${this.address.id} --json\`, then \`bpmn ext add <file> ${this.address.id} ${Shell.slotted(this.address.slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
   }
 
   /** `bpmn ext remove` of an extension element by its position. */
   removeAt(extension: HostExtension): string | undefined {
-    return this.address && `\`bpmn ext remove <file> ${this.address.id} ${slotted(this.address.slot, String(extension.index))}\``;
+    return this.address && `\`bpmn ext remove <file> ${this.address.id} ${Shell.slotted(this.address.slot, String(extension.index))}\``;
   }
 
   /** `bpmn ext remove` of an extension element by its selector (`camunda:field[name=a]`). */
   removeBySelector(extension: HostExtension): string | undefined {
-    return this.address && `\`bpmn ext remove <file> ${this.address.id} ${sh(`${this.address.slot}${this.selector(extension)}`)}\``;
+    return this.address && `\`bpmn ext remove <file> ${this.address.id} ${Shell.quote(`${this.address.slot}${this.selector(extension)}`)}\``;
   }
 
   /** `ext remove` selector of a top-level extension element: a unique attribute, else its index among its type. */
@@ -129,7 +129,7 @@ export class C7Host extends VendorHost {
     for (const key of Object.keys(fix)) if (!entries.some(([existing]) => existing === key)) entries.push([key, fix[key] ?? '']);
     const bodyProperty = (element.$descriptor?.properties ?? []).find((property: { isBody?: boolean }) => property.isBody);
     const body = bodyProperty ? element[bodyProperty.name] : undefined;
-    return [type, ...entries.map(([key, value]) => sh(`${key}=${fix[key] ?? value}`)), ...(body !== undefined ? ['--body', sh(String(body))] : [])].join(' ');
+    return [type, ...entries.map(([key, value]) => Shell.quote(`${key}=${fix[key] ?? value}`)), ...(body !== undefined ? ['--body', Shell.quote(String(body))] : [])].join(' ');
   }
 
   /** The attributes of a typed camunda element in file order, an unresolved reference where the descriptor puts it; undefined with child elements. */

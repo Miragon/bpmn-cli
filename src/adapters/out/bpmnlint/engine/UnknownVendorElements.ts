@@ -8,8 +8,8 @@ import type { ZeebeElementType } from '../../../../domain/document/vendor/ZeebeD
 import type { EnginePlatformInfo } from '../../../../domain/validation/EngineLint.js';
 import type { EngineKit } from '../engine-kit.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { describeElement } from './rules/describe.js';
-import { didYouMean } from './rules/didYouMean.js';
+import { ElementKinds } from './rules/ElementKinds.js';
+import { DidYouMean } from './rules/DidYouMean.js';
 import { SetCommand } from './rules/SetCommand.js';
 
 const ENGINE_NAME = { c7: 'the engines', c8: 'Camunda 8' };
@@ -47,7 +47,7 @@ export class UnknownVendorElements extends OwnModelCheck {
         else this.checkChildren(host, value, known, `${this.prefix}:${local}`, out);
         return;
       }
-      const guess = didYouMean(local, this.vendor.typeNames().map((name) => this.localName(name)));
+      const guess = DidYouMean.of(local, this.vendor.typeNames().map((name) => this.localName(name)));
       out.push(this.finding(host, `ext:${local}`, `${this.where(host)} has the unknown extension element ${this.prefix}:${local}${guess ? ` (did you mean ${this.prefix}:${guess}?)` : ''}; ${ENGINE_NAME[this.engine]} ignores it`, this.removeHint(host, index, guess)));
     });
   }
@@ -93,7 +93,7 @@ export class UnknownVendorElements extends OwnModelCheck {
 
   /** `timerEventDefinition Def_T`, or `the timerEventDefinition of intermediateCatchEvent:timer W` */
   private where(host: El): string {
-    return describeElement(host, host.$parent as El | undefined);
+    return ElementKinds.describe(host, host.$parent as El | undefined);
   }
 
   private misplacedFinding(host: El, local: string, message: string, hint: string): ProfileFinding {

@@ -1,6 +1,6 @@
 import { is } from 'bpmnlint-utils';
 
-import { ElementKinds } from '../describe.js';
+import { ElementKinds } from '../ElementKinds.js';
 import type { C7Host, HostExtension } from './C7Host.js';
 import { CamundaDescriptor } from './CamundaDescriptor.js';
 

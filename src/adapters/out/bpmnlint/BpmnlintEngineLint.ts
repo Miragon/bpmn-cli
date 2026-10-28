@@ -17,11 +17,11 @@ const ENGINE_NAMES: Record<Engine, string> = { c7: 'Camunda 7', c8: 'Camunda 8' 
  */
 const LOADERS: Record<Engine, () => Promise<EngineRun>> = {
   c7: async () => {
-    const [{ Camunda7Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c7/index.js'), import('./engine/EngineRun.js')]);
+    const [{ Camunda7Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c7/Camunda7Rules.js'), import('./engine/EngineRun.js')]);
     return new EngineRun(ENGINE_KIT, 'c7', Camunda7Rules.entry(ENGINE_KIT));
   },
   c8: async () => {
-    const [{ Camunda8Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c8/index.js'), import('./engine/EngineRun.js')]);
+    const [{ Camunda8Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c8/Camunda8Rules.js'), import('./engine/EngineRun.js')]);
     return new EngineRun(ENGINE_KIT, 'c8', Camunda8Rules.entry(ENGINE_KIT));
   },
 };

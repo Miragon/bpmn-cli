@@ -1,7 +1,7 @@
 import { is } from 'bpmnlint-utils';
 import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement } from '../CamundaRules.js';
 
-import { sh } from '../shell.js';
+import { Shell } from '../Shell.js';
 import { Values } from '../Values.js';
 import { C7Diagram } from './C7Diagram.js';
 import { CamundaAttributes } from './CamundaAttributes.js';
@@ -71,7 +71,7 @@ class C7Implementation extends C7Rule {
       const fixed = string ?? (stringValue ? stringValue : undefined);
       const property = string !== undefined ? 'string' : 'stringValue';
       if (fixed !== undefined && SHELL_FLAGS.includes(name) && !['true', 'false'].includes(fixed.toLowerCase())) this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is "${fixed}", not true or false; the engines refuse the file`, { path: [...fieldPath, property], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: field, property, hint: this.fieldHint(host, `name=${name} stringValue=true`, 'Use true or false.', ' (or false).') });
-      if (fixed === undefined && field.get('expression') !== undefined) this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is an expression; the shell task takes fixed values only and the engines refuse the file`, { path: [...fieldPath, 'expression'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: field, property: 'expression', hint: this.fieldHint(host, `name=${sh(name)} stringValue=<value>`, 'Use a stringValue.') });
+      if (fixed === undefined && field.get('expression') !== undefined) this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is an expression; the shell task takes fixed values only and the engines refuse the file`, { path: [...fieldPath, 'expression'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: field, property: 'expression', hint: this.fieldHint(host, `name=${Shell.quote(name)} stringValue=<value>`, 'Use a stringValue.') });
     }
   }
 
