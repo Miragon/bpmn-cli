@@ -34,7 +34,7 @@ export class EditBatch {
     private readonly opts: MutationOptions = {},
   ) {
     const platformChoice = opts.platform && opts.platform !== 'auto' ? opts.platform : undefined;
-    this.edit = new EditSession(doc, { conventions: opts.conventions, platformChoice, keepFlowIds: opts.keepFlowIds });
+    this.edit = new EditSession(doc, { conventions: opts.conventions, platformChoice });
   }
 
   /**

@@ -19,7 +19,6 @@ import { ElementOrder } from '../editing/elements/ElementOrder.js';
 import { ExtensionElements } from '../editing/extensions/ExtensionElements.js';
 import { BranchSplit } from '../editing/connections/BranchSplit.js';
 import { IdRename } from '../editing/ids/IdRename.js';
-import { StaleFlowReport } from '../editing/connections/StaleFlowReport.js';
 
 /** The merged changes, the ops with aliases resolved (for layout and format) and alias -> id. */
 export interface BatchRun {
@@ -55,7 +54,6 @@ export class ModelCommands {
   runCommand(command: EditCommand): ChangeSet {
     this.edit.begin();
     const cs = this.step(command);
-    new StaleFlowReport(this.edit).report(cs, this.edit.flowsBefore);
     new IdRename(this.edit).reportStalePrefixes(cs);
     return cs;
   }
@@ -185,7 +183,6 @@ export class ModelCommands {
     all.bindings = [];
     all.replaced = [];
     all.warnings = all.warnings.filter((warning) => this.stillHolds(warning));
-    new StaleFlowReport(this.edit).report(all, this.edit.flowsBefore);
     new IdRename(this.edit).reportStalePrefixes(all);
     return { changes: all, commands: batch.resolved, aliases: batch.table.toRecord() };
   }

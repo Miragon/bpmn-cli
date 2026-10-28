@@ -45,11 +45,7 @@ keys are in [Syntax and output](reference.md).
 | `--force` | write despite a lossy import, new validation errors, or an existing file (`new`) |
 | `--backup` | copy `<file>` to `<file>.bak` first |
 | `--strict` | exit code 5 when the result has warnings |
-| `--keep-flow-ids` | keep the ids of flows whose ends change; `W_FLOW_ID_STALE` names each id that no longer fits |
 | `--lint-config <path>`, `--no-lint-config` | choose or ignore the project's [bpmnlint](bpmnlint.md) configuration |
-
-`BPMN_KEEP_FLOW_IDS=1` makes `--keep-flow-ids` the default. A result whose ids it kept says so with
-`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)`.
 
 ## `new`
 

@@ -8,15 +8,14 @@ import { is, many, type El, idOf } from '../../document/utils/moddle.js';
 
 /**
  * Keeps speaking flow ids (flow_checkInvoiceToDone) true: a flow named after its ends is
- * renamed after its new ends when they change. Other ids stay; with `--keep-flow-ids`
- * the document's flows keep theirs and get reported as stale.
+ * renamed after its new ends when they change. Other ids stay.
  */
 export class FlowIdFollower {
   constructor(private readonly edit: EditSession) {}
 
   /**
    * Call before `set` renames `node`: a flow still named after its old id or name
-   * follows (or is reported) when a later op of the batch changes its ends.
+   * follows when a later op of the batch changes its ends.
    */
   recordFormerEnd(node: El): void {
     if (!is(node, 'bpmn:FlowNode') || !(many(node, 'incoming').length || many(node, 'outgoing').length)) return;
@@ -36,10 +35,7 @@ export class FlowIdFollower {
     );
   }
 
-  /**
-   * Returns the old id when it renamed the flow, `''` when it gave an id-less flow one.
-   * With ids kept, a flow the batch created is nobody's API yet and still follows.
-   */
+  /** Returns the old id when it renamed the flow, `''` when it gave an id-less flow one. */
   follow(flow: El, oldSource: El | undefined, oldTarget: El | undefined, wanted?: string): string | undefined {
     const doc = this.edit.doc;
     if (!is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) return undefined;
@@ -52,12 +48,8 @@ export class FlowIdFollower {
       doc.invalidate();
       return '';
     }
-    if (!this.namesEnds(old, oldSource, oldTarget)) return undefined;
+    if (!doc.followFlowEnds || !this.namesEnds(old, oldSource, oldTarget)) return undefined;
     const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
-    if (this.edit.keepsFlowId(flow)) {
-      this.edit.recordKeptFlow(flow, `${oldIds[0]} -> ${oldIds[1]}`);
-      return undefined;
-    }
     doc.ids.release(old);
     const id = this.edit.allocator.allocate(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
     if (id === old) return undefined;

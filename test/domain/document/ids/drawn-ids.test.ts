@@ -126,29 +126,25 @@ ${LINE.replace('<bpmn:sequenceFlow id="Flow_1" ', '<bpmn:sequenceFlow ')}
   const flows = (xml: string): string[] => [...xml.matchAll(/<bpmn:sequenceFlow ([^>]*?)\/>/g)].map((match) => match[1]!);
 
   it('a splice (add, split; with and without layout, with ids kept too) gives it an id from its new ends and lists it once, as changed', async () => {
-    for (const keepFlowIds of [false, true]) {
-      for (const layout of [false, undefined]) {
-        const outcome = await applyToXml(OUT, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1' }], { keepFlowIds, ...(layout === false ? { layout } : {}) });
-        await sound(outcome.xml);
-        expect(flows(outcome.xml)).toEqual(['id="Flow_1" sourceRef="Start_1" targetRef="Task_1"', 'id="flow_checkToLog" sourceRef="Task_1" targetRef="task_log"', 'id="flow_logToEnd" sourceRef="task_log" targetRef="End_1"']);
-        expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toEqual(['flow_checkToLog: Task_1 -> task_log (was -> End_1) (id added: it had none)']);
-        expect(outcome.result.created.map((change) => change.id)).toEqual(['task_log', 'flow_logToEnd']);
-        expect([outcome.result.renamed, outcome.result.warnings.added]).toEqual([undefined, []]);
-      }
-      const split = await applyToXml(OUT, [{ op: 'split', after: 'Task_1', name: 'Ok?', branches: [{ flowName: 'yes', nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: [] }] }], { keepFlowIds, layout: false });
-      expect(split.result.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('flow_checkToOk: Task_1 -> gateway_ok (was -> End_1) (id added: it had none)');
-      expect(flows(split.xml)).toContain('id="flow_checkToOk" sourceRef="Task_1" targetRef="gateway_ok"');
+    for (const layout of [false, undefined]) {
+      const outcome = await applyToXml(OUT, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1' }], { ...(layout === false ? { layout } : {}) });
+      await sound(outcome.xml);
+      expect(flows(outcome.xml)).toEqual(['id="Flow_1" sourceRef="Start_1" targetRef="Task_1"', 'id="flow_checkToLog" sourceRef="Task_1" targetRef="task_log"', 'id="flow_logToEnd" sourceRef="task_log" targetRef="End_1"']);
+      expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toEqual(['flow_checkToLog: Task_1 -> task_log (was -> End_1) (id added: it had none)']);
+      expect(outcome.result.created.map((change) => change.id)).toEqual(['task_log', 'flow_logToEnd']);
+      expect([outcome.result.renamed, outcome.result.warnings.added]).toEqual([undefined, []]);
     }
+    const split = await applyToXml(OUT, [{ op: 'split', after: 'Task_1', name: 'Ok?', branches: [{ flowName: 'yes', nodes: [{ kind: 'task', name: 'A' }] }, { flowName: 'no', nodes: [] }] }], { layout: false });
+    expect(split.result.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('flow_checkToOk: Task_1 -> gateway_ok (was -> End_1) (id added: it had none)');
+    expect(flows(split.xml)).toContain('id="flow_checkToOk" sourceRef="Task_1" targetRef="gateway_ok"');
   });
 
   it('add --flow-id on a splice into it: the flow takes that id (claimed like the id of a flow add creates), without W_OPTION_IGNORED', async () => {
-    for (const keepFlowIds of [false, true]) {
-      const outcome = await applyToXml(OUT, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1', flowId: 'Flow_IntoLog' }], { keepFlowIds, layout: false });
-      expect(flows(outcome.xml)).toEqual(['id="Flow_1" sourceRef="Start_1" targetRef="Task_1"', 'id="Flow_IntoLog" sourceRef="Task_1" targetRef="task_log"', 'id="flow_logToEnd" sourceRef="task_log" targetRef="End_1"']);
-      expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toEqual(['Flow_IntoLog: Task_1 -> task_log (was -> End_1) (id added: it had none)']);
-      expect(outcome.result.warnings.added).toEqual([]);
-      await expect(applyToXml(OUT, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1', flowId: 'Flow_1' }], { keepFlowIds, layout: false })).rejects.toMatchObject({ code: 'E_DUPLICATE_ID' });
-    }
+    const outcome = await applyToXml(OUT, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1', flowId: 'Flow_IntoLog' }], { layout: false });
+    expect(flows(outcome.xml)).toEqual(['id="Flow_1" sourceRef="Start_1" targetRef="Task_1"', 'id="Flow_IntoLog" sourceRef="Task_1" targetRef="task_log"', 'id="flow_logToEnd" sourceRef="task_log" targetRef="End_1"']);
+    expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toEqual(['Flow_IntoLog: Task_1 -> task_log (was -> End_1) (id added: it had none)']);
+    expect(outcome.result.warnings.added).toEqual([]);
+    await expect(applyToXml(OUT, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1', flowId: 'Flow_1' }], { layout: false })).rejects.toMatchObject({ code: 'E_DUPLICATE_ID' });
   });
 
   it('in a drawing kept as it is, the incremental layout draws the flow by its new id', async () => {
@@ -158,13 +154,11 @@ ${LINE.replace('<bpmn:sequenceFlow id="Flow_1" ', '<bpmn:sequenceFlow ')}
       .replace(/\s*<bpmndi:BPMNEdge id="[^"]*" bpmnElement="Flow_2">[\s\S]*?<\/bpmndi:BPMNEdge>/, '')
       .replace('<bpmn:sequenceFlow id="Flow_2" ', '<bpmn:sequenceFlow ')
       .replace(/<dc:Bounds x="(\d+)"/g, (_m, left: string) => `<dc:Bounds x="${Number(left) + 3}"`);
-    for (const keepFlowIds of [false, true]) {
-      const outcome = await applyToXml(kept, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1' }], { keepFlowIds });
-      await sound(outcome.xml);
-      expect(outcome.result.layout.mode).toBe('incremental');
-      expect(outcome.xml).toMatch(/<bpmndi:BPMNEdge id="[^"]+" bpmnElement="flow_checkToLog">/);
-      expect(outcome.result.changed.map((change) => change.id)).toContain('flow_checkToLog');
-    }
+    const outcome = await applyToXml(kept, [{ op: 'add', kind: 'task', name: 'Log', after: 'Task_1' }]);
+    await sound(outcome.xml);
+    expect(outcome.result.layout.mode).toBe('incremental');
+    expect(outcome.xml).toMatch(/<bpmndi:BPMNEdge id="[^"]+" bpmnElement="flow_checkToLog">/);
+    expect(outcome.result.changed.map((change) => change.id)).toContain('flow_checkToLog');
   });
 
   it('a bridge gives the flow into the removed node an id; a removed flow without id prints `(no id)` and is left out of the summary', async () => {

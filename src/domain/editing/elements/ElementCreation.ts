@@ -16,7 +16,6 @@ import { LaneInheritance } from './LaneInheritance.js';
 import { Camunda8Defaults } from '../../document/vendor/Camunda8Defaults.js';
 import { FlowOptions } from '../connections/FlowOptions.js';
 import type { AddElement, TriggerOptions } from '../../commands/types.js';
-import { StaleFlowReport } from '../connections/StaleFlowReport.js';
 import { NodePlacement } from './NodePlacement.js';
 import { EventGatewayRule } from '../events/EventGatewayRule.js';
 import { FlowRules } from '../../document/FlowRules.js';
@@ -171,13 +170,12 @@ export class ElementCreation {
     const named = (change: Change): boolean => change.kind === 'sequenceFlow' && change.id === command.flowId;
     if (command.flowId && !changes.created.some(named) && !changes.changed.some((change) => named(change) && !!change.detail?.endsWith(renamedNote('')))) {
       const entry = entryFlow ?? this.edit.doc.incoming(node)[0];
-      const kept = !!entry && this.edit.preferFlowId(entry, command.flowId, node);
       changes.warn({
         code: 'W_OPTION_IGNORED',
         message: `--flow-id ${command.flowId} ignored: the flow into ${id} is the existing ${entry ? idOf(entry) : 'flow'}, which keeps its id`,
         element: id,
         ...(entry ? { related: [idOf(entry)] } : {}),
-        hint: StaleFlowReport.flowIdIgnoredHint(command.flowId, entry && idOf(entry), kept),
+        hint: `--flow-id only names a flow that add creates (after a gateway / unconnected node, before a join / unconnected node)${entry ? `; rename the existing one with \`bpmn set <file> ${idOf(entry)} id=${command.flowId}\`` : ''}.`,
       });
     }
   }

@@ -96,8 +96,7 @@ them on a private corpus without copying it into the repository, are described i
   interface it exercises. Black-box tests through the entries and the CLI are in `test/e2e/`,
   shared helpers in `test/helpers/`; `test/repo-hygiene.test.ts` keeps it that way. Name a test
   after what it tests, never after the work step that added it. The suite also pins the documentation: the README quick start and the
-  examples in `docs/` must match what the CLI prints. `test/helpers/setup.ts` clears `BPMN_KEEP_FLOW_IDS`
-  of your shell before every file, so the tests see the CLI's defaults.
+  examples in `docs/` must match what the CLI prints.
 - `tools/`: benchmark, fuzzer, layout regression, isomorphism check, descriptor generator.
   The README demo (`docs/assets/demo.gif`) comes from the `product-shots` skill of the
   `miragon-brand` plugin ([Miragon/corporate-identity](https://github.com/Miragon/corporate-identity)),

@@ -16,18 +16,6 @@ export interface BatchContext {
   aliases: () => Record<string, string>;
 }
 
-export type FlowEnds = readonly [El | undefined, El | undefined];
-
-/**
- * `was`: the ends `A -> B` the kept id named; `preferred`: the id an op wanted while the flow
- * ends at `target` (`add --flow-id` on a splice), which W_FLOW_ID_STALE suggests.
- */
-export interface KeptFlow {
-  was: string;
-  id: string;
-  preferred?: { id: string; target: El };
-}
-
 /** What a node was called as a flow end before `set` gave it another id or name. */
 export interface FormerEnd {
   id: string;
@@ -52,18 +40,15 @@ export interface EditSettings {
   conventions?: IdConventions;
   /** so the ops follow the same engine as the profile that reports on them */
   platformChoice?: Platform;
-  keepFlowIds?: boolean;
 }
 
 /**
  * The state of one edit of a Doc: the call's settings and what the running batch (or a single
- * op) recorded so far (ids given out, renames, kept flows, former flow ends, dropped content).
+ * op) recorded so far (ids given out, renames, former flow ends, dropped content).
  */
 export class EditSession {
   batch: BatchContext | undefined;
-  private flows: ReadonlyMap<El, FlowEnds> | undefined;
   private renames: Rename[] = [];
-  private keptFlows = new Map<El, KeptFlow>();
   private readonly formerEnds = new Map<El, FormerEnd[]>();
   private idStates = new Map<string, KeptIdState>();
   private readonly dropped: DroppedContent[] = [];
@@ -96,10 +81,6 @@ export class EditSession {
     return this.doc.requireScope(id, this.batch);
   }
 
-  get followFlowEnds(): boolean {
-    return this.settings.keepFlowIds === undefined ? this.doc.followFlowEnds : !this.settings.keepFlowIds;
-  }
-
   /** The document's, or one for conventions the call brings itself. */
   get idStyle(): IdStyle {
     const conventions = this.settings.conventions;
@@ -108,16 +89,9 @@ export class EditSession {
   }
 
   begin(): void {
-    this.keptFlows.clear();
     this.idStates.clear();
     this.allocator.begin();
     this.formerEnds.clear();
-    this.flows = this.followFlowEnds ? undefined : new Map(this.doc.allSequenceFlows().map((flow) => [flow, [flow.get<El | undefined>('sourceRef'), flow.get<El | undefined>('targetRef')]] as const));
-  }
-
-  /** With flow ids kept: the flows at begin(), the only ones keeping their id, with their ends. */
-  get flowsBefore(): ReadonlyMap<El, FlowEnds> | undefined {
-    return this.flows;
   }
 
   /** `was`: what the old id named (a flow's old ends); `el` limits the rewrite to its entries. */
@@ -133,31 +107,6 @@ export class EditSession {
   takeRenames(): Rename[] {
     const out = this.renames;
     this.renames = [];
-    return out;
-  }
-
-  /** With flow ids kept, flows the document had before the batch keep their id. */
-  keepsFlowId(flow: El): boolean {
-    return !this.followFlowEnds && !!flow.get<string | undefined>('id') && (this.flows?.has(flow) ?? true);
-  }
-
-  /** The first ends stay while the flow has the id it kept; a flow renamed since keeps a new id. */
-  recordKeptFlow(flow: El, was: string): void {
-    const id = flow.get<string>('id');
-    if (this.keptFlows.get(flow)?.id !== id) this.keptFlows.set(flow, { was, id });
-  }
-
-  /** So W_FLOW_ID_STALE suggests the id the op wanted; false for a flow that was not kept. */
-  preferFlowId(flow: El, id: string, target: El): boolean {
-    const kept = this.keptFlows.get(flow);
-    if (!kept || kept.id !== flow.get<string>('id')) return false;
-    kept.preferred = { id, target };
-    return true;
-  }
-
-  takeKeptFlows(): Map<El, KeptFlow> {
-    const out = this.keptFlows;
-    this.keptFlows = new Map();
     return out;
   }
 

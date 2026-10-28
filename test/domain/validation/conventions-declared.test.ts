@@ -25,8 +25,8 @@ const REQUIRED = declared({ eventDefinitionQualifier: 'required' });
 const createdIds = (mutation: MutationResult): string[] => mutation.changes.created.map((created) => created.id);
 
 /** `ops` on `xml` with the declared conventions (null: none). */
-async function run(xml: string, ops: unknown[], conventions: IdConventions | null = BARE, opts: { keepFlowIds?: boolean } = {}): Promise<MutationResult> {
-  return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops as EditCommand[], { layout: false, ...(conventions ? { conventions } : {}), ...opts });
+async function run(xml: string, ops: unknown[], conventions: IdConventions | null = BARE): Promise<MutationResult> {
+  return mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops as EditCommand[], { layout: false, ...(conventions ? { conventions } : {}) });
 }
 
 /** A PascalCase file: start -> two tasks -> end, two lanes, a data object. */
@@ -318,16 +318,12 @@ describe('new ids take the declared prefix and case', () => {
     expect(result.xml).toContain('<bpmn:process id="Process_1"');
   });
 
-  it('a flow of the declared form still names its ends: renamed after its new ones, or kept with keepFlowIds and named stale; a flow of another form keeps its id', async () => {
+  it('a flow of the declared form still names its ends and is renamed after its new ones; a flow of another form keeps its id', async () => {
     const ops = [{ op: 'add', kind: 'task', name: 'Pack order', flow: 'flow_checkOrderToShipOrder' }];
     const renamed = await run(CONFORMING, ops);
     expect(renamed.changes.renames.map((rename) => `${rename.from} -> ${rename.to}`)).toEqual(['flow_checkOrderToShipOrder -> flow_checkOrderToPackOrder']);
-    const kept = await run(CONFORMING, ops, BARE, { keepFlowIds: true });
-    expect(kept.changes.renames).toEqual([]);
-    expect(kept.changes.warnings.find((warning) => warning.code === 'W_FLOW_ID_STALE')?.hint).toContain('`bpmn set <file> flow_checkOrderToShipOrder id=flow_checkOrderToPackOrder`');
     const other = await run(PASCAL, [{ op: 'add', kind: 'task', name: 'Pack order', flow: 'Flow_CheckOrderToShipOrder' }]);
     expect(other.changes.renames).toEqual([]);
-    expect(other.changes.warnings.filter((warning) => warning.code === 'W_FLOW_ID_STALE')).toEqual([]);
   });
 
   it('a host passes its own table (no plugin); unusable prefixes are left out; a type without one takes its type name', async () => {

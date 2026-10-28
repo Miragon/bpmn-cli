@@ -6,7 +6,6 @@ import { ChangeSet } from '../../document/ChangeSet.js';
 import { Lanes } from './Lanes.js';
 import { laneOf } from '../../document/utils/lanes.js';
 import { FlowBridge } from '../connections/FlowBridge.js';
-import { MovedFlows } from '../connections/MovedFlows.js';
 import { insertAfterInScope } from '../utils/declaration-order.js';
 import { LaneInheritance } from './LaneInheritance.js';
 import { IdRename } from '../ids/IdRename.js';
@@ -19,8 +18,7 @@ import { SequenceFlows } from '../connections/SequenceFlows.js';
 
 /**
  * `move`: relocates nodes via --after/--before/--flow (chained in order), --in, --on or --lane.
- * The old place is bridged; with flow ids kept, a moved node's out-flow is put back at the
- * new place, keeping its id. A move that leaves every node where it is changes nothing.
+ * The old place is bridged. A move that leaves every node where it is changes nothing.
  */
 export class ElementMove {
   constructor(private readonly edit: EditSession) {}
@@ -46,12 +44,10 @@ export class ElementMove {
         changes.note(`${nodes.map(idOf).join(', ')} ${nodes.length > 1 ? 'are' : 'is'} already ${ElementMove.describePlacement(placement)}${nodes.length > 1 ? ', in this order' : ''}`);
         this.optionsOnInFlow(this.edit.doc.incoming(nodes[0]!)[0], placement, changes);
       } else {
-        const moved = new MovedFlows(this.edit, changes, nodes);
         nodes.forEach((node, index) => {
           const prev = nodes[index - 1];
-          this.moveNode(node, prev ? { after: idOf(prev) } : placement, changes, hasLane, moved, { prev, next: nodes[index + 1] });
+          this.moveNode(node, prev ? { after: idOf(prev) } : placement, changes, hasLane);
         });
-        moved.finish();
       }
     }
     if (hasLane) {
@@ -274,13 +270,10 @@ export class ElementMove {
   }
 
   /**
-   * Moves a node to its placement. For `move a b` the flow a -> b is kept apart: when b is not
-   * bridged, the append after a puts it back as it was. The node's own and inherited lane are
-   * decided before the placement, as a splice may rename the flow; a gateway's out-flow waits for
-   * the append of the next node (a new branch).
+   * Moves a node to its placement. The node's own and inherited lane are decided before the
+   * placement, as a splice may rename the flow.
    */
-  private moveNode(node: El, placement: PlacementOptions, changes: ChangeSet, explicitLane: boolean, moved: MovedFlows, chain: { prev?: El; next?: El } = {}): void {
-    const { prev, next } = chain;
+  private moveNode(node: El, placement: PlacementOptions, changes: ChangeSet, explicitLane: boolean): void {
     ElementMove.assertNotBoundary(node);
     const anchors = this.anchorsOf(placement);
     for (const anchor of anchors) ElementMove.assertNotInside(node, anchor);
@@ -290,24 +283,14 @@ export class ElementMove {
     const incoming = this.edit.doc.incoming(node);
     const outgoing = this.edit.doc.outgoing(node);
     const flowIds = [...incoming, ...outgoing].map(idOf);
-    const oldOut = outgoing.length === 1 && outgoing[0]!.get<El>('targetRef') !== node && this.edit.keepsFlowId(outgoing[0]!) ? outgoing[0] : undefined;
-    const oldTarget = oldOut?.get<El>('targetRef');
-    const outLabel = oldOut && MovedFlows.labelOf(oldOut, node);
-    const fromPrev = prev && incoming.find((flow) => flow.get<El>('sourceRef') === prev && this.edit.keepsFlowId(flow));
-    const prevLabel = fromPrev && MovedFlows.labelOf(fromPrev, prev!);
-    const bridge = new FlowBridge(this.edit, changes, 'move').single(node, true);
-    if (bridge) moved.bridged(node, bridge);
+    new FlowBridge(this.edit, changes, 'move').single(node, true);
     this.reserveIds(flowIds);
-    if (oldOut && oldTarget && !this.edit.doc.has(idOf(oldOut))) moved.takeOut(node, oldOut, oldTarget, bridge ? undefined : outLabel);
-    if (fromPrev && !this.edit.doc.has(idOf(fromPrev)) && !moved.hasSpare(prev!)) moved.takeOut(prev!, fromPrev, node, prevLabel);
     const laneBefore = laneOf(this.edit.doc, node);
     this.leaveScope([node, ...boundaries], oldScope, targetScope, changes);
     this.edit.doc.invalidate();
     const own = laneBefore && (laneBefore.get<El[] | undefined>('flowNodeRef') ?? []).includes(node) ? laneBefore : undefined;
     const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? LaneInheritance.of(this.edit.doc, placement) : LaneInheritance.NONE;
-    const holdOwn = !!next && is(node, 'bpmn:Gateway');
-    new NodePlacement(this.edit, placement).place(node, changes, (source) => (source === node && holdOwn ? undefined : moved.spareOf(source)));
-    moved.putBack();
+    new NodePlacement(this.edit, placement).place(node, changes);
     for (const flow of new Set([...this.edit.doc.incoming(node), ...this.edit.doc.outgoing(node)])) new EventGatewayRule(this.edit).warnFlow(flow, changes);
     if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
     this.fixFlows(boundaries, targetScope, changes);

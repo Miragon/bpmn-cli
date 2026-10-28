@@ -9,7 +9,7 @@ import type { MutationResult } from '../../../domain/batch/types.js';
 import { LAYOUT_MODES, type LayoutMode } from '../../../domain/diagram/types.js';
 import { RENDER_MAX_SIZE, type RenderOptions } from '../../../application/port/in/RenderSvgUseCase.js';
 import { changeHighlight } from '../report/utils/highlight.js';
-import { type MutationReport, type MutationSummary } from '../report/command-report.js';
+import { type MutationReport } from '../report/command-report.js';
 import { RenderReport } from './RenderReport.js';
 import { isBpmnError, usageError } from '../../../domain/document/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';
@@ -33,8 +33,6 @@ export interface OutputOptions {
   summary?: boolean;
   /** --render <file>: draw the result to this image */
   render?: string;
-  /** BPMN_KEEP_FLOW_IDS when it, not a flag, kept the flow ids (the result then says so) */
-  keepFlowIdsEnv?: string;
 }
 
 export type MutationFlags = FileMutationOptions & OutputOptions;
@@ -61,9 +59,7 @@ export abstract class MutationCommand extends CliCommand {
       .option(...commonOption('--force'))
       .option(...commonOption('--backup'))
       .option(...commonOption('--show'))
-      .option(...commonOption('--strict'))
-      .option(...commonOption('--keep-flow-ids'))
-      .option(...commonOption('--no-keep-flow-ids'));
+      .option(...commonOption('--strict'));
   }
 
   protected withTriggerOptions(cmd: CommandType): CommandType {
@@ -80,7 +76,6 @@ export abstract class MutationCommand extends CliCommand {
   }
 
   protected mutationOptions(options: RawOpts): MutationFlags {
-    const { keep: keepFlowIds, env: keepFlowIdsEnv } = this.keepFlowIdsOption(options);
     return {
       json: !!options['json'],
       pretty: !!options['pretty'],
@@ -93,8 +88,6 @@ export abstract class MutationCommand extends CliCommand {
       show: !!options['show'],
       strict: !!options['strict'],
       ...(options['render'] !== undefined ? { render: String(options['render']) } : {}),
-      ...(keepFlowIds !== undefined ? { keepFlowIds } : {}),
-      ...(keepFlowIdsEnv !== undefined ? { keepFlowIdsEnv } : {}),
       ...this.lintOptions(options),
     };
   }
@@ -131,7 +124,7 @@ export abstract class MutationCommand extends CliCommand {
         },
       );
     } catch (err) {
-      throw this.withFile(this.keptIdsHint(err, commands, opts.keepFlowIdsEnv), file);
+      throw this.withFile(err, file);
     }
   }
 
@@ -162,20 +155,15 @@ export abstract class MutationCommand extends CliCommand {
     await this.printMutation(result, opts, xmlOut ? this.cli.io.stderr : this.cli.io.stdout);
   }
 
-  /**
-   * --strict exits 5 on any warning; flow ids BPMN_KEEP_FLOW_IDS kept add a note,
-   * also to --summary.
-   */
+  /** --strict exits 5 on any warning. */
   private async printMutation(result: MutationResult, opts: OutputOptions & { show?: boolean; dryRun?: boolean }, out: CliStream): Promise<void> {
-    const note = this.keptByEnvNote(result, opts.keepFlowIdsEnv);
-    if (note) result.changes.note(note);
     const report = new MutationReportBuilder(result).report();
     const shot = opts.render ? await this.renderResult(result.xml, report, opts.render) : undefined;
     const shotText = shot ? `\n${shot.lines.join('\n')}` : '';
     if (opts.summary) {
       const summary = new MutationSummaryBuilder(report).summary();
-      if (opts.json) this.cli.printJson({ ...summary, ...(note ? { notes: [note] } : {}), ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
-      else this.cli.print(this.summaryText(summary, { dryRun: opts.dryRun, advisory: advisoryOf((report).validation.validators) }, note) + shotText + (report.view ? `\n\n${new ModelViewText(report.view).text()}` : ''), out);
+      if (opts.json) this.cli.printJson({ ...summary, ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
+      else this.cli.print(new SummaryText(summary, { dryRun: opts.dryRun, advisory: advisoryOf((report).validation.validators) }).text() + shotText + (report.view ? `\n\n${new ModelViewText(report.view).text()}` : ''), out);
     } else if (opts.json) this.cli.printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
     else this.cli.print(new MutationText(report, { dryRun: opts.dryRun }).text().replace(/\n$/, '') + shotText, out);
     if (opts.strict && new MutationReportBuilder(result).warnings().length) this.cli.exitCode = 5;
@@ -198,45 +186,6 @@ export abstract class MutationCommand extends CliCommand {
     }
   }
 
-  /**
-   * A note when BPMN_KEEP_FLOW_IDS, not a flag, kept flow ids where the default differs:
-   * a stale flow id, or a move that put the moved node's old out-flow back. The variable
-   * sits in a shell or an agent's settings, where whoever reads the result does not see it.
-   */
-  private keptByEnvNote(result: MutationResult, value: string | undefined): string | undefined {
-    if (value === undefined) return undefined;
-    const { created, changed, warnings, relocated } = result.changes;
-    const putBack = relocated.length > 0 && changed.some((change) => change.kind === 'sequenceFlow' && !created.some((creation) => creation.id === change.id));
-    if (!putBack && !warnings.some((warning) => warning.code === 'W_FLOW_ID_STALE')) return undefined;
-    return `flow ids kept: BPMN_KEEP_FLOW_IDS=${value} (--no-keep-flow-ids renames flows after their new ends for one command)`;
-  }
-
-  /**
-   * renderSummary with `note` after the change lines, where the full result has its notes
-   * (the summary prints no notes of its own).
-   */
-  private summaryText(summary: MutationSummary, opts: ConstructorParameters<typeof SummaryText>[1], note: string | undefined): string {
-    const text = new SummaryText(summary, opts).text();
-    if (!note) return text;
-    const { aliases: _aliases, renamed: _renamed, format: _format, ...rest } = summary;
-    const below = new SummaryText({ ...rest, created: {}, changed: [], removed: [] }, opts).text().split('\n').length - 1;
-    const lines = text.split('\n');
-    lines.splice(lines.length - below, 0, `note: ${note}`);
-    return lines.join('\n');
-  }
-
-  /**
-   * With kept flow ids, a missing id may be the one the default gives a flow an earlier op
-   * rewired; the hint says so, as whoever reads the error may not see the variable.
-   */
-  private keptIdsHint(err: unknown, commands: readonly EditCommand[], value: string | undefined): unknown {
-    if (value === undefined || commands.length < 2 || !isBpmnError(err) || err.code !== 'E_NOT_FOUND') return err;
-    const kept = `If it is the id a flow an earlier op gave other ends would be renamed to: flow ids are kept here (BPMN_KEEP_FLOW_IDS=${value}), so that flow kept its old id; use the old id, or --no-keep-flow-ids to rename it after its new ends.`;
-    const hint = err.details.hint;
-    err.details.hint = typeof hint === 'string' && hint ? `${hint} ${kept}` : kept;
-    return err;
-  }
-
   /** Puts the file name into a refusal's runnable command (E_NO_ROOM) and its hint. */
   private withFile(err: unknown, file: string): unknown {
     if (!isBpmnError(err) || typeof err.details['command'] !== 'string' || file === '-') return err;
@@ -257,29 +206,5 @@ export abstract class MutationCommand extends CliCommand {
     }
     if (layout === false) return false;
     return (layout as LayoutMode | undefined) ?? 'auto';
-  }
-
-  /**
-   * --keep-flow-ids / --no-keep-flow-ids, else BPMN_KEEP_FLOW_IDS; `env`: the variable's
-   * value when it kept the ids.
-   */
-  private keepFlowIdsOption(options: RawOpts): { keep?: boolean; env?: string } {
-    const flag = options['keepFlowIds'] as boolean | undefined;
-    if (flag !== undefined) return { keep: flag };
-    const keep = this.envSwitch('BPMN_KEEP_FLOW_IDS', 'Set BPMN_KEEP_FLOW_IDS=1 (true, yes, on) to keep flow ids, BPMN_KEEP_FLOW_IDS=0 (false, no, off) or unset it to rename them after their new ends; --keep-flow-ids / --no-keep-flow-ids decide for one command.');
-    if (keep === undefined) return {};
-    return keep ? { keep, env: this.cli.io.env['BPMN_KEEP_FLOW_IDS']!.trim() } : { keep };
-  }
-
-  /**
-   * Unset or empty: undefined; 1 / true / yes / on: true; 0 / false / no / off: false.
-   * Anything else is E_USAGE: a typo must not silently mean on or off.
-   */
-  private envSwitch(name: string, hint: string): boolean | undefined {
-    const value = this.cli.io.env[name]?.trim();
-    if (!value) return undefined;
-    if (/^(1|true|yes|on)$/i.test(value)) return true;
-    if (/^(0|false|no|off)$/i.test(value)) return false;
-    throw usageError(`${name}=${value} is not a switch value`, { hint });
   }
 }

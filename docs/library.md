@@ -97,7 +97,6 @@ the CLI prints with `--json`. `renderMutation(result)` gives the CLI's text.
 | `layout` | `'auto'` (default), `'incremental'`, `'full'`, `false` | `--layout`, `--no-layout` |
 | `force` | write despite a guard | `--force` |
 | `platform` | `'auto'`, `'c7'`, `'c8'`, `'none'` | `--platform` |
-| `keepFlowIds` | keep flow ids; `W_FLOW_ID_STALE` names each stale one | `--keep-flow-ids` |
 | `validators` | host validators ([Validators](validators.md)) | none |
 | `conventions` | declared id conventions (below) | the `.bpmnlintrc` |
 

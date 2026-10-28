@@ -21,12 +21,7 @@ interface Run {
 }
 
 function bpmn(...args: string[]): Run {
-  return bpmnWith({}, ...args);
-}
-
-/** bpmn with these environment variables on top of the test's (test/helpers/setup.ts cleared the shell's BPMN_KEEP_FLOW_IDS). */
-function bpmnWith(env: Record<string, string>, ...args: string[]): Run {
-  const spawned = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: dir, input: '', env: { ...process.env, ...env } });
+  const spawned = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', cwd: dir, input: '' });
   return {
     code: spawned.status ?? -1,
     out: spawned.stdout,
@@ -36,11 +31,7 @@ function bpmnWith(env: Record<string, string>, ...args: string[]): Run {
 }
 
 function ok(...args: string[]): Run {
-  return okWith({}, ...args);
-}
-
-function okWith(env: Record<string, string>, ...args: string[]): Run {
-  const result = bpmnWith(env, ...args);
+  const result = bpmn(...args);
   if (result.code !== 0) throw new Error(`bpmn ${args.join(' ')} failed (${result.code}):\n${result.err}\n${result.out}`);
   return result;
 }
@@ -454,179 +445,5 @@ describe('bpmn cli contracts', () => {
     expect(result.code).toBe(4);
     expect(result.err).toMatch(/^error E_IO: Cannot write .*adir\.bpmn: it is a directory\n/);
     expect(readdirSync(dir).filter((fileName) => fileName.endsWith('.tmp'))).toEqual([]);
-  });
-});
-
-describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
-  let base: string;
-  const splice = ['serviceTask', 'Book invoice', '--after', 'userTask_checkInvoice'];
-  const STALE = 'warning W_FLOW_ID_STALE flow_checkInvoiceToInvoiceDone: Flow flow_checkInvoiceToInvoiceDone kept its id, which names its old ends userTask_checkInvoice -> endEvent_invoiceDone; it now runs userTask_checkInvoice -> serviceTask_bookInvoice  (Code and tests that use the id keep working; to rename it together with them: `bpmn set <file> flow_checkInvoiceToInvoiceDone id=flow_checkInvoiceToBookInvoice`.)';
-
-  /** A copy of start -> Check invoice -> end. */
-  function fresh(name: string): string {
-    const copy = join(dir, name);
-    writeFileSync(copy, readFileSync(base, 'utf8'));
-    return copy;
-  }
-
-  beforeAll(() => {
-    base = join(dir, 'invoice.bpmn');
-    ok('new', base, '--name', 'Invoice');
-    ok('add', base, 'startEvent', 'Invoice received');
-    ok('add', base, 'userTask', 'Check invoice', '--after', 'startEvent_invoiceReceived');
-    ok('add', base, 'endEvent', 'Invoice done', '--after', 'userTask_checkInvoice');
-  });
-
-  it('--keep-flow-ids keeps the id and names the stale flow with the command that renames it; the command works', () => {
-    const modelFile = fresh('keep-flag.bpmn');
-    const result = ok('add', modelFile, ...splice, '--keep-flow-ids');
-    expect(result.out).toContain(`${STALE}\n`);
-    expect(result.out).not.toMatch(/renamed/);
-    expect(readFileSync(modelFile, 'utf8')).toContain('<bpmn:sequenceFlow id="flow_checkInvoiceToInvoiceDone" sourceRef="userTask_checkInvoice" targetRef="serviceTask_bookInvoice" />');
-    const command = /`bpmn set <file> (\S+) (id=\S+)`/.exec(result.out)!;
-    expect(ok('set', modelFile, command[1]!, command[2]!).out).toMatch(/^changed sequenceFlow flow_checkInvoiceToBookInvoice /m);
-  });
-
-  it('BPMN_KEEP_FLOW_IDS=1 makes it the default; --no-keep-flow-ids, 0 and an empty value rename', () => {
-    let result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('env-on.bpmn'), ...splice, '--summary');
-    expect(result.out).toMatch(/^warning W_FLOW_ID_STALE flow_checkInvoiceToInvoiceDone: /m);
-    expect(result.out).not.toMatch(/^renamed:/m);
-    for (const [env, flag] of [['1', '--no-keep-flow-ids'], ['0', undefined], ['Off', undefined], ['', undefined]] as const) {
-      result = okWith({ BPMN_KEEP_FLOW_IDS: env }, 'add', fresh('env-off.bpmn'), ...splice, '--summary', ...(flag ? [flag] : []));
-      expect(result.out, `${env} ${flag ?? ''}`).toMatch(/^renamed: flow_checkInvoiceToInvoiceDone -> flow_checkInvoiceToBookInvoice$/m);
-      expect(result.out).not.toMatch(/W_FLOW_ID_STALE/);
-    }
-    result = okWith({ BPMN_KEEP_FLOW_IDS: 'yes' }, 'add', fresh('env-yes.bpmn'), ...splice, '--json');
-    expect(result.json()).not.toHaveProperty('renamed');
-    expect(result.json().warnings.added).toEqual([expect.objectContaining({ code: 'W_FLOW_ID_STALE', element: 'flow_checkInvoiceToInvoiceDone', related: ['userTask_checkInvoice', 'serviceTask_bookInvoice'] })]);
-  });
-
-  /** A copy of start -> Check invoice -> Book invoice -> end whose flows have ids that do not name their ends (`ids`: three). */
-  function unnamedFlows(name: string, ids: readonly string[]): string {
-    const modelFile = fresh(name);
-    ok('add', modelFile, ...splice);
-    let xml = readFileSync(modelFile, 'utf8');
-    ['flow_invoiceReceivedToCheckInvoice', 'flow_checkInvoiceToBookInvoice', 'flow_bookInvoiceToInvoiceDone'].forEach((id, flowIndex) => (xml = xml.replaceAll(id, ids[flowIndex]!)));
-    writeFileSync(modelFile, xml);
-    return modelFile;
-  }
-
-  it('a result says where BPMN_KEEP_FLOW_IDS kept flow ids and that changed it: text, --summary, --json, --summary --json', () => {
-    const note = (value: string) => `flow ids kept: BPMN_KEEP_FLOW_IDS=${value} (--no-keep-flow-ids renames flows after their new ends for one command)`;
-    // a stale flow id: after the change's own notes, before the warnings
-    let result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('note-text.bpmn'), ...splice);
-    expect(result.out).toContain(`\nnote: inserted between userTask_checkInvoice and endEvent_invoiceDone\nnote: ${note('1')}\n${STALE}\n`);
-    // --summary prints no notes of its own: this one follows the change lines
-    result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('note-summary.bpmn'), ...splice, '--summary');
-    expect(result.out).toContain(`\nchanged: flow_checkInvoiceToInvoiceDone\nnote: ${note('1')}\nwarning W_FLOW_ID_STALE flow_checkInvoiceToInvoiceDone: `);
-    result = okWith({ BPMN_KEEP_FLOW_IDS: 'yes' }, 'add', fresh('note-json.bpmn'), ...splice, '--json');
-    expect(result.json().notes).toEqual(['inserted between userTask_checkInvoice and endEvent_invoiceDone', note('yes')]);
-    const ops = join(dir, 'note-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'userTask_checkInvoice' }]));
-    result = okWith({ BPMN_KEEP_FLOW_IDS: 'On' }, 'apply', fresh('note-summary-json.bpmn'), ops, '--summary', '--json');
-    expect(result.json().notes).toEqual([note('On')]);
-    // a move puts the moved node's out-flow back without any warning (numbered flow ids): only the note says why
-    const numbered = unnamedFlows('note-numbered.bpmn', ['Flow_1', 'Flow_2', 'Flow_3']);
-    const move = ['move', numbered, 'userTask_checkInvoice', '--after', 'serviceTask_bookInvoice', '--summary', '--dry-run'];
-    result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, ...move);
-    expect(result.out).toMatch(/^changed: Flow_1, Flow_3, Flow_2, userTask_checkInvoice\nnote: flow ids kept: BPMN_KEEP_FLOW_IDS=1 /m);
-    expect(result.out).not.toMatch(/created sequenceFlow|warning/);
-    expect(ok(...move).out).toMatch(/^created sequenceFlow: flow_checkInvoiceToInvoiceDone\n[\s\S]*^removed: Flow_2$/m);
-    // the same move in a batch
-    writeFileSync(ops, JSON.stringify([{ op: 'move', ids: ['userTask_checkInvoice'], after: 'serviceTask_bookInvoice' }]));
-    expect(okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', numbered, ops, '--json', '--dry-run').json().notes).toContain(note('1'));
-  });
-
-  it('no note where a flag decides, the variable is unset or off, or the kept ids changed nothing: the output is the one without the variable', () => {
-    const modelFile = fresh('note-none.bpmn');
-    const numbered = unnamedFlows('note-none-numbered.bpmn', ['Flow_1', 'Flow_2', 'Flow_3']);
-    // the ids Camunda Modeler gives
-    const modeler = unnamedFlows('note-none-modeler.bpmn', ['Flow_0k3x9ab', 'Flow_1q7m2zd', 'Flow_0w5n1rt']);
-    const ops = join(dir, 'note-none-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'connect', source: 'startEvent_invoiceReceived', target: 'endEvent_invoiceDone', as: '$f' }, { op: 'set', id: '$f', values: { name: 'skip' } }]));
-    // a move in place relocates nothing: its flow options change the flow into its node the same in both modes
-    const inPlace = join(dir, 'note-none-in-place.json');
-    const inPlaceNumbered = join(dir, 'note-none-in-place-numbered.json');
-    writeFileSync(inPlace, JSON.stringify([{ op: 'move', ids: ['userTask_checkInvoice'], after: 'startEvent_invoiceReceived', flowName: 'go', flowId: 'Flow_ReceivedToCheck' }]));
-    writeFileSync(inPlaceNumbered, JSON.stringify([{ op: 'move', ids: ['serviceTask_bookInvoice'], after: 'userTask_checkInvoice', flowName: 'ok' }]));
-    expect(ok('apply', modelFile, inPlace, '--dry-run', '--summary').out).toMatch(/^changed: Flow_ReceivedToCheck$/m);
-    expect(ok('apply', numbered, inPlaceNumbered, '--dry-run', '--summary').out).toMatch(/^changed: Flow_2$/m);
-    const cases: string[][] = [
-      ['apply', modelFile, inPlace, '--summary'],
-      ['apply', numbered, inPlaceNumbered, '--json'],
-      ['add', modelFile, ...splice, '--keep-flow-ids'],
-      ['add', modelFile, ...splice, '--no-keep-flow-ids', '--summary'],
-      ['set', modelFile, 'userTask_checkInvoice', 'name=Check bill'],
-      // a flow the change creates or removes is the same in both modes, also one a batch created and then changed
-      ['connect', modelFile, 'startEvent_invoiceReceived', 'endEvent_invoiceDone', '--summary'],
-      ['remove', modelFile, 'flow_checkInvoiceToInvoiceDone', '--json'],
-      ['apply', modelFile, ops, '--summary'],
-      // a property of a flow, also the rename W_FLOW_ID_STALE's hint gives
-      ['set', modelFile, 'flow_checkInvoiceToInvoiceDone', 'name=done', '--summary'],
-      ['set', modelFile, 'flow_checkInvoiceToInvoiceDone', 'id=flow_checkInvoiceToBookInvoice', '--summary'],
-      // a flow whose id does not name its ends is renamed in neither mode: a splice, a bridging remove, set target=
-      ...[numbered, modeler].flatMap((sample) => [
-        ['add', sample, 'userTask', 'Approve invoice', '--after', 'userTask_checkInvoice', '--summary'],
-        ['remove', sample, 'serviceTask_bookInvoice', '--json'],
-        ['set', sample, sample === numbered ? 'Flow_1' : 'Flow_0k3x9ab', 'target=serviceTask_bookInvoice'],
-      ]),
-    ];
-    for (const args of cases) {
-      const plain = ok(...args, '--dry-run').out;
-      expect(plain, args.join(' ')).not.toMatch(/flow ids kept/);
-      expect(okWith({ BPMN_KEEP_FLOW_IDS: '1' }, ...args, '--dry-run').out, args.join(' ')).toBe(plain);
-    }
-    for (const env of ['0', 'off', '']) {
-      expect(okWith({ BPMN_KEEP_FLOW_IDS: env }, 'add', modelFile, ...splice, '--dry-run').out, env).toBe(ok('add', modelFile, ...splice, '--dry-run').out);
-    }
-  }, 60000);
-
-  it('an E_NOT_FOUND of a batch says that BPMN_KEEP_FLOW_IDS kept the flow ids: the id the default renames to does not exist', () => {
-    const ops = join(dir, 'note-error-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'userTask_checkInvoice' }, { op: 'set', id: 'flow_checkInvoiceToBookInvoice', values: { name: 'ok' } }]));
-    const modelFile = fresh('note-error.bpmn');
-    expect(ok('apply', modelFile, ops, '--dry-run', '--summary').out).toMatch(/^renamed: flow_checkInvoiceToInvoiceDone -> flow_checkInvoiceToBookInvoice$/m);
-    const kept = 'If it is the id a flow an earlier op gave other ends would be renamed to: flow ids are kept here (BPMN_KEEP_FLOW_IDS=1), so that flow kept its old id; use the old id, or --no-keep-flow-ids to rename it after its new ends.';
-    let result = bpmnWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', modelFile, ops, '--dry-run');
-    expect(result.code).toBe(2);
-    expect(result.err).toMatch(/^error E_NOT_FOUND: No element with id "flow_checkInvoiceToBookInvoice" \(did you mean: invoice\?\)\n/);
-    expect(result.err).toContain(` to list ids. ${kept}\n`);
-    result = bpmnWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', modelFile, ops, '--dry-run', '--json');
-    expect(result.json().error.hint.endsWith(` to list ids. ${kept}`)).toBe(true);
-    // a flag decides: the error as without the hint
-    const flag = bpmnWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', modelFile, ops, '--dry-run', '--keep-flow-ids');
-    expect(flag.err).not.toContain('BPMN_KEEP_FLOW_IDS');
-    expect(bpmn('apply', modelFile, ops, '--dry-run', '--keep-flow-ids').err).toBe(flag.err);
-    // one op: the ids it names are the file's, whatever the mode
-    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'set', modelFile, 'Flow_Nowhere', 'name=x').err).not.toContain('BPMN_KEEP_FLOW_IDS');
-  });
-
-  it('apply, remove and set target= keep ids too; --strict exits 5 on the warning', () => {
-    const ops = join(dir, 'keep-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'userTask_checkInvoice' }]));
-    expect(ok('apply', fresh('keep-apply.bpmn'), ops, '--keep-flow-ids').out).toContain(STALE);
-    const bridged = ok('remove', fresh('keep-remove.bpmn'), 'userTask_checkInvoice', '--keep-flow-ids').out;
-    expect(bridged).toMatch(/^warning W_FLOW_ID_STALE flow_invoiceReceivedToCheckInvoice: .*`bpmn set <file> flow_invoiceReceivedToCheckInvoice id=flow_invoiceReceivedToInvoiceDone`/m);
-    const retargeted = ok('set', fresh('keep-set.bpmn'), 'flow_invoiceReceivedToCheckInvoice', 'target=endEvent_invoiceDone', '--keep-flow-ids').out;
-    expect(retargeted).toMatch(/^warning W_FLOW_ID_STALE flow_invoiceReceivedToCheckInvoice: /m);
-    const strict = bpmn('add', fresh('keep-strict.bpmn'), ...splice, '--keep-flow-ids', '--strict');
-    expect(strict.code).toBe(5);
-    expect(strict.out).toContain(STALE);
-  });
-
-  it('another BPMN_KEEP_FLOW_IDS value is a usage error of a mutating command (unless a flag decides); show and validate ignore it', () => {
-    const modelFile = fresh('env-bad.bpmn');
-    const before = readFileSync(modelFile, 'utf8');
-    let result = bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'add', modelFile, ...splice);
-    expect(result.code).toBe(1);
-    expect(result.err).toMatch(/^error E_USAGE: BPMN_KEEP_FLOW_IDS=maybe is not a switch value$/m);
-    expect(result.err).toMatch(/^ {2}hint: Set BPMN_KEEP_FLOW_IDS=1 \(true, yes, on\) to keep flow ids/m);
-    result = bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'add', modelFile, ...splice, '--json');
-    expect(result.code).toBe(1);
-    expect(JSON.parse(result.err).error.code).toBe('E_USAGE');
-    expect(readFileSync(modelFile, 'utf8')).toBe(before);
-    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'add', modelFile, ...splice, '--keep-flow-ids', '--dry-run').code).toBe(0);
-    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'show', modelFile).code).toBe(0);
-    expect(bpmnWith({ BPMN_KEEP_FLOW_IDS: 'maybe' }, 'validate', modelFile).code).toBe(0);
   });
 });

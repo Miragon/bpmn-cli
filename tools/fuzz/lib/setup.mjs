@@ -11,9 +11,7 @@
  *    the PNG of `bpmn render --problems --tiles` (the walk's render oracle).
  *  - `makeExecutor({ exec, via, workDir, bin })`: exec 'cli' (default, in
  *    CLI_ENV) or 'lib' (dist/index.js in-process).
- *  - `CLI_ENV`: the environment the tools run the CLI in: this one without
- *    the switches that change what an edit does (BPMN_KEEP_FLOW_IDS), so a
- *    shell that sets one does not change the results (also the benchmark,
+ *  - `CLI_ENV`: the environment the tools run the CLI in (also the benchmark,
  *    tools/layout-regress.mjs and the demo).
  *  - `corpusFiles(dirs, filter)`: every *.bpmn below the given directories,
  *    sorted, de-duplicated. `defaultCorpus()`: test/fixtures and tools/scenarios
@@ -31,7 +29,7 @@ import { hardKinds, newKinds } from './metric-kinds.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const DEFAULT_BIN = join(ROOT, 'bin', 'bpmn.js');
-export const CLI_ENV = Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== 'BPMN_KEEP_FLOW_IDS'));
+export const CLI_ENV = process.env;
 const DIST = join(ROOT, 'dist');
 
 async function importDist(rel) {

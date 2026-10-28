@@ -14,8 +14,6 @@ export interface FlowAttrs {
   condition?: string;
   language?: string;
   isDefault?: boolean;
-  /** A removed flow put back instead of a new one when no `id` is given; it keeps its id. */
-  reuse?: El;
 }
 
 /**
@@ -33,33 +31,19 @@ export class SequenceFlows {
     rules.assertCondition(attrs.condition);
     rules.assertConditionTaken(source, attrs.condition, attrs.id);
     const scope = doc.scopeOf(source)!;
-    const reuse = attrs.id ? undefined : attrs.reuse;
-    const oldSource = reuse?.get<El | undefined>('sourceRef');
-    const oldTarget = reuse?.get<El | undefined>('targetRef');
-    let flow: El;
-    if (reuse) {
-      flow = reuse;
-      if (idOf(flow)) doc.ids.claim(idOf(flow));
-      flow.set('name', attrs.name || undefined);
-      flow.set('conditionExpression', attrs.condition ? this.conditionExpression(attrs.condition, attrs.language) : undefined);
-      flow.set('sourceRef', source);
-      flow.set('targetRef', target);
-    } else {
-      const id = this.edit.allocator.explicitOr(attrs.id, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target));
-      flow = doc.create('bpmn:SequenceFlow', {
-        id,
-        ...(attrs.name ? { name: attrs.name } : {}),
-        sourceRef: source,
-        targetRef: target,
-        ...(attrs.condition ? { conditionExpression: this.conditionExpression(attrs.condition, attrs.language) } : {}),
-      });
-    }
+    const id = this.edit.allocator.explicitOr(attrs.id, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target));
+    const flow = doc.create('bpmn:SequenceFlow', {
+      id,
+      ...(attrs.name ? { name: attrs.name } : {}),
+      sourceRef: source,
+      targetRef: target,
+      ...(attrs.condition ? { conditionExpression: this.conditionExpression(attrs.condition, attrs.language) } : {}),
+    });
     addTo(source, 'outgoing', flow);
     addTo(target, 'incoming', flow);
     insertAfterInScope(scope, declareAfter ?? lastFlowOf(scope, source) ?? source, flow);
     if (attrs.isDefault) this.setDefault(flow, true);
     doc.invalidate();
-    if (reuse) new FlowIdFollower(this.edit).follow(flow, oldSource, oldTarget);
     return flow;
   }
 
@@ -107,9 +91,9 @@ export class SequenceFlows {
 
   /**
    * A -> B becomes A -> node -> B: the original flow keeps its attributes and ends at
-   * `node`; a new plain flow (or `reuse`) runs node -> B.
+   * `node`; a new plain flow runs node -> B.
    */
-  splice(flow: El, node: El, reuse?: El, flowId?: string): { first: El; second: El; renamedFrom?: string } {
+  splice(flow: El, node: El, flowId?: string): { first: El; second: El; renamedFrom?: string } {
     const doc = this.edit.doc;
     const target = flow.get<El>('targetRef');
     const scope = doc.scopeOf(flow)!;
@@ -122,7 +106,7 @@ export class SequenceFlows {
     flow.set('targetRef', node);
     addTo(node, 'incoming', flow);
     const renamedFrom = new FlowIdFollower(this.edit).follow(flow, source, target, flowId);
-    const second = this.create(node, target, reuse ? { reuse } : {}, node);
+    const second = this.create(node, target, {}, node);
     doc.invalidate();
     return { first: flow, second, ...(renamedFrom !== undefined ? { renamedFrom } : {}) };
   }

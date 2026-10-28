@@ -62,20 +62,15 @@ export class NodePlacement {
   /**
    * The node must not be connected yet; returns the flow into it. `after X` appends when X is
    * a gateway or has no outgoing flow, splices into its one flow, else E_HAS_SUCCESSOR;
-   * `before` mirrors it. `reuse`: a moved node's old out-flow, put back instead of a new one.
+   * `before` mirrors it.
    * On a prepend the flow options go to the one flow it creates (node -> anchor).
    */
-  place(node: El, changes: ChangeSet, reuse?: (source: El) => El | undefined): El | undefined {
+  place(node: El, changes: ChangeSet): El | undefined {
     const { placement } = this;
     const doc = this.edit.doc;
     const mode = this.mode;
     const scope = this.scope();
     let entryFlow: El | undefined;
-    const outFlow = reuse?.(node);
-    const reused = (source: El): { reuse?: El } => {
-      const flow = source === node ? outFlow : reuse?.(source);
-      return flow ? { reuse: flow } : {};
-    };
 
     if (mode === 'on') {
       const host = this.edit.require(placement.on!, 'bpmn:Activity', 'activity');
@@ -96,22 +91,22 @@ export class NodePlacement {
       insertAfterInScope(scope, undefined, node);
     } else if (mode === 'flow') {
       const flow = this.edit.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow');
-      entryFlow = this.spliceWithOptions(node, flow, changes, outFlow);
+      entryFlow = this.spliceWithOptions(node, flow, changes);
     } else if (mode === 'between') {
       const afterNode = this.edit.require(placement.after!, 'bpmn:FlowNode');
       const beforeNode = this.edit.require(placement.before!, 'bpmn:FlowNode');
       const flow = this.requireFlowBetween(afterNode, beforeNode);
-      entryFlow = this.spliceWithOptions(node, flow, changes, outFlow);
+      entryFlow = this.spliceWithOptions(node, flow, changes);
     } else if (mode === 'after') {
       const anchor = this.edit.require(placement.after!, 'bpmn:FlowNode');
       const out = doc.outgoing(anchor);
       if (is(anchor, 'bpmn:Gateway') || out.length === 0) {
         insertAfterInScope(scope, lastFlowOf(scope, anchor) ?? anchor, node);
-        entryFlow = new SequenceFlows(this.edit).create(anchor, node, { ...new FlowOptions(placement).toAttrs(), ...reused(anchor) }, node);
+        entryFlow = new SequenceFlows(this.edit).create(anchor, node, new FlowOptions(placement).toAttrs(), node);
         changes.create(ChangeSet.flowEntryOf(entryFlow));
         changes.note(`appended after ${idOf(anchor)}`);
       } else if (out.length === 1) {
-        entryFlow = this.spliceWithOptions(node, out[0]!, changes, outFlow);
+        entryFlow = this.spliceWithOptions(node, out[0]!, changes);
       } else {
         throw modelError('E_HAS_SUCCESSOR', `${idOf(anchor)} already has ${out.length} outgoing flows; say which one to insert into`, {
           element: idOf(anchor),
@@ -125,7 +120,7 @@ export class NodePlacement {
       const isJoin = is(anchor, 'bpmn:Gateway') && inc.length >= 2;
       if (inc.length === 0 || isJoin) {
         insertBeforeInScope(scope, anchor, node);
-        const flow = new SequenceFlows(this.edit).create(node, anchor, { ...new FlowOptions(placement).toAttrs(), ...reused(node) }, node);
+        const flow = new SequenceFlows(this.edit).create(node, anchor, new FlowOptions(placement).toAttrs(), node);
         changes.create(ChangeSet.flowEntryOf(flow));
         changes.note(`prepended before ${idOf(anchor)}`);
         const used = new FlowOptions(placement).flags;
@@ -133,7 +128,7 @@ export class NodePlacement {
           changes.note(`${used.join(', ')} applied to ${idOf(flow)} (${idOf(node)} -> ${idOf(anchor)}): ${idOf(anchor)} ${isJoin ? 'is a join gateway' : 'had no incoming flow'}, so no flow into ${idOf(node)} was created`);
         }
       } else if (inc.length === 1) {
-        entryFlow = this.spliceWithOptions(node, inc[0]!, changes, outFlow);
+        entryFlow = this.spliceWithOptions(node, inc[0]!, changes);
       } else {
         throw modelError('E_HAS_PREDECESSOR', `${idOf(anchor)} already has ${inc.length} incoming flows; say which one to insert into`, {
           element: idOf(anchor),
@@ -217,11 +212,11 @@ export class NodePlacement {
   }
 
   /** `flow` (now source -> node) is the flow into the node, so it takes the flow options. */
-  private spliceWithOptions(node: El, flow: El, changes: ChangeSet, outFlow?: El): El {
+  private spliceWithOptions(node: El, flow: El, changes: ChangeSet): El {
     this.assertSpliceable(node, flow);
     const src = flow.get<El>('sourceRef');
     const tgt = flow.get<El>('targetRef');
-    const { second, renamedFrom } = new SequenceFlows(this.edit).splice(flow, node, outFlow, this.placement.flowId);
+    const { second, renamedFrom } = new SequenceFlows(this.edit).splice(flow, node, this.placement.flowId);
     changes.create(ChangeSet.flowEntryOf(second));
     changes.change(ChangeSet.flowEntryOf(flow, `${idOf(src)} -> ${idOf(node)} (was -> ${idOf(tgt)})${renamedNote(renamedFrom)}`));
     changes.note(`inserted between ${idOf(src)} and ${idOf(tgt)}`);
