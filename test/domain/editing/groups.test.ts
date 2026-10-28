@@ -144,7 +144,7 @@ describe('set and remove on groups', () => {
       { op: 'add', kind: 'task', name: 'Charge', in: '$sub', as: '$charge' },
       { op: 'add', kind: 'group', name: 'Inner', members: ['$charge'] },
     ]);
-    expect(xml).toMatch(/<bpmn:subProcess id="\w+" name="Pay">(?:(?!<\/bpmn:subProcess>)[\s\S])*<bpmn:group id="Group_Inner"/);
+    expect(xml).toMatch(/<bpmn:subProcess id="\w+" name="Pay">(?:(?!<\/bpmn:subProcess>)[\s\S])*<bpmn:group id="group_inner"/);
     const withData = await applyToXml(LINEAR, [{ op: 'add', kind: 'dataObject', name: 'Doc' }]);
     const backing = withData.xml.match(/<bpmn:dataObject id="(\w+)"/)![1]!;
     expect((await rejected(applyToXml(withData.xml, [{ op: 'add', kind: 'group', name: 'G', members: [backing] }]))).code).toBe('E_INVALID_VALUE');

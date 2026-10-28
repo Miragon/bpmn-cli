@@ -22,7 +22,7 @@ export class ShowCommand extends CliCommand {
         .option('--inner', 'with --around: also enter sub-processes from outside')
         .option('--context', 'with an id: the element in its context (where, lane, before / after, what catches it, message flows)')
         .option('--layout', 'the drawing instead of the model: rows of node ids per pool / lane with their columns (c0..cN), wide gaps, colours, label sides, layout problems')
-        .option('--conventions', "the id conventions new ids follow here: element-id-naming of the .bpmnlintrc (prefixes, case, qualifier) and the file's own style; a file that does not exist yet: those of a new model there")
+        .option('--conventions', "the id conventions new ids follow here: element-id-naming of the .bpmnlintrc (prefixes, case, qualifier), else its defaults, and bpmn-cli's prefixes for the types it does not check; a file that does not exist yet: those of a new model there")
         .option('--lint-config <path>', "with --conventions: the project's bpmnlint configuration (default: the nearest .bpmnlintrc above the file, up to the repository root, whoever owns it; outside one only in the file's directory; stdin: from the working directory)")
         .option('--no-lint-config', 'with --conventions: do not read the .bpmnlintrc (no id conventions from element-id-naming)'),
     ).action((file: string, id: string | undefined, options: RawOpts) => (options['conventions'] ? this.conventions(file, id, options) : this.view(file, id, options)));

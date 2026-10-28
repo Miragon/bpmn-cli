@@ -5,7 +5,7 @@ import type { ValidatorReport } from '../../../../domain/validation/validators.j
 /** This many warnings of one code (and validator) or more are printed as one line. */
 export const FLOOD_MIN = 3;
 
-export const FLOOD_IDS = 30;
+const FLOOD_IDS = 30;
 
 export function validatorTag(warning: Finding): string {
   return warning.validator ? `[${warning.validator}] ` : '';

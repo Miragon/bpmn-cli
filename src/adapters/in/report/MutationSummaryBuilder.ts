@@ -37,7 +37,6 @@ export class MutationSummaryBuilder {
         ...(metrics && !metrics.before && metrics.added.length ? { problems: metrics.added.length } : {}),
       },
       ...(report.layout.format?.length ? { format: report.layout.format } : {}),
-      ...(report.conventions ? { conventions: report.conventions } : {}),
     };
   }
 

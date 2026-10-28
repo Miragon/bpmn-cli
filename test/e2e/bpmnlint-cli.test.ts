@@ -34,11 +34,11 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
   };
 
   it('validate runs the .bpmnlintrc (exit 2 on its errors); --no-lint-config and --lint-config; stdin from the working directory; JSON', async () => {
-    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]);
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'models/x.bpmn': xml, 'lint/strict.json': JSON.stringify({ rules: { 'label-required': 'warn' } }) });
     const validated = bpmn(dir, ['validate', 'models/x.bpmn']);
     expect(validated.code, validated.err).toBe(2);
-    expect(validated.out).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(validated.out).toContain('[bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
     expect(validated.out).toContain('validator bpmnlint (.bpmnlintrc in .): 1 error(s), 0 warning(s) in the file\n');
     const off = bpmn(dir, ['validate', 'models/x.bpmn', '--no-lint-config']);
     expect(off.code).toBe(0);
@@ -47,13 +47,13 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(other.code).toBe(0);
     expect(other.out).toContain('validator bpmnlint (--lint-config ../lint/strict.json): 0 error(s), 1 warning(s) in the file\n');
     // a rule set to warn: no severity in the tag
-    expect(other.out).toContain('[bpmnlint] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(other.out).toContain('[bpmnlint] label-required task_afterCheck: Element is missing label/name\n');
     const stdin = bpmn(dir, ['validate', '-'], xml);
     expect(stdin.code).toBe(2);
-    expect(stdin.out).toContain('[bpmnlint error] label-required Activity_AfterCheck');
+    expect(stdin.out).toContain('[bpmnlint error] label-required task_afterCheck');
     const json = JSON.parse(bpmn(dir, ['validate', 'models/x.bpmn', '--json']).out);
     expect(json.validators[0]).toMatchObject({ name: 'bpmnlint', detail: '.bpmnlintrc in .', blocks: false, counts: { errors: 1, warnings: 0 } });
-    expect(json.errors).toContainEqual({ code: 'label-required', message: 'Element is missing label/name', element: 'Activity_AfterCheck', validator: 'bpmnlint', severity: 'error' });
+    expect(json.errors).toContainEqual({ code: 'label-required', message: 'Element is missing label/name', element: 'task_afterCheck', validator: 'bpmnlint', severity: 'error' });
     const missing = bpmn(dir, ['validate', 'models/x.bpmn', '--lint-config', 'nope.json']);
     expect(missing.code).toBe(4);
     expect(missing.err).toMatch(/^error E_LINT_CONFIG: /);
@@ -61,14 +61,14 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
 
   // a CI `container:` job, `docker run -v`: root over a checkout of another uid (simulated: a preload makes process.getuid() 0)
   it.skipIf(!process.getuid || process.getuid() === 0)('root over a checkout of another uid: the .bpmnlintrc at the repository root runs with bpmn-cli\'s rules (exit 2 on an error rule), the project plugin is left out and named', async () => {
-    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:evil/recommended'] }, { 'models/x.bpmn': await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]) });
+    const dir = repo({ extends: ['bpmnlint:recommended', 'plugin:evil/recommended'] }, { 'models/x.bpmn': await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]) });
     const marker = join(dir, 'RAN.txt');
     plugin(dir, 'bpmnlint-plugin-evil', { main: `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran'); module.exports = { configs: { recommended: { rules: {} } } };` });
     const asRoot = join(top, 'as-root.cjs');
     writeFileSync(asRoot, 'process.getuid = () => 0; delete process.env.SUDO_UID;\n');
     const spawned = spawnSync(process.execPath, ['--require', asRoot, cli, 'validate', 'x.bpmn'], { cwd: join(dir, 'models'), encoding: 'utf8', input: '' });
     expect(spawned.status, spawned.stderr).toBe(2);
-    expect(spawned.stdout).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(spawned.stdout).toContain('[bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
     expect(spawned.stdout).toContain("[bpmnlint] W_LINT_UNAVAILABLE: plugin:evil/recommended left out: bpmnlint-plugin-evil is not bundled with bpmn-cli, and bpmn-cli runs project plugins only in a repository of the user running it (the repository of ../.git belongs to another user)  (Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; --no-lint-config skips bpmnlint.)\n");
     expect(spawned.stdout).toContain('validator bpmnlint (.bpmnlintrc in ..; 1 left out (W_LINT_UNAVAILABLE; bpmn validate lists it)): 1 error(s), 1 warning(s) in the file\n');
     expect(existsSync(marker)).toBe(false);
@@ -81,13 +81,13 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
 
   it('a write exits 0 and lists the findings it added (5 with --strict); the hint and the validator line name the file relative to the working directory', async () => {
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'models/x.bpmn': await model(LINE) });
-    const add = bpmn(join(dir, 'models'), ['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run']);
+    const add = bpmn(join(dir, 'models'), ['add', 'x.bpmn', 'task', '--after', 'userTask_check', '--dry-run']);
     expect(add.code, add.err).toBe(0);
-    expect(add.out).toContain('warning [bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(add.out).toContain('warning [bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
     expect(add.out).toContain('validator bpmnlint (.bpmnlintrc in ..): 1 error(s), 0 warning(s) in the result (1 added, 0 resolved, 0 already in the file)\n');
-    expect(bpmn(join(dir, 'models'), ['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run', '--strict']).code).toBe(5);
-    const summary = bpmn(dir, ['add', 'models/x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run', '--summary']);
-    expect(summary.out).toContain('warning [bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(bpmn(join(dir, 'models'), ['add', 'x.bpmn', 'task', '--after', 'userTask_check', '--dry-run', '--strict']).code).toBe(5);
+    const summary = bpmn(dir, ['add', 'models/x.bpmn', 'task', '--after', 'userTask_check', '--dry-run', '--summary']);
+    expect(summary.out).toContain('warning [bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
   });
 
   it('JSON beyond 64 KB reaches a pipe whole with exit 2 and 5 (validate, --strict, a write with --strict): the exit code does not cut it off', async () => {
@@ -103,7 +103,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     };
     expect(piped(['validate', 'x.bpmn', '--json'], 2).errors).toHaveLength(300);
     piped(['validate', 'x.bpmn', '--json', '--strict', '--lint-config', 'lint/warn.json'], 5);
-    piped(['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run', '--json', '--strict'], 5);
+    piped(['add', 'x.bpmn', 'task', '--after', 'userTask_check', '--dry-run', '--json', '--strict'], 5);
     // a reader that closes after the first chunk (`| head`): the exit code stays, no EPIPE trace on stderr
     const early = (args: string[]) =>
       new Promise<{ code: number | null; err: string }>((done) => {
@@ -116,7 +116,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(await early(['validate', 'x.bpmn', '--json'])).toEqual({ code: 2, err: '' });
     expect(await early(['validate', 'x.bpmn'])).toEqual({ code: 2, err: '' });
     expect(await early(['validate', 'x.bpmn', '--strict', '--lint-config', 'lint/warn.json'])).toEqual({ code: 5, err: '' });
-    expect(await early(['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run', '--json', '--strict'])).toEqual({ code: 5, err: '' });
+    expect(await early(['add', 'x.bpmn', 'task', '--after', 'userTask_check', '--dry-run', '--json', '--strict'])).toEqual({ code: 5, err: '' });
   });
 
   it('a project plugin that leaves a timer running does not keep the command alive', async () => {
@@ -125,7 +125,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
       main: "setInterval(() => {}, 1000); module.exports = { configs: { recommended: { rules: { slow: 'error' } } } };",
       rules: { slow: "module.exports = () => ({ check(node, reporter) { if (node.$type === 'bpmn:Process') reporter.report(node.id, 'slow'); return new Promise((done) => setTimeout(done, 60000)); } });" },
     });
-    for (const [args, code] of [[['validate', 'x.bpmn'], 2], [['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run'], 0]] as const) {
+    for (const [args, code] of [[['validate', 'x.bpmn'], 2], [['add', 'x.bpmn', 'task', '--after', 'userTask_check', '--dry-run'], 0]] as const) {
       const started = Date.now();
       const spawned = spawnSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8', input: '', timeout: 20000 });
       expect(spawned.signal, args.join(' ')).toBeNull();
@@ -135,7 +135,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
   }, 60000);
 
   it.skipIf(process.platform === 'win32')('a working directory that was removed: validate and a write on an absolute path still run, the lookup from the file', async () => {
-    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'x.bpmn': await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]) });
+    const dir = repo({ extends: 'bpmnlint:recommended' }, { 'x.bpmn': await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]) });
     const gone = join(top, 'gone-cwd');
     const inGone = (args: string[]) => {
       mkdirSync(gone, { recursive: true });
@@ -144,15 +144,15 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     };
     const validated = inGone(['validate', join(dir, 'x.bpmn')]);
     expect(validated.code, validated.err).toBe(2);
-    expect(validated.out).toContain('[bpmnlint error] label-required Activity_AfterCheck');
+    expect(validated.out).toContain('[bpmnlint error] label-required task_afterCheck');
     const off = inGone(['validate', join(dir, 'x.bpmn'), '--no-lint-config']);
     expect(off.code, off.err).toBe(0);
-    const add = inGone(['add', join(dir, 'x.bpmn'), 'task', 'Ship', '--after', 'Activity_AfterCheck', '--dry-run']);
+    const add = inGone(['add', join(dir, 'x.bpmn'), 'task', 'Ship', '--after', 'task_afterCheck', '--dry-run']);
     expect(add.code, add.err).toBe(0);
   });
 
   it.skipIf(process.platform === 'win32')('a model reached through a linked directory from outside its repository runs the repository\'s .bpmnlintrc; a link inside a repository keeps that repository\'s', async () => {
-    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]);
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'models/x.bpmn': xml });
     const outside = join(top, 'cli-links');
     mkdirSync(join(outside, 'ext'), { recursive: true });
@@ -161,7 +161,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     symlinkSync(join(outside, 'ext'), join(dir, 'extlink'), 'dir');
     const linked = bpmn(outside, ['validate', 'mlink/x.bpmn']);
     expect(linked.code, linked.err).toBe(2);
-    expect(linked.out).toContain('[bpmnlint error] label-required Activity_AfterCheck: Element is missing label/name\n');
+    expect(linked.out).toContain('[bpmnlint error] label-required task_afterCheck: Element is missing label/name\n');
     expect(linked.out).toContain(`validator bpmnlint (.bpmnlintrc in ../${basename(dir)}): 1 error(s), 0 warning(s) in the file\n`);
     // a new file in a subdirectory the write creates behind the link: the same .bpmnlintrc
     const created = bpmn(outside, ['new', 'mlink/sub/n.bpmn', '--name', 'Order']);
@@ -176,7 +176,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
   it('a write looks the .bpmnlintrc up from the file it writes (-o); a model from stdin without -o from the working directory', async () => {
     const xml = await model(LINE);
     const dir = repo(undefined, { 'plain/x.bpmn': xml, 'sub/.bpmnlintrc': JSON.stringify({ extends: 'bpmnlint:recommended' }) });
-    const add = ['add', '-', 'task', '--after', 'Activity_Check'];
+    const add = ['add', '-', 'task', '--after', 'userTask_check'];
     expect(bpmn(dir, [...add, '-o', 'sub/out.bpmn'], xml).out).toContain('validator bpmnlint (.bpmnlintrc in sub): 1 error(s)');
     // the XML on stdout, the report on stderr
     const here = bpmn(dir, add, xml);
@@ -184,8 +184,8 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(here.err).not.toContain('bpmnlint');
     expect(bpmn(join(dir, 'sub'), add, xml).err).toContain('validator bpmnlint (.bpmnlintrc in .): 1 error(s)');
     // a file written elsewhere: the target's, not the input's
-    expect(bpmn(dir, ['add', 'plain/x.bpmn', 'task', '--after', 'Activity_Check', '-o', 'sub/y.bpmn']).out).toContain('validator bpmnlint (.bpmnlintrc in sub): 1 error(s)');
-    expect(bpmn(dir, ['add', 'sub/y.bpmn', 'task', 'Ship', '--after', 'Activity_AfterCheck', '-o', 'plain/z.bpmn']).out).not.toContain('bpmnlint');
+    expect(bpmn(dir, ['add', 'plain/x.bpmn', 'task', '--after', 'userTask_check', '-o', 'sub/y.bpmn']).out).toContain('validator bpmnlint (.bpmnlintrc in sub): 1 error(s)');
+    expect(bpmn(dir, ['add', 'sub/y.bpmn', 'task', 'Ship', '--after', 'task_afterCheck', '-o', 'plain/z.bpmn']).out).not.toContain('bpmnlint');
   });
 
   it('without a .bpmnlintrc nothing of bpmnlint is loaded and the output is that of --no-lint-config', async () => {
@@ -197,7 +197,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(run(dir)).toBe('0');
     const withRc = repo({ extends: 'bpmnlint:recommended' }, { 'x.bpmn': await model(LINE) });
     expect(Number(run(withRc))).toBeGreaterThan(30);
-    for (const args of [['validate', 'x.bpmn'], ['add', 'x.bpmn', 'task', '--after', 'Activity_Check', '--dry-run']]) {
+    for (const args of [['validate', 'x.bpmn'], ['add', 'x.bpmn', 'task', '--after', 'userTask_check', '--dry-run']]) {
       expect(bpmn(dir, args).out).toBe(bpmn(dir, [...args, '--no-lint-config']).out);
     }
   });
@@ -225,10 +225,10 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(validated.code, validated.err).toBe(0);
     expect(validated.out).toContain('[bpmnlint] W_LINT_UNAVAILABLE: bpmnlint could not be loaded: the plugin is broken; the plugin found bpmnlint 11.15.0 in ');
     expect(validated.out).toContain('validator bpmnlint (.bpmnlintrc in .; bpmnlint did not run (bpmn validate lists why)): 0 error(s), 1 warning(s) in the file\n');
-    const add = bpmn(dir, ['add', 'x.bpmn', 'task', 'Ship', '--after', 'Activity_Check'], undefined, bin);
+    const add = bpmn(dir, ['add', 'x.bpmn', 'task', 'Ship', '--after', 'userTask_check'], undefined, bin);
     expect(add.code, add.err).toBe(0);
     expect(add.out).toContain('written: x.bpmn');
-    expect(readFileSync(join(dir, 'x.bpmn'), 'utf8')).toContain('Activity_Ship');
+    expect(readFileSync(join(dir, 'x.bpmn'), 'utf8')).toContain('task_ship');
   });
 
   it('a project bpmnlint hoisted next to the plugin: an old one is named (the plugin cannot load), a loadable other version too', async () => {
@@ -307,7 +307,7 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(bpmn(dir, ['new', 'models/a.bpmn', '--name', 'Invoice handling']).code).toBe(0);
     expect(bpmn(dir, ['new', 'models/b.bpmn', '--name', 'Invoice handling', '--no-lint-config']).code).toBe(0);
     expect(readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8')).toBe(readFileSync(join(dir, 'models', 'b.bpmn'), 'utf8'));
-    expect(readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8')).toContain('<bpmn:process id="Process_InvoiceHandling"');
+    expect(readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8')).toContain('<bpmn:process id="invoiceHandling"');
     // what fails without a .bpmnlintrc fails first, also with a --lint-config that cannot be read
     const exists = bpmn(dir, ['new', 'models/a.bpmn', '--name', 'Other', '--lint-config', 'missing.json']);
     expect([exists.code, exists.err.split('\n')[0]]).toEqual([4, 'error E_FILE_EXISTS: models/a.bpmn already exists']);
@@ -320,11 +320,11 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(fresh.out.split('\n').slice(0, 3)).toEqual([
       'conventions of models/new.bpmn (no file yet: a new model)',
       'element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional',
-      '  <kind>_{name:camel}               lint        task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent',
+      '  <kind>_{name:camel}             lint      task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent participant lane dataObject dataStore textAnnotation group collaboration',
     ]);
     const json = JSON.parse(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--json']).out);
     expect(json).toMatchObject({ file: 'models/a.bpmn', exists: true, source: '.bpmnlintrc in .', rule: { severity: 'warn', case: 'camelCase', qualifier: 'optional' }, notes: [] });
-    expect(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--no-lint-config']).out.split('\n')[1]).toBe("no id conventions: --no-lint-config leaves the .bpmnlintrc out; new ids follow the file's id style");
+    expect(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--no-lint-config']).out.split('\n')[1]).toBe("no id conventions: --no-lint-config leaves the .bpmnlintrc out; new ids follow element-id-naming's defaults (case camelCase)");
     // the .bpmnlintrc only decides the conventions: without --conventions its options are an error
     for (const flag of [['--lint-config', 'nope.json'], ['--no-lint-config']]) {
       const plain = bpmn(dir, ['show', 'models/a.bpmn', ...flag]);
@@ -334,19 +334,19 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     expect(bpmn(dir, ['show', 'models/a.bpmn', '--conventions', '--lint-config', 'nope.json']).code).toBe(4);
     const stdin = bpmn(dir, ['show', '-', '--conventions'], readFileSync(join(dir, 'models', 'a.bpmn'), 'utf8'));
     expect(stdin.out.split('\n').slice(0, 2)).toEqual(['conventions of the model', 'element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional']);
-    const usage = bpmn(dir, ['show', 'models/a.bpmn', 'Process_InvoiceHandling', '--conventions', '--layout']);
+    const usage = bpmn(dir, ['show', 'models/a.bpmn', 'invoiceHandling', '--conventions', '--layout']);
     expect(usage.code).toBe(1);
     expect(usage.err).toContain('error E_USAGE: --conventions shows the id conventions of the whole file; drop the element id and --layout');
     // a .bpmnlintrc that is not strict JSON, one that leaves the rule out (a typo): the reason and the W_LINT_UNAVAILABLE
     const broken = repo('{"extends":["plugin:@miragon/rules/recommended-for-automation"],}');
     const notJson = bpmn(broken, ['show', 'x.bpmn', '--conventions']);
     expect(notJson.code, notJson.err).toBe(0);
-    expect(notJson.out.split('\n')[1]).toBe("no id conventions: the .bpmnlintrc in . could not be loaded (W_LINT_UNAVAILABLE below); new ids follow the file's id style");
+    expect(notJson.out.split('\n')[1]).toBe("no id conventions: the .bpmnlintrc in . could not be loaded (W_LINT_UNAVAILABLE below); new ids follow element-id-naming's defaults (case camelCase)");
     expect(notJson.out).toMatch(/^warning W_LINT_UNAVAILABLE: \.bpmnlintrc is not JSON /m);
     expect(JSON.parse(bpmn(broken, ['show', 'x.bpmn', '--conventions', '--json']).out)).toMatchObject({ source: '.bpmnlintrc in .', undeclared: 'not loaded', notes: [{ code: 'W_LINT_UNAVAILABLE' }] });
     const typo = repo({ rules: { 'miragon/element-id-naming': 'error' } });
     const left = bpmn(typo, ['show', 'x.bpmn', '--conventions']);
-    expect(left.out.split('\n')[1]).toBe("no id conventions: element-id-naming is off or not configured in the .bpmnlintrc in .; new ids follow the file's id style");
+    expect(left.out.split('\n')[1]).toBe("no id conventions: element-id-naming is off or not configured in the .bpmnlintrc in .; new ids follow element-id-naming's defaults (case camelCase)");
     expect(left.out).toContain('warning W_LINT_UNAVAILABLE: miragon/element-id-naming left out: bpmnlint-plugin-miragon is not installed');
     // validate - (stdin) looks the .bpmnlintrc up from the working directory: its W_CONFIG_IGNORED too
     const odd = repo({ rules: { '@miragon/rules/element-id-naming': ['warn', { eventDefinitionQualifier: 'requried' }] } });

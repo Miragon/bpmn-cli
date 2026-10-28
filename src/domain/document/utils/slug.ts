@@ -75,7 +75,7 @@ export function hasIdWords(name: string | undefined): boolean {
 const cap = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** A join and / or number tells a slug apart from its neighbours, so it survives a cut. */
-const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|_[Jj]oin)?(?:(?<=[A-Za-z])\d+|_\d+)?$/;
+const KEPT_TAIL = /(?:(?<=[a-z0-9])Join|[_-][Jj]oin)?(?:(?<=[A-Za-z])\d+|[_-]\d+)?$/;
 
 /**
  * Cuts at the last word boundary that fits, keeping a join or number tail. A cut keeps a letter
@@ -178,12 +178,16 @@ export function snakeSlug(name: string | undefined): string {
   );
 }
 
-export function pascalSnakeSlug(name: string | undefined): string {
-  return cut(nameWords(name).map(cap).join('_'));
+export function kebabSlug(name: string | undefined): string {
+  return cut(
+    nameWords(name)
+      .map((word) => word.toLowerCase())
+      .join('-'),
+  );
 }
 
 /** `step1No2`, never `step12`, which reads as the id of Step 12. */
-export const SUFFIX_WORD = 'No';
+const SUFFIX_WORD = 'No';
 
 export function withSuffix(base: string, sep: string, suffixNumber: number, cut: (max: number) => string = (max) => cutAt(base, max)): string {
   const fit = (suffix: string): string => (base.length + suffix.length <= MAX_ID ? base : cut(MAX_ID - suffix.length));
@@ -197,7 +201,7 @@ export function withSuffix(base: string, sep: string, suffixNumber: number, cut:
 /** `either`: a flow's id, whose separator the reader does not know. */
 export function isSuffix(base: string, rest: string, sep: string | 'either'): boolean {
   const word = /\d$/.test(base) ? `(?:${SUFFIX_WORD})?` : '';
-  if (sep === 'either') return new RegExp(`^(?:_|${word})\\d+$`).test(rest);
+  if (sep === 'either') return new RegExp(`^(?:[_-]|${word})\\d+$`).test(rest);
   return new RegExp(sep === '' ? `^${word}\\d+$` : `^${sep}\\d+$`).test(rest);
 }
 

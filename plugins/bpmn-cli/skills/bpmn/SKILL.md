@@ -53,17 +53,18 @@ installed version. Ask it instead of guessing:
    created them. Several hits for a name: decide by lane / neighbours
    (`show <id> --context`) or ask.
 3. **New ids speak.** In every batch give each element you create an explicit,
-   descriptive `"id"` in the file's style: `Activity_CheckInvoice`,
-   `Gateway_InvoiceOk`, `Event_InvoicePaid`, `Lane_Accounting`,
-   `Participant_Customer`; flows `Flow_CheckInvoiceToBookInvoice` (or let the
-   CLI derive them; derived ids speak too). PascalCase ASCII (ae oe ue ss), no
+   descriptive `"id"` in the project's id conventions: `userTask_checkInvoice`,
+   `gateway_invoiceOk`, `endEvent_invoicePaid`, `lane_accounting`,
+   `participant_customer`; flows `flow_checkInvoiceToBookInvoice` (or let the
+   CLI derive them; derived ids speak too). camelCase ASCII (ae oe ue ss), no
    numbers or hashes - also when the file's own ids are Modeler hashes like
-   `Activity_0k3x9qa`. Keep a file's existing prefix and case (`Task_check_stock`).
-   In a repository with a `.bpmnlintrc`, run `bpmn show <file> --conventions`
-   before the first change (a file that does not exist yet too): where its
-   `element-id-naming` declares a prefix (`lint` rows), new ids follow it
-   instead (`serviceTask_checkInvoice`, `flow_checkInvoiceToBookInvoice`).
-   Write explicit ids in those patterns, or let the CLI derive them. A
+   `Activity_0k3x9qa`; existing ids stay as they are.
+   Run `bpmn show <file> --conventions` before the first change (a file that
+   does not exist yet too): it lists the patterns new ids follow - the
+   `.bpmnlintrc`'s `element-id-naming` (`lint` rows), else the rule's defaults
+   (`default` rows), and bpmn-cli's prefixes for types the rule does not check
+   (`bpmn-cli` rows). Write explicit ids in those patterns, or let the CLI
+   derive them. A
    `warning W_LINT_UNAVAILABLE` there means the `.bpmnlintrc` did not load:
    fix it (or tell the user) before the first change.
 4. **Back references inside a batch:** an id you set explicitly can be used by
@@ -91,7 +92,7 @@ installed version. Ask it instead of guessing:
      boundary events, what catches it, message flows
    - `bpmn find <file> <text> [--kind userTask]` - ids for a name or a vendor value
    - `bpmn show <file> --conventions` - the id patterns new ids follow (the
-     `.bpmnlintrc`'s `element-id-naming`, else the file's style); once per file
+     `.bpmnlintrc`'s `element-id-naming`, else its defaults); once per file
    - `bpmn show <file> --layout` - the drawing: rows / columns of ids per lane,
      colours, layout problems (read it before formatting)
 2. **Change** in one batch with explicit ids. Ops are the CLI flags in
@@ -101,10 +102,10 @@ installed version. Ask it instead of guessing:
 
    ```bash
    printf '%s' '[
-     { "op": "add", "kind": "boundaryEvent:timer", "name": "14 days", "id": "Event_PaymentOverdue", "on": "Activity_ReceivePayment", "timer": "P14D", "nonInterrupting": true },
-     { "op": "add", "kind": "sendTask", "name": "Send payment reminder", "id": "Activity_SendPaymentReminder", "after": "Event_PaymentOverdue", "lane": "Lane_Accounting" },
-     { "op": "add", "kind": "endEvent", "name": "Reminder sent", "id": "Event_ReminderSent", "after": "Activity_SendPaymentReminder", "lane": "Lane_Accounting" },
-     { "op": "connect", "source": "Activity_SendPaymentReminder", "target": "Participant_Customer", "name": "Reminder" }
+     { "op": "add", "kind": "boundaryEvent:timer", "name": "14 days", "id": "event_paymentOverdue", "on": "receiveTask_receivePayment", "timer": "P14D", "nonInterrupting": true },
+     { "op": "add", "kind": "sendTask", "name": "Send payment reminder", "id": "sendTask_sendPaymentReminder", "after": "event_paymentOverdue", "lane": "lane_accounting" },
+     { "op": "add", "kind": "endEvent", "name": "Reminder sent", "id": "endEvent_reminderSent", "after": "sendTask_sendPaymentReminder", "lane": "lane_accounting" },
+     { "op": "connect", "source": "sendTask_sendPaymentReminder", "target": "participant_customer", "name": "Reminder" }
    ]' | bpmn apply order-to-cash.bpmn -
    ```
 
@@ -144,9 +145,6 @@ installed version. Ask it instead of guessing:
      the file does not keep, which bpmnlint in CI reports too, also for the
      elements this change added (`bpmn validate <file>` lists them; with
      `--summary` they are a `validator bpmnlint:` line)
-   - `conventions: <ids> follow element-id-naming ...`: those new ids carry a
-     prefix the `.bpmnlintrc` declares, not the file's older style; use them as
-     printed.
      `warning W_ID_PREFIX_STALE <id>` after a retype or a trigger change: the
      id keeps a prefix the convention rejects; rename it with the `bpmn set` of
      its hint only when nothing else uses the id (ask the user)
@@ -226,7 +224,7 @@ Exit codes: 0 ok, 1 usage, 2 model/validation error, 3 layout, 4 file/parse,
 - Flow options on add describe the flow **into** the new node: `flowName`,
   `condition`, `default`, `flowId`, `flowAs`.
 - `set` takes its changes in `values` (and `unset`):
-  `{ "op": "set", "id": "Flow_OrderOkYes", "values": { "name": "yes", "condition": "${orderOk}" } }`;
+  `{ "op": "set", "id": "flow_orderOkYes", "values": { "name": "yes", "condition": "${orderOk}" } }`;
   a `default` flow has no condition.
 - Pools: the first `participant` wraps the existing process; add further pools
   after it, `"blackBox": true` for a party without process (a customer).
@@ -268,8 +266,8 @@ run in batch order, each after the layout of the ops before it.
 
 ```bash
 bpmn show order-to-cash.bpmn --layout
-bpmn color order-to-cash.bpmn --path Event_OrderReceived Event_OrderCompleted --color green
-bpmn place order-to-cash.bpmn --branch Flow_OrderOkToSendRejection --below Activity_CheckOrder --dry-run
+bpmn color order-to-cash.bpmn --path startEvent_orderReceived endEvent_orderCompleted --color green
+bpmn place order-to-cash.bpmn --branch flow_orderOkToSendRejection --below userTask_checkOrder --dry-run
 ```
 
 Every command, selector and fix: [reference/formatting.md](reference/formatting.md).

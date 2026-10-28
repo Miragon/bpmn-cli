@@ -1,7 +1,7 @@
 import type { MutationSummary } from './command-report.js';
 import { WarningLines } from './WarningLines.js';
 import { validatorTag } from './utils/findings.js';
-import { aliasLine, conventionsLines, fileLines, leftOutText } from './utils/mutation-lines.js';
+import { aliasLine, fileLines, leftOutText } from './utils/mutation-lines.js';
 import { formatLine } from './utils/result-lines.js';
 
 /**
@@ -37,7 +37,6 @@ export class SummaryText {
     if (layout.added?.length) lines.push(`${head}; added: ${layout.added.map((placed) => `${placed.kind} [${placed.ids.join(', ')}]`).join(', ')}`);
     else if (layout.problems) lines.push(`${head} (${layout.problems} layout problem${layout.problems === 1 ? '' : 's'}: \`bpmn metrics <file>\` lists them)`);
     else lines.push(head);
-    lines.push(...conventionsLines(summary.conventions));
     lines.push(...fileLines(summary, opts));
     return lines.join('\n');
   }

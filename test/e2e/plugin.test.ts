@@ -398,7 +398,7 @@ EOF`,
   { "op": "add", "kind": "boundaryEvent:error", "name": "Card declined", "id": "Event_CardDeclined", "on": "Activity_ChargeCreditCard", "error": "Card declined", "errorCode": "CARD_DECLINED" },
   { "op": "add", "kind": "userTask", "name": "Inform customer", "id": "Activity_InformCustomer", "after": "Event_CardDeclined" },
   { "op": "add", "kind": "endEvent", "name": "Payment failed", "id": "Event_PaymentFailed", "after": "Activity_InformCustomer" },
-  { "op": "ext", "id": "Activity_ChargeCreditCard", "action": "add", "type": "camunda:errorEventDefinition", "attrs": { "id": "ErrorMapping_CardDeclined", "errorRef": "Error_CardDeclined", "expression": "\${declined}" } }
+  { "op": "ext", "id": "Activity_ChargeCreditCard", "action": "add", "type": "camunda:errorEventDefinition", "attrs": { "id": "ErrorMapping_CardDeclined", "errorRef": "error_cardDeclined", "expression": "\${declined}" } }
 ]
 EOF`,
   },

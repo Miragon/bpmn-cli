@@ -3,9 +3,8 @@ import { UNQUALIFIED_NOTE, type ConventionsView, type Undeclared } from '../../.
 
 const SOURCE_WORDS: Record<PrefixSource, string> = {
   lint: 'element-id-naming',
-  file: "the file's ids",
-  'lint shape': 'shaped like the declared prefixes (the file shows none)',
-  default: "bpmn-cli's default",
+  default: "element-id-naming's defaults (nothing declared)",
+  'bpmn-cli': "bpmn-cli's own prefix for a type element-id-naming does not check",
 };
 
 const UNDECLARED_WORDS: Record<Undeclared, (where: string | undefined) => string> = {
@@ -13,15 +12,14 @@ const UNDECLARED_WORDS: Record<Undeclared, (where: string | undefined) => string
   'no config': () => 'no .bpmnlintrc applies here',
   'not loaded': (where) => `the ${where ?? '.bpmnlintrc'} could not be loaded (W_LINT_UNAVAILABLE below)`,
   off: (where) => `element-id-naming is off or not configured in the ${where ?? '.bpmnlintrc'}`,
-  'no prefixes': (where) => `element-id-naming (${where ?? 'the host'}) declares no prefix new ids can follow`,
 };
 
 export function renderConventions(view: ConventionsView): string {
   const lines: string[] = [];
   lines.push(`conventions of ${view.file ?? 'the model'}${view.exists ? '' : ' (no file yet: a new model)'}`);
   if (view.rule) lines.push(`element-id-naming (${view.source ?? 'the host'}): ${view.rule.severity}, case ${view.rule.case}, eventDefinitionQualifier ${view.rule.qualifier}`);
-  else if (view.undeclared) lines.push(`no id conventions: ${UNDECLARED_WORDS[view.undeclared](view.source)}; new ids follow the file's id style`);
-  else lines.push("no id conventions declared: new ids follow the file's id style");
+  else if (view.undeclared) lines.push(`no id conventions: ${UNDECLARED_WORDS[view.undeclared](view.source)}; new ids follow element-id-naming's defaults (case camelCase)`);
+  else lines.push("no id conventions declared: new ids follow element-id-naming's defaults (case camelCase)");
   const width = Math.max(...view.rows.map((row) => row.pattern.length));
   const sourceWidth = Math.max(...view.rows.map((row) => row.source.length));
   for (const row of view.rows) lines.push(`  ${row.pattern.padEnd(width)}  ${row.source.padEnd(sourceWidth)}  ${row.kinds.join(' ')}${row.note ? ` (${row.note})` : ''}`);

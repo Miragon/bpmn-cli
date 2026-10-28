@@ -16,7 +16,7 @@ import { applyToXml, metricsXml, newXml, viewXml } from '../../../src/api.js';
 /** start -> check -> gateway -(yes)-> order -> end, -(no)-> notify -> end: drawn once, then kept */
 async function purchase(): Promise<string> {
   const result = await applyToXml((await newXml({ processName: 'Purchase' })).xml, [
-    { op: 'add', kind: 'startEvent', name: 'Request submitted', in: 'Process_Purchase', as: '$s' },
+    { op: 'add', kind: 'startEvent', name: 'Request submitted', in: 'purchase', as: '$s' },
     { op: 'add', kind: 'userTask', name: 'Check budget', after: '$s', as: '$c' },
     { op: 'add', kind: 'exclusiveGateway', name: 'Budget available?', after: '$c', as: '$g' },
     { op: 'add', kind: 'serviceTask', name: 'Order goods', after: '$g', condition: '${ok}', flowName: 'yes', flowAs: '$yes', as: '$o' },
@@ -38,13 +38,13 @@ describe('batch splices place like separate commands', () => {
     const flow = /<bpmn:sequenceFlow id="([^"]+)" name="yes"/.exec(xml)![1]!;
     const ops = [
       { op: 'add', kind: 'userTask', name: 'Approve purchase', flow },
-      { op: 'add', kind: 'exclusiveGateway', name: 'Purchase approved?', after: 'Activity_ApprovePurchase', before: 'Activity_OrderGoods' },
+      { op: 'add', kind: 'exclusiveGateway', name: 'Purchase approved?', after: 'userTask_approvePurchase', before: 'serviceTask_orderGoods' },
     ];
     const batch = await applyToXml(xml, ops, { layout: 'incremental' });
     let seq = xml;
     for (const op of ops) seq = (await applyToXml(seq, [op], { layout: 'incremental' })).xml;
     const batchRows = await rows(batch.xml);
-    expect(batchRows[0]).toEqual(['Event_RequestSubmitted', 'Activity_CheckBudget', 'Gateway_BudgetAvailable', 'Activity_ApprovePurchase', 'Gateway_PurchaseApproved', 'Activity_OrderGoods', 'Event_GoodsOrdered']);
+    expect(batchRows[0]).toEqual(['startEvent_requestSubmitted', 'userTask_checkBudget', 'gateway_budgetAvailable', 'userTask_approvePurchase', 'gateway_purchaseApproved', 'serviceTask_orderGoods', 'endEvent_goodsOrdered']);
     expect(batchRows).toEqual(await rows(seq));
     expect((await metricsXml(batch.xml)).score).toBe(0);
     // the same geometry as two commands
@@ -64,7 +64,7 @@ describe('batch splices place like separate commands', () => {
       ],
       { layout: 'incremental' },
     );
-    expect((await rows(result.xml))[0]).toEqual(['Event_RequestSubmitted', 'Activity_CheckBudget', 'Gateway_BudgetAvailable', 'Activity_ApprovePurchase', 'Activity_ReserveBudget', 'Gateway_Reserved', 'Activity_OrderGoods', 'Event_GoodsOrdered']);
+    expect((await rows(result.xml))[0]).toEqual(['startEvent_requestSubmitted', 'userTask_checkBudget', 'gateway_budgetAvailable', 'userTask_approvePurchase', 'serviceTask_reserveBudget', 'gateway_reserved', 'serviceTask_orderGoods', 'endEvent_goodsOrdered']);
     expect((await metricsXml(result.xml)).score).toBe(0);
   });
 });
@@ -85,7 +85,7 @@ describe('full layout: labels inside their pool', () => {
     const metrics = await metricsXml(result.xml);
     expect(metrics.problems.filter((problem) => problem.kind === 'labelOutsideFrame')).toEqual([]);
     const pool = /bpmnElement="Participant_Company"[^>]*>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(result.xml)!;
-    const label = /bpmnElement="Event_BestellungAbgeschlossenUndBezahlt"[\s\S]*?<bpmndi:BPMNLabel>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(result.xml)!;
+    const label = /bpmnElement="endEvent_bestellungAbgeschlossenUndBezahlt"[\s\S]*?<bpmndi:BPMNLabel>\s*<dc:Bounds x="(\d+)" y="\d+" width="(\d+)"/.exec(result.xml)!;
     expect(Number(label[1]) + Number(label[2])).toBeLessThanOrEqual(Number(pool[1]) + Number(pool[2]));
   });
 });

@@ -152,8 +152,8 @@ describe('the ops example', () => {
       doc,
       [
         { op: 'add', kind: 'start', name: 'Order received' },
-        { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_OrderReceived' },
-        { op: 'add', kind: 'end', name: 'Invoice handled', after: 'Activity_CheckInvoice' },
+        { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'startEvent_orderReceived' },
+        { op: 'add', kind: 'end', name: 'Invoice handled', after: 'userTask_checkInvoice' },
         ...opsExample().ops,
       ],
       { dryRun: true },

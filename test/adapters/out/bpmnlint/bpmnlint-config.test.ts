@@ -54,7 +54,7 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
 
   it('awaits a resolver that answers with promises; a rejected rule is left out with its reason', async () => {
     const { Linter, resolver } = bpmnlintEngine();
-    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'Activity_Check' }]);
+    const xml = await model([...LINE, { op: 'add', kind: 'task', after: 'userTask_check' }]);
     const rc = { extends: 'bpmnlint:recommended' };
     const sync = await resolveBpmnlintConfig({ Linter, resolver }, rc);
     const asyncResolver: BpmnlintResolver = {

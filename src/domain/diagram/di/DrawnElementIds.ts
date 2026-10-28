@@ -103,7 +103,7 @@ export class DrawnElementIds {
     if (!idless.length) return [];
     let next = allocate;
     if (!next) {
-      const style = IdStyle.infer(this.defs);
+      const style = IdStyle.of();
       const registry = new IdRegistry(indexById(this.defs).keys());
       next = (req) => {
         const { id } = style.next(req, registry);

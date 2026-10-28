@@ -14,9 +14,9 @@ async function invoice(): Promise<string> {
   return (
     await applyToXml((await newXml({ processName: 'Rechnung' })).xml, [
       { op: 'add', kind: 'start', name: 'Rechnung eingegangen' },
-      { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'Event_RechnungEingegangen' },
-      { op: 'add', kind: 'userTask', name: 'Prüfung', after: 'Activity_CheckInvoice' },
-      { op: 'add', kind: 'end', name: 'Done', after: 'Activity_Pruefung' },
+      { op: 'add', kind: 'userTask', name: 'Check invoice', after: 'startEvent_rechnungEingegangen' },
+      { op: 'add', kind: 'userTask', name: 'Prüfung', after: 'userTask_checkInvoice' },
+      { op: 'add', kind: 'end', name: 'Done', after: 'userTask_pruefung' },
     ])
   ).xml;
 }
@@ -34,44 +34,44 @@ async function notFound(xml: string, ops: unknown): Promise<BpmnError> {
 describe('E_NOT_FOUND candidates', () => {
   it('typos, another or no prefix, umlaut spellings: the meant id first', async () => {
     const doc = await Doc.fromXml(await invoice());
-    expect(doc.suggest('Activity_ChekInvoice')[0]).toBe('Activity_CheckInvoice');
-    expect(doc.suggest('Activity_CheckInvocie')[0]).toBe('Activity_CheckInvoice');
-    expect(doc.suggest('Task_CheckInvoice')[0]).toBe('Activity_CheckInvoice');
-    expect(doc.suggest('CheckInvoice')[0]).toBe('Activity_CheckInvoice');
-    expect(doc.suggest('Task_ChekInvoice')[0]).toBe('Activity_CheckInvoice');
-    expect(doc.suggest('Activity_Prüfung')[0]).toBe('Activity_Pruefung');
-    expect(doc.suggest('activity_prufung')[0]).toBe('Activity_Pruefung');
+    expect(doc.suggest('userTask_chekInvoice')[0]).toBe('userTask_checkInvoice');
+    expect(doc.suggest('userTask_checkInvocie')[0]).toBe('userTask_checkInvoice');
+    expect(doc.suggest('task_checkInvoice')[0]).toBe('userTask_checkInvoice');
+    expect(doc.suggest('checkInvoice')[0]).toBe('userTask_checkInvoice');
+    expect(doc.suggest('task_chekInvoice')[0]).toBe('userTask_checkInvoice');
+    expect(doc.suggest('userTask_prüfung')[0]).toBe('userTask_pruefung');
+    expect(doc.suggest('usertask_prufung')[0]).toBe('userTask_pruefung');
     // flows too: their ids name their ends
-    expect(doc.suggest('Flow_CheckInvoiceToPrufung')[0]).toBe('Flow_CheckInvoiceToPruefung');
+    expect(doc.suggest('flow_checkInvoiceToPrufung')[0]).toBe('flow_checkInvoiceToPruefung');
     // a short id is no typo of everything
-    expect(doc.suggest('Done')).toEqual(['Event_Done', 'Flow_PruefungToDone']);
+    expect(doc.suggest('Done')).toEqual(['endEvent_done', 'flow_pruefungToDone']);
     expect(doc.suggest('Xyz')).toEqual([]);
   });
 
   it('inside a batch: the ids it created come first and are listed in the hint', async () => {
     const failure = await notFound(await invoice(), [
-      { op: 'add', kind: 'userTask', name: 'Vollständigkeit prüfen', after: 'Activity_CheckInvoice' },
-      { op: 'add', kind: 'serviceTask', name: 'Buchen', after: 'Activity_VollstandigkeitPrufen' },
+      { op: 'add', kind: 'userTask', name: 'Vollständigkeit prüfen', after: 'userTask_checkInvoice' },
+      { op: 'add', kind: 'serviceTask', name: 'Buchen', after: 'userTask_vollstandigkeitPrufen' },
     ]);
     expect(failure.code).toBe('E_NOT_FOUND');
     expect(failure.details.op).toBe(1);
-    expect(failure.details.candidates?.[0]).toBe('Activity_VollstaendigkeitPruefen');
-    expect(failure.message).toBe('No element with id "Activity_VollstandigkeitPrufen" (did you mean: Activity_VollstaendigkeitPruefen?)');
-    expect(failure.details.hint).toMatch(/^Created earlier in this batch: Activity_VollstaendigkeitPruefen, Flow_VollstaendigkeitPruefenToPruefung; name them with "as": "\$name" to refer to them\./);
+    expect(failure.details.candidates?.[0]).toBe('userTask_vollstaendigkeitPruefen');
+    expect(failure.message).toBe('No element with id "userTask_vollstandigkeitPrufen" (did you mean: userTask_vollstaendigkeitPruefen?)');
+    expect(failure.details.hint).toMatch(/^Created earlier in this batch: userTask_vollstaendigkeitPruefen, flow_vollstaendigkeitPruefenToPruefung; name them with "as": "\$name" to refer to them\./);
   });
 
   it('a flow an op of the batch renamed: the message says to what', async () => {
     const failure = await notFound(await invoice(), [
-      { op: 'add', kind: 'task', name: 'Archive', after: 'Activity_Pruefung' },
-      { op: 'set', id: 'Flow_PruefungToDone', values: { name: 'ok' } },
+      { op: 'add', kind: 'task', name: 'Archive', after: 'userTask_pruefung' },
+      { op: 'set', id: 'flow_pruefungToDone', values: { name: 'ok' } },
     ]);
-    expect(failure.message).toBe('No element with id "Flow_PruefungToDone": an op before this one renamed it to Flow_PruefungToArchive (its id named its old ends)');
-    expect(failure.details.candidates?.[0]).toBe('Flow_PruefungToArchive');
+    expect(failure.message).toBe('No element with id "flow_pruefungToDone": an op before this one renamed it to flow_pruefungToArchive (its id named its old ends)');
+    expect(failure.details.candidates?.[0]).toBe('flow_pruefungToArchive');
   });
 
   it('an alias written without $ is pointed out', async () => {
     const failure = await notFound(await invoice(), [
-      { op: 'add', kind: 'task', name: 'Archive', after: 'Activity_Pruefung', as: '$archive' },
+      { op: 'add', kind: 'task', name: 'Archive', after: 'userTask_pruefung', as: '$archive' },
       { op: 'add', kind: 'end', name: 'Archived', after: 'archive' },
     ]);
     expect(failure.details.hint).toMatch(/^In this batch \$archive is an alias: write "\$archive"\./);
@@ -81,12 +81,12 @@ describe('E_NOT_FOUND candidates', () => {
     const doc = await Doc.fromXml(await invoice());
     let err: BpmnError | undefined;
     try {
-      runOps(doc, [{ op: 'remove', ids: ['Activity_ChekInvoice'] }]);
-      doc.require('Activity_Chek');
+      runOps(doc, [{ op: 'remove', ids: ['userTask_chekInvoice'] }]);
+      doc.require('userTask_chek');
     } catch (error) {
       err = error as BpmnError;
     }
-    expect(err?.details.candidates?.[0]).toBe('Activity_CheckInvoice');
+    expect(err?.details.candidates?.[0]).toBe('userTask_checkInvoice');
     expect(err?.details.hint).toBe('Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.');
   });
 });

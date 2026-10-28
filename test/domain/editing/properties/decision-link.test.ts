@@ -162,7 +162,7 @@ describe('set <id> calledDecision=<decision>', () => {
   it('works in `add` (trailing key=value / the set map of an add op)', async () => {
     const doc = await Doc.fromXml(model('<bpmn:task id="R" />', C7));
     runOps(doc, [{ op: 'add', kind: 'businessRuleTask', name: 'Rate', after: 'R', set: { calledDecision: 'risk' } }]);
-    expect(doc.require('Activity_Rate').$attrs).toEqual({ 'camunda:decisionRef': 'risk' });
+    expect(doc.require('businessRuleTask_rate').$attrs).toEqual({ 'camunda:decisionRef': 'risk' });
   });
 
   it('is a documented set key of business rule tasks (kinds --json)', async () => {
@@ -333,7 +333,7 @@ describe('a model without an engine keeps the file\'s spelling (issue #42)', () 
   it('`add` with calledDecision follows the file\'s spelling too', async () => {
     const doc = await Doc.fromXml(pair('camunda:decisionRef="d1"', '', { ns: CAMUNDA }));
     const result = await mutateDoc(doc, [{ op: 'add', kind: 'businessRuleTask', name: 'Price', after: 'Activity_Other', set: { calledDecision: 'price' } }], { layout: false, platform: 'none' });
-    expect(result.xml).toContain('<bpmn:businessRuleTask id="Activity_Price" name="Price" camunda:decisionRef="price" />');
+    expect(result.xml).toContain('<bpmn:businessRuleTask id="businessRuleTask_price" name="Price" camunda:decisionRef="price" />');
   });
 
   it('an empty value still removes the link in every spelling', async () => {

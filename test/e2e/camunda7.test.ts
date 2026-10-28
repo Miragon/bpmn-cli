@@ -288,13 +288,13 @@ describe('apply: "message" on add ops for send and receive tasks (#11)', () => {
     const ops = parseOps([
       { op: 'add', kind: 'startEvent', id: 'Event_Start' },
       { op: 'add', kind: 'receiveTask', name: 'Wait payment', after: 'Event_Start', message: 'PaymentReceived' },
-      { op: 'add', kind: 'sendTask', name: 'Send invoice', after: 'Activity_WaitPayment', message: 'Invoice' },
+      { op: 'add', kind: 'sendTask', name: 'Send invoice', after: 'receiveTask_waitPayment', message: 'Invoice' },
     ]);
     const doc = Doc.create({ target: 'camunda7' });
     const cs = runOps(doc, ops);
     expect(cs.warnings.map((warning) => warning.code)).not.toContain('W_OPTION_IGNORED');
-    expect(doc.require('Activity_WaitPayment').get<El>('messageRef').get('name')).toBe('PaymentReceived');
-    expect(doc.require('Activity_SendInvoice').get<El>('messageRef').get('name')).toBe('Invoice');
+    expect(doc.require('receiveTask_waitPayment').get<El>('messageRef').get('name')).toBe('PaymentReceived');
+    expect(doc.require('sendTask_sendInvoice').get<El>('messageRef').get('name')).toBe('Invoice');
     expect(() => parseOps([{ op: 'add', kind: 'userTask', message: 'X' }])).toThrow(/only apply to events/);
   });
 });
@@ -333,7 +333,7 @@ describe('find shows the matched vendor value; kinds documents the C7 keys (#8, 
     writeFileSync(file, await doc.toXml());
     const cliRun = cli('find', file, 'charge-card');
     expect(cliRun.code).toBe(0);
-    expect(cliRun.out.trim()).toBe('serviceTask Activity_Charge "Charge"  (in p)  [camunda:topic=charge-card]');
+    expect(cliRun.out.trim()).toBe('serviceTask serviceTask_charge "Charge"  (in p)  [camunda:topic=charge-card]');
   });
 
   it('kinds: --message on send / receive tasks, the set key groups and the nested keys', () => {

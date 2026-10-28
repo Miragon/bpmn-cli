@@ -32,16 +32,16 @@ creates them) and new event definitions an id.
 | condition | `add ... --condition '= amount > 1000'`, `set <file> <flowId> 'condition== amount > 1000'` |
 
 ```bash
-bpmn ext add shipping.bpmn Activity_CorrectAddress zeebe:formDefinition formId=correct-address
-bpmn ext add shipping.bpmn Activity_CorrectAddress zeebe:assignmentDefinition assignee==order.owner
-bpmn add shipping.bpmn businessRuleTask "Choose carrier" --id Activity_ChooseCarrier --before Activity_CreateShippingLabel calledDecision=choose-carrier
-bpmn ext add shipping.bpmn Activity_ChooseCarrier zeebe:calledDecision resultVariable=carrier
-bpmn add shipping.bpmn callActivity "Notify customer" --id Activity_NotifyCustomer --after Activity_WaitForPickup
-bpmn ext add shipping.bpmn Activity_NotifyCustomer zeebe:calledElement processId=notify-customer propagateAllChildVariables=false
-bpmn ext add shipping.bpmn Activity_NotifyCustomer loop.zeebe:loopCharacteristics inputCollection==order.contacts inputElement=contact
-bpmn ext add shipping.bpmn Activity_CreateShippingLabel zeebe:header key=carrier value=ups
-bpmn ext list shipping.bpmn Activity_CreateShippingLabel
-bpmn ext remove shipping.bpmn Activity_CreateShippingLabel 'zeebe:header[key=carrier]'
+bpmn ext add shipping.bpmn userTask_correctAddress zeebe:formDefinition formId=correct-address
+bpmn ext add shipping.bpmn userTask_correctAddress zeebe:assignmentDefinition assignee==order.owner
+bpmn add shipping.bpmn businessRuleTask "Choose carrier" --id businessRuleTask_chooseCarrier --before serviceTask_createShippingLabel calledDecision=choose-carrier
+bpmn ext add shipping.bpmn businessRuleTask_chooseCarrier zeebe:calledDecision resultVariable=carrier
+bpmn add shipping.bpmn callActivity "Notify customer" --id callActivity_notifyCustomer --after receiveTask_waitForPickup
+bpmn ext add shipping.bpmn callActivity_notifyCustomer zeebe:calledElement processId=notify-customer propagateAllChildVariables=false
+bpmn ext add shipping.bpmn callActivity_notifyCustomer loop.zeebe:loopCharacteristics inputCollection==order.contacts inputElement=contact
+bpmn ext add shipping.bpmn serviceTask_createShippingLabel zeebe:header key=carrier value=ups
+bpmn ext list shipping.bpmn serviceTask_createShippingLabel
+bpmn ext remove shipping.bpmn serviceTask_createShippingLabel 'zeebe:header[key=carrier]'
 bpmn validate shipping.bpmn --strict
 ```
 

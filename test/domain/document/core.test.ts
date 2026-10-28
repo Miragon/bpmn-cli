@@ -25,10 +25,10 @@ async function compensationDoc(): Promise<Doc> {
   runOps(doc, [
     { op: 'add', kind: 'startEvent', id: 'S' },
     { op: 'add', kind: 'serviceTask', name: 'Charge card', after: 'S' },
-    { op: 'add', kind: 'endEvent', id: 'E', after: 'Activity_ChargeCard' },
-    { op: 'add', kind: 'boundaryEvent:compensate', id: 'Comp', on: 'Activity_ChargeCard' },
+    { op: 'add', kind: 'endEvent', id: 'E', after: 'serviceTask_chargeCard' },
+    { op: 'add', kind: 'boundaryEvent:compensate', id: 'Comp', on: 'serviceTask_chargeCard' },
     { op: 'add', kind: 'serviceTask', name: 'Refund card', in: 'P', set: { isForCompensation: 'true' } },
-    { op: 'connect', source: 'Comp', target: 'Activity_RefundCard' },
+    { op: 'connect', source: 'Comp', target: 'serviceTask_refundCard' },
   ]);
   return doc;
 }
@@ -44,33 +44,33 @@ describe('ids', () => {
     expect(slugify('a'.repeat(60)).length).toBe(40);
   });
 
-  it('generates Prefix_Slug ids, kind + context ids for unnamed elements and flows named after their ends, without collisions (default style)', () => {
-    const ids = new IdRegistry(['Activity_CheckInvoice', 'Flow_3', 'Flow_7']);
+  it('generates prefix_slug ids, kind + context ids for unnamed elements and flows named after their ends, without collisions (the defaults)', () => {
+    const ids = new IdRegistry(['task_checkInvoice', 'Flow_3', 'Flow_7']);
+    const style = IdStyle.of();
     const next = (req: Parameters<IdStyle['next']>[0]): string => {
-      const { id } = IdStyle.DEFAULT.next(req, ids);
+      const { id } = style.next(req, ids);
       ids.claim(id);
       return id;
     };
     const task = kindByName('task')!;
-    expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('Activity_CheckInvoice_2');
-    expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('Activity_CheckInvoice_3');
+    expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('task_checkInvoice2');
+    expect(next(kindRequest(task, { name: 'Check invoice' }))).toBe('task_checkInvoice3');
     // unnamed (a name without words counts as none): the context, after a word for the kind where the prefix does not say it
     const gw = kindByName('exclusiveGateway')!;
-    expect(next(kindRequest(gw, { name: '???', context: 'After Check invoice' }))).toBe('Gateway_AfterCheckInvoice');
+    expect(next(kindRequest(gw, { name: '???', context: 'After Check invoice' }))).toBe('gateway_afterCheckInvoice');
     // a taken one spells out its kind first, then takes a suffix
-    expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('Gateway_ExclusiveAfterCheckInvoice');
-    expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('Gateway_AfterCheckInvoice_2');
-    // so does an unnamed task whose body an unnamed gateway's id has (the flow between them names both apart)
-    expect(next(kindRequest(task, { context: 'After Check invoice' }))).toBe('Activity_TaskAfterCheckInvoice');
-    expect(next(kindRequest(gw))).toBe('Gateway_Exclusive');
-    expect(next(kindRequest(kindByName('boundaryEvent')!, { trigger: 'timer', context: 'On Check invoice' }))).toBe('Event_TimerOnCheckInvoice');
-    expect(next(kindRequest(kindByName('startEvent')!, { trigger: 'message' }))).toBe('Event_MessageStart');
-    expect(next(typeRequest('bpmn:LaneSet', { context: 'Order handling' }))).toBe('LaneSet_OrderHandling');
-    expect(next(typeRequest('bpmn:Process'))).toBe('Process_Main');
+    expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('gateway_exclusiveAfterCheckInvoice');
+    expect(next(kindRequest(gw, { context: 'After Check invoice' }))).toBe('gateway_afterCheckInvoice2');
+    expect(next(kindRequest(task, { context: 'After Check invoice' }))).toBe('task_afterCheckInvoice');
+    expect(next(kindRequest(gw))).toBe('gateway_exclusive');
+    expect(next(kindRequest(kindByName('boundaryEvent')!, { trigger: 'timer', context: 'On Check invoice' }))).toBe('event_timerOnCheckInvoice');
+    expect(next(kindRequest(kindByName('startEvent')!, { trigger: 'message' }))).toBe('startEvent_message');
+    expect(next(typeRequest('bpmn:LaneSet', { context: 'Order handling' }))).toBe('laneSet_orderHandling');
+    expect(next(typeRequest('bpmn:Process'))).toBe('Process_1');
     // flows: the labels of their ends (default: the speaking part of the end ids); numbers in the registry play no part
-    const flow = connectionRequest('bpmn:SequenceFlow', 'Activity_CheckInvoice', 'Activity_0k3x9qa', { targetLabel: 'Book invoice' });
-    expect(next(flow)).toBe('Flow_CheckInvoiceToBookInvoice');
-    expect(IdStyle.DEFAULT.next(flow, ids)).toEqual({ id: 'Flow_CheckInvoiceToBookInvoice_2', base: 'Flow_CheckInvoiceToBookInvoice' });
+    const flow = connectionRequest('bpmn:SequenceFlow', 'task_checkInvoice', 'Activity_0k3x9qa', { targetLabel: 'Book invoice' });
+    expect(next(flow)).toBe('flow_checkInvoiceToBookInvoice');
+    expect(style.next(flow, ids)).toEqual({ id: 'flow_checkInvoiceToBookInvoice2', base: 'flow_checkInvoiceToBookInvoice' });
   });
 
   it('validates NCNames', () => {
@@ -124,7 +124,7 @@ describe('kinds', () => {
 describe('document', () => {
   it('creates a new document with a named process', async () => {
     const doc = Doc.create({ processName: 'Order handling', target: 'camunda8' });
-    expect(doc.processes()[0]!.get('id')).toBe('Process_OrderHandling');
+    expect(doc.processes()[0]!.get('id')).toBe('orderHandling');
     const xml = await doc.toXml();
     expect(xml).toContain('xmlns:zeebe=');
     expect(xml).toContain('modeler:executionPlatform="Camunda Cloud"');
@@ -175,13 +175,13 @@ describe('flows & placement', () => {
   it('splices after a connected task and appends after a gateway', async () => {
     const doc = await linearDoc();
     const cs = new ChangeSet();
-    const task = doc.create('bpmn:ServiceTask', { id: new EditSession(doc).newId('Activity', 'Check stock'), name: 'Check stock' });
+    const task = doc.create('bpmn:ServiceTask', { id: new EditSession(doc).allocator.allocate(kindRequest(kindByName('serviceTask')!, { name: 'Check stock' })).id, name: 'Check stock' });
     new NodePlacement(new EditSession(doc), { after: 'Task_A', flowName: 'ok' }).place(task, cs);
     expect(cs.notes).toContain('inserted between Task_A and End');
-    expect(doc.outgoing(doc.get('Task_A')!).map((flow) => flow.get<any>('targetRef').id)).toEqual(['Activity_CheckStock']);
+    expect(doc.outgoing(doc.get('Task_A')!).map((flow) => flow.get<any>('targetRef').id)).toEqual(['serviceTask_checkStock']);
     expect(doc.get('F2')!.get('name')).toBe('ok');
     const gw = doc.create('bpmn:ExclusiveGateway', { id: 'G', name: 'ok?' });
-    new NodePlacement(new EditSession(doc), { after: 'Activity_CheckStock' }).place(gw, new ChangeSet());
+    new NodePlacement(new EditSession(doc), { after: 'serviceTask_checkStock' }).place(gw, new ChangeSet());
     const e2 = doc.create('bpmn:EndEvent', { id: 'E2' });
     const cs2 = new ChangeSet();
     new NodePlacement(new EditSession(doc), { after: 'G', flowName: 'no', default: true }).place(e2, cs2);
@@ -348,11 +348,11 @@ describe('layout', () => {
       { op: 'add', kind: 'task', id: 'B', after: 'A' },
       { op: 'add', kind: 'endEvent', id: 'E', after: 'B' },
       { op: 'add', kind: 'dataObject', name: 'Doc', in: 'P' },
-      { op: 'connect', source: 'A', target: 'DataObjectReference_Doc' },
-      { op: 'connect', source: 'DataObjectReference_Doc', target: 'B' },
+      { op: 'connect', source: 'A', target: 'dataObject_doc' },
+      { op: 'connect', source: 'dataObject_doc', target: 'B' },
       { op: 'add', kind: 'lane', name: 'L1', in: 'P', members: ['S', 'A', 'E'] },
     ]);
-    const members = () => many(doc.get('Lane_L1')!, 'flowNodeRef').map((node) => node.get('id'));
+    const members = () => many(doc.get('lane_l1')!, 'flowNodeRef').map((node) => node.get('id'));
     expect(members()).toEqual(['S', 'A', 'E']);
     const layoutOutcome = await new FullLayout(doc.model).run();
     expect(layoutOutcome.xml).toMatch(/BPMNShape_B"/);
@@ -360,7 +360,7 @@ describe('layout', () => {
     expect(members()).toEqual(['S', 'A', 'E']);
     const written = await Doc.fromXml(layoutOutcome.xml);
     expect(written.importWarnings).toHaveLength(0);
-    expect(many(written.get('Lane_L1')!, 'flowNodeRef').map((node) => node.get('id'))).toEqual(['S', 'A', 'E']);
+    expect(many(written.get('lane_l1')!, 'flowNodeRef').map((node) => node.get('id'))).toEqual(['S', 'A', 'E']);
     expect(written.lanesOf(written.get('B')!)).toHaveLength(0);
   });
 
@@ -374,7 +374,7 @@ describe('layout', () => {
     const shapes = new Map<string, any>();
     for (const diagram of many(laidOut.definitions, 'diagrams')) for (const shape of many(diagram.get('plane'), 'planeElement')) shapes.set(shape.get('bpmnElement').id, shape);
     const event = shapes.get('Comp').bounds;
-    const handler = shapes.get('Activity_RefundCard').bounds;
+    const handler = shapes.get('serviceTask_refundCard').bounds;
     expect(handler.x + handler.width / 2).toBe(event.x + event.width / 2);
     expect(handler.y).toBeGreaterThan(event.y + event.height);
     const edge = shapes.get(association);
@@ -388,7 +388,7 @@ describe('layout', () => {
     const cs = runOps(doc, [{ op: 'add', kind: 'textAnnotation', text: 'on the flow', to: 'F1' }]);
     const association = cs.created.find((change) => change.kind === 'association')!.id;
     // F1 says nothing about its ends (a number): a flow
-    expect(association).toBe('Association_FlowToOnTheFlow');
+    expect(association).toBe('association_flowToOnTheFlow');
     const layoutOutcome = await new FullLayout(doc.model).run();
     expect(layoutOutcome.warnings).toEqual([]);
     expect(layoutOutcome.xml).toContain(`BPMNEdge_${association}`);

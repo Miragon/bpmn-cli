@@ -5,13 +5,13 @@ export const ucfirst = (text: string): string => text.charAt(0).toUpperCase() + 
 export const localName = (type: string): string => type.slice(type.indexOf(':') + 1);
 
 export const PREFIXED = /^([A-Za-z][A-Za-z0-9]*)_(.+)$/;
-export const GLUED = /^([A-Za-z]+)(\d+)$/;
+const GLUED = /^([A-Za-z]+)(\d+)$/;
 
 /** The Camunda Modeler's first start event says nothing about a file's conventions. */
-export const TOOL_DEFAULTS = new Set(['StartEvent_1']);
-export const HASH = /^[01][0-9a-z]{6}$/;
+const TOOL_DEFAULTS = new Set(['StartEvent_1']);
+const HASH = /^[01][0-9a-z]{6}$/;
 
-export function stem(id: string): string {
+function stem(id: string): string {
   const underscoreIndex = id.indexOf('_');
   return underscoreIndex === -1 ? id : id.slice(underscoreIndex + 1);
 }
@@ -59,26 +59,6 @@ export function stemWords(stem: string): string[] {
 export function beginAlike(one: string, other: string): boolean {
   const first = (slug: string): string => (stemWords(slug)[0] ?? '').toLowerCase();
   return first(one) === first(other);
-}
-
-export type PrefixClass = 'kind' | 'triggerKind' | 'literal';
-
-/**
- * Type names that are also their family's usual generic prefix: `Task_` on a plain task may be
- * the old modeler's type name or a `Task_` for every task, so it counts as the family's prefix.
- */
-export const GENERIC = new Set(['task']);
-
-/**
- * The bpmn-cli prefix of the family is a literal even where it is the type name (Lane_,
- * Message_): it says nothing about type-named prefixes.
- */
-export function prefixClass(prefix: string, typeNames: string[], trigger: string | undefined, family: string): PrefixClass {
-  const lowerPrefix = prefix.toLowerCase();
-  if (lowerPrefix === family.toLowerCase() || GENERIC.has(lowerPrefix)) return 'literal';
-  if (typeNames.some((typeName) => typeName.toLowerCase() === lowerPrefix)) return 'kind';
-  if (trigger && typeNames.some((typeName) => `${trigger}${typeName}`.toLowerCase() === lowerPrefix)) return 'triggerKind';
-  return 'literal';
 }
 
 /**

@@ -18,7 +18,7 @@ export interface LayoutOptions {
   expand?: Iterable<string>;
   /** sub-process ids that must be collapsed */
   collapse?: Iterable<string>;
-  /** claims an id for a drawn element that has none (default: the file's id style) */
+  /** claims an id for a drawn element that has none (default: the id conventions) */
   allocateId?: (req: IdRequest) => string;
 }
 

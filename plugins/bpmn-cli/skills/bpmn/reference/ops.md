@@ -40,13 +40,13 @@ Trigger keys: `timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`,
 
 ## Ids and aliases
 
-Give every created element an explicit speaking `id` (`Activity_<VerbObject>`,
-`Gateway_<Question>`, `Event_<State>`, `Lane_<Role>`, `Participant_<Party>`,
-`DataObjectReference_<Thing>`, `DataStoreReference_<Thing>`,
-`TextAnnotation_<Gist>`); later ops of the batch use it directly. Flow ids the
-CLI derives speak too (`Flow_CheckInvoiceToBookInvoice`). In a repository whose
-`.bpmnlintrc` declares id conventions (`bpmn show <file> --conventions`), use
-its patterns instead (`serviceTask_checkInvoice`, `flow_checkInvoiceToBookInvoice`). For an element you do
+Give every created element an explicit speaking `id` in the patterns
+`bpmn show <file> --conventions` lists; without a `.bpmnlintrc` these are
+`element-id-naming`'s defaults (`serviceTask_<verbObject>`, `userTask_<verbObject>`,
+`gateway_<question>`, `startEvent_<state>`, `endEvent_<state>`, `event_<state>`,
+`lane_<role>`, `participant_<party>`, `dataObject_<thing>`, `dataStore_<thing>`,
+`textAnnotation_<gist>`); later ops of the batch use it directly. Flow ids the
+CLI derives speak too (`flow_checkInvoiceToBookInvoice`). For an element you do
 not name, set an alias - `"as"` on add / connect / split and split nodes,
 `"flowAs"` for the flow into a new node, `"outAs"` for the flow an add creates
 out of it (on a splice: to the old successor, so the same batch can set its
@@ -59,18 +59,18 @@ works in one batch.
 ## A first batch: split, aliases, end
 
 ```bash
-bpmn new invoice.bpmn --name "Invoice approval" --id Process_InvoiceApproval
+bpmn new invoice.bpmn --name "Invoice approval" --id invoiceApproval
 printf '%s' '[
-  { "op": "add", "kind": "startEvent", "name": "Invoice received", "id": "Event_InvoiceReceived", "in": "Process_InvoiceApproval" },
-  { "op": "add", "kind": "userTask", "name": "Check invoice", "id": "Activity_CheckInvoice", "after": "Event_InvoiceReceived" },
-  { "op": "split", "after": "Activity_CheckInvoice", "kind": "exclusiveGateway", "name": "Invoice ok?", "id": "Gateway_InvoiceOk", "joinId": "Gateway_InvoiceOkJoin",
+  { "op": "add", "kind": "startEvent", "name": "Invoice received", "id": "startEvent_invoiceReceived", "in": "invoiceApproval" },
+  { "op": "add", "kind": "userTask", "name": "Check invoice", "id": "userTask_checkInvoice", "after": "startEvent_invoiceReceived" },
+  { "op": "split", "after": "userTask_checkInvoice", "kind": "exclusiveGateway", "name": "Invoice ok?", "id": "gateway_invoiceOk", "joinId": "gateway_invoiceOkJoin",
     "branches": [
-      { "flowName": "yes", "condition": "${invoiceOk}", "nodes": [ { "kind": "serviceTask", "name": "Book invoice", "id": "Activity_BookInvoice" } ] },
-      { "flowName": "no", "nodes": [ { "kind": "userTask", "name": "Clarify invoice", "id": "Activity_ClarifyInvoice", "flowAs": "$toClarify" },
-                                       { "kind": "sendTask", "name": "Inform supplier", "id": "Activity_InformSupplier" } ] }
+      { "flowName": "yes", "condition": "${invoiceOk}", "nodes": [ { "kind": "serviceTask", "name": "Book invoice", "id": "serviceTask_bookInvoice" } ] },
+      { "flowName": "no", "nodes": [ { "kind": "userTask", "name": "Clarify invoice", "id": "userTask_clarifyInvoice", "flowAs": "$toClarify" },
+                                       { "kind": "sendTask", "name": "Inform supplier", "id": "sendTask_informSupplier" } ] }
     ] },
-  { "op": "set", "id": "Gateway_InvoiceOk", "values": { "default": "$toClarify" } },
-  { "op": "add", "kind": "endEvent", "name": "Invoice handled", "id": "Event_InvoiceHandled", "after": "Gateway_InvoiceOkJoin" }
+  { "op": "set", "id": "gateway_invoiceOk", "values": { "default": "$toClarify" } },
+  { "op": "add", "kind": "endEvent", "name": "Invoice handled", "id": "endEvent_invoiceHandled", "after": "gateway_invoiceOkJoin" }
 ]' | bpmn apply invoice.bpmn -
 bpmn show invoice.bpmn
 ```
@@ -98,16 +98,16 @@ no placement: `members` names what it is drawn around.
 
 ```bash
 printf '%s' '[
-  { "op": "add", "kind": "dataObject", "name": "Invoice", "id": "DataObjectReference_Invoice", "in": "Process_InvoiceApproval" },
-  { "op": "connect", "source": "DataObjectReference_Invoice", "target": "Activity_CheckInvoice" },
-  { "op": "add", "kind": "dataStore", "name": "Ledger", "id": "DataStoreReference_Ledger", "in": "Process_InvoiceApproval" },
-  { "op": "connect", "source": "Activity_BookInvoice", "target": "DataStoreReference_Ledger" },
-  { "op": "add", "kind": "boundaryEvent:timer", "name": "5 days", "id": "Event_ClarificationOverdue", "on": "Activity_ClarifyInvoice", "timer": "P5D" },
-  { "op": "add", "kind": "endEvent", "name": "Invoice returned", "id": "Event_InvoiceReturned", "after": "Event_ClarificationOverdue" },
-  { "op": "add", "kind": "subProcess", "name": "Archive invoice", "id": "Activity_ArchiveInvoice", "before": "Event_InvoiceHandled" },
-  { "op": "add", "kind": "startEvent", "name": "Archiving started", "id": "Event_ArchivingStarted", "in": "Activity_ArchiveInvoice" },
-  { "op": "add", "kind": "serviceTask", "name": "Store PDF", "id": "Activity_StorePdf", "after": "Event_ArchivingStarted" },
-  { "op": "add", "kind": "endEvent", "name": "Archived", "id": "Event_Archived", "after": "Activity_StorePdf" }
+  { "op": "add", "kind": "dataObject", "name": "Invoice", "id": "dataObject_invoice", "in": "invoiceApproval" },
+  { "op": "connect", "source": "dataObject_invoice", "target": "userTask_checkInvoice" },
+  { "op": "add", "kind": "dataStore", "name": "Ledger", "id": "dataStore_ledger", "in": "invoiceApproval" },
+  { "op": "connect", "source": "serviceTask_bookInvoice", "target": "dataStore_ledger" },
+  { "op": "add", "kind": "boundaryEvent:timer", "name": "5 days", "id": "event_clarificationOverdue", "on": "userTask_clarifyInvoice", "timer": "P5D" },
+  { "op": "add", "kind": "endEvent", "name": "Invoice returned", "id": "endEvent_invoiceReturned", "after": "event_clarificationOverdue" },
+  { "op": "add", "kind": "subProcess", "name": "Archive invoice", "id": "subProcess_archiveInvoice", "before": "endEvent_invoiceHandled" },
+  { "op": "add", "kind": "startEvent", "name": "Archiving started", "id": "startEvent_archivingStarted", "in": "subProcess_archiveInvoice" },
+  { "op": "add", "kind": "serviceTask", "name": "Store PDF", "id": "serviceTask_storePdf", "after": "startEvent_archivingStarted" },
+  { "op": "add", "kind": "endEvent", "name": "Archived", "id": "endEvent_archived", "after": "serviceTask_storePdf" }
 ]' | bpmn apply invoice.bpmn - --summary
 ```
 
@@ -121,13 +121,13 @@ printf '%s' '[
 
 ```bash
 printf '%s' '[
-  { "op": "set", "id": "Activity_CheckInvoice", "values": { "name": "Check invoice and order", "doc": "Compare the invoice with the purchase order." } },
-  { "op": "set", "id": "Activity_StorePdf", "values": { "loop": "parallel", "cardinality": "${count}" } },
-  { "op": "retype", "id": "Event_InvoiceReceived", "kind": "startEvent:message", "message": "Invoice" },
-  { "op": "retype", "id": "Activity_BookInvoice", "kind": "scriptTask" },
-  { "op": "remove", "ids": ["Activity_InformSupplier"] },
-  { "op": "add", "kind": "endEvent", "name": "Invoice handled", "id": "Event_InvoiceHandled", "ifAbsent": true, "in": "Process_InvoiceApproval" },
-  { "op": "remove", "ids": ["Activity_PayInvoice"], "ifExists": true }
+  { "op": "set", "id": "userTask_checkInvoice", "values": { "name": "Check invoice and order", "doc": "Compare the invoice with the purchase order." } },
+  { "op": "set", "id": "serviceTask_storePdf", "values": { "loop": "parallel", "cardinality": "${count}" } },
+  { "op": "retype", "id": "startEvent_invoiceReceived", "kind": "startEvent:message", "message": "Invoice" },
+  { "op": "retype", "id": "serviceTask_bookInvoice", "kind": "scriptTask" },
+  { "op": "remove", "ids": ["sendTask_informSupplier"] },
+  { "op": "add", "kind": "endEvent", "name": "Invoice handled", "id": "endEvent_invoiceHandled", "ifAbsent": true, "in": "invoiceApproval" },
+  { "op": "remove", "ids": ["serviceTask_payInvoice"], "ifExists": true }
 ]' | bpmn apply invoice.bpmn - --summary
 bpmn validate invoice.bpmn
 ```
@@ -162,6 +162,6 @@ Tasks: `task`, `userTask`, `serviceTask`, `sendTask`, `receiveTask`,
 fits which event: `bpmn kinds --section kinds,triggers`. Timers are ISO 8601:
 `PT2H` / `P3D` (duration), `R/PT1H` (cycle), a date-time (date). Messages,
 errors, signals and escalations are root elements found by name or created
-(ids in the file's style, e.g. `Message_<Name>`); never guess those ids: name
+(ids like `message_<name>`); never guess those ids: name
 them in a batch with `"refAs": "$name"` on add / connect / set / retype, and the
 result lists them.

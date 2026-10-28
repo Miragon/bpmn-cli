@@ -70,7 +70,7 @@ afterAll(() => {
 describe('bpmn cli session', () => {
   it('creates a file with one process', async () => {
     const result = ok('new', file, '--name', 'Order handling', '--target', 'camunda8');
-    expect(result.out).toMatch(/Process_OrderHandling/);
+    expect(result.out).toMatch(/orderHandling/);
     expect(result.out).toMatch(/written: /);
     const xml = readFileSync(file, 'utf8');
     expect(xml).toContain('xmlns:zeebe');
@@ -81,41 +81,41 @@ describe('bpmn cli session', () => {
 
   it('builds a process with the placement grammar', async () => {
     ok('add', file, 'startEvent', 'Order received');
-    ok('add', file, 'userTask', 'Check invoice', '--after', 'Event_OrderReceived');
-    ok('add', file, 'xor', 'Invoice ok?', '--after', 'Activity_CheckInvoice');
-    let result = ok('add', file, 'serviceTask', 'Book invoice', '--after', 'Gateway_InvoiceOk', '--flow-name', 'yes', '--condition', '${ok}');
-    expect(result.out).toMatch(/appended after Gateway_InvoiceOk/);
-    ok('add', file, 'endEvent', 'Invoice booked', '--after', 'Activity_BookInvoice');
-    result = ok('add', file, 'userTask', 'Clarify invoice', '--after', 'Gateway_InvoiceOk', '--flow-name', 'no', '--default', '--to', 'Activity_CheckInvoice');
-    expect(result.out).toMatch(/Activity_ClarifyInvoice -> Activity_CheckInvoice/);
-    result = ok('add', file, 'boundaryEvent:timer', '2 days', '--on', 'Activity_CheckInvoice', '--timer', 'PT2D', '--non-interrupting');
-    expect(result.out).toMatch(/attached to Activity_CheckInvoice/);
-    ok('add', file, 'sendTask', 'Remind clerk', '--after', 'Event_2Days');
+    ok('add', file, 'userTask', 'Check invoice', '--after', 'startEvent_orderReceived');
+    ok('add', file, 'xor', 'Invoice ok?', '--after', 'userTask_checkInvoice');
+    let result = ok('add', file, 'serviceTask', 'Book invoice', '--after', 'gateway_invoiceOk', '--flow-name', 'yes', '--condition', '${ok}');
+    expect(result.out).toMatch(/appended after gateway_invoiceOk/);
+    ok('add', file, 'endEvent', 'Invoice booked', '--after', 'serviceTask_bookInvoice');
+    result = ok('add', file, 'userTask', 'Clarify invoice', '--after', 'gateway_invoiceOk', '--flow-name', 'no', '--default', '--to', 'userTask_checkInvoice');
+    expect(result.out).toMatch(/userTask_clarifyInvoice -> userTask_checkInvoice/);
+    result = ok('add', file, 'boundaryEvent:timer', '2 days', '--on', 'userTask_checkInvoice', '--timer', 'PT2D', '--non-interrupting');
+    expect(result.out).toMatch(/attached to userTask_checkInvoice/);
+    ok('add', file, 'sendTask', 'Remind clerk', '--after', 'event_timer2Days');
     const doc = await reparse();
-    const gw = doc.get('Gateway_InvoiceOk')!;
+    const gw = doc.get('gateway_invoiceOk')!;
     expect(doc.outgoing(gw)).toHaveLength(2);
     expect(gw.get<any>('default').get('name')).toBe('no');
     const yes = doc.outgoing(gw).find((flow) => flow.get('name') === 'yes')!;
     expect(yes.get<any>('conditionExpression').body).toBe('${ok}');
-    const be = doc.get('Event_2Days')!;
+    const be = doc.get('event_timer2Days')!;
     expect(be.get('cancelActivity')).toBe(false);
     expect(be.get<any>('eventDefinitions')[0].timeDuration.body).toBe('PT2D');
     const xml = readFileSync(file, 'utf8');
-    for (const id of ['Event_OrderReceived', 'Activity_CheckInvoice', 'Gateway_InvoiceOk', 'Activity_BookInvoice', 'Event_InvoiceBooked', 'Activity_ClarifyInvoice', 'Event_2Days', 'Activity_RemindClerk']) {
+    for (const id of ['startEvent_orderReceived', 'userTask_checkInvoice', 'gateway_invoiceOk', 'serviceTask_bookInvoice', 'endEvent_invoiceBooked', 'userTask_clarifyInvoice', 'event_timer2Days', 'sendTask_remindClerk']) {
       expect(diIds(xml)).toContain(id);
     }
   });
 
   it('shows the model without coordinates', () => {
     const result = ok('show', file);
-    expect(result.out).toMatch(/process Process_OrderHandling/);
-    expect(result.out).toMatch(/userTask Activity_CheckInvoice "Check invoice"/);
-    expect(result.out).toMatch(/exclusiveGateway Gateway_InvoiceOk/);
-    expect(result.out).toMatch(/boundaryEvent:timer Event_2Days/);
+    expect(result.out).toMatch(/process orderHandling/);
+    expect(result.out).toMatch(/userTask userTask_checkInvoice "Check invoice"/);
+    expect(result.out).toMatch(/exclusiveGateway gateway_invoiceOk/);
+    expect(result.out).toMatch(/boundaryEvent:timer event_timer2Days/);
     expect(result.out).not.toMatch(/x=|Bounds|waypoint/);
     const shown = ok('show', file, '--json').json();
-    expect(shown.processes[0].nodes.map((node: any) => node.id)).toContain('Activity_CheckInvoice');
-    const gatewayView = ok('show', file, 'Gateway_InvoiceOk', '--json').json();
+    expect(shown.processes[0].nodes.map((node: any) => node.id)).toContain('userTask_checkInvoice');
+    const gatewayView = ok('show', file, 'gateway_invoiceOk', '--json').json();
     expect(gatewayView.kind).toBe('exclusiveGateway');
     expect(gatewayView.outgoing).toHaveLength(2);
     const found = ok('find', file, 'invoice', '--json').json();
@@ -125,49 +125,49 @@ describe('bpmn cli session', () => {
   it('validates, sets properties and manages extensions', async () => {
     let result = ok('validate', file);
     expect(result.out).toMatch(/layout: ok/);
-    ok('set', file, 'Activity_CheckInvoice', 'name=Check the invoice', 'zeebe:modelerTemplate=check-form', 'doc=Compare with purchase order');
-    ok('ext', 'add', file, 'Activity_BookInvoice', 'zeebe:taskDefinition', 'type=book-invoice', 'retries=3');
-    result = ok('ext', 'list', file, 'Activity_BookInvoice');
+    ok('set', file, 'userTask_checkInvoice', 'name=Check the invoice', 'zeebe:modelerTemplate=check-form', 'doc=Compare with purchase order');
+    ok('ext', 'add', file, 'serviceTask_bookInvoice', 'zeebe:taskDefinition', 'type=book-invoice', 'retries=3');
+    result = ok('ext', 'list', file, 'serviceTask_bookInvoice');
     expect(result.out).toMatch(/zeebe:taskDefinition/);
     const doc = await reparse();
-    const checkTask = doc.get('Activity_CheckInvoice')!;
+    const checkTask = doc.get('userTask_checkInvoice')!;
     expect(checkTask.get('name')).toBe('Check the invoice');
     expect(checkTask.$attrs['zeebe:modelerTemplate']).toBe('check-form');
     expect(checkTask.get<any>('documentation')[0].text).toBe('Compare with purchase order');
     const xml = readFileSync(file, 'utf8');
     expect(xml).toMatch(/<zeebe:taskDefinition type="book-invoice" retries="3"/);
-    result = ok('set', file, 'Activity_BookInvoice', 'loop=parallel', 'cardinality=3');
+    result = ok('set', file, 'serviceTask_bookInvoice', 'loop=parallel', 'cardinality=3');
     const doc2 = await reparse();
-    expect(doc2.get('Activity_BookInvoice')!.get<any>('loopCharacteristics').$type).toBe('bpmn:MultiInstanceLoopCharacteristics');
+    expect(doc2.get('serviceTask_bookInvoice')!.get<any>('loopCharacteristics').$type).toBe('bpmn:MultiInstanceLoopCharacteristics');
   });
 
   it('retypes, removes with bridging and reorders', async () => {
-    ok('retype', file, 'Activity_BookInvoice', 'userTask');
+    ok('retype', file, 'serviceTask_bookInvoice', 'userTask');
     let doc = await reparse();
-    expect(doc.get('Activity_BookInvoice')!.$type).toBe('bpmn:UserTask');
-    expect(doc.incoming(doc.get('Activity_BookInvoice')!)).toHaveLength(1);
-    const result = ok('remove', file, 'Activity_BookInvoice');
+    expect(doc.get('serviceTask_bookInvoice')!.$type).toBe('bpmn:UserTask');
+    expect(doc.incoming(doc.get('serviceTask_bookInvoice')!)).toHaveLength(1);
+    const result = ok('remove', file, 'serviceTask_bookInvoice');
     expect(result.out).toMatch(/bridged/);
     doc = await reparse();
-    expect(doc.get('Activity_BookInvoice')).toBeUndefined();
-    const yes = doc.outgoing(doc.get('Gateway_InvoiceOk')!).find((flow) => flow.get('name') === 'yes')!;
-    expect(yes.get<any>('targetRef').id).toBe('Event_InvoiceBooked');
-    const flows = doc.outgoing(doc.get('Gateway_InvoiceOk')!).map((flow) => flow.get<string>('id'));
-    ok('order', file, 'Gateway_InvoiceOk', flows[1]!, flows[0]!);
+    expect(doc.get('serviceTask_bookInvoice')).toBeUndefined();
+    const yes = doc.outgoing(doc.get('gateway_invoiceOk')!).find((flow) => flow.get('name') === 'yes')!;
+    expect(yes.get<any>('targetRef').id).toBe('endEvent_invoiceBooked');
+    const flows = doc.outgoing(doc.get('gateway_invoiceOk')!).map((flow) => flow.get<string>('id'));
+    ok('order', file, 'gateway_invoiceOk', flows[1]!, flows[0]!);
     doc = await reparse();
-    expect(doc.outgoing(doc.get('Gateway_InvoiceOk')!).map((flow) => flow.get('id'))).toEqual([flows[1], flows[0]]);
+    expect(doc.outgoing(doc.get('gateway_invoiceOk')!).map((flow) => flow.get('id'))).toEqual([flows[1], flows[0]]);
   });
 
   it('applies a JSON batch with a split macro', async () => {
     const ops = {
       ops: [
-        { op: 'add', kind: 'subProcess', name: 'Payment', after: 'Gateway_InvoiceOk', before: 'Event_InvoiceBooked' },
-        { op: 'add', kind: 'startEvent', name: 'Pay start', in: 'Activity_Payment' },
-        { op: 'add', kind: 'serviceTask', name: 'Charge card', after: 'Event_PayStart' },
-        { op: 'add', kind: 'endEvent', name: 'Paid', after: 'Activity_ChargeCard' },
+        { op: 'add', kind: 'subProcess', name: 'Payment', after: 'gateway_invoiceOk', before: 'endEvent_invoiceBooked' },
+        { op: 'add', kind: 'startEvent', name: 'Pay start', in: 'subProcess_payment' },
+        { op: 'add', kind: 'serviceTask', name: 'Charge card', after: 'startEvent_payStart' },
+        { op: 'add', kind: 'endEvent', name: 'Paid', after: 'serviceTask_chargeCard' },
         {
           op: 'split',
-          after: 'Activity_ChargeCard',
+          after: 'serviceTask_chargeCard',
           kind: 'exclusiveGateway',
           name: 'Charged?',
           branches: [
@@ -175,11 +175,11 @@ describe('bpmn cli session', () => {
             { flowName: 'no', default: true, nodes: [{ kind: 'userTask', name: 'Retry manually' }] },
           ],
         },
-        { op: 'add', kind: 'dataObject', name: 'Invoice', in: 'Process_OrderHandling' },
-        { op: 'connect', source: 'Activity_CheckInvoice', target: 'DataObjectReference_Invoice' },
+        { op: 'add', kind: 'dataObject', name: 'Invoice', in: 'orderHandling' },
+        { op: 'connect', source: 'userTask_checkInvoice', target: 'dataObject_invoice' },
         // an unnamed element gets a hashed id: give it one to refer to it later in the batch
-        { op: 'add', kind: 'textAnnotation', id: 'TextAnnotation_Fallback', text: 'Manual fallback', in: 'Activity_Payment' },
-        { op: 'connect', source: 'TextAnnotation_Fallback', target: 'Activity_RetryManually' },
+        { op: 'add', kind: 'textAnnotation', id: 'TextAnnotation_Fallback', text: 'Manual fallback', in: 'subProcess_payment' },
+        { op: 'connect', source: 'TextAnnotation_Fallback', target: 'userTask_retryManually' },
       ],
     };
     const opsFile = join(dir, 'ops.json');
@@ -187,44 +187,44 @@ describe('bpmn cli session', () => {
     const result = ok('apply', file, opsFile, '--json');
     const applied = result.json();
     expect(applied.ok).toBe(true);
-    expect(applied.created.map((created: any) => created.id)).toEqual(expect.arrayContaining(['Activity_Payment', 'Gateway_Charged', 'Activity_RetryManually', 'DataObjectReference_Invoice']));
+    expect(applied.created.map((created: any) => created.id)).toEqual(expect.arrayContaining(['subProcess_payment', 'gateway_charged', 'userTask_retryManually', 'dataObject_invoice']));
     const doc = await reparse();
-    const sub = doc.get('Activity_Payment')!;
+    const sub = doc.get('subProcess_payment')!;
     expect(doc.flowNodes(sub).length).toBeGreaterThanOrEqual(5);
     const xml = readFileSync(file, 'utf8');
-    expect(xml).toMatch(/bpmnElement="Activity_Payment" isExpanded="true"/);
-    expect(diIds(xml)).toContain('Activity_RetryManually');
-    expect(diIds(xml)).toContain('DataObjectReference_Invoice');
+    expect(xml).toMatch(/bpmnElement="subProcess_payment" isExpanded="true"/);
+    expect(diIds(xml)).toContain('userTask_retryManually');
+    expect(diIds(xml)).toContain('dataObject_invoice');
     expect(diIds(xml)).toContain('TextAnnotation_Fallback');
     const report = ok('validate', file, '--json').json();
     expect(report.ok).toBe(true);
   });
 
   it('collapses and re-expands sub-processes through layout', async () => {
-    ok('layout', file, '--collapse', 'Activity_Payment');
+    ok('layout', file, '--collapse', 'subProcess_payment');
     let xml = readFileSync(file, 'utf8');
-    expect(xml).toMatch(/BPMNPlane_Activity_Payment/);
-    expect(xml).not.toMatch(/bpmnElement="Activity_Payment" isExpanded="true"/);
-    ok('add', file, 'task', 'Unrelated', '--in', 'Process_OrderHandling');
+    expect(xml).toMatch(/BPMNPlane_subProcess_payment/);
+    expect(xml).not.toMatch(/bpmnElement="subProcess_payment" isExpanded="true"/);
+    ok('add', file, 'task', 'Unrelated', '--in', 'orderHandling');
     xml = readFileSync(file, 'utf8');
-    expect(xml).toMatch(/BPMNPlane_Activity_Payment/);
-    ok('set', file, 'Activity_Payment', 'expanded=true');
+    expect(xml).toMatch(/BPMNPlane_subProcess_payment/);
+    ok('set', file, 'subProcess_payment', 'expanded=true');
     xml = readFileSync(file, 'utf8');
-    expect(xml).toMatch(/bpmnElement="Activity_Payment" isExpanded="true"/);
+    expect(xml).toMatch(/bpmnElement="subProcess_payment" isExpanded="true"/);
   });
 
   it('adds pools and message flows', async () => {
     ok('add', file, 'participant', 'Shop');
     ok('add', file, 'participant', 'Customer', '--black-box');
-    const result = ok('connect', file, 'Activity_CheckInvoice', 'Participant_Customer', '--name', 'Clarification request');
+    const result = ok('connect', file, 'userTask_checkInvoice', 'participant_customer', '--name', 'Clarification request');
     expect(result.out).toMatch(/messageFlow/);
     const doc = await reparse();
     expect(doc.collaboration()).toBeDefined();
     expect(doc.participants()).toHaveLength(2);
     expect(doc.messageFlows()).toHaveLength(1);
     const xml = readFileSync(file, 'utf8');
-    expect(diIds(xml)).toContain('Participant_Shop');
-    expect(diIds(xml)).toContain('Participant_Customer');
+    expect(diIds(xml)).toContain('participant_shop');
+    expect(diIds(xml)).toContain('participant_customer');
   });
 
   it('reports errors with codes and exit codes', () => {
@@ -239,10 +239,10 @@ describe('bpmn cli session', () => {
     result = bpmn('add', file, 'userTask', 'X', '--after', 'Nope', '--json');
     expect(result.code).toBe(2);
     expect(JSON.parse(result.err).error.code).toBe('E_NOT_FOUND');
-    result = bpmn('add', file, 'userTask', 'Y', '--after', 'Gateway_InvoiceOk', '--dry-run');
+    result = bpmn('add', file, 'userTask', 'Y', '--after', 'gateway_invoiceOk', '--dry-run');
     expect(result.code).toBe(0);
     expect(result.out).toMatch(/dry run/);
-    result = bpmn('show', file, 'Activity_Y');
+    result = bpmn('show', file, 'userTask_y');
     expect(result.code).toBe(2);
   });
 
@@ -259,22 +259,22 @@ describe('complex gateways (#74)', () => {
     const modelFile = join(dir, 'complex.bpmn');
     ok('new', modelFile, '--id', 'P');
     ok('add', modelFile, 'start', 'S');
-    expect(ok('add', modelFile, 'complex', 'Enough reviews?', '--after', 'Event_S').out).toMatch(/created complexGateway Gateway_EnoughReviews/);
-    ok('add', modelFile, 'task', 'Legal', '--after', 'Gateway_EnoughReviews');
-    ok('add', modelFile, 'task', 'Finance', '--after', 'Gateway_EnoughReviews');
-    ok('add', modelFile, 'parallelGateway', '--after', 'Activity_Legal', '--id', 'Join');
-    ok('connect', modelFile, 'Activity_Finance', 'Join');
+    expect(ok('add', modelFile, 'complex', 'Enough reviews?', '--after', 'startEvent_s').out).toMatch(/created complexGateway gateway_enoughReviews/);
+    ok('add', modelFile, 'task', 'Legal', '--after', 'gateway_enoughReviews');
+    ok('add', modelFile, 'task', 'Finance', '--after', 'gateway_enoughReviews');
+    ok('add', modelFile, 'parallelGateway', '--after', 'task_legal', '--id', 'Join');
+    ok('connect', modelFile, 'task_finance', 'Join');
     ok('add', modelFile, 'end', 'Done', '--after', 'Join');
     ok('retype', modelFile, 'Join', 'complexGateway');
-    expect(ok('retype', modelFile, 'Gateway_EnoughReviews', 'inclusiveGateway').out).toMatch(/changed inclusiveGateway Gateway_EnoughReviews/);
-    ok('retype', modelFile, 'Gateway_EnoughReviews', 'complex');
+    expect(ok('retype', modelFile, 'gateway_enoughReviews', 'inclusiveGateway').out).toMatch(/changed inclusiveGateway gateway_enoughReviews/);
+    ok('retype', modelFile, 'gateway_enoughReviews', 'complex');
     expect(ok('validate', modelFile).out).toMatch(/valid, 0 warning/);
     expect(ok('layout', modelFile).code).toBe(0);
     expect(ok('render', modelFile, '-o', join(dir, 'complex.svg')).out).toMatch(/wrote/);
-    expect(bpmn('validate', modelFile, '--platform', 'c7').out).toMatch(/W_C7_DEPLOY_COMPLEX_GATEWAY Gateway_EnoughReviews/);
+    expect(bpmn('validate', modelFile, '--platform', 'c7').out).toMatch(/W_C7_DEPLOY_COMPLEX_GATEWAY gateway_enoughReviews/);
     expect(bpmn('validate', modelFile, '--platform', 'c8').out).toMatch(/W_C8_DEPLOY_UNSUPPORTED Join/);
     expect(bpmn('remove', modelFile, 'Join').err).toMatch(/E_AMBIGUOUS_BRIDGE: Join is a complex join/);
-    expect(ok('remove', modelFile, 'Join', '--bridge-all').out).toMatch(/note: Join synchronised Activity_Legal, Activity_Finance/);
+    expect(ok('remove', modelFile, 'Join', '--bridge-all').out).toMatch(/note: Join synchronised task_legal, task_finance/);
   });
 });
 
@@ -289,8 +289,8 @@ describe('bpmn cli contracts', () => {
     modelFile = join(dir, 'contracts.bpmn');
     ok('new', modelFile, '--id', 'P');
     ok('add', modelFile, 'start', 'S');
-    ok('add', modelFile, 'subProcess', 'Sub', '--after', 'Event_S');
-    ok('add', modelFile, 'start', 'Inner', '--in', 'Activity_Sub');
+    ok('add', modelFile, 'subProcess', 'Sub', '--after', 'startEvent_s');
+    ok('add', modelFile, 'start', 'Inner', '--in', 'subProcess_sub');
   });
 
   it('reports a missing ops file as an I/O error', () => {
@@ -328,41 +328,41 @@ describe('bpmn cli contracts', () => {
   });
 
   it('validates and reports layout --expand / --collapse', () => {
-    let result = ok('layout', modelFile, '--expand', 'Activity_Sub');
-    expect(result.out).toMatch(/changed subProcess Activity_Sub "Sub" - expanded=true/);
-    result = bpmn('layout', modelFile, '--collapse', 'Event_S');
+    let result = ok('layout', modelFile, '--expand', 'subProcess_sub');
+    expect(result.out).toMatch(/changed subProcess subProcess_sub "Sub" - expanded=true/);
+    result = bpmn('layout', modelFile, '--collapse', 'startEvent_s');
     expect(result.code).toBe(2);
     expect(result.err).toMatch(/error E_WRONG_KIND/);
-    result = bpmn('layout', modelFile, '--expand', 'Activity_Su', '--json');
+    result = bpmn('layout', modelFile, '--expand', 'subProcess_su', '--json');
     expect(result.code).toBe(2);
     const cliError = JSON.parse(result.err).error;
     expect(cliError.code).toBe('E_NOT_FOUND');
-    expect(cliError.candidates).toEqual(['Activity_Sub']);
+    expect(cliError.candidates).toEqual(['subProcess_sub']);
     expect(bpmn('layout', modelFile, '--no-layout').code).toBe(1);
-    expect(bpmn('layout', modelFile, '--expand', 'Activity_Sub', '--collapse', 'Activity_Sub').code).toBe(1);
-    result = ok('layout', modelFile, '--collapse', 'Activity_Sub', '--json');
-    expect(result.json().changed).toEqual([{ id: 'Activity_Sub', kind: 'subProcess', name: 'Sub', detail: 'expanded=false' }]);
+    expect(bpmn('layout', modelFile, '--expand', 'subProcess_sub', '--collapse', 'subProcess_sub').code).toBe(1);
+    result = ok('layout', modelFile, '--collapse', 'subProcess_sub', '--json');
+    expect(result.json().changed).toEqual([{ id: 'subProcess_sub', kind: 'subProcess', name: 'Sub', detail: 'expanded=false' }]);
     expect(result.json().layout.expanded).toEqual([]);
-    ok('layout', modelFile, '--expand', 'Activity_Sub');
+    ok('layout', modelFile, '--expand', 'subProcess_sub');
   });
 
   it('keeps collapse requests made with --no-layout', () => {
-    let result = ok('set', modelFile, 'Activity_Sub', 'expanded=false', '--no-layout');
+    let result = ok('set', modelFile, 'subProcess_sub', 'expanded=false', '--no-layout');
     expect(result.out).toMatch(/expanded=false/);
-    expect(readFileSync(modelFile, 'utf8')).toMatch(/bpmnElement="Activity_Sub" isExpanded="false"/);
-    expect(ok('show', modelFile, 'Activity_Sub').out).toMatch(/expanded: false/);
+    expect(readFileSync(modelFile, 'utf8')).toMatch(/bpmnElement="subProcess_sub" isExpanded="false"/);
+    expect(ok('show', modelFile, 'subProcess_sub').out).toMatch(/expanded: false/);
     ok('layout', modelFile);
     let xml = readFileSync(modelFile, 'utf8');
-    expect(xml).toMatch(/BPMNPlane_Activity_Sub/);
-    expect(xml).not.toMatch(/bpmnElement="Activity_Sub" isExpanded="true"/);
-    result = ok('add', modelFile, 'subProcess', 'Other', '--after', 'Activity_Sub', '--collapsed', '--no-layout');
+    expect(xml).toMatch(/BPMNPlane_subProcess_sub/);
+    expect(xml).not.toMatch(/bpmnElement="subProcess_sub" isExpanded="true"/);
+    result = ok('add', modelFile, 'subProcess', 'Other', '--after', 'subProcess_sub', '--collapsed', '--no-layout');
     expect(result.out).toMatch(/laid out collapsed/);
     ok('layout', modelFile);
     xml = readFileSync(modelFile, 'utf8');
-    expect(xml).toMatch(/BPMNPlane_Activity_Other/);
-    expect(xml).not.toMatch(/bpmnElement="Activity_Other" isExpanded="true"/);
-    ok('layout', modelFile, '--expand', 'Activity_Sub,Activity_Other');
-    expect(readFileSync(modelFile, 'utf8')).toMatch(/bpmnElement="Activity_Other" isExpanded="true"/);
+    expect(xml).toMatch(/BPMNPlane_subProcess_other/);
+    expect(xml).not.toMatch(/bpmnElement="subProcess_other" isExpanded="true"/);
+    ok('layout', modelFile, '--expand', 'subProcess_sub,subProcess_other');
+    expect(readFileSync(modelFile, 'utf8')).toMatch(/bpmnElement="subProcess_other" isExpanded="true"/);
   });
 
   it('re-attaches boundary events with move --on', async () => {
@@ -370,13 +370,13 @@ describe('bpmn cli contracts', () => {
     ok('new', moveFile, '--id', 'M');
     ok('add', moveFile, 'task', 'A', '--in', 'M');
     ok('add', moveFile, 'task', 'B', '--in', 'M');
-    ok('add', moveFile, 'boundary:timer', 'T', '--on', 'Activity_A', '--timer', 'PT1H');
-    const result = ok('move', moveFile, 'Event_T', '--on', 'Activity_B');
-    expect(result.out).toMatch(/moved onto Activity_B \(was Activity_A\)/);
+    ok('add', moveFile, 'boundary:timer', 'T', '--on', 'task_a', '--timer', 'PT1H');
+    const result = ok('move', moveFile, 'event_t', '--on', 'task_b');
+    expect(result.out).toMatch(/moved onto task_b \(was task_a\)/);
     const doc = await Doc.fromXml(readFileSync(moveFile, 'utf8'));
-    expect(doc.get('Event_T')!.get<any>('attachedToRef').id).toBe('Activity_B');
-    expect(bpmn('move', moveFile, 'Event_T').err).toMatch(/--on/);
-    expect(bpmn('move', moveFile, 'Event_T', '--on', 'Activity_A', '--in', 'M').err).toMatch(/E_USAGE: --in and --on cannot be combined/);
+    expect(doc.get('event_t')!.get<any>('attachedToRef').id).toBe('task_b');
+    expect(bpmn('move', moveFile, 'event_t').err).toMatch(/--on/);
+    expect(bpmn('move', moveFile, 'event_t', '--on', 'task_a', '--in', 'M').err).toMatch(/E_USAGE: --in and --on cannot be combined/);
   });
 
   it('applies the ops JSON rules to CLI flags', () => {
@@ -387,24 +387,24 @@ describe('bpmn cli contracts', () => {
     result = bpmn('add', modelFile, 'task', 'Dup', '--if-absent');
     expect(result.code).toBe(1);
     expect(result.err).toMatch(/--if-absent needs an explicit --id/);
-    result = bpmn('add', modelFile, 'task', 'X', '--after', 'Event_S', '--condition', '${c}', '--default');
+    result = bpmn('add', modelFile, 'task', 'X', '--after', 'startEvent_s', '--condition', '${c}', '--default');
     expect(result.code).toBe(1);
     expect(result.err).toMatch(/--default and --condition are mutually exclusive/);
-    result = bpmn('connect', modelFile, 'Event_S', 'Activity_Sub', '--condition', '${c}', '--default');
+    result = bpmn('connect', modelFile, 'startEvent_s', 'subProcess_sub', '--condition', '${c}', '--default');
     expect(result.code).toBe(1);
-    result = bpmn('add', modelFile, 'task', 'X', '--after', 'Event_S', '--in', 'P');
+    result = bpmn('add', modelFile, 'task', 'X', '--after', 'startEvent_s', '--in', 'P');
     expect(result.code).toBe(1);
     expect(result.err).toMatch(/--after and --in cannot be combined/);
     expect(readFileSync(modelFile, 'utf8')).toBe(before);
   });
 
   it('does not expose diagram interchange ids', () => {
-    let result = bpmn('show', modelFile, 'BPMNShape_Event_S');
+    let result = bpmn('show', modelFile, 'BPMNShape_startEvent_s');
     expect(result.code).toBe(2);
     expect(result.err).toMatch(/error E_NOT_FOUND/);
     expect(result.err).not.toMatch(/candidates:.*BPMNShape/);
-    result = bpmn('show', modelFile, 'Event_');
-    expect(result.err).toMatch(/candidates: Event_Inner, Event_S$/m);
+    result = bpmn('show', modelFile, 'startEvent_');
+    expect(result.err).toMatch(/candidates: startEvent_inner, startEvent_s$/m);
     expect(bpmn('remove', modelFile, 'BPMNPlane_P').code).toBe(2);
   });
 
@@ -412,25 +412,25 @@ describe('bpmn cli contracts', () => {
     const syncFile = join(dir, 'sync.bpmn');
     ok('new', syncFile, '--name', 'Sync');
     ok('add', syncFile, 'start', 'Every minute');
-    ok('add', syncFile, 'serviceTask', 'Consignations synchronisieren', '--after', 'Event_EveryMinute');
-    ok('add', syncFile, 'end', 'Consignations aktualisiert', '--after', 'Activity_ConsignationsSynchronisieren');
-    const result = ok('add', syncFile, 'serviceTask', 'Consignations protokollieren', '--after', 'Activity_ConsignationsSynchronisieren');
+    ok('add', syncFile, 'serviceTask', 'Consignations synchronisieren', '--after', 'startEvent_everyMinute');
+    ok('add', syncFile, 'end', 'Consignations aktualisiert', '--after', 'serviceTask_consignationsSynchronisieren');
+    const result = ok('add', syncFile, 'serviceTask', 'Consignations protokollieren', '--after', 'serviceTask_consignationsSynchronisieren');
     expect(result.out).toMatch(
-      /^changed sequenceFlow Flow_ConsignationsSynchronisierenToConsignationsProtokollieren - .* \(renamed from Flow_ConsignationsSynchronisierenToConsignationsAktualisiert: its id named its old ends\)$/m,
+      /^changed sequenceFlow flow_consignationsSynchronisierenToConsignationsProtokollieren - .* \(renamed from flow_consignationsSynchronisierenToConsignationsAktualisiert: its id named its old ends\)$/m,
     );
   });
 
   it('does not write a result that equals the file, and says so', () => {
     const before = readFileSync(modelFile, 'utf8');
-    let result = ok('set', modelFile, 'Event_S', 'name=S');
+    let result = ok('set', modelFile, 'startEvent_s', 'name=S');
     expect(result.out).toMatch(/^unchanged: .*contracts\.bpmn \(the result equals the file; nothing written\)$/m);
     expect(result.out).not.toMatch(/^written: /m);
-    result = ok('set', modelFile, 'Event_S', 'name=S', '--json');
+    result = ok('set', modelFile, 'startEvent_s', 'name=S', '--json');
     expect(result.json()).toMatchObject({ ok: true, written: false, unchanged: true });
-    result = ok('set', modelFile, 'Event_S', 'name=S', '--dry-run');
+    result = ok('set', modelFile, 'startEvent_s', 'name=S', '--dry-run');
     expect(result.out).toMatch(/^dry run: .* not written \(unchanged\)$/m);
     expect(readFileSync(modelFile, 'utf8')).toBe(before);
-    result = ok('set', modelFile, 'Event_S', 'name=Started', '--json');
+    result = ok('set', modelFile, 'startEvent_s', 'name=Started', '--json');
     expect(result.json()).toMatchObject({ written: true, unchanged: false });
   });
 
@@ -442,15 +442,15 @@ describe('bpmn cli contracts', () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, file: '-' });
     result = piped('(head -c 200 "$1"; sleep 0.5; tail -c +201 "$1") | "$2" "$3" show -');
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('Activity_Sub');
-    result = piped('(sleep 0.5; echo \'[{"op":"set","id":"Event_S","values":{"name":"Started late"}}]\') | "$2" "$3" apply "$1" - --dry-run --json');
+    expect(result.stdout).toContain('subProcess_sub');
+    result = piped('(sleep 0.5; echo \'[{"op":"set","id":"startEvent_s","values":{"name":"Started late"}}]\') | "$2" "$3" apply "$1" - --dry-run --json');
     expect(result.status, result.stderr).toBe(0);
   });
 
   it('a write to a directory (-o) is E_IO and leaves no temp file', () => {
     const target = join(dir, 'adir.bpmn');
     mkdirSync(target);
-    const result = bpmn('add', modelFile, 'task', 'X', '--after', 'Event_S', '-o', target);
+    const result = bpmn('add', modelFile, 'task', 'X', '--after', 'startEvent_s', '-o', target);
     expect(result.code).toBe(4);
     expect(result.err).toMatch(/^error E_IO: Cannot write .*adir\.bpmn: it is a directory\n/);
     expect(readdirSync(dir).filter((fileName) => fileName.endsWith('.tmp'))).toEqual([]);
@@ -459,8 +459,8 @@ describe('bpmn cli contracts', () => {
 
 describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
   let base: string;
-  const splice = ['serviceTask', 'Book invoice', '--after', 'Activity_CheckInvoice'];
-  const STALE = 'warning W_FLOW_ID_STALE Flow_CheckInvoiceToInvoiceDone: Flow Flow_CheckInvoiceToInvoiceDone kept its id, which names its old ends Activity_CheckInvoice -> Event_InvoiceDone; it now runs Activity_CheckInvoice -> Activity_BookInvoice  (Code and tests that use the id keep working; to rename it together with them: `bpmn set <file> Flow_CheckInvoiceToInvoiceDone id=Flow_CheckInvoiceToBookInvoice`.)';
+  const splice = ['serviceTask', 'Book invoice', '--after', 'userTask_checkInvoice'];
+  const STALE = 'warning W_FLOW_ID_STALE flow_checkInvoiceToInvoiceDone: Flow flow_checkInvoiceToInvoiceDone kept its id, which names its old ends userTask_checkInvoice -> endEvent_invoiceDone; it now runs userTask_checkInvoice -> serviceTask_bookInvoice  (Code and tests that use the id keep working; to rename it together with them: `bpmn set <file> flow_checkInvoiceToInvoiceDone id=flow_checkInvoiceToBookInvoice`.)';
 
   /** A copy of start -> Check invoice -> end. */
   function fresh(name: string): string {
@@ -473,8 +473,8 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
     base = join(dir, 'invoice.bpmn');
     ok('new', base, '--name', 'Invoice');
     ok('add', base, 'startEvent', 'Invoice received');
-    ok('add', base, 'userTask', 'Check invoice', '--after', 'Event_InvoiceReceived');
-    ok('add', base, 'endEvent', 'Invoice done', '--after', 'Activity_CheckInvoice');
+    ok('add', base, 'userTask', 'Check invoice', '--after', 'startEvent_invoiceReceived');
+    ok('add', base, 'endEvent', 'Invoice done', '--after', 'userTask_checkInvoice');
   });
 
   it('--keep-flow-ids keeps the id and names the stale flow with the command that renames it; the command works', () => {
@@ -482,23 +482,23 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
     const result = ok('add', modelFile, ...splice, '--keep-flow-ids');
     expect(result.out).toContain(`${STALE}\n`);
     expect(result.out).not.toMatch(/renamed/);
-    expect(readFileSync(modelFile, 'utf8')).toContain('<bpmn:sequenceFlow id="Flow_CheckInvoiceToInvoiceDone" sourceRef="Activity_CheckInvoice" targetRef="Activity_BookInvoice" />');
+    expect(readFileSync(modelFile, 'utf8')).toContain('<bpmn:sequenceFlow id="flow_checkInvoiceToInvoiceDone" sourceRef="userTask_checkInvoice" targetRef="serviceTask_bookInvoice" />');
     const command = /`bpmn set <file> (\S+) (id=\S+)`/.exec(result.out)!;
-    expect(ok('set', modelFile, command[1]!, command[2]!).out).toMatch(/^changed sequenceFlow Flow_CheckInvoiceToBookInvoice /m);
+    expect(ok('set', modelFile, command[1]!, command[2]!).out).toMatch(/^changed sequenceFlow flow_checkInvoiceToBookInvoice /m);
   });
 
   it('BPMN_KEEP_FLOW_IDS=1 makes it the default; --no-keep-flow-ids, 0 and an empty value rename', () => {
     let result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('env-on.bpmn'), ...splice, '--summary');
-    expect(result.out).toMatch(/^warning W_FLOW_ID_STALE Flow_CheckInvoiceToInvoiceDone: /m);
+    expect(result.out).toMatch(/^warning W_FLOW_ID_STALE flow_checkInvoiceToInvoiceDone: /m);
     expect(result.out).not.toMatch(/^renamed:/m);
     for (const [env, flag] of [['1', '--no-keep-flow-ids'], ['0', undefined], ['Off', undefined], ['', undefined]] as const) {
       result = okWith({ BPMN_KEEP_FLOW_IDS: env }, 'add', fresh('env-off.bpmn'), ...splice, '--summary', ...(flag ? [flag] : []));
-      expect(result.out, `${env} ${flag ?? ''}`).toMatch(/^renamed: Flow_CheckInvoiceToInvoiceDone -> Flow_CheckInvoiceToBookInvoice$/m);
+      expect(result.out, `${env} ${flag ?? ''}`).toMatch(/^renamed: flow_checkInvoiceToInvoiceDone -> flow_checkInvoiceToBookInvoice$/m);
       expect(result.out).not.toMatch(/W_FLOW_ID_STALE/);
     }
     result = okWith({ BPMN_KEEP_FLOW_IDS: 'yes' }, 'add', fresh('env-yes.bpmn'), ...splice, '--json');
     expect(result.json()).not.toHaveProperty('renamed');
-    expect(result.json().warnings.added).toEqual([expect.objectContaining({ code: 'W_FLOW_ID_STALE', element: 'Flow_CheckInvoiceToInvoiceDone', related: ['Activity_CheckInvoice', 'Activity_BookInvoice'] })]);
+    expect(result.json().warnings.added).toEqual([expect.objectContaining({ code: 'W_FLOW_ID_STALE', element: 'flow_checkInvoiceToInvoiceDone', related: ['userTask_checkInvoice', 'serviceTask_bookInvoice'] })]);
   });
 
   /** A copy of start -> Check invoice -> Book invoice -> end whose flows have ids that do not name their ends (`ids`: three). */
@@ -506,7 +506,7 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
     const modelFile = fresh(name);
     ok('add', modelFile, ...splice);
     let xml = readFileSync(modelFile, 'utf8');
-    ['Flow_InvoiceReceivedToCheckInvoice', 'Flow_CheckInvoiceToBookInvoice', 'Flow_BookInvoiceToInvoiceDone'].forEach((id, flowIndex) => (xml = xml.replaceAll(id, ids[flowIndex]!)));
+    ['flow_invoiceReceivedToCheckInvoice', 'flow_checkInvoiceToBookInvoice', 'flow_bookInvoiceToInvoiceDone'].forEach((id, flowIndex) => (xml = xml.replaceAll(id, ids[flowIndex]!)));
     writeFileSync(modelFile, xml);
     return modelFile;
   }
@@ -515,25 +515,25 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
     const note = (value: string) => `flow ids kept: BPMN_KEEP_FLOW_IDS=${value} (--no-keep-flow-ids renames flows after their new ends for one command)`;
     // a stale flow id: after the change's own notes, before the warnings
     let result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('note-text.bpmn'), ...splice);
-    expect(result.out).toContain(`\nnote: inserted between Activity_CheckInvoice and Event_InvoiceDone\nnote: ${note('1')}\n${STALE}\n`);
+    expect(result.out).toContain(`\nnote: inserted between userTask_checkInvoice and endEvent_invoiceDone\nnote: ${note('1')}\n${STALE}\n`);
     // --summary prints no notes of its own: this one follows the change lines
     result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'add', fresh('note-summary.bpmn'), ...splice, '--summary');
-    expect(result.out).toContain(`\nchanged: Flow_CheckInvoiceToInvoiceDone\nnote: ${note('1')}\nwarning W_FLOW_ID_STALE Flow_CheckInvoiceToInvoiceDone: `);
+    expect(result.out).toContain(`\nchanged: flow_checkInvoiceToInvoiceDone\nnote: ${note('1')}\nwarning W_FLOW_ID_STALE flow_checkInvoiceToInvoiceDone: `);
     result = okWith({ BPMN_KEEP_FLOW_IDS: 'yes' }, 'add', fresh('note-json.bpmn'), ...splice, '--json');
-    expect(result.json().notes).toEqual(['inserted between Activity_CheckInvoice and Event_InvoiceDone', note('yes')]);
+    expect(result.json().notes).toEqual(['inserted between userTask_checkInvoice and endEvent_invoiceDone', note('yes')]);
     const ops = join(dir, 'note-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'Activity_CheckInvoice' }]));
+    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'userTask_checkInvoice' }]));
     result = okWith({ BPMN_KEEP_FLOW_IDS: 'On' }, 'apply', fresh('note-summary-json.bpmn'), ops, '--summary', '--json');
     expect(result.json().notes).toEqual([note('On')]);
     // a move puts the moved node's out-flow back without any warning (numbered flow ids): only the note says why
     const numbered = unnamedFlows('note-numbered.bpmn', ['Flow_1', 'Flow_2', 'Flow_3']);
-    const move = ['move', numbered, 'Activity_CheckInvoice', '--after', 'Activity_BookInvoice', '--summary', '--dry-run'];
+    const move = ['move', numbered, 'userTask_checkInvoice', '--after', 'serviceTask_bookInvoice', '--summary', '--dry-run'];
     result = okWith({ BPMN_KEEP_FLOW_IDS: '1' }, ...move);
-    expect(result.out).toMatch(/^changed: Flow_1, Flow_3, Flow_2, Activity_CheckInvoice\nnote: flow ids kept: BPMN_KEEP_FLOW_IDS=1 /m);
+    expect(result.out).toMatch(/^changed: Flow_1, Flow_3, Flow_2, userTask_checkInvoice\nnote: flow ids kept: BPMN_KEEP_FLOW_IDS=1 /m);
     expect(result.out).not.toMatch(/created sequenceFlow|warning/);
-    expect(ok(...move).out).toMatch(/^created sequenceFlow: Flow_CheckInvoiceToInvoiceDone\n[\s\S]*^removed: Flow_2$/m);
+    expect(ok(...move).out).toMatch(/^created sequenceFlow: flow_checkInvoiceToInvoiceDone\n[\s\S]*^removed: Flow_2$/m);
     // the same move in a batch
-    writeFileSync(ops, JSON.stringify([{ op: 'move', ids: ['Activity_CheckInvoice'], after: 'Activity_BookInvoice' }]));
+    writeFileSync(ops, JSON.stringify([{ op: 'move', ids: ['userTask_checkInvoice'], after: 'serviceTask_bookInvoice' }]));
     expect(okWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', numbered, ops, '--json', '--dry-run').json().notes).toContain(note('1'));
   });
 
@@ -543,12 +543,12 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
     // the ids Camunda Modeler gives
     const modeler = unnamedFlows('note-none-modeler.bpmn', ['Flow_0k3x9ab', 'Flow_1q7m2zd', 'Flow_0w5n1rt']);
     const ops = join(dir, 'note-none-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'connect', source: 'Event_InvoiceReceived', target: 'Event_InvoiceDone', as: '$f' }, { op: 'set', id: '$f', values: { name: 'skip' } }]));
+    writeFileSync(ops, JSON.stringify([{ op: 'connect', source: 'startEvent_invoiceReceived', target: 'endEvent_invoiceDone', as: '$f' }, { op: 'set', id: '$f', values: { name: 'skip' } }]));
     // a move in place relocates nothing: its flow options change the flow into its node the same in both modes
     const inPlace = join(dir, 'note-none-in-place.json');
     const inPlaceNumbered = join(dir, 'note-none-in-place-numbered.json');
-    writeFileSync(inPlace, JSON.stringify([{ op: 'move', ids: ['Activity_CheckInvoice'], after: 'Event_InvoiceReceived', flowName: 'go', flowId: 'Flow_ReceivedToCheck' }]));
-    writeFileSync(inPlaceNumbered, JSON.stringify([{ op: 'move', ids: ['Activity_BookInvoice'], after: 'Activity_CheckInvoice', flowName: 'ok' }]));
+    writeFileSync(inPlace, JSON.stringify([{ op: 'move', ids: ['userTask_checkInvoice'], after: 'startEvent_invoiceReceived', flowName: 'go', flowId: 'Flow_ReceivedToCheck' }]));
+    writeFileSync(inPlaceNumbered, JSON.stringify([{ op: 'move', ids: ['serviceTask_bookInvoice'], after: 'userTask_checkInvoice', flowName: 'ok' }]));
     expect(ok('apply', modelFile, inPlace, '--dry-run', '--summary').out).toMatch(/^changed: Flow_ReceivedToCheck$/m);
     expect(ok('apply', numbered, inPlaceNumbered, '--dry-run', '--summary').out).toMatch(/^changed: Flow_2$/m);
     const cases: string[][] = [
@@ -556,19 +556,19 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
       ['apply', numbered, inPlaceNumbered, '--json'],
       ['add', modelFile, ...splice, '--keep-flow-ids'],
       ['add', modelFile, ...splice, '--no-keep-flow-ids', '--summary'],
-      ['set', modelFile, 'Activity_CheckInvoice', 'name=Check bill'],
+      ['set', modelFile, 'userTask_checkInvoice', 'name=Check bill'],
       // a flow the change creates or removes is the same in both modes, also one a batch created and then changed
-      ['connect', modelFile, 'Event_InvoiceReceived', 'Event_InvoiceDone', '--summary'],
-      ['remove', modelFile, 'Flow_CheckInvoiceToInvoiceDone', '--json'],
+      ['connect', modelFile, 'startEvent_invoiceReceived', 'endEvent_invoiceDone', '--summary'],
+      ['remove', modelFile, 'flow_checkInvoiceToInvoiceDone', '--json'],
       ['apply', modelFile, ops, '--summary'],
       // a property of a flow, also the rename W_FLOW_ID_STALE's hint gives
-      ['set', modelFile, 'Flow_CheckInvoiceToInvoiceDone', 'name=done', '--summary'],
-      ['set', modelFile, 'Flow_CheckInvoiceToInvoiceDone', 'id=Flow_CheckInvoiceToBookInvoice', '--summary'],
+      ['set', modelFile, 'flow_checkInvoiceToInvoiceDone', 'name=done', '--summary'],
+      ['set', modelFile, 'flow_checkInvoiceToInvoiceDone', 'id=flow_checkInvoiceToBookInvoice', '--summary'],
       // a flow whose id does not name its ends is renamed in neither mode: a splice, a bridging remove, set target=
       ...[numbered, modeler].flatMap((sample) => [
-        ['add', sample, 'userTask', 'Approve invoice', '--after', 'Activity_CheckInvoice', '--summary'],
-        ['remove', sample, 'Activity_BookInvoice', '--json'],
-        ['set', sample, sample === numbered ? 'Flow_1' : 'Flow_0k3x9ab', 'target=Activity_BookInvoice'],
+        ['add', sample, 'userTask', 'Approve invoice', '--after', 'userTask_checkInvoice', '--summary'],
+        ['remove', sample, 'serviceTask_bookInvoice', '--json'],
+        ['set', sample, sample === numbered ? 'Flow_1' : 'Flow_0k3x9ab', 'target=serviceTask_bookInvoice'],
       ]),
     ];
     for (const args of cases) {
@@ -583,13 +583,13 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
 
   it('an E_NOT_FOUND of a batch says that BPMN_KEEP_FLOW_IDS kept the flow ids: the id the default renames to does not exist', () => {
     const ops = join(dir, 'note-error-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'Activity_CheckInvoice' }, { op: 'set', id: 'Flow_CheckInvoiceToBookInvoice', values: { name: 'ok' } }]));
+    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'userTask_checkInvoice' }, { op: 'set', id: 'flow_checkInvoiceToBookInvoice', values: { name: 'ok' } }]));
     const modelFile = fresh('note-error.bpmn');
-    expect(ok('apply', modelFile, ops, '--dry-run', '--summary').out).toMatch(/^renamed: Flow_CheckInvoiceToInvoiceDone -> Flow_CheckInvoiceToBookInvoice$/m);
+    expect(ok('apply', modelFile, ops, '--dry-run', '--summary').out).toMatch(/^renamed: flow_checkInvoiceToInvoiceDone -> flow_checkInvoiceToBookInvoice$/m);
     const kept = 'If it is the id a flow an earlier op gave other ends would be renamed to: flow ids are kept here (BPMN_KEEP_FLOW_IDS=1), so that flow kept its old id; use the old id, or --no-keep-flow-ids to rename it after its new ends.';
     let result = bpmnWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', modelFile, ops, '--dry-run');
     expect(result.code).toBe(2);
-    expect(result.err).toMatch(/^error E_NOT_FOUND: No element with id "Flow_CheckInvoiceToBookInvoice"\n/);
+    expect(result.err).toMatch(/^error E_NOT_FOUND: No element with id "flow_checkInvoiceToBookInvoice" \(did you mean: invoice\?\)\n/);
     expect(result.err).toContain(` to list ids. ${kept}\n`);
     result = bpmnWith({ BPMN_KEEP_FLOW_IDS: '1' }, 'apply', modelFile, ops, '--dry-run', '--json');
     expect(result.json().error.hint.endsWith(` to list ids. ${kept}`)).toBe(true);
@@ -603,12 +603,12 @@ describe('flow ids kept (--keep-flow-ids, BPMN_KEEP_FLOW_IDS)', () => {
 
   it('apply, remove and set target= keep ids too; --strict exits 5 on the warning', () => {
     const ops = join(dir, 'keep-ops.json');
-    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'Activity_CheckInvoice' }]));
+    writeFileSync(ops, JSON.stringify([{ op: 'add', kind: 'serviceTask', name: 'Book invoice', after: 'userTask_checkInvoice' }]));
     expect(ok('apply', fresh('keep-apply.bpmn'), ops, '--keep-flow-ids').out).toContain(STALE);
-    const bridged = ok('remove', fresh('keep-remove.bpmn'), 'Activity_CheckInvoice', '--keep-flow-ids').out;
-    expect(bridged).toMatch(/^warning W_FLOW_ID_STALE Flow_InvoiceReceivedToCheckInvoice: .*`bpmn set <file> Flow_InvoiceReceivedToCheckInvoice id=Flow_InvoiceReceivedToInvoiceDone`/m);
-    const retargeted = ok('set', fresh('keep-set.bpmn'), 'Flow_InvoiceReceivedToCheckInvoice', 'target=Event_InvoiceDone', '--keep-flow-ids').out;
-    expect(retargeted).toMatch(/^warning W_FLOW_ID_STALE Flow_InvoiceReceivedToCheckInvoice: /m);
+    const bridged = ok('remove', fresh('keep-remove.bpmn'), 'userTask_checkInvoice', '--keep-flow-ids').out;
+    expect(bridged).toMatch(/^warning W_FLOW_ID_STALE flow_invoiceReceivedToCheckInvoice: .*`bpmn set <file> flow_invoiceReceivedToCheckInvoice id=flow_invoiceReceivedToInvoiceDone`/m);
+    const retargeted = ok('set', fresh('keep-set.bpmn'), 'flow_invoiceReceivedToCheckInvoice', 'target=endEvent_invoiceDone', '--keep-flow-ids').out;
+    expect(retargeted).toMatch(/^warning W_FLOW_ID_STALE flow_invoiceReceivedToCheckInvoice: /m);
     const strict = bpmn('add', fresh('keep-strict.bpmn'), ...splice, '--keep-flow-ids', '--strict');
     expect(strict.code).toBe(5);
     expect(strict.out).toContain(STALE);

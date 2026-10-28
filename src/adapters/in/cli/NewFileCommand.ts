@@ -12,7 +12,7 @@ export class NewFileCommand extends MutationCommand {
     this.withMutationOptions(
       this.define(program, 'new')
         .option('--name <text>', 'process name')
-        .option('--id <processId>', "process id (default: Process_<Name> or Process_1; a bpmn:Process prefix the .bpmnlintrc's element-id-naming names: that prefix and the name, process_main without one)")
+        .option('--id <processId>', "process id (default: the name in the id case, orderToCash, or Process_1; a bpmn:Process prefix the .bpmnlintrc's element-id-naming names: that prefix and the name, process_main without one)")
         .option('--no-executable', 'isExecutable=false')
         .option('--target <platform>', 'camunda8 | camunda7: declare vendor namespaces (camunda7: also historyTimeToLive=180 and the platform version, like Camunda Modeler; for CIB seven and Operaton too)', (raw: string) => {
           try {

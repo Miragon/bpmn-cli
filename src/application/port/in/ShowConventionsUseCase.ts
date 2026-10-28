@@ -4,7 +4,7 @@ import type { FileBpmnlintOptions } from '../out/LoadProjectSettingsPort.js';
 
 /**
  * `bpmn show --conventions`: the id conventions new ids follow in a file,
- * from its .bpmnlintrc and its own style.
+ * from its .bpmnlintrc, else element-id-naming's defaults.
  */
 export interface ShowConventionsUseCase {
 

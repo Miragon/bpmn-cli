@@ -95,7 +95,7 @@ describe('a full redraw keeps the DI ids', () => {
     expect(modeler.shapes.get('Pool')).toBe('Pool_di');
     const engine = await drawn(suffix, { diagram: 'BPMNDiagram_P', plane: 'BPMNPlane_P' });
     const moved = diOf(await write(engine, [pool], { layout: 'full' }));
-    expect(moved.planes[0]).toMatch(/^BPMNPlane_Collaboration_/);
+    expect(moved.planes[0]).toMatch(/^BPMNPlane_collaboration_/);
     expect(moved.shapes.get('A')).toBe('A_di');
   });
 
@@ -206,8 +206,8 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
         expect(diOf(fresh).planes).toEqual([`BPMNPlane_${cutAt(pid, 51)}`]);
         for (const layout of ['full', 'auto'] as const) {
           const after = diOf(await write(fresh, [pool], { layout, engine }));
-          expect(after.planes[0]).toMatch(/^BPMNPlane_Collaboration_/);
-          expect(after.diagrams[0]).toMatch(/^BPMNDiagram_Collaboration_/);
+          expect(after.planes[0]).toMatch(/^BPMNPlane_collaboration_/);
+          expect(after.diagrams[0]).toMatch(/^BPMNDiagram_collaboration_/);
           expect([...after.planes, ...after.diagrams].filter((id) => id.length > 64)).toEqual([]);
         }
       }

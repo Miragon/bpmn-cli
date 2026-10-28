@@ -153,9 +153,9 @@ describe('remove --bridge-all', () => {
     expect(outcome.changed).toEqual(['F5: B2 -> C (bridged J)', 'F7: D1 -> C (bridged J)']);
     expect(outcome.notes).toContain('bridged all: B2, D1 -> C');
     expect(outcome.warnings).toContain('W_IMPLICIT_JOIN C');
-    // a flow whose id names its ends in the file's style (F_B2ToJ: the file's flows are F<n>) follows them
-    const named = await removed(SPLIT.replace(/"F5"/g, '"F_B2ToJ"').replace(/>F5</g, '>F_B2ToJ<'), ['J'], { bridgeAll: true });
-    expect(named.changed).toEqual(['F_B2ToC: B2 -> C (bridged J) (renamed from F_B2ToJ: its id named its old ends)', 'F7: D1 -> C (bridged J)']);
+    // a flow whose id names its ends (flow_b2ToJ) follows them
+    const named = await removed(SPLIT.replace(/"F5"/g, '"flow_b2ToJ"').replace(/>F5</g, '>flow_b2ToJ<'), ['J'], { bridgeAll: true });
+    expect(named.changed).toEqual(['flow_b2ToC: B2 -> C (bridged J) (renamed from flow_b2ToJ: its id named its old ends)', 'F7: D1 -> C (bridged J)']);
   });
 
   it('a parallel join loses its synchronisation: the warning says so', async () => {

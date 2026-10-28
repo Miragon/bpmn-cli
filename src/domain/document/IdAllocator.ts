@@ -6,14 +6,12 @@ import type { Doc } from './Doc.js';
 
 /**
  * The ids one edit gives out, and what it recorded about them: the id each generated one wanted,
- * the ones that took a collision suffix, the ones under a declared prefix.
+ * the ones that took a collision suffix.
  */
 export class IdAllocator {
   private suffixedIds: Array<{ id: string; base: string }> = [];
   /** generated id -> the id it wanted; nobody's API yet, so a later op may still rename it */
   private readonly generated = new Map<string, string>();
-  /** ids under a declared prefix that the file's own style would give otherwise */
-  private readonly declared: string[] = [];
 
   constructor(
     private readonly doc: Doc,
@@ -24,15 +22,10 @@ export class IdAllocator {
     this.generated.clear();
   }
 
-  /**
-   * Claims a new id; `base` is the id the request wanted before a collision suffix. An id under a
-   * declared prefix that the file's own style would give otherwise goes on the `conventions:` line.
-   */
+  /** Claims a new id; `base` is the id the request wanted before a collision suffix. */
   allocate(req: IdRequest): { id: string; base: string } {
-    const style = this.styleOf();
     const ids = this.doc.ids;
-    const out = style.next(req, ids);
-    if (style.ownStyleDiffers && style.explain(req).source === 'lint' && out.base !== style.learnedOnly().next(req, ids).base) this.declared.push(out.id);
+    const out = this.styleOf().next(req, ids);
     ids.claim(out.id);
     this.generated.set(out.id, out.base);
     if (out.id !== out.base) this.suffixedIds.push(out);
@@ -69,10 +62,9 @@ export class IdAllocator {
    * A free id from `base` for a generated id `old` that a retype left with a stale prefix.
    * Claims nothing: the rename does.
    */
-  regenerated(old: string, base: string, sep: string): string {
+  regenerated(base: string, sep: string): string {
     const id = this.suffixed(base, sep);
     if (id !== base) this.suffixedIds.push({ id, base });
-    if (this.declared.includes(old)) this.declared.push(id);
     return id;
   }
 
@@ -89,7 +81,7 @@ export class IdAllocator {
   /** Whether `req` gives `id` in the style, with or without a collision suffix. */
   isDerived(id: string, req: IdRequest): boolean {
     return this.styleOf()
-      .derivedBases(req, id)
+      .derivedBases(req)
       .some((base) => id === base || (id.startsWith(base) && isSuffix(base, id.slice(base.length), 'either')));
   }
 
@@ -99,14 +91,6 @@ export class IdAllocator {
 
   forgetGenerated(id: string): void {
     this.generated.delete(id);
-  }
-
-  recordDeclared(id: string): void {
-    if (this.styleOf().ownStyleDiffers) this.declared.push(id);
-  }
-
-  get declaredIds(): readonly string[] {
-    return this.declared;
   }
 
   reportSuffixed(cs: ChangeSet): void {

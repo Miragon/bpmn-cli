@@ -39,7 +39,6 @@ export class MutationReportBuilder {
       validation,
       importWarnings: result.importWarnings,
       ...(result.view ? { view: result.view } : {}),
-      ...(result.conventions ? { conventions: result.conventions } : {}),
     };
   }
 

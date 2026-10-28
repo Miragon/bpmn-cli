@@ -100,7 +100,7 @@ export function opsExample(): { ops: EditCommand[] } {
     ops: [
       {
         op: 'split',
-        after: 'Activity_CheckInvoice',
+        after: 'userTask_checkInvoice',
         kind: 'exclusiveGateway',
         name: 'Invoice ok?',
         as: '$ok',
@@ -111,7 +111,7 @@ export function opsExample(): { ops: EditCommand[] } {
       },
       { op: 'add', kind: 'boundaryEvent:timer', name: 'Reminder', on: '$clarify', timer: 'P2D', nonInterrupting: true, as: '$reminder' },
       { op: 'add', kind: 'sendTask', name: 'Remind customer', after: '$reminder', as: '$remind' },
-      { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'Process_OrderHandling', as: '$sent' },
+      { op: 'add', kind: 'endEvent', name: 'Reminder sent', in: 'orderHandling', as: '$sent' },
       { op: 'connect', source: '$remind', target: '$sent' },
       { op: 'set', id: '$book', values: { name: 'Book invoice in ERP', doc: 'Posts the invoice to the ledger.' } },
       { op: 'ext', id: '$book', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'book-invoice', retries: '3' } },

@@ -60,7 +60,6 @@ const NO_FILES = new NoDocumentFiles();
 /* the in-memory API: strings in, strings / data out */
 export { mutateDoc, layoutDoc, checkDoc, applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './adapters/in/report/command-report.js';
-export { conventionsLines } from './adapters/in/report/utils/mutation-lines.js';
 export function mutationReport(result: MutationResult): MutationReport { return new MutationReportBuilder(result).report(); }
 export function renderMutation(result: MutationReportLike, opts: { dryRun?: boolean } = {}): string { return new MutationText(result, opts).text(); }
 export function mutationSummary(report: MutationReportLike): MutationSummary { return new MutationSummaryBuilder(report).summary(); }
@@ -110,7 +109,7 @@ export type {
   InsertSpace,
   TidyShapes,
 } from './domain/commands/types.js';
-export { type ConventionsReport, type MutationOptions, type MutationResult } from './domain/batch/types.js';
+export { type MutationOptions, type MutationResult } from './domain/batch/types.js';
 export { LAYOUT_MODES, type LayoutMode, type LayoutStatus } from './domain/diagram/types.js';
 export { type CheckOptions, type CheckResult } from './application/port/in/ValidateDocumentUseCase.js';
 export { type LayoutDocOptions } from './application/port/in/RelayoutDiagramUseCase.js';
@@ -138,7 +137,8 @@ export { type ConventionsView, type ConventionsRow, type Undeclared } from './do
 
 /**
  * The id conventions element-id-naming declares, with a W_CONFIG_IGNORED note for each value
- * new ids cannot follow; `conventions` is undefined where nothing is declared.
+ * new ids cannot follow; `conventions` is undefined where nothing is declared. `naming` is the
+ * plugin's `naming` namespace (@miragon/bpmnlint-plugin-rules 0.19 or later).
  */
 export function idConventionsFromLint(setting: BpmnlintRuleSetting | undefined, naming: IdNamingHelpers, opts: { source?: string } = {}): { conventions?: IdConventions; notes: ValidatorFinding[] } {
   return new IdConventionsReader(naming, opts.source).read(setting);

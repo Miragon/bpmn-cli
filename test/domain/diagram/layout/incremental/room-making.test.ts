@@ -166,7 +166,7 @@ describe('the local repair after placement (issue #18 (3))', () => {
     const applied = await applyToXml(xml, [{ op: 'add', kind: 'sendTask', name: 'Send offer', id: 'Activity_SendOffer', after: 'Activity_PrepareOffer' }], { force: true });
     expect(await added(xml, applied.xml)).toEqual([]);
     expect(applied.result.layout?.rerouted).toContain('Flow_CollectDataToArchiveData');
-    expect(applied.result.layout?.notes).toContain('Flow_CollectDataToArchiveData routed again: it crossed the new Flow_PrepareOfferToSendOffer');
+    expect(applied.result.layout?.notes).toContain('Flow_CollectDataToArchiveData routed again: it crossed the new flow_prepareOfferToSendOffer');
     // the hand drawing is kept otherwise: the new task where a single command puts it, nothing moved
     expect(applied.result.layout?.moved ?? []).toEqual([]);
     expect(cy(boundsOf(applied.xml, 'Activity_SendOffer'))).toBe(cy(boundsOf(xml, 'Activity_PrepareOffer')));
@@ -295,7 +295,7 @@ describe('a line along a new shape (stage B verification)', () => {
     for (const after of [await batch(xml, ops), await singles(xml, ops)]) {
       expect(await added(xml, after)).toEqual([]);
       const end = boundsOf(after, 'Event_ClerkReminded');
-      const others = [...after.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((match) => match[1]!).filter((id) => id !== 'Flow_RemindClerkToClerkReminded');
+      const others = [...after.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((match) => match[1]!).filter((id) => id !== 'flow_remindClerkToClerkReminded');
       for (const id of others) expect(touches(waypoints(after, id), end), id).toBe(false);
     }
   });

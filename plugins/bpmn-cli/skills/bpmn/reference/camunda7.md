@@ -35,10 +35,10 @@ end / throw event), `loop.` (multi-instance: `loop.camunda:collection`,
 `bpmn kinds --section nestedKeys`. Quote values with `${...}` in single quotes.
 
 ```bash
-bpmn set payment.bpmn Activity_InformCustomer camunda:candidateGroups=support camunda:formKey=camunda-forms:deployment:inform-customer.form
-bpmn set payment.bpmn Event_CardDeclined definition.camunda:errorCodeVariable=declineCode definition.camunda:errorMessageVariable=declineMessage
-bpmn set payment.bpmn Activity_ChargeCreditCard camunda:asyncBefore=true
-bpmn add payment.bpmn userTask "Notify party" --id Activity_NotifyParty --after Activity_InformCustomer 'loop.camunda:collection=${parties}' loop.camunda:elementVariable=party 'camunda:assignee=${party}'
+bpmn set payment.bpmn userTask_informCustomer camunda:candidateGroups=support camunda:formKey=camunda-forms:deployment:inform-customer.form
+bpmn set payment.bpmn event_cardDeclined definition.camunda:errorCodeVariable=declineCode definition.camunda:errorMessageVariable=declineMessage
+bpmn set payment.bpmn serviceTask_chargeCreditCard camunda:asyncBefore=true
+bpmn add payment.bpmn userTask "Notify party" --id userTask_notifyParty --after userTask_informCustomer 'loop.camunda:collection=${parties}' loop.camunda:elementVariable=party 'camunda:assignee=${party}'
 ```
 
 ## Extension elements: `ext add`
@@ -50,19 +50,19 @@ Child types are filed into their container, created when missing
 a path reaches into nested containers.
 
 ```bash
-bpmn ext add payment.bpmn Activity_ChargeCreditCard camunda:outputParameter name=transactionId --body '${transactionId}'
-bpmn ext add payment.bpmn Activity_ChargeCreditCard camunda:failedJobRetryTimeCycle --body R3/PT5M
-bpmn ext add payment.bpmn Activity_InformCustomer camunda:taskListener event=create 'expression=${task.setPriority(80)}'
-bpmn ext add payment.bpmn Activity_NotifyParty camunda:formField id=notified type=boolean
-bpmn ext add payment.bpmn Activity_NotifyParty 'camunda:formField[id=notified]/camunda:validation/camunda:constraint' name=required
-bpmn ext list payment.bpmn Activity_ChargeCreditCard
-bpmn ext remove payment.bpmn Activity_ChargeCreditCard 'camunda:outputParameter[name=transactionId]'
+bpmn ext add payment.bpmn serviceTask_chargeCreditCard camunda:outputParameter name=transactionId --body '${transactionId}'
+bpmn ext add payment.bpmn serviceTask_chargeCreditCard camunda:failedJobRetryTimeCycle --body R3/PT5M
+bpmn ext add payment.bpmn userTask_informCustomer camunda:taskListener event=create 'expression=${task.setPriority(80)}'
+bpmn ext add payment.bpmn userTask_notifyParty camunda:formField id=notified type=boolean
+bpmn ext add payment.bpmn userTask_notifyParty 'camunda:formField[id=notified]/camunda:validation/camunda:constraint' name=required
+bpmn ext list payment.bpmn serviceTask_chargeCreditCard
+bpmn ext remove payment.bpmn serviceTask_chargeCreditCard 'camunda:outputParameter[name=transactionId]'
 ```
 
 - Call activity mappings: `bpmn ext add <file> <callActivityId> camunda:in variables=all`,
   `camunda:in source=amount target=payoutAmount`, `camunda:out source=transactionId target=transactionId`.
 - External task error mapping: `camunda:errorEventDefinition` with `id`,
-  `errorRef` (the root error, e.g. `Error_CardDeclined` that an error boundary
+  `errorRef` (the root error, e.g. `error_cardDeclined` that an error boundary
   event created) and `expression` - see recipe 4.
 - A single container exists once (`E_DUPLICATE_EXTENSION` on a conflict); a
   repeatable element (listener, error mapping, form field) is changed by

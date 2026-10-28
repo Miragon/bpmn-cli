@@ -144,8 +144,8 @@ describe('stdin and stdout', () => {
     expect(cliRun.out).toContain('name="Pay out"');
     expect(cliRun.err).toContain('written: -');
     const created = ok(['new', '-', '--name', 'Fresh']);
-    expect((await Doc.fromXml(created.out)).processes().map((processElement) => processElement.get('id'))).toEqual(['Process_Fresh']);
-    expect(created.err).toContain('created process Process_Fresh "Fresh"');
+    expect((await Doc.fromXml(created.out)).processes().map((processElement) => processElement.get('id'))).toEqual(['fresh']);
+    expect(created.err).toContain('created process fresh "Fresh"');
     // a dry run on stdin writes nothing: the report stays on stdout
     const dry = ok(['set', '-', 'Activity_Pay', 'name=Y', '--dry-run', '--no-layout'], MODEL);
     expect(dry.out).toContain('changed serviceTask Activity_Pay "Y"');

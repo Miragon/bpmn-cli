@@ -13,8 +13,9 @@ edit models that people also edit by hand.
    model without coordinates.
 2. **The CLI keeps the picture.** Every write ends with *validate -> layout -> atomic write*
    ([Layout modes](layout.md#layout-modes)).
-3. **Ids speak and follow the file.** A new id says what it names, in the file's id style
-   ([Ids](reference.md#ids)). Existing ids stay, except a flow id that names its ends.
+3. **Ids speak and follow the project's conventions.** A new id says what it names, with the
+   prefixes and case of `element-id-naming` ([Ids](reference.md#ids)). Existing ids stay, except
+   a flow id that names its ends.
 4. **Nothing is half done.** A command or a whole `apply` batch succeeds completely or leaves the
    file untouched. Errors the file already had do not block (`W_PREEXISTING_ERROR`); new ones do,
    unless `--force`. The project's [bpmnlint](bpmnlint.md) reports but never blocks a write.

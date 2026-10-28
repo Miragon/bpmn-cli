@@ -261,33 +261,33 @@ describe('the message a catching element waits for', () => {
 
   it('refAs names the message an op creates; the subscription goes on it (no misplaced extension, no deploy finding)', async () => {
     const mutated = await mutateDoc(blank(), [
-      { op: 'add', kind: 'startEvent', name: 'Asked', in: 'Process_Reply', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Asked', in: 'reply', as: '$s' },
       { op: 'add', kind: 'intermediateCatchEvent:message', name: 'Antwort erhalten', after: '$s', message: 'Antwort', as: '$m', refAs: '$msg' },
       { op: 'ext', id: '$msg', action: 'add', type: 'zeebe:subscription', attrs: { correlationKey: '= id' } },
       { op: 'add', kind: 'endEvent', name: 'Done', after: '$m' },
     ]);
-    expect(mutated.aliases).toEqual({ $s: 'Event_Asked', $m: 'Event_AntwortErhalten', $msg: 'Message_Antwort' });
-    expect(mutated.xml).toMatch(/<bpmn:message id="Message_Antwort" name="Antwort">\s*<bpmn:extensionElements>\s*<zeebe:subscription correlationKey="= id" \/>/);
+    expect(mutated.aliases).toEqual({ $s: 'startEvent_asked', $m: 'event_antwortErhalten', $msg: 'message_antwort' });
+    expect(mutated.xml).toMatch(/<bpmn:message id="message_antwort" name="Antwort">\s*<bpmn:extensionElements>\s*<zeebe:subscription correlationKey="= id" \/>/);
     expect(runProfile(await Doc.fromXml(mutated.xml)).findings).toEqual([]);
   });
 
   it('refAs on set, retype and connect (a message flow); E_USAGE when the element references none', async () => {
     const doc = blank();
     runOps(doc, [
-      { op: 'add', kind: 'startEvent', name: 'Go', in: 'Process_Reply' },
-      { op: 'add', kind: 'receiveTask', name: 'Wait', after: 'Event_Go' },
-      { op: 'add', kind: 'intermediateThrowEvent', name: 'Raise', after: 'Activity_Wait' },
-      { op: 'add', kind: 'endEvent', name: 'Done', after: 'Event_Raise' },
+      { op: 'add', kind: 'startEvent', name: 'Go', in: 'reply' },
+      { op: 'add', kind: 'receiveTask', name: 'Wait', after: 'startEvent_go' },
+      { op: 'add', kind: 'intermediateThrowEvent', name: 'Raise', after: 'receiveTask_wait' },
+      { op: 'add', kind: 'endEvent', name: 'Done', after: 'event_raise' },
     ]);
     const mutated = await mutateDoc(doc, [
-      { op: 'set', id: 'Activity_Wait', values: { message: 'Paid' }, refAs: '$paid' },
-      { op: 'retype', id: 'Event_Raise', kind: 'intermediateThrowEvent:signal', signal: 'Raised', refAs: '$sig' },
+      { op: 'set', id: 'receiveTask_wait', values: { message: 'Paid' }, refAs: '$paid' },
+      { op: 'retype', id: 'event_raise', kind: 'intermediateThrowEvent:signal', signal: 'Raised', refAs: '$sig' },
       { op: 'ext', id: '$paid', action: 'add', type: 'zeebe:subscription', attrs: { correlationKey: '=orderId' } },
     ]);
-    expect(mutated.aliases).toEqual({ $paid: 'Message_Paid', $sig: 'Signal_Raised' });
-    const caughtError = caught(() => runOps(blank(), [{ op: 'add', kind: 'userTask', name: 'Review', in: 'Process_Reply', refAs: '$x' }]));
+    expect(mutated.aliases).toEqual({ $paid: 'message_paid', $sig: 'signal_raised' });
+    const caughtError = caught(() => runOps(blank(), [{ op: 'add', kind: 'userTask', name: 'Review', in: 'reply', refAs: '$x' }]));
     expect(caughtError.code).toBe('E_USAGE');
-    expect(caughtError.message).toBe('refAs $x: userTask Activity_Review references no message, error, signal or escalation');
+    expect(caughtError.message).toBe('refAs $x: userTask userTask_review references no message, error, signal or escalation');
   });
 
   it('ext add <element> zeebe:subscription and set <element> zeebe:correlationKey= go to its message, with a note', async () => {
@@ -366,14 +366,14 @@ describe.skipIf(!ENGINE)('live engine: the verdicts hold', () => {
 
   it('the batch with refAs deploys', async () => {
     const mutated = await mutateDoc(Doc.create({ target: 'camunda8', processName: 'Reply' }), [
-      { op: 'add', kind: 'startEvent', name: 'Asked', in: 'Process_Reply', as: '$s' },
+      { op: 'add', kind: 'startEvent', name: 'Asked', in: 'reply', as: '$s' },
       { op: 'add', kind: 'intermediateCatchEvent:message', name: 'Antwort erhalten', after: '$s', message: 'Antwort', as: '$m', refAs: '$msg' },
       { op: 'ext', id: '$msg', action: 'add', type: 'zeebe:subscription', attrs: { correlationKey: '= id' } },
       { op: 'add', kind: 'receiveTask', name: 'Wait for confirmation', after: '$m', message: 'Confirmation', as: '$r' },
       { op: 'ext', id: '$r', action: 'add', type: 'zeebe:subscription', attrs: { correlationKey: '= id' } },
       { op: 'add', kind: 'endEvent', name: 'Done', after: '$r' },
     ]);
-    const error = await deploy('P_bpmn_cli_refas', mutated.xml.replace(/Process_Reply/g, 'P_bpmn_cli_refas'));
+    const error = await deploy('P_bpmn_cli_refas', mutated.xml.replace(/"reply"/g, '"P_bpmn_cli_refas"'));
     expect(error, error).toBeUndefined();
   });
 });

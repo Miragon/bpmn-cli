@@ -126,22 +126,22 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const file = await drawn('line.bpmn', LINE);
     const result = await refusal(file, LOOSE, { validators: [gate()] });
     expect(result.code).toBe('E_VALIDATION');
-    expect(codes(result.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose', '[gate] E_GATE_DEAD_END Activity_Loose']);
+    expect(codes(result.errors)).toEqual(['[gate] E_GATE_UNREACHABLE task_loose', '[gate] E_GATE_DEAD_END task_loose']);
     expect(result.errors[0]).toMatchObject({ validator: 'gate', severity: 'error' });
     const plain = await mutateFile(file, LOOSE, { dryRun: true });
     expect(plain.validation.validators).toBeUndefined();
-    expect(codes(plain.validation.warnings)).toEqual(expect.arrayContaining(['W_UNREACHABLE Activity_Loose', 'W_DEAD_END Activity_Loose']));
+    expect(codes(plain.validation.warnings)).toEqual(expect.arrayContaining(['W_UNREACHABLE task_loose', 'W_DEAD_END task_loose']));
   });
 
   it('--force writes it and reports the errors with the validator', async () => {
     const file = await drawn('forced.bpmn', LINE);
     const result = await mutateFile(file, LOOSE, { validators: [gate()], force: true });
     expect(result.written).toBe(true);
-    expect(codes(result.validation.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose', '[gate] E_GATE_DEAD_END Activity_Loose']);
+    expect(codes(result.validation.errors)).toEqual(['[gate] E_GATE_UNREACHABLE task_loose', '[gate] E_GATE_DEAD_END task_loose']);
     expect(result.validation.validators).toEqual([expect.objectContaining({ name: 'gate', detail: 'the test host', counts: { errors: 2, warnings: 0 }, preexisting: [], resolved: [] })]);
     // the lint warnings about the same node are not repeated next to the errors that cover them
-    expect(codes(result.validation.warnings)).not.toContain('W_DEAD_END Activity_Loose');
-    expect(codes(result.validation.warnings)).not.toContain('W_UNREACHABLE Activity_Loose');
+    expect(codes(result.validation.warnings)).not.toContain('W_DEAD_END task_loose');
+    expect(codes(result.validation.warnings)).not.toContain('W_UNREACHABLE task_loose');
   });
 
   it('an error the file already had does not block an edit; it is reported as W_PREEXISTING_ERROR and follows a rename', async () => {
@@ -168,11 +168,11 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
 
   it('a second start event is refused even with its path; a node and its flows in one transaction pass', async () => {
     const file = await drawn('starts.bpmn', LINE);
-    const second = await refusal(file, [{ op: 'add', kind: 'startEvent', name: 'Retry', in: 'P' }, { op: 'connect', source: 'Event_Retry', target: 'A' }], { validators: [gate()] });
-    expect(codes(second.errors)).toEqual(['[gate] E_GATE_START_EVENTS S', '[gate] E_GATE_START_EVENTS Event_Retry']);
+    const second = await refusal(file, [{ op: 'add', kind: 'startEvent', name: 'Retry', in: 'P' }, { op: 'connect', source: 'startEvent_retry', target: 'A' }], { validators: [gate()] });
+    expect(codes(second.errors)).toEqual(['[gate] E_GATE_START_EVENTS S', '[gate] E_GATE_START_EVENTS startEvent_retry']);
     const alone = await refusal(file, [{ op: 'add', kind: 'task', name: 'Parallel', in: 'P' }], { validators: [gate()] });
     expect(alone.errors).toHaveLength(2);
-    const batch = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Parallel', in: 'P' }, { op: 'connect', source: 'A', target: 'Activity_Parallel' }, { op: 'connect', source: 'Activity_Parallel', target: 'E' }], { validators: [gate()], dryRun: true });
+    const batch = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Parallel', in: 'P' }, { op: 'connect', source: 'A', target: 'task_parallel' }, { op: 'connect', source: 'task_parallel', target: 'E' }], { validators: [gate()], dryRun: true });
     expect(batch.validation.validators?.[0]?.errors).toEqual([]);
   });
 
@@ -180,18 +180,18 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const two = xml(`<bpmn:startEvent id="S" /><bpmn:startEvent id="S2" /><bpmn:task id="A" name="Check" /><bpmn:endEvent id="E" />
 <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="A" /><bpmn:sequenceFlow id="F0" sourceRef="S2" targetRef="A" /><bpmn:sequenceFlow id="F2" sourceRef="A" targetRef="E" />`);
     const file = await drawn('two-starts.bpmn', two);
-    const third = await refusal(file, [{ op: 'add', kind: 'startEvent', name: 'Third', in: 'P' }, { op: 'connect', source: 'Event_Third', target: 'A' }], { validators: [gate()] });
-    expect(codes(third.errors)).toEqual(['[gate] E_GATE_START_EVENTS Event_Third']);
+    const third = await refusal(file, [{ op: 'add', kind: 'startEvent', name: 'Third', in: 'P' }, { op: 'connect', source: 'startEvent_third', target: 'A' }], { validators: [gate()] });
+    expect(codes(third.errors)).toEqual(['[gate] E_GATE_START_EVENTS startEvent_third']);
     const removed = await mutateFile(file, [{ op: 'remove', ids: ['S2'] }], { validators: [gate()], dryRun: true });
     expect(removed.validation.validators?.[0]).toMatchObject({ errors: [], resolved: [expect.objectContaining({ element: 'S' }), expect.objectContaining({ element: 'S2' })] });
   });
 
   it('warnings a change introduces are reported once; later writes only count them (a key keeps a finding whose message changes)', async () => {
     const file = await drawn('complex.bpmn', LINE);
-    const ops: EditCommand[] = Array.from({ length: 9 }, (_unused, index) => ({ op: 'add', kind: 'task', name: `Step ${index}`, after: index === 0 ? 'A' : `Activity_Step${index - 1}` }));
+    const ops: EditCommand[] = Array.from({ length: 9 }, (_unused, index) => ({ op: 'add', kind: 'task', name: `Step ${index}`, after: index === 0 ? 'A' : `task_step${index - 1}` }));
     const grown = await mutateFile(file, ops, { validators: [gate()] });
     expect(codes(grown.validation.warnings).filter((code) => code.includes('GATE'))).toEqual(['[gate] W_GATE_SIZE']);
-    const again = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'One more', after: 'Activity_Step8' }], { validators: [gate()] });
+    const again = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'One more', after: 'task_step8' }], { validators: [gate()] });
     expect(codes(again.validation.warnings).filter((code) => code.includes('GATE'))).toEqual([]);
     expect(again.validation.validators?.[0]?.counts).toEqual({ errors: 0, warnings: 1 });
   });
@@ -213,8 +213,8 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('checks what would be written: without the layout a new node has no shape', async () => {
     const file = await drawn('no-layout.bpmn', LINE);
     const result = await refusal(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], layout: false });
-    // the new flow's id in the file's style (src/domain/document/ids/IdStyle.ts): LINE numbers its flows F1, F2 (the prefix), the body names the ends
-    expect(codes(result.errors)).toEqual(['[shapes] E_NOT_DRAWN Activity_Inserted', '[shapes] E_NOT_DRAWN F_InsertedToE']);
+    // the new flow's id names its ends (src/domain/document/ids/IdStyle.ts)
+    expect(codes(result.errors)).toEqual(['[shapes] E_NOT_DRAWN task_inserted', '[shapes] E_NOT_DRAWN flow_insertedToE']);
     expect((await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Inserted', after: 'A' }], { validators: [shapes], dryRun: true })).validation.validators?.[0]?.errors).toEqual([]);
   });
 
@@ -225,8 +225,8 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
   it('ruleId findings: an introduced ERROR blocks, a pre-existing one (matched by message, renames followed) does not', async () => {
     const file = await drawn('host.bpmn', LINE);
     const result = await refusal(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [unnamedTasks] });
-    // an unnamed task gets its placement as id (Activity_After<anchor>, src/domain/document/ids/IdStyle.ts)
-    expect(result.errors).toEqual([{ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
+    // an unnamed task gets its placement as id (task_after<anchor>, src/domain/document/ids/IdStyle.ts)
+    expect(result.errors).toEqual([{ code: 'naming/task', message: 'task task_afterCheck has no name', validator: 'unnamedTasks', severity: 'error' }]);
 
     const unnamed = await drawn('host-unnamed.bpmn', LINE.replace(' name="Check"', ''));
     const renamed = await mutateFile(unnamed, [{ op: 'set', id: 'A', values: { id: 'Activity_Old' } }], { validators: [{ name: 'naming', validate: unnamedTasks }] });
@@ -241,15 +241,15 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const seen: Array<{ phase: string; file?: string; platform: string; ops: number; shape: boolean; doc: boolean }> = [];
     const spy = async (xml: string, ctx: ValidatorContext): Promise<ValidatorFinding[]> => {
       const doc = await ctx.doc();
-      seen.push({ phase: ctx.phase, file: ctx.file, platform: ctx.platform, ops: ctx.ops.length, shape: xml.includes('bpmnElement="Activity_New"'), doc: !!doc.get('A') });
-      return ctx.phase === 'after' ? [{ severity: 'warning', code: 'W_HOST', message: 'checked', element: 'Activity_New' }] : [];
+      seen.push({ phase: ctx.phase, file: ctx.file, platform: ctx.platform, ops: ctx.ops.length, shape: xml.includes('bpmnElement="task_new"'), doc: !!doc.get('A') });
+      return ctx.phase === 'after' ? [{ severity: 'warning', code: 'W_HOST', message: 'checked', element: 'task_new' }] : [];
     };
     const result = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'New', after: 'A' }], { validators: [spy] });
     expect(seen).toEqual([
       { phase: 'before', file, platform: 'none', ops: 1, shape: false, doc: true },
       { phase: 'after', file, platform: 'none', ops: 1, shape: true, doc: true },
     ]);
-    expect(result.validation.warnings.at(-1)).toEqual({ code: 'W_HOST', message: 'checked', element: 'Activity_New', validator: 'spy', severity: 'warning' });
+    expect(result.validation.warnings.at(-1)).toEqual({ code: 'W_HOST', message: 'checked', element: 'task_new', validator: 'spy', severity: 'warning' });
   });
 
   it('a validator that throws fails the write (E_VALIDATOR_FAILED); a bad validator is refused', async () => {
@@ -275,7 +275,7 @@ describe('host validators on mutations (MutationOptions.validators)', () => {
     const advisory = { name: 'advice', blocks: false, validate: unnamedTasks };
     const result = await mutateFile(file, [{ op: 'add', kind: 'task', after: 'A' }], { validators: [advisory], dryRun: true });
     expect(result.validation.errors).toEqual([]);
-    expect(result.validation.warnings.at(-1)).toEqual({ code: 'naming/task', message: 'task Activity_AfterCheck has no name', validator: 'advice', severity: 'error' });
+    expect(result.validation.warnings.at(-1)).toEqual({ code: 'naming/task', message: 'task task_afterCheck has no name', validator: 'advice', severity: 'error' });
     expect(result.validation.validators).toEqual([{ name: 'advice', blocks: false, errors: [], warnings: [expect.objectContaining({ code: 'naming/task' })], preexisting: [], resolved: [], counts: { errors: 1, warnings: 0 } }]);
     // an error the file already had: no W_PREEXISTING_ERROR, only the count
     const unnamed = await drawn('advisory-unnamed.bpmn', LINE.replace(' name="Check"', ''));
@@ -317,8 +317,8 @@ describe('validator findings in a refusal, a result and their text (library use)
     expect(err?.details.hint).not.toContain('--profile');
     // each finding with its validator tag (validatorTag; the CLI's own refusal output is tested below)
     expect((err?.details['errors'] as Finding[]).map((error) => `${validatorTag(error)}${error.code} ${error.element}: ${error.message}`)).toEqual([
-      '[gate] E_GATE_UNREACHABLE Activity_Loose: Activity_Loose has no incoming sequence flow',
-      '[gate] E_GATE_DEAD_END Activity_Loose: Activity_Loose has no outgoing sequence flow',
+      '[gate] E_GATE_UNREACHABLE task_loose: task_loose has no incoming sequence flow',
+      '[gate] E_GATE_DEAD_END task_loose: task_loose has no outgoing sequence flow',
     ]);
     expect(JSON.parse(JSON.stringify(err?.toJSON())).errors[0]).toMatchObject({ code: 'E_GATE_UNREACHABLE', validator: 'gate', severity: 'error' });
     expect(readFileSync(file, 'utf8')).toBe(before);
@@ -326,9 +326,9 @@ describe('validator findings in a refusal, a result and their text (library use)
     const inserted = await mutateFile(file, [{ op: 'add', kind: 'task', name: 'Review', after: 'A' }], { validators: [gate()] });
     expect(renderMutation(mutationReport(inserted))).toContain('validator gate (the test host): 0 error(s), 0 warning(s) in the result');
     const forced = await mutateFile(file, LOOSE, { validators: [gate()], force: true });
-    expect(renderMutation(mutationReport(forced))).toContain('forced [gate] E_GATE_UNREACHABLE Activity_Loose');
+    expect(renderMutation(mutationReport(forced))).toContain('forced [gate] E_GATE_UNREACHABLE task_loose');
     // the error the file already had does not block; a result counts it instead of repeating it
-    const pre = mutationReport(await mutateFile(file, [{ op: 'set', id: 'Activity_Loose', values: { name: 'Still loose' } }], { validators: [gate()] }));
+    const pre = mutationReport(await mutateFile(file, [{ op: 'set', id: 'task_loose', values: { name: 'Still loose' } }], { validators: [gate()] }));
     expect(pre.warnings).toMatchObject({ added: [], preexistingCount: expect.any(Number) });
     expect(pre.warnings.preexistingCount).toBeGreaterThan(0);
     expect(renderMutation(pre)).not.toContain('W_PREEXISTING_ERROR');
@@ -351,7 +351,7 @@ describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
     const file = await drawn('left-out.bpmn', DEAD_END);
     // the loose task's dead end is left out: only its unreachable start blocks
     const result = await refusal(file, LOOSE, { validators: [leftOutGate()] });
-    expect(codes(result.errors)).toEqual(['[gate] E_GATE_UNREACHABLE Activity_Loose']);
+    expect(codes(result.errors)).toEqual(['[gate] E_GATE_UNREACHABLE task_loose']);
 
     const renamed = await mutateFile(file, [{ op: 'set', id: 'A', values: { name: 'Checked' } }], { validators: [leftOutGate()], dryRun: true });
     const validator = renamed.validation.validators![0]!;
@@ -369,7 +369,7 @@ describe('findings a write leaves out (ValidatorFinding.leftOut)', () => {
 
     // advisory: the line adds them after the findings the file already had; a new dead end keeps its lint warning
     const advisory = mutationReport(await mutateFile(file, LOOSE, { validators: [leftOutGate(false)], dryRun: true }));
-    expect(codes(advisory.warnings.added)).toEqual(['W_DEAD_END Activity_Loose', '[gate] E_GATE_UNREACHABLE Activity_Loose']);
+    expect(codes(advisory.warnings.added)).toEqual(['W_DEAD_END task_loose', '[gate] E_GATE_UNREACHABLE task_loose']);
     expect(renderMutation(advisory)).toContain('\nvalidator gate (the test host): 4 error(s), 0 warning(s) in the result (1 added, 0 resolved, 1 already in the file, 2 left out (dead ends the host checks elsewhere; a check lists them))\n');
     // the summary counts what the file already had among the warnings, and names what was left out in a line of its own
     const summary = mutationSummary(advisory);
