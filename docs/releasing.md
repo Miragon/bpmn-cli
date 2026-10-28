@@ -19,7 +19,9 @@ repository or in GitHub secrets.
 3. Merging the release PR creates the tag `vX.Y.Z` and the GitHub release. The `publish` job of the same
    workflow then checks out the tag, runs `npm ci`, `npm run build` and `npm test`, and runs
    `npm publish` with an OIDC token.
-4. The `homebrew` job then calls `.github/workflows/publish-homebrew.yml`: it downloads the published npm
+4. The `plugin-release-branch` job then fast-forwards the branch `release` to the tag, so the Claude
+   Code plugin reaches users (see [The Claude Code plugin](#the-claude-code-plugin)).
+5. The `homebrew` job then calls `.github/workflows/publish-homebrew.yml`: it downloads the published npm
    tarball, writes `Formula/bpmn-cli.rb` with its sha256, installs and tests the formula, and pushes it
    to [Miragon/homebrew-tap](https://github.com/Miragon/homebrew-tap) (see [Homebrew](#homebrew)).
 
@@ -64,6 +66,20 @@ CLI version it describes (until then the pinned `npx` version is the previous re
 workflow's `plugin` job runs `claude plugin validate --strict` on the plugin and the marketplace (no
 credentials needed), and `test/e2e/plugin.test.ts` fails when `plugin.json`, the pinned `npx` version and
 `package.json` disagree.
+
+The marketplace entry does not install the plugin from the marketplace checkout (the tip of `main`), but
+from the branch `release` (`git-subdir` source, `ref: release`). The `plugin-release-branch` job moves
+that branch to the release tag only after `npm publish` succeeded. Users therefore never get a skill
+ahead of its CLI, or one that pins a version npm does not have yet. Nothing else pushes to `release`.
+
+If the job fails, `release` stays at the previous release and users keep it:
+
+- `npm publish` failed: fix it and rerun the failed jobs; the branch then moves.
+- The move itself failed (`release` is not an ancestor of the tag, for example after a manual push):
+  look at what `release` points to, then move it by hand to the tag of the last published version:
+  ```
+  gh api --method PATCH repos/Miragon/bpmn-cli/git/refs/heads/release -f sha="$(git rev-parse vX.Y.Z^{commit})" -F force=true
+  ```
 
 ## Homebrew
 
