@@ -4,6 +4,7 @@ import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
 import { EngineCodes } from './EngineCodes.js';
 import { EngineHint } from './EngineHint.js';
 import type { EngineKit } from '../engine-kit.js';
+import type { Findings } from './rules/CamundaRules.js';
 
 /** The engine layers set what a finding means by its bpmnlint category. */
 const SEVERITY_OF_CATEGORY: Record<string, Severity> = { error: 'deploy', warn: 'runtime', info: 'practice' };
@@ -20,8 +21,8 @@ interface ModdleNode {
 }
 
 /**
- * The engine rules' bpmnlint reports as bpmn-cli findings: the code from the rule, the severity
- * from the category, the hint from `path` and `data.type`, and the subject (what a mutation tells
+ * The engine rules' bpmnlint reports as bpmn-cli findings: an own rule's code and severity from the
+ * finding it declares, camunda-compat's code from its rule and severity from the category, the hint from `path` and `data.type`, and the subject (what a mutation tells
  * apart on one element) from the path, an extension element as `ext:<local>` and a vendor
  * attribute as `attr:<local>`, as the operation warnings name what they cover.
  */
@@ -33,6 +34,7 @@ export class EngineFindings {
     private readonly kit: EngineKit,
     private readonly platform: 'c7' | 'c8',
     private readonly elementsById: Readonly<Record<string, unknown>>,
+    private readonly findings: Findings,
     private readonly spelling: (id: string, key: string) => string = (_id, key) => key,
     private readonly zeebePrefix = 'zeebe',
   ) {
@@ -50,10 +52,10 @@ export class EngineFindings {
     const compat: Array<{ finding: ProfileFinding; identity: string }> = [];
     for (const [rule, reports] of Object.entries(results)) {
       for (const report of reports) {
-        const severity = SEVERITY_OF_CATEGORY[report.category] ?? 'runtime';
+        const [code, severity] = this.findings[EngineFindings.findingOf(rule, report)] ?? [EngineCodes.codeOf(this.platform, rule, report), SEVERITY_OF_CATEGORY[report.category] ?? 'runtime'];
         const related = this.relatedIds(report);
         const subject = this.subjectOf(report);
-        const finding = this.kit.makeFinding(severity, EngineCodes.codeOf(this.platform, rule, report), String(report.message), report.id ?? undefined, { hint: this.spelledHint(this.hint.of(report, rule), rule), subject, ...(related.length ? { related } : {}) });
+        const finding = this.kit.makeFinding(severity, code, String(report.message), report.id ?? undefined, { hint: this.spelledHint(this.hint.of(report, rule), rule), subject, ...(related.length ? { related } : {}) });
         const identity = `${report.id ?? ''}|${subject}`;
         if (rule.startsWith(OWN_RULES)) {
           if (subject) ownSubjects.add(identity);
@@ -72,6 +74,11 @@ export class EngineFindings {
       return true;
     };
     return [...out, ...compat.filter(firstOfSubject).map(({ finding }) => finding)];
+  }
+
+  /** What an own rule's report is (`data.finding`, else the rule); '' for camunda-compat's. */
+  static findingOf(rule: string, report: BpmnlintEngineReport): string {
+    return rule.startsWith(OWN_RULES) ? String(report.data?.finding ?? rule.slice(OWN_RULES.length)) : '';
   }
 
   private subjectOf(report: BpmnlintEngineReport): string {

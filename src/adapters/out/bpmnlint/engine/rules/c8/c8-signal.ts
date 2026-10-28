@@ -28,6 +28,6 @@ class C8Signal extends C8NamedSubscriptionRule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-signal', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-signal', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-signal': ['W_C8_DEPLOY_SIGNAL', 'deploy'] } },
   C8Signal,
 );

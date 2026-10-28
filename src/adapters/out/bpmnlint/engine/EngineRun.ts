@@ -9,6 +9,7 @@ import type { EngineKit } from '../engine-kit.js';
 import { CamundaBooleans } from './CamundaBooleans.js';
 import { CompatVerdicts } from './CompatVerdicts.js';
 import { EngineFindings } from './EngineFindings.js';
+import type { Findings } from './rules/CamundaRules.js';
 import { PublishMessages } from './PublishMessages.js';
 import { SchemaText, type SchemaTextIssue } from './SchemaText.js';
 import { SchemaTextFindings } from './SchemaTextFindings.js';
@@ -20,6 +21,8 @@ type Engine = EnginePlatformInfo['platform'];
 /** One engine's rules for an engine version and the moddle extension they read, as `rules/c7` and `rules/c8` build them. */
 export interface EngineEntry {
   moddleExtensions: Record<string, unknown>;
+  /** The findings of bpmn-cli's rules, with their codes and impacts. */
+  findings: Findings;
   rules(version: string | undefined): RuleEntry[];
   /** What the rules need of the file that the parse for them no longer shows. */
   afterParse?(definitions: unknown, warnings: readonly ImportWarning[], vendor: { operaton: boolean; prefix: string }): void;
@@ -45,7 +48,7 @@ const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 
 
 /** It reports a send task with a zeebe:publishMessage as one without an implementation. */
 const COMPAT_IMPLEMENTATION = 'camunda-compat/implementation';
-const C7_MULTI_INSTANCE = 'bpmn-cli/c7-multi-instance';
+const C7_MULTI_INSTANCE = 'c7-multi-instance';
 /** Rules of camunda-compat's configs that do not skip the processes the engine does not run. */
 const EXECUTABLE_ONLY = ['start-event-required', 'camunda-compat/history-time-to-live'];
 
@@ -86,7 +89,7 @@ export class EngineRun {
     }
     const unprefixed = new UnprefixedAttributes(this.kit, doc, this.engine, ns).findings();
     const schemaKeys = new Set(unprefixed.map((finding) => `${finding.element}|${finding.subject!.replace(/^schema:/, 'attr:')}`));
-    const lint = new EngineFindings(this.kit, this.engine, elementsById, (id, key) => this.spelling(doc, ns, id, key), ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe').of(results);
+    const lint = new EngineFindings(this.kit, this.engine, elementsById, this.entry.findings, (id, key) => this.spelling(doc, ns, id, key), ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe').of(results);
     const findings = [
       ...lint.filter((finding) => !(finding.code === 'W_C8_DEPLOY_SCHEMA' && schemaKeys.has(`${finding.element}|${finding.subject}`))),
       ...unprefixed,
@@ -148,10 +151,8 @@ export class EngineRun {
    * parse drops it, and c7-multi-instance then reads the loop as one without a collection.
    */
   private withoutUnresolvedLoopInputs(results: Record<string, BpmnlintEngineReport[]>, warnings: ImportWarning[]): void {
-    const reports = results[C7_MULTI_INSTANCE];
-    if (!reports) return;
     const loops = new Set(warnings.filter((warning) => warning.property === 'bpmn:loopDataInputRef').map((warning) => (warning.element as { $parent?: { id?: string } } | undefined)?.$parent?.id));
-    results[C7_MULTI_INSTANCE] = reports.filter((report) => !loops.has(report.id));
+    for (const [rule, reports] of Object.entries(results)) results[rule] = reports.filter((report) => EngineFindings.findingOf(rule, report) !== C7_MULTI_INSTANCE || !loops.has(report.id));
   }
 
   /** The engines check executable processes only: a missing start event or history time to live elsewhere is no finding. */

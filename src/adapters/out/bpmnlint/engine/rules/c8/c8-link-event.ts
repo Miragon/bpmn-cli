@@ -78,6 +78,6 @@ class C8LinkEvent extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-link-event', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-link-event', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-link-event': ['W_C8_DEPLOY_LINK', 'deploy'] } },
   C8LinkEvent,
 );

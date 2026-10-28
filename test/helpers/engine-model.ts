@@ -1,7 +1,7 @@
 import Linter from 'bpmnlint/lib/linter.js';
 import { createModdle } from 'bpmnlint/lib/testers/helper.js';
 import { describe, expect, it } from 'vitest';
-import { CamundaDescriptor } from '../../src/adapters/out/bpmnlint/engine/rules/c7/extensions/CamundaDescriptor.js';
+import { CamundaDescriptor } from '../../src/adapters/out/bpmnlint/engine/rules/c7/CamundaDescriptor.js';
 import { ZeebeSchema } from '../../src/adapters/out/bpmnlint/engine/rules/c8/extensions/ZeebeSchema.js';
 import { ElementKinds } from '../../src/adapters/out/bpmnlint/engine/rules/describe.js';
 import { kindLabel } from '../../src/domain/document/Kinds.js';
@@ -87,11 +87,12 @@ export interface EngineRuleCase {
 }
 
 /**
- * bpmnlint's `verify` for an engine rule, comparing what a host reads of a report: its element,
- * message, path and `data.type`, but not the moddle objects camunda-compat puts in `data`.
+ * bpmnlint's `verify` for one finding of an engine rule (`data.finding`, else the rule's name),
+ * comparing what a host reads of its reports: element, message, path and `data.type`, but not the
+ * moddle objects camunda-compat puts in `data`. The rule's other findings are left out.
  */
 export function verifyEngineRule(
-  ruleName: string,
+  finding: string,
   rule: DeclaredRuleFactory,
   cases: {
     valid: EngineRuleCase[];
@@ -103,8 +104,8 @@ export function verifyEngineRule(
       resolver: { resolveRule: () => rule, resolveConfig: () => undefined },
     });
     const { root } = await moddleElement;
-    const reports = await linter.lint(root, { rules: { [ruleName]: ['error', config] } });
-    return (reports[ruleName] ?? []).map((report: any) => ({
+    const reports = await linter.lint(root, { rules: { [rule.ruleName]: ['error', config] } });
+    return (reports[rule.ruleName] ?? []).filter((report: any) => (report.data?.finding ?? rule.ruleName) === finding).map((report: any) => ({
       id: report.id,
       message: report.message,
       ...(report.path ? { path: report.path } : {}),
@@ -112,7 +113,7 @@ export function verifyEngineRule(
     }));
   };
 
-  describe(`rules/${ruleName}`, () => {
+  describe(`rules/${rule.ruleName}`, () => {
     for (const testCase of cases.valid) {
       it(`valid: ${testCase.name}`, async () => {
         expect(await lint(testCase)).toEqual([]);

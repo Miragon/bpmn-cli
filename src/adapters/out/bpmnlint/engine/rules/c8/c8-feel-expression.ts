@@ -450,6 +450,6 @@ class C8FeelExpression extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-feel-expression', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-feel-expression', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-feel-expression': ['W_C8_DEPLOY_EXPRESSION', 'deploy'] } },
   C8FeelExpression,
 );

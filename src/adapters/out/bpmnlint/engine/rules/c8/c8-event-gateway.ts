@@ -97,6 +97,6 @@ class C8EventGateway extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-event-gateway', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-event-gateway', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-event-gateway': ['W_C8_DEPLOY_EVENT_GATEWAY', 'deploy'] } },
   C8EventGateway,
 );

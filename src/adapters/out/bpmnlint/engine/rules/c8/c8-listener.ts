@@ -222,6 +222,6 @@ class C8Listener extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-listener', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-listener', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-listener': ['W_C8_DEPLOY_LISTENER', 'deploy'] } },
   C8Listener,
 );

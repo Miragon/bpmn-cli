@@ -194,6 +194,6 @@ class C8EventDefinition extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-event-definition', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-event-definition', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-event-definition': ['W_C8_DEPLOY_EVENT_DEFINITION', 'deploy'] } },
   C8EventDefinition,
 );

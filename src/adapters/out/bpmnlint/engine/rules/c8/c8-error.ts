@@ -91,6 +91,6 @@ class C8Error extends C8SubscriptionRule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-error', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-error', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-error': ['W_C8_DEPLOY_ERROR', 'deploy'] } },
   C8Error,
 );

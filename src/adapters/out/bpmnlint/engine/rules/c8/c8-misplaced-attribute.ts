@@ -42,6 +42,6 @@ class C8MisplacedAttribute extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-misplaced-attribute', kind: 'engine-specific', targetEngine: 'c8', impact: 'runtime' },
+  { ruleName: 'c8-misplaced-attribute', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-misplaced-attribute': ['W_C8_MISPLACED_ATTRIBUTE', 'runtime'] } },
   C8MisplacedAttribute,
 );

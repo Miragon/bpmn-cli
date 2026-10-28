@@ -37,6 +37,7 @@ export class Camunda8Rules {
     ZeebeSchema.use(kit.ZEEBE_DESCRIPTOR);
     return {
       moddleExtensions,
+      findings: RuleEntries.findingsOf(Camunda8Rules.RULES),
       rules: (version) => [...compatRules(version), ...RuleEntries.of(Camunda8Rules.RULES, version)],
     };
   }

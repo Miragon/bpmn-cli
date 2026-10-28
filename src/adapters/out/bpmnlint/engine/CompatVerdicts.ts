@@ -1,4 +1,5 @@
 import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
+import { EngineFindings } from './EngineFindings.js';
 
 /**
  * camunda-compat's rules that report a property of white space only as missing, where Camunda 8.9
@@ -10,7 +11,7 @@ const COMPAT_TIMER = 'camunda-compat/timer';
 const FLOW_CONDITION = 'camunda-compat/sequence-flow-condition';
 /** camunda-compat says from 8.10 on; Camunda 8.9 deploys it (engine-checked). */
 const JOB_PRIORITY = { rule: 'camunda-compat/no-job-priority-definition', since: [8, 9] };
-const OWN_DUPLICATES = 'bpmn-cli/c8-duplicate-extension';
+const OWN_DUPLICATES = 'c8-duplicate-extension';
 /** Reported on every element of a group; the engine refuses the second and later ones. */
 const REPEATS = new Set(['camunda.elementMultipleNotAllowed', 'camunda.elementPropertyValueDuplicated']);
 
@@ -40,7 +41,7 @@ export class CompatVerdicts {
   ) {}
 
   apply(results: Results): void {
-    const duplicated = new Set((results[OWN_DUPLICATES] ?? []).map((report) => report.id));
+    const duplicated = new Set(Object.entries(results).flatMap(([rule, reports]) => reports.filter((report) => EngineFindings.findingOf(rule, report) === OWN_DUPLICATES).map((report) => report.id)));
     for (const [rule, reports] of Object.entries(results)) {
       if (!rule.startsWith('camunda-compat/')) continue;
       const kept = reports.filter((report) => !this.dropped(rule, report, duplicated));

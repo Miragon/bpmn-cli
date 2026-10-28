@@ -120,6 +120,6 @@ class C8MisplacedExtension extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-misplaced-extension', kind: 'engine-specific', targetEngine: 'c8', impact: 'runtime' },
+  { ruleName: 'c8-misplaced-extension', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-misplaced-extension': ['W_C8_MISPLACED_EXTENSION', 'runtime'] } },
   C8MisplacedExtension,
 );

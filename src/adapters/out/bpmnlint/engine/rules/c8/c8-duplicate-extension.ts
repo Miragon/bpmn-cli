@@ -51,6 +51,6 @@ class C8DuplicateExtension extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-duplicate-extension', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-duplicate-extension', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-duplicate-extension': ['W_C8_DEPLOY_DUPLICATE_EXTENSION', 'deploy'] } },
   C8DuplicateExtension,
 );

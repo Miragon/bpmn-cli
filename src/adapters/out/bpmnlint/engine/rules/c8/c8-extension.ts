@@ -262,6 +262,6 @@ class C8Extension extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-extension', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-extension', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-extension': ['W_C8_DEPLOY_EXTENSION', 'deploy'] } },
   C8Extension,
 );

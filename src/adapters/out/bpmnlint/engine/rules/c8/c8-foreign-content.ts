@@ -86,6 +86,6 @@ class C8ForeignContent extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-foreign-content', kind: 'engine-specific', targetEngine: 'c8', impact: 'runtime' },
+  { ruleName: 'c8-foreign-content', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-foreign-content': ['W_C8_FOREIGN_CONTENT', 'runtime'] } },
   C8ForeignContent,
 );

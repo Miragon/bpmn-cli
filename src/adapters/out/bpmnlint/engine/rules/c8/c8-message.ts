@@ -47,6 +47,6 @@ class C8Message extends C8NamedSubscriptionRule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-message', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-message', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-message': ['W_C8_DEPLOY_MESSAGE', 'deploy'] } },
   C8Message,
 );

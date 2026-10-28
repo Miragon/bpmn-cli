@@ -129,6 +129,6 @@ class C8Schema extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-schema', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-schema', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-schema': ['W_C8_DEPLOY_SCHEMA', 'deploy'] } },
   C8Schema,
 );

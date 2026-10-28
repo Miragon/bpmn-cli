@@ -39,6 +39,6 @@ class C8FeelCompletionCondition extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-feel-completion-condition', kind: 'engine-specific', targetEngine: 'c8', impact: 'runtime' },
+  { ruleName: 'c8-feel-completion-condition', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-feel-completion-condition': ['W_C8_EXPRESSION', 'runtime'] } },
   C8FeelCompletionCondition,
 );

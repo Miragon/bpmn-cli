@@ -44,6 +44,6 @@ class C8Implementation extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-implementation', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-implementation', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-implementation': ['W_C8_DEPLOY_IMPLEMENTATION', 'deploy'] } },
   C8Implementation,
 );

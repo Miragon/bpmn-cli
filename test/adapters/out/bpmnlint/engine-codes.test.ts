@@ -16,13 +16,15 @@ const resultKey = (rule: string): string => (rule.startsWith('bpmnlint/') ? rule
 
 describe('every engine rule has a bpmn-cli code', () => {
   for (const { platform, entry, compatRules, major } of ENGINES) {
-    it(`${platform}: the rules of every camunda-compat version and bpmn-cli's own`, () => {
+    it(`${platform}: the rules of every camunda-compat version, and each finding of bpmn-cli's own`, () => {
       const rules = new Set<string>();
       for (let minor = 0; minor < 40; minor++) for (const rule of compatRules(`${major}.${minor}`)) rules.add(resultKey(rule.name));
-      for (const rule of entry.rules(undefined)) rules.add(resultKey(rule.name));
-      expect(rules.size).toBeGreaterThan(5);
+      expect(rules.size).toBeGreaterThan(0);
       expect([...rules].filter((rule) => !EngineCodes.TABLE[platform][rule]).sort()).toEqual([]);
       expect(Object.keys(EngineCodes.TABLE[platform]).filter((rule) => !rules.has(rule)).sort()).toEqual([]);
+      const own = entry.rules(undefined).filter((rule) => rule.name.startsWith('bpmn-cli/'));
+      expect(own.length).toBeGreaterThan(5);
+      expect(Object.values(entry.findings).filter(([code]) => !code.startsWith(`W_${platform.toUpperCase()}_`))).toEqual([]);
     });
   }
 });

@@ -102,6 +102,6 @@ class C8UnknownAttribute extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-unknown-attribute', kind: 'engine-specific', targetEngine: 'c8', impact: 'runtime' },
+  { ruleName: 'c8-unknown-attribute', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-unknown-attribute': ['W_C8_UNKNOWN_ATTRIBUTE', 'runtime'] } },
   C8UnknownAttribute,
 );

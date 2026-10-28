@@ -62,6 +62,6 @@ class C8StartEvent extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-start-event', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-start-event', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-start-event': ['W_C8_DEPLOY_START_EVENT', 'deploy'] } },
   C8StartEvent,
 );

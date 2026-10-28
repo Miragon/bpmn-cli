@@ -32,6 +32,6 @@ class C8AdHocSubProcess extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-ad-hoc-sub-process', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-ad-hoc-sub-process', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-ad-hoc-sub-process': ['W_C8_DEPLOY_AD_HOC_SUBPROCESS', 'deploy'] } },
   C8AdHocSubProcess,
 );

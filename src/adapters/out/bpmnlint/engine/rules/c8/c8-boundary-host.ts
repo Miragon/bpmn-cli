@@ -9,6 +9,6 @@ class C8BoundaryHost extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-boundary-host', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' },
+  { ruleName: 'c8-boundary-host', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-boundary-host': ['W_C8_DEPLOY_BOUNDARY_HOST', 'deploy'] } },
   C8BoundaryHost,
 );

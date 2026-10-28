@@ -117,6 +117,6 @@ class C8BadValue extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-bad-value', kind: 'engine-specific', targetEngine: 'c8', impact: 'runtime' },
+  { ruleName: 'c8-bad-value', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-bad-value': ['W_C8_BAD_VALUE', 'runtime'] } },
   C8BadValue,
 );

@@ -83,4 +83,4 @@ class C8TimerValue extends C8Rule {
 }
 
 export default defineRule(
-  { ruleName: 'c8-timer-value', kind: 'engine-specific', targetEngine: 'c8', impact: 'deploy' }, C8TimerValue);
+  { ruleName: 'c8-timer-value', kind: 'engine-specific', targetEngine: 'c8', findings: { 'c8-timer-value': ['W_C8_DEPLOY_TIMER', 'deploy'] } }, C8TimerValue);
