@@ -49,8 +49,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      # no NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token. No --provenance: npm only creates
-      # provenance for public repositories.
+      # no NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token. No --provenance: npm adds it to
+      # trusted publishes on its own.
       - run: npm publish
 
   homebrew:
