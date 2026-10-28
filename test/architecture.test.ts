@@ -35,14 +35,14 @@ const sourceFiles = (readdirSync('src', { recursive: true }) as string[]).filter
 
 const ENTRIES = ['src/api.ts', 'src/cli.ts', 'src/index.ts', 'src/node.ts'];
 const DOMAIN_MODULES = ['document', 'commands', 'diagram', 'editing', 'validation', 'views', 'batch'];
-const ADAPTERS = ['in/cli', 'in/report', 'out/bpmnlint', 'out/document', 'out/files', 'out/memory'];
+const ADAPTERS = ['in/cli', 'in/report', 'out/bpmnlint', 'out/document', 'out/files', 'out/memory', 'out/render'];
 /** adapter -> the adapters it may use: the CLI prints through the reports the library also returns, the files load the .bpmnlintrc bpmnlint runs, the files and memory stores share how a document is loaded and saved */
 const ADAPTER_USES: Record<string, string[]> = { 'in/cli': ['in/report'], 'out/files': ['out/bpmnlint', 'out/document'], 'out/memory': ['out/document'] };
 /** the public API's classes (Doc, BpmnError, ChangeSet), constants and pure helpers on kinds, op names and metrics */
 const DOMAIN_VALUES_ENTRIES_REEXPORT = [
   'Doc', 'TARGETS', 'BpmnError', 'EXIT_CODES', 'ChangeSet', 'KINDS', 'parseKind', 'kindOf', 'kindLabel', 'DIAGRAM_COMMAND_NAMES', 'isDiagramCommand', 'LAYOUT_MODES',
   'AROUND_DEFAULT_DEPTH', 'PLATFORM_CHOICES',
-  'diffProblems', 'metricsDelta', 'KEYS', 'WEIGHTS', 'SWATCHES', 'RENDER_MAX_SIZE', 'MIN_LABEL_SCALE', 'HALO_COLORS',
+  'diffProblems', 'metricsDelta', 'KEYS', 'WEIGHTS', 'SWATCHES',
 ];
 const inFolder =(file: string, folder: string) => file.startsWith(join('src', folder) + sep);
 
@@ -110,6 +110,17 @@ describe('architecture', () => {
       const forbidden = ADAPTERS.filter((other) => other !== adapter && !(ADAPTER_USES[adapter] ?? []).includes(other));
       await expectNoDependency(`adapters/${adapter}`, forbidden.map((other) => `adapters/${other}`));
     }
+  });
+
+  it('the renderer stays out of the domain: no domain file draws SVG', () => {
+    expect(existsSync(join(SRC_DIR, 'domain', 'views', 'render'))).toBe(false);
+    const drawing = sourceFiles.filter((file) => inFolder(file, 'domain') && /<svg|<g /.test(readFileSync(file, 'utf8')));
+    expect(drawing).toEqual([]);
+  });
+
+  it('the renderer is browser-safe: adapters/out/render imports no node builtins', () => {
+    const offenders = sourceFiles.filter((file) => inFolder(file, join('adapters', 'out', 'render')) && importsOf(file).some((specifier) => specifier.startsWith('node:')));
+    expect(offenders).toEqual([]);
   });
 
   it('the domain modules import each other without a cycle', () => {

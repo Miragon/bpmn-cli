@@ -327,7 +327,7 @@ not in an `applyToXml`-only bundle; and the command (`-o`, the temp default,
 `-o -`, `--json`, `--plane`, the usage errors). The synthetic
 `test/fixtures/render/gallery.bpmn` has every element kind the renderer
 draws (built with the CLI, then a group and multiple events added by hand).
-`test/domain/views/render/render-agent.test.ts` checks the agent features (stage 2): every layout
+`test/adapters/out/render/render-agent.test.ts` checks the agent features (stage 2): every layout
 problem of every scenario and fixture located inside the bounding box of its
 elements on its plane (`locateProblems`; `layoutProblems` unchanged);
 `--problems` listing every metrics problem in its order with the same ids,
@@ -342,7 +342,7 @@ mutating commands (text, JSON, the region of a large drawing, a failed render
 that leaves the change standing); and the fuzz walk's render oracle. The
 synthetic `test/fixtures/render/long.bpmn` (28 nodes in a row, 3,940 px
 wide, built with the CLI) is the tiles and focus model.
-`test/domain/views/render/render-fixes.test.ts` checks the fixes after the verification of
+`test/adapters/out/render/render-fixes.test.ts` checks the fixes after the verification of
 issue #12 on synthetic models: broken or far-flung coordinates (NaN,
 1e308, Infinity, 1e9, a negative size, far label bounds) are left out with a
 note and never give `width="NaN"`, an all-broken plane is `E_RENDER`;

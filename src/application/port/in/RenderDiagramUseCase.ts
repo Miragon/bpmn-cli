@@ -1,4 +1,5 @@
 import type { ImageRequest, Shot } from '../out/WriteImagePort.js';
+import type { RenderOptions } from './RenderSvgUseCase.js';
 
 /**
  * `bpmn render` and `--render`:
@@ -12,7 +13,8 @@ export interface RenderDiagramUseCase {
 export declare namespace RenderDiagramUseCase {
 
   /** The document to draw and the image request for it. */
-  interface Command extends Omit<ImageRequest, 'xml'> {
+  interface Command extends Omit<ImageRequest, 'drawn'> {
+    opts: RenderOptions;
     source: { file: string } | { bytes: Uint8Array; name: string } | { xml: string };
   }
 

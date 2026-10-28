@@ -1,7 +1,7 @@
-import { cx } from '../../diagram/utils/geom.js';
-import type { Box, Point } from '../../diagram/utils/geom.js';
-import { textWidth, wrapLines } from '../../diagram/utils/text.js';
-import { LAYER, type Item } from './types.js';
+import { cx } from '../../../../domain/diagram/utils/geom.js';
+import type { Box, Point } from '../../../../domain/diagram/utils/geom.js';
+import { textWidth, wrapLines } from '../../../../domain/diagram/utils/text.js';
+import { LAYER, type Item } from '../types.js';
 import { attr, lines, SIZE } from '../utils/svg.js';
 
 /** external labels (bpmn-js: 11 px, 90 px wide, line height 1.2) */

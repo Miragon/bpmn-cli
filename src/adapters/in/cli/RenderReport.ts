@@ -1,6 +1,6 @@
 import type { Shot } from '../../../application/port/out/WriteImagePort.js';
 import { AROUND_DEFAULT_DEPTH } from '../../../domain/views/around-view.js';
-import type { RenderHighlight, RenderOptions } from '../../../domain/views/render/types.js';
+import type { RenderHighlight, RenderOptions } from '../../../application/port/in/RenderSvgUseCase.js';
 import { scaleText } from '../../../domain/views/utils/scale.js';
 import type { BpmnError } from '../../../domain/document/BpmnError.js';
 

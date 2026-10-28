@@ -1,5 +1,5 @@
-import { raw } from '../../diagram/utils/raw.js';
-import type { El } from '../../document/utils/moddle.js';
+import { raw } from '../../../../domain/diagram/utils/raw.js';
+import type { El } from '../../../../domain/document/utils/moddle.js';
 import { FILL, STROKE } from '../utils/svg.js';
 
 /** The colour attributes of a DI element as bpmn-js reads them: color: first, then bioc:. */

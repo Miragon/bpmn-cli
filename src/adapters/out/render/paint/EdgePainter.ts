@@ -1,11 +1,12 @@
-import type { Box, Point } from '../../diagram/utils/geom.js';
-import { cx, unionAll } from '../../diagram/utils/geom.js';
-import { raw } from '../../diagram/utils/raw.js';
-import type { DEdge } from '../../diagram/di/types.js';
-import { is, type El } from '../../document/utils/moddle.js';
+import type { Box, Point } from '../../../../domain/diagram/utils/geom.js';
+import { cx, unionAll } from '../../../../domain/diagram/utils/geom.js';
+import { raw } from '../../../../domain/diagram/utils/raw.js';
+import type { DEdge } from '../../../../domain/diagram/di/types.js';
+import { is, type El } from '../../../../domain/document/utils/moddle.js';
 import { LabelPainter } from './LabelPainter.js';
 import { Style } from './Style.js';
-import { HALO_COLORS, type Item } from './types.js';
+import { HALO_COLORS } from '../../../../application/port/in/RenderSvgUseCase.js';
+import type { Item } from '../types.js';
 import { pointsBox } from '../utils/boxes.js';
 import { attr, FILL, formatNumber } from '../utils/svg.js';
 

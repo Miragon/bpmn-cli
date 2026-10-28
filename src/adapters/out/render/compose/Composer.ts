@@ -1,13 +1,14 @@
-import type { Box, Point } from '../../diagram/utils/geom.js';
-import { containsPoint, grow, unionAll } from '../../diagram/utils/geom.js';
-import { LayoutAnalysis } from '../../diagram/di/LayoutAnalysis.js';
-import { ProblemLocator } from '../../diagram/di/ProblemLocator.js';
-import { problemKey, type LayoutProblem } from '../../diagram/utils/problems.js';
-import type { Plane } from '../../diagram/di/types.js';
+import type { Box, Point } from '../../../../domain/diagram/utils/geom.js';
+import { containsPoint, grow, unionAll } from '../../../../domain/diagram/utils/geom.js';
+import { LayoutAnalysis } from '../../../../domain/diagram/di/LayoutAnalysis.js';
+import { ProblemLocator } from '../../../../domain/diagram/di/ProblemLocator.js';
+import { problemKey, type LayoutProblem } from '../../../../domain/diagram/utils/problems.js';
+import type { Plane } from '../../../../domain/diagram/di/types.js';
 import { TileGrid } from './TileGrid.js';
-import { LAYER, MARGIN, MAX_TILES, MIN_LABEL_SCALE, type RenderFrame, type Item, type RenderOptions, type RenderProblem, type RenderResult } from './types.js';
+import { MIN_LABEL_SCALE, type RenderOptions, type RenderProblem, type RenderResult } from '../../../../application/port/in/RenderSvgUseCase.js';
+import { LAYER, MARGIN, MAX_TILES, type RenderFrame, type Item } from '../types.js';
 import { meets, pointsBox } from '../utils/boxes.js';
-import { scaleText } from '../utils/scale.js';
+import { scaleText } from '../../../../domain/views/utils/scale.js';
 import { FILL, formatNumber } from '../utils/svg.js';
 
 const FOCUS_MARGIN = 40;

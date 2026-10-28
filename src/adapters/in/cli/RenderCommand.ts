@@ -1,7 +1,7 @@
 import { basename } from 'node:path';
 import { InvalidArgumentError, type Command as CommandType } from 'commander';
 import { ViewRequest } from '../../../domain/views/ViewRequest.js';
-import { RENDER_MAX_SIZE, type RenderOptions } from '../../../domain/views/render/types.js';
+import { RENDER_MAX_SIZE, type RenderOptions } from '../../../application/port/in/RenderSvgUseCase.js';
 import { RenderReport } from './RenderReport.js';
 import { usageError } from '../../../domain/document/utils/errors.js';
 import { CliCommand, type RawOpts } from './CliCommand.js';

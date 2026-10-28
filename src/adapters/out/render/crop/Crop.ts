@@ -1,13 +1,13 @@
-import { cx, cy } from '../../diagram/utils/geom.js';
-import type { Plane } from '../../diagram/di/types.js';
-import type { Semantics } from '../../diagram/di/Semantics.js';
-import type { Doc } from '../../document/Doc.js';
-import { is } from '../../document/utils/moddle.js';
-import { AroundWindow } from '../AroundWindow.js';
-import { ElementSelector } from '../../diagram/commands/ElementSelector.js';
-import { modelError, usageError } from '../../document/utils/errors.js';
-import type { RenderOptions } from './types.js';
-import { planeOfId } from '../utils/planes.js';
+import { cx, cy } from '../../../../domain/diagram/utils/geom.js';
+import type { Plane } from '../../../../domain/diagram/di/types.js';
+import type { Semantics } from '../../../../domain/diagram/di/Semantics.js';
+import type { Doc } from '../../../../domain/document/Doc.js';
+import { is } from '../../../../domain/document/utils/moddle.js';
+import { AroundWindow } from '../../../../domain/views/AroundWindow.js';
+import { ElementSelector } from '../../../../domain/diagram/commands/ElementSelector.js';
+import { modelError, usageError } from '../../../../domain/document/utils/errors.js';
+import type { RenderOptions } from '../../../../application/port/in/RenderSvgUseCase.js';
+import { planeOfId } from './planes.js';
 
 /** The crop the options ask for and the plane it implies. */
 export interface CropChoice {

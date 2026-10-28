@@ -4,6 +4,7 @@ import { Cli } from './adapters/in/cli/Cli.js';
 import { BpmnlintProjectSettings } from './adapters/out/files/BpmnlintProjectSettings.js';
 import { FileDocumentStore } from './adapters/out/files/FileDocumentStore.js';
 import { FileImageWriter } from './adapters/out/files/FileImageWriter.js';
+import { SvgRenderer } from './adapters/out/render/SvgRenderer.js';
 import { EditDocumentService } from './application/service/EditDocumentService.js';
 import { CreateDocumentService } from './application/service/CreateDocumentService.js';
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
@@ -49,7 +50,7 @@ const cli = new Cli(VERSION, {
   findElements: new FindElementsService(),
   analyzeLayout: new AnalyzeLayoutService(),
   runCommands: new RunCommandsService(),
-  renderDiagram: new RenderDiagramService(files, new FileImageWriter()),
+  renderDiagram: new RenderDiagramService(files, new SvgRenderer(), new FileImageWriter()),
 });
 void cli.run(process.argv).then(() => {
   process.exitCode = cli.exitCode;

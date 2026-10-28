@@ -1,5 +1,5 @@
 import type { MutationReport } from '../command-report.js';
-import type { RenderHighlight } from '../../../../domain/views/render/types.js';
+import type { RenderHighlight } from '../../../../application/port/in/RenderSvgUseCase.js';
 
 /** What a mutation touched, as halos; each id in its first category only. */
 export function changeHighlight(report: Pick<MutationReport, 'created' | 'changed' | 'layout'>): Required<RenderHighlight> {

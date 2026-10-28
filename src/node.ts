@@ -5,7 +5,9 @@ import type { Doc } from './domain/document/Doc.js';
 import type { EditCommand } from './domain/commands/types.js';
 import type { CheckResult } from './application/port/in/ValidateDocumentUseCase.js';
 import type { MutationResult } from './domain/batch/types.js';
-import type { RenderOptions } from './domain/views/render/types.js';
+import { RENDER_MAX_SIZE, type RenderOptions } from './application/port/in/RenderSvgUseCase.js';
+import { RenderSvgService } from './application/service/RenderSvgService.js';
+import { SvgRenderer } from './adapters/out/render/SvgRenderer.js';
 import { PngRenderer, type PngRenderResult } from './adapters/out/files/PngRenderer.js';
 import type { BpmnlintEngine } from './adapters/out/bpmnlint/bpmnlint-contract.js';
 import type { NamedValidator, Validator } from './domain/validation/validators.js';
@@ -70,6 +72,7 @@ export function projectBpmnlintSettings(file: string | undefined, opts: FileBpmn
 export function projectIdConventions(file: string | undefined, opts: FileBpmnlintOptions = {}): Promise<ProjectIdConventions | undefined> { return new ProjectBpmnlint(file, opts).idConventions(); }
 
 /** `bpmn render` (PNG): one plane of the document, a part of it or its tiles as PNG images. */
-export function renderPng(xml: string, opts: RenderOptions = {}): Promise<PngRenderResult> {
-  return new PngRenderer().render(xml, opts);
+export async function renderPng(xml: string, opts: RenderOptions = {}): Promise<PngRenderResult> {
+  const drawn = await new RenderSvgService(new SvgRenderer()).renderXml({ ...opts, maxSize: opts.maxSize ?? RENDER_MAX_SIZE, xml });
+  return new PngRenderer().render(drawn);
 }

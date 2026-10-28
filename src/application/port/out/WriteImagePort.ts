@@ -1,4 +1,4 @@
-import type { RenderOptions, RenderProblem } from '../../../domain/views/render/types.js';
+import type { RenderProblem, RenderResult } from '../in/RenderSvgUseCase.js';
 
 export type ImageFormat = 'png' | 'svg';
 
@@ -30,8 +30,7 @@ export interface Shot {
 
 export interface ImageRequest {
 
-  xml: string;
-  opts: RenderOptions;
+  drawn: RenderResult;
   format: ImageFormat;
 
   /**
@@ -44,7 +43,7 @@ export interface ImageRequest {
   stdout: { write(bytes: string | Uint8Array): unknown };
 }
 
-/** Renders a document as PNG or SVG and writes it to a file or stdout (`-`). */
+/** Writes a drawn document as PNG or SVG to a file or stdout (`-`). */
 export interface WriteImagePort {
 
   write(request: ImageRequest): Promise<Shot>;

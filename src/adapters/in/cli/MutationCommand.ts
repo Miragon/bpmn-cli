@@ -7,7 +7,7 @@ import type { EditCommand, TriggerOptions } from '../../../domain/commands/types
 import { TRIGGER_FIELDS, TRIGGER_KEYS } from '../../../domain/commands/utils/op-fields.js';
 import type { MutationResult } from '../../../domain/batch/types.js';
 import { LAYOUT_MODES, type LayoutMode } from '../../../domain/diagram/types.js';
-import { RENDER_MAX_SIZE, type RenderOptions } from '../../../domain/views/render/types.js';
+import { RENDER_MAX_SIZE, type RenderOptions } from '../../../application/port/in/RenderSvgUseCase.js';
 import { changeHighlight } from '../report/utils/highlight.js';
 import { type MutationReport, type MutationSummary } from '../report/command-report.js';
 import { RenderReport } from './RenderReport.js';
