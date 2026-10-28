@@ -1,5 +1,4 @@
-import { FeelError } from './FeelError.js';
-import { FeelParser } from './FeelParser.js';
+import { FeelError, FeelParser } from './FeelParser.js';
 
 export class FeelExpression {
   constructor(private readonly expression: string) {}
