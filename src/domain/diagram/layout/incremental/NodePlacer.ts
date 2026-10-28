@@ -78,6 +78,8 @@ export class NodePlacer {
   skip?: Map<string, number>;
   /** nodes continuing a chain on their anchor's row: a line touching them is rerouted */
   continued?: Set<string>;
+  /** the node placeFlowNodes places now */
+  private current?: string;
   private readonly drawings = new Map<Plane, Drawing>();
   private readonly rows: RowChooser;
   private readonly boundaries: BoundaryPlacer;
@@ -150,10 +152,24 @@ export class NodePlacer {
   spacingFor(plane: Plane): Spacing {
     let spacing = this.spacing.get(plane);
     if (!spacing) {
-      spacing = PlaneQuery.spacingOf(plane);
+      spacing = PlaneQuery.spacingOf(plane, (edge) => this.drawnEnds(plane, edge));
       this.spacing.set(plane, spacing);
     }
     return spacing;
+  }
+
+  /** The spacing without the flows of `ids` (they may not be routed yet in a batch). */
+  spacingWithout(plane: Plane, ids: readonly string[]): Spacing {
+    return PlaneQuery.spacingOf(plane, (edge) => (ids.includes(edge.sourceId ?? '') || ids.includes(edge.targetId ?? '') ? undefined : this.drawnEnds(plane, edge)));
+  }
+
+  /**
+   * The ends of a flow as the single command placing the current node sees them: an end the ops
+   * moved to a node not drawn yet counts at its old place, unless it is the current node.
+   */
+  private drawnEnds(plane: Plane, edge: DEdge): Pick<DEdge, 'sourceId' | 'targetId'> {
+    const end = (now: string | undefined, old: string | undefined): string | undefined => (!now || plane.shapes.has(now) || now === this.current ? now : old);
+    return { sourceId: end(edge.sourceId, this.oldSource.get(edge.id)), targetId: end(edge.targetId, this.oldTarget.get(edge.id)) };
   }
 
   /**
@@ -298,7 +314,7 @@ export class NodePlacer {
   }
 
   /** Whether `to` follows `from` along sequence flows (at most 500 nodes visited). */
-  private leadsTo(from: string, to: string): boolean {
+  leadsTo(from: string, to: string): boolean {
     const seen = new Set([from]);
     const queue = [from];
     while (queue.length && seen.size <= 500) {
@@ -326,13 +342,35 @@ export class NodePlacer {
       const successor = outs.length === 1 ? plane.shapes.get(outs[0]!) : undefined;
       if (preds.length < 2 || !successor || !preds.every((pred): pred is DShape => !!pred)) continue;
       const sameFrame = (shape: DShape): boolean => shape.poolId === join.poolId && shape.parentId === join.parentId;
-      if (!preds.every(sameFrame) || !sameFrame(successor) || successor.bounds.x <= Math.max(...preds.map((pred) => right(pred.bounds)))) continue;
+      /** S left of a predecessor is pushed right of the join again, when the join led forward into it */
+      if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= Math.max(...preds.map((pred) => right(pred.bounds))) && successor.bounds.x < right(join.bounds))) continue;
       if (!preds.some((pred) => cx(join.bounds) < pred.bounds.x && !this.leadsTo(jid, pred.id))) continue;
       plane.shapes.delete(jid);
       (this.joins ??= new Map()).set(jid, successor.id);
+      this.current = jid;
+      this.spacing.delete(plane);
       if (LayoutDebug.on()) LayoutDebug.log(`[join] ${jid}: a flow from ${preds.map((pred) => pred.id).join(', ')} would enter it backwards: placed again before ${successor.id}`);
       this.neighbours.placeAfter(plane, jid, preds, pending);
     }
+  }
+
+  /**
+   * Drawn targets the node `id` just placed would enter backwards move right of it (pushBehind);
+   * the node it was spliced before keeps the direction of the flow it was spliced into.
+   */
+  private pushTargets(plane: Plane, id: string, pending: ReadonlySet<string>): void {
+    const source = plane.shapes.get(id);
+    if (!source) return;
+    for (const tid of this.sem.successors(id)) {
+      const target = plane.shapes.get(tid);
+      if (!target || pending.has(tid) || this.spliced?.get(id) === tid || this.joins?.get(id) === tid) continue;
+      if (target.poolId === source.poolId && target.parentId === source.parentId) this.pushBehind(plane, source, target);
+    }
+  }
+
+  /** A flow from `source` that enters `target` backwards moves the target and what follows it right of the source. */
+  pushBehind(plane: Plane, source: DShape, target: DShape): boolean {
+    return this.neighbours.pushBehind(plane, source, target);
   }
 
   /**
@@ -395,14 +433,18 @@ export class NodePlacer {
         break;
       }
       pending.delete(chosen.id);
+      this.current = chosen.id;
+      this.spacing.delete(chosen.plane);
       if (chosen.mode === 'boundary') {
         if (!this.boundaries.placeBoundary(chosen.plane, chosen.id)) this.neighbours.placeUnconnected(chosen.plane, chosen.id);
       } else if (chosen.mode === 'after' || chosen.mode === 'exception') this.neighbours.placeAfter(chosen.plane, chosen.id, chosen.preds!, pending);
       else if (chosen.mode === 'before') this.neighbours.placeBefore(chosen.plane, chosen.id, chosen.succ!);
       else if (!is(this.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') || !this.boundaries.placeBoundary(chosen.plane, chosen.id)) this.neighbours.placeUnconnected(chosen.plane, chosen.id);
       this.pullPlacedJoins(chosen.plane, chosen.id, pending);
+      this.pushTargets(chosen.plane, chosen.id, pending);
       last = { plane: chosen.plane, id: chosen.id };
     }
+    delete this.current;
     return skipped;
   }
 

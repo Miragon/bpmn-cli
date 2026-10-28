@@ -20,7 +20,13 @@ Every write updates the diagram. `--layout <mode>` says how; `--relayout` is `--
 | `full` | the engine redraws everything; colours and DI ids are kept, positions are not |
 
 So a drawing you formatted by hand, here or in a modeler, stays as it is. A format command that moves
-a shape or reroutes a flow makes the drawing hand-made, so your formatting persists. If an
+a shape or reroutes a flow makes the drawing hand-made, so your formatting persists.
+
+Room is made only where it is needed: what follows the new element moves right, with what it would
+run into on the way, and by no more than the room that is missing. Another row of the diagram keeps
+its place, so a task added to a rejection path leaves the main path above it alone. A new flow that
+would enter an element left of its source (not a loop return) moves that element and what follows it
+right of the source. If an
 incremental update fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMENTAL_FAILED`).
 
 <figure class="diagram">

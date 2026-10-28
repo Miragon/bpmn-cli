@@ -10,7 +10,9 @@ import type { DShape } from '../../di/types.js';
 /**
  * A join drawn before the ops that a new flow would enter backwards (no loop return) is placed
  * again right of its rightmost predecessor, before its one successor: a `connect` into a merge an
- * earlier command spliced draws what the batch adding both draws. Its DI is reused.
+ * earlier command spliced draws what the batch adding both draws. Its DI is reused. Any other
+ * drawn node such a flow from a drawn node enters backwards moves right of its source with what
+ * follows it, as when the batch places the source (NodePlacer pushTargets).
  */
 export class JoinPuller {
   constructor(
@@ -18,9 +20,26 @@ export class JoinPuller {
     private readonly snap: Snapshot,
   ) {}
 
+  /** Sequence flows new in this run or with a new target. */
+  private fresh(): El[] {
+    const before = new Set([...this.snap.flowEnds.keys()].map((id) => this.snap.currentId(id)));
+    return [...this.run.sem.byId.values()].filter((el) => is(el, 'bpmn:SequenceFlow') && !!idOf(el) && (!before.has(idOf(el)!) || this.run.place.oldTarget.has(idOf(el)!)));
+  }
+
+  /** Runs after pullJoins: the joins placed again are no target any more. */
+  pushTargets(): void {
+    for (const el of this.fresh()) {
+      const { sourceId, targetId } = DiagramReader.edgeEnds(el);
+      const plane = this.run.planes.find((candidate) => !!targetId && candidate.shapes.has(targetId));
+      const target = targetId ? plane?.shapes.get(targetId) : undefined;
+      const source = sourceId ? plane?.shapes.get(sourceId) : undefined;
+      if (!plane || !target || !source || this.run.relocated.has(target.id) || this.run.relocated.has(source.id)) continue;
+      if (target.poolId === source.poolId && target.parentId === source.parentId) this.run.place.pushBehind(plane, source, target);
+    }
+  }
+
   /** Only a gateway with 2+ incoming flows and one outgoing, all in its pool / sub-process. */
   pullJoins(): void {
-    const before = new Set([...this.snap.flowEnds.keys()].map((id) => this.snap.currentId(id)));
     let next: Map<string, string[]> | undefined;
     const reaches = (from: string, to: string): boolean => {
       if (!next) {
@@ -43,9 +62,8 @@ export class JoinPuller {
       return false;
     };
     const seqFlows = (el: El | undefined, prop: 'incoming' | 'outgoing'): El[] => rawList(el, prop).filter((flow) => is(flow, 'bpmn:SequenceFlow'));
-    for (const el of this.run.sem.byId.values()) {
-      const fid = idOf(el);
-      if (!fid || !is(el, 'bpmn:SequenceFlow') || (before.has(fid) && !this.run.place.oldTarget.has(fid))) continue;
+    for (const el of this.fresh()) {
+      const fid = idOf(el)!;
       const { sourceId, targetId } = DiagramReader.edgeEnds(el);
       const plane = this.run.planes.find((candidate) => !!targetId && candidate.shapes.has(targetId));
       const join = targetId ? plane?.shapes.get(targetId) : undefined;
@@ -58,7 +76,8 @@ export class JoinPuller {
       if (ins.length < 2 || !successor || reaches(join.id, source.id)) continue;
       const preds = ins.map((flow) => plane.shapes.get(idOf(raw(flow, 'sourceRef')) ?? ''));
       const sameFrame = (shape: DShape | undefined): boolean => !!shape && shape.poolId === join.poolId && shape.parentId === join.parentId;
-      if (!preds.every(sameFrame) || !sameFrame(successor) || successor.bounds.x <= Math.max(...preds.map((pred) => right(pred!.bounds)))) continue;
+      /** S left of a predecessor is pushed right of the join again, when the join led forward into it */
+      if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= Math.max(...preds.map((pred) => right(pred!.bounds))) && successor.bounds.x < right(join.bounds))) continue;
       plane.shapes.delete(join.id);
       this.run.place.reuse.set(join.id, { shape: join, boundaries: [], from: plane });
       (this.run.place.joins ??= new Map()).set(join.id, successor.id);

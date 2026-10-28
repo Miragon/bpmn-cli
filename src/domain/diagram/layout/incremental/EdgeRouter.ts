@@ -1,5 +1,5 @@
 import { attachedSide, defaultSides, gatewaySide } from '../../utils/sides.js';
-import { crossings } from '../../utils/routing.js';
+import { BEND, crossings } from '../../utils/routing.js';
 import { OrthogonalRouter, type RouteRequest } from './OrthogonalRouter.js';
 import type { Side, DEdge, DShape, Plane } from '../../di/types.js';
 import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from '../../utils/geom.js';
@@ -27,9 +27,22 @@ export interface EdgeBefore {
 /** The `detachedEdge` metric uses the same gap. */
 export const DETACHED_GAP = 10;
 
-/** Routes and repairs single connections inside a kept drawing. */
+/** An association passing this close to a node placed in this run or its label reads as touching it. */
+const GRAZE_GAP = 3;
+
+/** A dock route that cuts a shape loses to any that cuts none, one more crossing to any length. */
+const DOCK_CUT = 1e9;
+const DOCK_CROSSING = 1e6;
+
+/**
+ * Routes and repairs single connections inside a kept drawing; `fresh`: the nodes placed in this
+ * run, which associations keep clear of.
+ */
 export class EdgeRouter {
-  constructor(private readonly plane: Plane) {}
+  constructor(
+    private readonly plane: Plane,
+    private readonly fresh: ReadonlySet<string> = new Set(),
+  ) {}
 
   private ancestors(shape: DShape): Set<string> {
     const out = new Set<string>();
@@ -142,10 +155,12 @@ export class EdgeRouter {
   }
 
   /**
-   * The nearest point of the flow a straight line from the shape reaches (`clear`),
-   * else the middle of the nearest segment, entered across it (`sides`).
+   * The nearest point of the flow a straight line of `edge` from the shape reaches (no `points`),
+   * else the route into the middle of a segment, entered across it, that cuts the fewest shapes,
+   * then crosses the fewest lines, then is the shortest (150 per bend); ties keep the segment
+   * nearer the shape.
    */
-  private flowDock(flow: DEdge, from: Box, obstacles: readonly Box[]): { at: Box; clear: boolean; sides?: Side[] } | undefined {
+  private flowDock(edge: DEdge, flow: DEdge, from: Box, obstacles: Box[], lines: Point[][]): { at: Box; points?: Point[] } | undefined {
     const center = { x: cx(from), y: cy(from) };
     const cands: Point[] = [];
     for (let index = 0; index + 1 < flow.points.length; index++) {
@@ -158,18 +173,25 @@ export class EdgeRouter {
     const dist = (point: Point): number => Math.hypot(point.x - center.x, point.y - center.y);
     const box = (point: Point): Box => ({ x: Math.round(point.x), y: Math.round(point.y), width: 0, height: 0 });
     const sorted = cands.sort((first, second) => dist(first) - dist(second) || first.x - second.x || first.y - second.y);
-    for (const candidate of sorted) if (!obstacles.some((obstacle) => pathHits(this.straight(from, box(candidate)), obstacle))) return { at: box(candidate), clear: true };
-    let best: { at: Box; clear: boolean; sides?: Side[] } | undefined;
-    let bestD = Infinity;
+    for (const candidate of sorted) {
+      const line = this.straight(from, box(candidate));
+      if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) return { at: box(candidate) };
+    }
+    let best: { at: Box; points: Point[] } | undefined;
+    let least = Infinity;
     for (let index = 0; index + 1 < flow.points.length; index++) {
       const start = flow.points[index]!;
       const end = flow.points[index + 1]!;
-      if (Math.abs(start.x - end.x) + Math.abs(start.y - end.y) < 20 && flow.points.length > 2) continue;
-      const distance = dist(this.nearestOn([start, end], center)!);
-      if (distance >= bestD) continue;
-      bestD = distance;
-      const horizontal = Math.abs(start.x - end.x) >= Math.abs(start.y - end.y);
-      best = { at: box({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }), clear: false, sides: horizontal ? ['top', 'bottom'] : ['left', 'right'] };
+      const dx = Math.abs(start.x - end.x);
+      const dy = Math.abs(start.y - end.y);
+      if (dx + dy < 20 && flow.points.length > 2) continue;
+      const at = box({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 });
+      const points = roundPoints(OrthogonalRouter.route({ source: from, target: at, obstacles, lines, targetSides: dx >= dy ? ['top', 'bottom'] : ['left', 'right'] }));
+      let cost = DOCK_CUT * obstacles.filter((obstacle) => pathHits(points, obstacle)).length + DOCK_CROSSING * crossings(points, lines) + BEND * (points.length - 2) + dist(this.nearestOn([start, end], center)!) / DOCK_CROSSING;
+      for (let step = 1; step < points.length; step++) cost += Math.abs(points[step]!.x - points[step - 1]!.x) + Math.abs(points[step]!.y - points[step - 1]!.y);
+      if (cost >= least) continue;
+      best = { at, points };
+      least = cost;
     }
     return best;
   }
@@ -220,17 +242,14 @@ export class EdgeRouter {
       const flow = !source ? this.plane.edges.get(edge.sourceId ?? '') : !target ? this.plane.edges.get(edge.targetId ?? '') : undefined;
       if (shape && flow && flow.points.length >= 2) {
         const obstacles = this.obstaclesFor(edge, shape);
-        const dock = this.flowDock(flow, shape.bounds, obstacles);
-        if (dock?.clear) return source ? this.straight(source.bounds, dock.at) : this.straight(dock.at, shape.bounds);
-        if (dock) {
-          const pts = roundPoints(OrthogonalRouter.route({ source: shape.bounds, target: dock.at, obstacles, lines: opts.lines, ...(dock.sides ? { targetSides: dock.sides } : {}) }));
-          return source ? pts : pts.reverse();
-        }
+        const dock = this.flowDock(edge, flow, shape.bounds, obstacles, opts.lines);
+        if (dock?.points) return source ? dock.points : dock.points.reverse();
+        if (dock) return source ? this.straight(source.bounds, dock.at) : this.straight(dock.at, shape.bounds);
       }
       const line = this.straight(sb, tb);
       if (!source || !target) return line;
       const obstacles = this.obstaclesFor(edge, source, target);
-      if (!obstacles.some((obstacle) => pathHits(line, obstacle))) return line;
+      if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) return line;
       return roundPoints(OrthogonalRouter.route({ source: source.bounds, target: target.bounds, obstacles, lines: opts.lines }));
     }
     if (!source || !target) return undefined;
@@ -278,6 +297,34 @@ export class EdgeRouter {
       if (solid && pathHits(points, shape.bounds)) out.add(shape.id);
     }
     return out;
+  }
+
+  /**
+   * Whether the line runs along the border of one of `ids` or touches it within `margin` (reads as
+   * docking on it); with `labels` their labels count too. Its own ends, their boundary events and
+   * hosts do not count.
+   */
+  grazes(edge: DEdge, ids: Iterable<string>, { points = edge.points, margin = 1, labels = false }: { points?: readonly Point[]; margin?: number; labels?: boolean } = {}): boolean {
+    if (points.length < 2) return false;
+    const own = new Set<string>();
+    for (const end of [edge.sourceId, edge.targetId]) {
+      const shape = end ? this.plane.shapes.get(end) : undefined;
+      if (!shape) continue;
+      own.add(shape.id);
+      if (shape.hostId) own.add(shape.hostId);
+      for (const boundary of PlaneQuery.boundariesOf(this.plane, shape.id)) own.add(boundary.id);
+    }
+    for (const id of ids) {
+      const shape = this.plane.shapes.get(id);
+      if (!shape || own.has(id) || !PlaneQuery.isLeaf(shape)) continue;
+      if (pathHits(points, shape.bounds, -margin) || (labels && shape.label && pathHits(points, shape.label, -margin))) return true;
+    }
+    return false;
+  }
+
+  /** Whether an association's line touches a node placed in this run or its label. */
+  touchesFresh(edge: DEdge, points: readonly Point[] = edge.points): boolean {
+    return (edge.kind === 'association' || edge.kind === 'dataAssociation') && this.grazes(edge, this.fresh, { points, margin: GRAZE_GAP, labels: true });
   }
 
   private endGaps(edge: DEdge): { sourceGap: number; targetGap: number } {

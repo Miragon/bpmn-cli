@@ -2,7 +2,6 @@ import type { Snapshot } from './Snapshot.js';
 import type { IncrementalLayout } from './IncrementalLayout.js';
 import { LayoutDebug } from '../LayoutDebug.js';
 import { is, type El } from '../../../document/utils/moddle.js';
-import { segmentHits } from '../../utils/geom.js';
 import { hasExternalLabel } from '../../utils/labels.js';
 import { idOf, raw, rawList } from '../../utils/raw.js';
 import { DiagramReader } from '../../di/DiagramReader.js';
@@ -38,8 +37,9 @@ export class IncrementalRouting {
    * the placement broke (not message flows) are routed now, and the spacing is measured again, so
    * the next placement sees what the next single command would. Step 8 routes such a flow again
    * only when it broke since.
-   * What the placement broke (the space tool, a new shape on a line) is routed again now; a flow
-   * whose end changes later (into a node still to be placed) is routed then.
+   * What the placement broke (the space tool, a new shape on a line, an association a new shape
+   * touches) is routed again now; a flow whose end changes later (into a node still to be placed)
+   * is routed then.
    */
   routeNow(plane: Plane, id: string): void {
     const shape = plane.shapes.get(id);
@@ -64,17 +64,18 @@ export class IncrementalRouting {
       this.routeKept(plane, edge);
     }
     const detached = !PlaneQuery.verticalBand(plane);
+    const drawing = this.run.drawing(plane);
     for (const edge of plane.edges.values()) {
       if (edge.kind === 'messageFlow' || edge.points.length < 2 || edge.sourceId === id || edge.targetId === id || !edge.sourceId || !edge.targetId) continue;
       const ends = DiagramReader.edgeEnds(edge.el);
       if (ends.sourceId !== edge.sourceId || ends.targetId !== edge.targetId || !plane.shapes.has(edge.sourceId) || !plane.shapes.has(edge.targetId)) continue;
       const was = this.run.routedNow.get(edge.id) ?? this.edgesBefore.get(edge);
-      if (!was || (!this.run.drawing(plane).brokenEdge(edge, was, { detached }) && !(this.run.place.continued?.has(id) && this.grazes(plane, edge, [id])))) continue;
+      if (!was || (!drawing.brokenEdge(edge, was, { detached }) && !(this.run.place.continued?.has(id) && drawing.grazes(edge, [id])) && !drawing.touchesFresh(edge))) continue;
       if (LayoutDebug.on()) LayoutDebug.log(`[route] ${edge.id}: broken when ${id} was placed`);
       this.routeKept(plane, edge);
     }
-    if (!shape.label && hasExternalLabel(shape) && raw<string>(el, 'name')) this.run.drawing(plane).placeShapeLabel(shape);
-    this.run.place.spacing.set(plane, PlaneQuery.spacingOf(plane));
+    if (!shape.label && hasExternalLabel(shape) && raw<string>(el, 'name')) drawing.placeShapeLabel(shape);
+    this.run.place.spacing.delete(plane);
   }
 
   /** Routes a connection during placement (routeNow) and records its state then. */
@@ -86,9 +87,10 @@ export class IncrementalRouting {
 
   /**
    * Creates DEdges for connections without DI and collects every edge to (re)route.
-   * A line not reaching its ends is routed again, except on vertical pools / lanes; one routed when
-   * its second end was placed is kept unless it broke since. Ends are compared by their ids now, so
-   * renaming an end (`set id=`) changes nothing.
+   * A line not reaching its ends is routed again, except on vertical pools / lanes, and so is an
+   * association a new node or its label touches; one routed when its second end was placed is kept
+   * unless it broke since. Ends are compared by their ids now, so renaming an end (`set id=`)
+   * changes nothing.
    */
   collectEdges(before: Map<DEdge, EdgeBefore>): void {
     const edges = this.edgeIndex(this.run.planes);
@@ -108,14 +110,16 @@ export class IncrementalRouting {
         this.run.newEdges.add(id);
       }
     }
+    const continued = this.run.place.continued ?? [];
     for (const plane of this.run.planes) {
       const detached = !PlaneQuery.verticalBand(plane);
+      const drawing = this.run.drawing(plane);
       for (const edge of plane.edges.values()) {
         if (this.run.fromEngine.has(edge.id)) continue;
         const now = this.run.routedNow.get(edge.id);
         if (now) {
           const ends = DiagramReader.edgeEnds(edge.el);
-          if (ends.sourceId === edge.sourceId && ends.targetId === edge.targetId && edge.points.length >= 2 && !this.run.drawing(plane).brokenEdge(edge, now, { detached }) && !this.grazes(plane, edge, this.run.place.continued)) continue;
+          if (ends.sourceId === edge.sourceId && ends.targetId === edge.targetId && edge.points.length >= 2 && !drawing.brokenEdge(edge, now, { detached }) && !drawing.grazes(edge, continued) && !drawing.touchesFresh(edge)) continue;
           this.run.reroute.add(edge.id);
           if (LayoutDebug.on()) LayoutDebug.log(`[route] ${edge.id}: broken after it was routed`);
           continue;
@@ -133,11 +137,13 @@ export class IncrementalRouting {
             ? 'ends changed'
             : (edge.sourceId && this.run.place.placed.has(edge.sourceId)) || (edge.targetId && this.run.place.placed.has(edge.targetId))
               ? 'end placed'
-              : this.run.drawing(plane).brokenEdge(edge, before.get(edge), { detached })
+              : drawing.brokenEdge(edge, before.get(edge), { detached })
                 ? 'broken'
-                : this.grazes(plane, edge, this.run.place.continued)
+                : drawing.grazes(edge, continued)
                   ? 'runs along a new shape'
-                  : undefined;
+                  : drawing.touchesFresh(edge)
+                    ? 'touches a new shape'
+                    : undefined;
         if (why) {
           this.run.reroute.add(edge.id);
           if (LayoutDebug.on()) LayoutDebug.log(`[route] ${edge.id}: ${why}`);
@@ -147,26 +153,26 @@ export class IncrementalRouting {
   }
 
   /**
-   * Whether a connection runs along the border of one of `ids` or touches it (reads as docking on
-   * it): checked for nodes continuing a chain. Its own ends, their boundary events and hosts do
-   * not count.
+   * Once the labels are settled (the last node's is placed after the routing, a repair route may
+   * run over one): a kept association that a node placed in this run or its label touches is
+   * routed again, once, and the labels its line then runs over step aside (one placed before a
+   * repair route ran over it too). A route that still touches one keeps the drawn line, whose
+   * labels step aside all the same. Returns the ones routed again.
    */
-  private grazes(plane: Plane, edge: DEdge, ids: Iterable<string> | undefined): boolean {
-    if (!ids || edge.points.length < 2) return false;
-    const own = new Set<string>();
-    for (const end of [edge.sourceId, edge.targetId]) {
-      const shape = end ? plane.shapes.get(end) : undefined;
-      if (!shape) continue;
-      own.add(shape.id);
-      if (shape.hostId) own.add(shape.hostId);
-      for (const boundary of PlaneQuery.boundariesOf(plane, shape.id)) own.add(boundary.id);
-    }
-    for (const id of ids) {
-      const shape = plane.shapes.get(id);
-      if (!shape || own.has(id) || !PlaneQuery.isLeaf(shape)) continue;
-      for (let index = 0; index + 1 < edge.points.length; index++) if (segmentHits(edge.points[index]!, edge.points[index + 1]!, shape.bounds, -1)) return true;
-    }
-    return false;
+  routeGrazed(): string[] {
+    return this.run.planes.flatMap((plane) => {
+      const drawing = this.run.drawing(plane);
+      const touched = [...plane.edges.values()].filter((edge) => !this.run.newEdges.has(edge.id) && drawing.touchesFresh(edge));
+      const routed = touched.filter((edge) => {
+        const drawn = { points: edge.points, label: edge.label };
+        if (!drawing.reroute(edge)) return false;
+        if (!drawing.touchesFresh(edge)) return true;
+        Object.assign(edge, drawn);
+        return false;
+      });
+      drawing.clearLabels(touched);
+      return routed.map((edge) => edge.id);
+    });
   }
 
   /**

@@ -237,9 +237,9 @@ Details, every op key and worked batches: [reference/ops.md](reference/ops.md).
 
 - `auto` (default): a new file or a drawing exactly as the engine would draw it
   is redrawn in full; anything hand-made or formatted is **kept** - new
-  elements are placed locally, room is made like the modeler's space tool,
-  only affected flows are rerouted (and a line that does not reach its ends,
-  `detachedEdge`, is routed again).
+  elements are placed locally, room is made for what follows them (other rows
+  stay), only affected flows are rerouted (and a line that does not reach its
+  ends, `detachedEdge`, is routed again).
 - `--layout incremental`: always keep (fails with `E_LAYOUT_INCREMENTAL`
   instead of redrawing) - use it when keeping the drawing is a requirement.
 - `--relayout` (= `--layout full`, `bpmn layout <file>`): redraw everything;
