@@ -167,7 +167,7 @@ export class MovedFlows {
 
   /**
    * Tells on a put-back flow's change entry which bridge kept its label:
-   * `(was -> C; its name stays with the bridge Flow_AToB)`.
+   * `(was -> C; its name stays with the bridge flow_aToB)`.
    */
   private reportBridgesKept(before: Map<El, LabelBefore>): void {
     const changes = this.changes;

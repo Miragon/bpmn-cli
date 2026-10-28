@@ -20,7 +20,7 @@ export abstract class C7Rules extends EngineRules {
     return super.addressOf(el, owner);
   }
 
-  /** `userTask Activity_X`, `the multiInstanceLoopCharacteristics of userTask Activity_X` */
+  /** `userTask userTask_x`, `the multiInstanceLoopCharacteristics of userTask userTask_x` */
   protected describe(el: El, owner: El | undefined): string {
     const id = idOf(el);
     const kind = this.kit.isBpmnElement(el) ? this.kit.kindLabel(el).replace(/^bpmn:/, '') : el.$type;

@@ -4,7 +4,7 @@ import { annotationLine, elementFlags, elementLine, flagValue, flowText, INDENT,
 
 /**
  * The model view as text, the default output of `show`: one line per node with its flows inline
- * and every id visible, e.g. `userTask Activity_Check "Check" [lane=Lane_Sales] -> Gateway_Ok`.
+ * and every id visible, e.g. `userTask userTask_check "Check" [lane=lane_sales] -> gateway_ok`.
  * Deterministic, compact, no coordinates.
  */
 export class ModelViewText {

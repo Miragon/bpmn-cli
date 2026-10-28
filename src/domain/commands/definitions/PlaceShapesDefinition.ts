@@ -32,8 +32,8 @@ export class PlaceShapesDefinition extends EditCommandDefinition<PlaceShapes> {
     command.selection(true);
     if (command.fields['side'] !== undefined) {
       const with_ = PLACE_GROUPS.flat().filter((placeKey) => command.fields[placeKey] !== undefined);
-      if (with_.length) throw command.fail(`"side" moves a boundary event to a border of its host; it cannot be combined with ${with_.map((placeKey) => `"${placeKey}"`).join(', ')}`, 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
-      if (command.hasSelector() || (command.fields['ids'] as string[] | undefined)?.length !== 1) throw command.fail('"side" takes exactly one id (the boundary event)', 'Example: {"op":"place","ids":["Event_Overdue"],"side":"top"}.');
+      if (with_.length) throw command.fail(`"side" moves a boundary event to a border of its host; it cannot be combined with ${with_.map((placeKey) => `"${placeKey}"`).join(', ')}`, 'Example: {"op":"place","ids":["event_overdue"],"side":"top"}.');
+      if (command.hasSelector() || (command.fields['ids'] as string[] | undefined)?.length !== 1) throw command.fail('"side" takes exactly one id (the boundary event)', 'Example: {"op":"place","ids":["event_overdue"],"side":"top"}.');
       return;
     }
     command.groups(PLACE_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before"), or "side" for a boundary event');

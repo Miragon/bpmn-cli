@@ -34,9 +34,9 @@ version of this plugin (Node 22.12+). It pre-approves only those two commands.
   piped in with `printf '%s' '<json>' | bpmn apply <file> -`, which runs under that
   pre-approval (a heredoc holding JSON makes Claude Code ask first).
 - **Standing rules** - never write or patch `.bpmn` XML or BPMNDI; address elements by id only;
-  give every created element an explicit speaking id (`Activity_CheckInvoice`); aliases for back
-  references inside a batch; one `bpmn apply` batch per change; keep the user's drawing
-  (`--relayout` only on request).
+  give every created element an explicit speaking id in the conventions `bpmn show --conventions`
+  lists (`userTask_checkInvoice`); aliases for back references inside a batch; one `bpmn apply`
+  batch per change; keep the user's drawing (`--relayout` only on request).
 - **The loop** - orient with `show`, `show --around`, `show <id> --context`, `find`; change in one
   batch; read the result (layout mode, placed / moved, added layout problems, the warnings the
   change added); look at a change that drew something (`bpmn render <file> --problems -o

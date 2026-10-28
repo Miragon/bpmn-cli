@@ -43,7 +43,7 @@ function hasWord(text: string): boolean {
   return (text.match(/[A-Za-z]{4,}/g) ?? []).some((run) => /[g-z]/i.test(run));
 }
 
-/** The words that tie an unnamed element's id to its place (Gateway_AfterCheckInvoice). */
+/** The words that tie an unnamed element's id to its place (gateway_afterCheckInvoice). */
 export type ContextWord = 'After' | 'Before' | 'On' | 'In';
 export const CONTEXT_WORDS = new Set(['after', 'before', 'on', 'in']);
 

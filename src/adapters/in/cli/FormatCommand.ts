@@ -19,7 +19,7 @@ export abstract class FormatCommand extends MutationCommand {
   /** The ids and selectors of a format command; `need`: ids or a selector are required. */
   protected selectorsOf(ids: string[], options: RawOpts, need: boolean): Pick<PlaceShapes, 'ids' | 'path' | 'via' | 'kind' | 'branch'> {
     const path = options['path'] as string[] | undefined;
-    assertPathFlags(path, options['via'], { path: 'Put the other ids before --path, or end the list with --: `bpmn color f.bpmn --path Event_Start Event_Done --color green`.' });
+    assertPathFlags(path, options['via'], { path: 'Put the other ids before --path, or end the list with --: `bpmn color f.bpmn --path startEvent_start endEvent_done --color green`.' });
     const out = { ...(ids.length ? { ids } : {}), ...(path ? { path } : {}), ...(options['via'] ? { via: options['via'] as string[] } : {}), ...this.pick(options, ['kind', 'branch'] as const) };
     if (need && !ids.length && !path && !out.kind && !out.branch) throw usageError('name the elements: ids and / or --path <fromId> <toId>, --kind <kind>, --branch <flowId>');
     return out;

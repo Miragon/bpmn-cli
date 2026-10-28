@@ -38,7 +38,7 @@ const houseRules: NamedValidator = {
 let { xml } = await newXml({ processName: 'Order handling' });
 ({ xml } = await applyToXml(xml, [
   { op: 'add', kind: 'start', name: 'Order received' },
-  { op: 'add', kind: 'end', name: 'Done', after: 'Event_OrderReceived' },
+  { op: 'add', kind: 'end', name: 'Done', after: 'startEvent_orderReceived' },
 ]));
 
 try {
@@ -46,7 +46,7 @@ try {
     op: 'add',
     kind: 'userTask',
     name: 'Archive',
-    in: 'Process_OrderHandling',
+    in: 'orderHandling',
   };
   await applyToXml(xml, [archive], { validators: [houseRules] });
 } catch (err) {
@@ -58,16 +58,16 @@ try {
   //  house-rules; nothing was written'
   err.details.errors;
   // [{ code: 'DEAD_END',
-  //    message: 'Activity_Archive has no outgoing sequence flow',
+  //    message: 'userTask_archive has no outgoing sequence flow',
   //    validator: 'house-rules', severity: 'error',
-  //    element: 'Activity_Archive' }]
+  //    element: 'userTask_archive' }]
 }
 
 const check = {
   op: 'add',
   kind: 'userTask',
   name: 'Check invoice',
-  after: 'Event_OrderReceived',
+  after: 'startEvent_orderReceived',
 };
 const edit = await applyToXml(xml, [check], { validators: [houseRules] });
 

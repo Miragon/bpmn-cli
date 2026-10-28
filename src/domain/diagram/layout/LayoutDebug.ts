@@ -1,4 +1,4 @@
-/** One line without trailing newline, e.g. `[route] Flow_3: source moved`. */
+/** One line without trailing newline, e.g. `[route] flow_aToB: source moved`. */
 export type DebugSink = (line: string) => void;
 
 /**

@@ -41,8 +41,8 @@ export const KIND_FIELD = ref('Element kind with optional trigger suffix, e.g. "
 
 export const NODE_FIELDS: FieldsOf<SplitNode> = {
   kind: KIND_FIELD,
-  name: str('Display name. Also drives the generated id (<Prefix>_<NameSlug> in the default style; new ids follow the id style of the file).'),
-  id: ref('Explicit id (default: a speaking id in the id style of the file: <Prefix>_<NameSlug>, unnamed elements <Prefix>_<Kind><Context> such as Gateway_AfterCheckInvoice). A later op of the batch refers to the element by this id or by an alias ("as").'),
+  name: str('Display name. Also drives the generated id (<prefix><nameSlug> after the id conventions: userTask_checkInvoice).'),
+  id: ref('Explicit id (default: an id after the id conventions, element-id-naming of the .bpmnlintrc or its defaults: <prefix><nameSlug>, unnamed elements <prefix><kindWord><Context> such as gateway_afterCheckInvoice). A later op of the batch refers to the element by this id or by an alias ("as").'),
   as: alias('Batch alias of the new element: "$" + a name, e.g. "$check".'),
   flowAs: alias('Batch alias of the flow into the new node (the flow the flow options describe; with "before" on a join or an unconnected node: the flow out of it).'),
   refAs: alias(REF_AS),

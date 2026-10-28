@@ -32,7 +32,7 @@ export function validatorLines(reports: readonly ValidatorReport[] | undefined, 
   });
 }
 
-/** `aliases: $check = Activity_CheckInvoice, $ok = Gateway_InvoiceOk` */
+/** `aliases: $check = userTask_checkInvoice, $ok = gateway_invoiceOk` */
 export function aliasLine(aliases: Record<string, string>): string {
   return `aliases: ${Object.entries(aliases).map(([alias, id]) => `${alias} = ${id}`).join(', ')}`;
 }

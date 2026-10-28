@@ -3,10 +3,10 @@
 # after picture, so both line up when the demo fades from one to the other.
 bpmn new order.bpmn --name "Order handling"
 bpmn add order.bpmn start "Order received"
-bpmn add order.bpmn userTask "Check invoice" --after Event_OrderReceived
-bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
+bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
+bpmn add order.bpmn end "Done" --after userTask_checkInvoice
 bpmn render order.bpmn -o landing-demo-before.svg
-bpmn add order.bpmn userTask "Approve invoice" --after Activity_CheckInvoice
+bpmn add order.bpmn userTask "Approve invoice" --after userTask_checkInvoice
 bpmn render order.bpmn -o landing-demo-after.svg
 canvas=$(sed -nE 's/.*<svg [^>]*width="([0-9.]+)" height="[0-9.]+" viewBox="[0-9.-]+ [0-9.-]+ ([0-9.]+) .*/\1 \2/p' landing-demo-after.svg)
 set -- $canvas

@@ -25,7 +25,7 @@ export class IdRegistry {
   }
 
   /**
-   * Whether another id shares the body of `id` after its prefix (`Gateway_X` for `Activity_X`):
+   * Whether another id shares the body of `id` after its prefix (`gateway_x` for `task_x`):
    * a flow between them would name both alike.
    */
   bodyTaken(id: string): boolean {

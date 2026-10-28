@@ -25,7 +25,7 @@ incremental update fails, `auto` falls back to a full redraw (`W_LAYOUT_INCREMEN
 
 <figure class="diagram">
   <img src="/shots/layout-modes-incremental.svg" alt="The order process with the customer pool on top and a new task Approve invoice placed between Check invoice and the gateway; the shapes that made room have blue halos" />
-  <figcaption><code>add ... --after Activity_CheckInvoice</code>: incremental, the drawing is kept and room is made (blue: moved)</figcaption>
+  <figcaption><code>add ... --after userTask_checkInvoice</code>: incremental, the drawing is kept and room is made (blue: moved)</figcaption>
 </figure>
 
 <figure class="diagram">
@@ -74,20 +74,20 @@ flow crosses the yes branch:
 
 ```console
 $ bpmn show order.bpmn --layout
-diagram BPMNPlane_Collaboration_OrderHandling (Collaboration_OrderHandling)
+diagram BPMNPlane_collaboration_orderHandling (collaboration_orderHandling)
   columns: c0..c5
-  participant Participant_Customer "Customer"
-  participant Participant_OrderHandling "Order handling"
-    row 1: c0 Event_OrderReceived, c1 Activity_CheckInvoice, c2 Gateway_InvoiceOk, c3 Activity_BookInvoice, c4 Gateway_InvoiceOk_join, c5 Event_InvoiceHandled
-    row 2: c3 Activity_AskCustomer
+  participant participant_customer "Customer"
+  participant participant_orderHandling "Order handling"
+    row 1: c0 startEvent_orderReceived, c1 userTask_checkInvoice, c2 gateway_invoiceOk, c3 serviceTask_bookInvoice, c4 gateway_invoiceOkJoin, c5 endEvent_invoiceHandled
+    row 2: c3 sendTask_askCustomer
 layout quality: score 6: crossings 1, labelOnLine 1
-  crossings [Flow_InvoiceOkToBookInvoice, Flow_AskCustomerToCustomer]
-  labelOnLine [Flow_InvoiceOkToBookInvoice, Flow_AskCustomerToCustomer]
+  crossings [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]
+  labelOnLine [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]
 
-$ bpmn place order.bpmn Activity_AskCustomer --row-of Activity_CheckInvoice
+$ bpmn place order.bpmn sendTask_askCustomer --row-of userTask_checkInvoice
 layout: ok - incremental (format operations only: drawing kept)
-  format place #0: moved Activity_BookInvoice, Activity_AskCustomer; rerouted Flow_BookInvoiceToInvoiceOkJoin, Flow_InvoiceOkToBookInvoice, Flow_AskCustomerToInvoiceOkJoin, Flow_InvoiceOkToAskCustomer, Flow_AskCustomerToCustomer
-layout quality: score 6 -> 0; resolved: crossings [Flow_InvoiceOkToBookInvoice, Flow_AskCustomerToCustomer], labelOnLine [Flow_InvoiceOkToBookInvoice, Flow_AskCustomerToCustomer]
+  format place #0: moved serviceTask_bookInvoice, sendTask_askCustomer; rerouted flow_bookInvoiceToInvoiceOkJoin, flow_invoiceOkToBookInvoice, flow_askCustomerToInvoiceOkJoin, flow_invoiceOkToAskCustomer, messageFlow_askCustomerToCustomer
+layout quality: score 6 -> 0; resolved: crossings [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer], labelOnLine [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]
 written: order.bpmn
 ```
 
@@ -98,7 +98,7 @@ written: order.bpmn
 
 <figure class="diagram">
   <img src="/shots/layout-place-after.svg" alt="After: Ask customer sits on the top row, its message flow rises straight to the Customer pool, Book invoice is on the row below" />
-  <figcaption>After <code>place ... --row-of Activity_CheckInvoice</code>: score 0</figcaption>
+  <figcaption>After <code>place ... --row-of userTask_checkInvoice</code>: score 0</figcaption>
 </figure>
 
 ## Layout conventions of the built-in engine

@@ -588,8 +588,8 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
 
   it('documents retype, event sub-processes, participants and scopes the way the ops behave', () => {
     expect(command('retype').summary).toMatch(/<kind>:none/);
-    expect(command('retype').examples).toContain('bpmn retype order.bpmn Event_Start startEvent:none');
-    expect(DOCS).toMatch(/retype Event_X startEvent:none/);
+    expect(command('retype').examples).toContain('bpmn retype order.bpmn startEvent_orderReceived startEvent:none');
+    expect(DOCS).toMatch(/retype startEvent_orderReceived startEvent:none/);
     expect(catalogue('E_EVENT_SUBPROCESS_NO_START').fix).toMatch(/one `bpmn apply`/);
     expect(DOCS).toMatch(/`eventSubProcess`.*one `bpmn apply`/);
     expect(catalogue('E_INVALID_SCOPE').meaning).not.toMatch(/collaboration/);

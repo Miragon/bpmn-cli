@@ -31,7 +31,7 @@ export function idOf(el: El): string {
   return el.get<string | undefined>('id') ?? '';
 }
 
-/** `userTask Activity_Check "Check"` */
+/** `userTask userTask_check "Check"` */
 export function labelOf(el: El): string {
   const name = el.get<string | undefined>('name');
   return `${kindLabel(el)} ${el.get<string>('id')}${name ? ` "${name}"` : ''}`;

@@ -24,7 +24,7 @@ export function floodKey(warning: Finding): string {
   return `${validatorTag(warning)}${warning.code}`;
 }
 
-/** `W_DEAD_END Activity_A, W_UNREACHABLE x5 [A, B, C, D, E]` */
+/** `W_DEAD_END task_a, W_UNREACHABLE x5 [A, B, C, D, E]` */
 export function findingList(findings: readonly Finding[]): string {
   const groups = new Map<string, Finding[]>();
   for (const finding of findings) groups.set(floodKey(finding), [...(groups.get(floodKey(finding)) ?? []), finding]);

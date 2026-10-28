@@ -25,7 +25,7 @@ whenever a change touches more than one element.
     "op": "add",
     "kind": "serviceTask",
     "name": "Book invoice",
-    "after": "Activity_CheckInvoice",
+    "after": "userTask_checkInvoice",
     "as": "$book"
   },
   {
@@ -45,11 +45,11 @@ whenever a change touches more than one element.
 
 ```console
 $ bpmn apply order.bpmn book.json --summary
-created serviceTask: Activity_BookInvoice
-created sequenceFlow: Flow_BookInvoiceToInvoiceHandled
-aliases: $book = Activity_BookInvoice
-changed: Flow_CheckInvoiceToBookInvoice
-renamed: Flow_CheckInvoiceToInvoiceHandled -> Flow_CheckInvoiceToBookInvoice
+created serviceTask: serviceTask_bookInvoice
+created sequenceFlow: flow_bookInvoiceToInvoiceHandled
+aliases: $book = serviceTask_bookInvoice
+changed: flow_checkInvoiceToBookInvoice
+renamed: flow_checkInvoiceToInvoiceHandled -> flow_checkInvoiceToBookInvoice
 layout: full, score 0 -> 0
 written: order.bpmn
 ```
@@ -94,7 +94,7 @@ creates (new node -> old successor), so the same batch can give it a condition:
   "op": "add",
   "kind": "exclusiveGateway",
   "name": "Valid?",
-  "flow": "Flow_CheckToOk",
+  "flow": "flow_checkToOk",
   "as": "$valid",
   "outAs": "$yes"
 }
@@ -118,7 +118,7 @@ splits after the check, adds a reminder timer with its own path and gives both t
   "ops": [
     {
       "op": "split",
-      "after": "Activity_CheckInvoice",
+      "after": "userTask_checkInvoice",
       "kind": "exclusiveGateway",
       "name": "Invoice ok?",
       "as": "$ok",
@@ -170,7 +170,7 @@ splits after the check, adds a reminder timer with its own path and gives both t
       "op": "add",
       "kind": "endEvent",
       "name": "Reminder sent",
-      "in": "Process_OrderHandling",
+      "in": "orderHandling",
       "as": "$sent"
     },
     { "op": "connect", "source": "$remind", "target": "$sent" },

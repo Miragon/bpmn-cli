@@ -48,17 +48,17 @@ approves the rest.
 bpmn new claim.bpmn --name "Claim handling" --target camunda7
 bpmn add claim.bpmn start "Claim received"
 bpmn add claim.bpmn serviceTask "Check coverage" \
-  --after Event_ClaimReceived camunda:type=external \
+  --after startEvent_claimReceived camunda:type=external \
   camunda:topic=check-coverage
-bpmn ext add claim.bpmn Activity_CheckCoverage camunda:inputParameter \
+bpmn ext add claim.bpmn serviceTask_checkCoverage camunda:inputParameter \
   name=amount --body '${amount}'
 bpmn add claim.bpmn boundary:error "Not covered" \
-  --on Activity_CheckCoverage --error "Not covered" \
+  --on serviceTask_checkCoverage --error "Not covered" \
   --error-code NOT_COVERED
-bpmn add claim.bpmn end "Claim rejected" --after Event_NotCovered
+bpmn add claim.bpmn end "Claim rejected" --after event_notCovered
 bpmn add claim.bpmn userTask "Approve claim" \
-  --after Activity_CheckCoverage camunda:candidateGroups=claims
-bpmn add claim.bpmn end "Claim settled" --after Activity_ApproveClaim
+  --after serviceTask_checkCoverage camunda:candidateGroups=claims
+bpmn add claim.bpmn end "Claim settled" --after userTask_approveClaim
 ```
 
 ```console
@@ -98,27 +98,27 @@ flow. The process then waits for the payment message.
 bpmn new invoice.bpmn --name "Invoice approval" --target camunda8
 bpmn add invoice.bpmn start "Invoice received"
 bpmn add invoice.bpmn serviceTask "Check invoice" \
-  --after Event_InvoiceReceived
-bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:taskDefinition \
+  --after startEvent_invoiceReceived
+bpmn ext add invoice.bpmn serviceTask_checkInvoice zeebe:taskDefinition \
   type=check-invoice retries=3
-bpmn ext add invoice.bpmn Activity_CheckInvoice zeebe:input \
+bpmn ext add invoice.bpmn serviceTask_checkInvoice zeebe:input \
   source==invoice.amount target=amount
 bpmn add invoice.bpmn exclusiveGateway "Amount over 1000?" \
-  --after Activity_CheckInvoice
+  --after serviceTask_checkInvoice
 bpmn add invoice.bpmn userTask "Approve invoice" \
-  --after Gateway_AmountOver1000 --flow-name yes \
+  --after gateway_amountOver1000 --flow-name yes \
   --condition '= amount > 1000'
-bpmn ext add invoice.bpmn Activity_ApproveInvoice \
+bpmn ext add invoice.bpmn userTask_approveInvoice \
   zeebe:assignmentDefinition candidateGroups=finance
-bpmn add invoice.bpmn exclusiveGateway --id Gateway_Approved \
-  --after Activity_ApproveInvoice
-bpmn connect invoice.bpmn Gateway_AmountOver1000 Gateway_Approved \
+bpmn add invoice.bpmn exclusiveGateway --id gateway_approved \
+  --after userTask_approveInvoice
+bpmn connect invoice.bpmn gateway_amountOver1000 gateway_approved \
   --name no --default
 bpmn add invoice.bpmn receiveTask "Wait for payment" \
-  --after Gateway_Approved --message "Payment received"
-bpmn ext add invoice.bpmn Activity_WaitForPayment zeebe:subscription \
+  --after gateway_approved --message "Payment received"
+bpmn ext add invoice.bpmn receiveTask_waitForPayment zeebe:subscription \
   correlationKey==invoiceId
-bpmn add invoice.bpmn end "Invoice settled" --after Activity_WaitForPayment
+bpmn add invoice.bpmn end "Invoice settled" --after receiveTask_waitForPayment
 ```
 
 ### The FEEL pitfall
@@ -127,10 +127,10 @@ A JUEL `${...}` condition deploys on Camunda 7 and is refused by Camunda 8. `val
 with the fix:
 
 ```console
-$ bpmn set invoice.bpmn Flow_AmountOver1000ToApproveInvoice 'condition=${amount > 1000}'
+$ bpmn set invoice.bpmn flow_amountOver1000ToApproveInvoice 'condition=${amount > 1000}'
 ...
 $ bpmn validate invoice.bpmn --strict
-W_C8_DEPLOY_EXPRESSION Flow_AmountOver1000ToApproveInvoice: The condition "${amount > 1000}" of sequence flow Flow_AmountOver1000ToApproveInvoice is no FEEL expression; Camunda 8 needs one starting with = and refuses the file  (`bpmn set <file> Flow_AmountOver1000ToApproveInvoice 'condition== amount > 1000'` (check the FEEL syntax: and / or, = for equality).)
+W_C8_DEPLOY_EXPRESSION flow_amountOver1000ToApproveInvoice: The condition "${amount > 1000}" of sequence flow flow_amountOver1000ToApproveInvoice is no FEEL expression; Camunda 8 needs one starting with = and refuses the file  (`bpmn set <file> flow_amountOver1000ToApproveInvoice 'condition== amount > 1000'` (check the FEEL syntax: and / or, = for equality).)
 platform: c8 (modeler:executionPlatform "Camunda Cloud") - 1 refused at deploy, 0 runtime, 0 practice finding(s)
 layout: ok
 valid, 1 warning(s)

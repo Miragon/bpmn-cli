@@ -49,14 +49,14 @@ type (`bpmn:UserTask`). Events take a trigger suffix (`startEvent:message`, `bou
 
 | family | kinds (aliases) | id prefix |
 | --- | --- | --- |
-| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask`, `sendTask`, `receiveTask`, `manualTask`, `businessRuleTask` (`rule`) | `Activity_` |
-| sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess`, `transaction` | `Activity_` |
-| call activity | `callActivity` (`call`) | `Activity_` |
-| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` | `Gateway_` |
-| events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `Event_` |
-| pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `Participant_`, `Lane_` |
-| data | `dataObject` (`data`), `dataStore` (`store`) | `DataObjectReference_`, `DataStoreReference_` |
-| artifacts | `textAnnotation` (`note`), `group` (`--members <id,...>`) | `TextAnnotation_`, `Group_` |
+| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask`, `sendTask`, `receiveTask`, `manualTask`, `businessRuleTask` (`rule`) | the kind: `task_`, `userTask_`, ... |
+| sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess`, `transaction` | `subProcess_` |
+| call activity | `callActivity` (`call`) | `callActivity_` |
+| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` | `gateway_` |
+| events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `startEvent_`, `endEvent_`, else `event_` |
+| pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `participant_`, `lane_` |
+| data | `dataObject` (`data`), `dataStore` (`store`) | `dataObject_`, `dataStore_` |
+| artifacts | `textAnnotation` (`note`), `group` (`--members <id,...>`) | `textAnnotation_`, `group_` |
 
 Choreographies are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs a
 `complexGateway`: the Camunda profiles report it (`W_C7_DEPLOY_COMPLEX_GATEWAY`,
@@ -65,7 +65,7 @@ Choreographies are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs
 ## Triggers
 
 The trigger is the kind's suffix, its details an option: `bpmn add order.bpmn boundary:timer
-"Late" --on Activity_Archive --timer P2D`. Messages, errors and signals are found by name and
+"Late" --on task_archive --timer P2D`. Messages, errors and signals are found by name and
 created when missing.
 
 | trigger | option |
@@ -135,11 +135,11 @@ A mutating command prints what it created, changed and removed, then warnings, t
 file line:
 
 ```console
-$ bpmn add order.bpmn end "Done" --after Activity_CheckInvoice
-created endEvent Event_Done "Done" - after Activity_CheckInvoice
-created sequenceFlow Flow_CheckInvoiceToDone - Activity_CheckInvoice -> Event_Done
-note: appended after Activity_CheckInvoice
-resolved: W_NO_END Process_OrderHandling, W_DEAD_END Activity_CheckInvoice
+$ bpmn add order.bpmn end "Done" --after userTask_checkInvoice
+created endEvent endEvent_done "Done" - after userTask_checkInvoice
+created sequenceFlow flow_checkInvoiceToDone - userTask_checkInvoice -> endEvent_done
+note: appended after userTask_checkInvoice
+resolved: W_NO_END orderHandling, W_DEAD_END userTask_checkInvoice
 layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
 written: order.bpmn
@@ -153,7 +153,7 @@ written: order.bpmn
   "file": "order.bpmn",
   "written": true,
   "unchanged": false,
-  "created": [{ "id": "Event_Done", "kind": "endEvent", "name": "Done" }],
+  "created": [{ "id": "endEvent_done", "kind": "endEvent", "name": "Done" }],
   "warnings": { "added": [], "resolved": [], "preexistingCount": 0 },
   "layout": { "status": "ok", "mode": "full" },
   "importWarnings": []
