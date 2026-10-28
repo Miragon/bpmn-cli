@@ -20,16 +20,24 @@ const TASK_LISTENER_EVENT_CHOICE = '<creating|assigning|updating|completing|canc
 const TASK_LISTENER_EVENTS = ['creating', 'assigning', 'updating', 'completing', 'canceling', 'create', 'assignment', 'update', 'complete', 'cancel'];
 
 /**
- * Reports zeebe extension content Camunda 8 refuses or cannot use. It refuses: two of an element it
- * reads once per element, listeners without or with an unknown event type or where it does not
- * run them (a start listener on a start or boundary event, an end listener on a gateway, execution
- * listeners on a sequence flow, task listeners on a job worker user task), an unknown binding type,
- * a linked resource without resource type or version tag, conditional filter variable events other
- * than create and update, a version tag binding without version tag and a task header key twice
- * where camunda-compat does not look. It deploys but cannot use: job retries that are no number (an
- * incident on every instance), task headers without key or value (dropped from the job) and a
- * multi-instance completion condition that is no FEEL expression (an incident on every completed
- * instance). A listener without type is left to camunda-compat.
+ * zeebe extension elements (listeners, task headers, bindings, linked resources, retries) with
+ * missing or unknown values, in a place Camunda 8 does not run them, or twice.
+ * Camunda 8 refuses to deploy most of them; the rest deploy but raise an incident when they run, or
+ * are dropped from the job.
+ *
+ * - `c8-feel-completion-condition`: a multi-instance completion condition that is no FEEL
+ *   expression.
+ * - `c8-bad-value`: job retries that are no number; a task header without key or value.
+ * - `c8-listener`: execution listeners on a sequence flow; task listeners on a job worker user
+ *   task; a listener without event type or with an unknown one; a start listener on a start or
+ *   boundary event; an end listener on a gateway.
+ * - `c8-extension`: an unknown binding type; a versionTag binding without version tag; a linked
+ *   resource without resource type; conditional filter variable events other than create and
+ *   update; one task header key twice.
+ * - `c8-duplicate-extension`: two of an extension element Camunda 8 reads once per element.
+ *
+ * @example retries that are no number
+ * <zeebe:taskDefinition type="charge" retries="three" />  <!-- incident on every instance -->
  */
 class C8Extensions extends C8Rule {
   protected visit(node: ModdleElement): void {

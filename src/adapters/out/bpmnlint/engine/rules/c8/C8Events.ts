@@ -26,16 +26,29 @@ const TIMER_CHECKS: Record<TimerKind, { valid: (timer: TimerValue) => boolean; r
 const GATEWAY_TRIGGERS = ['bpmn:MessageEventDefinition', 'bpmn:TimerEventDefinition', 'bpmn:SignalEventDefinition', 'bpmn:ConditionalEventDefinition'];
 
 /**
- * Reports the events, gateways and sub-processes Camunda 8 refuses to deploy. In the whole file: a
- * boundary event on a compensation handler, a conditional definition without condition, a link
- * definition without name where camunda-compat does not look. In what the engine runs: several
- * definitions on one event, none on an event sub-process start, a definition without the id the
- * engine needs, a compensation naming an activity of another scope or a compensation boundary
- * event not wired to its handler, a link throw without its catch, start and end events in an
- * ad-hoc sub-process, an event-based gateway with fewer than two branches (as the engine counts
- * them) or a target other than a message, timer, signal or conditional catch event, a triggered
- * start of an embedded sub-process and several starts of a sub-process. In executable processes, a
- * static timer value Camunda 8.9 does not parse (camunda-compat's value reports are dropped).
+ * Events, event-based gateways and sub-process start events Camunda 8 cannot execute.
+ * Camunda 8 refuses to deploy the file.
+ *
+ * - `c8-boundary-host`: a boundary event on a compensation handler.
+ * - `c8-event-definition`: a conditional event without condition; an event with several event
+ *   definitions; an event sub-process start without trigger; a conditional, compensation or link
+ *   catch definition without id; a compensation throw naming an activity of another scope; a
+ *   compensation boundary event without association to its handler, or with an outgoing flow.
+ * - `c8-link-event`: a link event without name or with an empty one; a link throw without a catch
+ *   of its name in its scope.
+ * - `c8-ad-hoc-sub-process`: a start or end event in an ad-hoc sub-process.
+ * - `c8-event-gateway`: fewer than two outgoing flows, or fewer than two listed as the gateway's
+ *   outgoing; a target other than a receive task or a message, timer, signal or conditional catch
+ *   event.
+ * - `c8-start-event`: a start event with a trigger in an embedded sub-process; a sub-process with
+ *   several start events.
+ * - `c8-timer-value`: a static timer value that is empty, no ISO 8601 date, duration or cycle nor a
+ *   6-field cron expression, or out of range.
+ *
+ * @example a timer duration in words
+ * <bpmn:timerEventDefinition>
+ *   <bpmn:timeDuration>1 hour</bpmn:timeDuration>  <!-- ISO 8601: PT1H -->
+ * </bpmn:timerEventDefinition>
  */
 class C8Events extends C8Rule {
   private readonly flows = new FlowIndex();

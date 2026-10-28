@@ -8,9 +8,15 @@ import { Values } from '../Values.js';
 const DI_TYPE = /^(bpmndi|dc|di):/;
 
 /**
- * Reports what Camunda 8 refuses when it validates the file against the BPMN schema and the moddle
- * tree shows: extension elements on `bpmn:definitions`, and ids that are no XML NCName. Attributes
- * without a namespace prefix are bpmn-cli's UnprefixedAttributes, which reads its own model.
+ * BPMN schema violations: extension elements on bpmn:definitions, and ids that are no valid XML
+ * name.
+ * Camunda 8 validates the file against the BPMN schema and refuses it.
+ *
+ * - `c8-schema`: extension elements on bpmn:definitions; an id that is no XML NCName (a colon, a
+ *   leading digit, a space).
+ *
+ * @example an id with a colon
+ * <bpmn:serviceTask id="Check:Order" />  <!-- no colon in an id -->
  */
 class C8Schema extends C8Rule {
   protected visit(node: ModdleElement): void {

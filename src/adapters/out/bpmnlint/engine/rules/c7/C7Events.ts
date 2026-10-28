@@ -21,14 +21,29 @@ const REFERENCES: Array<{ finding: string; kind: string; events: string[]; missi
 ];
 
 /**
- * Reports the events Camunda 7 refuses or runs other than modeled. The BPMN schema checks hold for
- * every event definition in the file: a conditional one needs a condition, a timer at most one time
- * element, a link a name. In what the engines run: messages, signals, errors and escalations need
- * their reference with a name or code, message and signal subscriptions a unique name per scope
- * and root signals a unique name, a timer a value, a compensation throw an activity of its own
- * scope, link catch names are unique and a reached throw finds its catch, an escalation boundary
- * event sits on a sub-process, call activity or user task, no boundary event on a compensation
- * handler; an event with several definitions acts on one only.
+ * Events whose trigger is incomplete, or clashes with another event in the same scope.
+ * Camunda 7 refuses to deploy the file; an event with several event definitions deploys but reacts
+ * to one of them only.
+ *
+ * - `c7-boundary-host`: a boundary event on a compensation handler.
+ * - `c7-event-definition`: a conditional event without condition; a timer with none or more than
+ *   one of date, duration and cycle; a compensation throw naming an activity outside its own
+ *   (sub-)process.
+ * - `c7-link-event`: a link event without name; two link catch events with one name in a process; a
+ *   connected link throw without a catch of its name in its own (sub-)process.
+ * - `c7-multiple-event-definitions`: an event with several event definitions.
+ * - `c7-message`: a message catch event without message; a message (also of a receive task) without
+ *   name; one message name twice among the events waiting in one scope.
+ * - `c7-signal`: a signal event without signal; a signal without name; one signal name twice among
+ *   the events waiting in one scope; two signals with one name.
+ * - `c7-error`: an error end event without error, or whose error has no error code.
+ * - `c7-escalation`: an escalation throw event without escalation or escalation code; an escalation
+ *   boundary event on anything but a sub-process, call activity or user task.
+ *
+ * @example an error end event that names no error
+ * <bpmn:endEvent id="Failed">
+ *   <bpmn:errorEventDefinition />  <!-- no errorRef -->
+ * </bpmn:endEvent>
  */
 class C7Events extends C7Rule {
   protected visit(node: ModdleElement): void {

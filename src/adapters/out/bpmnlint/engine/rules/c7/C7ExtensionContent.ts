@@ -29,13 +29,28 @@ interface FieldsAt {
 }
 
 /**
- * Reports camunda extension content the Camunda 7 engines refuse to deploy, in executable
- * processes: extension elements under `bpmn:definitions`; camunda:in / out without source and
- * target, nameless input or output parameters, a connector without connectorId, form fields
- * without id or with an unknown type, camunda:field without value where the engines read the
- * fields; listeners without implementation or with an unknown event, a script without format, a
- * timeout listener without timer or id; input/output mappings where the engines refuse them; a
- * second extension element the engines read as one (now, or once the element runs asynchronously).
+ * camunda extension elements (listeners, input/output mappings, fields, forms, connectors) with
+ * required parts missing, unknown values, a placement Camunda 7 forbids, or twice.
+ * Camunda 7 refuses to deploy the file; a second retry time cycle on an element that is not
+ * asynchronous deploys until the element becomes asynchronous.
+ *
+ * - `c7-definitions-extension`: extension elements on bpmn:definitions.
+ * - `c7-extension`: camunda:in or camunda:out without source or target; an input or output
+ *   parameter without name; a connector without connector id; a form field without id, without type
+ *   or with an unknown type; a field the engine reads without value, or with both stringValue and
+ *   string.
+ * - `c7-listener`: a listener without class, expression, delegate expression or script; a listener
+ *   without event or with an unknown one; a listener script without script format; a timeout task
+ *   listener without timer or id.
+ * - `c7-input-output`: input/output mappings on a start or boundary event, a gateway or an event
+ *   sub-process; output mappings on an end event or a multi-instance activity.
+ * - `c7-duplicate-extension`: a second input/output mapping, connector, form data or retry time
+ *   cycle where the engine reads one.
+ * - `c7-async-duplicate-extension`: a second retry time cycle on an element that is not
+ *   asynchronous.
+ *
+ * @example a listener that runs nothing
+ * <camunda:executionListener event="start" />  <!-- no class, expression or script -->
  */
 class C7ExtensionContent extends C7Rule {
   protected visit(node: ModdleElement): boolean | void {

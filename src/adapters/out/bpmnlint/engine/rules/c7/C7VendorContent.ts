@@ -16,11 +16,23 @@ import { CamundaPlacement, type Misplacement } from './CamundaPlacement.js';
 const EXTRA_ATTRIBUTES: Record<string, string[]> = { 'camunda:Field': ['expression'] };
 
 /**
- * Reports vendor content the Camunda 7 engines ignore: Camunda 8 (zeebe) attributes and extension
- * elements, camunda attributes the descriptor does not know (a typo such as camunda:asignee) or on
- * an element (or side of an event) the engines do not read them on, camunda extension elements
- * where the engines do not read them, and id references of camunda elements that name no element
- * of the type they need.
+ * Vendor content Camunda 7 does not read: Camunda 8 settings, and misspelled or misplaced camunda
+ * settings.
+ * Camunda 7 deploys the file and silently ignores the setting, so the process runs without the
+ * behaviour the model seems to configure.
+ *
+ * - `c7-foreign-content`: zeebe attributes and extension elements.
+ * - `c7-unknown-attribute`: a camunda attribute that does not exist, on a BPMN element or inside a
+ *   camunda extension element.
+ * - `c7-misplaced-attribute`: a camunda attribute on an element, or a side of an event, that does
+ *   not read it.
+ * - `c7-misplaced-extension`: a camunda extension element on an element, or a side of an event,
+ *   that does not read it, or outside its container.
+ * - `c7-dangling-reference`: an id reference of a camunda extension element (the errorRef of
+ *   camunda:errorEventDefinition) that names no element of the needed type.
+ *
+ * @example a typo in an attribute name
+ * <bpmn:userTask id="Review" camunda:asignee="demo" />  <!-- nobody gets assigned -->
  */
 class C7VendorContent extends VendorContentRule {
   protected readonly engine: Engine = 'c7';

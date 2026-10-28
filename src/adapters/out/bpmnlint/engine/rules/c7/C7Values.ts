@@ -26,11 +26,28 @@ interface Binding {
 }
 
 /**
- * Reports camunda values Camunda 7 refuses or cannot use, in what the engines run: a history time
- * to live that is no number of days, priorities that are no number or expression, an unknown
- * decision result mapper, binding or variable event, a binding without the version it binds to, a
- * call activity calling nothing or both a process and a case or an empty one, a form reference next
- * to a form key or without a known binding, a multi-instance loop without cardinality or collection.
+ * camunda attribute values Camunda 7 cannot interpret: history time to live, priorities, bindings,
+ * called elements, form references, multi-instance loops.
+ * Camunda 7 refuses to deploy most of them; the rest deploy but fail or resolve the wrong thing
+ * when the process runs.
+ *
+ * - `c7-history-time-to-live`: a history time to live that is no number of days or P<n>D.
+ * - `c7-attribute-value`: a job or task priority that is neither an integer nor an expression; an
+ *   unknown decision result mapper.
+ * - `c7-bad-value`: an unknown called element, case or decision binding; a user task priority that
+ *   is neither a number nor an expression; variable events other than create, update and delete; a
+ *   call activity with an empty called element.
+ * - `c7-binding-version`: a version or versionTag binding without the version or version tag it
+ *   binds to, also of a form reference.
+ * - `c7-called-element`: a call activity with neither called element nor case reference, or with
+ *   both.
+ * - `c7-form`: a form reference next to a form key; a form reference without a binding of
+ *   deployment, latest or version.
+ * - `c7-multi-instance`: a loop with neither cardinality nor collection; an empty cardinality; an
+ *   element variable without collection.
+ *
+ * @example a history time to live in words
+ * <bpmn:process id="Order" isExecutable="true" camunda:historyTimeToLive="6 months">  <!-- days: 180 -->
  */
 class C7Values extends C7Rule {
   protected visit(node: ModdleElement): boolean {

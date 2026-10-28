@@ -41,12 +41,21 @@ const INPUTS_IGNORED: Array<[type: string, noneOnly: boolean, where: string]> = 
 const NOT_EXECUTED = ['zeebe:publishMessage'];
 
 /**
- * Reports vendor content Camunda 8 ignores: Camunda 7 (`camunda:` and `operaton:`) attributes and
- * extension elements; zeebe attributes it does not know, on a BPMN element (most zeebe settings are
- * extension elements) or on a zeebe extension element; zeebe attributes on a BPMN element that does
- * not carry them; zeebe extension elements on a host that does not read them, loose instead of in
- * their container, and input mappings on start, boundary, none intermediate throw and none end
- * events, where only output mappings work.
+ * Vendor content Camunda 8 does not read: Camunda 7 settings, and unknown or misplaced zeebe
+ * settings.
+ * Camunda 8 deploys the file and silently ignores the setting, so the process runs without the
+ * behaviour the model seems to configure.
+ *
+ * - `c8-foreign-content`: camunda and operaton attributes and extension elements.
+ * - `c8-unknown-attribute`: a zeebe attribute that does not exist, on a BPMN element or a zeebe
+ *   extension element.
+ * - `c8-misplaced-attribute`: a zeebe attribute on a BPMN element that does not carry it.
+ * - `c8-misplaced-extension`: a zeebe extension element on an element that does not read it, or
+ *   outside its container; input mappings on a start, boundary, none intermediate throw or none end
+ *   event.
+ *
+ * @example a Camunda 7 assignee in a Camunda 8 model
+ * <bpmn:userTask id="Review" camunda:assignee="demo" />  <!-- Camunda 8 reads zeebe:assignmentDefinition -->
  */
 class C8VendorContent extends VendorContentRule {
   protected readonly engine: Engine = 'c8';

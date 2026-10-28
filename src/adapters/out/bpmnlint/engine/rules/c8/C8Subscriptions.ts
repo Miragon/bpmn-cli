@@ -18,11 +18,24 @@ const NAMED: Record<Trigger, { starts: string; note: string }> = {
 };
 
 /**
- * Reports what executable events subscribe to and Camunda 8 refuses to deploy: a start event whose
- * message (process starts) or signal name is a FEEL expression, an error catch event whose code is
- * one or that does not interrupt, and one message name, signal name or error code (or two
- * catch-alls) twice among the events of a (sub-)process it subscribes to together. A send task or
- * message throw event whose message has no name (camunda-compat checks catching elements only).
+ * Message, signal and error names and codes Camunda 8 cannot resolve to one event: the same one
+ * twice in a scope, a FEEL expression where a static value is needed, a thrown message without
+ * name.
+ * Camunda 8 refuses to deploy the file.
+ *
+ * - `c8-message`: a process start event whose message name is a FEEL expression; one message name
+ *   twice among the boundary events and receive task of an activity, the branches of an event-based
+ *   gateway, the event sub-process starts of a scope or the process start events.
+ * - `c8-signal`: a start event whose signal name is a FEEL expression; one signal name twice among
+ *   the boundary events of an activity or the process start events.
+ * - `c8-error`: an error catch event whose code is a FEEL expression; a non-interrupting error
+ *   event; one error code, or two catch-alls without code, among the boundary events of an activity
+ *   or the event sub-process starts of a scope.
+ * - `c8-implementation`: a send task or message throw event whose message has no name.
+ *
+ * @example two boundary events of one task waiting for the same message
+ * <bpmn:boundaryEvent attachedToRef="Pay"><bpmn:messageEventDefinition messageRef="Cancel" /></bpmn:boundaryEvent>
+ * <bpmn:boundaryEvent attachedToRef="Pay"><bpmn:messageEventDefinition messageRef="Cancel" /></bpmn:boundaryEvent>  <!-- same message -->
  */
 class C8Subscriptions extends C8Rule {
   private readonly flows = new FlowIndex();

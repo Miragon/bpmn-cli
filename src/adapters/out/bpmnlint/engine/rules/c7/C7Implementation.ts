@@ -11,11 +11,23 @@ const SHELL_FLAGS = ['wait', 'redirectError', 'cleanEnv'];
 const IMPLEMENTATIONS = ['class', 'delegateExpression', 'expression', 'type'];
 
 /**
- * Reports implementations Camunda 7 refuses or cannot run, in what the engines run: a task, or a
- * message throw or end event, without implementation or with an unsupported `camunda:type`, a shell
- * task with a missing or unusable field, an external task with a missing or empty topic, a result
- * variable next to a class or delegate expression, a script task without script; a message throw
- * event without implementation deploys and sends nothing.
+ * Tasks and message throw events that do not tell Camunda 7 what to run, or tell it in a way it
+ * cannot run.
+ * Camunda 7 refuses to deploy most of them; a message throw event without implementation deploys
+ * and sends nothing, and no worker fetches an external task with an empty topic.
+ *
+ * - `c7-implementation`: a service, send or business rule task without class, expression, delegate
+ *   expression, external type, decision or connector; a camunda:type other than external or shell;
+ *   a shell task without command field, with a flag other than true or false, or with a field given
+ *   as expression.
+ * - `c7-message-implementation`: a message throw or end event without implementation.
+ * - `c7-external-topic`: an external task without topic.
+ * - `c7-result-variable`: a result variable next to a class or delegate expression.
+ * - `c7-script`: a script task with neither script nor resource.
+ * - `c7-bad-value`: an external task with an empty topic.
+ *
+ * @example a service task without implementation
+ * <bpmn:serviceTask id="Charge" />  <!-- no camunda:class, expression or type -->
  */
 class C7Implementation extends C7Rule {
   protected visit(node: ModdleElement): boolean {
@@ -93,6 +105,7 @@ export default defineRule(
       'c7-external-topic': ['W_C7_DEPLOY_EXTERNAL_TOPIC', 'deploy'],
       'c7-result-variable': ['W_C7_DEPLOY_RESULT_VARIABLE', 'deploy'],
       'c7-script': ['W_C7_DEPLOY_SCRIPT', 'deploy'],
+      'c7-bad-value': ['W_C7_BAD_VALUE', 'runtime'],
     },
   },
   C7Implementation,

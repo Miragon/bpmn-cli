@@ -38,8 +38,16 @@ interface ValueSite {
 }
 
 /**
- * Reports values Camunda 8 parses as FEEL at deploy and refuses: a `=` value that is no valid FEEL
- * (JUEL habits named), and a static or JUEL value where Camunda 8 needs a FEEL expression.
+ * Values Camunda 8 parses as FEEL: invalid FEEL after =, or a static or Camunda 7 (JUEL) value
+ * where FEEL is required.
+ * Camunda 8 parses them at deploy and refuses the file.
+ *
+ * - `c8-feel-expression`: a value starting with = that is no valid FEEL; a sequence flow,
+ *   conditional event or ad-hoc completion condition, a multi-instance input collection or output
+ *   element, a script expression or a correlation key that is no FEEL expression.
+ *
+ * @example a Camunda 7 (JUEL) condition
+ * <bpmn:conditionExpression>${amount > 1000}</bpmn:conditionExpression>  <!-- FEEL: =amount > 1000 -->
  */
 class C8FeelExpression extends C8Rule {
   protected visit(node: ModdleElement): void {

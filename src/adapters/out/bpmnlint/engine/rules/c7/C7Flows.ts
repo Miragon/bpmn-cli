@@ -14,11 +14,29 @@ const WAITING_TRIGGERS = ['message', 'timer', 'signal', 'conditional'];
 const REFERENCE_BY_TRIGGER: Record<string, string> = { message: 'messageRef', signal: 'signalRef' };
 
 /**
- * Reports the flow Camunda 7 refuses or runs other than modeled, in what the engines run (not the
- * content of an ad-hoc sub-process): exclusive gateways without a usable default or with
- * conditions where none count, event-based gateways with other targets than catch events or
- * branches waiting for one name, connected complex gateways and ad-hoc sub-processes, empty
- * conditions, missing or extra start events, and transactions without a start event.
+ * Gateways, conditions and start events that leave Camunda 7 no single well-defined path.
+ * Camunda 7 refuses to deploy most of them; an empty condition or a transaction without start event
+ * fails when the process runs, and a lone flow without condition is taken as the default flow.
+ *
+ * - `c7-event-gateway`: a target other than a message, timer, signal or conditional catch event; a
+ *   target with other incoming flows; two branches waiting for one message or signal name.
+ * - `c7-exclusive-gateway`: no outgoing flow; a condition on the default flow or on the only
+ *   outgoing flow; a flow without condition next to a default flow, or several without condition
+ *   and no default flow.
+ * - `c7-implicit-default-flow`: exactly one flow without condition and no default flow.
+ * - `c7-complex-gateway`: a complex gateway with sequence flows.
+ * - `c7-ad-hoc-sub-process`: an ad-hoc sub-process with sequence flows, boundary events or a
+ *   multi-instance loop.
+ * - `c7-empty-condition`: a condition with neither expression nor resource, on a flow the engine
+ *   evaluates or on a conditional event.
+ * - `c7-start-event`: a process or sub-process (not an event sub-process) without start event; a
+ *   second none or timer start event of a process; a second start event of a sub-process.
+ * - `c7-transaction-start`: a transaction without start event.
+ *
+ * @example two outgoing flows, neither with a condition nor marked as default
+ * <bpmn:exclusiveGateway id="Approved" />
+ * <bpmn:sequenceFlow sourceRef="Approved" targetRef="Ship" />    <!-- no condition -->
+ * <bpmn:sequenceFlow sourceRef="Approved" targetRef="Reject" />  <!-- no condition -->
  */
 class C7Flows extends C7Rule {
   protected visit(node: ModdleElement): boolean {

@@ -11,10 +11,10 @@ import { C7FlowGraph } from './C7FlowGraph.js';
 const TRIGGER_OPTIONS: Record<string, string> = { message: 'messageRef', signal: 'signalRef', error: 'errorRef', escalation: 'escalationRef' };
 
 /**
- * How to get rid of a second start event `extra` next to `first`, without running a node twice:
- * its flows into what `first` reaches go with it, a branch of its own moves to `first` unless it
- * runs into a node `first` reaches. A process may keep it with another trigger, an event
- * sub-process may keep its trigger in an event sub-process of its own.
+ * Builds the fix advice for a second start event Camunda 7 refuses: remove it, move its branch to
+ * the first start event, or keep it with another trigger.
+ * The advice depends on what each start event reaches, as removing it can leave its branch
+ * unstarted and moving the branch can run a node twice.
  */
 export class C7ExtraStartHint {
   private readonly graph: C7FlowGraph;
