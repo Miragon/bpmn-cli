@@ -1,12 +1,11 @@
 import { is } from 'bpmnlint-utils';
-import { defineRule, ERROR_TYPES, type ModdleElement } from '../CamundaRules.js';
+import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData } from '../CamundaRules.js';
 
-import type { Engine } from '@miragon/bpmnlint-plugin-rules/engine';
 import { ElementKinds } from '../ElementKinds.js';
 import { CAMUNDA_URI, ZEEBE_URI } from '../DiagramNamespaces.js';
 import { DidYouMean } from '../DidYouMean.js';
 import { Shell } from '../Shell.js';
-import { VendorContentRule } from '../VendorContentRule.js';
+import type { VendorHost } from '../VendorHost.js';
 import { C7Diagram } from './C7Diagram.js';
 import { C7Host, type HostExtension } from './C7Host.js';
 import { CamundaDescriptor } from './CamundaDescriptor.js';
@@ -34,8 +33,7 @@ const EXTRA_ATTRIBUTES: Record<string, string[]> = { 'camunda:Field': ['expressi
  * @example a typo in an attribute name
  * <bpmn:userTask id="Review" camunda:asignee="demo" />  <!-- nobody gets assigned -->
  */
-class C7VendorContent extends VendorContentRule {
-  protected readonly engine: Engine = 'c7';
+class C7VendorContent extends C7Rule {
   private readonly descriptor = CamundaDescriptor.get();
 
   protected visit(node: ModdleElement): boolean | void {
@@ -46,7 +44,7 @@ class C7VendorContent extends VendorContentRule {
     this.checkForeignAttributes(host);
     if (!definitions) this.checkForeignExtensions(host, read.map(({ index }) => index));
     this.checkUnknownAttributes(host);
-    for (const extension of read) for (const attribute of host.treeAttributes(extension)) if (!attribute.key.includes(':')) this.reportUnknownTreeAttribute(host, attribute, attribute.key, this.attributeNamesOf(attribute.element), host.rebuild(extension));
+    for (const extension of read) for (const { element, where, path, key } of host.treeAttributes(extension)) if (!key.includes(':')) this.reportUnknownAttribute(host, where, key, { property: key, path: [...path, key], node: element, hint: host.rebuild(extension) }, DidYouMean.suggestion(key, this.attributeNamesOf(element)));
     this.checkMisplacedAttributes(host);
     if (definitions) return;
     this.checkMisplacedExtensions(host);
@@ -54,15 +52,15 @@ class C7VendorContent extends VendorContentRule {
   }
 
   private checkForeignAttributes(host: C7Host): void {
-    for (const { key, local, uri } of host.foreignAttributes()) if (uri === ZEEBE_URI) this.reportForeignAttribute(host, host.describe(), key, `zeebe:${local}`, { path: host.path(`zeebe:${local}`), hint: `Remove it: ${host.unset(key) ?? 'edit the XML'}, and use the camunda attribute instead (\`bpmn kinds\` lists them).` });
+    for (const { key, local, uri } of host.foreignAttributes()) if (uri === ZEEBE_URI) this.reportForeignAttribute(host, host.describe(), key, { property: `zeebe:${local}`, path: host.path(`zeebe:${local}`), hint: `Remove it: ${host.unset(key) ?? 'edit the XML'}, and use the camunda attribute instead (\`bpmn kinds\` lists them).` });
   }
 
   private checkForeignExtensions(host: C7Host, read: number[]): void {
     for (const extension of host.extensions()) {
       const type = String(extension.value.$type);
-      if (extension.uri === ZEEBE_URI) this.reportForeignExtension(host, type, extension.value, { path: host.extensionPath(extension.index), node: extension.value, hint: host.address ? `Remove it: \`bpmn ext remove <file> ${host.address.id} ${Shell.slotted(host.address.slot, type)}\`.` : 'Remove it from the XML.' });
+      if (extension.uri === ZEEBE_URI) this.reportOn(host, 'c7-foreign-content', `${host.describe()} contains the Camunda 8 extension ${type}, which Camunda 7 ignores`, { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: extension.value, path: host.extensionPath(extension.index), node: extension.value, hint: host.address ? `Remove it: \`bpmn ext remove <file> ${host.address.id} ${Shell.slotted(host.address.slot, type)}\`.` : 'Remove it from the XML.' });
       if (!read.includes(extension.index)) continue;
-      for (const { element, where, path, key, local, uri } of host.treeAttributes(extension)) if (uri === ZEEBE_URI) this.reportForeignAttribute(host, where, key, `zeebe:${local}`, { path: [...path, `zeebe:${local}`], node: element, hint: host.rebuild(extension) });
+      for (const { element, where, path, key, local, uri } of host.treeAttributes(extension)) if (uri === ZEEBE_URI) this.reportForeignAttribute(host, where, key, { property: `zeebe:${local}`, path: [...path, `zeebe:${local}`], node: element, hint: host.rebuild(extension) });
     }
   }
 
@@ -74,11 +72,10 @@ class C7VendorContent extends VendorContentRule {
       const applicable = this.descriptor.attributeNamesFor(host.node);
       const guess = DidYouMean.of(local, this.descriptor.attributeNames(), applicable);
       const fits = guess !== undefined && applicable.includes(guess);
-      const suggestion = guess ? ` (did you mean ${prefix}:${guess}?${fits ? '' : ` It applies to ${ElementKinds.list(this.descriptor.ownersOf(guess) ?? [], 4)} only.`})` : '';
       const unset = host.address && `bpmn set <file> ${host.address.id} ${Shell.quote(`${host.address.slot}${key}=`)}`;
       const rename = fits ? ` ${Shell.quote(`${host.address?.slot}${prefix}:${guess}=${String(host.node.$attrs[key] ?? '')}`)}` : '';
       const hint = unset ? `${rename ? 'Rename' : 'Remove'} it: \`${unset}${rename}\`.` : 'Remove it: edit the XML.';
-      this.reportUnknownAttribute(host, host.describe(), key, `camunda:${local}`, { path: host.path(`camunda:${local}`), hint }, suggestion);
+      this.reportUnknownAttribute(host, host.describe(), key, { property: `camunda:${local}`, path: host.path(`camunda:${local}`), hint }, guess ? ` (did you mean ${prefix}:${guess}?${fits ? '' : ` It applies to ${ElementKinds.list(this.descriptor.ownersOf(guess) ?? [], 4)} only.`})` : '');
     }
   }
 
@@ -91,7 +88,7 @@ class C7VendorContent extends VendorContentRule {
   /** A camunda attribute on an element type it does not apply to, or on the side of an event that ignores it. */
   private checkMisplacedAttributes(host: C7Host): void {
     const remove = (key: string, withoutAddress: string) => (host.unset(key) ? `Remove it: ${host.unset(key)}.` : withoutAddress);
-    const report = (key: string, local: string, readOn: string, hint: string) => this.reportMisplacedAttribute(host, key, readOn, `camunda:${local}`, { path: host.path(`camunda:${local}`), hint });
+    const report = (key: string, local: string, readOn: string, hint: string) => this.reportOn(host, 'c7-misplaced-attribute', `${key} on ${host.describe()} has no effect: the engines read it on ${readOn} only`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: `camunda:${local}`, path: host.path(`camunda:${local}`), hint });
     for (const { key, local, uri } of host.foreignAttributes()) {
       const owners = uri === CAMUNDA_URI ? this.descriptor.ownersOf(local) : undefined;
       if (owners && !this.descriptor.appliesTo(local, host.node)) report(key, local, ElementKinds.list(owners, 4), this.moveHint(host, key, `${local}=${String(host.node.$attrs[key] ?? '')}`, owners) ?? remove(key, 'Remove it from the XML.'));
@@ -123,9 +120,9 @@ class C7VendorContent extends VendorContentRule {
     for (const extension of host.camundaExtensions()) {
       const misplacement = placement.misplacementOf(extension);
       if (!misplacement) continue;
-      const finding = { path: host.extensionPath(extension.index), node: extension.value, hint: this.misplacedHint(host, extension, misplacement) };
-      if (misplacement.kind === 'loose') this.reportLooseExtension(host, host.typeName(extension.local), misplacement.containers, extension.value, finding);
-      else this.reportMisplacedExtension(host, host.typeName(extension.local), misplacement.readOn, extension.value, finding);
+      const type = host.typeName(extension.local);
+      const message = misplacement.kind === 'loose' ? `${type} sits directly in the extension elements of ${host.describe()}, but belongs inside ${misplacement.containers}; the engines ignore it` : `${type} on ${host.describe()} has no effect: the engines read it on ${misplacement.readOn} only`;
+      this.reportOn(host, 'c7-misplaced-extension', message, { type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, extensionElement: extension.value, path: host.extensionPath(extension.index), node: extension.value, hint: this.misplacedHint(host, extension, misplacement) });
     }
   }
 
@@ -156,8 +153,21 @@ class C7VendorContent extends VendorContentRule {
       let definitions = host.node;
       while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
       const candidates = (definitions?.rootElements ?? []).filter((root: ModdleElement) => is(root, property.type)).map((root: ModdleElement) => root.id ?? '').slice(0, 5);
-      this.reportOn(host, 'dangling-reference', `${host.typeName(extension.local)} of ${host.describe()} references ${name}="${id}", which is not a ${property.type} in the file; the engines ignore the mapping when it runs`, { path: host.extensionPath(extension.index, name), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: `Point it at an existing one${candidates.length ? ` (${candidates.join(', ')})` : ''}. ${host.rebuild(extension, { [name]: `<${typeName.charAt(0).toLowerCase()}${typeName.slice(1)}Id>` })}` });
+      this.reportOn(host, 'c7-dangling-reference', `${host.typeName(extension.local)} of ${host.describe()} references ${name}="${id}", which is not a ${property.type} in the file; the engines ignore the mapping when it runs`, { path: host.extensionPath(extension.index, name), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: `Point it at an existing one${candidates.length ? ` (${candidates.join(', ')})` : ''}. ${host.rebuild(extension, { [name]: `<${typeName.charAt(0).toLowerCase()}${typeName.slice(1)}Id>` })}` });
     }
+  }
+
+  private reportForeignAttribute(host: VendorHost, where: string, key: string, data: Pick<ReportData, 'path'> & Record<string, unknown>): void {
+    this.reportOn(host, 'c7-foreign-content', `${where} carries the Camunda 8 attribute ${key}, which Camunda 7 ignores`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, ...data });
+  }
+
+  /** `name` on `where`, which the descriptor does not know; `suggestion` names the one it most likely means. */
+  private reportUnknownAttribute(host: VendorHost, where: string, name: string, data: Pick<ReportData, 'path'> & Record<string, unknown>, suggestion: string): void {
+    this.reportOn(host, 'c7-unknown-attribute', `${where} has the unknown attribute ${name}${suggestion}; the engines ignore it`, { type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, ...data });
+  }
+
+  private reportOn(host: VendorHost, finding: string, message: string, { path, ...data }: ReportData): void {
+    this.report(finding, host.target, message, { node: host.node, path, ...data });
   }
 }
 

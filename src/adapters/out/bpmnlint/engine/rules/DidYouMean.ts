@@ -11,6 +11,12 @@ export class DidYouMean {
     return best?.candidate;
   }
 
+  /** ` (did you mean <closest>?)`, or '' without a close candidate. */
+  static suggestion(name: string, candidates: string[]): string {
+    const guess = DidYouMean.of(name, candidates);
+    return guess ? ` (did you mean ${guess}?)` : '';
+  }
+
   private static distance(left: string, right: string): number {
     const source = left.toLowerCase();
     const target = right.toLowerCase();
