@@ -11,15 +11,18 @@
  *    Buffer, global, require, __dirname, ...), naming the module;
  *  - the bundle contains the adapters (dist/adapters/), the node entry (dist/node.js) or the CLI (dist/cli.js);
  *  - a module of the engine rules that load on demand (ON_DEMAND: the
- *    Camunda 7 and Camunda 8 profile, src/domain/validation/profiles/PlatformProfiles.ts LOADERS) is
+ *    Camunda 7 and Camunda 8 rules in src/adapters/out/bpmnlint/engine/rules/,
+ *    bpmnlint's linter and the engine run in src/adapters/out/bpmnlint/engine/,
+ *    src/adapters/out/bpmnlint/BpmnlintEngineLint.ts LOADERS) is
  *    in the initial chunks of the whole entry or of the applyToXml-only
  *    entry, naming the module, or is no chunk of its own;
- *  - a module of those rules imports (statically, also through another
- *    rule module) a module the entry loads, naming both: Rollup / Vite put
- *    such a module into the host's entry chunk and make the rule chunk
- *    import the entry chunk back, so a host whose entry module awaits a
- *    Camunda 7 / 8 call at top level would wait forever (the rules get
- *    what they use of the core from src/domain/validation/profiles/rule-kit.ts instead);
+ *  - a module of bpmn-cli (dist/) the rules reach imports a module the entry
+ *    loads, naming both: the engine run and the rules get what they use of the core from
+ *    src/adapters/out/bpmnlint/engine-kit.ts (ENGINE_KIT) instead. The rules'
+ *    packages share packages with the core (min-dash): Rollup / Vite put
+ *    those into the entry chunk and make the rule chunk import it back, so a
+ *    host must not await a Camunda 7 / 8 call at the top level of its entry
+ *    module (docs/library.md);
  *  - a size is over its budget in tools/iso/budget.json (KB = 1024 bytes,
  *    minified and gzip: the initial chunks of both entries, the on-demand
  *    rule chunks of both); raising a budget is an explicit diff of that file;
@@ -47,9 +50,12 @@ const table = process.argv.includes('--table');
 const problems = [];
 
 /** What loads on demand, by the module that marks its chunk; `rules`: modules that must never be in the initial chunks. */
+const RULES = 'dist/adapters/out/bpmnlint/engine/rules';
+const ENGINE_RUN = ['EngineRun', 'EngineFindings', 'EngineCodes', 'EngineHint', 'CamundaBooleans', 'PublishMessages', 'SchemaText', 'BpmnSchema', 'SchemaTextFindings', 'UnknownVendorElements', 'UnprefixedAttributes'].map((name) => `dist/adapters/out/bpmnlint/engine/${name}.js`);
 const ON_DEMAND = [
-  { name: 'c7', label: 'Camunda 7 rules', marker: 'dist/domain/validation/profiles/C7Profile.js', rules: ['dist/domain/validation/profiles/C7Profile.js', 'dist/domain/validation/profiles/EngineProfile.js', 'dist/domain/validation/profiles/EngineRules.js', 'dist/domain/validation/profiles/RuleRun.js', 'dist/domain/validation/utils/value.js', 'dist/domain/validation/profiles/c7/C7DescriptorNames.js', 'dist/domain/validation/profiles/c7/C7EventRules.js', 'dist/domain/validation/profiles/c7/C7ExtensionContentRules.js', 'dist/domain/validation/profiles/c7/C7ExtensionRules.js', 'dist/domain/validation/profiles/c7/C7FlowRules.js', 'dist/domain/validation/profiles/c7/C7ImplementationRules.js', 'dist/domain/validation/profiles/c7/C7Rules.js', 'dist/domain/validation/profiles/c7/C7SchemaRules.js', 'dist/domain/validation/utils/c7-hint.js', 'dist/domain/validation/utils/element.js', 'dist/domain/validation/utils/hint.js'], when: "the first Camunda 7 document a call validates (`loadProfile('c7')` prefetches it)" },
-  { name: 'c8', label: 'Camunda 8 rules', marker: 'dist/domain/validation/profiles/C8Profile.js', rules: ['dist/domain/validation/profiles/C8Profile.js', 'dist/domain/validation/profiles/EngineProfile.js', 'dist/domain/validation/profiles/EngineRules.js', 'dist/domain/validation/profiles/RuleRun.js', 'dist/domain/validation/utils/value.js', 'dist/domain/validation/profiles/c8/C8EventRules.js', 'dist/domain/validation/profiles/c8/C8ExtensionRules.js', 'dist/domain/validation/profiles/c8/C8FlowRules.js', 'dist/domain/validation/profiles/c8/C8Rules.js', 'dist/domain/validation/profiles/c8/C8SchemaRules.js', 'dist/domain/validation/profiles/c8/C8TaskRules.js', 'dist/domain/validation/utils/c8-value.js', 'dist/domain/validation/utils/element.js', 'dist/domain/validation/utils/hint.js', 'dist/domain/validation/profiles/FeelExpression.js', 'dist/domain/validation/profiles/FeelParser.js', 'dist/domain/validation/profiles/FeelError.js', 'dist/domain/validation/profiles/TimerValue.js', 'dist/domain/validation/profiles/SchemaText.js', 'dist/domain/validation/profiles/BpmnSchema.js'], when: "the first Camunda 8 document a call validates (`loadProfile('c8')` prefetches it)" },
+  { name: 'c7', label: 'Camunda 7 rules', marker: `${RULES}/c7/index.js`, rules: [`${RULES}/c7/index.js`], when: 'the first Camunda 7 document a call validates' },
+  { name: 'c8', label: 'Camunda 8 rules', marker: `${RULES}/c8/index.js`, rules: [`${RULES}/c8/index.js`], when: 'the first Camunda 8 document a call validates' },
+  { name: 'engine', label: 'engine run (bpmnlint and the mapping to W_C7_* / W_C8_*)', marker: ENGINE_RUN[0], rules: [...ENGINE_RUN, 'node_modules/bpmnlint/lib/linter.js'], when: 'the first Camunda 7 or 8 document a call validates' },
 ];
 const ENTRIES = [
   { key: 'core', label: 'whole entry', name: 'the whole entry', title: 'everything `@miragon/bpmn-cli` exports' },
@@ -99,10 +105,9 @@ for (const [sub, file] of Object.entries(expected)) {
 }
 
 /* 4. a strict consumer of the published types (outside the repository, the package linked by name) */
-const CONSUMER = `import { applyToXml, loadProfile, newXml, renderSvg, validateXml, viewXml, type EditResult, type RenderResult } from '@miragon/bpmn-cli';
+const CONSUMER = `import { applyToXml, newXml, renderSvg, validateXml, viewXml, type EditResult, type RenderResult } from '@miragon/bpmn-cli';
 import { mutateFile, renderPng, type FileMutationOptions, type PngRenderResult } from '@miragon/bpmn-cli/node';
 export async function demo(): Promise<string> {
-  await loadProfile('c7');
   const created: EditResult = await newXml({ processName: 'Order' });
   const edited = await applyToXml(created.xml, [{ op: 'add', kind: 'start', name: 'Received' }], { layout: 'auto' });
   const report = await validateXml(edited.xml, { platform: 'auto' });
@@ -168,7 +173,7 @@ function sizeOf(bundle) {
     return seen;
   };
   const entryModules = reach(bundle.entry.entryPoint);
-  const importsOfEntry = (marker) => [...reach(marker)].filter((modulePath) => !entryModules.has(modulePath)).flatMap((modulePath) => bundle.graph[modulePath].filter((imported) => entryModules.has(imported)).map((imported) => ({ from: modulePath, to: imported })));
+  const importsOfEntry = (marker) => [...reach(marker)].filter((modulePath) => !entryModules.has(modulePath) && modulePath.startsWith('dist/')).flatMap((modulePath) => bundle.graph[modulePath].filter((imported) => entryModules.has(imported)).map((imported) => ({ from: modulePath, to: imported })));
   const sum = (chunks) => ({ bytes: [...chunks].reduce((total, chunk) => total + chunk.bytes, 0), gzip: [...chunks].reduce((total, chunk) => total + chunk.gzip, 0) });
   const lazy = bundle.chunks.filter((chunk) => !initial.has(chunk));
   const counted = new Set();
@@ -209,15 +214,10 @@ for (const entry of ENTRIES) {
   if (!entrySize) continue;
   for (const part of ON_DEMAND) {
     for (const rule of part.rules) {
-      if (entrySize.initialModules.includes(rule)) {
-        problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/domain/validation/profiles/PlatformProfiles.ts imports them, with import())`);
-      }
-    }
-    if (part.rules.length && !entrySize.onDemand.some((demandPart) => demandPart.name === part.name)) {
-      problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
+      if (entrySize.initialModules.includes(rule)) problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/adapters/out/bpmnlint/BpmnlintEngineLint.ts imports them, with import())`);
     }
     for (const { from, to } of entrySize.onDemand.find((demandPart) => demandPart.name === part.name)?.importsOfEntry ?? []) {
-      problems.push(`${from} imports ${to}, which ${entry.name} loads too: a host's bundler (Rollup / Vite) puts it into the entry chunk and makes the ${part.label} chunk import the entry chunk back, so a host whose entry module awaits a call at top level waits forever; hand it to the rules in src/domain/validation/profiles/rule-kit.ts (RULE_KIT) instead of importing it`);
+      problems.push(`${from} imports ${to}, which ${entry.name} loads too: a host's bundler (Rollup / Vite) puts it into the entry chunk and makes the ${part.label} chunk import the entry chunk back, so a host whose entry module awaits a call at top level waits forever; hand it to the engine run in src/adapters/out/bpmnlint/engine-kit.ts (ENGINE_KIT) instead of importing it`);
     }
   }
   overBudget(entry.name, entrySize, budget.entries?.[entry.label]);

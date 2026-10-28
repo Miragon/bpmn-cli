@@ -15,14 +15,12 @@
  * With BPMN_C8_ENGINE=<REST v2 root> each model is deployed (the accepted
  * ones in one file each and deleted again).
  */
+import { runProfile, validateWithEngine } from '../../helpers/engine.js';
 import { describe, expect, it } from 'vitest';
 import { validateXml } from '../../../src/api.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
-import { TimerValue } from '../../../src/domain/validation/profiles/TimerValue.js';
-import { loadProfiles, runProfile } from '../../../src/index.js';
+import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/events/TimerValue.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0"';
 const DI = 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"';
@@ -136,7 +134,7 @@ const MODELS: Model[] = [
 async function deployCodes(text: string): Promise<string[]> {
   return [
     ...new Set(
-      runProfile(await Doc.fromXml(text))
+      (await runProfile(await Doc.fromXml(text)))
         .findings.filter((finding) => finding.severity === 'deploy')
         .map((finding) => finding.code),
     ),
@@ -148,7 +146,7 @@ describe('timer values and xsd:booleans Camunda 8 refuses', () => {
     expect(await deployCodes(model.xml)).toEqual(model.codes);
   });
 
-  it('says what is out of range', () => {
+  it('says what is out of range', async () => {
     expect(new TimerValue('2030-02-30T10:00:00Z').dateTimeRangeProblem()).toBe('February 2030 has no day 30');
     expect(new TimerValue('2030-12-31T25:00:00Z').dateTimeRangeProblem()).toBe('hour 25 is not in 00-23');
     expect(new TimerValue('2032-02-29T10:00:00Z').dateTimeRangeProblem()).toBeUndefined();

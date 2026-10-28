@@ -52,6 +52,11 @@ and `@miragon/rules` come with bpmn-cli and need no install.
 Keep the `moddleExtensions` entry. Without it camunda-compat sees no `camunda:` or `zeebe:`
 properties and reports them missing, as bpmnlint does in CI.
 
+bpmn-cli runs camunda-compat and the Miragon engine layer for every Camunda 7 / 8 file anyway, as
+its `W_C7_*` / `W_C8_*` findings ([Camunda 7 and Camunda 8](camunda.md#where-the-checks-come-from)).
+Extend them in the `.bpmnlintrc` when CI runs `npx bpmnlint` too: the same findings are then listed
+twice, once under their code and once under the rule name.
+
 ::: warning Untrusted repositories
 A `.bpmnlintrc` can name plugins of the repository, and `bpmn validate` then runs their code, as
 `npx bpmnlint` would. In a repository you do not trust, pass `--no-lint-config`. See

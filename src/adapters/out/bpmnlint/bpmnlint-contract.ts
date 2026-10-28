@@ -20,6 +20,11 @@ export interface BpmnlintReport {
   category: string;
 }
 
+/** An engine rule's report: camunda-compat's `path` and `data.type` say where and what. */
+export interface BpmnlintEngineReport extends BpmnlintReport {
+  data?: { type?: string; [key: string]: unknown };
+}
+
 export interface BpmnlintRule {
   check?: unknown;
   meta?: unknown;

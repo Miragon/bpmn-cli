@@ -16,18 +16,15 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runProfile, validateWithEngine } from '../../helpers/engine.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { mutateDoc } from '../../../src/index.js';
-import { FeelExpression } from '../../../src/domain/validation/profiles/FeelExpression.js';
-import { TimerValue } from '../../../src/domain/validation/profiles/TimerValue.js';
-import { loadProfiles, runProfile } from '../../../src/index.js';
-import { validateDoc } from '../../../src/index.js';
+import { FeelExpression } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/feel/FeelExpression.js';
+import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/events/TimerValue.js';
 import { ZEEBE as C8_DESCRIPTOR } from '../../../src/domain/document/vendor/ZeebeDescriptor.js';
 import { cli } from '../../helpers/cli.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const ZEEBE = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"';
 const MODELER = 'xmlns:modeler="http://camunda.org/schema/modeler/1.0"';
@@ -298,7 +295,7 @@ const CASES: Case[] = [
   { name: 'two none start events', xml: xml(toEnd('') + '<bpmn:startEvent id="S2" /><bpmn:sequenceFlow id="F9" sourceRef="S2" targetRef="End" />'), codes: ['W_C8_DEPLOY_START_EVENT'], engine: 'reject' },
   { name: 'sub-process without start event, with a timer start, with two starts', xml: xml(chain(SUB('<bpmn:task id="A1" />'), `<bpmn:subProcess id="Y">${`<bpmn:startEvent id="YS">${TIMER('timeCycle', 'R/PT1H')}</bpmn:startEvent><bpmn:sequenceFlow id="YF" sourceRef="YS" targetRef="YE" /><bpmn:endEvent id="YE" />`}</bpmn:subProcess><bpmn:subProcess id="Z">${INNER.replace(/I([SFE])/g, 'Z$1')}<bpmn:startEvent id="ZS2" /><bpmn:sequenceFlow id="ZF2" sourceRef="ZS2" targetRef="ZE" /></bpmn:subProcess>`)), codes: ['W_C8_DEPLOY_START_EVENT', 'W_C8_DEPLOY_START_EVENT', 'W_C8_DEPLOY_START_EVENT'], engine: 'reject' },
   { name: 'event sub-process with a none start event', xml: xml(toEnd('') + evSub('<bpmn:startEvent id="ESP_S" />')), codes: ['W_C8_DEPLOY_EVENT_DEFINITION'], engine: 'reject', structural: 'E_EVENT_SUBPROCESS_PLAIN_START' },
-  { name: 'intermediate catch and boundary events without event definition', xml: xml(boundary('<bpmn:serviceTask id="X">' + ext(TD()) + '</bpmn:serviceTask>', '').replace('<bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />', '<bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="C" /><bpmn:intermediateCatchEvent id="C" /><bpmn:sequenceFlow id="F5" sourceRef="C" targetRef="End" />')), codes: ['W_C8_DEPLOY_EVENT_DEFINITION', 'W_C8_DEPLOY_EVENT_DEFINITION'], engine: 'reject', structural: 'E_INVALID_TRIGGER' },
+  { name: 'intermediate catch and boundary events without event definition', xml: xml(boundary('<bpmn:serviceTask id="X">' + ext(TD()) + '</bpmn:serviceTask>', '').replace('<bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />', '<bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="C" /><bpmn:intermediateCatchEvent id="C" /><bpmn:sequenceFlow id="F5" sourceRef="C" targetRef="End" />')), codes: ['W_C8_DEPLOY_UNSUPPORTED', 'W_C8_DEPLOY_UNSUPPORTED'], engine: 'reject', structural: 'E_INVALID_TRIGGER' },
   { name: 'an event with two event definitions', xml: xml(chain(`<bpmn:intermediateCatchEvent id="X">${TIMER()}<bpmn:messageEventDefinition id="MD" messageRef="M1" /></bpmn:intermediateCatchEvent>`), { roots: MSG() }), codes: ['W_C8_DEPLOY_EVENT_DEFINITION'], engine: 'reject' },
   { name: 'cancel end event', xml: xml(toEnd('<bpmn:cancelEventDefinition id="CA" />')), codes: ['W_C8_DEPLOY_UNSUPPORTED'], engine: 'reject', structural: 'E_INVALID_TRIGGER' },
   { name: 'transaction', xml: xml(chain(`<bpmn:transaction id="X">${INNER}</bpmn:transaction>`)), codes: ['W_C8_DEPLOY_UNSUPPORTED'], engine: 'reject' },
@@ -330,7 +327,7 @@ const sorted = (codes: string[]): string[] => [...codes].sort();
 describe('Camunda 8 profile: one model per rule', () => {
   it.each(CASES.map((testCase) => [testCase.name, testCase] as const))('%s', async (_name, testCase) => {
     const doc = await Doc.fromXml(testCase.xml);
-    const report = runProfile(doc);
+    const report = (await runProfile(doc));
     expect(report.platform).toBe('c8');
     expect(sorted(report.findings.map((finding) => finding.code))).toEqual(sorted(testCase.codes));
     for (const finding of report.findings) {
@@ -338,43 +335,43 @@ describe('Camunda 8 profile: one model per rule', () => {
       expect(finding.hint, finding.code).toBeTruthy();
     }
     const deploy = report.findings.some((finding) => finding.severity === 'deploy');
-    const structural = testCase.structural ? validateDoc(doc).errors.map((error) => error.code) : [];
+    const structural = testCase.structural ? (await validateWithEngine(doc)).errors.map((error) => error.code) : [];
     if (testCase.structural) expect(structural).toContain(testCase.structural);
     // a deploy finding (or the structural error that stands for it) exactly where the engine refuses
     expect(deploy || structural.some((structuralCode) => structuralCode !== 'E_MULTIPLE_ROOTS')).toBe(testCase.engine === 'reject');
   });
 
   it('names the fix: commands with the element, the file prefix and the nested slot', async () => {
-    const st = runProfile(await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />')))).findings[0]!;
+    const st = (await runProfile(await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'))))).findings[0]!;
     expect(st.hint).toBe('Give it a job type: `bpmn ext add <file> X zeebe:taskDefinition type=<jobType>`.');
-    const mi = runProfile(await Doc.fromXml(xml(chain(ST(ext(TD()) + MI(undefined)))))).findings[0]!;
+    const mi = (await runProfile(await Doc.fromXml(xml(chain(ST(ext(TD()) + MI(undefined))))))).findings[0]!;
     expect(mi.hint).toContain('`bpmn ext add <file> X loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>`');
-    const key = runProfile(await Doc.fromXml(xml(chain('<bpmn:receiveTask id="X" messageRef="M1" />'), { roots: MSG('M1', 'M1', 'orderId') }))).findings[0]!;
+    const key = (await runProfile(await Doc.fromXml(xml(chain('<bpmn:receiveTask id="X" messageRef="M1" />'), { roots: MSG('M1', 'M1', 'orderId') })))).findings[0]!;
     expect(key).toMatchObject({ code: 'W_C8_DEPLOY_EXPRESSION', element: 'X', related: ['M1'] });
     expect(key.hint).toBe('`bpmn ext add <file> M1 zeebe:subscription correlationKey==orderId --replace`.');
-    const cond = runProfile(await Doc.fromXml(xml(gateway(['${amount &gt; 100 &amp;&amp; ok}', null], 'S1')))).findings[0]!;
+    const cond = (await runProfile(await Doc.fromXml(xml(gateway(['${amount &gt; 100 &amp;&amp; ok}', null], 'S1'))))).findings[0]!;
     expect(cond.hint).toContain("`bpmn set <file> S0 'condition== amount > 100 and ok'`");
     // a hand-written attribute of a zeebe element on the BPMN element: the element that reads it
-    const attr = runProfile(await Doc.fromXml(xml(chain(UT(ext('<zeebe:userTask />'), ' zeebe:assignee="demo"'))))).findings[0]!;
+    const attr = (await runProfile(await Doc.fromXml(xml(chain(UT(ext('<zeebe:userTask />'), ' zeebe:assignee="demo"')))))).findings[0]!;
     expect(attr).toMatchObject({ code: 'W_C8_UNKNOWN_ATTRIBUTE', severity: 'runtime', element: 'X' });
     expect(attr.message).toBe('userTask X has the unknown attribute zeebe:assignee; Camunda 8 ignores it (it reads assignee on the zeebe:assignmentDefinition extension element)');
     expect(attr.hint).toBe('Move it: `bpmn set <file> X zeebe:assignee=`, then `bpmn ext add <file> X zeebe:assignmentDefinition assignee=demo`.');
     // another prefix for the zeebe namespace
-    const zeebeFinding = runProfile(await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { ns: 'xmlns:z="http://camunda.org/schema/zeebe/1.0"' }))).findings[0]!;
+    const zeebeFinding = (await runProfile(await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { ns: 'xmlns:z="http://camunda.org/schema/zeebe/1.0"' })))).findings[0]!;
     expect(zeebeFinding.hint).toBe('Give it a job type: `bpmn ext add <file> X z:taskDefinition type=<jobType>`.');
   });
 
   it('runs on Camunda 8 files only; --platform c8 forces it', async () => {
     const plain = await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { ns: '' }));
-    expect(runProfile(plain).findings).toEqual([]);
-    expect(runProfile(plain, 'c8').findings.map((finding) => finding.code)).toEqual(['W_C8_DEPLOY_IMPLEMENTATION']);
+    expect((await runProfile(plain)).findings).toEqual([]);
+    expect((await runProfile(plain, 'c8')).findings.map((finding) => finding.code)).toEqual(['W_C8_DEPLOY_IMPLEMENTATION']);
     const c7 = await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { ns: `${CAMUNDA} ${MODELER} modeler:executionPlatform="Camunda Platform"` }));
-    expect(runProfile(c7).findings.some((finding) => finding.code.startsWith('W_C8_'))).toBe(false);
+    expect((await runProfile(c7)).findings.some((finding) => finding.code.startsWith('W_C8_'))).toBe(false);
   });
 });
 
 describe('the zeebe descriptor, read as data', () => {
-  it('knows where zeebe elements belong and what they hold', () => {
+  it('knows where zeebe elements belong and what they hold', async () => {
     expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:ServiceTask')).toBe(true);
     expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:EndEvent')).toBe(true);
     expect(C8_DESCRIPTOR.allowedOn('zeebe:taskDefinition', 'bpmn:UserTask')).toBe(false);
@@ -396,31 +393,19 @@ describe('the zeebe descriptor, read as data', () => {
 });
 
 describe('values Camunda 8 parses at deploy (engine-checked on 60 timer values and 45 expressions)', () => {
-  it('durations', () => {
-    for (const duration of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) {
-      expect(new TimerValue(duration).isDuration(), duration).toBe(true);
-    }
-    for (const duration of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) {
-      expect(new TimerValue(duration).isDuration(), duration).toBe(false);
-    }
+  it('durations', async () => {
+    for (const duration of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) expect(new TimerValue(duration).isDuration(), duration).toBe(true);
+    for (const duration of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) expect(new TimerValue(duration).isDuration(), duration).toBe(false);
   });
-  it('dates', () => {
-    for (const date of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) {
-      expect(new TimerValue(date).isDateTime(), date).toBe(true);
-    }
-    for (const date of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) {
-      expect(new TimerValue(date).isDateTime(), date).toBe(false);
-    }
+  it('dates', async () => {
+    for (const date of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) expect(new TimerValue(date).isDateTime(), date).toBe(true);
+    for (const date of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) expect(new TimerValue(date).isDateTime(), date).toBe(false);
   });
-  it('cycles', () => {
-    for (const cycle of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) {
-      expect(new TimerValue(cycle).isCycle(), cycle).toBe(true);
-    }
-    for (const cycle of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) {
-      expect(new TimerValue(cycle).isCycle(), cycle).toBe(false);
-    }
+  it('cycles', async () => {
+    for (const cycle of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) expect(new TimerValue(cycle).isCycle(), cycle).toBe(true);
+    for (const cycle of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) expect(new TimerValue(cycle).isCycle(), cycle).toBe(false);
   });
-  it('FEEL slips', () => {
+  it('FEEL slips', async () => {
     const ok = ['a != b', 'not(a)', 'a = 1', '"a && b" = s', '-a', 'a - 1', 'a > 1 and b < 2', 'a in [1,2]', 'if a then b else c', 'some x in xs satisfies x > 1', 'a.b.c', 'x[1]', 'count(xs) > 0', 'date("2020-01-01") < today()', 'a instance of number', 'a between 1 and 3', 'a = null', 'a / 2', 'a ** 2', '`a b` > 1', '//comment\n a', 'a /* c */ > 1', '{"k": 1}.k = 1', '@"2020-01-01"', 'function(x) x', 'for x in xs return x'];
     for (const expression of ok) {
       expect(new FeelExpression(expression).problem(), expression).toBeUndefined();
@@ -436,7 +421,7 @@ describe('Camunda 8 files the CLI writes', () => {
   it('new --target camunda8 writes the platform and its version, like Camunda Modeler; its only finding is the missing start event', async () => {
     const doc = Doc.create({ target: 'camunda8', processName: 'Order' });
     expect(doc.definitions.$attrs).toMatchObject({ 'modeler:executionPlatform': 'Camunda Cloud', 'modeler:executionPlatformVersion': '8.9.0' });
-    expect(runProfile(doc).findings.map((finding) => finding.code)).toEqual(['W_C8_DEPLOY_START_EVENT']);
+    expect((await runProfile(doc)).findings.map((finding) => finding.code)).toEqual(['W_C8_DEPLOY_START_EVENT']);
   });
 
   it('a new or retyped user task is a Camunda user task (zeebe:userTask); a plain or Camunda 7 file gets none', async () => {
@@ -481,17 +466,17 @@ describe('Camunda 8 files the CLI writes', () => {
 
 describe('bpmn validate on a Camunda 8 file', () => {
   let dir: string;
-  beforeAll(() => {
+  beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'bpmn-c8-'));
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('counts the findings by severity in the platform line; --strict exits 5; --json carries the severity', () => {
+  it('counts the findings by severity in the platform line; --strict exits 5; --json carries the severity', async () => {
     const file = join(dir, 'job.bpmn');
     writeFileSync(file, xml(chain('<bpmn:serviceTask id="X" />', '<bpmn:userTask id="U" />')));
     const text = cli('validate', file, '--strict');
     expect(text.code).toBe(5);
-    expect(text.out).toMatch(/^W_C8_DEPLOY_IMPLEMENTATION X: serviceTask X has no zeebe:taskDefinition/m);
+    expect(text.out).toMatch(/^W_C8_DEPLOY_IMPLEMENTATION X: Element of type <bpmn:ServiceTask> must have one extension element of type <zeebe:TaskDefinition>/m);
     expect(text.out).toMatch(/^platform: c8 \(modeler:executionPlatform "Camunda Cloud"\) - 1 refused at deploy, 0 runtime, 1 practice finding\(s\)$/m);
     const json = JSON.parse(cli('validate', file, '--json').out);
     expect(json.platform).toMatchObject({ platform: 'c8', counts: { deploy: 1, runtime: 0, practice: 1 } });
@@ -592,7 +577,7 @@ async function withProcess(name: string, model: string, fn: (pid: string) => Pro
 describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime rules, by running the processes', () => {
   it('a job worker gets its type, input mapping and header (one without key is dropped); the output mapping writes back', async () => {
     const model = xml(chain(ST(ext('<zeebe:taskDefinition type="{pid}-check" retries="2" /><zeebe:ioMapping><zeebe:input source="=amount * 2" target="doubled" /><zeebe:output source="=result" target="checked" /></zeebe:ioMapping><zeebe:taskHeaders><zeebe:header key="channel" value="mail" /><zeebe:header value="dropped" /></zeebe:taskHeaders>'))));
-    expect(runProfile(await Doc.fromXml(model)).findings.map((finding) => finding.code)).toEqual(['W_C8_BAD_VALUE']);
+    expect((await runProfile(await Doc.fromXml(model))).findings.map((finding) => finding.code)).toEqual(['W_C8_BAD_VALUE']);
     await withProcess('job', model, async (pid) => {
       const key = await startInstance(pid, { amount: 21 });
       const [job] = await jobs(`${pid}-check`);
@@ -610,7 +595,7 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
     <bpmn:sequenceFlow id="Big" sourceRef="G" targetRef="EndBig"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= amount &gt; 100</bpmn:conditionExpression></bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Other" sourceRef="G" targetRef="EndOther" />
     <bpmn:endEvent id="EndBig" /><bpmn:endEvent id="EndOther" />`, { roots: `  <bpmn:message id="M1" name="{pid}-paid">${ext('<zeebe:subscription correlationKey="=orderId" />')}</bpmn:message>\n` });
-    expect(runProfile(await Doc.fromXml(model)).findings.map((finding) => [finding.code, finding.related?.[0]])).toEqual([['W_C8_EXCLUSIVE_GATEWAY', 'Other']]);
+    expect((await runProfile(await Doc.fromXml(model))).findings.map((finding) => [finding.code, finding.related?.[0]])).toEqual([['W_C8_EXCLUSIVE_GATEWAY', 'Other']]);
     await withProcess('route', model, async (pid) => {
       const big = await startInstance(pid, { orderId: 'o-1', amount: 500 });
       const small = await startInstance(pid, { orderId: 'o-2', amount: 5 });
@@ -647,7 +632,7 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
     <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="C" />
     <bpmn:callActivity id="C">${ext('<zeebe:calledElement processId="{pid}_child" propagateAllChildVariables="false" /><zeebe:ioMapping><zeebe:output source="=childResult" target="fromChild" /></zeebe:ioMapping>')}</bpmn:callActivity>
     <bpmn:sequenceFlow id="F3" sourceRef="C" targetRef="End" /><bpmn:endEvent id="End" />`);
-    expect(runProfile(await Doc.fromXml(model)).findings).toEqual([]);
+    expect((await runProfile(await Doc.fromXml(model))).findings).toEqual([]);
     await withProcess(
       'decision',
       model,
@@ -667,7 +652,7 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
 
   it('a Camunda user task is assigned and completed through the v2 user task API; a job worker user task is not listed there', async () => {
     const model = xml(chain(UT(ext('<zeebe:userTask /><zeebe:formDefinition externalReference="https://example.com/form" /><zeebe:assignmentDefinition assignee="=reviewer" candidateGroups="sales, finance" /><zeebe:priorityDefinition priority="80" />')), '<bpmn:userTask id="J" /><bpmn:sequenceFlow id="FJ" sourceRef="Start" targetRef="J" /><bpmn:sequenceFlow id="FJ2" sourceRef="J" targetRef="End" />'));
-    expect(runProfile(await Doc.fromXml(model)).findings.map((finding) => [finding.code, finding.element])).toEqual([['W_C8_JOB_WORKER_USER_TASK', 'J']]);
+    expect((await runProfile(await Doc.fromXml(model))).findings.map((finding) => [finding.code, finding.element])).toEqual([['W_C8_JOB_WORKER_USER_TASK', 'J']]);
     await withProcess('usertask', model, async (pid) => {
       const key = await startInstance(pid, { reviewer: 'demo' });
       const tasks = await userTasksOf(key);
@@ -684,7 +669,7 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
 
   it('a multi-instance activity runs per item and collects the results; a standard loop runs once', async () => {
     const model = xml(chain(ST(ext('<zeebe:taskDefinition type="{pid}-item" />') + MI(ZLOOP('inputCollection="=items" inputElement="item" outputCollection="results" outputElement="=done"'))), `<bpmn:serviceTask id="L">${ext('<zeebe:taskDefinition type="{pid}-loop" />')}<bpmn:standardLoopCharacteristics><bpmn:loopCondition xsi:type="bpmn:tFormalExpression">= true</bpmn:loopCondition></bpmn:standardLoopCharacteristics></bpmn:serviceTask><bpmn:sequenceFlow id="FL" sourceRef="Start" targetRef="L" /><bpmn:sequenceFlow id="FL2" sourceRef="L" targetRef="End" />`));
-    expect(runProfile(await Doc.fromXml(model)).findings.map((finding) => [finding.code, finding.element])).toEqual([['W_C8_STANDARD_LOOP', 'L']]);
+    expect((await runProfile(await Doc.fromXml(model))).findings.map((finding) => [finding.code, finding.element])).toEqual([['W_C8_STANDARD_LOOP', 'L']]);
     await withProcess('mi', model, async (pid) => {
       const key = await startInstance(pid, { items: [1, 2, 3] });
       const items = await until(() => jobs(`${pid}-item`), (activated) => activated.length >= 3);
@@ -714,7 +699,7 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
     <bpmn:serviceTask id="R">${ext('<zeebe:taskDefinition type="{pid}-r" retries="abc" />')}</bpmn:serviceTask>
     <bpmn:sequenceFlow id="F4" sourceRef="R" targetRef="EndB" />
     <bpmn:endEvent id="EndA" /><bpmn:endEvent id="EndB" />`, { ns: `${C8} ${CAMUNDA}` });
-    expect(sorted(runProfile(await Doc.fromXml(model)).findings.map((finding) => `${finding.code} ${finding.element}`))).toEqual(sorted(['W_C8_MISPLACED_EXTENSION Start', 'W_C8_CONDITION_IGNORED A', 'W_C8_FOREIGN_CONTENT U', 'W_C8_EXPRESSION X', 'W_C8_BAD_VALUE R']));
+    expect(sorted((await runProfile(await Doc.fromXml(model))).findings.map((finding) => `${finding.code} ${finding.element}`))).toEqual(sorted(['W_C8_MISPLACED_EXTENSION Start', 'W_C8_CONDITION_IGNORED A', 'W_C8_FOREIGN_CONTENT U', 'W_C8_EXPRESSION X', 'W_C8_BAD_VALUE R']));
     await withProcess('ignored', model, async (pid) => {
       const key = await startInstance(pid, { items: [1] });
       // the condition out of the task is ignored: both branches run; camunda:assignee is ignored; the input mapping too
@@ -738,7 +723,7 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
 
   it('zeebe:publishMessage on a send task deploys, but the instance gets an incident', async () => {
     const model = xml(chain(`<bpmn:sendTask id="X" messageRef="M1">${ext('<zeebe:publishMessage correlationKey="=orderId" />')}</bpmn:sendTask>`), { roots: MSG() });
-    expect(runProfile(await Doc.fromXml(model)).findings.map((finding) => finding.code)).toEqual(['W_C8_UNSUPPORTED_IMPLEMENTATION']);
+    expect((await runProfile(await Doc.fromXml(model))).findings.map((finding) => finding.code)).toEqual(['W_C8_UNSUPPORTED_IMPLEMENTATION']);
     await withProcess('publish', model, async (pid) => {
       const key = await startInstance(pid, { orderId: 'o' });
       expect((await incidentsOf(key)).map((incident) => String(incident['errorMessage']))[0]).toMatch(/only job worker-based implementation is supported for 'sendTask'/);

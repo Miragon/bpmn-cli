@@ -380,14 +380,16 @@ npx vitest run test/e2e/isomorphic.test.ts
   not compile. It prints the minified and gzipped sizes, split like a host's
   bundler would split them: the initial chunks of the whole entry and of an
   `applyToXml`-only entry, and the chunks loaded on demand (the Camunda 7
-  rules, the Camunda 8 rules with the FEEL, timer and schema-text checks).
-  It fails when a rule module
-  (`dist/platform/profiles/`: the profiles, their base, utils and checks) is in the initial chunks of
-  either entry, naming it; when a rule module imports a module the entry
+  and the Camunda 8 entry of `@miragon/bpmnlint-plugin-rules`, and bpmn-cli's
+  engine run in `src/adapters/out/bpmnlint/engine/` with bpmnlint's linter).
+  It fails when a rule module is in the initial chunks of
+  either entry, naming it; when a module of the engine run imports a module the entry
   loads, naming both (Rollup / Vite would put that module into the host's
   entry chunk and make the rule chunk import the entry chunk back: a host
   whose entry module awaits a Camunda 7 / 8 call at top level would hang;
-  the rules get the core helpers from `src/domain/validation/profiles/rule-kit.ts`); and
+  the engine run gets the core helpers from `src/adapters/out/bpmnlint/engine-kit.ts`;
+  the plugin's packages share min-dash with the core, so a host must not await
+  such a call at top level, [library.md](library.md#browser-bundles)); and
   when a size is over its budget in
   `tools/iso/budget.json` (KB = 1024 bytes; set to the measured size plus
   about 2 %: raise one only in the change that needs it, with the reason in
@@ -401,29 +403,28 @@ npx vitest run test/e2e/isomorphic.test.ts
   `process` read, and runs the bundle in a `vm` context without any Node
   global: `applyToXml` (also with host validators, and a no-op that must
   come back `unchanged`), `layoutXml` (both engines), `newXml`,
-  `validateXml` with the Camunda 7 and the Camunda 8 profile and with host
+  `validateXml` with the Camunda 7 and the Camunda 8 rules and with host
   validators, `showXml`, `findXml` and `metricsXml` must give there exactly what they
   give in Node, and `renderSvg` the same SVG. It also checks that the inlined
   Camunda 7 descriptor (`src/domain/document/vendor/camunda-descriptor.ts`) equals the
   installed `camunda-bpmn-moddle`; regenerate it with
   `node tools/gen-camunda-descriptor.mjs`.
 - The same file bundles `src/index.ts` as an ESM split bundle (what Vite or
-  esbuild make of the `import()` in `src/domain/validation/profiles/PlatformProfiles.ts`), writes a
+  esbuild make of the `import()` in `src/adapters/out/bpmnlint/BpmnlintEngineLint.ts`), writes a
   fresh copy per case, loads it with Node's own loader and records which
   chunk is evaluated: a plain model (also with a host validator, whose error, pre-existing
   error and covered lint warning come out like Node's) and
   `platform: 'none'` load no profile chunk, a Camunda 7 file only the Camunda 7 rules, a
   Camunda 8 file only the Camunda 8 rules; a batch that turns a plain file
   into a Camunda 7 / 8 file loads them after the ops and reports the added
-  findings of 0.4.0; `runProfile` without loaded rules throws
-  `E_PROFILE_NOT_LOADED`; a missing chunk rejects with `E_PROFILE_LOAD`
+  findings; `validateDoc` loads no rule chunk; a missing chunk rejects with `E_PROFILE_LOAD`
   (its hint says a browser may keep the failed fetch until the page
   reloads) and a later call imports it again, which in Node loads it. It
   also checks that the bundle's entry chunk is the requested one and that
   the rule modules (and so their chunks) import nothing the entry loads.
-- Test files that call `runProfile` or `validateDoc(doc, { platform })`
-  directly load the rules first (`await loadProfiles()` at the top); the
-  pipeline tests do not, so they run the on-demand path.
+- Tests that need the engine findings of a document on their own use
+  `runProfile` of `test/helpers/engine.ts`; the pipeline tests run the
+  on-demand path.
 - `test/e2e/api.test.ts` checks that the in-memory API gives what the CLI writes
   and prints for the same input.
 
@@ -638,32 +639,23 @@ flow between two lanes).
 
 ## Engine checks (Camunda 7)
 
-The Camunda 7 profile of `bpmn validate` (`src/domain/validation/profiles/C7Profile.ts`) states for
-every rule what the engines do. `test/domain/validation/c7-profile.test.ts` holds one synthetic
-model per rule (82 models) with the expected codes and the engine verdict;
-by default it checks only the profile. To re-check the verdicts against live
-engines (REST, no authentication), list their REST roots:
+The Camunda 7 rules of `bpmn validate` are bpmnlint rules: camunda-compat's `history-time-to-live`
+and the `c7-*` rules of `@miragon/bpmnlint-plugin-rules`, whose specs hold one model per rule with
+the engines' verdict ([Camunda 7 and Camunda 8](camunda.md#where-the-checks-come-from)). bpmn-cli
+tests what it adds: the code and the hint of each finding (`src/adapters/out/bpmnlint/engine/`),
+and the checks it makes itself. `test/adapters/out/bpmnlint/engine-codes.test.ts` fails when a rule
+of a camunda-compat version or of the Miragon engine layer has no code.
+`test/e2e/camunda7-rules.test.ts` holds synthetic models with the engines' verdict (events with
+several event definitions, attributes BPMN does not define) and runs their hints through the CLI. To
+re-check the verdicts against live engines (REST, no authentication), list their REST roots:
 
 ```
-BPMN_C7_ENGINES=http://localhost:8080/engine-rest[,http://host:port/engine-rest ...] npx vitest run test/domain/validation/c7-profile.test.ts
+BPMN_C7_ENGINES=http://localhost:8080/engine-rest[,http://host:port/engine-rest ...] npx vitest run test/e2e/camunda7-rules.test.ts
 ```
 
-Each model is deployed to every listed engine, the test asserts the engine's
-verdict and that a deploy-severity finding (`W_C7_DEPLOY_*`) is reported
-exactly for the refused ones, and every deployment is deleted again. The
-verdicts were identical on Camunda 7.24.0, CIB seven 2.2.0 and Operaton 2.1.5
-(341 tests with three engines). The follow-up rounds add their own models with
-engine verdicts the same way: `test/domain/validation/c7-profile-rules.test.ts` (deploy
-rules the engines disagreed with or the profile missed; `operaton` marks a
-verdict only Operaton gives, the engine is told apart by
-`/telemetry/data`), `test/e2e/camunda7-rules.test.ts` (events with
-several event definitions, attributes BPMN does not define) and
-`test/domain/validation/c7-schema-rules.test.ts` (schema rules on every event definition,
-start events of transactions / empty sub-processes / ad-hoc sub-processes;
-`run` also starts the process and checks that it fails or runs, and the
-second-start hint is followed and run). Run all four with the same
-`BPMN_C7_ENGINES`; `--no-file-parallelism` keeps two files from deploying
-one message name at the same time.
+Each model is deployed to every listed engine, the test asserts the engine's verdict and that a
+deploy-severity finding (`W_C7_DEPLOY_*`) is reported exactly for the refused ones, and every
+deployment is deleted again.
 
 The other C7 regression tests (`test/domain/editing/c7-semantic.test.ts`,
 `test/domain/editing/c7-ext-structure.test.ts`, `test/e2e/camunda7.test.ts`,
@@ -677,27 +669,19 @@ element by element.
 
 ## Engine checks (Camunda 8)
 
-The Camunda 8 profile (`src/domain/validation/profiles/C8Profile.ts`) states for every rule what
-Camunda 8.9 does; placement and known names come from the Zeebe descriptor
+The Camunda 8 rules are camunda-compat's config for the file's version and the `c8-*` rules of
+`@miragon/bpmnlint-plugin-rules` (the FEEL check with its 762 engine verdicts lives there). bpmn-cli
+makes the checks a typed parse cannot see itself: unknown zeebe elements, unprefixed attributes,
+`zeebe:publishMessage` and the schema rules of the file's text (child order, IDREFs, booleans);
+placement and known names come from the Zeebe descriptor
 (`src/domain/document/vendor/ZeebeDescriptor.ts`, the inlined `zeebe-bpmn-moddle`; regenerate with
-`node tools/gen-camunda-descriptor.mjs`, `test/e2e/isomorphic.test.ts` fails
-while it is stale). `test/domain/validation/c8-profile.test.ts` holds one synthetic model per
-rule (151 models) with the expected codes and Camunda 8's verdict, the timer
-and FEEL value checks with the values they were checked on, and the
-`validate` output; `test/domain/editing/c8-ops.test.ts` covers `set` / `ext` / `retype` /
-`show` in Camunda 8 files and runs the profile's hints through the real CLI
-until a refused model has no deploy finding left; `test/domain/validation/c8-feel-and-deploy.test.ts`
-checks the FEEL syntax check against `test/fixtures/c8/feel-verdicts.json`
-(762 synthetic expressions with the verdict of Camunda 8.9.22, one per line:
-add a new expression with the verdict you got from the engine) and the
-schema-text, white-space, `refAs` and subscription rules;
-`test/domain/validation/c8-values.test.ts` holds the timer range, cron field and
-xsd:boolean models (27, with the verdict) and the duplicate id. By default they
-check the CLI only. To re-check against a live Camunda 8 (REST v2, no
-authentication), name its v2 root:
+`node tools/gen-camunda-descriptor.mjs`, `test/e2e/isomorphic.test.ts` fails while it is stale).
+`test/domain/editing/c8-ops.test.ts` covers `set` / `ext` / `retype` / `show` in Camunda 8 files and
+runs the hints through the real CLI until a refused model has no deploy finding left. To re-check
+against a live Camunda 8 (REST v2, no authentication), name its v2 root:
 
 ```
-BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/domain/validation/c8-profile.test.ts test/domain/editing/c8-ops.test.ts test/domain/validation/c8-feel-and-deploy.test.ts test/domain/validation/c8-values.test.ts
+BPMN_C8_ENGINE=http://localhost:8088/v2 npx vitest run test/domain/editing/c8-ops.test.ts
 ```
 
 Each model is deployed (`POST /v2/deployments`), the test asserts that the

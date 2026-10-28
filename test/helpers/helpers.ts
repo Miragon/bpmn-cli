@@ -2,6 +2,7 @@ import { Doc } from '../../src/domain/document/Doc.js';
 import type { CliUseCases } from '../../src/adapters/in/cli/Cli.js';
 import { BpmnlintProjectSettings } from '../../src/adapters/out/files/BpmnlintProjectSettings.js';
 import { FileDocumentStore } from '../../src/adapters/out/files/FileDocumentStore.js';
+import { BpmnlintEngineLint } from '../../src/adapters/out/bpmnlint/BpmnlintEngineLint.js';
 import { FileImageWriter } from '../../src/adapters/out/files/FileImageWriter.js';
 import { SvgRenderer } from '../../src/adapters/out/render/SvgRenderer.js';
 import { EditDocumentService } from '../../src/application/service/EditDocumentService.js';
@@ -18,13 +19,14 @@ import { RunCommandsService } from '../../src/application/service/RunCommandsSer
 
 const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
+const engine = new BpmnlintEngineLint();
 
 /** The use cases on the file system, as src/cli.ts wires them. */
 export const FILE_USE_CASES: CliUseCases = {
-  editDocument: new EditDocumentService(project, files),
-  createDocument: new CreateDocumentService(project, files),
-  relayoutDiagram: new RelayoutDiagramService(project, files),
-  validateDocument: new ValidateDocumentService(project, files),
+  editDocument: new EditDocumentService(project, files, engine),
+  createDocument: new CreateDocumentService(project, files, engine),
+  relayoutDiagram: new RelayoutDiagramService(project, files, engine),
+  validateDocument: new ValidateDocumentService(project, files, engine),
   readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),

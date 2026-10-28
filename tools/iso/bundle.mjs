@@ -43,10 +43,23 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** Globals a browser does not have (globalThis, setTimeout, TextEncoder, URL, ... are fine). */
 export const NODE_GLOBALS = ['process', 'Buffer', 'global', 'require', '__dirname', '__filename', 'setImmediate', 'clearImmediate'];
 
+/**
+ * `require` is not replaced: esbuild bundles the require calls of a CommonJS package (bpmnlint,
+ * camunda-compat) itself. One it cannot resolve becomes its `__require` shim, which throws in a
+ * browser; that shim is the violation.
+ */
+const DEFINED_GLOBALS = NODE_GLOBALS.filter((globalName) => globalName !== 'require');
+
+/**
+ * Packages of the Camunda 8 rules (camunda-compat's FEEL parser) that read `process` only behind
+ * `typeof process != 'undefined'`, for a debug switch: in a browser the read is never made.
+ */
+const GUARDED = new Set(['node_modules/@lezer/lr/dist/index.js', 'node_modules/@bpmn-io/lezer-feel/dist/index.js', 'node_modules/@bpmn-io/semver-compat/dist/index.js']);
+
 const SENTINEL = '__ISO_NODE_GLOBAL_';
 
 function esbuildOptions(opts, minify) {
-  const define = Object.fromEntries(NODE_GLOBALS.map((globalName) => [globalName, `${SENTINEL}${globalName}`]));
+  const define = Object.fromEntries(DEFINED_GLOBALS.map((globalName) => [globalName, `${SENTINEL}${globalName}`]));
   return {
     ...(opts.stdin ? { stdin: { loader: 'ts', resolveDir: ROOT, ...opts.stdin } } : { entryPoints: [join(ROOT, opts.entry ?? join('src', 'index.ts'))] }),
     bundle: true,
@@ -77,12 +90,14 @@ function globalViolations(code) {
   const marks = moduleMarks(code);
   const seen = new Set();
   const out = [];
-  for (const match of code.matchAll(new RegExp(`${SENTINEL}(\\w+)`, 'g'))) {
+  for (const match of code.matchAll(new RegExp(`${SENTINEL}(\\w+)|\\b__require\\((?!\\s*\\))`, 'g'))) {
     const file = [...marks].reverse().find((mark) => mark.at < match.index)?.file ?? '?';
-    const key = `${match[1]}|${file}`;
+    const what = match[1] ?? 'require';
+    if (what === 'process' && GUARDED.has(file)) continue;
+    const key = `${what}|${file}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ kind: 'global', what: match[1], file });
+    out.push({ kind: 'global', what, file });
   }
   return out;
 }

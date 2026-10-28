@@ -1,10 +1,26 @@
 {
   "entries": {
-    "whole entry": { "minified": 1112, "gzip": 347 },
-    "applyToXml only": { "minified": 802, "gzip": 251 }
+    "whole entry": {
+      "minified": 1112,
+      "gzip": 347
+    },
+    "applyToXml only": {
+      "minified": 802,
+      "gzip": 251
+    }
   },
   "onDemand": {
-    "c7": { "minified": 65, "gzip": 19 },
-    "c8": { "minified": 89, "gzip": 25.5 }
+    "c7": {
+      "minified": 128,
+      "gzip": 35
+    },
+    "c8": {
+      "minified": 368,
+      "gzip": 102
+    },
+    "engine": {
+      "minified": 50,
+      "gzip": 15
+    }
   }
 }

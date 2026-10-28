@@ -381,7 +381,7 @@ describe('the resolver chain: bundled, shipped, project', () => {
   });
 
   it('camunda-compat configs the bundle lacks come from the camunda-compat bpmn-cli ships (offline, no project code)', async () => {
-    for (const config of ['camunda-platform-7-19', 'camunda-cloud-8-6']) {
+    for (const config of ['camunda-cloud-1-3', 'camunda-cloud-1-0']) {
       const dir = repo({ extends: [`plugin:camunda-compat/${config}`] });
       const { loaded, used } = await chainOf(dir, false);
       expect(used.get(`config:bpmnlint-plugin-camunda-compat/${config}`), config).toBe('shipped');

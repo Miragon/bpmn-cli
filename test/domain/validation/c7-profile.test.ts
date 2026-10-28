@@ -16,15 +16,14 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { ProfileFinding } from '../../../src/domain/document/Finding.js';
+import { runProfile, validateWithEngine } from '../../helpers/engine.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { checkFile } from '../../../src/node.js';
-import { mutateDoc, detectPlatform, loadProfiles, runProfile, type ProfileFinding } from '../../../src/index.js';
-import { validateDoc } from '../../../src/index.js';
+import { mutateDoc, detectPlatform } from '../../../src/index.js';
 import { cli } from '../../helpers/cli.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
 const MODELER = 'xmlns:modeler="http://camunda.org/schema/modeler/1.0"';
@@ -270,8 +269,8 @@ const CASES: Case[] = [
   },
 ];
 
-function profileCodes(doc: Doc): string[] {
-  return validateDoc(doc, { platform: 'auto' })
+async function profileCodes(doc: Doc): Promise<string[]> {
+  return (await validateWithEngine(doc, { platform: 'auto' }))
     .warnings.filter((warning) => warning.code.startsWith('W_C7_'))
     .map((warning) => warning.code)
     .sort();
@@ -280,13 +279,11 @@ function profileCodes(doc: Doc): string[] {
 describe('Camunda 7 profile: one model per rule', () => {
   it.each(CASES.map((testCase) => [testCase.name, testCase] as const))('%s', async (_name, testCase) => {
     // standalone on a fresh document: the rules must not rely on validateDoc having repaired incoming/outgoing
-    const findings = runProfile(await Doc.fromXml(testCase.xml)).findings;
+    const findings = (await runProfile(await Doc.fromXml(testCase.xml))).findings;
     expect(findings.map((finding) => finding.code).sort()).toEqual([...testCase.codes].sort());
     // validate reports a problem once: a structural error replaces the profile finding that repeats it
-    expect(profileCodes(await Doc.fromXml(testCase.xml))).toEqual(testCase.structural ? [] : [...testCase.codes].sort());
-    if (testCase.structural) {
-      expect(validateDoc(await Doc.fromXml(testCase.xml), { platform: 'auto' }).errors.map((error) => error.code)).toContain(testCase.structural);
-    }
+    expect((await profileCodes(await Doc.fromXml(testCase.xml)))).toEqual(testCase.structural ? [] : [...testCase.codes].sort());
+    if (testCase.structural) expect((await validateWithEngine(await Doc.fromXml(testCase.xml), { platform: 'auto' })).errors.map((error) => error.code)).toContain(testCase.structural);
     // deploy-severity findings exactly where the engines refuse the file
     expect(findings.some((finding) => finding.severity === 'deploy')).toBe(testCase.engine === 'reject');
     expect(findings.every((finding) => finding.code.startsWith('W_C7_DEPLOY_') === (finding.severity === 'deploy'))).toBe(true);
@@ -298,37 +295,37 @@ describe('Camunda 7 profile: one model per rule', () => {
 
   it('names the element and the fix (did you mean, nested keys)', async () => {
     const typo = await Doc.fromXml(xml(chain('<bpmn:userTask id="X" camunda:asignee="demo" />')));
-    const [finding] = runProfile(typo).findings;
+    const [finding] = (await runProfile(typo)).findings;
     expect(finding).toMatchObject({ code: 'W_C7_UNKNOWN_ATTRIBUTE', element: 'X', severity: 'runtime' });
     expect(finding!.message).toContain('did you mean camunda:assignee?');
     expect(finding!.hint).toContain('`bpmn set <file> X camunda:asignee= camunda:assignee=demo`');
     const mi = await Doc.fromXml(xml(chain('<bpmn:userTask id="X" camunda:collection="${items}"><bpmn:multiInstanceLoopCharacteristics /></bpmn:userTask>')));
-    const deploy = runProfile(mi).findings.find((finding) => finding.code === 'W_C7_DEPLOY_MULTI_INSTANCE')!;
+    const deploy = (await runProfile(mi)).findings.find((finding) => finding.code === 'W_C7_DEPLOY_MULTI_INSTANCE')!;
     expect(deploy.hint).toContain("`bpmn set <file> X camunda:collection= 'loop.camunda:collection=${items}'`");
     const ttl = await Doc.fromXml(xml(chain(ST()), { attrs: '' }));
-    expect(runProfile(ttl).findings[0]!.hint).toContain('`bpmn set <file> P_Test camunda:historyTimeToLive=180`');
+    expect((await runProfile(ttl)).findings[0]!.hint).toContain('`bpmn set <file> P_Test camunda:historyTimeToLive=180`');
     const event = await Doc.fromXml(xml(toEnd('<bpmn:messageEventDefinition id="MED" />')));
-    expect(runProfile(event).findings[0]).toMatchObject({ code: 'W_C7_MESSAGE_NO_IMPLEMENTATION', element: 'End' });
-    expect(runProfile(event).findings[0]!.hint).toContain('definition.camunda:type=external');
+    expect((await runProfile(event)).findings[0]).toMatchObject({ code: 'W_C7_MESSAGE_NO_IMPLEMENTATION', element: 'End' });
+    expect((await runProfile(event)).findings[0]!.hint).toContain('definition.camunda:type=external');
   });
 
   it('replaces the lint warning about an event-gateway target with the engine finding', async () => {
     const doc = await Doc.fromXml(eventGateway([TIMER_CATCH, '<bpmn:userTask id="{id}" />']));
-    expect(validateDoc(doc).warnings.map((warning) => warning.code)).toContain('W_EVENT_GATEWAY_TARGET');
-    const codes = validateDoc(doc, { platform: 'auto' }).warnings.map((warning) => warning.code);
+    expect((await validateWithEngine(doc)).warnings.map((warning) => warning.code)).toContain('W_EVENT_GATEWAY_TARGET');
+    const codes = (await validateWithEngine(doc, { platform: 'auto' })).warnings.map((warning) => warning.code);
     expect(codes).toContain('W_C7_DEPLOY_EVENT_GATEWAY');
     expect(codes).not.toContain('W_EVENT_GATEWAY_TARGET');
   });
 
   it('runs only on request: validateDoc without a platform and other platforms report nothing', async () => {
     const doc = await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { attrs: '' }));
-    expect(validateDoc(doc).warnings.some((warning) => warning.code.startsWith('W_C7_'))).toBe(false);
-    expect(validateDoc(doc).platform).toBeUndefined();
-    expect(validateDoc(doc, { platform: 'none' }).warnings.some((warning) => warning.code.startsWith('W_C7_'))).toBe(false);
-    expect(validateDoc(doc, { platform: 'c8' }).platform).toMatchObject({ platform: 'c8', source: 'option' });
+    expect((await validateWithEngine(doc)).warnings.some((warning) => warning.code.startsWith('W_C7_'))).toBe(false);
+    expect((await validateWithEngine(doc)).platform).toBeUndefined();
+    expect((await validateWithEngine(doc, { platform: 'none' })).warnings.some((warning) => warning.code.startsWith('W_C7_'))).toBe(false);
+    expect((await validateWithEngine(doc, { platform: 'c8' })).platform).toMatchObject({ platform: 'c8', source: 'option' });
     const plain = await Doc.fromXml(xml(chain('<bpmn:serviceTask id="X" />'), { ns: '', attrs: '' }));
-    expect(validateDoc(plain, { platform: 'auto' }).platform).toMatchObject({ platform: 'none', counts: { deploy: 0, runtime: 0, practice: 0 } });
-    expect(validateDoc(plain, { platform: 'c7' }).warnings.map((warning) => warning.code)).toEqual(expect.arrayContaining(['W_C7_DEPLOY_IMPLEMENTATION']));
+    expect((await validateWithEngine(plain, { platform: 'auto' })).platform).toMatchObject({ platform: 'none', counts: { deploy: 0, runtime: 0, practice: 0 } });
+    expect((await validateWithEngine(plain, { platform: 'c7' })).warnings.map((warning) => warning.code)).toEqual(expect.arrayContaining(['W_C7_DEPLOY_IMPLEMENTATION']));
   });
 });
 
@@ -355,7 +352,7 @@ describe('platform detection', () => {
     const doc = Doc.create({ target: 'camunda7', processName: 'Order' });
     expect(detectPlatform(doc)).toMatchObject({ platform: 'c7', source: 'executionPlatform' });
     // the engines refuse an empty process ("process must define a startEvent element")
-    expect(runProfile(doc).findings.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
+    expect((await runProfile(doc)).findings.map((finding) => finding.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
   });
 });
 
@@ -408,7 +405,7 @@ describe('mutations report only the findings they introduce', () => {
 
 describe('bpmn validate', () => {
   let dir: string;
-  beforeAll(() => {
+  beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'bpmn-c7-'));
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -466,7 +463,7 @@ describe.skipIf(!ENGINES.length)('live engines: the deploy rules flag exactly wh
     it.each(CASES.map((testCase, caseIndex) => [testCase.name, testCase, caseIndex] as const))(`${engine}: %s`, async (_name, testCase, caseIndex) => {
       const result = await deploy(engine, `bpmn-cli-c7-profile-${caseIndex}`, testCase.xml);
       expect(result.ok, result.message).toBe(testCase.engine === 'accept');
-      const deployFindings = runProfile(await Doc.fromXml(testCase.xml)).findings.filter((finding) => finding.severity === 'deploy');
+      const deployFindings = (await runProfile(await Doc.fromXml(testCase.xml))).findings.filter((finding) => finding.severity === 'deploy');
       expect(deployFindings.length > 0).toBe(!result.ok);
     });
   }
