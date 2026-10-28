@@ -257,7 +257,7 @@ camunda-compat's `feel` is off).
 | `W_C8_DEPLOY_MULTI_INSTANCE` | `camunda-compat/loop-characteristics` |
 | `W_C8_DEPLOY_SCHEMA` | `bpmn-cli/c8-schema`, bpmn-cli (unprefixed attributes; the file text: child order, IDREFs, booleans, unreadable ids) |
 | `W_C8_DEPLOY_SIGNAL` | `camunda-compat/signal-reference`, `bpmn-cli/c8-subscriptions` |
-| `W_C8_DEPLOY_START_EVENT` | `start-event-required`, `camunda-compat/no-multiple-none-start-events`, `bpmn-cli/c8-events` |
+| `W_C8_DEPLOY_START_EVENT` | `bpmnlint/start-event-required`, `camunda-compat/no-multiple-none-start-events`, `bpmn-cli/c8-events` |
 | `W_C8_DEPLOY_TIMER` | `camunda-compat/timer`, `bpmn-cli/c8-events` |
 | `W_C8_DEPLOY_UNSUPPORTED` | `camunda-compat/collapsed-subprocess`, `camunda-compat/element-type`, `camunda-compat/inclusive-gateway`, `camunda-compat/no-interrupting-event-subprocess`, `camunda-compat/no-loop`, `camunda-compat/no-signal-event-sub-process` |
 | `W_C8_DEPLOY_USER_TASK` | `camunda-compat/no-candidate-users`, `camunda-compat/no-priority-definition`, `camunda-compat/no-task-schedule`, `camunda-compat/no-zeebe-user-task`, `camunda-compat/priority-definition`, `camunda-compat/task-schedule`, `camunda-compat/user-task-definition`, `camunda-compat/user-task-form` |
