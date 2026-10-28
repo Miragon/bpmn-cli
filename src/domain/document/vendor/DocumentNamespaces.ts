@@ -1,5 +1,16 @@
-import { KNOWN_NAMESPACES, type Doc } from '../Doc.js';
+import type { Doc } from '../Doc.js';
 import { isBpmnElement, walk, type El } from '../utils/moddle.js';
+
+/** `operaton` is Operaton's copy of the camunda namespace (only Operaton reads it). */
+export const KNOWN_NAMESPACES: Record<string, string> = {
+  camunda: 'http://camunda.org/schema/1.0/bpmn',
+  operaton: 'http://operaton.org/schema/1.0/bpmn',
+  zeebe: 'http://camunda.org/schema/zeebe/1.0',
+  modeler: 'http://camunda.org/schema/modeler/1.0',
+  bioc: 'http://bpmn.io/schema/bpmn/biocolor/1.0',
+  color: 'http://www.omg.org/spec/BPMN/non-normative/color/1.0',
+  xsi: 'http://www.w3.org/2001/XMLSchema-instance',
+};
 
 const MODELER_URI = 'http://camunda.org/schema/modeler/1.0';
 

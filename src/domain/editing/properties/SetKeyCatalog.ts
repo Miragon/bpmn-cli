@@ -1,7 +1,9 @@
 import type { Doc } from '../../document/Doc.js';
 import type { EditSession } from '../../document/EditSession.js';
+import type { Properties } from './Properties.js';
+import { modelError } from '../../document/utils/errors.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
-import { triggerOf } from '../../document/Kinds.js';
+import { kindLabel, triggerOf } from '../../document/Kinds.js';
 import { addTo, is, many, nameOf, type El } from '../../document/utils/moddle.js';
 import { idOf, isEl, ownValue } from '../../document/utils/elements.js';
 import { renamedNote } from '../../document/utils/renames.js';
@@ -12,7 +14,6 @@ import { Artifacts } from '../elements/Artifacts.js';
 import { Lanes } from '../elements/Lanes.js';
 import { expressionBody, flowConditionOf, multiInstanceOf, readIf } from '../utils/set-key-values.js';
 import { DecisionLinkWriter } from './DecisionLinkWriter.js';
-import { Properties } from './Properties.js';
 import { EventTrigger } from '../events/EventTrigger.js';
 import { SequenceFlows } from '../connections/SequenceFlows.js';
 import { FlowIdFollower } from '../connections/FlowIdFollower.js';
@@ -26,6 +27,7 @@ export interface SetKeyDoc {
 export interface SetKeyWriting {
   edit: EditSession;
   changes: ChangeSet;
+  properties: Properties;
 }
 
 export type ChangeRecording = 'recorded by the key' | 'left to set';
@@ -51,6 +53,30 @@ const APPLIES_TO: Record<string, (el: El) => boolean> = {
 export class SetKeyCatalog {
   static appliesTo(definition: SetKeyDoc, el: El): boolean {
     return !!APPLIES_TO[definition.appliesTo]?.(el);
+  }
+
+  static settableKeys(doc: Doc, el: El): string[] {
+    const keys = new Set<string>();
+    for (const definition of SetKeyCatalog.KEYS) {
+      if (!SetKeyCatalog.isPlaceholder(definition) && SetKeyCatalog.appliesTo(definition, el)) keys.add(definition.key);
+    }
+    for (const genericKey of PropertyCoercer.genericKeys(doc, el)) keys.add(genericKey);
+    keys.add('<prefix>:<attr>');
+    return [...keys];
+  }
+
+  static unknownKey(doc: Doc, el: El, key: string, reason?: string) {
+    const keys = SetKeyCatalog.settableKeys(doc, el);
+    return modelError('E_UNKNOWN_KEY', `Unknown key "${key}" for ${kindLabel(el)} ${idOf(el)}${reason ? ` (${reason})` : ''}`, {
+      element: idOf(el),
+      candidates: keys,
+      hint: `Settable keys for this element: ${keys.join(', ')}.`,
+    });
+  }
+
+  static assertVendorKey(doc: Doc, el: El, key: string): void {
+    const [prefix, local] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    if (!prefix || !local || prefix === 'xmlns') throw SetKeyCatalog.unknownKey(doc, el, key, 'vendor attributes look like prefix:name');
   }
 
   static isPlaceholder(definition: SetKeyDoc): boolean {
@@ -232,7 +258,7 @@ export class SetKeyCatalog {
       description: 'true|false: draw the sub-process expanded (default) or collapsed',
       read: (subProcess, doc) => ({ expanded: doc.layoutRequests.requested(idOf(subProcess)) ?? diExpansionState(doc.definitions).get(idOf(subProcess)) ?? true }),
       write: (writing, el, value, key) => {
-        if (!is(el, 'bpmn:SubProcess')) throw PropertyCoercer.unknownKey(writing.edit.doc, el, key, 'applies to sub-processes');
+        if (!is(el, 'bpmn:SubProcess')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to sub-processes');
         writing.edit.doc.layoutRequests.expand(idOf(el), value ? PropertyCoercer.bool(el, key, value) : true);
         return 'left to set';
       },
@@ -247,8 +273,8 @@ export class SetKeyCatalog {
         return isEl(message) ? { message: message.get<string | undefined>('name') ?? idOf(message) } : {};
       },
       write: (writing, el, value, key) => {
-        if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) throw PropertyCoercer.unknownKey(writing.edit.doc, el, key, 'applies to events, send tasks and receive tasks');
-        new Properties(writing.edit).setTaskMessage(el, value, writing.changes);
+        if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to events, send tasks and receive tasks');
+        writing.properties.setTaskMessage(el, value, writing.changes);
         return 'left to set';
       },
     },
@@ -261,7 +287,7 @@ export class SetKeyCatalog {
           writing.changes.change(ChangeSet.entryOf(el, new DecisionLinkWriter(writing.edit).write(el, value, writing.changes)));
           return 'recorded by the key';
         }
-        new Properties(writing.edit).setModelProperty(el, key, value);
+        writing.properties.setModelProperty(el, key, value);
         return 'left to set';
       },
     },
@@ -279,7 +305,7 @@ export class SetKeyCatalog {
         return innermostLane ? { lane: idOf(innermostLane) } : {};
       },
       write: (writing, el, value, key) => {
-        if (!is(el, 'bpmn:FlowNode')) throw PropertyCoercer.unknownKey(writing.edit.doc, el, key, 'applies to flow nodes');
+        if (!is(el, 'bpmn:FlowNode')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to flow nodes');
         new Lanes(writing.edit).assign(el, value ? writing.edit.require(value, 'bpmn:Lane', 'lane') : undefined, writing.changes);
         return 'left to set';
       },
@@ -288,7 +314,7 @@ export class SetKeyCatalog {
   ];
 
   private static writeEnd(writing: SetKeyWriting, flow: El, value: string, key: string): ChangeRecording {
-    if (!is(flow, 'bpmn:SequenceFlow')) throw PropertyCoercer.unknownKey(writing.edit.doc, flow, key, 'applies to sequence flows');
+    if (!is(flow, 'bpmn:SequenceFlow')) throw SetKeyCatalog.unknownKey(writing.edit.doc, flow, key, 'applies to sequence flows');
     if (!value) throw PropertyCoercer.invalid(flow, key, 'a flow always needs a source and a target');
     const node = writing.edit.require(value, 'bpmn:FlowNode');
     const renamed = new SequenceFlows(writing.edit).redirect(flow, key === 'source' ? { source: node } : { target: node });
@@ -298,13 +324,13 @@ export class SetKeyCatalog {
   }
 
   private static writeLoop(writing: SetKeyWriting, el: El, value: string, key: string): ChangeRecording {
-    if (!is(el, 'bpmn:Activity')) throw PropertyCoercer.unknownKey(writing.edit.doc, el, key, 'applies to activities');
-    new Properties(writing.edit).setLoopKey(el, key, value, writing.changes);
+    if (!is(el, 'bpmn:Activity')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to activities');
+    writing.properties.setLoopKey(el, key, value, writing.changes);
     return 'left to set';
   }
 
   private static writeDefault(writing: SetKeyWriting, el: El, value: string): ChangeRecording {
-    new Properties(writing.edit).setDefaultKey(el, value, writing.changes);
+    writing.properties.setDefaultKey(el, value, writing.changes);
     return 'left to set';
   }
 

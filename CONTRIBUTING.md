@@ -78,12 +78,11 @@ them on a private corpus without copying it into the repository, are described i
   the services with their adapters. Every public function that works on a document goes
   through a use case, even one that only forwards to the domain: the entries import values only
   from `application/` and `adapters/`, and from `domain/` only types, re-exporting just the
-  public classes, constants and pure helpers the test lists. `test/architecture.test.ts` checks the rings: the domain
+  public classes, constants and pure helpers. `test/architecture.test.ts` (ArchUnitTS) checks the rings: the domain
   imports neither the application nor the adapters, the application no adapter, an adapter no
-  other adapter (the CLI only the reports, the files only bpmnlint and the document store, the memory adapters only the document store), the driving adapter no service, only adapters and entries import `node:*`, the
-  domain modules import each other without a cycle, `application/service/` holds only services,
-  each implementing its contract and using no other class of that folder, and the entries reach the domain only through the
-  use cases.
+  other adapter (the CLI only the reports, the files only bpmnlint and the document store, the memory adapters only the document store), the driving adapter no service, only adapters and entries import `node:*`,
+  `application/` holds only ports and services, and the root of `src/` only the entries.
+  `npm run cycles` (dependency-cruiser) keeps `src/` free of import cycles; type-only imports may point back.
 
   **Classes first, helpers in `utils/`.** Each module builds on classes, one per file, the file
   named like the class (`domain/document/ModelError.ts`, `domain/diagram/di/DrawingCheckpoint.ts`). Stateless helper

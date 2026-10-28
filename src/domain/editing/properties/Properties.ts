@@ -63,7 +63,7 @@ export class Properties {
       ...(command.unset ?? []).map((unsetKey) => [Properties.normalizeKey(unsetKey), ''] as [string, string]),
     ];
     if (!entries.length) {
-      throw usageError('Nothing to set: pass key=value pairs (or --unset <key>)', { element: command.id, hint: `Settable keys: ${PropertyCoercer.settableKeys(this.edit.doc, el).join(', ')}` });
+      throw usageError('Nothing to set: pass key=value pairs (or --unset <key>)', { element: command.id, hint: `Settable keys: ${SetKeyCatalog.settableKeys(this.edit.doc, el).join(', ')}` });
     }
     const eventKeys = new Map<string, string>();
     const conditionKeys = new Map<string, string>();
@@ -120,11 +120,12 @@ export class Properties {
     const detail = value ? `${key}=${value}` : `${key} removed`;
     const write = SetKeyCatalog.writerOf(key);
     if (write) {
-      if (write({ edit: this.edit, changes }, el, value, key) === 'recorded by the key') return;
+      if (write({ edit: this.edit, changes, properties: this }, el, value, key) === 'recorded by the key') return;
     } else if (key.includes(':')) {
       if (value && new ZeebeSubscription(this.edit.doc).setCorrelationKey(el, key, value, changes)) return;
       if (value) this.assertVendorHost(el, key, value);
       if (value) this.assertZeebeHost(el, key, value);
+      SetKeyCatalog.assertVendorKey(this.edit.doc, el, key);
       new PropertyCoercer(this.edit).setVendorAttribute(el, key, value);
     } else this.setModelProperty(el, key, value);
     changes.change(ChangeSet.entryOf(el, detail));
@@ -167,7 +168,7 @@ export class Properties {
       return;
     }
     if (!descriptorOf(el).propertiesByName?.['default']) {
-      throw PropertyCoercer.unknownKey(this.edit.doc, el, 'default', 'only exclusive/inclusive/complex gateways, activities and sequence flows have a default');
+      throw SetKeyCatalog.unknownKey(this.edit.doc, el, 'default', 'only exclusive/inclusive/complex gateways, activities and sequence flows have a default');
     }
     if (!value) {
       el.set('default', undefined);
@@ -256,10 +257,10 @@ export class Properties {
   setModelProperty(el: El, key: string, value: string): void {
     if (PropertyCoercer.removeUndefined(el, key, value)) return;
     const property = descriptorOf(el).propertiesByName?.[key];
-    if (!property || key === 'id') throw PropertyCoercer.unknownKey(this.edit.doc, el, key);
+    if (!property || key === 'id') throw SetKeyCatalog.unknownKey(this.edit.doc, el, key);
     const blocked = PropertyCoercer.blockedReason(key);
-    if (blocked) throw PropertyCoercer.unknownKey(this.edit.doc, el, key, blocked);
-    if (!PropertyCoercer.isSettable(this.edit.doc, property)) throw PropertyCoercer.unknownKey(this.edit.doc, el, key, `${key} is not an attribute`);
+    if (blocked) throw SetKeyCatalog.unknownKey(this.edit.doc, el, key, blocked);
+    if (!PropertyCoercer.isSettable(this.edit.doc, property)) throw SetKeyCatalog.unknownKey(this.edit.doc, el, key, `${key} is not an attribute`);
     if (!value) {
       el.set(key, undefined);
       return;
