@@ -16,11 +16,9 @@ import type { EngineKit } from '../engine-kit.js';
  */
 export class PublishMessages {
   readonly hosts = new Set<string>();
-  private readonly ns: DocumentNamespaces;
   private readonly prefix: string;
 
-  constructor(private readonly kit: EngineKit, private readonly doc: Doc) {
-    this.ns = new this.kit.DocumentNamespaces(doc);
+  constructor(private readonly kit: EngineKit, private readonly doc: Doc, private readonly ns: DocumentNamespaces) {
     this.prefix = this.ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe';
   }
 

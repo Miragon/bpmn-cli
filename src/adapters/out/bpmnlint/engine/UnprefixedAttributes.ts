@@ -19,7 +19,6 @@ const SLOTS: Array<[string, string]> = [['eventDefinitions', 'definition'], ['lo
  * them: bpmn-cli reads its own model, where they stay what the file says.
  */
 export class UnprefixedAttributes {
-  private readonly ns: DocumentNamespaces;
   private readonly code: string;
   private readonly prefix: string;
 
@@ -27,8 +26,8 @@ export class UnprefixedAttributes {
     private readonly kit: EngineKit,
     private readonly doc: Doc,
     private readonly platform: 'c7' | 'c8',
+    private readonly ns: DocumentNamespaces,
   ) {
-    this.ns = new this.kit.DocumentNamespaces(doc);
     this.code = platform === 'c8' ? 'W_C8_DEPLOY_SCHEMA' : 'W_C7_DEPLOY_SCHEMA';
     this.prefix = platform === 'c8' ? 'zeebe' : (this.ns.prefixOf(this.kit.CAMUNDA.uri) ?? 'camunda');
   }

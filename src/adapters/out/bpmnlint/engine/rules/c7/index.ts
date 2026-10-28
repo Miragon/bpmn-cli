@@ -54,7 +54,7 @@ export class Camunda7Rules {
     CamundaDescriptor.use(kit.CAMUNDA_DESCRIPTOR);
     const lint = camunda7.withRules('bpmn-cli', Camunda7Rules.RULES);
     return {
-      createResolver: () => lint.createResolver(),
+      lint: (root, config) => lint.lint(root, config),
       lintConfig: (version) => lint.lintConfig(version),
       afterParse: (definitions, warnings, vendor) => C7Diagram.record(definitions, vendor, warnings),
     };

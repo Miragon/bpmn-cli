@@ -18,7 +18,6 @@ import type { EngineKit } from '../engine-kit.js';
  * Like the engines, only executable processes count.
  */
 export class UnknownVendorElements {
-  private readonly ns: DocumentNamespaces;
   private readonly code: string;
   private readonly prefix: string;
 
@@ -26,8 +25,8 @@ export class UnknownVendorElements {
     private readonly kit: EngineKit,
     private readonly doc: Doc,
     private readonly platform: 'c7' | 'c8',
+    private readonly ns: DocumentNamespaces,
   ) {
-    this.ns = new this.kit.DocumentNamespaces(doc);
     this.code = platform === 'c8' ? 'W_C8_UNKNOWN_ELEMENT' : 'W_C7_UNKNOWN_ELEMENT';
     this.prefix = platform === 'c8' ? (this.ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe') : (this.ns.prefixOf(this.kit.CAMUNDA.uri) ?? 'camunda');
   }

@@ -4,7 +4,6 @@ import { ioError } from '../../../domain/document/utils/errors.js';
 import { firstLine } from '../../../domain/document/utils/text.js';
 import type { EnginePlatformInfo } from '../../../domain/validation/EngineLint.js';
 import type { EngineLintPort } from '../../../application/port/out/EngineLintPort.js';
-import type { BpmnlintLinterClass } from './bpmnlint-contract.js';
 import { ENGINE_KIT } from './engine-kit.js';
 import type { EngineRun } from './engine/EngineRun.js';
 
@@ -18,12 +17,12 @@ const ENGINE_NAMES: Record<Engine, string> = { c7: 'Camunda 7', c8: 'Camunda 8' 
  */
 const LOADERS: Record<Engine, () => Promise<EngineRun>> = {
   c7: async () => {
-    const [{ Camunda7Rules }, linter, { EngineRun }] = await Promise.all([import('./engine/rules/c7/index.js'), import('bpmnlint/lib/linter.js'), import('./engine/EngineRun.js')]);
-    return new EngineRun(ENGINE_KIT, 'c7', Camunda7Rules.lint(ENGINE_KIT), linter.default as unknown as BpmnlintLinterClass);
+    const [{ Camunda7Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c7/index.js'), import('./engine/EngineRun.js')]);
+    return new EngineRun(ENGINE_KIT, 'c7', Camunda7Rules.lint(ENGINE_KIT));
   },
   c8: async () => {
-    const [{ Camunda8Rules }, linter, { EngineRun }] = await Promise.all([import('./engine/rules/c8/index.js'), import('bpmnlint/lib/linter.js'), import('./engine/EngineRun.js')]);
-    return new EngineRun(ENGINE_KIT, 'c8', Camunda8Rules.lint(ENGINE_KIT), linter.default as unknown as BpmnlintLinterClass);
+    const [{ Camunda8Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c8/index.js'), import('./engine/EngineRun.js')]);
+    return new EngineRun(ENGINE_KIT, 'c8', Camunda8Rules.lint(ENGINE_KIT));
   },
 };
 

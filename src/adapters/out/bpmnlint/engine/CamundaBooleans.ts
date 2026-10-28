@@ -16,11 +16,8 @@ const SLOTS: Array<[string, string]> = [['eventDefinitions', 'definition.'], ['l
  * bpmnlint rule sees it; bpmn-cli's model keeps the text.
  */
 export class CamundaBooleans {
-  private readonly ns: DocumentNamespaces;
 
-  constructor(private readonly kit: EngineKit, private readonly doc: Doc) {
-    this.ns = new this.kit.DocumentNamespaces(doc);
-  }
+  constructor(private readonly kit: EngineKit, private readonly doc: Doc, private readonly ns: DocumentNamespaces) {}
 
   findings(): ProfileFinding[] {
     const out: ProfileFinding[] = [];
