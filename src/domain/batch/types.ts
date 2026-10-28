@@ -21,11 +21,6 @@ export interface MutationOptions extends DrawingOptions {
   validators?: Validator[];
   /** the file being written, for the validators; default doc.file */
   file?: string;
-  /**
-   * true keeps a flow's id when an op gives it other ends (where flow ids are API, e.g.
-   * generated code); false renames a flow whose id names its old ends
-   */
-  keepFlowIds?: boolean;
   /** declared id conventions, followed by generated ids where they declare a prefix */
   conventions?: IdConventions;
 }

@@ -100,12 +100,6 @@ creates (new node -> old successor), so the same batch can give it a condition:
 }
 ```
 
-## Flow ids in a batch
-
-With `apply --keep-flow-ids` a flow the file had keeps its id through the whole batch unless an op
-removes it, and the result names stale ids with `W_FLOW_ID_STALE` instead of renaming them.
-A `move` puts the moved node's out-flow back at its new place, so a flow between nodes moved
-together stays theirs.
 
 ## A full example
 

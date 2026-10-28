@@ -58,8 +58,6 @@ export interface EditOptions {
   validators?: Validator[];
   /** the document's file name, for the validators (`ctx.file`) */
   file?: string;
-  /** keep existing flow ids when the ops give the flow other ends (`--keep-flow-ids`) */
-  keepFlowIds?: boolean;
   /** new ids follow them where they declare a prefix, bpmn-cli's own prefix for the types they leave out; absent: element-id-naming's defaults */
   conventions?: IdConventions;
   /** include the model view of the result (`--show`) */

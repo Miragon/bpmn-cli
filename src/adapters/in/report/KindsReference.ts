@@ -162,15 +162,8 @@ export class KindsReference {
     out.push('runs (E_UNKNOWN_ALIAS, listing the aliases defined so far); the result lists alias -> final id ("aliases:" line,');
     out.push('`aliases` in --json) and the old -> new id of a flow it renamed after its new ends ("renamed:" with --summary, `renamed`).');
     out.push('An alias follows its element through a rename and a retype (also to another type: create, retype, then configure).');
-    out.push('With --keep-flow-ids a flow the file had keeps its id through the whole batch unless an op removes it (the flows of a');
-    out.push('removed node, the out-flow a bridge replaces: "removed:"), so later ops can use it; a move puts the moved node\'s');
-    out.push('out-flow back at its new place, with its id, documentation and extensions (its name, condition and annotations stay');
-    out.push('with the bridge, its change says which, and it is no longer a default flow; a node that is not bridged, or whose');
-    out.push('bridge a later node of the move removed, drops name and condition, W_LABEL_DROPPED, W_CONDITION_DROPPED, unless the');
-    out.push('flow is put back between its old ends; a "flowId" on a move that prepends names a new flow node -> anchor instead).');
-    out.push('The result names the stale ones (W_FLOW_ID_STALE) instead. A flow the batch created still follows its ends: name it');
-    out.push('where an op creates it, with "flowAs" on an add that appends or prepends and on split nodes, "outAs" on an add that');
-    out.push('splices, prepends or has "to", or "as" on connect. On a splice "flowAs" names the kept flow into the node and "outAs"');
+    out.push('Name a flow where an op creates it, with "flowAs" on an add that appends or prepends and on split nodes, "outAs"');
+    out.push('on an add that splices, prepends or has "to", or "as" on connect. On a splice "flowAs" names the kept flow into the node and "outAs"');
     out.push('the new flow node -> old successor, so the batch that splices a gateway in can set that flow\'s condition or make it');
     out.push('the default.');
     out.push('\nExample (after `bpmn new order.bpmn --name "Order handling" --target camunda8`, start -> "Check invoice" -> end):');

@@ -2,9 +2,6 @@ import type { Finding } from '../../../domain/document/Finding.js';
 import { renderProblems } from './utils/result-lines.js';
 import { FLOOD_MIN, floodKey, idsText, validatorTag, warningTag } from './utils/findings.js';
 
-/** Never flooded: each hint is the command for that one element. */
-const NEVER_FLOOD = new Set(['W_FLOW_ID_STALE']);
-
 /** bpmn-cli's own codes about an advisory validator: not rules, one line each. */
 const NO_RULE = new Set(['W_LINT_UNAVAILABLE', 'W_LINT_FAILED', 'W_CONFIG_IGNORED', 'import-warning']);
 
@@ -27,7 +24,7 @@ export class WarningLines {
     for (const warning of warnings) {
       const key = keyOf(warning);
       const group = groups.get(key)!;
-      if (group.length < FLOOD_MIN || NEVER_FLOOD.has(warning.code)) {
+      if (group.length < FLOOD_MIN) {
         out.push(WarningLines.warningLine(warning));
         continue;
       }

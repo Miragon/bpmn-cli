@@ -7,13 +7,6 @@ import { renamedNote } from '../../document/utils/renames.js';
 import { EventGatewayRule } from '../events/EventGatewayRule.js';
 import { SequenceFlows } from './SequenceFlows.js';
 
-/** The in-flow now running to the successor, the removed out-flow and what it took over. */
-export interface BridgedFlow {
-  flow: El;
-  from: El;
-  took: { name?: string; condition?: El; associations: El[] };
-}
-
 /** Hints differ per command: `move` has no --no-bridge. */
 export type BridgeCommand = 'remove' | 'move';
 
@@ -39,7 +32,7 @@ export class FlowBridge {
     } else this.single(node, bridge, removing);
   }
 
-  single(node: El, bridge: boolean, removing?: ReadonlySet<string>): BridgedFlow | undefined {
+  single(node: El, bridge: boolean, removing?: ReadonlySet<string>): void {
     const doc = this.edit.doc;
     const incoming = doc.incoming(node);
     const outgoing = doc.outgoing(node);
@@ -51,10 +44,10 @@ export class FlowBridge {
     if (predecessor === successor && !FlowBridge.canLoopToItself(predecessor)) {
       this.detach(node, false);
       if (predecessor !== node) this.changes.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
-      return undefined;
+      return;
     }
     this.assertAllowed(node, inFlow, outFlow, removing);
-    return this.detach(node, true);
+    this.detach(node, true);
   }
 
   /** Exception paths of the group's boundary events are not exits: the move drops them. */
@@ -89,7 +82,7 @@ export class FlowBridge {
   }
 
   /** Detaches the flows of the node; a self-loop, both incoming and outgoing, is removed and reported once. */
-  private detach(node: El, bridge: boolean): BridgedFlow | undefined {
+  private detach(node: El, bridge: boolean): void {
     const { changes } = this;
     const doc = this.edit.doc;
     const incoming = doc.incoming(node);
@@ -97,27 +90,27 @@ export class FlowBridge {
     if (bridge && incoming.length === 1 && outgoing.length === 1) {
       const inFlow = incoming[0]!;
       const outFlow = outgoing[0]!;
-      if (outFlow.get<El>('targetRef') !== node && inFlow.get<El>('sourceRef') !== node) return this.carry(inFlow, outFlow, idOf(node), 'node');
+      if (outFlow.get<El>('targetRef') !== node && inFlow.get<El>('sourceRef') !== node) {
+        this.carry(inFlow, outFlow, idOf(node), 'node');
+        return;
+      }
     }
     for (const flow of new Set([...incoming, ...outgoing])) {
       changes.remove(ChangeSet.flowEntryOf(flow));
       new SequenceFlows(this.edit).remove(flow, changes);
     }
-    return undefined;
   }
 
   /** Carries the in-flow on to the out-flow's target; under the group policy the out-flow's id stays claimed, so a flow the move creates afterwards does not reuse it. */
-  private carry(inFlow: El, outFlow: El, via: string, policy: CarryPolicy): BridgedFlow {
+  private carry(inFlow: El, outFlow: El, via: string, policy: CarryPolicy): void {
     const { changes } = this;
     const doc = this.edit.doc;
     const predecessor = inFlow.get<El>('sourceRef');
     const successor = outFlow.get<El>('targetRef');
     const outName = outFlow.get<string | undefined>('name');
     const outCond = outFlow.get<El | undefined>('conditionExpression');
-    const took: BridgedFlow['took'] = { associations: [] };
     if (outName && !inFlow.get<string | undefined>('name')) {
       inFlow.set('name', outName);
-      took.name = outName;
     } else if (outName) changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
     const ontoDefault = predecessor.get<El | undefined>('default') === inFlow;
     if (outCond && !inFlow.get<El | undefined>('conditionExpression') && ontoDefault && policy === 'node') {
@@ -131,16 +124,14 @@ export class FlowBridge {
     } else if (outCond && !inFlow.get<El | undefined>('conditionExpression') && !(ontoDefault && policy === 'group')) {
       inFlow.set('conditionExpression', outCond);
       if (policy === 'group') outCond.$parent = inFlow;
-      else took.condition = outCond;
     } else if (outCond) changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
-    took.associations = new SequenceFlows(this.edit).carryAssociations(outFlow, inFlow, changes);
+    new SequenceFlows(this.edit).carryAssociations(outFlow, inFlow, changes);
     new SequenceFlows(this.edit).remove(outFlow, changes);
     changes.remove(ChangeSet.flowEntryOf(outFlow));
     if (policy === 'group' && idOf(outFlow) && !doc.has(idOf(outFlow))) doc.ids.claim(idOf(outFlow));
     const renamed = new SequenceFlows(this.edit).redirect(inFlow, { target: successor });
     changes.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
     changes.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
-    return { flow: inFlow, from: outFlow, took };
   }
 
   private join(node: El, removing: ReadonlySet<string>): void {

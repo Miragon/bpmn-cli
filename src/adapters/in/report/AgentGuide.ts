@@ -156,17 +156,14 @@ const CONVENTIONS = [
 
 const OUTPUT = [
   '  A mutating command reports what changed, the warnings the change ADDED (three or more of one code as one line:',
-  '  `warning W_UNREACHABLE x20 [ids]: ...`; W_FLOW_ID_STALE keeps one line each), `resolved:` what it fixed, and one',
+  '  `warning W_UNREACHABLE x20 [ids]: ...`), `resolved:` what it fixed, and one',
   '  line counting the warnings the file already had (the platform profile\'s W_C7_* / W_C8_* among them; not repeated:',
   '  `bpmn validate <file>` lists them); then the layout block and the file line. A group warning (W_DUPLICATE_NAME)',
   '  that only shrank is the old one; an apply batch reports the warnings of its final state. The project\'s bpmnlint',
   '  (see BPMNLINT) is advisory: an error of it the change added is listed among the warnings',
-  '  (`warning [bpmnlint error] <rule> <id>: ...`). Where',
-  '  BPMN_KEEP_FLOW_IDS=1 kept the flow ids (no --keep-flow-ids / --no-keep-flow-ids given) and that changed the',
-  '  result (W_FLOW_ID_STALE, or a move put the node\'s old out-flow back), it says so, also with --summary:',
-  '  `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)` (JSON: notes); an E_NOT_FOUND of an apply batch, in its hint.',
+  '  (`warning [bpmnlint error] <rule> <id>: ...`).',
   '  --summary: `created <kind>: ids` per kind, `aliases:` (apply), `changed:`, `renamed: <old> -> <new>` (a flow whose id',
-  '  named its old ends: use the new id; with --keep-flow-ids it keeps its id and W_FLOW_ID_STALE names it) and',
+  '  named its old ends: use the new id) and',
   '  `removed:` ids, one `format <op> #<i>: ...` line per format op, the added warnings, one `warnings:` count line (what',
   '  is already in the file includes the project\'s bpmnlint findings) and',
   '  one layout line (`layout: incremental, score 12 -> 14; added: crossings [flow_aToB, flow_cToD]`).',
@@ -227,9 +224,7 @@ export class AgentGuide {
         '    taken id gets 2 (W_ID_SUFFIXED; an unnamed gateway or task says its kind first, gateway_parallelAfterCheck,',
         '    then the unnamed anchor it follows, task_afterCheckGateway).',
         '    A flow names an unnamed gateway by its id (flow_checkToAfterCheck). A flow whose id names its ends is',
-        '    renamed when a splice or bridge changes them (the result says so). Where flow ids are API (generated code,',
-        '    process tests), --keep-flow-ids or BPMN_KEEP_FLOW_IDS=1 keeps them; W_FLOW_ID_STALE then names each flow',
-        '    whose id no longer names its ends, with the `bpmn set` that renames it.',
+        '    renamed when a splice or bridge changes them (the result says so).',
         '    Every result names the ids it created; use them in the next command. In `apply`, name what an op creates',
         '    with an alias ("as": "$check"; add: "flowAs" for the flow into the node, "outAs" for the flow it creates out of',
         '    it; split: "joinAs"; "refAs": the message, error, signal or escalation the element references) and use the',
@@ -387,8 +382,7 @@ export class AgentGuide {
     out.push('  validation: {errors, platform?, validators?: [{name, detail?, blocks?, errors, warnings, preexisting, resolved, counts,');
     out.push('  leftOut?: [{reason, count}]}]}, importWarnings, view?, conventions?: {ids, source}}. With --summary --json: {ok, file,');
     out.push('  written, unchanged, created: {<kind>: [ids]}, changed, removed, forced?, warnings: {added, resolvedCount, preexistingCount},');
-    out.push('  leftOut?: [{validator, reason, count}], layout: {status, mode?, score?: {before?, after}, added?}, conventions?, notes? (only');
-    out.push('  the note of flow ids BPMN_KEEP_FLOW_IDS kept, see OUTPUT)}.');
+    out.push('  leftOut?: [{validator, reason, count}], layout: {status, mode?, score?: {before?, after}, added?}, conventions?}.');
     out.push('  A validator\'s findings (the project\'s bpmnlint; a host\'s validators in library use) carry `validator` and');
     out.push('  `severity`; in text they read "[<name>] <code> <element>: <message>" ("[bpmnlint error] <rule> ..." for a bpmnlint');
     out.push('  error, "warning [bpmnlint error] <rule> ..." when a write added it: bpmnlint is advisory, `blocks: false`).');
@@ -443,7 +437,6 @@ export class AgentGuide {
         '  bpmn add <f> <kind[:trigger]> [name] [--after|--before|--flow|--in|--on <id>] [--id <id>] [key=value ...]',
         '  bpmn connect|set|remove|retype|move|order|ext ...     bpmn apply <f> ops.json   (one transaction, one layout)',
         '  Options: --summary (short result), --dry-run, -o <file|->, --json [--pretty]; `-` as <f> reads stdin.',
-        '  Flow ids are API (generated code, tests)? --keep-flow-ids keeps them; W_FLOW_ID_STALE names a stale one.',
       ].join('\n'),
     );
     out.push(heading('OPS JSON  (bpmn apply; {"op": "<name>", ...}; * = required)'));

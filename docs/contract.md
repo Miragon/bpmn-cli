@@ -65,10 +65,8 @@ A write rewrites only the elements the change touched, so a git diff shows only 
 - Broken links in hand-edited files are not repaired; `bpmn validate` reports them.
 - The Camunda 8 profile checks FEEL syntax, not meaning. The engine finds the rest.
 - A flow id that names its ends is renamed when an edit changes its ends (a splice, a
-  `move`, `set source=`). Where flow ids are API (generated code, tests), `--keep-flow-ids` keeps
-  them, and `W_FLOW_ID_STALE` names each flow whose id no longer fits, with the `bpmn set` that
-  renames it. `BPMN_KEEP_FLOW_IDS=1` makes that the default of a shell
-  ([Environment](reference.md#environment)). Library: `keepFlowIds: true`.
+  `move`, `set source=`). Code that names flow ids (generated code, tests) follows the
+  `renamed:` report.
 
 ::: warning Merges can produce duplicate ids
 Two branches that each add an element of the same name get the same id. The next read refuses the

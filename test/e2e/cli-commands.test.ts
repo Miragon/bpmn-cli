@@ -58,12 +58,4 @@ describe('Cli in-process', () => {
     expect(JSON.parse(json.err)).toMatchObject({ ok: false, error: { code: 'E_USAGE' } });
   });
 
-  it('reads the environment it is given, not the process environment', async () => {
-    const io = { env: { BPMN_KEEP_FLOW_IDS: 'maybe' } };
-    let err = '';
-    const cli = new Cli('9.9.9', FILE_USE_CASES, { stdout: { write: () => true }, stderr: { write: (chunk: string | Uint8Array) => ((err += String(chunk)), true) }, stdin: Readable.from([]), ...io });
-    await cli.run(['node', 'bpmn', 'add', join(dir, 'order.bpmn'), 'userTask', 'K']);
-    expect(cli.exitCode).toBe(1);
-    expect(err).toContain('BPMN_KEEP_FLOW_IDS=maybe is not a switch value');
-  });
 });

@@ -548,32 +548,15 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(DOCS).toMatch(/alternately below and above/);
   });
 
-  it('documents keeping flow ids wherever renames are described (--keep-flow-ids, BPMN_KEEP_FLOW_IDS, W_FLOW_ID_STALE)', () => {
-    const keep = COMMON_OPTIONS.find((option) => option.option === '--keep-flow-ids')!;
-    expect(keep.description).toMatch(/W_FLOW_ID_STALE[\s\S]*BPMN_KEEP_FLOW_IDS=1/);
-    expect(COMMON_OPTIONS.map((option) => option.option)).toContain('--no-keep-flow-ids');
-    for (const [name, text] of Object.entries({ guide: guideText(), DOCS, library: repoFile('docs/library.md') })) {
-      for (const word of ['--keep-flow-ids', 'W_FLOW_ID_STALE']) expect(text, `${name}: ${word}`).toContain(word);
+  it('documents no way to keep flow ids: a flow whose id names its ends always follows them', () => {
+    expect(COMMON_OPTIONS.map((option) => option.option)).not.toContain('--keep-flow-ids');
+    const texts = { guide: guideText(), short: guideShort(), DOCS, library: repoFile('docs/library.md'), ops: repoFile('docs/ops.md'), skill: repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md') };
+    for (const [name, text] of Object.entries(texts)) {
+      for (const word of ['keep-flow-ids', 'keepFlowIds', 'BPMN_KEEP_FLOW_IDS', 'W_FLOW_ID_STALE']) expect(text, `${name}: ${word}`).not.toContain(word);
     }
-    expect(DOCS).toContain('BPMN_KEEP_FLOW_IDS=1');
-    expect(guideShort()).toContain('--keep-flow-ids');
-    expect(catalogue('W_FLOW_ID_STALE').fix).toContain('`bpmn set <file> <flowId> id=<newId>`');
-    // the first variable that can fail a command: the code an agent looks up names it
-    expect(catalogue('E_USAGE').meaning).toContain('BPMN_KEEP_FLOW_IDS');
-    expect(DOCS).not.toMatch(/the CLI has no switch/);
-    // a batch keeps the ids of the flows it does not remove; a move puts the node's out-flow back; outAs names a splice's new flow
     for (const [name, text] of Object.entries({ guide: guideText(), ops: repoFile('docs/ops.md') })) {
-      expect(text, name).not.toMatch(/every flow the file had keeps its id/);
-      expect(text, name).toMatch(/unless an op\s+removes it/);
-      expect(text, name).toMatch(/move`? puts the moved\s+node's\s+out-flow back/);
       expect(text, name).toMatch(/"outAs"`?\s+the\s+(new\s+)?flow\s+(the\s+splice\s+creates\s+\(new\s+)?node -> old\s+successor/);
       expect(text, name).not.toMatch(/has no alias/);
-    }
-    // the skill's pre-approved permission covers `bpmn ...`, not an inline variable in front of it
-    expect(repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md')).toMatch(/--keep-flow-ids[\s\S]*BPMN_KEEP_FLOW_IDS[\s\S]*not pre-approved/);
-    // a result whose flow ids the variable kept says so (src/adapters/in/cli/MutationCommand.ts keptByEnvNote): the reader may not see the variable
-    for (const [name, text] of Object.entries({ guide: guideText(), DOCS, skill: repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md') })) {
-      expect(text, name).toContain('`note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (');
     }
   });
 

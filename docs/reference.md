@@ -27,8 +27,7 @@ Hashes and running numbers are never copied. An unknown id (`E_NOT_FOUND`) comes
 were probably meant.
 
 A flow whose id names its ends in this form is renamed when an edit changes them (`renamed:` in the
-result); an older flow id (`Flow_AToB`) keeps its id. `--keep-flow-ids` keeps the id and reports
-`W_FLOW_ID_STALE` with the `bpmn set` that renames it.
+result); an older flow id (`Flow_AToB`) stays as it is.
 
 Names become ASCII words (`Prüfung buchen` gives `userTask_pruefungBuchen`), at most 40 characters
 of them: a longer name loses its last words, and a single longer word is cut at 40. An id has at
@@ -167,13 +166,8 @@ fix: `bpmn kinds --section errors`. `-` as the file reads the model from stdin.
 
 | variable | effect |
 | --- | --- |
-| `BPMN_KEEP_FLOW_IDS` | `1`, `true`, `yes`, `on`: every mutating command keeps flow ids, as with `--keep-flow-ids` |
 | `BPMN_LAYOUT_DEBUG` | layout diagnostics on stderr |
 | `BPMN_DEBUG` | the stack trace of an internal error |
-
-Where `BPMN_KEEP_FLOW_IDS=1` changed a result, the result says so, since the reader may not see
-the variable: `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (--no-keep-flow-ids renames flows after
-their new ends for one command)`.
 
 ## Quoting
 

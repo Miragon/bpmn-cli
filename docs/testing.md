@@ -25,12 +25,6 @@ bugs are open, a random campaign would hit them by chance. Layout quality is
 gated deterministically by the property test's fixed walks, the regression
 budget and `bench --compare`.
 
-None of the layers depends on the shell's `BPMN_KEEP_FLOW_IDS`: the unit
-tests clear it before every file (`test/helpers/setup.ts`), so the CLIs they spawn
-rename flows as by default, and the fuzzer, the benchmark, the layout
-regression and the demo run the CLI without it (`CLI_ENV` in
-`tools/fuzz/lib/setup.mjs`). A test that needs it sets it for its own spawn.
-
 ## Invariants
 
 The fuzzer and the property test check after every step
@@ -632,10 +626,9 @@ conventions, else element-id-naming's defaults, whatever ids the file has; bpmn-
 the types the rule does not check; the guard that `DEFAULT_ID_CONVENTIONS` equals the plugin's
 defaults), `test/domain/document/ids/speaking-ids.test.ts` and
 `test/domain/document/ids/id-style.test.ts` (renamed flows and their DI, also after an end got
-another id earlier in the batch; a flow id in an older form that keeps its id),
+another id earlier in the batch; a flow id in an older form that stays as it is),
 `test/domain/document/ids/id-quality.test.ts` (cuts to 64 characters, collisions,
-transliteration), `test/domain/editing/keep-flow-ids.test.ts` (flow ids kept with
-`--keep-flow-ids`, `W_FLOW_ID_STALE`, an end renamed or named earlier, `--flow-id` on a splice),
+transliteration),
 `test/domain/validation/conventions-*.test.ts` (declared conventions and the reader of the
 `.bpmnlintrc`), `test/domain/batch/batch-aliases.test.ts` (aliases in `apply`, on the command
 line too), `test/domain/document/not-found.test.ts` (the candidates of `E_NOT_FOUND`),

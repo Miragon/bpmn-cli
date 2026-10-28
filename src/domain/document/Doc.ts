@@ -59,8 +59,8 @@ export class Doc {
   private declared: IdConventions | undefined;
   readonly layoutRequests = new LayoutRequests();
   /**
-   * Whether a flow whose id names its ends is renamed when an op changes them.
-   * False keeps the ids of the flows the document had before the batch (reported W_FLOW_ID_STALE).
+   * Whether a flow whose id names its ends is renamed when an op changes them. Internal:
+   * BatchDrawing turns it off so bridged flows keep the ids their drawn edges are keyed by.
    */
   followFlowEnds = true;
 

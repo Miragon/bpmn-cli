@@ -119,19 +119,7 @@ installed version. Ask it instead of guessing:
    - `created` / `changed` / `removed` lines and `renamed: A -> B` (a flow whose
      id named its ends is renamed when a splice changes them: use the new id)
    - when flow ids are API (code generated from the model, e.g. bpmn-to-code,
-     or tests that name them), keep them: pass `--keep-flow-ids` to every
-     mutating command and `apply`, or ask the user to set `BPMN_KEEP_FLOW_IDS`
-     to `1` in the `env` of their Claude Code settings (an inline
-     `BPMN_KEEP_FLOW_IDS=1 bpmn ...` is not pre-approved). Then
-     `warning W_FLOW_ID_STALE <flowId>` names a flow whose id no longer names
-     its ends: tell the user; rename it (the `bpmn set` of its hint) only
-     together with the code that uses it. A result line
-     `note: flow ids kept: BPMN_KEEP_FLOW_IDS=1 (...)` means the user's
-     setting kept them although you passed no flag, and that made this
-     result differ: a `W_FLOW_ID_STALE` instead of `renamed:`, or a move
-     that put the node's old out-flow back instead of a new flow. An
-     `E_NOT_FOUND` in an `apply` batch whose hint names the variable: use
-     the flow's old id
+     or tests that name them), tell the user each `renamed:` so the code follows
    - `warning ...` lines are only the warnings **this change added**, each with
      a hint that is the fixing command; `resolved:` what it fixed; old warnings
      are only counted
@@ -306,7 +294,7 @@ Every command, selector and fix: [reference/formatting.md](reference/formatting.
 | `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; in a batch after other ops the hint names the space op to put before the place op; without one, move the shapes it names first. |
 | `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `outAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
 | `E_IMPORT_LOSSY` | The file has content the reader would drop. Show the user `bpmn validate` output and ask before `--force`; do not repair the XML by hand. |
-| `E_USAGE` | Bad flag, ops key or `BPMN_KEEP_FLOW_IDS` value: the message names it; see `bpmn <command> --help`. A bad `BPMN_KEEP_FLOW_IDS` is in the user's settings: tell them; `--keep-flow-ids` / `--no-keep-flow-ids` decide for one command. |
+| `E_USAGE` | Bad flag or ops key: the message names it; see `bpmn <command> --help`. |
 
 Every code with its fix: `bpmn kinds --section errors`.
 
