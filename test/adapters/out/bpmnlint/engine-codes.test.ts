@@ -11,14 +11,11 @@ const ENGINES = [
   { platform: 'c8', entry: Camunda8Rules.entry(ENGINE_KIT), compatRules: c8CompatRules, major: 8 },
 ] as const;
 
-/** A rule as the results name it: `camunda-compat/<rule>`, `bpmn-cli/<rule>`, a bpmnlint rule bare. */
-const resultKey = (rule: string): string => (rule.startsWith('bpmnlint/') ? rule.slice('bpmnlint/'.length) : rule);
-
 describe('every engine rule has a bpmn-cli code', () => {
   for (const { platform, entry, compatRules, major } of ENGINES) {
     it(`${platform}: the rules of every camunda-compat version, and each finding of bpmn-cli's own`, () => {
       const rules = new Set<string>();
-      for (let minor = 0; minor < 40; minor++) for (const rule of compatRules(`${major}.${minor}`)) rules.add(resultKey(rule.name));
+      for (let minor = 0; minor < 40; minor++) for (const rule of compatRules(`${major}.${minor}`)) rules.add(rule.name);
       expect(rules.size).toBeGreaterThan(0);
       expect([...rules].filter((rule) => !EngineCodes.TABLE[platform][rule]).sort()).toEqual([]);
       expect(Object.keys(EngineCodes.TABLE[platform]).filter((rule) => !rules.has(rule)).sort()).toEqual([]);

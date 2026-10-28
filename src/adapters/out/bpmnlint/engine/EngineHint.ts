@@ -154,7 +154,7 @@ export class EngineHint {
     const id = String(host.id);
     const type = report.data?.type;
     const path = report.path ?? [];
-    if (rule === 'start-event-required') return host.$type === 'bpmn:Process' ? `\`bpmn add <file> startEvent "<Name>" --before <firstNodeId>\` (or --in ${id}).` : `\`bpmn add <file> startEvent "<Name>" --in ${id}\`, then connect it to the first node.`;
+    if (rule === 'bpmnlint/start-event-required') return host.$type === 'bpmn:Process' ? `\`bpmn add <file> startEvent "<Name>" --before <firstNodeId>\` (or --in ${id}).` : `\`bpmn add <file> startEvent "<Name>" --in ${id}\`, then connect it to the first node.`;
     if (rule === 'camunda-compat/history-time-to-live') return `\`bpmn set <file> ${id} camunda:historyTimeToLive=180\` (days, like Camunda Modeler; P180D works too).`;
     if (type === 'camunda.propertyNotAllowed' && path[path.length - 1] === 'timeCycle') return this.timerCycle(id, host);
     if (type === 'camunda.elementTypeNotAllowed') return this.unsupported(id, host, report);

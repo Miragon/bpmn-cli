@@ -5,7 +5,7 @@ type EngineCode = string | { default: string; [dataType: string]: string };
 
 /**
  * The bpmn-cli code of every camunda-compat rule, keyed as bpmnlint reports it (`camunda-compat/<rule>`,
- * a bpmnlint rule bare): the agent-facing W_C7_* / W_C8_* codes. bpmn-cli's own rules declare theirs.
+ * `bpmnlint/<rule>`): the agent-facing W_C7_* / W_C8_* codes. bpmn-cli's own rules declare theirs.
  */
 export class EngineCodes {
   static readonly TABLE: Readonly<Record<'c7' | 'c8', Readonly<Record<string, EngineCode>>>> = {
@@ -13,7 +13,7 @@ export class EngineCodes {
       'camunda-compat/history-time-to-live': 'W_C7_DEPLOY_HISTORY_TTL',
     },
     c8: {
-      'start-event-required': 'W_C8_DEPLOY_START_EVENT',
+      'bpmnlint/start-event-required': 'W_C8_DEPLOY_START_EVENT',
       'camunda-compat/ad-hoc-sub-process': 'W_C8_DEPLOY_AD_HOC_SUBPROCESS',
       'camunda-compat/agent-fromai-contract': 'W_C8_DEPLOY_EXTENSION',
       'camunda-compat/agent-tool-documentation': 'W_C8_DEPLOY_EXTENSION',

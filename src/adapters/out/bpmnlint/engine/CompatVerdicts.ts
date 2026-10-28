@@ -23,7 +23,7 @@ const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 
 };
 
 /** Rules of camunda-compat's configs that do not skip the processes the engine does not run. */
-const EXECUTABLE_ONLY = ['start-event-required', 'camunda-compat/history-time-to-live'];
+const EXECUTABLE_ONLY = ['bpmnlint/start-event-required', 'camunda-compat/history-time-to-live'];
 /** It reports a send task with a zeebe:publishMessage as one without an implementation. */
 const COMPAT_IMPLEMENTATION = 'camunda-compat/implementation';
 
