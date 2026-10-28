@@ -128,13 +128,13 @@ class C7Values extends C7Rule {
     this.report('c7-form', node, `${describeElement(node)} has ${prefix}:formRef but ${found} (one of ${FORM_BINDINGS.join(', ')} is required); the engines refuse the file`, { path: ['formRefBinding'], ...problem, hint: `\`bpmn set <file> ${node.id} ${prefix}:formRefBinding=latest\`.` });
   }
 
-  /** A loop needs a cardinality or a collection (a `loopDataInputRef` counts, the engines read it as a variable name), a non-empty cardinality, and a collection for an element variable. */
+  /** A loop needs a cardinality or a collection (a `loopDataInputRef` counts, the engines read it as a variable name, also one that is no id of the file), a non-empty cardinality, and a collection for an element variable. */
   private checkMultiInstance(node: ModdleElement, prefix: string): void {
     const loop = node.get('loopCharacteristics');
     if (!loop || !is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) return;
     const loopAttributes = new CamundaAttributes(loop);
     const cardinality = loop.get('loopCardinality');
-    const hasCollection = loopAttributes.defined('collection') !== undefined || !!loop.get('loopDataInputRef');
+    const hasCollection = loopAttributes.defined('collection') !== undefined || !!loop.get('loopDataInputRef') || C7Diagram.unresolved(loop).has('loopDataInputRef');
     const label = describeElement(node);
     const id = node.id;
     if (!cardinality && !hasCollection) {

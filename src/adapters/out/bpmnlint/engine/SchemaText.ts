@@ -3,6 +3,7 @@ import type { BpmnModdle } from 'bpmn-moddle';
 import type { XElement } from '../../../../domain/document/utils/text-reader.js';
 
 import { BpmnSchema, BPMNDI_NS } from './BpmnSchema.js';
+import { Values } from './rules/Values.js';
 
 const OPAQUE = new Set(['extensionElements', 'documentation']);
 
@@ -24,10 +25,6 @@ const IDREF_CHILDREN: Array<[string, string[]]> = [
 
 const XSD_BOOLEAN = /^[ \t\r\n]*(?:true|false|1|0)[ \t\r\n]*$/;
 import type { EngineKit } from '../engine-kit.js';
-
-/** XML 1.0 fifth edition: what the schema's xsd:ID allows. */
-const NCNAME_START = 'A-Z_a-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD\\u{10000}-\\u{EFFFF}';
-const NCNAME = new RegExp(`^[${NCNAME_START}][${NCNAME_START}\\-.0-9\\u00B7\\u0300-\\u036F\\u203F-\\u2040]*$`, 'u');
 
 export interface SchemaTextIssue {
   kind: 'order' | 'idref' | 'id' | 'boolean';
@@ -72,9 +69,7 @@ export class SchemaText {
         const id = this.attr(el, 'id');
         if (id !== undefined) {
           ids.add(id.trim());
-          if (!NCNAME.test(id.trim())) {
-            out.push({ kind: 'id', owner: id.trim(), element: el.local, value: id.trim() });
-          }
+          if (!Values.isNcName(id.trim())) out.push({ kind: 'id', owner: id.trim(), element: el.local, value: id.trim() });
           here = id.trim();
         }
         const type = schema.typeOf(el.local, el.uri, undefined);

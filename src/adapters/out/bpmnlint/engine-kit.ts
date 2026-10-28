@@ -7,7 +7,6 @@ import { decodeXml, elementChildren, readXmlText } from '../../../domain/documen
 import { C7_URIS, CAMUNDA, CAMUNDA_URI, OPERATON_URI } from '../../../domain/document/vendor/CamundaDescriptor.js';
 import { DocumentNamespaces } from '../../../domain/document/vendor/DocumentNamespaces.js';
 import { ZEEBE } from '../../../domain/document/vendor/ZeebeDescriptor.js';
-import { ZEEBE_DESCRIPTOR } from '../../../domain/document/vendor/zeebe-descriptor.js';
 import { XmlTextError } from '../../../domain/document/xml/XmlTextError.js';
 import { DecisionLinkReader } from '../../../domain/editing/properties/DecisionLinkReader.js';
 
@@ -37,7 +36,6 @@ export const ENGINE_KIT = {
   OPERATON_URI,
   DocumentNamespaces,
   ZEEBE,
-  ZEEBE_DESCRIPTOR,
   XmlTextError,
   DecisionLinkReader,
 };

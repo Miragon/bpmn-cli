@@ -1,12 +1,7 @@
-import type { Doc } from '../../../../domain/document/Doc.js';
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
-
-
 import type { El } from '../../../../domain/document/utils/moddle.js';
-
-
-import type { DocumentNamespaces } from '../../../../domain/document/vendor/DocumentNamespaces.js';
-import type { EngineKit } from '../engine-kit.js';
+import { OwnModelCheck } from './OwnModelCheck.js';
+import { describeElement } from './rules/describe.js';
 
 /**
  * `zeebe:publishMessage`, which Camunda 8.9 checks but does not run. zeebe-bpmn-moddle does not
@@ -14,23 +9,17 @@ import type { EngineKit } from '../engine-kit.js';
  * send task as one without an implementation. bpmn-cli's model keeps it; `hosts` are the elements
  * whose implementation findings it answers.
  */
-export class PublishMessages {
+export class PublishMessages extends OwnModelCheck {
   readonly hosts = new Set<string>();
-  private readonly prefix: string;
-
-  constructor(private readonly kit: EngineKit, private readonly doc: Doc, private readonly ns: DocumentNamespaces) {
-    this.prefix = this.ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe';
-  }
+  private readonly prefix = this.ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe';
 
   findings(): ProfileFinding[] {
     const out: ProfileFinding[] = [];
-    for (const proc of this.doc.processes().filter((candidate) => this.kit.peek<boolean>(candidate, 'isExecutable') === true)) {
-      for (const el of this.kit.walk(proc, { bpmnOnly: true })) {
-        if (this.kit.is(el, 'bpmn:SendTask')) this.check(el, el, out);
-        else if (this.kit.is(el, 'bpmn:IntermediateThrowEvent') || this.kit.is(el, 'bpmn:EndEvent')) {
-          const definition = this.kit.list(el, 'eventDefinitions').find((candidate) => this.kit.is(candidate, 'bpmn:MessageEventDefinition'));
-          if (definition) this.check(el, definition, out);
-        }
+    for (const el of this.executableElements()) {
+      if (this.kit.is(el, 'bpmn:SendTask')) this.check(el, el, out);
+      else if (this.kit.is(el, 'bpmn:IntermediateThrowEvent') || this.kit.is(el, 'bpmn:EndEvent')) {
+        const definition = this.kit.list(el, 'eventDefinitions').find((candidate) => this.kit.is(candidate, 'bpmn:MessageEventDefinition'));
+        if (definition) this.check(el, definition, out);
       }
     }
     return out;
@@ -40,7 +29,7 @@ export class PublishMessages {
     const publish = this.zeebe(host, 'publishMessage')[0];
     if (!publish) return;
     const id = this.kit.peek<string>(el, 'id')!;
-    const label = `${this.kit.kindLabel(el).charAt(0).toLowerCase()}${this.kit.kindLabel(el).slice(1)} ${id}`;
+    const label = describeElement(el);
     const name = `${this.prefix}:publishMessage`;
     const slot = host === el ? '' : 'definition.';
     this.hosts.add(id);

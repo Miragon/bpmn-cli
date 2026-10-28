@@ -32,27 +32,6 @@ const ENGINE_NAMES: Record<Engine, string> = { c7: 'Camunda 7', c8: 'Camunda 8' 
 const EXECUTION_PLATFORMS: Record<Engine, string> = { c7: 'Camunda Platform', c8: 'Camunda Cloud' };
 
 /**
- * Where bpmn-cli reads camunda-compat's severity differently: a user task needs no form to run,
- * and a job worker user task works (the engines' layers would say runtime for both); Camunda 7.20+
- * refuses a process without a history time to live unless the engine sets a default.
- * c8-feel-expression checks FEEL with the grammar Camunda 8 accepts, names and values without = too.
- */
-const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 'off'>> = {
-  c7: { 'camunda-compat/history-time-to-live': 'error' },
-  c8: {
-    'camunda-compat/feel': 'off',
-    'camunda-compat/user-task-definition': 'off',
-    'camunda-compat/zeebe-user-task': 'info',
-  },
-};
-
-/** It reports a send task with a zeebe:publishMessage as one without an implementation. */
-const COMPAT_IMPLEMENTATION = 'camunda-compat/implementation';
-const C7_MULTI_INSTANCE = 'c7-multi-instance';
-/** Rules of camunda-compat's configs that do not skip the processes the engine does not run. */
-const EXECUTABLE_ONLY = ['start-event-required', 'camunda-compat/history-time-to-live'];
-
-/**
  * One engine's rules on a document, loaded on demand: camunda-compat's config for the file's
  * engine version and bpmn-cli's own rules, on the document parsed again
  * with the engine's moddle extension. The checks a typed parse cannot see (unknown vendor
@@ -77,23 +56,19 @@ export class EngineRun {
     const { rootElement, elementsById, warnings } = await this.moddle.fromXML(this.lintedXml(await doc.toXml(), info, ns));
     this.entry.afterParse?.(rootElement, warnings, this.vendor(ns, info));
     (rootElement as unknown as { $attrs: Record<string, unknown> }).$attrs['modeler:executionPlatform'] = EXECUTION_PLATFORMS[this.engine];
-    const results = lintRules(rootElement, this.withOverrides(this.entry.rules(info.version))) as Record<string, BpmnlintEngineReport[]>;
+    const verdicts = new CompatVerdicts(this.kit, this.engine, doc, elementsById, info.version);
+    const results = lintRules(rootElement, verdicts.rules(this.entry.rules(info.version))) as Record<string, BpmnlintEngineReport[]>;
     const failures = this.failuresOf(results);
-    this.withoutUnresolvedLoopInputs(results, warnings);
-    this.withoutNonExecutableProcesses(results, doc);
-    const published = this.engine === 'c8' ? new PublishMessages(this.kit, doc, ns) : undefined;
-    const ownFindings = published ? published.findings() : new CamundaBooleans(this.kit, doc, ns).findings();
-    if (published) {
-      this.withoutPublishedImplementations(results, published);
-      new CompatVerdicts(elementsById, info.version).apply(results);
-    }
+    const published = this.engine === 'c8' ? new PublishMessages(this.kit, doc, ns, this.engine) : undefined;
+    const ownFindings = published ? published.findings() : new CamundaBooleans(this.kit, doc, ns, this.engine).findings();
+    verdicts.apply(results, published?.hosts);
     const lint = new EngineFindings(this.kit, this.engine, elementsById, this.entry.findings, (id, key) => this.spelling(doc, ns, id, key), ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe').of(results);
     const findings = [
       ...lint,
-      ...new UnprefixedAttributes(this.kit, doc, this.engine, ns).findings(),
+      ...new UnprefixedAttributes(this.kit, doc, ns, this.engine).findings(),
       ...ownFindings,
       ...[...failures].map(([rule, message]) => this.kit.makeFinding('practice', 'W_LINT_FAILED', `The ${ENGINE_NAMES[this.engine]} rule ${rule} failed: ${message}; its findings are left out`, undefined, { subject: `failed:${rule}`, hint: 'Report the file and the rule: it is a bug of the rule, not of the model.' })),
-      ...new UnknownVendorElements(this.kit, doc, this.engine, ns).findings(),
+      ...new UnknownVendorElements(this.kit, doc, ns, this.engine, this.moddle).findings(),
       ...(this.engine === 'c8' ? new SchemaTextFindings(this.kit, doc).findings(this.schemaTextIssues(doc)) : []),
     ];
     return this.inDocumentOrder(doc, findings);
@@ -142,44 +117,6 @@ export class EngineRun {
     }
     const at = (finding: ProfileFinding): number => (finding.element !== undefined ? (position.get(finding.element) ?? -1) : -1);
     return findings.map((finding, index) => ({ finding, index })).sort((left, right) => at(left.finding) - at(right.finding) || left.index - right.index).map(({ finding }) => finding);
-  }
-
-  /**
-   * A loopDataInputRef may name a process variable Camunda 7 resolves, not an id of the file: the
-   * parse drops it, and c7-multi-instance then reads the loop as one without a collection.
-   */
-  private withoutUnresolvedLoopInputs(results: Record<string, BpmnlintEngineReport[]>, warnings: ImportWarning[]): void {
-    const loops = new Set(warnings.filter((warning) => warning.property === 'bpmn:loopDataInputRef').map((warning) => (warning.element as { $parent?: { id?: string } } | undefined)?.$parent?.id));
-    for (const [rule, reports] of Object.entries(results)) results[rule] = reports.filter((report) => EngineFindings.findingOf(rule, report) !== C7_MULTI_INSTANCE || !loops.has(report.id));
-  }
-
-  /** The engines check executable processes only: a missing start event or history time to live elsewhere is no finding. */
-  private withoutNonExecutableProcesses(results: Record<string, BpmnlintEngineReport[]>, doc: Doc): void {
-    for (const rule of EXECUTABLE_ONLY) {
-      const reports = results[rule];
-      if (!reports) continue;
-      results[rule] = reports.filter((report) => {
-        let el = report.id ? doc.get(report.id) : undefined;
-        while (el && !this.kit.is(el, 'bpmn:Process')) el = el.$parent as typeof el;
-        return !el || this.kit.peek<boolean>(el, 'isExecutable') === true;
-      });
-    }
-  }
-
-  /** A zeebe:publishMessage (its findings read first) is the implementation the typed parse dropped. */
-  private withoutPublishedImplementations(results: Record<string, BpmnlintEngineReport[]>, published: PublishMessages): void {
-    const reports = results[COMPAT_IMPLEMENTATION];
-    if (reports) results[COMPAT_IMPLEMENTATION] = reports.filter((report) => !report.id || !published.hosts.has(report.id));
-  }
-
-  /** The rules at bpmn-cli's category where it reads camunda-compat's differently, without the ones it turns off. */
-  private withOverrides(rules: RuleEntry[]): RuleEntry[] {
-    const overrides = SEVERITY_OVERRIDES[this.engine];
-    return rules.flatMap((entry) => {
-      const category = overrides[entry.name];
-      if (!category) return [entry];
-      return category === 'off' ? [] : [{ ...entry, category }];
-    });
   }
 
   /** A rule that threw reports one rule-error and no findings: it is named in a finding of its own. */

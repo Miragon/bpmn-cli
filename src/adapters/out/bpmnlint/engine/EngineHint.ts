@@ -1,5 +1,5 @@
 import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
-import { CompatHints } from './CompatHints.js';
+import { sh } from './rules/shell.js';
 
 /** camunda-compat's error types (`data.type`), the ones a hint tells apart. */
 const SET = new Set(['camunda.propertyRequired', 'camunda.propertyValueRequired', 'camunda.propertyDependentRequired', 'camunda.propertyValueNotAllowed', 'camunda.propertyTypeNotAllowed', 'camunda.expressionRequired', 'camunda.expressionValueNotAllowed', 'camunda.expressionNotAllowed', 'camunda.feelExpressionInvalid', 'camunda.feelExpressionUnsupportedFunction', 'camunda.propertyValueDuplicated', 'camunda.elementPropertyValueDuplicated', 'camunda.propertiesValuesDuplicated']);
@@ -70,6 +70,12 @@ const PLACEHOLDERS: Record<string, string> = {
   historyTimeToLive: '180',
 };
 
+/** The kind `bpmn retype` makes of an element type the engine does not support. */
+const REPLACEMENTS: Record<string, string> = {
+  'bpmn:Transaction': '`bpmn retype <file> {id} subProcess` (an embedded sub-process).',
+  'bpmn:ComplexGateway': '`bpmn retype <file> {id} inclusiveGateway` (or exclusiveGateway: one path).',
+};
+
 /** `bpmn set` keys of the event triggers, by event definition type. */
 const TRIGGERS: Record<string, string> = {
   'bpmn:MessageEventDefinition': 'message',
@@ -105,8 +111,6 @@ interface Address {
  * engine rules instead of a hint per rule. Without a command that fits, it says what to look at.
  */
 export class EngineHint {
-  private readonly compat = new CompatHints();
-
   constructor(private readonly elementsById: Readonly<Record<string, unknown>>) {}
 
   of(report: BpmnlintEngineReport, rule = ''): string {
@@ -115,7 +119,7 @@ export class EngineHint {
     const host = id ? (this.elementsById[id] as ModdleNode | undefined) : undefined;
     const own = report.data?.hint;
     if (typeof own === 'string') return own;
-    const special = id && host ? this.compat.of(rule, report, host) : undefined;
+    const special = id && host ? this.compatHint(rule, report, host) : undefined;
     if (special) return special;
     if (!id || !host || !type) return this.fallback(id);
     const path = report.path ?? [];
@@ -129,16 +133,66 @@ export class EngineHint {
     if (EXT_ADD.has(type)) return this.extAdd(address, ext, report);
     const child = ext && !EXT_REMOVE.has(type) && !UNSET.has(type) ? this.childRebuild(address, ext.element) : undefined;
     if (child) return child;
-    if (ext) return EXT_REMOVE.has(type) || UNSET.has(type) ? `Remove it: \`bpmn ext remove <file> ${address.target} ${this.quoted(`${address.slot}${ext.index}`)}\` (\`bpmn ext list <file> ${address.target}\` shows the extension elements).` : this.extRebuild(address.target, address.slot, ext.element, ext.property, FEEL.has(type));
+    if (ext) return EXT_REMOVE.has(type) || UNSET.has(type) ? `Remove it: \`bpmn ext remove <file> ${address.target} ${sh(`${address.slot}${ext.index}`)}\` (\`bpmn ext list <file> ${address.target}\` shows the extension elements).` : this.extRebuild(address.target, address.slot, ext.element, ext.property, FEEL.has(type));
     if (REMOVE.has(type)) return `Remove it (\`bpmn remove <file> ${id}\`), or change it to a kind the engine supports (\`bpmn retype <file> ${id} <kind>\`, \`bpmn kinds\` lists them).`;
     const key = this.attributeKey(address, report);
     if (!key) return this.fallback(id);
     const alias = SET_ALIASES[key.replace(/^definition\[\d+\]\./, 'definition.')];
-    if (alias && !UNSET.has(type)) return `\`bpmn set <file> ${address.target} ${alias.split(' ').map((pair) => this.quoted(FEEL.has(type) ? pair.replace(/=<expression>$/, '==<expression>') : pair)).join(' ')}\`.`;
-    if (UNSET.has(type)) return `Remove it: \`bpmn set <file> ${address.target} ${this.quoted(`${key}=`)}\`.`;
+    if (alias && !UNSET.has(type)) return `\`bpmn set <file> ${address.target} ${alias.split(' ').map((pair) => sh(FEEL.has(type) ? pair.replace(/=<expression>$/, '==<expression>') : pair)).join(' ')}\`.`;
+    if (UNSET.has(type)) return `Remove it: \`bpmn set <file> ${address.target} ${sh(`${key}=`)}\`.`;
     const suggested = report.data?.suggestedValue ?? report.data?.requiredValue;
-    if (SET.has(type)) return `\`bpmn set <file> ${address.target} ${this.quoted(`${key}=${typeof suggested === 'string' || typeof suggested === 'boolean' ? String(suggested) : FEEL.has(type) ? '=<expression>' : this.placeholder(key, address.node)}`)}\`.`;
+    if (SET.has(type)) return `\`bpmn set <file> ${address.target} ${sh(`${key}=${typeof suggested === 'string' || typeof suggested === 'boolean' ? String(suggested) : FEEL.has(type) ? '=<expression>' : this.placeholder(key, address.node)}`)}\`.`;
     return this.fallback(id);
+  }
+
+  /**
+   * The hints for camunda-compat reports where the one derived from `path` and `data.type` would be
+   * vague or wrong: a missing start event, a timer cycle where the engine refuses one, an element the
+   * engine does not support, a duplicated header, a standard loop.
+   */
+  private compatHint(rule: string, report: BpmnlintEngineReport, host: ModdleNode): string | undefined {
+    const id = String(host.id);
+    const type = report.data?.type;
+    const path = report.path ?? [];
+    if (rule === 'start-event-required') return host.$type === 'bpmn:Process' ? `\`bpmn add <file> startEvent "<Name>" --before <firstNodeId>\` (or --in ${id}).` : `\`bpmn add <file> startEvent "<Name>" --in ${id}\`, then connect it to the first node.`;
+    if (rule === 'camunda-compat/history-time-to-live') return `\`bpmn set <file> ${id} camunda:historyTimeToLive=180\` (days, like Camunda Modeler; P180D works too).`;
+    if (type === 'camunda.propertyNotAllowed' && path[path.length - 1] === 'timeCycle') return this.timerCycle(id, host);
+    if (type === 'camunda.elementTypeNotAllowed') return this.unsupported(id, host, report);
+    if (type === 'camunda.attachedToRefElementTypeNotAllowed') return `Attach it elsewhere (\`bpmn move <file> ${id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${id}\`.`;
+    if (type === 'camunda.propertyTypeNotAllowed' && path[0] === 'loopCharacteristics') return `Remove it (\`bpmn set <file> ${id} loop=none\`) and model the loop with a gateway, or make it a multi-instance: \`bpmn set <file> ${id} loop=sequential\`, then \`bpmn ext add <file> ${id} loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>\`.`;
+    if (type === 'camunda.elementMultipleNotAllowed' && !path.length) return `Remove ${id} (\`bpmn remove <file> ${id}\`) or give it a trigger: \`bpmn set <file> ${id} trigger=message message=<MessageName>\`.`;
+    if (type === 'camunda.propertyValueDuplicated') return this.duplicatedChild(id, report);
+    if (type === 'camunda.extensionElementRequired') return this.unprefixedDecision(id, host, report);
+    return undefined;
+  }
+
+  /** A business rule task that names its decision without the zeebe prefix: `bpmn set` writes the zeebe:calledDecision. */
+  private unprefixedDecision(id: string, host: ModdleNode, report: BpmnlintEngineReport): string | undefined {
+    const required = report.data?.requiredExtensionElement;
+    const decision = (host.$attrs as Record<string, unknown> | undefined)?.['calledDecision'];
+    if (!Array.isArray(required) || !required.includes('zeebe:CalledDecision') || typeof decision !== 'string') return undefined;
+    return `Give it its decision: \`bpmn set <file> ${id} calledDecision=${decision}\`.`;
+  }
+
+  /** A catch event takes a duration or a date; an interrupting boundary or event sub-process start no cycle. */
+  private timerCycle(id: string, host: ModdleNode): string {
+    if (host.$type === 'bpmn:IntermediateCatchEvent') return `\`bpmn set <file> ${id} timer=PT1H\` (a duration, or a date-time).`;
+    return `Make it non-interrupting (\`bpmn set <file> ${id} nonInterrupting=true\`) or use a duration (\`bpmn set <file> ${id} timer=PT1H\`).`;
+  }
+
+  private unsupported(id: string, host: ModdleNode, report: BpmnlintEngineReport): string | undefined {
+    if (report.data?.eventDefinition === 'bpmn:CancelEventDefinition' || (report.data?.eventDefinition as ModdleNode | undefined)?.$type === 'bpmn:CancelEventDefinition') return `\`bpmn set <file> ${id} trigger=none\`.`;
+    return REPLACEMENTS[String(host.$type)]?.replace('{id}', id);
+  }
+
+  /** Two children of one container with the same key: the second goes. */
+  private duplicatedChild(id: string, report: BpmnlintEngineReport): string | undefined {
+    const container = report.data?.node as ModdleNode | undefined;
+    const second = (report.data?.properties as ModdleNode[] | undefined)?.[1];
+    const values = container?.values as ModdleNode[] | undefined;
+    const index = second && values ? values.indexOf(second) : -1;
+    if (!container?.$type || !second?.$type || index < 0) return undefined;
+    return `Keep one: \`bpmn ext remove <file> ${id} '${this.xmlName(container.$type)}/${this.xmlName(second.$type)}[${index}]'\`.`;
   }
 
   /**
@@ -211,7 +265,7 @@ export class EngineHint {
     const [first, ...others] = types;
     const command = (type: string): string => {
       const attributes = REQUIRED_ATTRIBUTES[type];
-      return `\`bpmn ext add <file> ${target} ${this.quoted(`${slot}${type}`)}${attributes ? ` ${attributes}` : ''}\``;
+      return `\`bpmn ext add <file> ${target} ${sh(`${slot}${type}`)}${attributes ? ` ${attributes}` : ''}\``;
     };
     const lead = first === 'zeebe:taskDefinition' ? 'Give it a job type: ' : '';
     const alternatives = others.map((type) => ` (or ${ALTERNATIVES[type] ?? 'one'}: ${command(type)})`).join('');
@@ -225,12 +279,12 @@ export class EngineHint {
    */
   private extRebuild(target: string, slot: string, element: ModdleNode, property: string | undefined, feel: boolean): string {
     const type = this.xmlName(String(element.$type));
-    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && Object.hasOwn(element, candidate.name) && element[candidate.name] !== undefined && typeof element[candidate.name] !== 'object').map((candidate) => this.quoted(`${candidate.name}=${String(element[candidate.name])}`));
+    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && Object.hasOwn(element, candidate.name) && element[candidate.name] !== undefined && typeof element[candidate.name] !== 'object').map((candidate) => sh(`${candidate.name}=${String(element[candidate.name])}`));
     const required = REQUIRED_ATTRIBUTES[type]?.split(' ').filter((pair) => !attributes.some((attribute) => attribute.startsWith(`${pair.split('=')[0]}=`))) ?? [];
-    const fixed = property ? [this.quoted(`${property}=${feel ? '=<expression>' : (PLACEHOLDERS[property] ?? `<${property}>`)}`)] : required;
+    const fixed = property ? [sh(`${property}=${feel ? '=<expression>' : (PLACEHOLDERS[property] ?? `<${property}>`)}`)] : required;
     const hasChildren = (element.$descriptor?.properties ?? []).some((candidate) => !candidate.isAttr && element[candidate.name] !== undefined && typeof element[candidate.name] === 'object');
-    if (hasChildren) return `See it with \`bpmn ext list <file> ${target} --json\`, then rebuild it: \`bpmn ext add <file> ${target} ${this.quoted(`${slot}${type}`)} --replace --xml '<${type} ...>...</${type}>'\`.`;
-    return `\`bpmn ext add <file> ${target} ${[this.quoted(`${slot}${type}`), ...attributes, ...fixed, '--replace'].join(' ')}\`.`;
+    if (hasChildren) return `See it with \`bpmn ext list <file> ${target} --json\`, then rebuild it: \`bpmn ext add <file> ${target} ${sh(`${slot}${type}`)} --replace --xml '<${type} ...>...</${type}>'\`.`;
+    return `\`bpmn ext add <file> ${target} ${[sh(`${slot}${type}`), ...attributes, ...fixed, '--replace'].join(' ')}\`.`;
   }
 
   /**
@@ -245,9 +299,9 @@ export class EngineHint {
     const containerName = this.xmlName(String(container.$type));
     const childName = this.xmlName(String(element.$type));
     const added = containerName === 'zeebe:ioMapping' ? childName : `${containerName}/${childName}`;
-    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && typeof element[candidate.name] === 'string' && element[candidate.name] !== '').map((candidate) => this.quoted(`${candidate.name}=${String(element[candidate.name])}`));
-    const fixed = this.quoted(`${property}=${PLACEHOLDERS[property] ?? `<${property}>`}`);
-    return `Rebuild it: \`bpmn ext remove <file> ${address.target} ${this.quoted(`${containerName}/${childName}[${position}]`)}\`, then \`bpmn ext add <file> ${address.target} ${[this.quoted(`${address.slot}${added}`), ...attributes, fixed].join(' ')}\`.`;
+    const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && typeof element[candidate.name] === 'string' && element[candidate.name] !== '').map((candidate) => sh(`${candidate.name}=${String(element[candidate.name])}`));
+    const fixed = sh(`${property}=${PLACEHOLDERS[property] ?? `<${property}>`}`);
+    return `Rebuild it: \`bpmn ext remove <file> ${address.target} ${sh(`${containerName}/${childName}[${position}]`)}\`, then \`bpmn ext add <file> ${address.target} ${[sh(`${address.slot}${added}`), ...attributes, fixed].join(' ')}\`.`;
   }
 
   /** Several event definitions: keep the one the engine acts on (the rule names it as `kept`). */
@@ -278,11 +332,6 @@ export class EngineHint {
     const name = key.slice(Math.max(key.lastIndexOf(':'), key.lastIndexOf('.')) + 1);
     if (name === 'name' && (node?.$type === 'bpmn:Message' || node?.$type === 'bpmn:Signal')) return `<${node.$type.slice(5)}Name>`;
     return PLACEHOLDERS[name] ?? `<${name}>`;
-  }
-
-  /** Quotes a shell argument when the shell would read it (a `<placeholder>` stays as it is). */
-  private quoted(arg: string): string {
-    return /^[A-Za-z0-9_.:=,/@+-]*(<[a-zA-Z ]+>)?$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
   }
 
   private fallback(id: string | undefined): string {

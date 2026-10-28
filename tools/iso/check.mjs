@@ -51,7 +51,7 @@ const problems = [];
 
 /** What loads on demand, by the module that marks its chunk; `rules`: modules that must never be in the initial chunks. */
 const RULES = 'dist/adapters/out/bpmnlint/engine/rules';
-const ENGINE_RUN = ['EngineRun', 'EngineFindings', 'EngineCodes', 'EngineHint', 'CamundaBooleans', 'PublishMessages', 'SchemaText', 'BpmnSchema', 'SchemaTextFindings', 'UnknownVendorElements', 'UnprefixedAttributes'].map((name) => `dist/adapters/out/bpmnlint/engine/${name}.js`);
+const ENGINE_RUN = ['EngineRun', 'EngineFindings', 'EngineCodes', 'EngineHint', 'CompatVerdicts', 'OwnModelCheck', 'CamundaBooleans', 'PublishMessages', 'SchemaText', 'BpmnSchema', 'SchemaTextFindings', 'UnknownVendorElements', 'UnprefixedAttributes'].map((name) => `dist/adapters/out/bpmnlint/engine/${name}.js`);
 const ON_DEMAND = [
   { name: 'c7', label: 'Camunda 7 rules', marker: `${RULES}/c7/index.js`, rules: [`${RULES}/c7/index.js`], when: 'the first Camunda 7 document a call validates' },
   { name: 'c8', label: 'Camunda 8 rules', marker: `${RULES}/c8/index.js`, rules: [`${RULES}/c8/index.js`], when: 'the first Camunda 8 document a call validates' },
