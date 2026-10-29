@@ -143,6 +143,10 @@ names of zeebe content, see [Camunda 8](docs/camunda.md#camunda-8)).
   `feat` or `fix` title is what users read in the release notes.
 - **Documentation moves with the code.** A change to a command, an option or an output also
   changes `src/adapters/in/report/CommandCatalogue.ts` or `src/adapters/in/report/guide.ts` and the matching page in `docs/`.
+- **Block style.** The bodies of `if`, `else` and loops are blocks on lines of their own, with
+  `} else {` on the closing line. Only an `if` without `else` may stay on one line without braces
+  when it fits in 80 characters (`if (!doc) return undefined;`). `biome lint` enforces this with
+  the plugin `tools/biome/block-statements.grit`.
 
 ## Before opening a PR
 
