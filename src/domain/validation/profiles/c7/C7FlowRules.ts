@@ -53,9 +53,6 @@ export class C7FlowRules extends C7Rules {
         this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `target:${tid}`, `${leadsTo}; after an event-based gateway the engines accept only message, timer, signal and conditional catch events and refuse the file`, `\`bpmn set <file> ${tid} trigger=message message=<MessageName>\` (or trigger=timer timer=PT1H).`, [tid, fid]);
         continue;
       }
-      if ((this.incoming.get(target) ?? []).length > 1) {
-        this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `incoming:${tid}`, `${this.describe(target, undefined)} after event-based gateway ${id} has other incoming flows; the engines refuse the file`, `Join before the gateway instead, and keep only ${fid} into ${tid} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).`, [tid, fid]);
-      }
       const ref = kind === 'message' ? peek<El>(defs[0], 'messageRef') : kind === 'signal' ? peek<El>(defs[0], 'signalRef') : undefined;
       const name = nameOf(ref);
       if (!name) continue;

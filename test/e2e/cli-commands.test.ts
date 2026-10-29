@@ -49,6 +49,27 @@ describe('Cli in-process', () => {
     expect(twice.err).toContain('error E_USAGE: the model and the ops cannot both come from stdin');
   });
 
+  it.each([[], ['--target', 'camunda7'], ['--target', 'camunda8']])('refuses a second incoming flow into a target of an event-based gateway (%s)', async (...target) => {
+    const file = join(dir, `event-gateway${target.join('')}.bpmn`);
+    const steps = [
+      ['new', file, ...target],
+      ['add', file, 'startEvent', 'Start'],
+      ['add', file, 'task', 'Send invoice', '--id', 'Activity_SendInvoice', '--after', 'startEvent_start'],
+      ['add', file, 'eventBasedGateway', '--id', 'Gateway_Wait', '--after', 'Activity_SendInvoice'],
+      ['add', file, 'intermediateCatchEvent:message', 'Payment received', '--id', 'Event_PaymentReceived', '--message', 'PaymentReceived', '--after', 'Gateway_Wait'],
+      ['add', file, 'intermediateCatchEvent:timer', 'Overdue', '--timer', 'P14D', '--after', 'Gateway_Wait'],
+    ];
+    for (const step of steps) {
+      expect((await bpmn([...step, '--no-lint-config'])).code).toBe(0);
+    }
+    const before = readFileSync(file, 'utf8');
+    const outcome = await bpmn(['connect', file, 'Activity_SendInvoice', 'Event_PaymentReceived', '--no-lint-config']);
+    expect(outcome.code).not.toBe(0);
+    expect(outcome.err).toContain('error E_INVALID_TARGET: Event_PaymentReceived follows event-based gateway Gateway_Wait');
+    expect(outcome.err).toContain('`bpmn connect <file> Activity_SendInvoice Gateway_Wait`');
+    expect(readFileSync(file, 'utf8')).toBe(before);
+  });
+
   it('prints parser errors like every other error, with the positional hint and the exit code', async () => {
     const outcome = await bpmn(['set', 'f.bpmn', 'Activity_A', '--name', 'X']);
     expect(outcome.code).toBe(1);

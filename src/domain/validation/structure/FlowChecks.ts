@@ -20,9 +20,12 @@ export class FlowChecks {
     const target = peek<El>(flow, 'targetRef');
     if (!source || !target) return;
     try {
-      new FlowRules(this.doc).assertEndpoints(source, target);
+      new FlowRules(this.doc).assertEndpoints(source, target, flow);
     } catch (err) {
       if (!isBpmnError(err)) throw err;
+      if (this.leavesTheReportToAnotherIncoming(flow, source, target)) {
+        return;
+      }
       this.findings.error(err.code, err.message, shownId(flow), { related: [shownId(source), shownId(target)], hint: err.details.hint });
       return;
     }
@@ -111,6 +114,13 @@ export class FlowChecks {
 
   private outgoingOf(node: El): El[] {
     return list(node, 'outgoing');
+  }
+
+  private leavesTheReportToAnotherIncoming(flow: El, source: El, target: El): boolean {
+    if (!is(source, 'bpmn:EventBasedGateway')) {
+      return false;
+    }
+    return this.doc.incoming(target).some((other) => other !== flow && !is(other.get<El>('sourceRef'), 'bpmn:EventBasedGateway'));
   }
 
   private incomingOf(node: El): El[] {
