@@ -42,7 +42,9 @@ describe('a kept association a new label touches is routed again once the labels
     const gateway = shapes(after).get('G')!;
     expect(result.layout.rerouted).toContain('AS');
     expect(pathHits(edges(after).get('AS')!.points, gateway.label!, -3)).toBe(false);
-    for (const id of ['N', 'D']) expect(shapes(after).get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['N', 'D']) {
+      expect(shapes(after).get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 

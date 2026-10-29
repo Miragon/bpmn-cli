@@ -19,7 +19,9 @@ export class SetPropertiesDefinition extends EditCommandDefinition<SetProperties
   override check(command: CommandFieldCheck): void {
     const values = (command.fields['values'] as Record<string, string> | undefined) ?? {};
     const unset = (command.fields['unset'] as string[] | undefined) ?? [];
-    if (!Object.keys(values).length && !unset.length) throw command.fail('nothing to do: "values" is empty and "unset" is missing', 'Example: {"op":"set","id":"task_x","values":{"name":"New name"}}.');
+    if (!Object.keys(values).length && !unset.length) {
+      throw command.fail('nothing to do: "values" is empty and "unset" is missing', 'Example: {"op":"set","id":"task_x","values":{"name":"New name"}}.');
+    }
     command.fields['values'] = values;
   }
 

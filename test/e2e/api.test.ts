@@ -60,8 +60,11 @@ function cli(...args: string[]): Run {
 /** A copy of a fixture (or of XML) in the temp directory, for the CLI to write. */
 function copy(name: string, xml?: string): string {
   const file = join(dir, `${Math.random().toString(36).slice(2)}-${name}`);
-  if (xml !== undefined) writeFileSync(file, xml);
-  else copyFileSync(fixturePath(name), file);
+  if (xml !== undefined) {
+    writeFileSync(file, xml);
+  } else {
+    copyFileSync(fixturePath(name), file);
+  }
   return file;
 }
 

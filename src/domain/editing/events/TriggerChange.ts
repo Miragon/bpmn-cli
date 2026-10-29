@@ -47,27 +47,41 @@ export class TriggerChange {
     let dropNonInterrupting = false;
     if (trigger !== undefined) {
       const merged: TriggerOptions = trigger === this.was ? { ...this.before.opts, ...given } : { ...given };
-      if (given.timer !== undefined && given.timerKind === undefined) delete merged.timerKind;
+      if (given.timer !== undefined && given.timerKind === undefined) {
+        delete merged.timerKind;
+      }
       if (given.nonInterrupting === undefined && this.before.opts.nonInterrupting) {
         if (EventTrigger.interruptingOnly(on, trigger)) {
           merged.nonInterrupting = false;
           dropNonInterrupting = true;
-        } else if (strict) merged.nonInterrupting = true;
+        } else if (strict) {
+          merged.nonInterrupting = true;
+        }
       }
-      if (strict && merged.nonInterrupting) this.assertNonInterruptingAllowed(on, trigger);
-      for (const warning of new EventDefinitions(this.edit).setTrigger(on, trigger, merged)) changes.warn(warning);
+      if (strict && merged.nonInterrupting) {
+        this.assertNonInterruptingAllowed(on, trigger);
+      }
+      for (const warning of new EventDefinitions(this.edit).setTrigger(on, trigger, merged)) {
+        changes.warn(warning);
+      }
     }
     this.assertMessageFlowsFit(on);
-    if (dropNonInterrupting && trigger !== undefined) this.warnNonInterruptingDropped(changes, on, trigger);
+    if (dropNonInterrupting && trigger !== undefined) {
+      this.warnNonInterruptingDropped(changes, on, trigger);
+    }
     new IdRename(this.edit).recordState(on, this.state, this.label);
   }
 
   setNonInterrupting(value: boolean): void {
     const el = this.el;
     if (value) this.assertNonInterruptingAllowed(el, triggerOf(el) ?? 'none');
-    if (is(el, 'bpmn:BoundaryEvent')) el.set('cancelActivity', !value);
-    else if (is(el, 'bpmn:StartEvent')) el.set('isInterrupting', !value);
-    else this.assertNonInterruptingAllowed(el, 'none');
+    if (is(el, 'bpmn:BoundaryEvent')) {
+      el.set('cancelActivity', !value);
+    } else if (is(el, 'bpmn:StartEvent')) {
+      el.set('isInterrupting', !value);
+    } else {
+      this.assertNonInterruptingAllowed(el, 'none');
+    }
   }
 
   /** As in `connect`: only untyped or message events; throw events send, catch events receive. */
@@ -80,9 +94,13 @@ export class TriggerChange {
       const receives = flow.get<El | undefined>('targetRef') === event;
       if (!sends && !receives) continue;
       let why: string | undefined;
-      if (trigger !== 'none' && trigger !== 'message') why = `a ${trigger} event cannot ${sends ? 'send' : 'receive'} messages`;
-      else if (sends && !is(event, 'bpmn:ThrowEvent')) why = 'catching events cannot send messages';
-      else if (receives && !is(event, 'bpmn:CatchEvent')) why = 'throwing events cannot receive messages';
+      if (trigger !== 'none' && trigger !== 'message') {
+        why = `a ${trigger} event cannot ${sends ? 'send' : 'receive'} messages`;
+      } else if (sends && !is(event, 'bpmn:ThrowEvent')) {
+        why = 'catching events cannot send messages';
+      } else if (receives && !is(event, 'bpmn:CatchEvent')) {
+        why = 'throwing events cannot receive messages';
+      }
       if (why) out.push({ flow, why });
     }
     return out;

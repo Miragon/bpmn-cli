@@ -32,8 +32,11 @@ export class LinkEvents {
       const scope = doc.scopeOf(node);
       if (kit.is(node, 'bpmn:IntermediateCatchEvent')) {
         const first = this.firstCatch.get(name);
-        if (first) this.duplicates.push({ first, el: node, name });
-        else this.firstCatch.set(name, node);
+        if (first) {
+          this.duplicates.push({ first, el: node, name });
+        } else {
+          this.firstCatch.set(name, node);
+        }
         this.caughtIn.set(scope, new Set([...(this.caughtIn.get(scope) ?? []), name]));
       } else if (kit.is(node, 'bpmn:IntermediateThrowEvent')) {
         this.throws.push({ el: node, name, scope });

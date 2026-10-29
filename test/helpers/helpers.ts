@@ -67,8 +67,12 @@ export async function linearDoc(): Promise<Doc> {
 /** The id of the sequence / message flow from `source` to `target`. */
 export function flowBetween(doc: Doc, source: string, target: string): string {
   for (const el of doc.byId().values()) {
-    if (el.$type !== 'bpmn:SequenceFlow' && el.$type !== 'bpmn:MessageFlow') continue;
-    if (el.get<{ id: string } | undefined>('sourceRef')?.id === source && el.get<{ id: string } | undefined>('targetRef')?.id === target) return el.get<string>('id');
+    if (el.$type !== 'bpmn:SequenceFlow' && el.$type !== 'bpmn:MessageFlow') {
+      continue;
+    }
+    if (el.get<{ id: string } | undefined>('sourceRef')?.id === source && el.get<{ id: string } | undefined>('targetRef')?.id === target) {
+      return el.get<string>('id');
+    }
   }
   throw new Error(`no flow ${source} -> ${target}`);
 }

@@ -39,7 +39,9 @@ export class PreservingWriter {
   write(): string {
     const { original, next } = this;
     const base = this.toBase.get(next.root);
-    if (!base || !this.toOriginal.has(base)) throw new Error('the root elements differ');
+    if (!base || !this.toOriginal.has(base)) {
+      throw new Error('the root elements differ');
+    }
     const text = original.text;
     return text.slice(0, original.root.start) + this.element(next.root, this.indentOf(original.root.start) ?? '') + text.slice(original.root.end);
   }
@@ -64,7 +66,9 @@ export class PreservingWriter {
       return this.startTag(origEl, n0, nextEl, name, false) + this.restyle(origEl, content) + close;
     }
     if (!nKids.length) {
-      if (oKids.length || origEl.selfClosing) return this.startTag(origEl, n0, nextEl, name, true);
+      if (oKids.length || origEl.selfClosing) {
+        return this.startTag(origEl, n0, nextEl, name, true);
+      }
       return this.startTag(origEl, n0, nextEl, name, false) + original.text.slice(origEl.tagEnd, origEl.closeStart) + close;
     }
     const gaps = this.gapsOf(origEl, oKids);
@@ -104,16 +108,23 @@ export class PreservingWriter {
       last = basePosition;
       kept.push({ kid, at });
     }
-    if (kept.every((entry, index) => index === 0 || kept[index - 1]!.at < entry.at)) return kids;
+    if (kept.every((entry, index) => index === 0 || kept[index - 1]!.at < entry.at)) {
+      return kids;
+    }
     const keptSet = new Set(kept.map((entry) => entry.kid));
     const following = new Map<XElement | undefined, XElement[]>();
     let anchor: XElement | undefined;
     for (const kid of kids) {
-      if (keptSet.has(kid)) anchor = kid;
-      else following.set(anchor, [...(following.get(anchor) ?? []), kid]);
+      if (keptSet.has(kid)) {
+        anchor = kid;
+      } else {
+        following.set(anchor, [...(following.get(anchor) ?? []), kid]);
+      }
     }
     const out = [...(following.get(undefined) ?? [])];
-    for (const entry of [...kept].sort((first, second) => first.at - second.at)) out.push(entry.kid, ...(following.get(entry.kid) ?? []));
+    for (const entry of [...kept].sort((first, second) => first.at - second.at)) {
+      out.push(entry.kid, ...(following.get(entry.kid) ?? []));
+    }
     return out;
   }
 
@@ -124,7 +135,9 @@ export class PreservingWriter {
     if (nextEl.selfClosing) return this.core(next, nextEl) + this.selfClose;
     if (!kids.length || hasCharacterData(next, nextEl)) return rawOf(next, nextEl);
     let out = next.text.slice(nextEl.start, nextEl.tagEnd);
-    for (const child of kids) out += this.nl + indent + this.unit + this.fresh(child, indent + this.unit);
+    for (const child of kids) {
+      out += this.nl + indent + this.unit + this.fresh(child, indent + this.unit);
+    }
     return out + this.nl + indent + next.text.slice(nextEl.closeStart, nextEl.end);
   }
 
@@ -154,8 +167,11 @@ export class PreservingWriter {
       for (const attr of origEl.attrs) {
         const key = attrKey(origEl, attr);
         const now = afterByKey.get(key);
-        if (now !== undefined) attrs.push({ key, ws: attr.ws, text: before.get(key) === now ? raw(original, attr) : now });
-        else if (!before.has(key) || key.startsWith('xmlns')) attrs.push({ key, ws: attr.ws, text: raw(original, attr) });
+        if (now !== undefined) {
+          attrs.push({ key, ws: attr.ws, text: before.get(key) === now ? raw(original, attr) : now });
+        } else if (!before.has(key) || key.startsWith('xmlns')) {
+          attrs.push({ key, ws: attr.ws, text: raw(original, attr) });
+        }
       }
       const broken = origEl.attrs.map((attr) => attr.ws).filter((ws) => ws.includes('\n'));
       const ws = broken.length ? broken[broken.length - 1]! : ' ';
@@ -174,14 +190,18 @@ export class PreservingWriter {
       body = `<${name}${attrs.map((written) => written.ws + written.text).join('')}`;
     }
     const multiline = origEl.tail.includes('\n');
-    if (selfClosing) return body + (origEl.selfClosing || multiline ? `${origEl.tail}/>` : this.selfClose);
+    if (selfClosing) {
+      return body + (origEl.selfClosing || multiline ? `${origEl.tail}/>` : this.selfClose);
+    }
     return body + (!origEl.selfClosing || multiline ? origEl.tail : '') + '>';
   }
 
   private indentOf(at: number): string | undefined {
     const text = this.original.text;
     let cursor = at - 1;
-    while (cursor >= 0 && (text[cursor] === ' ' || text[cursor] === '\t')) cursor--;
+    while (cursor >= 0 && (text[cursor] === ' ' || text[cursor] === '\t')) {
+      cursor--;
+    }
     if (cursor >= 0 && text[cursor] !== '\n') return undefined;
     return text.slice(cursor + 1, at);
   }
@@ -198,12 +218,16 @@ export class PreservingWriter {
         const step = first.slice(own.length);
         counts.set(step, (counts.get(step) ?? 0) + 1);
       }
-      for (const kid of kids) visit(kid);
+      for (const kid of kids) {
+        visit(kid);
+      }
     };
     visit(doc.root);
     let best = '  ';
     let bestCount = 0;
-    for (const [step, count] of counts) if (count > bestCount) [best, bestCount] = [step, count];
+    for (const [step, count] of counts) {
+      if (count > bestCount) [best, bestCount] = [step, count];
+    }
     return best;
   }
 
@@ -224,12 +248,17 @@ export class PreservingWriter {
       if (br >= 0) inline = false;
       const before = br >= 0 ? gap.slice(0, br) : '';
       const after = br >= 0 ? gap.slice(br) : gap;
-      if (index === 0) head = before;
-      else trail.set(kids[index - 1]!, before);
+      if (index === 0) {
+        head = before;
+      } else {
+        trail.set(kids[index - 1]!, before);
+      }
       if (index < kids.length) {
         lead.set(kids[index]!, after);
         from = kids[index]!.end;
-      } else closing = after;
+      } else {
+        closing = after;
+      }
     }
     return { head, lead, trail, closing, inline };
   }

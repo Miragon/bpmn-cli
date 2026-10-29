@@ -106,7 +106,9 @@ export class EditBatch {
     }
     if (text.xml === source.text) return text.xml;
     const declared = utf8Declaration(text.xml);
-    if (declared.was !== undefined) changes.note(`the XML declaration named the encoding ${declared.was}; the text is written as UTF-8, so it now says UTF-8`);
+    if (declared.was !== undefined) {
+      changes.note(`the XML declaration named the encoding ${declared.was}; the text is written as UTF-8, so it now says UTF-8`);
+    }
     return declared.text;
   }
 

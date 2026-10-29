@@ -25,25 +25,32 @@ export class FlowBridge {
 
   /** A plain remove joins a non-synchronising merge and refuses a synchronising one. */
   forRemoval(node: El, bridge: boolean, all: boolean, removing: ReadonlySet<string>): void {
-    if (all) this.join(node, removing);
-    else if (bridge && this.isMerge(node)) {
+    if (all) {
+      this.join(node, removing);
+    } else if (bridge && this.isMerge(node)) {
       this.refuseSynchronisingJoin(node);
       this.join(node, removing);
-    } else this.single(node, bridge, removing);
+    } else {
+      this.single(node, bridge, removing);
+    }
   }
 
   single(node: El, bridge: boolean, removing?: ReadonlySet<string>): void {
     const doc = this.edit.doc;
     const incoming = doc.incoming(node);
     const outgoing = doc.outgoing(node);
-    if (!bridge || incoming.length !== 1 || outgoing.length !== 1) return this.detach(node, bridge);
+    if (!bridge || incoming.length !== 1 || outgoing.length !== 1) {
+      return this.detach(node, bridge);
+    }
     const inFlow = incoming[0]!;
     const outFlow = outgoing[0]!;
     const predecessor = inFlow.get<El>('sourceRef');
     const successor = outFlow.get<El>('targetRef');
     if (predecessor === successor && !FlowBridge.canLoopToItself(predecessor)) {
       this.detach(node, false);
-      if (predecessor !== node) this.changes.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
+      if (predecessor !== node) {
+        this.changes.note(`not bridged: ${idOf(predecessor)} is both predecessor and successor of ${idOf(node)} and cannot loop back to itself`);
+      }
       return;
     }
     this.assertAllowed(node, inFlow, outFlow, removing);
@@ -56,21 +63,31 @@ export class FlowBridge {
     const inside = new Set<El>();
     for (const member of group) {
       inside.add(member);
-      if (is(member, 'bpmn:Activity')) for (const boundary of doc.boundaryEventsOf(member)) inside.add(boundary);
+      if (is(member, 'bpmn:Activity')) {
+        for (const boundary of doc.boundaryEventsOf(member)) {
+          inside.add(boundary);
+        }
+      }
     }
     const entries: El[] = [];
     const exits: El[] = [];
     for (const member of inside) {
-      for (const flow of doc.incoming(member)) if (!inside.has(flow.get<El>('sourceRef'))) entries.push(flow);
+      for (const flow of doc.incoming(member)) {
+        if (!inside.has(flow.get<El>('sourceRef'))) entries.push(flow);
+      }
       if (is(member, 'bpmn:BoundaryEvent')) continue;
-      for (const flow of doc.outgoing(member)) if (!inside.has(flow.get<El>('targetRef'))) exits.push(flow);
+      for (const flow of doc.outgoing(member)) {
+        if (!inside.has(flow.get<El>('targetRef'))) exits.push(flow);
+      }
     }
     if (entries.length !== 1 || exits.length !== 1) return;
     const inFlow = entries[0]!;
     const outFlow = exits[0]!;
     const predecessor = inFlow.get<El>('sourceRef');
     const successor = outFlow.get<El>('targetRef');
-    if ((predecessor === successor && !FlowBridge.canLoopToItself(predecessor)) || doc.scopeOf(predecessor) !== doc.scopeOf(successor)) return;
+    if ((predecessor === successor && !FlowBridge.canLoopToItself(predecessor)) || doc.scopeOf(predecessor) !== doc.scopeOf(successor)) {
+      return;
+    }
     const via = group.map(idOf).join(', ');
     this.assertAllowed(outFlow.get<El>('sourceRef'), inFlow, outFlow, undefined, via);
     this.carry(inFlow, outFlow, via, 'group');
@@ -111,7 +128,9 @@ export class FlowBridge {
     const outCond = outFlow.get<El | undefined>('conditionExpression');
     if (outName && !inFlow.get<string | undefined>('name')) {
       inFlow.set('name', outName);
-    } else if (outName) changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
+    } else if (outName) {
+      changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
+    }
     const ontoDefault = predecessor.get<El | undefined>('default') === inFlow;
     if (outCond && !inFlow.get<El | undefined>('conditionExpression') && ontoDefault && policy === 'node') {
       changes.warn({
@@ -124,11 +143,15 @@ export class FlowBridge {
     } else if (outCond && !inFlow.get<El | undefined>('conditionExpression') && !(ontoDefault && policy === 'group')) {
       inFlow.set('conditionExpression', outCond);
       if (policy === 'group') outCond.$parent = inFlow;
-    } else if (outCond) changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
+    } else if (outCond) {
+      changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${via}`, element: idOf(outFlow) });
+    }
     new SequenceFlows(this.edit).carryAssociations(outFlow, inFlow, changes);
     new SequenceFlows(this.edit).remove(outFlow, changes);
     changes.remove(ChangeSet.flowEntryOf(outFlow));
-    if (policy === 'group' && idOf(outFlow) && !doc.has(idOf(outFlow))) doc.ids.claim(idOf(outFlow));
+    if (policy === 'group' && idOf(outFlow) && !doc.has(idOf(outFlow))) {
+      doc.ids.claim(idOf(outFlow));
+    }
     const renamed = new SequenceFlows(this.edit).redirect(inFlow, { target: successor });
     changes.change(ChangeSet.flowEntryOf(inFlow, `${idOf(predecessor)} -> ${idOf(successor)} (bridged ${via})${renamedNote(renamed)}`));
     changes.note(`bridged: ${idOf(predecessor)} -> ${idOf(successor)}`);
@@ -152,10 +175,16 @@ export class FlowBridge {
     }
     const outFlow = outgoing[0]!;
     const successor = outFlow.get<El>('targetRef');
-    for (const inFlow of incoming) this.assertAllowed(node, inFlow, outFlow, removing);
+    for (const inFlow of incoming) {
+      this.assertAllowed(node, inFlow, outFlow, removing);
+    }
     const outName = outFlow.get<string | undefined>('name');
-    if (outName) changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
-    if (outFlow.get<El | undefined>('conditionExpression')) changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
+    if (outName) {
+      changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
+    }
+    if (outFlow.get<El | undefined>('conditionExpression')) {
+      changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${idOf(outFlow)} was dropped while bridging ${idOf(node)} from ${incoming.length} predecessors`, element: idOf(outFlow) });
+    }
     new SequenceFlows(this.edit).remove(outFlow, changes);
     changes.remove(ChangeSet.flowEntryOf(outFlow));
     const bridged: string[] = [];
@@ -174,7 +203,9 @@ export class FlowBridge {
     }
     changes.note(`bridged all: ${bridged.join(', ')} -> ${idOf(successor)}`);
     const sync = synchronises(node);
-    if (sync) changes.note(`${idOf(node)} synchronised ${bridged.join(', ')}; now each of them runs on to ${idOf(successor)} on its own`);
+    if (sync) {
+      changes.note(`${idOf(node)} synchronised ${bridged.join(', ')}; now each of them runs on to ${idOf(successor)} on its own`);
+    }
     const count = doc.incoming(successor).length;
     if (count > 1 && (sync || !is(successor, 'bpmn:Gateway'))) {
       changes.warn({

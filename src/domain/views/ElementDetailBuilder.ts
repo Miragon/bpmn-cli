@@ -106,19 +106,31 @@ export class ElementDetailBuilder {
       const source = peek<El>(el, 'sourceRef');
       if (source && peek<El>(source, 'default') === el) props['default'] = true;
     }
-    if (is(el, 'bpmn:MessageFlow') && peek<El>(el, 'messageRef')) props['message'] = refLabel(peek<El>(el, 'messageRef'));
+    if (is(el, 'bpmn:MessageFlow') && peek<El>(el, 'messageRef')) {
+      props['message'] = refLabel(peek<El>(el, 'messageRef'));
+    }
     if (is(el, 'bpmn:Participant')) {
       const process = peek<El>(el, 'processRef');
       props['process'] = process ? shownId(process) : undefined;
       if (!process) props['blackBox'] = true;
     }
-    if (is(el, 'bpmn:Lane')) props['members'] = list(el, 'flowNodeRef').map(shownId);
-    if (is(el, 'bpmn:Group')) props['members'] = new Groups(doc.definitions).members().get(shownId(el)) ?? [];
+    if (is(el, 'bpmn:Lane')) {
+      props['members'] = list(el, 'flowNodeRef').map(shownId);
+    }
+    if (is(el, 'bpmn:Group')) {
+      props['members'] = new Groups(doc.definitions).members().get(shownId(el)) ?? [];
+    }
     if (is(el, 'bpmn:TextAnnotation')) props['text'] = peek<string>(el, 'text');
-    if (is(el, 'bpmn:Process')) props['isExecutable'] = peek<boolean>(el, 'isExecutable') === true;
+    if (is(el, 'bpmn:Process')) {
+      props['isExecutable'] = peek<boolean>(el, 'isExecutable') === true;
+    }
     if (is(el, 'bpmn:Error')) props['errorCode'] = peek<string>(el, 'errorCode');
-    if (is(el, 'bpmn:Escalation')) props['escalationCode'] = peek<string>(el, 'escalationCode');
-    if (is(el, 'bpmn:DataStoreReference')) props['dataStore'] = peek<El>(el, 'dataStoreRef') ? refLabel(peek<El>(el, 'dataStoreRef')) : undefined;
+    if (is(el, 'bpmn:Escalation')) {
+      props['escalationCode'] = peek<string>(el, 'escalationCode');
+    }
+    if (is(el, 'bpmn:DataStoreReference')) {
+      props['dataStore'] = peek<El>(el, 'dataStoreRef') ? refLabel(peek<El>(el, 'dataStoreRef')) : undefined;
+    }
     if (is(el, 'bpmn:FlowNode')) {
       const def = peek<El>(el, 'default');
       if (def) props['default'] = shownId(def);

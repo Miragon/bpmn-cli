@@ -249,7 +249,9 @@ describe('separate', () => {
     const boxOfB = box(drawingPlane, 'B');
     expect(boxOfN.y >= boxOfB.y + boxOfB.height + 20 || boxOfN.x >= boxOfB.x + boxOfB.width + 20 || boxOfB.x >= boxOfN.x + boxOfN.width + 20).toBe(true);
     const lane = box(drawingPlane, 'L1');
-    for (const id of ['N', 'B']) expect(box(drawingPlane, id).y + box(drawingPlane, id).height).toBeLessThanOrEqual(lane.y + lane.height);
+    for (const id of ['N', 'B']) {
+      expect(box(drawingPlane, id).y + box(drawingPlane, id).height).toBeLessThanOrEqual(lane.y + lane.height);
+    }
   });
 
   it('tidy removes overlaps among all shapes, keeping the order', () => {

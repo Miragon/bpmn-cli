@@ -104,30 +104,46 @@ export class Properties {
       conditionKeys.delete('condition');
       el.get<El | undefined>('conditionExpression')?.set('body', undefined);
     }
-    for (const nestedEntry of flowCondition) new NestedSlots(this.edit).setKey(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, changes, conditionKeys.has('condition'));
+    for (const nestedEntry of flowCondition) {
+      new NestedSlots(this.edit).setKey(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, changes, conditionKeys.has('condition'));
+    }
     if (conditionKeys.size) this.applyCondition(el, conditionKeys, changes);
     const resourceRemoval = is(el, 'bpmn:Event') ? nested.filter((nestedEntry) => nestedEntry.slot === 'condition' && !nestedEntry.value && new PropertyCoercer(this.edit).isResourceKey(nestedEntry.key)) : [];
-    for (const nestedEntry of resourceRemoval) new NestedSlots(this.edit).setKey(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, changes, eventKeys.has('when'));
+    for (const nestedEntry of resourceRemoval) {
+      new NestedSlots(this.edit).setKey(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, changes, eventKeys.has('when'));
+    }
     if (eventKeys.size) this.applyEventKeys(el, eventKeys, changes);
-    for (const nestedEntry of nested) if (!flowCondition.includes(nestedEntry) && !resourceRemoval.includes(nestedEntry)) new NestedSlots(this.edit).setKey(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, changes);
+    for (const nestedEntry of nested) {
+      if (!flowCondition.includes(nestedEntry) && !resourceRemoval.includes(nestedEntry)) {
+        new NestedSlots(this.edit).setKey(el, nestedEntry.slot, nestedEntry.key, nestedEntry.value, changes);
+      }
+    }
     this.edit.doc.invalidate();
     RootElements.bindRefAs(changes, command.refAs, el);
     return changes;
   }
 
   private applyKey(el: El, key: string, value: string, changes: ChangeSet): void {
-    if (key.includes(':')) value = new PropertyCoercer(this.edit).vendorValue(el, key, value);
+    if (key.includes(':')) {
+      value = new PropertyCoercer(this.edit).vendorValue(el, key, value);
+    }
     const detail = value ? `${key}=${value}` : `${key} removed`;
     const write = SetKeyCatalog.writerOf(key);
     if (write) {
-      if (write({ edit: this.edit, changes, properties: this }, el, value, key) === 'recorded by the key') return;
+      if (write({ edit: this.edit, changes, properties: this }, el, value, key) === 'recorded by the key') {
+        return;
+      }
     } else if (key.includes(':')) {
-      if (value && new ZeebeSubscription(this.edit.doc).setCorrelationKey(el, key, value, changes)) return;
+      if (value && new ZeebeSubscription(this.edit.doc).setCorrelationKey(el, key, value, changes)) {
+        return;
+      }
       if (value) this.assertVendorHost(el, key, value);
       if (value) this.assertZeebeHost(el, key, value);
       SetKeyCatalog.assertVendorKey(this.edit.doc, el, key);
       new PropertyCoercer(this.edit).setVendorAttribute(el, key, value);
-    } else this.setModelProperty(el, key, value);
+    } else {
+      this.setModelProperty(el, key, value);
+    }
     changes.change(ChangeSet.entryOf(el, detail));
   }
 
@@ -139,7 +155,9 @@ export class Properties {
     }
     const { el: message, created } = new RootElements(this.edit).ensure('bpmn:Message', name);
     task.set('messageRef', message);
-    if (created) changes.create({ id: idOf(message), kind: 'message', name: message.get<string>('name'), detail: 'root element' });
+    if (created) {
+      changes.create({ id: idOf(message), kind: 'message', name: message.get<string>('name'), detail: 'root element' });
+    }
   }
 
   /** A default flow has no condition: the flow's own one is removed with a warning. */
@@ -158,13 +176,18 @@ export class Properties {
         hint: 'Default flows are taken when no other condition matches; set the condition on another outgoing flow if it is still needed.',
       });
     }
-    if (previous && previous !== flow) changes.change(ChangeSet.entryOf(previous, `no longer the default flow of ${idOf(source)}`));
+    if (previous && previous !== flow) {
+      changes.change(ChangeSet.entryOf(previous, `no longer the default flow of ${idOf(source)}`));
+    }
   }
 
   setDefaultKey(el: El, value: string, changes: ChangeSet): void {
     if (is(el, 'bpmn:SequenceFlow')) {
-      if (value && PropertyCoercer.bool(el, 'default', value)) this.makeDefaultFlow(el, changes);
-      else new SequenceFlows(this.edit).setDefault(el, false);
+      if (value && PropertyCoercer.bool(el, 'default', value)) {
+        this.makeDefaultFlow(el, changes);
+      } else {
+        new SequenceFlows(this.edit).setDefault(el, false);
+      }
       return;
     }
     if (!descriptorOf(el).propertiesByName?.['default']) {
@@ -257,10 +280,14 @@ export class Properties {
   setModelProperty(el: El, key: string, value: string): void {
     if (PropertyCoercer.removeUndefined(el, key, value)) return;
     const property = descriptorOf(el).propertiesByName?.[key];
-    if (!property || key === 'id') throw SetKeyCatalog.unknownKey(this.edit.doc, el, key);
+    if (!property || key === 'id') {
+      throw SetKeyCatalog.unknownKey(this.edit.doc, el, key);
+    }
     const blocked = PropertyCoercer.blockedReason(key);
     if (blocked) throw SetKeyCatalog.unknownKey(this.edit.doc, el, key, blocked);
-    if (!PropertyCoercer.isSettable(this.edit.doc, property)) throw SetKeyCatalog.unknownKey(this.edit.doc, el, key, `${key} is not an attribute`);
+    if (!PropertyCoercer.isSettable(this.edit.doc, property)) {
+      throw SetKeyCatalog.unknownKey(this.edit.doc, el, key, `${key} is not an attribute`);
+    }
     if (!value) {
       el.set(key, undefined);
       return;
@@ -285,7 +312,9 @@ export class Properties {
     if (!keys.has('condition')) {
       const language = keys.get('language') || undefined;
       if (!hasCondition) {
-        if (language) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> (or condition.camunda:resource=<uri>) too.' });
+        if (language) {
+          throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> (or condition.camunda:resource=<uri>) too.' });
+        }
         return;
       }
       existing!.set('language', language);
@@ -294,7 +323,9 @@ export class Properties {
     }
     const condition = keys.get('condition') ?? '';
     if (!condition) {
-      if (keys.get('language')) throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
+      if (keys.get('language')) {
+        throw modelError('E_NO_CONDITION', `${idOf(flow)} has no condition to set a language on`, { element: idOf(flow), hint: 'Set condition=<expression> too.' });
+      }
       new SequenceFlows(this.edit).setCondition(flow, undefined);
       changes.change(ChangeSet.entryOf(flow, 'condition removed'));
       return;
@@ -302,10 +333,15 @@ export class Properties {
     new FlowRules(this.edit.doc).assertCondition(condition);
     const dropped: string[] = [];
     let language: string | undefined;
-    if (keys.has('language')) language = keys.get('language') || undefined;
-    else if (oldLanguage && resourceKey) dropped.push(`language ${oldLanguage}`);
-    else if (oldLanguage && Properties.isJuel(condition) && oldLanguage.toLowerCase() !== 'juel') dropped.push(`language ${oldLanguage}`);
-    else language = oldLanguage;
+    if (keys.has('language')) {
+      language = keys.get('language') || undefined;
+    } else if (oldLanguage && resourceKey) {
+      dropped.push(`language ${oldLanguage}`);
+    } else if (oldLanguage && Properties.isJuel(condition) && oldLanguage.toLowerCase() !== 'juel') {
+      dropped.push(`language ${oldLanguage}`);
+    } else {
+      language = oldLanguage;
+    }
     if (!existing || !is(existing, 'bpmn:FormalExpression')) {
       new SequenceFlows(this.edit).setCondition(flow, condition, language);
     } else {
@@ -316,7 +352,9 @@ export class Properties {
       existing.set('body', condition);
       existing.set('language', language);
       const source = flow.get<El | undefined>('sourceRef');
-      if (source?.get<El | undefined>('default') === flow) source.set('default', undefined);
+      if (source?.get<El | undefined>('default') === flow) {
+        source.set('default', undefined);
+      }
     }
     if (dropped.length) {
       changes.warn({
@@ -341,19 +379,31 @@ export class Properties {
     if (is(el, 'bpmn:Event')) {
       const defs = definitionsOf(el);
       const fit = defs.findIndex((definition) => CAMUNDA.attrAppliesTo(name, definition));
-      if (fit !== -1) return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
-      if (slotsOf(el).includes('condition') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+      if (fit !== -1) {
+        return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
+      }
+      if (slotsOf(el).includes('condition') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) {
+        return { slot: 'condition' };
+      }
       const current = triggerOf(el);
       for (const trigger of kindOf(el)?.triggers ?? []) {
         if (trigger === 'none' || trigger === current) continue;
-        if (CAMUNDA.attrAppliesTo(name, TRIGGERS[trigger].definition)) return { slot: 'definition', trigger };
+        if (CAMUNDA.attrAppliesTo(name, TRIGGERS[trigger].definition)) {
+          return { slot: 'definition', trigger };
+        }
       }
     }
-    if (is(el, 'bpmn:Activity') && CAMUNDA.attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) return { slot: 'loop' };
-    if (is(el, 'bpmn:SequenceFlow') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) return { slot: 'condition' };
+    if (is(el, 'bpmn:Activity') && CAMUNDA.attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) {
+      return { slot: 'loop' };
+    }
+    if (is(el, 'bpmn:SequenceFlow') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) {
+      return { slot: 'condition' };
+    }
     if (is(el, 'bpmn:Participant')) {
       const process = el.get<El | undefined>('processRef');
-      if (process && CAMUNDA.attrAppliesTo(name, process)) return { element: process };
+      if (process && CAMUNDA.attrAppliesTo(name, process)) {
+        return { element: process };
+      }
     }
     return undefined;
   }
@@ -386,7 +436,9 @@ export class Properties {
    */
   private assertZeebeHost(el: El, key: string, value: string): void {
     const idx = key.indexOf(':');
-    if (idx <= 0 || this.edit.doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) return;
+    if (idx <= 0 || this.edit.doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) {
+      return;
+    }
     const local = key.slice(idx + 1);
     if (ZEEBE.attr(local)) return;
     const prefix = key.slice(0, idx);
@@ -421,7 +473,9 @@ export class Properties {
     if (keys.has('trigger')) {
       const raw = keys.get('trigger') ?? '';
       requested = raw ? normalizeTrigger(raw) : 'none';
-      if (!requested) throw PropertyCoercer.invalid(el, 'trigger', `unknown trigger "${raw}"`, `Allowed on ${def?.kind ?? kindLabel(el)}: ${allowed.join(', ')}.`);
+      if (!requested) {
+        throw PropertyCoercer.invalid(el, 'trigger', `unknown trigger "${raw}"`, `Allowed on ${def?.kind ?? kindLabel(el)}: ${allowed.join(', ')}.`);
+      }
     }
     const given: Record<string, unknown> = {};
     let nonInterrupting: boolean | undefined;
@@ -432,8 +486,11 @@ export class Properties {
         continue;
       }
       const implied = TRIGGER_OF_KEY[key]!;
-      if (requested === undefined) requested = implied;
-      else if (requested !== implied) throw PropertyCoercer.invalid(el, key, `${key} belongs to the ${implied} trigger, not ${requested}`);
+      if (requested === undefined) {
+        requested = implied;
+      } else if (requested !== implied) {
+        throw PropertyCoercer.invalid(el, key, `${key} belongs to the ${implied} trigger, not ${requested}`);
+      }
       if (!value && key !== 'errorCode' && key !== 'escalationCode') {
         throw PropertyCoercer.invalid(el, key, `${key} needs a value`, 'Use trigger=none to remove the trigger.');
       }

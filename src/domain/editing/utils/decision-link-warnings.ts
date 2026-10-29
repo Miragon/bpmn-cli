@@ -11,6 +11,8 @@ export function isDecisionLinkWarning(warning: ImportWarning): boolean {
  * content. In a Camunda 7 / 8 file it stays a warning because the engines refuse it.
  */
 export function reportedImportWarnings(doc: Doc): ImportWarning[] {
-  if (!doc.importWarnings.some(isDecisionLinkWarning) || doc.platform() !== 'none') return doc.importWarnings;
+  if (!doc.importWarnings.some(isDecisionLinkWarning) || doc.platform() !== 'none') {
+    return doc.importWarnings;
+  }
   return doc.importWarnings.filter((warning) => !isDecisionLinkWarning(warning));
 }

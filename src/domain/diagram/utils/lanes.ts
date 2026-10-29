@@ -6,5 +6,7 @@ export function laneDepth(lanes: LaneBox[]): number {
 
 export function stretchLane(lane: LaneBox, width: number): void {
   lane.box.width = width - lane.box.x;
-  for (const child of lane.children) stretchLane(child, width);
+  for (const child of lane.children) {
+    stretchLane(child, width);
+  }
 }

@@ -21,9 +21,13 @@ export class ScopeLint {
   lintScope(scope: El, order: FlowOrder): void {
     const nodes = this.doc.flowNodes(scope);
     const adHoc = is(scope, 'bpmn:AdHocSubProcess');
-    if ((is(scope, 'bpmn:Process') || nodes.length) && !adHoc) this.lintStartAndEnd(scope, nodes);
+    if ((is(scope, 'bpmn:Process') || nodes.length) && !adHoc) {
+      this.lintStartAndEnd(scope, nodes);
+    }
     this.lintUnreachable(order);
-    for (const node of nodes) this.lintNode(node, adHoc);
+    for (const node of nodes) {
+      this.lintNode(node, adHoc);
+    }
   }
 
   private lintStartAndEnd(scope: El, nodes: El[]): void {
@@ -88,7 +92,9 @@ export class ScopeLint {
   checkDuplicateNames(): void {
     const groups = new Map<string, El[]>();
     for (const el of walk(this.doc.definitions)) {
-      if (!is(el, 'bpmn:FlowNode') && !is(el, 'bpmn:Participant') && !is(el, 'bpmn:Lane')) continue;
+      if (!is(el, 'bpmn:FlowNode') && !is(el, 'bpmn:Participant') && !is(el, 'bpmn:Lane')) {
+        continue;
+      }
       const name = this.findings.nameOf(el)?.trim();
       if (!name) continue;
       const key = `${kindLabel(el)}\u0000${name}`;

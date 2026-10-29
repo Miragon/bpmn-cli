@@ -39,7 +39,9 @@ async function sound(xml: string): Promise<void> {
   expect(xml).not.toMatch(/undefined/);
   const ids = [...xml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]!);
   expect(ids.length).toBe(new Set(ids).size);
-  for (const match of xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge|Plane) [^>]*?bpmnElement="([^"]+)"/g)) expect(ids).toContain(match[1]);
+  for (const match of xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge|Plane) [^>]*?bpmnElement="([^"]+)"/g)) {
+    expect(ids).toContain(match[1]);
+  }
   expect((await parseXml(xml)).importWarnings.map((warning) => warning.message)).toEqual([]);
 }
 
@@ -52,7 +54,9 @@ describe('ids for id-less elements a full redraw draws', () => {
     expect(outcome.xml).toContain('<bpmn:participant id="participant_shop" name="Shop" processRef="Process_A"/>');
     expect(outcome.xml).toContain('<bpmn:messageFlow id="messageFlow_customerToCheck" sourceRef="Part_B" targetRef="Task_1"/>');
     expect(outcome.xml).toContain('<bpmn:messageFlow id="messageFlow_checkToCustomer" name="Answer" sourceRef="Task_1" targetRef="Part_B"/>');
-    for (const id of ['collaboration_a', 'messageFlow_customerToCheck', 'messageFlow_checkToCustomer', 'participant_shop', 'Part_B']) expect(outcome.xml).toMatch(new RegExp(`<bpmndi:BPMN(?:Shape|Edge|Plane) id="[^"]+" bpmnElement="${id}"`));
+    for (const id of ['collaboration_a', 'messageFlow_customerToCheck', 'messageFlow_checkToCustomer', 'participant_shop', 'Part_B']) {
+      expect(outcome.xml).toMatch(new RegExp(`<bpmndi:BPMN(?:Shape|Edge|Plane) id="[^"]+" bpmnElement="${id}"`));
+    }
     expect(outcome.result.changed.filter((change) => change.detail?.startsWith('id added')).map((change) => [change.kind, change.id])).toEqual([
       ['collaboration', 'collaboration_a'],
       ['participant', 'participant_shop'],

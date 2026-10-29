@@ -36,7 +36,9 @@ export class ElementLabels {
       const text = this.el.get<string | undefined>('text');
       return own ?? (nameWords(text).length ? text! : 'TextAnnotation');
     }
-    if (own && (!named || own.replace(/[^A-Za-z]/g, '').length >= 3)) return named ? own : (this.joinLabel(own) ?? own);
+    if (own && (!named || own.replace(/[^A-Za-z]/g, '').length >= 3)) {
+      return named ? own : (this.joinLabel(own) ?? own);
+    }
     if (named) return name!;
     return this.kindLabel();
   }
@@ -57,11 +59,17 @@ export class ElementLabels {
   anchorContext(word: ContextWord): AnchorContext {
     const label = this.label();
     const own = this.own;
-    if (!own || is(this.el, 'bpmn:TextAnnotation') || hasIdWords(this.el.get<string | undefined>('name'))) return { context: `${word} ${label}` };
+    if (!own || is(this.el, 'bpmn:TextAnnotation') || hasIdWords(this.el.get<string | undefined>('name'))) {
+      return { context: `${word} ${label}` };
+    }
     const parts = this.contextParts(own);
     if (!parts) return { context: `${word} ${label}` };
-    if (parts.word === word && (word === 'After' || word === 'Before')) return { context: `${word} ${parts.tail.join(' ')}`, anchorKind: this.kindLabel() };
-    if (!parts.head.length && label === own) return { context: `${word} ${this.kindLabel()} ${label}` };
+    if (parts.word === word && (word === 'After' || word === 'Before')) {
+      return { context: `${word} ${parts.tail.join(' ')}`, anchorKind: this.kindLabel() };
+    }
+    if (!parts.head.length && label === own) {
+      return { context: `${word} ${this.kindLabel()} ${label}` };
+    }
     return { context: `${word} ${label}` };
   }
 
@@ -71,7 +79,9 @@ export class ElementLabels {
    */
   formerLabels(): string[] {
     const own = this.own;
-    if (!own || hasIdWords(this.el.get<string | undefined>('name')) || is(this.el, 'bpmn:TextAnnotation') || !this.contextParts(own)) return [];
+    if (!own || hasIdWords(this.el.get<string | undefined>('name')) || is(this.el, 'bpmn:TextAnnotation') || !this.contextParts(own)) {
+      return [];
+    }
     return [kindOf(this.el)?.family === 'gateway' && /join$/i.test(own) ? 'Join' : this.kindLabel()];
   }
 

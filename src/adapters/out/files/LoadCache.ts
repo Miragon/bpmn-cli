@@ -19,7 +19,9 @@ export class LoadCache {
 
   loaded(key: string, text: string, dir: string, load: () => Promise<{ loaded: LoadedBpmnlint; deps: LoadDeps }>): Promise<LoadedBpmnlint> {
     const hit = this.entries.get(key);
-    if (hit && hit.text === text && (!hit.deps || hit.deps.every((dep) => depState(dir, dep.ids) === dep.state))) return hit.loaded;
+    if (hit && hit.text === text && (!hit.deps || hit.deps.every((dep) => depState(dir, dep.ids) === dep.state))) {
+      return hit.loaded;
+    }
     if (hit?.deps) this.forgetResolutions(hit.deps);
     const entry: CacheEntry = {
       text,
@@ -51,7 +53,9 @@ export class LoadCache {
     for (const key of Object.keys(paths)) {
       const end = key.indexOf('\x00');
       const request = end < 0 ? key : key.slice(0, end);
-      if (requests.has(request) || packages.some((pkg) => request.startsWith(pkg))) delete paths[key];
+      if (requests.has(request) || packages.some((pkg) => request.startsWith(pkg))) {
+        delete paths[key];
+      }
     }
   }
 }

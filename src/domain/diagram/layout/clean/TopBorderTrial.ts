@@ -31,7 +31,9 @@ export class TopBorderTrial extends ArrangementTrial {
     const attached = new Set<GNode>();
     for (const artifact of layout.artifacts) {
       const ends: Array<LinkEnd | GNode | undefined> = [artifact.anchorNode, ...artifact.links.flatMap((link) => [link.from, link.to])];
-      for (const end of ends) if (end && 'host' in end && (end as GNode).host) attached.add(end as GNode);
+      for (const end of ends) {
+        if (end && 'host' in end && (end as GNode).host) attached.add(end as GNode);
+      }
     }
     let messages: Set<string> | undefined;
     const events = layout.nodes.flatMap((node) =>
@@ -54,7 +56,9 @@ export class TopBorderTrial extends ArrangementTrial {
         const mine = new Set(boundaryEvent.out);
         let length = 0, bends = 0;
         for (const edge of boundaryEvent.out) {
-          for (let index = 0; index + 1 < edge.points.length; index++) length += Math.abs(edge.points[index + 1]!.x - edge.points[index]!.x) + Math.abs(edge.points[index + 1]!.y - edge.points[index]!.y);
+          for (let index = 0; index + 1 < edge.points.length; index++) {
+            length += Math.abs(edge.points[index + 1]!.x - edge.points[index]!.x) + Math.abs(edge.points[index + 1]!.y - edge.points[index]!.y);
+          }
           bends += Math.max(0, edge.points.length - 2);
         }
         if (boundaryEvent.onTop) {
@@ -88,7 +92,9 @@ export class TopBorderTrial extends ArrangementTrial {
       ScopeGrid.placeBoundaryEvents(host);
       const title = host.child ? titleBox(host.box, nameOf(host)) : undefined;
       if (title && overlaps(title, boundaryEvent.box, 2)) {
-        if (LayoutDebug.on()) LayoutDebug.log(`[boundary] ${boundaryEvent.id} stays on the bottom border: the title of ${host.id} is in the way`);
+        if (LayoutDebug.on()) {
+          LayoutDebug.log(`[boundary] ${boundaryEvent.id} stays on the bottom border: the title of ${host.id} is in the way`);
+        }
         checkpoint.restore();
         continue;
       }
@@ -116,23 +122,30 @@ export class TopBorderTrial extends ArrangementTrial {
         const why = [now.up ? '' : 'not up', now.box ? '' : 'a line through it', now.label ? '' : 'its label not clear', boundaryEvent.labelLeft ? 'label left' : ''].filter(Boolean).join(', ');
         LayoutDebug.log(`[boundary] ${boundaryEvent.id} ${keep ? 'moves to the top border' : 'stays on the bottom border'}: ${this.showRoutes(before)} ${was.length} px ${was.bends} bends -> ${this.showRoutes(after)} ${now.length} px ${now.bends} bends${why ? ` (${why})` : ''}`);
       }
-      if (keep) before = after;
-      else {
+      if (keep) {
+        before = after;
+      } else {
         checkpoint.restore();
         ways.clear();
-        for (const [node, way] of kept) ways.set(node, way);
+        for (const [node, way] of kept) {
+          ways.set(node, way);
+        }
       }
     }
   }
 
   private messageEnds(scope: El): Set<string> {
     let root = scope;
-    while (root.$parent) root = root.$parent as El;
+    while (root.$parent) {
+      root = root.$parent as El;
+    }
     const ids = new Set<string>();
     for (const rootElement of many(root, 'rootElements')) {
       if (!is(rootElement, 'bpmn:Collaboration')) continue;
       for (const mf of many(rootElement, 'messageFlows')) {
-        for (const end of [mf.get<El | undefined>('sourceRef'), mf.get<El | undefined>('targetRef')]) if (end) ids.add(idOf(end));
+        for (const end of [mf.get<El | undefined>('sourceRef'), mf.get<El | undefined>('targetRef')]) {
+          if (end) ids.add(idOf(end));
+        }
       }
     }
     return ids;
@@ -149,14 +162,18 @@ export class TopBorderTrial extends ArrangementTrial {
   private crossingPairs(lines: readonly Point[][], otherLines: readonly Point[][]): number {
     const index = new XIndex<[Segment, number]>();
     otherLines.forEach((pts, lineIndex) => {
-      for (const segment of toSegments(pts)) index.add([segment, lineIndex], Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x));
+      for (const segment of toSegments(pts)) {
+        index.add([segment, lineIndex], Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x));
+      }
     });
     let count = 0;
     for (const pts of lines) {
       const met = new Set<number>();
       for (const segment of toSegments(pts)) {
         index.each(Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x), ([otherSegment, lineIndex]) => {
-          if (!met.has(lineIndex) && properCross(segment, otherSegment)) met.add(lineIndex);
+          if (!met.has(lineIndex) && properCross(segment, otherSegment)) {
+            met.add(lineIndex);
+          }
         });
       }
       count += met.size;

@@ -25,7 +25,9 @@ export class TextPreservation {
   /** Tries the original order of children first, bpmn-moddle's when that does not read back. */
   async result(): Promise<PreservedText> {
     const { original, baseline, next } = this;
-    if (next === baseline) return { xml: original, mode: 'unchanged', droppedComments: 0 };
+    if (next === baseline) {
+      return { xml: original, mode: 'unchanged', droppedComments: 0 };
+    }
     let docs: [XDocument, XDocument, XDocument];
     try {
       docs = [readXmlText(original), readXmlText(baseline), readXmlText(next)];
@@ -44,7 +46,9 @@ export class TextPreservation {
         continue;
       }
       if (xml === original) return { xml, mode: 'unchanged', droppedComments: 0 };
-      if (await this.readsAs(xml)) return { xml, mode: 'preserved', droppedComments: Math.max(0, docs[0].comments - kept) };
+      if (await this.readsAs(xml)) {
+        return { xml, mode: 'preserved', droppedComments: Math.max(0, docs[0].comments - kept) };
+      }
       reason = 'the preserved text does not read back as the changed model';
     }
     return this.plain(reason);

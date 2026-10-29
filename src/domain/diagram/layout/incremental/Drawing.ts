@@ -123,7 +123,9 @@ export class Drawing {
 
   adoptRoute(edge: DEdge, points: Point[]): void {
     edge.points = points;
-    if (edge.label || raw<string>(edge.el, 'name')) this.labels.placeEdgeLabel(edge);
+    if (edge.label || raw<string>(edge.el, 'name')) {
+      this.labels.placeEdgeLabel(edge);
+    }
   }
 
   placeShapeLabel(shape: DShape, prefer?: LabelSide): Box | undefined {
@@ -148,7 +150,9 @@ export class Drawing {
 
   clearLabels(fresh: readonly DEdge[]): void {
     for (const shape of this.plane.shapes.values()) {
-      if (!shape.label || !hasExternalLabel(shape) || !fresh.some((edge) => pathHits(edge.points, shape.label!, 1))) continue;
+      if (!shape.label || !hasExternalLabel(shape) || !fresh.some((edge) => pathHits(edge.points, shape.label!, 1))) {
+        continue;
+      }
       const host = shape.hostId ? this.plane.shapes.get(shape.hostId)?.bounds : undefined;
       const side = labelSideOf(shape, host);
       this.labels.placeShapeLabel(shape, side === 'inside' ? undefined : side);
@@ -163,7 +167,9 @@ export class Drawing {
     const delta = new Map<string, { dx: number; dy: number }>();
     for (const shape of this.plane.shapes.values()) {
       const beforeBox = before.bounds.get(shape.id);
-      if (!beforeBox || Math.abs(beforeBox.width - shape.bounds.width) > 0.5 || Math.abs(beforeBox.height - shape.bounds.height) > 0.5) continue;
+      if (!beforeBox || Math.abs(beforeBox.width - shape.bounds.width) > 0.5 || Math.abs(beforeBox.height - shape.bounds.height) > 0.5) {
+        continue;
+      }
       const dx = shape.bounds.x - beforeBox.x;
       const dy = shape.bounds.y - beforeBox.y;
       if (dx || dy) delta.set(shape.id, { dx, dy });
@@ -172,7 +178,9 @@ export class Drawing {
       if (!before.unchanged(edge)) continue;
       const sourceDelta = edge.sourceId ? delta.get(edge.sourceId) : undefined;
       const targetDelta = edge.targetId ? delta.get(edge.targetId) : undefined;
-      if (!sourceDelta || !targetDelta || sourceDelta.dx !== targetDelta.dx || sourceDelta.dy !== targetDelta.dy) continue;
+      if (!sourceDelta || !targetDelta || sourceDelta.dx !== targetDelta.dx || sourceDelta.dy !== targetDelta.dy) {
+        continue;
+      }
       translateEdge(edge, sourceDelta.dx, sourceDelta.dy);
     }
     const rerouted: DEdge[] = [];

@@ -48,7 +48,9 @@ export class JoinColumnTrial extends ArrangementTrial {
       tried.add(candidate);
       const before = routed ?? route();
       if (before.above.size && !this.takenColumns(before.above).has(candidate)) {
-        if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${candidate.id} stays: entered over the top`);
+        if (LayoutDebug.on()) {
+          LayoutDebug.log(`[joins] ${candidate.id} stays: entered over the top`);
+        }
         routed = before;
         continue;
       }
@@ -57,7 +59,9 @@ export class JoinColumnTrial extends ArrangementTrial {
       const step = (node: GNode): number => (shifts.get(node) ?? 0) - (kept.get(node) ?? 0);
       const reset = (to: ReadonlyMap<GNode, number>): void => {
         shifts.clear();
-        for (const [node, shift] of to) shifts.set(node, shift);
+        for (const [node, shift] of to) {
+          shifts.set(node, shift);
+        }
       };
       /**
        * Better and nothing worse: more rises, fewer labels, or fewer crossings / cuts at as many
@@ -86,15 +90,22 @@ export class JoinColumnTrial extends ArrangementTrial {
       const push = (): boolean => {
         let next = first;
         for (let round = 0; next.length && round < 3 * MAX_JOIN_SHIFT; round++, next = took((last = this.takenColumns()))) {
-          for (const node of next) shifts.set(node, (shifts.get(node) ?? 0) + 1);
+          for (const node of next) {
+            shifts.set(node, (shifts.get(node) ?? 0) + 1);
+          }
           if ([...shifts.keys()].filter((node) => node !== candidate && step(node)).length > MAX_PUSHED) {
-            if (round) back();
-            else reset(alone);
+            if (round) {
+              back();
+            } else {
+              reset(alone);
+            }
             return false;
           }
           arrange(shifts);
         }
-        if (LayoutDebug.on()) others = layout.nodes.filter((node) => node !== candidate && step(node)).map((node) => `${node.id} ${step(node)}`).join(', ');
+        if (LayoutDebug.on()) {
+          others = layout.nodes.filter((node) => node !== candidate && step(node)).map((node) => `${node.id} ${step(node)}`).join(', ');
+        }
         return [...shifts].some(([node, shift]) => shift !== alone.get(node));
       };
       const back = (): void => {
@@ -123,10 +134,14 @@ export class JoinColumnTrial extends ArrangementTrial {
           if (keeps(together)) {
             after = together;
             keep = true;
-          } else back();
+          } else {
+            back();
+          }
         }
       }
-      if (LayoutDebug.on()) LayoutDebug.log(`[joins] ${candidate.id} ${keep ? `moves ${step(candidate)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[joins] ${candidate.id} ${keep ? `moves ${step(candidate)} right` : 'stays'}: ${show(before)} -> ${show(after)}${together ? ` (with ${others}${after === together ? '' : `: ${show(together)}`})` : ''}`);
+      }
       if (keep) {
         routed = after;
         taken = last;
@@ -152,13 +167,21 @@ export class JoinColumnTrial extends ArrangementTrial {
     const add = (box: Box, owner: GNode | undefined): void => index.add([box, owner], box.x, box.x + box.width);
     for (const node of layout.nodes) {
       add(node.box, node);
-      for (const boundaryEvent of node.boundary) add(boundaryEvent.box, node);
+      for (const boundaryEvent of node.boundary) {
+        add(boundaryEvent.box, node);
+      }
     }
     const ownerOf = (artifact: GArtifact): GNode | undefined => artifact.anchorNode?.host ?? artifact.anchorNode;
-    for (const artifact of routedArtifacts(layout)) add(artifact.box, ownerOf(artifact));
+    for (const artifact of routedArtifacts(layout)) {
+      add(artifact.box, ownerOf(artifact));
+    }
     const labels = new ScopeLabels(layout);
-    for (const [box, node] of labels.ownShapes()) add(box, node);
-    for (const [box, artifact] of labels.placedData()) add(box, ownerOf(artifact));
+    for (const [box, node] of labels.ownShapes()) {
+      add(box, node);
+    }
+    for (const [box, artifact] of labels.placedData()) {
+      add(box, ownerOf(artifact));
+    }
     for (const riser of rising) {
       const riseX = ChannelRouter.riseX(riser), top = riser.box.y + riser.box.height, low = Math.max(...entries(riser).map(ChannelRouter.riseFrom));
       const owners = index.near(riseX - RISE_KEEP, riseX + RISE_KEEP).filter(([box, owner]) => owner !== riser && box.x - RISE_KEEP < riseX && riseX < box.x + box.width + RISE_KEEP && box.y < low && top < box.y + box.height).map(([, owner]) => owner);

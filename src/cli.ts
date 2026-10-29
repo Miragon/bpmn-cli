@@ -38,7 +38,9 @@ function exitWhenWritten(): void {
 const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
 const relayoutDiagram = new RelayoutDiagramService(project, files);
-if (process.env['BPMN_LAYOUT_DEBUG']) relayoutDiagram.setDebugSink({ sink: (line) => process.stderr.write(`${line}\n`) });
+if (process.env['BPMN_LAYOUT_DEBUG']) {
+  relayoutDiagram.setDebugSink({ sink: (line) => process.stderr.write(`${line}\n`) });
+}
 const cli = new Cli(VERSION, {
   editDocument: new EditDocumentService(project, files),
   createDocument: new CreateDocumentService(project, files),

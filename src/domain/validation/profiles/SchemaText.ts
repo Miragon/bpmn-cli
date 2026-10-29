@@ -70,7 +70,9 @@ export class SchemaText {
         const id = this.attr(el, 'id');
         if (id !== undefined) {
           ids.add(id.trim());
-          if (!NCNAME.test(id.trim())) out.push({ kind: 'id', owner: id.trim(), element: el.local, value: id.trim() });
+          if (!NCNAME.test(id.trim())) {
+            out.push({ kind: 'id', owner: id.trim(), element: el.local, value: id.trim() });
+          }
           here = id.trim();
         }
         const type = schema.typeOf(el.local, el.uri, undefined);
@@ -78,10 +80,14 @@ export class SchemaText {
         for (const attribute of booleans?.size ? el.attrs : []) {
           if (!booleans!.has(attribute.name)) continue;
           const decoded = this.kit.decodeXml(attribute.raw);
-          if (!XSD_BOOLEAN.test(decoded)) out.push({ kind: 'boolean', owner: el.uri === this.kit.BPMN_NS ? here : (this.attr(el, 'bpmnElement')?.trim() ?? owner), element: el.local, ref: attribute.name, value: decoded, attribute: true });
+          if (!XSD_BOOLEAN.test(decoded)) {
+            out.push({ kind: 'boolean', owner: el.uri === this.kit.BPMN_NS ? here : (this.attr(el, 'bpmnElement')?.trim() ?? owner), element: el.local, ref: attribute.name, value: decoded, attribute: true });
+          }
         }
       }
-      for (const child of this.kit.elementChildren(el)) collect(child, here);
+      for (const child of this.kit.elementChildren(el)) {
+        collect(child, here);
+      }
     };
     collect(root, undefined);
 
@@ -91,7 +97,9 @@ export class SchemaText {
         if (!schema.isA(type, base)) continue;
         for (const attrName of names) {
           const idref = this.attr(el, attrName)?.trim();
-          if (idref && !ids.has(idref)) out.push({ kind: 'idref', owner: here, element: el.local, ref: attrName, value: idref, attribute: true });
+          if (idref && !ids.has(idref)) {
+            out.push({ kind: 'idref', owner: here, element: el.local, ref: attrName, value: idref, attribute: true });
+          }
         }
       }
       const kids = this.kit.elementChildren(el);
@@ -100,7 +108,9 @@ export class SchemaText {
         for (const kid of kids) {
           if (kid.uri !== this.kit.BPMN_NS || !names.includes(kid.local)) continue;
           const idref = this.text(xml, kid);
-          if (idref && !ids.has(idref)) out.push({ kind: 'idref', owner: here, element: el.local, ref: kid.local, value: idref });
+          if (idref && !ids.has(idref)) {
+            out.push({ kind: 'idref', owner: here, element: el.local, ref: kid.local, value: idref });
+          }
         }
       }
       const slots = schema.slotsOf(type);
@@ -125,7 +135,9 @@ export class SchemaText {
         if (kidType) visit(kid, kidType, here);
       }
     };
-    if (root.uri === this.kit.BPMN_NS && root.local === 'definitions') visit(root, 'bpmn:Definitions', undefined);
+    if (root.uri === this.kit.BPMN_NS && root.local === 'definitions') {
+      visit(root, 'bpmn:Definitions', undefined);
+    }
     return out;
   }
 

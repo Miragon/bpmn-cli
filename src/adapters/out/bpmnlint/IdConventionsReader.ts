@@ -60,7 +60,9 @@ export class IdConventionsReader {
     const ignored: string[] = [];
     this.noteUnusablePrefixes(options.prefixes ?? {});
     const table = this.typePrefixes(moddle, convention, ignored);
-    if (qualifier !== 'off') this.qualifiedPrefixes(moddle, convention, table, qualifier, ignored);
+    if (qualifier !== 'off') {
+      this.qualifiedPrefixes(moddle, convention, table, qualifier, ignored);
+    }
     this.noteDiPrefixes(moddle, convention);
     const conventions: IdConventions = {
       prefixes: table,
@@ -84,7 +86,9 @@ export class IdConventionsReader {
 
   /** An unknown case resolves to the rule's fallback, PascalCase. */
   private caseOf(configured: string, label: string): string {
-    if (label !== configured) this.note('case', configured, `is unknown: the rule checks ${label}, and new ids take it`, `Write one of ${CASES.join(', ')} in the .bpmnlintrc.${this.didYouMean(configured, CASES)}`);
+    if (label !== configured) {
+      this.note('case', configured, `is unknown: the rule checks ${label}, and new ids take it`, `Write one of ${CASES.join(', ')} in the .bpmnlintrc.${this.didYouMean(configured, CASES)}`);
+    }
     return label;
   }
 
@@ -115,8 +119,11 @@ export class IdConventionsReader {
       const type = `bpmn:${moddleType.name}`;
       const prefix = convention.prefixOf(moddle.create(type, { id: 'x' }));
       if (prefix === null) continue;
-      if (isUsablePrefix(prefix)) table[type] = prefix;
-      else ignored.push(type);
+      if (isUsablePrefix(prefix)) {
+        table[type] = prefix;
+      } else {
+        ignored.push(type);
+      }
     }
     return table;
   }
@@ -131,8 +138,9 @@ export class IdConventionsReader {
         const event = moddle.create(def.type, { id: 'x', eventDefinitions: [moddle.create(TRIGGERS[trigger].definition)] });
         const qualified = convention.prefixesFor(event).find((candidate) => candidate !== plain);
         const key = `${def.type}:${trigger}`;
-        if (isUsablePrefix(qualified)) table[key] = qualified;
-        else if (qualified !== undefined && qualifier === 'required' && !this.noted.has(key)) {
+        if (isUsablePrefix(qualified)) {
+          table[key] = qualified;
+        } else if (qualified !== undefined && qualifier === 'required' && !this.noted.has(key)) {
           this.noted.add(key);
           ignored.push(key);
           this.note(`prefix of ${key}`, qualified, `is longer than 56 characters (the ${def.type} prefix qualified with the trigger): new ids of such events take the plain prefix, and the rule reports them`, `Shorten the ${def.type} prefix in the .bpmnlintrc, or set eventDefinitionQualifier to optional.`);
@@ -148,7 +156,9 @@ export class IdConventionsReader {
   private noteDiPrefixes(moddle: Moddle, convention: ElementIdConvention): void {
     for (const type of DI_WITH_IDS) {
       const prefix = convention.prefixOf(moddle.create(type, { id: 'x' }));
-      if (prefix !== null) this.note(`prefix of ${type}`, prefix, 'is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids', 'Set it to false or remove it; bpmn-js names DI <id>_di too.');
+      if (prefix !== null) {
+        this.note(`prefix of ${type}`, prefix, 'is not followed: bpmn-cli names DI after its element (BPMNShape_<id>, <id>_di), and the rule reports new DI ids', 'Set it to false or remove it; bpmn-js names DI <id>_di too.');
+      }
     }
   }
 }

@@ -27,7 +27,9 @@ export function floodKey(warning: Finding): string {
 /** `W_DEAD_END task_a, W_UNREACHABLE x5 [A, B, C, D, E]` */
 export function findingList(findings: readonly Finding[]): string {
   const groups = new Map<string, Finding[]>();
-  for (const finding of findings) groups.set(floodKey(finding), [...(groups.get(floodKey(finding)) ?? []), finding]);
+  for (const finding of findings) {
+    groups.set(floodKey(finding), [...(groups.get(floodKey(finding)) ?? []), finding]);
+  }
   return [...groups]
     .map(([key, group]) => (group.length === 1 ? `${key}${group[0]!.element ? ` ${group[0]!.element}` : ''}` : `${key} x${group.length} [${idsText(group.map((group) => group.element ?? '?'))}]`))
     .join(', ');

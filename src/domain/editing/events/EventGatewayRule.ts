@@ -29,7 +29,9 @@ export class EventGatewayRule {
   warnFlow(flow: El, changes: ChangeSet): void {
     const gateway = flow.get<El | undefined>('sourceRef');
     const target = flow.get<El | undefined>('targetRef');
-    if (!gateway || !target || !is(gateway, 'bpmn:EventBasedGateway') || this.rule === 'engines') return;
+    if (!gateway || !target || !is(gateway, 'bpmn:EventBasedGateway') || this.rule === 'engines') {
+      return;
+    }
     const problem = this.bpmnTargetProblem(gateway, target, [flow]);
     if (!problem) return;
     changes.warn({

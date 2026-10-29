@@ -11,7 +11,9 @@ export class ValidationText {
     const report = this.report;
     const { errors, warnings, platform } = report;
     const lines: string[] = [];
-    if (report.importWarnings.length) lines.push(...report.importWarnings.map((warning) => `import: ${warning}`));
+    if (report.importWarnings.length) {
+      lines.push(...report.importWarnings.map((warning) => `import: ${warning}`));
+    }
     const findings = new WarningLines(advisoryOf(report.validators));
     if (errors.length) lines.push(findings.problems(errors).trimEnd());
     if (warnings.length) lines.push(findings.problems(warnings).trimEnd());

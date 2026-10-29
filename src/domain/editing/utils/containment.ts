@@ -10,7 +10,9 @@ export function contains(parent: El, child: El): boolean {
   for (const property of descriptor.properties ?? []) {
     if (property.isReference) continue;
     const propValue = ownValue(parent, property.name);
-    if (Array.isArray(propValue) ? propValue.includes(child) : propValue === child) return true;
+    if (Array.isArray(propValue) ? propValue.includes(child) : propValue === child) {
+      return true;
+    }
   }
   return false;
 }
@@ -24,8 +26,11 @@ export function detachFromParent(el: El, replacement?: El): El | undefined {
     if (Array.isArray(propValue)) {
       const index = propValue.indexOf(el);
       if (index === -1) continue;
-      if (replacement) propValue[index] = replacement;
-      else propValue.splice(index, 1);
+      if (replacement) {
+        propValue[index] = replacement;
+      } else {
+        propValue.splice(index, 1);
+      }
     } else {
       if (propValue !== el) continue;
       parent.set(property.name, replacement);
@@ -45,7 +50,13 @@ export function referencesToAny(root: El, targets: Set<El>): Array<{ holder: El;
       if (!property.isReference) continue;
       const propValue = ownValue(el, property.name);
       if (property.isMany) {
-        if (Array.isArray(propValue)) for (const entry of propValue) if (isEl(entry) && targets.has(entry)) refs.push({ holder: el, prop: property.name, isMany: true, target: entry });
+        if (Array.isArray(propValue)) {
+          for (const entry of propValue) {
+            if (isEl(entry) && targets.has(entry)) {
+              refs.push({ holder: el, prop: property.name, isMany: true, target: entry });
+            }
+          }
+        }
       } else if (isEl(propValue) && targets.has(propValue)) {
         refs.push({ holder: el, prop: property.name, isMany: false, target: propValue });
       }
@@ -56,6 +67,8 @@ export function referencesToAny(root: El, targets: Set<El>): Array<{ holder: El;
 
 export function nearestWithId(el: El): El | undefined {
   let cur: El | undefined = el;
-  while (cur && !cur.get<string | undefined>('id')) cur = cur.$parent as El | undefined;
+  while (cur && !cur.get<string | undefined>('id')) {
+    cur = cur.$parent as El | undefined;
+  }
   return cur;
 }

@@ -14,7 +14,11 @@ export class C8FlowRules extends C8Rules {
   constructor(run: RuleRun, prefix: string) {
     super(run, prefix);
     const { doc } = run;
-    if (doc.source) for (const entry of run.kit.unkeptEntries(doc.definitions, doc.source.mirror)) if (entry.direction === 'outgoing') this.unlisted.set(entry.flow, entry.node);
+    if (doc.source) {
+      for (const entry of run.kit.unkeptEntries(doc.definitions, doc.source.mirror)) {
+        if (entry.direction === 'outgoing') this.unlisted.set(entry.flow, entry.node);
+      }
+    }
   }
 
   checkTransaction(el: El): void {
@@ -41,8 +45,11 @@ export class C8FlowRules extends C8Rules {
     if (cc) {
       const body = peek<string>(cc, 'body') ?? '';
       const fix = `\`bpmn set <file> ${id} ${sh(`completion==${feelOf(isFeel(body) ? body.trim().slice(1) : body)}`)}\` (check the FEEL syntax)`;
-      if (!isFeel(body)) this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'adHoc:completion', `The completion condition "${body.trim()}" of ad-hoc sub-process ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, `${fix}, or remove it: \`bpmn set <file> ${id} completion=\`.`);
-      else this.checkFeel(el, undefined, 'adHoc:completion', `The completion condition of ad-hoc sub-process ${id}`, body, `${fix}.`);
+      if (!isFeel(body)) {
+        this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'adHoc:completion', `The completion condition "${body.trim()}" of ad-hoc sub-process ${id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, `${fix}, or remove it: \`bpmn set <file> ${id} completion=\`.`);
+      } else {
+        this.checkFeel(el, undefined, 'adHoc:completion', `The completion condition of ad-hoc sub-process ${id}`, body, `${fix}.`);
+      }
     }
   }
 

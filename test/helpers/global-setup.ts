@@ -12,6 +12,8 @@ import { findUp } from '../../src/adapters/out/files/utils/find-up.js';
 export default function setup(): void {
   for (const dir of [tmpdir(), join(import.meta.dirname, '..', '..')]) {
     const found = findUp(dir, ['.bpmnlintrc'], { stopAtGitRoot: true });
-    if (found) throw new Error(`${join(found.dir, found.name)} applies to the test directories (bpmn-cli would run it in every test): move it away`);
+    if (found) {
+      throw new Error(`${join(found.dir, found.name)} applies to the test directories (bpmn-cli would run it in every test): move it away`);
+    }
   }
 }

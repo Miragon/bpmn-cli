@@ -222,9 +222,15 @@ describe('deploy rules: the profile flags exactly what Camunda 8.9.22 refuses', 
   });
 
   it('timer values', () => {
-    for (const timerValue of ['PT1.5H', 'PT1.5M', 'P1DT1.5H', 'PT1,5H']) expect(new TimerValue(timerValue).isDuration(), timerValue).toBe(false);
-    for (const timerValue of ['PT1.5S', 'PT1,5S', 'PT0.5S', 'P1DT1H30M']) expect(new TimerValue(timerValue).isDuration(), timerValue).toBe(true);
-    for (const timerValue of ['2030-12-31t10:00:00z', '2030-12-31t10:00:00Z', '2030-12-31T10:00:00z']) expect(new TimerValue(timerValue).isDateTime(), timerValue).toBe(true);
+    for (const timerValue of ['PT1.5H', 'PT1.5M', 'P1DT1.5H', 'PT1,5H']) {
+      expect(new TimerValue(timerValue).isDuration(), timerValue).toBe(false);
+    }
+    for (const timerValue of ['PT1.5S', 'PT1,5S', 'PT0.5S', 'P1DT1H30M']) {
+      expect(new TimerValue(timerValue).isDuration(), timerValue).toBe(true);
+    }
+    for (const timerValue of ['2030-12-31t10:00:00z', '2030-12-31t10:00:00Z', '2030-12-31T10:00:00z']) {
+      expect(new TimerValue(timerValue).isDateTime(), timerValue).toBe(true);
+    }
     expect(new TimerValue('R/PT1.5H').isCycle()).toBe(false);
     expect(new TimerValue('R/2030-12-31t10:00:00z/PT1H').isCycle()).toBe(true);
   });
@@ -321,7 +327,9 @@ describe('kinds sections', () => {
     expect(KINDS_SECTION_NAMES).toContain('zeebeElements');
     const named = [...guideText().matchAll(/kinds --section ([A-Za-z,]+)/g)].flatMap((match) => match[1]!.split(','));
     expect(named).toContain('zeebeElements');
-    for (const section of named) expect(() => kindsSections(section), section).not.toThrow();
+    for (const section of named) {
+      expect(() => kindsSections(section), section).not.toThrow();
+    }
   }, 60000);
 });
 
@@ -339,7 +347,9 @@ async function deploy(name: string, text: string): Promise<string | undefined> {
   if (!res.ok) return json.detail ?? String(res.status);
   for (const deployment of json.deployments ?? []) {
     const key = deployment.processDefinition?.processDefinitionKey;
-    if (key) await fetch(`${ENGINE}/resources/${key}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    if (key) {
+      await fetch(`${ENGINE}/resources/${key}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    }
   }
   return undefined;
 }
@@ -353,7 +363,9 @@ describe.skipIf(!ENGINE)('live engine: the verdicts hold', () => {
     }
     const wrong: string[] = [];
     for (const [expression] of FEEL_VERDICTS.filter(([, ok]) => !ok)) {
-      if ((await deploy('P_bpmn_cli_feel_bad', xml(gateway([`= ${expression}`])).replace('id="P_Test"', 'id="P_bpmn_cli_feel_bad"'))) === undefined) wrong.push(expression);
+      if ((await deploy('P_bpmn_cli_feel_bad', xml(gateway([`= ${expression}`])).replace('id="P_Test"', 'id="P_bpmn_cli_feel_bad"'))) === undefined) {
+        wrong.push(expression);
+      }
     }
     expect(wrong).toEqual([]);
   }, 600000);

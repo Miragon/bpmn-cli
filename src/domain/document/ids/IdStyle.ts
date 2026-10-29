@@ -64,7 +64,9 @@ export class IdStyle {
   private headOf(req: IdRequest): { head: string; source: PrefixSource } {
     const type = this.typeOf(req.key);
     const declared = this.conventions.headFor(type, req.trigger);
-    if (declared !== undefined) return { head: declared, source: this.declared ? 'lint' : 'default' };
+    if (declared !== undefined) {
+      return { head: declared, source: this.declared ? 'lint' : 'default' };
+    }
     if (type === 'bpmn:Process') return { head: '', source: 'bpmn-cli' };
     return { head: caseLike(UNCHECKED_PREFIXES[type] ?? `${lcfirst(localName(type))}_`, !this.conventions.upperFirst), source: 'bpmn-cli' };
   }
@@ -102,7 +104,9 @@ export class IdStyle {
     const { head } = this.headOf(req);
     const room = max - head.length;
     const body = this.bodyFor(named ? req.name! : this.unnamedText(req, head, spelled), req, head);
-    if (qualified && !named && req.anchorKind) return `${head}${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG))}`;
+    if (qualified && !named && req.anchorKind) {
+      return `${head}${this.withWord(body, req.anchorKind, Math.min(room, MAX_SLUG))}`;
+    }
     return `${head}${this.cutBody(body, room)}`;
   }
 
@@ -112,7 +116,9 @@ export class IdStyle {
    */
   private bodyFor(text: string, req: IdRequest, head: string): string {
     const body = this.bodyOf(text);
-    if (body && !((this.lettersOnly || head === '') && /^[0-9]/.test(body))) return body;
+    if (body && !((this.lettersOnly || head === '') && /^[0-9]/.test(body))) {
+      return body;
+    }
     const word = head === '' ? 'Process' : kindWord(req.key, req.trigger);
     return this.bodyOf(`${this.unsaid(word, head) || word} ${text}`);
   }
@@ -125,7 +131,9 @@ export class IdStyle {
 
   /** A taken unnamed gateway or activity spells its kind (gateway_parallelAfterCheck). */
   private spelledBase(req: IdRequest): string | undefined {
-    if (!SPELLABLE.has(req.key) || hasIdWords(req.name) || !nameWords(req.context).length) return undefined;
+    if (!SPELLABLE.has(req.key) || hasIdWords(req.name) || !nameWords(req.context).length) {
+      return undefined;
+    }
     const word = kindWord(req.key, req.trigger).toLowerCase();
     if (this.headOf(req).head.toLowerCase().includes(word)) return undefined;
     return this.derived(req, true);
@@ -133,7 +141,9 @@ export class IdStyle {
 
   /** An id that repeats its unnamed anchor's names the anchor's kind (task_afterCheckGateway). */
   private qualifiedBase(req: IdRequest): string | undefined {
-    if (!req.anchorKind || hasIdWords(req.name) || !nameWords(req.context).length) return undefined;
+    if (!req.anchorKind || hasIdWords(req.name) || !nameWords(req.context).length) {
+      return undefined;
+    }
     return this.derived(req, false, true);
   }
 
@@ -213,7 +223,9 @@ export class IdStyle {
   next(req: IdRequest, ids: IdRegistry): { id: string; base: string } {
     if (!this.isConnection(req) && this.numbered(req)) {
       let number = 1;
-      while (ids.has(`${NUMBERED_PROCESS}${number}`)) number++;
+      while (ids.has(`${NUMBERED_PROCESS}${number}`)) {
+        number++;
+      }
       return { id: `${NUMBERED_PROCESS}${number}`, base: `${NUMBERED_PROCESS}${number}` };
     }
     let base = this.wanted(req);
@@ -227,7 +239,9 @@ export class IdStyle {
     }
     const recut = (max: number): string => (base === qualified ? this.derived(req, false, true, max) : this.wanted(req, max));
     let id = base;
-    for (let suffixNumber = 2; ids.has(id); suffixNumber++) id = withSuffix(base, this.suffixSep(), suffixNumber, recut);
+    for (let suffixNumber = 2; ids.has(id); suffixNumber++) {
+      id = withSuffix(base, this.suffixSep(), suffixNumber, recut);
+    }
     return { id, base };
   }
 

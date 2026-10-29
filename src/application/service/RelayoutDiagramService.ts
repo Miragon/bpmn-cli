@@ -53,7 +53,9 @@ export class RelayoutDiagramService implements RelayoutDiagramUseCase {
     const collapse = opts.collapse ?? [];
     const subs = new Map([...expand, ...collapse].map((id) => [id, doc.require(id, SUB_PROCESS_TYPES, 'sub-process')]));
     const both = expand.filter((id) => collapse.includes(id));
-    if (both.length) throw usageError(`${both.join(', ')} given to both --expand and --collapse`);
+    if (both.length) {
+      throw usageError(`${both.join(', ')} given to both --expand and --collapse`);
+    }
     const result = await new EditBatch(doc, [], { ...opts, layout: 'full', expand, collapse }).run(target);
     for (const [id, expanded] of [...expand.map((id) => [id, true] as const), ...collapse.map((id) => [id, false] as const)]) {
       const sub = subs.get(id)!;

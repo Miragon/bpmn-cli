@@ -109,8 +109,12 @@ export class C8ExtensionRules extends C8Rules {
     if (this.kit.is(host, 'bpmn:StartEvent')) return 'start events';
     if (this.kit.is(host, 'bpmn:BoundaryEvent')) return 'boundary events';
     const defs = list(host, 'eventDefinitions');
-    if (this.kit.is(host, 'bpmn:IntermediateThrowEvent') && !defs.length) return 'none intermediate throw events';
-    if (this.kit.is(host, 'bpmn:EndEvent') && !defs.length) return 'none end events';
+    if (this.kit.is(host, 'bpmn:IntermediateThrowEvent') && !defs.length) {
+      return 'none intermediate throw events';
+    }
+    if (this.kit.is(host, 'bpmn:EndEvent') && !defs.length) {
+      return 'none end events';
+    }
     return undefined;
   }
 
@@ -183,7 +187,9 @@ export class C8ExtensionRules extends C8Rules {
     const where = `${this.zeebeName(local)}${path ? ` (in ${path})` : ''} of ${this.describe(host, owner)}`;
     const names = new Set(zeebeType.attributes.map((attribute) => attribute.name));
     for (const attributeKey of Object.keys(zeebeElement as unknown as Record<string, unknown>)) {
-      if (attributeKey.startsWith('$') || attributeKey.startsWith('xmlns') || attributeKey.includes(':')) continue;
+      if (attributeKey.startsWith('$') || attributeKey.startsWith('xmlns') || attributeKey.includes(':')) {
+        continue;
+      }
       if (names.has(attributeKey)) continue;
       const guess = didYouMean(attributeKey, [...names]);
       this.push('runtime', 'W_C8_UNKNOWN_ATTRIBUTE', host, owner, `ext:${path}/${local}@${attributeKey}`, `${where} has the unknown attribute ${attributeKey}${guess ? ` (did you mean ${guess}?)` : ''}; Camunda 8 ignores it`, this.rebuildHint(host, owner, this.zeebeName(path ? path.split(' > ')[0]!.replace(/^[^:]+:/, '') : local)));
@@ -233,7 +239,9 @@ export class C8ExtensionRules extends C8Rules {
   private checkBinding(host: El, owner: El | undefined, zeebeElement: El, local: string): void {
     const where = this.describe(host, owner);
     const binding = attr(zeebeElement, 'bindingType');
-    if (binding === undefined || !['calledDecision', 'calledElement', 'formDefinition'].includes(local)) return;
+    if (binding === undefined || !['calledDecision', 'calledElement', 'formDefinition'].includes(local)) {
+      return;
+    }
     if (!BINDING_TYPES.includes(binding)) {
       this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `${local}:bindingType`, `${this.zeebeName(local)} of ${where} has bindingType="${binding}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, this.fixHint(host, owner, zeebeElement, { bindingType: 'latest' }));
     } else if (binding === 'versionTag' && blank(attr(zeebeElement, 'versionTag'))) {
@@ -271,12 +279,21 @@ export class C8ExtensionRules extends C8Rules {
       const label = `Execution listener ${index + 1}${ev ? ` (${ev})` : ''} of ${where}`;
       const sel = addr ? `\`bpmn ext remove <file> ${addr.id} ${sh(`${addr.prefix}${this.zeebeName('executionListeners')}/${this.zeebeName('executionListener')}[${index}]`)}\`` : 'remove it from the XML';
       const again = (fix: string): string => `${sel}, then ${this.extAdd(host, owner, `${this.zeebeName('executionListeners')}/${this.zeebeName('executionListener')} ${fix}`)}`;
-      if (missing(attr(listener, 'type'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<start|end>'} type=<jobType>`)}.`);
-      if (ev === undefined || ev.trim() === '') this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
-      else if (ev !== 'start' && ev !== 'end') this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:eventType`, `${label}: eventType "${ev}" is not start or end; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
-      else if (ev === 'start' && (this.kit.is(host, 'bpmn:StartEvent') || this.kit.is(host, 'bpmn:BoundaryEvent'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:start`, `${label}: Camunda 8 does not support start listeners on ${this.kit.is(host, 'bpmn:StartEvent') ? 'start' : 'boundary'} events and refuses the file`, `Make it an end listener or remove it: ${again(`eventType=end type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
-      else if (ev === 'end' && this.kit.is(host, 'bpmn:Gateway')) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:end`, `${label}: Camunda 8 does not support end listeners on gateways and refuses the file`, `Make it a start listener or remove it: ${again(`eventType=start type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
-      for (const taskHeaders of this.kids(listener, 'taskHeaders')) this.checkHeaders(host, owner, taskHeaders, `execution listener ${index + 1}`);
+      if (missing(attr(listener, 'type'))) {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<start|end>'} type=<jobType>`)}.`);
+      }
+      if (ev === undefined || ev.trim() === '') {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      } else if (ev !== 'start' && ev !== 'end') {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:eventType`, `${label}: eventType "${ev}" is not start or end; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<start|end> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      } else if (ev === 'start' && (this.kit.is(host, 'bpmn:StartEvent') || this.kit.is(host, 'bpmn:BoundaryEvent'))) {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:start`, `${label}: Camunda 8 does not support start listeners on ${this.kit.is(host, 'bpmn:StartEvent') ? 'start' : 'boundary'} events and refuses the file`, `Make it an end listener or remove it: ${again(`eventType=end type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      } else if (ev === 'end' && this.kit.is(host, 'bpmn:Gateway')) {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `listener:${index}:end`, `${label}: Camunda 8 does not support end listeners on gateways and refuses the file`, `Make it a start listener or remove it: ${again(`eventType=start type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      }
+      for (const taskHeaders of this.kids(listener, 'taskHeaders')) {
+        this.checkHeaders(host, owner, taskHeaders, `execution listener ${index + 1}`);
+      }
     });
   }
 
@@ -289,9 +306,14 @@ export class C8ExtensionRules extends C8Rules {
       const ev = attr(listener, 'eventType');
       const label = `Task listener ${index + 1}${ev ? ` (${ev})` : ''} of ${where}`;
       const again = (fix: string): string => `\`bpmn ext remove <file> ${idOf(host)} ${sh(`${this.zeebeName('taskListeners')}/${this.zeebeName('taskListener')}[${index}]`)}\`, then ${this.extAdd(host, owner, `${this.zeebeName('taskListeners')}/${this.zeebeName('taskListener')} ${fix}`)}`;
-      if (missing(attr(listener, 'type'))) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${index}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<event>'} type=<jobType>`)}.`);
-      if (blank(ev)) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${index}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
-      else if (!TASK_LISTENER_EVENTS.includes(ev!)) this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${index}:eventType`, `${label}: eventType "${ev}" is not one of creating, assigning, updating, completing, canceling; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      if (missing(attr(listener, 'type'))) {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${index}:type`, `${label} has no type (the job type of its worker); Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=${ev ?? '<event>'} type=<jobType>`)}.`);
+      }
+      if (blank(ev)) {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${index}:eventType`, `${label} has no eventType; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      } else if (!TASK_LISTENER_EVENTS.includes(ev!)) {
+        this.push('deploy', 'W_C8_DEPLOY_LISTENER', host, owner, `taskListener:${index}:eventType`, `${label}: eventType "${ev}" is not one of creating, assigning, updating, completing, canceling; Camunda 8 refuses the file`, `Rebuild it: ${again(`eventType=<creating|assigning|updating|completing|canceling> type=${attr(listener, 'type') ?? '<jobType>'}`)}.`);
+      }
     });
   }
 
@@ -299,10 +321,15 @@ export class C8ExtensionRules extends C8Rules {
     const where = this.describe(host, owner);
     const rebuild = (): string => this.rebuildHint(host, owner, this.zeebeName('linkedResources'));
     this.kids(zeebeElement, 'linkedResource').forEach((resource, index) => {
-      if (missing(attr(resource, 'resourceType'))) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${index}:resourceType`, `Linked resource ${attr(resource, 'linkName') ?? index + 1} of ${where} has no resourceType; Camunda 8 refuses the file`, rebuild());
+      if (missing(attr(resource, 'resourceType'))) {
+        this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${index}:resourceType`, `Linked resource ${attr(resource, 'linkName') ?? index + 1} of ${where} has no resourceType; Camunda 8 refuses the file`, rebuild());
+      }
       const bindingType = attr(resource, 'bindingType');
-      if (bindingType !== undefined && !BINDING_TYPES.includes(bindingType)) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${index}:bindingType`, `Linked resource ${attr(resource, 'linkName') ?? index + 1} of ${where} has bindingType="${bindingType}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, rebuild());
-      else if (bindingType === 'versionTag' && blank(attr(resource, 'versionTag'))) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${index}:versionTag`, `Linked resource ${attr(resource, 'linkName') ?? index + 1} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, rebuild());
+      if (bindingType !== undefined && !BINDING_TYPES.includes(bindingType)) {
+        this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${index}:bindingType`, `Linked resource ${attr(resource, 'linkName') ?? index + 1} of ${where} has bindingType="${bindingType}"; Camunda 8 accepts ${BINDING_TYPES.join(', ')} only and refuses the file`, rebuild());
+      } else if (bindingType === 'versionTag' && blank(attr(resource, 'versionTag'))) {
+        this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, `linkedResource:${index}:versionTag`, `Linked resource ${attr(resource, 'linkName') ?? index + 1} of ${where} has bindingType="versionTag" but no versionTag; Camunda 8 refuses the file`, rebuild());
+      }
     });
   }
 
@@ -320,13 +347,17 @@ export class C8ExtensionRules extends C8Rules {
     const events = attr(zeebeElement, 'variableEvents');
     if (events === undefined) return;
     const bad = events.split(',').map((eventName) => eventName.trim()).filter((eventName) => eventName && eventName !== 'create' && eventName !== 'update');
-    if (bad.length) this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, 'conditionalFilter:variableEvents', `${this.zeebeName('conditionalFilter')} of ${where} lists the variable events ${bad.join(', ')}; Camunda 8 knows create and update only and refuses the file`, `${rebuild()} (variableEvents=create,update)`);
+    if (bad.length) {
+      this.push('deploy', 'W_C8_DEPLOY_EXTENSION', host, owner, 'conditionalFilter:variableEvents', `${this.zeebeName('conditionalFilter')} of ${where} lists the variable events ${bad.join(', ')}; Camunda 8 knows create and update only and refuses the file`, `${rebuild()} (variableEvents=create,update)`);
+    }
   }
 
   private checkPriority(host: El, owner: El | undefined, zeebeElement: El): void {
     const where = this.describe(host, owner);
     const prio = attr(zeebeElement, 'priority');
-    if (prio === undefined || prio === '' || isFeel(prio) || (/^\s*\d+\s*$/.test(prio) && Number(prio) <= 100)) return;
+    if (prio === undefined || prio === '' || isFeel(prio) || (/^\s*\d+\s*$/.test(prio) && Number(prio) <= 100)) {
+      return;
+    }
     this.push('deploy', 'W_C8_DEPLOY_USER_TASK', host, owner, 'priority', `${this.zeebeName('priorityDefinition')} of ${where} has priority "${prio}"; Camunda 8 needs a number from 0 to 100 (or an expression) and refuses the file`, this.fixHint(host, owner, zeebeElement, { priority: '50' }));
   }
 

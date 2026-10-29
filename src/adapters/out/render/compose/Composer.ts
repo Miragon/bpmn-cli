@@ -48,14 +48,18 @@ export class Composer {
     const listed = opts.problems ? this.problemList(opts.problems) : [];
     const cut = opts.tiles && scale < MIN_LABEL_SCALE && max ? new TileGrid(items, view, frame, max / base, listed).cut() : undefined;
     const tiled = cut && 'views' in cut ? cut.views : undefined;
-    if (opts.tiles && scale >= MIN_LABEL_SCALE) notes.push(`--tiles: the image is readable as one (scale ${scaleText(scale)}); no tiles`);
+    if (opts.tiles && scale >= MIN_LABEL_SCALE) {
+      notes.push(`--tiles: the image is readable as one (scale ${scaleText(scale)}); no tiles`);
+    }
     if (tiled) {
       scale = base;
       const bands = Math.max(...tiled.map((tile) => tile.band ?? 1));
       const parts = tiled.length > 1 ? `split into ${tiled.length} tiles${bands > 1 ? ` (${bands} bands)` : ''} at the diagram's columns (show --layout c<n>)` : 'one tile holds every shape and label';
       notes.push(`${parts}, each at scale ${scaleText(base)}${cut && 'views' in cut && cut.skipped ? '; parts with no shape or label (empty, or only connections passing through) are left out' : ''}`);
     } else if (scale < MIN_LABEL_SCALE) {
-      if (cut && 'over' in cut) notes.push(`--tiles: the drawing needs more than ${MAX_TILES} tiles at scale ${scaleText(base)}: it is drawn as one image instead`);
+      if (cut && 'over' in cut) {
+        notes.push(`--tiles: the drawing needs more than ${MAX_TILES} tiles at scale ${scaleText(base)}: it is drawn as one image instead`);
+      }
       notes.push(`the labels are drawn at ${scaleText(scale)} of their size (below ${MIN_LABEL_SCALE}: hard to read); render a part instead: --around <id> [--depth n], --path <from> <to> or ${opts.tiles ? '--scope <id>' : '--tiles'}`);
     }
     const views = tiled ?? [{ view }];
@@ -84,7 +88,11 @@ export class Composer {
     const near = new Set<string>();
     for (const edge of plane.edges.values()) {
       const ends = [edge.sourceId, edge.targetId].filter((nodeId): nodeId is string => !!nodeId);
-      if (focus.has(edge.id) || ends.some((nodeId) => focus.has(nodeId))) for (const nodeId of ends) near.add(nodeId);
+      if (focus.has(edge.id) || ends.some((nodeId) => focus.has(nodeId))) {
+        for (const nodeId of ends) {
+          near.add(nodeId);
+        }
+      }
     }
     return near;
   }
@@ -112,7 +120,9 @@ export class Composer {
       const shape = plane.shapes.get(id);
       if (shape) boxes.push(shape.bounds, ...(shape.label ? [shape.label] : []));
       const edge = plane.edges.get(id);
-      if (edge?.points.length) boxes.push(pointsBox(edge.points), ...(edge.label ? [edge.label] : []));
+      if (edge?.points.length) {
+        boxes.push(pointsBox(edge.points), ...(edge.label ? [edge.label] : []));
+      }
     }
     return unionAll(boxes);
   }
@@ -127,7 +137,9 @@ export class Composer {
       return shown ? located.filter((problem) => problem.ids.some((id) => shown.has(id))) : located;
     }
     const pool = new Map<string, LayoutProblem[]>();
-    for (const problem of located) pool.set(problemKey(problem), [...(pool.get(problemKey(problem)) ?? []), problem]);
+    for (const problem of located) {
+      pool.set(problemKey(problem), [...(pool.get(problemKey(problem)) ?? []), problem]);
+    }
     return asked.map((problem) => pool.get(problemKey(problem))?.shift() ?? problem);
   }
 
@@ -139,7 +151,9 @@ export class Composer {
     return listed.map((problem, index) => {
       const out: RenderProblem = { n: index + 1, kind: problem.kind, ids: problem.ids, ...(problem.detail !== undefined ? { detail: problem.detail } : {}), drawn: false };
       const at = problem.at;
-      if (!plane || frame.fileProblems || !at || at.plane !== plane.rootId) return out;
+      if (!plane || frame.fileProblems || !at || at.plane !== plane.rootId) {
+        return out;
+      }
       const tile = views.findIndex((candidate) => containsPoint(candidate.view, at));
       if (tile < 0) return out;
       const box = Composer.problemBox(plane, problem.ids) ?? { x: at.x, y: at.y, width: 0, height: 0 };
@@ -166,7 +180,9 @@ export class Composer {
       for (let step = 0; step < 8; step++) {
         const angle = (step * Math.PI) / 4;
         const point = { x: at.x + Math.cos(angle) * ring * radius, y: at.y + Math.sin(angle) * ring * radius };
-        if (containsPoint(box, point) && free(point)) return { x: Math.round(point.x * 100) / 100, y: Math.round(point.y * 100) / 100 };
+        if (containsPoint(box, point) && free(point)) {
+          return { x: Math.round(point.x * 100) / 100, y: Math.round(point.y * 100) / 100 };
+        }
       }
     }
     return at;

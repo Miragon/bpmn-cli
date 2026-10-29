@@ -16,7 +16,9 @@ export class RenderCommand extends CliCommand {
       this.define(program, 'render')
         .option('-o, --out <file>', 'the image file, .png or .svg (another name needs --format; - = stdout); default: bpmn-cli/<name>.png in the temp directory; tiles: <name>-1.png, <name>-2.png, ...')
         .option('--format <format>', 'png (default) or svg; default: the -o extension', (raw: string) => {
-          if (!(RENDER_FORMATS as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${RENDER_FORMATS.join(' or ')}`);
+          if (!(RENDER_FORMATS as readonly string[]).includes(raw)) {
+            throw new InvalidArgumentError(`expected ${RENDER_FORMATS.join(' or ')}`);
+          }
           return raw;
         })
         .option('--plane <id>', 'draw the plane of this collapsed sub-process (or process / collaboration); default: the first diagram, or the crop\'s')
@@ -40,7 +42,9 @@ export class RenderCommand extends CliCommand {
     if (out === '-' && format === 'png' && this.cli.io.stdout.isTTY) {
       throw usageError('a PNG is binary and does not go to a terminal', { hint: 'Redirect it (`bpmn render <file> -o - > out.png`), pass -o <file>, or use --format svg.' });
     }
-    if (out === '-' && options['tiles']) throw usageError('--tiles writes several images; they do not go to stdout', { hint: 'Pass -o <file.png> (the tiles become <file>-1.png, <file>-2.png, ...).' });
+    if (out === '-' && options['tiles']) {
+      throw usageError('--tiles writes several images; they do not go to stdout', { hint: 'Pass -o <file.png> (the tiles become <file>-1.png, <file>-2.png, ...).' });
+    }
     const around = options['around'] as string | undefined;
     ViewRequest.assertAroundFlags(around, options['depth'] !== undefined ? ['--depth'] : options['inner'] ? ['--inner'] : [], 'render');
     const path = options['path'] as string[] | undefined;

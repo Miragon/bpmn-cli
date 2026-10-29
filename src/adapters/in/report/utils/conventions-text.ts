@@ -17,12 +17,18 @@ const UNDECLARED_WORDS: Record<Undeclared, (where: string | undefined) => string
 export function renderConventions(view: ConventionsView): string {
   const lines: string[] = [];
   lines.push(`conventions of ${view.file ?? 'the model'}${view.exists ? '' : ' (no file yet: a new model)'}`);
-  if (view.rule) lines.push(`element-id-naming (${view.source ?? 'the host'}): ${view.rule.severity}, case ${view.rule.case}, eventDefinitionQualifier ${view.rule.qualifier}`);
-  else if (view.undeclared) lines.push(`no id conventions: ${UNDECLARED_WORDS[view.undeclared](view.source)}; new ids follow element-id-naming's defaults (case camelCase)`);
-  else lines.push("no id conventions declared: new ids follow element-id-naming's defaults (case camelCase)");
+  if (view.rule) {
+    lines.push(`element-id-naming (${view.source ?? 'the host'}): ${view.rule.severity}, case ${view.rule.case}, eventDefinitionQualifier ${view.rule.qualifier}`);
+  } else if (view.undeclared) {
+    lines.push(`no id conventions: ${UNDECLARED_WORDS[view.undeclared](view.source)}; new ids follow element-id-naming's defaults (case camelCase)`);
+  } else {
+    lines.push("no id conventions declared: new ids follow element-id-naming's defaults (case camelCase)");
+  }
   const width = Math.max(...view.rows.map((row) => row.pattern.length));
   const sourceWidth = Math.max(...view.rows.map((row) => row.source.length));
-  for (const row of view.rows) lines.push(`  ${row.pattern.padEnd(width)}  ${row.source.padEnd(sourceWidth)}  ${row.kinds.join(' ')}${row.note ? ` (${row.note})` : ''}`);
+  for (const row of view.rows) {
+    lines.push(`  ${row.pattern.padEnd(width)}  ${row.source.padEnd(sourceWidth)}  ${row.kinds.join(' ')}${row.note ? ` (${row.note})` : ''}`);
+  }
   if (view.qualified) {
     const except = view.rows.some((row) => row.note?.endsWith(UNQUALIFIED_NOTE)) ? ' (not the triggers marked above)' : '';
     const how = view.qualified.mode === 'required' ? `required, new ids take it${except}` : 'also accepted, new ids take the plain prefix';
@@ -30,6 +36,8 @@ export function renderConventions(view: ConventionsView): string {
   }
   const used = [...new Set(view.rows.map((row) => row.source))];
   lines.push(`sources: ${used.map((source) => `${source} = ${SOURCE_WORDS[source]}`).join('; ')}`);
-  for (const note of view.notes) lines.push(`warning ${note.code}: ${note.message}${note.hint ? `  (${note.hint})` : ''}`);
+  for (const note of view.notes) {
+    lines.push(`warning ${note.code}: ${note.message}${note.hint ? `  (${note.hint})` : ''}`);
+  }
   return lines.join('\n');
 }

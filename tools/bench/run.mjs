@@ -83,7 +83,9 @@ function doneKeys(file) {
   const keys = new Set(recs.filter((record) => !record.crash).map((record) => record.key));
   for (const record of recs) {
     const wantsForce = record.variant === 'primary' && (record.steps || []).some((stepRun) => FORCEABLE.has(stepRun.error?.code));
-    if (wantsForce && !keys.has(record.key.replace(/\/primary$/, '/force'))) keys.delete(record.key);
+    if (wantsForce && !keys.has(record.key.replace(/\/primary$/, '/force'))) {
+      keys.delete(record.key);
+    }
   }
   return keys;
 }
@@ -165,7 +167,11 @@ async function editCase(env, spec, edit, force) {
   const exclude = new Set(steps.flatMap((stepName) => spec.edits[stepName].touched || []));
   const { model, ...measured } = await env.measure(spec.file, run.file, exclude);
   const semantic = {};
-  if (model) for (const stepName of steps) semantic[stepName] = checkEdit(spec.edits[stepName].expect, model);
+  if (model) {
+    for (const stepName of steps) {
+      semantic[stepName] = checkEdit(spec.edits[stepName].expect, model);
+    }
+  }
   return {
     key: `${spec.corpus}/${spec.model}/${edit}/${force ? 'force' : 'primary'}`,
     track: 'edits', corpus: spec.corpus, model: spec.model, edit, arm: env.arm.key, variant: force ? 'force' : 'primary',
@@ -220,9 +226,13 @@ async function pool(jobs, env, track, jobsN) {
         const [corpus, model, edit, variant] = job.key.split('/');
         recs = [{ key: job.key, track, corpus, model, edit, arm: env.arm.key, variant, ok: false, crash: String(error.stack || error).slice(0, 500) }];
       }
-      for (const record of recs) appendFileSync(file, `${JSON.stringify(record)}\n`);
+      for (const record of recs) {
+        appendFileSync(file, `${JSON.stringify(record)}\n`);
+      }
       finished++;
-      if (finished % 50 === 0 || finished === jobs.length) console.log(`[${track}/${env.arm.key}] ${finished}/${jobs.length} (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+      if (finished % 50 === 0 || finished === jobs.length) {
+        console.log(`[${track}/${env.arm.key}] ${finished}/${jobs.length} (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.max(1, jobsN) }, worker));
@@ -237,8 +247,12 @@ function printCommands(arms) {
   for (const arm of arms) {
     console.log(`[${arm.key}] ${arm.path}`);
     console.log(`  edit:  node ${arm.edit(modelPath, ops, false).join(' ')}`);
-    if (arm.forceable) console.log(`  force: node ${arm.edit(modelPath, ops, true).join(' ')}`);
-    for (const [variant, cmd] of Object.entries(arm.global)) console.log(`  global ${variant}: node ${cmd(modelPath).join(' ')}`);
+    if (arm.forceable) {
+      console.log(`  force: node ${arm.edit(modelPath, ops, true).join(' ')}`);
+    }
+    for (const [variant, cmd] of Object.entries(arm.global)) {
+      console.log(`  global ${variant}: node ${cmd(modelPath).join(' ')}`);
+    }
   }
 }
 
@@ -277,7 +291,9 @@ async function bench(options) {
   const specs = (await writeSpecs(corpora, options.out, options.filter)).filter((spec) => !spec.unreadable);
   writeMeta(options, arms, corpora, metrics, pr);
   console.log(`bench: ${specs.length} model(s) in ${corpora.map((corpus) => `${corpus.name} (${corpus.files.length})`).join(', ')}; arms ${arms.map((benchArm) => benchArm.key).join(', ')}; hard kinds ${metrics.hard.join(' ')} -> ${options.out}`);
-  for (const arm of arms) await runArm(arm, specs, options, { metrics, pr });
+  for (const arm of arms) {
+    await runArm(arm, specs, options, { metrics, pr });
+  }
 }
 
 async function main() {
@@ -300,4 +316,6 @@ async function main() {
   process.exit(cmp.regressed ? 1 : 0);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

@@ -33,7 +33,9 @@ export class C8TaskRules extends C8Rules {
   /** The message a send task / message throw or end event references needs a name. */
   private checkThrownMessage(el: El, label: string): void {
     const msg = this.messageOf(el);
-    if (msg && !nameAttr(msg)) this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+    if (msg && !nameAttr(msg)) {
+      this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; Camunda 8 refuses the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+    }
   }
 
   checkServiceLike(el: El): void {
@@ -45,24 +47,35 @@ export class C8TaskRules extends C8Rules {
       const pm = this.zeebe(el, 'publishMessage');
       this.checkTaskDefinition(el, label, { local: 'publishMessage', count: pm.length, text: `a ${this.zeebeName('publishMessage')}` });
       this.checkThrownMessage(el, label);
-      if (pm.length && !this.zeebe(el, 'taskDefinition').length) this.checkPublishMessage(el, el, pm[0]!, label);
+      if (pm.length && !this.zeebe(el, 'taskDefinition').length) {
+        this.checkPublishMessage(el, el, pm[0]!, label);
+      }
     } else if (this.kit.is(el, 'bpmn:ScriptTask')) {
       const scripts = this.zeebe(el, 'script');
       this.checkTaskDefinition(el, label, { local: 'script', count: scripts.length, text: `a ${this.zeebeName('script')}` });
       const script = scripts[0];
       if (script && !this.zeebe(el, 'taskDefinition').length) {
         const expr = attr(script, 'expression');
-        if (blank(expr)) this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:expression', `The ${this.zeebeName('script')} of ${label} has no expression; Camunda 8 refuses the file`, this.fixHint(el, undefined, script, { expression: '=<expression>' }));
-        else if (!isFeel(expr)) this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'script:expression', `The ${this.zeebeName('script')} expression "${expr}" of ${label} is a static value; Camunda 8 needs a FEEL expression starting with = and refuses the file`, this.fixHint(el, undefined, script, { expression: `=${expr!.trim()}` }));
-        if (missing(attr(script, 'resultVariable'))) this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:resultVariable', `The ${this.zeebeName('script')} of ${label} has no resultVariable; Camunda 8 refuses the file`, this.fixHint(el, undefined, script, { resultVariable: '<variable>' }));
+        if (blank(expr)) {
+          this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:expression', `The ${this.zeebeName('script')} of ${label} has no expression; Camunda 8 refuses the file`, this.fixHint(el, undefined, script, { expression: '=<expression>' }));
+        } else if (!isFeel(expr)) {
+          this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', el, undefined, 'script:expression', `The ${this.zeebeName('script')} expression "${expr}" of ${label} is a static value; Camunda 8 needs a FEEL expression starting with = and refuses the file`, this.fixHint(el, undefined, script, { expression: `=${expr!.trim()}` }));
+        }
+        if (missing(attr(script, 'resultVariable'))) {
+          this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'script:resultVariable', `The ${this.zeebeName('script')} of ${label} has no resultVariable; Camunda 8 refuses the file`, this.fixHint(el, undefined, script, { resultVariable: '<variable>' }));
+        }
       }
     } else if (this.kit.is(el, 'bpmn:BusinessRuleTask')) {
       const calls = this.zeebe(el, 'calledDecision');
       this.checkTaskDefinition(el, label, { local: 'calledDecision', count: calls.length, text: `a ${this.zeebeName('calledDecision')}` });
       const call = calls[0];
       if (call && !this.zeebe(el, 'taskDefinition').length) {
-        if (missing(attr(call, 'decisionId'))) this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:decisionId', `The ${this.zeebeName('calledDecision')} of ${label} has no decisionId; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} calledDecision=<decisionId>\`.`);
-        if (missing(attr(call, 'resultVariable'))) this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:resultVariable', `The ${this.zeebeName('calledDecision')} of ${label} has no resultVariable; Camunda 8 refuses the file`, this.fixHint(el, undefined, call, { resultVariable: '<variable>' }));
+        if (missing(attr(call, 'decisionId'))) {
+          this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:decisionId', `The ${this.zeebeName('calledDecision')} of ${label} has no decisionId; Camunda 8 refuses the file`, `\`bpmn set <file> ${id} calledDecision=<decisionId>\`.`);
+        }
+        if (missing(attr(call, 'resultVariable'))) {
+          this.push('deploy', 'W_C8_DEPLOY_IMPLEMENTATION', el, undefined, 'decision:resultVariable', `The ${this.zeebeName('calledDecision')} of ${label} has no resultVariable; Camunda 8 refuses the file`, this.fixHint(el, undefined, call, { resultVariable: '<variable>' }));
+        }
       }
     }
   }
@@ -73,14 +86,20 @@ export class C8TaskRules extends C8Rules {
     const pm = this.zeebe(def, 'publishMessage');
     this.checkTaskDefinition(el, label, { local: 'publishMessage', count: pm.length, text: `a ${this.zeebeName('publishMessage')} in its message event definition` });
     this.checkThrownMessage(el, label);
-    if (pm.length && !this.zeebe(el, 'taskDefinition').length) this.checkPublishMessage(el, def, pm[0]!, label);
+    if (pm.length && !this.zeebe(el, 'taskDefinition').length) {
+      this.checkPublishMessage(el, def, pm[0]!, label);
+    }
   }
 
   /** zeebe:publishMessage: Camunda 8.9 checks it (message, correlationKey) but does not run it. */
   private checkPublishMessage(el: El, host: El, pm: El, label: string): void {
     const id = idOf(el)!;
-    if (!this.messageOf(el)) this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:messageRef', `${label} publishes no message (no message reference); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} message=<MessageName>\`.`);
-    if (missing(attr(pm, 'correlationKey'))) this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:correlationKey', `The ${this.zeebeName('publishMessage')} of ${label} has no correlationKey; Camunda 8 refuses the file`, `${this.extAdd(host, host === el ? undefined : el, `${this.zeebeName('publishMessage')} correlationKey==<expression>`)}.`);
+    if (!this.messageOf(el)) {
+      this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:messageRef', `${label} publishes no message (no message reference); Camunda 8 refuses the file`, `\`bpmn set <file> ${id} message=<MessageName>\`.`);
+    }
+    if (missing(attr(pm, 'correlationKey'))) {
+      this.push('deploy', 'W_C8_DEPLOY_MESSAGE', el, undefined, 'publish:correlationKey', `The ${this.zeebeName('publishMessage')} of ${label} has no correlationKey; Camunda 8 refuses the file`, `${this.extAdd(host, host === el ? undefined : el, `${this.zeebeName('publishMessage')} correlationKey==<expression>`)}.`);
+    }
     const send = this.kit.is(el, 'bpmn:SendTask');
     this.push('runtime', 'W_C8_UNSUPPORTED_IMPLEMENTATION', el, undefined, 'publishMessage', `${label} publishes its message with ${this.zeebeName('publishMessage')}: Camunda 8.9 accepts the file but does not run it (${send ? 'the instance gets an incident: only job worker send tasks are supported' : 'the event completes without sending anything'})`, `Use a job worker: \`bpmn ext remove <file> ${id} ${send ? '' : 'definition.'}${this.zeebeName('publishMessage')}\`, then \`bpmn ext add <file> ${id} ${this.zeebeName('taskDefinition')} type=<jobType>\`.`);
   }
@@ -130,16 +149,24 @@ export class C8TaskRules extends C8Rules {
     } else {
       const zeebeLoop = zl[0]!;
       const input = attr(zeebeLoop, 'inputCollection');
-      if (blank(input)) this.push('deploy', 'W_C8_DEPLOY_MULTI_INSTANCE', activity, undefined, 'mi:inputCollection', `The ${this.zeebeName('loopCharacteristics')} of multi-instance ${this.describe(activity)} has no inputCollection; Camunda 8 refuses the file`, this.fixHint(loop!, activity, zeebeLoop, { inputCollection: '=<items>' }));
-      else if (!isFeel(input)) this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', activity, undefined, 'mi:inputCollection', `inputCollection="${input}" of multi-instance ${this.describe(activity)} is a static value; Camunda 8 needs a FEEL expression (=${input!.trim()}) and refuses the file`, this.fixHint(loop!, activity, zeebeLoop, { inputCollection: `=${input!.trim()}` }));
+      if (blank(input)) {
+        this.push('deploy', 'W_C8_DEPLOY_MULTI_INSTANCE', activity, undefined, 'mi:inputCollection', `The ${this.zeebeName('loopCharacteristics')} of multi-instance ${this.describe(activity)} has no inputCollection; Camunda 8 refuses the file`, this.fixHint(loop!, activity, zeebeLoop, { inputCollection: '=<items>' }));
+      } else if (!isFeel(input)) {
+        this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', activity, undefined, 'mi:inputCollection', `inputCollection="${input}" of multi-instance ${this.describe(activity)} is a static value; Camunda 8 needs a FEEL expression (=${input!.trim()}) and refuses the file`, this.fixHint(loop!, activity, zeebeLoop, { inputCollection: `=${input!.trim()}` }));
+      }
       const oc = attr(zeebeLoop, 'outputCollection');
       const oe = attr(zeebeLoop, 'outputElement');
-      if ((oc === undefined) !== (oe === undefined)) this.push('deploy', 'W_C8_DEPLOY_MULTI_INSTANCE', activity, undefined, 'mi:output', `The ${this.zeebeName('loopCharacteristics')} of multi-instance ${this.describe(activity)} has ${oc !== undefined ? 'an outputCollection without outputElement' : 'an outputElement without outputCollection'}; Camunda 8 refuses the file`, `\`bpmn ext add <file> ${id} loop.${this.zeebeName('loopCharacteristics')} ${oc !== undefined ? 'outputElement==<expression>' : 'outputCollection=<variable>'}\`.`);
-      else if (oe !== undefined && !isFeel(oe)) this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', activity, undefined, 'mi:outputElement', `outputElement="${oe}" of multi-instance ${this.describe(activity)} is a static value; Camunda 8 needs a FEEL expression (=${oe.trim()}) and refuses the file`, this.fixHint(loop!, activity, zeebeLoop, { outputElement: `=${oe.trim()}` }));
+      if ((oc === undefined) !== (oe === undefined)) {
+        this.push('deploy', 'W_C8_DEPLOY_MULTI_INSTANCE', activity, undefined, 'mi:output', `The ${this.zeebeName('loopCharacteristics')} of multi-instance ${this.describe(activity)} has ${oc !== undefined ? 'an outputCollection without outputElement' : 'an outputElement without outputCollection'}; Camunda 8 refuses the file`, `\`bpmn ext add <file> ${id} loop.${this.zeebeName('loopCharacteristics')} ${oc !== undefined ? 'outputElement==<expression>' : 'outputCollection=<variable>'}\`.`);
+      } else if (oe !== undefined && !isFeel(oe)) {
+        this.push('deploy', 'W_C8_DEPLOY_EXPRESSION', activity, undefined, 'mi:outputElement', `outputElement="${oe}" of multi-instance ${this.describe(activity)} is a static value; Camunda 8 needs a FEEL expression (=${oe.trim()}) and refuses the file`, this.fixHint(loop!, activity, zeebeLoop, { outputElement: `=${oe.trim()}` }));
+      }
     }
     const cc = peek<El>(loop, 'completionCondition');
     const body = peek<string>(cc, 'body');
-    if (cc) this.checkFeel(activity, undefined, 'mi:completion', `The completion condition of multi-instance ${this.describe(activity)}`, body, `\`bpmn set <file> ${id} ${sh(`completion==${feelOf((body ?? '').trim().slice(1))}`)}\` (check the FEEL syntax).`);
+    if (cc) {
+      this.checkFeel(activity, undefined, 'mi:completion', `The completion condition of multi-instance ${this.describe(activity)}`, body, `\`bpmn set <file> ${id} ${sh(`completion==${feelOf((body ?? '').trim().slice(1))}`)}\` (check the FEEL syntax).`);
+    }
     if (cc && !isFeel(body)) {
       this.push('runtime', 'W_C8_EXPRESSION', activity, undefined, 'mi:completion', `The completion condition "${body ?? ''}" of multi-instance ${this.describe(activity)} is no FEEL expression (=...); it deploys, but every completed instance gets an incident (expected a boolean, got a string)`, `\`bpmn set <file> ${id} ${sh(`completion==${feelOf(body ?? '')}`)}\` (check the FEEL syntax).`);
     }

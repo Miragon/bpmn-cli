@@ -19,7 +19,9 @@ export class ScopeLabels {
 
   all(): Box[] {
     const out = this.shapes();
-    for (const edge of this.layout.edges) if (edge.label) out.push(edge.label);
+    for (const edge of this.layout.edges) {
+      if (edge.label) out.push(edge.label);
+    }
     return out;
   }
 
@@ -94,19 +96,25 @@ export class ScopeLabels {
         if (top) {
           const rightward = siblings.filter((sibling) => sibling.box.x > box.x).length;
           const labelY = host.box.y - 2 - height;
-          if ((siblings.length === 2 && rightward === 1) || ('labelLeft' in element && element.labelLeft)) return { x: box.x - 4 - width, y: labelY, width, height };
+          if ((siblings.length === 2 && rightward === 1) || ('labelLeft' in element && element.labelLeft)) {
+            return { x: box.x - 4 - width, y: labelY, width, height };
+          }
           return { x: box.x + box.width + 4, y: labelY - (siblings.length >= 3 ? rightward * (LABEL_LINE + 2) : 0), width, height };
         }
         const position = Math.max(0, siblings.findIndex((sibling) => sibling.box === box));
         const hostBottom = host ? bottom(host.box) : box.y + box.height / 2;
         const order = host && boundaryLeft(host) ? siblings.length - 1 - position : position;
-        if (siblings.length === 2 && order === 1) return { x: box.x - 4 - width, y: hostBottom + 2, width, height };
+        if (siblings.length === 2 && order === 1) {
+          return { x: box.x - 4 - width, y: hostBottom + 2, width, height };
+        }
         const stagger = siblings.length >= 3 ? order * (LABEL_LINE + 2) : 0;
         return { x: box.x + box.width + 4, y: hostBottom + 2 + stagger, width, height };
       }
       default: {
         const { width, height } = labelSize(name);
-        if (opts.above) return { x: Math.round(cx - width / 2), y: box.y - height - 6, width, height };
+        if (opts.above) {
+          return { x: Math.round(cx - width / 2), y: box.y - height - 6, width, height };
+        }
         return { x: Math.round(cx - width / 2), y: box.y + box.height + 6, width, height };
       }
     }

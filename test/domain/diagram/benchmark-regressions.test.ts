@@ -47,7 +47,11 @@ async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}):
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) if (!out.has(shape.id)) out.set(shape.id, shape);
+  for (const plane of new DiagramReader(doc.definitions).planes()) {
+    for (const shape of plane.shapes.values()) {
+      if (!out.has(shape.id)) out.set(shape.id, shape);
+    }
+  }
   return out;
 }
 
@@ -75,7 +79,9 @@ describe('fitInFrame keeps an inner frame with its content when the drawing has 
     expect(task.y + task.height).toBeLessThanOrEqual(esp.y + esp.height);
     expect(esp.y).toBe(beforeShapes.get('Esp')!.bounds.y);
     // the lanes keep their bands: nothing outside the sub-process's row moved down
-    for (const id of ['L1', 'L2', 'A', 'B', 'E']) expect(afterShapes.get(id)!.bounds.y).toBe(beforeShapes.get(id)!.bounds.y);
+    for (const id of ['L1', 'L2', 'A', 'B', 'E']) {
+      expect(afterShapes.get(id)!.bounds.y).toBe(beforeShapes.get(id)!.bounds.y);
+    }
     expect(afterShapes.get('L1')!.bounds.height).toBe(beforeShapes.get('L1')!.bounds.height);
   });
 });

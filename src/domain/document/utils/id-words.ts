@@ -29,9 +29,13 @@ export function speakingStem(id: string): string | undefined {
     return base ? `${base}_${suffixed[2]}` : undefined;
   }
   const idStem = stem(id);
-  if (HASH.test(idStem) || /^\d+$/.test(idStem) || !/[A-Za-z]/.test(idStem)) return undefined;
+  if (HASH.test(idStem) || /^\d+$/.test(idStem) || !/[A-Za-z]/.test(idStem)) {
+    return undefined;
+  }
   const digits = idStem.replace(/[^0-9]/g, '').length;
-  if (digits >= 3 && digits * 4 >= idStem.length && !hasWord(idStem)) return undefined;
+  if (digits >= 3 && digits * 4 >= idStem.length && !hasWord(idStem)) {
+    return undefined;
+  }
   return idStem;
 }
 
@@ -80,8 +84,12 @@ export function kindWord(key: string, trigger: string | undefined, withContext =
       return triggerWord ? `${triggerWord}Throw` : 'Intermediate';
   }
   if (withContext) return '';
-  if (/^[a-z]+Gateway$/.test(key)) return ucfirst(key.slice(0, -'Gateway'.length));
-  if (key === 'bpmn:Process' || key === 'bpmn:Collaboration' || key === 'bpmn:Definitions') return 'Main';
+  if (/^[a-z]+Gateway$/.test(key)) {
+    return ucfirst(key.slice(0, -'Gateway'.length));
+  }
+  if (key === 'bpmn:Process' || key === 'bpmn:Collaboration' || key === 'bpmn:Definitions') {
+    return 'Main';
+  }
   return ucfirst(localName(key));
 }
 

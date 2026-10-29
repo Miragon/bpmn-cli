@@ -22,8 +22,12 @@ export class RuleRun {
       if (!kit.is(flow, 'bpmn:SequenceFlow')) continue;
       const source = peek<El>(flow, 'sourceRef');
       const target = peek<El>(flow, 'targetRef');
-      if (source) this.outgoing.set(source, [...(this.outgoing.get(source) ?? []), flow]);
-      if (target) this.incoming.set(target, [...(this.incoming.get(target) ?? []), flow]);
+      if (source) {
+        this.outgoing.set(source, [...(this.outgoing.get(source) ?? []), flow]);
+      }
+      if (target) {
+        this.incoming.set(target, [...(this.incoming.get(target) ?? []), flow]);
+      }
     }
   }
 }

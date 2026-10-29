@@ -14,7 +14,9 @@ export class DuplicateDiGuard {
 
   assertNone(defs: El): void {
     for (const [key, count] of DuplicateDiGuard.counts(defs)) {
-      if (count > Math.max(1, this.before.get(key) ?? 0)) throw new Error(`internal: the incremental layout drew ${key.split('|')[1]} twice on ${key.split('|')[0]}`);
+      if (count > Math.max(1, this.before.get(key) ?? 0)) {
+        throw new Error(`internal: the incremental layout drew ${key.split('|')[1]} twice on ${key.split('|')[0]}`);
+      }
     }
   }
 

@@ -18,7 +18,9 @@ function model(nodes: Array<[string, string, string?]>, flows: Array<[string, st
     const links = [...flows.filter((flow) => flow[2] === id).map((flow) => `<bpmn:incoming>${flow[0]}</bpmn:incoming>`), ...flows.filter((flow) => flow[1] === id).map((flow) => `<bpmn:outgoing>${flow[0]}</bpmn:outgoing>`)];
     return `<bpmn:${tag} id="${id}"${attrs ? ` ${attrs}` : ''}>${links.join('')}</bpmn:${tag}>`;
   });
-  for (const [id, source, target] of flows) body.push(`<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`);
+  for (const [id, source, target] of flows) {
+    body.push(`<bpmn:sequenceFlow id="${id}" sourceRef="${source}" targetRef="${target}" />`);
+  }
   return definitionsXml(body.join('\n') + extra);
 }
 

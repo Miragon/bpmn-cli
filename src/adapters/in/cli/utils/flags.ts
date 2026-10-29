@@ -8,7 +8,9 @@ export function parseKeyValues(items: string[], what = 'property'): Record<strin
   const out: Record<string, string> = {};
   for (const item of items) {
     const idx = item.indexOf('=');
-    if (idx <= 0) throw new BpmnError('E_USAGE', `Expected ${what} as key=value, got "${item}"`, 'usage');
+    if (idx <= 0) {
+      throw new BpmnError('E_USAGE', `Expected ${what} as key=value, got "${item}"`, 'usage');
+    }
     out[item.slice(0, idx).trim()] = item.slice(idx + 1);
   }
   return out;
@@ -16,13 +18,17 @@ export function parseKeyValues(items: string[], what = 'property'): Record<strin
 
 export function givenStrings<TKey extends string>(options: Record<string, unknown>, keys: readonly TKey[]): Partial<Record<TKey, string>> {
   const out: Partial<Record<TKey, string>> = {};
-  for (const key of keys) if (options[key]) out[key] = String(options[key]);
+  for (const key of keys) {
+    if (options[key]) out[key] = String(options[key]);
+  }
   return out;
 }
 
 export function givenFlags<TKey extends string>(options: Record<string, unknown>, keys: readonly TKey[]): Partial<Record<TKey, true>> {
   const out: Partial<Record<TKey, true>> = {};
-  for (const key of keys) if (options[key]) out[key] = true;
+  for (const key of keys) {
+    if (options[key]) out[key] = true;
+  }
   return out;
 }
 
@@ -35,13 +41,19 @@ export function splitList(value: string | undefined): string[] | undefined {
 }
 
 export function depthArg(raw: string): number {
-  if (!/^\d+$/.test(raw)) throw new InvalidArgumentError('expected a whole number >= 0');
+  if (!/^\d+$/.test(raw)) {
+    throw new InvalidArgumentError('expected a whole number >= 0');
+  }
   return Number(raw);
 }
 
 export function assertPathFlags(path: string[] | undefined, via: unknown, hints: { path: string; via?: string }): void {
-  if (path && path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${path.length}`, { hint: hints.path });
-  if (via && !path) throw usageError('--via needs --path', hints.via !== undefined ? { hint: hints.via } : {});
+  if (path && path.length !== 2) {
+    throw usageError(`--path takes exactly two ids (from and to), got ${path.length}`, { hint: hints.path });
+  }
+  if (via && !path) {
+    throw usageError('--via needs --path', hints.via !== undefined ? { hint: hints.via } : {});
+  }
 }
 
 export const RENDER_FORMATS: readonly ImageFormat[] = ['png', 'svg'];
@@ -64,6 +76,8 @@ export function renderFormat(format: string | undefined, out: string | undefined
 
 /** --render <file>: a .png or .svg file (the extension decides the format). */
 export function renderTarget(raw: string): string {
-  if (raw === '-' || !/\.(png|svg)$/i.test(raw)) throw new InvalidArgumentError('expected a file name ending in .png or .svg (the image of the result; the XML or the report owns stdout)');
+  if (raw === '-' || !/\.(png|svg)$/i.test(raw)) {
+    throw new InvalidArgumentError('expected a file name ending in .png or .svg (the image of the result; the XML or the report owns stdout)');
+  }
   return raw;
 }

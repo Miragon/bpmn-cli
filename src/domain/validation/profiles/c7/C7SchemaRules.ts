@@ -56,7 +56,9 @@ export class C7SchemaRules extends C7Rules {
       /** the fix, or how to drop this definition when the engines act on another one */
       const fix = (cmd: string, keeps: string): string => {
         if (!id) return 'Fix it in the XML.';
-        if (defs.length < 2) return `\`bpmn set <file> ${id} ${cmd}\`${keeps ? ` (${keeps})` : ''}.`;
+        if (defs.length < 2) {
+          return `\`bpmn set <file> ${id} ${cmd}\`${keeps ? ` (${keeps})` : ''}.`;
+        }
         const acting = this.actingDefinition(event!);
         const only = `\`bpmn set <file> ${id} ${cmd}\` (keeps only the ${triggerName(def)} definition)`;
         if (!acting || acting === def) return `${only}.`;

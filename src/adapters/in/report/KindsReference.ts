@@ -119,7 +119,9 @@ export class KindsReference {
       .map((raw) => {
         const key = raw.toLowerCase().replace(/[\s_-]/g, '');
         const found = names.find((name) => name.toLowerCase() === key) ?? names.find((name) => name.toLowerCase() === key.replace(/s$/, '')) ?? names.find((name) => SECTION_KEYS[name]!.some((kind) => kind.toLowerCase() === key));
-        if (!found) throw usageError(`Unknown kinds section "${raw}"`, { candidates: names, hint: `Sections: ${names.join(', ')} (several: --section ops,errors).` });
+        if (!found) {
+          throw usageError(`Unknown kinds section "${raw}"`, { candidates: names, hint: `Sections: ${names.join(', ')} (several: --section ops,errors).` });
+        }
         return found;
       });
   }
@@ -131,7 +133,11 @@ export class KindsReference {
   sectionJson(sections: string[]): Record<string, unknown> {
     const all = this.json();
     const out: Record<string, unknown> = {};
-    for (const section of sections) for (const key of SECTION_KEYS[section]!) out[key] = all[key];
+    for (const section of sections) {
+      for (const key of SECTION_KEYS[section]!) {
+        out[key] = all[key];
+      }
+    }
     return out;
   }
 
@@ -215,7 +221,9 @@ export class KindsReference {
     }
     out.push(table(rows));
     out.push('  A camunda attribute that belongs on a nested element is refused on its parent (E_WRONG_HOST, the hint names the key).');
-    for (const [selector, text] of Object.entries(NESTED_SELECTORS)) out.push(`  ${selector}: ${text}`);
+    for (const [selector, text] of Object.entries(NESTED_SELECTORS)) {
+      out.push(`  ${selector}: ${text}`);
+    }
     out.push('  Extension elements of a nested element: the same prefix on the ext type, e.g. `bpmn ext add <file> <id> loop.camunda:failedJobRetryTimeCycle --body R3/PT5M`.');
     return out.join('\n');
   }
@@ -233,7 +241,9 @@ export class KindsReference {
 
   private errorsSection(): string {
     const out: string[] = [heading('ERRORS AND WARNINGS')];
-    for (const error of ERROR_CATALOGUE) out.push(`  ${error.code}\n      ${error.meaning}\n      fix: ${error.fix}`);
+    for (const error of ERROR_CATALOGUE) {
+      out.push(`  ${error.code}\n      ${error.meaning}\n      fix: ${error.fix}`);
+    }
     return out.join('\n');
   }
 
@@ -257,7 +267,9 @@ export class KindsReference {
     const table = {} as Record<NestedSlot, Record<string, string[]>>;
     for (const slot of NESTED_SLOTS) {
       table[slot] = {};
-      for (const type of NESTED_TYPES[slot]) table[slot][type] = new NestedSlots(edit).keysOf(slot, doc.moddle.create(type));
+      for (const type of NESTED_TYPES[slot]) {
+        table[slot][type] = new NestedSlots(edit).keysOf(slot, doc.moddle.create(type));
+      }
     }
     return table;
   }
@@ -268,22 +280,38 @@ export class KindsReference {
     for (const name of ZEEBE.typeNames()) {
       const zeebeType = ZEEBE.type(name)!;
       const on: string[] = [];
-      if (ZEEBE.nestedOnly(name)) on.push(...ZEEBE.containersOf(name).map((container) => `in ${container}`));
-      else {
+      if (ZEEBE.nestedOnly(name)) {
+        on.push(...ZEEBE.containersOf(name).map((container) => `in ${container}`));
+      } else {
         if (ZEEBE.allowedOn(name, 'bpmn:Process') === true) on.push('process');
         const families = new Map<string, KindDef[]>();
-        for (const kind of KINDS) families.set(kind.family, [...(families.get(kind.family) ?? []), kind]);
+        for (const kind of KINDS) {
+          families.set(kind.family, [...(families.get(kind.family) ?? []), kind]);
+        }
         for (const [family, kinds] of families) {
           const allowed = kinds.filter((kind) => ZEEBE.allowedOn(name, kind.type) === true);
-          if (allowed.length && allowed.length === kinds.length && kinds.length > 1) on.push(`${family === 'subProcess' ? 'sub-processe' : family}s`);
-          else on.push(...allowed.map((kind) => kind.kind));
+          if (allowed.length && allowed.length === kinds.length && kinds.length > 1) {
+            on.push(`${family === 'subProcess' ? 'sub-processe' : family}s`);
+          } else {
+            on.push(...allowed.map((kind) => kind.kind));
+          }
         }
-        if (ZEEBE.allowedOn(name, 'bpmn:Message') === true && ZEEBE.allowedOn(name, 'bpmn:Task') !== true) on.push('message');
-        if (ZEEBE.allowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) on.push('loop. (multi-instance activities)');
+        if (ZEEBE.allowedOn(name, 'bpmn:Message') === true && ZEEBE.allowedOn(name, 'bpmn:Task') !== true) {
+          on.push('message');
+        }
+        if (ZEEBE.allowedOn(name, 'bpmn:MultiInstanceLoopCharacteristics') === true) {
+          on.push('loop. (multi-instance activities)');
+        }
         const defs = ['Message', 'Conditional'].filter((definition) => ZEEBE.allowedOn(name, `bpmn:${definition}EventDefinition`) === true);
-        for (const definition of defs) on.push(`definition. (${definition.toLowerCase()} events)`);
-        if (ZEEBE.allowedOn(name, 'bpmn:Lane') === true && ZEEBE.allowedOn(name, 'bpmn:Message') === true) on.splice(0, on.length, 'any element');
-        for (const container of ZEEBE.containersOf(name)) on.push(`in ${container}`);
+        for (const definition of defs) {
+          on.push(`definition. (${definition.toLowerCase()} events)`);
+        }
+        if (ZEEBE.allowedOn(name, 'bpmn:Lane') === true && ZEEBE.allowedOn(name, 'bpmn:Message') === true) {
+          on.splice(0, on.length, 'any element');
+        }
+        for (const container of ZEEBE.containersOf(name)) {
+          on.push(`in ${container}`);
+        }
       }
       out.push({ type: name, on, attributes: zeebeType.attributes.map((attribute) => attribute.name), ...(zeebeType.children.length ? { children: zeebeType.children } : {}), single: ZEEBE_SINGLE.includes(name) });
     }

@@ -77,15 +77,25 @@ export class ScopeGrid {
         memo.set(node, layer);
         return layer;
       };
-      for (const node of nodes) layerOf(node);
+      for (const node of nodes) {
+        layerOf(node);
+      }
       return memo;
     };
     let natural = naturalLayers.get(this.layout);
     if (!natural) naturalLayers.set(this.layout, (natural = layers(new Map())));
     const moved = shifts.size ? layers(shifts) : natural;
-    for (const node of nodes) node.layer = moved.get(node)!;
-    for (const node of nodes) if (node.compensatedBy?.host) node.layer = node.compensatedBy.host.layer;
-    for (const node of nodes) for (const event of node.boundary) event.layer = node.layer;
+    for (const node of nodes) {
+      node.layer = moved.get(node)!;
+    }
+    for (const node of nodes) {
+      if (node.compensatedBy?.host) node.layer = node.compensatedBy.host.layer;
+    }
+    for (const node of nodes) {
+      for (const event of node.boundary) {
+        event.layer = node.layer;
+      }
+    }
     return natural;
   }
 
@@ -106,14 +116,18 @@ export class ScopeGrid {
       const lbl = labelSize(name);
       let need = lbl.width + 16;
       const gwName = source.kind === 'gateway' ? nameOf(source) : undefined;
-      if (gwName && lbl.lines > 1) need = Math.max(need, labelSize(gwName).width / 2 - source.width / 2 + lbl.width + 12);
+      if (gwName && lbl.lines > 1) {
+        need = Math.max(need, labelSize(gwName).width / 2 - source.width / 2 + lbl.width + 12);
+      }
       gap = Math.max(gap, need);
     }
     return gap;
   }
 
   private labelSide(node: GNode): 'above' | 'below' | undefined {
-    if (node.child || node.kind === 'subProcess' || node.kind === 'eventSubProcess' || !nameOf(node)) return undefined;
+    if (node.child || node.kind === 'subProcess' || node.kind === 'eventSubProcess' || !nameOf(node)) {
+      return undefined;
+    }
     return node.kind === 'gateway' ? 'above' : isEvent(node) ? 'below' : undefined;
   }
 
@@ -144,7 +158,9 @@ export class ScopeGrid {
       layout.height = 0;
       return;
     }
-    for (const node of nodes) node.width = this.hostWidthFor(node);
+    for (const node of nodes) {
+      node.width = this.hostWidthFor(node);
+    }
     const layers = Math.max(...nodes.map((node) => node.layer)) + 1;
     const rows = Math.max(...nodes.map((node) => node.row), ...layout.edges.map((edge) => edge.bandRow ?? 0)) + 1;
     const colWidth = new Array<number>(layers).fill(0);
@@ -155,12 +171,18 @@ export class ScopeGrid {
       rowHeight[node.row] = Math.max(rowHeight[node.row]!, node.height + ScopeGrid.boundaryExtra(node));
     }
     for (const artifact of layout.artifacts) {
-      if (artifact.kind !== 'annotation' && artifact.anchorNode) rowExtra[artifact.anchorNode.row] = DATA_ROW_EXTRA;
+      if (artifact.kind !== 'annotation' && artifact.anchorNode) {
+        rowExtra[artifact.anchorNode.row] = DATA_ROW_EXTRA;
+      }
     }
     const outOf = colWidth.map((): GEdge[] => []);
-    for (const edge of layout.edges) outOf[(edge.source.host ?? edge.source).layer]?.push(edge);
+    for (const edge of layout.edges) {
+      outOf[(edge.source.host ?? edge.source).layer]?.push(edge);
+    }
     const inColumn = colWidth.map((): GNode[] => []);
-    for (const node of nodes) inColumn[node.layer]!.push(node);
+    for (const node of nodes) {
+      inColumn[node.layer]!.push(node);
+    }
     const sides = new Map(nodes.map((node) => [node, this.labelSide(node)]));
     const gaps = colWidth.map((_width, column) => Math.max(this.layerGapFor(outOf[column]!, column), this.labelGapFor(inColumn[column]!, inColumn[column + 1] ?? [], colWidth, column, sides)));
     const colX: number[] = [];
@@ -183,7 +205,11 @@ export class ScopeGrid {
       node.box = { x: Math.round(bx), y: Math.round(by), width: node.width, height: node.height };
       ScopeGrid.placeBoundaryEvents(node);
     }
-    for (const edge of layout.edges) if (edge.bandRow !== undefined) edge.bandY = rowY[edge.bandRow]! + rowHeight[edge.bandRow]! / 2;
+    for (const edge of layout.edges) {
+      if (edge.bandRow !== undefined) {
+        edge.bandY = rowY[edge.bandRow]! + rowHeight[edge.bandRow]! / 2;
+      }
+    }
     for (const node of nodes) {
       const ev = node.compensatedBy;
       if (ev) {

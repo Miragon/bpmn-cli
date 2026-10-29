@@ -190,8 +190,11 @@ function shellSplit(line: string): string[] {
   for (let charIndex = 0; charIndex < line.length; charIndex++) {
     const ch = line[charIndex]!;
     if (quote) {
-      if (ch === quote) quote = undefined;
-      else cur += ch;
+      if (ch === quote) {
+        quote = undefined;
+      } else {
+        cur += ch;
+      }
     } else if (ch === "'" && line.startsWith("\\''", charIndex + 1)) {
       // '\'' inside a single-quoted argument: a literal quote
       cur += "'";
@@ -203,7 +206,9 @@ function shellSplit(line: string): string[] {
       if (cur || quoted) out.push(cur);
       cur = '';
       quoted = false;
-    } else cur += ch;
+    } else {
+      cur += ch;
+    }
   }
   if (cur || quoted) out.push(cur);
   return out;
@@ -244,7 +249,9 @@ describe('the hints of the Camunda 8 profile, run through the CLI', () => {
       const command = /`(bpmn [^`]+)`/.exec(nextFinding.hint ?? '')?.[1];
       expect(command, `${nextFinding.code}: ${nextFinding.hint}`).toBeDefined();
       let line = command!.replace(/<file>/g, file);
-      for (const [placeholder, violation] of Object.entries(FILL)) line = line.split(placeholder).join(violation);
+      for (const [placeholder, violation] of Object.entries(FILL)) {
+        line = line.split(placeholder).join(violation);
+      }
       const cliRun = cli(...shellSplit(line.replace(/^bpmn\s+/, '')), '--no-layout');
       expect([0, 5], `${line}\n${cliRun.err}${cliRun.out}`).toContain(cliRun.code);
     }
@@ -255,7 +262,11 @@ describe('the hints of the Camunda 8 profile, run through the CLI', () => {
       const res = await fetch(`${ENGINE}/deployments`, { method: 'POST', body: form, headers: { accept: 'application/json' } });
       const json = (await res.json()) as { detail?: string; deployments?: Array<{ processDefinition?: { processDefinitionKey: string } }> };
       expect(res.ok, json.detail).toBe(true);
-      for (const deployment of json.deployments ?? []) if (deployment.processDefinition) await fetch(`${ENGINE}/resources/${deployment.processDefinition.processDefinitionKey}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      for (const deployment of json.deployments ?? []) {
+        if (deployment.processDefinition) {
+          await fetch(`${ENGINE}/resources/${deployment.processDefinition.processDefinitionKey}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+        }
+      }
     }
   }, 60000);
 });

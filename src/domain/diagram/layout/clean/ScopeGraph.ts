@@ -20,8 +20,11 @@ export class ScopeGraph {
       const node: GNode = { el, id: idOf(el), ...defaultSizeOf(el), kind, boundary: [], layer: 0, row: 0, band: 0, box: { x: 0, y: 0, width: 0, height: 0 }, out: [], in: [] };
       if (kind === 'subProcess' || kind === 'eventSubProcess') nest(node);
       byId.set(node.id, node);
-      if (kind === 'eventSubProcess') eventSubs.push(node);
-      else nodes.push(node);
+      if (kind === 'eventSubProcess') {
+        eventSubs.push(node);
+      } else {
+        nodes.push(node);
+      }
     }
     for (const el of flowElements) {
       if (!is(el, 'bpmn:BoundaryEvent')) continue;
@@ -57,7 +60,9 @@ export class ScopeGraph {
       const tgt = el.get<El | undefined>('targetRef');
       const event = src ? byId.get(idOf(src)) : undefined;
       const handler = tgt ? byId.get(idOf(tgt)) : undefined;
-      if (!event || !handler || !event.host || !is(event.el, 'bpmn:BoundaryEvent')) continue;
+      if (!event || !handler || !event.host || !is(event.el, 'bpmn:BoundaryEvent')) {
+        continue;
+      }
       if (handler.in.length || !is(handler.el, 'bpmn:Activity')) continue;
       event.compensationHandler = handler;
       handler.compensatedBy = event;
@@ -72,7 +77,9 @@ export class ScopeGraph {
     if (is(el, 'bpmn:EndEvent')) return 'end';
     if (is(el, 'bpmn:Event')) return 'event';
     if (is(el, 'bpmn:Gateway')) return 'gateway';
-    if (is(el, 'bpmn:SubProcess')) return el.get<boolean | undefined>('triggeredByEvent') ? 'eventSubProcess' : 'subProcess';
+    if (is(el, 'bpmn:SubProcess')) {
+      return el.get<boolean | undefined>('triggeredByEvent') ? 'eventSubProcess' : 'subProcess';
+    }
     return 'task';
   }
 
@@ -103,8 +110,12 @@ export class ScopeGraph {
           }
         }
       };
-      for (const root of roots) bfs(root);
-      for (const node of nodes) bfs(node);
+      for (const root of roots) {
+        bfs(root);
+      }
+      for (const node of nodes) {
+        bfs(node);
+      }
       return depth;
     };
     const reaches = (from: GNode, to: GNode): boolean => {
@@ -113,9 +124,11 @@ export class ScopeGraph {
       while (stack.length) {
         const node = stack.pop()!;
         if (node === to) return true;
-        for (const edge of forwardOut(node)) if (!seen.has(edge.target)) {
-          seen.add(edge.target);
-          stack.push(edge.target);
+        for (const edge of forwardOut(node)) {
+          if (!seen.has(edge.target)) {
+            seen.add(edge.target);
+            stack.push(edge.target);
+          }
         }
       }
       return false;
@@ -126,7 +139,9 @@ export class ScopeGraph {
         state.set(node, 1);
         for (const edge of forwardOut(node)) {
           const targetState = state.get(edge.target);
-          if (targetState === 1 || (targetState === undefined && visit(edge.target))) return true;
+          if (targetState === 1 || (targetState === undefined && visit(edge.target))) {
+            return true;
+          }
         }
         state.set(node, 2);
         return false;

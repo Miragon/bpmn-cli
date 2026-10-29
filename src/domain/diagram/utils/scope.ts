@@ -10,9 +10,13 @@ export function obstacles(layout: ScopeLayout): Box[] {
   const boxes: Box[] = [];
   for (const node of layout.nodes) {
     boxes.push(node.box);
-    for (const boundaryEvent of node.boundary) boxes.push(boundaryEvent.box);
+    for (const boundaryEvent of node.boundary) {
+      boxes.push(boundaryEvent.box);
+    }
   }
-  for (const artifact of routedArtifacts(layout)) boxes.push(artifact.box);
+  for (const artifact of routedArtifacts(layout)) {
+    boxes.push(artifact.box);
+  }
   return boxes;
 }
 
@@ -39,8 +43,12 @@ export function growToFit(layout: ScopeLayout): void {
 
 /** Shifts the whole scope; a flow anchor is the same object as the link end using it and moves once. */
 export function shiftScope(layout: ScopeLayout, dx: number, dy: number): void {
-  for (const node of layout.nodes) shiftNode(node, dx, dy);
-  for (const es of layout.eventSubs) translate(es.box, dx, dy);
+  for (const node of layout.nodes) {
+    shiftNode(node, dx, dy);
+  }
+  for (const es of layout.eventSubs) {
+    translate(es.box, dx, dy);
+  }
   const movedEnds = new Set<LinkEnd>();
   const moveEnd = (end: LinkEnd | undefined): void => {
     if (!end?.flow || movedEnds.has(end)) return;
@@ -66,10 +74,14 @@ function shiftEdges(layout: ScopeLayout, dx: number, dy: number): void {
     translateEdge(edge, dx, dy);
     if (edge.bandY !== undefined) edge.bandY += dy;
   }
-  for (const compensation of layout.compensations) translatePoints(compensation.points, dx, dy);
+  for (const compensation of layout.compensations) {
+    translatePoints(compensation.points, dx, dy);
+  }
 }
 
 export function shiftNode(node: GNode, dx: number, dy: number): void {
   translate(node.box, dx, dy);
-  for (const boundaryEvent of node.boundary) translate(boundaryEvent.box, dx, dy);
+  for (const boundaryEvent of node.boundary) {
+    translate(boundaryEvent.box, dx, dy);
+  }
 }

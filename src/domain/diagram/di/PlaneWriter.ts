@@ -72,14 +72,18 @@ export class PlaneWriter {
   private writeShape(ids: DiIds, planeDi: El, shape: DShape): void {
     if (!shape.di) {
       const attrs: Record<string, unknown> = { id: ids.shape(shape.id), bpmnElement: shape.el };
-      if (shape.kind === 'participant' || shape.kind === 'lane') attrs['isHorizontal'] = true;
+      if (shape.kind === 'participant' || shape.kind === 'lane') {
+        attrs['isHorizontal'] = true;
+      }
       if (shape.kind === 'subProcess') attrs['isExpanded'] = shape.expanded === true;
       if (is(shape.el, 'bpmn:ExclusiveGateway')) attrs['isMarkerVisible'] = true;
       shape.di = this.moddle.create('bpmndi:BPMNShape', attrs);
       addTo(planeDi, 'planeElement', shape.di);
     } else {
       this.adopt(planeDi, shape.di);
-      if (shape.kind === 'subProcess' && shape.expanded !== undefined && (raw<boolean>(shape.di, 'isExpanded') === true) !== shape.expanded) shape.di.set('isExpanded', shape.expanded);
+      if (shape.kind === 'subProcess' && shape.expanded !== undefined && (raw<boolean>(shape.di, 'isExpanded') === true) !== shape.expanded) {
+        shape.di.set('isExpanded', shape.expanded);
+      }
     }
     this.setBounds(shape.di, shape.bounds);
     this.setLabel(shape.di, shape.label);
@@ -98,7 +102,9 @@ export class PlaneWriter {
 
   private ensurePlaneDi(ids: DiIds, plane: Plane): El {
     if (plane.di) {
-      if (raw<El>(plane.di, 'bpmnElement') !== plane.root) plane.di.set('bpmnElement', plane.root);
+      if (raw<El>(plane.di, 'bpmnElement') !== plane.root) {
+        plane.di.set('bpmnElement', plane.root);
+      }
       return plane.di;
     }
     const di = this.moddle.create('bpmndi:BPMNPlane', { id: ids.plane(plane.rootId), bpmnElement: plane.root });
@@ -128,8 +134,12 @@ export class PlaneWriter {
         if (parent) removeFrom(parent, 'planeElement', droppedElement);
       }
       plane.dropped = [];
-      for (const shape of plane.shapes.values()) this.writeShape(ids, planeDi, shape);
-      for (const edge of plane.edges.values()) this.writeEdge(ids, planeDi, edge);
+      for (const shape of plane.shapes.values()) {
+        this.writeShape(ids, planeDi, shape);
+      }
+      for (const edge of plane.edges.values()) {
+        this.writeEdge(ids, planeDi, edge);
+      }
     }
   }
 }

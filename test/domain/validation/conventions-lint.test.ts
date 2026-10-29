@@ -284,9 +284,15 @@ describe('in files of other styles, every id a change generates passes element-i
     const split = (id?: string): EditCommand => ({ op: 'split', after: 'start', kind: 'xor', ...(id ? { id } : {}), name: 'Approved?', branches }) as EditCommand;
     // [config, ops, retype the split's gateways to `and` in the same batch]
     const cases: Array<[Record<string, unknown>, EditCommand[], boolean?]> = [];
-    for (const id of ['gateway_Approved', 'gateway_approved_check', 'gateway_ok-1', 'Gateway_Check']) cases.push([{}, [split(id)]]);
-    for (const id of ['gateway_approved', 'gateway_ok-1']) cases.push([{ case: 'PascalCase' }, [split(id)]]);
-    for (const id of ['gateway_Approved', 'gateway_okCheck']) cases.push([{ case: 'snake_case' }, [split(id)]]);
+    for (const id of ['gateway_Approved', 'gateway_approved_check', 'gateway_ok-1', 'Gateway_Check']) {
+      cases.push([{}, [split(id)]]);
+    }
+    for (const id of ['gateway_approved', 'gateway_ok-1']) {
+      cases.push([{ case: 'PascalCase' }, [split(id)]]);
+    }
+    for (const id of ['gateway_Approved', 'gateway_okCheck']) {
+      cases.push([{ case: 'snake_case' }, [split(id)]]);
+    }
     cases.push([{ prefixes: { 'bpmn:Gateway': 'gw' } }, [split('gwApproved')]]);
     const retyped = [
       { op: 'add', kind: 'serviceTask', name: 'Check invoice', after: 'start', as: '$t' },
@@ -352,7 +358,9 @@ describe('idConventionsFromLint', () => {
       'bpmn:EndEvent:cancel': 'cancelEndEvent_',
     });
     expect(qualified.length).toBe(32);
-    for (const type of ['bpmn:Process', 'bpmn:Definitions', 'bpmn:Message', 'bpmn:DataObject', 'bpmn:DataStore']) expect(bare.prefixes[type], type).toBeUndefined();
+    for (const type of ['bpmn:Process', 'bpmn:Definitions', 'bpmn:Message', 'bpmn:DataObject', 'bpmn:DataStore']) {
+      expect(bare.prefixes[type], type).toBeUndefined();
+    }
     expect(bare).toMatchObject({ case: 'camelCase', qualifier: 'optional', source: '.bpmnlintrc in .' });
     // the qualifier off: no qualified prefixes; case any: none declared
     const off = conventionsOf({ severity: 'error', config: { eventDefinitionQualifier: 'off', case: 'any' } })!;
@@ -374,7 +382,9 @@ describe('idConventionsFromLint', () => {
 
   it('a prefix new ids cannot start with is left out with one W_CONFIG_IGNORED naming the .bpmnlintrc, the key and the value', () => {
     const { conventions, notes } = idConventionsFromLint({ severity: 'warn', config: { prefixes: { 'bpmn:UserTask': 'user task_', 'bpmn:Gateway': '1_', 'bpmn:ServiceTask': true, 'bpmn:SendTask': 'x'.repeat(57), 'bpmn:Task': 'svc:' } } }, naming, { source: '.bpmnlintrc in models' });
-    for (const type of ['bpmn:UserTask', 'bpmn:ExclusiveGateway', 'bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:Task']) expect(conventions!.prefixes[type], type).toBeUndefined();
+    for (const type of ['bpmn:UserTask', 'bpmn:ExclusiveGateway', 'bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:Task']) {
+      expect(conventions!.prefixes[type], type).toBeUndefined();
+    }
     expect(conventions!.prefixes['bpmn:ScriptTask']).toBe('scriptTask_');
     // the concrete types the rule still checks with them (show --conventions marks them)
     expect(conventions!.ignored).toEqual(expect.arrayContaining(['bpmn:UserTask', 'bpmn:ExclusiveGateway', 'bpmn:ComplexGateway', 'bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:Task']));
@@ -425,7 +435,9 @@ describe('idConventionsFromLint', () => {
     expect(hint({ eventDefinitionQualifier: 'on' })).toBe('Write one of off, optional, required in the .bpmnlintrc.');
     expect(hint({ eventDefinitionQualifier: '' })).toBe('Write one of off, optional, required in the .bpmnlintrc.');
     // the rule's own spellings give no note; ["warn"] and the bare flag are its defaults
-    for (const config of [undefined, {}, { case: 'snake_case', eventDefinitionQualifier: 'off' }, { case: 'kebab-case' }]) expect(idConventionsFromLint({ severity: 'warn', config }, naming).notes).toEqual([]);
+    for (const config of [undefined, {}, { case: 'snake_case', eventDefinitionQualifier: 'off' }, { case: 'kebab-case' }]) {
+      expect(idConventionsFromLint({ severity: 'warn', config }, naming).notes).toEqual([]);
+    }
   });
 
   it('says why a value is ignored: a case named like a property of JavaScript\'s Object (unknown like any other), a prefix outside ASCII', async () => {

@@ -95,7 +95,9 @@ class ExtensionStructure {
     if (levelType !== undefined && this.holds(levelType, type)) return undefined;
     const home = this.containerOf(type);
     if (!home) return undefined;
-    if (levelType === undefined) return this.staticHomes[ruleName(type)] || !this.nestedOnly(home) ? home : undefined;
+    if (levelType === undefined) {
+      return this.staticHomes[ruleName(type)] || !this.nestedOnly(home) ? home : undefined;
+    }
     return this.holds(levelType, home) ? home : undefined;
   }
 
@@ -158,7 +160,9 @@ class ExtensionStructure {
       const up: string[] = this.camunda.containersOf(current).filter((upper) => !upper.endsWith('inputOutputParameter'));
       current = up.length === 1 ? up[0] : undefined;
     }
-    if (current && !this.nestedOnly(current) && chain.length === 1) chain.unshift(current);
+    if (current && !this.nestedOnly(current) && chain.length === 1) {
+      chain.unshift(current);
+    }
     return chain
       .map((typeName, index) => {
         const key = index < chain.length - 1 ? KEYS[typeName]?.[0] : undefined;

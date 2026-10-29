@@ -38,7 +38,9 @@ function onDisk(dir: string, id: string): string[] {
   const { name, sub } = packageOf(id);
   for (let searchDir = dir; ; searchDir = dirname(searchDir)) {
     const pkg = join(searchDir, 'node_modules', name);
-    if (basename(searchDir) !== 'node_modules' && exists(pkg)) return [pkg, join(pkg, 'package.json'), ...(sub ? [join(pkg, sub)] : [])];
+    if (basename(searchDir) !== 'node_modules' && exists(pkg)) {
+      return [pkg, join(pkg, 'package.json'), ...(sub ? [join(pkg, sub)] : [])];
+    }
     if (dirname(searchDir) === searchDir) return [];
   }
 }
@@ -68,6 +70,10 @@ export function resolveFirst(req: { resolve(id: string): string }, ids: readonly
 export function depState(dir: string, ids: readonly string[]): string {
   const node = ids.every((id) => isAbsolute(id)) ? undefined : resolveFirst(createRequire(join(dir, '__bpmn-cli__.js')), ids);
   const files = new Set(node === undefined ? [] : [node]);
-  for (const id of ids) for (const file of onDisk(dir, id)) files.add(file);
+  for (const id of ids) {
+    for (const file of onDisk(dir, id)) {
+      files.add(file);
+    }
+  }
   return [`node:${node ?? '-'}`, ...[...files].map(fileState)].join('\n');
 }

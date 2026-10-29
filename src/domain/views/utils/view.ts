@@ -13,7 +13,9 @@ export function ownNameOf(el: El | undefined): string | undefined {
 
 /** Drops undefined-valued keys so JSON output stays compact. */
 export function compact<TObject extends object>(obj: TObject): TObject {
-  for (const key of Object.keys(obj) as Array<keyof TObject>) if (obj[key] === undefined) delete obj[key];
+  for (const key of Object.keys(obj) as Array<keyof TObject>) {
+    if (obj[key] === undefined) delete obj[key];
+  }
   return obj;
 }
 

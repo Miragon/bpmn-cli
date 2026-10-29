@@ -8,7 +8,9 @@ export class ValidatorSet {
 
   constructor(list: readonly Validator[] | undefined) {
     this.validators = (list ?? []).map((validator, index) => {
-      if (typeof validator === 'function') return { name: validator.name || `validator${index + 1}`, validate: validator };
+      if (typeof validator === 'function') {
+        return { name: validator.name || `validator${index + 1}`, validate: validator };
+      }
       if (!validator || typeof validator !== 'object' || (typeof validator.validate !== 'function' && typeof validator.validateDoc !== 'function')) {
         throw modelError('E_VALIDATOR_FAILED', `Validator ${index + 1} is neither a function nor an object with a validate function`, {
           hint: 'Pass `validators: [(xml, ctx) => findings]` or `[{ name, validate: (xml, ctx) => findings }]`.',

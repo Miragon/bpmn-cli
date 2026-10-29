@@ -80,7 +80,9 @@ export class BatchDrawing {
     const hasDiagram = many(doc.definitions, 'diagrams').length > 0 && snapshot.byDi.size > 0;
     const before: Before = { snapshot, stickies: new Stickies(doc.definitions).anchors() };
     if (hasDiagram) before.metrics = LayoutAnalysis.of(doc.definitions);
-    if (requested === 'auto' && !diagramCommandsOnly && snapshot.flowNodeShapes > 0) before.xml = asRead ?? (await doc.toXml());
+    if (requested === 'auto' && !diagramCommandsOnly && snapshot.flowNodeShapes > 0) {
+      before.xml = asRead ?? (await doc.toXml());
+    }
     return new BatchDrawing(doc, opts, requested, diagramCommandsOnly, before, removeElements);
   }
 
@@ -126,7 +128,9 @@ export class BatchDrawing {
     if (this.requested === 'skip') {
       const pruned = this.pruneDanglingDi();
       const reEnded = this.before.snapshot.pruneReEnded(doc.definitions);
-      if (pruned || reEnded.length) changes.note(BatchDrawing.staleDiNote(pruned, reEnded));
+      if (pruned || reEnded.length) {
+        changes.note(BatchDrawing.staleDiNote(pruned, reEnded));
+      }
       this.persistExpansionHints(doc.layoutRequests.expansion(this.opts));
       layout = { status: 'skipped', warnings: [], expanded: [], metrics: metricsDelta(this.before.metrics, LayoutAnalysis.of(doc.definitions)) };
     } else if (!current.model && this.requested !== 'full' && this.before.snapshot.flowNodeShapes > 0) {
@@ -155,7 +159,9 @@ export class BatchDrawing {
 
   private static noteGivenIds(changes: ChangeSet, givenIds: GivenId[] | undefined): void {
     if (!givenIds?.length) return;
-    for (const given of givenIds) changes.change({ id: given.id, kind: given.kind, ...(given.name ? { name: given.name } : {}), detail: 'id added (it had none; the diagram refers to elements by id)' });
+    for (const given of givenIds) {
+      changes.change({ id: given.id, kind: given.kind, ...(given.name ? { name: given.name } : {}), detail: 'id added (it had none; the diagram refers to elements by id)' });
+    }
     changes.note(`${givenIds.length} element(s) without id got one in the id conventions so that the redrawn diagram can show them: ${givenIds.map((given) => given.id).join(', ')}`);
   }
 
@@ -220,8 +226,12 @@ export class BatchDrawing {
   private persistExpansionHints(expansion: { expand: string[]; collapse: string[] }): void {
     const doc = this.doc;
     const wanted = new Map<string, boolean>();
-    for (const id of expansion.expand) wanted.set(id, true);
-    for (const id of expansion.collapse) wanted.set(id, false);
+    for (const id of expansion.expand) {
+      wanted.set(id, true);
+    }
+    for (const id of expansion.collapse) {
+      wanted.set(id, false);
+    }
     if (!wanted.size) return;
     const shapes = new Map<string, El>();
     let rootPlane: El | undefined;
@@ -269,7 +279,9 @@ export class BatchDrawing {
     const moved = new Set(changes.relocated);
     const out: string[] = [];
     for (const command of commands) {
-      if (command.op === 'move' && (command.after || command.before || command.flow || command.in)) out.push(...command.ids.filter((id) => moved.has(id)));
+      if (command.op === 'move' && (command.after || command.before || command.flow || command.in)) {
+        out.push(...command.ids.filter((id) => moved.has(id)));
+      }
     }
     return out;
   }
@@ -279,7 +291,9 @@ export class BatchDrawing {
     for (const sticky of this.before.stickies) {
       const processId = sticky.process.get<string | undefined>('id');
       const nodeId = sticky.node.get<string | undefined>('id');
-      if (!processId || !nodeId || this.doc.get(processId) !== sticky.process || !this.doc.get(nodeId)) continue;
+      if (!processId || !nodeId || this.doc.get(processId) !== sticky.process || !this.doc.get(nodeId)) {
+        continue;
+      }
       out.push({ processId, index: sticky.index, ...(sticky.stickyId !== undefined ? { stickyId: sticky.stickyId } : {}), nodeId, centre: sticky.centre });
     }
     return out;
@@ -289,7 +303,9 @@ export class BatchDrawing {
   private static diagramCommandEntries(commands: EditCommand[]): DiagramCommandEntry[] {
     const out: DiagramCommandEntry[] = [];
     commands.forEach((command, index) => {
-      if (isDiagramCommand(command) || command.op === 'order') out.push({ op: command, index });
+      if (isDiagramCommand(command) || command.op === 'order') {
+        out.push({ op: command, index });
+      }
     });
     return out;
   }
@@ -320,13 +336,23 @@ export class BatchDrawing {
 
   private async decideMode(requested: LayoutMode): Promise<{ mode: 'full' | 'incremental'; reason: string }> {
     const before = this.before;
-    if (requested === 'full') return { mode: 'full', reason: 'full redraw requested' };
-    if (!before.snapshot.flowNodeShapes) return { mode: 'full', reason: 'no diagram before: drawn from scratch' };
-    if (requested === 'incremental') return { mode: 'incremental', reason: 'incremental layout requested' };
+    if (requested === 'full') {
+      return { mode: 'full', reason: 'full redraw requested' };
+    }
+    if (!before.snapshot.flowNodeShapes) {
+      return { mode: 'full', reason: 'no diagram before: drawn from scratch' };
+    }
+    if (requested === 'incremental') {
+      return { mode: 'incremental', reason: 'incremental layout requested' };
+    }
     const undrawn = before.snapshot.undrawn;
     const missing = undrawn.length ? `${undrawn.length} flow node(s) had no shape (e.g. added with --no-layout)` : '';
-    if (before.xml && (await this.isEngineOwned(before.xml, undrawn))) return { mode: 'full', reason: missing ? `engine-owned diagram (${missing}): redrawn` : 'engine-owned diagram: redrawn' };
-    if (missing) return { mode: 'incremental', reason: `diagram kept: ${missing}; they are placed locally like new elements (\`bpmn layout\` redraws everything)` };
+    if (before.xml && (await this.isEngineOwned(before.xml, undrawn))) {
+      return { mode: 'full', reason: missing ? `engine-owned diagram (${missing}): redrawn` : 'engine-owned diagram: redrawn' };
+    }
+    if (missing) {
+      return { mode: 'incremental', reason: `diagram kept: ${missing}; they are placed locally like new elements (\`bpmn layout\` redraws everything)` };
+    }
     return { mode: 'incremental', reason: 'hand-made diagram: kept, changes placed locally' };
   }
 
@@ -367,8 +393,9 @@ export class BatchDrawing {
   private async runLayout(edit: EditSession, requested: LayoutMode, relocated: string[], created: readonly string[]): Promise<{ layout: LayoutStatus; givenIds?: GivenId[] }> {
     const decision = await this.decideMode(requested);
     let ran: Ran;
-    if (decision.mode === 'full') ran = await this.fullLayout(edit);
-    else {
+    if (decision.mode === 'full') {
+      ran = await this.fullLayout(edit);
+    } else {
       try {
         ran = await this.incrementalLayout(relocated, created);
       } catch (err) {

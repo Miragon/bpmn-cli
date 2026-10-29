@@ -28,7 +28,9 @@ const STYLED = readFileSync(join(ROOT, 'test', 'fixtures', 'roundtrip', 'styled.
 /** The lines of `a` that `b` no longer has (as a multiset), in order. */
 function removedLines(before: string, after: string): string[] {
   const left = new Map<string, number>();
-  for (const line of after.split('\n')) left.set(line, (left.get(line) ?? 0) + 1);
+  for (const line of after.split('\n')) {
+    left.set(line, (left.get(line) ?? 0) + 1);
+  }
   return before.split('\n').filter((line) => {
     const count = left.get(line) ?? 0;
     if (!count) return true;

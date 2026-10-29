@@ -70,9 +70,13 @@ export class PoolStacker {
       const first = writer.di.length;
       writer.shape(pool.participant, pool.box, { isHorizontal: true });
       if (pool.scope) {
-        for (const lane of pool.scope.lanes) stretchLane(lane, pool.box.width - SIZES.participantHeader);
+        for (const lane of pool.scope.lanes) {
+          stretchLane(lane, pool.box.width - SIZES.participantHeader);
+        }
         writer.emitScope(pool.scope, pool.scope.lanes.length ? { x: pool.origin.x, y: pool.box.y } : pool.origin);
-        for (const lane of pool.scope.lanes) writer.fixLaneShapes(lane, pool);
+        for (const lane of pool.scope.lanes) {
+          writer.fixLaneShapes(lane, pool);
+        }
       }
       pool.di = writer.di.slice(first);
     }
@@ -138,7 +142,9 @@ export class PoolStacker {
         continue;
       }
       const pts = many(diagramElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
-      for (let index = 0; index + 1 < pts.length; index++) lines.push([pts[index]!, pts[index + 1]!]);
+      for (let index = 0; index + 1 < pts.length; index++) {
+        lines.push([pts[index]!, pts[index + 1]!]);
+      }
     }
     const depth = pool.scope?.lanes.length ? laneDepth(pool.scope.lanes) : 0;
     return { box: pool.box, obstacles, lines, contentLeft: pool.box.x + SIZES.participantHeader + depth * SIZES.laneHeader };
@@ -152,7 +158,9 @@ export class PoolStacker {
     for (const diagramElement of pool.di ?? []) {
       moveBounds(diagramElement.get<El | undefined>('label')?.get<El | undefined>('bounds'));
       if (!is(diagramElement, 'bpmndi:BPMNShape')) {
-        for (const waypoint of many(diagramElement, 'waypoint')) waypoint.set('y', waypoint.get<number>('y') + dy);
+        for (const waypoint of many(diagramElement, 'waypoint')) {
+          waypoint.set('y', waypoint.get<number>('y') + dy);
+        }
         continue;
       }
       moveBounds(diagramElement.get<El | undefined>('bounds'));

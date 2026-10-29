@@ -64,7 +64,9 @@ export class Semantics {
     for (const root of rawList(defs, 'rootElements')) {
       if (is(root, 'bpmn:Process')) {
         sem.indexScope(root);
-        for (const ls of rawList(root, 'laneSets')) sem.indexLanes(rawList(ls, 'lanes'), root, undefined);
+        for (const ls of rawList(root, 'laneSets')) {
+          sem.indexLanes(rawList(ls, 'lanes'), root, undefined);
+        }
       } else if (is(root, 'bpmn:Collaboration')) {
         sem.collaboration ??= root;
         for (const participant of rawList(root, 'participants')) {
@@ -82,7 +84,9 @@ export class Semantics {
 
   processOf(id: string): El | undefined {
     let scope = this.scopeOf.get(id);
-    while (scope && !is(scope, 'bpmn:Process')) scope = this.scopeOf.get(idOf(scope) ?? '');
+    while (scope && !is(scope, 'bpmn:Process')) {
+      scope = this.scopeOf.get(idOf(scope) ?? '');
+    }
     return scope;
   }
 
@@ -103,7 +107,9 @@ export class Semantics {
     const el = this.byId.get(id);
     if (!el) return undefined;
     const collabPlane = (): Plane | undefined => (this.collaboration ? planes.find((plane) => plane.rootId === idOf(this.collaboration)) : undefined);
-    if (is(el, 'bpmn:Participant') || is(el, 'bpmn:MessageFlow')) return collabPlane();
+    if (is(el, 'bpmn:Participant') || is(el, 'bpmn:MessageFlow')) {
+      return collabPlane();
+    }
     if (is(el, 'bpmn:Lane')) {
       const pid = this.laneProcess.get(id);
       return planes.find((plane) => plane.rootId === pid) ?? (pid && this.poolOfProcess.has(pid) ? collabPlane() : undefined);

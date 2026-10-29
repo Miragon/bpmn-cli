@@ -74,7 +74,9 @@ export class DiagramCommands {
    */
   private resolveSelection<TCommand extends DiagramCommand>(command: TCommand): { command: TCommand; picked: Set<string> } {
     const none = { command, picked: new Set<string>() };
-    if (command.op !== 'place' && command.op !== 'align' && command.op !== 'color' && command.op !== 'tidy') return none;
+    if (command.op !== 'place' && command.op !== 'align' && command.op !== 'color' && command.op !== 'tidy') {
+      return none;
+    }
     if (!command.path && !command.kind && !command.branch) return none;
     if (!this.diagram.planes.length) throw this.diagram.noDiagram();
     const shapeOf = (id: string): DShape | undefined => this.diagram.planes.map((plane) => plane.shapes.get(id)).find((found) => !!found);

@@ -106,7 +106,9 @@ export class EventDefinitions {
         const def = this.edit.doc.moddle.create(type, {});
         if (opts.timer !== undefined) {
           const value = opts.timer.trim();
-          if (!value) throw modelError('E_INVALID_VALUE', 'The timer value is empty', { hint: 'Use ISO 8601: PT5M (duration), R/PT1H (cycle) or 2030-01-01T00:00:00Z (date).' });
+          if (!value) {
+            throw modelError('E_INVALID_VALUE', 'The timer value is empty', { hint: 'Use ISO 8601: PT5M (duration), R/PT1H (cycle) or 2030-01-01T00:00:00Z (date).' });
+          }
           def.set(TIMER_PROPS[EventDefinitions.classifyTimer(value, opts.timerKind)], this.expression(value));
         }
         return def;
@@ -164,11 +166,17 @@ export class EventDefinitions {
   private updateTimer(def: El, opts: TriggerOptions): void {
     if (opts.timer === undefined) return;
     const value = opts.timer.trim();
-    if (!value) throw modelError('E_INVALID_VALUE', 'The timer value is empty', { hint: 'Use ISO 8601: PT5M (duration), R/PT1H (cycle) or 2030-01-01T00:00:00Z (date).' });
+    if (!value) {
+      throw modelError('E_INVALID_VALUE', 'The timer value is empty', { hint: 'Use ISO 8601: PT5M (duration), R/PT1H (cycle) or 2030-01-01T00:00:00Z (date).' });
+    }
     const prop = TIMER_PROPS[EventDefinitions.classifyTimer(value, opts.timerKind)];
     const current = Object.values(TIMER_PROPS).find((timerProp) => def.get<El | undefined>(timerProp)) ?? prop;
     this.updateExpression(def, prop, value, current);
-    for (const timerProp of Object.values(TIMER_PROPS)) if (timerProp !== prop && def.get<El | undefined>(timerProp)) def.set(timerProp, undefined);
+    for (const timerProp of Object.values(TIMER_PROPS)) {
+      if (timerProp !== prop && def.get<El | undefined>(timerProp)) {
+        def.set(timerProp, undefined);
+      }
+    }
   }
 
   /**
@@ -207,10 +215,15 @@ export class EventDefinitions {
   }
 
   private updateDefinition(event: El, def: El, trigger: Exclude<Trigger, 'none'>, opts: TriggerOptions): Finding[] {
-    if (EventDefinitions.isRefTrigger(trigger)) this.updateReference(def, trigger, opts);
-    else if (trigger === 'timer') this.updateTimer(def, opts);
-    else if (trigger === 'conditional') return this.updateCondition(event, def, opts);
-    else if (trigger === 'link' && opts.link !== undefined && def.get<string | undefined>('name') !== opts.link) def.set('name', opts.link || undefined);
+    if (EventDefinitions.isRefTrigger(trigger)) {
+      this.updateReference(def, trigger, opts);
+    } else if (trigger === 'timer') {
+      this.updateTimer(def, opts);
+    } else if (trigger === 'conditional') {
+      return this.updateCondition(event, def, opts);
+    } else if (trigger === 'link' && opts.link !== undefined && def.get<string | undefined>('name') !== opts.link) {
+      def.set('name', opts.link || undefined);
+    }
     return [];
   }
 

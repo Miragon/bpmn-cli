@@ -23,7 +23,9 @@ export abstract class CliCommand {
 
   protected defineSignature(parent: CommandType, doc: CommandSignature): CommandType {
     const cmd = parent.command(doc.arguments ? `${doc.name} ${doc.arguments}` : doc.name);
-    for (const alias of doc.aliases ?? []) cmd.alias(alias);
+    for (const alias of doc.aliases ?? []) {
+      cmd.alias(alias);
+    }
     return cmd.description(doc.help);
   }
 

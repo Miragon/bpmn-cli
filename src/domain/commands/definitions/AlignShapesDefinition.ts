@@ -19,7 +19,9 @@ export class AlignShapesDefinition extends EditCommandDefinition<AlignShapes> {
 
   override check(command: CommandFieldCheck): void {
     command.selection(true);
-    if (!command.hasSelector() && (command.fields['ids'] as string[]).length < 2 && command.fields['to'] === undefined) throw command.fail('align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["endEvent_a","endEvent_b"],"axis":"column"}.');
+    if (!command.hasSelector() && (command.fields['ids'] as string[]).length < 2 && command.fields['to'] === undefined) {
+      throw command.fail('align needs two ids, or one id and "to"', 'Example: {"op":"align","ids":["endEvent_a","endEvent_b"],"axis":"column"}.');
+    }
   }
 
   override schemaRules(): unknown[] {

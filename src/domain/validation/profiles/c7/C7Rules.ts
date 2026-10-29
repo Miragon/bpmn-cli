@@ -58,7 +58,9 @@ export abstract class C7Rules extends EngineRules {
     const kids = peek<unknown[]>(el, '$children');
     if (!Array.isArray(kids)) return [];
     return (kids as El[]).filter((child) => {
-      if (!child || typeof child !== 'object' || typeof child.$type !== 'string' || !isGeneric(child)) return false;
+      if (!child || typeof child !== 'object' || typeof child.$type !== 'string' || !isGeneric(child)) {
+        return false;
+      }
       const uri = this.ns.uriOfElement(child);
       return this.kit.camunda.reads(uri) && (local === undefined || localName(child.$type) === local);
     });
@@ -75,7 +77,9 @@ export abstract class C7Rules extends EngineRules {
       .filter((element) => element.$type === vendorElement.$type);
     for (const key of SELECTOR_KEYS) {
       const val = attr(vendorElement, key);
-      if (val === undefined || val === '' || same.filter((sibling) => attr(sibling, key) === val).length !== 1) continue;
+      if (val === undefined || val === '' || same.filter((sibling) => attr(sibling, key) === val).length !== 1) {
+        continue;
+      }
       return `${vendorElement.$type}[${key}=${/^[\w.:-]+$/.test(val) ? val : `"${val.replace(/"/g, '\\"')}"`}]`;
     }
     return `${vendorElement.$type}[${Math.max(0, same.indexOf(vendorElement))}]`;
@@ -105,14 +109,24 @@ export abstract class C7Rules extends EngineRules {
    * are not even parsed. Undefined where the order is not known (every definition is checked then).
    */
   private actingOrder(el: El): string[] | undefined {
-    if (this.kit.is(el, 'bpmn:IntermediateCatchEvent')) return ['Timer', 'Signal', 'Message', 'Link', 'Conditional'];
-    if (this.kit.is(el, 'bpmn:BoundaryEvent')) return ['Timer', 'Signal', 'Message', 'Conditional'];
-    if (this.kit.is(el, 'bpmn:IntermediateThrowEvent')) return ['Signal', 'Message'];
+    if (this.kit.is(el, 'bpmn:IntermediateCatchEvent')) {
+      return ['Timer', 'Signal', 'Message', 'Link', 'Conditional'];
+    }
+    if (this.kit.is(el, 'bpmn:BoundaryEvent')) {
+      return ['Timer', 'Signal', 'Message', 'Conditional'];
+    }
+    if (this.kit.is(el, 'bpmn:IntermediateThrowEvent')) {
+      return ['Signal', 'Message'];
+    }
     if (this.kit.is(el, 'bpmn:EndEvent')) return ['Message', 'Signal'];
     if (this.kit.is(el, 'bpmn:StartEvent')) {
       const parent = el.$parent as El | undefined;
-      if (parent && this.kit.isEventSubProcess(parent)) return ['Message', 'Signal', 'Timer', 'Conditional'];
-      if (parent && this.kit.is(parent, 'bpmn:Process')) return ['Timer', 'Message', 'Signal', 'Conditional'];
+      if (parent && this.kit.isEventSubProcess(parent)) {
+        return ['Message', 'Signal', 'Timer', 'Conditional'];
+      }
+      if (parent && this.kit.is(parent, 'bpmn:Process')) {
+        return ['Timer', 'Message', 'Signal', 'Conditional'];
+      }
     }
     return undefined;
   }

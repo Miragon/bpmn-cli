@@ -57,7 +57,9 @@ export function union(first: Box, second: Box): Box {
 
 export function unionAll(boxes: readonly Box[]): Box | undefined {
   let out: Box | undefined;
-  for (const box of boxes) out = out ? union(out, box) : copyBox(box);
+  for (const box of boxes) {
+    out = out ? union(out, box) : copyBox(box);
+  }
   return out;
 }
 
@@ -67,7 +69,9 @@ export function translate(at: Point, dx: number, dy: number): void {
 }
 
 export function translatePoints(points: readonly Point[], dx: number, dy: number): void {
-  for (const point of points) translate(point, dx, dy);
+  for (const point of points) {
+    translate(point, dx, dy);
+  }
 }
 
 export function translateShape(shape: { bounds: Box; label?: Box | undefined }, dx: number, dy: number): void {
@@ -97,7 +101,9 @@ function slab(origin: number, direction: number, lo: number, hi: number): [numbe
 export function segmentHits(start: Point, end: Point, box: Box, shrink = 2): boolean {
   const boxHit = segmentHitsBox(start, end, box, shrink);
   if (!boxHit || start.x === end.x || start.y === end.y) return boxHit;
-  if (right(box) - shrink <= box.x + shrink || bottom(box) - shrink <= box.y + shrink) return false;
+  if (right(box) - shrink <= box.x + shrink || bottom(box) - shrink <= box.y + shrink) {
+    return false;
+  }
   const [ax, bx] = slab(start.x, end.x - start.x, box.x + shrink, right(box) - shrink);
   const [ay, by] = slab(start.y, end.y - start.y, box.y + shrink, bottom(box) - shrink);
   const lo = Math.max(ax, ay);
@@ -128,19 +134,27 @@ export function properCross([firstStart, firstEnd]: Segment, [secondStart, secon
 
 export function polylinesCross(first: readonly Point[], second: readonly Point[]): boolean {
   for (let firstIndex = 0; firstIndex + 1 < first.length; firstIndex++) {
-    for (let secondIndex = 0; secondIndex + 1 < second.length; secondIndex++) if (segmentsCross(first[firstIndex]!, first[firstIndex + 1]!, second[secondIndex]!, second[secondIndex + 1]!)) return true;
+    for (let secondIndex = 0; secondIndex + 1 < second.length; secondIndex++) {
+      if (segmentsCross(first[firstIndex]!, first[firstIndex + 1]!, second[secondIndex]!, second[secondIndex + 1]!)) {
+        return true;
+      }
+    }
   }
   return false;
 }
 
 export function pathHits(points: readonly Point[], box: Box, shrink = 2): boolean {
-  for (let index = 0; index + 1 < points.length; index++) if (segmentHits(points[index]!, points[index + 1]!, box, shrink)) return true;
+  for (let index = 0; index + 1 < points.length; index++) {
+    if (segmentHits(points[index]!, points[index + 1]!, box, shrink)) return true;
+  }
   return false;
 }
 
 export function toSegments(points: Point[]): Segment[] {
   const out: Segment[] = [];
-  for (let index = 0; index + 1 < points.length; index++) out.push([points[index]!, points[index + 1]!]);
+  for (let index = 0; index + 1 < points.length; index++) {
+    out.push([points[index]!, points[index + 1]!]);
+  }
   return out;
 }
 
@@ -173,8 +187,11 @@ export function hitCount(points: Point[], boxes: Box[] | XIndex<Box>, ignore: Bo
     const test = (box: Box): void => {
       if (spanCuts(span, box) && !ignore.includes(box)) (hit ??= new Set()).add(box);
     };
-    if (Array.isArray(boxes)) boxes.forEach(test);
-    else boxes.each(span.x1, span.x2, test);
+    if (Array.isArray(boxes)) {
+      boxes.forEach(test);
+    } else {
+      boxes.each(span.x1, span.x2, test);
+    }
   }
   return hit?.size ?? 0;
 }
@@ -183,7 +200,9 @@ export function pathHitsAny(points: Point[], boxes: Box[] | XIndex<Box>, ignore:
   for (let index = 0; index + 1 < points.length; index++) {
     const span = innerSpan(points[index]!, points[index + 1]!);
     const cuts = (box: Box): boolean => spanCuts(span, box) && !ignore.includes(box);
-    if (Array.isArray(boxes) ? boxes.some(cuts) : boxes.each(span.x1, span.x2, cuts)) return true;
+    if (Array.isArray(boxes) ? boxes.some(cuts) : boxes.each(span.x1, span.x2, cuts)) {
+      return true;
+    }
   }
   return false;
 }
@@ -192,7 +211,9 @@ export function isOrthogonal(points: readonly Point[], tol = 0.5): boolean {
   for (let index = 0; index + 1 < points.length; index++) {
     const start = points[index]!;
     const end = points[index + 1]!;
-    if (Math.abs(start.x - end.x) > tol && Math.abs(start.y - end.y) > tol) return false;
+    if (Math.abs(start.x - end.x) > tol && Math.abs(start.y - end.y) > tol) {
+      return false;
+    }
   }
   return true;
 }

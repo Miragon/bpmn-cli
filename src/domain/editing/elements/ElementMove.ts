@@ -36,7 +36,9 @@ export class ElementMove {
     if (mode === 'in') {
       this.moveInto(nodes, placement, changes);
     } else if (mode === 'on') {
-      for (const node of nodes) this.moveOnto(node, placement, changes);
+      for (const node of nodes) {
+        this.moveOnto(node, placement, changes);
+      }
     } else if (mode !== 'none') {
       this.assertFirstPlacement(nodes[0]!, placement);
       this.assertChainAnchor(nodes, placement);
@@ -52,7 +54,9 @@ export class ElementMove {
     }
     if (hasLane) {
       const lane = command.lane ? this.edit.require(command.lane, 'bpmn:Lane', 'lane') : undefined;
-      for (const node of nodes) new Lanes(this.edit).assign(node, lane, changes);
+      for (const node of nodes) {
+        new Lanes(this.edit).assign(node, lane, changes);
+      }
     }
     this.edit.doc.invalidate();
     return changes;
@@ -74,7 +78,9 @@ export class ElementMove {
   }
 
   private static describePlacement(placement: PlacementOptions): string {
-    if (placement.after && placement.before) return `between ${placement.after} and ${placement.before}`;
+    if (placement.after && placement.before) {
+      return `between ${placement.after} and ${placement.before}`;
+    }
     if (placement.after) return `after ${placement.after}`;
     if (placement.before) return `before ${placement.before}`;
     if (placement.flow) return `into flow ${placement.flow}`;
@@ -84,13 +90,19 @@ export class ElementMove {
 
   private anchorsOf(placement: PlacementOptions): El[] {
     const out: El[] = [];
-    if (placement.after) out.push(this.edit.require(placement.after, 'bpmn:FlowNode'));
-    if (placement.before) out.push(this.edit.require(placement.before, 'bpmn:FlowNode'));
+    if (placement.after) {
+      out.push(this.edit.require(placement.after, 'bpmn:FlowNode'));
+    }
+    if (placement.before) {
+      out.push(this.edit.require(placement.before, 'bpmn:FlowNode'));
+    }
     if (placement.flow) {
       const flow = this.edit.require(placement.flow, 'bpmn:SequenceFlow', 'sequence flow');
       out.push(flow.get<El>('sourceRef'), flow.get<El>('targetRef'));
     }
-    if (placement.on) out.push(this.edit.require(placement.on, 'bpmn:Activity', 'activity'));
+    if (placement.on) {
+      out.push(this.edit.require(placement.on, 'bpmn:Activity', 'activity'));
+    }
     if (placement.in) out.push(this.edit.requireScope(placement.in));
     return out;
   }
@@ -116,7 +128,9 @@ export class ElementMove {
 
   private assertFirstPlacement(node: El, placement: PlacementOptions): void {
     ElementMove.assertNotBoundary(node);
-    for (const anchor of this.anchorsOf(placement)) ElementMove.assertNotInside(node, anchor);
+    for (const anchor of this.anchorsOf(placement)) {
+      ElementMove.assertNotInside(node, anchor);
+    }
   }
 
   private static assertNotBoundary(node: El): void {
@@ -176,8 +190,12 @@ export class ElementMove {
    * new branch, before a join a prepend, so neither counts as in place.
    */
   private inPlace(nodes: El[], placement: PlacementOptions): boolean {
-    if (nodes.some((node) => is(node, 'bpmn:BoundaryEvent')) || new Set(nodes).size !== nodes.length) return false;
-    if (new FlowOptions(placement).flags.length && this.edit.doc.incoming(nodes[0]!).length !== 1) return false;
+    if (nodes.some((node) => is(node, 'bpmn:BoundaryEvent')) || new Set(nodes).size !== nodes.length) {
+      return false;
+    }
+    if (new FlowOptions(placement).flags.length && this.edit.doc.incoming(nodes[0]!).length !== 1) {
+      return false;
+    }
     const onlyIn = (node: El): El | undefined => {
       const flows = this.edit.doc.incoming(node);
       return flows.length === 1 ? flows[0]!.get<El>('sourceRef') : undefined;
@@ -186,7 +204,11 @@ export class ElementMove {
       const flows = this.edit.doc.outgoing(node);
       return flows.length === 1 ? flows[0]!.get<El>('targetRef') : undefined;
     };
-    for (let index = 1; index < nodes.length; index++) if (is(nodes[index - 1]!, 'bpmn:Gateway') || onlyIn(nodes[index]!) !== nodes[index - 1]) return false;
+    for (let index = 1; index < nodes.length; index++) {
+      if (is(nodes[index - 1]!, 'bpmn:Gateway') || onlyIn(nodes[index]!) !== nodes[index - 1]) {
+        return false;
+      }
+    }
     const first = nodes[0]!;
     const last = nodes[nodes.length - 1]!;
     const mode = NodePlacement.modeOf(placement);
@@ -198,7 +220,9 @@ export class ElementMove {
       const beforeNode = this.edit.require(placement.before!, 'bpmn:FlowNode');
       return !(is(beforeNode, 'bpmn:Gateway') && this.edit.doc.incoming(beforeNode).length >= 2) && onlyOut(last) === beforeNode;
     }
-    if (mode === 'between') return onlyIn(first) === this.edit.require(placement.after!, 'bpmn:FlowNode') && onlyOut(last) === this.edit.require(placement.before!, 'bpmn:FlowNode');
+    if (mode === 'between') {
+      return onlyIn(first) === this.edit.require(placement.after!, 'bpmn:FlowNode') && onlyOut(last) === this.edit.require(placement.before!, 'bpmn:FlowNode');
+    }
     return false;
   }
 
@@ -253,7 +277,9 @@ export class ElementMove {
   }
 
   private inheritLane(node: El, boundaries: El[], anchor: El | undefined, scope: El): void {
-    if (!anchor || !is(scope, 'bpmn:Process') || this.edit.doc.lanesOf(node).length) return;
+    if (!anchor || !is(scope, 'bpmn:Process') || this.edit.doc.lanesOf(node).length) {
+      return;
+    }
     const lane = this.deepestLane(anchor);
     if (!lane) return;
     this.joinLane(lane, node, boundaries);
@@ -261,12 +287,18 @@ export class ElementMove {
 
   private joinLane(lane: El, node: El, boundaries: El[]): void {
     addTo(lane, 'flowNodeRef', node);
-    for (const boundary of boundaries) if (!this.edit.doc.lanesOf(boundary).length) addTo(lane, 'flowNodeRef', boundary);
+    for (const boundary of boundaries) {
+      if (!this.edit.doc.lanesOf(boundary).length) {
+        addTo(lane, 'flowNodeRef', boundary);
+      }
+    }
   }
 
   /** A reused id would show up as both removed and created in the result. */
   private reserveIds(ids: string[]): void {
-    for (const id of ids) if (id && !this.edit.doc.has(id)) this.edit.doc.ids.claim(id);
+    for (const id of ids) {
+      if (id && !this.edit.doc.has(id)) this.edit.doc.ids.claim(id);
+    }
   }
 
   /**
@@ -276,7 +308,9 @@ export class ElementMove {
   private moveNode(node: El, placement: PlacementOptions, changes: ChangeSet, explicitLane: boolean): void {
     ElementMove.assertNotBoundary(node);
     const anchors = this.anchorsOf(placement);
-    for (const anchor of anchors) ElementMove.assertNotInside(node, anchor);
+    for (const anchor of anchors) {
+      ElementMove.assertNotInside(node, anchor);
+    }
     const oldScope = this.edit.doc.scopeOf(node);
     const targetScope = new NodePlacement(this.edit, placement).scope();
     const boundaries = is(node, 'bpmn:Activity') ? this.edit.doc.boundaryEventsOf(node) : [];
@@ -291,7 +325,9 @@ export class ElementMove {
     const own = laneBefore && (laneBefore.get<El[] | undefined>('flowNodeRef') ?? []).includes(node) ? laneBefore : undefined;
     const inherited = !explicitLane && is(targetScope, 'bpmn:Process') ? LaneInheritance.of(this.edit.doc, placement) : LaneInheritance.NONE;
     new NodePlacement(this.edit, placement).place(node, changes);
-    for (const flow of new Set([...this.edit.doc.incoming(node), ...this.edit.doc.outgoing(node)])) new EventGatewayRule(this.edit).warnFlow(flow, changes);
+    for (const flow of new Set([...this.edit.doc.incoming(node), ...this.edit.doc.outgoing(node)])) {
+      new EventGatewayRule(this.edit).warnFlow(flow, changes);
+    }
     if (boundaries.length) insertAfterInScope(targetScope, node, ...boundaries);
     this.fixFlows(boundaries, targetScope, changes);
     if (own) {

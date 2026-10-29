@@ -87,7 +87,9 @@ for (let firstIndex = 0; firstIndex < PLACEMENT_KEYS.length; firstIndex++) {
   for (let secondIndex = firstIndex + 1; secondIndex < PLACEMENT_KEYS.length; secondIndex++) {
     const firstKey = PLACEMENT_KEYS[firstIndex]!;
     const secondKey = PLACEMENT_KEYS[secondIndex]!;
-    if (!(firstKey === 'after' && secondKey === 'before')) PLACEMENT_CONFLICTS.push([firstKey, secondKey]);
+    if (!(firstKey === 'after' && secondKey === 'before')) {
+      PLACEMENT_CONFLICTS.push([firstKey, secondKey]);
+    }
   }
 }
 

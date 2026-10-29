@@ -47,7 +47,9 @@ export class VendorElements {
   resolvePrefix(el: El, prefix: string, scope: Record<string, string>): { prefix: string; uri: string } {
     const doc = this.doc;
     const inline = scope[prefix];
-    if (inline === BPMN_NS || (inline === undefined && prefix === 'bpmn')) return { prefix: this.bpmnPrefix(), uri: BPMN_NS };
+    if (inline === BPMN_NS || (inline === undefined && prefix === 'bpmn')) {
+      return { prefix: this.bpmnPrefix(), uri: BPMN_NS };
+    }
     const uri = inline ?? doc.namespaceUri(prefix);
     if (!uri) {
       doc.declareNamespace(prefix);
@@ -92,7 +94,9 @@ export class VendorElements {
   attrsOf(el: El): Record<string, string> {
     const out: Record<string, string> = {};
     for (const [rawKey, rawValue] of Object.entries(el as unknown as Raw)) {
-      if (rawKey.startsWith('$') || rawValue === undefined || rawValue === null || typeof rawValue === 'object' || typeof rawValue === 'function') continue;
+      if (rawKey.startsWith('$') || rawValue === undefined || rawValue === null || typeof rawValue === 'object' || typeof rawValue === 'function') {
+        continue;
+      }
       out[rawKey] = String(rawValue);
     }
     return out;
@@ -109,7 +113,11 @@ export class VendorElements {
 
   keyOf(el: El): { attr: string; value: string } | undefined {
     const attrs = this.attrsOf(el);
-    for (const attrKey of EXTENSION_STRUCTURE.keysOf(this.typeOf(el))) if (attrs[attrKey] !== undefined) return { attr: attrKey, value: attrs[attrKey]! };
+    for (const attrKey of EXTENSION_STRUCTURE.keysOf(this.typeOf(el))) {
+      if (attrs[attrKey] !== undefined) {
+        return { attr: attrKey, value: attrs[attrKey]! };
+      }
+    }
     return undefined;
   }
 
@@ -139,7 +147,9 @@ export class VendorElements {
 
   private filePrefixFor(uri: string): string | undefined {
     for (const [attrName, attrValue] of Object.entries(this.doc.definitions.$attrs as Record<string, unknown>)) {
-      if (attrName.startsWith('xmlns:') && attrValue === uri) return attrName.slice(6);
+      if (attrName.startsWith('xmlns:') && attrValue === uri) {
+        return attrName.slice(6);
+      }
     }
     return undefined;
   }
@@ -153,7 +163,9 @@ export class VendorElements {
     if (!match) {
       throw modelError('E_INVALID_VALUE', `"${name}" is not a prefixed element name (expected prefix:localName, e.g. zeebe:taskDefinition)`, { element: this.hosts.idOf(el) });
     }
-    if (match[1] === 'xmlns') throw modelError('E_INVALID_VALUE', `"${name}" is not an element name`, { element: this.hosts.idOf(el) });
+    if (match[1] === 'xmlns') {
+      throw modelError('E_INVALID_VALUE', `"${name}" is not an element name`, { element: this.hosts.idOf(el) });
+    }
     return { prefix: match[1]!, local: match[2]! };
   }
 
@@ -171,7 +183,9 @@ export class VendorElements {
     const uri = scope[match[1]!] ?? (match[1] === 'bpmn' ? BPMN_NS : undefined);
     if (uri !== BPMN_NS) return value;
     const attrs = this.doc.definitions.$attrs as Record<string, unknown>;
-    if (!this.filePrefixFor(BPMN_NS) && attrs['xmlns'] === BPMN_NS) return match[2]!;
+    if (!this.filePrefixFor(BPMN_NS) && attrs['xmlns'] === BPMN_NS) {
+      return match[2]!;
+    }
     return `${this.bpmnPrefix()}:${match[2]}`;
   }
 }

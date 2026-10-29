@@ -5,7 +5,9 @@ export function editDistance(left: string, right: string): number {
     for (let column = 1; column <= right.length; column++) {
       const cost = left[row - 1] === right[column - 1] ? 0 : 1;
       let distance = Math.min(distances[row - 1]![column]! + 1, distances[row]![column - 1]! + 1, distances[row - 1]![column - 1]! + cost);
-      if (row > 1 && column > 1 && left[row - 1] === right[column - 2] && left[row - 2] === right[column - 1]) distance = Math.min(distance, distances[row - 2]![column - 2]! + 1);
+      if (row > 1 && column > 1 && left[row - 1] === right[column - 2] && left[row - 2] === right[column - 1]) {
+        distance = Math.min(distance, distances[row - 2]![column - 2]! + 1);
+      }
       distances[row]![column] = distance;
     }
   }
@@ -18,7 +20,9 @@ export function typoTolerance(length: number): number {
 
 export function levenshtein(left: string, right: string): number {
   const dp: number[][] = Array.from({ length: left.length + 1 }, (_row, rowIndex) => [rowIndex, ...Array<number>(right.length).fill(0)]);
-  for (let column = 1; column <= right.length; column++) dp[0]![column] = column;
+  for (let column = 1; column <= right.length; column++) {
+    dp[0]![column] = column;
+  }
   for (let row = 1; row <= left.length; row++) {
     for (let column = 1; column <= right.length; column++) {
       dp[row]![column] = Math.min(dp[row - 1]![column]! + 1, dp[row]![column - 1]! + 1, dp[row - 1]![column - 1]! + (left[row - 1] === right[column - 1] ? 0 : 1));

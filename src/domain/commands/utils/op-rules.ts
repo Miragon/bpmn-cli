@@ -13,7 +13,9 @@ const PLACEMENT_ORDER = ['after', 'before', 'flow', 'in', 'on'];
 
 export function placementViolation(present: string[], name: FieldSpelling): RuleViolation | undefined {
   const used = PLACEMENT_ORDER.filter((placementKey) => present.includes(placementKey));
-  if (used.length <= 1 || (used.length === 2 && used.includes('after') && used.includes('before'))) return undefined;
+  if (used.length <= 1 || (used.length === 2 && used.includes('after') && used.includes('before'))) {
+    return undefined;
+  }
   return {
     message: `${used.map(name).join(' and ')} cannot be combined`,
     hint: `Use exactly one placement: ${name('after')}, ${name('before')}, ${name('after')} + ${name('before')} (splice into that flow), ${name('flow')}, ${name('in')}, or ${name('on')} (boundary events).`,
@@ -31,7 +33,9 @@ export function defaultWithConditionViolation(isDefault: boolean, hasCondition: 
 export function groupViolation(present: string[], groups: string[][], name: FieldSpelling): RuleViolation | undefined {
   for (const group of groups) {
     const used = group.filter((groupKey) => present.includes(groupKey));
-    if (used.length > 1) return { message: `${used.map(name).join(' and ')} cannot be combined`, hint: `Give at most one of ${group.map(name).join(', ')}.` };
+    if (used.length > 1) {
+      return { message: `${used.map(name).join(' and ')} cannot be combined`, hint: `Give at most one of ${group.map(name).join(', ')}.` };
+    }
   }
   return undefined;
 }

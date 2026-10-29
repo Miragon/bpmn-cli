@@ -52,12 +52,16 @@ function cliInfo(stdout) {
 }
 
 function cliArm(name, bin, layout) {
-  if (!existsSync(bin)) throw new Error(`${name}: ${bin} does not exist${name === 'new' ? ' (npm run build?)' : ''}`);
+  if (!existsSync(bin)) {
+    throw new Error(`${name}: ${bin} does not exist${name === 'new' ? ' (npm run build?)' : ''}`);
+  }
   const features = cliFeatures(bin);
   const mode = features.layoutModes ? ['--layout', layout] : [];
   const noLint = features.noLint ? ['--no-lint-config'] : [];
   const global = { layout: (file) => [bin, 'layout', file, '--force', '--json', ...noLint] };
-  if (features.tidy) global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint];
+  if (features.tidy) {
+    global.tidy = (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint];
+  }
   return {
     name, key: features.layoutModes ? `${name}-${layout}` : name, path: bin, kind: 'cli', features, forceable: true, global,
     edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', ...mode, ...noLint, ...(force ? ['--force'] : [])],
@@ -84,11 +88,15 @@ export function resolveArms(names, { layout = 'auto', env = process.env } = {}) 
   return names.map((name) => {
     if (name === 'new') return cliArm('new', join(ROOT, 'bin', 'bpmn.js'), layout);
     if (name === 'baseline') {
-      if (!env.BASELINE_BIN) throw new Error('arm baseline needs env BASELINE_BIN=<path to another bpmn-cli bin/bpmn.js>');
+      if (!env.BASELINE_BIN) {
+        throw new Error('arm baseline needs env BASELINE_BIN=<path to another bpmn-cli bin/bpmn.js>');
+      }
       return cliArm('baseline', env.BASELINE_BIN, layout);
     }
     if (name === 'pr') {
-      if (!env.BPMN_EDIT_MAIN) throw new Error('arm pr needs env BPMN_EDIT_MAIN=<path to the PR #218 tool src/main.ts>');
+      if (!env.BPMN_EDIT_MAIN) {
+        throw new Error('arm pr needs env BPMN_EDIT_MAIN=<path to the PR #218 tool src/main.ts>');
+      }
       return prArm(env.BPMN_EDIT_MAIN);
     }
     throw new Error(`unknown arm ${name} (new | baseline | pr)`);

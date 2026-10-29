@@ -82,7 +82,9 @@ export class ProblemLocator {
       lo = Math.max(lo, Math.min(t0, t1));
       hi = Math.min(hi, Math.max(t0, t1));
     }
-    if (lo <= hi) return { x: segmentStart.x + ((lo + hi) / 2) * dx, y: segmentStart.y + ((lo + hi) / 2) * dy };
+    if (lo <= hi) {
+      return { x: segmentStart.x + ((lo + hi) / 2) * dx, y: segmentStart.y + ((lo + hi) / 2) * dy };
+    }
     return this.meetCentre({ x: Math.min(segmentStart.x, segmentEnd.x), y: Math.min(segmentStart.y, segmentEnd.y), width: Math.abs(dx), height: Math.abs(dy) }, box);
   }
 
@@ -90,8 +92,12 @@ export class ProblemLocator {
   private sharedAt(first: Edge, second: Edge, skip = new Set<string>()): Point | undefined {
     for (const [firstIndex, [firstStart, firstEnd]] of first.segs.entries()) {
       for (const [secondIndex, [secondStart, secondEnd]] of second.segs.entries()) {
-        if (skip.has(`${firstIndex},${secondIndex}`) || collinear([firstStart, firstEnd], [secondStart, secondEnd]) <= 0) continue;
-        if (firstStart.x === firstEnd.x) return { x: firstStart.x, y: (Math.max(Math.min(firstStart.y, firstEnd.y), Math.min(secondStart.y, secondEnd.y)) + Math.min(Math.max(firstStart.y, firstEnd.y), Math.max(secondStart.y, secondEnd.y))) / 2 };
+        if (skip.has(`${firstIndex},${secondIndex}`) || collinear([firstStart, firstEnd], [secondStart, secondEnd]) <= 0) {
+          continue;
+        }
+        if (firstStart.x === firstEnd.x) {
+          return { x: firstStart.x, y: (Math.max(Math.min(firstStart.y, firstEnd.y), Math.min(secondStart.y, secondEnd.y)) + Math.min(Math.max(firstStart.y, firstEnd.y), Math.max(secondStart.y, secondEnd.y))) / 2 };
+        }
         return { x: (Math.max(Math.min(firstStart.x, firstEnd.x), Math.min(secondStart.x, secondEnd.x)) + Math.min(Math.max(firstStart.x, firstEnd.x), Math.max(secondStart.x, secondEnd.x))) / 2, y: firstStart.y };
       }
     }
@@ -103,7 +109,9 @@ export class ProblemLocator {
     let rest = parts.reduce((sum, [start, end]) => sum + Math.hypot(end.x - start.x, end.y - start.y), 0) / 2;
     for (const [start, end] of parts) {
       const len = Math.hypot(end.x - start.x, end.y - start.y);
-      if (len >= rest && len > 0) return { x: start.x + ((end.x - start.x) * rest) / len, y: start.y + ((end.y - start.y) * rest) / len };
+      if (len >= rest && len > 0) {
+        return { x: start.x + ((end.x - start.x) * rest) / len, y: start.y + ((end.y - start.y) * rest) / len };
+      }
       rest -= len;
     }
     return pts[0];
@@ -123,7 +131,13 @@ export class ProblemLocator {
     const labelOf = (id: string | undefined): Box | undefined => (id === undefined ? undefined : (pl.shapes.get(id)?.label ?? pl.edges.get(id)?.label));
     switch (problem.kind) {
       case 'crossings':
-        for (const firstSegment of ea?.segs ?? []) for (const secondSegment of eb?.segs ?? []) if (segmentsCross(...firstSegment, ...secondSegment)) return this.crossPoint(firstSegment, secondSegment);
+        for (const firstSegment of ea?.segs ?? []) {
+          for (const secondSegment of eb?.segs ?? []) {
+            if (segmentsCross(...firstSegment, ...secondSegment)) {
+              return this.crossPoint(firstSegment, secondSegment);
+            }
+          }
+        }
         return undefined;
       case 'overlaps':
       case 'frameOverlap':

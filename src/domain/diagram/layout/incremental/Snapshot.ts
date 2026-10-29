@@ -66,7 +66,9 @@ export class Snapshot {
     for (const [id, el] of sem.byId) {
       const name = raw<string>(el, 'name');
       if (name !== undefined) snap.names.set(id, name);
-      if (is(el, 'bpmn:SequenceFlow')) snap.flowEnds.set(id, { sourceId: idOf(raw(el, 'sourceRef')), targetId: idOf(raw(el, 'targetRef')) });
+      if (is(el, 'bpmn:SequenceFlow')) {
+        snap.flowEnds.set(id, { sourceId: idOf(raw(el, 'sourceRef')), targetId: idOf(raw(el, 'targetRef')) });
+      }
       const host = is(el, 'bpmn:BoundaryEvent') ? idOf(raw(el, 'attachedToRef')) : undefined;
       if (host) snap.hostOf.set(id, host);
     }
@@ -122,13 +124,19 @@ export class Snapshot {
   /** A renamed or retyped end counts as the same end. */
   changedEnds(edge: El): ChangedEnd[] {
     const old = this.byDi.get(edge);
-    if (!old || (old.kind !== 'sequenceFlow' && old.kind !== 'messageFlow')) return [];
+    if (!old || (old.kind !== 'sequenceFlow' && old.kind !== 'messageFlow')) {
+      return [];
+    }
     const el = raw<El>(edge, 'bpmnElement');
     if (!el) return [];
     const now = DiagramReader.edgeEnds(el);
     const out: ChangedEnd[] = [];
-    if (this.endNow(old.sourceId) !== now.sourceId) out.push({ end: 'source', id: now.sourceId ?? '' });
-    if (this.endNow(old.targetId) !== now.targetId) out.push({ end: 'target', id: now.targetId ?? '' });
+    if (this.endNow(old.sourceId) !== now.sourceId) {
+      out.push({ end: 'source', id: now.sourceId ?? '' });
+    }
+    if (this.endNow(old.targetId) !== now.targetId) {
+      out.push({ end: 'target', id: now.targetId ?? '' });
+    }
     return out;
   }
 

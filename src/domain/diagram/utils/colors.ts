@@ -35,7 +35,9 @@ export function colorsOf(defs: El): Map<string, ColorAttrs> {
       if (!id) continue;
       const own = pick(pe, is(pe, 'bpmndi:BPMNEdge') ? EDGE_COLORS : SHAPE_COLORS);
       const label = pick(raw<El>(pe, 'label'), LABEL_COLORS);
-      if (Object.keys(own).length || Object.keys(label).length) out.set(id, { own, label });
+      if (Object.keys(own).length || Object.keys(label).length) {
+        out.set(id, { own, label });
+      }
     }
   }
   return out;
@@ -55,7 +57,9 @@ export type SwatchName = keyof typeof SWATCHES;
 export function setSwatch(di: El, swatch: SwatchName | undefined): boolean {
   const edge = is(di, 'bpmndi:BPMNEdge');
   const before = JSON.stringify([pick(di, SHAPE_COLORS.concat(EDGE_COLORS)), pick(raw<El>(di, 'label'), LABEL_COLORS)]);
-  for (const key of new Set([...SHAPE_COLORS, ...EDGE_COLORS])) di.set(key, undefined);
+  for (const key of new Set([...SHAPE_COLORS, ...EDGE_COLORS])) {
+    di.set(key, undefined);
+  }
   const label = raw<El>(di, 'label');
   if (label) label.set('color:color', undefined);
   if (swatch) {
@@ -89,7 +93,9 @@ export function applyColors(moddle: BpmnModdle, defs: El, colors: Map<string, Co
     for (const pe of rawList(raw(diagram, 'plane'), 'planeElement')) {
       const elementColors = colors.get(idOf(raw(pe, 'bpmnElement')) ?? '');
       if (!elementColors) continue;
-      for (const [key, value] of Object.entries(elementColors.own)) pe.set(key, value);
+      for (const [key, value] of Object.entries(elementColors.own)) {
+        pe.set(key, value);
+      }
       if (Object.keys(elementColors.label).length) {
         let lbl = raw<El>(pe, 'label');
         if (!lbl) {
@@ -97,7 +103,9 @@ export function applyColors(moddle: BpmnModdle, defs: El, colors: Map<string, Co
           pe.set('label', lbl);
           lbl.$parent = pe;
         }
-        for (const [key, value] of Object.entries(elementColors.label)) lbl.set(key, value);
+        for (const [key, value] of Object.entries(elementColors.label)) {
+          lbl.set(key, value);
+        }
       }
       count++;
     }

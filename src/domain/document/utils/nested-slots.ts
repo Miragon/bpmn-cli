@@ -56,15 +56,21 @@ export interface SlotRef {
 
 export function parseSlotRef(text: string): SlotRef | undefined {
   const match = /^(\w+)(?:\[\s*([^\]]*?)\s*\])?$/.exec(text.trim());
-  if (!match || !(NESTED_SLOTS as readonly string[]).includes(match[1]!)) return undefined;
+  if (!match || !(NESTED_SLOTS as readonly string[]).includes(match[1]!)) {
+    return undefined;
+  }
   const ref: SlotRef = { slot: match[1] as NestedSlot, text: text.trim() };
   const sel = match[2];
   if (sel === undefined) return ref;
-  if (/^\d+$/.test(sel)) ref.index = Number(sel);
-  else {
+  if (/^\d+$/.test(sel)) {
+    ref.index = Number(sel);
+  } else {
     const trigger = normalizeTrigger(sel);
-    if (trigger && trigger !== 'none') ref.trigger = trigger;
-    else ref.invalid = sel;
+    if (trigger && trigger !== 'none') {
+      ref.trigger = trigger;
+    } else {
+      ref.invalid = sel;
+    }
   }
   return ref;
 }
@@ -83,7 +89,9 @@ export function slotsOf(el: El): NestedSlot[] {
   const out: NestedSlot[] = [];
   if (is(el, 'bpmn:Event')) out.push('definition');
   if (is(el, 'bpmn:Activity')) out.push('loop');
-  if (is(el, 'bpmn:SequenceFlow') || definitionsOf(el).some((definition) => is(definition, 'bpmn:ConditionalEventDefinition'))) out.push('condition');
+  if (is(el, 'bpmn:SequenceFlow') || definitionsOf(el).some((definition) => is(definition, 'bpmn:ConditionalEventDefinition'))) {
+    out.push('condition');
+  }
   return out;
 }
 
@@ -98,7 +106,9 @@ function nestedElement(el: El, slot: NestedSlot): El | undefined {
     case 'loop':
       return is(el, 'bpmn:Activity') ? el.get<El | undefined>('loopCharacteristics') : undefined;
     case 'condition': {
-      if (is(el, 'bpmn:SequenceFlow')) return el.get<El | undefined>('conditionExpression');
+      if (is(el, 'bpmn:SequenceFlow')) {
+        return el.get<El | undefined>('conditionExpression');
+      }
       const conditional = definitionsOf(el).filter((definition) => is(definition, 'bpmn:ConditionalEventDefinition'));
       return conditional.length === 1 ? conditional[0]!.get<El | undefined>('condition') : undefined;
     }
@@ -150,7 +160,9 @@ export function resolveNested(el: El, ref: SlotRef, what: string, example?: (pre
     }
     throw ambiguousNested(el, defs, what, `${hits.length} ${ref.trigger} event definitions`, example);
   }
-  if (defs.length > 1) throw ambiguousNested(el, defs, what, `${defs.length} event definitions`, example);
+  if (defs.length > 1) {
+    throw ambiguousNested(el, defs, what, `${defs.length} event definitions`, example);
+  }
   return defs[0];
 }
 

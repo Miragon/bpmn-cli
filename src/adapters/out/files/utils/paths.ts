@@ -21,8 +21,12 @@ export function real(path: string): string {
 export function shown(path: string, from?: string): string {
   if (from === undefined) return path;
   let relativePath: string;
-  if (inside(path, from)) relativePath = relative(from, path);
-  else if (inside(real(path), real(from))) relativePath = relative(real(from), real(path));
-  else relativePath = path === real(path) && from !== real(from) ? relative(real(from), path) : relative(from, path);
+  if (inside(path, from)) {
+    relativePath = relative(from, path);
+  } else if (inside(real(path), real(from))) {
+    relativePath = relative(real(from), real(path));
+  } else {
+    relativePath = path === real(path) && from !== real(from) ? relative(real(from), path) : relative(from, path);
+  }
   return relativePath === '' ? '.' : relativePath;
 }

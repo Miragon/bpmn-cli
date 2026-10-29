@@ -61,7 +61,9 @@ export function takeMirrorSnapshot(definitions: El): MirrorSnapshot {
     } else if (is(el, 'bpmn:FlowNode')) {
       const incoming = listOf(el, 'incoming');
       const outgoing = listOf(el, 'outgoing');
-      if (incoming.length || outgoing.length) listed.set(el, { incoming: new Set(incoming), outgoing: new Set(outgoing) });
+      if (incoming.length || outgoing.length) {
+        listed.set(el, { incoming: new Set(incoming), outgoing: new Set(outgoing) });
+      }
     }
   }
   return { listed, ends, connected };
@@ -106,7 +108,9 @@ export async function serializeWithout(model: Model, entries: MirrorEntry[]): Pr
   try {
     return await serialize(model);
   } finally {
-    for (const removal of removed.reverse()) removal.list.splice(removal.index, 0, removal.flow);
+    for (const removal of removed.reverse()) {
+      removal.list.splice(removal.index, 0, removal.flow);
+    }
   }
 }
 
@@ -121,7 +125,9 @@ export async function withoutEntries(xml: string, entries: MirrorEntry[]): Promi
       const list = node.get<El[] | undefined>(direction);
       if (!list?.length) continue;
       for (let index = list.length - 1; index >= 0; index--) {
-        if (!keys.has(`${id}\u0000${direction}\u0000${list[index]!.get<string>('id')}`)) continue;
+        if (!keys.has(`${id}\u0000${direction}\u0000${list[index]!.get<string>('id')}`)) {
+          continue;
+        }
         list.splice(index, 1);
         removed++;
       }

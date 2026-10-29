@@ -39,10 +39,16 @@ export class LayoutAnalysis {
     }
     this.indexDefinitions();
     const seen = new Set<string>();
-    for (const diagram of rawList(this.defs, 'diagrams')) new PlaneAnalysis(raw(diagram, 'plane'), this.index, seen, this.add).run();
-    for (const id of this.index.need) if (!seen.has(id)) this.add('missing', id, [id]);
+    for (const diagram of rawList(this.defs, 'diagrams')) {
+      new PlaneAnalysis(raw(diagram, 'plane'), this.index, seen, this.add).run();
+    }
+    for (const id of this.index.need) {
+      if (!seen.has(id)) this.add('missing', id, [id]);
+    }
     const counts = perKey(() => 0);
-    for (const metricKey of KEYS) counts[metricKey] = this.found[metricKey].length;
+    for (const metricKey of KEYS) {
+      counts[metricKey] = this.found[metricKey].length;
+    }
     return { counts, problems: KEYS.flatMap((metricKey) => this.found[metricKey]), score: scoreOf(counts) };
   }
 
@@ -80,8 +86,11 @@ export class LayoutAnalysis {
   private link(from: string | undefined, to: string | undefined): void {
     if (!from || !to) return;
     const list = this.index.next.get(from);
-    if (list) list.push(to);
-    else this.index.next.set(from, [to]);
+    if (list) {
+      list.push(to);
+    } else {
+      this.index.next.set(from, [to]);
+    }
   }
 
   private collectScope(scope: El): void {
@@ -93,7 +102,9 @@ export class LayoutAnalysis {
         if (drawn) this.index.need.add(id);
       }
       if (is(fe, 'bpmn:SubProcess')) this.collectScope(fe);
-      if (is(fe, 'bpmn:SequenceFlow')) this.link(idOf(raw(fe, 'sourceRef')), idOf(raw(fe, 'targetRef')));
+      if (is(fe, 'bpmn:SequenceFlow')) {
+        this.link(idOf(raw(fe, 'sourceRef')), idOf(raw(fe, 'targetRef')));
+      }
       if (is(fe, 'bpmn:BoundaryEvent')) this.link(idOf(raw(fe, 'attachedToRef')), id);
       for (const da of [...rawList(fe, 'dataInputAssociations'), ...rawList(fe, 'dataOutputAssociations')]) {
         const daId = idOf(da);
@@ -104,9 +115,13 @@ export class LayoutAnalysis {
       const id = idOf(artifact);
       if (!id) continue;
       this.index.parentOf.set(id, scope);
-      if (is(artifact, 'bpmn:TextAnnotation') || is(artifact, 'bpmn:Association')) this.index.need.add(id);
+      if (is(artifact, 'bpmn:TextAnnotation') || is(artifact, 'bpmn:Association')) {
+        this.index.need.add(id);
+      }
     }
-    for (const ls of rawList(scope, 'laneSets')) this.collectLanes(rawList(ls, 'lanes'), this.index.laneOf);
+    for (const ls of rawList(scope, 'laneSets')) {
+      this.collectLanes(rawList(ls, 'lanes'), this.index.laneOf);
+    }
   }
 
   /** only the laid-out root needs DI: further root processes are a documented limitation */

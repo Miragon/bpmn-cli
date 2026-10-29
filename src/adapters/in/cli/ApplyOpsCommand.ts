@@ -21,7 +21,9 @@ export class ApplyOpsCommand extends MutationCommand {
 
   private async readOpsText(file: string, opsFile: string | undefined): Promise<string> {
     if (!opsFile || opsFile === '-') {
-      if (file === '-') throw usageError('the model and the ops cannot both come from stdin', { hint: 'Pass the ops as a file: `bpmn apply - ops.json < model.bpmn` (or the model as a file: `bpmn apply model.bpmn - < ops.json`).' });
+      if (file === '-') {
+        throw usageError('the model and the ops cannot both come from stdin', { hint: 'Pass the ops as a file: `bpmn apply - ops.json < model.bpmn` (or the model as a file: `bpmn apply model.bpmn - < ops.json`).' });
+      }
       return (await this.cli.readStdin('the ops')).toString('utf8');
     }
     try {

@@ -50,7 +50,11 @@ export class BpmnlintValidator {
     private readonly resolved: ResolvedBpmnlintConfig,
     private readonly opts: BpmnlintValidatorOptions = {},
   ) {
-    for (const [name, setting] of Object.entries(resolved.rules)) if (setting.severity !== 'off') this.rules[name] = [setting.severity, setting.config];
+    for (const [name, setting] of Object.entries(resolved.rules)) {
+      if (setting.severity !== 'off') {
+        this.rules[name] = [setting.severity, setting.config];
+      }
+    }
     this.notes = [...bpmnlintUnavailableFindings([...resolved.unavailable, ...(opts.unavailable ?? [])]), ...(opts.notes ?? [])];
   }
 

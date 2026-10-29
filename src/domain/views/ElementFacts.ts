@@ -21,8 +21,12 @@ export class ElementFacts {
 
 
   nonInterrupting(): boolean | undefined {
-    if (is(this.el, 'bpmn:BoundaryEvent')) return peek<boolean>(this.el, 'cancelActivity') === false ? true : undefined;
-    if (is(this.el, 'bpmn:StartEvent')) return peek<boolean>(this.el, 'isInterrupting') === false ? true : undefined;
+    if (is(this.el, 'bpmn:BoundaryEvent')) {
+      return peek<boolean>(this.el, 'cancelActivity') === false ? true : undefined;
+    }
+    if (is(this.el, 'bpmn:StartEvent')) {
+      return peek<boolean>(this.el, 'isInterrupting') === false ? true : undefined;
+    }
     return undefined;
   }
 
@@ -43,8 +47,11 @@ export class ElementFacts {
     const props: Record<string, unknown> = {};
     const loop = peek<El>(el, 'loopCharacteristics');
     if (loop) {
-      if (is(loop, 'bpmn:StandardLoopCharacteristics')) props['loop'] = 'standard';
-      else props['loop'] = peek<boolean>(loop, 'isSequential') ? 'sequential' : 'parallel';
+      if (is(loop, 'bpmn:StandardLoopCharacteristics')) {
+        props['loop'] = 'standard';
+      } else {
+        props['loop'] = peek<boolean>(loop, 'isSequential') ? 'sequential' : 'parallel';
+      }
       const cardinality = bodyOf(peek<El>(loop, 'loopCardinality'));
       if (cardinality) props['cardinality'] = cardinality;
     }
@@ -52,13 +59,19 @@ export class ElementFacts {
     if (called) props['calledElement'] = called;
     const decision = new DecisionLinkReader().linkOf(el);
     if (decision) props['calledDecision'] = decision.value;
-    if (peek<boolean>(el, 'isForCompensation') === true) props['isForCompensation'] = true;
+    if (peek<boolean>(el, 'isForCompensation') === true) {
+      props['isForCompensation'] = true;
+    }
     const messageRef = peek<El>(el, 'messageRef');
-    if (messageRef && (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'))) props['message'] = refLabel(messageRef);
+    if (messageRef && (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask'))) {
+      props['message'] = refLabel(messageRef);
+    }
     const scriptFormat = peek<string>(el, 'scriptFormat');
     if (scriptFormat) props['scriptFormat'] = scriptFormat;
     const defs = definitionsOf(el);
-    if (defs.length > 1) props['definitions'] = defs.map((definition) => triggerOfDefinition(definition) ?? definition.$type).join('+');
+    if (defs.length > 1) {
+      props['definitions'] = defs.map((definition) => triggerOfDefinition(definition) ?? definition.$type).join('+');
+    }
     if (opts.zeebe !== false) this.zeebeProps(props);
     return Object.keys(props).length ? props : undefined;
   }
@@ -67,7 +80,9 @@ export class ElementFacts {
   vendorValues(skip: (slot: string, key: string) => boolean = () => false): Record<string, string> | undefined {
     const out: Record<string, string> = { ...vendorAttributes(this.el) };
     for (const { prefix, el: nested } of nestedEntries(this.el)) {
-      for (const [key, value] of Object.entries(vendorAttributes(nested))) if (!skip(prefix, key)) out[`${prefix}.${key}`] = value;
+      for (const [key, value] of Object.entries(vendorAttributes(nested))) {
+        if (!skip(prefix, key)) out[`${prefix}.${key}`] = value;
+      }
     }
     return Object.keys(out).length ? out : undefined;
   }
@@ -135,11 +150,17 @@ export class ElementFacts {
   private zeebeProps(props: Record<string, unknown>): void {
     const el = this.el;
     const job = ElementFacts.zeebeExt(el, 'taskDefinition');
-    if (job && peek<string>(job, 'type') !== undefined) props['job'] = peek<string>(job, 'type');
+    if (job && peek<string>(job, 'type') !== undefined) {
+      props['job'] = peek<string>(job, 'type');
+    }
     const called = ElementFacts.zeebeExt(el, 'calledElement');
-    if (called && props['calledElement'] === undefined && peek<string>(called, 'processId') !== undefined) props['calledElement'] = peek<string>(called, 'processId');
+    if (called && props['calledElement'] === undefined && peek<string>(called, 'processId') !== undefined) {
+      props['calledElement'] = peek<string>(called, 'processId');
+    }
     const script = ElementFacts.zeebeExt(el, 'script');
-    if (script) props['script'] = `${peek<string>(script, 'expression') ?? ''}${peek<string>(script, 'resultVariable') ? ` -> ${peek<string>(script, 'resultVariable')}` : ''}`;
+    if (script) {
+      props['script'] = `${peek<string>(script, 'expression') ?? ''}${peek<string>(script, 'resultVariable') ? ` -> ${peek<string>(script, 'resultVariable')}` : ''}`;
+    }
     const form = ElementFacts.zeebeExt(el, 'formDefinition');
     const formRef = form ? (peek<string>(form, 'formId') ?? peek<string>(form, 'externalReference') ?? peek<string>(form, 'formKey')) : undefined;
     if (formRef !== undefined) props['form'] = formRef;
@@ -184,8 +205,11 @@ export class ElementFacts {
     for (const child of extension.children ?? []) {
       const cl = child.type.split(':')[1] ?? child.type;
       const name = child.attrs['name'] ?? child.attrs['target'] ?? '?';
-      if (cl === 'inputParameter' || cl === 'input') ins.push(name);
-      else if (cl === 'outputParameter' || cl === 'output') outs.push(name);
+      if (cl === 'inputParameter' || cl === 'input') {
+        ins.push(name);
+      } else if (cl === 'outputParameter' || cl === 'output') {
+        outs.push(name);
+      }
     }
     const parts = [ins.length ? `in ${ins.join(', ')}` : '', outs.length ? `out ${outs.join(', ')}` : ''].filter(Boolean);
     return `io: ${parts.length ? parts.join('; ') : 'empty'}`;

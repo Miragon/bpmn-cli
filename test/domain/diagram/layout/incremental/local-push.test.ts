@@ -55,7 +55,9 @@ describe('a splice pushes only what follows the new node', () => {
     const { result, before, after } = await run(branches(), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'R' }]);
     expect(at(after, 'N')).toEqual({ x: 626, y: 300 });
     expect(at(after, 'RE').x).toBe(786);
-    for (const id of ['S', 'A', 'G', 'B', 'C', 'E', 'R']) expect(at(after, id), id).toEqual(at(before, id));
+    for (const id of ['S', 'A', 'G', 'B', 'C', 'E', 'R']) {
+      expect(at(after, id), id).toEqual(at(before, id));
+    }
     expect(result.layout.moved).toEqual(['RE']);
     expect(result.layout.metrics!.added).toEqual([]);
   });
@@ -64,7 +66,9 @@ describe('a splice pushes only what follows the new node', () => {
     const { result, before, after } = await run(branches(), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'B' }]);
     expect(at(after, 'C').x).toBeGreaterThan(at(before, 'C').x);
     expect(at(after, 'E').x - at(after, 'C').x).toBe(at(before, 'E').x - at(before, 'C').x);
-    for (const id of ['R', 'RE']) expect(at(after, id), id).toEqual(at(before, id));
+    for (const id of ['R', 'RE']) {
+      expect(at(after, id), id).toEqual(at(before, id));
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 
@@ -93,7 +97,9 @@ describe('a splice pushes only what follows the new node', () => {
     const dx = at(after, 'B').x - at(before, 'B').x;
     expect(dx).toBeGreaterThan(120);
     expect(at(after, 'T').x).toBe(at(before, 'T').x + dx);
-    for (const id of ['S2', 'Q']) expect(at(after, id), id).toEqual(at(before, id));
+    for (const id of ['S2', 'Q']) {
+      expect(at(after, id), id).toEqual(at(before, id));
+    }
     expect(result.layout.metrics!.added.map((problem) => problem.kind)).not.toContain('crossings');
   });
 });
@@ -124,7 +130,9 @@ describe('a pushed shape drags the artifacts of what hangs on it', () => {
     const { result, before, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'A' }]);
     const dx = at(after, 'B').x - at(before, 'B').x;
     expect(dx).toBeGreaterThan(0);
-    for (const id of ['BT', 'BE', 'AN']) expect(at(after, id), id).toEqual({ x: at(before, id).x + dx, y: at(before, id).y });
+    for (const id of ['BT', 'BE', 'AN']) {
+      expect(at(after, id), id).toEqual({ x: at(before, id).x + dx, y: at(before, id).y });
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 
@@ -155,7 +163,9 @@ describe('a pushed shape drags the artifacts of what hangs on it', () => {
     const { result, before, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'A' }]);
     const dx = at(after, 'SP').x - at(before, 'SP').x;
     expect(dx).toBeGreaterThan(0);
-    for (const id of ['T', 'E', 'AN']) expect(at(after, id), id).toEqual({ x: at(before, id).x + dx, y: at(before, id).y });
+    for (const id of ['T', 'E', 'AN']) {
+      expect(at(after, id), id).toEqual({ x: at(before, id).x + dx, y: at(before, id).y });
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 });
@@ -173,7 +183,9 @@ describe('a pool grows only as far as its content reaches', () => {
   it('a task on the shorter lane leaves the pool as it is', async () => {
     const { result, before, after } = await run(pooled(), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'R' }]);
     expect(at(after, 'RE').x).toBe(786);
-    for (const id of ['Pool', 'Main', 'Rejection']) expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['Pool', 'Main', 'Rejection']) {
+      expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 
@@ -181,7 +193,9 @@ describe('a pool grows only as far as its content reaches', () => {
     const { result, before, after } = await run(pooled(), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'C' }]);
     const dx = at(after, 'E').x - at(before, 'E').x;
     expect(dx).toBeGreaterThan(0);
-    for (const id of ['Pool', 'Main', 'Rejection']) expect(after.get(id)!.bounds.width, id).toBe(before.get(id)!.bounds.width + dx);
+    for (const id of ['Pool', 'Main', 'Rejection']) {
+      expect(after.get(id)!.bounds.width, id).toBe(before.get(id)!.bounds.width + dx);
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 });
@@ -191,13 +205,17 @@ describe('a new flow into a drawn node left of its source pushes the target', ()
     const { result, before, after } = await run(branches(), [{ op: 'connect', source: 'C', target: 'R', id: 'Flow_CToR' }]);
     expect(at(after, 'R').x).toBeGreaterThanOrEqual(at(before, 'C').x + 100 + 40);
     expect(at(after, 'RE').x - at(after, 'R').x).toBe(at(before, 'RE').x - at(before, 'R').x);
-    for (const id of ['S', 'A', 'G', 'B', 'C', 'E']) expect(at(after, id), id).toEqual(at(before, id));
+    for (const id of ['S', 'A', 'G', 'B', 'C', 'E']) {
+      expect(at(after, id), id).toEqual(at(before, id));
+    }
     expect(result.layout.metrics!.added.map((problem) => problem.kind)).not.toContain('backwardFlow');
   });
 
   it('connect: a loop return leaves its target where it is', async () => {
     const { before, after } = await run(branches(), [{ op: 'connect', source: 'C', target: 'A', id: 'Flow_CToA' }]);
-    for (const id of ['S', 'A', 'G', 'B', 'C', 'E', 'R', 'RE']) expect(at(after, id), id).toEqual(at(before, id));
+    for (const id of ['S', 'A', 'G', 'B', 'C', 'E', 'R', 'RE']) {
+      expect(at(after, id), id).toEqual(at(before, id));
+    }
   });
 
   it('a batch adding the source and the flow draws what the single commands draw', async () => {
@@ -206,7 +224,9 @@ describe('a new flow into a drawn node left of its source pushes the target', ()
       { op: 'connect', source: 'Gateway_D', target: 'R', id: 'Flow_DToR', name: 'no' },
     ];
     let single = branches();
-    for (const op of ops) single = (await applyToXml(single, [op], { force: true })).xml;
+    for (const op of ops) {
+      single = (await applyToXml(single, [op], { force: true })).xml;
+    }
     const batched = (await applyToXml(branches(), ops, { force: true })).xml;
     expect(shapeLines(batched)).toEqual(shapeLines(single));
     const after = shapes(await Doc.fromXml(batched));

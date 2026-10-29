@@ -86,7 +86,9 @@ export class DrawnElementIds {
       return pool && (this.idOf(pool) || pool.get<string | undefined>('name')) ? new ElementLabels(pool).label() : '';
     }
     let parent = el.$parent as El | undefined;
-    while (parent && (!this.idOf(parent) || is(parent, 'bpmn:LaneSet')) && !is(parent, 'bpmn:Definitions')) parent = parent.$parent as El | undefined;
+    while (parent && (!this.idOf(parent) || is(parent, 'bpmn:LaneSet')) && !is(parent, 'bpmn:Definitions')) {
+      parent = parent.$parent as El | undefined;
+    }
     return parent && !is(parent, 'bpmn:Definitions') ? new ElementLabels(parent).context('In') : '';
   }
 
@@ -97,7 +99,9 @@ export class DrawnElementIds {
   give(allocate?: (req: IdRequest) => string): GivenId[] {
     const idless: El[] = [];
     for (const el of walk(this.defs, { bpmnOnly: true })) {
-      if (isDiElement(el) || this.idOf(el) || !DRAWN.some((type) => is(el, type))) continue;
+      if (isDiElement(el) || this.idOf(el) || !DRAWN.some((type) => is(el, type))) {
+        continue;
+      }
       idless.push(el);
     }
     if (!idless.length) return [];

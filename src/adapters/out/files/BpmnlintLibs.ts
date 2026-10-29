@@ -43,7 +43,9 @@ export class BpmnlintLibs {
       const plugin = req(pluginMain) as BpmnlintLibs['plugin'];
       const { Linter } = pluginRequire('bpmnlint') as { Linter: BpmnlintLinterClass };
       const NodeResolver = pluginRequire('bpmnlint/lib/resolver/node-resolver') as NodeResolverClass;
-      if (typeof plugin.createBundledResolver !== 'function' || typeof Linter !== 'function') throw new Error(`${PLUGIN} or bpmnlint has an unexpected shape`);
+      if (typeof plugin.createBundledResolver !== 'function' || typeof Linter !== 'function') {
+        throw new Error(`${PLUGIN} or bpmnlint has an unexpected shape`);
+      }
       BpmnlintLibs.loaded = new BpmnlintLibs(Linter, NodeResolver, plugin, pluginRequire, used ?? { version: '?', dir: '' }, pinned ?? '?');
     } catch (err) {
       BpmnlintLibs.loaded = { message: firstLine(err), ...(used ? { bpmnlint: used } : {}), ...(pinned ? { pinned } : {}) };

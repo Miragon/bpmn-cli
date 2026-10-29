@@ -9,8 +9,12 @@ import { ioError } from '../../../../domain/document/utils/errors.js';
  */
 export function decodeXmlBytes(bytes: Uint8Array, file = 'the file'): string {
   const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder('utf-16le').decode(buf);
-  if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder('utf-16be').decode(buf);
+  if (buf[0] === 0xff && buf[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(buf);
+  }
+  if (buf[0] === 0xfe && buf[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(buf);
+  }
   const head = buf.subarray(0, 512).toString('latin1');
   const encoding = declaredEncoding(head.replace(/^ï»¿/, '﻿'));
   if (encoding === undefined || isUtf8(encoding)) return buf.toString('utf8');

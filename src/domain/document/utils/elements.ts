@@ -44,7 +44,9 @@ export function isEl(value: unknown): value is El {
 export function vendorAttributes(el: El): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [attrName, attrValue] of Object.entries(el.$attrs ?? {})) {
-    if (!attrName.includes(':') || attrName.startsWith('xmlns') || attrName.startsWith('xsi:') || attrName.startsWith('xml:') || attrValue === undefined || attrValue === null || typeof attrValue === 'object') continue;
+    if (!attrName.includes(':') || attrName.startsWith('xmlns') || attrName.startsWith('xsi:') || attrName.startsWith('xml:') || attrValue === undefined || attrValue === null || typeof attrValue === 'object') {
+      continue;
+    }
     out[attrName] = String(attrValue);
   }
   return out;
@@ -52,8 +54,16 @@ export function vendorAttributes(el: El): Record<string, string> {
 
 export function vendorContent(def: El): string[] {
   const out: string[] = [];
-  for (const [attrName, attrValue] of Object.entries(def.$attrs ?? {})) if (!attrName.startsWith('xmlns') && !attrName.startsWith('xsi:') && typeof attrValue !== 'object') out.push(attrName);
-  for (const ext of def.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) out.push(ext.$type);
-  if ((def.get<El[] | undefined>('documentation') ?? []).length) out.push('documentation');
+  for (const [attrName, attrValue] of Object.entries(def.$attrs ?? {})) {
+    if (!attrName.startsWith('xmlns') && !attrName.startsWith('xsi:') && typeof attrValue !== 'object') {
+      out.push(attrName);
+    }
+  }
+  for (const ext of def.get<El | undefined>('extensionElements')?.get<El[] | undefined>('values') ?? []) {
+    out.push(ext.$type);
+  }
+  if ((def.get<El[] | undefined>('documentation') ?? []).length) {
+    out.push('documentation');
+  }
   return out;
 }

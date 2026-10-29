@@ -58,7 +58,9 @@ describe('repository hygiene', () => {
     const bad: string[] = [];
     for (const file of repoFiles) {
       const text = readFileSync(join(ROOT, file), 'utf8');
-      for (const localPath of LOCAL_PATHS) if (text.includes(localPath)) bad.push(`${file}: ${localPath}`);
+      for (const localPath of LOCAL_PATHS) {
+        if (text.includes(localPath)) bad.push(`${file}: ${localPath}`);
+      }
     }
     expect(bad).toEqual([]);
   });

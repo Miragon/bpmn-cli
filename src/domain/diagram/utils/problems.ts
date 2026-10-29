@@ -126,7 +126,9 @@ export function problemKey(problem: LayoutProblem): string {
 
 function unmatched(list: readonly LayoutProblem[], other: readonly LayoutProblem[]): LayoutProblem[] {
   const pool = new Map<string, number>();
-  for (const problem of other) pool.set(problemKey(problem), (pool.get(problemKey(problem)) ?? 0) + 1);
+  for (const problem of other) {
+    pool.set(problemKey(problem), (pool.get(problemKey(problem)) ?? 0) + 1);
+  }
   return list.filter((problem) => {
     const key = problemKey(problem);
     const count = pool.get(key) ?? 0;

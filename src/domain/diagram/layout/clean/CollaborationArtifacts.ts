@@ -23,12 +23,18 @@ export class CollaborationArtifacts {
   draw(warnings: EngineWarning[]): void {
     const { writer } = this;
     for (const note of this.notes()) {
-      if (note.box) writer.shape(note.el, note.box);
-      else warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(note.el), message: `Artifacts owned by the collaboration are not laid out (${idOf(note.el)})` });
+      if (note.box) {
+        writer.shape(note.el, note.box);
+      } else {
+        warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(note.el), message: `Artifacts owned by the collaboration are not laid out (${idOf(note.el)})` });
+      }
     }
     for (const link of this.links()) {
-      if (link.points) writer.edge(link.el, link.points);
-      else warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(link.el), message: `No DI created for ${idOf(link.el)} (an end has no shape)` });
+      if (link.points) {
+        writer.edge(link.el, link.points);
+      } else {
+        warnings.push({ code: 'DI_NOT_CREATED', elementId: idOf(link.el), message: `No DI created for ${idOf(link.el)} (an end has no shape)` });
+      }
     }
   }
 
@@ -86,7 +92,9 @@ export class CollaborationArtifacts {
     let best: [Point, Point] | undefined;
     for (let index = 0; index + 1 < points.length; index++) {
       const start = points[index]!, end = points[index + 1]!;
-      if (!best || Math.abs(end.x - start.x) + Math.abs(end.y - start.y) > Math.abs(best[1].x - best[0].x) + Math.abs(best[1].y - best[0].y)) best = [start, end];
+      if (!best || Math.abs(end.x - start.x) + Math.abs(end.y - start.y) > Math.abs(best[1].x - best[0].x) + Math.abs(best[1].y - best[0].y)) {
+        best = [start, end];
+      }
     }
     return best ? { x: Math.round((best[0].x + best[1].x) / 2), y: Math.round((best[0].y + best[1].y) / 2), width: 0, height: 0 } : undefined;
   }
@@ -122,7 +130,9 @@ export class CollaborationArtifacts {
     if (!points) return undefined;
     if (is(el, 'bpmn:MessageFlow')) {
       const pieces = points.slice(1).flatMap((point, index) => this.outsidePieces(points[index]!, point, pools));
-      if (pieces.length) return this.edgeAnchor(pieces.reduce((best, piece) => (this.len(piece) > this.len(best) ? piece : best)));
+      if (pieces.length) {
+        return this.edgeAnchor(pieces.reduce((best, piece) => (this.len(piece) > this.len(best) ? piece : best)));
+      }
     }
     return this.edgeAnchor(points);
   }
@@ -179,7 +189,9 @@ export class CollaborationArtifacts {
         continue;
       }
       const pts = many(diElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
-      for (let index = 0; index + 1 < pts.length; index++) lines.push([pts[index]!, pts[index + 1]!]);
+      for (let index = 0; index + 1 < pts.length; index++) {
+        lines.push([pts[index]!, pts[index + 1]!]);
+      }
     }
     return { obstacles, lines };
   }

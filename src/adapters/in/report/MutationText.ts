@@ -22,15 +22,25 @@ export class MutationText {
     const text = renderChanges({ created: result.created, changed: result.changed, removed: result.removed, warnings: [], notes: result.notes }).trimEnd();
     const formatOnly = hasNoEntries(result) && !!result.layout.format?.length && !result.notes.length;
     if (text && !formatOnly) lines.push(text);
-    if (result.aliases && Object.keys(result.aliases).length) lines.push(aliasLine(result.aliases));
-    for (const error of result.validation.errors) lines.push(`forced ${validatorTag(error)}${error.code}${error.element ? ` ${error.element}` : ''}: ${error.message}`);
+    if (result.aliases && Object.keys(result.aliases).length) {
+      lines.push(aliasLine(result.aliases));
+    }
+    for (const error of result.validation.errors) {
+      lines.push(`forced ${validatorTag(error)}${error.code}${error.element ? ` ${error.element}` : ''}: ${error.message}`);
+    }
     lines.push(...new WarningLines(advisoryOf(result.validation.validators)).lines(result.warnings.added));
-    if (result.warnings.resolved.length) lines.push(`resolved: ${findingList(result.warnings.resolved)}`);
-    if (result.warnings.preexistingCount) lines.push(MutationText.preexistingLine(result.warnings.preexistingCount));
+    if (result.warnings.resolved.length) {
+      lines.push(`resolved: ${findingList(result.warnings.resolved)}`);
+    }
+    if (result.warnings.preexistingCount) {
+      lines.push(MutationText.preexistingLine(result.warnings.preexistingCount));
+    }
     lines.push(...validatorLines(result.validation.validators, 'result'));
     lines.push(...renderLayout(result.layout));
     lines.push(...fileLines(result, this.opts));
-    if (result.view) lines.push('', new ModelViewText(result.view).text().trimEnd());
+    if (result.view) {
+      lines.push('', new ModelViewText(result.view).text().trimEnd());
+    }
     return lines.join('\n');
   }
 

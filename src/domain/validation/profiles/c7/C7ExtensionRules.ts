@@ -134,11 +134,15 @@ export class C7ExtensionRules extends C7Rules {
     const rebuild = (): string => this.extHint(host, owner, topEl, localName(topEl.$type));
     const where = `${this.prefix}:${local}${path ? ` (in ${path})` : ''} of ${this.describe(host, owner)}`;
     const names = this.names.attrNames(vendorType);
-    for (const extra of EXTRA_ATTRS[local] ?? []) names.add(extra);
+    for (const extra of EXTRA_ATTRS[local] ?? []) {
+      names.add(extra);
+    }
     for (const [key, raw] of Object.entries(vendorElement as unknown as Record<string, unknown>)) {
       if (key.startsWith('$') || key.startsWith('xmlns')) continue;
       if (key.includes(':')) {
-        if (this.ns.uriOfName(key) === this.kit.zeebe.uri) this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}@${key}`, `${where} carries the Camunda 8 attribute ${key}, which Camunda 7 ignores`, rebuild());
+        if (this.ns.uriOfName(key) === this.kit.zeebe.uri) {
+          this.push('runtime', 'W_C7_FOREIGN_CONTENT', host, owner, `ext:${path}/${local}@${key}`, `${where} carries the Camunda 8 attribute ${key}, which Camunda 7 ignores`, rebuild());
+        }
         continue;
       }
       if (!names.has(key)) {
@@ -247,17 +251,25 @@ export class C7ExtensionRules extends C7Rules {
         continue;
       }
       this.checkVendorElement(extValue.el, host, owner, extValue.el, '');
-      if (executable) this.content.checkContent(host, owner, extValue.el, extValue.local);
+      if (executable) {
+        this.content.checkContent(host, owner, extValue.el, extValue.local);
+      }
     }
     if (!executable) return;
     for (const { local, type, uri, els } of byType.values()) {
       if (els.length < 2) continue;
       let read = false;
-      if (local === 'inputOutput') read = this.kit.is(host, 'bpmn:FlowNode');
-      else if (local === 'connector') read = SERVICE_LIKE.some((serviceType) => this.kit.is(host, serviceType));
-      else if (local === 'formData') read = this.kit.is(host, 'bpmn:UserTask') || this.kit.is(host, 'bpmn:StartEvent');
-      else if (local === 'failedJobRetryTimeCycle') read = this.isAsync(host) || this.hasTimer(host);
-      else continue;
+      if (local === 'inputOutput') {
+        read = this.kit.is(host, 'bpmn:FlowNode');
+      } else if (local === 'connector') {
+        read = SERVICE_LIKE.some((serviceType) => this.kit.is(host, serviceType));
+      } else if (local === 'formData') {
+        read = this.kit.is(host, 'bpmn:UserTask') || this.kit.is(host, 'bpmn:StartEvent');
+      } else if (local === 'failedJobRetryTimeCycle') {
+        read = this.isAsync(host) || this.hasTimer(host);
+      } else {
+        continue;
+      }
       if (!read && local !== 'failedJobRetryTimeCycle') continue;
       const merge = hostId ? `Merge them into one: \`bpmn ext list <file> ${hostId} --json\`, then \`bpmn ext add <file> ${hostId} ${slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.` : 'Merge them in the XML.';
       const subject = `dup:${local}${uri === this.kit.camunda.uri ? '' : `@${uri}`}`;
@@ -276,7 +288,9 @@ export class C7ExtensionRules extends C7Rules {
    */
   private movable(host: El, owner: El | undefined, local: string, again: string | undefined): string {
     const oid = idOf(owner);
-    if (!owner || owner === host || !oid || !again || !this.allowedTop(local, owner) || this.camundaExt(owner, local).length) return '';
+    if (!owner || owner === host || !oid || !again || !this.allowedTop(local, owner) || this.camundaExt(owner, local).length) {
+      return '';
+    }
     return `, then add it to ${this.describe(owner, undefined)}, where the engines read it: \`bpmn ext add <file> ${oid} ${again}\``;
   }
 

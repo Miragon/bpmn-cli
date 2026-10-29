@@ -48,7 +48,9 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, layout: 'incremental' });
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details };
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details };
+    }
     throw err;
   }
   throw new Error('expected the mutation to fail');
@@ -61,7 +63,9 @@ function outsideSub(doc: Doc): string[] {
   for (const plane of new DiagramReader(doc.definitions, sem).planes()) {
     for (const shape of plane.shapes.values()) {
       const parent = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
-      if (parent?.container && !inside(shape.bounds, parent.bounds)) out.push(`${shape.id} outside ${parent.id}`);
+      if (parent?.container && !inside(shape.bounds, parent.bounds)) {
+        out.push(`${shape.id} outside ${parent.id}`);
+      }
     }
   }
   return out;

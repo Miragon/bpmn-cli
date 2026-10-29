@@ -70,7 +70,9 @@ export class LaneInheritance {
     if (placement.on) return doc.get(placement.on);
     if (placement.after) return doc.get(placement.after);
     if (placement.before) return doc.get(placement.before);
-    if (placement.flow) return doc.get(placement.flow)?.get<El | undefined>('sourceRef');
+    if (placement.flow) {
+      return doc.get(placement.flow)?.get<El | undefined>('sourceRef');
+    }
     return undefined;
   }
 

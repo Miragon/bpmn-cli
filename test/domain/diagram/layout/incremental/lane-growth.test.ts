@@ -61,7 +61,9 @@ describe('lanes without a pool grow only as far as their content reaches', () =>
     it(`a task on the shorter lane leaves the lanes as they are ${JSON.stringify(variant)}`, async () => {
       const { result, before, after } = await run(laned(variant), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'R' }]);
       expect(after.get('RE')!.bounds.x).toBeGreaterThan(before.get('RE')!.bounds.x);
-      for (const id of lanes) expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+      for (const id of lanes) {
+        expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+      }
       expect(result.layout.metrics!.added).toEqual([]);
     });
 
@@ -69,7 +71,9 @@ describe('lanes without a pool grow only as far as their content reaches', () =>
       const { result, before, after } = await run(laned(variant), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'C' }]);
       const dx = after.get('E')!.bounds.x - before.get('E')!.bounds.x;
       expect(dx).toBeGreaterThan(0);
-      for (const id of lanes) expect(after.get(id)!.bounds.width, id).toBe(before.get(id)!.bounds.width + dx);
+      for (const id of lanes) {
+        expect(after.get(id)!.bounds.width, id).toBe(before.get(id)!.bounds.width + dx);
+      }
       expect(result.layout.metrics!.added).toEqual([]);
     });
   }
@@ -78,7 +82,9 @@ describe('lanes without a pool grow only as far as their content reaches', () =>
     const { result, before, after } = await run(laned({ group: true }), [{ op: 'add', kind: 'task', id: 'N', name: 'N', after: 'R' }]);
     const dx = after.get('Grp')!.bounds.width - before.get('Grp')!.bounds.width;
     expect(dx).toBeGreaterThan(0);
-    for (const id of ['LMain', 'LRej']) expect(after.get(id)!.bounds.width, id).toBe(before.get(id)!.bounds.width + dx);
+    for (const id of ['LMain', 'LRej']) {
+      expect(after.get(id)!.bounds.width, id).toBe(before.get(id)!.bounds.width + dx);
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 });

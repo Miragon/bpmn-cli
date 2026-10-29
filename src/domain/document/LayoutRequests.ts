@@ -22,10 +22,18 @@ export class LayoutRequests {
   expansion(opts: { expand?: string[]; collapse?: string[] } = {}): { expand: string[]; collapse: string[] } {
     const expand = new Set<string>(opts.expand ?? []);
     const collapse = new Set<string>(opts.collapse ?? []);
-    for (const id of this.collapsed) collapse.add(id);
-    for (const [id, expanded] of this.expansions) (expanded ? expand : collapse).add(id);
-    for (const id of opts.expand ?? []) collapse.delete(id);
-    for (const id of opts.collapse ?? []) expand.delete(id);
+    for (const id of this.collapsed) {
+      collapse.add(id);
+    }
+    for (const [id, expanded] of this.expansions) {
+      (expanded ? expand : collapse).add(id);
+    }
+    for (const id of opts.expand ?? []) {
+      collapse.delete(id);
+    }
+    for (const id of opts.collapse ?? []) {
+      expand.delete(id);
+    }
     return { expand: [...expand], collapse: [...collapse] };
   }
 }

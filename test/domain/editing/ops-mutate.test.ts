@@ -389,7 +389,9 @@ describe('set: readProperties', () => {
     // every read key is accepted by set again (round trip)
     const again = new ElementProperties(doc).read(doc.require('Task_A'));
     const values: Record<string, string> = {};
-    for (const [key, value] of Object.entries(again)) if (key !== 'id' && key !== 'lane') values[key] = String(value);
+    for (const [key, value] of Object.entries(again)) {
+      if (key !== 'id' && key !== 'lane') values[key] = String(value);
+    }
     expect(() => new Properties(new EditSession(doc)).set({ op: 'set', id: 'Task_A', values })).not.toThrow();
     expect(new ElementProperties(doc).read(doc.require('Task_A'))).toEqual(again);
   });
@@ -479,7 +481,9 @@ describe('remove', () => {
   it('removes a participant with its process and message flows; the collaboration goes with the last one', async () => {
     const doc = await fullDoc();
     const cs = new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['P_Customer'] });
-    for (const id of ['P_Customer', 'Process_2', 'C_Start', 'C_Task', 'CF1', 'MF1', 'MF2']) expect(doc.get(id), id).toBeUndefined();
+    for (const id of ['P_Customer', 'Process_2', 'C_Start', 'C_Task', 'CF1', 'MF1', 'MF2']) {
+      expect(doc.get(id), id).toBeUndefined();
+    }
     expect(doc.get('Collab')).toBeDefined();
     expect(ids(doc.participants())).toEqual(['P_Shop']);
     expect(doc.messageFlows()).toHaveLength(0);
@@ -620,7 +624,9 @@ describe('retype', () => {
     const cs = new ElementTypeChange(new EditSession(doc)).retype({ op: 'retype', id: 'Sub', kind: 'callActivity' });
     expect(cs.warnings).toEqual([]);
     expect(doc.require('Sub').$type).toBe('bpmn:CallActivity');
-    for (const id of ['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']) expect(doc.get(id), id).toBeUndefined();
+    for (const id of ['SubStart', 'SubTask', 'SubEnd', 'SF1', 'SF2']) {
+      expect(doc.get(id), id).toBeUndefined();
+    }
     expect(ids(doc.incoming(doc.require('Sub')))).toEqual(['F3', 'F4']);
     const cs2 = new ElementTypeChange(new EditSession(doc)).retype({ op: 'retype', id: 'Sub', kind: 'task' });
     expect(cs2.warnings).toEqual([]);
@@ -784,7 +790,9 @@ describe('move', () => {
     expect(flowElementIds(sub)).toEqual(['SubStart', 'SF1', 'SubTask', 'SF2', 'SubEnd', 'Task_A', 'F2', 'Timer_A', 'Gw']);
     expect(flowElementIds(doc.require('Process_1'))).not.toContain('F2');
     expect(doc.require('F2').$parent).toBe(sub);
-    for (const id of ['F1', 'F_T', 'F_yes', 'F_no']) expect(doc.get(id), id).toBeUndefined();
+    for (const id of ['F1', 'F_T', 'F_yes', 'F_no']) {
+      expect(doc.get(id), id).toBeUndefined();
+    }
     expect(ids(doc.outgoing(doc.require('Start')))).toEqual([]);
     expect(ids(doc.incoming(doc.require('Task_Remind')))).toEqual([]);
     expect(ids(doc.require('Lane_Sales').get<El[]>('flowNodeRef'))).toEqual(['Start']);

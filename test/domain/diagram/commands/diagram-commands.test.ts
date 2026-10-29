@@ -107,7 +107,9 @@ async function failure(xml: string, ops: EditCommand[], opts: MutationOptions = 
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true, ...opts });
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    }
     throw err;
   }
   throw new Error('expected the mutation to fail');
@@ -138,7 +140,9 @@ function keptExcept(before: Map<string, DShape>, after: Map<string, DShape>, exc
   for (const [id, shapeBefore] of before) {
     if (except.includes(id)) continue;
     const shapeAfter = after.get(id);
-    if (!shapeAfter || JSON.stringify(shapeAfter.bounds) !== JSON.stringify(shapeBefore.bounds)) moved.push(id);
+    if (!shapeAfter || JSON.stringify(shapeAfter.bounds) !== JSON.stringify(shapeBefore.bounds)) {
+      moved.push(id);
+    }
   }
   return moved;
 }
@@ -212,7 +216,9 @@ describe('place', () => {
     // the group keeps its shape
     expect(drawn.get('E2')!.bounds.x - drawn.get('C')!.bounds.x).toBe(before.get('E2')!.bounds.x - before.get('C')!.bounds.x);
     expect(drawn.get('E2')!.bounds.y - drawn.get('C')!.bounds.y).toBe(before.get('E2')!.bounds.y - before.get('C')!.bounds.y);
-    for (const id of ['C', 'E2']) expect(inside(drawn.get(id)!, drawn.get('L1')!), id).toBe(true);
+    for (const id of ['C', 'E2']) {
+      expect(inside(drawn.get(id)!, drawn.get('L1')!), id).toBe(true);
+    }
     expect(inside(drawn.get('L1')!, drawn.get('Pool')!)).toBe(true);
     const formatStep = result.layout.format![0]!;
     expect(formatStep).toMatchObject({ op: 'place', index: 0 });
@@ -293,7 +299,9 @@ describe('align', () => {
     expect(cy(drawn.get('C')!)).toBe(cy(before.get('C')!));
     expect(drawn.get('A')!.bounds).toEqual(before.get('A')!.bounds);
     expect(result.layout.format![0]!.rerouted).toEqual(expect.arrayContaining(['F_no']));
-    for (const edge of edges(after).values()) expect(orthogonal(edge), edge.id).toBe(true);
+    for (const edge of edges(after).values()) {
+      expect(orthogonal(edge), edge.id).toBe(true);
+    }
     expect(hardAdded(result)).toEqual([]);
   });
 
@@ -385,11 +393,17 @@ describe('space', () => {
     const drawn = shapes(after);
     const shift = drawn.get('G')!.bounds.x - before.get('G')!.bounds.x;
     expect(shift).toBeGreaterThanOrEqual(100);
-    for (const id of ['B', 'E', 'C', 'E2']) expect(drawn.get(id)!.bounds.x - before.get(id)!.bounds.x, id).toBe(shift);
-    for (const id of ['S', 'A']) expect(drawn.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['B', 'E', 'C', 'E2']) {
+      expect(drawn.get(id)!.bounds.x - before.get(id)!.bounds.x, id).toBe(shift);
+    }
+    for (const id of ['S', 'A']) {
+      expect(drawn.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(drawn.get('Pool')!.bounds.width - before.get('Pool')!.bounds.width).toBe(shift);
     expect(hardAdded(result)).toEqual([]);
-    for (const edge of edges(after).values()) expect(orthogonal(edge), edge.id).toBe(true);
+    for (const edge of edges(after).values()) {
+      expect(orthogonal(edge), edge.id).toBe(true);
+    }
   });
 
   it('makes a lane taller with --below <lane> and pixels', async () => {
@@ -409,7 +423,9 @@ describe('tidy', () => {
   async function overlapping(): Promise<string> {
     const doc = await Doc.fromXml(pooledHand);
     for (const pe of doc.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement')) {
-      if (pe.get<El>('bpmnElement').get<string>('id') === 'C') pe.get<El>('bounds').set('y', shapes(doc).get('B')!.bounds.y + 30);
+      if (pe.get<El>('bpmnElement').get<string>('id') === 'C') {
+        pe.get<El>('bounds').set('y', shapes(doc).get('B')!.bounds.y + 30);
+      }
     }
     return doc.toXml();
   }
@@ -483,8 +499,12 @@ describe('order lanes', () => {
     const { result, after } = await run(nested, [{ op: 'order', id: 'L1', lanes: ['L1b', 'L1a'] }]);
     const drawn = shapes(after);
     expect(drawn.get('L1b')!.bounds.y).toBe(before.get('L1a')!.bounds.y);
-    for (const id of ['S', 'A', 'G']) expect(inside(drawn.get(id)!, drawn.get('L1a')!), id).toBe(true);
-    for (const id of ['B', 'E', 'C', 'E2']) expect(inside(drawn.get(id)!, drawn.get('L1b')!), id).toBe(true);
+    for (const id of ['S', 'A', 'G']) {
+      expect(inside(drawn.get(id)!, drawn.get('L1a')!), id).toBe(true);
+    }
+    for (const id of ['B', 'E', 'C', 'E2']) {
+      expect(inside(drawn.get(id)!, drawn.get('L1b')!), id).toBe(true);
+    }
     expect(hardAdded(result)).toEqual([]);
     const wrong = await failure(nested, [{ op: 'order', id: 'Pool', lanes: ['L1b'] }]);
     expect(wrong).toMatchObject({ code: 'E_NOT_CHILD_LANE', element: 'Pool', candidates: ['L1', 'L2'] });
@@ -634,7 +654,9 @@ describe('layoutView (show --layout)', () => {
     const doc = await Doc.fromXml(xml);
     // C on top of B
     for (const pe of doc.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement')) {
-      if (pe.get<El>('bpmnElement').get<string>('id') === 'C') pe.get<El>('bounds').set('y', shapes(doc).get('B')!.bounds.y);
+      if (pe.get<El>('bpmnElement').get<string>('id') === 'C') {
+        pe.get<El>('bounds').set('y', shapes(doc).get('B')!.bounds.y);
+      }
     }
     const view = layoutView(doc.definitions);
     const groups = view.diagrams[0]!.groups;
@@ -654,7 +676,9 @@ describe('format ops in the ops JSON', () => {
     try {
       parseOps(input);
     } catch (err) {
-      if (isBpmnError(err)) return `${err.message}${err.details.hint ? ` | ${err.details.hint}` : ''}`;
+      if (isBpmnError(err)) {
+        return `${err.message}${err.details.hint ? ` | ${err.details.hint}` : ''}`;
+      }
       throw err;
     }
     throw new Error('expected parseOps to fail');
@@ -683,14 +707,20 @@ describe('format ops in the ops JSON', () => {
 
   it('are in the JSON schema and in `kinds --json`', () => {
     const defs = OPS_SCHEMA['$defs'] as Record<string, { properties: Record<string, unknown>; required: string[]; allOf?: unknown[] }>;
-    for (const name of DIAGRAM_COMMAND_NAMES) expect(defs[name], name).toBeDefined();
+    for (const name of DIAGRAM_COMMAND_NAMES) {
+      expect(defs[name], name).toBeDefined();
+    }
     expect(defs['place']!.required).toEqual(['op']);
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ anyOf: ['ids', 'path', 'kind', 'branch'].map((key) => ({ required: [key] })) }]));
     expect(defs['place']!.allOf).toEqual(expect.arrayContaining([{ not: { required: ['rowOf', 'below'] } }, { anyOf: ['rowOf', 'below', 'above', 'columnOf', 'after', 'before'].map((key) => ({ required: [key] })) }]));
     expect(defs['space']!.properties['by']).toMatchObject({ oneOf: [{ type: 'string', pattern: expect.any(String) }, { type: 'integer', not: { const: 0 } }] });
     const pattern = new RegExp((defs['space']!.properties['by'] as { oneOf: Array<{ pattern?: string }> }).oneOf[0]!.pattern!);
-    for (const ok of ['column', '-row', '2col', '2 columns', '-3rows', '80px', '120']) expect(pattern.test(ok), ok).toBe(true);
-    for (const bad of ['wide', '0', '2x', 'px', '']) expect(pattern.test(bad), bad).toBe(false);
+    for (const ok of ['column', '-row', '2col', '2 columns', '-3rows', '80px', '120']) {
+      expect(pattern.test(ok), ok).toBe(true);
+    }
+    for (const bad of ['wide', '0', '2x', 'px', '']) {
+      expect(pattern.test(bad), bad).toBe(false);
+    }
     expect(defs['color']!.properties['color']).toMatchObject({ enum: ['blue', 'orange', 'green', 'red', 'purple', 'default'] });
     expect(Object.keys(defs['order']!.properties)).toEqual(['op', 'id', 'flows', 'lanes', 'pools']);
     const json = kindsJson();

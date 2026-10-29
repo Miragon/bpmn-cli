@@ -5,6 +5,8 @@ const names = new WeakMap<object, string | null>();
 
 export function nameOf(element: { el: GNode['el'] }): string | undefined {
   let name = names.get(element);
-  if (name === undefined) names.set(element, (name = element.el.get<string | undefined>('name') ?? null));
+  if (name === undefined) {
+    names.set(element, (name = element.el.get<string | undefined>('name') ?? null));
+  }
   return name ?? undefined;
 }

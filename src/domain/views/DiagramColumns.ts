@@ -26,13 +26,18 @@ export class DiagramColumns {
     const cols: DShape[][] = [];
     for (const shape of sorted) {
       const col = cols[cols.length - 1];
-      if (col && cx(shape.bounds) - cx(col[0]!.bounds) <= tol) col.push(shape);
-      else cols.push([shape]);
+      if (col && cx(shape.bounds) - cx(col[0]!.bounds) <= tol) {
+        col.push(shape);
+      } else {
+        cols.push([shape]);
+      }
     }
     cols.forEach((col, columnIndex) => col.forEach((shape) => this.of.set(shape.id, columnIndex)));
     for (let columnIndex = 0; columnIndex + 1 < cols.length; columnIndex++) {
       const free = Math.min(...cols[columnIndex + 1]!.map((shape) => shape.bounds.x)) - Math.max(...cols[columnIndex]!.map((shape) => right(shape.bounds)));
-      if (free > this.wide) this.gaps.push({ after: columnIndex, width: Math.round(free) });
+      if (free > this.wide) {
+        this.gaps.push({ after: columnIndex, width: Math.round(free) });
+      }
     }
     this.count = cols.length;
   }

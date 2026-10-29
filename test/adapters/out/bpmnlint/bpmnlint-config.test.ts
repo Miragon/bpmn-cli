@@ -48,7 +48,9 @@ describe('resolveBpmnlintConfig: the effective rules', () => {
   it('a rule name bpmnlint cannot parse leaves out only that entry (bpmnlint fails on the whole file)', async () => {
     const resolved = await resolveBpmnlintConfig(bpmnlintEngine(), { extends: 'bpmnlint:recommended', rules: { 'no-implicit-end': 'off', 'no-disconnected': 'off', 'no-implicit-start': 'off', '@acme/foo': 'warn' } });
     expect(resolved.unavailable).toEqual([expect.objectContaining({ kind: 'rule', name: '@acme/foo', reason: 'unparseable rule name' })]);
-    for (const rule of ['no-implicit-end', 'no-disconnected', 'no-implicit-start']) expect(resolved.rules[rule]!.severity, rule).toBe('off');
+    for (const rule of ['no-implicit-end', 'no-disconnected', 'no-implicit-start']) {
+      expect(resolved.rules[rule]!.severity, rule).toBe('off');
+    }
     expect(resolved.rules['label-required']!.severity).toBe('error');
   });
 

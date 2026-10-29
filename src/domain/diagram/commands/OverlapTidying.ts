@@ -20,11 +20,17 @@ export class OverlapTidying {
         const { plane } = this.diagram.drawnShape(id);
         byPlane.set(plane, [...(byPlane.get(plane) ?? []), id]);
       }
-    } else for (const plane of this.diagram.planes) byPlane.set(plane, []);
+    } else {
+      for (const plane of this.diagram.planes) {
+        byPlane.set(plane, []);
+      }
+    }
     const rerouted: string[] = [];
     for (const [plane, ids] of byPlane) {
       const tidied = this.diagram.drawing(plane).tidy(ids.length ? { ids } : {});
-      if (tidied.unresolved.length) this.notes.push(`overlap left: ${tidied.unresolved.map(([first, second]) => `${first}~${second}`).join(', ')}`);
+      if (tidied.unresolved.length) {
+        this.notes.push(`overlap left: ${tidied.unresolved.map(([first, second]) => `${first}~${second}`).join(', ')}`);
+      }
       rerouted.push(...this.diagram.drawing(plane).settle(this.snap));
     }
     return rerouted;

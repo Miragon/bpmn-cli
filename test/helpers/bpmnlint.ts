@@ -19,7 +19,9 @@ let repos = 0;
 export function repo(rc: unknown, files: Record<string, string> = {}, parent = top): string {
   const dir = join(parent, `repo${++repos}`);
   mkdirSync(join(dir, '.git'), { recursive: true });
-  if (rc !== undefined) writeFileSync(join(dir, '.bpmnlintrc'), typeof rc === 'string' ? rc : JSON.stringify(rc));
+  if (rc !== undefined) {
+    writeFileSync(join(dir, '.bpmnlintrc'), typeof rc === 'string' ? rc : JSON.stringify(rc));
+  }
   for (const [name, text] of Object.entries(files)) {
     mkdirSync(dirname(join(dir, name)), { recursive: true });
     writeFileSync(join(dir, name), text);
@@ -33,7 +35,9 @@ export function plugin(dir: string, name: string, def: { version?: string; confi
   mkdirSync(join(pkg, 'rules'), { recursive: true });
   writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name, version: def.version ?? '1.2.0', main: 'index.js' }));
   writeFileSync(join(pkg, 'index.js'), def.main ?? `module.exports = { configs: ${JSON.stringify(def.configs ?? {})} };`);
-  for (const [rule, source] of Object.entries(def.rules ?? {})) writeFileSync(join(pkg, 'rules', `${rule}.js`), source);
+  for (const [rule, source] of Object.entries(def.rules ?? {})) {
+    writeFileSync(join(pkg, 'rules', `${rule}.js`), source);
+  }
   return pkg;
 }
 

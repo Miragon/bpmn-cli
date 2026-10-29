@@ -33,7 +33,9 @@ export class RepoTrust {
 
   private offOf(root: string): RepoOff | undefined {
     const dir = real(root);
-    if (this.uid !== undefined && (!this.owned(dir) || !this.owned(join(dir, '.git')))) return 'owner';
+    if (this.uid !== undefined && (!this.owned(dir) || !this.owned(join(dir, '.git')))) {
+      return 'owner';
+    }
     const gitdir = gitDirOf(dir);
     if (gitdir === null) return 'gitfile';
     if (this.uid === undefined) return this.inHome(dir) ? undefined : 'home';

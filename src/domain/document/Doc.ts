@@ -64,14 +64,18 @@ export class Doc {
 
   /** Operaton and CIB seven files are camunda7. */
   static assertTarget(target: unknown): asserts target is NewDocOptions['target'] {
-    if (target === undefined || (TARGETS as readonly unknown[]).includes(target)) return;
+    if (target === undefined || (TARGETS as readonly unknown[]).includes(target)) {
+      return;
+    }
     throw usageError(`Unknown --target "${String(target)}": expected camunda8 or camunda7`, {
       hint: 'camunda7 also covers CIB seven and Operaton (they read the camunda: namespace); camunda8 is Zeebe. Omit --target for a plain BPMN file.',
     });
   }
 
   static assertProcessId(id: string): void {
-    if (!isValidId(id)) throw modelError('E_INVALID_ID', `"${id}" is not a valid id (XML NCName)`);
+    if (!isValidId(id)) {
+      throw modelError('E_INVALID_ID', `"${id}" is not a valid id (XML NCName)`);
+    }
   }
 
   /**
@@ -94,7 +98,9 @@ export class Doc {
   }
 
   private static insideExtension(el: El): boolean {
-    for (let ancestor = el.$parent as El | undefined; ancestor; ancestor = ancestor.$parent as El | undefined) if (is(ancestor, 'bpmn:ExtensionElements')) return true;
+    for (let ancestor = el.$parent as El | undefined; ancestor; ancestor = ancestor.$parent as El | undefined) {
+      if (is(ancestor, 'bpmn:ExtensionElements')) return true;
+    }
     return false;
   }
 
@@ -107,7 +113,9 @@ export class Doc {
     try {
       model = await parseXml(xml);
     } catch (err) {
-      if (err instanceof ModelError) throw ioError('E_PARSE', err.message, { ...err.details, file });
+      if (err instanceof ModelError) {
+        throw ioError('E_PARSE', err.message, { ...err.details, file });
+      }
       throw err;
     }
     const ids = new IdRegistry(indexById(model.definitions).keys());
@@ -162,7 +170,9 @@ export class Doc {
     const uri = !this.prefixFor(camunda) && this.prefixFor(operaton) ? operaton : camunda;
     for (const uri of [camunda, operaton]) {
       const prefix = this.prefixFor(uri);
-      if (prefix && process.$attrs[`${prefix}:historyTimeToLive`] !== undefined) return;
+      if (prefix && process.$attrs[`${prefix}:historyTimeToLive`] !== undefined) {
+        return;
+      }
     }
     const prefix = this.prefixFor(uri) ?? (uri === operaton ? 'operaton' : 'camunda');
     this.declareNamespace(prefix, uri);
@@ -171,7 +181,9 @@ export class Doc {
 
   prefixFor(uri: string): string | undefined {
     for (const [key, value] of Object.entries(this.definitions.$attrs ?? {})) {
-      if (key.startsWith('xmlns:') && value === uri) return key.slice('xmlns:'.length);
+      if (key.startsWith('xmlns:') && value === uri) {
+        return key.slice('xmlns:'.length);
+      }
     }
     return undefined;
   }
@@ -210,7 +222,9 @@ export class Doc {
 
   /** Diagram interchange is not addressable: the AI never sees DI. */
   byId(): Map<string, El> {
-    if (!this.index) this.index = indexById(this.definitions, { semanticOnly: true });
+    if (!this.index) {
+      this.index = indexById(this.definitions, { semanticOnly: true });
+    }
     return this.index;
   }
 
@@ -267,9 +281,13 @@ export class Doc {
   private vendorUses(id: string): Array<{ type: string; owner: string }> {
     const out: Array<{ type: string; owner: string }> = [];
     for (const el of walk(this.definitions)) {
-      if ((el as unknown as { id?: unknown }).id !== id || (isBpmnElement(el) && !Doc.insideExtension(el))) continue;
+      if ((el as unknown as { id?: unknown }).id !== id || (isBpmnElement(el) && !Doc.insideExtension(el))) {
+        continue;
+      }
       let owner = el.$parent as El | undefined;
-      while (owner && (!isBpmnElement(owner) || is(owner, 'bpmn:ExtensionElements') || !owner.get<string | undefined>('id'))) owner = owner.$parent as El | undefined;
+      while (owner && (!isBpmnElement(owner) || is(owner, 'bpmn:ExtensionElements') || !owner.get<string | undefined>('id'))) {
+        owner = owner.$parent as El | undefined;
+      }
       out.push({ type: el.$type, owner: owner?.get<string>('id') ?? '?' });
     }
     return out;
@@ -359,7 +377,9 @@ export class Doc {
   scopeOf(el: El): El | undefined {
     let ancestor = el.$parent as El | undefined;
     while (ancestor) {
-      if (is(ancestor, 'bpmn:Process') || is(ancestor, 'bpmn:SubProcess')) return ancestor;
+      if (is(ancestor, 'bpmn:Process') || is(ancestor, 'bpmn:SubProcess')) {
+        return ancestor;
+      }
       ancestor = ancestor.$parent as El | undefined;
     }
     return undefined;
@@ -372,7 +392,9 @@ export class Doc {
   defaultScope(): El {
     const procs = this.processes();
     if (procs.length === 1) return procs[0]!;
-    if (!procs.length) throw modelError('E_NO_PROCESS', 'The file contains no process', { hint: 'Create one with `bpmn new`.' });
+    if (!procs.length) {
+      throw modelError('E_NO_PROCESS', 'The file contains no process', { hint: 'Create one with `bpmn new`.' });
+    }
     throw modelError('E_AMBIGUOUS_SCOPE', `The file has ${procs.length} processes; specify the scope with --in <processId|subProcessId>`, {
       candidates: procs.map((proc) => proc.get<string>('id')),
     });
@@ -384,7 +406,9 @@ export class Doc {
     const el = this.require(id, ['bpmn:Process', 'bpmn:SubProcess', 'bpmn:Participant'], 'scope', batch);
     if (is(el, 'bpmn:Participant')) {
       const proc = el.get<El | undefined>('processRef');
-      if (!proc) throw modelError('E_BLACK_BOX', `Participant "${id}" has no process (black box)`, { element: id });
+      if (!proc) {
+        throw modelError('E_BLACK_BOX', `Participant "${id}" has no process (black box)`, { element: id });
+      }
       return proc;
     }
     return el;

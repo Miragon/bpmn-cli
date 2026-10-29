@@ -61,13 +61,23 @@ export class ElementFinder {
   }
 
   private static vendorMatch(el: El, query: string): string | undefined {
-    for (const [key, value] of Object.entries(new ElementFacts(el).vendorValues() ?? {})) if (value.toLowerCase().includes(query)) return `${key}=${value}`;
+    for (const [key, value] of Object.entries(new ElementFacts(el).vendorValues() ?? {})) {
+      if (value.toLowerCase().includes(query)) return `${key}=${value}`;
+    }
     const decision = new DecisionLinkReader().linkOf(el);
-    if (decision && decision.value.toLowerCase().includes(query)) return `calledDecision=${decision.value}`;
+    if (decision && decision.value.toLowerCase().includes(query)) {
+      return `calledDecision=${decision.value}`;
+    }
     const visit = (exts: ExtensionInfo[] | undefined, path: string): string | undefined => {
       for (const extension of exts ?? []) {
-        for (const [key, value] of Object.entries(extension.attrs ?? {})) if (String(value).toLowerCase().includes(query)) return `${path}${extension.type} ${key}=${value}`;
-        if (extension.body && extension.body.toLowerCase().includes(query)) return `${path}${extension.type} ${truncate(extension.body, 60)}`;
+        for (const [key, value] of Object.entries(extension.attrs ?? {})) {
+          if (String(value).toLowerCase().includes(query)) {
+            return `${path}${extension.type} ${key}=${value}`;
+          }
+        }
+        if (extension.body && extension.body.toLowerCase().includes(query)) {
+          return `${path}${extension.type} ${truncate(extension.body, 60)}`;
+        }
         const hit = visit(extension.children as ExtensionInfo[] | undefined, path);
         if (hit) return hit;
       }

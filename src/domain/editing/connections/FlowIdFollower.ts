@@ -18,7 +18,9 @@ export class FlowIdFollower {
    * follows when a later op of the batch changes its ends.
    */
   recordFormerEnd(node: El): void {
-    if (!is(node, 'bpmn:FlowNode') || !(many(node, 'incoming').length || many(node, 'outgoing').length)) return;
+    if (!is(node, 'bpmn:FlowNode') || !(many(node, 'incoming').length || many(node, 'outgoing').length)) {
+      return;
+    }
     this.edit.recordFormerEnd(node, { id: idOf(node), labels: FlowIdFollower.endLabels(node) });
   }
 
@@ -38,17 +40,23 @@ export class FlowIdFollower {
   /** Returns the old id when it renamed the flow, `''` when it gave an id-less flow one. */
   follow(flow: El, oldSource: El | undefined, oldTarget: El | undefined, wanted?: string): string | undefined {
     const doc = this.edit.doc;
-    if (!is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) return undefined;
+    if (!is(flow, 'bpmn:SequenceFlow') || !oldSource || !oldTarget) {
+      return undefined;
+    }
     const source = flow.get<El | undefined>('sourceRef');
     const target = flow.get<El | undefined>('targetRef');
-    if (!source || !target || (source === oldSource && target === oldTarget)) return undefined;
+    if (!source || !target || (source === oldSource && target === oldTarget)) {
+      return undefined;
+    }
     const old = idOf(flow);
     if (!old) {
       flow.set('id', this.edit.allocator.explicitOr(wanted, ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)));
       doc.invalidate();
       return '';
     }
-    if (!doc.followFlowEnds || !this.namesEnds(old, oldSource, oldTarget)) return undefined;
+    if (!doc.followFlowEnds || !this.namesEnds(old, oldSource, oldTarget)) {
+      return undefined;
+    }
     const oldIds = [idOf(oldSource), idOf(oldTarget)] as const;
     doc.ids.release(old);
     const id = this.edit.allocator.allocate(ElementLabels.flowRequest('bpmn:SequenceFlow', source, target)).id;
@@ -68,7 +76,11 @@ export class FlowIdFollower {
     const flows = new Set([...many(node, 'incoming'), ...many(node, 'outgoing')]);
     for (const root of many(doc.definitions, 'rootElements')) {
       if (!is(root, 'bpmn:Collaboration')) continue;
-      for (const flow of many(root, 'messageFlows')) if (flow.get<El | undefined>('sourceRef') === node || flow.get<El | undefined>('targetRef') === node) flows.add(flow);
+      for (const flow of many(root, 'messageFlows')) {
+        if (flow.get<El | undefined>('sourceRef') === node || flow.get<El | undefined>('targetRef') === node) {
+          flows.add(flow);
+        }
+      }
     }
     return [...flows].filter((flow) => !!flow.get<El | undefined>('sourceRef') && !!flow.get<El | undefined>('targetRef') && this.edit.allocator.generatedFrom(idOf(flow), FlowIdFollower.connectionRequestOf(flow)));
   }
@@ -94,7 +106,9 @@ export class FlowIdFollower {
   private static endLabels(el: El): string[] {
     const labels = [new ElementLabels(el).label(), speakingStem(idOf(el)), ...new ElementLabels(el).formerLabels()].filter((label): label is string => !!label);
     const name = el.get<string | undefined>('name');
-    if (hasIdWords(name) && !labels.some((label) => label === name || (!label.includes('_') && slugify(label) === slugify(name)))) labels.push(name!);
+    if (hasIdWords(name) && !labels.some((label) => label === name || (!label.includes('_') && slugify(label) === slugify(name)))) {
+      labels.push(name!);
+    }
     return [...new Set(labels)];
   }
 

@@ -49,7 +49,9 @@ export class LabelRefresh {
         const now = raw<string>(edge.el, 'name');
         if (now && now !== before) this.run.drawing(plane).refitLabel(edge);
       }
-      for (const [id, sub] of this.run.drawing(plane).clearTitles((element, sub) => !this.run.fromEngine.has(element.id) && this.clearOfOldTitle(element, sub))) this.run.notes.push(`label of ${id} moved off the name of ${sub}`);
+      for (const [id, sub] of this.run.drawing(plane).clearTitles((element, sub) => !this.run.fromEngine.has(element.id) && this.clearOfOldTitle(element, sub))) {
+        this.run.notes.push(`label of ${id} moved off the name of ${sub}`);
+      }
     }
   }
 

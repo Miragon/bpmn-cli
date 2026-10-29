@@ -36,8 +36,11 @@ function bpmnFiles(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir).sort()) {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...bpmnFiles(full));
-    else if (name.endsWith('.bpmn')) out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...bpmnFiles(full));
+    } else if (name.endsWith('.bpmn')) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -63,10 +66,14 @@ function problemBox(plane: Plane, ids: string[]): Box | undefined {
   };
   for (const id of ids) {
     const shape = plane.shapes.get(id);
-    if (shape) [shape.bounds, shape.label].forEach((bounds) => bounds && add(bounds));
+    if (shape) {
+      [shape.bounds, shape.label].forEach((bounds) => bounds && add(bounds));
+    }
     const edge = plane.edges.get(id);
     if (edge) {
-      for (const point of edge.points) add({ x: point.x, y: point.y, width: 0, height: 0 });
+      for (const point of edge.points) {
+        add({ x: point.x, y: point.y, width: 0, height: 0 });
+      }
       if (edge.label) add(edge.label);
     }
   }
@@ -96,18 +103,24 @@ describe('locateProblems', () => {
       const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
       const defs = doc.definitions;
       const problems = LayoutAnalysis.of(defs).problems;
-      for (const problem of problems) expect(problem, file).not.toHaveProperty('at');
+      for (const problem of problems) {
+        expect(problem, file).not.toHaveProperty('at');
+      }
       const planes = new DiagramReader(defs).planes();
       const out = new ProblemLocator(defs).locate(problems);
       expect(out.map(({ at: _unusedAt, ...problem }) => problem), file).toEqual(problems);
       for (const problem of out) {
         const plane = planes.find((candidate) => candidate.shapes.has(problem.ids[0] ?? '') || candidate.edges.has(problem.ids[0] ?? ''));
         if (problem.kind === 'missing' || problem.kind === 'failed' || !plane) {
-          if (problem.kind === 'missing' || problem.kind === 'failed') expect(problem.at, `${file} ${shown(problem)}`).toBeUndefined();
+          if (problem.kind === 'missing' || problem.kind === 'failed') {
+            expect(problem.at, `${file} ${shown(problem)}`).toBeUndefined();
+          }
           continue;
         }
         // every problem on a plane has a place (degenerate edges without waypoints aside)
-        if (problem.kind !== 'degenerateEdge') expect(problem.at, `${file} ${shown(problem)}`).toBeDefined();
+        if (problem.kind !== 'degenerateEdge') {
+          expect(problem.at, `${file} ${shown(problem)}`).toBeDefined();
+        }
         if (!problem.at) continue;
         located++;
         expect(problem.at.plane, `${file} ${shown(problem)}`).toBe(plane.rootId);
@@ -156,7 +169,11 @@ describe('--problems', () => {
   it('moves a badge that would cover an earlier one aside, still inside its elements', async () => {
     const rendered = await renderSvg(readFileSync(O2C, 'utf8'), { problems: true });
     const spots = [...badgesOf(rendered.svg).values()];
-    for (const [index, spot] of spots.entries()) for (const otherSpot of spots.slice(index + 1)) expect(Math.hypot(spot.x - otherSpot.x, spot.y - otherSpot.y)).toBeGreaterThan(17.9);
+    for (const [index, spot] of spots.entries()) {
+      for (const otherSpot of spots.slice(index + 1)) {
+        expect(Math.hypot(spot.x - otherSpot.x, spot.y - otherSpot.y)).toBeGreaterThan(17.9);
+      }
+    }
   });
 
   it('a list of problems: exactly those, numbered in its order; a problem on another plane is listed, not drawn', async () => {
@@ -222,7 +239,9 @@ describe('crops', () => {
     const path = await renderSvg(xml, { path: { from: 'Event_OrderReceived', to: 'Event_OrderCompleted' } });
     const expected = new ElementSelector(doc).path('Event_OrderReceived', 'Event_OrderCompleted').map((el) => el.get<string>('id'));
     expect(path.nodes).toEqual(expected.filter((id) => is(doc.require(id), 'bpmn:FlowNode')));
-    for (const id of expected) expect(drawnIds(path.svg)).toContain(id);
+    for (const id of expected) {
+      expect(drawnIds(path.svg)).toContain(id);
+    }
     const lane = await renderSvg(xml, { scope: 'Lane_Warehouse' });
     expect(lane.nodes!.sort()).toEqual(['Activity_PickAndPack', 'Activity_ShipGoods']);
     expect(drawnIds(lane.svg)).toContain('Lane_Warehouse');
@@ -293,7 +312,9 @@ describe('halos', () => {
     expect(highlight.changed).toEqual(expect.arrayContaining(['Flow_5', 'Activity_ShipGoods']));
     expect(highlight.changed).not.toContain('userTask_approveCredit');
     expect(highlight.moved).toContain('Gateway_CreditOk');
-    for (const id of highlight.moved) expect([...highlight.created, ...highlight.changed]).not.toContain(id);
+    for (const id of highlight.moved) {
+      expect([...highlight.created, ...highlight.changed]).not.toContain(id);
+    }
   });
 });
 
@@ -330,8 +351,12 @@ describe('tiles', () => {
     const gallery = readFileSync(GALLERY, 'utf8');
     const rendered = await renderSvg(gallery, { maxSize: 600, tiles: true, problems: true });
     expect(rendered.tiles!.some((tile) => (tile.band ?? 1) > 1)).toBe(true);
-    for (const tile of rendered.tiles!) expect(Math.max(tile.width, tile.height)).toBeLessThanOrEqual(600);
-    for (const problem of rendered.problems.filter((candidate) => candidate.drawn)) expect(rendered.tiles![problem.tile! - 1]!.svg).toContain(`<g data-problem="${problem.n}">`);
+    for (const tile of rendered.tiles!) {
+      expect(Math.max(tile.width, tile.height)).toBeLessThanOrEqual(600);
+    }
+    for (const problem of rendered.problems.filter((candidate) => candidate.drawn)) {
+      expect(rendered.tiles![problem.tile! - 1]!.svg).toContain(`<g data-problem="${problem.n}">`);
+    }
     const small = await renderSvg(readFileSync(O2C, 'utf8'), { tiles: true });
     expect(small.tiles).toBeUndefined();
     expect(small.notes).toContain('--tiles: the image is readable as one (scale 1.00); no tiles');
@@ -344,7 +369,9 @@ describe('focus', () => {
     const rendered = await renderSvg(xml, { maxSize: 2000, focus: ['Activity_PackItems'] });
     expect(rendered.scale).toBe(1);
     expect(rendered.notes.join('\n')).toMatch(/the image shows the region around the 1 element in focus/);
-    for (const id of ['Activity_PickItems', 'Activity_PackItems', 'Activity_WeighParcel']) expect(drawnIds(rendered.svg)).toContain(id);
+    for (const id of ['Activity_PickItems', 'Activity_PackItems', 'Activity_WeighParcel']) {
+      expect(drawnIds(rendered.svg)).toContain(id);
+    }
     expect(drawnIds(rendered.svg)).not.toContain('Activity_ReceiveOrder');
     const o2c = await renderSvg(readFileSync(O2C, 'utf8'), { maxSize: 2000, focus: ['Activity_CheckCredit'] });
     expect(o2c.notes).toEqual([]);
@@ -388,7 +415,9 @@ describe('the commands', () => {
     const lines = run.out.split('\n').filter((line) => line.startsWith('wrote '));
     expect(lines.length).toBeGreaterThanOrEqual(2);
     lines.forEach((line, index) => expect(line).toMatch(new RegExp(`^wrote \\S+long-${index + 1}\\.png  \\d+x\\d+ px  ~[\\d,]+ image tokens  scale 1\\.00  plane Process_LongOrder  tile ${index + 1}/${lines.length} c\\d+-c\\d+$`)));
-    for (const index of lines.keys()) expect(existsSync(join(dir, `long-${index + 1}.png`))).toBe(true);
+    for (const index of lines.keys()) {
+      expect(existsSync(join(dir, `long-${index + 1}.png`))).toBe(true);
+    }
     expect(run.out).toMatch(new RegExp(`\\n${lines.length} tiles, ~[\\d,]+ image tokens in all\\n`));
   });
 

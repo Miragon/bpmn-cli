@@ -124,11 +124,15 @@ export class NodePlacer {
   restore(st: PlacerState): void {
     const refill = <TElement>(into: Set<TElement>, from: Set<TElement>): void => {
       into.clear();
-      for (const element of from) into.add(element);
+      for (const element of from) {
+        into.add(element);
+      }
     };
     const remap = <TKey, TValue>(into: Map<TKey, TValue>, from: Map<TKey, TValue>): void => {
       into.clear();
-      for (const [key, entry] of from) into.set(key, entry);
+      for (const [key, entry] of from) {
+        into.set(key, entry);
+      }
     };
     refill(this.placed, st.placed);
     refill(this.moved, st.moved);
@@ -185,7 +189,9 @@ export class NodePlacer {
     if (reused) return { width: reused.width, height: reused.height };
     const el = this.sem.byId.get(id)!;
     const kind = DiagramReader.shapeKind(el);
-    if (kind === 'subProcess' && this.expandedByDefault(id)) return { width: 350, height: 200 };
+    if (kind === 'subProcess' && this.expandedByDefault(id)) {
+      return { width: 350, height: 200 };
+    }
     if (kind === 'annotation') return defaultSizeOf(el);
     const family = (shapeKind: ShapeKind): string => (shapeKind === 'boundary' ? 'event' : shapeKind === 'subProcess' ? 'task' : shapeKind);
     const sameKind = (shape: DShape): boolean => !shape.container && family(shape.kind) === family(kind) && (kind !== 'data' || shape.el.$type === el.$type);
@@ -211,14 +217,17 @@ export class NodePlacer {
     const el = this.sem.byId.get(id)!;
     const expanded = Semantics.isSubProcess(el) ? (reuse ? reuse.shape.expanded === true : this.expandedByDefault(id) || this.blockSize.has(id)) : undefined;
     const shape = DiagramReader.shapeOf(this.sem, id, el, bounds, expanded);
-    if (reuse?.shape.di) shape.di = reuse.shape.di;
-    else if (!reuse) {
+    if (reuse?.shape.di) {
+      shape.di = reuse.shape.di;
+    } else if (!reuse) {
       const di = this.planes.map((candidate) => candidate.unbounded?.get(id)).find((unbounded) => !!unbounded);
       if (di) shape.di = di;
     }
     const scope = this.sem.scopeOf.get(id);
     const sid = idOf(scope);
-    if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) shape.parentId = sid;
+    if (scope && sid && Semantics.isSubProcess(scope) && plane.shapes.get(sid)?.expanded) {
+      shape.parentId = sid;
+    }
     if (reuse?.shape.label) {
       const old = reuse.shape.bounds;
       shape.label = { ...reuse.shape.label, x: reuse.shape.label.x + bounds.x - old.x, y: reuse.shape.label.y + bounds.y - old.y };
@@ -252,7 +261,9 @@ export class NodePlacer {
         this.moved.add(moving.id);
       };
       reuse.boundaries.forEach(translate);
-      for (const child of reuse.content?.shapes ?? []) translate(child);
+      for (const child of reuse.content?.shapes ?? []) {
+        translate(child);
+      }
       for (const edge of reuse.content?.edges ?? []) {
         translateEdge(edge, dx, dy);
         if (reuse.from !== plane) {
@@ -271,7 +282,9 @@ export class NodePlacer {
       const room = this.drawing(plane).roomBelowTitle(frame, labelAt(shape, { width, height }, 'above'), shape.id);
       if (room) this.recordSpace(room.res);
     }
-    if (!reuse && shape.kind !== 'boundary') this.boundaries.reattachBoundaries(plane, shape);
+    if (!reuse && shape.kind !== 'boundary') {
+      this.boundaries.reattachBoundaries(plane, shape);
+    }
   }
 
   recordSpace(result: { moved: Set<string> }): void {
@@ -297,7 +310,9 @@ export class NodePlacer {
       .map((neighbour) => Math.round(cy(neighbour.bounds)));
     const centre = this.rows.rowInLane(plane, lane, shape.bounds.x, shape.bounds.width, shape.bounds.height, neighbours, exclude);
     const dy = Math.round(centre - shape.bounds.height / 2 - shape.bounds.y);
-    for (const movedId of this.drawing(plane).shift(id, 0, dy)) this.moved.add(movedId);
+    for (const movedId of this.drawing(plane).shift(id, 0, dy)) {
+      this.moved.add(movedId);
+    }
     if (!inLane()) this.recordSpace(this.drawing(plane).fitInFrame(id, 15));
     return true;
   }
@@ -336,20 +351,30 @@ export class NodePlacer {
   private pullPlacedJoins(plane: Plane, id: string, pending: ReadonlySet<string>): void {
     for (const jid of this.sem.successors(id)) {
       const join = plane.shapes.get(jid);
-      if (!join || !this.placed.has(jid) || pending.has(jid) || !is(join.el, 'bpmn:Gateway')) continue;
+      if (!join || !this.placed.has(jid) || pending.has(jid) || !is(join.el, 'bpmn:Gateway')) {
+        continue;
+      }
       const preds = this.sem.predecessors(jid).map((predId) => plane.shapes.get(predId));
       const outs = this.sem.successors(jid);
       const successor = outs.length === 1 ? plane.shapes.get(outs[0]!) : undefined;
-      if (preds.length < 2 || !successor || !preds.every((pred): pred is DShape => !!pred)) continue;
+      if (preds.length < 2 || !successor || !preds.every((pred): pred is DShape => !!pred)) {
+        continue;
+      }
       const sameFrame = (shape: DShape): boolean => shape.poolId === join.poolId && shape.parentId === join.parentId;
       /** S left of a predecessor is pushed right of the join again, when the join led forward into it */
-      if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= Math.max(...preds.map((pred) => right(pred.bounds))) && successor.bounds.x < right(join.bounds))) continue;
-      if (!preds.some((pred) => cx(join.bounds) < pred.bounds.x && !this.leadsTo(jid, pred.id))) continue;
+      if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= Math.max(...preds.map((pred) => right(pred.bounds))) && successor.bounds.x < right(join.bounds))) {
+        continue;
+      }
+      if (!preds.some((pred) => cx(join.bounds) < pred.bounds.x && !this.leadsTo(jid, pred.id))) {
+        continue;
+      }
       plane.shapes.delete(jid);
       (this.joins ??= new Map()).set(jid, successor.id);
       this.current = jid;
       this.spacing.delete(plane);
-      if (LayoutDebug.on()) LayoutDebug.log(`[join] ${jid}: a flow from ${preds.map((pred) => pred.id).join(', ')} would enter it backwards: placed again before ${successor.id}`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[join] ${jid}: a flow from ${preds.map((pred) => pred.id).join(', ')} would enter it backwards: placed again before ${successor.id}`);
+      }
       this.neighbours.placeAfter(plane, jid, preds, pending);
     }
   }
@@ -363,8 +388,12 @@ export class NodePlacer {
     if (!source) return;
     for (const tid of this.sem.successors(id)) {
       const target = plane.shapes.get(tid);
-      if (!target || pending.has(tid) || this.spliced?.get(id) === tid || this.joins?.get(id) === tid) continue;
-      if (target.poolId === source.poolId && target.parentId === source.parentId) this.pushBehind(plane, source, target);
+      if (!target || pending.has(tid) || this.spliced?.get(id) === tid || this.joins?.get(id) === tid) {
+        continue;
+      }
+      if (target.poolId === source.poolId && target.parentId === source.parentId) {
+        this.pushBehind(plane, source, target);
+      }
     }
   }
 
@@ -400,7 +429,11 @@ export class NodePlacer {
     }
     let last: { plane: Plane; id: string } | undefined;
     while (pending.size) {
-      for (const id of pending) if (this.planes.some((candidate) => candidate.shapes.has(id))) pending.delete(id);
+      for (const id of pending) {
+        if (this.planes.some((candidate) => candidate.shapes.has(id))) {
+          pending.delete(id);
+        }
+      }
       if (!pending.size) break;
       if (last) this.hooks.afterNode?.(last.plane, last.id);
       last = undefined;
@@ -417,29 +450,41 @@ export class NodePlacer {
           } else if (is(el, 'bpmn:BoundaryEvent') && idOf(raw(el, 'attachedToRef')) && pending.has(idOf(raw(el, 'attachedToRef'))!)) {
             continue;
           } else if (mode === 'after' || mode === 'exception') {
-            if (is(el, 'bpmn:BoundaryEvent') || exception.has(id) !== (mode === 'exception')) continue;
+            if (is(el, 'bpmn:BoundaryEvent') || exception.has(id) !== (mode === 'exception')) {
+              continue;
+            }
             const preds = this.sem.predecessors(id).map((predId) => shapeOn(plane, predId)).filter((pred): pred is DShape => !!pred);
             if (preds.length) chosen = { id, plane, mode, preds };
           } else if (mode === 'before') {
             const succ = this.sem.successors(id).map((succId) => shapeOn(plane, succId)).find((shape): shape is DShape => !!shape);
             if (succ) chosen = { id, plane, mode, succ };
-          } else chosen = { id, plane, mode };
+          } else {
+            chosen = { id, plane, mode };
+          }
           if (chosen) break;
         }
         if (chosen) break;
       }
       if (!chosen) {
-        for (const id of pending) skipped.push(id);
+        for (const id of pending) {
+          skipped.push(id);
+        }
         break;
       }
       pending.delete(chosen.id);
       this.current = chosen.id;
       this.spacing.delete(chosen.plane);
       if (chosen.mode === 'boundary') {
-        if (!this.boundaries.placeBoundary(chosen.plane, chosen.id)) this.neighbours.placeUnconnected(chosen.plane, chosen.id);
-      } else if (chosen.mode === 'after' || chosen.mode === 'exception') this.neighbours.placeAfter(chosen.plane, chosen.id, chosen.preds!, pending);
-      else if (chosen.mode === 'before') this.neighbours.placeBefore(chosen.plane, chosen.id, chosen.succ!);
-      else if (!is(this.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') || !this.boundaries.placeBoundary(chosen.plane, chosen.id)) this.neighbours.placeUnconnected(chosen.plane, chosen.id);
+        if (!this.boundaries.placeBoundary(chosen.plane, chosen.id)) {
+          this.neighbours.placeUnconnected(chosen.plane, chosen.id);
+        }
+      } else if (chosen.mode === 'after' || chosen.mode === 'exception') {
+        this.neighbours.placeAfter(chosen.plane, chosen.id, chosen.preds!, pending);
+      } else if (chosen.mode === 'before') {
+        this.neighbours.placeBefore(chosen.plane, chosen.id, chosen.succ!);
+      } else if (!is(this.sem.byId.get(chosen.id)!, 'bpmn:BoundaryEvent') || !this.boundaries.placeBoundary(chosen.plane, chosen.id)) {
+        this.neighbours.placeUnconnected(chosen.plane, chosen.id);
+      }
       this.pullPlacedJoins(chosen.plane, chosen.id, pending);
       this.pushTargets(chosen.plane, chosen.id, pending);
       last = { plane: chosen.plane, id: chosen.id };

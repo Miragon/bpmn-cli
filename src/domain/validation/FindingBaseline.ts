@@ -128,9 +128,13 @@ export class FindingBaseline {
     const added: Finding[] = [];
     let preexistingCount = keptCount;
     for (const warning of final.warnings) {
-      if (warning.code === 'W_PREEXISTING_ERROR') preexistingCount++;
-      else if (FindingMatcher.take(pool, (earlier) => this.matcher.sameWarning(earlier, warning))) preexistingCount += coveredByKept(warning) ? 0 : 1;
-      else added.push(warning);
+      if (warning.code === 'W_PREEXISTING_ERROR') {
+        preexistingCount++;
+      } else if (FindingMatcher.take(pool, (earlier) => this.matcher.sameWarning(earlier, warning))) {
+        preexistingCount += coveredByKept(warning) ? 0 : 1;
+      } else {
+        added.push(warning);
+      }
     }
     return { added, resolved, preexisting: preexistingCount };
   }
@@ -168,15 +172,20 @@ export class FindingBaseline {
           if (issue.severity === 'error' && blocking) report.preexisting.push(issue);
           continue;
         }
-        if (issue.severity === 'error' && blocking) report.errors.push(issue);
-        else report.warnings.push(issue);
+        if (issue.severity === 'error' && blocking) {
+          report.errors.push(issue);
+        } else {
+          report.warnings.push(issue);
+        }
       }
       for (const issue of marked) {
         const id = identityAfter(issue);
         FindingMatcher.take(left, (entry) => entry.id === id && entry.issue.severity === issue.severity);
       }
       report.resolved = left.map((entry) => entry.issue);
-      if (leftOut.size) report.leftOut = [...leftOut].map(([reason, count]) => ({ reason, count }));
+      if (leftOut.size) {
+        report.leftOut = [...leftOut].map(([reason, count]) => ({ reason, count }));
+      }
       return report;
     });
   }
@@ -186,8 +195,11 @@ export class FindingBaseline {
     const errors: Finding[] = [];
     const kept: Finding[] = [];
     for (const finding of after.errors) {
-      if (FindingMatcher.take(left, (earlier) => this.matcher.same(earlier, finding))) kept.push(preexisting(finding));
-      else errors.push(finding);
+      if (FindingMatcher.take(left, (earlier) => this.matcher.same(earlier, finding))) {
+        kept.push(preexisting(finding));
+      } else {
+        errors.push(finding);
+      }
     }
     return { errors, warnings: [...kept, ...after.warnings] };
   }

@@ -62,8 +62,12 @@ export class FullLayout {
   private groupNotes({ kept, moved }: RedrawnGroups): { notes?: string[] } {
     const stay = kept.filter((id) => !moved.includes(id));
     const notes: string[] = [];
-    if (stay.length) notes.push(stay.length === 1 ? `group ${stay[0]} kept its box: no element inside it is drawn` : `groups ${stay.join(', ')} kept their boxes: no element inside them is drawn`);
-    if (moved.length) notes.push(moved.length === 1 ? `group ${moved[0]} moved below the drawing: no element inside it is drawn and the redraw put shapes on its box` : `groups ${moved.join(', ')} moved below the drawing: no element inside them is drawn and the redraw put shapes on their boxes`);
+    if (stay.length) {
+      notes.push(stay.length === 1 ? `group ${stay[0]} kept its box: no element inside it is drawn` : `groups ${stay.join(', ')} kept their boxes: no element inside them is drawn`);
+    }
+    if (moved.length) {
+      notes.push(moved.length === 1 ? `group ${moved[0]} moved below the drawing: no element inside it is drawn and the redraw put shapes on its box` : `groups ${moved.join(', ')} moved below the drawing: no element inside them is drawn and the redraw put shapes on their boxes`);
+    }
     return notes.length ? { notes } : {};
   }
 }

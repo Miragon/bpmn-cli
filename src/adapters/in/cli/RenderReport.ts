@@ -29,12 +29,17 @@ export class RenderReport {
       const tile = images.length > 1 ? `  tile ${tileIndex + 1}/${images.length}${im.columns ? ` c${im.columns[0]}-c${im.columns[1]}` : ''}${im.band ? ` band ${im.band}` : ''}` : '';
       return `wrote ${im.out === '-' ? '<stdout>' : im.out}  ${im.width}x${im.height} px  ~${this.thousands(im.tokens)} image tokens  scale ${scaleText(shot.scale)}  plane ${shot.plane}${tile}`;
     });
-    if (images.length > 1) lines.push(`${images.length} tiles, ~${this.thousands(images.reduce((total, im) => total + im.tokens, 0))} image tokens in all`);
-    if (extra.crop) lines.push(`crop: ${extra.crop}: ${shot.nodes?.length ?? 0} node${shot.nodes?.length === 1 ? '' : 's'}`);
+    if (images.length > 1) {
+      lines.push(`${images.length} tiles, ~${this.thousands(images.reduce((total, im) => total + im.tokens, 0))} image tokens in all`);
+    }
+    if (extra.crop) {
+      lines.push(`crop: ${extra.crop}: ${shot.nodes?.length ?? 0} node${shot.nodes?.length === 1 ? '' : 's'}`);
+    }
     if (extra.halos) lines.push(`halos: ${extra.halos}`);
     if (extra.problems !== undefined) {
-      if (!shot.problems.length) lines.push(`${extra.problems}: none`);
-      else {
+      if (!shot.problems.length) {
+        lines.push(`${extra.problems}: none`);
+      } else {
         lines.push(`${extra.problems} (numbered in the image):`);
         for (const problem of shot.problems) {
           const where = !problem.drawn ? '  (not in the image)' : problem.tile ? `  (tile ${problem.tile})` : '';
@@ -42,16 +47,26 @@ export class RenderReport {
         }
       }
     }
-    if (shot.planes.length) lines.push(`other planes (--plane <id>): ${shot.planes.join(', ')}`);
-    for (const note of shot.notes) lines.push(`note: ${note}`);
+    if (shot.planes.length) {
+      lines.push(`other planes (--plane <id>): ${shot.planes.join(', ')}`);
+    }
+    for (const note of shot.notes) {
+      lines.push(`note: ${note}`);
+    }
     return lines;
   }
 
   private cropOf(opts: RenderOptions): string | undefined {
-    if (opts.around) return `around ${opts.around.id} (depth ${opts.around.depth ?? AROUND_DEFAULT_DEPTH}${opts.around.inner ? ', inner' : ''})`;
-    if (opts.path) return `path ${opts.path.from} -> ${opts.path.to}${opts.path.via ? ` via ${opts.path.via.join(', ')}` : ''}`;
+    if (opts.around) {
+      return `around ${opts.around.id} (depth ${opts.around.depth ?? AROUND_DEFAULT_DEPTH}${opts.around.inner ? ', inner' : ''})`;
+    }
+    if (opts.path) {
+      return `path ${opts.path.from} -> ${opts.path.to}${opts.path.via ? ` via ${opts.path.via.join(', ')}` : ''}`;
+    }
     if (opts.scope !== undefined) return `scope ${opts.scope}`;
-    if (opts.ids?.length) return `${opts.ids.length} id${opts.ids.length > 1 ? 's' : ''}`;
+    if (opts.ids?.length) {
+      return `${opts.ids.length} id${opts.ids.length > 1 ? 's' : ''}`;
+    }
     return undefined;
   }
 

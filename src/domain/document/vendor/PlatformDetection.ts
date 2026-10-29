@@ -51,7 +51,9 @@ export class PlatformDetection {
       info.platform === 'c7' && operaton > 0 ? { ...info, operaton: true, ...(info.source === 'namespace-use' ? {} : { detail: `${info.detail}; ${operaton} operaton attribute(s)/element(s): ${OPERATON_NOTE}` }) } : info;
     if (declared !== undefined) {
       const platform = this.fromExecutionPlatform(declared);
-      if (platform) return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"` });
+      if (platform) {
+        return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"` });
+      }
     }
     if (c7 || c8) {
       const platform: Platform = c7 >= c8 ? 'c7' : 'c8';
@@ -85,8 +87,12 @@ export class PlatformDetection {
 
   private fromExecutionPlatform(value: string): Platform | undefined {
     const normalized = value.trim().toLowerCase();
-    if (normalized.startsWith('camunda platform') || normalized.startsWith('camunda 7') || normalized.startsWith('operaton') || normalized.startsWith('cib seven') || normalized.startsWith('cibseven')) return 'c7';
-    if (normalized.startsWith('camunda cloud') || normalized.startsWith('camunda 8') || normalized.startsWith('zeebe')) return 'c8';
+    if (normalized.startsWith('camunda platform') || normalized.startsWith('camunda 7') || normalized.startsWith('operaton') || normalized.startsWith('cib seven') || normalized.startsWith('cibseven')) {
+      return 'c7';
+    }
+    if (normalized.startsWith('camunda cloud') || normalized.startsWith('camunda 8') || normalized.startsWith('zeebe')) {
+      return 'c8';
+    }
     return undefined;
   }
 }

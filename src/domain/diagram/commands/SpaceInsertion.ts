@@ -42,7 +42,9 @@ export class SpaceInsertion {
       const lanes = [...plane.shapes.values()].filter((lane) => lane.kind === 'lane' && (lane.poolId === shape.id || Frames.chain(plane, lane).includes(shape))).map((lane) => lane.id);
       const occ = compaction.occupied(axis, shape.bounds, { skip: new Set([shape.id, ...(pool ? [pool.id] : []), ...lanes]), loose });
       const last = occ.length ? occ[occ.length - 1]![1] : undefined;
-      if (last !== undefined) strip = { from: last, to: far(shape.bounds), keep: COMPACT_PAD };
+      if (last !== undefined) {
+        strip = { from: last, to: far(shape.bounds), keep: COMPACT_PAD };
+      }
     } else {
       const unit = shape.container ? shape.bounds : this.diagram.drawing(plane).unitBox(shape);
       within = axis === 'x' && pool ? copyBox(pool.bounds) : undefined;
@@ -51,10 +53,13 @@ export class SpaceInsertion {
       const skip = new Set([shape.id, ...[...plane.shapes.values()].filter((frame) => frame.kind === 'lane' || frame.kind === 'participant').map((frame) => frame.id)]);
       const occ = compaction.occupied(axis, region, { skip, loose, solid: (other) => other.kind === 'subProcess' && other.container && other.id !== shape.id && !Frames.chain(plane, shape).includes(other) });
       let from = far(unit);
-      for (const [start, end] of occ) if (start <= from + 1) from = Math.max(from, end);
+      for (const [start, end] of occ) {
+        if (start <= from + 1) from = Math.max(from, end);
+      }
       const next = occ.find(([start]) => start > from + 1);
-      if (next) strip = { from, to: next[0], keep: axis === 'x' ? gaps.x : gaps.y };
-      else if (shape.container) {
+      if (next) {
+        strip = { from, to: next[0], keep: axis === 'x' ? gaps.x : gaps.y };
+      } else if (shape.container) {
         this.notes.push(`nothing to close ${where}: nothing follows it`);
         return [];
       }
@@ -89,7 +94,9 @@ export class SpaceInsertion {
     const { plane, shape } = this.diagram.drawnShape(refId);
     const axis = this.command.after ? 'x' : 'y';
     const by = parseSpaceAmount(this.command.by ?? (axis === 'x' ? 'column' : 'row'));
-    if (!by) throw usageError(`space: --by ${String(this.command.by)} is no amount (column, row, 2col, 3rows, 80px, 80; negative closes space)`);
+    if (!by) {
+      throw usageError(`space: --by ${String(this.command.by)} is no amount (column, row, 2col, 3rows, 80px, 80; negative closes space)`);
+    }
     const column = this.columnWidth(plane);
     const row = PlaneQuery.spacingOf(plane).row;
     const step = by.unit === 'column' ? column : by.unit === 'row' ? row : 1;

@@ -68,7 +68,9 @@ export class ChannelRouter {
       if (label) this.labelsBelow.push(label);
       for (const boundaryEvent of node.boundary) {
         const boundaryLabel = ScopeLabels.of(boundaryEvent, 'boundary');
-        if (boundaryLabel) (boundaryEvent.onTop ? this.labelsAbove : this.labelsBelow).push(boundaryLabel);
+        if (boundaryLabel) {
+          (boundaryEvent.onTop ? this.labelsAbove : this.labelsBelow).push(boundaryLabel);
+        }
       }
     }
     this.belowIndex = this.boxIndex(this.labelsBelow);
@@ -111,7 +113,9 @@ export class ChannelRouter {
 
   static dataX(node: GNode): number {
     const centerX = center(node.box).x;
-    if (!node.boundary.length) return centerX + Math.min(30, node.box.width / 2 - 10);
+    if (!node.boundary.length) {
+      return centerX + Math.min(30, node.box.width / 2 - 10);
+    }
     return boundaryLeft(node) ? centerX + 30 : centerX - 30;
   }
 
@@ -119,7 +123,9 @@ export class ChannelRouter {
     let crossingCount = 0;
     for (const segment of toSegments(points)) {
       const count = (other: Segment): boolean => properCross(segment, other) && ++crossingCount >= stop;
-      if (Array.isArray(routed) ? routed.some(count) : routed.each(Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x), count)) break;
+      if (Array.isArray(routed) ? routed.some(count) : routed.each(Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x), count)) {
+        break;
+      }
     }
     return crossingCount;
   }
@@ -128,7 +134,9 @@ export class ChannelRouter {
   private static bottomCandidates(node: GNode): number[] {
     const box = node.box;
     const centerX = center(box).x;
-    if (!node.boundary.length) return box.width >= 100 ? [centerX, centerX - 25, centerX + 25] : [centerX];
+    if (!node.boundary.length) {
+      return box.width >= 100 ? [centerX, centerX - 25, centerX + 25] : [centerX];
+    }
     return boundaryLeft(node) ? [right(box) - 20, right(box) - 8] : [box.x + 20, box.x + 8];
   }
 
@@ -147,7 +155,9 @@ export class ChannelRouter {
     const fromEvents = forward.filter((edge) => edge.source.host).sort((first, second) => low(second) - low(first) || center(second.source.box).x - center(first.source.box).x);
     forward.splice(0, forward.length, ...forward.filter((edge) => !edge.source.host), ...fromEvents, ...this.openRow);
     const loops = layout.edges.filter((edge) => edge.back).sort((first, second) => Math.abs(center(first.source.box).x - center(first.target.box).x) - Math.abs(center(second.source.box).x - center(second.target.box).x));
-    for (const edge of [...forward, ...loops]) this.routeEdge(edge);
+    for (const edge of [...forward, ...loops]) {
+      this.routeEdge(edge);
+    }
     this.markTopsUsed();
     const maxChannel = this.channels.lowest();
     const maxRun = Math.max(0, ...layout.edges.filter((edge) => edge.runsBelow).map((edge) => edge.points[1]!.y + RUN_CLEAR));
@@ -182,18 +192,24 @@ export class ChannelRouter {
         );
       }
     });
-    for (const edge of this.layout.edges) hits += hitCount(edge.points, this.boxes, [edge.source.box, edge.target.box, ...(edge.source.host ? [edge.source.host.box] : [])]);
+    for (const edge of this.layout.edges) {
+      hits += hitCount(edge.points, this.boxes, [edge.source.box, edge.target.box, ...(edge.source.host ? [edge.source.host.box] : [])]);
+    }
     return { crossings, hits, labels: labels.filter((label) => routed.each(label.x, right(label), ([start, end]) => segmentHitsBox(start, end, label))).length };
   }
 
   private boxIndex(boxes: Box[]): XIndex<Box> {
     const index = new XIndex<Box>();
-    for (const box of boxes) index.add(box, box.x, right(box));
+    for (const box of boxes) {
+      index.add(box, box.x, right(box));
+    }
     return index;
   }
 
   private addSegments(index: XIndex<Segment>, segments: Segment[]): void {
-    for (const segment of segments) index.add(segment, Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x));
+    for (const segment of segments) {
+      index.add(segment, Math.min(segment[0].x, segment[1].x), Math.max(segment[0].x, segment[1].x));
+    }
   }
 
   private routeEdge(edge: GEdge): void {
@@ -209,7 +225,9 @@ export class ChannelRouter {
     this.addSegments(this.routed, segs);
     if (route.runsAbove) this.addSegments(this.overTop, segs);
     const chosenChannel = route.channel;
-    if (chosenChannel) chosenChannel.list.take(chosenChannel.y, chosenChannel.x1, chosenChannel.x2);
+    if (chosenChannel) {
+      chosenChannel.list.take(chosenChannel.y, chosenChannel.x1, chosenChannel.x2);
+    }
     edge.label = this.flowLabel(edge);
     if (edge.label) {
       this.flowLabels.push(edge.label);
@@ -246,7 +264,9 @@ export class ChannelRouter {
     let maxY = 0;
     for (const node of this.allNodes) {
       const layer = node.host ? node.host.layer : node.layer;
-      if (layer >= fromLayer && layer <= toLayer) maxY = Math.max(maxY, bottom(node.box));
+      if (layer >= fromLayer && layer <= toLayer) {
+        maxY = Math.max(maxY, bottom(node.box));
+      }
     }
     return maxY;
   }
@@ -255,10 +275,20 @@ export class ChannelRouter {
     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
     const inBand = (pointY: number): boolean => !band || (pointY >= band.top && pointY <= band.bottom);
     let minY = Infinity;
-    for (const box of this.boxes.near(lo, hi)) if (box.x <= hi && right(box) >= lo && inBand(center(box).y)) minY = Math.min(minY, box.y);
-    for (const label of this.aboveIndex.near(lo, hi)) if (label.x <= hi && right(label) >= lo && inBand(bottom(label))) minY = Math.min(minY, label.y);
+    for (const box of this.boxes.near(lo, hi)) {
+      if (box.x <= hi && right(box) >= lo && inBand(center(box).y)) {
+        minY = Math.min(minY, box.y);
+      }
+    }
+    for (const label of this.aboveIndex.near(lo, hi)) {
+      if (label.x <= hi && right(label) >= lo && inBand(bottom(label))) {
+        minY = Math.min(minY, label.y);
+      }
+    }
     for (const [start, end] of this.routed.near(lo, hi)) {
-      if (Math.max(start.x, end.x) >= lo && Math.min(start.x, end.x) <= hi && inBand(start.y) && inBand(end.y)) minY = Math.min(minY, start.y, end.y);
+      if (Math.max(start.x, end.x) >= lo && Math.min(start.x, end.x) <= hi && inBand(start.y) && inBand(end.y)) {
+        minY = Math.min(minY, start.y, end.y);
+      }
     }
     return minY === Infinity ? 0 : minY;
   }
@@ -267,10 +297,20 @@ export class ChannelRouter {
     const lo = Math.min(x1, x2), hi = Math.max(x1, x2);
     const inBand = (pointY: number): boolean => !band || (pointY >= band.top && pointY <= band.bottom);
     let maxY = 0;
-    for (const box of this.boxes.near(lo, hi)) if (box.x <= hi && right(box) >= lo && inBand(center(box).y)) maxY = Math.max(maxY, bottom(box));
-    for (const label of this.belowIndex.near(lo, hi)) if (label.x <= hi && right(label) >= lo && inBand(label.y)) maxY = Math.max(maxY, bottom(label));
+    for (const box of this.boxes.near(lo, hi)) {
+      if (box.x <= hi && right(box) >= lo && inBand(center(box).y)) {
+        maxY = Math.max(maxY, bottom(box));
+      }
+    }
+    for (const label of this.belowIndex.near(lo, hi)) {
+      if (label.x <= hi && right(label) >= lo && inBand(label.y)) {
+        maxY = Math.max(maxY, bottom(label));
+      }
+    }
     for (const [start, end] of this.routed.near(lo, hi)) {
-      if (Math.max(start.x, end.x) >= lo && Math.min(start.x, end.x) <= hi && inBand(start.y) && inBand(end.y)) maxY = Math.max(maxY, start.y, end.y);
+      if (Math.max(start.x, end.x) >= lo && Math.min(start.x, end.x) <= hi && inBand(start.y) && inBand(end.y)) {
+        maxY = Math.max(maxY, start.y, end.y);
+      }
     }
     return maxY;
   }
@@ -421,7 +461,9 @@ export class ChannelRouter {
       { pts: [{ x: right(tb) + METRICS.hGap / 2, y: channelY }, { x: right(tb) + METRICS.hGap / 2, y: hookY }, { x: tx, y: hookY }, { x: tx, y: bottom(tb) }], x: tx },
       { pts: [{ x: x1, y: channelY }, { x: x1, y: hookY }, { x: tx, y: hookY }, { x: tx, y: bottom(tb) }], x: tx },
     ];
-    if (target.kind === 'gateway' && !this.leftTaken.has(target)) entries.push({ pts: [{ x: x1, y: channelY }, { x: x1, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 1.5 });
+    if (target.kind === 'gateway' && !this.leftTaken.has(target)) {
+      entries.push({ pts: [{ x: x1, y: channelY }, { x: x1, y: tc.y }, { x: tb.x, y: tc.y }], penalty: 1.5 });
+    }
     for (const ex2 of exits) {
       for (const en of entries) {
         cands.push({
@@ -471,12 +513,16 @@ export class ChannelRouter {
     cands.forEach((cand, candIndex) => {
       let score = cand.penalty + candIndex * 0.001;
       if (cand.exit && cand.exit[0].taken(cand.exit[1], cand.exit[2])) score += 2;
-      if (cand.entry && cand.entry[0].taken(cand.entry[1], cand.entry[2], !cand.offDiamond)) score += 2;
+      if (cand.entry && cand.entry[0].taken(cand.entry[1], cand.entry[2], !cand.offDiamond)) {
+        score += 2;
+      }
       if (best && score >= best.score) return;
       score += hitCount(cand.pts, this.boxes, ignore) * 1000;
       if (best && score >= best.score) return;
       score += ChannelRouter.countCrossings(cand.pts, this.routed, best ? Math.ceil((best.score - score) / 3) : Infinity) * 3;
-      if (this.overTop.size && !(best && score >= best.score) && this.onRouted(cand.pts, this.overTop)) score += 3;
+      if (this.overTop.size && !(best && score >= best.score) && this.onRouted(cand.pts, this.overTop)) {
+        score += 3;
+      }
       if (!best || score < best.score) best = { cand, score };
     });
     const win = best!.cand;
@@ -494,8 +540,9 @@ export class ChannelRouter {
     if (edge.bandY !== undefined) {
       const ex = this.exitX(source);
       const band = [...this.exitToBelow(source, ex, edge.bandY), ...this.hookFromBelow(target, edge.bandY)];
-      if (this.openRow.has(edge) && this.lineFree(pts) && ChannelRouter.countCrossings(pts, this.routed) <= ChannelRouter.countCrossings(band, this.routed)) this.leftTaken.add(target);
-      else {
+      if (this.openRow.has(edge) && this.lineFree(pts) && ChannelRouter.countCrossings(pts, this.routed) <= ChannelRouter.countCrossings(band, this.routed)) {
+        this.leftTaken.add(target);
+      } else {
         pts = band;
         this.usedBottom.take(source, ex, true);
       }
@@ -524,8 +571,9 @@ export class ChannelRouter {
     let pts: Point[] = [{ x: ex, y: bottom(sb) }, { x: ex, y: tc.y }, { x: tb.x, y: tc.y }];
     const sideAt = (dropX: number): Point[] => [{ x: right(sb), y: sc.y }, { x: dropX, y: sc.y }, { x: dropX, y: tc.y }, { x: tb.x, y: tc.y }];
     const joinSide = this.joinFromBelow(source) ? [METRICS.hGap / 4, METRICS.hGap / 2].map((offset) => sideAt(right(sb) + offset)).find((path) => !pathHitsAny(path, this.boxes, ignore)) : undefined;
-    if (joinSide) pts = joinSide;
-    else if (pathHitsAny(pts, this.boxes, ignore)) {
+    if (joinSide) {
+      pts = joinSide;
+    } else if (pathHitsAny(pts, this.boxes, ignore)) {
       pts = sideAt(right(sb) + METRICS.hGap / 2);
       if (source.host) {
         const gx = right(source.host.box) + METRICS.hGap / 2, runY = this.runBelow(sc.x, gx, bottom(sb));
@@ -541,7 +589,9 @@ export class ChannelRouter {
         const channelY = this.channelFor(ex, tb.x - 20, base);
         pts = [{ x: ex, y: bottom(sb) }, { x: ex, y: channelY }, { x: tb.x - 20, y: channelY }, { x: tb.x - 20, y: tc.y }, { x: tb.x, y: tc.y }];
       }
-    } else this.usedBottom.take(source.host ?? source, ex, true);
+    } else {
+      this.usedBottom.take(source.host ?? source, ex, true);
+    }
     return { pts, runsBelow };
   }
 
@@ -584,7 +634,9 @@ export class ChannelRouter {
       ];
     };
     const overWay = (way: Point[], runY: number, x1: number, end: OverEnd, below?: boolean): Way | undefined => {
-      if (pathHitsAny(way, this.boxes, ignore) || this.onRouted(way)) return undefined;
+      if (pathHitsAny(way, this.boxes, ignore) || this.onRouted(way)) {
+        return undefined;
+      }
       const spare = end.top !== undefined ? this.gatewaySpots.get(target) : undefined;
       return { pts: way, ...(below ? { below } : {}), over: { y: runY, from: Math.min(x1, end.to), to: Math.max(x1, end.to) }, ...(end.top !== undefined ? { top: end.top } : {}), ...(spare ? { spare } : {}) };
     };
@@ -613,7 +665,9 @@ export class ChannelRouter {
       const runs = new Map<number, number>();
       const runTo = (to: number): number => {
         let runY = runs.get(to);
-        if (runY === undefined) runs.set(to, (runY = this.runBelow(sc.x, to, bottom(sb), area)));
+        if (runY === undefined) {
+          runs.set(to, (runY = this.runBelow(sc.x, to, bottom(sb), area)));
+        }
         return runY;
       };
       const clear = (slotX: number): boolean => {
@@ -648,7 +702,9 @@ export class ChannelRouter {
         const ends = overEnds();
         hostGaps.forEach((gx, gapIndex) => {
           if (gx < 0 || Math.abs(gx - sc.x) < RUN_CLEAR) return;
-          if (host.boundary.some((boundaryEvent) => boundaryEvent !== source && !boundaryEvent.onTop && Math.min(gx, sc.x) < center(boundaryEvent.box).x && center(boundaryEvent.box).x < Math.max(gx, sc.x))) return;
+          if (host.boundary.some((boundaryEvent) => boundaryEvent !== source && !boundaryEvent.onTop && Math.min(gx, sc.x) < center(boundaryEvent.box).x && center(boundaryEvent.box).x < Math.max(gx, sc.x))) {
+            return;
+          }
           for (const end of ends) {
             if (end.top === undefined && gapX - gx < RUN_CLEAR) continue;
             cands.push({
@@ -665,8 +721,12 @@ export class ChannelRouter {
     const late = (rank: number): number | undefined => (source.host ? 100 + rank * 0.5 : undefined);
     cands.push({ penalty: late(0), make: () => ({ pts: [{ x: right(sb), y: sc.y }, { x: tx, y: sc.y }, { x: tx, y: bottom(tb) }], x: tx }) });
     cands.push({ penalty: late(1), make: () => ({ pts: [{ x: right(sb), y: sc.y }, ...this.hookFromBelow(target, sc.y)], x: tx }) });
-    if (tb.x >= right(sb)) cands.push({ penalty: late(2), make: () => ({ pts: [{ x: sc.x, y: sb.y }, { x: sc.x, y: tc.y }, { x: tb.x, y: tc.y }] }) });
-    if (gapX > right(sb)) cands.push({ penalty: late(3), make: () => ({ pts: [{ x: right(sb), y: sc.y }, { x: gapX, y: sc.y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }] }) });
+    if (tb.x >= right(sb)) {
+      cands.push({ penalty: late(2), make: () => ({ pts: [{ x: sc.x, y: sb.y }, { x: sc.x, y: tc.y }, { x: tb.x, y: tc.y }] }) });
+    }
+    if (gapX > right(sb)) {
+      cands.push({ penalty: late(3), make: () => ({ pts: [{ x: right(sb), y: sc.y }, { x: gapX, y: sc.y }, { x: gapX, y: tc.y }, { x: tb.x, y: tc.y }] }) });
+    }
     let best: (Way & { score: number; faults: number }) | undefined;
     let below: number | undefined;
     cands.forEach((cand, candIndex) => {
@@ -682,8 +742,12 @@ export class ChannelRouter {
       const crossings = ChannelRouter.countCrossings(way.pts, this.routed, Math.min(best ? Math.ceil((best.score - score) / per) : Infinity, way.over ? below! : Infinity));
       if (way.over && crossings >= below!) return;
       score += per * crossings;
-      if (source.host && !(best && score >= best.score)) score += 3 * (hitCount(way.pts, this.spotIndex, way.spare ? [way.spare] : []) + hitCount(way.pts, this.flowLabelIndex, []));
-      if (!best || score < best.score) best = { ...way, score, faults: hits + crossings };
+      if (source.host && !(best && score >= best.score)) {
+        score += 3 * (hitCount(way.pts, this.spotIndex, way.spare ? [way.spare] : []) + hitCount(way.pts, this.flowLabelIndex, []));
+      }
+      if (!best || score < best.score) {
+        best = { ...way, score, faults: hits + crossings };
+      }
     });
     pts = best!.pts;
     if (best!.score < 1000) runsBelow = best!.below;
@@ -715,7 +779,11 @@ export class ChannelRouter {
       for (const point of [edge.points[0]!, edge.points[edge.points.length - 1]!]) {
         if (!point) continue;
         for (let row = Math.floor(point.y) - 1; row <= Math.floor(point.y) + 1; row++) {
-          for (const node of byTop.get(row)?.near(point.x, point.x) ?? []) if (Math.abs(point.y - node.box.y) < 1 && point.x >= node.box.x && point.x <= right(node.box)) node.topUsed = true;
+          for (const node of byTop.get(row)?.near(point.x, point.x) ?? []) {
+            if (Math.abs(point.y - node.box.y) < 1 && point.x >= node.box.x && point.x <= right(node.box)) {
+              node.topUsed = true;
+            }
+          }
         }
       }
     }
@@ -725,24 +793,42 @@ export class ChannelRouter {
   private moveBelowTop(): void {
     const { layout } = this;
     let minY = 0;
-    for (const edge of layout.edges) for (const point of edge.points) minY = Math.min(minY, point.y);
-    for (const edge of layout.edges) if (edge.label) minY = Math.min(minY, edge.label.y);
+    for (const edge of layout.edges) {
+      for (const point of edge.points) {
+        minY = Math.min(minY, point.y);
+      }
+    }
+    for (const edge of layout.edges) {
+      if (edge.label) minY = Math.min(minY, edge.label.y);
+    }
     if (minY < 0) {
       const dy = -minY + 10;
       for (const node of layout.nodes) {
         node.box.y += dy;
-        for (const boundaryEvent of node.boundary) boundaryEvent.box.y += dy;
+        for (const boundaryEvent of node.boundary) {
+          boundaryEvent.box.y += dy;
+        }
       }
-      for (const artifact of routedArtifacts(layout)) artifact.box.y += dy;
+      for (const artifact of routedArtifacts(layout)) {
+        artifact.box.y += dy;
+      }
       for (const edge of layout.edges) {
-        for (const point of edge.points) point.y += dy;
+        for (const point of edge.points) {
+          point.y += dy;
+        }
         if (edge.label) edge.label.y += dy;
         if (edge.bandY !== undefined) edge.bandY += dy;
       }
-      for (const compensation of layout.compensations) for (const point of compensation.points) point.y += dy;
-      if (layout.laneBands) for (const band of layout.laneBands) {
-        band.top += dy;
-        band.bottom += dy;
+      for (const compensation of layout.compensations) {
+        for (const point of compensation.points) {
+          point.y += dy;
+        }
+      }
+      if (layout.laneBands) {
+        for (const band of layout.laneBands) {
+          band.top += dy;
+          band.bottom += dy;
+        }
       }
       layout.height += dy;
     }

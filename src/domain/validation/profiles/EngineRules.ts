@@ -71,9 +71,15 @@ export abstract class EngineRules {
     const oid = idOf(owner);
     if (!owner || el === owner || !oid) return own;
     const defs = list(owner, 'eventDefinitions');
-    if (defs.includes(el)) return { id: oid, prefix: defs.length > 1 ? `definition[${defs.indexOf(el)}].` : 'definition.' };
-    if (peek<El>(owner, 'loopCharacteristics') === el) return { id: oid, prefix: 'loop.' };
-    if (peek<El>(owner, 'conditionExpression') === el) return { id: oid, prefix: 'condition.' };
+    if (defs.includes(el)) {
+      return { id: oid, prefix: defs.length > 1 ? `definition[${defs.indexOf(el)}].` : 'definition.' };
+    }
+    if (peek<El>(owner, 'loopCharacteristics') === el) {
+      return { id: oid, prefix: 'loop.' };
+    }
+    if (peek<El>(owner, 'conditionExpression') === el) {
+      return { id: oid, prefix: 'condition.' };
+    }
     return own;
   }
 
@@ -96,7 +102,9 @@ export abstract class EngineRules {
       const parent = el.$parent as El | undefined;
       const nested = parent && idOf(parent) && this.addressOf(el, parent)?.prefix ? parent : undefined;
       let owner: El | undefined = nested ?? el;
-      while (owner && !idOf(owner)) owner = owner.$parent as El | undefined;
+      while (owner && !idOf(owner)) {
+        owner = owner.$parent as El | undefined;
+      }
       const id = idOf(owner);
       const di = this.kit.isDiElement(el) || (!!owner && this.kit.isDiElement(owner));
       const addr = di ? undefined : el === owner ? (id ? { id, prefix: '' } : undefined) : owner ? this.addressOf(el, owner) : undefined;

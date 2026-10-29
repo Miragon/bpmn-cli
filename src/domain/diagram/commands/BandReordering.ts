@@ -45,7 +45,9 @@ export class BandReordering {
     const lanes = rawList(set, 'lanes').map((lane) => idOf(lane)!).filter(Boolean);
     const plane = this.diagram.planes.find((candidate) => lanes.length > 0 && lanes.every((id) => candidate.shapes.has(id)));
     if (!plane) {
-      if (this.diagram.planes.length) this.notes.push('the lanes are not drawn: nothing to reorder in the diagram');
+      if (this.diagram.planes.length) {
+        this.notes.push('the lanes are not drawn: nothing to reorder in the diagram');
+      }
       return [];
     }
     const bands = lanes.map((id) => plane.shapes.get(id)!);
@@ -57,9 +59,13 @@ export class BandReordering {
     for (const shape of plane.shapes.values()) {
       if (shape.kind === 'participant' || shape.hostId || shape.parentId) continue;
       let band: string | undefined;
-      if (shape.kind === 'lane') band = bands.find((candidate) => candidate.id !== shape.id && subtrees.get(candidate.id)!.has(shape.id))?.id;
-      else if (shape.laneId) band = bands.find((candidate) => subtrees.get(candidate.id)!.has(shape.laneId!))?.id;
-      else if (shape.poolId === poolId && !shape.container) band = bands.find((candidate) => cy(shape.bounds) >= candidate.bounds.y && cy(shape.bounds) < bottom(candidate.bounds))?.id;
+      if (shape.kind === 'lane') {
+        band = bands.find((candidate) => candidate.id !== shape.id && subtrees.get(candidate.id)!.has(shape.id))?.id;
+      } else if (shape.laneId) {
+        band = bands.find((candidate) => subtrees.get(candidate.id)!.has(shape.laneId!))?.id;
+      } else if (shape.poolId === poolId && !shape.container) {
+        band = bands.find((candidate) => cy(shape.bounds) >= candidate.bounds.y && cy(shape.bounds) < bottom(candidate.bounds))?.id;
+      }
       if (band) members.get(band)!.push(shape.id);
     }
     let cursor = byY[0]!.bounds.y;
@@ -73,15 +79,20 @@ export class BandReordering {
       band.bounds.y += dy;
       for (const id of members.get(band.id)!) {
         const shape = plane.shapes.get(id)!;
-        if (shape.kind === 'lane') shape.bounds.y += dy;
-        else this.diagram.drawing(plane).shift(id, 0, dy);
+        if (shape.kind === 'lane') {
+          shape.bounds.y += dy;
+        } else {
+          this.diagram.drawing(plane).shift(id, 0, dy);
+        }
       }
     }
     const pool = poolId ? plane.shapes.get(poolId) : undefined;
     for (const band of bands) {
       const lowest = Math.max(-Infinity, ...members.get(band.id)!.map((id) => plane.shapes.get(id)!).filter((member) => member.kind !== 'lane').map((member) => bottom(this.diagram.drawing(plane).unitBox(member))));
       const over = lowest + 5 - bottom(band.bounds);
-      if (over > 0.5) this.diagram.drawing(plane).makeSpace({ axis: 'y', line: bottom(band.bounds) - 1, delta: Math.ceil(over), ...(pool ? { within: copyBox(pool.bounds) } : {}) });
+      if (over > 0.5) {
+        this.diagram.drawing(plane).makeSpace({ axis: 'y', line: bottom(band.bounds) - 1, delta: Math.ceil(over), ...(pool ? { within: copyBox(pool.bounds) } : {}) });
+      }
     }
     return this.diagram.drawing(plane).settle(this.snap);
   }
@@ -97,7 +108,9 @@ export class BandReordering {
     const plane = this.diagram.planes.find((candidate) => candidate.rootId === this.command.id);
     const bands = plane ? ids.map((id) => plane.shapes.get(id)).filter((shape): shape is DShape => !!shape) : [];
     if (!plane || bands.length < 2) {
-      if (this.diagram.planes.length) this.notes.push('fewer than two pools are drawn: nothing to reorder in the diagram');
+      if (this.diagram.planes.length) {
+        this.notes.push('fewer than two pools are drawn: nothing to reorder in the diagram');
+      }
       return [];
     }
     const byY = [...bands].sort((one, other) => one.bounds.y - other.bounds.y);
@@ -113,7 +126,9 @@ export class BandReordering {
     for (const shape of plane.shapes.values()) {
       if (shape.kind === 'participant' || shape.hostId || shape.parentId) continue;
       let pool = shape.poolId && members.has(shape.poolId) ? shape.poolId : undefined;
-      if (!pool && !shape.poolId) pool = bands.find((band) => cy(shape.bounds) >= band.bounds.y && cy(shape.bounds) <= bottom(band.bounds) && cx(shape.bounds) >= band.bounds.x && cx(shape.bounds) <= right(band.bounds))?.id;
+      if (!pool && !shape.poolId) {
+        pool = bands.find((band) => cy(shape.bounds) >= band.bounds.y && cy(shape.bounds) <= bottom(band.bounds) && cx(shape.bounds) >= band.bounds.x && cx(shape.bounds) <= right(band.bounds))?.id;
+      }
       if (pool) members.get(pool)!.push(shape);
     }
     let cursor = byY[0]!.bounds.y;
@@ -123,8 +138,11 @@ export class BandReordering {
       if (!dy) return;
       band.bounds.y += dy;
       for (const member of members.get(band.id)!) {
-        if (member.kind === 'lane') member.bounds.y += dy;
-        else this.diagram.drawing(plane).shift(member.id, 0, dy);
+        if (member.kind === 'lane') {
+          member.bounds.y += dy;
+        } else {
+          this.diagram.drawing(plane).shift(member.id, 0, dy);
+        }
       }
     });
     return this.diagram.drawing(plane).settle(this.snap);

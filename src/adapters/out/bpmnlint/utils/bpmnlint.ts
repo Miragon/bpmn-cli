@@ -15,8 +15,11 @@ export function bpmnlintUnavailableFindings(list: readonly BpmnlintUnavailable[]
   for (const entry of list) {
     const key = `${entry.kind === 'config' || entry.kind === 'rule' ? 'package' : entry.kind}|${entry.pkg}|${entry.reason}`;
     const group = groups.get(key);
-    if (group) group.push(entry);
-    else groups.set(key, [entry]);
+    if (group) {
+      group.push(entry);
+    } else {
+      groups.set(key, [entry]);
+    }
   }
   return [...groups].map(([key, group]) => {
     const first = group[0]!;

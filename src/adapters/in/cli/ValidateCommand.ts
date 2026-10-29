@@ -16,7 +16,9 @@ export class ValidateCommand extends CliCommand {
       this.withJsonOptions(this.define(program, 'validate'))
         .option(...commonOption('--strict'))
         .option('--platform <platform>', 'engine profile: auto (default: detected from modeler:executionPlatform / the vendor namespace), c7, c8 or none', (raw: string) => {
-          if (!(PLATFORM_CHOICES as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
+          if (!(PLATFORM_CHOICES as readonly string[]).includes(raw)) {
+            throw new InvalidArgumentError(`expected ${PLATFORM_CHOICES.join(', ')}`);
+          }
           return raw;
         }),
     ).action(async (file: string, options: RawOpts) => {
@@ -28,8 +30,11 @@ export class ValidateCommand extends CliCommand {
       } else {
         this.cli.print(new ValidationText(report).text());
       }
-      if (report.errors.length) this.cli.exitCode = 2;
-      else if (options['strict'] && (report.warnings.length || report.importWarnings.length)) this.cli.exitCode = 5;
+      if (report.errors.length) {
+        this.cli.exitCode = 2;
+      } else if (options['strict'] && (report.warnings.length || report.importWarnings.length)) {
+        this.cli.exitCode = 5;
+      }
     });
   }
 }

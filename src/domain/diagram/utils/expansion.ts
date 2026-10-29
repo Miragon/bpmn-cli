@@ -34,7 +34,11 @@ export function resolveExpanded(model: Model, opts: { expand?: Iterable<string>;
     const recorded = diState.get(id);
     if (recorded === undefined || recorded) expanded.add(id);
   }
-  for (const id of opts.expand ?? []) if (known.has(id)) expanded.add(id);
-  for (const id of opts.collapse ?? []) expanded.delete(id);
+  for (const id of opts.expand ?? []) {
+    if (known.has(id)) expanded.add(id);
+  }
+  for (const id of opts.collapse ?? []) {
+    expanded.delete(id);
+  }
   return expanded;
 }

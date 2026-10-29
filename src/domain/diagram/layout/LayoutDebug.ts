@@ -21,7 +21,9 @@ export class LayoutDebug {
 
   static log(line: string): void {
     LayoutDebug.processSink?.(line);
-    for (const sink of LayoutDebug.callSinks) sink(line);
+    for (const sink of LayoutDebug.callSinks) {
+      sink(line);
+    }
   }
 
   /**

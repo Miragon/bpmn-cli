@@ -130,7 +130,9 @@ export class Cli {
       KindsReferenceCommand,
       GuideCommand,
     ];
-    for (const command of commands) new command(this).register(this.program);
+    for (const command of commands) {
+      new command(this).register(this.program);
+    }
     describeOptionsByDefinitions(this.program);
   }
 
@@ -168,11 +170,15 @@ export class Cli {
    * and a synchronous read fails with EAGAIN while its writer is slower than our start.
    */
   async readStdin(what: string): Promise<Buffer> {
-    if (this.stdinUsed) throw usageError(`stdin already holds ${this.stdinUsed}; it cannot also hold ${what}`, { hint: 'Read one of them from a file, e.g. `bpmn apply - ops.json < model.bpmn`.' });
+    if (this.stdinUsed) {
+      throw usageError(`stdin already holds ${this.stdinUsed}; it cannot also hold ${what}`, { hint: 'Read one of them from a file, e.g. `bpmn apply - ops.json < model.bpmn`.' });
+    }
     this.stdinUsed = what;
     try {
       const chunks: Buffer[] = [];
-      for await (const chunk of this.io.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      for await (const chunk of this.io.stdin) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      }
       return Buffer.concat(chunks);
     } catch (err) {
       throw ioError('E_IO', `Cannot read ${what} from stdin: ${(err as Error).message}`, { hint: 'Pipe the input in, e.g. `cat model.bpmn | bpmn show -`.' });
@@ -195,10 +201,22 @@ export class Cli {
         const lines = [`error ${err.code}: ${err.message}`];
         const details = err.details;
         if (details.element) lines.push(`  element: ${String(details.element)}`);
-        if (Array.isArray(details.related) && details.related.length) lines.push(`  related: ${details.related.join(', ')}`);
-        if (Array.isArray(details.candidates) && details.candidates.length) lines.push(`  candidates: ${details.candidates.join(', ')}`);
-        if (Array.isArray(details.errors)) for (const issue of details.errors as Finding[]) lines.push(`  ${validatorTag(issue)}${issue.code}${issue.element ? ` ${issue.element}` : ''}: ${issue.message}${issue.hint ? `  (${issue.hint})` : ''}`);
-        if (Array.isArray(details.warnings)) for (const warning of details.warnings as string[]) lines.push(`  ${warning}`);
+        if (Array.isArray(details.related) && details.related.length) {
+          lines.push(`  related: ${details.related.join(', ')}`);
+        }
+        if (Array.isArray(details.candidates) && details.candidates.length) {
+          lines.push(`  candidates: ${details.candidates.join(', ')}`);
+        }
+        if (Array.isArray(details.errors)) {
+          for (const issue of details.errors as Finding[]) {
+            lines.push(`  ${validatorTag(issue)}${issue.code}${issue.element ? ` ${issue.element}` : ''}: ${issue.message}${issue.hint ? `  (${issue.hint})` : ''}`);
+          }
+        }
+        if (Array.isArray(details.warnings)) {
+          for (const warning of details.warnings as string[]) {
+            lines.push(`  ${warning}`);
+          }
+        }
         if (details.op !== undefined) lines.push(`  op: #${String(details.op)}`);
         if (details.hint) lines.push(`  hint: ${String(details.hint)}`);
         stderr.write(`${lines.join('\n')}\n`);
@@ -207,8 +225,11 @@ export class Cli {
       return;
     }
     const error = err as Error;
-    if (json) stderr.write(`${JSON.stringify({ ok: false, error: { code: 'E_INTERNAL', message: error.message } })}\n`);
-    else stderr.write(`error E_INTERNAL: ${error.message}\n${this.io.env['BPMN_DEBUG'] ? (error.stack ?? '') : ''}\n`);
+    if (json) {
+      stderr.write(`${JSON.stringify({ ok: false, error: { code: 'E_INTERNAL', message: error.message } })}\n`);
+    } else {
+      stderr.write(`error E_INTERNAL: ${error.message}\n${this.io.env['BPMN_DEBUG'] ? (error.stack ?? '') : ''}\n`);
+    }
     this.exitCode = 70;
   }
 }

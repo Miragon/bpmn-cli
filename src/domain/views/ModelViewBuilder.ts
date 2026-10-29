@@ -63,7 +63,9 @@ export class ModelViewBuilder {
     const processId = doc.processOf(scope)?.get<string>('id');
     view.processes = view.processes.filter((process) => process.id === processId);
     const inScope = (id: string): boolean => {
-      for (let el = doc.get(id); el; el = el.$parent as El | undefined) if (el === scope) return true;
+      for (let el = doc.get(id); el; el = el.$parent as El | undefined) {
+        if (el === scope) return true;
+      }
       return false;
     };
     view.groups = nonEmpty((view.groups ?? []).filter((group) => group.members.some(inScope)));
@@ -136,7 +138,9 @@ export class ModelViewBuilder {
     const out: ViewData[] = [];
     for (const scope of scopes) {
       for (const el of this.doc.flowElements(scope)) {
-        if (!is(el, 'bpmn:DataObjectReference') && !is(el, 'bpmn:DataStoreReference')) continue;
+        if (!is(el, 'bpmn:DataObjectReference') && !is(el, 'bpmn:DataStoreReference')) {
+          continue;
+        }
         const entry = this.links.viewDataOf(el);
         for (const node of nodes) {
           const { reads, writes } = this.links.dataRefsOf(node);

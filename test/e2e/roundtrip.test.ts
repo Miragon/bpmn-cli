@@ -150,7 +150,9 @@ describe('comments next to removed elements are reported (#31)', () => {
   it('removing an element drops the comment before it with a note, the other comments stay', async () => {
     const result = await dry(STYLED, [{ op: 'remove', ids: ['Task_Script'] }]);
     expect(result.xml).not.toContain('scripted step');
-    for (const kept of ['Synthetic roundtrip fixture', 'the order starts here', 'end of the synthetic fixture']) expect(result.xml).toContain(kept);
+    for (const kept of ['Synthetic roundtrip fixture', 'the order starts here', 'end of the synthetic fixture']) {
+      expect(result.xml).toContain(kept);
+    }
     expect(result.changes.notes).toContain('1 XML comment(s) dropped: they were inside or next to elements the change removed or rewrote');
   });
 
@@ -267,7 +269,9 @@ describe('the safety net', () => {
     expect(text.slice(kid.start, kid.end)).toBe('<a:kid id="k" a:y="2"/>');
     expect(kid.attrs.map((attr) => [attr.name, attr.raw, attr.ws])).toEqual([['id', 'k', ' '], ['a:y', '2', ' ']]);
     expect(doc.root.children.map((child) => child.kind)).toEqual(['text', 'comment', 'text', 'element', 'text', 'cdata']);
-    for (const bad of ['<a><b></a></b>', '<x:a/>', '<a b="1" b="2"/>', '<!DOCTYPE a><a/>', '<a/><b/>', '<a>']) expect(() => readXmlText(bad)).toThrow(XmlTextError);
+    for (const bad of ['<a><b></a></b>', '<x:a/>', '<a b="1" b="2"/>', '<!DOCTYPE a><a/>', '<a/><b/>', '<a>']) {
+      expect(() => readXmlText(bad)).toThrow(XmlTextError);
+    }
   });
 });
 
@@ -279,8 +283,11 @@ function bpmnFiles(base: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(base, { withFileTypes: true })) {
     const path = join(base, entry.name);
-    if (entry.isDirectory()) out.push(...bpmnFiles(path));
-    else if (entry.name.endsWith('.bpmn')) out.push(path);
+    if (entry.isDirectory()) {
+      out.push(...bpmnFiles(path));
+    } else if (entry.name.endsWith('.bpmn')) {
+      out.push(path);
+    }
   }
   return out.sort();
 }

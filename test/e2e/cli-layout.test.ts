@@ -39,7 +39,9 @@ async function handFile(name: string): Promise<string> {
       if (bounds) bounds.set('x', bounds.get<number>('x') + 20);
       const lb = pe.get<El | undefined>('label')?.get<El | undefined>('bounds');
       if (lb) lb.set('x', lb.get<number>('x') + 20);
-      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) waypoint.set('x', waypoint.get<number>('x') + 20);
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) {
+        waypoint.set('x', waypoint.get<number>('x') + 20);
+      }
     }
   }
   const file = join(dir, name);
@@ -49,7 +51,9 @@ async function handFile(name: string): Promise<string> {
 
 async function boxOf(file: string, id: string): Promise<unknown> {
   const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
-  for (const plane of new DiagramReader(doc.definitions).planes()) if (plane.shapes.has(id)) return plane.shapes.get(id)!.bounds;
+  for (const plane of new DiagramReader(doc.definitions).planes()) {
+    if (plane.shapes.has(id)) return plane.shapes.get(id)!.bounds;
+  }
   return undefined;
 }
 

@@ -91,7 +91,9 @@ describe('space --by: columns, rows and pixels, the distance noted', () => {
     expect(parseSpaceAmount('-row')).toEqual({ count: -1, unit: 'row' });
     expect(parseSpaceAmount('80px')).toEqual({ count: 80, unit: 'px' });
     expect(parseSpaceAmount(80)).toEqual({ count: 80, unit: 'px' });
-    for (const bad of ['0', 0, '2x', 'px', '', 'lots', 1.5]) expect(parseSpaceAmount(bad), String(bad)).toBeUndefined();
+    for (const bad of ['0', 0, '2x', 'px', '', 'lots', 1.5]) {
+      expect(parseSpaceAmount(bad), String(bad)).toBeUndefined();
+    }
   });
 
   const spaceNote = async (by: string | number): Promise<string> => {

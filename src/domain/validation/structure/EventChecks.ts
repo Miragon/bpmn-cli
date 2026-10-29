@@ -31,7 +31,9 @@ export class EventChecks {
       return;
     }
     if (is(el, 'bpmn:StartEvent')) this.checkStartTrigger(el, scope, trigger);
-    if (is(el, 'bpmn:EndEvent') && trigger === 'cancel') this.checkCancelEnd(el, scope);
+    if (is(el, 'bpmn:EndEvent') && trigger === 'cancel') {
+      this.checkCancelEnd(el, scope);
+    }
   }
 
   private checkStartTrigger(el: El, scope: El, trigger: Trigger): void {

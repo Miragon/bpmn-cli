@@ -23,13 +23,18 @@ export class DocumentNamespaces {
     this.definitions = (source as Doc).definitions ?? (source as El);
     const take = (attrs: Record<string, unknown> | undefined): void => {
       for (const [attrName, attrValue] of Object.entries(attrs ?? {})) {
-        if (attrName.startsWith('xmlns:') && typeof attrValue === 'string' && !this.map.has(attrName.slice(6))) this.map.set(attrName.slice(6), attrValue);
+        if (attrName.startsWith('xmlns:') && typeof attrValue === 'string' && !this.map.has(attrName.slice(6))) {
+          this.map.set(attrName.slice(6), attrValue);
+        }
       }
     };
     take(this.definitions.$attrs as Record<string, unknown>);
     for (const el of walk(this.definitions)) {
-      if (isBpmnElement(el)) take(el.$attrs as Record<string, unknown>);
-      else take(el as unknown as Record<string, unknown>);
+      if (isBpmnElement(el)) {
+        take(el.$attrs as Record<string, unknown>);
+      } else {
+        take(el as unknown as Record<string, unknown>);
+      }
     }
   }
 
@@ -62,7 +67,9 @@ export class DocumentNamespaces {
     };
     for (const el of walk(this.definitions)) {
       if (isBpmnElement(el)) {
-        for (const attrName of Object.keys(el.$attrs ?? {})) bump(this.uriOfName(attrName));
+        for (const attrName of Object.keys(el.$attrs ?? {})) {
+          bump(this.uriOfName(attrName));
+        }
       } else {
         bump(this.uriOfElement(el));
       }
@@ -73,7 +80,9 @@ export class DocumentNamespaces {
   /** Any prefix bound to the modeler namespace counts. */
   executionPlatform(): string | undefined {
     for (const [attrName, attrValue] of Object.entries(this.definitions.$attrs ?? {})) {
-      if (!attrName.endsWith(':executionPlatform') && attrName !== 'executionPlatform') continue;
+      if (!attrName.endsWith(':executionPlatform') && attrName !== 'executionPlatform') {
+        continue;
+      }
       const uri = this.uriOfName(attrName);
       if (uri && uri !== MODELER_URI) continue;
       if (typeof attrValue === 'string') return attrValue;

@@ -49,7 +49,9 @@ export class FrameGrowth {
     const delta = Math.ceil(Math.min(gained, bottom(title) + 4 - Math.min(...boxes.map((box) => box.y))));
     if (delta <= 0) return;
     const result = this.run.drawing(plane).makeSpace({ axis: 'y', line: shape.bounds.y + 1, delta, anchors: [shape.id], frame: shape.id, within: copyBox(shape.bounds) });
-    for (const movedId of [...result.moved, ...result.resized]) this.run.place.moved.add(movedId);
+    for (const movedId of [...result.moved, ...result.resized]) {
+      this.run.place.moved.add(movedId);
+    }
     this.run.place.moved.add(shape.id);
     this.run.notes.push(`${shape.id} made ${delta} px of room below its new title`);
   }
@@ -65,7 +67,9 @@ export class FrameGrowth {
     for (const plane of this.run.planes) {
       const sp = this.run.place.spacing.get(plane) ?? PlaneQuery.spacingOf(plane);
       for (const shape of [...plane.shapes.values()]) {
-        if (this.run.fromEngine.has(shape.id) || (shape.kind !== 'task' && shape.kind !== 'subProcess')) continue;
+        if (this.run.fromEngine.has(shape.id) || (shape.kind !== 'task' && shape.kind !== 'subProcess')) {
+          continue;
+        }
         const name = raw<string>(shape.el, 'name');
         if (!name || name === this.snap.names.get(this.run.oldId(shape))) continue;
         if (shape.container) {
@@ -87,7 +91,9 @@ export class FrameGrowth {
             const sub = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
             const frame = sub ?? (shape.poolId ? plane.shapes.get(shape.poolId) : undefined);
             const result = this.run.drawing(plane).makeSpace({ axis: 'x', line: right(old) + 0.5, delta: dw, keep: own, anchors: [shape.id], ...(frame ? { within: copyBox(frame.bounds) } : {}), ...(sub ? { frame: sub.id } : {}) });
-            for (const movedId of [...result.moved, ...result.resized]) this.run.place.moved.add(movedId);
+            for (const movedId of [...result.moved, ...result.resized]) {
+              this.run.place.moved.add(movedId);
+            }
           }
         }
         shape.bounds = { x: old.x, y: Math.round(cy(old) - size.height / 2), width: size.width, height: size.height };
@@ -95,7 +101,9 @@ export class FrameGrowth {
         const inner = frame ? Frames.interior(frame, 15) : undefined;
         if (inner && shape.bounds.y < inner.y) shape.bounds.y = Math.round(inner.y);
         this.run.drawing(plane).reseatBoundaries(shape, old);
-        for (const movedId of this.run.drawing(plane).fitInFrame(shape.id, 15).moved) this.run.place.moved.add(movedId);
+        for (const movedId of this.run.drawing(plane).fitInFrame(shape.id, 15).moved) {
+          this.run.place.moved.add(movedId);
+        }
         this.run.active.add(shape.id);
         this.run.place.moved.add(shape.id);
         this.run.grown.add(shape.id);
@@ -115,11 +123,17 @@ export class FrameGrowth {
       const active = [...changed].filter((id) => plane.shapes.has(id) && !this.run.fromEngine.has(id));
       if (!active.length) continue;
       const movable = new Set(active);
-      for (const id of active) for (const neighbourId of this.neighbourIds(id)) if (plane.shapes.has(neighbourId)) movable.add(neighbourId);
+      for (const id of active) {
+        for (const neighbourId of this.neighbourIds(id)) {
+          if (plane.shapes.has(neighbourId)) movable.add(neighbourId);
+        }
+      }
       const result = this.run.drawing(plane).separate({ active: [...active].filter((id) => this.run.place.placed.has(id) || this.run.active.has(id)), movable, baseline: this.baseline });
       result.moved.forEach((movedId) => this.run.place.moved.add(movedId));
       result.resized.forEach((resizedId) => this.run.place.moved.add(resizedId));
-      if (result.unresolved.length) this.run.notes.push(`overlap left: ${result.unresolved.map(([firstId, secondId]) => `${firstId}~${secondId}`).join(', ')}`);
+      if (result.unresolved.length) {
+        this.run.notes.push(`overlap left: ${result.unresolved.map(([firstId, secondId]) => `${firstId}~${secondId}`).join(', ')}`);
+      }
     }
   }
 

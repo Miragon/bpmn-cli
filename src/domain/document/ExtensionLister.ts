@@ -23,7 +23,9 @@ export class ExtensionLister {
   /** Own extension elements first, then those of nested elements, each with its slot. */
   listAll(el: El): ExtensionInfo[] {
     const out = this.list(el);
-    for (const { prefix, el: nested } of nestedEntries(el)) out.push(...this.list(nested).map((info) => ({ ...info, slot: prefix })));
+    for (const { prefix, el: nested } of nestedEntries(el)) {
+      out.push(...this.list(nested).map((info) => ({ ...info, slot: prefix })));
+    }
     return out;
   }
 
@@ -33,7 +35,9 @@ export class ExtensionLister {
     if (descriptor.isGeneric) {
       const raw = extension as unknown as Record<string, unknown>;
       for (const [attrName, val] of Object.entries(raw)) {
-        if (attrName.startsWith('$') || val === undefined || val === null || typeof val === 'object' || typeof val === 'function') continue;
+        if (attrName.startsWith('$') || val === undefined || val === null || typeof val === 'object' || typeof val === 'function') {
+          continue;
+        }
         info.attrs[attrName] = String(val);
       }
       if (typeof raw['$body'] === 'string') info.body = raw['$body'];
@@ -44,8 +48,11 @@ export class ExtensionLister {
     for (const property of descriptor.properties ?? []) {
       const val = (extension as unknown as Record<string, unknown>)[property.name];
       if (val === undefined || val === null) continue;
-      if (property.isBody && typeof val === 'string') info.body = val;
-      else if (property.isAttr && typeof val !== 'object') info.attrs[property.name] = String(val);
+      if (property.isBody && typeof val === 'string') {
+        info.body = val;
+      } else if (property.isAttr && typeof val !== 'object') {
+        info.attrs[property.name] = String(val);
+      }
     }
     return info;
   }

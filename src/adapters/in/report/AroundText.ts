@@ -28,17 +28,25 @@ export class AroundText {
       this.heading(node.scope);
       const hostShown = !!node.host && shownIds.has(node.host);
       let line = elementLine(node, AroundText.flags(node, hostShown));
-      if (node.from?.length) line += ` <- ${node.from.map((flow) => `${flow.source} (${[flow.id, ...flowTraits(flow)].join(' ')})`).join(', ')}`;
-      if (node.outgoing.length) line += ` -> ${node.outgoing.map(flowText).join(', ')}`;
+      if (node.from?.length) {
+        line += ` <- ${node.from.map((flow) => `${flow.source} (${[flow.id, ...flowTraits(flow)].join(' ')})`).join(', ')}`;
+      }
+      if (node.outgoing.length) {
+        line += ` -> ${node.outgoing.map(flowText).join(', ')}`;
+      }
       out.push(INDENT.repeat(this.level(node.scope) + 1 + (hostShown ? 1 : 0)) + line);
     }
     if (view.messageFlows.length) {
       out.push('message flows:');
-      for (const mf of view.messageFlows) out.push(INDENT + messageFlowLine(mf));
+      for (const mf of view.messageFlows) {
+        out.push(INDENT + messageFlowLine(mf));
+      }
     }
     if (view.annotations.length) {
       out.push('annotations:');
-      for (const annotation of view.annotations) out.push(INDENT + annotationLine(annotation));
+      for (const annotation of view.annotations) {
+        out.push(INDENT + annotationLine(annotation));
+      }
     }
     if (view.data.length) {
       out.push('data:');

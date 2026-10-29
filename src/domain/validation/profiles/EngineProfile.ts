@@ -24,7 +24,9 @@ export abstract class EngineProfile {
   protected visit(el: El, owner: El | undefined, executable: boolean): void {
     if (this.checkElement(el, owner, executable) === 'stop') return;
     const next = idOf(el) ? el : owner;
-    for (const child of this.bpmnChildren(el)) this.visit(child, next, executable);
+    for (const child of this.bpmnChildren(el)) {
+      this.visit(child, next, executable);
+    }
   }
 
   /** BPMN containment children (no references, no DI, no vendor content). */
@@ -33,10 +35,14 @@ export abstract class EngineProfile {
     if (descriptor.isGeneric) return [];
     const out: El[] = [];
     for (const property of descriptor.properties ?? []) {
-      if (property.isReference || property.name === 'extensionElements' || property.name === 'diagrams') continue;
+      if (property.isReference || property.name === 'extensionElements' || property.name === 'diagrams') {
+        continue;
+      }
       const propertyValue = peek<unknown>(el, property.name);
       for (const child of Array.isArray(propertyValue) ? propertyValue : [propertyValue]) {
-        if (child && typeof child === 'object' && typeof (child as El).$type === 'string' && '$descriptor' in (child as object) && this.kit.isBpmnElement(child as El) && !this.kit.isDiElement(child as El)) out.push(child as El);
+        if (child && typeof child === 'object' && typeof (child as El).$type === 'string' && '$descriptor' in (child as object) && this.kit.isBpmnElement(child as El) && !this.kit.isDiElement(child as El)) {
+          out.push(child as El);
+        }
       }
     }
     return out;

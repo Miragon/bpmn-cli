@@ -54,7 +54,9 @@ export class LintRun {
   async lint(rules: Record<string, unknown>, rootElement: unknown): Promise<void> {
     const linter = new this.engine.Linter({ config: { rules }, resolver: this.guardedResolver(), transformRule: (rule, info) => this.guardRule(rule, info) });
     const results = await linter.lint(rootElement);
-    if (this.pending.length) await Promise.race([Promise.all(this.pending), new Promise<void>((done) => (typeof setTimeout === 'function' ? setTimeout(done, 0) : done()))]);
+    if (this.pending.length) {
+      await Promise.race([Promise.all(this.pending), new Promise<void>((done) => (typeof setTimeout === 'function' ? setTimeout(done, 0) : done()))]);
+    }
     for (const [rule, reports] of Object.entries(results)) {
       if (this.failures.has(rule)) continue;
       for (const report of reports) {
@@ -124,10 +126,16 @@ export class LintRun {
       }
     };
     const check = rule?.check;
-    if (typeof check === 'function') return { ...rule, check: guard(check as (...args: unknown[]) => unknown) };
+    if (typeof check === 'function') {
+      return { ...rule, check: guard(check as (...args: unknown[]) => unknown) };
+    }
     const parts = check && typeof check === 'object' ? (check as { enter?: unknown; leave?: unknown }) : {};
     const guarded: Record<string, unknown> = {};
-    for (const part of ['enter', 'leave'] as const) if (typeof parts[part] === 'function') guarded[part] = guard(parts[part] as (...args: unknown[]) => unknown);
+    for (const part of ['enter', 'leave'] as const) {
+      if (typeof parts[part] === 'function') {
+        guarded[part] = guard(parts[part] as (...args: unknown[]) => unknown);
+      }
+    }
     if (!Object.keys(guarded).length) {
       this.failures.set(name, 'the rule has no check');
       return { ...rule, check: () => undefined };
@@ -142,13 +150,17 @@ export class LintRun {
       if (depth > 64) return;
       for (const child of el.flowElements ?? []) {
         if (child.$type === 'bpmn:SequenceFlow') {
-          if (child.sourceRef?.id) outgoing.set(child.sourceRef.id, (outgoing.get(child.sourceRef.id) ?? 0) + 1);
+          if (child.sourceRef?.id) {
+            outgoing.set(child.sourceRef.id, (outgoing.get(child.sourceRef.id) ?? 0) + 1);
+          }
           if (child.targetRef?.id) incoming.add(child.targetRef.id);
         }
         visit(child, depth + 1);
       }
     };
-    for (const el of root.rootElements ?? []) visit(el, 0);
+    for (const el of root.rootElements ?? []) {
+      visit(el, 0);
+    }
     return { incoming, outgoing };
   }
 

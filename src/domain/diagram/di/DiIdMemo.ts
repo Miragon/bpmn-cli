@@ -43,7 +43,9 @@ export class DiIdMemo {
       const plane = raw<El>(diagram, 'plane');
       di.add(diagram);
       if (plane) di.add(plane);
-      for (const pe of rawList(plane, 'planeElement')) di.add(pe);
+      for (const pe of rawList(plane, 'planeElement')) {
+        di.add(pe);
+      }
     }
     const taken = allIds(defs);
     for (const el of di) {
@@ -55,7 +57,9 @@ export class DiIdMemo {
       if (wanted && !taken.has(wanted)) {
         taken.add(wanted);
         el.set('id', wanted);
-      } else fresh.push({ el, base });
+      } else {
+        fresh.push({ el, base });
+      }
     };
     const rootId = (kind: 'Plane' | 'Diagram', el: El, root: string | undefined): string => (root ? rootDiId(kind, root) : (idOf(el) ?? `BPMN${kind}_1`));
     const old = [...this.diagrams];
@@ -94,6 +98,8 @@ export class DiIdMemo {
       }
     }
     const uncut = (candidate: { el: El; base: string }): boolean => idOf(candidate.el) === candidate.base;
-    for (const { el, base } of [...fresh.filter(uncut), ...fresh.filter((candidate) => !uncut(candidate))]) el.set('id', claimUnique(taken, base));
+    for (const { el, base } of [...fresh.filter(uncut), ...fresh.filter((candidate) => !uncut(candidate))]) {
+      el.set('id', claimUnique(taken, base));
+    }
   }
 }

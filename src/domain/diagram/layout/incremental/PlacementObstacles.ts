@@ -47,13 +47,21 @@ export class PlacementObstacles {
       const member = this.within(plane, shape, frame);
       const drawnIn = !member && !!frame && solid && overlaps(shape.bounds, frame.bounds) && !Frames.within(plane, frame, shape);
       if (!member && !drawnIn) {
-        if (frame && shape.label && overlaps(shape.label, frame.bounds)) labels.push(shape.label);
+        if (frame && shape.label && overlaps(shape.label, frame.bounds)) {
+          labels.push(shape.label);
+        }
         continue;
       }
-      if (solid) boxes.push(PlaneQuery.isLeaf(shape) && !shape.hostId ? this.placer.drawing(plane).unitBox(shape) : shape.bounds);
+      if (solid) {
+        boxes.push(PlaneQuery.isLeaf(shape) && !shape.hostId ? this.placer.drawing(plane).unitBox(shape) : shape.bounds);
+      }
       if (shape.label) labels.push(shape.label);
     }
-    if (plain) for (const edge of plane.edges.values()) if (edge.label) labels.push(edge.label);
+    if (plain) {
+      for (const edge of plane.edges.values()) {
+        if (edge.label) labels.push(edge.label);
+      }
+    }
     return { boxes, labels };
   }
 
@@ -62,7 +70,9 @@ export class PlacementObstacles {
     const out: string[] = [];
     for (const group of plane.shapes.values()) {
       if (group.kind !== 'group') continue;
-      if (anchors.some((anchor) => !!anchor && cx(anchor.bounds) > group.bounds.x && cx(anchor.bounds) < right(group.bounds) && cy(anchor.bounds) > group.bounds.y && cy(anchor.bounds) < bottom(group.bounds))) out.push(group.id);
+      if (anchors.some((anchor) => !!anchor && cx(anchor.bounds) > group.bounds.x && cx(anchor.bounds) < right(group.bounds) && cy(anchor.bounds) > group.bounds.y && cy(anchor.bounds) < bottom(group.bounds))) {
+        out.push(group.id);
+      }
     }
     return out;
   }
@@ -121,10 +131,14 @@ export class PlacementObstacles {
         const dragged = [shape, ...PlaneQuery.boundariesOf(plane, shape.id), ...(shape.container ? PlaneQuery.contentOf(plane, shape.id).shapes : [])];
         dragged.forEach((part) => out.add(part.id));
         for (const part of dragged) {
-          for (const target of next.get(part.id) ?? []) take(plane.shapes.get(target));
+          for (const target of next.get(part.id) ?? []) {
+            take(plane.shapes.get(target));
+          }
           for (const other of links.get(part.id) ?? []) {
             const artifact = plane.shapes.get(other);
-            if (artifact?.kind === 'annotation' || artifact?.kind === 'data') take(artifact);
+            if (artifact?.kind === 'annotation' || artifact?.kind === 'data') {
+              take(artifact);
+            }
           }
         }
       }
@@ -149,24 +163,36 @@ export class PlacementObstacles {
       const labels = pushed.flatMap((shape) => (shape.label ? [shape.label] : []));
       const hits = (other: Box, margin: number): boolean => solids.some((before) => closer(before, other, margin)) || labels.some((before) => closer(before, other, LABEL_CLEAR));
       for (const group of plane.shapes.values()) {
-        if (group.kind !== 'group' || out.has(group.id) || !pushed.some((shape) => PlaneQuery.isLeaf(shape) && containsPoint(group.bounds, { x: cx(shape.bounds), y: cy(shape.bounds) }))) continue;
+        if (group.kind !== 'group' || out.has(group.id) || !pushed.some((shape) => PlaneQuery.isLeaf(shape) && containsPoint(group.bounds, { x: cx(shape.bounds), y: cy(shape.bounds) }))) {
+          continue;
+        }
         out.add(group.id);
         grew = true;
         if (group.bounds.x < line) continue;
-        for (const member of plane.shapes.values()) if (containsPoint(group.bounds, { x: cx(member.bounds), y: cy(member.bounds) })) take(member);
+        for (const member of plane.shapes.values()) {
+          if (containsPoint(group.bounds, { x: cx(member.bounds), y: cy(member.bounds) })) {
+            take(member);
+          }
+        }
       }
       for (const shape of plane.shapes.values()) {
         if (out.has(shape.id) || !movable(shape)) continue;
         const own = [shape, ...PlaneQuery.boundariesOf(plane, shape.id)].flatMap((part) => (part.label ? [part.label] : []));
-        if (!hits(this.placer.drawing(plane).unitBox(shape), CLEAR) && !own.some((label) => hits(label, LABEL_CLEAR))) continue;
+        if (!hits(this.placer.drawing(plane).unitBox(shape), CLEAR) && !own.some((label) => hits(label, LABEL_CLEAR))) {
+          continue;
+        }
         take(shape);
         grew = true;
       }
       for (const edge of plane.edges.values()) {
-        if (out.has(edge.id) || [edge.sourceId, edge.targetId].some((end) => !end || end === req.id || out.has(end))) continue;
+        if (out.has(edge.id) || [edge.sourceId, edge.targetId].some((end) => !end || end === req.id || out.has(end))) {
+          continue;
+        }
         const bendsInBox = !!box && edge.points.slice(1, -1).some((point) => overlaps({ ...point, width: 0, height: 0 }, box, 10));
         const crossed = edge.points.some((point, index) => index > 0 && solids.some((before) => segmentHits(edge.points[index - 1]!, point, swept(before)) && !(before !== box && segmentHits(edge.points[index - 1]!, point, before))));
-        if (!bendsInBox && !crossed && !(edge.label && hits(edge.label, LABEL_CLEAR))) continue;
+        if (!bendsInBox && !crossed && !(edge.label && hits(edge.label, LABEL_CLEAR))) {
+          continue;
+        }
         out.add(edge.id);
         take(plane.shapes.get(edge.sourceId!));
         take(plane.shapes.get(edge.targetId!));

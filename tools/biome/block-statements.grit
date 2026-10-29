@@ -1,0 +1,42 @@
+language js
+
+any {
+  or {
+    JsIfStatement(consequent=$block),
+    JsElseClause(alternate=$block),
+    JsForStatement(body=$block),
+    JsForOfStatement(body=$block),
+    JsForInStatement(body=$block),
+    JsWhileStatement(body=$block),
+    JsDoWhileStatement(body=$block)
+  } where {
+    $block <: JsBlockStatement(),
+    $block <: r"\{[^\n]*\S[^\n]*\}",
+    register_diagnostic(span=$block, message="Block style: the body of if, else and loops goes on lines of its own.")
+  },
+  JsIfStatement(consequent=$then, else_clause=$else) as $if where {
+    $else <: JsElseClause(alternate=$alt),
+    or { $then <: not JsBlockStatement(), $alt <: and { not JsBlockStatement(), not JsIfStatement() } },
+    register_diagnostic(span=$if, message="Block style: an if with an else has blocks in all branches.")
+  },
+  JsIfStatement(consequent=$then, else_clause=$else) as $if where {
+    $else <: .,
+    $then <: not JsBlockStatement(),
+    $if <: not r"[^\n]{1,80}",
+    register_diagnostic(span=$if, message="Block style: an if without braces fits on one line of at most 80 characters.")
+  },
+  or {
+    JsForStatement(body=$body),
+    JsForOfStatement(body=$body),
+    JsForInStatement(body=$body),
+    JsWhileStatement(body=$body),
+    JsDoWhileStatement(body=$body)
+  } as $loop where {
+    $body <: not JsBlockStatement(),
+    register_diagnostic(span=$loop, message="Block style: a loop body is a block.")
+  },
+  JsIfStatement() as $if where {
+    $if <: r"[\s\S]*\}\s*\n\s*else[\s{][\s\S]*",
+    register_diagnostic(span=$if, message="Block style: else follows the closing brace on the same line.")
+  }
+}

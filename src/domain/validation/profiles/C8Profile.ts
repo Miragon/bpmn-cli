@@ -35,7 +35,9 @@ export class C8Profile extends EngineProfile {
     const processes = doc.processes();
     const executable = processes.filter((proc) => peek<boolean>(proc, 'isExecutable') === true);
     schema.checkExecutable(processes, executable);
-    for (const proc of executable) this.visit(proc, undefined, true);
+    for (const proc of executable) {
+      this.visit(proc, undefined, true);
+    }
     this.extensions.checkCaughtMessages(executable);
     schema.checkSchemaEventDefinitions();
     this.events.checkFeelNames();
@@ -63,18 +65,26 @@ export class C8Profile extends EngineProfile {
       return 'stop';
     }
     if (is(el, 'bpmn:ComplexGateway')) this.flows.checkComplexGateway(el);
-    if (is(el, 'bpmn:Process') || (is(el, 'bpmn:SubProcess') && !is(el, 'bpmn:AdHocSubProcess'))) this.events.checkStartEvents(el);
-    if (is(el, 'bpmn:Process') || is(el, 'bpmn:SubProcess')) this.events.checkSubscriptionScopes(el);
+    if (is(el, 'bpmn:Process') || (is(el, 'bpmn:SubProcess') && !is(el, 'bpmn:AdHocSubProcess'))) {
+      this.events.checkStartEvents(el);
+    }
+    if (is(el, 'bpmn:Process') || is(el, 'bpmn:SubProcess')) {
+      this.events.checkSubscriptionScopes(el);
+    }
     if (is(el, 'bpmn:Process')) this.events.checkLinks(el);
     if (is(el, 'bpmn:AdHocSubProcess')) this.flows.checkAdHoc(el);
-    if (is(el, 'bpmn:ServiceTask') || is(el, 'bpmn:SendTask') || is(el, 'bpmn:ScriptTask') || is(el, 'bpmn:BusinessRuleTask')) this.tasks.checkServiceLike(el);
+    if (is(el, 'bpmn:ServiceTask') || is(el, 'bpmn:SendTask') || is(el, 'bpmn:ScriptTask') || is(el, 'bpmn:BusinessRuleTask')) {
+      this.tasks.checkServiceLike(el);
+    }
     if (is(el, 'bpmn:ReceiveTask')) this.events.checkMessageCatch(el);
     if (is(el, 'bpmn:CallActivity')) this.tasks.checkCallActivity(el);
     if (is(el, 'bpmn:UserTask')) this.tasks.checkUserTask(el);
     if (is(el, 'bpmn:Activity')) this.tasks.checkMultiInstance(el);
     if (is(el, 'bpmn:Event')) this.events.checkEvent(el);
     if (is(el, 'bpmn:BoundaryEvent')) this.events.checkBoundaryHost(el);
-    if (is(el, 'bpmn:ExclusiveGateway') || is(el, 'bpmn:InclusiveGateway')) this.flows.checkBranchingGateway(el);
+    if (is(el, 'bpmn:ExclusiveGateway') || is(el, 'bpmn:InclusiveGateway')) {
+      this.flows.checkBranchingGateway(el);
+    }
     if (is(el, 'bpmn:EventBasedGateway')) this.flows.checkEventGateway(el);
     if (is(el, 'bpmn:SequenceFlow')) this.flows.checkFlow(el);
     return 'descend';

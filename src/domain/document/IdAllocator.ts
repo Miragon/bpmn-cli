@@ -54,7 +54,9 @@ export class IdAllocator {
   /** `base` with the first free collision suffix after `sep`; claims and records nothing. */
   suffixed(base: string, sep: string, taken: (id: string) => boolean = (id) => this.doc.has(id) || this.doc.ids.has(id), cut?: (max: number) => string): string {
     let id = base;
-    for (let suffix = 2; taken(id); suffix++) id = withSuffix(base, sep, suffix, cut);
+    for (let suffix = 2; taken(id); suffix++) {
+      id = withSuffix(base, sep, suffix, cut);
+    }
     return id;
   }
 
@@ -97,7 +99,9 @@ export class IdAllocator {
     const suffixed = this.suffixedIds;
     this.suffixedIds = [];
     for (const { id, base } of suffixed) {
-      if (cs.warnings.some((warning) => warning.code === 'W_ID_SUFFIXED' && warning.element === id)) continue;
+      if (cs.warnings.some((warning) => warning.code === 'W_ID_SUFFIXED' && warning.element === id)) {
+        continue;
+      }
       cs.warn({
         code: 'W_ID_SUFFIXED',
         message: `Id ${base} is already taken; using ${id}`,

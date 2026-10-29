@@ -83,7 +83,9 @@ describe('bpmnlintValidator: findings', () => {
         if (node.$type === 'bpmn:EndEvent') throw new Error('later boom');
       } }),
       'async-ok': () => ({ async check(node: Node, reporter: { report(id: string, message: string): void }) {
-        if (node.$type === 'bpmn:EndEvent') reporter.report(node.id, 'reported before the first await');
+        if (node.$type === 'bpmn:EndEvent') {
+          reporter.report(node.id, 'reported before the first await');
+        }
       } }),
       'async-factory': async () => {
         throw new Error('async factory boom');
@@ -127,7 +129,9 @@ describe('bpmnlintValidator: findings', () => {
     const lintValidator = bpmnlintValidator(engine, resolved);
     expect(await lintValidator.validate!(xml, ctx(xml))).toEqual([failed]);
     // a write does not compare it: its validator line says that no rule ran
-    for (const phase of ['before', 'after'] as const) expect(await lintValidator.validate!(xml, ctx(xml, phase)), phase).toEqual([{ ...failed, leftOut: 'W_LINT_FAILED, no rule ran' }]);
+    for (const phase of ['before', 'after'] as const) {
+      expect(await lintValidator.validate!(xml, ctx(xml, phase)), phase).toEqual([{ ...failed, leftOut: 'W_LINT_FAILED, no rule ran' }]);
+    }
   });
 
   it('a moddle descriptor BpmnModdle rejects (a prefix or uri already defined, an extends of an unknown type) is left out alone: W_LINT_UNAVAILABLE, the other rules run', async () => {
@@ -249,7 +253,9 @@ describe('covered lint warnings and the incoming / outgoing lists', () => {
     const checked = await run(xml);
     const lists = lintOf(checked.validation.errors).filter((finding) => ['no-implicit-end', 'no-implicit-start', 'no-disconnected'].includes(finding.code));
     expect(codes(lists).sort()).toEqual(['no-disconnected endEvent_done', 'no-disconnected startEvent_received', 'no-disconnected userTask_check', 'no-implicit-end startEvent_received', 'no-implicit-end userTask_check', 'no-implicit-start endEvent_done', 'no-implicit-start userTask_check']);
-    for (const finding of lists) expect(finding.hint).toMatch(/^The element has sequence flows the file does not list under incoming \/ outgoing, which no-/);
+    for (const finding of lists) {
+      expect(finding.hint).toMatch(/^The element has sequence flows the file does not list under incoming \/ outgoing, which no-/);
+    }
     const dir = repo({ extends: 'bpmnlint:recommended' }, { 'listless.bpmn': xml });
     const added = mutationReport(await mutateFile(join(dir, 'listless.bpmn'), [{ op: 'add', kind: 'userTask', name: 'Ship', after: 'userTask_check' }], { dryRun: true })).warnings.added;
     expect(lintOf(added)).toEqual([]);

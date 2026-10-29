@@ -40,7 +40,9 @@ export function withValidatorReports(result: ValidationResult, reports: Validato
   const warnings = result.warnings.filter((warning) => {
     const by = covering.get(lintKey(warning));
     if (!by) return true;
-    for (const issue of by) if (!issue.hint && warning.hint) issue.hint = warning.hint;
+    for (const issue of by) {
+      if (!issue.hint && warning.hint) issue.hint = warning.hint;
+    }
     return false;
   });
   return {

@@ -517,9 +517,13 @@ describe('KEYS and WEIGHTS', () => {
     expect(KEYS.filter((key) => !HARNESS_KEYS.includes(key))).toEqual([...EXTRA_KEYS, ...QUALITY_KEYS]);
     const pairs = Object.fromEntries((weights ?? '').split(',').map((kv) => kv.split(':').map((part) => part.trim())).map(([key, weight]) => [key, Number(weight)]));
     expect(pairs).toEqual(Object.fromEntries(HARNESS_KEYS.map((key) => [key, WEIGHTS[key]])));
-    for (const key of EXTRA_KEYS) expect(WEIGHTS[key]).toBe(WEIGHTS.overlaps);
+    for (const key of EXTRA_KEYS) {
+      expect(WEIGHTS[key]).toBe(WEIGHTS.overlaps);
+    }
     // the quality kinds are soft: the bench and the fuzzer count weights >= 6 as hard
-    for (const key of QUALITY_KEYS) expect(WEIGHTS[key]).toBeLessThan(6);
+    for (const key of QUALITY_KEYS) {
+      expect(WEIGHTS[key]).toBeLessThan(6);
+    }
   });
 });
 

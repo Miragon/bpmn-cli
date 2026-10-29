@@ -54,7 +54,10 @@ export class ExtensionElementsCommand extends MutationCommand {
     const doc = await this.cli.readDocArg(file);
     const el = doc.require(id);
     const items = this.cli.useCases.showModel.allExtensions({ element: el });
-    if (options['json']) this.cli.printJson(items, !!options['pretty']);
-    else this.cli.print(renderExtensionList(items));
+    if (options['json']) {
+      this.cli.printJson(items, !!options['pretty']);
+    } else {
+      this.cli.print(renderExtensionList(items));
+    }
   }
 }

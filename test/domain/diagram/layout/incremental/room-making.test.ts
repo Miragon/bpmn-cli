@@ -54,7 +54,9 @@ async function batch(xml: string, ops: object[]): Promise<string> {
   return (await applyToXml(xml, ops, { force: true })).xml;
 }
 async function singles(xml: string, ops: object[]): Promise<string> {
-  for (const op of ops) xml = (await applyToXml(xml, [op], { force: true })).xml;
+  for (const op of ops) {
+    xml = (await applyToXml(xml, [op], { force: true })).xml;
+  }
   return xml;
 }
 
@@ -203,7 +205,9 @@ describe('the findings of the stage B verification (issue #18)', () => {
     const applied = await applyToXml(xml, [remind], { force: true });
     expect(await added(xml, applied.xml)).toEqual([]);
     expect(applied.result.layout?.moved ?? []).toEqual([]);
-    for (const id of mainRow) expect(boundsOf(applied.xml, id)).toEqual(boundsOf(xml, id));
+    for (const id of mainRow) {
+      expect(boundsOf(applied.xml, id)).toEqual(boundsOf(xml, id));
+    }
     const host = boundsOf(applied.xml, 'Activity_ApprovePurchase');
     expect(boundsOf(applied.xml, 'Activity_SendApprovalReminder').y + 80).toBeLessThanOrEqual(host.y);
   });
@@ -222,7 +226,9 @@ describe('the findings of the stage B verification (issue #18)', () => {
     ];
     const batched = await batch(EVAL, ops);
     expect(await added(EVAL, batched)).toEqual([]);
-    for (const id of ['StartEvent_1', 'Activity_0k3x9qa', 'Event_0q2mb7c']) expect(cy(boundsOf(batched, id))).toBe(cy(boundsOf(EVAL, id)));
+    for (const id of ['StartEvent_1', 'Activity_0k3x9qa', 'Event_0q2mb7c']) {
+      expect(cy(boundsOf(batched, id))).toBe(cy(boundsOf(EVAL, id)));
+    }
   });
 });
 
@@ -296,7 +302,9 @@ describe('a line along a new shape (stage B verification)', () => {
       expect(await added(xml, after)).toEqual([]);
       const end = boundsOf(after, 'Event_ClerkReminded');
       const others = [...after.matchAll(/<bpmndi:BPMNEdge [^>]*bpmnElement="([^"]+)"/g)].map((match) => match[1]!).filter((id) => id !== 'flow_remindClerkToClerkReminded');
-      for (const id of others) expect(touches(waypoints(after, id), end), id).toBe(false);
+      for (const id of others) {
+        expect(touches(waypoints(after, id), end), id).toBe(false);
+      }
     }
   });
 });
@@ -335,7 +343,9 @@ describe('the cost of the local repair (stage B verification)', () => {
     const repair = lines.filter((line) => line.startsWith('[repair]'));
     expect(repair.some((line) => line.endsWith('still crossing, not measured'))).toBe(true);
     // every measured trial is judged (kept or undone); the skipped ones are not
-    for (const line of repair.filter((candidate) => candidate.includes('not measured'))) expect(line).not.toMatch(/score \d+ ->/);
+    for (const line of repair.filter((candidate) => candidate.includes('not measured'))) {
+      expect(line).not.toMatch(/score \d+ ->/);
+    }
     // the same drawing as without the debug sink
     expect((await applyToXml(xml, ops, { force: true })).xml).toBe(applied.xml);
   });

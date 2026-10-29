@@ -56,7 +56,9 @@ export class IdFitter {
     const [shortestSource, shortestTarget] = [fa[fa.length - 1]!.text, fb[fb.length - 1]!.text];
     const long = shortestSource.length >= shortestTarget.length ? 0 : 1;
     const keep = room - (long ? shortestSource : shortestTarget).length;
-    if (keep < 8) return this.sharePair(shortestSource, shortestTarget, room, (slug, max) => this.cutInside(slug, max));
+    if (keep < 8) {
+      return this.sharePair(shortestSource, shortestTarget, room, (slug, max) => this.cutInside(slug, max));
+    }
     const cut = this.cutInside(long ? shortestTarget : shortestSource, keep);
     const other = (long ? fa : fb).find((form) => form.text.length + cut.length <= room)!.text;
     return long ? [other, cut] : [cut, other];
@@ -73,7 +75,9 @@ export class IdFitter {
         if (sourceForm.text.length + targetForm.text.length > room) continue;
         const candidateScore = score(sourceForm, targetForm);
         const firstDifference = best ? candidateScore.findIndex((component, index) => component !== best!.score[index]) : 0;
-        if (!best || firstDifference === -1 || candidateScore[firstDifference]! > best.score[firstDifference]!) best = { x: sourceForm, y: targetForm, score: candidateScore };
+        if (!best || firstDifference === -1 || candidateScore[firstDifference]! > best.score[firstDifference]!) {
+          best = { x: sourceForm, y: targetForm, score: candidateScore };
+        }
       }
     }
     return { ...(best ? { best: [best.x.text, best.y.text] as [string, string] } : {}), fa, fb };
@@ -92,16 +96,26 @@ export class IdFitter {
     const number = (word: string): boolean => /^[_.-]*\d+$/.test(word);
     const filler = (): number => {
       const index = words.length - tail - 1;
-      if (index < 1 || index > words.length - 1 - kept || !isFiller(words[index]!)) return -1;
-      if (!words.some((other, otherIndex) => otherIndex !== index && otherIndex < words.length - tail && letter(other))) return -1;
+      if (index < 1 || index > words.length - 1 - kept || !isFiller(words[index]!)) {
+        return -1;
+      }
+      if (!words.some((other, otherIndex) => otherIndex !== index && otherIndex < words.length - tail && letter(other))) {
+        return -1;
+      }
       return /\d$/.test(words[index - 1]!) && /^[_.-]*\d/.test(words[index + 1] ?? '') ? -1 : index;
     };
     const victim = (): number => {
       const head = words.length - tail;
       for (let index = words.length - 1 - kept; index >= (keepLast ? 0 : 1); index--) {
-        if (letter(words[index]!) && !words.some((other, otherIndex) => otherIndex !== index && otherIndex < head && letter(other))) continue;
-        if (number(words[index]!) && index + 1 < words.length && words.slice(index + 1).every(number)) continue;
-        if (index === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[index - 1]!) && /^[_.-]*\d/.test(words[index + 1] ?? ''))) return index;
+        if (letter(words[index]!) && !words.some((other, otherIndex) => otherIndex !== index && otherIndex < head && letter(other))) {
+          continue;
+        }
+        if (number(words[index]!) && index + 1 < words.length && words.slice(index + 1).every(number)) {
+          continue;
+        }
+        if (index === 0 ? /^[_.-]*[A-Za-z]/.test(words[1] ?? '') : !(/\d$/.test(words[index - 1]!) && /^[_.-]*\d/.test(words[index + 1] ?? ''))) {
+          return index;
+        }
       }
       return -1;
     };

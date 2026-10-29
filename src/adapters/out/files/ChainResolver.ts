@@ -85,7 +85,9 @@ export class ChainResolver implements BpmnlintChain {
   private async first(kind: 'rule' | 'config', pkg: string, name: string): Promise<unknown> {
     const key = `${kind}:${pkg}/${name}`;
     if (this.answers.has(key)) return this.answers.get(key);
-    if (pkg !== 'bpmnlint' && !this.before.has(pkg)) this.before.set(pkg, depState(this.rcDir, [pkg]));
+    if (pkg !== 'bpmnlint' && !this.before.has(pkg)) {
+      this.before.set(pkg, depState(this.rcDir, [pkg]));
+    }
     const tiers = this.pinned.has(pkg) ? [...this.tiers.filter((tier) => tier.name === 'project'), ...this.tiers.filter((tier) => tier.name !== 'project')] : this.tiers;
     for (const tier of tiers) {
       if (!tier.accepts(pkg)) continue;
@@ -125,32 +127,52 @@ export class ChainResolver implements BpmnlintChain {
         return fail(`${bundled}, and this host does not run project plugins (lintProjectCode)`, this.repoOff ? `Check the name; lintProjectCode: true would not load the ${pkg} installed next to the .bpmnlintrc either: ${this.repoOff.why}.` : `Check the name, or let the host pass lintProjectCode: true to use the ${pkg} installed in the repository.`);
       }
       if (this.off) return fail(bundled, `Check the name; ${this.off.why}.`);
-        if (!this.opts.projectCode) return fail(bundled, this.repoOff ? `Check the name; a newer ${pkg} installed next to the .bpmnlintrc would not be used either: this host does not run project plugins (lintProjectCode), and ${this.repoOff.why}.` : `Check the name; a newer ${pkg} installed in the repository next to the .bpmnlintrc is used only when the host passes lintProjectCode: true.`);
+        if (!this.opts.projectCode) {
+          return fail(bundled, this.repoOff ? `Check the name; a newer ${pkg} installed next to the .bpmnlintrc would not be used either: this host does not run project plugins (lintProjectCode), and ${this.repoOff.why}.` : `Check the name; a newer ${pkg} installed in the repository next to the .bpmnlintrc is used only when the host passes lintProjectCode: true.`);
+        }
       return fail(bundled, `Check the name. A newer ${pkg} installed in the repository next to the .bpmnlintrc is used for what the bundled one does not know.`);
     }
     const offError = this.off && fail(`${pkg} is not bundled with bpmn-cli, and ${this.off.why}`, this.off.hint);
     if (path === undefined) {
       const known = kind === 'rule' ? this.bundledName(pkg, name) : undefined;
-      if (known) return fail(`${pkg} is not installed (looked up from ${where})`, `Did you mean ${known}? bpmn-cli bundles that rule.`);
+      if (known) {
+        return fail(`${pkg} is not installed (looked up from ${where})`, `Did you mean ${known}? bpmn-cli bundles that rule.`);
+      }
       if (offError) return offError;
-      if (!this.opts.projectCode) return fail(`${pkg} is not installed (looked up from ${where})`, this.repoOff ? `Remove it from the configuration; installing it would not help: this host does not run project plugins (lintProjectCode), and ${this.repoOff.why}.` : `Remove it from the configuration, or install it next to the .bpmnlintrc (npm i -D ${pkg}) and let the host pass lintProjectCode: true.`);
+      if (!this.opts.projectCode) {
+        return fail(`${pkg} is not installed (looked up from ${where})`, this.repoOff ? `Remove it from the configuration; installing it would not help: this host does not run project plugins (lintProjectCode), and ${this.repoOff.why}.` : `Remove it from the configuration, or install it next to the .bpmnlintrc (npm i -D ${pkg}) and let the host pass lintProjectCode: true.`);
+      }
       return fail(`${pkg} is not installed (looked up from ${where})`, `Install it next to the .bpmnlintrc (npm i -D ${pkg}) or remove it from the configuration; ${SKIP_HINT}`);
     }
     if (offError) return offError;
-    if (!inside(path, this.root)) return fail(`${pkg} resolves outside the repository (${path}); bpmn-cli loads project plugins only from inside ${this.root}`, `Install it inside the repository (npm i -D ${pkg}).`);
-    if (!this.opts.projectCode) return fail(`${pkg} is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)`, this.repoOff ? `Remove it from the configuration; lintProjectCode: true would not run it either: ${this.repoOff.why}.` : 'Remove it from the configuration, or let the host pass lintProjectCode: true.');
+    if (!inside(path, this.root)) {
+      return fail(`${pkg} resolves outside the repository (${path}); bpmn-cli loads project plugins only from inside ${this.root}`, `Install it inside the repository (npm i -D ${pkg}).`);
+    }
+    if (!this.opts.projectCode) {
+      return fail(`${pkg} is not bundled with bpmn-cli, and this host does not run project plugins (lintProjectCode)`, this.repoOff ? `Remove it from the configuration; lintProjectCode: true would not run it either: ${this.repoOff.why}.` : 'Remove it from the configuration, or let the host pass lintProjectCode: true.');
+    }
     const failed = [...this.loadFailures].find(([file]) => file === path || file.includes(`${sep}node_modules${sep}${pkg.split('/').join(sep)}${sep}`));
-    if (failed) return fail(`${pkg} fails to load: ${failed[1].message}`, `Fix or reinstall ${pkg}; ${SKIP_HINT}`);
+    if (failed) {
+      return fail(`${pkg} fails to load: ${failed[1].message}`, `Fix or reinstall ${pkg}; ${SKIP_HINT}`);
+    }
     return fail(`${pkg} has no ${kind} ${name}`, `Check the name and the installed version of ${pkg}.`);
   }
 
   private offReason(repo: Repo | undefined): { why: string; hint: string } | undefined {
     const from = this.opts.from;
-    if (!repo) return { why: `bpmn-cli runs project plugins only inside a git repository (the .bpmnlintrc in ${shown(this.rcDir, from)} is in none)`, hint: `Keep the .bpmnlintrc and the plugin in a git repository, or remove the plugin from the configuration; ${SKIP_HINT}` };
+    if (!repo) {
+      return { why: `bpmn-cli runs project plugins only inside a git repository (the .bpmnlintrc in ${shown(this.rcDir, from)} is in none)`, hint: `Keep the .bpmnlintrc and the plugin in a git repository, or remove the plugin from the configuration; ${SKIP_HINT}` };
+    }
     const git = shown(join(repo.root, '.git'), from);
-    if (repo.off === 'owner') return { why: `bpmn-cli runs project plugins only in a repository of the user running it (the repository of ${git} belongs to another user)`, hint: `Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; ${SKIP_HINT}` };
-    if (repo.off === 'gitfile') return { why: `bpmn-cli runs project plugins only inside a git repository (${git} is a file that names no git directory, so git takes it for no repository either)`, hint: `Fix or remove that .git file (a worktree or submodule whose git directory moved), or remove the plugin from the configuration; ${SKIP_HINT}` };
-    if (repo.off === 'home') return { why: `bpmn-cli runs project plugins only in a repository of the user running it, and where it cannot read file owners (Windows) only in one inside the home directory (${git} is outside it)`, hint: `Keep the repository inside your home directory, or remove the plugin from the configuration; ${SKIP_HINT}` };
+    if (repo.off === 'owner') {
+      return { why: `bpmn-cli runs project plugins only in a repository of the user running it (the repository of ${git} belongs to another user)`, hint: `Check who created that repository and its .git; run bpmn-cli as its owner (git's safe.directory does not change this), or remove the plugin from the configuration; ${SKIP_HINT}` };
+    }
+    if (repo.off === 'gitfile') {
+      return { why: `bpmn-cli runs project plugins only inside a git repository (${git} is a file that names no git directory, so git takes it for no repository either)`, hint: `Fix or remove that .git file (a worktree or submodule whose git directory moved), or remove the plugin from the configuration; ${SKIP_HINT}` };
+    }
+    if (repo.off === 'home') {
+      return { why: `bpmn-cli runs project plugins only in a repository of the user running it, and where it cannot read file owners (Windows) only in one inside the home directory (${git} is outside it)`, hint: `Keep the repository inside your home directory, or remove the plugin from the configuration; ${SKIP_HINT}` };
+    }
     return undefined;
   }
 
@@ -162,7 +184,9 @@ export class ChainResolver implements BpmnlintChain {
     const req = createRequire(join(this.rcDir, '__bpmn-cli__.js')) as Require;
     const check = (id: string): string => {
       const path = req.resolve(id);
-      if (!inside(path, this.root)) throw new Error(`${id} resolves outside the repository (${path})`);
+      if (!inside(path, this.root)) {
+        throw new Error(`${id} resolves outside the repository (${path})`);
+      }
       return path;
     };
     const bounded = ((id: string) => {

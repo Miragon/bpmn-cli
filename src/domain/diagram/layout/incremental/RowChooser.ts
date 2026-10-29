@@ -65,7 +65,9 @@ export class RowChooser {
     for (let rowIndex = 0; rowIndex < 40 && out.length < count; rowIndex++) {
       const centre = startCy + (up ? -rowIndex : rowIndex) * step;
       const box = { x: left, y: centre - height / 2, width, height };
-      if (!this.obstacles.isFree(box, obs) || (extent > 0 && !this.obstacles.isFree({ ...box, x: left + width, width: extent }, shapesOnly))) continue;
+      if (!this.obstacles.isFree(box, obs) || (extent > 0 && !this.obstacles.isFree({ ...box, x: left + width, width: extent }, shapesOnly))) {
+        continue;
+      }
       out.push({ centre, onLine: segs.some((segment) => overlaps(segment, box, 4)) });
     }
     if (!out.length && !up) out.push({ centre: startCy, onLine: false });
@@ -89,7 +91,9 @@ export class RowChooser {
     const obstacles: Box[] = [];
     for (const other of plane.shapes.values()) {
       if (other.id === from.id || other.kind === 'group') continue;
-      if (PlaneQuery.isLeaf(other) || (other.kind === 'subProcess' && other.container && other.id !== from.parentId)) obstacles.push(this.shiftedBox(other.bounds, shift));
+      if (PlaneQuery.isLeaf(other) || (other.kind === 'subProcess' && other.container && other.id !== from.parentId)) {
+        obstacles.push(this.shiftedBox(other.bounds, shift));
+      }
     }
     const flows = [...plane.edges.values()].map((edge) => this.shiftedLine(edge.points, shift)).filter((points) => points.length >= 2);
     const lines = this.placer.drawing(plane).routingLines().map((line) => this.shiftedLine(line, shift));
@@ -97,16 +101,30 @@ export class RowChooser {
     const sourceSides = from.kind === 'boundary' && hostBox ? [attachedSide(from.bounds, hostBox)] : defaultSides(from.kind, 'source');
     const pts = OrthogonalRouter.route({ source: from.bounds, target: to, sourceSides, targetSides: defaultSides(toKind, 'target'), obstacles, lines });
     let cost = 0;
-    for (let index = 0; index + 1 < pts.length; index++) cost += Math.abs(pts[index + 1]!.x - pts[index]!.x) + Math.abs(pts[index + 1]!.y - pts[index]!.y);
+    for (let index = 0; index + 1 < pts.length; index++) {
+      cost += Math.abs(pts[index + 1]!.x - pts[index]!.x) + Math.abs(pts[index + 1]!.y - pts[index]!.y);
+    }
     cost = cost * 0.5 + (pts.length - 2) * 30;
-    for (const obstacle of obstacles) if (obstacle !== hostBox && pathHits(pts, obstacle)) cost += 2000;
+    for (const obstacle of obstacles) {
+      if (obstacle !== hostBox && pathHits(pts, obstacle)) cost += 2000;
+    }
     for (const line of flows) {
       for (let index = 0; index + 1 < pts.length; index++) {
-        for (let lineIndex = 0; lineIndex + 1 < line.length; lineIndex++) if (segmentsCross(pts[index]!, pts[index + 1]!, line[lineIndex]!, line[lineIndex + 1]!)) cost += CROSSING;
+        for (let lineIndex = 0; lineIndex + 1 < line.length; lineIndex++) {
+          if (segmentsCross(pts[index]!, pts[index + 1]!, line[lineIndex]!, line[lineIndex + 1]!)) {
+            cost += CROSSING;
+          }
+        }
       }
     }
     const labels = [...plane.shapes.values(), ...plane.edges.values()].map((owner) => owner.label).filter((label): label is Box => !!label);
-    for (const label of labels) for (let index = 0; index + 1 < pts.length; index++) if (segmentHits(pts[index]!, pts[index + 1]!, this.shiftedBox(label, shift), 0)) cost += LABEL_HIT;
+    for (const label of labels) {
+      for (let index = 0; index + 1 < pts.length; index++) {
+        if (segmentHits(pts[index]!, pts[index + 1]!, this.shiftedBox(label, shift), 0)) {
+          cost += LABEL_HIT;
+        }
+      }
+    }
     return cost;
   }
 
@@ -128,10 +146,14 @@ export class RowChooser {
         const segmentEnd = line[index + 1]!;
         if (run && segmentsCross(run[0], run[1], segmentStart, segmentEnd)) {
           cost += CROSSING;
-          if (LayoutDebug.on()) LayoutDebug.log(`[place]   chain at c=${cand.centre} crosses ${edge.id}`);
+          if (LayoutDebug.on()) {
+            LayoutDebug.log(`[place]   chain at c=${cand.centre} crosses ${edge.id}`);
+          }
         } else if ((rest && segmentHits(segmentStart, segmentEnd, rest, 2)) || (head && segmentHits(segmentStart, segmentEnd, head, 2))) {
           cost += LINE_HIT;
-          if (LayoutDebug.on()) LayoutDebug.log(`[place]   chain at c=${cand.centre} is hit by ${edge.id}`);
+          if (LayoutDebug.on()) {
+            LayoutDebug.log(`[place]   chain at c=${cand.centre} is hit by ${edge.id}`);
+          }
         }
       }
     }
@@ -149,13 +171,17 @@ export class RowChooser {
       const box = { x: cand.x, y: cand.centre - cand.size.height / 2, ...cand.size };
       const source = { ...from, bounds: cand.top ?? this.shiftedBox(from.bounds, cand.insert ?? cand.grow) };
       const cost = this.connectionCost(plane, source, box, kind, cand.insert ?? cand.grow) + this.chainCost(plane, box, cand) + cand.penalty;
-      if (LayoutDebug.on()) LayoutDebug.log(`[place] from ${from.id} x=${cand.x} c=${cand.centre} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ` insert ${cand.insert.delta}` : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}${cand.top ? ' top' : ''}`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[place] from ${from.id} x=${cand.x} c=${cand.centre} penalty=${Math.round(cand.penalty)} cost=${Math.round(cost)}${cand.insert ? ` insert ${cand.insert.delta}` : ''}${cand.grow ? ` grow ${cand.grow.delta}` : ''}${cand.top ? ' top' : ''}`);
+      }
       ranked.push({ cand, cost });
     }
     ranked.sort((first, second) => first.cost - second.cost);
     (this.placer.heads ??= new Map()).set(id, ranked.length);
     const chosenIndex = Math.min(this.placer.skip?.get(id) ?? 0, ranked.length - 1);
-    if (chosenIndex > 0 && LayoutDebug.on()) LayoutDebug.log(`[place] ${id}: candidate ${chosenIndex + 1} of ${ranked.length} (the local repair retries the chain)`);
+    if (chosenIndex > 0 && LayoutDebug.on()) {
+      LayoutDebug.log(`[place] ${id}: candidate ${chosenIndex + 1} of ${ranked.length} (the local repair retries the chain)`);
+    }
     return ranked[chosenIndex]?.cand ?? cands[0]!;
   }
 
@@ -172,12 +198,18 @@ export class RowChooser {
       for (let index = 0; index + 1 < pointCount; index++) {
         const segmentStart = edge.points[index]!;
         const segmentEnd = edge.points[index + 1]!;
-        if (Math.abs(segmentStart.y - segmentEnd.y) > 0.5 || segmentStart.y <= floor + 0.5 || segmentStart.y > below) continue;
-        if (Math.max(segmentStart.x, segmentEnd.x) < x0 || Math.min(segmentStart.x, segmentEnd.x) > x1) continue;
+        if (Math.abs(segmentStart.y - segmentEnd.y) > 0.5 || segmentStart.y <= floor + 0.5 || segmentStart.y > below) {
+          continue;
+        }
+        if (Math.max(segmentStart.x, segmentEnd.x) < x0 || Math.min(segmentStart.x, segmentEnd.x) > x1) {
+          continue;
+        }
         out.push(segmentStart.y);
         for (const end of [index === 0 ? edge.sourceId : undefined, index + 1 === pointCount - 1 ? edge.targetId : undefined]) {
           const shape = end ? plane.shapes.get(end) : undefined;
-          if (shape && PlaneQuery.isLeaf(shape) && shape.bounds.y > floor + 0.5) out.push(shape.bounds.y);
+          if (shape && PlaneQuery.isLeaf(shape) && shape.bounds.y > floor + 0.5) {
+            out.push(shape.bounds.y);
+          }
         }
       }
     }
@@ -219,7 +251,9 @@ export class RowChooser {
     const top = Math.min(...tops);
     if (top <= floor) return cands;
     const insert: Shift = { line: top - 0.5, delta: Math.ceil(bottom(box) + 20 - top), ...band };
-    if (LayoutDebug.on()) LayoutDebug.log(`[place] open row c=${first} floor=${Math.round(floor)} line=${insert.line} delta=${insert.delta} lines=${lines.join(',')} blockers=${blockers.map((blocker) => blocker.y).join(',')}`);
+    if (LayoutDebug.on()) {
+      LayoutDebug.log(`[place] open row c=${first} floor=${Math.round(floor)} line=${insert.line} delta=${insert.delta} lines=${lines.join(',')} blockers=${blockers.map((blocker) => blocker.y).join(',')}`);
+    }
     const movingCount = Math.min(OPEN_MAX_SHAPES, moving(insert.line));
     cands.push({ x: left, centre: first, size, extent, penalty: basePenalty + OPEN_ROW + OPEN_PER_SHAPE * movingCount + insert.delta * 0.2, insert });
     return cands;
@@ -259,7 +293,9 @@ export class RowChooser {
       if (last && centre - last.centre <= tol) {
         last.centre = (last.centre * last.count + centre) / (last.count + 1);
         last.count++;
-      } else clusters.push({ centre, count: 1 });
+      } else {
+        clusters.push({ centre, count: 1 });
+      }
     }
     return clusters.sort((first, second) => second.count - first.count || first.centre - second.centre).map((cluster) => Math.round(cluster.centre));
   }
@@ -278,7 +314,9 @@ export class RowChooser {
     const candidates = [...prefer.filter((centre) => fitsIn(centre, inner)), ...rows.filter((centre) => fitsIn(centre, lane.bounds))];
     if (!rows.length) candidates.push(Math.round(cy(inner)));
     for (const centre of candidates) {
-      if (this.obstacles.isFree({ x: left, y: centre - height / 2, width, height }, obs)) return centre;
+      if (this.obstacles.isFree({ x: left, y: centre - height / 2, width, height }, obs)) {
+        return centre;
+      }
     }
     const below = this.obstacles.contentBottom(plane, lane, exclude);
     return Math.round((below ?? inner.y) + Math.max(30, sp.row - 80) + height / 2);
@@ -290,9 +328,13 @@ export class RowChooser {
    */
   intoOwnLane(plane: Plane, probe: Probe, left: number, centre: number, size: { width: number; height: number }, prefer: number[], anchor?: DShape): number {
     const lane = probe.laneId ? plane.shapes.get(probe.laneId) : undefined;
-    if (!lane || (anchor && anchor.laneId === probe.laneId && centre - size.height / 2 >= Frames.interior(lane, 5).y)) return centre;
+    if (!lane || (anchor && anchor.laneId === probe.laneId && centre - size.height / 2 >= Frames.interior(lane, 5).y)) {
+      return centre;
+    }
     const inner = Frames.interior(lane, 5);
-    if (centre - size.height / 2 >= inner.y && centre + size.height / 2 <= bottom(inner)) return centre;
+    if (centre - size.height / 2 >= inner.y && centre + size.height / 2 <= bottom(inner)) {
+      return centre;
+    }
     return this.rowInLane(plane, lane, left, size.width, size.height, prefer, new Set([probe.id]));
   }
 }

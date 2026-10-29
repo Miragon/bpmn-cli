@@ -32,7 +32,9 @@ export class Lanes {
           addTo(lane, 'flowNodeRef', node);
         }
         changes.note(`moved ${inherited.length} member(s) of ${idOf(parentLane)} into its first child lane ${id}`);
-        if (command.members?.length) extra = inherited.filter((node) => !command.members!.includes(idOf(node)));
+        if (command.members?.length) {
+          extra = inherited.filter((node) => !command.members!.includes(idOf(node)));
+        }
       }
     }
     if (!doc.participantOf(process)) {
@@ -88,13 +90,17 @@ export class Lanes {
     const current = doc.lanesOf(node);
     const unchanged = lane ? current.length === 1 && current[0] === lane : current.length === 0;
     if (!unchanged) {
-      for (const other of current) removeFrom(other, 'flowNodeRef', node);
+      for (const other of current) {
+        removeFrom(other, 'flowNodeRef', node);
+      }
       if (lane) addTo(lane, 'flowNodeRef', node);
       const name = nameOf(node);
       changes.change({ id: idOf(node), kind: kindLabel(node), ...(name ? { name } : {}), detail: lane ? `lane ${idOf(lane)}` : 'removed from lanes' });
     }
     if (is(node, 'bpmn:Activity')) {
-      for (const boundary of doc.boundaryEventsOf(node)) this.assign(boundary, lane, changes);
+      for (const boundary of doc.boundaryEventsOf(node)) {
+        this.assign(boundary, lane, changes);
+      }
     }
     doc.invalidate();
   }
@@ -130,7 +136,9 @@ export class Lanes {
     }
     if (is(container, 'bpmn:Lane')) {
       const process = doc.processOf(container);
-      if (!process) throw modelError('E_INVALID_SCOPE', `Lane ${command.in} is not inside a process`, { element: command.in });
+      if (!process) {
+        throw modelError('E_INVALID_SCOPE', `Lane ${command.in} is not inside a process`, { element: command.in });
+      }
       return { process, parentLane: container };
     }
     return { process: this.edit.requireScope(command.in) };

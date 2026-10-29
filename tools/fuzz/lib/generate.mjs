@@ -87,7 +87,9 @@ function addAfter(ctx) {
   if (!anchor) return undefined;
   const kind = ctx.r.pick([...TASKS, 'exclusiveGateway', 'intermediateThrowEvent', 'callActivity', 'subProcess', 'intermediateCatchEvent:timer']);
   const extra = kind.endsWith(':timer') ? { timer: 'PT5M' } : kind === 'subProcess' ? { collapsed: true } : {};
-  if (anchor.outgoing.length > 1 && !isGateway(anchor)) return one('add-flow', { op: 'add', kind, name: ctx.name(), flow: ctx.r.pick(anchor.outgoing), ...extra });
+  if (anchor.outgoing.length > 1 && !isGateway(anchor)) {
+    return one('add-flow', { op: 'add', kind, name: ctx.name(), flow: ctx.r.pick(anchor.outgoing), ...extra });
+  }
   return one('add-after', { op: 'add', kind, name: ctx.name(), after: anchor.id, ...extra });
 }
 
@@ -116,7 +118,9 @@ function addBoundary(ctx) {
   if (trigger === 'signal') add.signal = `Sig${step}`;
   if (trigger !== 'error' && random.chance(0.5)) add.nonInterrupting = true;
   const ops = [add];
-  if (random.chance(0.6)) ops.push({ op: 'add', kind: random.pick(['endEvent', 'userTask']), name: `Fzb${step} handling`, id: `Activity_Fzbh${step}`, after: id });
+  if (random.chance(0.6)) {
+    ops.push({ op: 'add', kind: random.pick(['endEvent', 'userTask']), name: `Fzb${step} handling`, id: `Activity_Fzbh${step}`, after: id });
+  }
   if (ops[1]?.kind === 'userTask') {
     const target = random.pick(ctx.inScope(host.scope).filter((node) => !isStart(node) && !isBoundary(node) && node.id !== host.id));
     ops.push(target ? { op: 'connect', source: ops[1].id, target: target.id } : { op: 'add', kind: 'endEvent', name: `Fzb${step} done`, after: ops[1].id });
@@ -149,7 +153,9 @@ function move(ctx) {
   if (!moved) return undefined;
   const target = ctx.r.pick(ctx.inScope(moved.scope).filter((node) => node.id !== moved.id && !isEnd(node) && !isBoundary(node) && node.type !== 'eventBasedGateway'));
   if (!target) return undefined;
-  if (target.outgoing.length > 1 && !isGateway(target)) return one('move-flow', { op: 'move', ids: [moved.id], flow: ctx.r.pick(target.outgoing) });
+  if (target.outgoing.length > 1 && !isGateway(target)) {
+    return one('move-flow', { op: 'move', ids: [moved.id], flow: ctx.r.pick(target.outgoing) });
+  }
   return one('move-after', { op: 'move', ids: [moved.id], after: target.id });
 }
 
@@ -166,13 +172,19 @@ function retype(ctx) {
   const { r: random } = ctx;
   const element = random.pick(ctx.N);
   if (!element) return undefined;
-  if (TASKS.includes(element.type)) return one('retype', { op: 'retype', id: element.id, kind: random.pick([...TASKS.filter((taskType) => taskType !== element.type), 'callActivity', 'subProcess']) });
-  if (GATEWAYS.includes(element.type)) return one('retype', { op: 'retype', id: element.id, kind: random.pick(GATEWAYS.filter((gatewayType) => gatewayType !== element.type)) });
+  if (TASKS.includes(element.type)) {
+    return one('retype', { op: 'retype', id: element.id, kind: random.pick([...TASKS.filter((taskType) => taskType !== element.type), 'callActivity', 'subProcess']) });
+  }
+  if (GATEWAYS.includes(element.type)) {
+    return one('retype', { op: 'retype', id: element.id, kind: random.pick(GATEWAYS.filter((gatewayType) => gatewayType !== element.type)) });
+  }
   if (isEnd(element)) {
     const kind = random.pick(['endEvent:terminate', 'endEvent:none', 'endEvent:signal']);
     return one('retype', { op: 'retype', id: element.id, kind, ...(kind.endsWith('signal') ? { signal: 'S1' } : {}) });
   }
-  if (element.type === 'subProcess' && !element.triggered) return one('retype', { op: 'retype', id: element.id, kind: random.pick(['transaction', 'adHocSubProcess']) });
+  if (element.type === 'subProcess' && !element.triggered) {
+    return one('retype', { op: 'retype', id: element.id, kind: random.pick(['transaction', 'adHocSubProcess']) });
+  }
   return undefined;
 }
 
@@ -192,11 +204,16 @@ function split(ctx) {
   const branches = [];
   for (let branchIndex = 0, nb = 2 + random.int(2); branchIndex < nb; branchIndex++) {
     const nodes = [];
-    for (let nodeIndex = 0, len = 1 + random.int(2); nodeIndex < len; nodeIndex++) nodes.push({ kind: random.pick(TASKS), name: `Fz${step} b${branchIndex} n${nodeIndex}` });
+    for (let nodeIndex = 0, len = 1 + random.int(2); nodeIndex < len; nodeIndex++) {
+      nodes.push({ kind: random.pick(TASKS), name: `Fz${step} b${branchIndex} n${nodeIndex}` });
+    }
     const br = { nodes };
     if (kind !== 'parallelGateway') br.flowName = `opt ${branchIndex}`;
-    if (kind === 'exclusiveGateway' && branchIndex === 0) br.default = true;
-    else if (kind !== 'parallelGateway') br.condition = `\${v == ${branchIndex}}`;
+    if (kind === 'exclusiveGateway' && branchIndex === 0) {
+      br.default = true;
+    } else if (kind !== 'parallelGateway') {
+      br.condition = `\${v == ${branchIndex}}`;
+    }
     branches.push(br);
   }
   return one('split', { op: 'split', after: anchor.id, kind, name: `Fz${step} split?`, branches });
@@ -212,7 +229,9 @@ function addSubProcess(ctx) {
     { op: 'add', kind: 'startEvent', name: `Fzs${step} start`, id: `Event_Fzs${step}s`, in: sub },
     { op: 'add', kind: random.pick(TASKS), name: `Fzs${step} inner`, id: `Activity_Fzs${step}i`, after: `Event_Fzs${step}s` },
   ];
-  if (random.chance(0.5)) ops.push({ op: 'add', kind: random.pick(TASKS), name: `Fzs${step} inner2`, id: `Activity_Fzs${step}j`, after: `Activity_Fzs${step}i` });
+  if (random.chance(0.5)) {
+    ops.push({ op: 'add', kind: random.pick(TASKS), name: `Fzs${step} inner2`, id: `Activity_Fzs${step}j`, after: `Activity_Fzs${step}i` });
+  }
   ops.push({ op: 'add', kind: 'endEvent', name: `Fzs${step} end`, id: `Event_Fzs${step}e`, after: ops[ops.length - 1].id });
   return { name: 'add-subprocess', ops };
 }
@@ -293,7 +312,9 @@ function route(ctx) {
   if (!flow) return undefined;
   const op = { op: 'route', id: flow.id };
   if (ctx.r.chance(0.6)) op.exit = ctx.r.pick(['right', 'top', 'bottom', 'left']);
-  if (ctx.r.chance(0.6)) op.entry = ctx.r.pick(['left', 'top', 'bottom', 'right']);
+  if (ctx.r.chance(0.6)) {
+    op.entry = ctx.r.pick(['left', 'top', 'bottom', 'right']);
+  }
   return one('route', op);
 }
 
@@ -307,15 +328,20 @@ function space(ctx) {
   if (!target) return undefined;
   const dir = ctx.r.chance(0.6) ? 'after' : 'below';
   const op = { op: 'space', [dir]: target.id };
-  if (ctx.r.chance(0.4)) op.by = ctx.r.pick(['column', 'row', 20 + ctx.r.int(200)]);
-  // closing space (negative amounts)
-  else if (ctx.r.chance(0.3)) op.by = ctx.r.pick(['-column', '-row', -(20 + ctx.r.int(200))]);
+  if (ctx.r.chance(0.4)) {
+    op.by = ctx.r.pick(['column', 'row', 20 + ctx.r.int(200)]);
+    // closing space (negative amounts)
+  } else if (ctx.r.chance(0.3)) {
+    op.by = ctx.r.pick(['-column', '-row', -(20 + ctx.r.int(200))]);
+  }
   return one(`space-${dir}${typeof op.by === 'string' && op.by.startsWith('-') || op.by < 0 ? '-close' : ''}`, op);
 }
 
 function compact(ctx) {
   const frames = [...ctx.inf.participants.filter((participant) => ctx.inf.shapeOf(participant.id)).map((participant) => participant.id), ...ctx.inf.leafLanes.map((lane) => lane.id), ...ctx.N.filter((node) => isSub(node) && ctx.inf.shapeOf(node.id)?.container).map((node) => node.id)];
-  if (!frames.length || ctx.r.chance(0.5)) return one('compact', { op: 'compact' });
+  if (!frames.length || ctx.r.chance(0.5)) {
+    return one('compact', { op: 'compact' });
+  }
   return one('compact-ids', { op: 'compact', ids: ctx.r.shuffle(frames).slice(0, 1 + ctx.r.int(2)) });
 }
 

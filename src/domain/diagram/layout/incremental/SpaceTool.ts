@@ -97,7 +97,9 @@ export class SpaceTool {
       }
       const inside = new Set(shapes.map((child) => child.id));
       for (const edge of edges) {
-        if (!(edge.sourceId && inside.has(edge.sourceId)) || !(edge.targetId && inside.has(edge.targetId))) continue;
+        if (!(edge.sourceId && inside.has(edge.sourceId)) || !(edge.targetId && inside.has(edge.targetId))) {
+          continue;
+        }
         translateEdge(edge, dx, dy);
       }
     }
@@ -115,7 +117,9 @@ export class SpaceTool {
     for (const grownPool of grown) {
       const old = before.get(grownPool.id)!;
       for (const pool of pools) {
-        if (pool === grownPool || res.resized.has(pool.id) || res.moved.has(pool.id)) continue;
+        if (pool === grownPool || res.resized.has(pool.id) || res.moved.has(pool.id)) {
+          continue;
+        }
         if (Math.abs(right(before.get(pool.id)!) - right(old)) > 2) continue;
         const target = right(grownPool.bounds);
         if (target < right(pool.bounds)) {
@@ -142,26 +146,36 @@ export class SpaceTool {
 
   /** For shapes without a semantic pool (collaboration-level artifacts): by their centre. */
   private geometricPool(shape: DShape, before: ReadonlyMap<string, Box>): string | undefined {
-    if (shape.poolId || shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group' || shape.hostId || shape.parentId) return shape.poolId;
+    if (shape.poolId || shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group' || shape.hostId || shape.parentId) {
+      return shape.poolId;
+    }
     const centre = { x: cx(shape.bounds), y: cy(shape.bounds) };
     for (const pool of this.plane.shapes.values()) {
       if (pool.kind !== 'participant') continue;
       const poolBox = before.get(pool.id) ?? pool.bounds;
-      if (centre.x >= poolBox.x && centre.x <= right(poolBox) && centre.y >= poolBox.y && centre.y <= bottom(poolBox)) return pool.id;
+      if (centre.x >= poolBox.x && centre.x <= right(poolBox) && centre.y >= poolBox.y && centre.y <= bottom(poolBox)) {
+        return pool.id;
+      }
     }
     return undefined;
   }
 
   /** For shapes no lane lists (data objects, annotations): the innermost lane at their centre. */
   private geometricLane(shape: DShape, before: ReadonlyMap<string, Box>): string | undefined {
-    if (shape.laneId || shape.hostId || shape.parentId || shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group') return shape.laneId;
+    if (shape.laneId || shape.hostId || shape.parentId || shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group') {
+      return shape.laneId;
+    }
     const centre = { x: cx(shape.bounds), y: cy(shape.bounds) };
     let best: Box | undefined;
     let id: string | undefined;
     for (const lane of this.plane.shapes.values()) {
-      if (lane.kind !== 'lane' || (shape.poolId && lane.poolId !== shape.poolId)) continue;
+      if (lane.kind !== 'lane' || (shape.poolId && lane.poolId !== shape.poolId)) {
+        continue;
+      }
       const laneBox = before.get(lane.id) ?? lane.bounds;
-      if (centre.x < laneBox.x || centre.x > right(laneBox) || centre.y < laneBox.y || centre.y > bottom(laneBox)) continue;
+      if (centre.x < laneBox.x || centre.x > right(laneBox) || centre.y < laneBox.y || centre.y > bottom(laneBox)) {
+        continue;
+      }
       if (!best || laneBox.width * laneBox.height < best.width * best.height) {
         best = laneBox;
         id = lane.id;
@@ -176,7 +190,9 @@ export class SpaceTool {
    */
   private inLanes(lanes: DShape[], shape: DShape, before: ReadonlyMap<string, Box>): boolean {
     const owner = shape.hostId ? this.plane.shapes.get(shape.hostId) ?? shape : shape;
-    if (Frames.of(this.plane, owner)) return lanes.some((lane) => Frames.within(this.plane, owner, lane));
+    if (Frames.of(this.plane, owner)) {
+      return lanes.some((lane) => Frames.within(this.plane, owner, lane));
+    }
     const box = before.get(owner.id) ?? owner.bounds;
     return lanes.some((lane) => containsPoint(before.get(lane.id)!, { x: cx(box), y: cy(box) }));
   }
@@ -185,14 +201,19 @@ export class SpaceTool {
   private capShrink(container: DShape, axis: Axis, before: Box, pad = 10): void {
     let need = -Infinity;
     for (const shape of this.plane.shapes.values()) {
-      if (shape === container || shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group') continue;
+      if (shape === container || shape.kind === 'participant' || shape.kind === 'lane' || shape.kind === 'group') {
+        continue;
+      }
       if (!Frames.within(this.plane, shape, container)) continue;
       need = Math.max(need, far(shape.bounds, axis) + (shape.kind === 'boundary' ? 0 : pad));
     }
     const limit = Math.min(need, far(before, axis));
     if (far(container.bounds, axis) >= limit) return;
-    if (axis === 'x') container.bounds.width = limit - container.bounds.x;
-    else container.bounds.height = limit - container.bounds.y;
+    if (axis === 'x') {
+      container.bounds.width = limit - container.bounds.x;
+    } else {
+      container.bounds.height = limit - container.bounds.y;
+    }
   }
 
   /**
@@ -203,25 +224,39 @@ export class SpaceTool {
   private capGrowth(pass: Pass, res: SpaceResult): void {
     const { axis, delta, before } = pass;
     const setFar = (container: DShape, to: number): void => {
-      if (axis === 'x') container.bounds.width = to - container.bounds.x;
-      else container.bounds.height = to - container.bounds.y;
-      if (Math.abs(to - far(before.get(container.id)!, axis)) < 0.5) res.resized.delete(container.id);
-      else res.resized.add(container.id);
+      if (axis === 'x') {
+        container.bounds.width = to - container.bounds.x;
+      } else {
+        container.bounds.height = to - container.bounds.y;
+      }
+      if (Math.abs(to - far(before.get(container.id)!, axis)) < 0.5) {
+        res.resized.delete(container.id);
+      } else {
+        res.resized.add(container.id);
+      }
     };
     const cap = (frames: DShape[], holds: (shape: DShape) => boolean): void => {
       let farBefore = -Infinity;
       let farNow = -Infinity;
       for (const shape of this.plane.shapes.values()) {
-        if (shape.kind === 'participant' || shape.kind === 'lane' || !holds(shape)) continue;
+        if (shape.kind === 'participant' || shape.kind === 'lane' || !holds(shape)) {
+          continue;
+        }
         const shift = res.moved.has(shape.id) ? delta : 0;
         farBefore = Math.max(farBefore, far(before.get(shape.id)!, axis), shape.label ? far(shape.label, axis) - shift : -Infinity);
         farNow = Math.max(farNow, far(shape.bounds, axis), shape.label ? far(shape.label, axis) : -Infinity);
       }
       const old = Math.max(...frames.map((frame) => far(before.get(frame.id)!, axis)));
-      if (Number.isFinite(farNow)) for (const frame of frames) setFar(frame, old + Math.min(delta, Math.max(0, farNow + Math.max(0, old - farBefore) - old)));
+      if (Number.isFinite(farNow)) {
+        for (const frame of frames) {
+          setFar(frame, old + Math.min(delta, Math.max(0, farNow + Math.max(0, old - farBefore) - old)));
+        }
+      }
     };
     const containers = [...res.resized].map((id) => this.plane.shapes.get(id)!).filter((shape) => shape.kind === 'participant' || shape.kind === 'lane');
-    for (const pool of containers.filter((shape) => shape.kind === 'participant')) cap([pool], (shape) => shape.kind !== 'group' && Frames.within(this.plane, shape, pool));
+    for (const pool of containers.filter((shape) => shape.kind === 'participant')) {
+      cap([pool], (shape) => shape.kind !== 'group' && Frames.within(this.plane, shape, pool));
+    }
     const free = [...this.plane.shapes.values()].filter((shape) => shape.kind === 'lane' && !shape.poolId);
     /** a lane beyond the line moved: the lanes do not end where the line crosses them */
     const tops = free.some((lane) => res.moved.has(lane.id)) ? [] : free.filter((lane) => !lane.laneId && res.resized.has(lane.id));
@@ -235,7 +270,9 @@ export class SpaceTool {
     }
     for (const lane of containers.filter((shape) => shape.kind === 'lane')) {
       const pool = lane.poolId ? this.plane.shapes.get(lane.poolId) : undefined;
-      if (pool && Math.abs(far(before.get(lane.id)!, axis) - far(before.get(pool.id)!, axis)) <= 2) setFar(lane, far(pool.bounds, axis));
+      if (pool && Math.abs(far(before.get(lane.id)!, axis) - far(before.get(pool.id)!, axis)) <= 2) {
+        setFar(lane, far(pool.bounds, axis));
+      }
     }
   }
 
@@ -291,7 +328,9 @@ export class SpaceTool {
   }
 
   private rigid(pass: Pass, candidate: DShape): boolean {
-    if (!pass.held || candidate.kind !== 'subProcess' || !candidate.container || pass.held.has(candidate.id) || pass.keep.has(candidate.id)) return false;
+    if (!pass.held || candidate.kind !== 'subProcess' || !candidate.container || pass.held.has(candidate.id) || pass.keep.has(candidate.id)) {
+      return false;
+    }
     const box = pass.before.get(candidate.id)!;
     return near(box, pass.axis) < pass.line && far(box, pass.axis) > pass.line && overlapsBand(box, pass.band, pass.axis);
   }
@@ -309,7 +348,9 @@ export class SpaceTool {
   private insideFrame(pass: Pass, shape: DShape): boolean {
     const scope = pass.scope!;
     if (this.frameChain(shape).includes(scope.frame)) return true;
-    if (shape.container || shape.kind === 'group' || scope.ancestors.has(shape.id)) return false;
+    if (shape.container || shape.kind === 'group' || scope.ancestors.has(shape.id)) {
+      return false;
+    }
     const box = pass.before.get(shape.id)!;
     const frameBox = pass.before.get(scope.frame.id)!;
     const centre = { x: cx(box), y: cy(box) };
@@ -319,7 +360,9 @@ export class SpaceTool {
   /** Undefined for the frame and its content, which follow the usual rules. */
   private scopeDecision(pass: Pass, shape: DShape): Decision | undefined {
     const scope = pass.scope;
-    if (!scope || shape === scope.frame || this.insideFrame(pass, shape)) return undefined;
+    if (!scope || shape === scope.frame || this.insideFrame(pass, shape)) {
+      return undefined;
+    }
     if (!scope.ancestors.has(shape.id) || !scope.grow.has(shape.id)) return 'stay';
     const box = pass.before.get(shape.id)!;
     return near(box, pass.axis) < pass.line && far(box, pass.axis) > pass.line ? 'resize' : 'stay';
@@ -348,8 +391,9 @@ export class SpaceTool {
       const hostDecision = host && depth < 20 ? decide(host, depth + 1) : undefined;
       const scoped = host ? undefined : this.scopeDecision(pass, shape);
       const block = pass.held && !host && !carrier ? this.rigidAround(pass, shape) : undefined;
-      if (keep.has(shape.id)) verdict = 'stay';
-      else if (host && hostDecision && (!host.container || hostDecision !== 'resize')) {
+      if (keep.has(shape.id)) {
+        verdict = 'stay';
+      } else if (host && hostDecision && (!host.container || hostDecision !== 'resize')) {
         verdict = hostDecision === 'move' ? 'move' : 'stay';
       } else if (host && hostDecision === 'resize') {
         const eb = before.get(shape.id)!;
@@ -365,15 +409,18 @@ export class SpaceTool {
         verdict = (axis === 'x' ? cx(box) : cy(box)) >= line && this.pushed(pass, shape) ? 'move' : 'stay';
       } else {
         const ref = before.get(shape.id)!;
-        if (near(ref, axis) >= line) verdict = overlapsBand(ref, band, axis) && this.pushed(pass, shape) ? 'move' : 'stay';
-        else if ((shape.container || (shape.kind === 'group' && this.pushed(pass, shape))) && far(ref, axis) > line && overlapsBand(ref, band, axis)) {
+        if (near(ref, axis) >= line) {
+          verdict = overlapsBand(ref, band, axis) && this.pushed(pass, shape) ? 'move' : 'stay';
+        } else if ((shape.container || (shape.kind === 'group' && this.pushed(pass, shape))) && far(ref, axis) > line && overlapsBand(ref, band, axis)) {
           verdict = delta < 0 && beyondBand(ref, band, axis) ? 'stay' : 'resize';
         }
       }
       decision.set(shape.id, verdict);
       return verdict;
     };
-    for (const shape of plane.shapes.values()) decide(shape);
+    for (const shape of plane.shapes.values()) {
+      decide(shape);
+    }
     return decision;
   }
 
@@ -395,9 +442,11 @@ export class SpaceTool {
         res.resized.add(shape.id);
       }
     }
-    if (delta < 0) for (const id of res.resized) {
-      const container = plane.shapes.get(id)!;
-      if (container.container) this.capShrink(container, axis, before.get(id)!);
+    if (delta < 0) {
+      for (const id of res.resized) {
+        const container = plane.shapes.get(id)!;
+        if (container.container) this.capShrink(container, axis, before.get(id)!);
+      }
     }
     if (pass.push && delta > 0) this.capGrowth(pass, res);
     if (axis === 'x') this.alignPoolsAndLanes(before, res);
@@ -407,8 +456,12 @@ export class SpaceTool {
       for (const shape of plane.shapes.values()) {
         if (!this.rigid(pass, shape) || this.rigidAround(pass, shape)) continue;
         blockOf.set(shape.id, shape.id);
-        for (const boundary of PlaneQuery.boundariesOf(plane, shape.id)) blockOf.set(boundary.id, shape.id);
-        for (const child of PlaneQuery.contentOf(plane, shape.id).shapes) blockOf.set(child.id, shape.id);
+        for (const boundary of PlaneQuery.boundariesOf(plane, shape.id)) {
+          blockOf.set(boundary.id, shape.id);
+        }
+        for (const child of PlaneQuery.contentOf(plane, shape.id).shapes) {
+          blockOf.set(child.id, shape.id);
+        }
       }
     }
     const changed = (id: string | undefined): boolean => !!id && (res.moved.has(id) || res.resized.has(id));
@@ -418,8 +471,12 @@ export class SpaceTool {
     };
 
     for (const edge of plane.edges.values()) {
-      if (edge.sourceId && edge.targetId && keep.has(edge.sourceId) && keep.has(edge.targetId)) continue;
-      if (pass.scope && !changed(edge.sourceId) && !changed(edge.targetId) && outside(edge.sourceId) && outside(edge.targetId)) continue;
+      if (edge.sourceId && edge.targetId && keep.has(edge.sourceId) && keep.has(edge.targetId)) {
+        continue;
+      }
+      if (pass.scope && !changed(edge.sourceId) && !changed(edge.targetId) && outside(edge.sourceId) && outside(edge.targetId)) {
+        continue;
+      }
       const pointCount = edge.points.length;
       const bends = !pass.push || pass.push.has(edge.id) || changed(edge.sourceId) || changed(edge.targetId);
       const block = edge.sourceId && edge.targetId ? blockOf.get(edge.sourceId) : undefined;
@@ -431,15 +488,24 @@ export class SpaceTool {
         const end = endId ? plane.shapes.get(endId) : undefined;
         const beyond = (axis === 'x' ? pt.x : pt.y) >= line;
         let shift: boolean;
-        if (inBlock) shift = res.moved.has(block);
-        else if (end && res.moved.has(end.id)) shift = true;
-        else if (end && res.resized.has(end.id)) shift = beyond;
-        else if (end) shift = false;
-        else shift = beyond && bends && pointInBand(pt, band, axis);
+        if (inBlock) {
+          shift = res.moved.has(block);
+        } else if (end && res.moved.has(end.id)) {
+          shift = true;
+        } else if (end && res.resized.has(end.id)) {
+          shift = beyond;
+        } else if (end) {
+          shift = false;
+        } else {
+          shift = beyond && bends && pointInBand(pt, band, axis);
+        }
         shifted.push(shift);
         if (shift) {
-          if (axis === 'x') pt.x += delta;
-          else pt.y += delta;
+          if (axis === 'x') {
+            pt.x += delta;
+          } else {
+            pt.y += delta;
+          }
         }
       });
       if (!edge.label) continue;
@@ -459,8 +525,12 @@ export class SpaceTool {
       if (verdict !== 'move' && verdict !== 'resize') continue;
       const reach = far(pass.before.get(shape.id)!, pass.axis) + pass.delta + (shape.kind === 'boundary' || shape.kind === 'lane' ? 0 : FRAME_PAD);
       for (const ancestor of this.frameChain(shape)) {
-        if (!scope.ancestors.has(ancestor.id) || scope.grow.has(ancestor.id) || out.has(ancestor.id)) continue;
-        if (reach > far(pass.before.get(ancestor.id)!, pass.axis) + 0.5) out.add(ancestor.id);
+        if (!scope.ancestors.has(ancestor.id) || scope.grow.has(ancestor.id) || out.has(ancestor.id)) {
+          continue;
+        }
+        if (reach > far(pass.before.get(ancestor.id)!, pass.axis) + 0.5) {
+          out.add(ancestor.id);
+        }
       }
     }
     return [...out];
@@ -476,12 +546,16 @@ export class SpaceTool {
     const scope = pass.scope!;
     const out: DShape[] = [];
     for (const resized of pass.plane.shapes.values()) {
-      if (decision.get(resized.id) !== 'resize' || (resized !== scope.frame && !scope.grow.has(resized.id))) continue;
+      if (decision.get(resized.id) !== 'resize' || (resized !== scope.frame && !scope.grow.has(resized.id))) {
+        continue;
+      }
       const rb = pass.before.get(resized.id)!;
       const region = this.growthRegion(pass, rb);
       const around = new Set(this.frameChain(resized).map((frame) => frame.id));
       const hit = [...pass.plane.shapes.values()].some((shape) => {
-        if (shape === resized || shape.kind === 'group' || pass.keep.has(shape.id) || decision.get(shape.id) !== 'stay' || around.has(shape.id) || shape.hostId === resized.id) return false;
+        if (shape === resized || shape.kind === 'group' || pass.keep.has(shape.id) || decision.get(shape.id) !== 'stay' || around.has(shape.id) || shape.hostId === resized.id) {
+          return false;
+        }
         if (this.frameChain(shape).includes(resized)) return false;
         const sb = pass.before.get(shape.id)!;
         return overlaps(sb, region) && !overlaps(sb, rb);
@@ -523,7 +597,9 @@ export class SpaceTool {
       }
       const over = this.swallowers(pass, decision);
       if (!over.length) return this.applyPass(pass, decision);
-      if (LayoutDebug.on()) LayoutDebug.log(`[space] ${over.map((shape) => shape.id).join(',')} would grow over a shape: room one level out`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[space] ${over.map((shape) => shape.id).join(',')} would grow over a shape: room one level out`);
+      }
       scope = this.widen(scope, over);
     }
     const pass: Pass = { ...base, band: undefined };
@@ -538,13 +614,17 @@ export class SpaceTool {
     const { axis, line, delta } = req;
     if (!delta) return { moved: new Set(), resized: new Set() };
     const before = new Map<string, Box>();
-    for (const shape of this.plane.shapes.values()) before.set(shape.id, { ...shape.bounds });
+    for (const shape of this.plane.shapes.values()) {
+      before.set(shape.id, { ...shape.bounds });
+    }
     const keep = req.keep ?? new Set<string>();
     const held = req.anchors && delta > 0 ? this.holders(req.anchors) : undefined;
     const base = { plane: this.plane, axis, line, delta, keep, before, held, push: req.push };
     const frame = req.frame ? this.plane.shapes.get(req.frame) : undefined;
     const fb = frame && before.get(frame.id)!;
-    if (frame && fb && frame.container && delta > 0 && near(fb, axis) < line && far(fb, axis) > line) return this.spaceInFrame(base, frame);
+    if (frame && fb && frame.container && delta > 0 && near(fb, axis) < line && far(fb, axis) > line) {
+      return this.spaceInFrame(base, frame);
+    }
     const within = req.within ?? (frame ? frame.bounds : undefined);
     const pass: Pass = { ...base, band: bandOf(within, axis) };
     return this.applyPass(pass, this.decideAll(pass));
@@ -575,14 +655,18 @@ export class SpaceTool {
       const eventBox = boundary.bounds;
       const onBorder = axis === 'y' ? Math.abs(cy(eventBox) - bottom(frame.bounds)) <= 6 : Math.abs(cx(eventBox) - right(frame.bounds)) <= 6;
       const facing = axis === 'y' ? eventBox.x < right(box) + 10 && right(eventBox) > box.x - 10 : eventBox.y < bottom(box) + 10 && bottom(eventBox) > box.y - 10;
-      if (onBorder && facing) out = Math.max(out, (axis === 'y' ? eventBox.height : eventBox.width) / 2 + 10);
+      if (onBorder && facing) {
+        out = Math.max(out, (axis === 'y' ? eventBox.height : eventBox.width) / 2 + 10);
+      }
     }
     return out;
   }
 
   private labelOrDefault(shape: DShape): Box | undefined {
     const name = raw<string>(shape.el, 'name')?.trim();
-    if (!name || shape.kind === 'boundary' || !hasExternalLabel(shape)) return undefined;
+    if (!name || shape.kind === 'boundary' || !hasExternalLabel(shape)) {
+      return undefined;
+    }
     if (shape.label) return shape.label;
     const { width, height } = labelSize(name);
     return labelAt(shape, { width, height }, defaultLabelSide(shape.kind));
@@ -607,7 +691,9 @@ export class SpaceTool {
        * skip an ancestor not holding the inner frame's centre (an event sub-process drawn in
        * another lane): growing it would move the inner frame away from the shape
        */
-      while (frame && guard > 0 && !containsPoint(frame.bounds, { x: cx(inner.bounds), y: cy(inner.bounds) })) frame = frameFn(frame);
+      while (frame && guard > 0 && !containsPoint(frame.bounds, { x: cx(inner.bounds), y: cy(inner.bounds) })) {
+        frame = frameFn(frame);
+      }
       if (!frame) break;
       const box = inner.kind === 'participant' || inner.kind === 'lane' ? inner.bounds : this.unitBox(inner);
       const framePad = inner.kind === 'lane' ? 0 : pad;
@@ -617,9 +703,13 @@ export class SpaceTool {
         return Math.max(far(box) + Math.max(framePad, this.borderPad(frame, box, axis)), label ? far(label) + Math.max(LABEL_PAD, this.borderPad(frame, label, axis)) : -Infinity);
       };
       const overRight = reach('x') - right(frame.bounds);
-      if (overRight > 0.5) merge(this.makeSpace({ axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep, anchors: [id], ...this.growthScope(frame, 'x') }));
+      if (overRight > 0.5) {
+        merge(this.makeSpace({ axis: 'x', line: right(frame.bounds) - 1, delta: Math.ceil(overRight), keep, anchors: [id], ...this.growthScope(frame, 'x') }));
+      }
       const overBottom = reach('y') - bottom(frame.bounds);
-      if (overBottom > 0.5) merge(this.makeSpace({ axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(overBottom), keep, anchors: [id], ...this.growthScope(frame, 'y') }));
+      if (overBottom > 0.5) {
+        merge(this.makeSpace({ axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(overBottom), keep, anchors: [id], ...this.growthScope(frame, 'y') }));
+      }
       inner = frame;
     }
     return out;
@@ -660,7 +750,9 @@ export class SpaceTool {
       if (shape.container && overlapsBand(shape.bounds, band, axis)) {
         const nearEdge = near(shape.bounds, axis);
         const farEdge = far(shape.bounds, axis);
-        if ((nearEdge > lo && nearEdge < hi) || (farEdge > lo && farEdge < hi)) return undefined;
+        if ((nearEdge > lo && nearEdge < hi) || (farEdge > lo && farEdge < hi)) {
+          return undefined;
+        }
       }
     }
     for (const edge of this.plane.edges.values()) {
@@ -669,7 +761,9 @@ export class SpaceTool {
       for (let index = 1; index + 1 < edge.points.length; index++) {
         const point = edge.points[index]!;
         const coordinate = axis === 'x' ? point.x : point.y;
-        if (coordinate > lo && coordinate < hi && pointInBand(point, band, axis)) return undefined;
+        if (coordinate > lo && coordinate < hi && pointInBand(point, band, axis)) {
+          return undefined;
+        }
       }
     }
     const shapesBefore = new Map([...this.plane.shapes.values()].map((shape) => [shape, { bounds: { ...shape.bounds }, label: shape.label ? { ...shape.label } : undefined }] as const));
@@ -681,16 +775,24 @@ export class SpaceTool {
       if (!shape || !PlaneQuery.isLeaf(shape)) continue;
       const hit = leaves.find((other) => other !== shape && other.hostId !== shape.id && shape.hostId !== other.id && overlaps(other.bounds, shape.bounds) && !overlaps(shapesBefore.get(other)!.bounds, shapesBefore.get(shape)!.bounds));
       if (!hit) continue;
-      if (LayoutDebug.on()) LayoutDebug.log(`[strip] closing would put ${shape.id} onto ${hit.id}: kept open`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[strip] closing would put ${shape.id} onto ${hit.id}: kept open`);
+      }
       for (const [sh, snapshot] of shapesBefore) {
         sh.bounds = snapshot.bounds;
-        if (snapshot.label) sh.label = snapshot.label;
-        else delete sh.label;
+        if (snapshot.label) {
+          sh.label = snapshot.label;
+        } else {
+          delete sh.label;
+        }
       }
       for (const [edge, snapshot] of edgesBefore) {
         edge.points = snapshot.points;
-        if (snapshot.label) edge.label = snapshot.label;
-        else delete edge.label;
+        if (snapshot.label) {
+          edge.label = snapshot.label;
+        } else {
+          delete edge.label;
+        }
       }
       return undefined;
     }

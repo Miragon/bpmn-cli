@@ -82,8 +82,12 @@ export class BoundaryPlacer {
     for (const [centreY, clear] of [[bottom(hb) - size.height / 2, true], [bottom(hb) - size.height / 2, false], [hb.y - size.height / 2, false]] as const) {
       strict = clear;
       const centres: number[] = [];
-      for (let centre = right(hb) - offset; centre >= hb.x + size.width / 2 - 0.5; centre -= 4) centres.push(centre);
-      for (let centre = right(hb) - offset + 4; centre <= right(hb); centre += 4) centres.push(centre);
+      for (let centre = right(hb) - offset; centre >= hb.x + size.width / 2 - 0.5; centre -= 4) {
+        centres.push(centre);
+      }
+      for (let centre = right(hb) - offset + 4; centre <= right(hb); centre += 4) {
+        centres.push(centre);
+      }
       for (const centre of centres) {
         const cand = { x: Math.round(centre - size.width / 2), y: Math.round(centreY), ...size };
         if (free(cand)) return cand;
@@ -148,9 +152,13 @@ export class BoundaryPlacer {
     if (attachedSide(event.bounds, host.bounds) !== 'bottom') return [];
     if (!this.placer.placed.has(event.id)) {
       const spot = this.boundarySpot(plane, host, { width: event.bounds.width, height: event.bounds.height }, event.id);
-      if (Math.abs(spot.x - event.bounds.x) > 1 || Math.abs(spot.y - event.bounds.y) > 1) return [];
+      if (Math.abs(spot.x - event.bounds.x) > 1 || Math.abs(spot.y - event.bounds.y) > 1) {
+        return [];
+      }
     }
-    if (this.placer.sem.successors(event.id).some((successorId) => successorId !== id && plane.shapes.has(successorId))) return [];
+    if (this.placer.sem.successors(event.id).some((successorId) => successorId !== id && plane.shapes.has(successorId))) {
+      return [];
+    }
     const spot = this.topSpot(plane, event, host);
     if (!spot) return [];
     const sp = this.placer.spacingFor(plane);
@@ -164,7 +172,9 @@ export class BoundaryPlacer {
    */
   seatOnTop(plane: Plane, event: DShape, spot: Box): void {
     const moved = this.placer.drawing(plane).shift(event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
-    for (const movedId of moved) if (!this.placer.placed.has(movedId)) this.placer.moved.add(movedId);
+    for (const movedId of moved) {
+      if (!this.placer.placed.has(movedId)) this.placer.moved.add(movedId);
+    }
     if (event.label) (this.placer.relabel ??= new Set()).add(event.id);
     this.placer.notes.push(`${event.id} moved to the top border of ${event.hostId}: its path runs above it (below, it would cross a line or take more room)`);
   }

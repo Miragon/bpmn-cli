@@ -33,17 +33,23 @@ function parseArgs(argv) {
   const opts = { inputs: [], lib: join(ROOT, 'dist', 'index.js'), baseline: undefined, json: undefined, list: false };
   for (let argIndex = 0; argIndex < argv.length; argIndex++) {
     const arg = argv[argIndex];
-    if (arg === '--lib') opts.lib = argv[++argIndex];
-    else if (arg === '--baseline') opts.baseline = argv[++argIndex];
-    else if (arg === '--json') opts.json = argv[++argIndex];
-    else if (arg === '--list') opts.list = true;
-    else if (arg === '-h' || arg === '--help') {
+    if (arg === '--lib') {
+      opts.lib = argv[++argIndex];
+    } else if (arg === '--baseline') {
+      opts.baseline = argv[++argIndex];
+    } else if (arg === '--json') {
+      opts.json = argv[++argIndex];
+    } else if (arg === '--list') {
+      opts.list = true;
+    } else if (arg === '-h' || arg === '--help') {
       console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace(/^#!.*\n\/\*\*\n?/, '').replace(/^ \* ?/gm, ''));
       process.exit(0);
     } else if (arg.startsWith('--')) {
       console.error(`unknown option ${arg}`);
       process.exit(2);
-    } else opts.inputs.push(arg);
+    } else {
+      opts.inputs.push(arg);
+    }
   }
   return opts;
 }
@@ -53,8 +59,11 @@ function bpmnFiles(path) {
   const out = [];
   for (const name of readdirSync(path).sort()) {
     const entryPath = join(path, name);
-    if (statSync(entryPath).isDirectory()) out.push(...bpmnFiles(entryPath));
-    else if (name.endsWith('.bpmn')) out.push(entryPath);
+    if (statSync(entryPath).isDirectory()) {
+      out.push(...bpmnFiles(entryPath));
+    } else if (name.endsWith('.bpmn')) {
+      out.push(entryPath);
+    }
   }
   return out;
 }
@@ -74,9 +83,13 @@ function changedLines(before, after) {
   const beforeLines = before.split('\n');
   const afterLines = after.split('\n');
   let head = 0;
-  while (head < beforeLines.length && head < afterLines.length && beforeLines[head] === afterLines[head]) head++;
+  while (head < beforeLines.length && head < afterLines.length && beforeLines[head] === afterLines[head]) {
+    head++;
+  }
   let tail = 0;
-  while (tail < beforeLines.length - head && tail < afterLines.length - head && beforeLines[beforeLines.length - 1 - tail] === afterLines[afterLines.length - 1 - tail]) tail++;
+  while (tail < beforeLines.length - head && tail < afterLines.length - head && beforeLines[beforeLines.length - 1 - tail] === afterLines[afterLines.length - 1 - tail]) {
+    tail++;
+  }
   const xs = beforeLines.slice(head, beforeLines.length - tail);
   const ys = afterLines.slice(head, afterLines.length - tail);
   if (!xs.length || !ys.length) return xs.length + ys.length;
@@ -84,7 +97,9 @@ function changedLines(before, after) {
   const rowWidth = ys.length + 1;
   const dp = new Uint32Array((xs.length + 1) * rowWidth);
   for (let beforeIndex = xs.length - 1; beforeIndex >= 0; beforeIndex--) {
-    for (let afterIndex = ys.length - 1; afterIndex >= 0; afterIndex--) dp[beforeIndex * rowWidth + afterIndex] = xs[beforeIndex] === ys[afterIndex] ? dp[(beforeIndex + 1) * rowWidth + afterIndex + 1] + 1 : Math.max(dp[(beforeIndex + 1) * rowWidth + afterIndex], dp[beforeIndex * rowWidth + afterIndex + 1]);
+    for (let afterIndex = ys.length - 1; afterIndex >= 0; afterIndex--) {
+      dp[beforeIndex * rowWidth + afterIndex] = xs[beforeIndex] === ys[afterIndex] ? dp[(beforeIndex + 1) * rowWidth + afterIndex + 1] + 1 : Math.max(dp[(beforeIndex + 1) * rowWidth + afterIndex], dp[beforeIndex * rowWidth + afterIndex + 1]);
+    }
   }
   return xs.length + ys.length - 2 * dp[0];
 }
@@ -93,7 +108,9 @@ function changedLines(before, after) {
 function regionShare(before, after) {
   let start = 0;
   const min = Math.min(before.length, after.length);
-  while (start < min && before[start] === after[start]) start++;
+  while (start < min && before[start] === after[start]) {
+    start++;
+  }
   let endA = before.length;
   let endB = after.length;
   while (endA > start && endB > start && before[endA - 1] === after[endB - 1]) {
@@ -119,7 +136,11 @@ function targetsOf(api, doc) {
   const nodes = [...doc.byId().values()].filter((el) => is(el, 'bpmn:FlowNode'));
   const rename = nodes.find((el) => is(el, 'bpmn:Activity') && el.get('name')) ?? nodes.find((el) => el.get('name'));
   const drawn = new Set();
-  for (const diagram of doc.definitions.get('diagrams') ?? []) for (const diShape of diagram.get('plane')?.get('planeElement') ?? []) if (diShape.get('bpmnElement')) drawn.add(diShape.get('bpmnElement'));
+  for (const diagram of doc.definitions.get('diagrams') ?? []) {
+    for (const diShape of diagram.get('plane')?.get('planeElement') ?? []) {
+      if (diShape.get('bpmnElement')) drawn.add(diShape.get('bpmnElement'));
+    }
+  }
   const insert = nodes.find((el) => is(el, 'bpmn:Task') && drawn.has(el) && doc.outgoing(el).length === 1);
   return { rename: rename && { id: rename.get('id'), name: rename.get('name') }, insert: insert && { id: insert.get('id') } };
 }
@@ -182,7 +203,11 @@ function summarise(label, records, list) {
     if (!rows.length) continue;
     const ok = rows.filter(([, outcome]) => !outcome.refused);
     const refused = {};
-    for (const [, outcome] of rows) if (outcome.refused) refused[outcome.refused] = (refused[outcome.refused] ?? 0) + 1;
+    for (const [, outcome] of rows) {
+      if (outcome.refused) {
+        refused[outcome.refused] = (refused[outcome.refused] ?? 0) + 1;
+      }
+    }
     const same = ok.filter(([, outcome]) => outcome.identical).length;
     const lineVals = ok.map(([, outcome]) => outcome.lines);
     const regions = ok.map(([, outcome]) => outcome.region);
@@ -202,7 +227,9 @@ function summarise(label, records, list) {
         const cause = outcome.fallback ? 'fall-back to the plain serialisation' : outcome.drew ? 'the layout drew or moved something' : 'other';
         (causes[cause] ??= []).push(basename(record.file));
       }
-      for (const [cause, names] of Object.entries(causes)) lines.push(`      not identical: ${names.length} ${cause}${list ? `: ${names.join(' ')}` : ''}`);
+      for (const [cause, names] of Object.entries(causes)) {
+        lines.push(`      not identical: ${names.length} ${cause}${list ? `: ${names.join(' ')}` : ''}`);
+      }
     }
   }
   return lines.join('\n');

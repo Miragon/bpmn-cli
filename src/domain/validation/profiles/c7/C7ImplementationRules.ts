@@ -35,7 +35,9 @@ export class C7ImplementationRules extends C7Rules {
     const pick = (attrName: string, child: string): { value?: string; problem?: string } => {
       const attributeValue = attr(field, attrName);
       const kids = this.children(field, child);
-      if (attributeValue !== undefined && kids.length) return { problem: `both the attribute ${attrName} and a ${this.prefix}:${child} element` };
+      if (attributeValue !== undefined && kids.length) {
+        return { problem: `both the attribute ${attrName} and a ${this.prefix}:${child} element` };
+      }
       if (kids.length) {
         const text = peek<unknown>(kids[0], '$body');
         return { value: typeof text === 'string' ? text : '' };
@@ -44,10 +46,14 @@ export class C7ImplementationRules extends C7Rules {
     };
     const stringValue = pick('stringValue', 'string');
     if (stringValue.problem) return { problem: stringValue.problem };
-    if (stringValue.value !== undefined) return { kind: 'string', value: stringValue.value };
+    if (stringValue.value !== undefined) {
+      return { kind: 'string', value: stringValue.value };
+    }
     const expression = pick('expression', 'expression');
     if (expression.problem) return { problem: expression.problem };
-    if (expression.value !== undefined) return { kind: 'expression', value: expression.value };
+    if (expression.value !== undefined) {
+      return { kind: 'expression', value: expression.value };
+    }
     return { problem: 'no value' };
   }
 
@@ -121,8 +127,12 @@ export class C7ImplementationRules extends C7Rules {
     const addr = this.addressOf(el, owner);
     for (const name of names) {
       const value = this.c7(el, name);
-      if (value === undefined || this.isNumber(value) || this.isExpression(value)) continue;
-      if (!this.kit.camunda.attr(name)?.owners.some((ownerType) => this.kit.is(el, ownerType))) continue;
+      if (value === undefined || this.isNumber(value) || this.isExpression(value)) {
+        continue;
+      }
+      if (!this.kit.camunda.attr(name)?.owners.some((ownerType) => this.kit.is(el, ownerType))) {
+        continue;
+      }
       this.push('deploy', 'W_C7_DEPLOY_BAD_VALUE', el, owner, `attr:${name}`, `${this.prefix}:${name}="${value}" on ${this.describe(el, owner)} is not a number or expression; the engines refuse it`, addr ? `\`bpmn set <file> ${addr.id} ${sh(`${addr.prefix}${this.prefix}:${name}=50`)}\` (an integer or \${...}).` : 'Use an integer.');
     }
   }
@@ -150,7 +160,9 @@ export class C7ImplementationRules extends C7Rules {
       return;
     }
     if (shell) this.checkShell(el, owner, label, fieldAdd);
-    if (this.fieldsRead(el, { type })) this.checkFieldValues(el, owner, this.camundaExt(el, 'field'), label, fieldAdd);
+    if (this.fieldsRead(el, { type })) {
+      this.checkFieldValues(el, owner, this.camundaExt(el, 'field'), label, fieldAdd);
+    }
     const impl =
       ['class', 'delegateExpression', 'expression'].some((attributeName) => nonEmpty(this.c7(el, attributeName))) ||
       external ||
@@ -264,13 +276,17 @@ export class C7ImplementationRules extends C7Rules {
   }
 
   checkScriptTask(el: El): void {
-    if (nonEmpty(peek<string>(el, 'script')) || this.c7(el, 'resource') !== undefined) return;
+    if (nonEmpty(peek<string>(el, 'script')) || this.c7(el, 'resource') !== undefined) {
+      return;
+    }
     this.push('deploy', 'W_C7_DEPLOY_SCRIPT', el, undefined, 'script', `Script task ${idOf(el)} has neither a script nor ${this.prefix}:resource; the engines refuse the file`, `\`bpmn set <file> ${idOf(el)} scriptFormat=groovy ${sh('script=...')}\` (or ${this.prefix}:resource=deployment://<file>).`);
   }
 
   checkUserTaskPriority(el: El): void {
     const priority = this.c7(el, 'priority');
-    if (priority === undefined || this.isNumber(priority) || this.isExpression(priority)) return;
+    if (priority === undefined || this.isNumber(priority) || this.isExpression(priority)) {
+      return;
+    }
     this.push('runtime', 'W_C7_BAD_VALUE', el, undefined, 'attr:priority', `${this.prefix}:priority="${priority}" on ${this.describe(el, undefined)} is not a number or expression; creating the task fails`, `\`bpmn set <file> ${idOf(el)} ${this.prefix}:priority=50\`.`);
   }
 }

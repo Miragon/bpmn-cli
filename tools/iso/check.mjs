@@ -69,7 +69,9 @@ for (const violation of full.violations) {
   problems.push(violation.kind === 'global' ? `${violation.file}: uses the Node-only global \`${violation.what}\`` : `${violation.file}${violation.line ? `:${violation.line}` : ''}: ${violation.kind === 'builtin' ? `imports the Node builtin "${violation.what}"` : violation.text}`);
 }
 for (const input of full.inputs) {
-  if (/^dist\/(adapters\/(in\/cli|out\/files)\/|node\.js$|cli\.js$)/.test(input)) problems.push(`the core bundle contains ${input} (Node only)`);
+  if (/^dist\/(adapters\/(in\/cli|out\/files)\/|node\.js$|cli\.js$)/.test(input)) {
+    problems.push(`the core bundle contains ${input} (Node only)`);
+  }
 }
 
 /* 2. what a host pays for the edit engine alone */
@@ -87,9 +89,13 @@ for (const [sub, file] of Object.entries(expected)) {
     problems.push(`${spec} does not resolve: ${err.message}`);
     continue;
   }
-  if (resolved !== join(ROOT, file)) problems.push(`${spec} resolves to ${resolved}, expected ${file}`);
+  if (resolved !== join(ROOT, file)) {
+    problems.push(`${spec} resolves to ${resolved}, expected ${file}`);
+  }
   const types = pkg.exports?.[sub]?.types;
-  if (!types || !existsSync(join(ROOT, types))) problems.push(`${spec}: no type declarations (exports["${sub}"].types = ${types})`);
+  if (!types || !existsSync(join(ROOT, types))) {
+    problems.push(`${spec}: no type declarations (exports["${sub}"].types = ${types})`);
+  }
 }
 
 /* 4. a strict consumer of the published types (outside the repository, the package linked by name) */
@@ -117,7 +123,9 @@ try {
   const options = { target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', lib: ['ES2022'], strict: true, skipLibCheck: false, noEmit: true, types: [] };
   writeFileSync(join(tmp, 'tsconfig.json'), JSON.stringify({ compilerOptions: options, files: ['consumer.ts'] }));
   const tsc = spawnSync(process.execPath, [join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', join(tmp, 'tsconfig.json')], { encoding: 'utf8', cwd: tmp });
-  if (tsc.status !== 0) problems.push(`a strict TypeScript consumer does not compile against the published types:\n${(tsc.stdout + tsc.stderr).trim().split(tmp).join('<consumer>')}`);
+  if (tsc.status !== 0) {
+    problems.push(`a strict TypeScript consumer does not compile against the published types:\n${(tsc.stdout + tsc.stderr).trim().split(tmp).join('<consumer>')}`);
+  }
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
@@ -129,14 +137,18 @@ try {
  * the rest named by its packages).
  */
 function sizeOf(bundle) {
-  if (!bundle.entry) throw new Error('isomorphism check: the bundle has no entry chunk');
+  if (!bundle.entry) {
+    throw new Error('isomorphism check: the bundle has no entry chunk');
+  }
   const byPath = new Map(bundle.chunks.map((chunk) => [chunk.path, chunk]));
   const closure = (start, skip = new Set()) => {
     const seen = new Set();
     const visit = (chunk) => {
       if (!chunk || seen.has(chunk) || skip.has(chunk)) return;
       seen.add(chunk);
-      for (const importPath of chunk.imports) visit(byPath.get(importPath));
+      for (const importPath of chunk.imports) {
+        visit(byPath.get(importPath));
+      }
     };
     visit(start);
     return seen;
@@ -148,7 +160,9 @@ function sizeOf(bundle) {
     const visit = (modulePath) => {
       if (seen.has(modulePath) || !bundle.graph[modulePath]) return;
       seen.add(modulePath);
-      for (const imported of bundle.graph[modulePath]) visit(imported);
+      for (const imported of bundle.graph[modulePath]) {
+        visit(imported);
+      }
     };
     visit(start);
     return seen;
@@ -164,7 +178,9 @@ function sizeOf(bundle) {
     const root = lazy.find((chunk) => chunk.inputs.some(has));
     if (!root) continue;
     const chunks = closure(root, initial);
-    for (const chunk of chunks) counted.add(chunk);
+    for (const chunk of chunks) {
+      counted.add(chunk);
+    }
     onDemand.push({ name: part.name, label: part.label, ...sum(chunks), modules: [...chunks].flatMap((chunk) => chunk.inputs), importsOfEntry: part.rules.length ? importsOfEntry(part.marker) : [] });
   }
   const rest = lazy.filter((chunk) => !counted.has(chunk));
@@ -183,7 +199,9 @@ const overBudget = (what, size, limit) => {
   if (!limit) return problems.push(`${BUDGET_FILE} has no budget for ${what}`);
   for (const unit of ['minified', 'gzip']) {
     const bytes = unit === 'minified' ? size.bytes : size.gzip;
-    if (bytes > limit[unit] * KB) problems.push(`${what} is ${kb(bytes)} ${unit}, over its budget of ${limit[unit]} KB (${BUDGET_FILE}; raise it only in the change that needs it, with the reason)`);
+    if (bytes > limit[unit] * KB) {
+      problems.push(`${what} is ${kb(bytes)} ${unit}, over its budget of ${limit[unit]} KB (${BUDGET_FILE}; raise it only in the change that needs it, with the reason)`);
+    }
   }
 };
 for (const entry of ENTRIES) {
@@ -191,16 +209,22 @@ for (const entry of ENTRIES) {
   if (!entrySize) continue;
   for (const part of ON_DEMAND) {
     for (const rule of part.rules) {
-      if (entrySize.initialModules.includes(rule)) problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/domain/validation/profiles/PlatformProfiles.ts imports them, with import())`);
+      if (entrySize.initialModules.includes(rule)) {
+        problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/domain/validation/profiles/PlatformProfiles.ts imports them, with import())`);
+      }
     }
-    if (part.rules.length && !entrySize.onDemand.some((demandPart) => demandPart.name === part.name)) problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
+    if (part.rules.length && !entrySize.onDemand.some((demandPart) => demandPart.name === part.name)) {
+      problems.push(`${entry.name} has no on-demand chunk with ${part.marker} (the ${part.label})`);
+    }
     for (const { from, to } of entrySize.onDemand.find((demandPart) => demandPart.name === part.name)?.importsOfEntry ?? []) {
       problems.push(`${from} imports ${to}, which ${entry.name} loads too: a host's bundler (Rollup / Vite) puts it into the entry chunk and makes the ${part.label} chunk import the entry chunk back, so a host whose entry module awaits a call at top level waits forever; hand it to the rules in src/domain/validation/profiles/rule-kit.ts (RULE_KIT) instead of importing it`);
     }
   }
   overBudget(entry.name, entrySize, budget.entries?.[entry.label]);
   for (const demandPart of entrySize.onDemand) {
-    if (budget.onDemand?.[demandPart.name] !== undefined || ON_DEMAND.find((candidate) => candidate.name === demandPart.name)?.rules.length) overBudget(`the ${demandPart.label} chunk of ${entry.name}`, demandPart, budget.onDemand?.[demandPart.name]);
+    if (budget.onDemand?.[demandPart.name] !== undefined || ON_DEMAND.find((candidate) => candidate.name === demandPart.name)?.rules.length) {
+      overBudget(`the ${demandPart.label} chunk of ${entry.name}`, demandPart, budget.onDemand?.[demandPart.name]);
+    }
   }
 }
 
@@ -216,7 +240,9 @@ function sizeTable() {
   const rows = ['| bundle | minified | gzip | budget (tools/iso/budget.json) | loads |', '| --- | ---: | ---: | ---: | --- |'];
   for (const entry of ENTRIES) {
     const entrySize = sizes[entry.key];
-    if (entrySize) rows.push(`| ${entry.title} | ${fmt(entrySize.bytes)} | ${fmt(entrySize.gzip)} | ${limit(budget.entries?.[entry.label])} | with the entry |`);
+    if (entrySize) {
+      rows.push(`| ${entry.title} | ${fmt(entrySize.bytes)} | ${fmt(entrySize.gzip)} | ${limit(budget.entries?.[entry.label])} | with the entry |`);
+    }
   }
   // the on-demand chunks are the same for both entries (the measured ones of the applyToXml-only entry)
   const lazy = (sizes.applyToXmlOnly ?? sizes.core)?.onDemand ?? [];
@@ -236,8 +262,12 @@ if (json) {
 } else {
   if (!problems.length) {
     console.log(`isomorphic: dist/index.js bundles for the browser without Node builtins or globals (${full.inputs.length} modules); the exports and their types resolve for a strict consumer; the engine rules load on demand and import nothing the entry loads; every size is within ${BUDGET_FILE}`);
-    for (const entry of ENTRIES) if (sizes[entry.key]) console.log(sizeLine(entry.label, sizes[entry.key]));
+    for (const entry of ENTRIES) {
+      if (sizes[entry.key]) console.log(sizeLine(entry.label, sizes[entry.key]));
+    }
   }
-  for (const problem of problems) console.error(`isomorphism check: ${problem}`);
+  for (const problem of problems) {
+    console.error(`isomorphism check: ${problem}`);
+  }
 }
 process.exit(problems.length ? 1 : 0);

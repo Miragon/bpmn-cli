@@ -36,7 +36,9 @@ const suffix = (_k: string, id: string): string => `${id}_di`;
 /** DI ids by element id, and the plane / diagram ids. */
 function diOf(xml: string): { shapes: Map<string, string>; planes: string[]; diagrams: string[] } {
   const shapes = new Map<string, string>();
-  for (const match of xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)) shapes.set(match[2]!, match[1]!);
+  for (const match of xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="([^"]+)" bpmnElement="([^"]+)"/g)) {
+    shapes.set(match[2]!, match[1]!);
+  }
   return {
     shapes,
     planes: [...xml.matchAll(/<bpmndi:BPMNPlane id="([^"]+)"/g)].map((match) => match[1]!),
@@ -64,7 +66,9 @@ describe('a full redraw keeps the DI ids', () => {
     const after = diOf(await write(await drawn(suffix), [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'A' }, { op: 'remove', ids: ['E2'] }], { layout: 'full' }));
     expect(after.shapes.get('N')).toBe('N_di');
     expect(after.shapes.get('E2')).toBeUndefined();
-    for (const [el, di] of after.shapes) expect(di).toBe(`${el}_di`);
+    for (const [el, di] of after.shapes) {
+      expect(di).toBe(`${el}_di`);
+    }
     expect(after.planes).toEqual(['BPMNPlane_1']);
   });
 
@@ -154,7 +158,9 @@ describe('every DI id bpmn-cli writes stays within 64 characters', () => {
       const { shapes, planes, diagrams } = diOf(outcome.xml);
       const flows = [...outcome.xml.matchAll(/<bpmn:sequenceFlow id="([^"]+)"/g)].map((match) => match[1]!);
       expect(flows.some((flowId) => flowId.length > 52)).toBe(true);
-      for (const flowId of flows) expect(shapes.get(flowId)).toBe(styledId('bpmn', 'Edge', flowId));
+      for (const flowId of flows) {
+        expect(shapes.get(flowId)).toBe(styledId('bpmn', 'Edge', flowId));
+      }
       // the engine's form, cut like the element ids themselves
       expect(shapes.get(`${APPROVE}A`)).toBe('BPMNShape_Activity_ApproveTheIncomingSupplierInvoiceFor');
       expect(shapes.get(`${APPROVE}B`)).toBe('BPMNShape_Activity_ApproveTheIncomingSupplierInvoiceFor_2');

@@ -25,11 +25,19 @@ export class Connections {
   }
 
   private kindOf(source: El, target: El): ConnectionKind {
-    if (is(source, 'bpmn:TextAnnotation') || is(target, 'bpmn:TextAnnotation')) return 'association';
-    if (isDataReference(source) || isDataReference(target)) return 'dataAssociation';
-    if (is(source, 'bpmn:Participant') || is(target, 'bpmn:Participant')) return 'messageFlow';
+    if (is(source, 'bpmn:TextAnnotation') || is(target, 'bpmn:TextAnnotation')) {
+      return 'association';
+    }
+    if (isDataReference(source) || isDataReference(target)) {
+      return 'dataAssociation';
+    }
+    if (is(source, 'bpmn:Participant') || is(target, 'bpmn:Participant')) {
+      return 'messageFlow';
+    }
     if (is(source, 'bpmn:FlowNode') && is(target, 'bpmn:FlowNode')) {
-      if (is(source, 'bpmn:BoundaryEvent') && triggerOf(source) === 'compensate' && is(target, 'bpmn:Activity')) return 'association';
+      if (is(source, 'bpmn:BoundaryEvent') && triggerOf(source) === 'compensate' && is(target, 'bpmn:Activity')) {
+        return 'association';
+      }
       const ps = this.edit.doc.processOf(source);
       const pt = this.edit.doc.processOf(target);
       if (ps && pt && ps !== pt) return 'messageFlow';
@@ -52,13 +60,23 @@ export class Connections {
     const fail = (why: string, hint: string): never => {
       throw modelError('E_INVALID_ENDPOINT', `${Connections.describe(el)} cannot be the ${role} of a message flow: ${why}`, { element: idOf(el), hint });
     };
-    if (!is(el, 'bpmn:InteractionNode')) fail('not an interaction node', 'Message flows connect participants, tasks, events and sub-processes; not gateways or data.');
-    if (isEventSubProcess(el)) fail('event sub-processes cannot send or receive messages', 'Target a message start event inside it instead.');
+    if (!is(el, 'bpmn:InteractionNode')) {
+      fail('not an interaction node', 'Message flows connect participants, tasks, events and sub-processes; not gateways or data.');
+    }
+    if (isEventSubProcess(el)) {
+      fail('event sub-processes cannot send or receive messages', 'Target a message start event inside it instead.');
+    }
     if (is(el, 'bpmn:Event')) {
       const trigger = triggerOf(el);
-      if (trigger !== 'none' && trigger !== 'message') fail(`a ${trigger} event cannot ${role === 'source' ? 'send' : 'receive'} messages`, 'Use a message or untyped event.');
-      if (role === 'source' && !is(el, 'bpmn:ThrowEvent')) fail('catching events cannot send messages', 'Use a throw event, end event or send task as source.');
-      if (role === 'target' && !is(el, 'bpmn:CatchEvent')) fail('throwing events cannot receive messages', 'Use a catch event, start event or receive task as target.');
+      if (trigger !== 'none' && trigger !== 'message') {
+        fail(`a ${trigger} event cannot ${role === 'source' ? 'send' : 'receive'} messages`, 'Use a message or untyped event.');
+      }
+      if (role === 'source' && !is(el, 'bpmn:ThrowEvent')) {
+        fail('catching events cannot send messages', 'Use a throw event, end event or send task as source.');
+      }
+      if (role === 'target' && !is(el, 'bpmn:CatchEvent')) {
+        fail('throwing events cannot receive messages', 'Use a catch event, start event or receive task as target.');
+      }
     }
   }
 
@@ -153,8 +171,12 @@ export class Connections {
       if (command.default) reject('default', 'sequence flows');
       if (command.language !== undefined) reject('language', 'sequence flows');
     }
-    if (kind !== 'sequenceFlow' && kind !== 'messageFlow' && command.name !== undefined) reject('name', 'sequence and message flows');
-    if (kind !== 'messageFlow' && command.message !== undefined) reject('message', 'message flows (between pools)');
+    if (kind !== 'sequenceFlow' && kind !== 'messageFlow' && command.name !== undefined) {
+      reject('name', 'sequence and message flows');
+    }
+    if (kind !== 'messageFlow' && command.message !== undefined) {
+      reject('message', 'message flows (between pools)');
+    }
     new FlowOptions({ condition: command.condition, default: command.default }).assertConsistent({ element: command.source, related: [command.target] });
   }
 
@@ -204,7 +226,9 @@ export class Connections {
         const flow = (made = new SequenceFlows(this.edit).create(source, target, new FlowOptions({ flowId: command.id, flowName: command.name, condition: command.condition, language: command.language, default: command.default }).toAttrs(true)));
         changes.create(ChangeSet.flowEntryOf(flow));
         new EventGatewayRule(this.edit).warnFlow(flow, changes);
-        if (selfLoop) changes.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);
+        if (selfLoop) {
+          changes.note(`${idOf(source)} loops back to itself; a standard loop marker (\`bpmn set <file> ${idOf(source)} loop=standard\`) is the conventional alternative`);
+        }
         const out = this.edit.doc.outgoing(source).length;
         const inc = this.edit.doc.incoming(target).length;
         if (!is(source, 'bpmn:Gateway') && out > 1) {

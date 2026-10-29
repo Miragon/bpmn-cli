@@ -21,7 +21,9 @@ describe('CLI options of the edit commands', () => {
         const spec = option.negate ? undefined : fields[option.attributeName()];
         if (!spec) continue;
         expect(option.description, `${command.name()} ${option.long}`).toBe(spec.description);
-        if (spec.values) expect(option.argChoices, `${command.name()} ${option.long}`).toEqual([...spec.values]);
+        if (spec.values) {
+          expect(option.argChoices, `${command.name()} ${option.long}`).toEqual([...spec.values]);
+        }
       }
     }
   });

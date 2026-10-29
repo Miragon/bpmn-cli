@@ -372,7 +372,11 @@ describe('layout', () => {
     expect(layoutOutcome.xml).toContain(`BPMNEdge_${association}`);
     const laidOut = await Doc.fromXml(layoutOutcome.xml);
     const shapes = new Map<string, any>();
-    for (const diagram of many(laidOut.definitions, 'diagrams')) for (const shape of many(diagram.get('plane'), 'planeElement')) shapes.set(shape.get('bpmnElement').id, shape);
+    for (const diagram of many(laidOut.definitions, 'diagrams')) {
+      for (const shape of many(diagram.get('plane'), 'planeElement')) {
+        shapes.set(shape.get('bpmnElement').id, shape);
+      }
+    }
     const event = shapes.get('Comp').bounds;
     const handler = shapes.get('serviceTask_refundCard').bounds;
     expect(handler.x + handler.width / 2).toBe(event.x + event.width / 2);

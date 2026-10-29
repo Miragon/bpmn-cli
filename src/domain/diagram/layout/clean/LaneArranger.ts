@@ -72,7 +72,9 @@ export class LaneArranger {
     if (!leaves.length) return;
     this.leaves = leaves;
     const assigned = new Set(leaves.flatMap((lane) => lane.nodes));
-    for (const node of scope.nodes) if (!assigned.has(node)) leaves[0]!.nodes.push(node);
+    for (const node of scope.nodes) {
+      if (!assigned.has(node)) leaves[0]!.nodes.push(node);
+    }
 
     const dataRow = new Set(scope.artifacts.filter((artifact) => artifact.kind !== 'annotation' && artifact.anchorNode).map((artifact) => artifact.anchorNode!));
     const arrange = (): void => {
@@ -83,7 +85,9 @@ export class LaneArranger {
         rows.forEach((row) => {
           const inRow = lane.nodes.filter((node) => node.row === row);
           const rh = Math.max(0, ...inRow.map((node) => node.height + ScopeGrid.boundaryExtra(node)));
-          for (const node of inRow) shiftNode(node, 0, Math.round(rowY + rh / 2 - node.height / 2 - node.box.y));
+          for (const node of inRow) {
+            shiftNode(node, 0, Math.round(rowY + rh / 2 - node.height / 2 - node.box.y));
+          }
           rowY += rh + METRICS.vGap + (inRow.some((node) => dataRow.has(node)) ? DATA_ROW_EXTRA : 0);
         });
         const content = rows.length ? rowY - METRICS.vGap - (laneTop + SIZES.lanePadding) : 0;
@@ -110,7 +114,9 @@ export class LaneArranger {
         bandShift = band?.bandY !== undefined && drawnBandY !== undefined ? drawnBandY - band.bandY : 0;
       }
       grid.arrange(shifts);
-      for (const edge of scope.edges) if (edge.bandY !== undefined) edge.bandY += bandShift;
+      for (const edge of scope.edges) {
+        if (edge.bandY !== undefined) edge.bandY += bandShift;
+      }
       arrange();
     }).run();
     new ChainLiftTrial(scope, arrange).run();
@@ -132,7 +138,9 @@ export class LaneArranger {
     new LinkRouter(scope).route();
     growToFit(scope);
     const last = leaves[leaves.length - 1]!;
-    for (const lane of leaves) if (lane !== last && lane.subs.length) this.placeLaneEventSubs(lane);
+    for (const lane of leaves) {
+      if (lane !== last && lane.subs.length) this.placeLaneEventSubs(lane);
+    }
     const placed = new Set(leaves.filter((lane) => lane !== last).flatMap((lane) => lane.subs));
     let extraY = last.y + last.height - SIZES.lanePadding;
     for (const es of scope.eventSubs.filter((eventSub) => !placed.has(eventSub))) {
@@ -141,7 +149,9 @@ export class LaneArranger {
     }
     const labels = new ScopeLabels(scope);
     const contentBottom = Math.max(extraY, ...scope.nodes.map((node) => node.box.y + node.box.height), ...scope.artifacts.map((artifact) => artifact.box.y + artifact.box.height), ...scope.edges.flatMap((edge) => edge.points.map((point) => point.y)), ...labels.all().map((label) => label.y + label.height));
-    if (contentBottom > last.y + last.height - SIZES.lanePadding) last.height = Math.round(contentBottom + SIZES.lanePadding - last.y);
+    if (contentBottom > last.y + last.height - SIZES.lanePadding) {
+      last.height = Math.round(contentBottom + SIZES.lanePadding - last.y);
+    }
     scope.height = last.y + last.height;
     const finalize = (laneBand: LaneBand): void => {
       if (laneBand.children.length) {
@@ -171,7 +181,9 @@ export class LaneArranger {
   private growFirstLane(shift: number, bandsMoved: boolean): void {
     const { scope, leaves } = this;
     if (!shift) return;
-    for (const lane of leaves) lane.y += shift;
+    for (const lane of leaves) {
+      lane.y += shift;
+    }
     leaves[0]!.y -= shift;
     leaves[0]!.height += shift;
     const bands = scope.laneBands ?? [];
@@ -193,18 +205,26 @@ export class LaneArranger {
     const move = (point: Point): void => {
       if (point.y >= cut) point.y += dy;
     };
-    for (const node of [...scope.nodes, ...scope.eventSubs]) if (node.box.y >= cut) shiftNode(node, 0, dy);
+    for (const node of [...scope.nodes, ...scope.eventSubs]) {
+      if (node.box.y >= cut) shiftNode(node, 0, dy);
+    }
     for (const artifact of scope.artifacts) {
       if (artifact.box.y >= cut) artifact.box.y += dy;
-      for (const link of artifact.links) link.points.forEach(move);
+      for (const link of artifact.links) {
+        link.points.forEach(move);
+      }
     }
     for (const edge of scope.edges) {
       if (keep.has(edge)) continue;
       edge.points.forEach(move);
       if (edge.label && edge.label.y >= cut) edge.label.y += dy;
     }
-    for (const compensation of scope.compensations) compensation.points.forEach(move);
-    for (const lane of leaves) if (lane.y >= cut) lane.y += dy;
+    for (const compensation of scope.compensations) {
+      compensation.points.forEach(move);
+    }
+    for (const lane of leaves) {
+      if (lane.y >= cut) lane.y += dy;
+    }
     scope.height += dy;
   }
 
@@ -213,7 +233,9 @@ export class LaneArranger {
     for (const edge of this.scope.edges) {
       for (let index = 0; index + 1 < edge.points.length; index++) {
         const start = edge.points[index]!, end = edge.points[index + 1]!;
-        if (start.x === end.x && Math.min(start.y, end.y) < cut && Math.max(start.y, end.y) > cut) crossing.push(start.x);
+        if (start.x === end.x && Math.min(start.y, end.y) < cut && Math.max(start.y, end.y) > cut) {
+          crossing.push(start.x);
+        }
       }
     }
     const candidates = [0, ...crossing.map((left) => left + 20)].sort((first, second) => first - second);
@@ -246,7 +268,9 @@ export class LaneArranger {
         const cut = lane.y;
         this.openStrip(cut, above);
         for (const edge of inside) {
-          for (const point of edge.points) if (point.y < cut) point.y += above;
+          for (const point of edge.points) {
+            if (point.y < cut) point.y += above;
+          }
           if (edge.label && edge.label.y < cut) edge.label.y += above;
         }
         lane.y -= above;
@@ -275,11 +299,21 @@ export class LaneArranger {
     const inBand = (pointY: number): boolean => pointY > top && pointY <= bottom;
     const labelIn = (pointY: number): boolean => pointY >= top && pointY < bottom;
     let content = bottom - SIZES.lanePadding;
-    for (const node of lane.nodes) content = Math.max(content, node.box.y + node.box.height, ...node.boundary.map((event) => event.box.y + event.box.height));
-    for (const artifact of scope.artifacts) if (inBand(cy(artifact.box))) content = Math.max(content, artifact.box.y + artifact.box.height);
+    for (const node of lane.nodes) {
+      content = Math.max(content, node.box.y + node.box.height, ...node.boundary.map((event) => event.box.y + event.box.height));
+    }
+    for (const artifact of scope.artifacts) {
+      if (inBand(cy(artifact.box))) {
+        content = Math.max(content, artifact.box.y + artifact.box.height);
+      }
+    }
     for (const edge of scope.edges) {
-      for (const point of edge.points) if (inBand(point.y)) content = Math.max(content, point.y);
-      if (edge.label && labelIn(edge.label.y)) content = Math.max(content, edge.label.y + edge.label.height);
+      for (const point of edge.points) {
+        if (inBand(point.y)) content = Math.max(content, point.y);
+      }
+      if (edge.label && labelIn(edge.label.y)) {
+        content = Math.max(content, edge.label.y + edge.label.height);
+      }
     }
     let stackBottom = content;
     const stack = lane.subs.map((es) => {

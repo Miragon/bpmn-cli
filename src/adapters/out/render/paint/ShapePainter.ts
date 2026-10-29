@@ -61,7 +61,9 @@ export class ShapePainter {
     const shape = this.shape;
     const bounds = shape.bounds;
     const paint = `fill="none" stroke="${color}" stroke-opacity="${color === HALO_COLORS.moved ? 0.4 : 0.55}" stroke-width="${color === HALO_COLORS.moved ? 4 : 6}"`;
-    if (shape.kind === 'event' || shape.kind === 'boundary') return `<circle cx="${formatNumber(bounds.x + bounds.width / 2)}" cy="${formatNumber(bounds.y + bounds.height / 2)}" r="${formatNumber(Math.min(bounds.width, bounds.height) / 2 + 6)}" ${paint}/>`;
+    if (shape.kind === 'event' || shape.kind === 'boundary') {
+      return `<circle cx="${formatNumber(bounds.x + bounds.width / 2)}" cy="${formatNumber(bounds.y + bounds.height / 2)}" r="${formatNumber(Math.min(bounds.width, bounds.height) / 2 + 6)}" ${paint}/>`;
+    }
     if (shape.kind === 'gateway') {
       const cx = bounds.x + bounds.width / 2;
       const cy = bounds.y + bounds.height / 2;
@@ -79,7 +81,9 @@ export class ShapePainter {
     if (!external) return undefined;
     const value = shape.kind === 'group' ? groupName(shape.el) : raw<string>(shape.el, 'name');
     if (!value || !value.trim()) return undefined;
-    if (shape.label) return this.text.external(shape.id, value, shape.label.x + shape.label.width / 2, Math.round(shape.label.y), shape.label.width);
+    if (shape.label) {
+      return this.text.external(shape.id, value, shape.label.x + shape.label.width / 2, Math.round(shape.label.y), shape.label.width);
+    }
     const bounds = shape.bounds;
     return this.text.external(shape.id, value, bounds.x + bounds.width / 2, Math.round(shape.kind === 'group' ? bounds.y : bounds.y + bounds.height));
   }
@@ -115,7 +119,9 @@ export class ShapePainter {
     const paper = this.style.fill;
     const fill = full ? ink : paper;
     const shape = (pathData: string, extra = ''): string => `<path d="${pathData}" fill="${fill}" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"${extra}/>`;
-    if (defs.length > 1) return raw(el, 'parallelMultiple') ? shape(PLUS) : shape(PENTAGON);
+    if (defs.length > 1) {
+      return raw(el, 'parallelMultiple') ? shape(PLUS) : shape(PENTAGON);
+    }
     const definition = defs[0]!;
     if (is(definition, 'bpmn:MessageEventDefinition')) {
       return `<rect x="-8.5" y="-6" width="17" height="12" fill="${fill}" stroke="${ink}" stroke-width="1.2"/><path d="M-8.5 -6L0 0.8L8.5 -6" fill="none" stroke="${full ? paper : ink}" stroke-width="1.2"/>`;
@@ -126,13 +132,27 @@ export class ShapePainter {
     if (is(definition, 'bpmn:ConditionalEventDefinition')) {
       return `<rect x="-7" y="-9" width="14" height="18" fill="${paper}" stroke="${ink}" stroke-width="1.2"/><path d="M-4.5 -5H4.5M-4.5 -1.5H4.5M-4.5 2H4.5M-4.5 5.5H4.5" stroke="${ink}" stroke-width="1"/>`;
     }
-    if (is(definition, 'bpmn:SignalEventDefinition')) return shape('M0 -9.5L8.5 6H-8.5Z');
-    if (is(definition, 'bpmn:EscalationEventDefinition')) return shape('M0 -9L7 8L0 2L-7 8Z');
-    if (is(definition, 'bpmn:ErrorEventDefinition')) return shape('M-8 8L-3.5 -7.5L1.5 1.5L7.5 -8.5L3 7.5L-1.5 -1Z');
-    if (is(definition, 'bpmn:LinkEventDefinition')) return shape('M-8 -3.5H1V-8L9 0L1 8V3.5H-8Z');
-    if (is(definition, 'bpmn:CompensateEventDefinition')) return shape('M-8 0L0 -6V6ZM0 0L8 -6V6Z');
-    if (is(definition, 'bpmn:CancelEventDefinition')) return shape('M-7 -9L0 -2L7 -9L9 -7L2 0L9 7L7 9L0 2L-7 9L-9 7L-2 0L-9 -7Z');
-    if (is(definition, 'bpmn:TerminateEventDefinition')) return `<circle r="10.5" fill="${ink}"/>`;
+    if (is(definition, 'bpmn:SignalEventDefinition')) {
+      return shape('M0 -9.5L8.5 6H-8.5Z');
+    }
+    if (is(definition, 'bpmn:EscalationEventDefinition')) {
+      return shape('M0 -9L7 8L0 2L-7 8Z');
+    }
+    if (is(definition, 'bpmn:ErrorEventDefinition')) {
+      return shape('M-8 8L-3.5 -7.5L1.5 1.5L7.5 -8.5L3 7.5L-1.5 -1Z');
+    }
+    if (is(definition, 'bpmn:LinkEventDefinition')) {
+      return shape('M-8 -3.5H1V-8L9 0L1 8V3.5H-8Z');
+    }
+    if (is(definition, 'bpmn:CompensateEventDefinition')) {
+      return shape('M-8 0L0 -6V6ZM0 0L8 -6V6Z');
+    }
+    if (is(definition, 'bpmn:CancelEventDefinition')) {
+      return shape('M-7 -9L0 -2L7 -9L9 -7L2 0L9 7L7 9L0 2L-7 9L-9 7L-2 0L-9 -7Z');
+    }
+    if (is(definition, 'bpmn:TerminateEventDefinition')) {
+      return `<circle r="10.5" fill="${ink}"/>`;
+    }
     return '';
   }
 
@@ -149,7 +169,9 @@ export class ShapePainter {
     const nonInterrupting = (shape.kind === 'boundary' && raw(el, 'cancelActivity') === false) || (start && raw(el, 'isInterrupting') === false);
     const dash = nonInterrupting ? ' stroke-dasharray="5.5 3"' : '';
     let out = `<circle cx="${formatNumber(cx)}" cy="${formatNumber(cy)}" r="${formatNumber(radius)}" fill="${st.fill}" stroke="${st.stroke}" stroke-width="${end ? 4 : start ? 2 : 1.5}"${dash}/>`;
-    if (!start && !end) out += `<circle cx="${formatNumber(cx)}" cy="${formatNumber(cy)}" r="${formatNumber(Math.max(1, radius - 3))}" fill="none" stroke="${st.stroke}" stroke-width="1.5"${dash}/>`;
+    if (!start && !end) {
+      out += `<circle cx="${formatNumber(cx)}" cy="${formatNumber(cy)}" r="${formatNumber(Math.max(1, radius - 3))}" fill="none" stroke="${st.stroke}" stroke-width="1.5"${dash}/>`;
+    }
     const glyph = this.triggerGlyph(el, end || is(el, 'bpmn:IntermediateThrowEvent'));
     return glyph ? out + at(cx, cy, radius / 18, glyph) : out;
   }
@@ -159,15 +181,21 @@ export class ShapePainter {
     const ink = this.style.stroke;
     const bar = (pathData: string, strokeWidth: number): string => `<path d="${pathData}" fill="none" stroke="${ink}" stroke-width="${strokeWidth}"/>`;
     if (is(el, 'bpmn:ParallelGateway')) return bar('M0 -12V12M-12 0H12', 4.5);
-    if (is(el, 'bpmn:InclusiveGateway')) return `<circle r="10.5" fill="none" stroke="${ink}" stroke-width="3.5"/>`;
-    if (is(el, 'bpmn:ComplexGateway')) return bar('M0 -12V12M-12 0H12M-8.5 -8.5L8.5 8.5M8.5 -8.5L-8.5 8.5', 4);
+    if (is(el, 'bpmn:InclusiveGateway')) {
+      return `<circle r="10.5" fill="none" stroke="${ink}" stroke-width="3.5"/>`;
+    }
+    if (is(el, 'bpmn:ComplexGateway')) {
+      return bar('M0 -12V12M-12 0H12M-8.5 -8.5L8.5 8.5M8.5 -8.5L-8.5 8.5', 4);
+    }
     if (is(el, 'bpmn:EventBasedGateway')) {
       const parallel = raw(el, 'eventGatewayType') === 'Parallel';
       const instantiate = raw(el, 'instantiate') === true;
       const ring = `<circle r="12" fill="none" stroke="${ink}" stroke-width="1.2"/>` + (parallel || instantiate ? '' : `<circle r="9.3" fill="none" stroke="${ink}" stroke-width="1.2"/>`);
       return ring + `<path d="${parallel ? 'M-1.5 -7H1.5V-1.5H7V1.5H1.5V7H-1.5V1.5H-7V-1.5H-1.5Z' : 'M0 -5.5L5.2 -1.7L3.2 4.4L-3.2 4.4L-5.2 -1.7Z'}" fill="none" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>`;
     }
-    if (is(el, 'bpmn:ExclusiveGateway') && raw(this.shape.di, 'isMarkerVisible') === true) return bar('M-7.5 -9.5L7.5 9.5M7.5 -9.5L-7.5 9.5', 4.5);
+    if (is(el, 'bpmn:ExclusiveGateway') && raw(this.shape.di, 'isMarkerVisible') === true) {
+      return bar('M-7.5 -9.5L7.5 9.5M7.5 -9.5L-7.5 9.5', 4.5);
+    }
     return '';
   }
 
@@ -216,11 +244,20 @@ export class ShapePainter {
     const line = (pathData: string, strokeWidth = 1.5): string => `<path d="${pathData}" fill="none" stroke="${ink}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
     const out: string[] = [];
     const loop = raw<El>(el, 'loopCharacteristics');
-    if (loop && is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) out.push(raw(loop, 'isSequential') ? line('M2 3H12M2 7H12M2 11H12', 2) : line('M3 2V12M7 2V12M11 2V12', 2));
-    else if (loop) out.push(line('M4.2 11.8A5.5 5.5 0 1 1 9.8 11.8') + line('M9.8 11.8L9.6 8.4M9.8 11.8L13 11'));
-    if (collapsedSub) out.push(`<rect x="0.5" y="0.5" width="13" height="13" fill="none" stroke="${ink}" stroke-width="1.2"/>` + line('M3.5 7H10.5M7 3.5V10.5', 1.5));
-    if (raw(el, 'isForCompensation')) out.push(`<path d="M1 7L7 2.5V11.5ZM7 7L13 2.5V11.5Z" fill="none" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>`);
-    if (is(el, 'bpmn:AdHocSubProcess')) out.push(line('M1 8C3.5 4 5.5 4 7 7C8.5 10 10.5 10 13 6'));
+    if (loop && is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) {
+      out.push(raw(loop, 'isSequential') ? line('M2 3H12M2 7H12M2 11H12', 2) : line('M3 2V12M7 2V12M11 2V12', 2));
+    } else if (loop) {
+      out.push(line('M4.2 11.8A5.5 5.5 0 1 1 9.8 11.8') + line('M9.8 11.8L9.6 8.4M9.8 11.8L13 11'));
+    }
+    if (collapsedSub) {
+      out.push(`<rect x="0.5" y="0.5" width="13" height="13" fill="none" stroke="${ink}" stroke-width="1.2"/>` + line('M3.5 7H10.5M7 3.5V10.5', 1.5));
+    }
+    if (raw(el, 'isForCompensation')) {
+      out.push(`<path d="M1 7L7 2.5V11.5ZM7 7L13 2.5V11.5Z" fill="none" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>`);
+    }
+    if (is(el, 'bpmn:AdHocSubProcess')) {
+      out.push(line('M1 8C3.5 4 5.5 4 7 7C8.5 10 10.5 10 13 6'));
+    }
     return out;
   }
 
@@ -233,14 +270,20 @@ export class ShapePainter {
     const rect = (inset: number, width: number, extra = ''): string =>
       `<rect x="${formatNumber(bounds.x + inset)}" y="${formatNumber(bounds.y + inset)}" width="${formatNumber(Math.max(0, bounds.width - 2 * inset))}" height="${formatNumber(Math.max(0, bounds.height - 2 * inset))}" rx="${10 - inset}" fill="${inset ? 'none' : st.fill}" stroke="${st.stroke}" stroke-width="${width}"${extra}/>`;
     let out: string;
-    if (is(el, 'bpmn:Transaction')) out = rect(0, 1.5) + rect(3, 1.5);
-    else if (raw(el, 'triggeredByEvent')) out = rect(0, 2, ' stroke-dasharray="1 4" stroke-linecap="round"');
-    else out = rect(0, is(el, 'bpmn:CallActivity') ? 5 : 2);
+    if (is(el, 'bpmn:Transaction')) {
+      out = rect(0, 1.5) + rect(3, 1.5);
+    } else if (raw(el, 'triggeredByEvent')) {
+      out = rect(0, 2, ' stroke-dasharray="1 4" stroke-linecap="round"');
+    } else {
+      out = rect(0, is(el, 'bpmn:CallActivity') ? 5 : 2);
+    }
     const icon = shape.kind === 'task' ? this.taskIcon() : '';
     if (icon) out += at(bounds.x + 4, bounds.y + 4, 1, icon);
     const name = raw<string>(el, 'name');
     const collapsed = (shape.kind === 'subProcess' && !expanded) || is(el, 'bpmn:CallActivity');
-    if (name && name.trim()) out += this.text.inBox(name, bounds, 'center', expanded ? 'top' : 'middle', 7);
+    if (name && name.trim()) {
+      out += this.text.inBox(name, bounds, 'center', expanded ? 'top' : 'middle', 7);
+    }
     const markers = this.activityMarkers(collapsed);
     const gap = 3;
     const total = markers.length * 14 + (markers.length - 1) * gap;
@@ -255,7 +298,9 @@ export class ShapePainter {
     const name = raw<string>(this.shape.el, 'name');
     if (!name || !name.trim()) return '';
     const bounds = this.shape.bounds;
-    if (!this.horizontal()) return this.text.inBox(name, { x: bounds.x, y: bounds.y, width: bounds.width, height: 30 }, 'center', 'middle', 0);
+    if (!this.horizontal()) {
+      return this.text.inBox(name, { x: bounds.x, y: bounds.y, width: bounds.width, height: 30 }, 'center', 'middle', 0);
+    }
     const cx = bounds.x + 15;
     const cy = bounds.y + bounds.height / 2;
     const box = { x: cx - bounds.height / 2, y: cy - 15, width: bounds.height, height: 30 };
@@ -270,7 +315,9 @@ export class ShapePainter {
     const blackBox = !raw(shape.el, 'processRef');
     if (blackBox) {
       const name = raw<string>(shape.el, 'name');
-      if (name && name.trim()) out += this.text.inBox(name, bounds, 'center', 'middle', 0);
+      if (name && name.trim()) {
+        out += this.text.inBox(name, bounds, 'center', 'middle', 0);
+      }
     } else {
       out += this.horizontal()
         ? `<path d="M${formatNumber(bounds.x + 30)} ${formatNumber(bounds.y)}V${formatNumber(bounds.y + bounds.height)}" stroke="${st.stroke}" stroke-width="1.5"/>`
@@ -313,7 +360,9 @@ export class ShapePainter {
       `<path d="M${formatNumber(bounds.x)} ${formatNumber(bounds.y)}H${formatNumber(bounds.x + bounds.width - fold)}L${formatNumber(bounds.x + bounds.width)} ${formatNumber(bounds.y + fold)}V${formatNumber(bounds.y + bounds.height)}H${formatNumber(bounds.x)}Z" fill="${st.fill}" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>` +
       `<path d="M${formatNumber(bounds.x + bounds.width - fold)} ${formatNumber(bounds.y)}V${formatNumber(bounds.y + fold)}H${formatNumber(bounds.x + bounds.width)}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>`;
     const object = is(el, 'bpmn:DataObjectReference') ? raw<El>(el, 'dataObjectRef') : el;
-    if (raw(object, 'isCollection')) out += at(bounds.x + bounds.width / 2 - 7, bounds.y + bounds.height - 15, 1, `<path d="M3 2V12M7 2V12M11 2V12" fill="none" stroke="${ink}" stroke-width="2"/>`);
+    if (raw(object, 'isCollection')) {
+      out += at(bounds.x + bounds.width / 2 - 7, bounds.y + bounds.height - 15, 1, `<path d="M3 2V12M7 2V12M11 2V12" fill="none" stroke="${ink}" stroke-width="2"/>`);
+    }
     const input = is(el, 'bpmn:DataInput');
     if (input || is(el, 'bpmn:DataOutput')) {
       out += at(bounds.x + 4, bounds.y + 4, 1, `<path d="M1 4H7V1L13 6L7 11V8H1Z" fill="${input ? 'none' : ink}" stroke="${ink}" stroke-width="1.2" stroke-linejoin="round"/>`);

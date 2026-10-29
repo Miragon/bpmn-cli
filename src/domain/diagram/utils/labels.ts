@@ -48,7 +48,9 @@ export function labelSideOf(shape: Pick<DShape, 'bounds' | 'label' | 'kind' | 'h
   const label = shape.label;
   if (!label) return undefined;
   const bounds = shape.bounds;
-  if (host && shape.kind === 'boundary' && label.y >= bottom(host) - 2) return 'below';
+  if (host && shape.kind === 'boundary' && label.y >= bottom(host) - 2) {
+    return 'below';
+  }
   if (label.y >= bottom(bounds) - 2) return 'below';
   if (bottom(label) <= bounds.y + 2) return 'above';
   if (label.x >= right(bounds) - 2) return 'right';

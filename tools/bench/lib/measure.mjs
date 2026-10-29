@@ -48,10 +48,14 @@ export async function quality(xml, ctx) {
 export function hardDelta(before, after, ctx) {
   const hard = ctx.metrics.hard;
   const count = (quality) => (quality.harness.counts ? hard.reduce((sum, kind) => sum + (quality.harness.counts[kind] ?? 0), 0) : null);
-  if (!before.problems || !after.problems) return { before: count(before), after: count(after), added: null, addedKinds: {}, examples: [] };
+  if (!before.problems || !after.problems) {
+    return { before: count(before), after: count(after), added: null, addedKinds: {}, examples: [] };
+  }
   const added = ctx.metrics.diff(before.problems, after.problems).added.filter((problem) => hard.includes(problem.kind));
   const addedKinds = {};
-  for (const problem of added) addedKinds[problem.kind] = (addedKinds[problem.kind] ?? 0) + 1;
+  for (const problem of added) {
+    addedKinds[problem.kind] = (addedKinds[problem.kind] ?? 0) + 1;
+  }
   return { before: count(before), after: count(after), added: added.length, addedKinds, examples: added.slice(0, 3).map((problem) => `${problem.kind}:${problem.ids.join(',')}`) };
 }
 
@@ -86,11 +90,18 @@ const warningKind = (msg) => (/unresolved reference/i.test(msg) ? 'unresolvedRef
 
 export function validity(model) {
   let missing = 0;
-  for (const id of model.nodes.keys()) if (!model.shapes.has(id)) missing++;
+  for (const id of model.nodes.keys()) {
+    if (!model.shapes.has(id)) missing++;
+  }
   let emptyEdges = 0;
-  for (const pts of model.edges.values()) if (pts.length < 2) emptyEdges++;
+  for (const pts of model.edges.values()) {
+    if (pts.length < 2) emptyEdges++;
+  }
   const warningKinds = {};
-  for (const warning of model.warnings) { const kind = warningKind(warning.message); warningKinds[kind] = (warningKinds[kind] ?? 0) + 1; }
+  for (const warning of model.warnings) {
+    const kind = warningKind(warning.message);
+    warningKinds[kind] = (warningKinds[kind] ?? 0) + 1;
+  }
   return { importWarnings: model.warnings.length, warningKinds, lossy: model.lossy, flowNodes: model.nodes.size, missingDi: missing, emptyEdges };
 }
 

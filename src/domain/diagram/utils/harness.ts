@@ -67,7 +67,11 @@ export type Edge = Pick<DEdge, 'id' | 'el' | 'points' | 'label'> & {
 function endsOf(el: El): Set<string | undefined> {
   const source = raw<unknown>(el, 'sourceRef');
   const ends = new Set<string | undefined>([idOf(source), idOf(raw(el, 'targetRef'))]);
-  if (Array.isArray(source)) for (const sourceElement of source) ends.add(idOf(sourceElement));
+  if (Array.isArray(source)) {
+    for (const sourceElement of source) {
+      ends.add(idOf(sourceElement));
+    }
+  }
   const parent = el.$parent;
   if (parent && is(parent, 'bpmn:FlowNode')) ends.add(idOf(parent));
   return ends;
@@ -98,8 +102,12 @@ export function readDrawnPlane(plane: unknown, seen: Set<string>): { shapes: Sha
 
 /** A data association is drawn between its activity and the data object / store. */
 export function drawnEnds(el: El): [string | undefined, string | undefined] {
-  if (is(el, 'bpmn:DataInputAssociation')) return [idOf(rawList(el, 'sourceRef')[0]), idOf(el.$parent)];
-  if (is(el, 'bpmn:DataOutputAssociation')) return [idOf(el.$parent), idOf(raw(el, 'targetRef'))];
+  if (is(el, 'bpmn:DataInputAssociation')) {
+    return [idOf(rawList(el, 'sourceRef')[0]), idOf(el.$parent)];
+  }
+  if (is(el, 'bpmn:DataOutputAssociation')) {
+    return [idOf(el.$parent), idOf(raw(el, 'targetRef'))];
+  }
   return [idOf(raw(el, 'sourceRef')), idOf(raw(el, 'targetRef'))];
 }
 
@@ -117,11 +125,14 @@ function runs(list: Segment[]): Run[] {
     const last = out[out.length - 1];
     const empty = segment[0].x === segment[1].x && segment[0].y === segment[1].y;
     const straight = segment[0].x === segment[1].x || segment[0].y === segment[1].y;
-    if (!last && empty) lead.push(segmentIndex);
-    else if (last && (empty || (straight && way(last.seg) === way(segment)))) {
+    if (!last && empty) {
+      lead.push(segmentIndex);
+    } else if (last && (empty || (straight && way(last.seg) === way(segment)))) {
       last.seg = [last.seg[0], segment[1]];
       last.idx.push(segmentIndex);
-    } else out.push({ seg: segment, idx: out.length ? [segmentIndex] : [...lead, segmentIndex] });
+    } else {
+      out.push({ seg: segment, idx: out.length ? [segmentIndex] : [...lead, segmentIndex] });
+    }
   });
   if (!out.length && lead.length) out.push({ seg: list[lead[0]!]!, idx: lead });
   return out;
@@ -141,7 +152,9 @@ export function joinTail(first: Edge, second: Edge, target: Shape | undefined): 
     if (!run) return 0;
     const [start, end] = run.seg;
     if (start.x !== end.x || Math.abs(end.x - (cx(targetBounds))) > 2) return 0;
-    if (Math.abs(end.y - (targetBounds.y + targetBounds.height)) <= 2 && start.y > end.y) return 1;
+    if (Math.abs(end.y - (targetBounds.y + targetBounds.height)) <= 2 && start.y > end.y) {
+      return 1;
+    }
     return Math.abs(end.y - targetBounds.y) <= 2 && start.y < end.y ? -1 : 0;
   };
   const ra = runs(first.segs);
@@ -152,7 +165,11 @@ export function joinTail(first: Edge, second: Edge, target: Shape | undefined): 
     const firstRun = ra[firstIndex]!;
     const secondRun = rb[secondIndex]!;
     if (collinear(firstRun.seg, secondRun.seg) <= 0) break;
-    for (const firstSegmentIndex of firstRun.idx) for (const secondSegmentIndex of secondRun.idx) tail.add(`${firstSegmentIndex},${secondSegmentIndex}`);
+    for (const firstSegmentIndex of firstRun.idx) {
+      for (const secondSegmentIndex of secondRun.idx) {
+        tail.add(`${firstSegmentIndex},${secondSegmentIndex}`);
+      }
+    }
     if (!near(firstRun.seg[0], secondRun.seg[0])) break;
     if (firstIndex === 0 && secondIndex === 0) return new Set();
   }

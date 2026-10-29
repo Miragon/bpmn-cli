@@ -44,7 +44,9 @@ export class NestedHosts {
 
   /** The ops JSON may give the `ext list` index of a remove (`loop.2`) as "type". */
   normalizeIndex(command: EditExtensionElements): EditExtensionElements {
-    if (command.action !== 'remove' || command.index !== undefined || command.type === undefined) return command;
+    if (command.action !== 'remove' || command.index !== undefined || command.type === undefined) {
+      return command;
+    }
     const ref = this.indexRef(command.type);
     if (!ref) return command;
     if (ref.slot !== undefined && command.slot !== undefined && command.slot !== ref.slot) {
@@ -109,7 +111,9 @@ export class NestedHosts {
   /** `2`, `loop.2`, `definition[1].0`: an index from `ext list`. */
   private indexRef(text: string): { slot?: string; index: number } | undefined {
     const match = /^(?:(\w+(?:\[[^\]]*\])?)\.)?(\d+)$/.exec(text.trim());
-    if (!match || (match[1] !== undefined && !parseSlotRef(match[1]))) return undefined;
+    if (!match || (match[1] !== undefined && !parseSlotRef(match[1]))) {
+      return undefined;
+    }
     return { ...(match[1] !== undefined ? { slot: match[1] } : {}), index: Number(match[2]) };
   }
 }

@@ -32,8 +32,11 @@ function bpmnFiles(dir) {
   const walk = (dir) => {
     for (const name of readdirSync(dir).sort()) {
       const entryPath = join(dir, name);
-      if (statSync(entryPath).isDirectory()) walk(entryPath);
-      else if (name.endsWith('.bpmn')) out.push(entryPath);
+      if (statSync(entryPath).isDirectory()) {
+        walk(entryPath);
+      } else if (name.endsWith('.bpmn')) {
+        out.push(entryPath);
+      }
     }
   };
   walk(dir);
@@ -46,9 +49,13 @@ function envCorpora(env) {
     const [given, dir] = entry.includes('=') ? entry.split('=') : [basename(entry), entry];
     const base = given.replace(/[^\w.-]+/g, '_');
     let name = base;
-    for (let suffix = 2; used.has(name); suffix++) name = `${base}-${suffix}`;
+    for (let suffix = 2; used.has(name); suffix++) {
+      name = `${base}-${suffix}`;
+    }
     used.add(name);
-    if (!existsSync(dir)) throw new Error(`BPMN_BENCH_CORPUS: ${dir} does not exist`);
+    if (!existsSync(dir)) {
+      throw new Error(`BPMN_BENCH_CORPUS: ${dir} does not exist`);
+    }
     return { name, dir: resolve(dir) };
   });
 }

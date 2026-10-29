@@ -36,18 +36,26 @@ export class SelectorParser {
           const ch = source[scan]!;
           if (quote) {
             if (ch === quote) quote = undefined;
-          } else if (ch === '"' || ch === "'") quote = ch;
-          else if (ch === ']') break;
+          } else if (ch === '"' || ch === "'") {
+            quote = ch;
+          } else if (ch === ']') {
+            break;
+          }
         }
         if (scan >= source.length) this.fail(text, 'unclosed [', el);
         const inner = source.slice(cursor + 1, scan).trim();
-        if (/^\d+$/.test(inner)) step.index = Number(inner);
-        else {
+        if (/^\d+$/.test(inner)) {
+          step.index = Number(inner);
+        } else {
           const eq = inner.indexOf('=');
-          if (eq <= 0) this.fail(text, `expected [attr=value] or [index], got [${inner}]`, el);
+          if (eq <= 0) {
+            this.fail(text, `expected [attr=value] or [index], got [${inner}]`, el);
+          }
           step.attr = inner.slice(0, eq).trim();
           let attrValue = inner.slice(eq + 1).trim();
-          if (attrValue.length >= 2 && (attrValue[0] === '"' || attrValue[0] === "'") && attrValue[attrValue.length - 1] === attrValue[0]) attrValue = attrValue.slice(1, -1);
+          if (attrValue.length >= 2 && (attrValue[0] === '"' || attrValue[0] === "'") && attrValue[attrValue.length - 1] === attrValue[0]) {
+            attrValue = attrValue.slice(1, -1);
+          }
           step.value = attrValue;
         }
         cursor = scan + 1;
@@ -55,7 +63,9 @@ export class SelectorParser {
       }
       steps.push(step);
       if (cursor === source.length) return steps;
-      if (source[cursor] !== '/') this.fail(text, `unexpected "${source[cursor]}" at offset ${cursor}`, el);
+      if (source[cursor] !== '/') {
+        this.fail(text, `unexpected "${source[cursor]}" at offset ${cursor}`, el);
+      }
       cursor++;
     }
   }

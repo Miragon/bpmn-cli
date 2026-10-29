@@ -32,23 +32,38 @@ function pathIn(model, scopeId) {
     while (stack.length) {
       const top = stack[stack.length - 1];
       const out = succ(model.nodes.get(top[0]));
-      if (top[1] >= out.length) { state.set(top[0], 2); stack.pop(); continue; }
+      if (top[1] >= out.length) {
+        state.set(top[0], 2);
+        stack.pop();
+        continue;
+      }
       const successorId = out[top[1]++];
-      if (state.get(successorId) === 1) back.add(`${top[0]}>${successorId}`);
-      else if (!state.has(successorId)) { state.set(successorId, 1); stack.push([successorId, 0]); }
+      if (state.get(successorId) === 1) {
+        back.add(`${top[0]}>${successorId}`);
+      } else if (!state.has(successorId)) {
+        state.set(successorId, 1);
+        stack.push([successorId, 0]);
+      }
     }
   }
   const reach = [...state.keys()];
   const indeg = new Map(reach.map((id) => [id, 0]));
   const fwd = (id) => succ(model.nodes.get(id)).filter((targetId) => !back.has(`${id}>${targetId}`) && indeg.has(targetId));
-  for (const id of reach) for (const targetId of fwd(id)) indeg.set(targetId, indeg.get(targetId) + 1);
+  for (const id of reach) {
+    for (const targetId of fwd(id)) {
+      indeg.set(targetId, indeg.get(targetId) + 1);
+    }
+  }
   const dist = new Map(reach.map((id) => [id, 0]));
   const pred = new Map();
   const queue = reach.filter((id) => indeg.get(id) === 0);
   while (queue.length) {
     const id = queue.shift();
     for (const targetId of fwd(id)) {
-      if (dist.get(id) + 1 > dist.get(targetId)) { dist.set(targetId, dist.get(id) + 1); pred.set(targetId, id); }
+      if (dist.get(id) + 1 > dist.get(targetId)) {
+        dist.set(targetId, dist.get(id) + 1);
+        pred.set(targetId, id);
+      }
       indeg.set(targetId, indeg.get(targetId) - 1);
       if (indeg.get(targetId) === 0) queue.push(targetId);
     }
@@ -57,15 +72,22 @@ function pathIn(model, scopeId) {
   const ends = sinks.filter((id) => model.nodes.get(id).type === 'EndEvent');
   const pool = ends.length ? ends : sinks.length ? sinks : reach;
   let best = pool[0];
-  for (const id of pool) if (dist.get(id) > dist.get(best)) best = id;
+  for (const id of pool) {
+    if (dist.get(id) > dist.get(best)) best = id;
+  }
   const path = [best];
-  while (pred.has(path[0])) path.unshift(pred.get(path[0]));
+  while (pred.has(path[0])) {
+    path.unshift(pred.get(path[0]));
+  }
   return path;
 }
 
 export function longestPath(model) {
   let best = [];
-  for (const scope of topScopes(model)) { const scopePath = pathIn(model, scope); if (scopePath.length > best.length) best = scopePath; }
+  for (const scope of topScopes(model)) {
+    const scopePath = pathIn(model, scope);
+    if (scopePath.length > best.length) best = scopePath;
+  }
   return best;
 }
 
@@ -75,7 +97,9 @@ export function pickNearMedian(model, path, ok) {
   path.forEach((id, pathIndex) => {
     const node = model.nodes.get(id);
     if (!node || !ok(node)) return;
-    if (!pick || Math.abs(pathIndex - mid) < Math.abs(pick.i - mid)) pick = { id, i: pathIndex };
+    if (!pick || Math.abs(pathIndex - mid) < Math.abs(pick.i - mid)) {
+      pick = { id, i: pathIndex };
+    }
   });
   if (pick) return { id: pick.id, onPath: true };
   const top = topScopes(model);

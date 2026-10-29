@@ -28,8 +28,11 @@ function bpmnFiles(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir).sort()) {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...bpmnFiles(full));
-    else if (name.endsWith('.bpmn')) out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...bpmnFiles(full));
+    } else if (name.endsWith('.bpmn')) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -98,9 +101,13 @@ describe('every scenario and fixture renders', () => {
       expect(pngSize(image.png), name).toEqual({ width: svg.width, height: svg.height });
       expect({ width: image.width, height: image.height, tokens: image.tokens, scale: png.scale }, name).toEqual({ width: svg.width, height: svg.height, tokens: svg.tokens, scale: svg.scale });
       // the PNG bytes are deterministic too (every 10th file twice: the rasteriser is the slow part)
-      if (index % 10 === 0) expect(Buffer.from((await renderPng(xml)).images[0]!.png).equals(Buffer.from(image.png)), name).toBe(true);
+      if (index % 10 === 0) {
+        expect(Buffer.from((await renderPng(xml)).images[0]!.png).equals(Buffer.from(image.png)), name).toBe(true);
+      }
       // every other plane renders as well
-      for (const plane of svg.planes) expect((await renderSvg(xml, { plane })).plane, `${name} ${plane}`).toBe(plane);
+      for (const plane of svg.planes) {
+        expect((await renderSvg(xml, { plane })).plane, `${name} ${plane}`).toBe(plane);
+      }
       stats.files++;
       stats.tokens.push(image.tokens);
     }
@@ -114,7 +121,9 @@ describe('the PNG rasteriser', () => {
     const { pixels, width, height } = await new PngRenderer().rasterize(svg, { pixels: true });
     expect({ width, height }).toEqual({ width: 200, height: 30 });
     let dark = 0;
-    for (let index = 0; index < pixels!.length; index += 4) if (pixels![index]! < 128) dark++;
+    for (let index = 0; index < pixels!.length; index += 4) {
+      if (pixels![index]! < 128) dark++;
+    }
     expect(dark).toBeGreaterThan(150);
   });
 
@@ -124,7 +133,9 @@ describe('the PNG rasteriser', () => {
     const count = async (svg: string): Promise<number> => {
       const { pixels } = await new PngRenderer().rasterize(svg, { pixels: true });
       let dark = 0;
-      for (let index = 0; index < pixels!.length; index += 4) if (pixels![index]! < 128) dark++;
+      for (let index = 0; index < pixels!.length; index += 4) {
+        if (pixels![index]! < 128) dark++;
+      }
       return dark;
     };
     expect(await count(named.svg)).toBeGreaterThan((await count(unnamed.svg)) + 200);
@@ -201,7 +212,9 @@ describe('renderSvg', () => {
     const { svg } = await renderSvg(xml);
     const shapes = [...xml.matchAll(/<bpmndi:BPMN(?:Shape|Edge) id="[^"]+" bpmnElement="([^"]+)"/g)].map((match) => match[1]!);
     const main = xml.slice(0, xml.indexOf('<bpmndi:BPMNPlane id="BPMNPlane_Activity_CollapsedSubProcess"'));
-    for (const id of shapes.filter((shapeId) => main.includes(`bpmnElement="${shapeId}"`))) expect(svg, id).toContain(`<g data-id="${id}">`);
+    for (const id of shapes.filter((shapeId) => main.includes(`bpmnElement="${shapeId}"`))) {
+      expect(svg, id).toContain(`<g data-id="${id}">`);
+    }
     // a few glyphs: the call activity's thick border, the transaction's double border, the event sub-process's dots, the data store's ellipse
     expect(group(svg, 'Activity_CallActivity')).toContain('stroke-width="5"');
     expect(group(svg, 'Activity_Transaction').match(/<rect /g)).toHaveLength(2);
@@ -235,7 +248,9 @@ describe('renderSvg', () => {
 
   it('wraps lines like innerLines counts them', () => {
     for (const name of ['Check invoice', 'A very long activity name with many words in it', 'Line\nbreak', 'Supercalifragilisticexpialidocious-task']) {
-      for (const width of [100, 120, 200]) expect(wrapLines(name, width - 14).length, `${name} ${width}`).toBe(innerLines(name, width));
+      for (const width of [100, 120, 200]) {
+        expect(wrapLines(name, width - 14).length, `${name} ${width}`).toBe(innerLines(name, width));
+      }
     }
   });
 

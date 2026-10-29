@@ -82,9 +82,13 @@ export class OrthogonalRouter {
     const router = new OrthogonalRouter(context);
     const frame = req.frame && OrthogonalRouter.finiteBox(req.frame) ? union(req.frame, union(context.source, context.target)) : undefined;
     let best = router.attempt(false, frame);
-    if (!best || best.hits > 0) best = OrthogonalRouter.better(best, router.attempt(true, frame));
+    if (!best || best.hits > 0) {
+      best = OrthogonalRouter.better(best, router.attempt(true, frame));
+    }
     const thin = context.margin > THIN_MARGIN ? new OrthogonalRouter({ ...context, margin: THIN_MARGIN }) : undefined;
-    if (thin && (!best || best.hits > 0)) best = OrthogonalRouter.better(best, thin.attempt(true, frame));
+    if (thin && (!best || best.hits > 0)) {
+      best = OrthogonalRouter.better(best, thin.attempt(true, frame));
+    }
     if (frame && (!best || best.hits > 0)) {
       const free = OrthogonalRouter.better(router.attempt(true, undefined), thin && thin.attempt(true, undefined));
       if (free && free.hits === 0) best = free;
@@ -152,7 +156,9 @@ export class OrthogonalRouter {
       const cands = new Map<number, number>([[mid, base]]);
       const add = (offset: number, clamp = false): void => {
         if (middle) return;
-        if (clamp) offset = Math.round(Math.min(hi - inset, Math.max(lo + inset, offset)));
+        if (clamp) {
+          offset = Math.round(Math.min(hi - inset, Math.max(lo + inset, offset)));
+        }
         if (offset < lo + inset || offset > hi - inset || cands.has(offset)) return;
         if (OrthogonalRouter.stubBlocked(box, side, offset, stub, obstacles)) return;
         cands.set(offset, base + PORT_OFFSET + (PORT_SLOPE * Math.abs(offset - mid)) / Math.max(len, 1));
@@ -175,7 +181,9 @@ export class OrthogonalRouter {
         add(Math.round(lo + len / 4));
         add(Math.round(lo + (3 * len) / 4));
       }
-      for (const [offset, cost] of [...cands].sort((first, second) => first[0] - second[0])) ports.push({ ...pointOn(box, side, offset), side, cost });
+      for (const [offset, cost] of [...cands].sort((first, second) => first[0] - second[0])) {
+        ports.push({ ...pointOn(box, side, offset), side, cost });
+      }
     });
     return ports;
   }
@@ -194,7 +202,9 @@ export class OrthogonalRouter {
       if (last && kind !== 'd' && kind === last.kind && (kind === 'v' ? Math.abs(start.x - last.start.x) : Math.abs(start.y - last.start.y)) < EPS && way(start, end) === way(last.start, last.end)) {
         last.end = end;
         last.segs.push(segIndex);
-      } else out.push({ start, end, kind, segs: [segIndex] });
+      } else {
+        out.push({ start, end, kind, segs: [segIndex] });
+      }
     }
     return out;
   }
@@ -222,10 +232,14 @@ export class OrthogonalRouter {
       if (!port) continue;
       const runs = OrthogonalRouter.runsOf(segs, first);
       const last = runs[runs.length - 1];
-      if (last?.kind === 'v' && (port.side === 'bottom' ? last.start.y > last.end.y : last.start.y < last.end.y)) entries.push({ port, runs });
+      if (last?.kind === 'v' && (port.side === 'bottom' ? last.start.y > last.end.y : last.start.y < last.end.y)) {
+        entries.push({ port, runs });
+      }
     }
     const mark = (run: Run | undefined): void => {
-      for (const segIndex of run?.segs ?? []) segs[segIndex]!.merge = true;
+      for (const segIndex of run?.segs ?? []) {
+        segs[segIndex]!.merge = true;
+      }
     };
     for (const { port, runs } of entries) {
       const runCount = runs.length;
@@ -239,9 +253,13 @@ export class OrthogonalRouter {
         if (other.port !== port || other.runs === runs) continue;
         for (let index = runCount - 1, otherIndex = other.runs.length - 1; index >= 0 && otherIndex >= 0; index--, otherIndex--) {
           const ownRun = runs[index]!, otherRun = other.runs[otherIndex]!;
-          if (!OrthogonalRouter.segmentsOverlap(ownRun.start, ownRun.end, otherRun.start, otherRun.end)) break;
+          if (!OrthogonalRouter.segmentsOverlap(ownRun.start, ownRun.end, otherRun.start, otherRun.end)) {
+            break;
+          }
           mark(ownRun);
-          if (Math.abs(ownRun.start.x - otherRun.start.x) > OVERLAP_TOL || Math.abs(ownRun.start.y - otherRun.start.y) > OVERLAP_TOL) break;
+          if (Math.abs(ownRun.start.x - otherRun.start.x) > OVERLAP_TOL || Math.abs(ownRun.start.y - otherRun.start.y) > OVERLAP_TOL) {
+            break;
+          }
         }
       }
     }
@@ -277,11 +295,19 @@ export class OrthogonalRouter {
     const spread = 2 * this.context.margin + 10;
     const clip = (box: Box): Box => (frame ? OrthogonalRouter.intersect(box, frame) : box);
     let ext = grow(union(this.context.source, this.context.target), Math.max(REGION_PAD, 2 * this.context.stub + 20));
-    if (wide) for (const obstacle of this.context.obstacles) ext = union(ext, grow(obstacle, spread));
+    if (wide) {
+      for (const obstacle of this.context.obstacles) {
+        ext = union(ext, grow(obstacle, spread));
+      }
+    }
     ext = clip(ext);
     for (let round = 0; round < 2; round++) {
       let next = ext;
-      for (const obstacle of this.context.obstacles) if (OrthogonalRouter.touches(obstacle, ext)) next = union(next, grow(obstacle, spread));
+      for (const obstacle of this.context.obstacles) {
+        if (OrthogonalRouter.touches(obstacle, ext)) {
+          next = union(next, grow(obstacle, spread));
+        }
+      }
       next = clip(next);
       if (equalBoxes(next, ext)) break;
       ext = next;
@@ -312,10 +338,18 @@ export class OrthogonalRouter {
       ys.push(box.y - this.context.stub, bottom(box) + this.context.stub);
     }
     const { source, target } = this.context;
-    if (target.x > right(source)) xs.push(Math.round((right(source) + target.x) / 2));
-    if (source.x > right(target)) xs.push(Math.round((right(target) + source.x) / 2));
-    if (target.y > bottom(source)) ys.push(Math.round((bottom(source) + target.y) / 2));
-    if (source.y > bottom(target)) ys.push(Math.round((bottom(target) + source.y) / 2));
+    if (target.x > right(source)) {
+      xs.push(Math.round((right(source) + target.x) / 2));
+    }
+    if (source.x > right(target)) {
+      xs.push(Math.round((right(target) + source.x) / 2));
+    }
+    if (target.y > bottom(source)) {
+      ys.push(Math.round((bottom(source) + target.y) / 2));
+    }
+    if (source.y > bottom(target)) {
+      ys.push(Math.round((bottom(target) + source.y) / 2));
+    }
     for (const obstacle of inc) {
       xs.push(obstacle.x - this.context.margin, right(obstacle) + this.context.margin);
       ys.push(obstacle.y - this.context.margin, bottom(obstacle) + this.context.margin);
@@ -333,12 +367,22 @@ export class OrthogonalRouter {
     const { xs, ys } = this.gridLines(ext, inc, frame);
     const nx = xs.length, ny = ys.length;
     const grid = new RouteGrid(xs, ys);
-    for (let row = 0; row < ny; row++) for (let column = 0; column + 1 < nx; column++) grid.hCost[row * (nx - 1) + column] = xs[column + 1]! - xs[column]!;
-    for (let row = 0; row + 1 < ny; row++) for (let column = 0; column < nx; column++) grid.vCost[row * nx + column] = ys[row + 1]! - ys[row]!;
+    for (let row = 0; row < ny; row++) {
+      for (let column = 0; column + 1 < nx; column++) {
+        grid.hCost[row * (nx - 1) + column] = xs[column + 1]! - xs[column]!;
+      }
+    }
+    for (let row = 0; row + 1 < ny; row++) {
+      for (let column = 0; column < nx; column++) {
+        grid.vCost[row * nx + column] = ys[row + 1]! - ys[row]!;
+      }
+    }
     for (const obstacle of inc) {
       grid.addInside(obstacle, HIT, 0);
       grid.addOutline(obstacle, OVERLAP);
-      if (this.context.margin > 0) grid.addInside(grow(obstacle, this.context.margin), 0, NEAR);
+      if (this.context.margin > 0) {
+        grid.addInside(grow(obstacle, this.context.margin), 0, NEAR);
+      }
     }
     grid.addInside(this.context.source, HIT, 0);
     grid.addInside(this.context.target, HIT, 0);
@@ -391,7 +435,9 @@ export class OrthogonalRouter {
         if (dir === inward) {
           const ahead = inward === 0 ? nodeY === qy && qx >= nodeX : inward === 2 ? nodeY === qy && qx <= nodeX : inward === 1 ? nodeX === qx && qy >= nodeY : nodeX === qx && qy <= nodeY;
           bends = ahead ? 0 : 2;
-        } else bends = dir === (inward + 2) % 4 ? 2 : 1;
+        } else {
+          bends = dir === (inward + 2) % 4 ? 2 : 1;
+        }
         const estimate = Math.abs(nodeX - qx) + Math.abs(nodeY - qy) + BEND * bends;
         if (estimate < best) best = estimate;
       }
@@ -421,7 +467,9 @@ export class OrthogonalRouter {
       const dir = nd4 % 4;
       const node = (nd4 - dir) / 4;
       const start = parent[st] === -1;
-      if (!start && goalNode[node] && goals.has(nd4)) return { points: grid.trace(st, parent, nOv), cost: cg };
+      if (!start && goalNode[node] && goals.has(nd4)) {
+        return { points: grid.trace(st, parent, nOv), cost: cg };
+      }
       const column = node % nx, row = (node - column) / nx;
       for (let turnIndex = 0; turnIndex < (start ? 1 : 3); turnIndex++) {
         const direction = turnIndex === 0 ? dir : turnIndex === 1 ? (dir + 1) % 4 : (dir + 3) % 4;
@@ -445,7 +493,9 @@ export class OrthogonalRouter {
         if (ovEdge) {
           nov = 1;
           if (!(ov === 1 && direction === dir)) ng += OVERLAP;
-        } else if (mgEdge) nov = 2;
+        } else if (mgEdge) {
+          nov = 2;
+        }
         if (ov === 2 && nov !== 2) ng += OVERLAP;
         const nn = nj * nx + ni;
         const goalCost = goalNode[nn] ? goals.get(nn * 4 + direction) : undefined;
@@ -466,13 +516,20 @@ export class OrthogonalRouter {
     const boxes = [...this.context.obstacles, this.context.source, this.context.target];
     const onTail = (segmentIndex: number): boolean => this.context.segs.some((seg) => seg.merge && OrthogonalRouter.segmentsOverlap(points[segmentIndex]!, points[segmentIndex + 1]!, seg.start, seg.end));
     let tail = points.length - 1;
-    while (tail > 0 && onTail(tail - 1)) tail--;
+    while (tail > 0 && onTail(tail - 1)) {
+      tail--;
+    }
     for (let index = 0; index + 1 < points.length; index++) {
       const start = points[index]!, end = points[index + 1]!;
-      for (const box of boxes) if (segmentHitsBox(start, end, box)) hits++;
+      for (const box of boxes) {
+        if (segmentHitsBox(start, end, box)) hits++;
+      }
       for (const seg of this.context.segs) {
-        if (segmentsCross(start, end, seg.start, seg.end)) penalty += CROSS;
-        else if ((!seg.merge || index < tail) && OrthogonalRouter.segmentsOverlap(start, end, seg.start, seg.end)) penalty += OVERLAP;
+        if (segmentsCross(start, end, seg.start, seg.end)) {
+          penalty += CROSS;
+        } else if ((!seg.merge || index < tail) && OrthogonalRouter.segmentsOverlap(start, end, seg.start, seg.end)) {
+          penalty += OVERLAP;
+        }
       }
     }
     return { hits, penalty };
@@ -511,10 +568,14 @@ export class OrthogonalRouter {
   private centreJog(points: Point[], index: number): Point[] | undefined {
     const previous = points[index - 1]!, jogStart = points[index]!, jogEnd = points[index + 1]!, next = points[index + 2]!;
     const vertical = jogStart.x === jogEnd.x;
-    if (vertical ? previous.y !== jogStart.y || jogEnd.y !== next.y : previous.x !== jogStart.x || jogEnd.x !== next.x) return undefined;
+    if (vertical ? previous.y !== jogStart.y || jogEnd.y !== next.y : previous.x !== jogStart.x || jogEnd.x !== next.x) {
+      return undefined;
+    }
     const along = (pt: Point): number => (vertical ? pt.x : pt.y);
     const dir = Math.sign(along(jogStart) - along(previous));
-    if (dir === 0 || dir !== Math.sign(along(next) - along(jogEnd))) return undefined;
+    if (dir === 0 || dir !== Math.sign(along(next) - along(jogEnd))) {
+      return undefined;
+    }
     const from = along(previous) + (index === 1 ? dir * this.context.stub : 0);
     const to = along(next) - (index + 2 === points.length - 1 ? dir * this.context.stub : 0);
     if (dir * (to - from) < 0) return undefined;
@@ -527,9 +588,13 @@ export class OrthogonalRouter {
       const olo = vertical ? blocker.x : blocker.y, ohi = vertical ? right(blocker) : bottom(blocker);
       const clo = vertical ? blocker.y : blocker.x, chi = vertical ? bottom(blocker) : right(blocker);
       if (chi < s1 || clo > s2) continue;
-      if (ohi <= at) lo = Math.max(lo, ohi);
-      else if (olo >= at) hi = Math.min(hi, olo);
-      else return undefined;
+      if (ohi <= at) {
+        lo = Math.max(lo, ohi);
+      } else if (olo >= at) {
+        hi = Math.min(hi, olo);
+      } else {
+        return undefined;
+      }
     }
     if (hi < lo) return undefined;
     const centre = Math.round((lo + hi) / 2);
@@ -548,7 +613,9 @@ export class OrthogonalRouter {
 
   private centreJogs(points: Point[]): Point[] {
     let out = points;
-    for (let index = 1; index + 2 < out.length; index++) out = this.centreJog(out, index) ?? out;
+    for (let index = 1; index + 2 < out.length; index++) {
+      out = this.centreJog(out, index) ?? out;
+    }
     return simplify(out);
   }
 }

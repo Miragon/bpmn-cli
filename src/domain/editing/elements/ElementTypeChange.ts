@@ -33,7 +33,9 @@ export class ElementTypeChange {
   }
 
   private static incompatibility(from: KindDef, to: KindDef): string | undefined {
-    if (ACTIVITY_FAMILIES.has(from.family) && ACTIVITY_FAMILIES.has(to.family)) return undefined;
+    if (ACTIVITY_FAMILIES.has(from.family) && ACTIVITY_FAMILIES.has(to.family)) {
+      return undefined;
+    }
     if (from.family === 'gateway' && to.family === 'gateway') return undefined;
     if (from.family === 'event' && to.family === 'event') {
       return ElementTypeChange.eventPosition(from) === ElementTypeChange.eventPosition(to) ? undefined : `a ${from.kind} sits at a different position in the flow than a ${to.kind}`;
@@ -72,7 +74,9 @@ export class ElementTypeChange {
     try {
       parsed = parseKind(command.kind);
     } catch (err) {
-      if (err instanceof BpmnError) throw modelError('E_UNKNOWN_KIND', err.message, { element: id, candidates: err.details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
+      if (err instanceof BpmnError) {
+        throw modelError('E_UNKNOWN_KIND', err.message, { element: id, candidates: err.details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
+      }
       throw err;
     }
     const to = parsed.def;
@@ -119,7 +123,9 @@ export class ElementTypeChange {
       changes.replaced.push({ from: el, to: target });
       const inapplicable = this.inapplicableCamundaContent(target, to);
       if (inapplicable) changes.warn(inapplicable);
-      if (new Camunda8Defaults(this.edit).userTask(target)) changes.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
+      if (new Camunda8Defaults(this.edit).userTask(target)) {
+        changes.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
+      }
     }
     new SequenceFlows(this.edit).dropIgnoredConditions(target, changes);
     change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, changes, { on: target });
@@ -136,13 +142,17 @@ export class ElementTypeChange {
   /** Operaton's namespace counts as camunda too. */
   private camundaName(name: string): string | undefined {
     const idx = name.indexOf(':');
-    if (idx <= 0 || !CAMUNDA.reads(this.edit.doc.namespaceUri(name.slice(0, idx)))) return undefined;
+    if (idx <= 0 || !CAMUNDA.reads(this.edit.doc.namespaceUri(name.slice(0, idx)))) {
+      return undefined;
+    }
     return `camunda:${name.slice(idx + 1)}`;
   }
 
   private zeebeLocal(name: string): string | undefined {
     const idx = name.indexOf(':');
-    if (idx <= 0 || this.edit.doc.namespaceUri(name.slice(0, idx)) !== ZEEBE_URI) return undefined;
+    if (idx <= 0 || this.edit.doc.namespaceUri(name.slice(0, idx)) !== ZEEBE_URI) {
+      return undefined;
+    }
     return name.slice(idx + 1);
   }
 
@@ -182,8 +192,14 @@ export class ElementTypeChange {
   }
 
   private static applyKindProps(el: El, from: KindDef, to: KindDef): void {
-    for (const propName of Object.keys(from.props ?? {})) if (!(to.props && propName in to.props) && descriptorOf(el).propertiesByName?.[propName]) el.set(propName, undefined);
-    for (const [propName, propValue] of Object.entries(to.props ?? {})) el.set(propName, propValue);
+    for (const propName of Object.keys(from.props ?? {})) {
+      if (!(to.props && propName in to.props) && descriptorOf(el).propertiesByName?.[propName]) {
+        el.set(propName, undefined);
+      }
+    }
+    for (const [propName, propValue] of Object.entries(to.props ?? {})) {
+      el.set(propName, propValue);
+    }
   }
 
   private static copyProp(next: El, property: PropDescriptor, value: unknown): void {
@@ -210,9 +226,13 @@ export class ElementTypeChange {
     if (!property.isReference) {
       const children = (Array.isArray(value) ? value : [value]).filter((child): child is El => isEl(child) && !!child.get<string | undefined>('id'));
       const before = changes.removed.length;
-      for (const child of children) new ElementRemoval(this.edit).cascade(child, changes);
+      for (const child of children) {
+        new ElementRemoval(this.edit).cascade(child, changes);
+      }
       const removed = changes.removed.slice(before).map((change) => change.id);
-      if (removed.length) this.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
+      if (removed.length) {
+        this.edit.recordDroppedContent({ element: idOf(el), kind: to.kind, removed });
+      }
     }
     changes.warn({
       code: 'W_PROPERTY_DROPPED',
@@ -246,10 +266,15 @@ export class ElementTypeChange {
     for (const property of descriptorOf(el).properties ?? []) {
       if (property.name === 'id') continue;
       const value = ownValue(el, property.name);
-      if (value === undefined || value === null || (Array.isArray(value) && !value.length)) continue;
+      if (value === undefined || value === null || (Array.isArray(value) && !value.length)) {
+        continue;
+      }
       if (ElementTypeChange.isReappliedKindProp(property.name)) continue;
-      if (nextProps[property.name]) ElementTypeChange.copyProp(next, property, value);
-      else this.dropProp(el, property, value, to, changes);
+      if (nextProps[property.name]) {
+        ElementTypeChange.copyProp(next, property, value);
+      } else {
+        this.dropProp(el, property, value, to, changes);
+      }
     }
     Object.assign(next.$attrs, el.$attrs);
     detachFromParent(el, next);

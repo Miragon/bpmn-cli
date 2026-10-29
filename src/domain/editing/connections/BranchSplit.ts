@@ -29,7 +29,9 @@ export class BranchSplit {
     try {
       def = parseKind(kind).def;
     } catch (err) {
-      if (err instanceof BpmnError) throw modelError('E_UNKNOWN_KIND', err.message, { candidates: err.details.candidates ?? [] });
+      if (err instanceof BpmnError) {
+        throw modelError('E_UNKNOWN_KIND', err.message, { candidates: err.details.candidates ?? [] });
+      }
       throw err;
     }
     if (def.family !== 'gateway') {
@@ -71,13 +73,17 @@ export class BranchSplit {
   split(command: SplitIntoBranches): ChangeSet {
     const changes = new ChangeSet();
     const kind = BranchSplit.gatewayKind(command.kind);
-    if (command.branches !== undefined && command.branches !== null) new CommandParser().parseBranches(command.branches);
+    if (command.branches !== undefined && command.branches !== null) {
+      new CommandParser().parseBranches(command.branches);
+    }
     if (!command.branches?.length) {
       throw modelError('E_INVALID_VALUE', 'split needs at least one branch', { hint: 'Pass branches: [{ nodes: [...] }, ...].' });
     }
     const anchor = this.edit.require(command.after, 'bpmn:FlowNode');
     const scope = this.edit.doc.scopeOf(anchor);
-    if (!scope) throw modelError('E_INVALID_PLACEMENT', `${command.after} is not inside a process`, { element: command.after });
+    if (!scope) {
+      throw modelError('E_INVALID_PLACEMENT', `${command.after} is not inside a process`, { element: command.after });
+    }
     const outgoing = this.edit.doc.outgoing(anchor);
     const isGateway = is(anchor, 'bpmn:Gateway');
     if (!isGateway && outgoing.length > 1) {
@@ -110,7 +116,9 @@ export class BranchSplit {
       changes.note(`appended ${gatewayId} after ${command.after}`);
     }
     const gwEntry = changes.created.find((change) => change.id === gatewayId);
-    if (gwEntry) gwEntry.detail = spliced ? `between ${command.after} and ${idOf(successor!)}` : `after ${command.after}`;
+    if (gwEntry) {
+      gwEntry.detail = spliced ? `between ${command.after} and ${idOf(successor!)}` : `after ${command.after}`;
+    }
 
     const ends: Array<{ end: string; flowOptions: FlowOptionValues; direct: boolean }> = [];
     for (const branch of command.branches) {
@@ -159,13 +167,17 @@ export class BranchSplit {
       const joinCs = new ElementCreation(this.edit).add({ op: 'add', kind, ...(command.joinName ? { name: command.joinName } : {}), id: wanted.id, in: idOf(scope), ...laneOpt });
       changes.merge(joinCs);
       joinId = BranchSplit.createdId(joinCs);
-      if (wanted.base !== undefined) this.edit.allocator.markGenerated(joinId, wanted.base);
+      if (wanted.base !== undefined) {
+        this.edit.allocator.markGenerated(joinId, wanted.base);
+      }
       changes.bind(command.joinAs, this.edit.doc.get(joinId));
       const joinEntry = changes.created.find((change) => change.id === joinId);
       if (joinEntry) joinEntry.detail = `join of ${gatewayId}`;
     }
     const target = joinId ?? (successor ? idOf(successor) : undefined);
-    for (const { end } of terminating) changes.note(`branch ending at ${end} terminates (end event)${target ? `; not connected to ${target}` : ''}`);
+    for (const { end } of terminating) {
+      changes.note(`branch ending at ${end} terminates (end event)${target ? `; not connected to ${target}` : ''}`);
+    }
     if (successor && !continuing.length) {
       changes.note(`${idOf(successor)} is no longer reached: every branch terminates (connect it with \`bpmn connect <file> <id> ${idOf(successor)}\` or remove it)`);
     }

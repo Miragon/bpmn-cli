@@ -34,7 +34,9 @@ const DIST = join(ROOT, 'dist');
 
 async function importDist(rel) {
   const file = join(DIST, rel);
-  if (!existsSync(file)) throw new Error(`${file} is missing: run \`npm run build\` first`);
+  if (!existsSync(file)) {
+    throw new Error(`${file} is missing: run \`npm run build\` first`);
+  }
   return import(pathToFileURL(file).href);
 }
 
@@ -61,8 +63,11 @@ export async function makeExecutor({ exec = 'cli', via = 'commands', workDir, bi
 function walkDir(dir, out) {
   for (const name of readdirSync(dir).sort()) {
     const entryPath = join(dir, name);
-    if (statSync(entryPath).isDirectory()) walkDir(entryPath, out);
-    else if (name.endsWith('.bpmn')) out.push(entryPath);
+    if (statSync(entryPath).isDirectory()) {
+      walkDir(entryPath, out);
+    } else if (name.endsWith('.bpmn')) {
+      out.push(entryPath);
+    }
   }
 }
 
@@ -70,8 +75,11 @@ export function corpusFiles(dirs, filter) {
   const out = [];
   for (const dir of dirs) {
     if (!existsSync(dir)) throw new Error(`corpus directory ${dir} does not exist`);
-    if (statSync(dir).isDirectory()) walkDir(resolve(dir), out);
-    else out.push(resolve(dir));
+    if (statSync(dir).isDirectory()) {
+      walkDir(resolve(dir), out);
+    } else {
+      out.push(resolve(dir));
+    }
   }
   return [...new Set(out)].filter((file) => !filter || file.includes(filter));
 }
@@ -86,13 +94,21 @@ export function parseArgs(argv, spec) {
   const opts = { ...spec, _: [] };
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
-    if (!arg.startsWith('--')) { opts._.push(arg); continue; }
+    if (!arg.startsWith('--')) {
+      opts._.push(arg);
+      continue;
+    }
     const key = arg.slice(2).replace(/-([a-z])/g, (wholeMatch, letter) => letter.toUpperCase());
     const negated = key.startsWith('no') && key.length > 2 ? key[2].toLowerCase() + key.slice(3) : undefined;
-    if (negated && typeof spec[negated] === 'boolean') opts[negated] = false;
-    else if (typeof spec[key] === 'boolean') opts[key] = true;
-    else if (key in spec) opts[key] = typeof spec[key] === 'number' ? Number(argv[++index]) : argv[++index];
-    else throw new Error(`unknown option ${arg}`);
+    if (negated && typeof spec[negated] === 'boolean') {
+      opts[negated] = false;
+    } else if (typeof spec[key] === 'boolean') {
+      opts[key] = true;
+    } else if (key in spec) {
+      opts[key] = typeof spec[key] === 'number' ? Number(argv[++index]) : argv[++index];
+    } else {
+      throw new Error(`unknown option ${arg}`);
+    }
   }
   return opts;
 }

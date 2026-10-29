@@ -36,7 +36,9 @@ export class Pools {
     const detail =
       resolved.mode === 'blackBox' ? 'black box (no process)' : resolved.mode === 'wrap' ? `wraps process ${idOf(process!)}` : `process ${idOf(process!)}`;
     changes.create({ id, kind: 'participant', ...(command.name ? { name: command.name } : {}), detail });
-    if (resolved.mode === 'wrap') changes.note(`collaboration ${idOf(collab)} created; ${id} wraps the existing process ${idOf(process!)}`);
+    if (resolved.mode === 'wrap') {
+      changes.note(`collaboration ${idOf(collab)} created; ${id} wraps the existing process ${idOf(process!)}`);
+    }
     doc.invalidate();
     return participant;
   }

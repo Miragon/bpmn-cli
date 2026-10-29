@@ -367,7 +367,9 @@ export class AgentGuide {
     for (const command of COMMANDS) {
       out.push(`\n  ${command.usage}`);
       out.push(`      ${command.summary}`);
-      for (const ex of command.examples) out.push(`      $ ${ex}`);
+      for (const ex of command.examples) {
+        out.push(`      $ ${ex}`);
+      }
     }
     out.push('\n  Common options of every mutating command:');
     out.push(table(COMMON_OPTIONS.map((option) => [option.option, option.description]), '      '));
@@ -397,7 +399,9 @@ export class AgentGuide {
     out.push(heading('COMMON ERRORS'));
     for (const code of COMMON_ERRORS) {
       const errorEntry = ERROR_CATALOGUE.find((catalogued) => catalogued.code === code);
-      if (errorEntry) out.push(`  ${errorEntry.code}: ${errorEntry.meaning}\n      fix: ${errorEntry.fix}`);
+      if (errorEntry) {
+        out.push(`  ${errorEntry.code}: ${errorEntry.meaning}\n      fix: ${errorEntry.fix}`);
+      }
     }
     out.push('  The full catalogue: `bpmn kinds` (section ERRORS AND WARNINGS) or `bpmn kinds --json` -> errors.');
     return out.join('\n') + '\n';
@@ -478,14 +482,18 @@ export class AgentGuide {
       const line = lines[index]!;
       const next = lines[index + 1];
       if (next !== undefined && line.length > 0 && /^-+$/.test(next) && next.length === line.length) {
-        if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+        if (current) {
+          out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+        }
         current = { title: line, lines: [line, next] };
         index++;
         continue;
       }
       current?.lines.push(line);
     }
-    if (current) out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+    if (current) {
+      out.push({ title: current.title, text: current.lines.join('\n').trimEnd() });
+    }
     return out;
   }
 

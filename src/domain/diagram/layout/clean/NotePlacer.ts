@@ -39,8 +39,12 @@ export class NotePlacer {
     let fallbackY = top;
     const free = (job: NoteJob, box: Box): boolean => {
       if (box.x < 0 || box.y < 0) return false;
-      if (job.pool ? !this.inside(box, job.pool) : world.pools.some((pool) => overlaps(box, pool, 0))) return false;
-      if ([...world.obstacles, ...taken].some((obstacle) => overlaps(box, obstacle, MARGIN))) return false;
+      if (job.pool ? !this.inside(box, job.pool) : world.pools.some((pool) => overlaps(box, pool, 0))) {
+        return false;
+      }
+      if ([...world.obstacles, ...taken].some((obstacle) => overlaps(box, obstacle, MARGIN))) {
+        return false;
+      }
       return !world.lines.some(([start, end]) => segmentHitsBox(start, end, box, -2));
     };
     return jobs.map((job) => {
@@ -71,7 +75,11 @@ export class NotePlacer {
     out.push({ x: Math.round(anchor.x + anchor.width + GAP + 20), y: Math.round(cy - height / 2), width, height });
     out.push({ x: Math.round(anchor.x - GAP - 20 - width), y: Math.round(cy - height / 2), width, height });
     out.push(at(below, 0));
-    for (const top of [above, below]) for (let step = 1; step <= 6; step++) out.push(at(top, step), at(top, -step));
+    for (const top of [above, below]) {
+      for (let step = 1; step <= 6; step++) {
+        out.push(at(top, step), at(top, -step));
+      }
+    }
     return out;
   }
 }

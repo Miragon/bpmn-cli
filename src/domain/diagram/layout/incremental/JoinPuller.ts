@@ -33,8 +33,12 @@ export class JoinPuller {
       const plane = this.run.planes.find((candidate) => !!targetId && candidate.shapes.has(targetId));
       const target = targetId ? plane?.shapes.get(targetId) : undefined;
       const source = sourceId ? plane?.shapes.get(sourceId) : undefined;
-      if (!plane || !target || !source || this.run.relocated.has(target.id) || this.run.relocated.has(source.id)) continue;
-      if (target.poolId === source.poolId && target.parentId === source.parentId) this.run.place.pushBehind(plane, source, target);
+      if (!plane || !target || !source || this.run.relocated.has(target.id) || this.run.relocated.has(source.id)) {
+        continue;
+      }
+      if (target.poolId === source.poolId && target.parentId === source.parentId) {
+        this.run.place.pushBehind(plane, source, target);
+      }
     }
   }
 
@@ -46,7 +50,9 @@ export class JoinPuller {
         next = new Map();
         for (const el of this.run.sem.byId.values()) {
           const ends = is(el, 'bpmn:SequenceFlow') ? DiagramReader.edgeEnds(el) : is(el, 'bpmn:BoundaryEvent') ? { sourceId: idOf(raw(el, 'attachedToRef')), targetId: idOf(el) } : undefined;
-          if (ends?.sourceId && ends.targetId) next.set(ends.sourceId, [...(next.get(ends.sourceId) ?? []), ends.targetId]);
+          if (ends?.sourceId && ends.targetId) {
+            next.set(ends.sourceId, [...(next.get(ends.sourceId) ?? []), ends.targetId]);
+          }
         }
       }
       const seen = new Set([from]);
@@ -68,8 +74,12 @@ export class JoinPuller {
       const plane = this.run.planes.find((candidate) => !!targetId && candidate.shapes.has(targetId));
       const join = targetId ? plane?.shapes.get(targetId) : undefined;
       const source = sourceId ? plane?.shapes.get(sourceId) : undefined;
-      if (!plane || !join || !source || !join.di || !this.snap.byDi.has(join.di) || this.run.relocated.has(join.id) || this.run.place.joins?.has(join.id)) continue;
-      if (!is(join.el, 'bpmn:Gateway') || cx(join.bounds) >= source.bounds.x) continue;
+      if (!plane || !join || !source || !join.di || !this.snap.byDi.has(join.di) || this.run.relocated.has(join.id) || this.run.place.joins?.has(join.id)) {
+        continue;
+      }
+      if (!is(join.el, 'bpmn:Gateway') || cx(join.bounds) >= source.bounds.x) {
+        continue;
+      }
       const ins = seqFlows(join.el, 'incoming');
       const outs = seqFlows(join.el, 'outgoing');
       const successor = outs.length === 1 ? plane.shapes.get(idOf(raw(outs[0], 'targetRef')) ?? '') : undefined;
@@ -77,13 +87,21 @@ export class JoinPuller {
       const preds = ins.map((flow) => plane.shapes.get(idOf(raw(flow, 'sourceRef')) ?? ''));
       const sameFrame = (shape: DShape | undefined): boolean => !!shape && shape.poolId === join.poolId && shape.parentId === join.parentId;
       /** S left of a predecessor is pushed right of the join again, when the join led forward into it */
-      if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= Math.max(...preds.map((pred) => right(pred!.bounds))) && successor.bounds.x < right(join.bounds))) continue;
+      if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= Math.max(...preds.map((pred) => right(pred!.bounds))) && successor.bounds.x < right(join.bounds))) {
+        continue;
+      }
       plane.shapes.delete(join.id);
       this.run.place.reuse.set(join.id, { shape: join, boundaries: [], from: plane });
       (this.run.place.joins ??= new Map()).set(join.id, successor.id);
       this.run.relocated.add(join.id);
-      for (const edge of plane.edges.values()) if (edge.sourceId === join.id || edge.targetId === join.id) this.run.reroute.add(edge.id);
-      if (LayoutDebug.on()) LayoutDebug.log(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${successor.id}`);
+      for (const edge of plane.edges.values()) {
+        if (edge.sourceId === join.id || edge.targetId === join.id) {
+          this.run.reroute.add(edge.id);
+        }
+      }
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[join] ${join.id}: ${fid} from ${source.id} would enter it backwards: placed again before ${successor.id}`);
+      }
     }
   }
 }

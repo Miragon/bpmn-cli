@@ -81,7 +81,9 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    }
     throw err;
   }
   throw new Error('expected the mutation to fail');
@@ -103,7 +105,9 @@ describe('compact', () => {
     const now = shapes(after);
     expect(now.get('L1')!.bounds.height).toBeLessThan(grownShapes.get('L1')!.bounds.height - 250);
     // the content keeps its place and its order; the lane below follows the shrunk lane
-    for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds.y, id).toBe(grownShapes.get(id)!.bounds.y);
+    for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) {
+      expect(now.get(id)!.bounds.y, id).toBe(grownShapes.get(id)!.bounds.y);
+    }
     expect(now.get('L2')!.bounds.y).toBe(now.get('L1')!.bounds.y + now.get('L1')!.bounds.height);
     expect(now.get('Pool')!.bounds.height).toBe(now.get('L1')!.bounds.height + now.get('L2')!.bounds.height);
     expect(result.layout.metrics!.added).toEqual([]);
@@ -120,9 +124,15 @@ describe('compact', () => {
     // back to the drawing's gap: everything right of A moves by one offset (relative positions kept)
     const dx = now.get('G')!.bounds.x - original.get('G')!.bounds.x;
     expect(Math.abs(dx)).toBeLessThanOrEqual(5);
-    for (const id of ['B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds.x - original.get(id)!.bounds.x, id).toBe(dx);
-    for (const id of ['S', 'A']) expect(now.get(id)!.bounds, id).toEqual(original.get(id)!.bounds);
-    for (const edge of edges(after).values()) expect(orthogonal(edge), edge.id).toBe(true);
+    for (const id of ['B', 'E', 'C', 'E2']) {
+      expect(now.get(id)!.bounds.x - original.get(id)!.bounds.x, id).toBe(dx);
+    }
+    for (const id of ['S', 'A']) {
+      expect(now.get(id)!.bounds, id).toEqual(original.get(id)!.bounds);
+    }
+    for (const edge of edges(after).values()) {
+      expect(orthogonal(edge), edge.id).toBe(true);
+    }
     expect(result.layout.metrics!.added).toEqual([]);
     expect(notesOf(result)).toEqual(expect.arrayContaining([expect.stringMatching(/^closed 1 empty column \(\d+ px\)$/)]));
   });
@@ -137,7 +147,9 @@ describe('compact', () => {
     const oneShapes = shapes(one.after);
     expect(oneShapes.get('Sub')!.bounds.width).toBeLessThan(spacedShapes.get('Sub')!.bounds.width - 250);
     // what is outside the sub-process stays where it was
-    for (const id of ['S', 'A', 'G', 'B', 'C', 'E2']) expect(oneShapes.get(id)!.bounds, id).toEqual(spacedShapes.get(id)!.bounds);
+    for (const id of ['S', 'A', 'G', 'B', 'C', 'E2']) {
+      expect(oneShapes.get(id)!.bounds, id).toEqual(spacedShapes.get(id)!.bounds);
+    }
     const all = await run(one.xml, [{ op: 'compact' }]);
     expect(shapes(all.after).get('E')!.bounds.x).toBeLessThan(oneShapes.get('E')!.bounds.x);
     expect(hardOf(all.after)).toEqual(hardOf(await Doc.fromXml(hand)));

@@ -32,7 +32,9 @@ class OpsSchemaBuilder {
   private objectSchema(fields: Record<string, FieldSpec>, opts: { op?: string; description: string; allOf?: unknown[] }): Record<string, unknown> {
     const properties: Record<string, unknown> = {};
     if (opts.op) properties['op'] = { const: opts.op };
-    for (const [key, spec] of Object.entries(fields)) properties[key] = this.fieldSchema(spec);
+    for (const [key, spec] of Object.entries(fields)) {
+      properties[key] = this.fieldSchema(spec);
+    }
     const required = [...(opts.op ? ['op'] : []), ...Object.entries(fields).filter(([, fieldSpec]) => fieldSpec.required).map(([fieldName]) => fieldName)];
     return {
       type: 'object',

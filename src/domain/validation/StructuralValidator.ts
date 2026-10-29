@@ -67,7 +67,9 @@ export class StructuralValidator {
     if (invalidHost.size) {
       shown = shown.filter((finding) => !repeated(finding));
       report = { ...report, findings: report.findings.filter((finding) => !repeated(finding)) };
-      if (delta) delta = { added: delta.added.filter((finding) => !repeated(finding)), resolved: delta.resolved };
+      if (delta) {
+        delta = { added: delta.added.filter((finding) => !repeated(finding)), resolved: delta.resolved };
+      }
     }
     const covered = lintCoveredBy(shown);
     const warnings = result.warnings.filter((warning) => !covered(warning));

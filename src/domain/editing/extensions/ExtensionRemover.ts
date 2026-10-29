@@ -51,7 +51,9 @@ export class ExtensionRemover {
       this.pruneEmpty(el, level, changes);
     }
     const extensionElements = el.get<El | undefined>('extensionElements');
-    if (extensionElements && !many(extensionElements, 'values').length) el.set('extensionElements', undefined);
+    if (extensionElements && !many(extensionElements, 'values').length) {
+      el.set('extensionElements', undefined);
+    }
     this.doc.invalidate();
     changes.change(ChangeSet.entryOf(this.hosts.ownerOf(el), `ext removed ${texts.map((text) => this.hosts.slotPrefix(el) + text).join(', ')}`));
     return changes;
@@ -100,7 +102,9 @@ export class ExtensionRemover {
   private pruneEmpty(host: El, level: ExtensionLevel, changes: ChangeSet): void {
     let cur: El | undefined = level.parent;
     while (cur && this.names.isGeneric(cur)) {
-      if (this.names.kidsOf(cur).length || this.names.bodyOf(cur) !== undefined || Object.keys(this.names.attrsOf(cur)).length) return;
+      if (this.names.kidsOf(cur).length || this.names.bodyOf(cur) !== undefined || Object.keys(this.names.attrsOf(cur)).length) {
+        return;
+      }
       if (!this.structure.isPureContainer(this.names.typeOf(cur))) return;
       const parent = cur.$parent as El | undefined;
       if (!parent) return;

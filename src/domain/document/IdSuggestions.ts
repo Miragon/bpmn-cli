@@ -54,18 +54,28 @@ export class IdSuggestions {
       const fidStem = IdSuggestions.foldUmlauts(IdSuggestions.stemOf(id));
       let score = Infinity;
       let dist = 0;
-      if (id === renamed) score = -1;
-      else if (lid === lowerQuery) score = 0;
-      else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) score = 1;
-      else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) score = 2;
-      else if (prefix && IdSuggestions.prefixOf(id) === prefix && fstem.length >= 3 && fidStem.length >= 6 && (fidStem.includes(fstem) || fstem.includes(fidStem))) score = 2;
-      else {
+      if (id === renamed) {
+        score = -1;
+      } else if (lid === lowerQuery) {
+        score = 0;
+      } else if ((fq && fid === fq) || (fstem.length >= 3 && fidStem === fstem)) {
+        score = 1;
+      } else if (fq && (fid.includes(fq) || (fid.length >= 3 && fq.includes(fid)))) {
+        score = 2;
+      } else if (prefix && IdSuggestions.prefixOf(id) === prefix && fstem.length >= 3 && fidStem.length >= 6 && (fidStem.includes(fstem) || fstem.includes(fidStem))) {
+        score = 2;
+      } else {
         const whole = editDistance(fq, fid);
         const bare = editDistance(fstem, fidStem);
-        if (fq && whole <= typoTolerance(fq.length)) [score, dist] = [3, whole];
-        else if (fstem && bare <= typoTolerance(fstem.length)) [score, dist] = [3, bare];
-        else if (name && (name === lowerQuery || name.includes(lowerQuery) || (!!fq && IdSuggestions.foldUmlauts(name).includes(fq)))) score = 4;
-        else if (lowerQuery.replace(/[^a-z0-9]/g, '') && lid.replace(/[^a-z0-9]/g, '').includes(lowerQuery.replace(/[^a-z0-9]/g, ''))) score = 5;
+        if (fq && whole <= typoTolerance(fq.length)) {
+          [score, dist] = [3, whole];
+        } else if (fstem && bare <= typoTolerance(fstem.length)) {
+          [score, dist] = [3, bare];
+        } else if (name && (name === lowerQuery || name.includes(lowerQuery) || (!!fq && IdSuggestions.foldUmlauts(name).includes(fq)))) {
+          score = 4;
+        } else if (lowerQuery.replace(/[^a-z0-9]/g, '') && lid.replace(/[^a-z0-9]/g, '').includes(lowerQuery.replace(/[^a-z0-9]/g, ''))) {
+          score = 5;
+        }
       }
       if (score < Infinity) hits.push({ id, score, dist });
     }

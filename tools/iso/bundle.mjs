@@ -67,7 +67,9 @@ function esbuildOptions(opts, minify) {
 /** The module comments (`// src/domain/document/utils/moddle.ts`) of an unminified bundle with their offsets. */
 function moduleMarks(code) {
   const marks = [];
-  for (const marker of code.matchAll(/^\s*\/\/ (\S+\.(?:[cm]?[jt]s|json))$/gm)) marks.push({ at: marker.index, file: marker[1] });
+  for (const marker of code.matchAll(/^\s*\/\/ (\S+\.(?:[cm]?[jt]s|json))$/gm)) {
+    marks.push({ at: marker.index, file: marker[1] });
+  }
   return marks;
 }
 
@@ -110,7 +112,9 @@ export async function bundleCore(opts = {}) {
     return { path: relative(ROOT, outputFile.path), bytes: outputFile.contents.length, gzip: gzipSync(outputFile.contents).length, entry: meta?.entryPoint === requested, entryPoint: meta?.entryPoint, imports, inputs: Object.keys(meta?.inputs ?? {}), text: outputFile.text };
   });
   const entries = chunks.filter((chunk) => chunk.entry);
-  if (entries.length !== 1) throw new Error(`bundleCore: ${entries.length} output chunks have the entry point ${requested} (${chunks.map((chunk) => `${chunk.path}: ${chunk.entryPoint ?? '-'}`).join(', ')})`);
+  if (entries.length !== 1) {
+    throw new Error(`bundleCore: ${entries.length} output chunks have the entry point ${requested} (${chunks.map((chunk) => `${chunk.path}: ${chunk.entryPoint ?? '-'}`).join(', ')})`);
+  }
   const entry = entries[0];
   const graph = Object.fromEntries(Object.entries(result.metafile.inputs).map(([file, input]) => [file, input.imports.filter((importRecord) => importRecord.kind === 'import-statement').map((importRecord) => importRecord.path)]));
   // the sentinels are located in an unminified build (minified output has no module comments)

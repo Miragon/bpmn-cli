@@ -27,28 +27,40 @@ export class ChainLiftTrial extends ArrangementTrial {
     if (!lanes?.length) return;
     const laneOf = new Map<GNode, number>();
     lanes.forEach((band, laneIndex) => {
-      for (const node of band.nodes) laneOf.set(node, laneIndex);
+      for (const node of band.nodes) {
+        laneOf.set(node, laneIndex);
+      }
     });
     const lane = (node: GNode): number => laneOf.get(node) ?? 0;
     const tried = new Set<GNode>();
     const show = (routes: Routes): string => this.showRoutes(routes, true);
     const setRow = (node: GNode, row: number): void => {
       node.row = row;
-      for (const boundaryEvent of node.boundary) boundaryEvent.row = row;
+      for (const boundaryEvent of node.boundary) {
+        boundaryEvent.row = row;
+      }
     };
     let routed: Routes | undefined;
     for (;;) {
       const cells = new Set<string>();
       const cell = (lane: number, row: number, layer: number): string => `${lane}/${row}/${layer}`;
-      for (const node of layout.nodes) cells.add(cell(lane(node), node.row, node.layer));
+      for (const node of layout.nodes) {
+        cells.add(cell(lane(node), node.row, node.layer));
+      }
       const nodeCells = new Set(cells);
       for (const edge of layout.edges) {
         const source = edge.source, target = edge.target;
-        if (edge.back || source.host || source.row !== target.row || lane(source) !== lane(target)) continue;
-        for (let layer = source.layer + 1; layer < target.layer; layer++) cells.add(cell(lane(source), source.row, layer));
+        if (edge.back || source.host || source.row !== target.row || lane(source) !== lane(target)) {
+          continue;
+        }
+        for (let layer = source.layer + 1; layer < target.layer; layer++) {
+          cells.add(cell(lane(source), source.row, layer));
+        }
       }
       const free = (lane: number, row: number, from: number, to: number): boolean => {
-        for (let layer = from; layer <= to; layer++) if (cells.has(cell(lane, row, layer))) return false;
+        for (let layer = from; layer <= to; layer++) {
+          if (cells.has(cell(lane, row, layer))) return false;
+        }
         return true;
       };
       const open = layout.nodes.filter((node) => !tried.has(node) && !node.compensatedBy).sort((first, second) => first.layer - second.layer || first.row - second.row);
@@ -63,7 +75,9 @@ export class ChainLiftTrial extends ArrangementTrial {
           cur = undefined;
           for (const edge of from.out) {
             const target = edge.target;
-            if (edge.back || target.row !== candidate.row || lane(target) !== lane(candidate) || target.layer <= from.layer || target.compensatedBy || chain.includes(target) || !free(lane(candidate), row, from.layer + 1, target.layer)) continue;
+            if (edge.back || target.row !== candidate.row || lane(target) !== lane(candidate) || target.layer <= from.layer || target.compensatedBy || chain.includes(target) || !free(lane(candidate), row, from.layer + 1, target.layer)) {
+              continue;
+            }
             if (!cur || target.layer < cur.layer) cur = target;
           }
           if (cur) chain.push(cur);
@@ -89,7 +103,9 @@ export class ChainLiftTrial extends ArrangementTrial {
         if (moved.has(source) !== moved.has(target)) {
           const stayer = moved.has(source) ? target : source, mover = stayer === source ? target : source;
           if (lane(stayer) !== lane(head) || stayer.row !== row) return false;
-          for (let layer = Math.min(mover.layer, stayer.layer) + 1; layer < Math.max(mover.layer, stayer.layer); layer++) if (nodeCells.has(cell(lane(head), row, layer))) return true;
+          for (let layer = Math.min(mover.layer, stayer.layer) + 1; layer < Math.max(mover.layer, stayer.layer); layer++) {
+            if (nodeCells.has(cell(lane(head), row, layer))) return true;
+          }
           return false;
         }
         if (moved.has(source)) return false;
@@ -97,11 +113,15 @@ export class ChainLiftTrial extends ArrangementTrial {
         return lift.chain.some((member) => member.box.x < riseX && riseX < member.box.x + member.box.width) && above([lane(target), target.row], to) && !above([lane(source), source.row], to);
       });
       if (bent) {
-        if (LayoutDebug.on()) LayoutDebug.log(`[lifts] ${head.id} stays: ${bent.id} would no longer rise straight`);
+        if (LayoutDebug.on()) {
+          LayoutDebug.log(`[lifts] ${head.id} stays: ${bent.id} would no longer rise straight`);
+        }
         continue;
       }
       const checkpoint = new ArrangementCheckpoint(layout);
-      for (const member of lift.chain) setRow(member, lift.row);
+      for (const member of lift.chain) {
+        setRow(member, lift.row);
+      }
       arrange();
       const after = this.routesOf(true);
       const keep =
@@ -115,9 +135,14 @@ export class ChainLiftTrial extends ArrangementTrial {
         !after.sharing.has(lift.flow) &&
         [...before.rises].every((edge) => after.rises.has(edge) || after.straight.has(edge)) &&
         [...before.straight].every((edge) => after.straight.has(edge) || moved.has(edge.source) || moved.has(edge.target));
-      if (LayoutDebug.on()) LayoutDebug.log(`[lifts] ${head.id} ${keep ? `moves up onto row ${lift.row}` : 'stays'}${lift.chain.length > 1 ? ` (with ${lift.chain.slice(1).map((member) => member.id).join(', ')})` : ''}: ${show(before)} -> ${show(after)}`);
-      if (keep) routed = after;
-      else checkpoint.restore();
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[lifts] ${head.id} ${keep ? `moves up onto row ${lift.row}` : 'stays'}${lift.chain.length > 1 ? ` (with ${lift.chain.slice(1).map((member) => member.id).join(', ')})` : ''}: ${show(before)} -> ${show(after)}`);
+      }
+      if (keep) {
+        routed = after;
+      } else {
+        checkpoint.restore();
+      }
     }
   }
 }

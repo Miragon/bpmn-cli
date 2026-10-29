@@ -215,7 +215,11 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     mkdirSync(join(broken, 'node_modules', '@miragon', 'bpmnlint-plugin-rules'), { recursive: true });
     cpSync(join(build, 'dist'), join(broken, 'dist'), { recursive: true });
     writeFileSync(join(broken, 'package.json'), readFileSync(join(ROOT, 'package.json')));
-    for (const name of readdirSync(join(ROOT, 'node_modules'))) if (name !== '@miragon') symlinkSync(join(ROOT, 'node_modules', name), join(broken, 'node_modules', name));
+    for (const name of readdirSync(join(ROOT, 'node_modules'))) {
+      if (name !== '@miragon') {
+        symlinkSync(join(ROOT, 'node_modules', name), join(broken, 'node_modules', name));
+      }
+    }
     const stub = join(broken, 'node_modules', '@miragon', 'bpmnlint-plugin-rules');
     writeFileSync(join(stub, 'package.json'), JSON.stringify({ name: '@miragon/bpmnlint-plugin-rules', version: '0.12.0', main: 'index.cjs' }));
     writeFileSync(join(stub, 'index.cjs'), "throw new Error('the plugin is broken');");
@@ -242,7 +246,11 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
       // bpmn-cli's own bpmnlint (the pinned one) is nested; the plugin and the rest are hoisted
       symlinkSync(join(ROOT, 'node_modules', 'bpmnlint'), join(cliDir, 'node_modules', 'bpmnlint'));
       cpSync(join(ROOT, 'node_modules', '@miragon', 'bpmnlint-plugin-rules'), join(modules, '@miragon', 'bpmnlint-plugin-rules'), { recursive: true });
-      for (const entry of readdirSync(join(ROOT, 'node_modules'))) if (entry !== '@miragon' && entry !== 'bpmnlint') symlinkSync(join(ROOT, 'node_modules', entry), join(modules, entry));
+      for (const entry of readdirSync(join(ROOT, 'node_modules'))) {
+        if (entry !== '@miragon' && entry !== 'bpmnlint') {
+          symlinkSync(join(ROOT, 'node_modules', entry), join(modules, entry));
+        }
+      }
       install(join(modules, 'bpmnlint'));
       return { dir, bin: join(cliDir, 'dist', 'cli.js'), name };
     };
@@ -291,7 +299,9 @@ describe('the CLI under plain node (src/ built into a temporary directory)', () 
     // the write first, then validate the result and show its id conventions
     const written = bpmn(dir, args(add[0]!));
     expect(written.code, written.err).toBe(0);
-    for (const line of add.slice(1).filter((outputLine) => outputLine !== '...')) expect(written.out.split('\n'), line).toContain(line);
+    for (const line of add.slice(1).filter((outputLine) => outputLine !== '...')) {
+      expect(written.out.split('\n'), line).toContain(line);
+    }
     const checked = bpmn(dir, args(validate[0]!));
     expect(checked.code).toBe(2);
     expect(checked.out.trimEnd()).toBe(validate.slice(1).join('\n'));

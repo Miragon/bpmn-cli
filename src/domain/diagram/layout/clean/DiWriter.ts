@@ -18,7 +18,9 @@ export class DiWriter {
   shape(el: El, box: Box, extra: Record<string, unknown> = {}, label?: Box): void {
     const { moddle } = this;
     const shapeDi = moddle.create('bpmndi:BPMNShape', { id: `BPMNShape_${idOf(el)}`, bpmnElement: el, bounds: this.bounds(box), ...extra });
-    if (label) shapeDi.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+    if (label) {
+      shapeDi.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+    }
     this.di.push(shapeDi);
     this.absBoxes.set(idOf(el), { ...box });
   }
@@ -26,21 +28,33 @@ export class DiWriter {
   edge(el: El, points: Point[], label?: Box): void {
     const { moddle } = this;
     const edgeDi = moddle.create('bpmndi:BPMNEdge', { id: `BPMNEdge_${idOf(el)}`, bpmnElement: el, waypoint: points.map((point) => moddle.create('dc:Point', { x: Math.round(point.x), y: Math.round(point.y) })) });
-    if (label) edgeDi.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+    if (label) {
+      edgeDi.set('label', moddle.create('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+    }
     this.di.push(edgeDi);
   }
 
   emitScope(scope: ScopeLayout, origin: Point): void {
     this.crossLinks.push(...scope.crossLinks);
-    for (const lane of scope.lanes) this.emitLane(lane, origin);
-    for (const node of [...scope.nodes, ...scope.eventSubs]) this.emitNode(node, origin);
-    for (const edge of scope.edges) this.edge(edge.el, this.shiftPts(edge.points, origin), edge.label ? this.shift(edge.label, origin) : undefined);
-    for (const compensation of scope.compensations) this.edge(compensation.el, this.shiftPts(compensation.points, origin));
+    for (const lane of scope.lanes) {
+      this.emitLane(lane, origin);
+    }
+    for (const node of [...scope.nodes, ...scope.eventSubs]) {
+      this.emitNode(node, origin);
+    }
+    for (const edge of scope.edges) {
+      this.edge(edge.el, this.shiftPts(edge.points, origin), edge.label ? this.shift(edge.label, origin) : undefined);
+    }
+    for (const compensation of scope.compensations) {
+      this.edge(compensation.el, this.shiftPts(compensation.points, origin));
+    }
     for (const artifact of scope.artifacts) {
       const box = this.shift(artifact.box, origin);
       const label = artifact.kind === 'annotation' ? undefined : ScopeLabels.of(artifact, 'data');
       this.shape(artifact.el, box, {}, label ? this.shift(label, origin) : undefined);
-      for (const link of artifact.links) this.edge(link.el, this.shiftPts(link.points, origin));
+      for (const link of artifact.links) {
+        this.edge(link.el, this.shiftPts(link.points, origin));
+      }
     }
   }
 
@@ -53,7 +67,9 @@ export class DiWriter {
       bounds.set('y', pool.box.y + lane.box.y);
       this.absBoxes.set(lane.id, { x: baseX + lane.box.x, y: pool.box.y + lane.box.y, width: lane.box.width, height: lane.box.height });
     }
-    for (const childLane of lane.children) this.fixLaneShapes(childLane, pool, processOnly);
+    for (const childLane of lane.children) {
+      this.fixLaneShapes(childLane, pool, processOnly);
+    }
   }
 
   startPlane(): void {
@@ -101,7 +117,9 @@ export class DiWriter {
 
   private emitLane(lane: LaneBox, origin: Point): void {
     this.shape(lane.el, this.shift(lane.box, origin), { isHorizontal: true });
-    for (const childLane of lane.children) this.emitLane(childLane, origin);
+    for (const childLane of lane.children) {
+      this.emitLane(childLane, origin);
+    }
   }
 
   /** A collapsed sub-process gets only its shape here, its content lives on its own plane. */

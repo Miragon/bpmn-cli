@@ -131,7 +131,9 @@ export class ElementCreation {
     if (opts.message !== undefined) return 'message';
     if (opts.error !== undefined || opts.errorCode !== undefined) return 'error';
     if (opts.signal !== undefined) return 'signal';
-    if (opts.escalation !== undefined || opts.escalationCode !== undefined) return 'escalation';
+    if (opts.escalation !== undefined || opts.escalationCode !== undefined) {
+      return 'escalation';
+    }
     if (opts.when !== undefined) return 'conditional';
     if (opts.link !== undefined) return 'link';
     return undefined;
@@ -288,9 +290,15 @@ export class ElementCreation {
       this.reportNewRoots(changes, () => new EventDefinitions(this.edit).setTrigger(el, resolved, command));
       if (resolved !== 'none') entry.kind = kindLabel(el);
     }
-    if (messageTask) new Properties(this.edit).setTaskMessage(el, command.message ?? '', changes);
-    if (new Camunda8Defaults(this.edit).userTask(el)) changes.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
-    for (const flow of new Set([...this.edit.doc.incoming(el), ...this.edit.doc.outgoing(el)])) new EventGatewayRule(this.edit).warnFlow(flow, changes);
+    if (messageTask) {
+      new Properties(this.edit).setTaskMessage(el, command.message ?? '', changes);
+    }
+    if (new Camunda8Defaults(this.edit).userTask(el)) {
+      changes.note(`${id} is a Camunda user task (zeebe:userTask), like Camunda Modeler creates them`);
+    }
+    for (const flow of new Set([...this.edit.doc.incoming(el), ...this.edit.doc.outgoing(el)])) {
+      new EventGatewayRule(this.edit).warnFlow(flow, changes);
+    }
     if (command.collapsed && def.family === 'subProcess') {
       this.edit.doc.layoutRequests.collapse(id);
       changes.note(`${id} will be laid out collapsed`);
@@ -331,7 +339,9 @@ export class ElementCreation {
       const existing = this.edit.doc.get(command.id)!;
       changes.note(`${command.id} already exists (${kindLabel(existing)}); nothing to do`);
       changes.bind(command.as, existing);
-      if (command.flowAs) changes.bind(command.flowAs, this.edit.doc.incoming(existing)[0]);
+      if (command.flowAs) {
+        changes.bind(command.flowAs, this.edit.doc.incoming(existing)[0]);
+      }
       if (command.outAs) this.bindExistingOutAs(command.outAs, existing, changes);
       RootElements.bindRefAs(changes, command.refAs, existing);
       if (kindLabel(existing) !== def.kind && !kindLabel(existing).startsWith(`${def.kind}:`)) {
@@ -356,7 +366,11 @@ export class ElementCreation {
         ElementCreation.rejectPlacement(command, [], 'participant');
         const before = new Set(this.edit.doc.processes());
         el = new Pools(this.edit).createParticipant(command, changes);
-        for (const process of this.edit.doc.processes()) if (!before.has(process)) this.edit.doc.initProcess(process, this.edit.platform());
+        for (const process of this.edit.doc.processes()) {
+          if (!before.has(process)) {
+            this.edit.doc.initProcess(process, this.edit.platform());
+          }
+        }
         break;
       }
       case 'lane':
@@ -368,7 +382,9 @@ export class ElementCreation {
         const scope = this.edit.requireScope(command.in);
         const opts = { ...(command.id ? { id: command.id } : {}), ...(command.name ? { name: command.name } : {}) };
         el = def.kind === 'dataStore' ? new Artifacts(this.edit).createDataStore(scope, opts, changes) : new Artifacts(this.edit).createDataObject(scope, opts, changes);
-        if (command.to) new Associations(this.edit).createDataAssociation(el, this.edit.require(command.to), {}, changes);
+        if (command.to) {
+          new Associations(this.edit).createDataAssociation(el, this.edit.require(command.to), {}, changes);
+        }
         break;
       }
       case 'artifact': {
@@ -381,7 +397,9 @@ export class ElementCreation {
         const scope = this.edit.requireScope(command.in);
         const text = command.text ?? command.name;
         el = new Artifacts(this.edit).createTextAnnotation(scope, { ...(command.id ? { id: command.id } : {}), ...(command.name ? { name: command.name } : {}), ...(text ? { text } : {}) }, changes);
-        if (command.to) new Associations(this.edit).createAssociation(this.edit.require(command.to), el, {}, changes);
+        if (command.to) {
+          new Associations(this.edit).createAssociation(this.edit.require(command.to), el, {}, changes);
+        }
         break;
       }
       default:

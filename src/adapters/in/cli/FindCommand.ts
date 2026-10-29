@@ -10,8 +10,11 @@ export class FindCommand extends CliCommand {
     this.withJsonOptions(this.define(program, 'find').option('--kind <kind>', 'restrict to a kind', (raw: string) => this.kindArg(raw))).action(async (file: string, text: string, options: RawOpts) => {
       const doc = await this.cli.readDocArg(file);
       const hits = this.cli.useCases.findElements.find({ doc, text, ...(options['kind'] !== undefined ? { kind: options['kind'] as string } : {}) });
-      if (options['json']) this.cli.printJson(hits, !!options['pretty']);
-      else this.cli.print(renderFind(hits));
+      if (options['json']) {
+        this.cli.printJson(hits, !!options['pretty']);
+      } else {
+        this.cli.print(renderFind(hits));
+      }
     });
   }
 

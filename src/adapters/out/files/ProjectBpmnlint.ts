@@ -34,7 +34,9 @@ export class ProjectBpmnlint {
 
   /** Nothing when `validators` already hold a bpmnlint: that host passes its own conventions. */
   async lint(): Promise<ProjectLint> {
-    if (this.opts.validators?.some((validator) => (typeof validator === 'function' ? validator.name : validator?.name) === BPMNLINT_VALIDATOR)) return ProjectLint.NONE;
+    if (this.opts.validators?.some((validator) => (typeof validator === 'function' ? validator.name : validator?.name) === BPMNLINT_VALIDATOR)) {
+      return ProjectLint.NONE;
+    }
     const loaded = await this.loaded();
     if (!loaded) return ProjectLint.NONE;
     const blocks = this.opts.lintBlocks ?? false;
@@ -55,7 +57,9 @@ export class ProjectBpmnlint {
   async idConventions(): Promise<ProjectIdConventions | undefined> {
     const loaded = await this.loaded();
     if (!loaded) return undefined;
-    if (!loaded.ok) return { notes: bpmnlintUnavailableFindings(loaded.unavailable), where: loaded.where, unavailable: true };
+    if (!loaded.ok) {
+      return { notes: bpmnlintUnavailableFindings(loaded.unavailable), where: loaded.where, unavailable: true };
+    }
     const ids = this.conventionsOf(loaded);
     const left = bpmnlintUnavailableFindings([...loaded.resolved.unavailable, ...loaded.notes]);
     return left.length ? { ...ids, notes: [...ids.notes, ...left] } : ids;
@@ -64,7 +68,9 @@ export class ProjectBpmnlint {
   async settings(): Promise<BpmnlintSettings | undefined> {
     const loaded = await this.loaded();
     if (!loaded) return undefined;
-    if (!loaded.ok) return { path: loaded.path, detail: loaded.detail, rules: {}, unavailable: loaded.unavailable };
+    if (!loaded.ok) {
+      return { path: loaded.path, detail: loaded.detail, rules: {}, unavailable: loaded.unavailable };
+    }
     return { path: loaded.path, detail: loaded.detail, rules: loaded.resolved.rules, unavailable: [...loaded.resolved.unavailable, ...loaded.notes] };
   }
 
@@ -81,7 +87,9 @@ export class ProjectBpmnlint {
   private configFile(): { path: string; explicit: boolean } | undefined {
     const { opts } = this;
     if (opts.lintConfig === false) return undefined;
-    if (typeof opts.lintConfig === 'string') return { path: resolve(opts.lintFrom ?? '', opts.lintConfig), explicit: true };
+    if (typeof opts.lintConfig === 'string') {
+      return { path: resolve(opts.lintFrom ?? '', opts.lintConfig), explicit: true };
+    }
     const start = this.file !== undefined ? dirname(resolve(this.file)) : opts.lintFrom;
     const found = start !== undefined ? new ConfigLookup(start).nearest() : undefined;
     return found ? { path: found, explicit: false } : undefined;
@@ -93,7 +101,9 @@ export class ProjectBpmnlint {
     const setting = loaded.resolved.rules[ID_NAMING_RULE];
     const libs = BpmnlintLibs.load();
     const out: ProjectIdConventions = { notes: [], where: loaded.where, ...(setting ? { setting } : {}) };
-    if (setting && setting.severity !== 'off' && libs instanceof BpmnlintLibs) Object.assign(out, new IdConventionsReader(libs.plugin.naming, loaded.where).read(setting));
+    if (setting && setting.severity !== 'off' && libs instanceof BpmnlintLibs) {
+      Object.assign(out, new IdConventionsReader(libs.plugin.naming, loaded.where).read(setting));
+    }
     ProjectBpmnlint.conventionsCache.set(loaded.resolved, out);
     return out;
   }

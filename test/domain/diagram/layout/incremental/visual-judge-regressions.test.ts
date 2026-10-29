@@ -38,13 +38,21 @@ async function run(xml: string, ops: EditCommand[]): Promise<{ result: MutationR
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const shape of diagramPlane.shapes.values()) out.set(shape.id, shape);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) {
+    for (const shape of diagramPlane.shapes.values()) {
+      out.set(shape.id, shape);
+    }
+  }
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const edge of diagramPlane.edges.values()) out.set(edge.id, edge);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) {
+    for (const edge of diagramPlane.edges.values()) {
+      out.set(edge.id, edge);
+    }
+  }
   return out;
 }
 
@@ -238,10 +246,14 @@ describe('judged edits on hand drawings', () => {
     expect(m1.label!.x).toBe(m0.label!.x + dx);
     expect(m1.label!.y).toBe(m0.label!.y);
     // mostly before the insertion line: untouched with its content and inner flows
-    for (const id of ['ESP', 'ES', 'ET', 'EE']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    for (const id of ['ESP', 'ES', 'ET', 'EE']) {
+      expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    }
     expect(edges(after).get('EF2')!.points).toEqual(edges(before).get('EF2')!.points);
     // mostly beyond it, but neither following the new node nor in the way of what moves: kept as a whole
-    for (const id of ['ESP2', 'BS', 'BT', 'BE']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    for (const id of ['ESP2', 'BS', 'BT', 'BE']) {
+      expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    }
     expect(edges(after).get('BF1')!.points).toEqual(edges(before).get('BF1')!.points);
   });
 
@@ -275,7 +287,9 @@ describe('judged edits on hand drawings', () => {
     ]);
     const shapesBefore = shapes(before);
     const shapesAfter = shapes(after);
-    for (const id of ['A', 'B', 'C', 'E', 'EB']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    for (const id of ['A', 'B', 'C', 'E', 'EB']) {
+      expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    }
   });
 
   it('lane change: the rerouted flows dock only on vertices, free ones of the split; the join\'s entries from below share its bottom vertex', async () => {
@@ -287,7 +301,9 @@ describe('judged edits on hand drawings', () => {
     for (const gw of ['G1', 'J']) {
       const docks = docksOf(gw);
       expect(docks).toHaveLength(3);
-      for (const dock of docks) expect(vertices(shapesAfter.get(gw)!.bounds), `${gw} ${dock}`).toContain(dock);
+      for (const dock of docks) {
+        expect(vertices(shapesAfter.get(gw)!.bounds), `${gw} ${dock}`).toContain(dock);
+      }
     }
     expect(new Set(docksOf('G1')).size).toBe(3);
     // T1, now in the lower lane, rises into J's bottom vertex beside T2's flow (bpmn-js draws a join so), without crossing it
@@ -308,7 +324,9 @@ describe('judged edits on hand drawings', () => {
     expect(shapesAfter.get('M')!.bounds.x).toBe(shapesBefore.get('X')!.bounds.x);
     expect(shapesAfter.get('E2')!.bounds.x - shapesBefore.get('E2')!.bounds.x).toBe(dx);
     expect(shapesAfter.get('M')!.label!.x - shapesBefore.get('M')!.label!.x).toBe(dx);
-    for (const id of ['S', 'H', 'B', 'E1', 'Org']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    for (const id of ['S', 'H', 'B', 'E1', 'Org']) {
+      expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    }
     expect(LayoutAnalysis.of(after.definitions).counts.overlaps).toBe(0);
   });
 
@@ -322,6 +340,8 @@ describe('judged edits on hand drawings', () => {
     const { before, after } = await run(xml, [{ op: 'remove', ids: ['X'] }]);
     const shapesBefore = shapes(before);
     const shapesAfter = shapes(after);
-    for (const id of ['M', 'E2', 'T']) expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    for (const id of ['M', 'E2', 'T']) {
+      expect(shapesAfter.get(id)!.bounds, id).toEqual(shapesBefore.get(id)!.bounds);
+    }
   });
 });
