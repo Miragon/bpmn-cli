@@ -1,7 +1,7 @@
 ---
 name: bpmn
-description: Create, read, change, lay out and validate BPMN 2.0 process models (.bpmn files) with the bpmn CLI (@miragon/bpmn-cli) instead of editing BPMN XML by hand. Use it whenever the user wants to model, build or create a process or BPMN diagram; add, remove, rename, move or reconnect tasks, gateways, events, sub-processes, lanes, pools, message flows, data objects or annotations; format, lay out, tidy or render a diagram, colour or align elements; set Camunda 7 or Camunda 8 implementation details (external tasks, job workers, input/output mappings, error handling, forms, multi-instance); or validate a .bpmn file before deploying it.
-when_to_use: Any request that creates or touches a .bpmn file, even when it does not say BPMN. Typical phrases are "model the order process", "draw a BPMN diagram", "add an approval step", "add a reminder timer", "add a lane for accounting", "add the customer as a pool with message flows", "the rejection branch should go below", "colour the happy path", "tidy up the layout", "make it deployable on Camunda 8", "external task with input mapping", "Prozess modellieren", "BPMN anpassen", "BPMN-Diagramm erstellen", "Schritt einfügen", "Lane hinzufügen", "Diagramm aufräumen", "Camunda-8-Prozess bauen".
+description: Creates, changes, lays out and validates BPMN 2.0 process models (.bpmn files) with the bpmn CLI instead of editing BPMN XML by hand, including Camunda 7/8 implementation details.
+when_to_use: Use whenever a request creates or touches a .bpmn file or a process diagram, even when it does not say BPMN, e.g. "model the order process", "Prozess modellieren", "BPMN anpassen".
 allowed-tools:
   - Bash(bpmn *)
   - Bash(npx -y @miragon/bpmn-cli@0.8.0 *) # x-release-please-version
