@@ -10,6 +10,8 @@ import { CamundaAttributes } from './CamundaAttributes.js';
 
 const SERVICE_LIKE = ['bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:BusinessRuleTask'];
 const THROW_EVENTS = ['bpmn:IntermediateThrowEvent', 'bpmn:EndEvent'];
+/** The attributes that implement a host. */
+export const IMPLEMENTATIONS = ['class', 'delegateExpression', 'expression', 'type'];
 
 /**
  * Where Camunda 7 reads how work is implemented: a service, send or business rule task, or the
@@ -67,6 +69,11 @@ export class ImplementationHost {
     return this.type?.toLowerCase() === 'shell';
   }
 
+  /** A camunda:type other than external or shell, which the engines refuse before they look at anything else of the host. */
+  get hasUnsupportedType(): boolean {
+    return this.type !== undefined && !this.isExternal && !this.isShell;
+  }
+
   /** Whether the engines find an implementation: a delegate, an external or shell task, a connector or a decision. */
   get hasImplementation(): boolean {
     return ['class', 'delegateExpression', 'expression'].some((local) => Values.nonEmpty(this.attributes.defined(local))) || this.isExternal || this.isShell || this.hasConnector() || (this.readsDecisionRef && this.attributes.defined('decisionRef') !== undefined);
@@ -75,6 +82,12 @@ export class ImplementationHost {
   /** The path from the reported element to `property` of the host. */
   pathTo(...property: ReportPath): ReportPath {
     return [...this.path, ...property];
+  }
+
+  /** `bpmn ext add` of a camunda:field, which replaces the field of that name; `otherwise` without an id to address. */
+  fieldHint(args: string, otherwise: string, after = '.'): string {
+    const target = this.command.extTarget(`${this.prefix}:field`);
+    return target ? `\`bpmn ext add <file> ${target} ${args}\`${after}` : otherwise;
   }
 
   /** The `camunda:Field` extension elements of the host, with their index in `values`. */

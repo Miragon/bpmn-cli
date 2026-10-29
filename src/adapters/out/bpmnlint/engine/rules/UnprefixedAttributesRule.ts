@@ -7,7 +7,7 @@ import { WrittenModel } from './support/WrittenModel.js';
 
 /**
  * Attributes without a namespace prefix that the BPMN schema does not define, for either engine
- * (`C7UnprefixedAttributesRule`, `C8UnprefixedAttributesRule` name the findings).
+ * (`C7BpmnAttributeKnownRule`, `C8BpmnAttributeKnownRule`).
  * Both engines validate the file against the schema and refuse it. The typed parse turns some of
  * them into the vendor attribute of that name, so the rule reads each element as the file writes
  * it (`WrittenModel`) and reports on its typed twin. The hint suggests the prefixed vendor
@@ -53,7 +53,7 @@ export abstract class UnprefixedAttributesRule extends CamundaRule {
     const engines = this.engine === 'c8' ? 'Camunda 8 validates the file against the schema and refuses it' : 'the engines validate the file against the schema and refuse it';
     const message = `${where} has the attribute ${key}, which the BPMN schema does not define${fits ? ` (did you mean ${this.prefix}:${key}?)` : ''}; ${engines}`;
     const reported = this.model.typed(owner ?? this.model.file.definitions);
-    this.report(`${this.engine}-unprefixed-attributes`, reported, message, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, writtenAt: this.model.position(el), subject: `schema:${key}`, hint: this.hint(el, id, key, fits, remove, di) });
+    this.report(reported, message, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, writtenAt: this.model.position(el), subject: `schema:${key}`, hint: this.hint(el, id, key, fits, remove, di) });
   }
 
   private hint(el: ModdleElement, id: string | undefined, key: string, fits: boolean, remove: string | undefined, di: boolean): string {

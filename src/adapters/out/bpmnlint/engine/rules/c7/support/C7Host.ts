@@ -54,6 +54,15 @@ export class C7Host extends VendorHost {
     return is(this.node, 'bpmn:Definitions');
   }
 
+  /** `a startEvent`, `a boundaryEvent:timer`, `an event sub-process`: where the engines take no input/output mappings; undefined where they take them. */
+  unsupportedMappingHost(): string | undefined {
+    const { node } = this;
+    if (is(node, 'bpmn:SubProcess') && node.triggeredByEvent === true) {
+      return 'an event sub-process';
+    }
+    return is(node, 'bpmn:StartEvent') || is(node, 'bpmn:BoundaryEvent') || is(node, 'bpmn:Gateway') ? `a ${ElementKinds.of(node)}` : undefined;
+  }
+
   extensions(): HostExtension[] {
     const namespaces = DiagramNamespaces.forElement(this.node);
     return (this.node.extensionElements?.values ?? []).map((value: ModdleElement, index: number) => {
