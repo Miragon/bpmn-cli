@@ -25,7 +25,9 @@ export class SetCommand {
     for (const [property, slot] of SLOTS) {
       const value = parent[property];
       if (value === el) return `${slot}.`;
-      if (Array.isArray(value) && value.includes(el)) return value.length > 1 ? `${slot}[${value.indexOf(el)}].` : `${slot}.`;
+      if (Array.isArray(value) && value.includes(el)) {
+        return value.length > 1 ? `${slot}[${value.indexOf(el)}].` : `${slot}.`;
+      }
     }
     return '';
   }

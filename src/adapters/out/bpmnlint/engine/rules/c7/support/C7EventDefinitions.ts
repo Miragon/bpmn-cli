@@ -55,8 +55,12 @@ export class C7EventDefinitions {
 
   private actingOrder(): string[] | undefined {
     const event = this.event;
-    if (is(event, 'bpmn:StartEvent') && EngineScope.isEventSubProcess(event.$parent)) return ['Message', 'Signal', 'Timer', 'Conditional'];
-    if (is(event, 'bpmn:StartEvent') && is(event.$parent, 'bpmn:Process')) return ['Timer', 'Message', 'Signal', 'Conditional'];
+    if (is(event, 'bpmn:StartEvent') && EngineScope.isEventSubProcess(event.$parent)) {
+      return ['Message', 'Signal', 'Timer', 'Conditional'];
+    }
+    if (is(event, 'bpmn:StartEvent') && is(event.$parent, 'bpmn:Process')) {
+      return ['Timer', 'Message', 'Signal', 'Conditional'];
+    }
     return ACTING_ORDERS.find(([type]) => is(event, type))?.[1];
   }
 }

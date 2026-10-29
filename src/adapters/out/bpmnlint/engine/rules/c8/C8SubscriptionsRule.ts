@@ -63,7 +63,9 @@ class C8SubscriptionsRule extends C8Rule {
   protected visit(node: ModdleElement): void {
     if (!EngineScope.C8.contains(node)) return;
     const groups = is(node, 'bpmn:Process') || is(node, 'bpmn:SubProcess') ? this.groupsOf(node) : undefined;
-    if (is(node, 'bpmn:StartEvent') && is(node.$parent, 'bpmn:Process')) this.checkStartName(node, 'message');
+    if (is(node, 'bpmn:StartEvent') && is(node.$parent, 'bpmn:Process')) {
+      this.checkStartName(node, 'message');
+    }
     if (groups) this.checkMessageScope(groups, node);
     if (is(node, 'bpmn:StartEvent')) this.checkStartName(node, 'signal');
     if (groups) this.checkSignalScope(groups, node);
@@ -77,7 +79,9 @@ class C8SubscriptionsRule extends C8Rule {
     const boundariesByActivity = new Map<ModdleElement, ModdleElement[]>();
     for (const node of nodes) {
       const host = is(node, 'bpmn:BoundaryEvent') ? node.get('attachedToRef') : undefined;
-      if (host) boundariesByActivity.set(host, [...(boundariesByActivity.get(host) ?? []), node]);
+      if (host) {
+        boundariesByActivity.set(host, [...(boundariesByActivity.get(host) ?? []), node]);
+      }
     }
     return {
       boundaryGroups: nodes.filter((node) => is(node, 'bpmn:Activity') && boundariesByActivity.has(node)).map((activity) => ({ activity, boundaries: boundariesByActivity.get(activity)! })),
@@ -102,18 +106,26 @@ class C8SubscriptionsRule extends C8Rule {
     const kind = `${trigger.charAt(0).toUpperCase()}${trigger.slice(1)}`;
     const reference = C8EventDefinitions.definitionOfType(start, `bpmn:${kind}EventDefinition`)?.get(`${trigger}Ref`);
     const name = reference?.get('name');
-    if (Values.isFeel(name)) this.report(`c8-${trigger}`, start, `Start event ${start.id} catches the ${trigger} "${name}", a FEEL expression; Camunda 8 needs a static ${trigger} name on ${NAMED[trigger].starts} and refuses the file`, { path: ['eventDefinitions', 0, `${trigger}Ref`, 'name'], type: ERROR_TYPES.EXPRESSION_NOT_ALLOWED, node: reference, property: 'name', hint: `\`bpmn set <file> ${reference.id} name=<${kind}Name>\`.` });
+    if (Values.isFeel(name)) {
+      this.report(`c8-${trigger}`, start, `Start event ${start.id} catches the ${trigger} "${name}", a FEEL expression; Camunda 8 needs a static ${trigger} name on ${NAMED[trigger].starts} and refuses the file`, { path: ['eventDefinitions', 0, `${trigger}Ref`, 'name'], type: ERROR_TYPES.EXPRESSION_NOT_ALLOWED, node: reference, property: 'name', hint: `\`bpmn set <file> ${reference.id} name=<${kind}Name>\`.` });
+    }
   }
 
   private checkMessageScope(groups: SubscriptionGroups, scope: ModdleElement): void {
-    for (const { activity, boundaries } of groups.boundaryGroups) this.reportNamed('message', is(activity, 'bpmn:ReceiveTask') ? [activity, ...boundaries] : boundaries, `on ${activity.id}`);
-    for (const { gateway, targets } of groups.gatewayTargets) this.reportNamed('message', targets, `after event-based gateway ${gateway.id}`);
+    for (const { activity, boundaries } of groups.boundaryGroups) {
+      this.reportNamed('message', is(activity, 'bpmn:ReceiveTask') ? [activity, ...boundaries] : boundaries, `on ${activity.id}`);
+    }
+    for (const { gateway, targets } of groups.gatewayTargets) {
+      this.reportNamed('message', targets, `after event-based gateway ${gateway.id}`);
+    }
     this.reportNamed('message', groups.eventSubProcessStarts, `in the event sub-processes of ${scope.id}`);
     this.reportNamed('message', groups.processStarts, `in process ${scope.id}`);
   }
 
   private checkSignalScope(groups: SubscriptionGroups, scope: ModdleElement): void {
-    for (const { activity, boundaries } of groups.boundaryGroups) this.reportNamed('signal', boundaries, `on ${activity.id}`);
+    for (const { activity, boundaries } of groups.boundaryGroups) {
+      this.reportNamed('signal', boundaries, `on ${activity.id}`);
+    }
     this.reportNamed('signal', groups.processStarts, `in process ${scope.id}`);
   }
 
@@ -137,14 +149,20 @@ class C8SubscriptionsRule extends C8Rule {
     if (!definition) return;
     const error = definition.get('errorRef');
     const code = error?.get('errorCode');
-    if (Values.isFeel(code)) this.report('c8-error', event, `${ElementKinds.describe(event)} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, { path: ['eventDefinitions', 0, 'errorRef', 'errorCode'], type: ERROR_TYPES.EXPRESSION_NOT_ALLOWED, node: error, property: 'errorCode', hint: `\`bpmn set <file> ${event.id} errorCode=<CODE>\` (or no code: it catches every error).` });
+    if (Values.isFeel(code)) {
+      this.report('c8-error', event, `${ElementKinds.describe(event)} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, { path: ['eventDefinitions', 0, 'errorRef', 'errorCode'], type: ERROR_TYPES.EXPRESSION_NOT_ALLOWED, node: error, property: 'errorCode', hint: `\`bpmn set <file> ${event.id} errorCode=<CODE>\` (or no code: it catches every error).` });
+    }
     const interrupting = is(event, 'bpmn:BoundaryEvent') ? 'cancelActivity' : 'isInterrupting';
-    if (is(event, 'bpmn:IntermediateCatchEvent') || event.get(interrupting) !== false) return;
+    if (is(event, 'bpmn:IntermediateCatchEvent') || event.get(interrupting) !== false) {
+      return;
+    }
     this.report('c8-error', event, `${ElementKinds.describe(event)} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, { path: [interrupting], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: interrupting, hint: `\`bpmn set <file> ${event.id} nonInterrupting=false\`.` });
   }
 
   private checkErrorScope(groups: SubscriptionGroups, scope: ModdleElement): void {
-    for (const { activity, boundaries } of groups.boundaryGroups) this.reportErrorCodes(boundaries, `the boundary events of ${activity.id}`);
+    for (const { activity, boundaries } of groups.boundaryGroups) {
+      this.reportErrorCodes(boundaries, `the boundary events of ${activity.id}`);
+    }
     this.reportErrorCodes(groups.eventSubProcessStarts, `the event sub-processes of ${scope.id}`);
   }
 

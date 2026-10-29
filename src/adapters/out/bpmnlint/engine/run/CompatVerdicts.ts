@@ -76,7 +76,9 @@ export class CompatVerdicts {
     if (this.engine !== 'c8') return;
     const published = new Set(results[PUBLISH_MESSAGE]?.map((report) => report.id));
     const implementations = results[COMPAT_IMPLEMENTATION];
-    if (implementations) results[COMPAT_IMPLEMENTATION] = implementations.filter((report) => !report.id || !published.has(report.id));
+    if (implementations) {
+      results[COMPAT_IMPLEMENTATION] = implementations.filter((report) => !report.id || !published.has(report.id));
+    }
     const duplicated = new Set(Object.entries(results).flatMap(([rule, reports]) => reports.filter((report) => EngineFindings.findingOf(rule, report) === OWN_DUPLICATES).map((report) => report.id)));
     for (const [rule, reports] of Object.entries(results)) {
       if (!rule.startsWith('camunda-compat/')) continue;
@@ -91,7 +93,9 @@ export class CompatVerdicts {
       if (!reports) continue;
       results[rule] = reports.filter((report) => {
         let el = report.id ? this.doc.get(report.id) : undefined;
-        while (el && !this.kit.is(el, 'bpmn:Process')) el = el.$parent as typeof el;
+        while (el && !this.kit.is(el, 'bpmn:Process')) {
+          el = el.$parent as typeof el;
+        }
         return !el || this.kit.peek<boolean>(el, 'isExecutable') === true;
       });
     }
@@ -99,10 +103,16 @@ export class CompatVerdicts {
 
   private dropped(rule: string, report: BpmnlintEngineReport, duplicated: ReadonlySet<string | undefined>): boolean {
     const type = report.data?.type;
-    if (duplicated.has(report.id) || duplicated.has((report.data?.node as Node | undefined)?.id)) return true;
+    if (duplicated.has(report.id) || duplicated.has((report.data?.node as Node | undefined)?.id)) {
+      return true;
+    }
     if (BLANK_PASSES.includes(rule) && this.isBlank(report)) return true;
-    if (rule === COMPAT_TIMER && type === 'camunda.expressionValueNotAllowed') return true;
-    if (rule === FLOW_CONDITION && type === 'camunda.propertyNotAllowed') return this.leavesGateway(report);
+    if (rule === COMPAT_TIMER && type === 'camunda.expressionValueNotAllowed') {
+      return true;
+    }
+    if (rule === FLOW_CONDITION && type === 'camunda.propertyNotAllowed') {
+      return this.leavesGateway(report);
+    }
     return rule === JOB_PRIORITY.rule && this.runsAtLeast(JOB_PRIORITY.since);
   }
 
@@ -127,13 +137,17 @@ export class CompatVerdicts {
 
   private runsAtLeast([major, minor]: number[]): boolean {
     const [fileMajor, fileMinor] = (this.version ?? '').split('.').map(Number);
-    if (fileMajor === undefined || Number.isNaN(fileMajor) || fileMinor === undefined || Number.isNaN(fileMinor)) return true;
+    if (fileMajor === undefined || Number.isNaN(fileMajor) || fileMinor === undefined || Number.isNaN(fileMinor)) {
+      return true;
+    }
     return fileMajor !== major ? fileMajor > major! : fileMinor >= minor!;
   }
 
   private isBlank(report: BpmnlintEngineReport): boolean {
     let value: unknown = report.id ? this.elementsById[report.id] : undefined;
-    for (const step of report.path ?? []) value = (value as Record<string | number, unknown> | undefined)?.[step];
+    for (const step of report.path ?? []) {
+      value = (value as Record<string | number, unknown> | undefined)?.[step];
+    }
     return typeof value === 'string' && value !== '' && value.trim() === '';
   }
 }

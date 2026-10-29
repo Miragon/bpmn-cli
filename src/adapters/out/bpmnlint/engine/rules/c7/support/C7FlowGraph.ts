@@ -16,7 +16,9 @@ export class C7FlowGraph {
   private readonly boundaryEventsByHost = new Map<ModdleElement, ModdleElement[]>();
 
   private constructor(definitions: ModdleElement) {
-    for (const root of definitions?.rootElements ?? []) this.index(root);
+    for (const root of definitions?.rootElements ?? []) {
+      this.index(root);
+    }
   }
 
   /** The graph of the diagram `node` belongs to. */
@@ -58,7 +60,10 @@ export class C7FlowGraph {
   private add(byNode: Map<ModdleElement, ModdleElement[]>, node: ModdleElement, element: ModdleElement): void {
     if (!node) return;
     const elements = byNode.get(node);
-    if (elements) elements.push(element);
-    else byNode.set(node, [element]);
+    if (elements) {
+      elements.push(element);
+    } else {
+      byNode.set(node, [element]);
+    }
   }
 }

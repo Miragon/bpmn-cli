@@ -54,7 +54,9 @@ export class PlatformDetection {
     if (declared !== undefined) {
       const platform = this.fromExecutionPlatform(declared);
       const version = ns.executionPlatformVersion();
-      if (platform) return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"`, ...(version ? { version } : {}) });
+      if (platform) {
+        return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"`, ...(version ? { version } : {}) });
+      }
     }
     if (c7 || c8) {
       const platform: Platform = c7 >= c8 ? 'c7' : 'c8';

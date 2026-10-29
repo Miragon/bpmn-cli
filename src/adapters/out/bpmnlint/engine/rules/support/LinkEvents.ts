@@ -51,10 +51,15 @@ export class LinkEvents {
       const name = linkName(node);
       if (name !== undefined && is(node, 'bpmn:IntermediateCatchEvent')) {
         const first = this.firstCatch.get(name);
-        if (first) this.duplicates.push({ first, el: node, name });
-        else this.firstCatch.set(name, node);
+        if (first) {
+          this.duplicates.push({ first, el: node, name });
+        } else {
+          this.firstCatch.set(name, node);
+        }
         this.caughtIn.set(scope, new Set([...(this.caughtIn.get(scope) ?? []), name]));
-      } else if (name !== undefined && is(node, 'bpmn:IntermediateThrowEvent')) this.throws.push({ el: node, name, scope });
+      } else if (name !== undefined && is(node, 'bpmn:IntermediateThrowEvent')) {
+        this.throws.push({ el: node, name, scope });
+      }
       if (node.flowElements) this.collect(node, linkName);
     }
   }

@@ -8,7 +8,9 @@ export class DidYouMean {
     let best: { candidate: string; distance: number } | undefined;
     for (const candidate of [...preferred, ...candidates]) {
       const distance = RuleKit.kit.levenshtein(name.toLowerCase(), candidate.toLowerCase());
-      if (distance <= limit && (!best || distance < best.distance)) best = { candidate, distance };
+      if (distance <= limit && (!best || distance < best.distance)) {
+        best = { candidate, distance };
+      }
     }
     return best?.candidate;
   }

@@ -22,7 +22,9 @@ export class WrittenModel {
 
   private constructor(typedDefinitions: ModdleElement, readonly file: WrittenFile) {
     this.pair(typedDefinitions, file.definitions);
-    for (const el of RuleKit.kit.walk(file.definitions)) this.walkOrder.set(el, this.walkOrder.size);
+    for (const el of RuleKit.kit.walk(file.definitions)) {
+      this.walkOrder.set(el, this.walkOrder.size);
+    }
   }
 
   static record(typedDefinitions: ModdleElement, file: WrittenFile): void {
@@ -54,7 +56,9 @@ export class WrittenModel {
       if (isAttr || isReference) continue;
       const writtenValues = [written[name]].flat();
       [typed[name]].flat().forEach((value, index) => {
-        if (BPMN_TYPE.test(value?.$type) && writtenValues[index]?.$type === value.$type) this.pair(value, writtenValues[index]);
+        if (BPMN_TYPE.test(value?.$type) && writtenValues[index]?.$type === value.$type) {
+          this.pair(value, writtenValues[index]);
+        }
       });
     }
   }

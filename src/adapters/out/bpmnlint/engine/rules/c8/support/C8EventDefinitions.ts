@@ -41,7 +41,9 @@ export class C8EventDefinitions {
   /** Where a report on an event definition goes: on its event, with the path to the definition, or on the definition itself when no event holds it (a root element). */
   static definitionOwner(definition: ModdleElement): { owner: ModdleElement; path: ReportPath } {
     const event = definition.$parent;
-    if (event && is(event, 'bpmn:Event')) return { owner: event, path: ['eventDefinitions', event.get('eventDefinitions').indexOf(definition)] };
+    if (event && is(event, 'bpmn:Event')) {
+      return { owner: event, path: ['eventDefinitions', event.get('eventDefinitions').indexOf(definition)] };
+    }
     return { owner: definition, path: [] };
   }
 
@@ -59,9 +61,13 @@ export class C8EventDefinitions {
   /** Whether `node` is a message an event or receive task of an executable process of its diagram uses: Camunda 8 reads its zeebe content. */
   static isUsedMessage(node: ModdleElement): boolean {
     const definitions = node.$parent;
-    if (!is(node, 'bpmn:Message') || !definitions || !is(definitions, 'bpmn:Definitions')) return false;
+    if (!is(node, 'bpmn:Message') || !definitions || !is(definitions, 'bpmn:Definitions')) {
+      return false;
+    }
     let used = C8EventDefinitions.usedByDefinitions.get(definitions);
-    if (!used) C8EventDefinitions.usedByDefinitions.set(definitions, (used = C8EventDefinitions.usedMessages(definitions)));
+    if (!used) {
+      C8EventDefinitions.usedByDefinitions.set(definitions, (used = C8EventDefinitions.usedMessages(definitions)));
+    }
     return used.has(node);
   }
 

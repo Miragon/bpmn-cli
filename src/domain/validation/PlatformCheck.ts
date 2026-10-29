@@ -28,7 +28,9 @@ export class PlatformCheck {
 
   static summarize(report: ProfileReport): PlatformSummary {
     const counts = Object.fromEntries(SEVERITIES.map((severity) => [severity, 0])) as Record<Severity, number>;
-    for (const finding of report.findings) counts[finding.severity]++;
+    for (const finding of report.findings) {
+      counts[finding.severity]++;
+    }
     return { platform: report.platform, source: report.source, detail: report.detail, ...(report.operaton ? { operaton: true } : {}), ...(report.version ? { version: report.version } : {}), counts };
   }
 }

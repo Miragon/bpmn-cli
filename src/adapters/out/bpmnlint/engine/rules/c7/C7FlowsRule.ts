@@ -40,22 +40,32 @@ class C7FlowsRule extends C7Rule {
   protected visit(node: ModdleElement): boolean {
     if (is(node, 'bpmn:Process') && node.isExecutable !== true) return false;
     if (is(node, 'bpmn:EventBasedGateway')) this.checkEventGateway(node);
-    if (is(node, 'bpmn:ExclusiveGateway')) this.checkExclusiveGateway(node, C7FlowGraph.forElement(node).outgoing(node));
+    if (is(node, 'bpmn:ExclusiveGateway')) {
+      this.checkExclusiveGateway(node, C7FlowGraph.forElement(node).outgoing(node));
+    }
     if (is(node, 'bpmn:ComplexGateway')) this.checkComplexGateway(node);
     if (is(node, 'bpmn:AdHocSubProcess')) this.checkAdHocSubProcess(node);
-    if (isAny(node, ['bpmn:Process', 'bpmn:SubProcess']) && !is(node, 'bpmn:AdHocSubProcess')) this.checkStartEvents(node);
+    if (isAny(node, ['bpmn:Process', 'bpmn:SubProcess']) && !is(node, 'bpmn:AdHocSubProcess')) {
+      this.checkStartEvents(node);
+    }
     return !is(node, 'bpmn:AdHocSubProcess');
   }
 
   private checkExclusiveGateway(node: ModdleElement, outgoing: ModdleElement[]): void {
-    if (!outgoing.length) return this.report('c7-exclusive-gateway', node, `Exclusive gateway ${node.id} has no outgoing flow; the engines refuse the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'outgoing', hint: `Continue it: \`bpmn add <file> <kind> "<Name>" --after ${node.id}\`.` });
+    if (!outgoing.length) {
+      return this.report('c7-exclusive-gateway', node, `Exclusive gateway ${node.id} has no outgoing flow; the engines refuse the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'outgoing', hint: `Continue it: \`bpmn add <file> <kind> "<Name>" --after ${node.id}\`.` });
+    }
     const defaultFlow = node.default;
     if (outgoing.length === 1) {
       const [flow] = outgoing;
-      if (flow.conditionExpression) this.reportCondition(node, flow, flow === defaultFlow ? `Default flow ${flow.id} of exclusive gateway ${node.id} has a condition; the engines refuse the file` : `Exclusive gateway ${node.id} has a single outgoing flow ${flow.id} with a condition; the engines refuse the file`);
+      if (flow.conditionExpression) {
+        this.reportCondition(node, flow, flow === defaultFlow ? `Default flow ${flow.id} of exclusive gateway ${node.id} has a condition; the engines refuse the file` : `Exclusive gateway ${node.id} has a single outgoing flow ${flow.id} with a condition; the engines refuse the file`);
+      }
       return;
     }
-    if (defaultFlow?.conditionExpression && outgoing.includes(defaultFlow)) this.reportCondition(node, defaultFlow, `Default flow ${defaultFlow.id} of exclusive gateway ${node.id} has a condition; the engines refuse the file`);
+    if (defaultFlow?.conditionExpression && outgoing.includes(defaultFlow)) {
+      this.reportCondition(node, defaultFlow, `Default flow ${defaultFlow.id} of exclusive gateway ${node.id} has a condition; the engines refuse the file`);
+    }
     const unconditioned = outgoing.filter((flow) => flow !== defaultFlow && !flow.conditionExpression);
     if (!defaultFlow && unconditioned.length === 1) {
       const [flow] = unconditioned;
@@ -91,12 +101,16 @@ class C7FlowsRule extends C7Rule {
         this.report('c7-event-gateway', node, `${leadsTo}; after an event-based gateway the engines accept only message, timer, signal and conditional catch events and refuse the file`, { path: null, type: ERROR_TYPES.EVENT_BASED_GATEWAY_TARGET_NOT_ALLOWED, node: target, sequenceFlow: flow, hint: `\`bpmn set <file> ${target.id} trigger=message message=<MessageName>\` (or trigger=timer timer=PT1H).` });
         continue;
       }
-      if (graph.incoming(target).length > 1) this.report('c7-event-gateway', node, `${ElementKinds.describe(target)} after event-based gateway ${node.id} has other incoming flows; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: target, sequenceFlow: flow, property: 'incoming', hint: `Join before the gateway instead, and keep only ${flow.id} into ${target.id} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).` });
+      if (graph.incoming(target).length > 1) {
+        this.report('c7-event-gateway', node, `${ElementKinds.describe(target)} after event-based gateway ${node.id} has other incoming flows; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: target, sequenceFlow: flow, property: 'incoming', hint: `Join before the gateway instead, and keep only ${flow.id} into ${target.id} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).` });
+      }
       const trigger = ElementKinds.trigger(definition);
       const referenceProperty = REFERENCE_BY_TRIGGER[trigger];
       const name = referenceProperty ? definition.get(referenceProperty)?.name : undefined;
       const first = referenceProperty && name ? firsts.repeats(`${trigger}\u0000${name}`, target) : undefined;
-      if (first) this.report('c7-event-gateway', node, `Branches ${first.id} and ${target.id} of event-based gateway ${node.id} wait for the same ${trigger} "${name}"; the engines refuse the file`, { path: null, type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, first, node: target, duplicatedProperty: referenceProperty, duplicatedPropertyValue: name, hint: `\`bpmn set <file> ${target.id} ${trigger}=<OtherName>\`, or remove one branch.` });
+      if (first) {
+        this.report('c7-event-gateway', node, `Branches ${first.id} and ${target.id} of event-based gateway ${node.id} wait for the same ${trigger} "${name}"; the engines refuse the file`, { path: null, type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, first, node: target, duplicatedProperty: referenceProperty, duplicatedPropertyValue: name, hint: `\`bpmn set <file> ${target.id} ${trigger}=<OtherName>\`, or remove one branch.` });
+      }
     }
   }
 
@@ -105,7 +119,9 @@ class C7FlowsRule extends C7Rule {
     const graph = C7FlowGraph.forElement(node);
     const incoming = graph.incoming(node);
     const flows = [...incoming, ...graph.outgoing(node)];
-    if (flows.length) this.report('c7-complex-gateway', node, `Complex gateway ${node.id} is connected; the engines do not run complex gateways and refuse the file (invalid ${incoming.length ? 'destination' : 'source'} '${node.id}' of sequence flow ${flows[0].id})`, { path: null, type: ERROR_TYPES.ELEMENT_TYPE_NOT_ALLOWED, flows, hint: `\`bpmn retype <file> ${node.id} inclusiveGateway\` (or exclusiveGateway: one path).` });
+    if (flows.length) {
+      this.report('c7-complex-gateway', node, `Complex gateway ${node.id} is connected; the engines do not run complex gateways and refuse the file (invalid ${incoming.length ? 'destination' : 'source'} '${node.id}' of sequence flow ${flows[0].id})`, { path: null, type: ERROR_TYPES.ELEMENT_TYPE_NOT_ALLOWED, flows, hint: `\`bpmn retype <file> ${node.id} inclusiveGateway\` (or exclusiveGateway: one path).` });
+    }
   }
 
   /** The engines do not run ad-hoc sub-processes: one with a sequence flow, a boundary event or a multi-instance loop is refused (Operaton deploys one with a valid loop). */
@@ -140,8 +156,11 @@ class C7FlowsRule extends C7Rule {
     const isProcess = is(scope, 'bpmn:Process');
     const what = nodes.length ? 'has no start event' : 'is empty, without a start event';
     const missing = { path: ['flowElements'], type: ERROR_TYPES.CHILD_ELEMENT_OF_TYPE_REQUIRED, requiredType: 'bpmn:StartEvent', hint: this.missingStartHint(scope.id, nodes.length > 0, !isProcess) };
-    if (!starts.length && is(scope, 'bpmn:Transaction')) this.report('c7-transaction-start', scope, `Transaction ${scope.id} ${what}: it deploys, but every instance that reaches it fails ("No initial activity found for subprocess ${scope.id}")`, missing);
-    else if (!starts.length && !EngineScope.isEventSubProcess(scope)) this.report('c7-start-event', scope, `${isProcess ? 'Process' : 'Sub-process'} ${scope.id} ${what}; the engines refuse the file (${isProcess ? 'process' : 'subProcess'} must define a startEvent element)`, missing);
+    if (!starts.length && is(scope, 'bpmn:Transaction')) {
+      this.report('c7-transaction-start', scope, `Transaction ${scope.id} ${what}: it deploys, but every instance that reaches it fails ("No initial activity found for subprocess ${scope.id}")`, missing);
+    } else if (!starts.length && !EngineScope.isEventSubProcess(scope)) {
+      this.report('c7-start-event', scope, `${isProcess ? 'Process' : 'Sub-process'} ${scope.id} ${what}; the engines refuse the file (${isProcess ? 'process' : 'subProcess'} must define a startEvent element)`, missing);
+    }
     const limited = isProcess ? starts.filter((start) => new C7EventDefinitions(start).actedOn().every((definition) => is(definition, 'bpmn:TimerEventDefinition'))) : starts;
     const [first, ...rest] = limited;
     const kind = is(scope, 'bpmn:Transaction') ? 'Transaction' : 'Sub-process';

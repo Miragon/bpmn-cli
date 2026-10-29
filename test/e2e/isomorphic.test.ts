@@ -324,7 +324,9 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     const own = [...reach(ENGINE_RUN)];
     expect(own.filter((module) => core.has(module))).toEqual([]);
     expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency))).toEqual([]);
-    for (const rules of [`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`]) expect([...reach(rules)].filter((module) => module.startsWith('src/') && core.has(module)), rules).toEqual([]);
+    for (const rules of [`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`]) {
+      expect([...reach(rules)].filter((module) => module.startsWith('src/') && core.has(module)), rules).toEqual([]);
+    }
     expect(bundle.chunks.find((chunk) => chunk.inputs.includes(ENGINE_RUN))!.inputs).toEqual(expect.arrayContaining(['src/adapters/out/bpmnlint/engine/run/EngineFindings.ts', 'src/adapters/out/bpmnlint/engine/run/CompatVerdicts.ts', 'src/adapters/out/bpmnlint/engine/run/EngineHint.ts']));
   });
 

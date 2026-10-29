@@ -10,20 +10,26 @@ export class ModdlePath {
     const parent = node.$parent;
     if (parent?.id && SetCommand.slotIn(parent, node)) return parent;
     let owner = node;
-    while (owner && !owner.id) owner = owner.$parent;
+    while (owner && !owner.id) {
+      owner = owner.$parent;
+    }
     return owner;
   }
 
   /** The nearest element with an id from `start` up, below `bpmn:Definitions`. */
   static nearestWithId(start: ModdleElement | undefined): ModdleElement | undefined {
-    for (let current = start; current && !is(current, 'bpmn:Definitions'); current = current.$parent) if (current.id) return current;
+    for (let current = start; current && !is(current, 'bpmn:Definitions'); current = current.$parent) {
+      if (current.id) return current;
+    }
     return undefined;
   }
 
   /** The property steps from `ancestor` down to `descendant`: `['loopCharacteristics', 'extensionElements', 'values', 0]`. */
   static between(ancestor: ModdleElement, descendant: ModdleElement): ReportPath {
     const steps: ReportPath = [];
-    for (let child = descendant; child && child !== ancestor && child.$parent; child = child.$parent) steps.unshift(...ModdlePath.stepInto(child.$parent, child));
+    for (let child = descendant; child && child !== ancestor && child.$parent; child = child.$parent) {
+      steps.unshift(...ModdlePath.stepInto(child.$parent, child));
+    }
     return steps;
   }
 
@@ -31,7 +37,9 @@ export class ModdlePath {
     for (const property of parent.$descriptor?.properties ?? []) {
       const value = parent.get(property.name);
       if (value === child) return [property.ns?.localName ?? property.name];
-      if (Array.isArray(value) && value.includes(child)) return [property.ns?.localName ?? property.name, value.indexOf(child)];
+      if (Array.isArray(value) && value.includes(child)) {
+        return [property.ns?.localName ?? property.name, value.indexOf(child)];
+      }
     }
     return [];
   }

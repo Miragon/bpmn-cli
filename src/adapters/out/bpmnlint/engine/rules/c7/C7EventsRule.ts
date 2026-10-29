@@ -45,9 +45,14 @@ const REFERENCES: Array<{ finding: string; kind: string; events: string[]; missi
 class C7EventsRule extends C7Rule {
   protected visit(node: ModdleElement): void {
     if (is(node, 'bpmn:Definitions')) this.checkSignalNames(node);
-    if (is(node, 'bpmn:Event')) this.checkEvent(node);
-    else if (is(node, 'bpmn:EventDefinition') && !(node.$parent && is(node.$parent, 'bpmn:Event'))) this.checkDefinitions([node]);
-    if (is(node, 'bpmn:ReceiveTask') && node.messageRef && !node.messageRef.name && EngineScope.C7.contains(node)) this.reportUnnamed(node, node.messageRef, `Message ${node.messageRef.id} of receive task ${node.id}`, ['messageRef']);
+    if (is(node, 'bpmn:Event')) {
+      this.checkEvent(node);
+    } else if (is(node, 'bpmn:EventDefinition') && !(node.$parent && is(node.$parent, 'bpmn:Event'))) {
+      this.checkDefinitions([node]);
+    }
+    if (is(node, 'bpmn:ReceiveTask') && node.messageRef && !node.messageRef.name && EngineScope.C7.contains(node)) {
+      this.reportUnnamed(node, node.messageRef, `Message ${node.messageRef.id} of receive task ${node.id}`, ['messageRef']);
+    }
     if (is(node, 'bpmn:Process') && EngineScope.C7.contains(node)) {
       this.checkSubscriptions(node);
       this.checkLinks(node);
@@ -59,25 +64,45 @@ class C7EventsRule extends C7Rule {
     const definitions = new C7EventDefinitions(event);
     if (runs) {
       for (const definition of definitions.actedOn()) {
-        if (is(definition, 'bpmn:TimerEventDefinition') && !TIMER_ELEMENTS.some((timeElement) => definition[timeElement])) this.report('c7-event-definition', event, `Timer of ${ElementKinds.describe(event)} has no date, cycle or duration; the engines refuse the file`, { path: definitions.pathTo(definition), type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: TIMER_ELEMENTS, hint: `\`bpmn set <file> ${event.id} timer=PT1H\` (or R/PT1H, or a date).` });
-        if (is(definition, 'bpmn:CompensateEventDefinition') && isAny(event, ['bpmn:IntermediateThrowEvent', 'bpmn:EndEvent'])) this.checkCompensation(event, definition, definitions);
+        if (is(definition, 'bpmn:TimerEventDefinition') && !TIMER_ELEMENTS.some((timeElement) => definition[timeElement])) {
+          this.report('c7-event-definition', event, `Timer of ${ElementKinds.describe(event)} has no date, cycle or duration; the engines refuse the file`, { path: definitions.pathTo(definition), type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: TIMER_ELEMENTS, hint: `\`bpmn set <file> ${event.id} timer=PT1H\` (or R/PT1H, or a date).` });
+        }
+        if (is(definition, 'bpmn:CompensateEventDefinition') && isAny(event, ['bpmn:IntermediateThrowEvent', 'bpmn:EndEvent'])) {
+          this.checkCompensation(event, definition, definitions);
+        }
       }
     }
     this.checkDefinitions(definitions.all());
     if (!runs) return;
-    for (const reference of REFERENCES) if (isAny(event, reference.events)) for (const definition of definitions.actedOn()) if (is(definition, `bpmn:${reference.kind}EventDefinition`)) this.checkReference(event, definition, definitions, reference);
-    if (is(event, 'bpmn:BoundaryEvent') && definitions.ofType('bpmn:EscalationEventDefinition')) this.checkEscalationHost(event);
+    for (const reference of REFERENCES) {
+      if (isAny(event, reference.events)) {
+        for (const definition of definitions.actedOn()) {
+          if (is(definition, `bpmn:${reference.kind}EventDefinition`)) {
+            this.checkReference(event, definition, definitions, reference);
+          }
+        }
+      }
+    }
+    if (is(event, 'bpmn:BoundaryEvent') && definitions.ofType('bpmn:EscalationEventDefinition')) {
+      this.checkEscalationHost(event);
+    }
   }
 
   /** The BPMN schema checks of event definitions, also of one the engines ignore or do not run. */
   private checkDefinitions(definitions: ModdleElement[]): void {
     for (const definition of definitions) {
-      if (is(definition, 'bpmn:ConditionalEventDefinition') && !definition.condition) this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Conditional event')} has no condition element, which the BPMN schema requires; the engines refuse the file`, { path: this.subjectPath(definition, 'condition'), type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'condition', hint: this.subjectHint(definition, Shell.quote('when=${expression}')) });
+      if (is(definition, 'bpmn:ConditionalEventDefinition') && !definition.condition) {
+        this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Conditional event')} has no condition element, which the BPMN schema requires; the engines refuse the file`, { path: this.subjectPath(definition, 'condition'), type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'condition', hint: this.subjectHint(definition, Shell.quote('when=${expression}')) });
+      }
       const timeElements = TIMER_ELEMENTS.filter((timeElement) => definition[timeElement]);
-      if (is(definition, 'bpmn:TimerEventDefinition') && timeElements.length > 1) this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Timer event')} has ${timeElements.join(' and ')}; the BPMN schema allows only one of timeDate, timeCycle and timeDuration, and the engines refuse the file`, { path: this.subjectPath(definition), type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, hint: this.subjectHint(definition, 'timer=<value>', 'R/PT1H is a cycle, PT1H a duration, else a date; the other elements go') });
+      if (is(definition, 'bpmn:TimerEventDefinition') && timeElements.length > 1) {
+        this.reportSchema('c7-event-definition', definition, `${this.subjectName(definition, 'Timer event')} has ${timeElements.join(' and ')}; the BPMN schema allows only one of timeDate, timeCycle and timeDuration, and the engines refuse the file`, { path: this.subjectPath(definition), type: ERROR_TYPES.ELEMENT_MULTIPLE_NOT_ALLOWED, hint: this.subjectHint(definition, 'timer=<value>', 'R/PT1H is a cycle, PT1H a duration, else a date; the other elements go') });
+      }
     }
     for (const definition of definitions) {
-      if (is(definition, 'bpmn:LinkEventDefinition') && (definition.name === undefined || definition.name === null)) this.reportSchema('c7-link-event', definition, `${this.subjectName(definition, 'Link event')} has no link name, which the BPMN schema requires; the engines refuse the file`, { path: this.subjectPath(definition, 'name'), type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'name', hint: this.subjectHint(definition, 'link=<Name>', 'the throw and the catch event of a pair share the name') });
+      if (is(definition, 'bpmn:LinkEventDefinition') && (definition.name === undefined || definition.name === null)) {
+        this.reportSchema('c7-link-event', definition, `${this.subjectName(definition, 'Link event')} has no link name, which the BPMN schema requires; the engines refuse the file`, { path: this.subjectPath(definition, 'name'), type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'name', hint: this.subjectHint(definition, 'link=<Name>', 'the throw and the catch event of a pair share the name') });
+      }
     }
   }
 
@@ -94,7 +119,9 @@ class C7EventsRule extends C7Rule {
   /** `Conditional event X`, among several definitions `The conditional definition of <event>`, without an event the definition itself. */
   private subjectName(definition: ModdleElement, single: string): string {
     const event = this.eventOf(definition);
-    if (!event) return `${definition.$type}${definition.id ? ` ${definition.id}` : ''}`;
+    if (!event) {
+      return `${definition.$type}${definition.id ? ` ${definition.id}` : ''}`;
+    }
     return new C7EventDefinitions(event).all().length > 1 ? `The ${ElementKinds.trigger(definition)} definition of ${ElementKinds.describe(event)}` : `${single} ${event.id}`;
   }
 
@@ -108,7 +135,9 @@ class C7EventsRule extends C7Rule {
     const event = this.eventOf(definition);
     if (!event) return 'Fix it in the XML.';
     const definitions = new C7EventDefinitions(event);
-    if (definitions.all().length < 2) return `\`bpmn set <file> ${event.id} ${command}\`${keeps ? ` (${keeps})` : ''}.`;
+    if (definitions.all().length < 2) {
+      return `\`bpmn set <file> ${event.id} ${command}\`${keeps ? ` (${keeps})` : ''}.`;
+    }
     const only = `\`bpmn set <file> ${event.id} ${command}\` (keeps only the ${ElementKinds.trigger(definition)} definition)`;
     const acting = definitions.acting();
     if (!acting || acting === definition) return `${only}.`;
@@ -124,7 +153,9 @@ class C7EventsRule extends C7Rule {
     if (!referenced) {
       this.report(finding, event, `${label} ${missing}; the engines refuse the file`, { path, type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: reference, hint: `\`bpmn set <file> ${event.id} ${set}\`${after}.` });
     } else if (kind === 'Message' || kind === 'Signal') {
-      if (!referenced.name) this.reportUnnamed(event, referenced, `${kind} ${referenced.id} of ${label}`, path, finding);
+      if (!referenced.name) {
+        this.reportUnnamed(event, referenced, `${kind} ${referenced.id} of ${label}`, path, finding);
+      }
     } else if (!String(referenced.get(`${kind.toLowerCase()}Code`) ?? '').trim()) {
       const code = `${kind.toLowerCase()}Code`;
       this.report(finding, event, `${kind} ${referenced.id} thrown by ${label} has no ${code}; the engines refuse the file`, { path: [...path, code], type: ERROR_TYPES.PROPERTY_REQUIRED, node: referenced, requiredProperty: code, hint: `\`bpmn set <file> ${event.id} ${code}=<CODE>\`.` });
@@ -164,14 +195,20 @@ class C7EventsRule extends C7Rule {
    */
   private checkSubscriptions(scope: ModdleElement, firsts = new FirstOfKey<ModdleElement>()): void {
     for (const node of scope.flowElements ?? []) {
-      if (is(node, 'bpmn:ReceiveTask')) this.checkSubscription(firsts, node, 'message', `scope:${node.id}`, node.messageRef?.name, ['messageRef']);
+      if (is(node, 'bpmn:ReceiveTask')) {
+        this.checkSubscription(firsts, node, 'message', `scope:${node.id}`, node.messageRef?.name, ['messageRef']);
+      }
       const subscriptionScope = this.subscriptionScope(node);
       const definitions = new C7EventDefinitions(node);
       for (const kind of subscriptionScope ? ['message', 'signal'] : []) {
         const definition = definitions.ofType(`bpmn:${kind.charAt(0).toUpperCase()}${kind.slice(1)}EventDefinition`);
-        if (definition) this.checkSubscription(firsts, node, kind, subscriptionScope!, definition.get(`${kind}Ref`)?.name, definitions.pathTo(definition, `${kind}Ref`));
+        if (definition) {
+          this.checkSubscription(firsts, node, kind, subscriptionScope!, definition.get(`${kind}Ref`)?.name, definitions.pathTo(definition, `${kind}Ref`));
+        }
       }
-      if (is(node, 'bpmn:SubProcess') && !is(node, 'bpmn:AdHocSubProcess')) this.checkSubscriptions(node, firsts);
+      if (is(node, 'bpmn:SubProcess') && !is(node, 'bpmn:AdHocSubProcess')) {
+        this.checkSubscriptions(node, firsts);
+      }
     }
   }
 
@@ -194,18 +231,24 @@ class C7EventsRule extends C7Rule {
   /** The engines refuse duplicate root signal names, even of an unused signal, once a process runs. */
   private checkSignalNames(definitions: ModdleElement): void {
     const roots: ModdleElement[] = definitions.rootElements ?? [];
-    if (!roots.some((root) => is(root, 'bpmn:Process') && root.isExecutable === true)) return;
+    if (!roots.some((root) => is(root, 'bpmn:Process') && root.isExecutable === true)) {
+      return;
+    }
     const firsts = new FirstOfKey<ModdleElement>();
     for (const signal of roots.filter((root) => is(root, 'bpmn:Signal') && root.name)) {
       const first = firsts.repeats(signal.name, signal);
-      if (first) this.report('c7-signal', signal, `Signals ${first.id} and ${signal.id} are both named "${signal.name}"; the engines refuse duplicate signal names`, { path: ['name'], type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, duplicatedProperty: 'name', duplicatedPropertyValue: signal.name, first, hint: `\`bpmn set <file> ${signal.id} name=<OtherName>\` (or point its events at ${first.id} and remove it).` });
+      if (first) {
+        this.report('c7-signal', signal, `Signals ${first.id} and ${signal.id} are both named "${signal.name}"; the engines refuse duplicate signal names`, { path: ['name'], type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, duplicatedProperty: 'name', duplicatedPropertyValue: signal.name, first, hint: `\`bpmn set <file> ${signal.id} name=<OtherName>\` (or point its events at ${first.id} and remove it).` });
+      }
     }
   }
 
   /** Link catch names are unique in a process (sub-processes included); a throw a flow reaches needs a catch of its name in its own (sub-)process. */
   private checkLinks(process: ModdleElement): void {
     const links = new LinkEvents(process, (node) => (EngineScope.C7.contains(node) ? (new C7EventDefinitions(node).ofType('bpmn:LinkEventDefinition')?.name ?? undefined) : undefined));
-    for (const { first, el, name } of links.duplicateCatches()) this.report('c7-link-event', el, `Link catch events ${first.id} and ${el.id} are both named "${name}"; the engines refuse two link catch events with one name in a process (sub-processes included)`, { path: this.linkNamePath(el), type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, duplicatedProperty: 'name', duplicatedPropertyValue: name, first, hint: `\`bpmn set <file> ${el.id} link=<OtherName>\` (and its throw events too).` });
+    for (const { first, el, name } of links.duplicateCatches()) {
+      this.report('c7-link-event', el, `Link catch events ${first.id} and ${el.id} are both named "${name}"; the engines refuse two link catch events with one name in a process (sub-processes included)`, { path: this.linkNamePath(el), type: ERROR_TYPES.ELEMENT_PROPERTY_VALUE_DUPLICATED, duplicatedProperty: 'name', duplicatedPropertyValue: name, first, hint: `\`bpmn set <file> ${el.id} link=<OtherName>\` (and its throw events too).` });
+    }
     const targets = this.flowTargets(process);
     for (const { el, name, scope } of links.unmatchedThrows()) {
       if (!targets.has(el)) continue;
@@ -224,7 +267,9 @@ class C7EventsRule extends C7Rule {
   /** The flow nodes a sequence flow of the process leads to. */
   private flowTargets(scope: ModdleElement, targets = new Set<ModdleElement>()): Set<ModdleElement> {
     for (const element of scope.flowElements ?? []) {
-      if (is(element, 'bpmn:SequenceFlow') && element.targetRef) targets.add(element.targetRef);
+      if (is(element, 'bpmn:SequenceFlow') && element.targetRef) {
+        targets.add(element.targetRef);
+      }
       if (element.flowElements) this.flowTargets(element, targets);
     }
     return targets;

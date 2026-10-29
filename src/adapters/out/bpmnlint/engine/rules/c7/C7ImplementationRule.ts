@@ -31,7 +31,9 @@ const IMPLEMENTATIONS = ['class', 'delegateExpression', 'expression', 'type'];
 class C7ImplementationRule extends C7Rule {
   protected visit(node: ModdleElement): boolean {
     if (is(node, 'bpmn:Process') && node.get('isExecutable') !== true) return false;
-    for (const host of ImplementationHost.forElement(node)) this.checkHost(node, host);
+    for (const host of ImplementationHost.forElement(node)) {
+      this.checkHost(node, host);
+    }
     if (is(node, 'bpmn:ScriptTask')) this.checkScript(node);
     return !is(node, 'bpmn:AdHocSubProcess');
   }
@@ -49,11 +51,17 @@ class C7ImplementationRule extends C7Rule {
       const hint = host.attributes.defined('topic') !== undefined ? `It has a ${prefix}:topic but no ${prefix}:type: ${command.of(`${prefix}:type=external`)}.` : `Give it one: ${command.of(`${prefix}:type=external`, `${prefix}:topic=<topic>`)} (or ${prefix}:delegateExpression=\${...}, ${prefix}:class=..., ${prefix}:expression=\${...}${decision}).`;
       this.report('c7-implementation', node, `${label} has no implementation (${prefix}:class, delegateExpression, expression, type=external${host.readsDecisionRef ? ', decisionRef' : ''} or a connector); the engines refuse the file`, { path: host.pathTo('type'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: host.readsDecisionRef ? [...IMPLEMENTATIONS, 'decisionRef'] : IMPLEMENTATIONS, hint });
     }
-    if (host.isEvent && !host.hasImplementation && !this.hasMisplacedImplementation(node)) this.report('c7-message-implementation', node, `${label} has no implementation: it sends nothing and behaves like a none event at run time`, { path: host.pathTo('type'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: IMPLEMENTATIONS, hint: `Give it one: ${command.of(`${prefix}:type=external`, `${prefix}:topic=<topic>`)} (or ${prefix}:delegateExpression=\${...}).` });
+    if (host.isEvent && !host.hasImplementation && !this.hasMisplacedImplementation(node)) {
+      this.report('c7-message-implementation', node, `${label} has no implementation: it sends nothing and behaves like a none event at run time`, { path: host.pathTo('type'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: IMPLEMENTATIONS, hint: `Give it one: ${command.of(`${prefix}:type=external`, `${prefix}:topic=<topic>`)} (or ${prefix}:delegateExpression=\${...}).` });
+    }
     const topic = host.attributes.defined('topic');
-    if (host.isExternal && topic === undefined) this.report('c7-external-topic', node, `${label} is an external task without ${prefix}:topic; the engines refuse the file`, { path: host.pathTo('topic'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: 'topic', hint: `${command.of(`${prefix}:topic=<topic>`)}.` });
+    if (host.isExternal && topic === undefined) {
+      this.report('c7-external-topic', node, `${label} is an external task without ${prefix}:topic; the engines refuse the file`, { path: host.pathTo('topic'), type: ERROR_TYPES.PROPERTY_REQUIRED, node: host.element, requiredProperty: 'topic', hint: `${command.of(`${prefix}:topic=<topic>`)}.` });
+    }
     const delegate = ['class', 'delegateExpression'].find((local) => Values.nonEmpty(host.attributes.defined(local)));
-    if (delegate && host.attributes.defined('resultVariable') !== undefined) this.report('c7-result-variable', node, `${label} combines ${prefix}:resultVariable with ${prefix}:${delegate}; the engines support a result variable only with ${prefix}:expression and refuse the file`, { path: host.pathTo('resultVariable'), type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: host.element, property: 'resultVariable', hint: `Remove it: ${command.of(`${prefix}:resultVariable=`)} (or switch to ${prefix}:expression=\${...}).` });
+    if (delegate && host.attributes.defined('resultVariable') !== undefined) {
+      this.report('c7-result-variable', node, `${label} combines ${prefix}:resultVariable with ${prefix}:${delegate}; the engines support a result variable only with ${prefix}:expression and refuse the file`, { path: host.pathTo('resultVariable'), type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: host.element, property: 'resultVariable', hint: `Remove it: ${command.of(`${prefix}:resultVariable=`)} (or switch to ${prefix}:expression=\${...}).` });
+    }
   }
 
   /** An implementation on the event instead of its message definition, which the misplaced attribute finding reports. */
@@ -71,7 +79,9 @@ class C7ImplementationRule extends C7Rule {
   /** A shell task needs a command field and fixed values, true or false for its flags; a field with no value, or with both a string attribute and element, is the extension finding's. */
   private checkShell(node: ModdleElement, host: ImplementationHost): void {
     const fields = host.fields();
-    if (!fields.some(({ field }) => field.get('name') === 'command')) this.report('c7-implementation', node, `${host.label} is a shell task without a ${host.prefix}:field named command; the engines refuse the file`, { path: host.pathTo('extensionElements'), type: ERROR_TYPES.EXTENSION_ELEMENT_REQUIRED, node: host.element, requiredExtensionElement: 'camunda:Field', hint: this.fieldHint(host, 'name=command stringValue=<command>', 'Add a command field in the XML.') });
+    if (!fields.some(({ field }) => field.get('name') === 'command')) {
+      this.report('c7-implementation', node, `${host.label} is a shell task without a ${host.prefix}:field named command; the engines refuse the file`, { path: host.pathTo('extensionElements'), type: ERROR_TYPES.EXTENSION_ELEMENT_REQUIRED, node: host.element, requiredExtensionElement: 'camunda:Field', hint: this.fieldHint(host, 'name=command stringValue=<command>', 'Add a command field in the XML.') });
+    }
     for (const { field, index } of fields) {
       const name = field.get('name') ?? '';
       const fieldPath = host.pathTo('extensionElements', 'values', index);
@@ -80,13 +90,19 @@ class C7ImplementationRule extends C7Rule {
       if (stringValue !== undefined && string !== undefined) continue;
       const fixed = string ?? (stringValue ? stringValue : undefined);
       const property = string !== undefined ? 'string' : 'stringValue';
-      if (fixed !== undefined && SHELL_FLAGS.includes(name) && !['true', 'false'].includes(fixed.toLowerCase())) this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is "${fixed}", not true or false; the engines refuse the file`, { path: [...fieldPath, property], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: field, property, hint: this.fieldHint(host, `name=${name} stringValue=true`, 'Use true or false.', ' (or false).') });
-      if (fixed === undefined && field.get('expression') !== undefined) this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is an expression; the shell task takes fixed values only and the engines refuse the file`, { path: [...fieldPath, 'expression'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: field, property: 'expression', hint: this.fieldHint(host, `name=${Shell.quote(name)} stringValue=<value>`, 'Use a stringValue.') });
+      if (fixed !== undefined && SHELL_FLAGS.includes(name) && !['true', 'false'].includes(fixed.toLowerCase())) {
+        this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is "${fixed}", not true or false; the engines refuse the file`, { path: [...fieldPath, property], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: field, property, hint: this.fieldHint(host, `name=${name} stringValue=true`, 'Use true or false.', ' (or false).') });
+      }
+      if (fixed === undefined && field.get('expression') !== undefined) {
+        this.report('c7-implementation', node, `${host.prefix}:field "${name}" of shell task ${host.label} is an expression; the shell task takes fixed values only and the engines refuse the file`, { path: [...fieldPath, 'expression'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: field, property: 'expression', hint: this.fieldHint(host, `name=${Shell.quote(name)} stringValue=<value>`, 'Use a stringValue.') });
+      }
     }
   }
 
   private checkScript(node: ModdleElement): void {
-    if (Values.nonEmpty(node.get('script')) || new CamundaAttributes(node).defined('resource') !== undefined) return;
+    if (Values.nonEmpty(node.get('script')) || new CamundaAttributes(node).defined('resource') !== undefined) {
+      return;
+    }
     const prefix = C7Diagram.of(node).prefix;
     this.report('c7-script', node, `Script task ${node.id} has neither a script nor ${prefix}:resource; the engines refuse the file`, { path: ['script'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: ['script', 'resource'], hint: `\`bpmn set <file> ${node.id} scriptFormat=groovy script=...\` (or ${prefix}:resource=deployment://<file>).` });
   }

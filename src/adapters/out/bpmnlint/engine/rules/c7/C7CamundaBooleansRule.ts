@@ -24,7 +24,9 @@ class C7CamundaBooleansRule extends C7Rule {
     if (!el) return;
     this.model = model!;
     this.checkAttributes(el);
-    for (const value of el.extensionElements?.values ?? []) this.checkVendorElement(el, value, '');
+    for (const value of el.extensionElements?.values ?? []) {
+      this.checkVendorElement(el, value, '');
+    }
   }
 
   private checkAttributes(el: ModdleElement): void {
@@ -32,7 +34,9 @@ class C7CamundaBooleansRule extends C7Rule {
     for (const [key, raw] of Object.entries(el.$attrs ?? {})) {
       if (!kit.CAMUNDA.reads(this.model.file.namespaces.uriOfName(key))) continue;
       const def = kit.CAMUNDA.attr(key.slice(key.indexOf(':') + 1));
-      if (def?.type !== 'Boolean' || !def.owners.some((ownerType) => kit.is(el, ownerType))) continue;
+      if (def?.type !== 'Boolean' || !def.owners.some((ownerType) => kit.is(el, ownerType))) {
+        continue;
+      }
       const value = String(raw ?? '');
       if (value === 'true' || value === 'false') continue;
       const address = SetCommand.at(el);
@@ -41,18 +45,24 @@ class C7CamundaBooleansRule extends C7Rule {
   }
 
   private checkVendorElement(host: ModdleElement, vendorElement: ModdleElement, path: string): void {
-    if (!RuleKit.kit.CAMUNDA.reads(this.model.file.namespaces.uriOfElement(vendorElement))) return;
+    if (!RuleKit.kit.CAMUNDA.reads(this.model.file.namespaces.uriOfElement(vendorElement))) {
+      return;
+    }
     const local = vendorElement.$type.slice(vendorElement.$type.indexOf(':') + 1);
     const vendorType = RuleKit.kit.CAMUNDA.type(local);
     if (!vendorType) return;
     for (const property of vendorType.properties) {
       if (property.type !== 'Boolean' || !property.isAttr) continue;
       const raw = vendorElement[property.name];
-      if (raw === undefined || raw === true || raw === false || raw === 'true' || raw === 'false') continue;
+      if (raw === undefined || raw === true || raw === false || raw === 'true' || raw === 'false') {
+        continue;
+      }
       const address = SetCommand.at(host);
       this.reportValue(host, address, `${property.name}="${String(raw)}" on ${vendorElement.$type}${path ? ` (in ${path})` : ''} of ${ElementKinds.describe(host)} is not true or false; the engines read only the exact value true`, `ext:${path}/${local}@${property.name}`, address ? `See it with \`bpmn ext list <file> ${address.id} --json\`, then rebuild it with \`bpmn ext add <file> ${address.id} ... --replace\` and ${property.name}=true (or false).` : 'Use true or false in the XML.');
     }
-    for (const child of vendorElement.$children ?? []) this.checkVendorElement(host, child, path ? `${path} > ${vendorElement.$type}` : vendorElement.$type);
+    for (const child of vendorElement.$children ?? []) {
+      this.checkVendorElement(host, child, path ? `${path} > ${vendorElement.$type}` : vendorElement.$type);
+    }
   }
 
   private reportValue(el: ModdleElement, address: SetCommand | undefined, message: string, subject: string, hint: string): void {

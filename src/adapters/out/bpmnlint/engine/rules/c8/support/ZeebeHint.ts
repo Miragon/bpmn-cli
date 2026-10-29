@@ -33,10 +33,20 @@ export class ZeebeHint extends SetCommand {
   /** `bpmn ext add --replace` that writes the zeebe element anew with `fix` laid over its attributes, those the descriptor knows and the unknown ones; the rebuild hint when it has child elements. */
   replace(element: ModdleElement, fix: Record<string, string>): string {
     const properties: Array<{ name: string; isAttr?: boolean }> = element.$descriptor?.properties ?? [];
-    if (properties.some(({ name, isAttr }) => !isAttr && (Array.isArray(element[name]) ? element[name].length > 0 : element[name] !== undefined && typeof element[name] === 'object'))) return this.rebuild(this.nameOf(element));
+    if (properties.some(({ name, isAttr }) => !isAttr && (Array.isArray(element[name]) ? element[name].length > 0 : element[name] !== undefined && typeof element[name] === 'object'))) {
+      return this.rebuild(this.nameOf(element));
+    }
     const attributes: Record<string, string> = {};
-    for (const { name, isAttr } of properties) if (isAttr && Object.hasOwn(element, name) && element[name] !== undefined && element[name] !== null && typeof element[name] !== 'object') attributes[name] = String(element[name]);
-    for (const [key, value] of Object.entries(element.$attrs ?? {})) if (!key.startsWith('xmlns') && value !== undefined && value !== null) attributes[key] = String(value);
+    for (const { name, isAttr } of properties) {
+      if (isAttr && Object.hasOwn(element, name) && element[name] !== undefined && element[name] !== null && typeof element[name] !== 'object') {
+        attributes[name] = String(element[name]);
+      }
+    }
+    for (const [key, value] of Object.entries(element.$attrs ?? {})) {
+      if (!key.startsWith('xmlns') && value !== undefined && value !== null) {
+        attributes[key] = String(value);
+      }
+    }
     return this.replaceWith(this.nameOf(element), attributes, fix);
   }
 
@@ -44,7 +54,9 @@ export class ZeebeHint extends SetCommand {
   static fix(host: ModdleElement, element: ModdleElement, fix: Record<string, string>): string {
     const hint = ZeebeHint.of(host);
     const written = Object.entries(element).filter(([key]) => !key.startsWith('$'));
-    if (written.some(([, value]) => value !== null && typeof value === 'object' && (!Array.isArray(value) || value.length > 0))) return hint ? hint.rebuild(ZeebeHint.typeName(element)) : 'Fix it in the XML.';
+    if (written.some(([, value]) => value !== null && typeof value === 'object' && (!Array.isArray(value) || value.length > 0))) {
+      return hint ? hint.rebuild(ZeebeHint.typeName(element)) : 'Fix it in the XML.';
+    }
     const attributes = Object.fromEntries(written.filter(([, value]) => value !== undefined && value !== null && typeof value !== 'object').map(([key, value]) => [key, String(value)]));
     return hint ? hint.replaceWith(ZeebeHint.typeName(element), attributes, fix) : 'edit the XML.';
   }

@@ -214,7 +214,9 @@ for (const entry of ENTRIES) {
   if (!entrySize) continue;
   for (const part of ON_DEMAND) {
     for (const rule of part.rules) {
-      if (entrySize.initialModules.includes(rule)) problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/adapters/out/bpmnlint/BpmnlintEngineLint.ts imports them, with import())`);
+      if (entrySize.initialModules.includes(rule)) {
+        problems.push(`the initial chunks of ${entry.name} contain ${rule}: the ${part.label} load on demand (only src/adapters/out/bpmnlint/BpmnlintEngineLint.ts imports them, with import())`);
+      }
     }
     for (const { from, to } of entrySize.onDemand.find((demandPart) => demandPart.name === part.name)?.importsOfEntry ?? []) {
       problems.push(`${from} imports ${to}, which ${entry.name} loads too: a host's bundler (Rollup / Vite) puts it into the entry chunk and makes the ${part.label} chunk import the entry chunk back, so a host whose entry module awaits a call at top level waits forever; hand it to the engine run in src/adapters/out/bpmnlint/engine-kit.ts (ENGINE_KIT) instead of importing it`);

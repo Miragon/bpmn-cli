@@ -33,8 +33,9 @@ class C8PublishMessageRule extends C8Rule {
     if (!el) return;
     this.model = model!;
     this.prefix = this.model.file.namespaces.prefixOf(RuleKit.kit.ZEEBE.uri) ?? 'zeebe';
-    if (is(el, 'bpmn:SendTask')) this.checkPublish(node, el, el);
-    else if (is(el, 'bpmn:IntermediateThrowEvent') || is(el, 'bpmn:EndEvent')) {
+    if (is(el, 'bpmn:SendTask')) {
+      this.checkPublish(node, el, el);
+    } else if (is(el, 'bpmn:IntermediateThrowEvent') || is(el, 'bpmn:EndEvent')) {
       const definition = (el.eventDefinitions ?? []).find((candidate: ModdleElement) => is(candidate, 'bpmn:MessageEventDefinition'));
       if (definition) this.checkPublish(node, el, definition);
     }
@@ -52,9 +53,13 @@ class C8PublishMessageRule extends C8Rule {
       this.report('c8-publish-implementation', node, `${label} has both a ${this.prefix}:taskDefinition and a ${name}; Camunda 8 needs exactly one of them and refuses the file`, { path: null, type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, writtenAt, subject: 'impl:both', hint: `Keep one: \`bpmn ext remove <file> ${id} ${this.prefix}:taskDefinition\` (or \`bpmn ext remove <file> ${id} ${slot}${name}\`).` });
       return;
     }
-    if (!host.messageRef) this.report('c8-publish-message', node, `${label} publishes no message (no message reference); Camunda 8 refuses the file`, { path: null, type: ERROR_TYPES.PROPERTY_REQUIRED, writtenAt, subject: 'publish:messageRef', hint: `\`bpmn set <file> ${id} message=<MessageName>\`.` });
+    if (!host.messageRef) {
+      this.report('c8-publish-message', node, `${label} publishes no message (no message reference); Camunda 8 refuses the file`, { path: null, type: ERROR_TYPES.PROPERTY_REQUIRED, writtenAt, subject: 'publish:messageRef', hint: `\`bpmn set <file> ${id} message=<MessageName>\`.` });
+    }
     const correlationKey: string | undefined = publish.correlationKey;
-    if (correlationKey === undefined || correlationKey === '') this.report('c8-publish-message', node, `The ${name} of ${label} has no correlationKey; Camunda 8 refuses the file`, { path: null, type: ERROR_TYPES.PROPERTY_REQUIRED, writtenAt, subject: 'publish:correlationKey', hint: `\`bpmn ext add <file> ${id} ${slot}${name} correlationKey==<expression>\`.` });
+    if (correlationKey === undefined || correlationKey === '') {
+      this.report('c8-publish-message', node, `The ${name} of ${label} has no correlationKey; Camunda 8 refuses the file`, { path: null, type: ERROR_TYPES.PROPERTY_REQUIRED, writtenAt, subject: 'publish:correlationKey', hint: `\`bpmn ext add <file> ${id} ${slot}${name} correlationKey==<expression>\`.` });
+    }
     const send = is(el, 'bpmn:SendTask');
     this.report('c8-publish-unsupported', node, `${label} publishes its message with ${name}: Camunda 8.9 accepts the file but does not run it (${send ? 'the instance gets an incident: only job worker send tasks are supported' : 'the event completes without sending anything'})`, { path: null, type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, writtenAt, subject: 'publishMessage', hint: `Use a job worker: \`bpmn ext remove <file> ${id} ${slot}${name}\`, then \`bpmn ext add <file> ${id} ${this.prefix}:taskDefinition type=<jobType>\`.` });
   }

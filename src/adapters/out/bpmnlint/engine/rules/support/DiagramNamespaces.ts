@@ -24,13 +24,19 @@ export class DiagramNamespaces {
   private readonly uriByPrefix = new Map<string, string>();
 
   private constructor(definitions: ModdleElement) {
-    for (const [name, uri] of Object.entries(definitions?.$attrs ?? {})) if (name.startsWith('xmlns:') && typeof uri === 'string') this.uriByPrefix.set(name.slice('xmlns:'.length), uri);
+    for (const [name, uri] of Object.entries(definitions?.$attrs ?? {})) {
+      if (name.startsWith('xmlns:') && typeof uri === 'string') {
+        this.uriByPrefix.set(name.slice('xmlns:'.length), uri);
+      }
+    }
   }
 
   /** The `bpmn:Definitions` of the diagram `node` belongs to. */
   static definitionsOf(node: ModdleElement): ModdleElement | undefined {
     let definitions = node;
-    while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
+    while (definitions && !is(definitions, 'bpmn:Definitions')) {
+      definitions = definitions.$parent;
+    }
     return definitions;
   }
 
@@ -39,7 +45,9 @@ export class DiagramNamespaces {
     const definitions = DiagramNamespaces.definitionsOf(node);
     const key = definitions ?? DiagramNamespaces;
     let namespaces = DiagramNamespaces.byDefinitions.get(key);
-    if (!namespaces) DiagramNamespaces.byDefinitions.set(key, (namespaces = new DiagramNamespaces(definitions)));
+    if (!namespaces) {
+      DiagramNamespaces.byDefinitions.set(key, (namespaces = new DiagramNamespaces(definitions)));
+    }
     return namespaces;
   }
 

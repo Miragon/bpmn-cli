@@ -25,7 +25,9 @@ export class C7ExtraStartHint {
 
   text(): string {
     const parts = [this.removal()];
-    if (is(this.scope, 'bpmn:Process')) parts.push(`give it another trigger, which keeps it as a second way into the process: \`bpmn set <file> ${this.extra.id} trigger=message message=<Name>\``);
+    if (is(this.scope, 'bpmn:Process')) {
+      parts.push(`give it another trigger, which keeps it as a second way into the process: \`bpmn set <file> ${this.extra.id} trigger=message message=<Name>\``);
+    }
     const again = EngineScope.isEventSubProcess(this.scope) ? this.ownEventSubProcess() : '';
     return `${parts.join(', or ')}${again ? `; ${again}` : ''}.`;
   }
@@ -39,9 +41,13 @@ export class C7ExtraStartHint {
     const into = flows.filter((flow) => !own.includes(flow));
     const remove = `\`bpmn remove <file> ${extraId}\``;
     const goes = `go${into.length === 1 ? 'es' : ''}`;
-    if (!own.length) return `Remove it: ${remove}${into.length ? ` (${firstId} already leads to ${this.targets(into)}; ${this.ids(into)} ${goes} with it)` : ''}`;
+    if (!own.length) {
+      return `Remove it: ${remove}${into.length ? ` (${firstId} already leads to ${this.targets(into)}; ${this.ids(into)} ${goes} with it)` : ''}`;
+    }
     const meet = this.meetingNodes(own, reached);
-    if (meet.length) return `Remove it: ${remove} (${this.targets(own)} is then no longer started; starting it from ${firstId} instead would run ${meet.slice(0, 3).join(', ') + (meet.length > 3 ? ', ...' : '')}, which ${firstId} reaches too, once per branch)`;
+    if (meet.length) {
+      return `Remove it: ${remove} (${this.targets(own)} is then no longer started; starting it from ${firstId} instead would run ${meet.slice(0, 3).join(', ') + (meet.length > 3 ? ', ...' : '')}, which ${firstId} reaches too, once per branch)`;
+    }
     const moves = own.map((flow) => `\`bpmn set <file> ${flow.id} source=${firstId}\``).join(', ');
     const notes = [this.graph.outgoing(this.first).length ? `${firstId} then starts both branches in parallel` : '', into.length ? `${this.ids(into)} into ${this.targets(into)}, which ${firstId} already reaches, ${goes} with ${extraId}` : ''].filter(Boolean);
     return `Start its branch from ${firstId}: ${moves}, then ${remove}${notes.length ? ` (${notes.join('; ')})` : ''}`;
@@ -50,7 +56,13 @@ export class C7ExtraStartHint {
   /** The nodes (no end events) a branch of its own runs into that `first` reaches as well. */
   private meetingNodes(own: ModdleElement[], reached: Set<ModdleElement>): string[] {
     const meet = new Set<string>();
-    for (const flow of own) for (const node of this.reachableFrom(flow.targetRef)) if (reached.has(node) && !is(node, 'bpmn:EndEvent') && node.id) meet.add(node.id);
+    for (const flow of own) {
+      for (const node of this.reachableFrom(flow.targetRef)) {
+        if (reached.has(node) && !is(node, 'bpmn:EndEvent') && node.id) {
+          meet.add(node.id);
+        }
+      }
+    }
     return [...meet];
   }
 

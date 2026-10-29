@@ -30,10 +30,14 @@ export abstract class UnprefixedAttributesRule extends CamundaRule {
     const parent = el.$parent;
     const slot = parent?.id ? SetCommand.slotIn(parent, el) : '';
     let owner = slot ? parent : el;
-    while (owner && !owner.id) owner = owner.$parent;
+    while (owner && !owner.id) {
+      owner = owner.$parent;
+    }
     const id: string | undefined = owner?.id;
     const di = kit.isDiElement(el) || (!!owner && kit.isDiElement(owner));
-    for (const key of keys) this.checkAttribute(el, owner, id, di ? undefined : slot || (el === owner ? '' : undefined), di, key);
+    for (const key of keys) {
+      this.checkAttribute(el, owner, id, di ? undefined : slot || (el === owner ? '' : undefined), di, key);
+    }
   }
 
   private get prefix(): string {
@@ -58,10 +62,14 @@ export abstract class UnprefixedAttributesRule extends CamundaRule {
       const command = `\`bpmn set <file> ${id} ${Shell.quote(`calledDecision=${link.value}`)}\``;
       return this.engine === 'c7' ? `Write the decision link in the engines' spelling: ${command} (${this.prefix}:decisionRef; the unprefixed ${key} is removed).` : `Write the decision link the Camunda 8 way: ${command} (${this.prefix}:calledDecision; the unprefixed ${key} is removed; give it a resultVariable).`;
     }
-    if (fits) return `Use the vendor attribute instead: \`bpmn set <file> ${id} ${Shell.quote(`${key}=`)} ${Shell.quote(`${this.prefix}:${key}=${String(el.$attrs[key] ?? '')}`)}\`.`;
+    if (fits) {
+      return `Use the vendor attribute instead: \`bpmn set <file> ${id} ${Shell.quote(`${key}=`)} ${Shell.quote(`${this.prefix}:${key}=${String(el.$attrs[key] ?? '')}`)}\`.`;
+    }
     const prefixed = this.engine === 'c8' ? 'vendor attributes need their namespace prefix; Camunda 8 settings are mostly zeebe: extension elements' : `vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>`;
     if (remove) return `Remove it: ${remove} (${prefixed}).`;
-    if (di) return this.engine === 'c8' ? `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).` : `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`;
+    if (di) {
+      return this.engine === 'c8' ? `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).` : `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`;
+    }
     return this.engine === 'c8' ? `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''}.` : `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''} (${prefixed}).`;
   }
 

@@ -19,7 +19,7 @@ import { ERROR_CATALOGUE } from '../../../../src/adapters/in/report/guide.js';
 import { guideText, kindsJson } from '../../../../src/index.js';
 import { checkFile } from '../../../../src/node.js';
 import { mutateDoc, type MutationOptions, buildView, elementDetail, findElements } from '../../../../src/index.js';
-import { PropertyCoercer } from '../../../../src/domain/editing/properties/PropertyCoercer.js';
+import { SetKeyCatalog } from '../../../../src/domain/editing/properties/SetKeyCatalog.js';
 import { cli } from '../../../helpers/cli.js';
 
 

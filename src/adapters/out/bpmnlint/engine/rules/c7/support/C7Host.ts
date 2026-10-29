@@ -43,7 +43,9 @@ export class C7Host extends VendorHost {
    * them (the engines skip them).
    */
   static visits(node: ModdleElement): boolean {
-    if (!String(node.$type).startsWith('bpmn:') || is(node, 'bpmn:ExtensionElements')) return false;
+    if (!String(node.$type).startsWith('bpmn:') || is(node, 'bpmn:ExtensionElements')) {
+      return false;
+    }
     if (is(node, 'bpmn:Process')) return node.isExecutable === true;
     return !(is(node, 'bpmn:AdHocSubProcess') && EngineScope.inExecutableProcess(node));
   }
@@ -88,7 +90,9 @@ export class C7Host extends VendorHost {
   rebuild(extension: HostExtension, fix: Record<string, string> = {}): string {
     if (!this.address) return 'Fix it in the XML.';
     const type = this.typeName(extension.local);
-    if (SINGLE_TYPES.includes(extension.local)) return this.address.rebuild(type, type);
+    if (SINGLE_TYPES.includes(extension.local)) {
+      return this.address.rebuild(type, type);
+    }
     const flat = C7Host.extAddArguments(extension.value, type, fix);
     const again = flat ? this.address.extAdd(flat) : `${this.address.extAdd(`${type} --xml '<${type} ...>...</${type}>'`)} (\`bpmn ext list <file> ${this.address.id} --json\` shows it)`;
     return `Replace just this one (--replace would remove every ${type}): ${this.address.extRemove(this.selector(extension))}, then ${again}.`;
@@ -100,7 +104,9 @@ export class C7Host extends VendorHost {
     const siblings = this.extensions().filter((sibling) => sibling.value.$type === extension.value.$type).map((sibling) => sibling.value);
     for (const key of SELECTOR_KEYS) {
       const value = C7Host.attributeValue(extension.value, key);
-      if (value !== undefined && value !== '' && siblings.filter((sibling) => C7Host.attributeValue(sibling, key) === value).length === 1) return `${type}[${key}=${/^[\w.:-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`}]`;
+      if (value !== undefined && value !== '' && siblings.filter((sibling) => C7Host.attributeValue(sibling, key) === value).length === 1) {
+        return `${type}[${key}=${/^[\w.:-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`}]`;
+      }
     }
     return `${type}[${Math.max(0, siblings.indexOf(extension.value))}]`;
   }
@@ -109,7 +115,11 @@ export class C7Host extends VendorHost {
   static extAddArguments(element: ModdleElement, type: string, fix: Record<string, string> = {}): string | undefined {
     const entries = C7Host.attributesOf(element);
     if (!entries) return undefined;
-    for (const key of Object.keys(fix)) if (!entries.some(([existing]) => existing === key)) entries.push([key, fix[key] ?? '']);
+    for (const key of Object.keys(fix)) {
+      if (!entries.some(([existing]) => existing === key)) {
+        entries.push([key, fix[key] ?? '']);
+      }
+    }
     const bodyProperty = (element.$descriptor?.properties ?? []).find((property: { isBody?: boolean }) => property.isBody);
     const body = bodyProperty ? element[bodyProperty.name] : undefined;
     return [type, ...entries.map(([key, value]) => Shell.quote(`${key}=${fix[key] ?? value}`)), ...(body !== undefined ? ['--body', Shell.quote(String(body))] : [])].join(' ');
@@ -122,7 +132,9 @@ export class C7Host extends VendorHost {
     for (const key of Object.keys(element)) {
       const property = properties.find((candidate) => candidate.name === key);
       const value = element[key];
-      if (key.startsWith('$') || property?.isBody || (Array.isArray(value) && value.length === 0)) continue;
+      if (key.startsWith('$') || property?.isBody || (Array.isArray(value) && value.length === 0)) {
+        continue;
+      }
       if (property && !property.isAttr) return undefined;
       entries.push([key, value && typeof value === 'object' ? String(value.id) : String(value)]);
     }
@@ -131,7 +143,9 @@ export class C7Host extends VendorHost {
       const before = entries.findIndex(([key]) => rank(key) > rank(name));
       entries.splice(before === -1 ? entries.length : before, 0, [name, id]);
     }
-    for (const [key, value] of Object.entries(element.$attrs ?? {})) if (!key.startsWith('xmlns')) entries.push([key, String(value)]);
+    for (const [key, value] of Object.entries(element.$attrs ?? {})) {
+      if (!key.startsWith('xmlns')) entries.push([key, String(value)]);
+    }
     return entries;
   }
 

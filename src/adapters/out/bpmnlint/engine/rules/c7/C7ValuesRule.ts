@@ -53,21 +53,35 @@ class C7ValuesRule extends C7Rule {
     if (is(node, 'bpmn:Process') && node.get('isExecutable') !== true) return false;
     const prefix = C7Diagram.of(node).prefix;
     const attributes = new CamundaAttributes(node);
-    if (is(node, 'bpmn:Process')) this.checkHistoryTimeToLive(node, attributes.defined('historyTimeToLive'), prefix);
+    if (is(node, 'bpmn:Process')) {
+      this.checkHistoryTimeToLive(node, attributes.defined('historyTimeToLive'), prefix);
+    }
     this.checkAttributeValues(node, attributes, prefix);
     const bindings = this.bindingsOf(node, attributes);
-    for (const { binding, allowed } of bindings.filter((candidate) => this.bindingProblem(attributes, candidate) === 'value')) this.report('c7-bad-value', node, `${prefix}:${binding}="${attributes.defined(binding)}" on ${ElementKinds.describe(node)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, { path: [binding], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: binding, hint: `${new SetCommand(node.id).of(`${prefix}:${binding}=latest`)}.` });
+    for (const { binding, allowed } of bindings.filter((candidate) => this.bindingProblem(attributes, candidate) === 'value')) {
+      this.report('c7-bad-value', node, `${prefix}:${binding}="${attributes.defined(binding)}" on ${ElementKinds.describe(node)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, { path: [binding], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: binding, hint: `${new SetCommand(node.id).of(`${prefix}:${binding}=latest`)}.` });
+    }
     const priority = is(node, 'bpmn:UserTask') ? attributes.defined('priority') : undefined;
-    if (priority !== undefined && !Values.isPriority(priority)) this.report('c7-bad-value', node, `${prefix}:priority="${priority}" on ${ElementKinds.describe(node)} is not a number or expression; creating the task fails`, { path: ['priority'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'priority', hint: `${new SetCommand(node.id).of(`${prefix}:priority=50`)}.` });
+    if (priority !== undefined && !Values.isPriority(priority)) {
+      this.report('c7-bad-value', node, `${prefix}:priority="${priority}" on ${ElementKinds.describe(node)} is not a number or expression; creating the task fails`, { path: ['priority'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'priority', hint: `${new SetCommand(node.id).of(`${prefix}:priority=50`)}.` });
+    }
     if (is(node, 'bpmn:Event')) this.checkVariableEvents(node, prefix);
     for (const binding of bindings) {
       const problem = this.bindingProblem(attributes, binding);
-      if (problem === 'version') this.reportBindingVersion(node, binding.binding, 'version', binding.version, '<n>', prefix);
-      if (problem === 'versionTag') this.reportBindingVersion(node, binding.binding, 'versionTag', binding.versionTag!, '<tag>', prefix);
+      if (problem === 'version') {
+        this.reportBindingVersion(node, binding.binding, 'version', binding.version, '<n>', prefix);
+      }
+      if (problem === 'versionTag') {
+        this.reportBindingVersion(node, binding.binding, 'versionTag', binding.versionTag!, '<tag>', prefix);
+      }
     }
     const hasForm = isAny(node, ['bpmn:UserTask', 'bpmn:StartEvent']) && attributes.defined('formRef') !== undefined;
-    if (hasForm && attributes.defined('formRefBinding') === 'version' && attributes.defined('formRefVersion') === undefined) this.reportBindingVersion(node, 'formRefBinding', 'version', 'formRefVersion', '<n>', prefix);
-    if (is(node, 'bpmn:CallActivity')) this.checkCalledElement(node, attributes.defined('caseRef'), prefix);
+    if (hasForm && attributes.defined('formRefBinding') === 'version' && attributes.defined('formRefVersion') === undefined) {
+      this.reportBindingVersion(node, 'formRefBinding', 'version', 'formRefVersion', '<n>', prefix);
+    }
+    if (is(node, 'bpmn:CallActivity')) {
+      this.checkCalledElement(node, attributes.defined('caseRef'), prefix);
+    }
     if (hasForm) this.checkForm(node, attributes, prefix);
     if (is(node, 'bpmn:Activity')) this.checkMultiInstance(node, prefix);
     return !is(node, 'bpmn:AdHocSubProcess');
@@ -75,22 +89,36 @@ class C7ValuesRule extends C7Rule {
 
   private checkHistoryTimeToLive(node: ModdleElement, timeToLive: string | undefined, prefix: string): void {
     const days = Values.nonEmpty(timeToLive) ? (/^\+?(\d+)$/.exec(timeToLive) ?? /^P(\d+)D$/.exec(timeToLive)) : undefined;
-    if (!Values.nonEmpty(timeToLive) || (days && Number(days[1]) <= MAX_DAYS)) return;
+    if (!Values.nonEmpty(timeToLive) || (days && Number(days[1]) <= MAX_DAYS)) {
+      return;
+    }
     this.report('c7-history-time-to-live', node, `${prefix}:historyTimeToLive="${timeToLive}" of process ${node.id} is not a number of days (or P<n>D); the engines refuse it`, { path: ['historyTimeToLive'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'historyTimeToLive', hint: `\`bpmn set <file> ${node.id} ${prefix}:historyTimeToLive=180\` (days, like Camunda Modeler; P180D works too).` });
   }
 
   /** Job and external task priorities that are no number or expression, and an unknown decision result mapper: the engines refuse the file. */
   private checkAttributeValues(node: ModdleElement, attributes: CamundaAttributes, prefix: string): void {
     const command = new SetCommand(node.id);
-    if (is(node, 'bpmn:Process')) for (const name of ['jobPriority', 'taskPriority']) this.checkPriority(node, node, [], command, name, prefix);
+    if (is(node, 'bpmn:Process')) {
+      for (const name of ['jobPriority', 'taskPriority']) {
+        this.checkPriority(node, node, [], command, name, prefix);
+      }
+    }
     if (isAny(node, JOB_PRIORITIZED) && !is(node, 'bpmn:AdHocSubProcess')) {
       this.checkPriority(node, node, [], command, 'jobPriority', prefix);
       const loop = node.get('loopCharacteristics');
-      if (loop && is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) this.checkPriority(loop, node, ['loopCharacteristics'], new SetCommand(node.id, 'loop.'), 'jobPriority', prefix);
+      if (loop && is(loop, 'bpmn:MultiInstanceLoopCharacteristics')) {
+        this.checkPriority(loop, node, ['loopCharacteristics'], new SetCommand(node.id, 'loop.'), 'jobPriority', prefix);
+      }
     }
-    for (const host of ImplementationHost.forElement(node)) if (host.isExternal) this.checkPriority(host.element, node, host.path, host.command, 'taskPriority', prefix);
+    for (const host of ImplementationHost.forElement(node)) {
+      if (host.isExternal) {
+        this.checkPriority(host.element, node, host.path, host.command, 'taskPriority', prefix);
+      }
+    }
     const mapper = is(node, 'bpmn:BusinessRuleTask') && attributes.defined('decisionRef') !== undefined ? attributes.defined('mapDecisionResult') : undefined;
-    if (mapper !== undefined && !DECISION_MAPPERS.includes(mapper)) this.report('c7-attribute-value', node, `${prefix}:mapDecisionResult="${mapper}" on ${ElementKinds.describe(node)} is not one of ${DECISION_MAPPERS.join(', ')}; the engines refuse the file`, { path: ['mapDecisionResult'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'mapDecisionResult', hint: `${command.of(`${prefix}:mapDecisionResult=singleEntry`)} (or another of the four).` });
+    if (mapper !== undefined && !DECISION_MAPPERS.includes(mapper)) {
+      this.report('c7-attribute-value', node, `${prefix}:mapDecisionResult="${mapper}" on ${ElementKinds.describe(node)} is not one of ${DECISION_MAPPERS.join(', ')}; the engines refuse the file`, { path: ['mapDecisionResult'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, property: 'mapDecisionResult', hint: `${command.of(`${prefix}:mapDecisionResult=singleEntry`)} (or another of the four).` });
+    }
   }
 
   /** `element` carries the priority; `reported` is the element it sits on, or the element itself. */
@@ -104,13 +132,17 @@ class C7ValuesRule extends C7Rule {
     for (const { definition, index } of new C7EventDefinitions(node).indexedOfType('bpmn:ConditionalEventDefinition')) {
       const events = new CamundaAttributes(definition).defined('variableEvents');
       const unknown = (events ?? '').split(',').map((eventName) => eventName.trim()).filter((eventName) => eventName && !VARIABLE_EVENTS.includes(eventName));
-      if (unknown.length) this.report('c7-bad-value', node, `${prefix}:variableEvents="${events}" of ${ElementKinds.describe(node)} lists ${unknown.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, { path: ['eventDefinitions', index, 'variableEvents'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: definition, property: 'variableEvents', hint: `${SetCommand.forDefinition(node, index).of(`${prefix}:variableEvents=create, update`)}.` });
+      if (unknown.length) {
+        this.report('c7-bad-value', node, `${prefix}:variableEvents="${events}" of ${ElementKinds.describe(node)} lists ${unknown.join(', ')}; only ${VARIABLE_EVENTS.join(', ')} trigger the condition`, { path: ['eventDefinitions', index, 'variableEvents'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: definition, property: 'variableEvents', hint: `${SetCommand.forDefinition(node, index).of(`${prefix}:variableEvents=create, update`)}.` });
+      }
     }
   }
 
   /** The bindings of `node` the engines read: of a call activity, or of a business rule task with a decision. */
   private bindingsOf(node: ModdleElement, attributes: CamundaAttributes): Binding[] {
-    if (is(node, 'bpmn:CallActivity')) return [{ binding: 'calledElementBinding', version: 'calledElementVersion', versionTag: 'calledElementVersionTag', allowed: BINDINGS }, { binding: 'caseBinding', version: 'caseVersion', allowed: ['latest', 'deployment', 'version'] }];
+    if (is(node, 'bpmn:CallActivity')) {
+      return [{ binding: 'calledElementBinding', version: 'calledElementVersion', versionTag: 'calledElementVersionTag', allowed: BINDINGS }, { binding: 'caseBinding', version: 'caseVersion', allowed: ['latest', 'deployment', 'version'] }];
+    }
     return is(node, 'bpmn:BusinessRuleTask') && attributes.defined('decisionRef') !== undefined ? [{ binding: 'decisionRefBinding', version: 'decisionRefVersion', versionTag: 'decisionRefVersionTag', allowed: BINDINGS }] : [];
   }
 
@@ -118,8 +150,12 @@ class C7ValuesRule extends C7Rule {
   private bindingProblem(attributes: CamundaAttributes, { binding, version, versionTag, allowed }: Binding): 'version' | 'versionTag' | 'value' | undefined {
     const value = attributes.defined(binding);
     if (value === undefined) return undefined;
-    if (value === 'version' && attributes.any(version) === undefined) return 'version';
-    if (value === 'versionTag' && versionTag && attributes.any(versionTag) === undefined) return 'versionTag';
+    if (value === 'version' && attributes.any(version) === undefined) {
+      return 'version';
+    }
+    if (value === 'versionTag' && versionTag && attributes.any(versionTag) === undefined) {
+      return 'versionTag';
+    }
     return allowed.includes(value) ? undefined : 'value';
   }
 
@@ -130,13 +166,18 @@ class C7ValuesRule extends C7Rule {
 
   private checkCalledElement(node: ModdleElement, caseRef: string | undefined, prefix: string): void {
     const calledElement: string | undefined = node.get('calledElement');
-    if (calledElement === undefined && caseRef === undefined) this.report('c7-called-element', node, `Call activity ${node.id} has no calledElement (nor ${prefix}:caseRef); the engines refuse the file`, { path: ['calledElement'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'calledElement', hint: `\`bpmn set <file> ${node.id} calledElement=<processId>\`.` });
-    else if (calledElement !== undefined && caseRef !== undefined) this.report('c7-called-element', node, `Call activity ${node.id} has both calledElement and ${prefix}:caseRef; the engines refuse the file`, { path: ['caseRef'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'caseRef', hint: `Keep one: \`bpmn set <file> ${node.id} ${prefix}:caseRef=\`.` });
+    if (calledElement === undefined && caseRef === undefined) {
+      this.report('c7-called-element', node, `Call activity ${node.id} has no calledElement (nor ${prefix}:caseRef); the engines refuse the file`, { path: ['calledElement'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'calledElement', hint: `\`bpmn set <file> ${node.id} calledElement=<processId>\`.` });
+    } else if (calledElement !== undefined && caseRef !== undefined) {
+      this.report('c7-called-element', node, `Call activity ${node.id} has both calledElement and ${prefix}:caseRef; the engines refuse the file`, { path: ['caseRef'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'caseRef', hint: `Keep one: \`bpmn set <file> ${node.id} ${prefix}:caseRef=\`.` });
+    }
   }
 
   /** A `camunda:formRef` next to a `camunda:formKey`, or without a known `camunda:formRefBinding`. */
   private checkForm(node: ModdleElement, attributes: CamundaAttributes, prefix: string): void {
-    if (attributes.defined('formKey') !== undefined) this.report('c7-form', node, `${ElementKinds.describe(node)} has both ${prefix}:formKey and ${prefix}:formRef; the engines refuse the file`, { path: ['formKey'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'formKey', hint: `Keep one: \`bpmn set <file> ${node.id} ${prefix}:formKey=\` (or ${prefix}:formRef=).` });
+    if (attributes.defined('formKey') !== undefined) {
+      this.report('c7-form', node, `${ElementKinds.describe(node)} has both ${prefix}:formKey and ${prefix}:formRef; the engines refuse the file`, { path: ['formKey'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'formKey', hint: `Keep one: \`bpmn set <file> ${node.id} ${prefix}:formKey=\` (or ${prefix}:formRef=).` });
+    }
     const binding = attributes.defined('formRefBinding');
     if (binding !== undefined && FORM_BINDINGS.includes(binding)) return;
     const found = binding === undefined ? `no ${prefix}:formRefBinding` : `${prefix}:formRefBinding="${binding}"`;
@@ -161,8 +202,12 @@ class C7ValuesRule extends C7Rule {
       this.report('c7-multi-instance', node, `Multi-instance ${label} has neither a loop cardinality nor ${prefix}:collection${misplaced !== undefined ? ` (${prefix}:collection sits on the activity, not on the loop)` : ''}; the engines refuse the file`, { path: ['loopCharacteristics', 'collection'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: loop, requiredProperty: ['loopCardinality', 'collection'], hint });
       return;
     }
-    if (cardinality && !Values.nonEmpty(cardinality.get('body')) && !hasCollection) this.report('c7-multi-instance', node, `Multi-instance ${label} has an empty loop cardinality; the engines refuse the file`, { path: ['loopCharacteristics', 'loopCardinality'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: loop, property: 'loopCardinality', hint: `\`bpmn set <file> ${id} cardinality=3\` (a number or \${...}).` });
-    if (loopAttributes.defined('elementVariable') !== undefined && !hasCollection) this.report('c7-multi-instance', node, `Multi-instance ${label} has ${prefix}:elementVariable but no ${prefix}:collection; the engines refuse the file`, { path: ['loopCharacteristics', 'collection'], type: ERROR_TYPES.PROPERTY_DEPENDENT_REQUIRED, node: loop, property: 'elementVariable', dependentRequiredProperty: 'collection', hint: `\`bpmn set <file> ${id} ${Shell.quote(`loop.${prefix}:collection=\${items}`)}\` (or remove it: \`bpmn set <file> ${id} loop.${prefix}:elementVariable=\`).` });
+    if (cardinality && !Values.nonEmpty(cardinality.get('body')) && !hasCollection) {
+      this.report('c7-multi-instance', node, `Multi-instance ${label} has an empty loop cardinality; the engines refuse the file`, { path: ['loopCharacteristics', 'loopCardinality'], type: ERROR_TYPES.EXPRESSION_REQUIRED, node: loop, property: 'loopCardinality', hint: `\`bpmn set <file> ${id} cardinality=3\` (a number or \${...}).` });
+    }
+    if (loopAttributes.defined('elementVariable') !== undefined && !hasCollection) {
+      this.report('c7-multi-instance', node, `Multi-instance ${label} has ${prefix}:elementVariable but no ${prefix}:collection; the engines refuse the file`, { path: ['loopCharacteristics', 'collection'], type: ERROR_TYPES.PROPERTY_DEPENDENT_REQUIRED, node: loop, property: 'elementVariable', dependentRequiredProperty: 'collection', hint: `\`bpmn set <file> ${id} ${Shell.quote(`loop.${prefix}:collection=\${items}`)}\` (or remove it: \`bpmn set <file> ${id} loop.${prefix}:elementVariable=\`).` });
+    }
   }
 }
 

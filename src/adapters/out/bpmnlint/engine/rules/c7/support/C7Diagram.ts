@@ -32,7 +32,9 @@ export class C7Diagram {
   static record(definitions: ModdleElement, facts: C7DiagramFacts, warnings: readonly ImportWarning[]): void {
     C7Diagram.recorded.set(definitions, facts);
     for (const { message, element, property, value } of warnings) {
-      if (!message?.startsWith('unresolved reference') || !element || typeof element !== 'object' || !property) continue;
+      if (!message?.startsWith('unresolved reference') || !element || typeof element !== 'object' || !property) {
+        continue;
+      }
       const references = C7Diagram.unresolvedByElement.get(element) ?? new Map<string, string>();
       references.set(property.slice(property.indexOf(':') + 1), String(value));
       C7Diagram.unresolvedByElement.set(element, references);

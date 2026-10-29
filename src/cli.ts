@@ -40,7 +40,9 @@ const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
 const engine = new BpmnlintEngineLint();
 const relayoutDiagram = new RelayoutDiagramService(project, files, engine);
-if (process.env['BPMN_LAYOUT_DEBUG']) relayoutDiagram.setDebugSink({ sink: (line) => process.stderr.write(`${line}\n`) });
+if (process.env['BPMN_LAYOUT_DEBUG']) {
+  relayoutDiagram.setDebugSink({ sink: (line) => process.stderr.write(`${line}\n`) });
+}
 const cli = new Cli(VERSION, {
   editDocument: new EditDocumentService(project, files, engine),
   createDocument: new CreateDocumentService(project, files, engine),

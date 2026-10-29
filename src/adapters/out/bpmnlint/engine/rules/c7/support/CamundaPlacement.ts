@@ -64,7 +64,9 @@ export class CamundaPlacement {
     if (side) return { kind: 'side', readOn: side };
     if (CamundaPlacement.isReadOn(local, this.host.node)) return undefined;
     const containers = RuleKit.kit.CAMUNDA.allowedParents(local).length === 0 ? RuleKit.kit.CAMUNDA.containersOf(local) : [];
-    if (containers.length) return { kind: 'loose', containers: containers.map((container) => container.replace(/^camunda:/, `${this.host.prefix}:`)).join(' / ') };
+    if (containers.length) {
+      return { kind: 'loose', containers: containers.map((container) => container.replace(/^camunda:/, `${this.host.prefix}:`)).join(' / ') };
+    }
     return { kind: 'host', readOn: ElementKinds.list(CamundaPlacement.hostsOf(local), 4) };
   }
 

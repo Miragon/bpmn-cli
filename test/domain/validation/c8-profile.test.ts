@@ -388,16 +388,28 @@ describe('the zeebe descriptor, read as data', () => {
 
 describe('values Camunda 8 parses at deploy (engine-checked on 60 timer values and 45 expressions)', () => {
   it('durations', async () => {
-    for (const duration of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) expect(new TimerValue(duration).isDuration(), duration).toBe(true);
-    for (const duration of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) expect(new TimerValue(duration).isDuration(), duration).toBe(false);
+    for (const duration of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) {
+      expect(new TimerValue(duration).isDuration(), duration).toBe(true);
+    }
+    for (const duration of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) {
+      expect(new TimerValue(duration).isDuration(), duration).toBe(false);
+    }
   });
   it('dates', async () => {
-    for (const date of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) expect(new TimerValue(date).isDateTime(), date).toBe(true);
-    for (const date of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) expect(new TimerValue(date).isDateTime(), date).toBe(false);
+    for (const date of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) {
+      expect(new TimerValue(date).isDateTime(), date).toBe(true);
+    }
+    for (const date of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) {
+      expect(new TimerValue(date).isDateTime(), date).toBe(false);
+    }
   });
   it('cycles', async () => {
-    for (const cycle of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) expect(new TimerValue(cycle).isCycle(), cycle).toBe(true);
-    for (const cycle of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) expect(new TimerValue(cycle).isCycle(), cycle).toBe(false);
+    for (const cycle of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) {
+      expect(new TimerValue(cycle).isCycle(), cycle).toBe(true);
+    }
+    for (const cycle of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) {
+      expect(new TimerValue(cycle).isCycle(), cycle).toBe(false);
+    }
   });
   it('FEEL slips', async () => {
     const ok = ['a != b', 'not(a)', 'a = 1', '"a && b" = s', '-a', 'a - 1', 'a > 1 and b < 2', 'a in [1,2]', 'if a then b else c', 'some x in xs satisfies x > 1', 'a.b.c', 'x[1]', 'count(xs) > 0', 'date("2020-01-01") < today()', 'a instance of number', 'a between 1 and 3', 'a = null', 'a / 2', 'a ** 2', '`a b` > 1', '//comment\n a', 'a /* c */ > 1', '{"k": 1}.k = 1', '@"2020-01-01"', 'function(x) x', 'for x in xs return x'];

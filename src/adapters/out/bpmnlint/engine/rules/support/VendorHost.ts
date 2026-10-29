@@ -81,7 +81,9 @@ export class VendorHost {
     const name = `${prefix}:${ElementKinds.xmlName(local)}`;
     found.push({ element, where: `${name}${trail ? ` (in ${trail})` : ''} of ${this.describe()}`, path });
     for (const property of element.$descriptor?.properties ?? []) {
-      if (property.isAttr || property.isReference || !String(property.type).startsWith(type.slice(0, type.indexOf(':') + 1))) continue;
+      if (property.isAttr || property.isReference || !String(property.type).startsWith(type.slice(0, type.indexOf(':') + 1))) {
+        continue;
+      }
       const propertyName = property.ns?.localName ?? property.name;
       const value = element.get(property.name);
       const children: ModdleElement[] = (Array.isArray(value) ? value : [value]).filter(Boolean);

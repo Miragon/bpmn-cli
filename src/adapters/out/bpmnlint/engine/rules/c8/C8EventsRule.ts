@@ -57,21 +57,33 @@ class C8EventsRule extends C8Rule {
     if (is(node, 'bpmn:Process') && runs) this.checkLinkThrows(node);
     if (is(node, 'bpmn:AdHocSubProcess') && runs) this.checkAdHocContent(node);
     if (is(node, 'bpmn:EventBasedGateway') && runs) this.checkGateway(node);
-    if (runs && C8EventDefinitions.isEmbeddedSubProcessStart(node)) this.checkStartTrigger(node);
-    if (runs && is(node, 'bpmn:SubProcess') && !is(node, 'bpmn:AdHocSubProcess')) this.checkStartCount(node);
-    if (is(node, 'bpmn:Event') && EngineScope.inExecutableProcess(node)) (node.get('eventDefinitions') as ModdleElement[]).forEach((definition, index) => this.checkTimer(node, definition, index));
+    if (runs && C8EventDefinitions.isEmbeddedSubProcessStart(node)) {
+      this.checkStartTrigger(node);
+    }
+    if (runs && is(node, 'bpmn:SubProcess') && !is(node, 'bpmn:AdHocSubProcess')) {
+      this.checkStartCount(node);
+    }
+    if (is(node, 'bpmn:Event') && EngineScope.inExecutableProcess(node)) {
+      (node.get('eventDefinitions') as ModdleElement[]).forEach((definition, index) => this.checkTimer(node, definition, index));
+    }
   }
 
   private checkEvent(event: ModdleElement): void {
     const definitions = event.get('eventDefinitions') ?? [];
     if (!definitions.length) {
-      if (is(event, 'bpmn:StartEvent') && EngineScope.isEventSubProcess(event.$parent)) this.report('c8-event-definition', event, `Start event ${event.id} of event sub-process ${event.$parent.id} has no trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file`, { path: ['eventDefinitions'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'eventDefinitions', hint: `\`bpmn set <file> ${event.id} trigger=message message=<MessageName>\` (or timer, error, signal, escalation, conditional).` });
+      if (is(event, 'bpmn:StartEvent') && EngineScope.isEventSubProcess(event.$parent)) {
+        this.report('c8-event-definition', event, `Start event ${event.id} of event sub-process ${event.$parent.id} has no trigger; Camunda 8 needs a message, timer, error, signal, escalation or conditional start there and refuses the file`, { path: ['eventDefinitions'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'eventDefinitions', hint: `\`bpmn set <file> ${event.id} trigger=message message=<MessageName>\` (or timer, error, signal, escalation, conditional).` });
+      }
       return;
     }
     const definition = C8EventDefinitions.definitionOf(event);
     if (!definition) return;
-    if (is(definition, 'bpmn:CompensateEventDefinition') && is(event, 'bpmn:ThrowEvent')) this.checkActivityRef(event, definition);
-    if (is(definition, 'bpmn:CompensateEventDefinition') && is(event, 'bpmn:BoundaryEvent')) this.checkCompensationBoundary(event);
+    if (is(definition, 'bpmn:CompensateEventDefinition') && is(event, 'bpmn:ThrowEvent')) {
+      this.checkActivityRef(event, definition);
+    }
+    if (is(definition, 'bpmn:CompensateEventDefinition') && is(event, 'bpmn:BoundaryEvent')) {
+      this.checkCompensationBoundary(event);
+    }
   }
 
   /** A compensation throw event's activityRef must name an activity of its own scope. */
@@ -90,7 +102,9 @@ class C8EventsRule extends C8Rule {
       return;
     }
     const [outgoing] = this.flows.outgoing(event);
-    if (outgoing) this.report('c8-event-definition', event, `Compensation boundary event ${event.id} has an outgoing sequence flow; Camunda 8 refuses the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'outgoing', hint: `Remove the flow (\`bpmn remove <file> ${outgoing.id} --no-bridge\`) and connect the handler instead: \`bpmn connect <file> ${event.id} <handlerId>\`.` });
+    if (outgoing) {
+      this.report('c8-event-definition', event, `Compensation boundary event ${event.id} has an outgoing sequence flow; Camunda 8 refuses the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, property: 'outgoing', hint: `Remove the flow (\`bpmn remove <file> ${outgoing.id} --no-bridge\`) and connect the handler instead: \`bpmn connect <file> ${event.id} <handlerId>\`.` });
+    }
   }
 
   /** The BPMN schema requires a condition in every conditional event definition of the file. */
@@ -109,30 +123,40 @@ class C8EventsRule extends C8Rule {
     const name = definition.get('name');
     const event = definition.$parent;
     const checkedByCompat = isAny(event, ['bpmn:IntermediateCatchEvent', 'bpmn:IntermediateThrowEvent']) && event.get('eventDefinitions')[0] === definition && EngineScope.inExecutableProcess(event);
-    if ((name !== undefined && name !== null && name !== '') || checkedByCompat) return;
+    if ((name !== undefined && name !== null && name !== '') || checkedByCompat) {
+      return;
+    }
     const { owner, path } = C8EventDefinitions.definitionOwner(definition);
     this.report('c8-link-event', owner, `The link event definition of ${owner === definition ? definition.$type : ElementKinds.describe(owner)} has ${name === '' ? 'an empty name' : 'no name, which the BPMN schema requires'}; Camunda 8 refuses the file`, { path: [...path, 'name'], type: ERROR_TYPES.PROPERTY_REQUIRED, node: definition, requiredProperty: 'name', hint: owner.id ? `\`bpmn set <file> ${owner.id} link=<Name>\` (the throw and the catch event of a pair share the name).` : 'Fix it in the XML.' });
   }
 
   private checkLinkThrows(process: ModdleElement): void {
     const links = new LinkEvents(process, (node) => C8EventDefinitions.onlyDefinition(node, 'bpmn:LinkEventDefinition')?.get('name'));
-    for (const { el, name, scope } of links.unmatchedThrows()) this.report('c8-link-event', el, `Link throw event ${el.id} goes to "${name}", but ${scope.id} has no link catch event of that name; Camunda 8 refuses the file`, { path: ['eventDefinitions', 0, 'name'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: el.get('eventDefinitions')[0], property: 'name', hint: `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${scope.id} --link ${Shell.quote(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${el.id} link=<Name>\`).` });
+    for (const { el, name, scope } of links.unmatchedThrows()) {
+      this.report('c8-link-event', el, `Link throw event ${el.id} goes to "${name}", but ${scope.id} has no link catch event of that name; Camunda 8 refuses the file`, { path: ['eventDefinitions', 0, 'name'], type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: el.get('eventDefinitions')[0], property: 'name', hint: `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${scope.id} --link ${Shell.quote(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${el.id} link=<Name>\`).` });
+    }
   }
 
   /** The report goes on the ad-hoc sub-process, with the path to the event to remove. */
   private checkAdHocContent(subProcess: ModdleElement): void {
     (subProcess.get('flowElements') as ModdleElement[]).forEach((child, index) => {
-      if (isAny(child, ['bpmn:StartEvent', 'bpmn:EndEvent'])) this.report('c8-ad-hoc-sub-process', subProcess, `Ad-hoc sub-process ${subProcess.id} contains the ${is(child, 'bpmn:StartEvent') ? 'start' : 'end'} event ${child.id}; Camunda 8 refuses start and end events in ad-hoc sub-processes`, { path: ['flowElements', index], type: ERROR_TYPES.ELEMENT_TYPE_NOT_ALLOWED, node: child, hint: `\`bpmn remove <file> ${child.id}\`.` });
+      if (isAny(child, ['bpmn:StartEvent', 'bpmn:EndEvent'])) {
+        this.report('c8-ad-hoc-sub-process', subProcess, `Ad-hoc sub-process ${subProcess.id} contains the ${is(child, 'bpmn:StartEvent') ? 'start' : 'end'} event ${child.id}; Camunda 8 refuses start and end events in ad-hoc sub-processes`, { path: ['flowElements', index], type: ERROR_TYPES.ELEMENT_TYPE_NOT_ALLOWED, node: child, hint: `\`bpmn remove <file> ${child.id}\`.` });
+      }
     });
   }
 
   /** A receive task after it is camunda-compat's `event-based-gateway-target`. */
   private checkGateway(gateway: ModdleElement): void {
     const flows = this.flows.outgoing(gateway);
-    if (flows.length < 2) this.report('c8-event-gateway', gateway, `Event-based gateway ${gateway.id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'outgoing', hint: `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${gateway.id} --timer PT1H\`.` });
+    if (flows.length < 2) {
+      this.report('c8-event-gateway', gateway, `Event-based gateway ${gateway.id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, { path: ['outgoing'], type: ERROR_TYPES.PROPERTY_REQUIRED, requiredProperty: 'outgoing', hint: `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${gateway.id} --timer PT1H\`.` });
+    }
     for (const flow of flows) {
       const target = flow.get('targetRef');
-      if (!target || is(target, 'bpmn:ReceiveTask') || (is(target, 'bpmn:IntermediateCatchEvent') && GATEWAY_TRIGGERS.some((type) => C8EventDefinitions.onlyDefinition(target, type)))) continue;
+      if (!target || is(target, 'bpmn:ReceiveTask') || (is(target, 'bpmn:IntermediateCatchEvent') && GATEWAY_TRIGGERS.some((type) => C8EventDefinitions.onlyDefinition(target, type)))) {
+        continue;
+      }
       this.report('c8-event-gateway', gateway, `Event-based gateway ${gateway.id} leads to ${ElementKinds.describe(target)}; Camunda 8 allows only message, timer, signal and conditional intermediate catch events after it and refuses the file`, { path: null, type: ERROR_TYPES.EVENT_BASED_GATEWAY_TARGET_NOT_ALLOWED, target, flow, hint: `Put a catch event in between: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${flow.id} --message <MessageName>\` (or retype ${target.id}).` });
     }
   }
@@ -140,7 +164,9 @@ class C8EventsRule extends C8Rule {
   private checkStartTrigger(start: ModdleElement): void {
     const definitions = start.get('eventDefinitions');
     const [definition] = definitions;
-    if (definitions.length !== 1 || is(definition, 'bpmn:CancelEventDefinition')) return;
+    if (definitions.length !== 1 || is(definition, 'bpmn:CancelEventDefinition')) {
+      return;
+    }
     this.report('c8-start-event', start, `Start event ${start.id} of sub-process ${start.$parent.id} has a ${ElementKinds.trigger(definition)} trigger; Camunda 8 allows only a none start event in an embedded sub-process and refuses the file`, { path: ['eventDefinitions', 0], type: ERROR_TYPES.ELEMENT_TYPE_NOT_ALLOWED, eventDefinition: definition, hint: `\`bpmn set <file> ${start.id} trigger=none\` (an event sub-process takes triggered starts: \`bpmn add <file> eventSubProcess:${ElementKinds.trigger(definition)} ... --in ${start.$parent.id}\`).` });
   }
 
@@ -158,16 +184,22 @@ class C8EventsRule extends C8Rule {
     if (kinds.length !== 1 || !kind) return;
     const value = String(definition.get(kind).get('body') ?? '').trim();
     const problem = value.startsWith('=') ? undefined : this.timerProblem(event, kind, value);
-    if (problem) this.report('c8-timer-value', event, `The ${kind}${value === '' ? '' : ` "${value}"`} of ${ElementKinds.describe(event)} ${problem.text}; Camunda 8 refuses the file`, { path: ['eventDefinitions', index, kind], type: ERROR_TYPES.EXPRESSION_VALUE_NOT_ALLOWED, node: definition.get(kind), property: 'body', hint: problem.hint });
+    if (problem) {
+      this.report('c8-timer-value', event, `The ${kind}${value === '' ? '' : ` "${value}"`} of ${ElementKinds.describe(event)} ${problem.text}; Camunda 8 refuses the file`, { path: ['eventDefinitions', index, kind], type: ERROR_TYPES.EXPRESSION_VALUE_NOT_ALLOWED, node: definition.get(kind), property: 'body', hint: problem.hint });
+    }
   }
 
   /** What is wrong with a static timer value, and the `bpmn set` that fixes it. */
   private timerProblem(event: ModdleElement, kind: TimerKind, value: string): { text: string; hint: string } | undefined {
-    if (value === '') return { text: 'is empty', hint: `\`bpmn set <file> ${event.id} timer=PT1H\`.` };
+    if (value === '') {
+      return { text: 'is empty', hint: `\`bpmn set <file> ${event.id} timer=PT1H\`.` };
+    }
     const timer = new TimerValue(value);
     if (TIMER_CHECKS[kind].valid(timer)) return undefined;
     const range = TIMER_CHECKS[kind].range(timer);
-    if (range) return { text: `is no valid ${kind === 'timeDate' || !/^\S+( +\S+){5}$/.test(value) ? 'date-time' : 'cron expression'}: ${range}`, hint: `\`bpmn set <file> ${event.id} ${Shell.quote(`timer=${kind === 'timeDate' ? TIMER_EXAMPLE.timeDate : TIMER_EXAMPLE.timeCycle}`)}\` (with a value in range).` };
+    if (range) {
+      return { text: `is no valid ${kind === 'timeDate' || !/^\S+( +\S+){5}$/.test(value) ? 'date-time' : 'cron expression'}: ${range}`, hint: `\`bpmn set <file> ${event.id} ${Shell.quote(`timer=${kind === 'timeDate' ? TIMER_EXAMPLE.timeDate : TIMER_EXAMPLE.timeCycle}`)}\` (with a value in range).` };
+    }
     return { text: `is not ${TIMER_EXPECTED[kind]}`, hint: `\`bpmn set <file> ${event.id} ${Shell.quote(`timer=${TIMER_EXAMPLE[kind]}`)}\` (or a FEEL expression: ${Shell.quote('timer==<expression>')} with --timer-kind ${kind.replace('time', '').toLowerCase()}).` };
   }
 }

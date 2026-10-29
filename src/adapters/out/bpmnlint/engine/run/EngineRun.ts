@@ -98,7 +98,9 @@ export class EngineRun {
     const position = new Map<string, number>();
     for (const el of this.kit.walk(doc.definitions)) {
       const id = (el as { id?: unknown }).id;
-      if (typeof id === 'string' && !position.has(id)) position.set(id, position.size);
+      if (typeof id === 'string' && !position.has(id)) {
+        position.set(id, position.size);
+      }
     }
     const at = (finding: ProfileFinding): number => (finding.element !== undefined ? (position.get(finding.element) ?? -1) : -1);
     return findings.map((finding, index) => ({ finding, index })).sort((left, right) => at(left.finding) - at(right.finding) || left.index - right.index).map(({ finding }) => finding);

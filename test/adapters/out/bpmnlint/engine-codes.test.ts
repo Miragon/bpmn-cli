@@ -17,7 +17,11 @@ describe('every engine rule has a bpmn-cli code', () => {
     it(`${platform}: the rules of every camunda-compat version, and each finding of bpmn-cli's own`, () => {
       const rules = new Set<string>();
       const verdicts = new CompatVerdicts(ENGINE_KIT, platform, undefined as never, {}, undefined);
-      for (let minor = 0; minor < 40; minor++) for (const rule of verdicts.rules(compatRules(`${major}.${minor}`))) rules.add(rule.name);
+      for (let minor = 0; minor < 40; minor++) {
+        for (const rule of verdicts.rules(compatRules(`${major}.${minor}`))) {
+          rules.add(rule.name);
+        }
+      }
       expect(rules.size).toBeGreaterThan(0);
       expect([...rules].filter((rule) => EngineCodes.codeOf(platform, rule, { data: {} } as never) === EngineCodes.UNMAPPED[platform]).sort()).toEqual([]);
       const tabled = Object.values(EngineCodes.TABLE[platform]).flat().map((rule) => rule.split('#')[0]!).map((rule) => (rule.includes('/') ? rule : `camunda-compat/${rule}`));

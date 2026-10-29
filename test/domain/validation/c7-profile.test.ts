@@ -264,7 +264,9 @@ describe('Camunda 7 profile: one model per rule', () => {
     expect(findings.map((finding) => finding.code).sort()).toEqual([...testCase.codes].sort());
     // validate reports a problem once: a structural error replaces the profile finding that repeats it
     expect((await profileCodes(await Doc.fromXml(testCase.xml)))).toEqual(testCase.structural ? [] : [...testCase.codes].sort());
-    if (testCase.structural) expect((await validateWithEngine(await Doc.fromXml(testCase.xml), { platform: 'auto' })).errors.map((error) => error.code)).toContain(testCase.structural);
+    if (testCase.structural) {
+      expect((await validateWithEngine(await Doc.fromXml(testCase.xml), { platform: 'auto' })).errors.map((error) => error.code)).toContain(testCase.structural);
+    }
     // deploy-severity findings exactly where the engines refuse the file
     expect(findings.some((finding) => finding.severity === 'deploy')).toBe(testCase.engine === 'reject');
     expect(findings.every((finding) => finding.code.startsWith('W_C7_DEPLOY_') === (finding.severity === 'deploy'))).toBe(true);

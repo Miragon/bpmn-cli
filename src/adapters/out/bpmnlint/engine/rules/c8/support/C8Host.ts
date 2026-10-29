@@ -35,8 +35,12 @@ export interface ZeebeValue {
 export class C8Host extends VendorHost {
   static of(node: ModdleElement): C8Host | undefined {
     const type = String(node?.$type ?? '');
-    if (!type.startsWith('bpmn:') || is(node, 'bpmn:Definitions') || node.$descriptor?.isGeneric || !C8Host.readsExtensionsOf(node)) return undefined;
-    for (let ancestor = node; ancestor; ancestor = ancestor.$parent) if (is(ancestor, 'bpmn:ExtensionElements')) return undefined;
+    if (!type.startsWith('bpmn:') || is(node, 'bpmn:Definitions') || node.$descriptor?.isGeneric || !C8Host.readsExtensionsOf(node)) {
+      return undefined;
+    }
+    for (let ancestor = node; ancestor; ancestor = ancestor.$parent) {
+      if (is(ancestor, 'bpmn:ExtensionElements')) return undefined;
+    }
     const host = new C8Host(node);
     return node.id || host.owner ? host : undefined;
   }
@@ -48,7 +52,9 @@ export class C8Host extends VendorHost {
 
   /** The BPMN element whose extension elements hold `node` directly, when Camunda 8 reads it there: it reads the host's extensions and the type is allowed on it. */
   static readHostOf(node: ModdleElement): ModdleElement | undefined {
-    if (!node.$parent || !is(node.$parent, 'bpmn:ExtensionElements')) return undefined;
+    if (!node.$parent || !is(node.$parent, 'bpmn:ExtensionElements')) {
+      return undefined;
+    }
     const host = node.$parent.$parent;
     const allowedIn: string[] | undefined = node.$model?.getTypeDescriptor(node.$type)?.meta?.allowedIn;
     return host && C8Host.readsExtensionsOf(host) && (!allowedIn || allowedIn.some((type) => is(host, type))) ? host : undefined;
@@ -88,7 +94,9 @@ export class C8Host extends VendorHost {
 
   private placementOf(type: ZeebeType): ZeebePlacement {
     if (RuleKit.kit.ZEEBE.nestedOnly(type.name)) return 'loose';
-    if (type.name === 'zeebe:executionListeners' && is(this.node, 'bpmn:SequenceFlow')) return 'flowListeners';
+    if (type.name === 'zeebe:executionListeners' && is(this.node, 'bpmn:SequenceFlow')) {
+      return 'flowListeners';
+    }
     return RuleKit.kit.ZEEBE.allowedOn(type.name, this.node) === false ? 'misplaced' : 'read';
   }
 }

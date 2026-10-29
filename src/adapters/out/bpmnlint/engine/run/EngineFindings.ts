@@ -103,9 +103,13 @@ export class EngineFindings {
     if (at === 0 && path[1] === 'values' && typeof path[2] === 'number') {
       const type = host?.extensionElements?.values?.[path[2]]?.$type;
       const local = type?.slice(type.indexOf(':') + 1);
-      if (local) return [`ext:${ElementKinds.xmlName(local)}`, ...path.slice(3)].join('.');
+      if (local) {
+        return [`ext:${ElementKinds.xmlName(local)}`, ...path.slice(3)].join('.');
+      }
     }
-    if (path.length === 1 && typeof path[0] === 'string') return `attr:${report.id ? this.spelling(report.id, this.attributeKey(host, path[0])) : this.attributeKey(host, path[0])}`;
+    if (path.length === 1 && typeof path[0] === 'string') {
+      return `attr:${report.id ? this.spelling(report.id, this.attributeKey(host, path[0])) : this.attributeKey(host, path[0])}`;
+    }
     return path.join('.');
   }
 
@@ -118,7 +122,9 @@ export class EngineFindings {
 
   /** An event definition or loop of the reported element is part of it, not another element; a flow node in it is one. */
   private isInside(node: ModdleNode, id: string | undefined): boolean {
-    for (let parent = node.$parent; parent; parent = parent.$parent) if (parent.id === id) return true;
+    for (let parent = node.$parent; parent; parent = parent.$parent) {
+      if (parent.id === id) return true;
+    }
     return false;
   }
 
@@ -137,7 +143,9 @@ export class EngineFindings {
     for (const value of Object.values(report.data ?? {})) {
       for (const item of Array.isArray(value) ? value : [value]) {
         const id = item && typeof item === 'object' && typeof (item as ModdleNode).$instanceOf === 'function' ? (item as ModdleNode).id : undefined;
-        if (id && id !== report.id && !(this.isInside(item as ModdleNode, report.id) && !this.isFlowElement(item as ModdleNode))) ids.add(id);
+        if (id && id !== report.id && !(this.isInside(item as ModdleNode, report.id) && !this.isFlowElement(item as ModdleNode))) {
+          ids.add(id);
+        }
       }
     }
     return [...ids];

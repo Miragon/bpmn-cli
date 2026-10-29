@@ -55,7 +55,9 @@ export abstract class UnknownVendorElementsRule extends CamundaRule {
     const local = this.localName(value.$type);
     const known = this.vendor.type(local);
     if (known) {
-      if (!(this.engine === 'c8' ? this.misplaced(host, local, index) : this.looseParameter(host, value, local, index))) this.checkChildren(host, value, known, `${this.prefix}:${local}`);
+      if (!(this.engine === 'c8' ? this.misplaced(host, local, index) : this.looseParameter(host, value, local, index))) {
+        this.checkChildren(host, value, known, `${this.prefix}:${local}`);
+      }
       return;
     }
     const guess = DidYouMean.of(local, this.vendor.typeNames().map((name) => this.localName(name)));
@@ -79,7 +81,9 @@ export abstract class UnknownVendorElementsRule extends CamundaRule {
       return true;
     }
     const type = ZEEBE.type(local)!;
-    if (this.node.$model.getTypeDescriptor(type.type) || ZEEBE.allowedOn(local, host) !== false) return false;
+    if (this.node.$model.getTypeDescriptor(type.type) || ZEEBE.allowedOn(local, host) !== false) {
+      return false;
+    }
     const hosts = type.allowedIn.filter((allowed) => allowed.startsWith('bpmn:')).map((allowed) => `${allowed.charAt(5).toLowerCase()}${allowed.slice(6)}`);
     this.reportMisplaced(host, local, `${name} on ${this.where(host)} has no effect: Camunda 8 reads it on ${hosts.length > 5 ? `${hosts.slice(0, 5).join(', ')}, ...` : hosts.join(', ')} only`, `Remove it: ${remove}.`);
     return true;
@@ -152,7 +156,9 @@ export abstract class UnknownVendorElementsRule extends CamundaRule {
 
   private reportUnknown(host: ModdleElement, subject: string, message: string, hint: string): void {
     let reported: ModdleElement | undefined = this.address(host).id === host.id ? host : host.$parent;
-    while (reported && !reported.id) reported = reported.$parent;
+    while (reported && !reported.id) {
+      reported = reported.$parent;
+    }
     this.report(`${this.engine}-unknown-element`, (reported && this.model.typed(reported)) ?? this.node, message, { path: null, type: ERROR_TYPES.EXTENSION_ELEMENT_NOT_ALLOWED, writtenAt: this.model.position(host), subject, hint });
   }
 

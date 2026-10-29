@@ -27,13 +27,19 @@ export class EngineScope {
   /** Whether `node` is (in) an executable process, wherever in it: what camunda-compat checks. */
   static inExecutableProcess(node: ModdleElement): boolean {
     let process = node;
-    while (process && !is(process, 'bpmn:Process')) process = process.$parent;
+    while (process && !is(process, 'bpmn:Process')) {
+      process = process.$parent;
+    }
     return process?.isExecutable === true;
   }
 
   /** The process or sub-process whose flow elements hold `node`. */
   static scopeOf(node: ModdleElement): ModdleElement | undefined {
-    for (let ancestor = node.$parent; ancestor; ancestor = ancestor.$parent) if (is(ancestor, 'bpmn:Process') || is(ancestor, 'bpmn:SubProcess')) return ancestor;
+    for (let ancestor = node.$parent; ancestor; ancestor = ancestor.$parent) {
+      if (is(ancestor, 'bpmn:Process') || is(ancestor, 'bpmn:SubProcess')) {
+        return ancestor;
+      }
+    }
     return undefined;
   }
 
