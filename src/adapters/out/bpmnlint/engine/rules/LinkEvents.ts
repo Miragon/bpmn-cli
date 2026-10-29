@@ -38,9 +38,7 @@ export class LinkEvents {
 
   /** The throw events whose (sub-)process has no catch event of their name. */
   unmatchedThrows(): LinkThrow[] {
-    return this.throws.filter(
-      (linkThrow) => !this.caughtIn.get(linkThrow.scope)?.has(linkThrow.name),
-    );
+    return this.throws.filter((linkThrow) => !this.caughtIn.get(linkThrow.scope)?.has(linkThrow.name));
   }
 
   /** The first catch event of a name, wherever it is in the process. */
@@ -48,26 +46,16 @@ export class LinkEvents {
     return this.firstCatch.get(name);
   }
 
-  private collect(
-    scope: ModdleElement,
-    linkName: (node: ModdleElement) => string | undefined,
-  ): void {
+  private collect(scope: ModdleElement, linkName: (node: ModdleElement) => string | undefined): void {
     for (const node of scope.flowElements ?? []) {
       const name = linkName(node);
       if (name !== undefined && is(node, 'bpmn:IntermediateCatchEvent')) {
         const first = this.firstCatch.get(name);
-        if (first) {
-          this.duplicates.push({ first, el: node, name });
-        } else {
-          this.firstCatch.set(name, node);
-        }
+        if (first) this.duplicates.push({ first, el: node, name });
+        else this.firstCatch.set(name, node);
         this.caughtIn.set(scope, new Set([...(this.caughtIn.get(scope) ?? []), name]));
-      } else if (name !== undefined && is(node, 'bpmn:IntermediateThrowEvent')) {
-        this.throws.push({ el: node, name, scope });
-      }
-      if (node.flowElements) {
-        this.collect(node, linkName);
-      }
+      } else if (name !== undefined && is(node, 'bpmn:IntermediateThrowEvent')) this.throws.push({ el: node, name, scope });
+      if (node.flowElements) this.collect(node, linkName);
     }
   }
 }

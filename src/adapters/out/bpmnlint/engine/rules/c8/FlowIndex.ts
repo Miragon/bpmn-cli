@@ -9,9 +9,7 @@ export class FlowIndex {
   /** The sequence flows whose sourceRef is `node`, in document order. */
   outgoing(node: ModdleElement): ModdleElement[] {
     const container = node.$parent;
-    if (!container) {
-      return [];
-    }
+    if (!container) return [];
     let bySource = this.byContainer.get(container);
     if (!bySource) {
       bySource = this.index(container);
@@ -24,9 +22,7 @@ export class FlowIndex {
     const bySource = new Map<ModdleElement, ModdleElement[]>();
     for (const element of container.get?.('flowElements') ?? []) {
       const source = is(element, 'bpmn:SequenceFlow') ? element.get('sourceRef') : undefined;
-      if (!source) {
-        continue;
-      }
+      if (!source) continue;
       const flows = bySource.get(source) ?? [];
       flows.push(element);
       bySource.set(source, flows);

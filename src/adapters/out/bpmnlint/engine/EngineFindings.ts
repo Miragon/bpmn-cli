@@ -36,8 +36,8 @@ export class EngineFindings {
     private readonly platform: 'c7' | 'c8',
     private readonly elementsById: Readonly<Record<string, unknown>>,
     private readonly findings: Findings,
-    private readonly spelling: (id: string, key: string) => string = (_id, key) => key,
-    private readonly zeebePrefix = 'zeebe',
+    private readonly spelling: (id: string, key: string) => string,
+    private readonly zeebePrefix: string,
   ) {
     this.hint = new EngineHint(elementsById);
   }
