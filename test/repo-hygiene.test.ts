@@ -65,7 +65,7 @@ describe('repository hygiene', () => {
 });
 
 /** Test files that check the repository as a whole sit directly in test/. */
-const PROJECT_TESTS = new Set(['architecture.test.ts', 'repo-hygiene.test.ts']);
+const PROJECT_TESTS = new Set(['repo-hygiene.test.ts']);
 
 /**
  * Tests mirror the module folders of src/: a test sits in the folder of the module whose

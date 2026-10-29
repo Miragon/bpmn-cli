@@ -1,7 +1,7 @@
 # Architecture
 
 How `src/` is built, and how a command gets from the terminal into the BPMN model.
-`test/architecture.test.ts` checks every rule on this page. The folder table and where new code
+`npm run architecture` (dependency-cruiser, `.dependency-cruiser.cjs`) checks every rule on this page. The folder table and where new code
 goes are in [CONTRIBUTING.md](https://github.com/Miragon/bpmn-cli/blob/main/CONTRIBUTING.md#how-the-package-is-laid-out).
 
 ## One domain, three ways in
