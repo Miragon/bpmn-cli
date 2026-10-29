@@ -25,8 +25,11 @@ export class ScopeArtifactPlacer {
       return artifact;
     };
     for (const el of many(scope, 'flowElements')) {
-      if (is(el, 'bpmn:DataObjectReference')) add(el, 'dataObject', defaultSizeOf(el));
-      else if (is(el, 'bpmn:DataStoreReference')) add(el, 'dataStore', defaultSizeOf(el));
+      if (is(el, 'bpmn:DataObjectReference')) {
+        add(el, 'dataObject', defaultSizeOf(el));
+      } else if (is(el, 'bpmn:DataStoreReference')) {
+        add(el, 'dataStore', defaultSizeOf(el));
+      }
     }
     for (const el of many(scope, 'artifacts')) {
       if (is(el, 'bpmn:TextAnnotation')) add(el, 'annotation', defaultSizeOf(el));
@@ -60,7 +63,9 @@ export class ScopeArtifactPlacer {
       const to = resolve(target);
       const art = from && 'links' in from ? (from as GArtifact) : to && 'links' in to ? (to as GArtifact) : undefined;
       if (!from || !to || !art) {
-        if (source && target && !layout.compensations.some((compensation) => compensation.el === el)) layout.crossLinks.push({ el, id: idOf(el), sourceId: idOf(source), targetId: idOf(target) });
+        if (source && target && !layout.compensations.some((compensation) => compensation.el === el)) {
+          layout.crossLinks.push({ el, id: idOf(el), sourceId: idOf(source), targetId: idOf(target) });
+        }
         continue;
       }
       art.links.push({ el, id: idOf(el), from, to, points: [] });
@@ -71,7 +76,9 @@ export class ScopeArtifactPlacer {
         const src = (da.get<El[] | undefined>('sourceRef') ?? [])[0];
         const art = src ? byArtifactId.get(idOf(src)) : undefined;
         if (!art) {
-          if (src) layout.crossLinks.push({ el: da, id: idOf(da), sourceId: idOf(src), targetId: node.id });
+          if (src) {
+            layout.crossLinks.push({ el: da, id: idOf(da), sourceId: idOf(src), targetId: node.id });
+          }
           continue;
         }
         art.links.push({ el: da, id: idOf(da), from: art, to: node, points: [] });
@@ -81,7 +88,9 @@ export class ScopeArtifactPlacer {
         const tgt = da.get<El | undefined>('targetRef');
         const art = tgt ? byArtifactId.get(idOf(tgt)) : undefined;
         if (!art) {
-          if (tgt) layout.crossLinks.push({ el: da, id: idOf(da), sourceId: node.id, targetId: idOf(tgt) });
+          if (tgt) {
+            layout.crossLinks.push({ el: da, id: idOf(da), sourceId: node.id, targetId: idOf(tgt) });
+          }
           continue;
         }
         art.links.push({ el: da, id: idOf(da), from: node, to: art, points: [] });
@@ -110,7 +119,9 @@ export class ScopeArtifactPlacer {
       }
       const cx = ChannelRouter.entriesFromBelow(node).length ? node.box.x + node.box.width / 2 + 6 + artifact.width / 2 : this.belowX(node);
       let box: Box = { x: Math.round(cx - artifact.width / 2), y: node.box.y + node.box.height + (node.boundary.length ? 24 : 20), width: artifact.width, height: artifact.height };
-      while (!free(box)) box = { ...box, x: box.x + artifact.width + 10 };
+      while (!free(box)) {
+        box = { ...box, x: box.x + artifact.width + 10 };
+      }
       artifact.box = box;
       taken.push(box);
     }
@@ -142,9 +153,17 @@ export class ScopeArtifactPlacer {
         if (label) boxes.push(label);
       }
     }
-    for (const es of layout.eventSubs) boxes.push(es.box);
-    for (const artifact of layout.artifacts) if (artifact.kind !== 'annotation' || artifact.anchorNode?.host) boxes.push(artifact.box);
-    for (const edge of layout.edges) if (edge.label) boxes.push(edge.label);
+    for (const es of layout.eventSubs) {
+      boxes.push(es.box);
+    }
+    for (const artifact of layout.artifacts) {
+      if (artifact.kind !== 'annotation' || artifact.anchorNode?.host) {
+        boxes.push(artifact.box);
+      }
+    }
+    for (const edge of layout.edges) {
+      if (edge.label) boxes.push(edge.label);
+    }
     const segments = routedSegments(layout);
     const collides = (box: Box): boolean =>
       boxes.some((obstacle) => overlaps(obstacle, box, 6)) ||
@@ -175,7 +194,9 @@ export class ScopeArtifactPlacer {
       if (box) {
         note.box = box;
         boxes.push(box);
-      } else band.push(note);
+      } else {
+        band.push(note);
+      }
     }
     if (band.length) {
       const topBand = Math.max(...band.map((note) => note.height)) + METRICS.vGap;
@@ -195,9 +216,13 @@ export class ScopeArtifactPlacer {
   refreshFlowAnchors(): void {
     for (const artifact of this.layout.artifacts) {
       for (const link of artifact.links) {
-        for (const end of [link.from, link.to]) if (end.flow) end.box = this.flowPoint(end.flow);
+        for (const end of [link.from, link.to]) {
+          if (end.flow) end.box = this.flowPoint(end.flow);
+        }
       }
-      if (artifact.anchor?.flow) artifact.anchor.box = this.flowPoint(artifact.anchor.flow);
+      if (artifact.anchor?.flow) {
+        artifact.anchor.box = this.flowPoint(artifact.anchor.flow);
+      }
     }
   }
 
@@ -205,7 +230,9 @@ export class ScopeArtifactPlacer {
     let best: [Point, Point] | undefined;
     for (let index = 0; index + 1 < flow.points.length; index++) {
       const start = flow.points[index]!, end = flow.points[index + 1]!;
-      if (!best || Math.hypot(end.x - start.x, end.y - start.y) > Math.hypot(best[1].x - best[0].x, best[1].y - best[0].y)) best = [start, end];
+      if (!best || Math.hypot(end.x - start.x, end.y - start.y) > Math.hypot(best[1].x - best[0].x, best[1].y - best[0].y)) {
+        best = [start, end];
+      }
     }
     const midpoint = best ? { x: (best[0].x + best[1].x) / 2, y: (best[0].y + best[1].y) / 2 } : { x: 0, y: 0 };
     return { x: midpoint.x, y: midpoint.y, width: 0, height: 0 };
@@ -233,11 +260,15 @@ export class ScopeArtifactPlacer {
       out.push(sibling.box);
       const label = ScopeLabels.of(sibling, 'boundary');
       if (label) out.push(label);
-      if (sibling.out.length && !sibling.onTop) out.push(this.dropLine(sibling.box.x + sibling.box.width / 2, sibling.box.y));
+      if (sibling.out.length && !sibling.onTop) {
+        out.push(this.dropLine(sibling.box.x + sibling.box.width / 2, sibling.box.y));
+      }
     }
     const hostY = host.box.y + host.box.height / 2;
     if (host.out.some((flow) => !flow.back && flow.target.box.y + flow.target.box.height / 2 > hostY + 1)) {
-      for (const left of [host.box.x + 8, host.box.x + 20]) out.push(this.dropLine(left, host.box.y + host.box.height));
+      for (const left of [host.box.x + 8, host.box.x + 20]) {
+        out.push(this.dropLine(left, host.box.y + host.box.height));
+      }
     }
     return out;
   }
@@ -253,7 +284,9 @@ export class ScopeArtifactPlacer {
     const y0 = host.box.y + host.box.height + 8;
     const fallback = (): Box => {
       let box: Box = { x: near, y: y0, width: note.width, height: note.height };
-      while (!free(box)) box = { ...box, y: box.y + note.height + 8 };
+      while (!free(box)) {
+        box = { ...box, y: box.y + note.height + 8 };
+      }
       return box;
     };
     if (!blockers.length) return fallback();

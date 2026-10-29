@@ -29,7 +29,13 @@ export async function loadPrMetrics(env = process.env) {
       const metrics = planes.map((plane) => measurePlane(plane));
       const scores = planes.map((plane) => +score(plane).toFixed(2));
       const sums = {};
-      for (const metric of metrics) for (const [metricName, metricValue] of Object.entries(metric)) if (typeof metricValue === 'number') sums[metricName] = (sums[metricName] ?? 0) + metricValue;
+      for (const metric of metrics) {
+        for (const [metricName, metricValue] of Object.entries(metric)) {
+          if (typeof metricValue === 'number') {
+            sums[metricName] = (sums[metricName] ?? 0) + metricValue;
+          }
+        }
+      }
       return { score: +scores.reduce((total, planeScore) => total + planeScore, 0).toFixed(2), sums, planes: planes.length };
     },
   };

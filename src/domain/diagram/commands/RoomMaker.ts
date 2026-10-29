@@ -24,8 +24,12 @@ export class RoomMaker {
   private laneAt(poolId: string | undefined, point: Point): DShape | undefined {
     let best: DShape | undefined;
     for (const lane of this.plane.shapes.values()) {
-      if (lane.kind !== 'lane' || lane.poolId !== poolId || !containsPoint(lane.bounds, point)) continue;
-      if (!best || lane.bounds.width * lane.bounds.height < best.bounds.width * best.bounds.height) best = lane;
+      if (lane.kind !== 'lane' || lane.poolId !== poolId || !containsPoint(lane.bounds, point)) {
+        continue;
+      }
+      if (!best || lane.bounds.width * lane.bounds.height < best.bounds.width * best.bounds.height) {
+        best = lane;
+      }
     }
     return best;
   }
@@ -107,7 +111,9 @@ export class RoomMaker {
       for (let innerIndex = outerIndex + 1; innerIndex < leaves.length; innerIndex++) {
         const first = leaves[outerIndex]!;
         const second = leaves[innerIndex]!;
-        if (first.hostId === second.id || second.hostId === first.id || !overlaps(first.bounds, second.bounds)) continue;
+        if (first.hostId === second.id || second.hostId === first.id || !overlaps(first.bounds, second.bounds)) {
+          continue;
+        }
         const was = [snap.bounds.get(first.id), snap.bounds.get(second.id)];
         if (was[0] && was[1] && overlaps(was[0], was[1])) continue;
         out.push([first.id, second.id]);
@@ -125,7 +131,9 @@ export class RoomMaker {
     if (!frame || !shape.label) return;
     const sub = frame.kind === 'subProcess';
     const over = bottom(shape.label) + 5 - bottom(frame.bounds);
-    if (over > 0.5) this.drawing.makeSpace({ axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+    if (over > 0.5) {
+      this.drawing.makeSpace({ axis: 'y', line: bottom(frame.bounds) - 1, delta: Math.ceil(over), keep: new Set(keep), ...(sub ? { within: copyBox(frame.bounds), frame: frame.id } : {}) });
+    }
     const overRight = right(shape.label) + 5 - right(frame.bounds);
     if (overRight <= 0.5) return;
     const pool = frame.kind === 'participant' ? frame : frame.poolId ? this.plane.shapes.get(frame.poolId) : undefined;
@@ -169,8 +177,12 @@ export class RoomMaker {
         for (const fid of [shape.parentId, shape.hostId ? undefined : shape.laneId, shape.poolId]) {
           const frame = fid ? this.plane.shapes.get(fid) : undefined;
           const fb = frame ? snap.bounds.get(frame.id) : undefined;
-          if (!frame || !fb || (frame.kind === 'subProcess' && !frame.container)) continue;
-          if (inside(was, fb) && !inside(shape.bounds, frame.bounds)) out.push({ shape, frame });
+          if (!frame || !fb || (frame.kind === 'subProcess' && !frame.container)) {
+            continue;
+          }
+          if (inside(was, fb) && !inside(shape.bounds, frame.bounds)) {
+            out.push({ shape, frame });
+          }
         }
       }
       return out;
@@ -187,7 +199,9 @@ export class RoomMaker {
       if (stuck.length) {
         const second = this.drawing.separate({ active: ids, movable: all, pinned: fixed, locked: { ids, axes: lock }, baseline: snap.bounds });
         left = second.unresolved.some(([one, other]) => ids.includes(one) || ids.includes(other));
-        if (!left) out.push(`moved ${moved.map((shape) => shape.id).join(', ')} ${lock.includes('x') ? 'down' : 'right'} a little to clear ${stuck.map(([one, other]) => (ids.includes(one) ? other : one)).join(', ')}`);
+        if (!left) {
+          out.push(`moved ${moved.map((shape) => shape.id).join(', ')} ${lock.includes('x') ? 'down' : 'right'} a little to clear ${stuck.map(([one, other]) => (ids.includes(one) ? other : one)).join(', ')}`);
+        }
       }
       const covered = swallowed();
       const gone = displaced();

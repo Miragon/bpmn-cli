@@ -18,14 +18,18 @@ export class ElementRemoval {
 
   remove(command: RemoveElements): ChangeSet {
     const changes = new ChangeSet();
-    if (!command.ids?.length) throw usageError('remove needs at least one element id');
+    if (!command.ids?.length) {
+      throw usageError('remove needs at least one element id');
+    }
     const bridge = command.bridge ?? true;
     const removing = new Set(command.ids);
     const gone = new Set<string>();
     if (command.withBranch && (command.bridgeAll || command.bridge === false)) {
       throw usageError(`--with-branch removes the node's whole downstream path and bridges nothing: drop ${command.bridgeAll ? '--bridge-all' : '--no-bridge'}`);
     }
-    if (command.bridgeAll && command.bridge === false) throw usageError('--bridge-all and --no-bridge contradict each other');
+    if (command.bridgeAll && command.bridge === false) {
+      throw usageError('--bridge-all and --no-bridge contradict each other');
+    }
     if (command.withBranch) {
       for (const id of command.ids) {
         if (gone.has(id)) continue;
@@ -34,7 +38,9 @@ export class ElementRemoval {
           continue;
         }
         const branch = this.branchOf(this.edit.require(id, ['bpmn:FlowNode'], 'flow node'));
-        for (const el of branch.nodes) removing.add(idOf(el));
+        for (const el of branch.nodes) {
+          removing.add(idOf(el));
+        }
         changes.note(
           `branch of ${id}: ${branch.nodes.length} node(s) (${branch.nodes.map(idOf).join(', ')})${branch.stops.length ? `; it stops before ${branch.stops.map(idOf).join(', ')}, which other paths reach (they stay)` : '; it ends there'}`,
         );
@@ -42,7 +48,9 @@ export class ElementRemoval {
           if (gone.has(idOf(el))) continue;
           new FlowBridge(this.edit, changes).single(el, false);
           this.cascade(el, changes);
-          for (const removal of changes.removed) gone.add(removal.id);
+          for (const removal of changes.removed) {
+            gone.add(removal.id);
+          }
         }
       }
       this.edit.doc.invalidate();
@@ -69,7 +77,9 @@ export class ElementRemoval {
         new FlowBridge(this.edit, changes).forRemoval(el, bridge, !!command.bridgeAll, removing);
       }
       this.cascade(el, changes);
-      for (const removal of changes.removed) gone.add(removal.id);
+      for (const removal of changes.removed) {
+        gone.add(removal.id);
+      }
     }
     this.edit.doc.invalidate();
     return changes;
@@ -97,7 +107,9 @@ export class ElementRemoval {
     const before = (node: El): El[] => {
       if (is(node, 'bpmn:BoundaryEvent')) return [node.get<El>('attachedToRef')];
       const preds = this.edit.doc.incoming(node).map((flow) => flow.get<El>('sourceRef'));
-      if (node.get<boolean | undefined>('isForCompensation')) preds.push(...this.compensationSources(node));
+      if (node.get<boolean | undefined>('isForCompensation')) {
+        preds.push(...this.compensationSources(node));
+      }
       return preds;
     };
     const stops = new Set<El>();
@@ -110,7 +122,9 @@ export class ElementRemoval {
             inBranch.add(successor);
             stops.delete(successor);
             grew = true;
-          } else stops.add(successor);
+          } else {
+            stops.add(successor);
+          }
         }
       }
     }
@@ -177,8 +191,14 @@ export class ElementRemoval {
       const id = element.get<string | undefined>('id');
       if (id) this.edit.doc.ids.release(id);
     }
-    if (ElementRemoval.reportable(el) || el.get<string | undefined>('id')) changes.remove(ElementRemoval.removedEntry(el));
-    for (const element of subtree) if (element !== el && ElementRemoval.reportable(element)) changes.remove(ElementRemoval.removedEntry(element));
+    if (ElementRemoval.reportable(el) || el.get<string | undefined>('id')) {
+      changes.remove(ElementRemoval.removedEntry(el));
+    }
+    for (const element of subtree) {
+      if (element !== el && ElementRemoval.reportable(element)) {
+        changes.remove(ElementRemoval.removedEntry(element));
+      }
+    }
     this.edit.doc.invalidate();
     this.afterDetach(el, parent, changes);
     this.cleanupReferences(removed, changes);
@@ -189,8 +209,11 @@ export class ElementRemoval {
     if (is(el, 'bpmn:Lane') && parent && is(parent, 'bpmn:LaneSet')) {
       if (!many(parent, 'lanes').length) {
         const owner = parent.$parent as El | undefined;
-        if (owner && is(owner, 'bpmn:Lane')) owner.set('childLaneSet', undefined);
-        else if (owner) removeFrom(owner, 'laneSets', parent);
+        if (owner && is(owner, 'bpmn:Lane')) {
+          owner.set('childLaneSet', undefined);
+        } else if (owner) {
+          removeFrom(owner, 'laneSets', parent);
+        }
         const lsId = parent.get<string | undefined>('id');
         if (lsId) this.edit.doc.ids.release(lsId);
         changes.note(`lane set${lsId ? ` ${lsId}` : ''} removed: no lanes left`);
@@ -208,20 +231,28 @@ export class ElementRemoval {
     }
     if (is(el, 'bpmn:DataObjectReference')) {
       const backing = el.get<El | undefined>('dataObjectRef');
-      if (backing && this.isAttached(backing) && !referencesToAny(this.edit.doc.definitions, new Set([backing])).length) this.cascade(backing, changes);
+      if (backing && this.isAttached(backing) && !referencesToAny(this.edit.doc.definitions, new Set([backing])).length) {
+        this.cascade(backing, changes);
+      }
       return;
     }
     if (is(el, 'bpmn:DataStoreReference')) {
       const backing = el.get<El | undefined>('dataStoreRef');
-      if (backing && this.isAttached(backing) && !referencesToAny(this.edit.doc.definitions, new Set([backing])).length) this.cascade(backing, changes);
+      if (backing && this.isAttached(backing) && !referencesToAny(this.edit.doc.definitions, new Set([backing])).length) {
+        this.cascade(backing, changes);
+      }
       return;
     }
     if (is(el, 'bpmn:Group')) {
       const value = el.get<El | undefined>('categoryValueRef');
-      if (!value || !this.isAttached(value) || referencesToAny(this.edit.doc.definitions, new Set([value])).some((reference) => is(reference.holder, 'bpmn:Group'))) return;
+      if (!value || !this.isAttached(value) || referencesToAny(this.edit.doc.definitions, new Set([value])).some((reference) => is(reference.holder, 'bpmn:Group'))) {
+        return;
+      }
       const category = value.$parent as El;
       this.cascade(value, changes);
-      if (is(category, 'bpmn:Category') && !many(category, 'categoryValue').length) this.cascade(category, changes);
+      if (is(category, 'bpmn:Category') && !many(category, 'categoryValue').length) {
+        this.cascade(category, changes);
+      }
       return;
     }
     if (is(el, 'bpmn:Process')) {
@@ -295,12 +326,16 @@ export class ElementRemoval {
       }
       if (isMany) {
         removeFrom(holder, prop, target);
-        if (is(holder, 'bpmn:Lane')) changes.change(ChangeSet.entryOf(holder, `member ${targetId} removed`));
+        if (is(holder, 'bpmn:Lane')) {
+          changes.change(ChangeSet.entryOf(holder, `member ${targetId} removed`));
+        }
         continue;
       }
       holder.set(prop, undefined);
       const owner = nearestWithId(holder);
-      if (owner && prop !== 'default') changes.change(ChangeSet.entryOf(owner, `${prop} cleared (${targetId} removed)`));
+      if (owner && prop !== 'default') {
+        changes.change(ChangeSet.entryOf(owner, `${prop} cleared (${targetId} removed)`));
+      }
     }
     this.edit.doc.invalidate();
   }

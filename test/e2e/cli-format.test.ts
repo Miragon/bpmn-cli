@@ -47,7 +47,9 @@ async function handFile(name: string, mutate?: (doc: Doc) => void): Promise<stri
       if (bounds) bounds.set('x', bounds.get<number>('x') + 20);
       const lb = pe.get<El | undefined>('label')?.get<El | undefined>('bounds');
       if (lb) lb.set('x', lb.get<number>('x') + 20);
-      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) waypoint.set('x', waypoint.get<number>('x') + 20);
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) {
+        waypoint.set('x', waypoint.get<number>('x') + 20);
+      }
     }
   }
   mutate?.(doc);
@@ -59,7 +61,11 @@ async function handFile(name: string, mutate?: (doc: Doc) => void): Promise<stri
 async function shapesOf(file: string): Promise<Map<string, DShape>> {
   const doc = await Doc.fromXml(readFileSync(file, 'utf8'));
   const out = new Map<string, DShape>();
-  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) out.set(shape.id, shape);
+  for (const plane of new DiagramReader(doc.definitions).planes()) {
+    for (const shape of plane.shapes.values()) {
+      out.set(shape.id, shape);
+    }
+  }
   return out;
 }
 
@@ -93,7 +99,9 @@ describe('format commands', () => {
     const after = await shapesOf(file);
     expect(cx(after.get('C')!)).toBe(cx(after.get('A')!));
     expect(cy(after.get('E2')!)).toBe(cy(after.get('C')!));
-    for (const id of ['S', 'A', 'G', 'B', 'E']) expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['S', 'A', 'G', 'B', 'E']) {
+      expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(readFileSync(file, 'utf8')).toMatch(/bpmnElement="A" bioc:stroke="#831311"/);
   });
 
@@ -169,7 +177,9 @@ describe('read side', () => {
   /** C pushed onto B: one overlap. */
   const overlap = (doc: Doc): void => {
     for (const pe of doc.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement')) {
-      if (pe.get<El>('bpmnElement').get<string>('id') === 'C') pe.get<El>('bounds').set('y', 150);
+      if (pe.get<El>('bpmnElement').get<string>('id') === 'C') {
+        pe.get<El>('bounds').set('y', 150);
+      }
     }
   };
 
@@ -205,7 +215,9 @@ describe('read side', () => {
     expect(cliRun.out).toMatch(/format tidy #0: moved /);
     expect(JSON.parse(bpmn('metrics', file, '--json').out).counts.overlaps).toBe(0);
     const after = await shapesOf(file);
-    for (const id of ['S', 'A', 'G']) expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['S', 'A', 'G']) {
+      expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(bpmn('layout', file, '--tidy', '--collapse', 'X').err).toMatch(/E_USAGE: --tidy keeps the drawing/);
   });
 });

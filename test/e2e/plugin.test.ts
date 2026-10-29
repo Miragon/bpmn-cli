@@ -99,7 +99,9 @@ function bashBlocks(file: string): string[] {
 function runBlocks(file: string, cwd: string): void {
   bashBlocks(file).forEach((block, blockIndex) => {
     const result = sh(block, cwd);
-    if (result.code !== 0) throw new Error(`${file.slice(ROOT.length + 1)} bash block ${blockIndex + 1} failed (${result.code}):\n${block}\n--- stdout\n${result.out}\n--- stderr\n${result.err}`);
+    if (result.code !== 0) {
+      throw new Error(`${file.slice(ROOT.length + 1)} bash block ${blockIndex + 1} failed (${result.code}):\n${block}\n--- stdout\n${result.out}\n--- stderr\n${result.err}`);
+    }
   });
 }
 
@@ -117,19 +119,29 @@ function frontmatter(text: string): { data: Record<string, unknown>; body: strin
     if (raw === '') {
       // a YAML list on the following lines
       const items: string[] = [];
-      while (lineIndex + 1 < lines.length && /^\s+-\s/.test(lines[lineIndex + 1]!)) items.push(lines[++lineIndex]!.replace(/^\s+-\s+/, '').replace(/\s+#.*$/, ''));
+      while (lineIndex + 1 < lines.length && /^\s+-\s/.test(lines[lineIndex + 1]!)) {
+        items.push(lines[++lineIndex]!.replace(/^\s+-\s+/, '').replace(/\s+#.*$/, ''));
+      }
       data[key] = items;
-    } else data[key] = scalar(raw);
+    } else {
+      data[key] = scalar(raw);
+    }
   }
   return { data, body: match[2]! };
 }
 
 function scalar(raw: string): unknown {
   const trimmed = raw.trim();
-  if (trimmed.startsWith("'")) return trimmed.slice(1, trimmed.lastIndexOf("'")).replace(/''/g, "'");
+  if (trimmed.startsWith("'")) {
+    return trimmed.slice(1, trimmed.lastIndexOf("'")).replace(/''/g, "'");
+  }
   if (trimmed.startsWith('"')) return JSON.parse(trimmed);
-  if (trimmed.startsWith('[')) return trimmed.slice(1, -1).split(',').map((part) => part.trim()).filter(Boolean);
-  if (trimmed.startsWith('{')) return Object.fromEntries(trimmed.slice(1, -1).split(',').map((pair) => pair.split(':').map((part) => part.trim()) as [string, string]));
+  if (trimmed.startsWith('[')) {
+    return trimmed.slice(1, -1).split(',').map((part) => part.trim()).filter(Boolean);
+  }
+  if (trimmed.startsWith('{')) {
+    return Object.fromEntries(trimmed.slice(1, -1).split(',').map((pair) => pair.split(':').map((part) => part.trim()) as [string, string]));
+  }
   if (/^\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
   return trimmed;
 }
@@ -225,7 +237,9 @@ describe('the skill', () => {
         const sub = cmd === 'ext' ? (/^\s+(add|remove|list)\b/.exec(rest!)?.[1] ?? '') : '';
         const options = help(sub ? [cmd!, sub] : [cmd!]);
         for (const [, opt] of rest!.replace(/'[^']*'|"[^"]*"/g, '').matchAll(/\s(--[a-z][a-z-]*)/g)) {
-          if (!options.includes(`${opt} `) && !options.includes(`${opt},`) && !options.includes(`${opt}\n`)) problems.push(`${file}: bpmn ${cmd}${sub ? ` ${sub}` : ''} has no option ${opt}`);
+          if (!options.includes(`${opt} `) && !options.includes(`${opt},`) && !options.includes(`${opt}\n`)) {
+            problems.push(`${file}: bpmn ${cmd}${sub ? ` ${sub}` : ''} has no option ${opt}`);
+          }
         }
       }
     }
@@ -245,7 +259,9 @@ describe('the skill', () => {
   for (const ref of REFERENCES) {
     it(`the examples of reference/${ref} run on the models the recipes build`, () => {
       const base = join(tmp, 'recipes');
-      if (!existsSync(join(base, 'order-to-cash.bpmn'))) runBlocks(join(SKILL, 'reference', 'recipes.md'), workDir('recipes'));
+      if (!existsSync(join(base, 'order-to-cash.bpmn'))) {
+        runBlocks(join(SKILL, 'reference', 'recipes.md'), workDir('recipes'));
+      }
       const dir = workDir(`ref-${ref}`);
       cpSync(base, dir, { recursive: true });
       runBlocks(join(SKILL, 'reference', ref), dir);
@@ -254,7 +270,9 @@ describe('the skill', () => {
 
   it('the look step of SKILL.md runs: its render example draws the recipes\' model into .bpmn-render/', () => {
     const base = join(tmp, 'recipes');
-    if (!existsSync(join(base, 'order-to-cash.bpmn'))) runBlocks(join(SKILL, 'reference', 'recipes.md'), workDir('recipes'));
+    if (!existsSync(join(base, 'order-to-cash.bpmn'))) {
+      runBlocks(join(SKILL, 'reference', 'recipes.md'), workDir('recipes'));
+    }
     const dir = workDir('skill-look');
     cpSync(base, dir, { recursive: true });
     const blocks = bashBlocks(join(SKILL, 'SKILL.md')).filter((block) => /\bbpmn render\b/.test(block));
@@ -310,7 +328,9 @@ describe('the skill', () => {
   }, SLOW);
 
   it('batches are piped in with printf, never through a heredoc (Claude Code asks before running JSON in a heredoc)', () => {
-    for (const file of skillFiles()) expect(md(file), file).not.toMatch(/<<\s*'?EOF/);
+    for (const file of skillFiles()) {
+      expect(md(file), file).not.toMatch(/<<\s*'?EOF/);
+    }
   });
 });
 
@@ -339,7 +359,9 @@ function regexPasses(grader: Grader, text: string): boolean {
   const re = new RegExp(grader.data.pattern as string, flags);
   if (match === 'not_contains') return !re.test(text);
   const count = /^count:(\d+)$/.exec(match);
-  if (count) return [...text.matchAll(new RegExp(grader.data.pattern as string, flags.includes('g') ? flags : `${flags}g`))].length === Number(count[1]);
+  if (count) {
+    return [...text.matchAll(new RegExp(grader.data.pattern as string, flags.includes('g') ? flags : `${flags}g`))].length === Number(count[1]);
+  }
   return re.test(text);
 }
 
@@ -459,7 +481,9 @@ describe('the eval suite', () => {
     expect(cases.sort()).toEqual(['build-order-to-cash', 'camunda7-external-task', 'camunda8-retoure-german', 'edit-hand-drawn-model', 'format-happy-path', 'ignores-python-question', 'tidy-after-edit']);
     for (const caseName of cases) {
       const { data, body } = frontmatter(md(join(EVALS, caseName, 'prompt.md')));
-      for (const key of Object.keys(data)) expect(PROMPT_KEYS.has(key), `${caseName}: prompt.md key ${key}`).toBe(true);
+      for (const key of Object.keys(data)) {
+        expect(PROMPT_KEYS.has(key), `${caseName}: prompt.md key ${key}`).toBe(true);
+      }
       expect(body.trim().length).toBeGreaterThan(50);
       // realistic prompts: the user does not name the skill
       expect(body).not.toMatch(/\bskill\b|bpmn-cli|@miragon/i);
@@ -469,7 +493,9 @@ describe('the eval suite', () => {
         expect(yaml).toMatch(/^schema_version: "1\.1"$/m);
         expect(yaml).toMatch(new RegExp(`^name: ${caseName}$`, 'm'));
         const script = /scaffold_script: (\S+)/.exec(yaml)?.[1];
-        if (script) expect(existsSync(join(EVALS, caseName, script)), `${caseName}: ${script}`).toBe(true);
+        if (script) {
+          expect(existsSync(join(EVALS, caseName, script)), `${caseName}: ${script}`).toBe(true);
+        }
       }
     }
   });
@@ -478,9 +504,15 @@ describe('the eval suite', () => {
     for (const caseName of cases) {
       for (const caseGrader of graders(join(EVALS, caseName))) {
         expect(GRADER_TYPES.has(caseGrader.type), `${caseName}/${caseGrader.name}: type ${caseGrader.type}`).toBe(true);
-        if (caseGrader.type === 'regex') expect(() => new RegExp(caseGrader.data.pattern as string, (caseGrader.data.flags as string) ?? ''), `${caseName}/${caseGrader.name}`).not.toThrow();
-        if (caseGrader.type === 'tool_used' && caseGrader.data.input_match) expect(() => new RegExp(caseGrader.data.input_match as string), `${caseName}/${caseGrader.name}`).not.toThrow();
-        if (caseGrader.type === 'llm') expect(caseGrader.body.trim(), `${caseName}/${caseGrader.name}`).toMatch(/PASS[\s\S]*FAIL/);
+        if (caseGrader.type === 'regex') {
+          expect(() => new RegExp(caseGrader.data.pattern as string, (caseGrader.data.flags as string) ?? ''), `${caseName}/${caseGrader.name}`).not.toThrow();
+        }
+        if (caseGrader.type === 'tool_used' && caseGrader.data.input_match) {
+          expect(() => new RegExp(caseGrader.data.input_match as string), `${caseName}/${caseGrader.name}`).not.toThrow();
+        }
+        if (caseGrader.type === 'llm') {
+          expect(caseGrader.body.trim(), `${caseName}/${caseGrader.name}`).toMatch(/PASS[\s\S]*FAIL/);
+        }
       }
     }
   });
@@ -541,7 +573,9 @@ describe('the eval suite', () => {
       const after = readFileSync(join(dir, solution.file), 'utf8');
       const fg = fileGraders(caseDir, solution.file);
       expect(fg.map((caseGrader) => caseGrader.name)).toEqual(expect.arrayContaining(solution.changeGraders));
-      for (const caseGrader of fg) expect(regexPasses(caseGrader, after), `${caseName}/${caseGrader.name} on the CLI solution`).toBe(true);
+      for (const caseGrader of fg) {
+        expect(regexPasses(caseGrader, after), `${caseName}/${caseGrader.name} on the CLI solution`).toBe(true);
+      }
       // the transcript graders match what the CLI prints for the solution
       for (const caseGrader of graders(caseDir).filter((warning) => warning.type === 'regex' && warning.data.target === 'trace')) {
         const validation = bpmn(['validate', solution.file, '--strict'], dir);
@@ -560,7 +594,9 @@ describe('the eval suite', () => {
     const result = sh(hashed, dir);
     expect(result.code, `${result.out}${result.err}`).toBe(0);
     const model = readFileSync(join(dir, edit.file), 'utf8');
-    for (const name of ['approval-inserted', 'timer-reminder', 'reminder-path']) expect(regexPasses(grader('edit-hand-drawn-model', name), model), name).toBe(true);
+    for (const name of ['approval-inserted', 'timer-reminder', 'reminder-path']) {
+      expect(regexPasses(grader('edit-hand-drawn-model', name), model), name).toBe(true);
+    }
     expect(regexPasses(grader('edit-hand-drawn-model', 'speaking-new-ids'), model)).toBe(false);
     // format-happy-path: any green counts, also one that is not the bpmn-js palette
     const fmt = SOLUTIONS['format-happy-path']!;
@@ -612,7 +648,9 @@ describe('the eval suite', () => {
       const crossing = problems.some((problem) => problem.kind === 'crossings');
       const xml = readFileSync(join(dir, file), 'utf8');
       // compact moved the reminder path up: the rows are no longer the solution's
-      if (name === 'the solution, then compact') expect(xml).toMatch(/bpmnElement="sendTask_remindApprover"[^>]*>\s*<dc:Bounds x="720" y="327"/);
+      if (name === 'the solution, then compact') {
+        expect(xml).toMatch(/bpmnElement="sendTask_remindApprover"[^>]*>\s*<dc:Bounds x="720" y="327"/);
+      }
       expect(regexPasses(grader('gateway-label-clear'), xml), `${name}: gateway-label-clear`).toBe(!labelProblem);
       expect(regexPasses(grader('no-crossing'), xml), `${name}: no-crossing`).toBe(name !== 'the fixture' && !crossing);
       expect(regexPasses(grader('main-line-kept'), xml), `${name}: main-line-kept`).toBe(true);

@@ -30,7 +30,9 @@ function shiftRight(doc: Doc, ids: string[], dx: number): void {
   for (const pe of doc.definitions.get<El[]>('diagrams')[0]!.get<El>('plane').get<El[]>('planeElement')) {
     const id = pe.get<El>('bpmnElement').get<string>('id');
     if (!ids.includes(id)) continue;
-    for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (bounds) bounds.set('x', bounds.get<number>('x') + dx);
+    for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) {
+      if (bounds) bounds.set('x', bounds.get<number>('x') + dx);
+    }
   }
 }
 

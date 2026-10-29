@@ -20,7 +20,9 @@ export class Camunda8Defaults {
     if (this.edit.platform() !== 'c8' || !is(el, 'bpmn:UserTask')) return false;
     const container = el.get<El | undefined>('extensionElements');
     const values = container ? many(container, 'values') : [];
-    if (values.some((extension) => extension.$type.endsWith(':userTask') && this.edit.doc.namespaceUri(extension.$type.slice(0, extension.$type.indexOf(':'))) === ZEEBE_URI)) return false;
+    if (values.some((extension) => extension.$type.endsWith(':userTask') && this.edit.doc.namespaceUri(extension.$type.slice(0, extension.$type.indexOf(':'))) === ZEEBE_URI)) {
+      return false;
+    }
     const prefix = this.edit.doc.prefixFor(ZEEBE_URI) ?? 'zeebe';
     this.edit.doc.declareNamespace(prefix, ZEEBE_URI);
     let ext = container;

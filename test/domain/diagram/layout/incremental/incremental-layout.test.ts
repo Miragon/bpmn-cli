@@ -194,8 +194,9 @@ describe('incremental placement', () => {
     expect(cy(shapeN)).toBe(cy(shapeA));
     for (const [id, shapeBefore] of before) {
       if (shapeBefore.container) continue;
-      if (shapeBefore.bounds.x < right(shapeA) + 1) expect(now.get(id)!.bounds, id).toEqual(shapeBefore.bounds);
-      else {
+      if (shapeBefore.bounds.x < right(shapeA) + 1) {
+        expect(now.get(id)!.bounds, id).toEqual(shapeBefore.bounds);
+      } else {
         expect(now.get(id)!.bounds.y, id).toBe(shapeBefore.bounds.y);
         expect(now.get(id)!.bounds.x, id).toBeGreaterThan(shapeBefore.bounds.x);
       }
@@ -207,7 +208,9 @@ describe('incremental placement', () => {
     expect(analysis.score).toBe(0);
     const incident = [...edges(after).values()].filter((edge) => edge.sourceId === 'N' || edge.targetId === 'N');
     expect(incident).toHaveLength(2);
-    for (const edge of incident) expect(orthogonal(edge)).toBe(true);
+    for (const edge of incident) {
+      expect(orthogonal(edge)).toBe(true);
+    }
   });
 
   it('places a new gateway branch on a free row below the existing ones', async () => {
@@ -221,7 +224,9 @@ describe('incremental placement', () => {
     expect(cy(now.get('N')!)).toBeGreaterThan(cy(before.get('C')!));
     expect(now.get('N')!.bounds.x).toBeGreaterThan(right(before.get('G')!));
     expect(cy(now.get('NE')!)).toBe(cy(now.get('N')!));
-    for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) expect(now.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['S', 'A', 'G', 'B', 'E', 'C', 'E2']) {
+      expect(now.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(addedKinds(result).filter((kind) => kind !== 'labelOnLine')).toEqual([]);
   });
 
@@ -291,7 +296,9 @@ describe('incremental placement', () => {
       const joinBounds = di('GJ').get<El>('bounds'), el = di('EL').get<El>('bounds');
       const jx = num(joinBounds, 'x') + num(joinBounds, 'width') / 2, jb = num(joinBounds, 'y') + num(joinBounds, 'height');
       const dx = jx - (num(el, 'x') + num(el, 'width') / 2);
-      for (const movedBounds of [el, di('EL').get<El | undefined>('label')?.get<El>('bounds')]) movedBounds?.set('x', num(movedBounds, 'x') + dx);
+      for (const movedBounds of [el, di('EL').get<El | undefined>('label')?.get<El>('bounds')]) {
+        movedBounds?.set('x', num(movedBounds, 'x') + dx);
+      }
       const point = (pointX: number, pointY: number): El => doc.moddle.create('dc:Point', { x: pointX, y: pointY }) as El;
       for (const pe of planeElements) {
         const flow = pe.get<El>('bpmnElement');
@@ -337,7 +344,9 @@ describe('incremental placement', () => {
         const segmentStart = pts[segmentIndex]!;
         return segmentStart.x === segmentEnd.x ? corner.x === segmentStart.x && corner.y >= Math.min(segmentStart.y, segmentEnd.y) && corner.y <= Math.max(segmentStart.y, segmentEnd.y) : corner.y === segmentStart.y && corner.x >= Math.min(segmentStart.x, segmentEnd.x) && corner.x <= Math.max(segmentStart.x, segmentEnd.x);
       });
-      for (const corner of [{ x: joinShape.bounds.x + joinShape.bounds.width / 2, y: joinShape.bounds.y }, { x: right(joinShape), y: cy(joinShape) }, { x: joinShape.bounds.x, y: cy(joinShape) }]) expect(through(corner), JSON.stringify(pts)).toBe(false);
+      for (const corner of [{ x: joinShape.bounds.x + joinShape.bounds.width / 2, y: joinShape.bounds.y }, { x: right(joinShape), y: cy(joinShape) }, { x: joinShape.bounds.x, y: cy(joinShape) }]) {
+        expect(through(corner), JSON.stringify(pts)).toBe(false);
+      }
       expect(addedKinds(result)).toEqual([]);
       expect(result.layout.metrics!.after.score).toBe(result.layout.metrics!.before!.score);
     });
@@ -420,14 +429,18 @@ describe('incremental placement', () => {
     const now = shapes(after);
     expect(now.get('B')!.bounds.x).toBe(before.get('B')!.bounds.x);
     expect(inside(now.get('B')!, now.get('L2')!)).toBe(true);
-    for (const id of ['S', 'A', 'G', 'E', 'C', 'E2', 'Pool', 'L1', 'L2']) expect(now.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['S', 'A', 'G', 'E', 'C', 'E2', 'Pool', 'L1', 'L2']) {
+      expect(now.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(result.layout.moved).toEqual(['B']);
     // the rerouted branch leaves G by its free right vertex (not beside "no" at the bottom): it crosses "no" on
     // its way down, the only problem it may add
     const gatewayBounds = now.get('G')!.bounds;
     const starts = [...edges(after).values()].filter((edge) => edge.sourceId === 'G').map((edge) => edge.points[0]!);
     expect(starts).toHaveLength(2);
-    for (const startPoint of starts) expect([`${gatewayBounds.x + gatewayBounds.width},${gatewayBounds.y + gatewayBounds.height / 2}`, `${gatewayBounds.x + gatewayBounds.width / 2},${gatewayBounds.y + gatewayBounds.height}`]).toContain(`${startPoint.x},${startPoint.y}`);
+    for (const startPoint of starts) {
+      expect([`${gatewayBounds.x + gatewayBounds.width},${gatewayBounds.y + gatewayBounds.height / 2}`, `${gatewayBounds.x + gatewayBounds.width / 2},${gatewayBounds.y + gatewayBounds.height}`]).toContain(`${startPoint.x},${startPoint.y}`);
+    }
     expect(new Set(starts.map((startPoint) => `${startPoint.x},${startPoint.y}`)).size).toBe(2);
     expect(addedKinds(result).filter((kind) => kind !== 'crossings')).toEqual([]);
   });
@@ -475,7 +488,9 @@ describe('incremental placement', () => {
       { op: 'add', kind: 'task', id: 'SupT', name: 'Ship', after: 'SupS' },
     ]);
     const now = shapes(after);
-    for (const id of ['SupS', 'SupT']) expect(inside(now.get(id)!, now.get('Sup')!)).toBe(true);
+    for (const id of ['SupS', 'SupT']) {
+      expect(inside(now.get(id)!, now.get('Sup')!)).toBe(true);
+    }
     expect(now.get('Sup')!.bounds.y).toBeGreaterThan(bottom(now.get('Pool')!));
     expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
   });
@@ -489,7 +504,9 @@ describe('incremental placement', () => {
     let { after } = await run(await handXml(BASE), sub);
     let now = shapes(after);
     expect(now.get('NS')).toMatchObject({ expanded: true });
-    for (const id of ['NSS', 'NST']) expect(inside(now.get(id)!, now.get('NS')!)).toBe(true);
+    for (const id of ['NSS', 'NST']) {
+      expect(inside(now.get(id)!, now.get('NS')!)).toBe(true);
+    }
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(now.get('NS')!));
     expect(LayoutAnalysis.of(after.definitions).score).toBe(0);
     ({ after } = await run(await handXml(BASE), [{ ...sub[0]!, collapsed: true } as EditCommand, ...sub.slice(1)]));
@@ -531,7 +548,9 @@ describe('incremental placement', () => {
     const sub = now.get('Sub')!;
     expect(sub).toMatchObject({ expanded: true, container: true });
     expect(sub.bounds.x).toBe(before.get('Sub')!.bounds.x);
-    for (const id of ['SS', 'ST']) expect(inside(now.get(id)!, sub)).toBe(true);
+    for (const id of ['SS', 'ST']) {
+      expect(inside(now.get(id)!, sub)).toBe(true);
+    }
     expect(now.get('E')!.bounds.x).toBeGreaterThan(right(sub));
     expect(new DiagramReader(after.definitions).planes()).toHaveLength(1);
     expect(result.layout.notes).toContain('Sub drawn expanded');
@@ -654,7 +673,9 @@ describe('incremental placement', () => {
 /** The id of the sequence flow from `source` to `target`. */
 function flowFrom(doc: Doc, source: string, target: string): string {
   for (const [id, el] of doc.byId()) {
-    if (is(el, 'bpmn:SequenceFlow') && el.get<El>('sourceRef').get('id') === source && el.get<El>('targetRef').get('id') === target) return id;
+    if (is(el, 'bpmn:SequenceFlow') && el.get<El>('sourceRef').get('id') === source && el.get<El>('targetRef').get('id') === target) {
+      return id;
+    }
   }
   throw new Error(`no flow ${source} -> ${target}`);
 }
@@ -700,7 +721,9 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     expect(routed.result.layout.format?.[0]?.rerouted).toEqual([bridge]);
     expect(edges(routed.after).get(bridge)!.points[0]!.x).toBe(right(shapes(routed.after).get('S')!));
     expect(LayoutAnalysis.of(routed.after.definitions).counts.missing).toBe(0);
-    for (const [id, shape] of shapes(after)) expect(shapes(routed.after).get(id)!.bounds, id).toEqual(shape.bounds);
+    for (const [id, shape] of shapes(after)) {
+      expect(shapes(routed.after).get(id)!.bounds, id).toEqual(shape.bounds);
+    }
     const batch = await run(xml, [{ op: 'remove', ids: ['A'] }, { op: 'route', id: bridge }], { layout: false });
     expect(edges(batch.after).has(bridge)).toBe(true);
     expect(detached(batch.after)).toEqual([]);
@@ -745,7 +768,9 @@ describe('stale edges: flows whose ends changed, edges that do not reach their e
     expect(result.layout.rerouted).toEqual([flow]);
     expect(result.layout.notes).toContain(`${flow} routed again: it did not reach B and E`);
     expect(detached(after)).toEqual([]);
-    for (const [id, edge] of edges(after)) if (id !== flow) expect(edge.points, id).toEqual(before.get(id)!.points);
+    for (const [id, edge] of edges(after)) {
+      if (id !== flow) expect(edge.points, id).toEqual(before.get(id)!.points);
+    }
     // a format command reroutes it too; --no-layout leaves it as it is
     const tidied = await run(xml, [{ op: 'tidy' }]);
     expect(detached(tidied.after)).toEqual([]);

@@ -18,7 +18,9 @@ export function describeOptionsByDefinitions(program: Command): void {
       const spec = option.negate ? undefined : definition.fields[fieldKey(option)];
       if (!spec) continue;
       option.description = spec.description;
-      if (spec.values && (option.required || option.optional)) option.choices(spec.values);
+      if (spec.values && (option.required || option.optional)) {
+        option.choices(spec.values);
+      }
     }
   }
 }

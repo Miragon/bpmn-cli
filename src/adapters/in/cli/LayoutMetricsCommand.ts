@@ -12,8 +12,11 @@ export class LayoutMetricsCommand extends CliCommand {
     this.withJsonOptions(this.define(program, 'metrics')).action(async (file: string, options: RawOpts) => {
       const doc = await this.cli.readDocArg(file);
       const metrics = this.cli.useCases.analyzeLayout.measure({ definitions: doc.definitions });
-      if (options['json']) this.cli.printJson({ file, ...metricsJson(metrics) }, !!options['pretty']);
-      else this.cli.print(new MetricsText(metrics).text());
+      if (options['json']) {
+        this.cli.printJson({ file, ...metricsJson(metrics) }, !!options['pretty']);
+      } else {
+        this.cli.print(new MetricsText(metrics).text());
+      }
     });
   }
 }

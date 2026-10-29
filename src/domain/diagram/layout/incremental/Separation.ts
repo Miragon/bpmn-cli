@@ -74,9 +74,13 @@ export class Separation {
   private unitsOf(): Map<string, Unit> {
     const out = new Map<string, Unit>();
     for (const shape of this.plane.shapes.values()) {
-      if (!PlaneQuery.isLeaf(shape) && !(shape.kind === 'subProcess' && shape.container)) continue;
+      if (!PlaneQuery.isLeaf(shape) && !(shape.kind === 'subProcess' && shape.container)) {
+        continue;
+      }
       const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
-      if (host && (PlaneQuery.isLeaf(host) || (host.kind === 'subProcess' && host.container))) continue;
+      if (host && (PlaneQuery.isLeaf(host) || (host.kind === 'subProcess' && host.container))) {
+        continue;
+      }
       out.set(shape.id, { id: shape.id, shape });
     }
     return out;
@@ -123,9 +127,13 @@ export class Separation {
       const sb = boxes.get(mover.id)!;
       const ob = boxes.get(obstacle.id)!;
       const used = ctx.used.get(mover.id) ?? new Set<Dir>();
-      if (mover === second) out.push({ unit: mover.id, dir: 'right', need: right(ob) + ctx.gap - sb.x });
+      if (mover === second) {
+        out.push({ unit: mover.id, dir: 'right', need: right(ob) + ctx.gap - sb.x });
+      }
       const lower = cy(sb) >= cy(ob);
-      if (lower && !used.has('up')) out.push({ unit: mover.id, dir: 'down', need: bottom(ob) + ctx.gap - sb.y });
+      if (lower && !used.has('up')) {
+        out.push({ unit: mover.id, dir: 'down', need: bottom(ob) + ctx.gap - sb.y });
+      }
       if (!lower && ctx.active.has(mover.id) && !used.has('down')) {
         const need = bottom(sb) - (ob.y - ctx.gap);
         const frame = Frames.of(this.plane, mover.shape);
@@ -151,8 +159,12 @@ export class Separation {
     const toUnits = (ids: Iterable<string>): Set<string> => new Set([...ids].map((id) => this.unitOf(units, id)).filter((unitId): unitId is string => !!unitId));
     const active = new Set([...opts.active].filter((id) => this.plane.shapes.has(id)));
     const movable = opts.movable ? toUnits(opts.movable) : toUnits(active);
-    for (const id of toUnits(active)) movable.add(id);
-    for (const id of toUnits(opts.pinned ?? [])) movable.delete(id);
+    for (const id of toUnits(active)) {
+      movable.add(id);
+    }
+    for (const id of toUnits(opts.pinned ?? [])) {
+      movable.delete(id);
+    }
     const lockedIds = toUnits(opts.locked?.ids ?? []);
     const lockedX = new Set(opts.locked?.axes.includes('x') ? lockedIds : []);
     const lockedY = new Set(opts.locked?.axes.includes('y') ? lockedIds : []);
@@ -183,7 +195,9 @@ export class Separation {
             if (opts.baseline) {
               const a0 = units.has(id) ? this.baselineBox(opts.baseline, first.id) : opts.baseline.get(id);
               const b0 = this.baselineBox(opts.baseline, second.id);
-              if (a0 && b0 && this.shortfall(a0, b0, need) >= this.shortfall(ab, bb, need) - 1) continue;
+              if (a0 && b0 && this.shortfall(a0, b0, need) >= this.shortfall(ab, bb, need) - 1) {
+                continue;
+              }
             }
             conflict = [first, second];
             conflictGap = need;
@@ -201,10 +215,14 @@ export class Separation {
         continue;
       }
       const need = Math.ceil(move.need);
-      if (LayoutDebug.on()) LayoutDebug.log(`[separate] ${unitA.id} ~ ${unitB.id}: ${move.unit} ${move.dir} ${need}`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[separate] ${unitA.id} ~ ${unitB.id}: ${move.unit} ${move.dir} ${need}`);
+      }
       const dy = move.dir === 'down' ? need : move.dir === 'up' ? -need : 0;
       const dx = move.dir === 'right' ? need : 0;
-      for (const id of this.space.shiftShape(move.unit, dx, dy)) res.moved.add(id);
+      for (const id of this.space.shiftShape(move.unit, dx, dy)) {
+        res.moved.add(id);
+      }
       if (!used.has(move.unit)) used.set(move.unit, new Set());
       used.get(move.unit)!.add(move.dir);
       active.add(move.unit);

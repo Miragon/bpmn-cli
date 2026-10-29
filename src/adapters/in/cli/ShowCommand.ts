@@ -31,11 +31,16 @@ export class ShowCommand extends CliCommand {
   /** A file that does not exist yet gets the conventions a new model there gets (before `bpmn new`). */
   private async conventions(file: string, id: string | undefined, options: RawOpts): Promise<void> {
     const extra = [...(id !== undefined ? ['the element id'] : []), ...['scope', 'around', 'depth', 'inner', 'context', 'layout'].filter((key) => options[key] !== undefined && options[key] !== false).map((key) => `--${key}`)];
-    if (extra.length) throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
+    if (extra.length) {
+      throw usageError(`--conventions shows the id conventions of the whole file; drop ${extra.join(' and ')}`, { hint: 'Use `bpmn show <file> --conventions`.' });
+    }
     const doc = file === '-' || existsSync(file) ? await this.cli.readDocArg(file) : undefined;
     const view = await this.cli.useCases.showConventions.show({ ...this.lintOptions(options), ...(file === '-' ? {} : { file }), ...(doc ? { doc } : {}) });
-    if (options['json']) this.cli.printJson(view, !!options['pretty']);
-    else this.cli.print(renderConventions(view));
+    if (options['json']) {
+      this.cli.printJson(view, !!options['pretty']);
+    } else {
+      this.cli.print(renderConventions(view));
+    }
   }
 
   /** Refuses --lint-config / --no-lint-config: the .bpmnlintrc only decides the id conventions. */
@@ -54,7 +59,10 @@ export class ShowCommand extends CliCommand {
     };
     const doc = await this.cli.readDocArg(file);
     const shown = this.cli.useCases.showModel.show({ ...opts, doc });
-    if (options['json']) this.cli.printJson(shown.kind === 'layout' ? { file, ...shown.view } : shown.view, !!options['pretty']);
-    else this.cli.print(new ShownText(shown).text());
+    if (options['json']) {
+      this.cli.printJson(shown.kind === 'layout' ? { file, ...shown.view } : shown.view, !!options['pretty']);
+    } else {
+      this.cli.print(new ShownText(shown).text());
+    }
   }
 }

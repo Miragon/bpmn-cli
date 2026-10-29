@@ -15,7 +15,9 @@ export class LayoutText {
     if (!view.diagrams.length) out.push('no diagram');
     for (const diagram of view.diagrams) {
       out.push(`diagram ${diagram.id} (${diagram.root})`);
-      if (diagram.columns) out.push(`${INDENT}columns: c0..c${diagram.columns - 1}${diagram.gaps.length ? `; wide gaps: ${diagram.gaps.map((gap) => `c${gap.after}|c${gap.after + 1} ${gap.width}px`).join(', ')}` : ''}`);
+      if (diagram.columns) {
+        out.push(`${INDENT}columns: c0..c${diagram.columns - 1}${diagram.gaps.length ? `; wide gaps: ${diagram.gaps.map((gap) => `c${gap.after}|c${gap.after + 1} ${gap.width}px`).join(', ')}` : ''}`);
+      }
       const depth = new Map<string, number>();
       for (const group of diagram.groups) {
         const level = group.parent !== undefined ? (depth.get(group.parent) ?? 0) + 1 : 1;
@@ -29,8 +31,12 @@ export class LayoutText {
         });
       }
     }
-    if (view.colors.length) out.push(`colors: ${view.colors.map((color) => `${color.id} ${color.color === 'custom' ? `custom(${[color.fill, color.stroke].filter(Boolean).join('/')})` : color.color}`).join(', ')}`);
-    if (view.labels.length) out.push(`labels off their default side: ${view.labels.map((label) => `${label.id} ${label.side} (default ${label.default})`).join(', ')}`);
+    if (view.colors.length) {
+      out.push(`colors: ${view.colors.map((color) => `${color.id} ${color.color === 'custom' ? `custom(${[color.fill, color.stroke].filter(Boolean).join('/')})` : color.color}`).join(', ')}`);
+    }
+    if (view.labels.length) {
+      out.push(`labels off their default side: ${view.labels.map((label) => `${label.id} ${label.side} (default ${label.default})`).join(', ')}`);
+    }
     const metrics = new MetricsText(view.metrics);
     out.push(`layout quality: ${metrics.scoreLine()}`);
     out.push(...metrics.problemLines());

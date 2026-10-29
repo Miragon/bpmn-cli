@@ -16,7 +16,9 @@ export class ElementProperties {
   read(el: El): Record<string, unknown> {
     const out = SetKeyCatalog.readKeysBeforeGeneric(el, this.doc);
     for (const property of descriptorOf(el).properties ?? []) {
-      if (property.name === 'id' || property.name === 'name' || property.name === 'default' || !PropertyCoercer.isSettable(this.doc, property)) continue;
+      if (property.name === 'id' || property.name === 'name' || property.name === 'default' || !PropertyCoercer.isSettable(this.doc, property)) {
+        continue;
+      }
       const propValue = ownValue(el, property.name);
       if (propValue === undefined || propValue === null || propValue === '') continue;
       out[property.name] = property.isReference && isEl(propValue) ? idOf(propValue) : propValue;
@@ -30,7 +32,9 @@ export class ElementProperties {
       if (prefix.includes('[')) out[prefix] = typeLabel(nestedEl);
       const nestedId = nestedEl.get<string | undefined>('id');
       if (nestedId) out[`${prefix}.id`] = nestedId;
-      for (const [attrName, attrValue] of Object.entries(vendorAttributes(nestedEl))) out[`${prefix}.${attrName}`] = attrValue;
+      for (const [attrName, attrValue] of Object.entries(vendorAttributes(nestedEl))) {
+        out[`${prefix}.${attrName}`] = attrValue;
+      }
     }
     return out;
   }

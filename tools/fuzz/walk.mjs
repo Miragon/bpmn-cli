@@ -37,7 +37,9 @@ export async function walkOnce(model, options) {
     replay: options.replay ? JSON.parse(readFileSync(options.replay, 'utf8')) : undefined,
     onStep: (entry, xml) => {
       appendFileSync(log, `${JSON.stringify(entry)}\n`);
-      if (options.saveSteps && entry.status === 'ok') writeFileSync(join(out, `step-${String(entry.step).padStart(3, '0')}.bpmn`), xml);
+      if (options.saveSteps && entry.status === 'ok') {
+        writeFileSync(join(out, `step-${String(entry.step).padStart(3, '0')}.bpmn`), xml);
+      }
     },
   });
   const { ops, ...rest } = summary;
@@ -50,7 +52,9 @@ async function main() {
   let options;
   try {
     options = parseArgs(process.argv.slice(2), SPEC);
-    if (options._.length !== 1) throw new Error('usage: node tools/fuzz/walk.mjs <model.bpmn> [options]');
+    if (options._.length !== 1) {
+      throw new Error('usage: node tools/fuzz/walk.mjs <model.bpmn> [options]');
+    }
   } catch (error) {
     console.error(error.message);
     process.exit(2);
@@ -61,4 +65,6 @@ async function main() {
   process.exit(summary.errors || (options.strict && summary.warnings) ? 1 : 0);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

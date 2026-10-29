@@ -5,7 +5,9 @@ export class IdRegistry {
   private readonly used = new Set<string>();
 
   constructor(existing: Iterable<string> = []) {
-    for (const id of existing) this.used.add(id);
+    for (const id of existing) {
+      this.used.add(id);
+    }
   }
 
   has(id: string): boolean {
@@ -32,7 +34,11 @@ export class IdRegistry {
     const at = id.indexOf('_');
     if (at === -1) return false;
     const tail = id.slice(at);
-    for (const other of this.used) if (other !== id && other.endsWith(tail) && PREFIXED.test(other) && other.indexOf('_') === other.length - tail.length) return true;
+    for (const other of this.used) {
+      if (other !== id && other.endsWith(tail) && PREFIXED.test(other) && other.indexOf('_') === other.length - tail.length) {
+        return true;
+      }
+    }
     return false;
   }
 }

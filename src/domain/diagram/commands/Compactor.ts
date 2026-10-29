@@ -87,12 +87,20 @@ export class Compactor {
     const merged = this.occupied(axis, region, opts);
     const out: Strip[] = [];
     if (!merged.length) {
-      if (opts.empty !== undefined && opts.start !== undefined && opts.end !== undefined) out.push({ from: opts.start, to: opts.end, keep: opts.empty });
+      if (opts.empty !== undefined && opts.start !== undefined && opts.end !== undefined) {
+        out.push({ from: opts.start, to: opts.end, keep: opts.empty });
+      }
       return out.filter((strip) => strip.to - strip.from - strip.keep >= MIN_GAIN);
     }
-    if (opts.start !== undefined) out.push({ from: opts.start, to: merged[0]![0], keep: opts.lead });
-    for (let index = 0; index + 1 < merged.length; index++) out.push({ from: merged[index]![1], to: merged[index + 1]![0], keep: opts.gap });
-    if (opts.end !== undefined) out.push({ from: merged[merged.length - 1]![1], to: opts.end, keep: opts.trail });
+    if (opts.start !== undefined) {
+      out.push({ from: opts.start, to: merged[0]![0], keep: opts.lead });
+    }
+    for (let index = 0; index + 1 < merged.length; index++) {
+      out.push({ from: merged[index]![1], to: merged[index + 1]![0], keep: opts.gap });
+    }
+    if (opts.end !== undefined) {
+      out.push({ from: merged[merged.length - 1]![1], to: opts.end, keep: opts.trail });
+    }
     return out.filter((strip) => strip.to - strip.from - strip.keep >= MIN_GAIN);
   }
 
@@ -106,13 +114,16 @@ export class Compactor {
     const lo = this.near(region, axis);
     const hi = this.far(region, axis);
     const take = (box: Box, margin = 0): void => {
-      if (this.acrossRegion(box, region, axis) && this.far(box, axis) + margin >= lo && this.near(box, axis) - margin <= hi) occ.push([this.near(box, axis) - margin, this.far(box, axis) + margin]);
+      if (this.acrossRegion(box, region, axis) && this.far(box, axis) + margin >= lo && this.near(box, axis) - margin <= hi) {
+        occ.push([this.near(box, axis) - margin, this.far(box, axis) + margin]);
+      }
     };
     const solid = opts.solid ?? ((shape: DShape): boolean => shape.kind === 'subProcess' && shape.container);
     for (const shape of this.plane.shapes.values()) {
       if (opts.skip.has(shape.id)) continue;
-      if (PlaneQuery.isLeaf(shape) || solid(shape)) take(shape.bounds);
-      else if (shape.kind === 'group') {
+      if (PlaneQuery.isLeaf(shape) || solid(shape)) {
+        take(shape.bounds);
+      } else if (shape.kind === 'group') {
         const [nearEdge, farEdge] = [this.near(shape.bounds, axis), this.far(shape.bounds, axis)];
         take(axis === 'x' ? { ...shape.bounds, x: nearEdge, width: 0 } : { ...shape.bounds, y: nearEdge, height: 0 }, 2);
         take(axis === 'x' ? { ...shape.bounds, x: farEdge, width: 0 } : { ...shape.bounds, y: farEdge, height: 0 }, 2);
@@ -122,7 +133,9 @@ export class Compactor {
     for (const edge of this.plane.edges.values()) {
       if (opts.loose?.has(edge.id)) continue;
       if (edge.label) take(edge.label);
-      for (const point of edge.points) take({ x: point.x - 1, y: point.y - 1, width: 2, height: 2 });
+      for (const point of edge.points) {
+        take({ x: point.x - 1, y: point.y - 1, width: 2, height: 2 });
+      }
       for (let index = 0; index + 1 < edge.points.length; index++) {
         const from = edge.points[index]!;
         const to = edge.points[index + 1]!;
@@ -133,8 +146,11 @@ export class Compactor {
     const merged: Array<[number, number]> = [];
     for (const [start, end] of occ.map(([start, end]) => [Math.max(start, lo), Math.min(end, hi)] as [number, number]).filter(([start, end]) => end >= start).sort((one, other) => one[0] - other[0])) {
       const last = merged[merged.length - 1];
-      if (last && start <= last[1]) last[1] = Math.max(last[1], end);
-      else merged.push([start, end]);
+      if (last && start <= last[1]) {
+        last[1] = Math.max(last[1], end);
+      } else {
+        merged.push([start, end]);
+      }
     }
     return merged;
   }
@@ -159,17 +175,27 @@ export class Compactor {
     const inBand = (coordinate: number): boolean => !within || (axis === 'x' ? coordinate >= within.y - 1 && coordinate <= bottom(within) + 1 : coordinate >= within.x - 1 && coordinate <= right(within) + 1);
     for (const point of edge.points.slice(1, -1)) {
       const coordinate = axis === 'x' ? point.x : point.y;
-      if (coordinate <= strip.from || coordinate >= line || !inBand(axis === 'x' ? point.y : point.x)) continue;
-      if (axis === 'x') point.x = Math.round(map(coordinate));
-      else point.y = Math.round(map(coordinate));
+      if (coordinate <= strip.from || coordinate >= line || !inBand(axis === 'x' ? point.y : point.x)) {
+        continue;
+      }
+      if (axis === 'x') {
+        point.x = Math.round(map(coordinate));
+      } else {
+        point.y = Math.round(map(coordinate));
+      }
     }
     const label = edge.label;
     if (!label) return;
     const center = axis === 'x' ? cx(label) : cy(label);
-    if (center <= strip.from || center >= line || !inBand(axis === 'x' ? cy(label) : cx(label))) return;
+    if (center <= strip.from || center >= line || !inBand(axis === 'x' ? cy(label) : cx(label))) {
+      return;
+    }
     const offset = Math.round(map(center) - center);
-    if (axis === 'x') label.x += offset;
-    else label.y += offset;
+    if (axis === 'x') {
+      label.x += offset;
+    } else {
+      label.y += offset;
+    }
   }
 
   gaps(): { x: number; y: number } {
@@ -186,7 +212,11 @@ export class Compactor {
     const loose = this.looseEdges();
     const touched = [...this.plane.edges.values()].filter((edge) => loose.has(edge.id) && this.touches(edge, axis, strip, within));
     const result = this.drawing.closeStrip({ axis, from: strip.from, to: strip.to, gap: strip.keep, ignore: loose, ...(within ? { within: { ...within } } : {}), ...(keep ? { keep } : {}) });
-    if (result) for (const edge of touched) this.squeeze(edge, axis, strip, within);
+    if (result) {
+      for (const edge of touched) {
+        this.squeeze(edge, axis, strip, within);
+      }
+    }
     return result;
   }
 
@@ -194,7 +224,9 @@ export class Compactor {
     const out = new Set<string>([shape.id]);
     let cur: DShape | undefined = shape;
     for (let depth = 0; cur && depth < 20; depth++) {
-      for (const id of [cur.parentId, cur.laneId, cur.poolId]) if (id) out.add(id);
+      for (const id of [cur.parentId, cur.laneId, cur.poolId]) {
+        if (id) out.add(id);
+      }
       cur = cur.parentId ? this.plane.shapes.get(cur.parentId) : cur.laneId ? this.plane.shapes.get(cur.laneId) : undefined;
     }
     return out;
@@ -202,7 +234,9 @@ export class Compactor {
 
   private depth(shape: DShape): number {
     let depth = 0;
-    for (let parentId = shape.parentId; parentId && depth < 20; parentId = this.plane.shapes.get(parentId)?.parentId) depth++;
+    for (let parentId = shape.parentId; parentId && depth < 20; parentId = this.plane.shapes.get(parentId)?.parentId) {
+      depth++;
+    }
     return depth;
   }
 
@@ -221,7 +255,9 @@ export class Compactor {
       if (opts.only.has(frame.id)) return true;
       for (const id of opts.only) {
         const target = this.plane.shapes.get(id);
-        if (target && target !== frame && Frames.within(this.plane, frame, target)) return true;
+        if (target && target !== frame && Frames.within(this.plane, frame, target)) {
+          return true;
+        }
       }
       return false;
     };
@@ -236,7 +272,9 @@ export class Compactor {
         if (kept) {
           stats.strips[axis]++;
           stats.px[axis] += gain;
-        } else stats.refused++;
+        } else {
+          stats.refused++;
+        }
       }
     };
 
@@ -272,7 +310,9 @@ export class Compactor {
     }
     if (!pools.length && !opts.only) {
       const region = this.planeBox();
-      if (region) close('x', findStrips('x', region, { lead: PAD, trail: PAD, gap: gapX, skip: new Set() }), undefined);
+      if (region) {
+        close('x', findStrips('x', region, { lead: PAD, trail: PAD, gap: gapX, skip: new Set() }), undefined);
+      }
     }
 
     const leafLanes = shapes()
@@ -292,7 +332,9 @@ export class Compactor {
     }
     if (!pools.length && !opts.only) {
       const region = this.planeBox();
-      if (region) close('y', findStrips('y', region, { lead: PAD, trail: PAD, gap: gapY, skip: new Set() }), undefined);
+      if (region) {
+        close('y', findStrips('y', region, { lead: PAD, trail: PAD, gap: gapY, skip: new Set() }), undefined);
+      }
     }
 
     if (pools.length > 1 && !opts.only) {
@@ -300,7 +342,9 @@ export class Compactor {
       const gaps = sorted.slice(1).map((pool, index) => pool.bounds.y - bottom(sorted[index]!.bounds)).filter((gap) => gap >= 0);
       const poolGap = Math.min(80, Math.max(20, gaps.length ? Math.min(...gaps) : 80));
       const region = this.planeBox(true);
-      if (region) close('y', findStrips('y', region, { lead: 0, trail: 0, gap: poolGap, skip: new Set(), solid: (shape) => shape.kind === 'participant' || (shape.kind === 'subProcess' && shape.container) }), undefined);
+      if (region) {
+        close('y', findStrips('y', region, { lead: 0, trail: 0, gap: poolGap, skip: new Set(), solid: (shape) => shape.kind === 'participant' || (shape.kind === 'subProcess' && shape.container) }), undefined);
+      }
     }
 
     if (aligned) {
@@ -310,7 +354,11 @@ export class Compactor {
         const old = right(pool.bounds);
         if (Math.abs(old - edge) <= 0.5) continue;
         pool.bounds.width = edge - pool.bounds.x;
-        for (const lane of lanesOf(pool)) if (Math.abs(right(lane.bounds) - old) <= 2) lane.bounds.width = edge - lane.bounds.x;
+        for (const lane of lanesOf(pool)) {
+          if (Math.abs(right(lane.bounds) - old) <= 2) {
+            lane.bounds.width = edge - lane.bounds.x;
+          }
+        }
       }
     }
     return stats;

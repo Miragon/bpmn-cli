@@ -25,7 +25,9 @@ export class ZeebeSubscription {
 
   /** Undefined when the op is no `ext add zeebe:subscription` and stays where it is. */
   messageFor(owner: El, command: EditExtensionElements): El | undefined {
-    if (command.action !== 'add' || this.addedType(command) !== 'zeebe:subscription') return undefined;
+    if (command.action !== 'add' || this.addedType(command) !== 'zeebe:subscription') {
+      return undefined;
+    }
     const slot = command.slot ?? (command.type ? this.hosts.splitSlot(command.type)?.slot : undefined);
     if (slot !== undefined && !slot.startsWith('definition')) return undefined;
     const { catching, message } = this.caughtMessage(owner);
@@ -43,10 +45,14 @@ export class ZeebeSubscription {
   note(owner: El, message: El, what: string): string {
     const others: string[] = [];
     for (const el of walk(this.doc.definitions, { bpmnOnly: true })) {
-      if (el !== owner && this.caughtMessage(el).message === message) others.push(idOf(el));
+      if (el !== owner && this.caughtMessage(el).message === message) {
+        others.push(idOf(el));
+      }
     }
     const shared = others.length ? ` (${others.join(', ')} wait${others.length === 1 ? 's' : ''} for it ${owner === message ? '' : 'too '}and share${others.length === 1 ? 's' : ''} it)` : '';
-    if (owner === message) return `${what} is written to the zeebe:subscription of message ${idOf(message)}${shared}`;
+    if (owner === message) {
+      return `${what} is written to the zeebe:subscription of message ${idOf(message)}${shared}`;
+    }
     return `${what} goes to message ${idOf(message)}, which ${idOf(owner)} waits for: Camunda 8 reads the correlation key in the message's zeebe:subscription${shared}`;
   }
 
@@ -58,7 +64,9 @@ export class ZeebeSubscription {
   setCorrelationKey(el: El, key: string, value: string, changes: ChangeSet): boolean {
     const doc = this.doc;
     const idx = key.indexOf(':');
-    if (idx <= 0 || key.slice(idx + 1) !== 'correlationKey' || doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) return false;
+    if (idx <= 0 || key.slice(idx + 1) !== 'correlationKey' || doc.namespaceUri(key.slice(0, idx)) !== ZEEBE_URI) {
+      return false;
+    }
     const message = is(el, 'bpmn:Message') ? el : this.caughtMessage(el).message;
     if (!message) return false;
     const type = `${key.slice(0, idx)}:subscription`;
@@ -78,14 +86,18 @@ export class ZeebeSubscription {
   }
 
   private caughtMessage(el: El): { catching: boolean; message?: El } {
-    if (is(el, 'bpmn:ReceiveTask')) return { catching: true, message: el.get<El | undefined>('messageRef') };
+    if (is(el, 'bpmn:ReceiveTask')) {
+      return { catching: true, message: el.get<El | undefined>('messageRef') };
+    }
     if (!is(el, 'bpmn:CatchEvent')) return { catching: false };
     const def = definitionsOf(el).find((definition) => is(definition, 'bpmn:MessageEventDefinition'));
     return def ? { catching: true, message: def.get<El | undefined>('messageRef') } : { catching: false };
   }
 
   private addedType(command: EditExtensionElements): string | undefined {
-    if (command.type) return this.names.canonicalName((this.hosts.splitSlot(command.type)?.rest ?? command.type).split('/')[0]!);
+    if (command.type) {
+      return this.names.canonicalName((this.hosts.splitSlot(command.type)?.rest ?? command.type).split('/')[0]!);
+    }
     const match = command.xml ? /^\s*<([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)([^>]*)>/.exec(command.xml) : null;
     if (!match) return undefined;
     const inline = new RegExp(`xmlns:${match[1]!.replace(/[.-]/g, '\\$&')}\\s*=\\s*["']([^"']*)["']`).exec(match[3] ?? '')?.[1];

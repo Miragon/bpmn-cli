@@ -56,7 +56,9 @@ describe('the node layer', () => {
     expect(typeof node.mutateFile).toBe('function');
     expect(node.mutateDoc).toBe(mutateDoc);
     // the project's bpmnlint: the core's validator, the node layer's lookup and loading
-    for (const name of ['bpmnlintValidator', 'resolveBpmnlintConfig', 'checkLoadedDoc', 'findBpmnlintConfig', 'bpmnlintEngine', 'loadBpmnlint', 'projectBpmnlint', 'projectBpmnlintSettings'] as const) expect(typeof node[name], name).toBe('function');
+    for (const name of ['bpmnlintValidator', 'resolveBpmnlintConfig', 'checkLoadedDoc', 'findBpmnlintConfig', 'bpmnlintEngine', 'loadBpmnlint', 'projectBpmnlint', 'projectBpmnlintSettings'] as const) {
+      expect(typeof node[name], name).toBe('function');
+    }
     expect(node.BPMNLINT_CONFIG_FILE).toBe('.bpmnlintrc');
   });
 

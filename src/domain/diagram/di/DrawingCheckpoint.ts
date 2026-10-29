@@ -24,7 +24,9 @@ export class DrawingCheckpoint {
 
   /** The first state kept of a shape wins. */
   keepShape(shape: DShape): void {
-    if (!this.shapes.has(shape)) this.shapes.set(shape, { bounds: copyBox(shape.bounds), ...(shape.label ? { label: copyBox(shape.label) } : {}) });
+    if (!this.shapes.has(shape)) {
+      this.shapes.set(shape, { bounds: copyBox(shape.bounds), ...(shape.label ? { label: copyBox(shape.label) } : {}) });
+    }
   }
 
   /** The first state kept of an edge wins. */
@@ -41,17 +43,29 @@ export class DrawingCheckpoint {
   restore(): void {
     for (const [shape, saved] of this.shapes) {
       shape.bounds = copyBox(saved.bounds);
-      if (saved.label) shape.label = copyBox(saved.label);
-      else delete shape.label;
+      if (saved.label) {
+        shape.label = copyBox(saved.label);
+      } else {
+        delete shape.label;
+      }
     }
     for (const [edge, saved] of this.edges) {
       edge.points = copyPoints(saved.points);
-      if (saved.label) edge.label = copyBox(saved.label);
-      else delete edge.label;
-      if (saved.sourceId) edge.sourceId = saved.sourceId;
-      else delete edge.sourceId;
-      if (saved.targetId) edge.targetId = saved.targetId;
-      else delete edge.targetId;
+      if (saved.label) {
+        edge.label = copyBox(saved.label);
+      } else {
+        delete edge.label;
+      }
+      if (saved.sourceId) {
+        edge.sourceId = saved.sourceId;
+      } else {
+        delete edge.sourceId;
+      }
+      if (saved.targetId) {
+        edge.targetId = saved.targetId;
+      } else {
+        delete edge.targetId;
+      }
     }
   }
 }

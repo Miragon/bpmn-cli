@@ -60,7 +60,9 @@ export class Artifacts {
 
   createGroup(opts: { id?: string; name?: string; members?: string[] }, changes: ChangeSet): El {
     const doc = this.edit.doc;
-    if (!opts.members?.length) throw usageError('A group needs --members <id,...>: the elements it is drawn around');
+    if (!opts.members?.length) {
+      throw usageError('A group needs --members <id,...>: the elements it is drawn around');
+    }
     const members = opts.members.map((id) => this.edit.require(id));
     const wrong = members.find((member) => !is(member, 'bpmn:FlowNode') && !isDataReference(member));
     if (wrong) {
@@ -71,7 +73,9 @@ export class Artifacts {
     const value = this.createCategoryValue(speakingStem(id) ?? around, opts.name);
     const group = doc.create('bpmn:Group', { id, categoryValueRef: value });
     addTo(this.groupContainer(members), 'artifacts', group);
-    for (const member of members) addTo(member, 'categoryValueRef', value);
+    for (const member of members) {
+      addTo(member, 'categoryValueRef', value);
+    }
     changes.create({ id, kind: 'group', ...(opts.name ? { name: opts.name } : {}), detail: `around ${members.map(idOf).join(', ')}` });
     doc.invalidate();
     return group;
@@ -83,8 +87,11 @@ export class Artifacts {
    */
   setGroupName(group: El, name: string): void {
     const value = group.get<El | undefined>('categoryValueRef');
-    if (value) value.set('value', name || undefined);
-    else if (name) group.set('categoryValueRef', this.createCategoryValue(speakingStem(idOf(group)) ?? '', name));
+    if (value) {
+      value.set('value', name || undefined);
+    } else if (name) {
+      group.set('categoryValueRef', this.createCategoryValue(speakingStem(idOf(group)) ?? '', name));
+    }
     new Groups(this.edit.doc.definitions).relabel(this.edit.doc.moddle, group, name);
   }
 
@@ -122,10 +129,14 @@ export class Artifacts {
   private groupContainer(members: El[]): El {
     const doc = this.edit.doc;
     const within = (el: El, scope: El): boolean => {
-      for (let ancestor = el.$parent as El | undefined; ancestor; ancestor = ancestor.$parent as El | undefined) if (ancestor === scope) return true;
+      for (let ancestor = el.$parent as El | undefined; ancestor; ancestor = ancestor.$parent as El | undefined) {
+        if (ancestor === scope) return true;
+      }
       return false;
     };
-    for (let scope = doc.scopeOf(members[0]!); scope && is(scope, 'bpmn:SubProcess'); scope = doc.scopeOf(scope)) if (members.every((member) => within(member, scope!))) return scope;
+    for (let scope = doc.scopeOf(members[0]!); scope && is(scope, 'bpmn:SubProcess'); scope = doc.scopeOf(scope)) {
+      if (members.every((member) => within(member, scope!))) return scope;
+    }
     return collaboration(doc.definitions) ?? doc.processOf(members[0]!)!;
   }
 }

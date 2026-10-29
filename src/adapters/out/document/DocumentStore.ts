@@ -32,7 +32,9 @@ export abstract class DocumentStore implements DocumentPort {
   }
 
   async save(result: MutationResult, doc: Doc, target: string | undefined, opts: FileWriteOptions): Promise<void> {
-    if (!opts.dryRun && target) result.written = await this.write(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
+    if (!opts.dryRun && target) {
+      result.written = await this.write(target, result.xml, { source: doc.file, unchanged: result.unchanged, backup: opts.backup });
+    }
   }
 
   protected abstract read(file: string): Promise<string>;

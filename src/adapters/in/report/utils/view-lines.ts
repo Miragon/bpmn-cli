@@ -25,8 +25,12 @@ export function quote(text: string): string {
 export function scalar(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) return value.join(', ');
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) {
+    return value.join(', ');
+  }
   return JSON.stringify(value);
 }
 
@@ -36,7 +40,9 @@ export function flagValue(value: string, max = VALUE_MAX): string {
 
 function extensionList(types: readonly string[]): string {
   const counts = new Map<string, number>();
-  for (const type of types) counts.set(type, (counts.get(type) ?? 0) + 1);
+  for (const type of types) {
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+  }
   return [...counts].map(([type, count]) => (count > 1 ? `${type} x${count}` : type)).join(', ');
 }
 
@@ -52,8 +58,11 @@ export function vendorFlags(item: { attrs?: Record<string, string>; extensions?:
 export function flowTraits(flow: Omit<FlowRef, 'id'>, fullCondition = false): string[] {
   const traits: string[] = [];
   if (flow.name) traits.push(quote(flow.name));
-  if (flow.condition) traits.push(`if ${fullCondition ? flow.condition : truncate(flow.condition, 120)}`);
-  else if (flow.conditionResource) traits.push(`if resource ${flow.conditionResource}`);
+  if (flow.condition) {
+    traits.push(`if ${fullCondition ? flow.condition : truncate(flow.condition, 120)}`);
+  } else if (flow.conditionResource) {
+    traits.push(`if resource ${flow.conditionResource}`);
+  }
   if (flow.default) traits.push('default');
   return traits;
 }
@@ -83,11 +92,17 @@ export function elementFlags(element: ElementFlagSource, extra: { leading?: stri
   if (element.lane) flags.push(`lane=${element.lane}`);
   if (element.trigger) flags.push(element.trigger);
   if (element.nonInterrupting) flags.push('non-interrupting');
-  if (element.expanded !== undefined) flags.push(element.expanded ? 'expanded' : 'collapsed');
+  if (element.expanded !== undefined) {
+    flags.push(element.expanded ? 'expanded' : 'collapsed');
+  }
   flags.push(...(extra.afterState ?? []));
-  for (const [key, value] of Object.entries(element.props ?? {})) flags.push(`${key}=${scalar(value)}`);
+  for (const [key, value] of Object.entries(element.props ?? {})) {
+    flags.push(`${key}=${scalar(value)}`);
+  }
   flags.push(...(extra.vendor ?? []));
-  if (element.documentation) flags.push(`doc: ${quote(truncate(element.documentation, DOC_MAX))}`);
+  if (element.documentation) {
+    flags.push(`doc: ${quote(truncate(element.documentation, DOC_MAX))}`);
+  }
   return flags;
 }
 
@@ -113,21 +128,34 @@ export function extensionLines(ext: unknown, indent = '', lead = ''): string[] {
   if (!ext || typeof ext !== 'object') return [`${indent}${lead}${scalar(ext)}`];
   const extension = ext as { type?: string; attrs?: Record<string, string>; body?: string; children?: unknown[] };
   const parts = [extension.type ?? 'extension'];
-  for (const [key, value] of Object.entries(extension.attrs ?? {})) parts.push(`${key}=${quote(value)}`);
+  for (const [key, value] of Object.entries(extension.attrs ?? {})) {
+    parts.push(`${key}=${quote(value)}`);
+  }
   const inner = `${indent}${' '.repeat(lead.length)}${INDENT}`;
   const block = extension.body ? bodyBlock(extension.body) : undefined;
-  if (block) parts.push('body:');
-  else if (extension.body?.trim()) parts.push(`body="${extension.body.trim().replace(/"/g, '\\"')}"`);
+  if (block) {
+    parts.push('body:');
+  } else if (extension.body?.trim()) {
+    parts.push(`body="${extension.body.trim().replace(/"/g, '\\"')}"`);
+  }
   const out = [`${indent}${lead}${parts.join(' ')}`];
-  for (const line of block ?? []) out.push(`${inner}|${line ? ` ${line}` : ''}`);
-  for (const child of extension.children ?? []) out.push(...extensionLines(child, inner));
+  for (const line of block ?? []) {
+    out.push(`${inner}|${line ? ` ${line}` : ''}`);
+  }
+  for (const child of extension.children ?? []) {
+    out.push(...extensionLines(child, inner));
+  }
   return out;
 }
 
 function bodyBlock(body: string): string[] | undefined {
   const lines = body.replace(/\r\n?/g, '\n').split('\n');
-  while (lines.length && !lines[0]!.trim()) lines.shift();
-  while (lines.length && !lines[lines.length - 1]!.trim()) lines.pop();
+  while (lines.length && !lines[0]!.trim()) {
+    lines.shift();
+  }
+  while (lines.length && !lines[lines.length - 1]!.trim()) {
+    lines.pop();
+  }
   return lines.length > 1 ? lines.map((line) => line.replace(/\s+$/, '')) : undefined;
 }
 

@@ -86,7 +86,9 @@ function compareEdits(oldDir, newDir, arm, kinds, notes) {
   const oldEdits = effectiveEdits(readJsonl(join(oldDir, `edits-${arm}.jsonl`)));
   const newEdits = effectiveEdits(readJsonl(join(newDir, `edits-${arm}.jsonl`)));
   const only = [...oldEdits.keys()].filter((key) => !newEdits.has(key)).length + [...newEdits.keys()].filter((key) => !oldEdits.has(key)).length;
-  if (only) notes.push(`${arm}: ${only} edit run(s) exist on one side only and are not compared`);
+  if (only) {
+    notes.push(`${arm}: ${only} edit run(s) exist on one side only and are not compared`);
+  }
   const pairs = [...oldEdits.keys()].filter((key) => newEdits.has(key)).sort().map((key) => ({ key, edit: key.split('/').pop(), old: measures(oldEdits.get(key), kinds), new: measures(newEdits.get(key), kinds) }));
   const rows = [...EDIT_ORDER, 'all'].map((editType) => editRow(arm, editType, pairs.filter((pair) => editType === 'all' || pair.edit === editType))).filter((row) => row.n);
   const describe = (pair) => `${arm} ${pair.key}: sem ${pair.old.sem ? 'ok' : 'FAIL'} -> ${pair.new.sem ? 'ok' : 'FAIL'}, +hard ${pair.old.hard} -> ${pair.new.hard}`;
@@ -104,8 +106,10 @@ function compareGlobal(oldDir, newDir, arm, kinds) {
     if (!newRecord) continue;
     const variantTotals = variants.get(oldRecord.variant) ?? { arm, variant: oldRecord.variant, n: 0, old: 0, new: 0, failedOld: 0, failedNew: 0 };
     variantTotals.n++;
-    variantTotals.old += hardAfter(oldRecord, kinds); variantTotals.new += hardAfter(newRecord, kinds);
-    variantTotals.failedOld += oldRecord.ok ? 0 : 1; variantTotals.failedNew += newRecord.ok ? 0 : 1;
+    variantTotals.old += hardAfter(oldRecord, kinds);
+    variantTotals.new += hardAfter(newRecord, kinds);
+    variantTotals.failedOld += oldRecord.ok ? 0 : 1;
+    variantTotals.failedNew += newRecord.ok ? 0 : 1;
     variants.set(oldRecord.variant, variantTotals);
   }
   return [...variants.values()];
@@ -137,14 +141,18 @@ export function compareResults(oldDir, newDir, budgetFile = SOFT_BUDGET_FILE) {
   const kinds = (mn.hardKinds ?? []).filter((kind) => (mo.hardKinds ?? mn.hardKinds ?? []).includes(kind));
   const notes = [];
   const onlyNew = (mn.hardKinds ?? []).filter((kind) => !kinds.includes(kind));
-  if (onlyNew.length) notes.push(`hard kinds only in the new run, not compared: ${onlyNew.join(' ')}`);
+  if (onlyNew.length) {
+    notes.push(`hard kinds only in the new run, not compared: ${onlyNew.join(' ')}`);
+  }
   const arms = [...new Set([...armKeys(oldDir, 'edits'), ...armKeys(oldDir, 'global')])].filter((armKey) => armKeys(newDir, 'edits').includes(armKey) || armKeys(newDir, 'global').includes(armKey));
   if (!arms.length) notes.push('no arm has records in both directories');
   const edits = { rows: [], worse: [], better: [] };
   const global = [];
   for (const arm of arms) {
     const armEdits = compareEdits(oldDir, newDir, arm, kinds, notes);
-    edits.rows.push(...armEdits.rows); edits.worse.push(...armEdits.worse); edits.better.push(...armEdits.better);
+    edits.rows.push(...armEdits.rows);
+    edits.worse.push(...armEdits.worse);
+    edits.better.push(...armEdits.better);
     global.push(...compareGlobal(oldDir, newDir, arm, kinds));
   }
   const totals = edits.rows.filter((row) => row.edit === 'all');
@@ -161,7 +169,9 @@ const arrow = (before, after, fmt = String) => (fmt(before) === fmt(after) ? fmt
 
 export function formatComparison(comparison) {
   const lines = [`COMPARE ${comparison.oldDir}  ->  ${comparison.newDir}`, `hard kinds compared: ${comparison.kinds.join(' ') || '(none)'}`];
-  for (const note of comparison.notes) lines.push(`note: ${note}`);
+  for (const note of comparison.notes) {
+    lines.push(`note: ${note}`);
+  }
   const opt = (value) => (value === undefined ? '-' : String(value));
   lines.push('', '| arm | edit | n | sem fail | runs +hard | +hard | runs +crossings | runs +backward | mean Δ harness | median moved>5px |', '|---|---|---|---|---|---|---|---|---|---|');
   for (const row of comparison.edits.rows) {
@@ -169,15 +179,21 @@ export function formatComparison(comparison) {
   }
   if (comparison.soft?.rows.length) {
     lines.push('', '| arm | corpus | edit | soft kind | runs | runs adding it | budget |', '|---|---|---|---|---|---|---|');
-    for (const row of comparison.soft.rows) lines.push(`| ${row.arm} | ${row.corpus} | ${row.edit} | ${row.kind} | ${row.n} | ${row.adding} (${pct(row.adding / row.n)})${row.over ? ' OVER' : ''} | ${row.budget} |`);
+    for (const row of comparison.soft.rows) {
+      lines.push(`| ${row.arm} | ${row.corpus} | ${row.edit} | ${row.kind} | ${row.n} | ${row.adding} (${pct(row.adding / row.n)})${row.over ? ' OVER' : ''} | ${row.budget} |`);
+    }
   }
   if (comparison.global.length) {
     lines.push('', '| arm | global variant | n | hard after | failed |', '|---|---|---|---|---|');
-    for (const globalRow of comparison.global) lines.push(`| ${globalRow.arm} | ${globalRow.variant} | ${globalRow.n} | ${arrow(globalRow.old, globalRow.new)} | ${arrow(globalRow.failedOld, globalRow.failedNew)} |`);
+    for (const globalRow of comparison.global) {
+      lines.push(`| ${globalRow.arm} | ${globalRow.variant} | ${globalRow.n} | ${arrow(globalRow.old, globalRow.new)} | ${arrow(globalRow.failedOld, globalRow.failedNew)} |`);
+    }
   }
   const list = (title, xs) => {
     lines.push('', `${title} (${xs.length})`);
-    for (const entry of xs.slice(0, 40)) lines.push(`  ${entry}`);
+    for (const entry of xs.slice(0, 40)) {
+      lines.push(`  ${entry}`);
+    }
     if (xs.length > 40) lines.push(`  ... ${xs.length - 40} more`);
   };
   list('WORSE', comparison.edits.worse);

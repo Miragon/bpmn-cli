@@ -69,7 +69,9 @@ export class MessageFlowRouter {
    */
   poolOrder(): MessagePool[] {
     const { pools, jobs } = this;
-    if (pools.length < 2 || pools.length > MAX_PERMUTED || !jobs.length) return pools;
+    if (pools.length < 2 || pools.length > MAX_PERMUTED || !jobs.length) {
+      return pools;
+    }
     const endCost = (box: Box, own: Box[], el: El, pool?: MessagePool): { up: number; down: number } => {
       const inside = is(el, 'bpmn:Participant') ? undefined : pool;
       return { up: this.straightHits(box, own, inside, true), down: this.straightHits(box, own, inside, false) };
@@ -119,7 +121,11 @@ export class MessageFlowRouter {
     const plans = jobs.map((job) => this.planOf(job));
     const channels = new Map<string, number>();
     const byGap = new Map<number, Plan[]>();
-    for (const plan of plans) for (const gap of new Set(plan.gaps)) byGap.set(gap, [...(byGap.get(gap) ?? []), plan]);
+    for (const plan of plans) {
+      for (const gap of new Set(plan.gaps)) {
+        byGap.set(gap, [...(byGap.get(gap) ?? []), plan]);
+      }
+    }
     for (const [gap, list] of byGap) {
       const range = gapRange(gap);
       const level = (channelIndex: number, channelCount: number): number => Math.round(range.top + ((channelIndex + 1) * (range.bottom - range.top)) / (channelCount + 1));
@@ -166,7 +172,11 @@ export class MessageFlowRouter {
 
   private hits(points: Point[], boxes: Box[]): number {
     let hitCount = 0;
-    for (const box of boxes) if (toSegments(points).some(([start, end]) => segmentHitsBox(start, end, box, 1))) hitCount++;
+    for (const box of boxes) {
+      if (toSegments(points).some(([start, end]) => segmentHitsBox(start, end, box, 1))) {
+        hitCount++;
+      }
+    }
     return hitCount;
   }
 
@@ -225,8 +235,11 @@ export class MessageFlowRouter {
     let cursor = left;
     const gap = (gapStart: number, gapEnd: number): void => {
       if (gapEnd < gapStart) return;
-      if (gapEnd - gapStart > 120) out.push(Math.round(Math.min(Math.max(near, gapStart + 20), gapEnd - 20)));
-      else out.push(Math.round((gapStart + gapEnd) / 2), Math.round((gapStart + gapEnd) / 2 - Math.min(10, (gapEnd - gapStart) / 2)), Math.round((gapStart + gapEnd) / 2 + Math.min(10, (gapEnd - gapStart) / 2)));
+      if (gapEnd - gapStart > 120) {
+        out.push(Math.round(Math.min(Math.max(near, gapStart + 20), gapEnd - 20)));
+      } else {
+        out.push(Math.round((gapStart + gapEnd) / 2), Math.round((gapStart + gapEnd) / 2 - Math.min(10, (gapEnd - gapStart) / 2)), Math.round((gapStart + gapEnd) / 2 + Math.min(10, (gapEnd - gapStart) / 2)));
+      }
     };
     for (const [spanStart, spanEnd] of spans) {
       gap(cursor, Math.min(spanStart, right));
@@ -258,7 +271,9 @@ export class MessageFlowRouter {
       .map((exitX, exitIndex) => ({ x: exitX, line: [{ x: exitX, y: edge }, { x: exitX, y: border }], exitIndex }))
       .filter(({ line }) => !this.hits(line, obstacles) && this.alongCost(line, pool.lines) < 300)
       .map(({ x: exitX, line, exitIndex }) => ({ x: exitX, score: exitIndex === 0 ? -1 : crossings(line, pool.lines) * 5 + exitIndex }));
-    if (clean.length) return straight(clean.reduce((bestExit, candidate) => (candidate.score < bestExit.score ? candidate : bestExit)).x);
+    if (clean.length) {
+      return straight(clean.reduce((bestExit, candidate) => (candidate.score < bestExit.score ? candidate : bestExit)).x);
+    }
     const reach = up ? Math.min(box.y, ...own.filter((boundaryEvent) => this.onTop(boundaryEvent, box)).map((boundaryEvent) => boundaryEvent.y)) : Math.max(box.y + box.height, ...own.map((boundaryEvent) => boundaryEvent.y + boundaryEvent.height));
     const jy = Math.round(up ? reach - JOG : reach + JOG);
     let best: { leg: Leg; score: number } = { leg: straight(exits[0]!), score: score([{ x: exits[0]!, y: edge }, { x: exits[0]!, y: border }]) };
@@ -276,7 +291,9 @@ export class MessageFlowRouter {
     if (list.length <= 1) return [list];
     const out: TItem[][] = [];
     list.forEach((item, index) => {
-      for (const rest of this.permutations([...list.slice(0, index), ...list.slice(index + 1)])) out.push([item, ...rest]);
+      for (const rest of this.permutations([...list.slice(0, index), ...list.slice(index + 1)])) {
+        out.push([item, ...rest]);
+      }
     });
     return out;
   }
@@ -291,7 +308,11 @@ export class MessageFlowRouter {
       let crossingCount = 0;
       for (let index = 0; index < lines.length; index++) {
         for (let otherIndex = index + 1; otherIndex < lines.length; otherIndex++) {
-          for (const segment of toSegments(lines[index]!)) for (const otherSegment of toSegments(lines[otherIndex]!)) if (properCross(segment, otherSegment)) crossingCount++;
+          for (const segment of toSegments(lines[index]!)) {
+            for (const otherSegment of toSegments(lines[otherIndex]!)) {
+              if (properCross(segment, otherSegment)) crossingCount++;
+            }
+          }
         }
       }
       return crossingCount;
@@ -326,14 +347,20 @@ export class MessageFlowRouter {
     const targetPool = is(job.target, 'bpmn:Participant');
     let sourceLeg = this.legOf(job.sourceBox, job.sourceOwn, job.sourcePool, !down, job.source);
     let targetLeg = this.legOf(job.targetBox, job.targetOwn, job.targetPool, down, job.target);
-    if (sourcePool && !targetPool) sourceLeg = this.dockLeg(job.sourceBox, targetLeg.x, !down);
-    if (targetPool && !sourcePool) targetLeg = this.dockLeg(job.targetBox, sourceLeg.x, down);
+    if (sourcePool && !targetPool) {
+      sourceLeg = this.dockLeg(job.sourceBox, targetLeg.x, !down);
+    }
+    if (targetPool && !sourcePool) {
+      targetLeg = this.dockLeg(job.targetBox, sourceLeg.x, down);
+    }
     if (sourcePool && targetPool) {
       sourceLeg = this.dockLeg(job.sourceBox, center(job.targetBox).x, !down);
       targetLeg = this.dockLeg(job.targetBox, center(job.sourceBox).x, down);
     }
     const sx = sourceLeg.x, tx = targetLeg.x;
-    if (sourceIndex < 0 || targetIndex < 0 || Math.abs(sourceIndex - targetIndex) === 1) return { job, sourceLeg, targetLeg, sx, tx, gaps: [Math.min(sourceIndex, targetIndex) < 0 ? 0 : Math.min(sourceIndex, targetIndex)], outside: false, down };
+    if (sourceIndex < 0 || targetIndex < 0 || Math.abs(sourceIndex - targetIndex) === 1) {
+      return { job, sourceLeg, targetLeg, sx, tx, gaps: [Math.min(sourceIndex, targetIndex) < 0 ? 0 : Math.min(sourceIndex, targetIndex)], outside: false, down };
+    }
     return { job, sourceLeg, targetLeg, sx, tx, gaps: [sourceIndex < targetIndex ? sourceIndex : sourceIndex - 1, sourceIndex < targetIndex ? targetIndex - 1 : targetIndex], outside: true, down };
   }
 

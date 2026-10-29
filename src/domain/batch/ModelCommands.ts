@@ -103,7 +103,9 @@ export class ModelCommands {
     let start = 0;
     const segment = (end: number) => ({ start, end, model: commands.slice(start, end).some((command) => !isDiagramCommand(command)) });
     commands.forEach((command, index) => {
-      if (index === 0 || isDiagramCommand(command) || !isDiagramCommand(commands[index - 1]!)) return;
+      if (index === 0 || isDiagramCommand(command) || !isDiagramCommand(commands[index - 1]!)) {
+        return;
+      }
       segments.push(segment(index));
       start = index;
     });
@@ -133,7 +135,9 @@ export class ModelCommands {
         const command = batch.commands[commandIndex]!;
         this.atCommand(commandIndex, () => {
           if (isDiagramCommand(command)) {
-            for (const { key, alias } of new CommandAliases(command).references()) batch.table.idOf(alias, commandIndex, command, key);
+            for (const { key, alias } of new CommandAliases(command).references()) {
+              batch.table.idOf(alias, commandIndex, command, key);
+            }
             batch.pending.push(commandIndex);
             return;
           }
@@ -141,12 +145,18 @@ export class ModelCommands {
           batch.resolved[commandIndex] = ready;
           const cs = this.step(ready);
           batch.all.merge(cs);
-          for (const replacement of cs.replaced) batch.table.rebind(replacement.from, replacement.to);
-          for (const binding of cs.bindings) batch.table.define(binding.alias, binding.el, commandIndex);
+          for (const replacement of cs.replaced) {
+            batch.table.rebind(replacement.from, replacement.to);
+          }
+          for (const binding of cs.bindings) {
+            batch.table.define(binding.alias, binding.el, commandIndex);
+          }
           const context = batch.context;
           context.created.push(...cs.created.map((change) => change.id));
           for (const rename of cs.renames) {
-            for (const [old, now] of context.renamed) if (now === rename.from) context.renamed.set(old, rename.to);
+            for (const [old, now] of context.renamed) {
+              if (now === rename.from) context.renamed.set(old, rename.to);
+            }
             context.renamed.set(rename.from, rename.to);
             if (!rename.regenerated) continue;
             if (!rename.was) context.retyped!.add(rename.from);
@@ -168,7 +178,9 @@ export class ModelCommands {
       for (const pendingIndex of pending) {
         this.atCommand(pendingIndex, () => {
           const ready = (batch.resolved[pendingIndex] = new CommandAliases(batch.commands[pendingIndex]!).resolve(batch.table, pendingIndex));
-          for (const id of new CommandAliases(ready).referencedIds()) if (!this.doc.get(id)) this.edit.require(id);
+          for (const id of new CommandAliases(ready).referencedIds()) {
+            if (!this.doc.get(id)) this.edit.require(id);
+          }
         });
       }
     });

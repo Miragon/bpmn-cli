@@ -18,7 +18,9 @@ export class WarningLines {
       return validator && this.advisory.has(validator) ? `${warningTag(warning)}${warning.code}\n${warning.message}` : floodKey(warning);
     };
     const groups = new Map<string, Finding[]>();
-    for (const warning of warnings) groups.set(keyOf(warning), [...(groups.get(keyOf(warning)) ?? []), warning]);
+    for (const warning of warnings) {
+      groups.set(keyOf(warning), [...(groups.get(keyOf(warning)) ?? []), warning]);
+    }
     const out: string[] = [];
     const done = new Set<string>();
     for (const warning of warnings) {
@@ -68,7 +70,9 @@ export class WarningLines {
       if (done.has(key!)) continue;
       done.add(key!);
       const byMessage = new Map<string, Finding[]>();
-      for (const member of group) byMessage.set(member.message, [...(byMessage.get(member.message) ?? []), member]);
+      for (const member of group) {
+        byMessage.set(member.message, [...(byMessage.get(member.message) ?? []), member]);
+      }
       const [message, same] = [...byMessage].reduce((best, candidate) => (candidate[1].length > best[1].length ? candidate : best));
       const others = byMessage.size - 1;
       const rest = group.length - same.length;

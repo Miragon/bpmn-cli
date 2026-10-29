@@ -12,7 +12,9 @@ export class FeelExpression {
       const char = expression[index]!;
       if (char === '"' || char === '`') {
         let closing = index + 1;
-        while (closing < expression.length && expression[closing] !== char) closing += expression[closing] === '\\' && char === '"' ? 2 : 1;
+        while (closing < expression.length && expression[closing] !== char) {
+          closing += expression[closing] === '\\' && char === '"' ? 2 : 1;
+        }
         if (closing >= expression.length) break;
         code += char === '"' ? ' "s" ' : ' n ';
         index = closing;
@@ -27,7 +29,9 @@ export class FeelExpression {
         code += char;
       }
     }
-    if (/[$#]\{/.test(code)) return '${...} (JUEL; FEEL writes the expression itself: = amount > 100)';
+    if (/[$#]\{/.test(code)) {
+      return '${...} (JUEL; FEEL writes the expression itself: = amount > 100)';
+    }
     if (code.includes('&&')) return '&& (FEEL: and)';
     if (code.includes('||')) return '|| (FEEL: or)';
     if (code.includes('==')) return '== (FEEL compares with a single =)';

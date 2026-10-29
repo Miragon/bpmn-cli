@@ -60,12 +60,16 @@ export class PlaneQuery {
       if (!ends?.sourceId || !ends.targetId) continue;
       const source = plane.shapes.get(ends.sourceId);
       const target = plane.shapes.get(ends.targetId);
-      if (!source || !target || source.kind === 'boundary' || source.container || target.container) continue;
+      if (!source || !target || source.kind === 'boundary' || source.container || target.container) {
+        continue;
+      }
       const dy = Math.abs(cy(source.bounds) - cy(target.bounds));
       if (dy <= 5) {
         const gap = target.bounds.x - right(source.bounds);
         if (gap > 0) gaps.push(gap);
-      } else if (dy >= 30) rows.push(dy);
+      } else if (dy >= 30) {
+        rows.push(dy);
+      }
     }
     const gap = Math.round(clamp(median(gaps) ?? 60, 40, 100));
     const row = Math.round(clamp(median(rows) ?? 140, 80, 150));

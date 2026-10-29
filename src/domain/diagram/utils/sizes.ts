@@ -37,7 +37,9 @@ export function defaultSizeOf(el: El): { width: number; height: number } {
   if (is(el, 'bpmn:Gateway')) return { ...SIZES.gateway };
   if (is(el, 'bpmn:DataObjectReference')) return { ...SIZES.dataObject };
   if (is(el, 'bpmn:DataStoreReference')) return { ...SIZES.dataStore };
-  if (is(el, 'bpmn:TextAnnotation')) return annotationSize(raw<string>(el, 'text'));
+  if (is(el, 'bpmn:TextAnnotation')) {
+    return annotationSize(raw<string>(el, 'text'));
+  }
   return { ...SIZES.task };
 }
 

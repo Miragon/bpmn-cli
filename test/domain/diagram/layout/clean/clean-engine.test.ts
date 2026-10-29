@@ -59,8 +59,11 @@ async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
     for (const pe of many(plane, 'planeElement')) {
       const el = pe.get<El>('bpmnElement');
       const label = pe.get<El | undefined>('label')?.get<El | undefined>('bounds');
-      if (is(pe, 'bpmndi:BPMNShape')) shapes.set(el.get<string>('id'), { el, box: boxOf(pe.get<El>('bounds')), expanded: pe.get<boolean | undefined>('isExpanded') === true, ...(label ? { label: boxOf(label) } : {}) });
-      else edges.set(el.get<string>('id'), { el, points: many(pe, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') })), ...(label ? { label: boxOf(label) } : {}) });
+      if (is(pe, 'bpmndi:BPMNShape')) {
+        shapes.set(el.get<string>('id'), { el, box: boxOf(pe.get<El>('bounds')), expanded: pe.get<boolean | undefined>('isExpanded') === true, ...(label ? { label: boxOf(label) } : {}) });
+      } else {
+        edges.set(el.get<string>('id'), { el, points: many(pe, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') })), ...(label ? { label: boxOf(label) } : {}) });
+      }
     }
   });
   const byId = new Map<string, El>();
@@ -68,7 +71,9 @@ async function drawn(xml: string, opts: LayoutOptions = {}): Promise<Drawn> {
     const id = el.get<string | undefined>('id');
     if (id) byId.set(id, el);
     for (const key of ['rootElements', 'flowElements', 'artifacts', 'participants', 'messageFlows', 'laneSets', 'lanes']) {
-      for (const child of (el.get<El[] | undefined>(key) ?? []) as El[]) visit(child);
+      for (const child of (el.get<El[] | undefined>(key) ?? []) as El[]) {
+        visit(child);
+      }
     }
     const child = el.get<El | undefined>('childLaneSet');
     if (child) visit(child);
@@ -89,11 +94,17 @@ function leafLanes(drawing: Drawn): Array<{ id: string; nodes: string[] }> {
   const out: Array<{ id: string; nodes: string[] }> = [];
   const visit = (lane: El): void => {
     const child = lane.get<El | undefined>('childLaneSet');
-    if (child && many(child, 'lanes').length) return many(child, 'lanes').forEach(visit);
+    if (child && many(child, 'lanes').length) {
+      return many(child, 'lanes').forEach(visit);
+    }
     const nodes = (lane.get<El[] | undefined>('flowNodeRef') ?? []).filter((node) => !is(node, 'bpmn:BoundaryEvent')).map((node) => node.get<string>('id'));
     out.push({ id: lane.get<string>('id'), nodes });
   };
-  for (const el of drawing.byId.values()) if (is(el, 'bpmn:LaneSet') && !is(el.$parent as El, 'bpmn:Lane')) many(el, 'lanes').forEach(visit);
+  for (const el of drawing.byId.values()) {
+    if (is(el, 'bpmn:LaneSet') && !is(el.$parent as El, 'bpmn:Lane')) {
+      many(el, 'lanes').forEach(visit);
+    }
+  }
   return out;
 }
 
@@ -139,7 +150,9 @@ function cutShapes(drawing: Drawn, edgeId: string): string[] {
     if (isContainer(shape) || ends.has(id)) continue;
     const host = shape.el.get<El | undefined>('attachedToRef')?.get<string>('id');
     if (host && ends.has(host)) continue;
-    if (segments(edge.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, shape.box))) bad.push(id);
+    if (segments(edge.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, shape.box))) {
+      bad.push(id);
+    }
   }
   return bad;
 }
@@ -158,7 +171,9 @@ describe('lane bands follow the content after routing', () => {
   it.each(['lanes__complaint-t1.bpmn', 'lanes__complaint-t2.bpmn'])('%s: lanes stack without gaps and fill the pool', async (file) => {
     const drawing = await drawn(scenario(file));
     const lanes = leafLanes(drawing).map((lane) => drawing.shapes.get(lane.id)!.box);
-    for (let index = 1; index < lanes.length; index++) expect(lanes[index]!.y).toBe(lanes[index - 1]!.y + lanes[index - 1]!.height);
+    for (let index = 1; index < lanes.length; index++) {
+      expect(lanes[index]!.y).toBe(lanes[index - 1]!.y + lanes[index - 1]!.height);
+    }
     const pool = drawing.shapes.get('Participant_Reklamationsbearbeitung')!.box;
     expect(lanes[0]!.y).toBe(pool.y);
     expect(lanes[lanes.length - 1]!.y + lanes[lanes.length - 1]!.height).toBe(pool.y + pool.height);
@@ -175,7 +190,9 @@ describe('message flows', () => {
     const drawing = await drawn(scenario(file));
     const ids = messageFlowIds(drawing);
     expect(ids.length).toBeGreaterThan(0);
-    for (const id of ids) expect(cutShapes(drawing, id), id).toEqual([]);
+    for (const id of ids) {
+      expect(cutShapes(drawing, id), id).toEqual([]);
+    }
   });
 
   it('a black-box pool whose flows end in the top lane is drawn above the process pool', async () => {
@@ -188,7 +205,9 @@ describe('message flows', () => {
   it('pools are ordered so that no message flow has to skip a pool', async () => {
     // declared order Shop, Customer, Supplier: Shop <-> Supplier flows had to run around the Customer pool
     const drawing = await drawn(scenario('subproc__s08-collab3.bpmn'));
-    for (const id of messageFlowIds(drawing)) expect(drawing.edges.get(id)!.points.length, id).toBeLessThanOrEqual(4);
+    for (const id of messageFlowIds(drawing)) {
+      expect(drawing.edges.get(id)!.points.length, id).toBeLessThanOrEqual(4);
+    }
   });
 
   it('a message flow does not run on top of a sequence flow leaving the same element', async () => {
@@ -222,7 +241,9 @@ describe('message flows', () => {
     const [route] = new MessageFlowRouter([job], [upper, lower]).route();
     expect(segments(route!.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, blocker))).toBe(false);
     expect(route!.points[0]).toEqual({ x: 250, y: 180 });
-    for (const [segmentStart, segmentEnd] of segments(route!.points)) expect(segmentStart.x === segmentEnd.x || segmentStart.y === segmentEnd.y).toBe(true);
+    for (const [segmentStart, segmentEnd] of segments(route!.points)) {
+      expect(segmentStart.x === segmentEnd.x || segmentStart.y === segmentEnd.y).toBe(true);
+    }
   });
 
   it('keeps the declaration order when no order is better', () => {
@@ -272,7 +293,9 @@ describe('notes on boundary events', () => {
 </bpmn:definitions>`;
     const drawing = await drawn(xml);
     expect(leafOverlaps(drawing)).toEqual([]);
-    for (const id of ['F3', 'F4', 'F5', 'F6']) expect(cutShapes(drawing, id), id).toEqual([]);
+    for (const id of ['F3', 'F4', 'F5', 'F6']) {
+      expect(cutShapes(drawing, id), id).toEqual([]);
+    }
   });
 });
 
@@ -282,10 +305,14 @@ describe('event sub-processes', () => {
     expect(inside(drawing.shapes.get('Activity_OnCancel')!.box, drawing.shapes.get('Lane_Sales')!.box)).toBe(true);
     expect(outsideLane(drawing)).toEqual([]);
     expect(leafOverlaps(drawing)).toEqual([]);
-    for (const id of ['Flow_4', 'Flow_5', 'Flow_6', 'Flow_7', 'Flow_8', 'Flow_9']) expect(cutShapes(drawing, id), id).toEqual([]);
+    for (const id of ['Flow_4', 'Flow_5', 'Flow_6', 'Flow_7', 'Flow_8', 'Flow_9']) {
+      expect(cutShapes(drawing, id), id).toEqual([]);
+    }
     // no flow runs through the event sub-process frame either
     const frame = drawing.shapes.get('Activity_OnCancel')!.box;
-    for (const id of ['Flow_4', 'Flow_5']) expect(segments(drawing.edges.get(id)!.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, frame)), id).toBe(false);
+    for (const id of ['Flow_4', 'Flow_5']) {
+      expect(segments(drawing.edges.get(id)!.points).some(([segmentStart, segmentEnd]) => cuts(segmentStart, segmentEnd, frame)), id).toBe(false);
+    }
   });
 
   it('collapse is honoured for an event sub-process (option)', async () => {
@@ -310,8 +337,12 @@ describe('event sub-processes', () => {
 describe('text annotations owned by the collaboration', () => {
   it('every note and association gets DI, without warnings', async () => {
     const drawing = await drawn(scenario('collab__notes-on-collaboration.bpmn'));
-    for (const id of ['TextAnnotation_Sla', 'TextAnnotation_Portal', 'TextAnnotation_Pdf', 'TextAnnotation_Loose']) expect(drawing.shapes.has(id), id).toBe(true);
-    for (const id of ['Association_Sla', 'Association_Portal', 'Association_Pdf']) expect(drawing.edges.get(id)?.points.length, id).toBe(2);
+    for (const id of ['TextAnnotation_Sla', 'TextAnnotation_Portal', 'TextAnnotation_Pdf', 'TextAnnotation_Loose']) {
+      expect(drawing.shapes.has(id), id).toBe(true);
+    }
+    for (const id of ['Association_Sla', 'Association_Portal', 'Association_Pdf']) {
+      expect(drawing.edges.get(id)?.points.length, id).toBe(2);
+    }
     expect(drawing.warnings.filter((warning) => warning.code === 'DI_NOT_CREATED')).toEqual([]);
   });
 

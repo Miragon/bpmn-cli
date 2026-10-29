@@ -36,7 +36,9 @@ export class LabelPlacer {
     const segments: Clutter['segments'] = [];
     const crossing: Clutter['segments'] = [];
     for (const shape of this.plane.shapes.values()) {
-      if (!shape.container && shape.kind !== 'group' && !ignoreShapes.has(shape.id)) shapes.push(shape.bounds);
+      if (!shape.container && shape.kind !== 'group' && !ignoreShapes.has(shape.id)) {
+        shapes.push(shape.bounds);
+      }
       if (shape.label && shape.id !== ownerId) labels.push(shape.label);
       const title = Frames.title(shape);
       if (title) shapes.push(title);
@@ -66,7 +68,9 @@ export class LabelPlacer {
    */
   private collides(candidate: Box, clutter: Clutter, name?: string): boolean {
     const onLine = ([start, end]: Clutter['segments'][number]): boolean => segmentHits(start, end, candidate, 1);
-    if (clutter.shapes.some((shape) => overlaps(shape, candidate, 2)) || clutter.labels.some((label) => overlaps(label, candidate, 2)) || clutter.segments.some(onLine) || clutter.crossing.some(onLine)) return true;
+    if (clutter.shapes.some((shape) => overlaps(shape, candidate, 2)) || clutter.labels.some((label) => overlaps(label, candidate, 2)) || clutter.segments.some(onLine) || clutter.crossing.some(onLine)) {
+      return true;
+    }
     if (!name) return false;
     const text = glyph(candidate, name);
     return clutter.shapes.some((shape) => overlaps(shape, text)) || clutter.segments.some(([start, end]) => segmentHits(start, end, text, 0));
@@ -116,8 +120,12 @@ export class LabelPlacer {
       const base = labelAt(shape, size, side, host, step);
       cands.push(base);
       if (side === 'below' || side === 'above') {
-        for (const shift of over ? [0, over] : [0]) cands.push({ ...base, x: Math.round(cx(shape.bounds) + 6 + shift) }, { ...base, x: Math.round(cx(shape.bounds) - 6 - size.width - shift) });
-      } else cands.push({ ...base, y: Math.round(cy(shape.bounds) + 6) }, { ...base, y: Math.round(cy(shape.bounds) - 6 - size.height) });
+        for (const shift of over ? [0, over] : [0]) {
+          cands.push({ ...base, x: Math.round(cx(shape.bounds) + 6 + shift) }, { ...base, x: Math.round(cx(shape.bounds) - 6 - size.width - shift) });
+        }
+      } else {
+        cands.push({ ...base, y: Math.round(cy(shape.bounds) + 6) }, { ...base, y: Math.round(cy(shape.bounds) - 6 - size.height) });
+      }
     }
     return cands;
   }
@@ -177,7 +185,9 @@ export class LabelPlacer {
         cands.push(...this.boundaryLabelCandidates(shape.bounds, host.bounds, size, step));
         continue;
       }
-      for (const side of sides) cands.push(labelAt(shape, size, side, host, step));
+      for (const side of sides) {
+        cands.push(labelAt(shape, size, side, host, step));
+      }
     }
     const first = cands[0];
     /**
@@ -197,7 +207,9 @@ export class LabelPlacer {
    */
   placeEdgeLabel(edge: DEdge): Box | undefined {
     const name = this.nameOf(edge.el);
-    if (!name || edge.points.length < 2 || !(is(edge.el, 'bpmn:SequenceFlow') || is(edge.el, 'bpmn:MessageFlow'))) return undefined;
+    if (!name || edge.points.length < 2 || !(is(edge.el, 'bpmn:SequenceFlow') || is(edge.el, 'bpmn:MessageFlow'))) {
+      return undefined;
+    }
     const { width, height } = labelSize(name);
     const size = { width, height };
     const clutter = this.clutter(edge.id, new Set());
@@ -211,7 +223,9 @@ export class LabelPlacer {
         const hi = Math.max(start.x, end.x);
         if (hi - lo < size.width / 2) continue;
         const xs = [Math.min(lo + 8, Math.max(lo + 2, hi - size.width - 4)), (lo + hi) / 2 - size.width / 2, hi - size.width - 8];
-        for (const left of xs) cands.push({ x: Math.round(left), y: Math.round(start.y - size.height - 4), ...size }, { x: Math.round(left), y: Math.round(start.y + 4), ...size });
+        for (const left of xs) {
+          cands.push({ x: Math.round(left), y: Math.round(start.y - size.height - 4), ...size }, { x: Math.round(left), y: Math.round(start.y + 4), ...size });
+        }
       }
     }
     for (let index = 0; index + 1 < pts.length; index++) {
@@ -252,10 +266,15 @@ export class LabelPlacer {
         const host = owner.hostId ? this.plane.shapes.get(owner.hostId) : undefined;
         const side = labelSideOf(owner, host?.bounds);
         this.placeShapeLabel(owner, side === 'inside' ? undefined : side);
-      } else this.placeEdgeLabel(owner);
+      } else {
+        this.placeEdgeLabel(owner);
+      }
       const home = this.homeOf(owner);
-      if (owner.label && !onTitle(owner.label) && (!home || inside(owner.label, home.bounds))) out.push([owner.id, sub.id]);
-      else owner.label = old;
+      if (owner.label && !onTitle(owner.label) && (!home || inside(owner.label, home.bounds))) {
+        out.push([owner.id, sub.id]);
+      } else {
+        owner.label = old;
+      }
     }
     return out;
   }
@@ -273,10 +292,15 @@ export class LabelPlacer {
       const old = shape.label;
       const bounds = shape.bounds;
       let box: Box;
-      if (old.y >= bottom(bounds) - 2) box = { x: Math.round(cx(old) - size.width / 2), y: old.y, ...size };
-      else if (bottom(old) <= bounds.y + 2) box = { x: Math.round(cx(old) - size.width / 2), y: Math.round(bottom(old) - size.height), ...size };
-      else if (old.x >= right(bounds) - 2) box = { x: old.x, y: Math.round(cy(old) - size.height / 2), ...size };
-      else box = { x: Math.round(right(old) - size.width), y: Math.round(cy(old) - size.height / 2), ...size };
+      if (old.y >= bottom(bounds) - 2) {
+        box = { x: Math.round(cx(old) - size.width / 2), y: old.y, ...size };
+      } else if (bottom(old) <= bounds.y + 2) {
+        box = { x: Math.round(cx(old) - size.width / 2), y: Math.round(bottom(old) - size.height), ...size };
+      } else if (old.x >= right(bounds) - 2) {
+        box = { x: old.x, y: Math.round(cy(old) - size.height / 2), ...size };
+      } else {
+        box = { x: Math.round(right(old) - size.width), y: Math.round(cy(old) - size.height / 2), ...size };
+      }
       const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
       const clutter = this.clutter(shape.id, new Set([shape.id, ...(host ? [host.id] : [])]));
       if (this.collides(box, clutter)) return this.placeShapeLabel(shape);

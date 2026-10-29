@@ -63,25 +63,33 @@ export class PropertyCoercer {
 
   /** Errors name `label`, the key as given. */
   coerce(el: El, property: PropDescriptor, value: string, label: string = property.name): unknown {
-    if (property.isReference) return this.edit.require(value, property.type, property.name);
+    if (property.isReference) {
+      return this.edit.require(value, property.type, property.name);
+    }
     switch (property.type) {
       case 'String':
         return value;
       case 'Boolean':
         return PropertyCoercer.bool(el, label, value);
       case 'Integer': {
-        if (!/^-?\d+$/.test(value.trim())) throw PropertyCoercer.invalid(el, label, `"${value}" is not an integer`);
+        if (!/^-?\d+$/.test(value.trim())) {
+          throw PropertyCoercer.invalid(el, label, `"${value}" is not an integer`);
+        }
         return Number(value);
       }
       case 'Real': {
         const numeric = Number(value);
-        if (!value.trim() || Number.isNaN(numeric)) throw PropertyCoercer.invalid(el, label, `"${value}" is not a number`);
+        if (!value.trim() || Number.isNaN(numeric)) {
+          throw PropertyCoercer.invalid(el, label, `"${value}" is not a number`);
+        }
         return numeric;
       }
       default: {
         const literals = PropertyCoercer.enumLiterals(this.edit.doc, property.type) ?? [];
         const hit = literals.find((literal) => literal.toLowerCase() === value.trim().toLowerCase());
-        if (!hit) throw PropertyCoercer.invalid(el, label, `"${value}" is not one of ${literals.join('|')}`);
+        if (!hit) {
+          throw PropertyCoercer.invalid(el, label, `"${value}" is not one of ${literals.join('|')}`);
+        }
         return hit;
       }
     }
@@ -112,8 +120,12 @@ export class PropertyCoercer {
    * the engines validate against the schema and refuse the file.
    */
   static removeUndefined(el: El, key: string, value: string): boolean {
-    if (value || key.includes(':') || descriptorOf(el).propertiesByName?.[key]) return false;
-    if (!el.$attrs || !Object.prototype.hasOwnProperty.call(el.$attrs, key)) return false;
+    if (value || key.includes(':') || descriptorOf(el).propertiesByName?.[key]) {
+      return false;
+    }
+    if (!el.$attrs || !Object.prototype.hasOwnProperty.call(el.$attrs, key)) {
+      return false;
+    }
     delete el.$attrs[key];
     return true;
   }

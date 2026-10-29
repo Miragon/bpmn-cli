@@ -26,7 +26,9 @@ const SOFT_BREAK = '­';
 /** Width at 12 px; the advances are in 1/1000 em. */
 export function textWidth(text: string): number {
   let units = 0;
-  for (const ch of text.trim()) units += ARIAL[ch] ?? DEFAULT_ADVANCE;
+  for (const ch of text.trim()) {
+    units += ARIAL[ch] ?? DEFAULT_ADVANCE;
+  }
   return (units * 12) / 1000;
 }
 
@@ -69,7 +71,9 @@ export function wrapLines(text: string, maxWidth: number): string[] {
       if (fit === ' ' || fit === '' || width <= maxWidth || fit.length < 2) break;
       fit = shortenLine(fit, width, maxWidth);
     }
-    if (fit.length < original.length) lines.unshift(original.slice(fit.length).trim());
+    if (fit.length < original.length) {
+      lines.unshift(original.slice(fit.length).trim());
+    }
     out.push(fit);
   }
   return out;
@@ -115,7 +119,9 @@ export function activitySize(name: string, size: { width: number; height: number
   if (!name.trim() || fitsInside(name, size, bottomRoom)) return undefined;
   const widths: number[] = [];
   for (let candidateWidth = size.width + STEP; candidateWidth <= Math.max(MAX_WIDTH, size.width); candidateWidth += STEP) {
-    if (fitsInside(name, { width: candidateWidth, height: size.height }, bottomRoom)) return { width: candidateWidth, height: size.height };
+    if (fitsInside(name, { width: candidateWidth, height: size.height }, bottomRoom)) {
+      return { width: candidateWidth, height: size.height };
+    }
     widths.push(candidateWidth);
   }
   const fewest = innerLines(name, widths.at(-1) ?? size.width);
@@ -154,9 +160,11 @@ function measureLabel(name: string, maxWidth: number): { width: number; height: 
   let cur = 0;
   for (const word of words) {
     const ww = word.length * charW;
-    if (cur === 0) cur = ww;
-    else if (cur + charW + ww + pad <= limit) cur += charW + ww;
-    else {
+    if (cur === 0) {
+      cur = ww;
+    } else if (cur + charW + ww + pad <= limit) {
+      cur += charW + ww;
+    } else {
       lines.push(cur);
       cur = ww;
     }

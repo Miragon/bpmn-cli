@@ -25,7 +25,9 @@ export class C7FlowRules extends C7Rules {
     const cond = peek<El>(flow, 'conditionExpression');
     if (!cond || !this.emptyCondition(cond)) return;
     const source = peek<El>(flow, 'sourceRef');
-    if (source && (this.kit.ignoresConditions(source) || peek<El>(source, 'default') === flow)) return;
+    if (source && (this.kit.ignoresConditions(source) || peek<El>(source, 'default') === flow)) {
+      return;
+    }
     const id = idOf(flow)!;
     this.push('runtime', 'W_C7_EMPTY_CONDITION', flow, undefined, 'emptyCondition', `Sequence flow ${id} has an empty condition (no expression and no ${this.prefix}:resource): it deploys, but the engines fail when they evaluate it`, `Give it one: \`bpmn set <file> ${id} ${sh('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${id} condition=\`.`);
   }
@@ -61,7 +63,9 @@ export class C7FlowRules extends C7Rules {
       const first = names.get(key);
       if (first) {
         this.push('deploy', 'W_C7_DEPLOY_EVENT_GATEWAY', gw, undefined, `dup:${kind}:${name}`, `Branches ${idOf(first)} and ${tid} of event-based gateway ${id} wait for the same ${kind} "${name}"; the engines refuse the file`, `\`bpmn set <file> ${tid} ${kind}=<OtherName>\`, or remove one branch.`, [idOf(first)!, tid]);
-      } else names.set(key, target);
+      } else {
+        names.set(key, target);
+      }
     }
   }
 
@@ -79,7 +83,9 @@ export class C7FlowRules extends C7Rules {
     }
     if (outgoing.length === 1) {
       const flow = outgoing[0]!;
-      if (hasCond(flow) && flow !== def) this.push('deploy', 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', gw, undefined, `single:${idOf(flow)}`, `Exclusive gateway ${id} has a single outgoing flow ${idOf(flow)} with a condition; the engines refuse the file`, `\`bpmn set <file> ${idOf(flow)} condition=\`.`, [idOf(flow)!]);
+      if (hasCond(flow) && flow !== def) {
+        this.push('deploy', 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', gw, undefined, `single:${idOf(flow)}`, `Exclusive gateway ${id} has a single outgoing flow ${idOf(flow)} with a condition; the engines refuse the file`, `\`bpmn set <file> ${idOf(flow)} condition=\`.`, [idOf(flow)!]);
+      }
       if (hasCond(flow) && flow === def) conditionedDefault(flow);
       return;
     }

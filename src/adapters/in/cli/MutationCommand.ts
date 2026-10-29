@@ -49,7 +49,9 @@ export abstract class MutationCommand extends CliCommand {
     if (layoutToggle) {
       cmd
         .option(...commonOption('--layout'), (raw: string) => {
-          if (!(LAYOUT_MODES as readonly string[]).includes(raw)) throw new InvalidArgumentError(`expected ${LAYOUT_MODES.join(', ')}`);
+          if (!(LAYOUT_MODES as readonly string[]).includes(raw)) {
+            throw new InvalidArgumentError(`expected ${LAYOUT_MODES.join(', ')}`);
+          }
           return raw;
         })
         .option(...commonOption('--relayout'))
@@ -63,14 +65,18 @@ export abstract class MutationCommand extends CliCommand {
   }
 
   protected withTriggerOptions(cmd: CommandType): CommandType {
-    for (const key of TRIGGER_KEYS) cmd.option(...triggerFlag(key));
+    for (const key of TRIGGER_KEYS) {
+      cmd.option(...triggerFlag(key));
+    }
     return cmd;
   }
 
   protected triggerOptions(options: RawOpts): TriggerOptions {
     const trigger: Record<string, string | boolean> = {};
     for (const key of TRIGGER_KEYS) {
-      if (options[key]) trigger[key] = TRIGGER_FIELDS[key].type === 'boolean' ? true : String(options[key]);
+      if (options[key]) {
+        trigger[key] = TRIGGER_FIELDS[key].type === 'boolean' ? true : String(options[key]);
+      }
     }
     return trigger as TriggerOptions;
   }
@@ -101,7 +107,9 @@ export abstract class MutationCommand extends CliCommand {
   /** Flow options describe the flow INTO the node; they need a placement that creates one. */
   protected checkFlowFlags(options: RawOpts, needsPlacement: boolean): void {
     const conditionedDefault = defaultWithConditionViolation(!!options['default'], options['condition'] !== undefined, flag);
-    if (conditionedDefault) throw usageError(conditionedDefault.message, { hint: conditionedDefault.hint });
+    if (conditionedDefault) {
+      throw usageError(conditionedDefault.message, { hint: conditionedDefault.hint });
+    }
     if (!needsPlacement) return;
     const used = Object.keys(FLOW_FLAGS).filter((key) => options[key] !== undefined && options[key] !== false);
     const createsFlow = !!options['after'] || !!options['before'] || !!options['flow'];
@@ -162,11 +170,19 @@ export abstract class MutationCommand extends CliCommand {
     const shotText = shot ? `\n${shot.lines.join('\n')}` : '';
     if (opts.summary) {
       const summary = new MutationSummaryBuilder(report).summary();
-      if (opts.json) this.cli.printJson({ ...summary, ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
-      else this.cli.print(new SummaryText(summary, { dryRun: opts.dryRun, advisory: advisoryOf((report).validation.validators) }).text() + shotText + (report.view ? `\n\n${new ModelViewText(report.view).text()}` : ''), out);
-    } else if (opts.json) this.cli.printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
-    else this.cli.print(new MutationText(report, { dryRun: opts.dryRun }).text().replace(/\n$/, '') + shotText, out);
-    if (opts.strict && new MutationReportBuilder(result).warnings().length) this.cli.exitCode = 5;
+      if (opts.json) {
+        this.cli.printJson({ ...summary, ...(report.view ? { view: report.view } : {}), ...(shot ? { render: shot.json } : {}) }, opts.pretty, out);
+      } else {
+        this.cli.print(new SummaryText(summary, { dryRun: opts.dryRun, advisory: advisoryOf((report).validation.validators) }).text() + shotText + (report.view ? `\n\n${new ModelViewText(report.view).text()}` : ''), out);
+      }
+    } else if (opts.json) {
+      this.cli.printJson(shot ? { ...report, render: shot.json } : report, opts.pretty, out);
+    } else {
+      this.cli.print(new MutationText(report, { dryRun: opts.dryRun }).text().replace(/\n$/, '') + shotText, out);
+    }
+    if (opts.strict && new MutationReportBuilder(result).warnings().length) {
+      this.cli.exitCode = 5;
+    }
   }
 
   /**
@@ -188,10 +204,14 @@ export abstract class MutationCommand extends CliCommand {
 
   /** Puts the file name into a refusal's runnable command (E_NO_ROOM) and its hint. */
   private withFile(err: unknown, file: string): unknown {
-    if (!isBpmnError(err) || typeof err.details['command'] !== 'string' || file === '-') return err;
+    if (!isBpmnError(err) || typeof err.details['command'] !== 'string' || file === '-') {
+      return err;
+    }
     const quoted = /^[\w./@%+=:,-]+$/.test(file) ? file : `'${file.replace(/'/g, `'\\''`)}'`;
     err.details['command'] = String(err.details['command']).replaceAll('<file>', quoted);
-    if (typeof err.details.hint === 'string') err.details.hint = err.details.hint.replaceAll('bpmn space <file>', `bpmn space ${quoted}`);
+    if (typeof err.details.hint === 'string') {
+      err.details.hint = err.details.hint.replaceAll('bpmn space <file>', `bpmn space ${quoted}`);
+    }
     return err;
   }
 

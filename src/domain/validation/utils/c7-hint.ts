@@ -10,7 +10,11 @@ export function extAddArgs(vendorElement: El, type: string, fix: Record<string, 
   const kids = peek<unknown[]>(vendorElement, '$children');
   if (Array.isArray(kids) && kids.length) return undefined;
   const entries = Object.entries(vendorElement as unknown as Record<string, unknown>).filter(([key]) => !key.startsWith('$') && !key.startsWith('xmlns'));
-  for (const key of Object.keys(fix)) if (!entries.some(([existingKey]) => existingKey === key)) entries.push([key, fix[key]]);
+  for (const key of Object.keys(fix)) {
+    if (!entries.some(([existingKey]) => existingKey === key)) {
+      entries.push([key, fix[key]]);
+    }
+  }
   const attrs = entries.map(([key, val]) => sh(`${key}=${key in fix ? fix[key] : String(val)}`));
   const body = peek<string>(vendorElement, '$body');
   return [type, ...attrs, ...(body !== undefined ? ['--body', sh(String(body))] : [])].join(' ');

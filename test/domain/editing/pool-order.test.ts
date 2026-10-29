@@ -41,8 +41,12 @@ async function handXml(): Promise<string> {
   const doc = await Doc.fromXml(result.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
-      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (bounds) bounds.set('x', bounds.get<number>('x') + 11);
-      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) waypoint.set('x', waypoint.get<number>('x') + 11);
+      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) {
+        if (bounds) bounds.set('x', bounds.get<number>('x') + 11);
+      }
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) {
+        waypoint.set('x', waypoint.get<number>('x') + 11);
+      }
     }
   }
   return doc.toXml();
@@ -59,7 +63,9 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    }
     throw err;
   }
   throw new Error('expected the mutation to fail');
@@ -67,13 +73,21 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnShape of diagramPlane.shapes.values()) out.set(drawnShape.id, drawnShape);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) {
+    for (const drawnShape of diagramPlane.shapes.values()) {
+      out.set(drawnShape.id, drawnShape);
+    }
+  }
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnEdge of diagramPlane.edges.values()) out.set(drawnEdge.id, drawnEdge);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) {
+    for (const drawnEdge of diagramPlane.edges.values()) {
+      out.set(drawnEdge.id, drawnEdge);
+    }
+  }
   return out;
 }
 
@@ -101,7 +115,9 @@ describe('pool order', () => {
       expect(s1.get(id)!.bounds.x, id).toBe(s0.get(id)!.bounds.x);
     }
     const dy = s1.get('Org')!.bounds.y - s0.get('Org')!.bounds.y;
-    for (const id of ['L1', 'L2', 'S', 'A', 'B', 'E']) expect(s1.get(id)!.bounds.y - s0.get(id)!.bounds.y, id).toBe(dy);
+    for (const id of ['L1', 'L2', 'S', 'A', 'B', 'E']) {
+      expect(s1.get(id)!.bounds.y - s0.get(id)!.bounds.y, id).toBe(dy);
+    }
     // the stack starts where it started and keeps its gaps
     expect(Math.min(...['Org', 'Customer', 'Bank'].map((id) => s1.get(id)!.bounds.y))).toBe(Math.min(...['Org', 'Customer', 'Bank'].map((id) => s0.get(id)!.bounds.y)));
     for (const id of ['M1', 'M2']) {

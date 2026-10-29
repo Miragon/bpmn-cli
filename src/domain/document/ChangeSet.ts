@@ -97,7 +97,9 @@ export class ChangeSet {
   }
 
   change(change: Change): this {
-    if (!this.changed.some((existing) => existing.id === change.id && existing.detail === change.detail)) this.changed.push(change);
+    if (!this.changed.some((existing) => existing.id === change.id && existing.detail === change.detail)) {
+      this.changed.push(change);
+    }
     return this;
   }
 
@@ -126,10 +128,16 @@ export class ChangeSet {
       const el = ChangeSet.elements.get(rename);
       const renamed = el && ChangeSet.successorOf(el);
       const created = this.created.some((entry) => entry.id === rename.from || entry.id === rename.to);
-      for (const entry of [...this.created, ...this.changed]) if (entry.id === rename.from && (!renamed || ChangeSet.successorOf(ChangeSet.elements.get(entry) ?? renamed) === renamed)) entry.id = rename.to;
+      for (const entry of [...this.created, ...this.changed]) {
+        if (entry.id === rename.from && (!renamed || ChangeSet.successorOf(ChangeSet.elements.get(entry) ?? renamed) === renamed)) {
+          entry.id = rename.to;
+        }
+      }
       if (rename.regenerated) {
         const old = new RegExp(`(?<![A-Za-z0-9_.-])${rename.from.replace(/[.]/g, '\\.')}(?![A-Za-z0-9_.-])`, 'g');
-        for (const entry of [...this.created, ...this.changed]) if (entry.detail) entry.detail = entry.detail.replace(old, rename.to);
+        for (const entry of [...this.created, ...this.changed]) {
+          if (entry.detail) entry.detail = entry.detail.replace(old, rename.to);
+        }
         this.notes = this.notes.map((note) => note.replace(old, rename.to));
         this.warnings = this.warnings
           .filter((warning) => !(warning.code === 'W_ID_SUFFIXED' && warning.element === rename.from))
@@ -141,9 +149,17 @@ export class ChangeSet {
         continue;
       }
       let origin = rename.from;
-      for (let index = this.renames.length - 1; index >= 0; index--) if (this.renames[index]!.to === origin && !this.renames[index]!.takeover) origin = this.renames[index]!.from;
+      for (let index = this.renames.length - 1; index >= 0; index--) {
+        if (this.renames[index]!.to === origin && !this.renames[index]!.takeover) {
+          origin = this.renames[index]!.from;
+        }
+      }
       this.removed[gone] = { id: origin, kind: this.removed[gone]!.kind, ...(rename.was && origin === rename.from ? { detail: rename.was } : {}) };
-      for (const entry of this.changed) if (entry.id === rename.to && entry.detail) entry.detail = entry.detail.replace(renamedNote(rename.from), '');
+      for (const entry of this.changed) {
+        if (entry.id === rename.to && entry.detail) {
+          entry.detail = entry.detail.replace(renamedNote(rename.from), '');
+        }
+      }
       this.renames.push(ChangeSet.about({ ...rename, takeover: true as const }, el));
     }
     return this;
@@ -160,7 +176,9 @@ export class ChangeSet {
     this.replaced.push(...other.replaced);
     this.relocated.push(...other.relocated);
     this.created.push(...other.created);
-    for (const change of other.changed) this.change(change);
+    for (const change of other.changed) {
+      this.change(change);
+    }
     this.removed.push(...other.removed);
     this.warnings.push(...other.warnings);
     this.notes.push(...other.notes);
@@ -174,7 +192,9 @@ export class ChangeSet {
 
   touchedIds(): string[] {
     const ids = new Set<string>();
-    for (const entry of [...this.created, ...this.changed]) ids.add(entry.id);
+    for (const entry of [...this.created, ...this.changed]) {
+      ids.add(entry.id);
+    }
     return [...ids];
   }
 

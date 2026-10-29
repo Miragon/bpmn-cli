@@ -129,8 +129,9 @@ function isContainer(el: El, expanded: boolean): boolean {
 function endsOf(el: El): Set<string> {
   const ends = new Set<string>();
   const add = (ref: unknown): void => {
-    if (Array.isArray(ref)) ref.forEach(add);
-    else if (ref && typeof ref === 'object' && 'get' in ref) {
+    if (Array.isArray(ref)) {
+      ref.forEach(add);
+    } else if (ref && typeof ref === 'object' && 'get' in ref) {
       const id = (ref as El).get<string | undefined>('id');
       if (id) ends.add(id);
     }
@@ -169,16 +170,26 @@ function elementsNeedingDi(doc: Doc): Set<string> {
   const need = new Set<string>();
   const walk = (scope: El): void => {
     for (const fe of many(scope, 'flowElements')) {
-      if (is(fe, 'bpmn:FlowNode') || is(fe, 'bpmn:SequenceFlow') || is(fe, 'bpmn:DataObjectReference') || is(fe, 'bpmn:DataStoreReference')) need.add(idOf(fe));
+      if (is(fe, 'bpmn:FlowNode') || is(fe, 'bpmn:SequenceFlow') || is(fe, 'bpmn:DataObjectReference') || is(fe, 'bpmn:DataStoreReference')) {
+        need.add(idOf(fe));
+      }
       if (is(fe, 'bpmn:SubProcess')) walk(fe);
     }
-    for (const artifact of many(scope, 'artifacts')) if (is(artifact, 'bpmn:TextAnnotation') || is(artifact, 'bpmn:Association')) need.add(idOf(artifact));
+    for (const artifact of many(scope, 'artifacts')) {
+      if (is(artifact, 'bpmn:TextAnnotation') || is(artifact, 'bpmn:Association')) {
+        need.add(idOf(artifact));
+      }
+    }
   };
   for (const root of many(doc.definitions, 'rootElements')) {
     if (is(root, 'bpmn:Process')) walk(root);
     if (is(root, 'bpmn:Collaboration')) {
-      for (const participant of many(root, 'participants')) need.add(idOf(participant));
-      for (const messageFlow of many(root, 'messageFlows')) need.add(idOf(messageFlow));
+      for (const participant of many(root, 'participants')) {
+        need.add(idOf(participant));
+      }
+      for (const messageFlow of many(root, 'messageFlows')) {
+        need.add(idOf(messageFlow));
+      }
     }
   }
   return need;
@@ -192,7 +203,9 @@ type Segment = [Point, Point];
 
 function segments(points: Point[]): Segment[] {
   const out: Segment[] = [];
-  for (let index = 0; index + 1 < points.length; index++) out.push([points[index]!, points[index + 1]!]);
+  for (let index = 0; index + 1 < points.length; index++) {
+    out.push([points[index]!, points[index + 1]!]);
+  }
   return out;
 }
 
@@ -268,7 +281,9 @@ function checkDi(doc: Doc, planes: Plane[]): Report {
   const report: Report = { planes: planes.length, shapes: 0, edges: 0, crossings: [], overlaps: [], through: [], diagonal: [], missing: [], nonInteger: [], labelClashes: [], labelOnLine: [], inOutOverlaps: [] };
   const seen = new Set<string>();
   const integer = (what: string, ...values: number[]): void => {
-    if (!values.every((coordinate) => Number.isInteger(coordinate))) report.nonInteger.push(what);
+    if (!values.every((coordinate) => Number.isInteger(coordinate))) {
+      report.nonInteger.push(what);
+    }
   };
   for (const plane of planes) {
     report.shapes += plane.shapes.length;
@@ -276,46 +291,82 @@ function checkDi(doc: Doc, planes: Plane[]): Report {
     for (const shape of plane.shapes) {
       seen.add(shape.id);
       integer(shape.id, shape.box.x, shape.box.y, shape.box.width, shape.box.height);
-      if (shape.label) integer(`${shape.id}#label`, shape.label.x, shape.label.y, shape.label.width, shape.label.height);
+      if (shape.label) {
+        integer(`${shape.id}#label`, shape.label.x, shape.label.y, shape.label.width, shape.label.height);
+      }
     }
     for (const edge of plane.edges) {
       seen.add(edge.id);
-      for (const point of edge.points) integer(edge.id, point.x, point.y);
-      if (edge.label) integer(`${edge.id}#label`, edge.label.x, edge.label.y, edge.label.width, edge.label.height);
+      for (const point of edge.points) {
+        integer(edge.id, point.x, point.y);
+      }
+      if (edge.label) {
+        integer(`${edge.id}#label`, edge.label.x, edge.label.y, edge.label.width, edge.label.height);
+      }
     }
     const leaf = plane.shapes.filter((shape) => !shape.container);
     for (let index = 0; index < leaf.length; index++) {
       for (let otherIndex = index + 1; otherIndex < leaf.length; otherIndex++) {
         const first = leaf[index]!, second = leaf[otherIndex]!;
         const boundaryPair = (is(first.el, 'bpmn:BoundaryEvent') && attachedTo(first.el) === second.id) || (is(second.el, 'bpmn:BoundaryEvent') && attachedTo(second.el) === first.id);
-        if (!boundaryPair && boxesOverlap(first.box, second.box)) report.overlaps.push(`${first.id}~${second.id}`);
+        if (!boundaryPair && boxesOverlap(first.box, second.box)) {
+          report.overlaps.push(`${first.id}~${second.id}`);
+        }
       }
     }
     for (const edge of plane.edges) {
       for (const seg of segments(edge.points)) {
-        if (isFlow(edge.el) && seg[0].x !== seg[1].x && seg[0].y !== seg[1].y) report.diagonal.push(edge.id);
+        if (isFlow(edge.el) && seg[0].x !== seg[1].x && seg[0].y !== seg[1].y) {
+          report.diagonal.push(edge.id);
+        }
         for (const shape of leaf) {
           if (edge.ends.has(shape.id)) continue;
-          if (is(shape.el, 'bpmn:BoundaryEvent') && edge.ends.has(attachedTo(shape.el) ?? '')) continue;
-          if (segmentHitsBox(seg, shape.box)) report.through.push(`${edge.id}->${shape.id}`);
+          if (is(shape.el, 'bpmn:BoundaryEvent') && edge.ends.has(attachedTo(shape.el) ?? '')) {
+            continue;
+          }
+          if (segmentHitsBox(seg, shape.box)) {
+            report.through.push(`${edge.id}->${shape.id}`);
+          }
         }
       }
     }
     for (let index = 0; index < plane.edges.length; index++) {
       for (let otherIndex = index + 1; otherIndex < plane.edges.length; otherIndex++) {
         const first = plane.edges[index]!, second = plane.edges[otherIndex]!;
-        if (segments(first.points).some((s1) => segments(second.points).some((s2) => properCross(s1, s2)))) report.crossings.push(`${first.id}x${second.id}`);
+        if (segments(first.points).some((s1) => segments(second.points).some((s2) => properCross(s1, s2)))) {
+          report.crossings.push(`${first.id}x${second.id}`);
+        }
       }
     }
     // labels: against leaf shapes, other labels and edge segments
     const labels: Array<{ owner: string; box: Box; text: Box }> = [];
-    for (const shape of plane.shapes) if (shape.label) labels.push({ owner: shape.id, box: shape.label, text: glyphBox(shape.label, shape.el.get<string | undefined>('name') ?? '') });
-    for (const edge of plane.edges) if (edge.label) labels.push({ owner: edge.id, box: edge.label, text: glyphBox(edge.label, edge.el.get<string | undefined>('name') ?? '') });
+    for (const shape of plane.shapes) {
+      if (shape.label) {
+        labels.push({ owner: shape.id, box: shape.label, text: glyphBox(shape.label, shape.el.get<string | undefined>('name') ?? '') });
+      }
+    }
+    for (const edge of plane.edges) {
+      if (edge.label) {
+        labels.push({ owner: edge.id, box: edge.label, text: glyphBox(edge.label, edge.el.get<string | undefined>('name') ?? '') });
+      }
+    }
     for (let index = 0; index < labels.length; index++) {
       const label = labels[index]!;
-      for (const shape of leaf) if (shape.id !== label.owner && boxesOverlap(label.box, shape.box)) report.labelClashes.push(`${label.owner}#label~${shape.id}`);
-      for (let otherIndex = index + 1; otherIndex < labels.length; otherIndex++) if (boxesOverlap(label.box, labels[otherIndex]!.box)) report.labelClashes.push(`${label.owner}#label~${labels[otherIndex]!.owner}#label`);
-      for (const edge of plane.edges) if (segments(edge.points).some((seg) => segmentCutsBox(seg, label.text))) report.labelOnLine.push(`${label.owner}#label~${edge.id}`);
+      for (const shape of leaf) {
+        if (shape.id !== label.owner && boxesOverlap(label.box, shape.box)) {
+          report.labelClashes.push(`${label.owner}#label~${shape.id}`);
+        }
+      }
+      for (let otherIndex = index + 1; otherIndex < labels.length; otherIndex++) {
+        if (boxesOverlap(label.box, labels[otherIndex]!.box)) {
+          report.labelClashes.push(`${label.owner}#label~${labels[otherIndex]!.owner}#label`);
+        }
+      }
+      for (const edge of plane.edges) {
+        if (segments(edge.points).some((seg) => segmentCutsBox(seg, label.text))) {
+          report.labelOnLine.push(`${label.owner}#label~${edge.id}`);
+        }
+      }
     }
     // an incoming and an outgoing flow of one node must not share a line
     const flows = plane.edges.filter((edge) => is(edge.el, 'bpmn:SequenceFlow'));
@@ -325,14 +376,20 @@ function checkDi(doc: Doc, planes: Plane[]): Report {
       for (const incoming of into) {
         for (const outgoing of outOf) {
           if (incoming === outgoing) continue;
-          if (segments(incoming.points).some((s1) => segments(outgoing.points).some((s2) => collinearOverlap(s1, s2) > 0))) report.inOutOverlaps.push(`${incoming.id}|${outgoing.id}@${shape.id}`);
+          if (segments(incoming.points).some((s1) => segments(outgoing.points).some((s2) => collinearOverlap(s1, s2) > 0))) {
+            report.inOutOverlaps.push(`${incoming.id}|${outgoing.id}@${shape.id}`);
+          }
         }
       }
     }
   }
-  for (const id of elementsNeedingDi(doc)) if (!seen.has(id)) report.missing.push(id);
+  for (const id of elementsNeedingDi(doc)) {
+    if (!seen.has(id)) report.missing.push(id);
+  }
   const uniq = (list: string[]): string[] => [...new Set(list)];
-  for (const key of ['crossings', 'overlaps', 'through', 'diagonal', 'nonInteger', 'labelClashes', 'labelOnLine', 'inOutOverlaps'] as const) report[key] = uniq(report[key]);
+  for (const key of ['crossings', 'overlaps', 'through', 'diagonal', 'nonInteger', 'labelClashes', 'labelOnLine', 'inOutOverlaps'] as const) {
+    report[key] = uniq(report[key]);
+  }
   return report;
 }
 
@@ -395,7 +452,11 @@ function expectClean(laid: Laid): void {
   expect(laid.report.crossings).toEqual([]);
   expect(laid.report.labelClashes).toEqual([]);
   expect(laid.report.inOutOverlaps).toEqual([]);
-  for (const plane of laid.planes) for (const edge of plane.edges) expect(edge.points.length, `${edge.id} has waypoints`).toBeGreaterThanOrEqual(2);
+  for (const plane of laid.planes) {
+    for (const edge of plane.edges) {
+      expect(edge.points.length, `${edge.id} has waypoints`).toBeGreaterThanOrEqual(2);
+    }
+  }
 }
 
 /** No label text is crossed by a line. */
@@ -429,7 +490,9 @@ function longestHorizontalY(points: Point[]): number | undefined {
   let best: Segment | undefined;
   for (const segment of segments(points)) {
     if (segment[0].y !== segment[1].y) continue;
-    if (!best || Math.abs(segment[1].x - segment[0].x) > Math.abs(best[1].x - best[0].x)) best = segment;
+    if (!best || Math.abs(segment[1].x - segment[0].x) > Math.abs(best[1].x - best[0].x)) {
+      best = segment;
+    }
   }
   return best?.[0].y;
 }
@@ -484,10 +547,16 @@ describe('clean layout engine', () => {
     expectLabelsClear(laid);
     expect(laid.report).toMatchObject({ planes: 1, shapes: 5, edges: 4 });
     expectStraightLine(laid, ['S', 'A', 'B', 'C', 'E']);
-    for (const plane of laid.planes) for (const edge of plane.edges) expect(edge.points, `${edge.id} is one straight segment`).toHaveLength(2);
+    for (const plane of laid.planes) {
+      for (const edge of plane.edges) {
+        expect(edge.points, `${edge.id} is one straight segment`).toHaveLength(2);
+      }
+    }
     // event labels below, and every element sits inside the plane at positive coordinates
     expect(laid.shape('S').label!.y).toBeGreaterThan(bottom(laid.box('S')));
-    for (const shape of laid.planes[0]!.shapes) expect(Math.min(shape.box.x, shape.box.y)).toBeGreaterThan(0);
+    for (const shape of laid.planes[0]!.shapes) {
+      expect(Math.min(shape.box.x, shape.box.y)).toBeGreaterThan(0);
+    }
   });
 
   it('xor split / join with 3 branches: first branch is the spine, the others are bands below in order', async () => {
@@ -598,7 +667,9 @@ describe('clean layout engine', () => {
     );
     expectClean(merge);
     const mergeBox = merge.box('M');
-    for (const id of ['F', 'Q']) expect(flowBetween(merge, id, 'M').points.at(-1), id).toEqual({ x: cx(mergeBox), y: bottom(mergeBox) });
+    for (const id of ['F', 'Q']) {
+      expect(flowBetween(merge, id, 'M').points.at(-1), id).toEqual({ x: cx(mergeBox), y: bottom(mergeBox) });
+    }
     // Fix loops back into the join GJ, which T2 enters from below: it rises there too, not over the top
     const join = await layout(
       'loop-into-join',
@@ -614,7 +685,9 @@ describe('clean layout engine', () => {
     );
     expectClean(join);
     const gj = join.box('GJ');
-    for (const id of ['T2', 'F']) expect(flowBetween(join, id, 'GJ').points.at(-1), id).toEqual({ x: cx(gj), y: bottom(gj) });
+    for (const id of ['T2', 'F']) {
+      expect(flowBetween(join, id, 'GJ').points.at(-1), id).toEqual({ x: cx(gj), y: bottom(gj) });
+    }
   });
 
   it('a loop from a gateway into a join leaves through a vertex of the diamond, not beside it, to share the join\'s bottom vertex', async () => {
@@ -680,7 +753,9 @@ describe('clean layout engine', () => {
     const o2c = await layout('o2c-join-exits', doc);
     expect(LayoutAnalysis.of(o2c.out.definitions).problems.filter((problem) => problem.kind === 'inOut')).toEqual([]);
     const fork = o2c.box('Gateway_Fork'), join2 = o2c.box('Gateway_Join');
-    for (const target of ['Activity_CreateInvoice', 'Activity_PickAndPack']) expect(flowBetween(o2c, 'Gateway_Fork', target).points[0], target).toEqual({ x: right(fork), y: cy(fork) });
+    for (const target of ['Activity_CreateInvoice', 'Activity_PickAndPack']) {
+      expect(flowBetween(o2c, 'Gateway_Fork', target).points[0], target).toEqual({ x: right(fork), y: cy(fork) });
+    }
     expect(flowBetween(o2c, 'Gateway_Join', 'Activity_ShipGoods').points[0]).toEqual({ x: right(join2), y: cy(join2) });
   });
 
@@ -728,7 +803,9 @@ describe('clean layout engine', () => {
     const gatewayBox = laid.box('G'), otherIndex = laid.box('J');
     expect(flowBetween(laid, 'G', 'J').points).toEqual([{ x: right(gatewayBox), y: cy(gatewayBox) }, { x: otherIndex.x, y: cy(otherIndex) }]);
     const without = await layout('lanes-no-empty-branch', emptyBranchDoc(lanes, false));
-    for (const id of ['Service', 'Warehouse']) expect(laid.box(id), id).toEqual(without.box(id));
+    for (const id of ['Service', 'Warehouse']) {
+      expect(laid.box(id), id).toEqual(without.box(id));
+    }
     // without lanes the branches lie on that row: the empty branch keeps its band below them
     const plain = await layout('empty-branch-band', emptyBranchDoc(undefined));
     expectClean(plain);
@@ -1004,9 +1081,13 @@ describe('clean layout engine', () => {
     expect(pts[2]!.y, `${what}: a horizontal run`).toBe(run);
     for (const id of [eventId, ...passed]) {
       const shape = laid.shape(id);
-      for (const box of [shape.box, ...(shape.label ? [shape.label] : [])]) expect(run - bottom(box), `${what}: the run keeps off ${id}`).toBeGreaterThanOrEqual(15);
+      for (const box of [shape.box, ...(shape.label ? [shape.label] : [])]) {
+        expect(run - bottom(box), `${what}: the run keeps off ${id}`).toBeGreaterThanOrEqual(15);
+      }
     }
-    if (straight) expect(pts.slice(2), `${what}: straight up into ${targetId}`).toEqual([{ x: cx(targetBox), y: run }, { x: cx(targetBox), y: bottom(targetBox) }]);
+    if (straight) {
+      expect(pts.slice(2), `${what}: straight up into ${targetId}`).toEqual([{ x: cx(targetBox), y: run }, { x: cx(targetBox), y: bottom(targetBox) }]);
+    }
     return run;
   }
 
@@ -1067,7 +1148,9 @@ describe('clean layout engine', () => {
     expect(laid.shape('BF').label!.height).toBeGreaterThan(20);
     const run = expectRunBelow(laid, 'BF', 'H', ['A', 'B'], 'two-line label');
     expect(bottom(laid.box('L2')) - run).toBeGreaterThanOrEqual(15);
-    for (const id of ['A', 'B', 'E']) expect(bottom(laid.box(id)), id).toBeLessThan(bottom(laid.box('L2')));
+    for (const id of ['A', 'B', 'E']) {
+      expect(bottom(laid.box(id)), id).toBeLessThan(bottom(laid.box('L2')));
+    }
   });
 
   it('a boundary flow into a node on the row above leaves its event downwards and runs below the host\'s row and the event\'s label, not along the host\'s bottom border (without lanes)', async () => {
@@ -1119,7 +1202,9 @@ describe('clean layout engine', () => {
         const run = expectRunBelow(laid, 'BT', 'C', ['B'], what(where), false);
         const frameBox = laid.box(frame);
         expect(bottom(frameBox) - run, what(`${where}: the run keeps off the frame's bottom border`)).toBeGreaterThanOrEqual(15);
-        for (const point of flowBetween(laid, 'BT', 'C').points) expect(contains(frameBox, { ...point, width: 0, height: 0 }), what(`${where}: (${point.x}, ${point.y}) inside`)).toBe(true);
+        for (const point of flowBetween(laid, 'BT', 'C').points) {
+          expect(contains(frameBox, { ...point, width: 0, height: 0 }), what(`${where}: (${point.x}, ${point.y}) inside`)).toBe(true);
+        }
       }
       const run = expectRunBelow(esp, 'BT', 'C', ['B'], what('event sub-process'), false);
       const box = esp.box('ESP');
@@ -1228,8 +1313,11 @@ describe('clean layout engine', () => {
     const process = many(doc.definitions, 'rootElements').find((root) => is(root, 'bpmn:Process'))!;
     const list = process.get<El[]>('flowElements');
     const [flow] = list.splice(list.findIndex((el) => idOf(el) === id), 1);
-    if (first) list.unshift(flow!);
-    else list.push(flow!);
+    if (first) {
+      list.unshift(flow!);
+    } else {
+      list.push(flow!);
+    }
     return doc;
   }
 
@@ -1439,7 +1527,9 @@ describe('clean layout engine', () => {
       for (const shape of plane.shapes.filter((candidate) => candidate.label)) {
         for (const edge of plane.edges) {
           for (const [start, end] of segments(edge.points)) {
-            if (start.y !== end.y || Math.max(start.x, end.x) <= shape.label!.x || Math.min(start.x, end.x) >= right(shape.label!)) continue;
+            if (start.y !== end.y || Math.max(start.x, end.x) <= shape.label!.x || Math.min(start.x, end.x) >= right(shape.label!)) {
+              continue;
+            }
             expect(Math.abs(start.y - shape.label!.y) > 2 && Math.abs(start.y - bottom(shape.label!)) > 2, `${shape.id}'s label off ${edge.id} at y ${start.y}`).toBe(true);
           }
         }
@@ -1615,7 +1705,9 @@ describe('clean layout engine', () => {
     expect(bottom(label)).toBeLessThanOrEqual(host.y);
     expect(laid.box('BE8').y, '2 days stays on the bottom border of Inform order').toBe(bottom(laid.box('T5')) - 18);
     const borders = ['L0', 'L1', 'L2', 'L3'].flatMap((id) => [laid.box(id).y, bottom(laid.box(id))]);
-    for (const point of flow.points) expect(borders, `(${point.x}, ${point.y}) off the lane borders`).not.toContain(point.y);
+    for (const point of flow.points) {
+      expect(borders, `(${point.x}, ${point.y}) off the lane borders`).not.toContain(point.y);
+    }
   });
 
   it('lanes: a host in the first column sends its boundary flow over the top from its top border (r013 without the start event)', async () => {
@@ -1707,7 +1799,9 @@ describe('clean layout engine', () => {
       if (!frame) continue;
       const frameBox = laid.box(frame);
       expect(run - frameBox.y, `${where}: the run keeps 15 px from the frame's top border`).toBeGreaterThanOrEqual(15);
-      for (const label of [flow.label!, laid.shape('BE12').label!]) expect(contains(frameBox, label), `${where}: the labels inside the frame`).toBe(true);
+      for (const label of [flow.label!, laid.shape('BE12').label!]) {
+        expect(contains(frameBox, label), `${where}: the labels inside the frame`).toBe(true);
+      }
       expect(contains(frameBox, laid.box('BE12')), `${where}: the event inside the frame`).toBe(true);
     }
   });
@@ -1739,7 +1833,11 @@ describe('clean layout engine', () => {
     // from its host's top border: the run starts above the host, the loop runs below
     expectUpOverTop(laid, 'BE6', 'F', 'A1', 'om-19');
     const way = segments(flowBetween(laid, 'BE6', 'F').points), loop = segments(flowBetween(laid, 'D', 'A1').points);
-    for (const waySegment of way) for (const loopSegment of loop) expect(collinearOverlap(waySegment, loopSegment), `${JSON.stringify(waySegment)} / ${JSON.stringify(loopSegment)}`).toBeLessThanOrEqual(0);
+    for (const waySegment of way) {
+      for (const loopSegment of loop) {
+        expect(collinearOverlap(waySegment, loopSegment), `${JSON.stringify(waySegment)} / ${JSON.stringify(loopSegment)}`).toBeLessThanOrEqual(0);
+      }
+    }
   });
 
   it('lanes: a node that a boundary event\'s way enters over the top is not moved for a rise into its bottom it does not have (r013 with data objects in Pack data\'s column)', async () => {
@@ -1785,10 +1883,18 @@ describe('clean layout engine', () => {
     );
     expect(laid.report.through).toEqual([]);
     const ways = [flowBetween(laid, 'BE14', 'J3'), flowBetween(laid, 'BE15', 'J9'), flowBetween(laid, 'BE16', 'F')];
-    for (const way of ways) for (const otherWay of ways) if (way !== otherWay) expect(laid.report.crossings, `${way.id} / ${otherWay.id}`).not.toContain(`${way.id}x${otherWay.id}`);
+    for (const way of ways) {
+      for (const otherWay of ways) {
+        if (way !== otherWay) {
+          expect(laid.report.crossings, `${way.id} / ${otherWay.id}`).not.toContain(`${way.id}x${otherWay.id}`);
+        }
+      }
+    }
     for (const [ev, way] of [['BE14', ways[0]!], ['BE15', ways[1]!], ['BE16', ways[2]!]] as const) {
       // the ways over the top
-      if (Math.min(...way.points.map((point) => point.y)) >= laid.box('A1').y) continue;
+      if (Math.min(...way.points.map((point) => point.y)) >= laid.box('A1').y) {
+        continue;
+      }
       const [start, end] = [way.points[1]!, way.points[2]!];
       for (const other of ['BE14', 'BE15', 'BE16']) {
         if (other === ev) continue;
@@ -1883,7 +1989,9 @@ describe('clean layout engine', () => {
       expect(cx(rejected), `${what}: Rejected keeps its place, the second from the right`).toBe(right(host) - 69);
       expect(flowBetween(laid, 'BE13', 'H').points[0], `${what}: Rejected's flow leaves downwards`).toEqual({ x: cx(rejected), y: bottom(rejected) });
       expect(laid.shape('BE13').label!.x, `${what}: its label right of it, below the host`).toBeGreaterThan(right(rejected));
-      if (sub) expect(laid.box('BE12').x, 'off the title').toBeGreaterThan(right(titleBox(host, 'Handle claim')!));
+      if (sub) {
+        expect(laid.box('BE12').x, 'off the title').toBeGreaterThan(right(titleBox(host, 'Handle claim')!));
+      }
       expect(LayoutAnalysis.of(laid.out.model.definitions).score, what).toBe(0);
     }
   });
@@ -2146,8 +2254,12 @@ describe('clean layout engine', () => {
     expectStraightLine(laid, ['S2', 'T1', 'Inner', 'G', 'E2']);
     expectStraightLine(laid, ['S3', 'T3', 'E3']);
     // children stay inside their (expanded) parent, with room for the header
-    for (const id of ['S2', 'T1', 'Inner', 'G', 'E2']) expect(contains(laid.box('Sub'), laid.box(id)), `${id} inside Sub`).toBe(true);
-    for (const id of ['S3', 'T3', 'E3']) expect(contains(laid.box('Inner'), laid.box(id)), `${id} inside Inner`).toBe(true);
+    for (const id of ['S2', 'T1', 'Inner', 'G', 'E2']) {
+      expect(contains(laid.box('Sub'), laid.box(id)), `${id} inside Sub`).toBe(true);
+    }
+    for (const id of ['S3', 'T3', 'E3']) {
+      expect(contains(laid.box('Inner'), laid.box(id)), `${id} inside Inner`).toBe(true);
+    }
     expect(laid.box('S2').y).toBeGreaterThan(laid.box('Sub').y + 30);
     // the internal loop stays inside the sub-process and goes around T1 .. G
     const loop = flowBetween(laid, 'G', 'T1');
@@ -2235,7 +2347,9 @@ describe('clean layout engine', () => {
     const mainBottom = Math.max(...['S', 'A', 'B', 'E'].map((id) => bottom(laid.box(id))));
     expect(es.y).toBeGreaterThan(mainBottom);
     expect(es.x).toBeGreaterThanOrEqual(laid.box('S').x);
-    for (const id of ['ES_S', 'ES_T', 'ES_E']) expect(contains(es, laid.box(id)), `${id} inside ES`).toBe(true);
+    for (const id of ['ES_S', 'ES_T', 'ES_E']) {
+      expect(contains(es, laid.box(id)), `${id} inside ES`).toBe(true);
+    }
   });
 
   it('collaboration: 2 pools + black box, pools stacked, message flows orthogonal', async () => {
@@ -2274,8 +2388,12 @@ describe('clean layout engine', () => {
     expect(new Set([customer.width, shop.width, bank.width]).size).toBe(1);
     expect(bank.height).toBeLessThan(shop.height);
     // every node sits in its pool, right of the header
-    for (const id of ['CS', 'C1', 'C2', 'CE']) expect(contains({ ...customer, x: customer.x + 30, width: customer.width - 30 }, laid.box(id)), `${id} in Customer`).toBe(true);
-    for (const id of ['SS', 'S1', 'S2', 'SE']) expect(contains({ ...shop, x: shop.x + 30, width: shop.width - 30 }, laid.box(id)), `${id} in Shop`).toBe(true);
+    for (const id of ['CS', 'C1', 'C2', 'CE']) {
+      expect(contains({ ...customer, x: customer.x + 30, width: customer.width - 30 }, laid.box(id)), `${id} in Customer`).toBe(true);
+    }
+    for (const id of ['SS', 'S1', 'S2', 'SE']) {
+      expect(contains({ ...shop, x: shop.x + 30, width: shop.width - 30 }, laid.box(id)), `${id} in Shop`).toBe(true);
+    }
     expectStraightLine(laid, ['CS', 'C1', 'C2', 'CE']);
     expectStraightLine(laid, ['SS', 'S1', 'S2', 'SE']);
     // message flows dock on the top / bottom borders and the one to the black box ends on the pool
@@ -2326,10 +2444,14 @@ describe('clean layout engine', () => {
     expect(l1.x).toBe(pool.x + 30);
     expect(right(l1)).toBe(right(pool));
     const boxes = { L1: l1, L2: l2, L3: l3 };
-    for (const [id, lane] of Object.entries(lanes)) expect(contains(boxes[lane], laid.box(id)), `${id} inside ${lane}`).toBe(true);
+    for (const [id, lane] of Object.entries(lanes)) {
+      expect(contains(boxes[lane], laid.box(id)), `${id} inside ${lane}`).toBe(true);
+    }
     // still left to right, and the nodes of one lane line up
     const order = ['S', 'A', 'B', 'C', 'D', 'F', 'G', 'E'];
-    for (let index = 0; index + 1 < order.length; index++) expect(laid.box(order[index + 1]!).x).toBeGreaterThan(right(laid.box(order[index]!)));
+    for (let index = 0; index + 1 < order.length; index++) {
+      expect(laid.box(order[index + 1]!).x).toBeGreaterThan(right(laid.box(order[index]!)));
+    }
     for (const lane of ['L1', 'L2', 'L3']) {
       const ys = Object.keys(lanes).filter((id) => lanes[id] === lane).map((id) => cy(laid.box(id)));
       expect(new Set(ys).size, `nodes of ${lane} on one line`).toBe(1);
@@ -2652,7 +2774,9 @@ describe('clean layout engine', () => {
       expect(laid.report.overlaps, what).toEqual([]);
       // with the boundary paths the timer path goes over the top from Pick invoice's top border (it crosses nothing), and
       // the crossing the lanes force stays
-      if (full) expect(laid.report.crossings, what).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
+      if (full) {
+        expect(laid.report.crossings, what).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
+      }
       if (!full) {
         // only the crossing the lanes force: Pack order's way up into Inform order crosses Book data's into the join
         expect(laid.report.crossings).toEqual(['flow_packOrderToInformOrderxflow_bookDataToGateway']);
@@ -2736,7 +2860,9 @@ describe('clean layout engine', () => {
     expect(lines.filter((line) => line.startsWith('[lifts]')).map((line) => line.split(':')[0])).toEqual(['[lifts] T10 stays', '[lifts] T11 stays']);
     const gatewayBox = laid.box('G');
     expect(flowBetween(laid, 'G', 'T8').points[0]).toEqual({ x: right(gatewayBox), y: cy(gatewayBox) });
-    for (const id of ['T10', 'T11']) expect(flowBetween(laid, 'G', id).points[0], id).toEqual({ x: cx(gatewayBox), y: bottom(gatewayBox) });
+    for (const id of ['T10', 'T11']) {
+      expect(flowBetween(laid, 'G', id).points[0], id).toEqual({ x: cx(gatewayBox), y: bottom(gatewayBox) });
+    }
     expect(laid.report.labelClashes).toEqual([]);
     expect(laid.report.inOutOverlaps).toEqual([]);
   });
@@ -2752,7 +2878,9 @@ describe('clean layout engine', () => {
         for (const row of [...new Set(nodes.map((node) => node.row))].sort((earlier, later) => earlier - later)) {
           const inRow = nodes.filter((node) => node.row === row);
           const rh = Math.max(...inRow.map((node) => node.height + (node.boundary.length ? 38 : 0)));
-          for (const node of inRow) shiftNode(node, 0, Math.round(rowY + rh / 2 - node.height / 2 - node.box.y));
+          for (const node of inRow) {
+            shiftNode(node, 0, Math.round(rowY + rh / 2 - node.height / 2 - node.box.y));
+          }
           rowY += rh + 60;
         }
         laneY = Math.max(rowY - 30, top + 120);
@@ -2824,7 +2952,9 @@ describe('clean layout engine', () => {
     expect(laid.shape('DO').label!.y).toBeGreaterThanOrEqual(bottom(laid.box('DO')));
     const dataEdges = laid.planes[0]!.edges.filter((edge) => is(edge.el, 'bpmn:DataAssociation'));
     expect(dataEdges).toHaveLength(3);
-    for (const edge of dataEdges) expect(edge.points).toHaveLength(2);
+    for (const edge of dataEdges) {
+      expect(edge.points).toHaveLength(2);
+    }
     // the association ends on the borders of the artifact and the task
     const outA = dataEdges.find((edge) => is(edge.el, 'bpmn:DataOutputAssociation') && edge.ends.has('A'))!;
     expect(outA.points[1]!.y).toBe(laid.box('DO').y);
@@ -3010,9 +3140,13 @@ async function shapesOf(xml: string): Promise<Map<string, DShape>> {
 function expectGroupAround(shapes: Map<string, DShape>, groupId: string, members: string[]): Box {
   const group = shapes.get(groupId);
   expect(group, `${groupId} is drawn`).toBeDefined();
-  for (const id of members) expect(contains(group!.bounds, shapes.get(id)!.bounds), `${id} inside ${groupId}`).toBe(true);
+  for (const id of members) {
+    expect(contains(group!.bounds, shapes.get(id)!.bounds), `${id} inside ${groupId}`).toBe(true);
+  }
   for (const shape of shapes.values()) {
-    if (shape.id === groupId || shape.container || shape.kind === 'group' || members.includes(shape.id)) continue;
+    if (shape.id === groupId || shape.container || shape.kind === 'group' || members.includes(shape.id)) {
+      continue;
+    }
     expect(boxesOverlap(group!.bounds, shape.bounds) && !contains(group!.bounds, shape.bounds), `${groupId}'s border cuts ${shape.id}`).toBe(false);
   }
   return group!.bounds;
@@ -3143,7 +3277,9 @@ describe('groups over a full redraw', () => {
     ids.forEach((id, index) => {
       const event = index === 0 || index === ids.length - 1;
       di.push(diShape(id, event ? [left, 122, 36, 36] : [left, 100, 100, 80]));
-      if (index < ids.length - 1) di.push(diEdge(`F${index + 1}`, [[left + (event ? 36 : 100), 140], [left + (event ? 36 : 100) + 60, 140]]));
+      if (index < ids.length - 1) {
+        di.push(diEdge(`F${index + 1}`, [[left + (event ? 36 : 100), 140], [left + (event ? 36 : 100) + 60, 140]]));
+      }
       left += (event ? 36 : 100) + 60;
     });
     return { body: kinds.join('') + flows.join(''), di };

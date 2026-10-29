@@ -23,8 +23,12 @@ export class PlaceCommand extends FormatCommand {
     ).action(async (file: string, ids: string[], options: RawOpts) => {
       if (options['side'] !== undefined) {
         const given = ['rowOf', 'below', 'above', 'columnOf', 'after', 'before', 'path', 'kind', 'branch'].filter((flag) => options[flag] !== undefined);
-        if (given.length) throw usageError(`--side cannot be combined with ${given.map(flag).join(', ')}`, { hint: '`bpmn place <file> <boundaryEventId> --side top` moves a boundary event to the top border of its host; place the host to move both.' });
-        if (ids.length !== 1) throw usageError('--side takes exactly one id: the boundary event', { hint: 'Example: `bpmn place order.bpmn event_paymentOverdue --side top`.' });
+        if (given.length) {
+          throw usageError(`--side cannot be combined with ${given.map(flag).join(', ')}`, { hint: '`bpmn place <file> <boundaryEventId> --side top` moves a boundary event to the top border of its host; place the host to move both.' });
+        }
+        if (ids.length !== 1) {
+          throw usageError('--side takes exactly one id: the boundary event', { hint: 'Example: `bpmn place order.bpmn event_paymentOverdue --side top`.' });
+        }
         await this.runFormat(file, { op: 'place', ids, side: options['side'] as PlaceShapes['side'] }, options);
         return;
       }

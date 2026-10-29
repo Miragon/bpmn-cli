@@ -31,7 +31,9 @@ function sideOf(point: Point, rect: Box): Side | undefined {
 function hits(points: Point[], rect: Box): boolean {
   for (let index = 0; index + 1 < points.length; index++) {
     const segmentStart = points[index]!, segmentEnd = points[index + 1]!;
-    if (Math.min(segmentStart.x, segmentEnd.x) < rect.x + rect.width && Math.max(segmentStart.x, segmentEnd.x) > rect.x && Math.min(segmentStart.y, segmentEnd.y) < rect.y + rect.height && Math.max(segmentStart.y, segmentEnd.y) > rect.y) return true;
+    if (Math.min(segmentStart.x, segmentEnd.x) < rect.x + rect.width && Math.max(segmentStart.x, segmentEnd.x) > rect.x && Math.min(segmentStart.y, segmentEnd.y) < rect.y + rect.height && Math.max(segmentStart.y, segmentEnd.y) > rect.y) {
+      return true;
+    }
   }
   return false;
 }
@@ -42,7 +44,9 @@ function crossings(points: Point[], line: Point[]): number {
   for (let routeIndex = 0; routeIndex + 1 < points.length; routeIndex++) {
     for (let lineIndex = 0; lineIndex + 1 < line.length; lineIndex++) {
       const routeStart = points[routeIndex]!, routeEnd = points[routeIndex + 1]!, lineStart = line[lineIndex]!, lineEnd = line[lineIndex + 1]!;
-      if (orient(routeStart, routeEnd, lineStart) * orient(routeStart, routeEnd, lineEnd) < 0 && orient(lineStart, lineEnd, routeStart) * orient(lineStart, lineEnd, routeEnd) < 0) crossingCount++;
+      if (orient(routeStart, routeEnd, lineStart) * orient(routeStart, routeEnd, lineEnd) < 0 && orient(lineStart, lineEnd, routeStart) * orient(lineStart, lineEnd, routeEnd) < 0) {
+        crossingCount++;
+      }
     }
   }
   return crossingCount;
@@ -64,9 +68,13 @@ function expectValid(req: RouteRequest, points: Point[], opts: Expect = {}): voi
     expect(segmentStart.x === segmentEnd.x || segmentStart.y === segmentEnd.y, `segment ${segmentIndex} orthogonal`).toBe(true);
     expect(segLen(segmentStart, segmentEnd), `segment ${segmentIndex} not empty`).toBeGreaterThan(0);
     const nextEnd = points[segmentIndex + 2];
-    if (nextEnd) expect((segmentStart.x === segmentEnd.x && segmentEnd.x === nextEnd.x) || (segmentStart.y === segmentEnd.y && segmentEnd.y === nextEnd.y), `point ${segmentIndex + 1} is a bend`).toBe(false);
+    if (nextEnd) {
+      expect((segmentStart.x === segmentEnd.x && segmentEnd.x === nextEnd.x) || (segmentStart.y === segmentEnd.y && segmentEnd.y === nextEnd.y), `point ${segmentIndex + 1} is a bend`).toBe(false);
+    }
   }
-  for (const point of points) expect(Number.isFinite(point.x) && Number.isFinite(point.y)).toBe(true);
+  for (const point of points) {
+    expect(Number.isFinite(point.x) && Number.isFinite(point.y)).toBe(true);
+  }
   const first = sideOf(points[0]!, req.source), last = sideOf(points[points.length - 1]!, req.target);
   expect(first, 'first point on the source border').toBeDefined();
   expect(last, 'last point on the target border').toBeDefined();
@@ -77,7 +85,9 @@ function expectValid(req: RouteRequest, points: Point[], opts: Expect = {}): voi
     expect(segLen(points[points.length - 2]!, points[points.length - 1]!), 'target stub').toBeGreaterThanOrEqual(15);
   }
   if (!opts.mayHit) {
-    for (const obstacle of req.obstacles) expect(hits(points, obstacle), `cuts obstacle ${JSON.stringify(obstacle)}`).toBe(false);
+    for (const obstacle of req.obstacles) {
+      expect(hits(points, obstacle), `cuts obstacle ${JSON.stringify(obstacle)}`).toBe(false);
+    }
     expect(hits(points, req.source), 'cuts the source').toBe(false);
     expect(hits(points, req.target), 'cuts the target').toBe(false);
   }
@@ -213,7 +223,9 @@ describe('OrthogonalRouter: obstacles', () => {
       const obstacles: Box[] = [];
       for (let attempt = 0; attempt < 200 && obstacles.length < 25; attempt++) {
         const obstacle = box(Math.round(rand() * 900 - 50), Math.round(rand() * 700 - 50), 36 + Math.round(rand() * 80), 36 + Math.round(rand() * 50));
-        if (clear(obstacle, [source, target], 40) && clear(obstacle, obstacles, 20)) obstacles.push(obstacle);
+        if (clear(obstacle, [source, target], 40) && clear(obstacle, obstacles, 20)) {
+          obstacles.push(obstacle);
+        }
       }
       route({ source, target, obstacles, sourceSides: TASK_OUT, targetSides: TASK_IN });
     }

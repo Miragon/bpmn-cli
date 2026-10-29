@@ -53,7 +53,9 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    }
     throw err;
   }
   throw new Error('expected the mutation to fail');
@@ -61,13 +63,21 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnShape of diagramPlane.shapes.values()) if (!out.has(drawnShape.id)) out.set(drawnShape.id, drawnShape);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) {
+    for (const drawnShape of diagramPlane.shapes.values()) {
+      if (!out.has(drawnShape.id)) out.set(drawnShape.id, drawnShape);
+    }
+  }
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) for (const drawnEdge of diagramPlane.edges.values()) if (!out.has(drawnEdge.id)) out.set(drawnEdge.id, drawnEdge);
+  for (const diagramPlane of new DiagramReader(doc.definitions).planes()) {
+    for (const drawnEdge of diagramPlane.edges.values()) {
+      if (!out.has(drawnEdge.id)) out.set(drawnEdge.id, drawnEdge);
+    }
+  }
   return out;
 }
 
@@ -118,7 +128,9 @@ describe('a growing frame makes room around it instead of growing over foreign s
     const { result, after } = await run(xml, [{ op: 'add', kind: 'task', id: 'N', name: 'New', after: 'EH' }]);
     const shapesById = shapes(after);
     expect(right(shapesById.get('EV')!)).toBeGreaterThan(right(before.get('EV')!));
-    for (const id of ['OUT', 'AFTER', 'E', 'OT', 'OE']) expect(shapesById.get(id)!.bounds).toEqual(before.get(id)!.bounds);
+    for (const id of ['OUT', 'AFTER', 'E', 'OT', 'OE']) {
+      expect(shapesById.get(id)!.bounds).toEqual(before.get(id)!.bounds);
+    }
     expect(result.layout.moved).not.toContain('OUT');
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
   });
@@ -130,7 +142,9 @@ describe('a growing frame makes room around it instead of growing over foreign s
     const shapesById = shapes(after);
     const shift = (id: string): number => shapesById.get(id)!.bounds.x - before.get(id)!.bounds.x;
     expect(shift('G')).toBeGreaterThan(0);
-    for (const id of ['T_UP', 'E1', 'T_LOW', 'E2']) expect(shift(id)).toBe(shift('G'));
+    for (const id of ['T_UP', 'E1', 'T_LOW', 'E2']) {
+      expect(shift(id)).toBe(shift('G'));
+    }
     expect(shapesById.get('T_LOW')!.bounds.x).toBeGreaterThan(right(shapesById.get('G')!));
     expect(right(shapesById.get('G')!)).toBeLessThanOrEqual(right(shapesById.get('Pool')!));
     expect(problems(after, FRAME_DEFECTS)).toEqual([]);
@@ -208,7 +222,9 @@ describe('an unconnected node goes below its own container content', () => {
     const { result, after } = await run(xml, [{ op: 'move', ids: ['X'], lane: 'L1' }]);
     const shapesById = shapes(after);
     expect(shapesById.get('X')!.bounds.y).toBe(before.get('A')!.bounds.y);
-    for (const id of ['Pool', 'L1', 'L2', 'E']) expect(shapesById.get(id)!.bounds).toEqual(before.get(id)!.bounds);
+    for (const id of ['Pool', 'L1', 'L2', 'E']) {
+      expect(shapesById.get(id)!.bounds).toEqual(before.get(id)!.bounds);
+    }
     expect(result.layout.moved).toEqual(['X']);
   });
 });

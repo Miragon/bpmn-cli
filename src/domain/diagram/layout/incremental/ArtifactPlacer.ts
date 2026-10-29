@@ -28,12 +28,19 @@ export class ArtifactPlacer {
       if (is(other, 'bpmn:Association')) {
         const sourceId = idOf(raw(other, 'sourceRef'));
         const targetId = idOf(raw(other, 'targetRef'));
-        if (sourceId === id && targetId) out.push(targetId);
-        else if (targetId === id && sourceId) out.push(sourceId);
+        if (sourceId === id && targetId) {
+          out.push(targetId);
+        } else if (targetId === id && sourceId) {
+          out.push(sourceId);
+        }
       } else if (is(other, 'bpmn:DataInputAssociation')) {
-        if (rawList(other, 'sourceRef').some((ref) => idOf(ref) === id) && idOf(other.$parent)) out.push(idOf(other.$parent)!);
+        if (rawList(other, 'sourceRef').some((ref) => idOf(ref) === id) && idOf(other.$parent)) {
+          out.push(idOf(other.$parent)!);
+        }
       } else if (is(other, 'bpmn:DataOutputAssociation')) {
-        if (idOf(raw(other, 'targetRef')) === id && idOf(other.$parent)) out.push(idOf(other.$parent)!);
+        if (idOf(raw(other, 'targetRef')) === id && idOf(other.$parent)) {
+          out.push(idOf(other.$parent)!);
+        }
       }
     }
     return out;
@@ -66,7 +73,11 @@ export class ArtifactPlacer {
         candidates.push({ x: right(anchorBox) + 10, y: bottom(anchorBox) + 30 + step * (size.height + 20), ...size });
       }
     }
-    if (annotation) for (const step of steps) candidates.push({ x: right(anchorBox) + 30 + step * (size.width + 20), y: anchorBox.y - size.height / 2, ...size }, { x: right(anchorBox) + 20, y: bottom(anchorBox) + 30 + step * (size.height + 20), ...size });
+    if (annotation) {
+      for (const step of steps) {
+        candidates.push({ x: right(anchorBox) + 30 + step * (size.width + 20), y: anchorBox.y - size.height / 2, ...size }, { x: right(anchorBox) + 20, y: bottom(anchorBox) + 30 + step * (size.height + 20), ...size });
+      }
+    }
     const inner = frame ? Frames.interior(frame, 5) : undefined;
     const ok = (box: Box): boolean => this.obstacles.isFree(box, obs, 15) && !segs.some((segment) => overlaps(segment, box, 2)) && (!inner || (box.x >= inner.x && box.y >= inner.y));
     const box = candidates.find(ok) ?? candidates.find((candidate) => this.obstacles.isFree(candidate, obs, 10) && (!inner || (candidate.x >= inner.x && candidate.y >= inner.y))) ?? candidates[0]!;

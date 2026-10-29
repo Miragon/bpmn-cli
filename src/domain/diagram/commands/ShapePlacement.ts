@@ -30,10 +30,14 @@ export class ShapePlacement {
    * frames is refused, as the shapes cannot go beside it.
    */
   run(): string[] {
-    if (this.command.side) return this.boundarySide(this.command.ids?.[0] ?? '', this.command.side);
+    if (this.command.side) {
+      return this.boundarySide(this.command.ids?.[0] ?? '', this.command.side);
+    }
     const items = unique(this.command.ids ?? []).map((id) => this.diagram.movableShape(id));
     const { plane, shape: ref } = items[0]!;
-    for (const item of items) this.diagram.samePlane(plane, item.plane, item.shape.id, ref.id);
+    for (const item of items) {
+      this.diagram.samePlane(plane, item.plane, item.shape.id, ref.id);
+    }
     const group = outermost(plane, items.map((item) => item.shape));
     const sp = PlaneQuery.spacingOf(plane);
     const refUnit = this.diagram.drawing(plane).unitBox(ref);
@@ -80,7 +84,9 @@ export class ShapePlacement {
       for (const member of group) {
         if (!Frames.chain(plane, member).includes(frame)) continue;
         const memberUnit = this.diagram.drawing(plane).unitBox(member);
-        if (inside({ ...memberUnit, x: memberUnit.x + dx, y: memberUnit.y + dy }, frame.bounds)) continue;
+        if (inside({ ...memberUnit, x: memberUnit.x + dx, y: memberUnit.y + dy }, frame.bounds)) {
+          continue;
+        }
         throw modelError('E_LEAVES_CONTAINER', `Placing ${member.id} ${parts.join(' and ')} would move it out of its ${frameWord(frame)} ${frame.id}`, {
           element: member.id,
           related: [frame.id],
@@ -93,7 +99,9 @@ export class ShapePlacement {
       this.notes.push(`${ref.id} is already there`);
       return [];
     }
-    for (const member of group) this.diagram.drawing(plane).shift(member.id, dx, dy);
+    for (const member of group) {
+      this.diagram.drawing(plane).shift(member.id, dx, dy);
+    }
     const unit = (candidate: DShape): Box => (candidate.container ? candidate.bounds : this.diagram.drawing(plane).unitBox(candidate));
     const shape = (id: string): DShape => plane.shapes.get(id)!;
     const holds = (): boolean => {
@@ -121,8 +129,12 @@ export class ShapePlacement {
     while (queue.length) {
       for (const flow of flowsOf(queue.shift()!, 'outgoing')) {
         const node = plane.shapes.get(idOf(raw(flow, 'targetRef')) ?? '');
-        if (!node || inPath.has(node.id) || node.id === host.id || !PlaneQuery.isLeaf(node) || node.kind === 'boundary' || !beyond(node.bounds) || Frames.of(plane, node) !== home) continue;
-        if (!flowsOf(node.id, 'incoming').every((incoming) => inPath.has(idOf(raw(incoming, 'sourceRef')) ?? ''))) continue;
+        if (!node || inPath.has(node.id) || node.id === host.id || !PlaneQuery.isLeaf(node) || node.kind === 'boundary' || !beyond(node.bounds) || Frames.of(plane, node) !== home) {
+          continue;
+        }
+        if (!flowsOf(node.id, 'incoming').every((incoming) => inPath.has(idOf(raw(incoming, 'sourceRef')) ?? ''))) {
+          continue;
+        }
         inPath.add(node.id);
         path.push(node);
         queue.push(node.id);
@@ -180,7 +192,9 @@ export class ShapePlacement {
     const others = [...plane.shapes.values()].filter((boundary) => boundary.hostId === host.id && boundary.id !== id).map((boundary) => boundary.bounds);
     const docks: Point[] = [];
     for (const edge of plane.edges.values()) {
-      if (edge.points.length < 2 || edge.sourceId === id || edge.targetId === id) continue;
+      if (edge.points.length < 2 || edge.sourceId === id || edge.targetId === id) {
+        continue;
+      }
       if (edge.sourceId === host.id) docks.push(edge.points[0]!);
       if (edge.targetId === host.id) docks.push(edge.points[edge.points.length - 1]!);
     }
@@ -217,10 +231,16 @@ export class ShapePlacement {
       event.label.y += dy;
     }
     const shifts = path.map((node) => ({ node, dy: mirror(node) }));
-    for (const { node, dy: ny } of shifts) this.diagram.room(plane).checkFrames([node], 0, ny, `on the ${side} side of ${host.id}`, [host]);
-    for (const { node, dy: ny } of shifts) this.diagram.drawing(plane).shift(node.id, 0, ny);
+    for (const { node, dy: ny } of shifts) {
+      this.diagram.room(plane).checkFrames([node], 0, ny, `on the ${side} side of ${host.id}`, [host]);
+    }
+    for (const { node, dy: ny } of shifts) {
+      this.diagram.drawing(plane).shift(node.id, 0, ny);
+    }
     const holds = (): boolean => attachedSide(event.bounds, host.bounds) === side && path.every((node) => (side === 'top' ? bottom(node.bounds) <= hb.y : node.bounds.y >= bottom(hb)));
-    if (path.length) this.diagram.room(plane).makeRoom(path, [host], this.snap, this.notes, `on the ${side} side of ${host.id}`, holds, ['y']);
+    if (path.length) {
+      this.diagram.room(plane).makeRoom(path, [host], this.snap, this.notes, `on the ${side} side of ${host.id}`, holds, ['y']);
+    }
     if (event.label) this.diagram.drawing(plane).placeShapeLabel(event);
     const rerouted = this.diagram.drawing(plane).settle(this.snap);
     for (const edge of plane.edges.values()) {

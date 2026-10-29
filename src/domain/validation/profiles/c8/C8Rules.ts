@@ -35,7 +35,9 @@ export abstract class C8Rules extends EngineRules {
   }
 
   protected messageOf(el: El): El | undefined {
-    if (this.kit.is(el, 'bpmn:ReceiveTask') || this.kit.is(el, 'bpmn:SendTask')) return peek<El>(el, 'messageRef');
+    if (this.kit.is(el, 'bpmn:ReceiveTask') || this.kit.is(el, 'bpmn:SendTask')) {
+      return peek<El>(el, 'messageRef');
+    }
     const def = list(el, 'eventDefinitions').find((definition) => this.kit.is(definition, 'bpmn:MessageEventDefinition'));
     return peek<El>(def, 'messageRef');
   }
@@ -55,7 +57,9 @@ export abstract class C8Rules extends EngineRules {
     if (this.kids(zeebeElement).length) return undefined;
     const attrs: Record<string, string> = {};
     for (const [key, val] of Object.entries(zeebeElement as unknown as Record<string, unknown>)) {
-      if (key.startsWith('$') || key.startsWith('xmlns') || val === undefined || val === null || typeof val === 'object') continue;
+      if (key.startsWith('$') || key.startsWith('xmlns') || val === undefined || val === null || typeof val === 'object') {
+        continue;
+      }
       attrs[key] = String(val);
     }
     Object.assign(attrs, fix);

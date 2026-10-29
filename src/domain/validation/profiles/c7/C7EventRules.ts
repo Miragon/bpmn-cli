@@ -40,7 +40,9 @@ export class C7EventRules extends C7Rules {
   checkEvent(el: El): void {
     this.checkCompensationHost(el);
     this.checkMultipleDefinitions(el);
-    for (const def of this.actedOn(el)) this.checkDefinition(el, def);
+    for (const def of this.actedOn(el)) {
+      this.checkDefinition(el, def);
+    }
   }
 
   private checkCompensationHost(el: El): void {
@@ -51,13 +53,21 @@ export class C7EventRules extends C7Rules {
   }
 
   private checkDefinition(el: El, def: El): void {
-    if (this.kit.is(def, 'bpmn:MessageEventDefinition')) this.checkMessageDefinition(el, def);
-    else if (this.kit.is(def, 'bpmn:SignalEventDefinition')) this.checkSignalDefinition(el, def);
-    else if (this.kit.is(def, 'bpmn:ErrorEventDefinition') && this.kit.is(el, 'bpmn:EndEvent')) this.checkErrorDefinition(el, def);
-    else if (this.kit.is(def, 'bpmn:EscalationEventDefinition')) this.checkEscalationDefinition(el, def);
-    else if (this.kit.is(def, 'bpmn:CompensateEventDefinition') && this.isThrowing(el)) this.checkCompensationRef(el, def);
-    else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) this.checkTimerDefinition(el, def);
-    else if (this.kit.is(def, 'bpmn:ConditionalEventDefinition')) this.checkConditionalDefinition(el, def);
+    if (this.kit.is(def, 'bpmn:MessageEventDefinition')) {
+      this.checkMessageDefinition(el, def);
+    } else if (this.kit.is(def, 'bpmn:SignalEventDefinition')) {
+      this.checkSignalDefinition(el, def);
+    } else if (this.kit.is(def, 'bpmn:ErrorEventDefinition') && this.kit.is(el, 'bpmn:EndEvent')) {
+      this.checkErrorDefinition(el, def);
+    } else if (this.kit.is(def, 'bpmn:EscalationEventDefinition')) {
+      this.checkEscalationDefinition(el, def);
+    } else if (this.kit.is(def, 'bpmn:CompensateEventDefinition') && this.isThrowing(el)) {
+      this.checkCompensationRef(el, def);
+    } else if (this.kit.is(def, 'bpmn:TimerEventDefinition')) {
+      this.checkTimerDefinition(el, def);
+    } else if (this.kit.is(def, 'bpmn:ConditionalEventDefinition')) {
+      this.checkConditionalDefinition(el, def);
+    }
   }
 
   private isCatching(el: El): boolean {
@@ -77,42 +87,59 @@ export class C7EventRules extends C7Rules {
     const id = idOf(el)!;
     const label = this.describe(el, undefined);
     const msg = peek<El>(def, 'messageRef');
-    if (!msg) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageRef', `${label} has no message; the engines refuse the file`, `\`bpmn set <file> ${id} message=<MessageName>\` (creates the bpmn:Message).`);
-    else if (!nameOf(msg)) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+    if (!msg) {
+      this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageRef', `${label} has no message; the engines refuse the file`, `\`bpmn set <file> ${id} message=<MessageName>\` (creates the bpmn:Message).`);
+    } else if (!nameOf(msg)) {
+      this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+    }
   }
 
   private checkSignalDefinition(el: El, def: El): void {
     const id = idOf(el)!;
     const label = this.describe(el, undefined);
     const sig = peek<El>(def, 'signalRef');
-    if (!sig) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; the engines refuse the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
-    else if (!nameOf(sig)) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
+    if (!sig) {
+      this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalRef', `${label} has no signal; the engines refuse the file`, `\`bpmn set <file> ${id} signal=<SignalName>\`.`);
+    } else if (!nameOf(sig)) {
+      this.push('deploy', 'W_C7_DEPLOY_SIGNAL', el, undefined, 'signalName', `Signal ${idOf(sig)} of ${label} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(sig)} name=<SignalName>\`.`, [idOf(sig)!]);
+    }
   }
 
   private checkErrorDefinition(el: El, def: El): void {
     const id = idOf(el)!;
     const label = this.describe(el, undefined);
     const err = peek<El>(def, 'errorRef');
-    if (!err) this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); the engines refuse the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
-    else if (!nonEmpty(peek<string>(err, 'errorCode'))) this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; the engines refuse the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
+    if (!err) {
+      this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorRef', `${label} throws no error (no errorRef); the engines refuse the file`, `\`bpmn set <file> ${id} error=<ErrorName> errorCode=<CODE>\`.`);
+    } else if (!nonEmpty(peek<string>(err, 'errorCode'))) {
+      this.push('deploy', 'W_C7_DEPLOY_ERROR', el, undefined, 'errorCode', `Error ${idOf(err)} thrown by ${label} has no errorCode; the engines refuse the file`, `\`bpmn set <file> ${id} errorCode=<CODE>\`.`, [idOf(err)!]);
+    }
   }
 
   private checkEscalationDefinition(el: El, def: El): void {
-    if (this.isThrowing(el)) this.checkThrownEscalation(el, def);
-    else if (this.kit.is(el, 'bpmn:BoundaryEvent')) this.checkEscalationHost(el);
+    if (this.isThrowing(el)) {
+      this.checkThrownEscalation(el, def);
+    } else if (this.kit.is(el, 'bpmn:BoundaryEvent')) {
+      this.checkEscalationHost(el);
+    }
   }
 
   private checkThrownEscalation(el: El, def: El): void {
     const id = idOf(el)!;
     const label = this.describe(el, undefined);
     const esc = peek<El>(def, 'escalationRef');
-    if (!esc) this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); the engines refuse the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
-    else if (!nonEmpty(peek<string>(esc, 'escalationCode'))) this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; the engines refuse the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
+    if (!esc) {
+      this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationRef', `${label} throws no escalation (no escalationRef); the engines refuse the file`, `\`bpmn set <file> ${id} escalation=<Name> escalationCode=<CODE>\`.`);
+    } else if (!nonEmpty(peek<string>(esc, 'escalationCode'))) {
+      this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationCode', `Escalation ${idOf(esc)} thrown by ${label} has no escalationCode; the engines refuse the file`, `\`bpmn set <file> ${id} escalationCode=<CODE>\`.`, [idOf(esc)!]);
+    }
   }
 
   private checkEscalationHost(el: El): void {
     const host = peek<El>(el, 'attachedToRef');
-    if (!host || this.kit.is(host, 'bpmn:SubProcess') || this.kit.is(host, 'bpmn:CallActivity') || this.kit.is(host, 'bpmn:UserTask')) return;
+    if (!host || this.kit.is(host, 'bpmn:SubProcess') || this.kit.is(host, 'bpmn:CallActivity') || this.kit.is(host, 'bpmn:UserTask')) {
+      return;
+    }
     const id = idOf(el)!;
     this.push('deploy', 'W_C7_DEPLOY_ESCALATION', el, undefined, 'escalationHost', `Escalation boundary event ${id} is attached to ${this.describe(host, undefined)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, `Attach it elsewhere (\`bpmn move <file> ${id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${id}\`.`, [idOf(host)!]);
   }
@@ -151,7 +178,9 @@ export class C7EventRules extends C7Rules {
     if (!scope) return;
     const allowed: Array<El | undefined> = [scope];
     if (this.kit.isEventSubProcess(scope)) allowed.push(this.doc.scopeOf(scope));
-    if (this.kit.is(ref, 'bpmn:FlowNode') && allowed.includes(this.doc.scopeOf(ref))) return;
+    if (this.kit.is(ref, 'bpmn:FlowNode') && allowed.includes(this.doc.scopeOf(ref))) {
+      return;
+    }
     const id = idOf(el)!;
     const sid = idOf(scope) ?? '<scopeId>';
     const candidates = this.doc
@@ -167,7 +196,9 @@ export class C7EventRules extends C7Rules {
 
   checkReceiveTask(el: El): void {
     const msg = peek<El>(el, 'messageRef');
-    if (msg && !nameOf(msg)) this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of receive task ${idOf(el)} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+    if (msg && !nameOf(msg)) {
+      this.push('deploy', 'W_C7_DEPLOY_MESSAGE', el, undefined, 'messageName', `Message ${idOf(msg)} of receive task ${idOf(el)} has no name; the engines refuse the file`, `\`bpmn set <file> ${idOf(msg)} name=<MessageName>\`.`, [idOf(msg)!]);
+    }
   }
 
   /**
@@ -178,7 +209,9 @@ export class C7EventRules extends C7Rules {
     const out: El[] = [];
     for (const node of this.doc.flowNodes(scope)) {
       out.push(node);
-      if (this.kit.is(node, 'bpmn:SubProcess') && !this.kit.is(node, 'bpmn:AdHocSubProcess')) out.push(...this.allFlowNodes(node));
+      if (this.kit.is(node, 'bpmn:SubProcess') && !this.kit.is(node, 'bpmn:AdHocSubProcess')) {
+        out.push(...this.allFlowNodes(node));
+      }
     }
     return out;
   }
@@ -199,11 +232,16 @@ export class C7EventRules extends C7Rules {
       let scope: string | undefined;
       if (this.kit.is(node, 'bpmn:StartEvent')) {
         const parent = this.doc.scopeOf(node);
-        if (parent && this.kit.is(parent, 'bpmn:Process')) scope = `start:${idOf(parent)}`;
-        else if (parent && this.kit.isEventSubProcess(parent)) scope = `scope:${idOf(this.doc.scopeOf(parent))}`;
+        if (parent && this.kit.is(parent, 'bpmn:Process')) {
+          scope = `start:${idOf(parent)}`;
+        } else if (parent && this.kit.isEventSubProcess(parent)) {
+          scope = `scope:${idOf(this.doc.scopeOf(parent))}`;
+        }
       } else if (this.kit.is(node, 'bpmn:BoundaryEvent')) {
         const host = peek<El>(node, 'attachedToRef');
-        if (host) scope = `${this.isMultiInstance(host) ? 'body' : 'scope'}:${idOf(host)}`;
+        if (host) {
+          scope = `${this.isMultiInstance(host) ? 'body' : 'scope'}:${idOf(host)}`;
+        }
       } else if (this.kit.is(node, 'bpmn:ReceiveTask')) {
         add('message', `scope:${idOf(node)}`, nameOf(peek<El>(node, 'messageRef')), node);
       }
@@ -252,8 +290,11 @@ export class C7EventRules extends C7Rules {
       const name = nameOf(sig);
       if (!name) continue;
       const first = seen.get(name);
-      if (first) this.push('deploy', 'W_C7_DEPLOY_SIGNAL', sig, undefined, `dupSignal:${name}`, `Signals ${idOf(first)} and ${idOf(sig)} are both named "${name}"; the engines refuse duplicate signal names`, `\`bpmn set <file> ${idOf(sig)} name=<OtherName>\` (or point its events at ${idOf(first)} and remove it).`, [idOf(first)!]);
-      else seen.set(name, sig);
+      if (first) {
+        this.push('deploy', 'W_C7_DEPLOY_SIGNAL', sig, undefined, `dupSignal:${name}`, `Signals ${idOf(first)} and ${idOf(sig)} are both named "${name}"; the engines refuse duplicate signal names`, `\`bpmn set <file> ${idOf(sig)} name=<OtherName>\` (or point its events at ${idOf(first)} and remove it).`, [idOf(first)!]);
+      } else {
+        seen.set(name, sig);
+      }
     }
   }
 
@@ -329,7 +370,11 @@ export class C7EventRules extends C7Rules {
     const meet = new Set<string>();
     for (const flow of own) {
       const target = peek<El>(flow, 'targetRef')!;
-      for (const node of this.reachableFrom(target)) if (reached.has(node) && !this.kit.is(node, 'bpmn:EndEvent') && idOf(node)) meet.add(idOf(node)!);
+      for (const node of this.reachableFrom(target)) {
+        if (reached.has(node) && !this.kit.is(node, 'bpmn:EndEvent') && idOf(node)) {
+          meet.add(idOf(node)!);
+        }
+      }
     }
     const ids = (els: El[]): string => els.map(idOf).join(', ');
     const targets = (els: El[]): string => [...new Set(els.map((flow) => idOf(peek<El>(flow, 'targetRef'))).filter((targetId): targetId is string => !!targetId))].join(', ');
@@ -345,7 +390,9 @@ export class C7EventRules extends C7Rules {
       const notes = [(this.outgoing.get(first) ?? []).length ? `${fid} then starts both branches in parallel` : '', into.length ? `${ids(into)} into ${targets(into)}, which ${fid} already reaches, go${into.length === 1 ? 'es' : ''} with ${sid}` : ''].filter(Boolean);
       parts.push(`Start its branch from ${fid}: ${moves}, then ${remove}${notes.length ? ` (${notes.join('; ')})` : ''}`);
     }
-    if (this.kit.is(scope, 'bpmn:Process')) parts.push(`give it another trigger, which keeps it as a second way into the process: \`bpmn set <file> ${sid} trigger=message message=<Name>\``);
+    if (this.kit.is(scope, 'bpmn:Process')) {
+      parts.push(`give it another trigger, which keeps it as a second way into the process: \`bpmn set <file> ${sid} trigger=message message=<Name>\``);
+    }
     const again = this.kit.isEventSubProcess(scope) ? this.ownEventSubProcess(scope, extra) : '';
     return `${parts.join(', or ')}${again ? `; ${again}` : ''}.`;
   }

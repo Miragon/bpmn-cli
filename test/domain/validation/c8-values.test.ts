@@ -205,7 +205,9 @@ async function deploy(name: string, text: string): Promise<string | undefined> {
   if (!res.ok) return json.detail ?? String(res.status);
   for (const deployment of json.deployments ?? []) {
     const key = deployment.processDefinition?.processDefinitionKey;
-    if (key) await fetch(`${ENGINE}/resources/${key}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    if (key) {
+      await fetch(`${ENGINE}/resources/${key}/deletion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    }
   }
   return undefined;
 }

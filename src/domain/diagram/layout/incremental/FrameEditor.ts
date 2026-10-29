@@ -36,9 +36,15 @@ export class FrameEditor {
     for (const shape of this.plane.shapes.values()) {
       if (shape === pool) continue;
       const parts = [shape.bounds, ...(shape.label ? [shape.label] : [])];
-      for (const part of parts) box = box ? union(box, part) : copyBox(part);
+      for (const part of parts) {
+        box = box ? union(box, part) : copyBox(part);
+      }
     }
-    for (const edge of this.plane.edges.values()) for (const point of edge.points) box = box ? union(box, { x: point.x, y: point.y, width: 0, height: 0 }) : { x: point.x, y: point.y, width: 0, height: 0 };
+    for (const edge of this.plane.edges.values()) {
+      for (const point of edge.points) {
+        box = box ? union(box, { x: point.x, y: point.y, width: 0, height: 0 }) : { x: point.x, y: point.y, width: 0, height: 0 };
+      }
+    }
     pool.bounds = box ? { x: Math.round(box.x - HEADER - PAD), y: Math.round(box.y - PAD), width: Math.round(box.width + HEADER + 2 * PAD), height: Math.round(box.height + 2 * PAD) } : { x: 100, y: 80, width: 600, height: 250 };
   }
 
@@ -48,7 +54,11 @@ export class FrameEditor {
     const height = size?.height ?? (blackBox ? SIZES.blackBoxHeight : 200);
     if (!others.length) {
       let content: Box | undefined;
-      for (const shape of this.plane.shapes.values()) if (shape !== pool) content = content ? union(content, shape.bounds) : copyBox(shape.bounds);
+      for (const shape of this.plane.shapes.values()) {
+        if (shape !== pool) {
+          content = content ? union(content, shape.bounds) : copyBox(shape.bounds);
+        }
+      }
       const left = content ? content.x - HEADER - PAD : 100;
       const top = content ? bottom(content) + 80 : 80;
       pool.bounds = { x: Math.round(left), y: Math.round(top), width: Math.round(size?.width ?? Math.max(600, content ? content.width + HEADER + 2 * PAD : 600)), height };
@@ -56,7 +66,9 @@ export class FrameEditor {
     }
     const sorted = [...others].sort((upper, lower) => upper.bounds.y - lower.bounds.y);
     const gaps: number[] = [];
-    for (let index = 0; index + 1 < sorted.length; index++) gaps.push(sorted[index + 1]!.bounds.y - bottom(sorted[index]!.bounds));
+    for (let index = 0; index + 1 < sorted.length; index++) {
+      gaps.push(sorted[index + 1]!.bounds.y - bottom(sorted[index]!.bounds));
+    }
     const gap = Math.max(0, Math.round(median(gaps.filter((spacing) => spacing >= 0)) ?? 80));
     const widest = [...others].sort((first, second) => second.bounds.width - first.bounds.width || first.bounds.x - second.bounds.x)[0]!;
     const lowest = Math.max(...others.map((existing) => bottom(existing.bounds)));
@@ -142,8 +154,12 @@ export class FrameEditor {
   }
 
   private shiftAll(shapes: DShape[], edges: DEdge[], dx: number, dy: number): void {
-    for (const shape of shapes) translateShape(shape, dx, dy);
-    for (const edge of edges) translateEdge(edge, dx, dy);
+    for (const shape of shapes) {
+      translateShape(shape, dx, dy);
+    }
+    for (const edge of edges) {
+      translateEdge(edge, dx, dy);
+    }
   }
 
   /**
@@ -194,17 +210,27 @@ export class FrameEditor {
       let center = hi;
       for (const event of [...sorted].reverse()) {
         center = Math.min(center - size(event) / 2 - 7, hi - size(event) / 2 - 7);
-        while (!free(center, event) && center - size(event) / 2 >= lo) center -= 4;
+        while (!free(center, event) && center - size(event) / 2 >= lo) {
+          center -= 4;
+        }
         if (free(center, event)) {
           placed.set(event, { side, center });
           taken.push([event, { side, center }]);
           center -= size(event) / 2;
-        } else overflow.push([side, event]);
+        } else {
+          overflow.push([side, event]);
+        }
       }
     };
-    for (const [side, list] of bySide) fit(side, list, true);
-    for (const [side, event] of overflow.splice(0)) fit(opposite[side], [event], false);
-    for (const [side, event] of overflow) placed.set(event, { side, center: span(nb, side)[1] - (horizontal(side) ? event.bounds.width : event.bounds.height) / 2 });
+    for (const [side, list] of bySide) {
+      fit(side, list, true);
+    }
+    for (const [side, event] of overflow.splice(0)) {
+      fit(opposite[side], [event], false);
+    }
+    for (const [side, event] of overflow) {
+      placed.set(event, { side, center: span(nb, side)[1] - (horizontal(side) ? event.bounds.width : event.bounds.height) / 2 });
+    }
     for (const [event, { side, center }] of placed) {
       const width = event.bounds.width;
       const height = event.bounds.height;
@@ -255,7 +281,9 @@ export class FrameEditor {
     const content = child ? [...child.shapes.values()] : [];
     let box: Box | undefined;
     for (const shape of content) {
-      for (const part of [shape.bounds, ...(shape.label ? [shape.label] : [])]) box = box ? union(box, part) : copyBox(part);
+      for (const part of [shape.bounds, ...(shape.label ? [shape.label] : [])]) {
+        box = box ? union(box, part) : copyBox(part);
+      }
     }
     const width = Math.max(350, box ? Math.round(box.width + 2 * PAD) : 0);
     const height = Math.max(200, box ? Math.round(box.height + 45 + PAD) : 0);
@@ -275,7 +303,9 @@ export class FrameEditor {
     this.reseatBoundaries(sub, old);
     if (!child) return;
     const edges = [...child.edges.values()];
-    if (box) this.shiftAll(content, edges, sub.bounds.x + PAD - box.x, sub.bounds.y + 45 - box.y);
+    if (box) {
+      this.shiftAll(content, edges, sub.bounds.x + PAD - box.x, sub.bounds.y + 45 - box.y);
+    }
     for (const shape of content) {
       child.shapes.delete(shape.id);
       const scope = sem.scopeOf.get(shape.id);

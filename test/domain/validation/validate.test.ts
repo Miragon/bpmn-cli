@@ -46,7 +46,9 @@ function body(nodes: NodeSpec[], flows: FlowSpec[] = [], extra = ''): string {
 function chain(nodes: NodeSpec[], extra = ''): string {
   const all: NodeSpec[] = [{ tag: 'startEvent', id: 'Start' }, ...nodes, { tag: 'endEvent', id: 'End' }];
   const flows: FlowSpec[] = [];
-  for (let index = 0; index < all.length - 1; index++) flows.push({ id: `F${index + 1}`, from: all[index]!.id, to: all[index + 1]!.id });
+  for (let index = 0; index < all.length - 1; index++) {
+    flows.push({ id: `F${index + 1}`, from: all[index]!.id, to: all[index + 1]!.id });
+  }
   return body(all, flows, extra);
 }
 
@@ -135,7 +137,9 @@ describe('structural errors', () => {
     const process = doc.processes()[0]!;
     const taskA = doc.require('A');
     removeFrom(process, 'flowElements', taskA);
-    for (const finding of [...doc.incoming(taskA), ...doc.outgoing(taskA)]) removeFrom(process, 'flowElements', finding);
+    for (const finding of [...doc.incoming(taskA), ...doc.outgoing(taskA)]) {
+      removeFrom(process, 'flowElements', finding);
+    }
     doc.invalidate();
     const findings = findingsOf(doc, 'E_DANGLING_REF');
     expect(findings.some((finding) => finding.element === 'Lane_1' && finding.related?.[0] === 'A')).toBe(true);
@@ -809,7 +813,9 @@ describe('hints', () => {
         const cmd = command[1]!;
         const rest = command[2]!;
         expect(cmd, `${code}: ${hint}`).not.toBe('split');
-        if (FILE_COMMANDS.includes(cmd)) expect(rest, `${code}: ${hint}`).toMatch(/^ <file>/);
+        if (FILE_COMMANDS.includes(cmd)) {
+          expect(rest, `${code}: ${hint}`).toMatch(/^ <file>/);
+        }
         if (cmd === 'add') expect(rest, `${code}: ${hint}`).not.toMatch(/--name/);
       }
     }

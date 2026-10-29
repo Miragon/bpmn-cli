@@ -36,17 +36,29 @@ export class ArrangementCheckpoint {
     for (const saved of this.shapes) {
       Object.assign(saved.node, { layer: saved.layer, row: saved.row, band: saved.band, width: saved.width, box: saved.box, topUsed: saved.topUsed });
       if (saved.node.onTop !== saved.onTop) saved.node.onTop = saved.onTop;
-      if (saved.node.labelLeft !== saved.labelLeft) saved.node.labelLeft = saved.labelLeft;
+      if (saved.node.labelLeft !== saved.labelLeft) {
+        saved.node.labelLeft = saved.labelLeft;
+      }
     }
     for (const saved of this.edges) {
       Object.assign(saved.edge, { points: saved.points, label: saved.label, runsBelow: saved.runsBelow, runsAbove: saved.runsAbove });
-      if (saved.bandRow === undefined) delete saved.edge.bandRow;
-      else saved.edge.bandRow = saved.bandRow;
-      if (saved.bandY === undefined) delete saved.edge.bandY;
-      else saved.edge.bandY = saved.bandY;
+      if (saved.bandRow === undefined) {
+        delete saved.edge.bandRow;
+      } else {
+        saved.edge.bandRow = saved.bandRow;
+      }
+      if (saved.bandY === undefined) {
+        delete saved.edge.bandY;
+      } else {
+        saved.edge.bandY = saved.bandY;
+      }
     }
-    for (const saved of this.artifacts) saved.artifact.box = saved.box;
-    for (const saved of this.compensations) saved.compensation.points = saved.points;
+    for (const saved of this.artifacts) {
+      saved.artifact.box = saved.box;
+    }
+    for (const saved of this.compensations) {
+      saved.compensation.points = saved.points;
+    }
     layout.width = this.width;
     layout.height = this.height;
     layout.laneBands = this.laneBands;

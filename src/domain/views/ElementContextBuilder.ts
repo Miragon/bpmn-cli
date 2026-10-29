@@ -50,7 +50,9 @@ export class ElementContextBuilder {
     const ancestors = [...chain].reverse().map((scope) => (is(scope, 'bpmn:Process') ? compact<ContextRef>({ id: shownId(scope), kind: 'process', name: ownNameOf(scope) }) : ElementContextBuilder.refOf(scope)));
     const isMessageFlow = is(el, 'bpmn:MessageFlow');
     const collaboration = isMessageFlow ? (el.$parent as El | undefined) : undefined;
-    if (collaboration && is(collaboration, 'bpmn:Collaboration')) ancestors.push(ElementContextBuilder.refOf(collaboration));
+    if (collaboration && is(collaboration, 'bpmn:Collaboration')) {
+      ancestors.push(ElementContextBuilder.refOf(collaboration));
+    }
     const pool = this.links.poolOf(el);
     const lane = is(el, 'bpmn:FlowNode') ? this.links.effectiveLane(el) : undefined;
     const host = is(el, 'bpmn:BoundaryEvent') ? peek<El>(el, 'attachedToRef') : undefined;
@@ -74,7 +76,13 @@ export class ElementContextBuilder {
 
     const boundary = is(el, 'bpmn:Activity') ? doc.boundaryEventsOf(el).map((boundaryEvent) => this.catchOf(boundaryEvent)) : [];
     const caughtBy: ContextCatch[] = [];
-    for (const scope of chain) if (is(scope, 'bpmn:SubProcess')) for (const boundaryEvent of doc.boundaryEventsOf(scope)) caughtBy.push(this.catchOf(boundaryEvent));
+    for (const scope of chain) {
+      if (is(scope, 'bpmn:SubProcess')) {
+        for (const boundaryEvent of doc.boundaryEventsOf(scope)) {
+          caughtBy.push(this.catchOf(boundaryEvent));
+        }
+      }
+    }
     const message = ElementContextBuilder.messageOf(el);
     const eventSubProcesses: ContextEventSubProcess[] = [];
     for (const scope of chain) {
@@ -138,7 +146,9 @@ export class ElementContextBuilder {
     const name = ownNameOf(message);
     const out: DetailMessageFlow[] = [];
     for (const mf of this.doc.messageFlows()) {
-      if (peek<El>(mf, direction === 'in' ? 'targetRef' : 'sourceRef') !== pool) continue;
+      if (peek<El>(mf, direction === 'in' ? 'targetRef' : 'sourceRef') !== pool) {
+        continue;
+      }
       const ref = peek<El>(mf, 'messageRef');
       if (ref ? ref !== message : !name || ownNameOf(mf) !== name) continue;
       out.push({ ...this.links.messageFlowEntry(mf, direction), at: shownId(pool) });
@@ -168,7 +178,9 @@ export class ElementContextBuilder {
   }
 
   private static messageOf(el: El): El | undefined {
-    if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) return peek<El>(el, 'messageRef');
+    if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) {
+      return peek<El>(el, 'messageRef');
+    }
     const def = list(el, 'eventDefinitions').find((definition) => is(definition, 'bpmn:MessageEventDefinition'));
     return def ? peek<El>(def, 'messageRef') : undefined;
   }
@@ -176,7 +188,9 @@ export class ElementContextBuilder {
   private static messageDirection(el: El): 'in' | 'out' | undefined {
     if (is(el, 'bpmn:ReceiveTask')) return 'in';
     if (is(el, 'bpmn:SendTask')) return 'out';
-    if (!list(el, 'eventDefinitions').some((definition) => is(definition, 'bpmn:MessageEventDefinition'))) return undefined;
+    if (!list(el, 'eventDefinitions').some((definition) => is(definition, 'bpmn:MessageEventDefinition'))) {
+      return undefined;
+    }
     return is(el, 'bpmn:CatchEvent') ? 'in' : is(el, 'bpmn:ThrowEvent') ? 'out' : undefined;
   }
 

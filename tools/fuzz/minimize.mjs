@@ -54,7 +54,11 @@ async function ddmin(steps, test) {
       const cand = [...cur.slice(0, chunkStart), ...cur.slice(chunkStart + chunk)];
       if (!cand.length) continue;
       at = await probe(cand);
-      if (at >= 0) { cur = cand.slice(0, at + 1); granularity = Math.max(granularity - 1, 2); reduced = true; }
+      if (at >= 0) {
+        cur = cand.slice(0, at + 1);
+        granularity = Math.max(granularity - 1, 2);
+        reduced = true;
+      }
     }
     if (!reduced) {
       if (granularity >= cur.length) break;
@@ -76,11 +80,14 @@ function writeRepro(dir, model, steps, mode) {
   const lines = ['#!/bin/sh', '# Minimised fuzz repro: replays the steps on a copy of start.bpmn, then prints the metrics.', 'D=$(cd "$(dirname "$0")" && pwd)',
     `BPMN=\${BPMN:-"node ${binRef}"}`, 'cp "$D/start.bpmn" "$D/work.bpmn"'];
   steps.forEach((step, stepIndex) => {
-    if (stepIndex === steps.length - 1) lines.push('cp "$D/work.bpmn" "$D/before-last.bpmn"');
+    if (stepIndex === steps.length - 1) {
+      lines.push('cp "$D/work.bpmn" "$D/before-last.bpmn"');
+    }
     lines.push(`# step ${stepIndex}: ${step.name}`);
     const argv = toArgv(step.ops);
-    if (argv) lines.push(`$BPMN ${argv.map((arg) => (arg === '%F' ? '"$D/work.bpmn"' : quote(arg))).join(' ')}${layout}`);
-    else {
+    if (argv) {
+      lines.push(`$BPMN ${argv.map((arg) => (arg === '%F' ? '"$D/work.bpmn"' : quote(arg))).join(' ')}${layout}`);
+    } else {
       const opsFile = `op-${String(stepIndex).padStart(2, '0')}.json`;
       writeFileSync(join(dir, opsFile), JSON.stringify(step.ops, null, 1));
       lines.push(`$BPMN apply "$D/work.bpmn" "$D/${opsFile}"${layout}`);
@@ -96,7 +103,9 @@ export async function minimizeWalk(walkDir, options = {}) {
   const summary = JSON.parse(readFileSync(join(walkDir, 'summary.json'), 'utf8'));
   const steps = JSON.parse(readFileSync(join(walkDir, 'steps.json'), 'utf8'));
   const { first, hit } = matcher(summary, options);
-  if (!first) return { reproduced: false, tests: 0, reason: 'no matching violation in the walk' };
+  if (!first) {
+    return { reproduced: false, tests: 0, reason: 'no matching violation in the walk' };
+  }
   const slug = first.kind.replace(/[^\w]+/g, '_');
   const out = resolve(options.out ?? join(walkDir, `min-${slug}`));
   mkdirSync(out, { recursive: true });
@@ -123,7 +132,9 @@ async function main() {
   let options;
   try {
     options = parseArgs(process.argv.slice(2), SPEC);
-    if (options._.length !== 1) throw new Error('usage: node tools/fuzz/minimize.mjs <walk-dir> [--kind regex] [--detail regex] [--out dir]');
+    if (options._.length !== 1) {
+      throw new Error('usage: node tools/fuzz/minimize.mjs <walk-dir> [--kind regex] [--detail regex] [--out dir]');
+    }
   } catch (error) {
     console.error(error.message);
     process.exit(2);
@@ -137,4 +148,6 @@ async function main() {
   console.log(readFileSync(minimized.script, 'utf8'));
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

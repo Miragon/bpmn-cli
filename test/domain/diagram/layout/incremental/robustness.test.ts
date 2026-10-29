@@ -31,13 +31,21 @@ async function run(xml: string, ops: EditCommand[], opts: MutationOptions = {}):
 
 function shapes(doc: Doc): Map<string, DShape> {
   const out = new Map<string, DShape>();
-  for (const plane of new DiagramReader(doc.definitions).planes()) for (const shape of plane.shapes.values()) if (!out.has(shape.id)) out.set(shape.id, shape);
+  for (const plane of new DiagramReader(doc.definitions).planes()) {
+    for (const shape of plane.shapes.values()) {
+      if (!out.has(shape.id)) out.set(shape.id, shape);
+    }
+  }
   return out;
 }
 
 function edges(doc: Doc): Map<string, DEdge> {
   const out = new Map<string, DEdge>();
-  for (const plane of new DiagramReader(doc.definitions).planes()) for (const edge of plane.edges.values()) if (!out.has(edge.id)) out.set(edge.id, edge);
+  for (const plane of new DiagramReader(doc.definitions).planes()) {
+    for (const edge of plane.edges.values()) {
+      if (!out.has(edge.id)) out.set(edge.id, edge);
+    }
+  }
   return out;
 }
 
@@ -122,8 +130,12 @@ describe('boundary events of an expanded sub-process', () => {
     expect(sp.bounds.width).toBe(100);
     const events = [...now.values()].filter((shape) => shape.hostId === 'SP');
     expect(events.length).toBe(3);
-    for (const event of events) expect(attached(event, sp)).toBe(true);
-    for (const event of events) if (event.label) expect(labelGap(event)).toBeLessThan(40);
+    for (const event of events) {
+      expect(attached(event, sp)).toBe(true);
+    }
+    for (const event of events) {
+      if (event.label) expect(labelGap(event)).toBeLessThan(40);
+    }
     // the ones still on the bottom border keep their left-to-right order
     const bottomRow = events.filter((event) => Math.abs(cy(event) - bottom(sp)) <= 2).sort((first, second) => cx(first) - cx(second)).map((event) => event.id);
     const oldOrder = [...before.values()].filter((shape) => shape.hostId === 'SP').sort((first, second) => cx(first) - cx(second)).map((shape) => shape.id).filter((id) => bottomRow.includes(id));
@@ -155,7 +167,9 @@ describe('relocation keeps one DI per element', () => {
     const now = shapes(after);
     const sp = now.get('SP')!;
     expect(sp.bounds.width).toBe(400);
-    for (const id of ['SS', 'ST', 'SE']) expect(inside(now.get(id)!, sp)).toBe(true);
+    for (const id of ['SS', 'ST', 'SE']) {
+      expect(inside(now.get(id)!, sp)).toBe(true);
+    }
     expect(attached(now.get('BE')!, sp)).toBe(true);
   });
 
@@ -184,7 +198,9 @@ describe('renaming ids (set id=)', () => {
     expect(result.layout.moved).toEqual([]);
     const old = boundsOf(await Doc.fromXml(xml));
     const now = boundsOf(after);
-    for (const id of ['SS', 'ST', 'SE', 'BE', 'T']) expect(now.get(id)).toBe(old.get(id));
+    for (const id of ['SS', 'ST', 'SE', 'BE', 'T']) {
+      expect(now.get(id)).toBe(old.get(id));
+    }
     expect(now.get('X')).toBe(old.get('SP'));
   });
 
@@ -202,7 +218,9 @@ describe('closing a strip inside a sub-process', () => {
     const old = shapes(await Doc.fromXml(xml));
     const { after } = await run(xml, [{ op: 'remove', ids: ['X'] }]);
     const now = shapes(after);
-    for (const id of ['Pool', 'L1', 'L2']) expect(now.get(id)!.bounds).toEqual(old.get(id)!.bounds);
+    for (const id of ['Pool', 'L1', 'L2']) {
+      expect(now.get(id)!.bounds).toEqual(old.get(id)!.bounds);
+    }
     for (const id of ['T3', 'E']) {
       expect(inside(now.get(id)!, now.get('L1')!)).toBe(true);
       expect(inside(now.get(id)!, now.get('Pool')!)).toBe(true);
@@ -262,7 +280,9 @@ describe('several diagrams, partial and unusual DI', () => {
       const shapeC = shapes(after).get('C')!;
       expect(shapeC.di!.get('id')).toBe('C_di');
       expect(Number.isFinite(shapeC.bounds.x)).toBe(true);
-      if (name === 'nobounds.bpmn') expect(shapeC.di!.get('bioc:fill')).toBe('#ff0000');
+      if (name === 'nobounds.bpmn') {
+        expect(shapeC.di!.get('bioc:fill')).toBe('#ff0000');
+      }
     }
   });
 
@@ -380,7 +400,9 @@ describe('frames and obstacles', () => {
     const now = shapes(after);
     const shapeT = now.get('Z_T')!;
     for (const shape of now.values()) {
-      if (shape.id === 'Z_T' || shape.container || shape.kind === 'group' || shape.kind === 'lane' || shape.kind === 'participant') continue;
+      if (shape.id === 'Z_T' || shape.container || shape.kind === 'group' || shape.kind === 'lane' || shape.kind === 'participant') {
+        continue;
+      }
       const apart = shapeT.bounds.x >= right(shape) || shape.bounds.x >= right(shapeT) || shapeT.bounds.y >= bottom(shape) || shape.bounds.y >= bottom(shapeT);
       expect(apart, `Z_T overlaps ${shape.id}`).toBe(true);
     }
@@ -395,7 +417,9 @@ describe('frames and obstacles', () => {
     ]);
     const now = shapes(after);
     expect(inside(now.get('TE')!, now.get('G1')!)).toBe(true);
-    for (const id of ['G2', 'S3', 'C', 'E3', 'D']) expect(now.get(id)!.bounds).toEqual(old.get(id)!.bounds);
+    for (const id of ['G2', 'S3', 'C', 'E3', 'D']) {
+      expect(now.get(id)!.bounds).toEqual(old.get(id)!.bounds);
+    }
   });
 });
 
@@ -451,7 +475,9 @@ describe('engine ownership (auto mode)', () => {
       const doc = await Doc.fromXml(xml);
       for (const diagram of doc.definitions.get<El[]>('diagrams')) {
         for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
-          if (pe.get<El>('bpmnElement').get('id') === 'Note') pe.get<El>('bounds').set('x', pe.get<El>('bounds').get<number>('x') + 200);
+          if (pe.get<El>('bpmnElement').get('id') === 'Note') {
+            pe.get<El>('bounds').set('x', pe.get<El>('bounds').get<number>('x') + 200);
+          }
         }
       }
       return doc.toXml();
@@ -489,7 +515,9 @@ describe('engine ownership (auto mode)', () => {
 async function flowId(xml: string, source: string, target: string): Promise<string | undefined> {
   const doc = await Doc.fromXml(xml);
   for (const [id, el] of doc.byId()) {
-    if (is(el, 'bpmn:SequenceFlow') && el.get<El>('sourceRef').get('id') === source && el.get<El>('targetRef').get('id') === target) return id;
+    if (is(el, 'bpmn:SequenceFlow') && el.get<El>('sourceRef').get('id') === source && el.get<El>('targetRef').get('id') === target) {
+      return id;
+    }
   }
   return undefined;
 }

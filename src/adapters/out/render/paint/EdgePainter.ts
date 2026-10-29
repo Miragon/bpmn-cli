@@ -57,17 +57,23 @@ export class EdgePainter {
     }
     if (edge.kind === 'messageFlow') {
       let out = path(' stroke-dasharray="10 6"');
-      if (start) out += `<circle cx="${formatNumber(start.tip.x)}" cy="${formatNumber(start.tip.y)}" r="4" fill="${FILL}" stroke="${ink}" stroke-width="1.2"/>`;
+      if (start) {
+        out += `<circle cx="${formatNumber(start.tip.x)}" cy="${formatNumber(start.tip.y)}" r="4" fill="${FILL}" stroke="${ink}" stroke-width="1.2"/>`;
+      }
       if (end) out += this.arrow(end, 'white');
       if (this.carriesMessage()) out += this.envelope();
       return out;
     }
     const dotted = path(' stroke-dasharray="0.5 4.5" stroke-linecap="round"');
-    if (edge.kind === 'dataAssociation') return dotted + (end ? this.arrow(end, 'open') : '');
+    if (edge.kind === 'dataAssociation') {
+      return dotted + (end ? this.arrow(end, 'open') : '');
+    }
     if (edge.kind === 'association') {
       const direction = raw<string>(edge.el, 'associationDirection');
       let out = dotted;
-      if (end && (direction === 'One' || direction === 'Both')) out += this.arrow(end, 'open');
+      if (end && (direction === 'One' || direction === 'Both')) {
+        out += this.arrow(end, 'open');
+      }
       if (start && direction === 'Both') out += this.arrow(start, 'open');
       return out;
     }
@@ -88,11 +94,15 @@ export class EdgePainter {
 
   label(): Item | undefined {
     const edge = this.edge;
-    if (edge.kind !== 'sequenceFlow' && edge.kind !== 'messageFlow') return undefined;
+    if (edge.kind !== 'sequenceFlow' && edge.kind !== 'messageFlow') {
+      return undefined;
+    }
     const value = raw<string>(edge.el, 'name');
     if (!value || !value.trim()) return undefined;
     const text = new LabelPainter(this.style.label);
-    if (edge.label) return text.external(edge.id, value, cx(edge.label), Math.round(edge.label.y), edge.label.width);
+    if (edge.label) {
+      return text.external(edge.id, value, cx(edge.label), Math.round(edge.label.y), edge.label.width);
+    }
     const mid = this.flowLabelMid();
     return text.external(edge.id, value, mid.x, Math.round(mid.y - 10));
   }
@@ -158,7 +168,9 @@ export class EdgePainter {
     for (let index = pts.length - 2; index >= 0; index--) {
       const previous = pts[index]!;
       const len = Math.hypot(tip.x - previous.x, tip.y - previous.y);
-      if (len > 0.01) return { tip, ux: (tip.x - previous.x) / len, uy: (tip.y - previous.y) / len };
+      if (len > 0.01) {
+        return { tip, ux: (tip.x - previous.x) / len, uy: (tip.y - previous.y) / len };
+      }
     }
     return undefined;
   }
@@ -172,7 +184,9 @@ export class EdgePainter {
     const leftWing = `${formatNumber(bx - direction.uy * half)} ${formatNumber(by + direction.ux * half)}`;
     const rightWing = `${formatNumber(bx + direction.uy * half)} ${formatNumber(by - direction.ux * half)}`;
     const tip = `${formatNumber(direction.tip.x)} ${formatNumber(direction.tip.y)}`;
-    if (kind === 'open') return `<path d="M${leftWing}L${tip}L${rightWing}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (kind === 'open') {
+      return `<path d="M${leftWing}L${tip}L${rightWing}" fill="none" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
     return `<path d="M${leftWing}L${tip}L${rightWing}Z" fill="${kind === 'filled' ? ink : FILL}" stroke="${ink}" stroke-width="1" stroke-linejoin="round"/>`;
   }
 

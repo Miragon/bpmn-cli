@@ -24,7 +24,11 @@ export class IncrementalRouting {
 
   private edgeIndex(planes: readonly Plane[]): Map<string, { plane: Plane; edge: DEdge }> {
     const out = new Map<string, { plane: Plane; edge: DEdge }>();
-    for (const plane of planes) for (const edge of plane.edges.values()) out.set(edge.id, { plane, edge });
+    for (const plane of planes) {
+      for (const edge of plane.edges.values()) {
+        out.set(edge.id, { plane, edge });
+      }
+    }
     return out;
   }
 
@@ -50,7 +54,9 @@ export class IncrementalRouting {
       if (!fid || !is(flow, 'bpmn:SequenceFlow')) continue;
       const ends = DiagramReader.edgeEnds(flow);
       const other = ends.sourceId === id ? ends.targetId : ends.sourceId;
-      if (!other || !plane.shapes.has(other) || this.run.planes.some((otherPlane) => otherPlane !== plane && otherPlane.edges.has(fid))) continue;
+      if (!other || !plane.shapes.has(other) || this.run.planes.some((otherPlane) => otherPlane !== plane && otherPlane.edges.has(fid))) {
+        continue;
+      }
       let edge = plane.edges.get(fid);
       if (!edge) {
         edge = { id: fid, el: flow, kind: 'sequenceFlow', ...ends, points: [] };
@@ -60,21 +66,33 @@ export class IncrementalRouting {
         edge.sourceId = ends.sourceId;
         edge.targetId = ends.targetId;
       }
-      if (LayoutDebug.on()) LayoutDebug.log(`[route] ${fid}: ${this.run.newEdges.has(fid) ? 'new' : 'end placed'}, routed when ${id} was placed`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[route] ${fid}: ${this.run.newEdges.has(fid) ? 'new' : 'end placed'}, routed when ${id} was placed`);
+      }
       this.routeKept(plane, edge);
     }
     const detached = !PlaneQuery.verticalBand(plane);
     const drawing = this.run.drawing(plane);
     for (const edge of plane.edges.values()) {
-      if (edge.kind === 'messageFlow' || edge.points.length < 2 || edge.sourceId === id || edge.targetId === id || !edge.sourceId || !edge.targetId) continue;
+      if (edge.kind === 'messageFlow' || edge.points.length < 2 || edge.sourceId === id || edge.targetId === id || !edge.sourceId || !edge.targetId) {
+        continue;
+      }
       const ends = DiagramReader.edgeEnds(edge.el);
-      if (ends.sourceId !== edge.sourceId || ends.targetId !== edge.targetId || !plane.shapes.has(edge.sourceId) || !plane.shapes.has(edge.targetId)) continue;
+      if (ends.sourceId !== edge.sourceId || ends.targetId !== edge.targetId || !plane.shapes.has(edge.sourceId) || !plane.shapes.has(edge.targetId)) {
+        continue;
+      }
       const was = this.run.routedNow.get(edge.id) ?? this.edgesBefore.get(edge);
-      if (!was || (!drawing.brokenEdge(edge, was, { detached }) && !(this.run.place.continued?.has(id) && drawing.grazes(edge, [id])) && !drawing.touchesFresh(edge))) continue;
-      if (LayoutDebug.on()) LayoutDebug.log(`[route] ${edge.id}: broken when ${id} was placed`);
+      if (!was || (!drawing.brokenEdge(edge, was, { detached }) && !(this.run.place.continued?.has(id) && drawing.grazes(edge, [id])) && !drawing.touchesFresh(edge))) {
+        continue;
+      }
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[route] ${edge.id}: broken when ${id} was placed`);
+      }
       this.routeKept(plane, edge);
     }
-    if (!shape.label && hasExternalLabel(shape) && raw<string>(el, 'name')) drawing.placeShapeLabel(shape);
+    if (!shape.label && hasExternalLabel(shape) && raw<string>(el, 'name')) {
+      drawing.placeShapeLabel(shape);
+    }
     this.run.place.spacing.delete(plane);
   }
 
@@ -119,9 +137,13 @@ export class IncrementalRouting {
         const now = this.run.routedNow.get(edge.id);
         if (now) {
           const ends = DiagramReader.edgeEnds(edge.el);
-          if (ends.sourceId === edge.sourceId && ends.targetId === edge.targetId && edge.points.length >= 2 && !drawing.brokenEdge(edge, now, { detached }) && !drawing.grazes(edge, continued) && !drawing.touchesFresh(edge)) continue;
+          if (ends.sourceId === edge.sourceId && ends.targetId === edge.targetId && edge.points.length >= 2 && !drawing.brokenEdge(edge, now, { detached }) && !drawing.grazes(edge, continued) && !drawing.touchesFresh(edge)) {
+            continue;
+          }
           this.run.reroute.add(edge.id);
-          if (LayoutDebug.on()) LayoutDebug.log(`[route] ${edge.id}: broken after it was routed`);
+          if (LayoutDebug.on()) {
+            LayoutDebug.log(`[route] ${edge.id}: broken after it was routed`);
+          }
           continue;
         }
         if (this.run.newEdges.has(edge.id)) {

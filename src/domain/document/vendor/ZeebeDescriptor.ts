@@ -115,7 +115,9 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
     const prefix = this.prefix;
     const raw = [...((ZEEBE_DESCRIPTOR as unknown as { types: RawType[] }).types ?? []), ...EXTRA_TYPES];
     const types = new Map<string, RawType>();
-    for (const rawType of raw) types.set(this.typeKey(rawType.name), rawType);
+    for (const rawType of raw) {
+      types.set(this.typeKey(rawType.name), rawType);
+    }
 
     const mixinAttrs = new Map<string, ZeebeProperty[]>();
     const hostsOfMixin = new Map<string, string[]>();
@@ -129,7 +131,9 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
         if (bpmn.length) {
           const prev = attrs.get(property.name);
           if (prev) {
-            for (const owner of bpmn) if (!prev.owners.includes(owner)) prev.owners.push(owner);
+            for (const owner of bpmn) {
+              if (!prev.owners.includes(owner)) prev.owners.push(owner);
+            }
           } else {
             attrs.set(property.name, { name: `${prefix}:${property.name}`, type: property.type ?? 'String', owners: [...bpmn] });
           }
@@ -170,13 +174,18 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
       const props = ownProps(key);
       const allowedIn: string[] = [];
       for (const allowed of ALLOWED_IN_OVERRIDES[key] ?? rawType.meta?.allowedIn ?? []) {
-        if (allowed === '*') allowedIn.push('*');
-        else if (allowed.startsWith('bpmn:')) allowedIn.push(allowed);
-        else {
+        if (allowed === '*') {
+          allowedIn.push('*');
+        } else if (allowed.startsWith('bpmn:')) {
+          allowedIn.push(allowed);
+        } else {
           const allowedKey = this.typeKey(this.qualify(allowed));
           const hosts = hostsOfMixin.get(allowedKey);
-          if (hosts) allowedIn.push(...hosts);
-          else allowedIn.push(this.xmlName(allowedKey));
+          if (hosts) {
+            allowedIn.push(...hosts);
+          } else {
+            allowedIn.push(this.xmlName(allowedKey));
+          }
         }
       }
       elements.set(key, {
@@ -188,7 +197,9 @@ export class ZeebeDescriptor extends VendorDescriptor<ZeebeElementType> {
         body: props.some((property) => property.isBody),
       });
     }
-    for (const element of elements.values()) element.children = element.children.filter((child) => child !== element.name);
+    for (const element of elements.values()) {
+      element.children = element.children.filter((child) => child !== element.name);
+    }
     return { elements, attrs };
   }
 

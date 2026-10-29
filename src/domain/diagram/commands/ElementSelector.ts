@@ -66,12 +66,16 @@ export class ElementSelector {
     for (const fid of via) {
       const flow = doc.require(fid, 'bpmn:SequenceFlow', 'sequence flow');
       const leg = this.shortest(cur, flow.get<El>('sourceRef'));
-      if (!leg) throw ElementSelector.noMatch(`No sequence-flow path leads from ${ElementSelector.idOf(cur)} to ${fid}`, `Check the direction (--path <fromId> <toId>) and the order of --via; \`bpmn show <file>\` lists the flows of every node.`, fid);
+      if (!leg) {
+        throw ElementSelector.noMatch(`No sequence-flow path leads from ${ElementSelector.idOf(cur)} to ${fid}`, `Check the direction (--path <fromId> <toId>) and the order of --via; \`bpmn show <file>\` lists the flows of every node.`, fid);
+      }
       out.push(...leg, flow, flow.get<El>('targetRef'));
       cur = flow.get<El>('targetRef');
     }
     const last = this.shortest(cur, to);
-    if (!last) throw ElementSelector.noMatch(`No sequence-flow path leads from ${ElementSelector.idOf(cur)} to ${toId}`, `Check the direction (--path <fromId> <toId>)${via.length ? ' and the --via flows' : ''}; \`bpmn show <file>\` lists the flows of every node.`, toId);
+    if (!last) {
+      throw ElementSelector.noMatch(`No sequence-flow path leads from ${ElementSelector.idOf(cur)} to ${toId}`, `Check the direction (--path <fromId> <toId>)${via.length ? ' and the --via flows' : ''}; \`bpmn show <file>\` lists the flows of every node.`, toId);
+    }
     out.push(...last);
     return out.filter((el, index) => out.indexOf(el) === index);
   }
@@ -81,7 +85,9 @@ export class ElementSelector {
     const order = [start];
     for (let index = 0; index < order.length; index++) {
       for (const step of this.steps(order[index]!)) {
-        if (step.to === stop || seen.has(step.to) || !forward(order[index]!, step.to)) continue;
+        if (step.to === stop || seen.has(step.to) || !forward(order[index]!, step.to)) {
+          continue;
+        }
         seen.add(step.to);
         order.push(step.to);
       }
@@ -116,7 +122,9 @@ export class ElementSelector {
   ofKind(kind: string): El[] {
     const match = kindFilter(kind);
     const out = [...this.doc.byId().values()].filter((el) => match(el));
-    if (!out.length) throw ElementSelector.noMatch(`No element of kind ${kind} in the file`, '`bpmn find <file> "" --kind <kind>` lists the elements of a kind; `bpmn kinds` the kind names.');
+    if (!out.length) {
+      throw ElementSelector.noMatch(`No element of kind ${kind} in the file`, '`bpmn find <file> "" --kind <kind>` lists the elements of a kind; `bpmn kinds` the kind names.');
+    }
     return out;
   }
 
@@ -125,11 +133,17 @@ export class ElementSelector {
    * boundary events follow them.
    */
   select(sel: Selection, opts: { shapesOnly: boolean; drawn: (id: string) => boolean; centreX: (id: string) => number | undefined }): string[] {
-    if (sel.path && sel.path.length !== 2) throw usageError(`--path takes exactly two ids (from and to), got ${sel.path.length}`, { hint: 'Example: --path startEvent_start endEvent_done (with --via <flowId> to choose a branch).' });
-    if (sel.via?.length && !sel.path) throw usageError('--via needs --path', { hint: 'Example: --path startEvent_start endEvent_done --via flow_okToBook.' });
+    if (sel.path && sel.path.length !== 2) {
+      throw usageError(`--path takes exactly two ids (from and to), got ${sel.path.length}`, { hint: 'Example: --path startEvent_start endEvent_done (with --via <flowId> to choose a branch).' });
+    }
+    if (sel.via?.length && !sel.path) {
+      throw usageError('--via needs --path', { hint: 'Example: --path startEvent_start endEvent_done --via flow_okToBook.' });
+    }
     const found: El[] = [];
     if (sel.branch) found.push(...this.branch(sel.branch, opts.centreX));
-    if (sel.path) found.push(...this.path(sel.path[0]!, sel.path[1]!, sel.via ?? []));
+    if (sel.path) {
+      found.push(...this.path(sel.path[0]!, sel.path[1]!, sel.via ?? []));
+    }
     if (sel.kind) found.push(...this.ofKind(sel.kind));
     const connection = (el: El): boolean => is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow') || is(el, 'bpmn:Association') || is(el, 'bpmn:DataAssociation');
     const picked = found

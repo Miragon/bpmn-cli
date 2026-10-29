@@ -35,7 +35,9 @@ const tryJson = (text) => { try { return JSON.parse(text); } catch { return unde
 /** The `error` of the CLI's JSON error output (whole text or its last line). */
 function parseError(text) {
   const error = (tryJson(text) ?? tryJson(text.trim().split('\n').pop() ?? ''))?.error;
-  if (error?.code) return { code: error.code, message: String(error.message ?? '').slice(0, 300) };
+  if (error?.code) {
+    return { code: error.code, message: String(error.message ?? '').slice(0, 300) };
+  }
   return { code: 'E_UNPARSED', message: text.trim().split('\n')[0]?.slice(0, 300) ?? '' };
 }
 
@@ -82,11 +84,15 @@ export function libExecutor(api, { label = 'lib' } = {}) {
       try {
         const doc = await api.Doc.fromXml(xml);
         // the CLI's loadDoc guard (Doc.fromXml has none)
-        if (doc.lossyImportWarnings?.length) return { status: 'refused', code: 'E_IMPORT_LOSSY', message: 'lossy import', ms: ms(t0) };
+        if (doc.lossyImportWarnings?.length) {
+          return { status: 'refused', code: 'E_IMPORT_LOSSY', message: 'lossy import', ms: ms(t0) };
+        }
         const result = await api.mutateDoc(doc, api.parseOps(ops), { dryRun: true, layout: mode });
         return { status: 'ok', xml: result.xml, layout: result.layout, ms: ms(t0) };
       } catch (error) {
-        if (!(error instanceof api.BpmnError)) return { status: 'crash', code: 'E_EXCEPTION', message: String(error?.stack ?? error).slice(0, 500), ms: ms(t0) };
+        if (!(error instanceof api.BpmnError)) {
+          return { status: 'crash', code: 'E_EXCEPTION', message: String(error?.stack ?? error).slice(0, 500), ms: ms(t0) };
+        }
         const status = error.code === 'E_INTERNAL' || error.category === 'internal' ? 'crash' : error.category === 'usage' ? 'usage' : 'refused';
         return { status, code: error.code, message: String(error.message).slice(0, 300), ms: ms(t0) };
       }

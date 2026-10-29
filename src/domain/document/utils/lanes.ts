@@ -11,7 +11,9 @@ export function allLanes(process: El): El[] {
       visit(lane.get<El | undefined>('childLaneSet'));
     }
   };
-  for (const ls of many(process, 'laneSets')) visit(ls);
+  for (const ls of many(process, 'laneSets')) {
+    visit(ls);
+  }
   return out;
 }
 

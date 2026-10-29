@@ -102,7 +102,9 @@ export function followDiIds(defs: El, el: El, old: string, id: string, ids: IdCl
       const base = styledId(style, kind, id);
       if (isOrSuffixed(diId, base)) continue;
       let next = base;
-      for (let index = 2; ids.has(next); index++) next = `${base}_${index}`;
+      for (let index = 2; ids.has(next); index++) {
+        next = `${base}_${index}`;
+      }
       ids.release(diId);
       ids.claim(next);
       pe.set('id', next);
@@ -114,7 +116,9 @@ export function followDiIds(defs: El, el: El, old: string, id: string, ids: IdCl
 
 export function claimUnique(taken: Set<string>, base: string): string {
   let id = base;
-  for (let index = 2; taken.has(id); index++) id = `${base}_${index}`;
+  for (let index = 2; taken.has(id); index++) {
+    id = `${base}_${index}`;
+  }
   taken.add(id);
   return id;
 }

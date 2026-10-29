@@ -49,8 +49,11 @@ export class DrawnDiagram {
       details.hint = `It has no line (added, or its ends changed, with --no-layout): \`bpmn route <file> ${id}\` draws it, and so does the next model edit without --no-layout.`;
     } else if (is(el, 'bpmn:Process')) {
       const pool = rawList(this.sem.collaboration, 'participants').find((participant) => raw(participant, 'processRef') === el);
-      if (pool) details.hint = `A process is drawn as its pool: use the participant id ${idOf(pool)}.`;
-      else details.hint = 'A process without pool is the diagram itself; name the shapes inside it.';
+      if (pool) {
+        details.hint = `A process is drawn as its pool: use the participant id ${idOf(pool)}.`;
+      } else {
+        details.hint = 'A process without pool is the diagram itself; name the shapes inside it.';
+      }
     }
     return modelError('E_NO_SHAPE', `${id} has no ${what} in the diagram`, details);
   }
@@ -62,7 +65,9 @@ export class DrawnDiagram {
       const shape = plane.shapes.get(id);
       if (shape) return { plane, shape };
     }
-    if (this.isConnectionEl(el)) throw modelError('E_WRONG_KIND', `"${id}" is a connection, expected a shape`, { element: id, hint: 'Connections follow their ends; use `bpmn route` to route one again.' });
+    if (this.isConnectionEl(el)) {
+      throw modelError('E_WRONG_KIND', `"${id}" is a connection, expected a shape`, { element: id, hint: 'Connections follow their ends; use `bpmn route` to route one again.' });
+    }
     throw this.noShape(el, id);
   }
 

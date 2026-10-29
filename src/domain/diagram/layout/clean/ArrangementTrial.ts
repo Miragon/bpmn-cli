@@ -48,8 +48,11 @@ export abstract class ArrangementTrial {
         if (!key) continue;
         const [lo, hi] = start.y === end.y ? [Math.min(start.x, end.x), Math.max(start.x, end.x)] : [Math.min(start.y, end.y), Math.max(start.y, end.y)];
         const list = lines.get(key);
-        if (list) list.push([lo, hi, edgeIndex]);
-        else lines.set(key, [[lo, hi, edgeIndex]]);
+        if (list) {
+          list.push([lo, hi, edgeIndex]);
+        } else {
+          lines.set(key, [[lo, hi, edgeIndex]]);
+        }
       }
     });
     const pairs = new Set<number>();
@@ -76,7 +79,9 @@ export abstract class ArrangementTrial {
       const xs = ChannelRouter.riseSlots(node).map(Math.round), nodeBottom = node.box.y + node.box.height;
       for (const edge of ChannelRouter.risesInto(node)) {
         const [beforeLast, last] = edge.points.slice(-2);
-        if (beforeLast && last && (edge.source.host ? xs.includes(last.x) : last.x === xs[0]) && last.y === nodeBottom && beforeLast.x === last.x && (edge.source.host ? beforeLast.y >= ChannelRouter.riseFrom(edge) - 1 : Math.abs(beforeLast.y - ChannelRouter.riseFrom(edge)) <= 1)) out.add(edge);
+        if (beforeLast && last && (edge.source.host ? xs.includes(last.x) : last.x === xs[0]) && last.y === nodeBottom && beforeLast.x === last.x && (edge.source.host ? beforeLast.y >= ChannelRouter.riseFrom(edge) - 1 : Math.abs(beforeLast.y - ChannelRouter.riseFrom(edge)) <= 1)) {
+          out.add(edge);
+        }
       }
     }
     return out;

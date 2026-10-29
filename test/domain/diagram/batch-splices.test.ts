@@ -42,7 +42,9 @@ describe('batch splices place like separate commands', () => {
     ];
     const batch = await applyToXml(xml, ops, { layout: 'incremental' });
     let seq = xml;
-    for (const op of ops) seq = (await applyToXml(seq, [op], { layout: 'incremental' })).xml;
+    for (const op of ops) {
+      seq = (await applyToXml(seq, [op], { layout: 'incremental' })).xml;
+    }
     const batchRows = await rows(batch.xml);
     expect(batchRows[0]).toEqual(['startEvent_requestSubmitted', 'userTask_checkBudget', 'gateway_budgetAvailable', 'userTask_approvePurchase', 'gateway_purchaseApproved', 'serviceTask_orderGoods', 'endEvent_goodsOrdered']);
     expect(batchRows).toEqual(await rows(seq));

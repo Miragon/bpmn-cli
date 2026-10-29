@@ -46,8 +46,12 @@ export class ReferenceChecks {
   }
 
   checkReferences(): void {
-    for (const holder of walk(this.doc.definitions)) this.checkReferencesOf(holder);
-    for (const el of walk(this.doc.definitions)) this.checkConnectionEnds(el);
+    for (const holder of walk(this.doc.definitions)) {
+      this.checkReferencesOf(holder);
+    }
+    for (const el of walk(this.doc.definitions)) {
+      this.checkConnectionEnds(el);
+    }
   }
 
   private checkReferencesOf(holder: El): void {
@@ -73,7 +77,9 @@ export class ReferenceChecks {
   }
 
   private checkConnectionEnds(el: El): void {
-    if (!is(el, 'bpmn:SequenceFlow') && !is(el, 'bpmn:MessageFlow') && !is(el, 'bpmn:Association')) return;
+    if (!is(el, 'bpmn:SequenceFlow') && !is(el, 'bpmn:MessageFlow') && !is(el, 'bpmn:Association')) {
+      return;
+    }
     for (const end of ['sourceRef', 'targetRef'].filter((end) => !peek<El>(el, end))) {
       this.findings.error('E_DANGLING_REF', `${this.findings.describe(el)} has no ${end === 'sourceRef' ? 'source' : 'target'} (unresolved reference)`, shownId(el), {
         hint: `Remove it with \`bpmn remove <file> ${shownId(el)}\` and re-connect with \`bpmn connect <file> <sourceId> <targetId>\`.`,

@@ -20,7 +20,9 @@ export class DiagramReader {
     if (is(el, 'bpmn:Gateway')) return 'gateway';
     if (Semantics.isSubProcess(el)) return 'subProcess';
     if (is(el, 'bpmn:Activity')) return 'task';
-    if (is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference') || is(el, 'bpmn:DataInput') || is(el, 'bpmn:DataOutput')) return 'data';
+    if (is(el, 'bpmn:DataObjectReference') || is(el, 'bpmn:DataStoreReference') || is(el, 'bpmn:DataInput') || is(el, 'bpmn:DataOutput')) {
+      return 'data';
+    }
     if (is(el, 'bpmn:TextAnnotation')) return 'annotation';
     if (is(el, 'bpmn:Participant')) return 'participant';
     if (is(el, 'bpmn:Lane')) return 'lane';
@@ -42,7 +44,9 @@ export class DiagramReader {
       const src = rawList(el, 'sourceRef')[0];
       return { sourceId: idOf(src), targetId: idOf(el.$parent) };
     }
-    if (is(el, 'bpmn:DataOutputAssociation')) return { sourceId: idOf(el.$parent), targetId: idOf(raw(el, 'targetRef')) };
+    if (is(el, 'bpmn:DataOutputAssociation')) {
+      return { sourceId: idOf(el.$parent), targetId: idOf(raw(el, 'targetRef')) };
+    }
     return { sourceId: idOf(raw(el, 'sourceRef')), targetId: idOf(raw(el, 'targetRef')) };
   }
 
@@ -109,8 +113,11 @@ export class DiagramReader {
       if (!el || !id) continue;
       if (is(pe, 'bpmndi:BPMNShape')) {
         const shape = this.readShape(pe, el, id);
-        if (shape) plane.shapes.set(id, shape);
-        else (plane.unbounded ??= new Map()).set(id, pe);
+        if (shape) {
+          plane.shapes.set(id, shape);
+        } else {
+          (plane.unbounded ??= new Map()).set(id, pe);
+        }
       } else if (is(pe, 'bpmndi:BPMNEdge')) {
         plane.edges.set(id, this.readEdge(pe, el, id));
       }

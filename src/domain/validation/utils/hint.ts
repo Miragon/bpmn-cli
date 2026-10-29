@@ -36,7 +36,9 @@ export function didYouMean(name: string, candidates: string[], preferred: string
   let best: { candidate: string; distance: number } | undefined;
   for (const candidate of [...preferred, ...candidates]) {
     const dist = distance(name, candidate);
-    if (dist <= limit && (!best || dist < best.distance)) best = { candidate, distance: dist };
+    if (dist <= limit && (!best || dist < best.distance)) {
+      best = { candidate, distance: dist };
+    }
   }
   return best?.candidate;
 }

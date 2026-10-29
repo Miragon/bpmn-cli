@@ -62,10 +62,14 @@ export class C7Profile extends EngineProfile {
     if (!executable) return 'descend';
     const implementation = this.implementation;
     if (is(el, 'bpmn:Process')) implementation.checkProcess(el);
-    if (SERVICE_LIKE.some((type) => is(el, type))) implementation.checkServiceLike(el);
+    if (SERVICE_LIKE.some((type) => is(el, type))) {
+      implementation.checkServiceLike(el);
+    }
     if (is(el, 'bpmn:BusinessRuleTask')) implementation.checkBusinessRule(el);
     if (is(el, 'bpmn:CallActivity')) implementation.checkCallActivity(el);
-    if (is(el, 'bpmn:UserTask') || is(el, 'bpmn:StartEvent')) implementation.checkForms(el);
+    if (is(el, 'bpmn:UserTask') || is(el, 'bpmn:StartEvent')) {
+      implementation.checkForms(el);
+    }
     if (is(el, 'bpmn:UserTask')) implementation.checkUserTaskPriority(el);
     if (is(el, 'bpmn:Activity')) implementation.checkMultiInstance(el);
     if (is(el, 'bpmn:Event')) this.events.checkEvent(el);
@@ -75,8 +79,12 @@ export class C7Profile extends EngineProfile {
     if (is(el, 'bpmn:ScriptTask')) implementation.checkScriptTask(el);
     if (is(el, 'bpmn:ReceiveTask')) this.events.checkReceiveTask(el);
     if (is(el, 'bpmn:SequenceFlow')) this.flows.checkFlowCondition(el);
-    if ((is(el, 'bpmn:Activity') || is(el, 'bpmn:Gateway') || is(el, 'bpmn:Event') || is(el, 'bpmn:MultiInstanceLoopCharacteristics')) && !is(el, 'bpmn:Process')) implementation.checkPriorities(el, owner, ['jobPriority']);
-    if (is(el, 'bpmn:Process') || is(el, 'bpmn:SubProcess')) this.events.checkStartEvents(el);
+    if ((is(el, 'bpmn:Activity') || is(el, 'bpmn:Gateway') || is(el, 'bpmn:Event') || is(el, 'bpmn:MultiInstanceLoopCharacteristics')) && !is(el, 'bpmn:Process')) {
+      implementation.checkPriorities(el, owner, ['jobPriority']);
+    }
+    if (is(el, 'bpmn:Process') || is(el, 'bpmn:SubProcess')) {
+      this.events.checkStartEvents(el);
+    }
     if (is(el, 'bpmn:Process')) {
       this.events.checkSubscriptions(el);
       this.events.checkLinks(el);

@@ -13,7 +13,9 @@ export class Channels {
   free(fromX: number, toX: number, base: number, step: number): number {
     const lo = Math.min(fromX, toX), hi = Math.max(fromX, toX);
     let height = base;
-    while (this.list.some((channel) => channel.y === height && channel.from <= hi && lo <= channel.to)) height += step;
+    while (this.list.some((channel) => channel.y === height && channel.from <= hi && lo <= channel.to)) {
+      height += step;
+    }
     return height;
   }
 

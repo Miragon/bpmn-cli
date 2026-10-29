@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "files": { "includes": ["src/**/*.ts"] },
+  "files": { "includes": ["src/**/*.ts", "test/**/*.ts", "tools/**/*.mjs", "!tools/fuzz/out"] },
+  "plugins": ["./tools/biome/block-statements.grit"],
   "formatter": { "enabled": false },
   "assist": { "enabled": false },
   "linter": {
@@ -15,5 +16,16 @@
         "noNestedTernary": "warn"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["test/**", "tools/**"],
+      "linter": {
+        "rules": {
+          "complexity": { "noExcessiveCognitiveComplexity": "off", "noExcessiveLinesPerFunction": "off" },
+          "style": { "noNestedTernary": "off" }
+        }
+      }
+    }
+  ]
 }

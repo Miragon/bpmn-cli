@@ -55,7 +55,9 @@ export class SequenceFlows {
     const doc = this.edit.doc;
     if (changes) this.dropAssociations(flow, changes);
     const source = flow.get<El | undefined>('sourceRef');
-    if (source && source.get<El | undefined>('default') === flow) source.set('default', undefined);
+    if (source && source.get<El | undefined>('default') === flow) {
+      source.set('default', undefined);
+    }
     const scope = flow.$parent as El | undefined;
     const nodes = scope ? many(scope, 'flowElements').filter((flowElement) => is(flowElement, 'bpmn:FlowNode')) : [];
     for (const node of new Set([source, flow.get<El | undefined>('targetRef'), ...nodes])) {
@@ -78,7 +80,9 @@ export class SequenceFlows {
     const oldTarget = flow.get<El | undefined>('targetRef');
     if (oldSource && oldSource !== source) {
       removeFrom(oldSource, 'outgoing', flow);
-      if (oldSource.get<El | undefined>('default') === flow) oldSource.set('default', undefined);
+      if (oldSource.get<El | undefined>('default') === flow) {
+        oldSource.set('default', undefined);
+      }
     }
     if (oldTarget && oldTarget !== target) removeFrom(oldTarget, 'incoming', flow);
     flow.set('sourceRef', source);
@@ -121,7 +125,9 @@ export class SequenceFlows {
         });
       }
       source.set('default', flow);
-      if (flow.get<El | undefined>('conditionExpression')) flow.set('conditionExpression', undefined);
+      if (flow.get<El | undefined>('conditionExpression')) {
+        flow.set('conditionExpression', undefined);
+      }
     } else if (source.get<El | undefined>('default') === flow) {
       source.set('default', undefined);
     }
@@ -136,7 +142,9 @@ export class SequenceFlows {
     if (expr) {
       flow.set('conditionExpression', this.conditionExpression(expr, language));
       const source = flow.get<El | undefined>('sourceRef');
-      if (source?.get<El | undefined>('default') === flow) source.set('default', undefined);
+      if (source?.get<El | undefined>('default') === flow) {
+        source.set('default', undefined);
+      }
     } else {
       flow.set('conditionExpression', undefined);
     }
@@ -157,7 +165,9 @@ export class SequenceFlows {
   carryAssociations(from: El, to: El, changes: ChangeSet): El[] {
     const carried = this.associationsOf(from);
     for (const association of carried) {
-      for (const end of ['sourceRef', 'targetRef']) if (association.get<El | undefined>(end) === from) association.set(end, to);
+      for (const end of ['sourceRef', 'targetRef']) {
+        if (association.get<El | undefined>(end) === from) association.set(end, to);
+      }
       changes.change({ id: idOf(association), kind: 'association', detail: `re-attached from ${idOf(from)} to ${idOf(to)}` });
     }
     this.edit.doc.invalidate();

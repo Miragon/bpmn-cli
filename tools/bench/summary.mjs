@@ -134,12 +134,16 @@ function problemsSection(ctx) {
 
 function validitySection(ctx) {
   const out = ['### validity of the written files', '', '| corpus | track | arm | runs | import warnings | of which unresolved ref | unparsable (dup id) | missing DI | edges w/o waypoints | metrics crashed |', '|---|---|---|---|---|---|---|---|---|---|'];
-  for (const corpus of ctx.corpora) for (const track of ['edits', 'global']) for (const arm of ctx.arms) {
-    const recs = ctx.load(track, arm).filter((record) => record.corpus === corpus);
-    const rs = track === 'edits' ? effective(recs).map((row) => row.eff).filter(Boolean) : recs.filter((record) => record.ok);
-    if (!rs.length) continue;
-    const countWhere = (predicate) => rs.filter(predicate).length || '';
-    out.push(`| ${corpus} | ${track} | ${arm} | ${rs.length} | ${countWhere((record) => record.validity?.importWarnings > 0)} | ${countWhere((record) => record.validity?.warningKinds?.unresolvedRef > 0)} | ${countWhere((record) => record.validity?.warningKinds?.unparsable > 0)} | ${countWhere((record) => record.validity?.missingDi > 0)} | ${countWhere((record) => record.validity?.emptyEdges > 0)} | ${countWhere((record) => record.after?.harness.score === null)} |`);
+  for (const corpus of ctx.corpora) {
+    for (const track of ['edits', 'global']) {
+      for (const arm of ctx.arms) {
+        const recs = ctx.load(track, arm).filter((record) => record.corpus === corpus);
+        const rs = track === 'edits' ? effective(recs).map((row) => row.eff).filter(Boolean) : recs.filter((record) => record.ok);
+        if (!rs.length) continue;
+        const countWhere = (predicate) => rs.filter(predicate).length || '';
+        out.push(`| ${corpus} | ${track} | ${arm} | ${rs.length} | ${countWhere((record) => record.validity?.importWarnings > 0)} | ${countWhere((record) => record.validity?.warningKinds?.unresolvedRef > 0)} | ${countWhere((record) => record.validity?.warningKinds?.unparsable > 0)} | ${countWhere((record) => record.validity?.missingDi > 0)} | ${countWhere((record) => record.validity?.emptyEdges > 0)} | ${countWhere((record) => record.after?.harness.score === null)} |`);
+      }
+    }
   }
   return out.join('\n');
 }
@@ -170,4 +174,6 @@ async function main() {
   console.log(md);
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

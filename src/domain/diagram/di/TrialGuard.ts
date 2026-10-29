@@ -53,8 +53,9 @@ export class TrialGuard {
     const addedKeys = [...now].filter(([key, count]) => count > (this.counts.get(key) ?? 0)).map(([key]) => key);
     const before = this.base.score;
     const ok = !added.length && (this.policy.lower ? metrics.score < before : metrics.score <= before);
-    if (!ok) this.rejected.push(...(added.length ? added : diffProblems(this.base.problems, metrics.problems).added));
-    else {
+    if (!ok) {
+      this.rejected.push(...(added.length ? added : diffProblems(this.base.problems, metrics.problems).added));
+    } else {
       this.base = metrics;
       if (this.policy.rebase) this.counts = now;
     }

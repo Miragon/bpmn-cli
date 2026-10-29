@@ -39,7 +39,9 @@ export class LabelDeclutter {
       if (shapeBox && container) {
         this.frames.push(shapeBox);
         this.frameOfEl.set(el, shapeBox);
-        if (is(el, 'bpmn:SubProcess')) this.titles.set(shapeBox, titleBox(shapeBox, el.get<string | undefined>('name')));
+        if (is(el, 'bpmn:SubProcess')) {
+          this.titles.set(shapeBox, titleBox(shapeBox, el.get<string | undefined>('name')));
+        }
       }
       const points = isShape ? undefined : many(diagramElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
       if (points) this.lines.push(...toSegments(points));

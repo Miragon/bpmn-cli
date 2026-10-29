@@ -176,7 +176,9 @@ describe('verifier follow-ups: one synthetic model per rule', () => {
     // deploy findings exactly where the engine that reads the file refuses it
     expect(findings.some((finding) => finding.severity === 'deploy')).toBe((report.operaton ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'reject');
     expect(findings.every((finding) => finding.code.startsWith('W_C7_DEPLOY_') === (finding.severity === 'deploy'))).toBe(true);
-    for (const finding of findings) expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|retype|ext (add|remove|list)) <file> /);
+    for (const finding of findings) {
+      expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|retype|ext (add|remove|list)) <file> /);
+    }
   });
 
   it('a schema finding on an ignored definition names the acting one and both ways out', async () => {
@@ -231,8 +233,9 @@ function commandsOf(hint: string): string[][] {
     let last = -1;
     while ((cur = re.exec(match[1]!))) {
       const piece = cur[1] !== undefined ? cur[1].replace(/'\\''/g, "'") : cur[2]!;
-      if (cur.index === last) arg += piece;
-      else {
+      if (cur.index === last) {
+        arg += piece;
+      } else {
         if (last !== -1) out.push(arg);
         arg = piece;
       }
@@ -388,12 +391,16 @@ async function deploy(engine: string, name: string, bpmn: string, start?: string
   form.append('data', new Blob([bpmn], { type: 'application/octet-stream' }), `${name}.bpmn`);
   const res = await fetch(`${engine}/deployment/create`, { method: 'POST', body: form });
   const body = await json(res);
-  if (!res.ok || typeof body['id'] !== 'string') return { ok: false, message: body.message ?? String(res.status) };
+  if (!res.ok || typeof body['id'] !== 'string') {
+    return { ok: false, message: body.message ?? String(res.status) };
+  }
   try {
     if (!start) return { ok: true, message: '' };
     const startResponse = await fetch(`${engine}/process-definition/key/${start}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     const instance = await json(startResponse);
-    if (!startResponse.ok) return { ok: true, message: instance.message ?? '', started: false };
+    if (!startResponse.ok) {
+      return { ok: true, message: instance.message ?? '', started: false };
+    }
     const tasks = (await (await fetch(`${engine}/task?processInstanceId=${String(instance['id'])}`)).json()) as Array<{ taskDefinitionKey: string }>;
     return { ok: true, message: '', started: true, tasks: tasks.map((task) => task.taskDefinitionKey).sort() };
   } finally {
@@ -415,7 +422,9 @@ describe.skipIf(!ENGINES.length)('live engines: the engines agree with CASES', (
     it.each(CASES.map((testCase, caseIndex) => [testCase.name, testCase, caseIndex] as const))(`${engine}: %s`, async (_name, testCase, caseIndex) => {
       const result = await deploy(engine, `bpmn-cli-c7-verify-${caseIndex}`, testCase.xml, testCase.run ? 'P_Verify' : undefined);
       expect(result.ok, result.message).toBe(((await isOperaton(engine)) ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'accept');
-      if (testCase.run) expect(result.started, result.message).toBe(testCase.run === 'ok');
+      if (testCase.run) {
+        expect(result.started, result.message).toBe(testCase.run === 'ok');
+      }
     }, 30000);
 
     it(`${engine}: following the second-start hint, each node runs once`, async () => {

@@ -48,7 +48,9 @@ describe('flows at unnamed gateways name them by their speaking ids', () => {
         'flow_fixJoinToCheckJoin',
       ].sort(),
     );
-    for (const id of flows) expect(id).not.toMatch(GENERIC_SIDE);
+    for (const id of flows) {
+      expect(id).not.toMatch(GENERIC_SIDE);
+    }
     expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
     expect(new Set(ids(applied.xml)).size).toBe(ids(applied.xml).length);
   });
@@ -89,7 +91,9 @@ describe('flows at unnamed gateways name them by their speaking ids', () => {
     ]);
     expect(splits.suffixed).toBe(0);
     expect(splits.flows).toEqual(expect.arrayContaining(['flow_afterCheckToParallelAfterCheck', 'flow_parallelAfterCheckToY', 'flow_yToParallelAfterCheckJoin']));
-    for (const id of [...Object.values(gw.aliases), ...gw.flows, ...Object.values(tasks.aliases), ...tasks.flows, ...splits.flows]) expect(id).not.toMatch(/AfterAfter|_\d+$/);
+    for (const id of [...Object.values(gw.aliases), ...gw.flows, ...Object.values(tasks.aliases), ...tasks.flows, ...splits.flows]) {
+      expect(id).not.toMatch(/AfterAfter|_\d+$/);
+    }
   });
 
   it('a flow an earlier version named (Flow_GatewayToShip) keeps its id when a splice changes its ends; the new flow follows the current rule', async () => {
@@ -155,7 +159,9 @@ describe('unnamed elements in a row where the prefix says the kind (task_)', () 
     expect(applied.suffixed).toEqual([]);
     const bodies = nodes(applied.fresh, applied.flows).map(body);
     expect(new Set(bodies).size).toBe(bodies.length);
-    for (const id of applied.flows) expect(sameEnds(id)).toBe(false);
+    for (const id of applied.flows) {
+      expect(sameEnds(id)).toBe(false);
+    }
   });
 
   it('after a task whose name gives no id words', async () => {
@@ -175,7 +181,9 @@ describe('unnamed elements in a row where the prefix says the kind (task_)', () 
       { op: 'add', kind: 'task', after: '$g', as: '$u' },
     ]);
     expect(applied.aliases['$u']).toMatch(/^task_after\w+Gateway$/);
-    for (const id of applied.fresh) expect(id.length).toBeLessThanOrEqual(MAX_ID);
+    for (const id of applied.fresh) {
+      expect(id.length).toBeLessThanOrEqual(MAX_ID);
+    }
     expect(applied.suffixed).toEqual([]);
   });
 
@@ -192,7 +200,9 @@ describe('unnamed elements in a row where the prefix says the kind (task_)', () 
     const branches = await run(OLD_MODELER, [{ op: 'split', after: 'Task_0k3x9qa', kind: 'parallelGateway', branches: [{ nodes: [{ kind: 'task' }] }, { nodes: [{ kind: 'task' }] }] }]);
     expect(branches.fresh).toEqual(expect.arrayContaining(['task_afterCheckGateway', 'task_afterCheckGateway2']));
     expect(branches.suffixed.map((suffixWarning) => suffixWarning.element)).toEqual(['task_afterCheckGateway2']);
-    for (const id of branches.flows) expect(sameEnds(id)).toBe(false);
+    for (const id of branches.flows) {
+      expect(sameEnds(id)).toBe(false);
+    }
   });
 });
 
@@ -208,7 +218,9 @@ describe('id quality: context once, length cap, transliteration', () => {
       { op: 'add', kind: 'endEvent', after: '$g', as: '$e' },
     ]);
     const all = ids(applied.xml);
-    for (const id of all) expect(id).not.toMatch(/AfterAfter|BeforeBefore/);
+    for (const id of all) {
+      expect(id).not.toMatch(/AfterAfter|BeforeBefore/);
+    }
     expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');
     expect(applied.result.aliases).toMatchObject({
       // a body that would begin with a number begins with the kind word
@@ -240,7 +252,9 @@ describe('id quality: context once, length cap, transliteration', () => {
     ];
     const base = await newXml({ processName: 'Long' });
     const applied = await applyToXml(base.xml, ops);
-    for (const id of ids(applied.xml)) expect(id.length).toBeLessThanOrEqual(MAX_ID);
+    for (const id of ids(applied.xml)) {
+      expect(id.length).toBeLessThanOrEqual(MAX_ID);
+    }
     // a name gives at most 40 characters of words, although serviceTask_benachrichtigungUeberDenBearbeitungsstand fits into 64,
     // and they never end on a filler word (before: serviceTask_benachrichtigungUeberDen)
     expect(applied.result.aliases).toMatchObject({ $a: 'userTask_pruefenObDieEingereichtenUnterlagen', $b: 'serviceTask_benachrichtigungUeber' });
@@ -339,7 +353,9 @@ describe('id quality: context once, length cap, transliteration', () => {
     };
     const name = (head?: string): string => {
       const words = [head ?? vocabulary[pick(vocabulary.length - 2)]!];
-      for (let remaining = pick(6); remaining > 0; remaining--) words.push(vocabulary[pick(vocabulary.length)]!);
+      for (let remaining = pick(6); remaining > 0; remaining--) {
+        words.push(vocabulary[pick(vocabulary.length)]!);
+      }
       return words.join(' ');
     };
     for (let index = 0; index < 2000; index++) {
@@ -350,10 +366,13 @@ describe('id quality: context once, length cap, transliteration', () => {
       const uncut = `flow_${camelSlug(sourceLabel)}To${slugify(targetLabel)}`;
       const known = new Set([...idWords(camelSlug(sourceLabel)), ...idWords(slugify(targetLabel)), 'To'].map((word) => word.toLowerCase()));
       expect(id.length, id).toBeLessThanOrEqual(MAX_ID);
-      if (uncut.length <= MAX_ID) expect(id).toBe(uncut);
-      else {
+      if (uncut.length <= MAX_ID) {
+        expect(id).toBe(uncut);
+      } else {
         const words = idWords(id.slice('flow_'.length));
-        for (const word of words) expect(known, `${word} in ${id}`).toContain(word.toLowerCase());
+        for (const word of words) {
+          expect(known, `${word} in ${id}`).toContain(word.toLowerCase());
+        }
         const [full, other] = [idWords(camelSlug(sourceLabel)), idWords(slugify(targetLabel))];
         if (full[0]!.toLowerCase() !== other[0]!.toLowerCase()) {
           const at = words.indexOf('To');
@@ -361,9 +380,13 @@ describe('id quality: context once, length cap, transliteration', () => {
             // a number goes with the word after it (an end never ends on a number it did not end with), so does a filler
             // word (und, an: a cut never ends on one)
             let cutEnd = cut.length;
-            while (cutEnd < whole.length - 1 && (/^\d+$/.test(whole[cutEnd]!) || isFiller(whole[cutEnd]!))) cutEnd++;
+            while (cutEnd < whole.length - 1 && (/^\d+$/.test(whole[cutEnd]!) || isFiller(whole[cutEnd]!))) {
+              cutEnd++;
+            }
             const next = whole.slice(cut.length, cutEnd + 1).join('');
-            if (cut.length < whole.length && cut.every((word, wordIndex) => word === whole[wordIndex])) expect(id.length + next.length, `${next} after ${id}`).toBeGreaterThan(MAX_ID);
+            if (cut.length < whole.length && cut.every((word, wordIndex) => word === whole[wordIndex])) {
+              expect(id.length + next.length, `${next} after ${id}`).toBeGreaterThan(MAX_ID);
+            }
           }
         }
       }
@@ -551,8 +574,12 @@ describe('id quality: context once, length cap, transliteration', () => {
     // without the anchor's kind the 2 would read like the gateway (..._afterLieferungPruefenAbcdefghi2)
     expect(applied.result.aliases).toMatchObject({ $a: `${prefix}_afterLieferungPruefenAbcdefghiGateway`, $b: `${prefix}_afterLieferungPruefenGateway2` });
     expect(applied.result.aliases!['$a']).toHaveLength(MAX_ID);
-    for (const id of ids(applied.xml)) expect(id.length).toBeLessThanOrEqual(MAX_ID);
-    for (const id of flowIds(applied.xml)) expect(sameEnds(id), id).toBe(false);
+    for (const id of ids(applied.xml)) {
+      expect(id.length).toBeLessThanOrEqual(MAX_ID);
+    }
+    for (const id of flowIds(applied.xml)) {
+      expect(sameEnds(id), id).toBe(false);
+    }
   });
 
   it('#31: ends of any length are cut fast: only the forms that can fit are listed', async () => {
@@ -596,7 +623,9 @@ describe('id quality: context once, length cap, transliteration', () => {
     expect(given.slice(98)).toEqual(['flow_synchronisierenToDeliveriesabcdProtokollieren99', 'flow_synchronisierenToDeliveriesabcdProtokollieren100', 'flow_synchronisierenToDeliveriesabcdProtokollieren101']);
     expect(given.filter((id) => id.length > MAX_ID)).toEqual([]);
     const bases = IdStyle.of().derivedBases(req);
-    for (const id of given) expect(bases.some((base) => id === base || (id.startsWith(base) && /^\d+$/.test(id.slice(base.length)))), id).toBe(true);
+    for (const id of given) {
+      expect(bases.some((base) => id === base || (id.startsWith(base) && /^\d+$/.test(id.slice(base.length)))), id).toBe(true);
+    }
   });
 
   it('#31: a flow keeps its suffix without a separator when the suffix cuts it again', async () => {

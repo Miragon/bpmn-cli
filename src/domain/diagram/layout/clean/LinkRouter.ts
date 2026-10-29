@@ -14,8 +14,9 @@ export class LinkRouter {
     for (const compensation of layout.compensations) {
       const eb = compensation.event.box, hb = compensation.handler.box;
       const ex = cx(eb);
-      if (ex >= hb.x && ex <= hb.x + hb.width) compensation.points = [{ x: ex, y: bottom(eb) }, { x: ex, y: hb.y }];
-      else {
+      if (ex >= hb.x && ex <= hb.x + hb.width) {
+        compensation.points = [{ x: ex, y: bottom(eb) }, { x: ex, y: hb.y }];
+      } else {
         const midY = (bottom(eb) + hb.y) / 2;
         const hx = cx(hb);
         compensation.points = [{ x: ex, y: bottom(eb) }, { x: ex, y: midY }, { x: hx, y: midY }, { x: hx, y: hb.y }];
@@ -50,14 +51,20 @@ export class LinkRouter {
     const xLo = Math.max(artifactBox.x + 4, targetBox.x + 8), xHi = Math.min(right(artifactBox) - 4, right(targetBox) - 8);
     if (xLo <= xHi) {
       const crossX = Math.min(Math.max(ac.x, xLo), xHi);
-      if (artifactBox.y >= bottom(targetBox)) push({ x: crossX, y: artifactBox.y }, { x: crossX, y: bottom(targetBox) });
-      else if (bottom(artifactBox) <= targetBox.y) push({ x: crossX, y: bottom(artifactBox) }, { x: crossX, y: targetBox.y });
+      if (artifactBox.y >= bottom(targetBox)) {
+        push({ x: crossX, y: artifactBox.y }, { x: crossX, y: bottom(targetBox) });
+      } else if (bottom(artifactBox) <= targetBox.y) {
+        push({ x: crossX, y: bottom(artifactBox) }, { x: crossX, y: targetBox.y });
+      }
     }
     const yLo = Math.max(artifactBox.y + 4, targetBox.y + 8), yHi = Math.min(bottom(artifactBox) - 4, bottom(targetBox) - 8);
     if (yLo <= yHi) {
       const crossY = Math.min(Math.max(ac.y, yLo), yHi);
-      if (artifactBox.x >= right(targetBox)) push({ x: artifactBox.x, y: crossY }, { x: right(targetBox), y: crossY });
-      else if (right(artifactBox) <= targetBox.x) push({ x: right(artifactBox), y: crossY }, { x: targetBox.x, y: crossY });
+      if (artifactBox.x >= right(targetBox)) {
+        push({ x: artifactBox.x, y: crossY }, { x: right(targetBox), y: crossY });
+      } else if (right(artifactBox) <= targetBox.x) {
+        push({ x: right(artifactBox), y: crossY }, { x: targetBox.x, y: crossY });
+      }
     }
     const nx = node ? ChannelRouter.dataX(node) : nc.x;
     const ny = ac.y > nc.y ? bottom(targetBox) : targetBox.y;
@@ -74,7 +81,11 @@ export class LinkRouter {
     if (end === 'shape') {
       const lo = Math.min(ac.x, nc.x), hi = Math.max(ac.x, nc.x);
       let under = Math.max(bottom(artifactBox), bottom(targetBox));
-      for (const box of boxes) if (box !== artifactBox && box !== targetBox && box.x <= hi && right(box) >= lo) under = Math.max(under, bottom(box));
+      for (const box of boxes) {
+        if (box !== artifactBox && box !== targetBox && box.x <= hi && right(box) >= lo) {
+          under = Math.max(under, bottom(box));
+        }
+      }
       under += 20;
       const approachX = ac.x < nc.x ? targetBox.x - 20 : right(targetBox) + 20;
       const nSideX = ac.x < nc.x ? targetBox.x : right(targetBox);
@@ -88,7 +99,9 @@ export class LinkRouter {
     cands.push([borderPoint(artifactBox, nc), end === 'flow' ? nc : borderPoint(targetBox, ac)]);
     const length = (pts: Point[]): number => {
       let len = 0;
-      for (const [segmentStart, segmentEnd] of toSegments(pts)) len += Math.abs(segmentEnd.x - segmentStart.x) + Math.abs(segmentEnd.y - segmentStart.y);
+      for (const [segmentStart, segmentEnd] of toSegments(pts)) {
+        len += Math.abs(segmentEnd.x - segmentStart.x) + Math.abs(segmentEnd.y - segmentStart.y);
+      }
       return len;
     };
     let best: { pts: Point[]; score: number } | undefined;

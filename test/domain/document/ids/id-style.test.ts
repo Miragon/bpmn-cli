@@ -21,7 +21,9 @@ function chain(nodes: Array<[string, string, string?]>, flowIds: string[]): stri
     const links = [...(nodeIndex > 0 ? [`<bpmn:incoming>${flowIds[nodeIndex - 1]}</bpmn:incoming>`] : []), ...(nodeIndex + 1 < nodes.length ? [`<bpmn:outgoing>${flowIds[nodeIndex]}</bpmn:outgoing>`] : [])];
     return `<bpmn:${tag} id="${id}"${name ? ` name="${name}"` : ''}>${links.join('')}</bpmn:${tag}>`;
   });
-  for (let flowIndex = 0; flowIndex + 1 < nodes.length; flowIndex++) body.push(`<bpmn:sequenceFlow id="${flowIds[flowIndex]}" sourceRef="${nodes[flowIndex]![1]}" targetRef="${nodes[flowIndex + 1]![1]}" />`);
+  for (let flowIndex = 0; flowIndex + 1 < nodes.length; flowIndex++) {
+    body.push(`<bpmn:sequenceFlow id="${flowIds[flowIndex]}" sourceRef="${nodes[flowIndex]![1]}" targetRef="${nodes[flowIndex + 1]![1]}" />`);
+  }
   return definitionsXml(body.join('\n'));
 }
 
@@ -96,7 +98,9 @@ describe('new ids follow the defaults of element-id-naming', () => {
     ]);
     // a flow names an unnamed end by its own id's speaking part (its kind and place), never by a bare kind word
     expect(unnamedEdit.ids).toEqual(['event_timerOnCheckOrder', 'endEvent_afterTimerOnCheckOrder', 'flow_timerOnCheckOrderToAfterTimerOnCheckOrder', 'gateway_afterShipOrder', 'flow_afterShipOrderToOrderShipped']);
-    for (const id of [...spliceEdit.ids, ...unnamedEdit.ids]) expect(id).not.toMatch(NOT_SPEAKING);
+    for (const id of [...spliceEdit.ids, ...unnamedEdit.ids]) {
+      expect(id).not.toMatch(NOT_SPEAKING);
+    }
   });
 
   it('type-named camelCase ids: serviceTask_checkStock, flow_checkStockToApproveOrder', async () => {
@@ -190,7 +194,9 @@ describe('speaking ids on two branches of a file (independent edits)', () => {
     const right = await created(base, [{ op: 'add', kind: 'task', name: 'Archive', after: 'Activity_B' }, { op: 'add', kind: 'parallelGateway', after: 'task_archive' }]);
     expect(left.ids.filter((id) => right.ids.includes(id))).toEqual([]);
     // the merged file has no duplicate id: every new id of the right branch is free on the left
-    for (const id of right.ids) expect(left.doc.ids.has(id)).toBe(false);
+    for (const id of right.ids) {
+      expect(left.doc.ids.has(id)).toBe(false);
+    }
     // the flow that CheckAddress -> B got when it was created names its new ends once the gateway is spliced in;
     // the result lists every id as it is at the end of the batch
     expect(left.ids).toEqual(['task_checkAddress', 'flow_checkAddressToAfterCheckAddress', 'gateway_afterCheckAddress', 'flow_afterCheckAddressToB']);

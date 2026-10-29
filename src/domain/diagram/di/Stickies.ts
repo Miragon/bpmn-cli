@@ -35,7 +35,9 @@ export class Stickies {
 
   private isSticky(el: unknown): el is El {
     const type = raw<string>(el, '$type');
-    if (!type || type.slice(type.indexOf(':') + 1).toLowerCase() !== 'sticky') return false;
+    if (!type || type.slice(type.indexOf(':') + 1).toLowerCase() !== 'sticky') {
+      return false;
+    }
     const ns = raw<{ uri?: string; prefix?: string }>(raw(el, '$descriptor'), 'ns');
     return ns?.uri === BPMIQ_URI || (!ns?.uri && type.startsWith('bpmiq:'));
   }
@@ -71,7 +73,9 @@ export class Stickies {
       const el = raw<El>(pe, 'bpmnElement');
       const bounds = raw(pe, 'bounds');
       const box = { x: this.num(raw(bounds, 'x')), y: this.num(raw(bounds, 'y')), width: this.num(raw(bounds, 'width')), height: this.num(raw(bounds, 'height')) };
-      if (!el || !is(el, 'bpmn:FlowNode') || box.x === undefined || box.y === undefined || box.width === undefined || box.height === undefined) continue;
+      if (!el || !is(el, 'bpmn:FlowNode') || box.x === undefined || box.y === undefined || box.width === undefined || box.height === undefined) {
+        continue;
+      }
       out.set(el, box as Box);
     }
     return out;
@@ -101,9 +105,13 @@ export class Stickies {
         let best: { el: El; box: Box; gap: number } | undefined;
         for (const [el, shapeBounds] of shapes) {
           const gap = this.distance(boxCenter, shapeBounds);
-          if (!best || gap < best.gap || (gap === best.gap && shapeBounds.width * shapeBounds.height < best.box.width * best.box.height)) best = { el, box: shapeBounds, gap };
+          if (!best || gap < best.gap || (gap === best.gap && shapeBounds.width * shapeBounds.height < best.box.width * best.box.height)) {
+            best = { el, box: shapeBounds, gap };
+          }
         }
-        if (best) out.push({ process, index, ...(idOf(sticky) ? { stickyId: idOf(sticky) } : {}), node: best.el, centre: center(best.box) });
+        if (best) {
+          out.push({ process, index, ...(idOf(sticky) ? { stickyId: idOf(sticky) } : {}), node: best.el, centre: center(best.box) });
+        }
       });
     }
     return out;

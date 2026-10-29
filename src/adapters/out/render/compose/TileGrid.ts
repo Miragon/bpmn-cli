@@ -36,7 +36,11 @@ export class TileGrid {
     const plane = frame.located;
     if (!plane) return undefined;
     const marks: Box[] = items.filter((item) => !item.extra && item.content && meets(item.content, view)).map((item) => item.content!);
-    for (const problem of this.problems) if (problem.at && problem.at.plane === plane.rootId && !frame.fileProblems && containsPoint(view, problem.at)) marks.push({ x: problem.at.x, y: problem.at.y, width: 0, height: 0 });
+    for (const problem of this.problems) {
+      if (problem.at && problem.at.plane === plane.rootId && !frame.fileProblems && containsPoint(view, problem.at)) {
+        marks.push({ x: problem.at.x, y: problem.at.y, width: 0, height: 0 });
+      }
+    }
     if (!marks.length) return undefined;
     const drawnShape = (shape: DShape): boolean => (!frame.drawn || frame.drawn.has(shape.id)) && !shape.container && shape.kind !== 'group' && meets(shape.bounds, view);
     const leaves = [...plane.shapes.values()].filter(drawnShape);
@@ -100,14 +104,18 @@ export class TileGrid {
     const budget = this.budget;
     const merged = TileGrid.mergeSpans(spans, 0);
     const cuts: number[] = [];
-    for (let index = 0; index + 1 < merged.length; index++) cuts.push((merged[index]!.end + merged[index + 1]!.start) / 2);
+    for (let index = 0; index + 1 < merged.length; index++) {
+      cuts.push((merged[index]!.end + merged[index + 1]!.start) / 2);
+    }
     const out: Span[] = [];
     let start = lo;
     let nextCut = 0;
     while (hi - start > budget) {
       if (out.length >= room) return undefined;
       const target = start + (hi - start) / Math.ceil((hi - start) / budget);
-      while (nextCut < cuts.length && cuts[nextCut]! <= start + 1) nextCut++;
+      while (nextCut < cuts.length && cuts[nextCut]! <= start + 1) {
+        nextCut++;
+      }
       let at = start + budget;
       let best = Infinity;
       for (let cutIndex = nextCut; cutIndex < cuts.length && cuts[cutIndex]! - start <= budget; cutIndex++) {
@@ -128,17 +136,24 @@ export class TileGrid {
     const merged: Span[] = [];
     for (const span of [...spans].sort((first, second) => first.start - second.start)) {
       const last = merged[merged.length - 1];
-      if (last && span.start - last.end < gap) last.end = Math.max(last.end, span.end);
-      else merged.push({ ...span });
+      if (last && span.start - last.end < gap) {
+        last.end = Math.max(last.end, span.end);
+      } else {
+        merged.push({ ...span });
+      }
     }
     return merged;
   }
 
   private static piecesMet(pieces: Span[], start: number, end: number): [number, number] {
     let first = 0;
-    while (first < pieces.length && pieces[first]!.end < start) first++;
+    while (first < pieces.length && pieces[first]!.end < start) {
+      first++;
+    }
     let last = first - 1;
-    while (last + 1 < pieces.length && pieces[last + 1]!.start <= end) last++;
+    while (last + 1 < pieces.length && pieces[last + 1]!.start <= end) {
+      last++;
+    }
     return [first, last];
   }
 }

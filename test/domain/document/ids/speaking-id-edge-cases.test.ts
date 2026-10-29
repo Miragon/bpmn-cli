@@ -36,7 +36,9 @@ describe('an anchor name with a number keeps its speaking stem', () => {
       ];
       const applied = await applyToXml((await newXml({ processName: 'Bp' })).xml, ops, { layout: false });
       const flows = flowIds(applied.xml);
-      for (const id of flows) expect(id).not.toMatch(GENERIC_SIDE);
+      for (const id of flows) {
+        expect(id).not.toMatch(GENERIC_SIDE);
+      }
       expect(allIds(applied.xml).filter((id) => /^serviceTask_/.test(id))).not.toContain('serviceTask_afterGateway');
       expect(new Set(flows).size).toBe(flows.length);
       expect(applied.result.warnings.added.map((warning) => warning.code)).not.toContain('W_ID_SUFFIXED');

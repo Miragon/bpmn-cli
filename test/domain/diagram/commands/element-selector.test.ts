@@ -51,8 +51,12 @@ async function handXml(ops: EditCommand[]): Promise<string> {
   const doc = await Doc.fromXml(mutation.xml);
   for (const diagram of doc.definitions.get<El[]>('diagrams')) {
     for (const pe of diagram.get<El>('plane').get<El[]>('planeElement')) {
-      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) if (bounds) bounds.set('y', bounds.get<number>('y') + 9);
-      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) waypoint.set('y', waypoint.get<number>('y') + 9);
+      for (const bounds of [pe.get<El | undefined>('bounds'), pe.get<El | undefined>('label')?.get<El | undefined>('bounds')]) {
+        if (bounds) bounds.set('y', bounds.get<number>('y') + 9);
+      }
+      for (const waypoint of pe.get<El[] | undefined>('waypoint') ?? []) {
+        waypoint.set('y', waypoint.get<number>('y') + 9);
+      }
     }
   }
   return doc.toXml();
@@ -67,7 +71,9 @@ async function failure(xml: string, ops: EditCommand[]): Promise<{ code: string;
   try {
     await mutateDoc(await Doc.fromXml(xml, 'x.bpmn'), ops, { dryRun: true });
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details } as Awaited<ReturnType<typeof failure>>;
+    }
     throw err;
   }
   throw new Error('expected the mutation to fail');
@@ -142,7 +148,9 @@ describe('--branch', () => {
     const dy = laidShapes.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
     expect(laidShapes.get('B2')!.bounds.y - before.get('B2')!.bounds.y).toBe(dy);
     expect(laidShapes.get('B2')!.bounds.x - laidShapes.get('B1')!.bounds.x).toBe(before.get('B2')!.bounds.x - before.get('B1')!.bounds.x);
-    for (const id of ['G', 'J', 'End']) expect(laidShapes.get(id)!.bounds.y, id).toBe(before.get(id)!.bounds.y);
+    for (const id of ['G', 'J', 'End']) {
+      expect(laidShapes.get(id)!.bounds.y, id).toBe(before.get(id)!.bounds.y);
+    }
     expect(mutation.layout.format![0]!.moved).toEqual(expect.arrayContaining(['B1', 'B2']));
   });
 
@@ -157,7 +165,9 @@ describe('--branch', () => {
     const laidShapes = shapes(after);
     const dy = laidShapes.get('B1')!.bounds.y - before.get('B1')!.bounds.y;
     expect(dy).toBeLessThan(0);
-    for (const id of ['B2', 'TB', 'TE']) expect(laidShapes.get(id)!.bounds.y - before.get(id)!.bounds.y, id).toBe(dy);
+    for (const id of ['B2', 'TB', 'TE']) {
+      expect(laidShapes.get(id)!.bounds.y - before.get(id)!.bounds.y, id).toBe(dy);
+    }
     expect(mutation.layout.metrics!.added.filter((problem) => ['overlaps', 'through', 'outsidePool'].includes(problem.kind))).toEqual([]);
   });
 

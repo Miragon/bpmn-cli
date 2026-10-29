@@ -32,7 +32,9 @@ function bpmn(...args: string[]): Run {
 
 function ok(...args: string[]): Run {
   const result = bpmn(...args);
-  if (result.code !== 0) throw new Error(`bpmn ${args.join(' ')} failed (${result.code}):\n${result.err}\n${result.out}`);
+  if (result.code !== 0) {
+    throw new Error(`bpmn ${args.join(' ')} failed (${result.code}):\n${result.err}\n${result.out}`);
+  }
   return result;
 }
 

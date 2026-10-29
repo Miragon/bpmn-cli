@@ -38,8 +38,11 @@ export class RouteGrid {
     let lo = 0, hi = arr.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (arr[mid]! > target) hi = mid;
-      else lo = mid + 1;
+      if (arr[mid]! > target) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
     }
     return lo;
   }
@@ -48,8 +51,11 @@ export class RouteGrid {
     let lo = 0, hi = arr.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (arr[mid]! >= target) hi = mid;
-      else lo = mid + 1;
+      if (arr[mid]! >= target) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
     }
     return lo;
   }
@@ -78,14 +84,18 @@ export class RouteGrid {
       const row = RouteGrid.lower(ys, edgeY - EPS);
       if (row >= ny || Math.abs(ys[row]! - edgeY) > EPS) continue;
       for (let column = Math.max(0, RouteGrid.upper(xs, box.x) - 1); column < nx - 1 && xs[column]! < right(box); column++) {
-        if (Math.min(xs[column + 1]!, right(box)) - Math.max(xs[column]!, box.x) > 1) RouteGrid.bump(this.hCost, row * (nx - 1) + column, cost);
+        if (Math.min(xs[column + 1]!, right(box)) - Math.max(xs[column]!, box.x) > 1) {
+          RouteGrid.bump(this.hCost, row * (nx - 1) + column, cost);
+        }
       }
     }
     for (const edgeX of [box.x, right(box)]) {
       const column = RouteGrid.lower(xs, edgeX - EPS);
       if (column >= nx || Math.abs(xs[column]! - edgeX) > EPS) continue;
       for (let row = Math.max(0, RouteGrid.upper(ys, box.y) - 1); row < ny - 1 && ys[row]! < bottom(box); row++) {
-        if (Math.min(ys[row + 1]!, bottom(box)) - Math.max(ys[row]!, box.y) > 1) RouteGrid.bump(this.vCost, row * nx + column, cost);
+        if (Math.min(ys[row + 1]!, bottom(box)) - Math.max(ys[row]!, box.y) > 1) {
+          RouteGrid.bump(this.vCost, row * nx + column, cost);
+        }
       }
     }
   }
@@ -95,9 +105,15 @@ export class RouteGrid {
     const { xs, nx } = this;
     const column = RouteGrid.lower(xs, crossX);
     if (column < nx && Math.abs(xs[column]! - crossX) < EPS) {
-      if (column > 0) RouteGrid.bump(this.hCost, row * (nx - 1) + column - 1, cost / 2);
-      if (column < nx - 1) RouteGrid.bump(this.hCost, row * (nx - 1) + column, cost / 2);
-    } else if (column > 0 && column < nx) RouteGrid.bump(this.hCost, row * (nx - 1) + column - 1, cost);
+      if (column > 0) {
+        RouteGrid.bump(this.hCost, row * (nx - 1) + column - 1, cost / 2);
+      }
+      if (column < nx - 1) {
+        RouteGrid.bump(this.hCost, row * (nx - 1) + column, cost / 2);
+      }
+    } else if (column > 0 && column < nx) {
+      RouteGrid.bump(this.hCost, row * (nx - 1) + column - 1, cost);
+    }
   }
 
   private crossColumn(column: number, crossY: number, cost = CROSS): void {
@@ -106,7 +122,9 @@ export class RouteGrid {
     if (row < ny && Math.abs(ys[row]! - crossY) < EPS) {
       if (row > 0) RouteGrid.bump(this.vCost, (row - 1) * nx + column, cost / 2);
       if (row < ny - 1) RouteGrid.bump(this.vCost, row * nx + column, cost / 2);
-    } else if (row > 0 && row < ny) RouteGrid.bump(this.vCost, (row - 1) * nx + column, cost);
+    } else if (row > 0 && row < ny) {
+      RouteGrid.bump(this.vCost, (row - 1) * nx + column, cost);
+    }
   }
 
   markLine(seg: Seg): void {
@@ -135,13 +153,17 @@ export class RouteGrid {
     if (seg.kind === 'h') {
       for (let row = RouteGrid.lower(ys, start.y - OVERLAP_TOL); row < ny && ys[row]! <= start.y + OVERLAP_TOL; row++) {
         for (let column = Math.max(0, RouteGrid.upper(xs, x1) - 1); column < nx - 1 && xs[column]! < x2; column++) {
-          if (Math.min(xs[column + 1]!, x2) - Math.max(xs[column]!, x1) > least(xs[column + 1]! - xs[column]!)) hFlag[row * (nx - 1) + column] = 1;
+          if (Math.min(xs[column + 1]!, x2) - Math.max(xs[column]!, x1) > least(xs[column + 1]! - xs[column]!)) {
+            hFlag[row * (nx - 1) + column] = 1;
+          }
         }
       }
     } else if (seg.kind === 'v') {
       for (let column = RouteGrid.lower(xs, start.x - OVERLAP_TOL); column < nx && xs[column]! <= start.x + OVERLAP_TOL; column++) {
         for (let row = Math.max(0, RouteGrid.upper(ys, y1) - 1); row < ny - 1 && ys[row]! < y2; row++) {
-          if (Math.min(ys[row + 1]!, y2) - Math.max(ys[row]!, y1) > least(ys[row + 1]! - ys[row]!)) vFlag[row * nx + column] = 1;
+          if (Math.min(ys[row + 1]!, y2) - Math.max(ys[row]!, y1) > least(ys[row + 1]! - ys[row]!)) {
+            vFlag[row * nx + column] = 1;
+          }
         }
       }
     }
@@ -159,8 +181,20 @@ export class RouteGrid {
       const vertex = pointOn(box, side, Math.round(lo + (hi - lo) / 2));
       const outward = OUTWARD[side];
       const column = at(xs, vertex.x), row = at(ys, vertex.y);
-      if (row >= 0) for (let cell = 0; cell + 1 < nx; cell++) if (xs[cell]! <= vertex.x + EPS && xs[cell + 1]! >= vertex.x - EPS && !(outward === 0 && cell === column) && !(outward === 2 && cell + 1 === column)) RouteGrid.bump(this.hCost, row * (nx - 1) + cell, HIT);
-      if (column >= 0) for (let cell = 0; cell + 1 < ny; cell++) if (ys[cell]! <= vertex.y + EPS && ys[cell + 1]! >= vertex.y - EPS && !(outward === 1 && cell === row) && !(outward === 3 && cell + 1 === row)) RouteGrid.bump(this.vCost, cell * nx + column, HIT);
+      if (row >= 0) {
+        for (let cell = 0; cell + 1 < nx; cell++) {
+          if (xs[cell]! <= vertex.x + EPS && xs[cell + 1]! >= vertex.x - EPS && !(outward === 0 && cell === column) && !(outward === 2 && cell + 1 === column)) {
+            RouteGrid.bump(this.hCost, row * (nx - 1) + cell, HIT);
+          }
+        }
+      }
+      if (column >= 0) {
+        for (let cell = 0; cell + 1 < ny; cell++) {
+          if (ys[cell]! <= vertex.y + EPS && ys[cell + 1]! >= vertex.y - EPS && !(outward === 1 && cell === row) && !(outward === 3 && cell + 1 === row)) {
+            RouteGrid.bump(this.vCost, cell * nx + column, HIT);
+          }
+        }
+      }
     }
   }
 
@@ -185,7 +219,9 @@ export class RouteGrid {
 
   nodeOf(point: Point): number | undefined {
     const column = RouteGrid.lower(this.xs, point.x), row = RouteGrid.lower(this.ys, point.y);
-    if (column >= this.nx || row >= this.ny || Math.abs(this.xs[column]! - point.x) > EPS || Math.abs(this.ys[row]! - point.y) > EPS) return undefined;
+    if (column >= this.nx || row >= this.ny || Math.abs(this.xs[column]! - point.x) > EPS || Math.abs(this.ys[row]! - point.y) > EPS) {
+      return undefined;
+    }
     return row * this.nx + column;
   }
 

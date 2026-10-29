@@ -108,7 +108,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     addSupers(target.type);
     const out: string[] = [];
     for (const element of elements.values()) {
-      if (element.properties.some((property) => !property.isAttr && !property.isReference && property.type.startsWith(`${this.prefix}:`) && accepted.has(this.typeKey(property.type)))) out.push(element.name);
+      if (element.properties.some((property) => !property.isAttr && !property.isReference && property.type.startsWith(`${this.prefix}:`) && accepted.has(this.typeKey(property.type)))) {
+        out.push(element.name);
+      }
     }
     return out;
   }
@@ -123,7 +125,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     const probe = VendorDescriptor.probe();
     for (const element of this.index().elements.values()) {
       for (const property of element.properties) {
-        if (property.isReference && property.isAttr) out.push({ element: element.name, attr: property.name, target: property.type });
+        if (property.isReference && property.isAttr) {
+          out.push({ element: element.name, attr: property.name, target: property.type });
+        }
       }
       for (const sup of element.bpmnSuperTypes) {
         let descriptor: { properties?: Array<{ name: string; type: string; isReference?: boolean; isAttr?: boolean }> } | undefined;
@@ -134,7 +138,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
         }
         for (const superProperty of descriptor?.properties ?? []) {
           if (!superProperty.isReference || !superProperty.isAttr) continue;
-          if (!out.some((idRef) => idRef.element === element.name && idRef.attr === superProperty.name)) out.push({ element: element.name, attr: superProperty.name, target: superProperty.type.includes(':') ? superProperty.type : `bpmn:${superProperty.type}` });
+          if (!out.some((idRef) => idRef.element === element.name && idRef.attr === superProperty.name)) {
+            out.push({ element: element.name, attr: superProperty.name, target: superProperty.type.includes(':') ? superProperty.type : `bpmn:${superProperty.type}` });
+          }
         }
       }
     }
@@ -150,7 +156,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
     const prefix = this.prefix;
     const raw = CAMUNDA_DESCRIPTOR as unknown as { types: RawType[] };
     const types = new Map<string, RawType>();
-    for (const rawType of raw.types) types.set(this.typeKey(rawType.name), rawType);
+    for (const rawType of raw.types) {
+      types.set(this.typeKey(rawType.name), rawType);
+    }
 
     const subTypes = new Map<string, string[]>();
     for (const [key, rawType] of types) {
@@ -172,15 +180,26 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
       const out = new Set<string>();
       for (const ext of rawType?.extends ?? []) {
         const qualified = this.qualify(ext);
-        if (qualified.startsWith('bpmn:')) out.add(qualified);
-        else if (qualified.startsWith(`${prefix}:`)) for (const host of hostsOf(this.typeKey(qualified), seen)) out.add(host);
+        if (qualified.startsWith('bpmn:')) {
+          out.add(qualified);
+        } else if (qualified.startsWith(`${prefix}:`)) {
+          for (const host of hostsOf(this.typeKey(qualified), seen)) {
+            out.add(host);
+          }
+        }
       }
-      for (const sub of subTypes.get(key) ?? []) for (const host of hostsOf(sub, seen)) out.add(host);
+      for (const sub of subTypes.get(key) ?? []) {
+        for (const host of hostsOf(sub, seen)) {
+          out.add(host);
+        }
+      }
       const list = [...out];
       hosts.set(key, list);
       return list;
     };
-    for (const key of types.keys()) hostsOf(key, new Set());
+    for (const key of types.keys()) {
+      hostsOf(key, new Set());
+    }
 
     const attrs = new Map<string, VendorAttr>();
     for (const [key, rawType] of types) {
@@ -191,7 +210,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
         const local = this.attrKey(property.name);
         const prev = attrs.get(local);
         if (prev) {
-          for (const owner of owners) if (!prev.owners.includes(owner)) prev.owners.push(owner);
+          for (const owner of owners) {
+            if (!prev.owners.includes(owner)) prev.owners.push(owner);
+          }
         } else {
           attrs.set(local, { name: `${prefix}:${local}`, type: property.type ?? 'String', owners: [...owners] });
         }
@@ -217,7 +238,9 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
         isBody: !!property.isBody,
       }));
       const byName = new Map<string, CamundaProperty>();
-      for (const property of [...inherited, ...own]) byName.set(property.name, property);
+      for (const property of [...inherited, ...own]) {
+        byName.set(property.name, property);
+      }
       return [...byName.values()];
     };
     for (const [key, rawType] of types) {
@@ -226,13 +249,18 @@ export class CamundaDescriptor extends VendorDescriptor<CamundaElementType> {
       const allowedIn: string[] = [];
       for (const allowed of ALLOWED_IN_OVERRIDES[key] ?? rawType.meta?.allowedIn ?? []) {
         const qualified = this.qualify(allowed);
-        if (qualified === '*' || allowed === '*') allowedIn.push('*');
-        else if (qualified.startsWith('bpmn:')) allowedIn.push(qualified);
-        else {
+        if (qualified === '*' || allowed === '*') {
+          allowedIn.push('*');
+        } else if (qualified.startsWith('bpmn:')) {
+          allowedIn.push(qualified);
+        } else {
           const allowedKey = this.typeKey(qualified);
           const allowedHosts = hosts.get(allowedKey) ?? [];
-          if (allowedHosts.length) allowedIn.push(...allowedHosts);
-          else allowedIn.push(this.xmlName(allowedKey));
+          if (allowedHosts.length) {
+            allowedIn.push(...allowedHosts);
+          } else {
+            allowedIn.push(this.xmlName(allowedKey));
+          }
         }
       }
       elements.set(key, {

@@ -40,26 +40,46 @@ export class ViewRequest {
     const flag = (option: string) => (option === 'id' ? 'the element id' : `--${option}`);
     if (opts.layout) {
       const extra = used(['id', 'scope', 'around', 'context']);
-      if (extra.length) throw usageError(`--layout shows the whole drawing; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
+      if (extra.length) {
+        throw usageError(`--layout shows the whole drawing; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --layout` and look up the id in the rows.' });
+      }
     }
     if (opts.around !== undefined) {
       const extra = used(['id', 'scope', 'context']);
-      if (extra.length) throw usageError(`--around <id> names the element itself; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --around <id> [--depth n]`, or `bpmn show <file> <id> --context` for one element in its context.' });
-    } else ViewRequest.assertAroundFlags(undefined, used(['depth', 'inner']).map(flag), 'show');
-    if (opts.context && opts.id === undefined) throw usageError('--context needs an element id', { hint: 'Use `bpmn show <file> <id> --context`.' });
-    if (opts.context && opts.scope !== undefined) throw usageError('--context shows one element; drop --scope', { hint: 'Use `bpmn show <file> <id> --context`.' });
+      if (extra.length) {
+        throw usageError(`--around <id> names the element itself; drop ${extra.map(flag).join(' and ')}`, { hint: 'Use `bpmn show <file> --around <id> [--depth n]`, or `bpmn show <file> <id> --context` for one element in its context.' });
+      }
+    } else {
+      ViewRequest.assertAroundFlags(undefined, used(['depth', 'inner']).map(flag), 'show');
+    }
+    if (opts.context && opts.id === undefined) {
+      throw usageError('--context needs an element id', { hint: 'Use `bpmn show <file> <id> --context`.' });
+    }
+    if (opts.context && opts.scope !== undefined) {
+      throw usageError('--context shows one element; drop --scope', { hint: 'Use `bpmn show <file> <id> --context`.' });
+    }
   }
 
   static assertAroundFlags(around: string | undefined, flags: string[], command: 'show' | 'render'): void {
-    if (around === undefined && flags.length) throw usageError(`${flags.join(' and ')} ${flags.length > 1 ? 'go' : 'goes'} only with --around <id>`, { hint: `Use \`bpmn ${command} <file> --around <id> --depth <n>\`.` });
+    if (around === undefined && flags.length) {
+      throw usageError(`${flags.join(' and ')} ${flags.length > 1 ? 'go' : 'goes'} only with --around <id>`, { hint: `Use \`bpmn ${command} <file> --around <id> --depth <n>\`.` });
+    }
   }
 
   of(doc: Doc): ShownView {
     const opts = this.opts;
-    if (opts.layout) return { kind: 'layout', view: new LayoutViewBuilder(doc.definitions).build() };
-    if (opts.around !== undefined) return { kind: 'around', view: new AroundWindow(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }).view() };
-    if (opts.id !== undefined && opts.context) return { kind: 'context', view: new ElementContextBuilder(doc, opts.id).build() };
-    if (opts.id !== undefined) return { kind: 'detail', view: new ElementDetailBuilder(doc, doc.require(opts.id)).build() };
+    if (opts.layout) {
+      return { kind: 'layout', view: new LayoutViewBuilder(doc.definitions).build() };
+    }
+    if (opts.around !== undefined) {
+      return { kind: 'around', view: new AroundWindow(doc, opts.around, { ...(opts.depth !== undefined ? { depth: opts.depth } : {}), inner: !!opts.inner }).view() };
+    }
+    if (opts.id !== undefined && opts.context) {
+      return { kind: 'context', view: new ElementContextBuilder(doc, opts.id).build() };
+    }
+    if (opts.id !== undefined) {
+      return { kind: 'detail', view: new ElementDetailBuilder(doc, doc.require(opts.id)).build() };
+    }
     const view = new ModelViewBuilder(doc).build();
     return { kind: 'model', view: opts.scope ? new ModelViewBuilder(doc).scope(view, opts.scope) : view };
   }

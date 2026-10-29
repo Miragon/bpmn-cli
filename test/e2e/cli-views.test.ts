@@ -32,7 +32,9 @@ function cli(args: string[], input = ''): Run {
 
 function ok(args: string[], input = ''): Run {
   const cliRun = cli(args, input);
-  if (cliRun.code !== 0) throw new Error(`bpmn ${args.join(' ')} failed (${cliRun.code}):\n${cliRun.err}\n${cliRun.out}`);
+  if (cliRun.code !== 0) {
+    throw new Error(`bpmn ${args.join(' ')} failed (${cliRun.code}):\n${cliRun.err}\n${cliRun.out}`);
+  }
   return cliRun;
 }
 
@@ -157,7 +159,9 @@ describe('guide --short, guide <topic>, kinds --section', () => {
   it('guide --short is the core in at most 5 KB', () => {
     const short = ok(['guide', '--short']).out;
     expect(Buffer.byteLength(short)).toBeLessThanOrEqual(5 * 1024);
-    for (const heading of ['CONTRACT', 'READ', 'CHANGE', 'OPS JSON', 'PLACEMENT', 'TOP ERRORS']) expect(short).toMatch(new RegExp(`^${heading}`, 'm'));
+    for (const heading of ['CONTRACT', 'READ', 'CHANGE', 'OPS JSON', 'PLACEMENT', 'TOP ERRORS']) {
+      expect(short).toMatch(new RegExp(`^${heading}`, 'm'));
+    }
     expect(short).toContain('by id only');
     // every op is listed with its keys
     expect(short).toMatch(/^ {2}add {6}kind\* name id as flowAs refAs after before flow in on to lane/m);
@@ -167,7 +171,9 @@ describe('guide --short, guide <topic>, kinds --section', () => {
   it('every topic prints its sections; an unknown topic is a usage error', () => {
     for (const [topic, { sections }] of Object.entries(GUIDE_TOPICS)) {
       const text = guideTopic(topic);
-      for (const section of sections) expect(text, topic).toContain(`${section}`);
+      for (const section of sections) {
+        expect(text, topic).toContain(`${section}`);
+      }
       expect(text.length, topic).toBeGreaterThan(200);
     }
     expect(ok(['guide', 'camunda8']).out).toMatch(/^CAMUNDA 8/);

@@ -15,7 +15,9 @@ export class InsertSpaceCommand extends FormatCommand {
         .option('--after <id>')
         .option('--below <id>')
         .option('--by <amount>', 'column (default for --after), row (default for --below), <n>col / <n>row (n of them) or pixels (<n>, <n>px); -column, -<n>col, -row or -<px> closes that much empty space instead', (raw: string) => {
-          if (!parseSpaceAmount(raw)) throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
+          if (!parseSpaceAmount(raw)) {
+            throw new InvalidArgumentError('expected column, row, <n>col, <n>row (2col: two columns) or pixels (80, 80px); negative (-column, -2col, -80) to close space');
+          }
           return /^\s*-?\d+\s*$/.test(raw) ? Number(raw) : raw;
         }),
     ).action(async (file: string, options: RawOpts) => {

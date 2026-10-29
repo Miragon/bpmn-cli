@@ -19,11 +19,17 @@ export class C7DescriptorNames {
         known = new Set<string>();
         try {
           const descriptor = this.probe.getElementDescriptor(this.probe.getType(sup)) as { properties?: Array<{ name: string; isAttr?: boolean; isReference?: boolean; isMany?: boolean }> };
-          for (const property of descriptor.properties ?? []) if (property.isAttr || (property.isReference && !property.isMany)) known.add(property.name);
+          for (const property of descriptor.properties ?? []) {
+            if (property.isAttr || (property.isReference && !property.isMany)) {
+              known.add(property.name);
+            }
+          }
         } catch {}
         this.bpmnAttrNames.set(sup, known);
       }
-      for (const name of known) names.add(name);
+      for (const name of known) {
+        names.add(name);
+      }
     }
     return names;
   }

@@ -40,7 +40,9 @@ export class Scene {
       const label = painter.label();
       const layer = this.layerOf(shape);
       const color = shape.container && halo(shape.id) === HALO_COLORS.moved ? undefined : halo(shape.id);
-      if (color) items.push({ box: grow(shape.bounds, 9), layer, svg: painter.halo(color), id: shape.id, extra: true });
+      if (color) {
+        items.push({ box: grow(shape.bounds, 9), layer, svg: painter.halo(color), id: shape.id, extra: true });
+      }
       const content = !full ? undefined : shape.container || shape.kind === 'group' ? painter.nameBox() : shape.bounds;
       items.push({ box: shape.bounds, layer, svg: `<g ${full ? 'data-id' : 'data-context'}="${attr(shape.id)}">${painter.svg()}</g>`, id: shape.id, ...(full ? {} : { extra: true }), ...(content ? { content } : {}) });
       if (label) {
@@ -62,11 +64,17 @@ export class Scene {
         if (from === to) continue;
         const stub = from ? Scene.cut(edge.points, STUB) : Scene.cut([...edge.points].reverse(), STUB).reverse();
         items.push({ box: painter.box(), fit: pointsBox(stub), layer: LAYER.edge, svg: `<g data-faded="${attr(edge.id)}" opacity="${FADED}">${painter.svg()}</g>`, id: edge.id });
-        for (const label of [painter.label(), painter.messageLabel()]) if (label) items.push({ ...label, svg: `<g opacity="${FADED}">${label.svg}</g>`, id: edge.id, extra: true });
+        for (const label of [painter.label(), painter.messageLabel()]) {
+          if (label) {
+            items.push({ ...label, svg: `<g opacity="${FADED}">${label.svg}</g>`, id: edge.id, extra: true });
+          }
+        }
         continue;
       }
       const color = halo(edge.id);
-      if (color) items.push({ box: grow(pointsBox(edge.points), 5), layer: LAYER.edge, svg: painter.halo(color), id: edge.id, extra: true });
+      if (color) {
+        items.push({ box: grow(pointsBox(edge.points), 5), layer: LAYER.edge, svg: painter.halo(color), id: edge.id, extra: true });
+      }
       items.push({ box: painter.box(), layer: LAYER.edge, svg: `<g data-id="${attr(edge.id)}">${painter.svg()}</g>`, id: edge.id });
       const label = painter.label();
       if (label) {
@@ -109,7 +117,9 @@ export class Scene {
 
   private depth(shape: DShape, parent: (shape: DShape) => string | undefined): number {
     let level = 0;
-    for (let parentId = parent(shape); parentId && level < 50; level++) parentId = this.plane.shapes.get(parentId) ? parent(this.plane.shapes.get(parentId)!) : undefined;
+    for (let parentId = parent(shape); parentId && level < 50; level++) {
+      parentId = this.plane.shapes.get(parentId) ? parent(this.plane.shapes.get(parentId)!) : undefined;
+    }
     return level;
   }
 

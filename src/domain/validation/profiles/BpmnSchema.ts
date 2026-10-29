@@ -85,16 +85,26 @@ export class BpmnSchema {
       if (property.isAttr || property.isBody || property.isVirtual) return;
       const names = new Set([property.name]);
       if (!property.isReference && property.type.startsWith('bpmn:')) {
-        for (const bpmnType of this.bpmnTypes) if (this.isA(bpmnType, property.type)) names.add(bpmnType.charAt(5).toLowerCase() + bpmnType.slice(6));
+        for (const bpmnType of this.bpmnTypes) {
+          if (this.isA(bpmnType, property.type)) {
+            names.add(bpmnType.charAt(5).toLowerCase() + bpmnType.slice(6));
+          }
+        }
       }
-      if (!property.isReference && property.type.startsWith('bpmndi:')) names.add(property.type.slice('bpmndi:'.length));
-      for (const name of names) out!.set(name, out!.has(name) && out!.get(name) !== slot ? -1 : slot);
+      if (!property.isReference && property.type.startsWith('bpmndi:')) {
+        names.add(property.type.slice('bpmndi:'.length));
+      }
+      for (const name of names) {
+        out!.set(name, out!.has(name) && out!.get(name) !== slot ? -1 : slot);
+      }
     });
     for (const group of SAME_SLOT) {
       const at = group.map((name) => out!.get(name)).filter((slot): slot is number => slot !== undefined && slot >= 0);
       if (at.length < 2) continue;
       const first = Math.min(...at);
-      for (const name of group) if ((out.get(name) ?? -1) >= 0) out.set(name, first);
+      for (const name of group) {
+        if ((out.get(name) ?? -1) >= 0) out.set(name, first);
+      }
     }
     this.slots.set(type, out);
     return out;

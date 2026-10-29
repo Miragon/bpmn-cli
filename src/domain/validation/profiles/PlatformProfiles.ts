@@ -49,7 +49,9 @@ class PlatformProfiles {
 
   load(platform: Platform): Promise<void> {
     if (platform === 'none') return Promise.resolve();
-    if (!this.isEnginePlatform(platform)) return Promise.reject(usageError(`Unknown platform "${String(platform)}": loadProfile takes 'c7', 'c8' or 'none'`, { hint: 'Pass the platform of a document (detectPlatform(doc).platform) or one of c7, c8.' }));
+    if (!this.isEnginePlatform(platform)) {
+      return Promise.reject(usageError(`Unknown platform "${String(platform)}": loadProfile takes 'c7', 'c8' or 'none'`, { hint: 'Pass the platform of a document (detectPlatform(doc).platform) or one of c7, c8.' }));
+    }
     const loaded = this.loading[platform];
     if (loaded) return loaded;
     const load = LOADERS[platform]().then(
@@ -92,7 +94,9 @@ class PlatformProfiles {
 
   summarize(report: ProfileReport): PlatformSummary {
     const counts = Object.fromEntries(SEVERITIES.map((severity) => [severity, 0])) as Record<Severity, number>;
-    for (const finding of report.findings) counts[finding.severity]++;
+    for (const finding of report.findings) {
+      counts[finding.severity]++;
+    }
     return { platform: report.platform, source: report.source, detail: report.detail, ...(report.operaton ? { operaton: true } : {}), counts };
   }
 

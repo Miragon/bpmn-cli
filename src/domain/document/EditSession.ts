@@ -84,7 +84,9 @@ export class EditSession {
   /** The document's, or one for conventions the call brings itself. */
   get idStyle(): IdStyle {
     const conventions = this.settings.conventions;
-    if (conventions === undefined || conventions === this.doc.conventions) return this.doc.idStyle;
+    if (conventions === undefined || conventions === this.doc.conventions) {
+      return this.doc.idStyle;
+    }
     return (this.style ??= IdStyle.of(conventions));
   }
 
@@ -113,7 +115,9 @@ export class EditSession {
   /** A flow id naming the node by its former id or name still names its ends this batch. */
   recordFormerEnd(node: El, end: FormerEnd): void {
     const list = this.formerEnds.get(node) ?? [];
-    if (!list.some((existing) => existing.id === end.id && existing.labels.join('\n') === end.labels.join('\n'))) list.push(end);
+    if (!list.some((existing) => existing.id === end.id && existing.labels.join('\n') === end.labels.join('\n'))) {
+      list.push(end);
+    }
     this.formerEnds.set(node, list);
   }
 
@@ -127,7 +131,9 @@ export class EditSession {
     const former = this.formerEnds.get(old);
     if (!former) return;
     this.formerEnds.delete(old);
-    for (const end of former) this.recordFormerEnd(next, end);
+    for (const end of former) {
+      this.recordFormerEnd(next, end);
+    }
   }
 
   /** The first record stays, so a batch compares the state before it with the one after. */

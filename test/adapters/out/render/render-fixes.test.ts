@@ -96,7 +96,9 @@ describe('broken and far-flung coordinates', () => {
     // the PNG shows the start event and the task (not a blank image)
     const { pixels } = await new PngRenderer().rasterize(rendered.svg, { pixels: true });
     let dark = 0;
-    for (let index = 0; index < pixels!.length; index += 4) if (pixels![index]! < 128) dark++;
+    for (let index = 0; index < pixels!.length; index += 4) {
+      if (pixels![index]! < 128) dark++;
+    }
     expect(dark).toBeGreaterThan(200);
     // overflowing (1e308), infinite and far (1e9) coordinates, a negative size, far label bounds
     for (const [task, points] of [

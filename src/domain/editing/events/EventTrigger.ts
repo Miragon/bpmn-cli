@@ -36,13 +36,17 @@ export class EventTrigger {
   /** Only boundary and start events can be non-interrupting, and not with every trigger. */
   static interruptingOnly(el: El, trigger: Trigger): boolean {
     if (is(el, 'bpmn:BoundaryEvent')) return ALWAYS_INTERRUPTING.includes(trigger);
-    if (is(el, 'bpmn:StartEvent')) return ALWAYS_INTERRUPTING.includes(trigger) || trigger === 'none';
+    if (is(el, 'bpmn:StartEvent')) {
+      return ALWAYS_INTERRUPTING.includes(trigger) || trigger === 'none';
+    }
     return true;
   }
 
   static optionsOf(source: TriggerOptions): TriggerOptions {
     const out: Record<string, unknown> = {};
-    for (const key of TRIGGER_KEYS) if (source[key] !== undefined) out[key] = source[key];
+    for (const key of TRIGGER_KEYS) {
+      if (source[key] !== undefined) out[key] = source[key];
+    }
     return out as TriggerOptions;
   }
 
@@ -58,9 +62,13 @@ export class EventTrigger {
           const cycle = body('timeCycle');
           const duration = body('timeDuration');
           const date = body('timeDate');
-          if (cycle) Object.assign(opts, { timer: cycle, timerKind: 'cycle' });
-          else if (duration) Object.assign(opts, { timer: duration, timerKind: 'duration' });
-          else if (date) Object.assign(opts, { timer: date, timerKind: 'date' });
+          if (cycle) {
+            Object.assign(opts, { timer: cycle, timerKind: 'cycle' });
+          } else if (duration) {
+            Object.assign(opts, { timer: duration, timerKind: 'duration' });
+          } else if (date) {
+            Object.assign(opts, { timer: date, timerKind: 'date' });
+          }
           break;
         }
         case 'conditional':
@@ -76,9 +84,15 @@ export class EventTrigger {
         }
       }
     }
-    if (is(el, 'bpmn:BoundaryEvent') && el.get<boolean | undefined>('cancelActivity') === false) opts.nonInterrupting = true;
-    if (is(el, 'bpmn:StartEvent') && el.get<boolean | undefined>('isInterrupting') === false) opts.nonInterrupting = true;
-    for (const optionKey of Object.keys(opts) as Array<keyof TriggerOptions>) if (opts[optionKey] === undefined) delete opts[optionKey];
+    if (is(el, 'bpmn:BoundaryEvent') && el.get<boolean | undefined>('cancelActivity') === false) {
+      opts.nonInterrupting = true;
+    }
+    if (is(el, 'bpmn:StartEvent') && el.get<boolean | undefined>('isInterrupting') === false) {
+      opts.nonInterrupting = true;
+    }
+    for (const optionKey of Object.keys(opts) as Array<keyof TriggerOptions>) {
+      if (opts[optionKey] === undefined) delete opts[optionKey];
+    }
     return { trigger, opts };
   }
 
@@ -115,8 +129,12 @@ export class EventTrigger {
         }
       }
     }
-    if (is(event, 'bpmn:BoundaryEvent') && event.get<boolean>('cancelActivity') === false) details.nonInterrupting = true;
-    if (is(event, 'bpmn:StartEvent') && event.get<boolean>('isInterrupting') === false) details.nonInterrupting = true;
+    if (is(event, 'bpmn:BoundaryEvent') && event.get<boolean>('cancelActivity') === false) {
+      details.nonInterrupting = true;
+    }
+    if (is(event, 'bpmn:StartEvent') && event.get<boolean>('isInterrupting') === false) {
+      details.nonInterrupting = true;
+    }
     return details;
   }
 
@@ -140,7 +158,9 @@ export class EventTrigger {
   private static readRoot(def: El, root: RootReference, opts: TriggerOptions): void {
     const ref = def.get<El | undefined>(root.refProperty);
     opts[root.option] = ref?.get<string | undefined>('name') ?? ref?.get<string | undefined>('id');
-    if (root.codeProperty) opts[root.codeProperty] = ref?.get<string | undefined>(root.codeProperty);
+    if (root.codeProperty) {
+      opts[root.codeProperty] = ref?.get<string | undefined>(root.codeProperty);
+    }
   }
 
   private static rootReferenceOf(trigger: Trigger): RootReference | undefined {

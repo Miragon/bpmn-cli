@@ -40,10 +40,14 @@ export class IdRename {
     }
     const vendorRefs = CAMUNDA.idReferenceAttrs().filter((reference) => is(el, reference.target));
     for (const element of walk(doc.definitions)) {
-      if (is(element, 'bpmn:CallActivity') && element.get<string | undefined>('calledElement') === old) element.set('calledElement', newId);
+      if (is(element, 'bpmn:CallActivity') && element.get<string | undefined>('calledElement') === old) {
+        element.set('calledElement', newId);
+      }
       if (!descriptorOf(element).isGeneric) continue;
       const any = element as unknown as Record<string, unknown>;
-      if (element.$type === 'zeebe:calledElement' && any['processId'] === old) any['processId'] = newId;
+      if (element.$type === 'zeebe:calledElement' && any['processId'] === old) {
+        any['processId'] = newId;
+      }
       if (!vendorRefs.length) continue;
       const [prefix, local] = element.$type.split(':');
       if (!prefix || !local || !CAMUNDA.reads(doc.namespaceUri(prefix))) continue;
@@ -80,7 +84,9 @@ export class IdRename {
     this.rename(el, next);
     allocator.markGenerated(next, wanted);
     this.edit.recordRegenerated(id, next, undefined, el);
-    for (const { flow, was } of flows) new FlowIdFollower(this.edit).followRenamedEnd(flow, was);
+    for (const { flow, was } of flows) {
+      new FlowIdFollower(this.edit).followRenamedEnd(flow, was);
+    }
   }
 
   /**

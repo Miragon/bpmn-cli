@@ -32,7 +32,13 @@ export const OUTWARD: Record<Side, number> = { right: 0, bottom: 1, left: 2, top
 export function crossings(points: readonly Point[], lines: readonly Point[][]): number {
   let crossings = 0;
   for (let index = 0; index + 1 < points.length; index++) {
-    for (const line of lines) for (let segmentIndex = 0; segmentIndex + 1 < line.length; segmentIndex++) if (segmentsCross(points[index]!, points[index + 1]!, line[segmentIndex]!, line[segmentIndex + 1]!)) crossings++;
+    for (const line of lines) {
+      for (let segmentIndex = 0; segmentIndex + 1 < line.length; segmentIndex++) {
+        if (segmentsCross(points[index]!, points[index + 1]!, line[segmentIndex]!, line[segmentIndex + 1]!)) {
+          crossings++;
+        }
+      }
+    }
   }
   return crossings;
 }
@@ -44,7 +50,9 @@ export function simplify(points: Point[]): Point[] {
     const last = out[out.length - 1];
     if (last && last.x === point.x && last.y === point.y) continue;
     const prev = out[out.length - 2];
-    if (prev && last && ((prev.x === last.x && last.x === point.x) || (prev.y === last.y && last.y === point.y))) out.pop();
+    if (prev && last && ((prev.x === last.x && last.x === point.x) || (prev.y === last.y && last.y === point.y))) {
+      out.pop();
+    }
     out.push({ x: point.x, y: point.y });
   }
   if (out.length === 1 && points.length > 1) out.push({ ...out[0]! });

@@ -174,7 +174,9 @@ describe('full engine: labels stay off the title of an expanded sub-process and 
     const sub = /<bpmn:subProcess id="([^"]+)"/.exec(result.xml)![1]!;
     const { title, shapes, labels } = frameOf(result.xml, sub, name);
     expect(title.height).toBeGreaterThanOrEqual(3 * 14.4);
-    for (const [, box] of [...shapes, ...labels]) expect(box.y).toBeGreaterThanOrEqual(bottom(title));
+    for (const [, box] of [...shapes, ...labels]) {
+      expect(box.y).toBeGreaterThanOrEqual(bottom(title));
+    }
     expectLabelsClear(result.xml, sub, name);
     expect((await metricsXml(result.xml)).score).toBe(0);
   });
@@ -431,11 +433,15 @@ describe('incremental layout: a kept event sub-process', () => {
     expect(result.result.layout.notes?.join(' ')).toMatch(/Activity_Esp made \d+ px of room below its new title/);
     const { title, shapes, labels } = frameOf(result.xml, 'Activity_Esp', name);
     expect(title.height).toBeGreaterThanOrEqual(3 * 14.4);
-    for (const [, box] of [...shapes, ...labels]) expect(box.y).toBeGreaterThanOrEqual(bottom(title) + 4);
+    for (const [, box] of [...shapes, ...labels]) {
+      expect(box.y).toBeGreaterThanOrEqual(bottom(title) + 4);
+    }
     expect((await metricsXml(result.xml)).score).toBe(0);
     const compacted = await applyToXml(result.xml, [{ op: 'compact', ids: ['Activity_Esp'] }]);
     const after = frameOf(compacted.xml, 'Activity_Esp', name);
-    for (const [, box] of [...after.shapes, ...after.labels]) expect(box.y).toBeGreaterThanOrEqual(bottom(after.title) + 3.5);
+    for (const [, box] of [...after.shapes, ...after.labels]) {
+      expect(box.y).toBeGreaterThanOrEqual(bottom(after.title) + 3.5);
+    }
   });
 
   it('`label --side above` makes room below the title instead of putting the label on it', async () => {
@@ -636,7 +642,9 @@ describe('incremental layout: a renamed sub-process makes room only for the line
     expect(title.height).toBeCloseTo(2 * 14.4);
     const drawing = drawn(result.xml);
     for (const id of ['Event_Begin', 'Activity_Check', 'Event_Checked']) {
-      for (const box of [drawing.get(id)!.bounds!, ...(drawing.get(id)!.label ? [drawing.get(id)!.label!] : [])]) expect(box.y, id).toBeGreaterThanOrEqual(bottom(title) + 4);
+      for (const box of [drawing.get(id)!.bounds!, ...(drawing.get(id)!.label ? [drawing.get(id)!.label!] : [])]) {
+        expect(box.y, id).toBeGreaterThanOrEqual(bottom(title) + 4);
+      }
     }
     // the task at y 220 is what reaches up to the new title: room for it (10 px), not for the label at y 110
     const moved = drawing.get('Activity_Check')!.bounds!.y - 220;

@@ -22,7 +22,9 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..',
 
 export async function loadMetrics() {
   const file = join(ROOT, 'dist', 'index.js');
-  if (!existsSync(file)) throw new Error(`${file} is missing: run \`npm run build\` first`);
+  if (!existsSync(file)) {
+    throw new Error(`${file} is missing: run \`npm run build\` first`);
+  }
   const api = await import(pathToFileURL(file).href);
   const lib = { KEYS: api.METRIC_KEYS, WEIGHTS: api.METRIC_WEIGHTS };
   return {

@@ -11,8 +11,11 @@ export function far(box: Box, axis: Axis): number {
 }
 
 export function shiftBox(box: Box, axis: Axis, delta: number): void {
-  if (axis === 'x') box.x += delta;
-  else box.y += delta;
+  if (axis === 'x') {
+    box.x += delta;
+  } else {
+    box.y += delta;
+  }
 }
 
 export function bandOf(within: Box | undefined, axis: Axis): [number, number] | undefined {
@@ -40,8 +43,11 @@ export function pointInBand(point: { x: number; y: number }, band: [number, numb
 }
 
 export function resize(box: Box, axis: Axis, delta: number): void {
-  if (axis === 'x') box.width = Math.max(1, box.width + delta);
-  else box.height = Math.max(1, box.height + delta);
+  if (axis === 'x') {
+    box.width = Math.max(1, box.width + delta);
+  } else {
+    box.height = Math.max(1, box.height + delta);
+  }
 }
 
 export function beyondBand(box: Box, band: [number, number] | undefined, axis: Axis): boolean {

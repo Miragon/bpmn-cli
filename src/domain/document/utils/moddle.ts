@@ -46,7 +46,9 @@ export function is(el: unknown, type: string): boolean {
 
 export function enclosingProcess(scope: El | undefined): El | undefined {
   let current: El | undefined = scope;
-  while (current && !is(current, 'bpmn:Process')) current = current.$parent as El | undefined;
+  while (current && !is(current, 'bpmn:Process')) {
+    current = current.$parent as El | undefined;
+  }
   return current;
 }
 
@@ -91,7 +93,11 @@ export function insertInto(parent: El, prop: string, index: number, ...children:
   const list = many(parent, prop);
   const at = Math.max(0, Math.min(index, list.length));
   list.splice(at, 0, ...children);
-  if (!isReferenceProp(parent, prop)) for (const child of children) child.$parent = parent;
+  if (!isReferenceProp(parent, prop)) {
+    for (const child of children) {
+      child.$parent = parent;
+    }
+  }
 }
 
 /** No cascade. */
@@ -135,14 +141,20 @@ export function* walk(root: El, opts: WalkOptions = {}): Generator<El> {
     const descriptor = el.$descriptor as { isGeneric?: boolean; properties?: Array<{ name: string; isReference?: boolean }> };
     if (descriptor.isGeneric) {
       const children = (el as unknown as { $children?: unknown[] }).$children;
-      if (Array.isArray(children)) for (const child of children) if (isModdleElement(child)) stack.push(child);
+      if (Array.isArray(children)) {
+        for (const child of children) {
+          if (isModdleElement(child)) stack.push(child);
+        }
+      }
       continue;
     }
     for (const property of descriptor.properties ?? []) {
       if (property.isReference) continue;
       const value = el.get<unknown>(property.name);
       if (Array.isArray(value)) {
-        for (let index = value.length - 1; index >= 0; index--) if (isModdleElement(value[index])) stack.push(value[index] as El);
+        for (let index = value.length - 1; index >= 0; index--) {
+          if (isModdleElement(value[index])) stack.push(value[index] as El);
+        }
       } else if (isModdleElement(value)) {
         stack.push(value);
       }
@@ -235,7 +247,9 @@ function elementText(el: El, tag = false): string {
   const id = (el as unknown as Record<string, unknown>)['id'];
   const local = localType(el);
   const name = local.charAt(0).toLowerCase() + local.slice(1);
-  if (tag) return `<${el.$type.split(':')[0]}:${name}${typeof id === 'string' ? ` id="${id}"` : ''}>`;
+  if (tag) {
+    return `<${el.$type.split(':')[0]}:${name}${typeof id === 'string' ? ` id="${id}"` : ''}>`;
+  }
   return `${name}${typeof id === 'string' ? ` ${id}` : ''}`;
 }
 
@@ -254,14 +268,19 @@ function watchOverwrites(moddle: BpmnModdle): { stop(): void; warnings(): Import
     if (value && typeof value === 'object' && typeof (value as El).$type === 'string' && /^bpmn:/.test(target.$type)) {
       const property = (target.$descriptor as { propertiesByName?: Record<string, { name: string; isMany?: boolean; isReference?: boolean }> }).propertiesByName?.[name];
       const current = property && !property.isMany && !property.isReference && Object.prototype.hasOwnProperty.call(target, property.name) ? (target as unknown as Record<string, unknown>)[property.name] : undefined;
-      if (current && current !== value && typeof current === 'object' && typeof (current as El).$type === 'string') found.push({ holder: target, prop: property!.name, lost: current as El, kept: value as El });
+      if (current && current !== value && typeof current === 'object' && typeof (current as El).$type === 'string') {
+        found.push({ holder: target, prop: property!.name, lost: current as El, kept: value as El });
+      }
     }
     original.call(this, target, name, value);
   };
   return {
     stop(): void {
-      if (own) props.set = original;
-      else delete (props as Partial<Props>).set;
+      if (own) {
+        props.set = original;
+      } else {
+        delete (props as Partial<Props>).set;
+      }
     },
     warnings(): ImportWarning[] {
       return found.map(({ holder, prop, lost, kept }) => ({

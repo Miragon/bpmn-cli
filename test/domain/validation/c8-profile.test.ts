@@ -397,22 +397,38 @@ describe('the zeebe descriptor, read as data', () => {
 
 describe('values Camunda 8 parses at deploy (engine-checked on 60 timer values and 45 expressions)', () => {
   it('durations', () => {
-    for (const duration of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) expect(new TimerValue(duration).isDuration(), duration).toBe(true);
-    for (const duration of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) expect(new TimerValue(duration).isDuration(), duration).toBe(false);
+    for (const duration of ['PT1H', 'P1D', 'P1DT2H', 'PT1.5S', '-PT1S', 'P1W', 'p1d', 'PT1H30M', 'P0D', 'PT0S', 'P1Y2M', 'P1Y2M3DT4H', 'PT1H ', 'PT1M30.5S', 'P2W3D']) {
+      expect(new TimerValue(duration).isDuration(), duration).toBe(true);
+    }
+    for (const duration of ['pt1h', 'PT', 'P', '1h', 'P1.5D']) {
+      expect(new TimerValue(duration).isDuration(), duration).toBe(false);
+    }
   });
   it('dates', () => {
-    for (const date of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) expect(new TimerValue(date).isDateTime(), date).toBe(true);
-    for (const date of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) expect(new TimerValue(date).isDateTime(), date).toBe(false);
+    for (const date of ['2030-12-31T10:00Z', '2030-12-31T10:00:00Z', '2030-12-31T10:00:00.123Z', '2030-12-31T10:00:00+01:00', '2030-12-31T10:00:00+01:00[Europe/Berlin]', '2030-12-31T10:00:00z']) {
+      expect(new TimerValue(date).isDateTime(), date).toBe(true);
+    }
+    for (const date of ['2030-12-31T10:00:00[Europe/Berlin]', '2030-12-31', '2030-12-31T10:00:00+0100', '2030-12-31T10:00:00', '2030-12-31 10:00:00Z', '2030-12-31T10Z']) {
+      expect(new TimerValue(date).isDateTime(), date).toBe(false);
+    }
   });
   it('cycles', () => {
-    for (const cycle of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) expect(new TimerValue(cycle).isCycle(), cycle).toBe(true);
-    for (const cycle of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) expect(new TimerValue(cycle).isCycle(), cycle).toBe(false);
+    for (const cycle of ['R/PT1H', 'R5/PT1H', 'R0/PT1H', 'R-1/PT1H', 'R/2030-01-01T00:00:00Z/P1D', '0 0 12 * * ?', '0 0 12 ? * MON', '0 0 9-17 * * MON-FRI', '0 0/5 * * * *', '@hourly', '@weekly', '@midnight', '@yearly', '@annually', '@monthly', '@daily', 'R/P1D']) {
+      expect(new TimerValue(cycle).isCycle(), cycle).toBe(true);
+    }
+    for (const cycle of ['R5/PT1H/2030-01-01T00:00:00Z', 'R5/2030-01-01T00:00:00Z/2030-02-01T00:00:00Z', '@reboot', 'r/PT1H', 'R/PT1H/', 'R5/PT', 'PT1H', '* * * * * * *', '0 9 * * MON']) {
+      expect(new TimerValue(cycle).isCycle(), cycle).toBe(false);
+    }
   });
   it('FEEL slips', () => {
     const ok = ['a != b', 'not(a)', 'a = 1', '"a && b" = s', '-a', 'a - 1', 'a > 1 and b < 2', 'a in [1,2]', 'if a then b else c', 'some x in xs satisfies x > 1', 'a.b.c', 'x[1]', 'count(xs) > 0', 'date("2020-01-01") < today()', 'a instance of number', 'a between 1 and 3', 'a = null', 'a / 2', 'a ** 2', '`a b` > 1', '//comment\n a', 'a /* c */ > 1', '{"k": 1}.k = 1', '@"2020-01-01"', 'function(x) x', 'for x in xs return x'];
-    for (const expression of ok) expect(new FeelExpression(expression).problem(), expression).toBeUndefined();
+    for (const expression of ok) {
+      expect(new FeelExpression(expression).problem(), expression).toBeUndefined();
+    }
     const bad = ['x == 1', 'a && b', 'a || b', '!a', '${a}', 'x >', '(a', 'a)', '[1,2', '{a: 1', '"abc', 'a and', 'a or', 'a +', "'single'", 'a ? b : c', 'a.', '', ' '];
-    for (const expression of bad) expect(new FeelExpression(expression).problem(), expression).toBeDefined();
+    for (const expression of bad) {
+      expect(new FeelExpression(expression).problem(), expression).toBeDefined();
+    }
   });
 });
 
@@ -505,7 +521,9 @@ async function c8(method: string, path: string, body?: unknown): Promise<{ ok: b
 /** Deploys resources; returns the refusal message, or undefined and the keys to delete. */
 async function deploy(resources: Array<{ name: string; text: string }>): Promise<{ error?: string; keys: string[] }> {
   const form = new FormData();
-  for (const resource of resources) form.append('resources', new Blob([resource.text], { type: 'application/octet-stream' }), resource.name);
+  for (const resource of resources) {
+    form.append('resources', new Blob([resource.text], { type: 'application/octet-stream' }), resource.name);
+  }
   const res = await fetch(`${ENGINE}/deployments`, { method: 'POST', body: form, headers: { accept: 'application/json' } });
   const json = (await res.json()) as { detail?: string; deployments?: Array<Record<string, Record<string, string>>> };
   if (!res.ok) return { error: json.detail ?? String(res.status), keys: [] };
@@ -514,7 +532,9 @@ async function deploy(resources: Array<{ name: string; text: string }>): Promise
 }
 
 async function undeploy(keys: string[]): Promise<void> {
-  for (const key of keys) await c8('POST', `/resources/${key}/deletion`, {});
+  for (const key of keys) {
+    await c8('POST', `/resources/${key}/deletion`, {});
+  }
 }
 
 describe.skipIf(!ENGINE)('live engine: the deploy rules flag exactly what Camunda 8 refuses', () => {
@@ -598,7 +618,9 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
       await c8('POST', '/messages/publication', { name: `${pid}-paid`, correlationKey: 'o-3', timeToLive: 0 });
       await sleep(500);
       expect(await stateOf(big)).toBe('ACTIVE');
-      for (const key of ['o-1', 'o-2']) await c8('POST', '/messages/publication', { name: `${pid}-paid`, correlationKey: key, timeToLive: 10000 });
+      for (const key of ['o-1', 'o-2']) {
+        await c8('POST', '/messages/publication', { name: `${pid}-paid`, correlationKey: key, timeToLive: 10000 });
+      }
       expect(await finished(big)).toBe('COMPLETED');
       expect(await completedIds(big)).toContain('EndBig');
       // no condition holds: the flow without condition is not taken, the instance gets an incident
@@ -666,8 +688,12 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
     await withProcess('mi', model, async (pid) => {
       const key = await startInstance(pid, { items: [1, 2, 3] });
       const items = await until(() => jobs(`${pid}-item`), (activated) => activated.length >= 3);
-      for (const itemJob of items) await complete(itemJob, { done: ((itemJob['variables'] as Item)['item'] as number) * 10 });
-      for (const loopJob of await jobs(`${pid}-loop`)) await complete(loopJob);
+      for (const itemJob of items) {
+        await complete(itemJob, { done: ((itemJob['variables'] as Item)['item'] as number) * 10 });
+      }
+      for (const loopJob of await jobs(`${pid}-loop`)) {
+        await complete(loopJob);
+      }
       expect(await jobs(`${pid}-loop`, 1500)).toEqual([]);
       expect(await finished(key)).toBe('COMPLETED');
       const results = (await search('/variables/search', { processInstanceKey: key, name: 'results' }))[0];
@@ -697,7 +723,9 @@ describe.skipIf(!ENGINE)('live engine: the Camunda 8 features and the runtime ru
       expect(task['assignee'] ?? undefined).toBeUndefined();
       expect((await search('/variables/search', { processInstanceKey: key })).map((variable) => variable['name'])).not.toContain('startIn');
       await c8('POST', `/user-tasks/${String(task['userTaskKey'])}/completion`, {});
-      for (const workerJob of await jobs(`${pid}-w`)) await complete(workerJob, { done: true });
+      for (const workerJob of await jobs(`${pid}-w`)) {
+        await complete(workerJob, { done: true });
+      }
       expect((await incidentsOf(key)).map((incident) => incident['errorMessage'])).toEqual(["Expected result of the expression '${done}' to be 'BOOLEAN', but was 'STRING'."]);
       await cancel(key);
       // an empty collection skips the multi-instance: then the job with retries "abc" fails

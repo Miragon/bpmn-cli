@@ -62,7 +62,9 @@ export class EngineDrawing {
 
   private processOfScope(id: string): El | undefined {
     let el: El | undefined = this.sem.byId.get(id);
-    for (let depth = 0; el && depth < 50 && !is(el, 'bpmn:Process'); depth++) el = this.sem.scopeOf.get(idOf(el) ?? '');
+    for (let depth = 0; el && depth < 50 && !is(el, 'bpmn:Process'); depth++) {
+      el = this.sem.scopeOf.get(idOf(el) ?? '');
+    }
     return el;
   }
 }

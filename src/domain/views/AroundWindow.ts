@@ -36,7 +36,9 @@ export class AroundWindow {
   view(): AroundView {
     const { doc, id, opts } = this;
     const depth = opts.depth ?? AROUND_DEFAULT_DEPTH;
-    if (!Number.isInteger(depth) || depth < 0) throw usageError(`--depth must be a whole number >= 0, got ${String(opts.depth)}`);
+    if (!Number.isInteger(depth) || depth < 0) {
+      throw usageError(`--depth must be a whole number >= 0, got ${String(opts.depth)}`);
+    }
     const inner = !!opts.inner;
     const el = doc.require(id);
     const seeds = this.seedsOf(el);
@@ -45,7 +47,9 @@ export class AroundWindow {
 
     const distance = new Map<El, number>();
     let frontier = seeds;
-    for (const seed of seeds) distance.set(seed, 0);
+    for (const seed of seeds) {
+      distance.set(seed, 0);
+    }
     for (let step = 1; step <= depth && frontier.length; step++) {
       const next: El[] = [];
       for (const node of frontier) {
@@ -110,16 +114,26 @@ export class AroundWindow {
         if (placed.has(node)) return;
         placed.add(node);
         nodes.push(nodeOf(node));
-        if (is(node, 'bpmn:Activity')) for (const boundaryEvent of doc.boundaryEventsOf(node)) if (inWindow(boundaryEvent)) emit(boundaryEvent);
+        if (is(node, 'bpmn:Activity')) {
+          for (const boundaryEvent of doc.boundaryEventsOf(node)) {
+            if (inWindow(boundaryEvent)) emit(boundaryEvent);
+          }
+        }
         if (is(node, 'bpmn:SubProcess') && scopeSet.has(node)) {
           scopes.push(scopeEntry(node, true));
           visitScope(node);
         }
       };
-      for (const node of ordered) if (inWindow(node)) emit(node);
-      for (const node of doc.flowNodes(scope)) if (inWindow(node) && is(node, 'bpmn:BoundaryEvent')) emit(node);
+      for (const node of ordered) {
+        if (inWindow(node)) emit(node);
+      }
       for (const node of doc.flowNodes(scope)) {
-        if (!is(node, 'bpmn:SubProcess') || inWindow(node) || !scopeSet.has(node)) continue;
+        if (inWindow(node) && is(node, 'bpmn:BoundaryEvent')) emit(node);
+      }
+      for (const node of doc.flowNodes(scope)) {
+        if (!is(node, 'bpmn:SubProcess') || inWindow(node) || !scopeSet.has(node)) {
+          continue;
+        }
         scopes.push(scopeEntry(node, false));
         visitScope(node);
       }
@@ -184,16 +198,24 @@ export class AroundWindow {
     if (scope && (isLinkThrow(node) || isLinkCatch(node))) {
       const name = linkNameOf(node);
       const isPartner = isLinkThrow(node) ? isLinkCatch : isLinkThrow;
-      if (name) out.push(...doc.flowNodes(scope).filter((candidate) => isPartner(candidate) && linkNameOf(candidate) === name));
+      if (name) {
+        out.push(...doc.flowNodes(scope).filter((candidate) => isPartner(candidate) && linkNameOf(candidate) === name));
+      }
     }
-    if (scope && is(scope, 'bpmn:SubProcess') && this.isEntryOrExit(node)) out.push(scope);
-    if (inner && is(node, 'bpmn:SubProcess')) out.push(...doc.flowNodes(node).filter((child) => this.isEntryOrExit(child)));
+    if (scope && is(scope, 'bpmn:SubProcess') && this.isEntryOrExit(node)) {
+      out.push(scope);
+    }
+    if (inner && is(node, 'bpmn:SubProcess')) {
+      out.push(...doc.flowNodes(node).filter((child) => this.isEntryOrExit(child)));
+    }
     return out;
   }
 
   private seedsOf(el: El): El[] {
     if (is(el, 'bpmn:FlowNode')) return [el];
-    if (is(el, 'bpmn:SequenceFlow')) return [peek<El>(el, 'sourceRef'), peek<El>(el, 'targetRef')].filter((endpoint): endpoint is El => !!endpoint);
+    if (is(el, 'bpmn:SequenceFlow')) {
+      return [peek<El>(el, 'sourceRef'), peek<El>(el, 'targetRef')].filter((endpoint): endpoint is El => !!endpoint);
+    }
     throw usageError(`--around needs a flow node or a sequence flow; "${this.id}" is a ${kindOrTypeLabel(el)}`, {
       hint: is(el, 'bpmn:Process') || is(el, 'bpmn:Participant') || is(el, 'bpmn:SubProcess') ? 'Use `bpmn show <file> --scope <id>` for a whole process, pool or sub-process.' : 'Pick a node it belongs to (`bpmn show <file> <id>` names it).',
     });
@@ -216,8 +238,11 @@ export class AroundWindow {
     for (const element of windowEls) {
       for (const annotation of this.links.annotationsOf(element)) {
         const known = annotations.find((existing) => existing.id === annotation.id);
-        if (known) known.attachedTo.push(shownId(element));
-        else annotations.push(compact<ViewAnnotation>({ id: annotation.id, text: annotation.text, attachedTo: [shownId(element)] }));
+        if (known) {
+          known.attachedTo.push(shownId(element));
+        } else {
+          annotations.push(compact<ViewAnnotation>({ id: annotation.id, text: annotation.text, attachedTo: [shownId(element)] }));
+        }
       }
     }
     return annotations;

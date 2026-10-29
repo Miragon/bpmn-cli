@@ -27,7 +27,9 @@ export function validatorLines(reports: readonly ValidatorReport[] | undefined, 
     const line = `validator ${report.name}${report.detail ? ` (${report.detail})` : ''}: ${report.counts.errors} error(s), ${report.counts.warnings} warning(s) in the ${what}`;
     if (what !== 'result') return line;
     const left = (report.leftOut ?? []).map((group) => leftOutText(report.name, group));
-    if (report.blocks !== false) return left.length ? `${line} (${left.join(', ')})` : line;
+    if (report.blocks !== false) {
+      return left.length ? `${line} (${left.join(', ')})` : line;
+    }
     return `${line} (${[`${report.errors.length + report.warnings.length} added`, `${report.resolved.length} resolved`, `${keptOf(report)} already in the file`, ...left].join(', ')})`;
   });
 }
@@ -38,8 +40,14 @@ export function aliasLine(aliases: Record<string, string>): string {
 }
 
 export function fileLines(result: { file?: string; written?: boolean; unchanged: boolean }, opts: { dryRun?: boolean }): string[] {
-  if (result.written) return [`written: ${result.file}${result.unchanged ? ' (unchanged copy of the input)' : ''}`];
-  if (result.file && result.unchanged && !opts.dryRun) return [`unchanged: ${result.file} (the result equals the file; nothing written)`];
-  if (result.file) return [`dry run: ${result.file} not written${result.unchanged ? ' (unchanged)' : ''}`];
+  if (result.written) {
+    return [`written: ${result.file}${result.unchanged ? ' (unchanged copy of the input)' : ''}`];
+  }
+  if (result.file && result.unchanged && !opts.dryRun) {
+    return [`unchanged: ${result.file} (the result equals the file; nothing written)`];
+  }
+  if (result.file) {
+    return [`dry run: ${result.file} not written${result.unchanged ? ' (unchanged)' : ''}`];
+  }
   return [];
 }

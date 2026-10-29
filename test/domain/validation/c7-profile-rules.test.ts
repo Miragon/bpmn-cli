@@ -217,7 +217,9 @@ describe('profile follow-ups: one synthetic model per rule', () => {
     const operatonFile = detectPlatform(await Doc.fromXml(testCase.xml)).operaton === true;
     expect(findings.some((finding) => finding.severity === 'deploy')).toBe((operatonFile ? (testCase.operaton ?? testCase.engine) : testCase.engine) === 'reject');
     expect(findings.every((finding) => finding.code.startsWith('W_C7_DEPLOY_') === (finding.severity === 'deploy'))).toBe(true);
-    for (const finding of findings) expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
+    for (const finding of findings) {
+      expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
+    }
   });
 
   it('an empty process (bpmn new) and an empty sub-process need a start event too (engine-checked)', async () => {
@@ -301,8 +303,9 @@ function commandsOf(hint: string): string[][] {
     let last = -1;
     while ((cur = re.exec(match[1]!))) {
       const piece = cur[1] !== undefined ? cur[1].replace(/'\\''/g, "'") : cur[2]!;
-      if (cur.index === last) arg += piece;
-      else {
+      if (cur.index === last) {
+        arg += piece;
+      } else {
         if (last !== -1) out.push(arg);
         arg = piece;
       }

@@ -15,7 +15,9 @@ export class ElementAligner {
   counterparts(): Map<XElement, XElement> {
     const { left, right } = this;
     const map = new Map<XElement, XElement>();
-    if (left.root.uri !== right.root.uri || left.root.local !== right.root.local) return map;
+    if (left.root.uri !== right.root.uri || left.root.local !== right.root.local) {
+      return map;
+    }
     const stack: Array<[XElement, XElement]> = [[left.root, right.root]];
     while (stack.length) {
       const [leftEl, rightEl] = stack.pop()!;
@@ -48,12 +50,25 @@ export class ElementAligner {
       if (!entry) groups.set(key, (entry = { xs: [], ys: [] }));
       return entry;
     };
-    for (const child of xs) if (!keyed(child, xIds) && idOf(child) === undefined) group(child).xs.push(child);
-    for (const child of ys) if (!keyed(child, yIds) && idOf(child) === undefined) group(child).ys.push(child);
+    for (const child of xs) {
+      if (!keyed(child, xIds) && idOf(child) === undefined) {
+        group(child).xs.push(child);
+      }
+    }
+    for (const child of ys) {
+      if (!keyed(child, yIds) && idOf(child) === undefined) {
+        group(child).ys.push(child);
+      }
+    }
     for (const entry of groups.values()) {
       if (!entry.xs.length || !entry.ys.length) continue;
-      if (this.byText) pairs.push(...this.sequencePairs(entry.xs, entry.ys));
-      else for (let index = 0; index < Math.min(entry.xs.length, entry.ys.length); index++) pairs.push([entry.xs[index]!, entry.ys[index]!]);
+      if (this.byText) {
+        pairs.push(...this.sequencePairs(entry.xs, entry.ys));
+      } else {
+        for (let index = 0; index < Math.min(entry.xs.length, entry.ys.length); index++) {
+          pairs.push([entry.xs[index]!, entry.ys[index]!]);
+        }
+      }
     }
     return pairs;
   }
@@ -66,7 +81,9 @@ export class ElementAligner {
       seen.set(id, seen.has(id) ? null : el);
     }
     const out = new Map<string, XElement>();
-    for (const [id, el] of seen) if (el) out.set(id, el);
+    for (const [id, el] of seen) {
+      if (el) out.set(id, el);
+    }
     return out;
   }
 
@@ -94,13 +111,18 @@ export class ElementAligner {
           used.y.add(yIndex);
           xIndex++;
           yIndex++;
-        } else if (dp[(xIndex + 1) * rowWidth + yIndex]! >= dp[xIndex * rowWidth + yIndex + 1]!) xIndex++;
-        else yIndex++;
+        } else if (dp[(xIndex + 1) * rowWidth + yIndex]! >= dp[xIndex * rowWidth + yIndex + 1]!) {
+          xIndex++;
+        } else {
+          yIndex++;
+        }
       }
     }
     const restX = xs.filter((_xElement, xIndex) => !used.x.has(xIndex));
     const restY = ys.filter((_yElement, yIndex) => !used.y.has(yIndex));
-    for (let index = 0; index < Math.min(restX.length, restY.length); index++) pairs.push([restX[index]!, restY[index]!]);
+    for (let index = 0; index < Math.min(restX.length, restY.length); index++) {
+      pairs.push([restX[index]!, restY[index]!]);
+    }
     return pairs;
   }
 }

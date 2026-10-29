@@ -55,9 +55,15 @@ const sortedKeys = (problems) => problems.map((problem) => `${problem.kind}:${pr
 
 function failureViolations(res, before, readBack) {
   const violations = [];
-  if (res.status === 'crash') violations.push({ kind: 'crash', detail: `${res.code}: ${res.message}` });
-  if (res.status === 'usage') violations.push({ kind: 'usage', detail: `${res.code}: ${res.message}` });
-  if (readBack !== undefined && readBack !== before) violations.push({ kind: 'writtenOnFailure', detail: res.code });
+  if (res.status === 'crash') {
+    violations.push({ kind: 'crash', detail: `${res.code}: ${res.message}` });
+  }
+  if (res.status === 'usage') {
+    violations.push({ kind: 'usage', detail: `${res.code}: ${res.message}` });
+  }
+  if (readBack !== undefined && readBack !== before) {
+    violations.push({ kind: 'writtenOnFailure', detail: res.code });
+  }
   return violations;
 }
 
@@ -76,11 +82,15 @@ function consistencyViolations(layout, now, addedHard, hard) {
   // only kinds both sides know: a CLI build under test may predate kinds of the measuring library
   const shared = Object.keys(now.counts).filter((kind) => kind in reported.after.counts);
   const diff = shared.filter((kind) => reported.after.counts[kind] !== now.counts[kind]);
-  if (diff.length) violations.push({ kind: 'metricsMismatch', detail: diff.map((kind) => `${kind}: result ${reported.after.counts[kind]} vs metrics ${now.counts[kind]}`).join('; ') });
+  if (diff.length) {
+    violations.push({ kind: 'metricsMismatch', detail: diff.map((kind) => `${kind}: result ${reported.after.counts[kind]} vs metrics ${now.counts[kind]}`).join('; ') });
+  }
   const known = (problem) => hard.includes(problem.kind) && shared.includes(problem.kind);
   const theirs = sortedKeys((reported.added ?? []).filter(known));
   const mine = sortedKeys(addedHard.filter(known));
-  if (JSON.stringify(theirs) !== JSON.stringify(mine)) violations.push({ kind: 'addedMismatch', detail: `result [${theirs.join(' ')}] vs measured [${mine.join(' ')}]` });
+  if (JSON.stringify(theirs) !== JSON.stringify(mine)) {
+    violations.push({ kind: 'addedMismatch', detail: `result [${theirs.join(' ')}] vs measured [${mine.join(' ')}]` });
+  }
   return violations;
 }
 
@@ -89,18 +99,28 @@ function stabilityViolations(prev, next, layout) {
   if (!keeps) return [];
   const st = stability(geometry(prev), geometry(next), reportedIds(layout));
   const violations = [];
-  if (st.unreportedShapes.length) violations.push({ kind: 'unreportedMove', n: st.unreportedShapes.length, detail: st.unreportedShapes.slice(0, 5).map((unreported) => `${unreported.id} ${unreported.from.join(',')} -> ${unreported.to.join(',')}`).join(' | ') });
-  if (st.unreportedEdges.length) violations.push({ kind: 'unreportedReroute', n: st.unreportedEdges.length, detail: st.unreportedEdges.slice(0, 3).map((unreported) => `${unreported.id}: ${unreported.from} -> ${unreported.to}`).join(' | ') });
+  if (st.unreportedShapes.length) {
+    violations.push({ kind: 'unreportedMove', n: st.unreportedShapes.length, detail: st.unreportedShapes.slice(0, 5).map((unreported) => `${unreported.id} ${unreported.from.join(',')} -> ${unreported.to.join(',')}`).join(' | ') });
+  }
+  if (st.unreportedEdges.length) {
+    violations.push({ kind: 'unreportedReroute', n: st.unreportedEdges.length, detail: st.unreportedEdges.slice(0, 3).map((unreported) => `${unreported.id}: ${unreported.from} -> ${unreported.to}`).join(' | ') });
+  }
   return violations;
 }
 
 function extentViolations(prev, next, start) {
   const nextBox = bbox(next), pb = bbox(prev);
   // a model drawn for the first time has no extent to compare with
-  if (![nextBox.w, nextBox.h, pb.w, pb.h, start.x1, start.y1].every(Number.isFinite)) return [];
+  if (![nextBox.w, nextBox.h, pb.w, pb.h, start.x1, start.y1].every(Number.isFinite)) {
+    return [];
+  }
   const violations = [];
-  if (nextBox.w - pb.w > 1500 || nextBox.h - pb.h > 1000) violations.push({ kind: 'bboxJump', detail: `${Math.round(pb.w)}x${Math.round(pb.h)} -> ${Math.round(nextBox.w)}x${Math.round(nextBox.h)}` });
-  if (nextBox.x1 < start.x1 - 2000 || nextBox.y1 < start.y1 - 2000 || nextBox.x1 < -5000 || nextBox.y1 < -5000) violations.push({ kind: 'drift', detail: `origin ${Math.round(nextBox.x1)},${Math.round(nextBox.y1)} (start ${Math.round(start.x1)},${Math.round(start.y1)})` });
+  if (nextBox.w - pb.w > 1500 || nextBox.h - pb.h > 1000) {
+    violations.push({ kind: 'bboxJump', detail: `${Math.round(pb.w)}x${Math.round(pb.h)} -> ${Math.round(nextBox.w)}x${Math.round(nextBox.h)}` });
+  }
+  if (nextBox.x1 < start.x1 - 2000 || nextBox.y1 < start.y1 - 2000 || nextBox.x1 < -5000 || nextBox.y1 < -5000) {
+    violations.push({ kind: 'drift', detail: `origin ${Math.round(nextBox.x1)},${Math.round(nextBox.y1)} (start ${Math.round(start.x1)},${Math.round(start.y1)})` });
+  }
   return violations;
 }
 
@@ -111,9 +131,13 @@ async function renderViolations(render, xml, met) {
     const rendered = await render.draw(xml);
     const violations = [];
     const big = rendered.images.find((image) => Math.max(image.width, image.height) > render.maxSize);
-    if (big) violations.push({ kind: 'render', detail: `an image of ${big.width}x${big.height} px exceeds ${render.maxSize}` });
+    if (big) {
+      violations.push({ kind: 'render', detail: `an image of ${big.width}x${big.height} px exceeds ${render.maxSize}` });
+    }
     const expected = met?.problems ? met.problems.filter((problem) => problem.kind !== 'failed').length : undefined;
-    if (expected !== undefined && rendered.problems.length !== expected) violations.push({ kind: 'render', detail: `${rendered.problems.length} problems listed, the metrics have ${expected}` });
+    if (expected !== undefined && rendered.problems.length !== expected) {
+      violations.push({ kind: 'render', detail: `${rendered.problems.length} problems listed, the metrics have ${expected}` });
+    }
     return violations;
   } catch (error) {
     return [{ kind: 'render', detail: `${error?.code ?? 'exception'}: ${String(error?.message ?? error).split('\n')[0].slice(0, 300)}` }];
@@ -136,20 +160,27 @@ async function checkSuccess(cfg, st, res) {
   const inv = diInvariants(next);
   const violations = inv.filter((invariant) => !st.inv.has(invariant)).map((invariant) => ({ kind: `di:${invariant.split('|')[0]}`, detail: invariant.slice(invariant.indexOf('|') + 1) }));
   const now = await measureSafe(cfg.metrics, res.xml);
-  if (now.error) violations.push({ kind: 'metricsFailed', detail: now.error });
-  else {
+  if (now.error) {
+    violations.push({ kind: 'metricsFailed', detail: now.error });
+  } else {
     const added = st.met.problems ? cfg.metrics.diff(st.met.problems, now.problems).added : [];
     const hardV = hardViolations(added, cfg.metrics.hard, next);
     violations.push(...hardV, ...consistencyViolations(res.layout, now, added.filter((problem) => cfg.metrics.hard.includes(problem.kind)), cfg.metrics.hard));
   }
-  if (!next.parseError) violations.push(...stabilityViolations(st.a, next, res.layout), ...extentViolations(st.a, next, st.box0));
-  if (!next.parseError) violations.push(...(await renderViolations(cfg.render, res.xml, now.error ? undefined : now)));
+  if (!next.parseError) {
+    violations.push(...stabilityViolations(st.a, next, res.layout), ...extentViolations(st.a, next, st.box0));
+  }
+  if (!next.parseError) {
+    violations.push(...(await renderViolations(cfg.render, res.xml, now.error ? undefined : now)));
+  }
   return { v: violations, state: { ...st, xml: res.xml, a: next, inv: new Set(inv), met: now.error ? st.met : now } };
 }
 
 async function determinism(cfg, prevXml, ops, res) {
   const again = await cfg.exec.run(prevXml, ops, { mode: cfg.mode });
-  if (again.status !== 'ok') return [{ kind: 'nondeterministic', detail: `re-run ${again.status} ${again.code ?? ''}` }];
+  if (again.status !== 'ok') {
+    return [{ kind: 'nondeterministic', detail: `re-run ${again.status} ${again.code ?? ''}` }];
+  }
   return again.xml === res.xml ? [] : [{ kind: 'nondeterministic', detail: 'same input and step, different bytes' }];
 }
 
@@ -187,10 +218,14 @@ export async function runWalk(cfg) {
       summary.modes[entry.mode] = (summary.modes[entry.mode] ?? 0) + 1;
       const prevXml = st.xml;
       ({ v: violations, state: st } = await checkSuccess(cfg, st, res));
-      if (cfg.detEvery && step % cfg.detEvery === cfg.detEvery - 1) violations.push(...(await determinism(cfg, prevXml, gen.ops, res)));
+      if (cfg.detEvery && step % cfg.detEvery === cfg.detEvery - 1) {
+        violations.push(...(await determinism(cfg, prevXml, gen.ops, res)));
+      }
     }
     entry.violations = violations.map((violation) => ({ ...violation, severity: severityOf(violation.kind, cfg.hardSeverity) }));
-    for (const violation of entry.violations) summary.violations.push({ step, op: gen.name, ...violation });
+    for (const violation of entry.violations) {
+      summary.violations.push({ step, op: gen.name, ...violation });
+    }
     cfg.onStep?.(entry, st.xml);
   }
   summary.errors = summary.violations.filter((violation) => violation.severity === 'error').length;

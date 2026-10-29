@@ -33,7 +33,13 @@ export class CrossingRepair {
       const fresh = [...plane.edges.values()].filter((edge) => this.run.newEdges.has(edge.id) && edge.points.length >= 2);
       if (!fresh.length) continue;
       const kept = [...plane.edges.values()].filter((edge) => !this.run.newEdges.has(edge.id) && edge.points.length >= 2);
-      for (const freshEdge of fresh) for (const edge of kept) if (polylinesCross(freshEdge.points, edge.points)) out.push([freshEdge, edge, plane]);
+      for (const freshEdge of fresh) {
+        for (const edge of kept) {
+          if (polylinesCross(freshEdge.points, edge.points)) {
+            out.push([freshEdge, edge, plane]);
+          }
+        }
+      }
     }
     return out;
   }
@@ -47,8 +53,12 @@ export class CrossingRepair {
   private takeDi(): Map<string, El> {
     const out = new Map<string, El>();
     for (const plane of this.run.planes) {
-      for (const shape of plane.shapes.values()) if (shape.di) out.set(`${plane.rootId}|s|${shape.id}`, shape.di);
-      for (const edge of plane.edges.values()) if (edge.di) out.set(`${plane.rootId}|e|${edge.id}`, edge.di);
+      for (const shape of plane.shapes.values()) {
+        if (shape.di) out.set(`${plane.rootId}|s|${shape.id}`, shape.di);
+      }
+      for (const edge of plane.edges.values()) {
+        if (edge.di) out.set(`${plane.rootId}|e|${edge.id}`, edge.di);
+      }
     }
     return out;
   }
@@ -64,7 +74,9 @@ export class CrossingRepair {
         const diagramElement = di.get(`${plane.rootId}|${'points' in element ? 'e' : 's'}|${element.id}`);
         if (!diagramElement) continue;
         element.di = diagramElement;
-        if (!element.label && raw(diagramElement, 'label')) diagramElement.set('label', undefined);
+        if (!element.label && raw(diagramElement, 'label')) {
+          diagramElement.set('label', undefined);
+        }
       }
     }
   }
@@ -80,7 +92,9 @@ export class CrossingRepair {
       if (seen.has(id)) continue;
       seen.add(id);
       if (heads.has(id)) return id;
-      for (const predecessor of this.run.sem.predecessors(id)) if (this.run.place.placed.has(predecessor)) queue.push(predecessor);
+      for (const predecessor of this.run.sem.predecessors(id)) {
+        if (this.run.place.placed.has(predecessor)) queue.push(predecessor);
+      }
     }
     return undefined;
   }
@@ -109,7 +123,9 @@ export class CrossingRepair {
     };
     const judge = (what: string): boolean => {
       const verdict = guard!.judge();
-      if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${what}: score ${verdict.before} -> ${verdict.after}${verdict.addedKeys.length ? `, added ${verdict.addedKeys.join(' ')}` : ''}: ${verdict.ok ? 'kept' : 'undone'}`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[repair] ${what}: score ${verdict.before} -> ${verdict.after}${verdict.addedKeys.length ? `, added ${verdict.addedKeys.join(' ')}` : ''}: ${verdict.ok ? 'kept' : 'undone'}`);
+      }
       return verdict.ok;
     };
     const reroutes = (list: string[]): void => {
@@ -123,7 +139,9 @@ export class CrossingRepair {
           const other = target === freshEdge ? keptEdge : freshEdge;
           const crossing = polylinesCross(pts, other.points) || (target === keptEdge && crossesNewDrawnLine(plane, target, pts));
           if (crossing || (target === keptEdge && runsAlongDrawnLines(plane, target, pts))) {
-            if (LayoutDebug.on()) LayoutDebug.log(`[repair] ${target.id} routed again (it crossed: ${freshEdge.id} x ${keptEdge.id}): ${crossing ? 'still crossing' : 'along drawn lines'}, not measured`);
+            if (LayoutDebug.on()) {
+              LayoutDebug.log(`[repair] ${target.id} routed again (it crossed: ${freshEdge.id} x ${keptEdge.id}): ${crossing ? 'still crossing' : 'along drawn lines'}, not measured`);
+            }
             continue;
           }
           trials++;
@@ -132,8 +150,11 @@ export class CrossingRepair {
           drawing.adoptRoute(target, pts);
           if (!judge(`${target.id} routed again (it crossed: ${freshEdge.id} x ${keptEdge.id})`)) {
             target.points = old.points;
-            if (old.label) target.label = old.label;
-            else delete target.label;
+            if (old.label) {
+              target.label = old.label;
+            } else {
+              delete target.label;
+            }
             continue;
           }
           if (target === keptEdge) {
@@ -152,8 +173,14 @@ export class CrossingRepair {
         const segs = toSegments(points);
         let len = 0;
         for (const other of plane.edges.values()) {
-          if (other === target || this.run.newEdges.has(other.id) || [other.sourceId, other.targetId].some((end) => end === target.sourceId || end === target.targetId)) continue;
-          for (const sb of toSegments(other.points)) for (const sa of segs) len += Math.max(0, collinear(sa, sb));
+          if (other === target || this.run.newEdges.has(other.id) || [other.sourceId, other.targetId].some((end) => end === target.sourceId || end === target.targetId)) {
+            continue;
+          }
+          for (const sb of toSegments(other.points)) {
+            for (const sa of segs) {
+              len += Math.max(0, collinear(sa, sb));
+            }
+          }
         }
         return len;
       };

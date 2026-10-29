@@ -27,7 +27,9 @@ export class ElementOrder {
     const changes = new ChangeSet();
     const collab = this.edit.require(command.id, 'bpmn:Collaboration', 'collaboration');
     const ids = command.pools ?? command.flows ?? [];
-    if (!ids.length) throw usageError('order needs the participant ids in the wanted top-to-bottom order', { element: command.id });
+    if (!ids.length) {
+      throw usageError('order needs the participant ids in the wanted top-to-bottom order', { element: command.id });
+    }
     const participants = many(collab, 'participants');
     const listed: El[] = [];
     for (const id of ids) {
@@ -40,7 +42,9 @@ export class ElementOrder {
           hint: `Pools of ${idOf(collab)} (in declaration order): ${participants.map(idOf).join(', ')}.`,
         });
       }
-      if (listed.includes(participant)) throw usageError(`Participant ${id} is listed twice`, { element: idOf(collab) });
+      if (listed.includes(participant)) {
+        throw usageError(`Participant ${id} is listed twice`, { element: idOf(collab) });
+      }
       listed.push(participant);
     }
     const ordered = [...listed, ...participants.filter((participant) => !listed.includes(participant))];
@@ -74,7 +78,9 @@ export class ElementOrder {
             : `${idOf(owner)} has no lanes. Order the lanes of a pool by the participant (or process) id, nested lanes by their parent lane id.`,
         });
       }
-      if (listed.includes(lane)) throw usageError(`Lane ${id} is listed twice`, { element: idOf(owner) });
+      if (listed.includes(lane)) {
+        throw usageError(`Lane ${id} is listed twice`, { element: idOf(owner) });
+      }
       listed.push(lane);
     }
     const ordered = [...listed, ...lanes.filter((lane) => !listed.includes(lane))];
@@ -92,7 +98,9 @@ export class ElementOrder {
     const doc = this.edit.doc;
     const changes = new ChangeSet();
     const node = this.edit.require(command.id, 'bpmn:FlowNode');
-    if (!command.flows?.length) throw usageError('order needs the flow ids in the wanted order', { element: command.id });
+    if (!command.flows?.length) {
+      throw usageError('order needs the flow ids in the wanted order', { element: command.id });
+    }
     const outgoing = doc.outgoing(node);
     const listed: El[] = [];
     for (const flowId of command.flows) {
@@ -105,7 +113,9 @@ export class ElementOrder {
           hint: `Outgoing flows of ${idOf(node)}: ${outgoing.map(idOf).join(', ') || 'none'}.`,
         });
       }
-      if (listed.includes(flow)) throw usageError(`Flow ${flowId} is listed twice`, { element: idOf(node) });
+      if (listed.includes(flow)) {
+        throw usageError(`Flow ${flowId} is listed twice`, { element: idOf(node) });
+      }
       listed.push(flow);
     }
     const ordered = [...listed, ...outgoing.filter((flow) => !listed.includes(flow))];
@@ -136,7 +146,9 @@ export class ElementOrder {
     const positions = ordered.map((flow) => list.indexOf(flow)).filter((position) => position >= 0);
     const nodeIndex = list.indexOf(node);
     let at = positions.length ? Math.min(...positions) : list.length;
-    for (const flow of ordered) removeFrom(scope, 'flowElements', flow);
+    for (const flow of ordered) {
+      removeFrom(scope, 'flowElements', flow);
+    }
     const nodeIndexAfter = list.indexOf(node);
     if (nodeIndex !== -1 && at <= nodeIndex) at = nodeIndexAfter + 1;
     insertInto(scope, 'flowElements', Math.min(at, list.length), ...ordered);

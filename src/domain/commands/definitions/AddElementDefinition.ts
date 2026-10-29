@@ -39,7 +39,9 @@ export class AddElementDefinition extends EditCommandDefinition<AddElement> {
     this.checkOutAs(command, command.kind());
     command.placement();
     command.flowOptions(true);
-    if (command.fields['ifAbsent'] === true && command.fields['id'] === undefined) throw command.fail('"ifAbsent" needs an explicit "id" to check for', 'Add "id": "<Prefix>_<Name>" or drop ifAbsent.');
+    if (command.fields['ifAbsent'] === true && command.fields['id'] === undefined) {
+      throw command.fail('"ifAbsent" needs an explicit "id" to check for', 'Add "id": "<Prefix>_<Name>" or drop ifAbsent.');
+    }
   }
 
   override schemaRules(): unknown[] {

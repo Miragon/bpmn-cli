@@ -127,7 +127,9 @@ describe('integration follow-ups: one synthetic model per rule', () => {
     const findings = runProfile(await Doc.fromXml(testCase.xml)).findings;
     expect(findings.map((finding) => finding.code).sort()).toEqual([...testCase.codes].sort());
     expect(findings.some((finding) => finding.severity === 'deploy')).toBe(testCase.engine === 'reject');
-    for (const finding of findings) expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
+    for (const finding of findings) {
+      expect(finding.hint, `${finding.code}: ${finding.hint}`).toMatch(/`bpmn (set|add|remove|move|ext (add|remove|list)) <file> /);
+    }
   });
 
   it('names the definition the engines act on and how to keep only it', async () => {
@@ -154,8 +156,9 @@ function commandsOf(hint: string): string[][] {
     let last = -1;
     while ((cur = re.exec(match[1]!))) {
       const piece = cur[1] !== undefined ? cur[1].replace(/'\\''/g, "'") : cur[2]!;
-      if (cur.index === last) arg += piece;
-      else {
+      if (cur.index === last) {
+        arg += piece;
+      } else {
         if (last !== -1) out.push(arg);
         arg = piece;
       }

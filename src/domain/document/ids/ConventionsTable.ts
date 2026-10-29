@@ -62,9 +62,15 @@ export class ConventionsTable {
     private readonly conventions: IdConventions | undefined,
   ) {
     this.style = IdStyle.of(conventions);
-    for (const def of KINDS) this.element(def.kind, def.type, kindRequest(def));
-    for (const type of ['bpmn:Process', 'bpmn:Collaboration', 'bpmn:Message']) this.element(type.charAt(5).toLowerCase() + type.slice(6), type, typeRequest(type));
-    for (const [kind, type] of [['sequenceFlow', 'bpmn:SequenceFlow'], ['messageFlow', 'bpmn:MessageFlow']] as const) this.flow(kind, type);
+    for (const def of KINDS) {
+      this.element(def.kind, def.type, kindRequest(def));
+    }
+    for (const type of ['bpmn:Process', 'bpmn:Collaboration', 'bpmn:Message']) {
+      this.element(type.charAt(5).toLowerCase() + type.slice(6), type, typeRequest(type));
+    }
+    for (const [kind, type] of [['sequenceFlow', 'bpmn:SequenceFlow'], ['messageFlow', 'bpmn:MessageFlow']] as const) {
+      this.flow(kind, type);
+    }
   }
 
   /** A row of one kind shows its concrete pattern (process_{name:camel}, not <kind>_). */
@@ -90,8 +96,11 @@ export class ConventionsTable {
 
   private add(kind: string, concrete: string, pattern: string, source: PrefixSource, note?: string): void {
     const row = this.groups.find((candidate) => candidate.pattern === pattern && candidate.source === source && candidate.note === note);
-    if (row) row.kinds.push(kind);
-    else this.groups.push({ concrete, pattern, source, kinds: [kind], ...(note ? { note } : {}) });
+    if (row) {
+      row.kinds.push(kind);
+    } else {
+      this.groups.push({ concrete, pattern, source, kinds: [kind], ...(note ? { note } : {}) });
+    }
   }
 
   private element(kind: string, type: string, req: IdRequest): void {

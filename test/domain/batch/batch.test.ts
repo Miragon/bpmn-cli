@@ -23,7 +23,9 @@ function failure(input: unknown): { code: string; message: string; op?: number; 
   try {
     parseOps(input);
   } catch (err) {
-    if (isBpmnError(err)) return { code: err.code, message: err.message, ...err.details } as ReturnType<typeof failure>;
+    if (isBpmnError(err)) {
+      return { code: err.code, message: err.message, ...err.details } as ReturnType<typeof failure>;
+    }
     throw err;
   }
   throw new Error('expected parseOps to throw');
@@ -35,8 +37,11 @@ function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...sourceFiles(full));
-    else if (entry.endsWith('.ts')) out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...sourceFiles(full));
+    } else if (entry.endsWith('.ts')) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -53,7 +58,9 @@ function codesInSource(): string[] {
   const codes = new Set<string>();
   for (const file of sourceFiles(SRC_DIR)) {
     if (GUIDE_TEXT_FILES.some((guide) => file.endsWith(guide))) continue;
-    for (const match of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) codes.add(match[0].endsWith('_') ? `${match[0]}*` : match[0]);
+    for (const match of readFileSync(file, 'utf8').matchAll(/\b[EW]_[A-Z][A-Z0-9_]*\b/g)) {
+      codes.add(match[0].endsWith('_') ? `${match[0]}*` : match[0]);
+    }
   }
   return [...codes].sort();
 }
@@ -72,7 +79,9 @@ function commandsWithoutFile(text: string): string[] {
     if (cmd === 'kinds' || cmd === 'guide' || cmd === 'help') continue;
     const first = rest!.split(' ').slice(cmd === 'ext' ? 1 : 0)[0];
     if (!first || (first.startsWith('-') && first !== '-')) continue;
-    if (!['<file>', '-', '${quoted}'].includes(first) && !first.endsWith('.bpmn')) out.push(command);
+    if (!['<file>', '-', '${quoted}'].includes(first) && !first.endsWith('.bpmn')) {
+      out.push(command);
+    }
   }
   return out;
 }
@@ -80,7 +89,9 @@ function commandsWithoutFile(text: string): string[] {
 /** Resolves the escapes of a string or template piece (`\n`, `\x41`, `\u{1F600}`, a line continuation, `\'`). */
 function cooked(raw: string): string {
   return raw.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|\r\n|[\s\S])/g, (unused, escape: string) => {
-    if (escape[0] === 'u' || escape[0] === 'x') return String.fromCodePoint(parseInt(escape.replace(/[ux{}]/g, ''), 16));
+    if (escape[0] === 'u' || escape[0] === 'x') {
+      return String.fromCodePoint(parseInt(escape.replace(/[ux{}]/g, ''), 16));
+    }
     const simple: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0', '\n': '', '\r\n': '', '\u2028': '', '\u2029': '' };
     return simple[escape] ?? escape;
   });
@@ -117,7 +128,9 @@ function stringsIn(src: string): string[] {
         index = end === -1 ? src.length : end + 2;
       } else if (character === "'" || character === '"') {
         let cursor = index + 1;
-        while (cursor < src.length && src[cursor] !== character && src[cursor] !== '\n') cursor += src[cursor] === '\\' ? 2 : 1;
+        while (cursor < src.length && src[cursor] !== character && src[cursor] !== '\n') {
+          cursor += src[cursor] === '\\' ? 2 : 1;
+        }
         out.push(cooked(src.slice(index + 1, cursor)));
         index = cursor + 1;
         regexAllowed = false;
@@ -128,13 +141,19 @@ function stringsIn(src: string): string[] {
         let cursor = index + 1;
         let inClass = false;
         while (cursor < src.length && src[cursor] !== '\n' && (inClass || src[cursor] !== '/')) {
-          if (src[cursor] === '\\') cursor++;
-          else if (src[cursor] === '[') inClass = true;
-          else if (src[cursor] === ']') inClass = false;
+          if (src[cursor] === '\\') {
+            cursor++;
+          } else if (src[cursor] === '[') {
+            inClass = true;
+          } else if (src[cursor] === ']') {
+            inClass = false;
+          }
           cursor++;
         }
         index = cursor + 1;
-        while (index < src.length && /[a-z]/.test(src[index]!)) index++;
+        while (index < src.length && /[a-z]/.test(src[index]!)) {
+          index++;
+        }
         regexAllowed = false;
       } else if (/[A-Za-z_$#]/.test(character)) {
         const word = /^[#\w$]+/.exec(src.slice(index, index + 64))![0];
@@ -146,8 +165,9 @@ function stringsIn(src: string): string[] {
       } else if (/\s/.test(character)) {
         index++;
       } else {
-        if (character === '{') depth++;
-        else if (character === '}') {
+        if (character === '{') {
+          depth++;
+        } else if (character === '}') {
           if (depth === 0 && inSubstitution) return index;
           depth--;
         }
@@ -288,7 +308,9 @@ describe('parseOps: shapes', () => {
     ];
     expect(parseOps(full)).toEqual(full);
     const used = new Set(full.map((operation) => operation.op));
-    for (const name of COMMAND_NAMES) expect(used.has(name), `no full-shape test for op ${name}`).toBe(true);
+    for (const name of COMMAND_NAMES) {
+      expect(used.has(name), `no full-shape test for op ${name}`).toBe(true);
+    }
   });
 
   it('fills set.values when only unset is given and converts primitives in maps', () => {
@@ -408,7 +430,9 @@ describe('OPS_SCHEMA', () => {
 
   it('is a draft 2020-12 schema with a definition per op, branch and node', () => {
     expect(OPS_SCHEMA['$schema']).toBe('https://json-schema.org/draft/2020-12/schema');
-    for (const name of [...COMMAND_NAMES, 'branch', 'node', 'op']) expect(defs[name], name).toBeDefined();
+    for (const name of [...COMMAND_NAMES, 'branch', 'node', 'op']) {
+      expect(defs[name], name).toBeDefined();
+    }
   });
 
   it('lists exactly the keys the parser accepts, with op as a const', () => {
@@ -427,7 +451,9 @@ describe('OPS_SCHEMA', () => {
   it('describes the example ops with known keys only', () => {
     for (const op of opsExample().ops) {
       const props = defs[op.op]!.properties;
-      for (const key of Object.keys(op)) expect(props[key], `${op.op}.${key}`).toBeDefined();
+      for (const key of Object.keys(op)) {
+        expect(props[key], `${op.op}.${key}`).toBeDefined();
+      }
     }
   });
 });
@@ -457,11 +483,19 @@ describe('guide', () => {
     const text = kindsText();
     for (const kind of KINDS) {
       expect(text).toContain(kind.kind);
-      for (const alias of kind.aliases) expect(text).toContain(alias);
+      for (const alias of kind.aliases) {
+        expect(text).toContain(alias);
+      }
     }
-    for (const opt of ['--timer', '--message', '--error-code', '--signal', '--escalation-code', '--when', '--link', '--non-interrupting']) expect(text).toContain(opt);
-    for (const opt of ['--after', '--before', '--flow', '--in', '--on', '--to']) expect(text).toContain(opt);
-    for (const entry of ERROR_CATALOGUE) expect(text).toContain(entry.code);
+    for (const opt of ['--timer', '--message', '--error-code', '--signal', '--escalation-code', '--when', '--link', '--non-interrupting']) {
+      expect(text).toContain(opt);
+    }
+    for (const opt of ['--after', '--before', '--flow', '--in', '--on', '--to']) {
+      expect(text).toContain(opt);
+    }
+    for (const entry of ERROR_CATALOGUE) {
+      expect(text).toContain(entry.code);
+    }
   });
 
   it('the guide lists every command commander registers, and no other', () => {
@@ -476,7 +510,9 @@ describe('guide', () => {
       expect(text).toContain(`bpmn ${name}`);
       expect(text).toContain(`$ bpmn ${name}`);
     }
-    for (const opt of ['--json', '--out', '--dry-run', '--no-layout', '--force', '--backup', '--show', '--strict']) expect(text).toContain(opt);
+    for (const opt of ['--json', '--out', '--dry-run', '--no-layout', '--force', '--backup', '--show', '--strict']) {
+      expect(text).toContain(opt);
+    }
     expect(text).toContain("'${");
     expect(text).toContain('"op": "split"');
     expect(text).toContain('70');
@@ -498,7 +534,9 @@ describe('guide', () => {
     const problems = ERROR_CATALOGUE.flatMap((entry) => commandsWithoutFile(`${entry.meaning} ${entry.fix}`).map((command) => `${entry.code}: ${command}`));
     for (const file of sourceFiles(SRC_DIR)) {
       // the strings only: comments describe commands, hints and notes reach the user
-      for (const text of stringsInSource(file)) problems.push(...commandsWithoutFile(text).map((command) => `${file.slice(SRC_DIR.length + 1)}: ${command}`));
+      for (const text of stringsInSource(file)) {
+        problems.push(...commandsWithoutFile(text).map((command) => `${file.slice(SRC_DIR.length + 1)}: ${command}`));
+      }
     }
     // the scanner: strings and templates with their escapes and substitutions, no comment, no regular expression
     expect(stringsIn("// 'no'\nconst a = 'it\\'s' + \"x\\ty\" + `bpmn set ${quoted} ${f(`in`)}` /* `no` */ / 2;\nconst r = /['`]/g.test(a) ? `\\u0041` : '';")).toEqual([
@@ -525,7 +563,9 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
   const catalogue = (code: string) => ERROR_CATALOGUE.find((entry) => entry.code === code)!;
 
   it('documents ext sub-command first (bpmn ext add|remove|list <file> <id> ...)', () => {
-    for (const line of [command('ext').usage, ...command('ext').examples]) expect(line).toMatch(/^bpmn ext (add|remove|list) /);
+    for (const line of [command('ext').usage, ...command('ext').examples]) {
+      expect(line).toMatch(/^bpmn ext (add|remove|list) /);
+    }
     for (const [name, text] of Object.entries(texts)) {
       for (const match of text.matchAll(/bpmn ext (\S+) (\S+)/g)) {
         expect(['add', 'remove', 'list'], `${name}: ${match[0]}`).toContain(match[1]);
@@ -536,13 +576,17 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
   });
 
   it('never tells the agent to run a `bpmn split` command', () => {
-    for (const [name, text] of Object.entries(texts)) expect(text, name).not.toMatch(/bpmn split/);
+    for (const [name, text] of Object.entries(texts)) {
+      expect(text, name).not.toMatch(/bpmn split/);
+    }
     expect(catalogue('W_IMPLICIT_SPLIT').fix).toMatch(/`split` op in `bpmn apply`/);
     expect(guideText()).toMatch(/there is no split command/);
   });
 
   it('describes the layouter branch rule instead of "first flow on top"', () => {
-    for (const [name, text] of Object.entries(texts)) expect(text, name).not.toMatch(/drawn on top/);
+    for (const [name, text] of Object.entries(texts)) {
+      expect(text, name).not.toMatch(/drawn on top/);
+    }
     expect(PLACEMENT_NOTES.join(' ')).toMatch(/default flow .* continues straight/);
     expect(command('order').summary).toMatch(/default flow/);
     expect(DOCS).toMatch(/alternately below and above/);
@@ -552,7 +596,9 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(COMMON_OPTIONS.map((option) => option.option)).not.toContain('--keep-flow-ids');
     const texts = { guide: guideText(), short: guideShort(), DOCS, library: repoFile('docs/library.md'), ops: repoFile('docs/ops.md'), skill: repoFile('plugins/bpmn-cli/skills/bpmn/SKILL.md') };
     for (const [name, text] of Object.entries(texts)) {
-      for (const word of ['keep-flow-ids', 'keepFlowIds', 'BPMN_KEEP_FLOW_IDS', 'W_FLOW_ID_STALE']) expect(text, `${name}: ${word}`).not.toContain(word);
+      for (const word of ['keep-flow-ids', 'keepFlowIds', 'BPMN_KEEP_FLOW_IDS', 'W_FLOW_ID_STALE']) {
+        expect(text, `${name}: ${word}`).not.toContain(word);
+      }
     }
     for (const [name, text] of Object.entries({ guide: guideText(), ops: repoFile('docs/ops.md') })) {
       expect(text, name).toMatch(/"outAs"`?\s+the\s+(new\s+)?flow\s+(the\s+splice\s+creates\s+\(new\s+)?node -> old\s+successor/);
@@ -564,8 +610,12 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     expect(command('validate').usage).toContain('[--strict]');
     expect(command('layout').summary).toMatch(/no --no-layout/);
     expect(COMMON_OPTIONS.find((option) => option.option === '--no-layout')!.description).toMatch(/pruned/);
-    for (const key of ['written', 'importWarnings', 'written: <file>']) expect(guideText()).toContain(key);
-    for (const key of ['"written": true', '"importWarnings": []']) expect(DOCS).toContain(key);
+    for (const key of ['written', 'importWarnings', 'written: <file>']) {
+      expect(guideText()).toContain(key);
+    }
+    for (const key of ['"written": true', '"importWarnings": []']) {
+      expect(DOCS).toContain(key);
+    }
     expect(DOCS).toMatch(/`--target camunda7` the `camunda:` and `modeler:` namespaces/);
   });
 
@@ -596,7 +646,9 @@ describe('guide, README and docs: documented syntax matches the CLI', () => {
     // a number a cut leaves goes only where it reads like a collision suffix
     expect(DOCS).toMatch(/a number a cut would leave at the end of the id goes too where it would read\s+like a collision suffix/);
     expect(kindsSectionText(['ids'])).toMatch(/a number left at the end of the id goes too where it reads like a collision suffix/);
-    for (const [name, text] of Object.entries(texts)) expect(text, name).not.toMatch(/cut at a word\b|an id that fits is never cut/);
+    for (const [name, text] of Object.entries(texts)) {
+      expect(text, name).not.toMatch(/cut at a word\b|an id that fits is never cut/);
+    }
   });
 
   it('README quick start shows exactly what `bpmn show` prints', async () => {

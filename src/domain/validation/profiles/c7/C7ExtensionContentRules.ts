@@ -33,21 +33,32 @@ export class C7ExtensionContentRules extends C7Rules {
       const impl = ['class', 'expression', 'delegateExpression'].some((attribute) => nonEmpty(attr(extension, attribute))) || this.children(extension, 'script').length > 0;
       const event = attr(extension, 'event');
       const label = `${this.prefix}:${local}${event ? ` (event ${event})` : ''} of ${where}`;
-      if (!impl) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:${event}:impl`, `${label} has no class, expression, delegateExpression or script; the engines refuse the file`, rebuild({ [`expression`]: '${...}' }));
+      if (!impl) {
+        this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:${event}:impl`, `${label} has no class, expression, delegateExpression or script; the engines refuse the file`, rebuild({ [`expression`]: '${...}' }));
+      }
       if (!this.kit.is(host, 'bpmn:SequenceFlow')) {
         const allowed = local === 'taskListener' ? TASK_EVENTS : EXECUTION_EVENTS;
         const placeholder = `<${allowed.join('|')}>`;
-        if (event === undefined) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:event`, `${label} has no event; the engines refuse the file`, `Set event to one of ${allowed.join(', ')}. ${rebuild({ event: placeholder })}`);
-        else if (!allowed.includes(event)) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:${event}:event`, `${label}: event "${event}" is not one of ${allowed.join(', ')}; the engines refuse the file`, `${event === 'take' && local === 'executionListener' ? 'take is only read on sequence flows. ' : ''}${rebuild({ event: placeholder })}`);
+        if (event === undefined) {
+          this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:event`, `${label} has no event; the engines refuse the file`, `Set event to one of ${allowed.join(', ')}. ${rebuild({ event: placeholder })}`);
+        } else if (!allowed.includes(event)) {
+          this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:${event}:event`, `${label}: event "${event}" is not one of ${allowed.join(', ')}; the engines refuse the file`, `${event === 'take' && local === 'executionListener' ? 'take is only read on sequence flows. ' : ''}${rebuild({ event: placeholder })}`);
+        }
       }
       for (const script of this.children(extension, 'script')) {
-        if (!nonEmpty(attr(script, 'scriptFormat'))) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:${event}:script`, `The script of ${label} has no scriptFormat; the engines refuse the file`, rebuild());
+        if (!nonEmpty(attr(script, 'scriptFormat'))) {
+          this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:${event}:script`, `The script of ${label} has no scriptFormat; the engines refuse the file`, rebuild());
+        }
       }
       if (local === 'taskListener' && event === 'timeout') {
         const kids = peek<unknown[]>(extension, '$children');
         const timer = Array.isArray(kids) && (kids as El[]).some((kid) => kid && typeof kid.$type === 'string' && /timerEventDefinition$/i.test(kid.$type));
-        if (!timer) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:timeout:timer`, `${label} has no bpmn:timerEventDefinition; the engines refuse the file`, rebuild());
-        if (attr(extension, 'id') === undefined) this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:timeout:id`, `${label} has no id, which the engines require on timeout task listeners; they refuse the file`, rebuild({ id: '<listenerId>' }));
+        if (!timer) {
+          this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:timeout:timer`, `${label} has no bpmn:timerEventDefinition; the engines refuse the file`, rebuild());
+        }
+        if (attr(extension, 'id') === undefined) {
+          this.push('deploy', 'W_C7_DEPLOY_LISTENER', host, owner, `listener:${local}:timeout:id`, `${label} has no id, which the engines require on timeout task listeners; they refuse the file`, rebuild({ id: '<listenerId>' }));
+        }
       }
       const fieldsHere = this.children(extension, 'field');
       if (fieldsHere.length && this.implementation.fieldsRead(extension)) {
@@ -57,8 +68,12 @@ export class C7ExtensionContentRules extends C7Rules {
       return;
     }
     if (local === 'in' || local === 'out') {
-      if (!this.kit.is(host, 'bpmn:CallActivity') && !(local === 'in' && this.kit.is(host, 'bpmn:SignalEventDefinition'))) return;
-      if (attr(extension, 'variables') !== undefined || (local === 'in' && attr(extension, 'businessKey') !== undefined)) return;
+      if (!this.kit.is(host, 'bpmn:CallActivity') && !(local === 'in' && this.kit.is(host, 'bpmn:SignalEventDefinition'))) {
+        return;
+      }
+      if (attr(extension, 'variables') !== undefined || (local === 'in' && attr(extension, 'businessKey') !== undefined)) {
+        return;
+      }
       const source = attr(extension, 'source') !== undefined || attr(extension, 'sourceExpression') !== undefined;
       const target = attr(extension, 'target') !== undefined;
       if (!source || !target) {
@@ -76,20 +91,33 @@ export class C7ExtensionContentRules extends C7Rules {
     }
     if (local === 'connector') {
       const ids = this.children(extension).filter((child) => localName(child.$type) === 'connectorId');
-      if (!ids.length) this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, 'connector:id', `${this.prefix}:connector of ${where} has no ${this.prefix}:connectorId; the engines refuse the file`, rebuild());
-      if (ids.length > 1) this.push('deploy', 'W_C7_DEPLOY_DUPLICATE_EXTENSION', host, owner, 'dup:connectorId', `${this.prefix}:connector of ${where} has ${ids.length} ${this.prefix}:connectorId elements; the engines refuse the file`, rebuild());
+      if (!ids.length) {
+        this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, 'connector:id', `${this.prefix}:connector of ${where} has no ${this.prefix}:connectorId; the engines refuse the file`, rebuild());
+      }
+      if (ids.length > 1) {
+        this.push('deploy', 'W_C7_DEPLOY_DUPLICATE_EXTENSION', host, owner, 'dup:connectorId', `${this.prefix}:connector of ${where} has ${ids.length} ${this.prefix}:connectorId elements; the engines refuse the file`, rebuild());
+      }
       const ios = this.children(extension, 'inputOutput');
-      if (ios.length > 1) this.push('deploy', 'W_C7_DEPLOY_DUPLICATE_EXTENSION', host, owner, 'dup:connector/inputOutput', `${this.prefix}:connector of ${where} has ${ios.length} ${this.prefix}:inputOutput elements; the engines refuse the file`, rebuild());
-      for (const io of ios) this.checkParameters(host, owner, io, rebuild(), 'connector');
+      if (ios.length > 1) {
+        this.push('deploy', 'W_C7_DEPLOY_DUPLICATE_EXTENSION', host, owner, 'dup:connector/inputOutput', `${this.prefix}:connector of ${where} has ${ios.length} ${this.prefix}:inputOutput elements; the engines refuse the file`, rebuild());
+      }
+      for (const io of ios) {
+        this.checkParameters(host, owner, io, rebuild(), 'connector');
+      }
       return;
     }
     if (local === 'formData' && (this.kit.is(host, 'bpmn:UserTask') || this.kit.is(host, 'bpmn:StartEvent'))) {
       this.children(extension, 'formField').forEach((field, index) => {
         const label = `Form field ${attr(field, 'id') ?? index + 1} of ${where}`;
-        if (!nonEmpty(attr(field, 'id'))) this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `formField#${index}:id`, `${label} has no id; the engines refuse the file`, rebuild());
+        if (!nonEmpty(attr(field, 'id'))) {
+          this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `formField#${index}:id`, `${label} has no id; the engines refuse the file`, rebuild());
+        }
         const type = attr(field, 'type');
-        if (type === undefined) this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `formField#${index}:type`, `${label} has no type; the engines refuse the file`, `Use one of ${FORM_TYPES.join(', ')}. ${rebuild()}`);
-        else if (!FORM_TYPES.includes(type)) this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `formField#${index}:type`, `${label} has type "${type}", which is not one of the built-in form types ${FORM_TYPES.join(', ')}; the engines refuse the file (unless a plugin registers it as a custom form type)`, rebuild());
+        if (type === undefined) {
+          this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `formField#${index}:type`, `${label} has no type; the engines refuse the file`, `Use one of ${FORM_TYPES.join(', ')}. ${rebuild()}`);
+        } else if (!FORM_TYPES.includes(type)) {
+          this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `formField#${index}:type`, `${label} has type "${type}", which is not one of the built-in form types ${FORM_TYPES.join(', ')}; the engines refuse the file (unless a plugin registers it as a custom form type)`, rebuild());
+        }
       });
     }
   }
@@ -98,7 +126,9 @@ export class C7ExtensionContentRules extends C7Rules {
     const where = this.describe(host, owner);
     for (const kind of ['inputParameter', 'outputParameter']) {
       this.children(io, kind).forEach((param, index) => {
-        if (!nonEmpty(attr(param, 'name'))) this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `${scope}:${kind}#${index}:name`, `${this.prefix}:${kind} ${index + 1} of ${where} has no name; the engines refuse the file`, rebuild);
+        if (!nonEmpty(attr(param, 'name'))) {
+          this.push('deploy', 'W_C7_DEPLOY_EXTENSION', host, owner, `${scope}:${kind}#${index}:name`, `${this.prefix}:${kind} ${index + 1} of ${where} has no name; the engines refuse the file`, rebuild);
+        }
       });
     }
   }

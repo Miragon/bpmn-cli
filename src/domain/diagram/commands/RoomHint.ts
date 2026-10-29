@@ -28,7 +28,9 @@ export class RoomHint {
   private candidates(): InsertSpace[] {
     const out: InsertSpace[] = [];
     const cols = (after: string): void => {
-      for (const by of ['1col', '2col', '3col'] as const) out.push({ op: 'space', after, by });
+      for (const by of ['1col', '2col', '3col'] as const) {
+        out.push({ op: 'space', after, by });
+      }
     };
     const shapeOf = (id: string | undefined): DShape | undefined => (id ? this.diagram.planes.map((plane) => plane.shapes.get(id)).find((found) => !!found) : undefined);
     if (this.command.op === 'place') {
@@ -37,10 +39,16 @@ export class RoomHint {
         const beforeShape = shapeOf(this.command.before);
         for (const flow of rawList(this.diagram.sem.byId.get(this.command.before), 'incoming')) {
           const source = shapeOf(idOf(raw(flow, 'sourceRef')));
-          if (beforeShape && source && right(source.bounds) <= beforeShape.bounds.x) cols(source.id);
+          if (beforeShape && source && right(source.bounds) <= beforeShape.bounds.x) {
+            cols(source.id);
+          }
         }
       }
-      if (this.command.below) for (const by of ['1row', '2row'] as const) out.push({ op: 'space', below: this.command.below, by });
+      if (this.command.below) {
+        for (const by of ['1row', '2row'] as const) {
+          out.push({ op: 'space', below: this.command.below, by });
+        }
+      }
     }
     if ((this.command.op === 'place' && this.command.rowOf && !this.command.after && !this.command.before && !this.command.columnOf) || (this.command.op === 'align' && this.command.axis === 'row')) {
       const ref = shapeOf(this.command.op === 'place' ? this.command.rowOf : (this.command.to ?? this.command.ids?.[0]));
@@ -73,8 +81,11 @@ export class RoomHint {
         states.forEach((state) => state.restore());
         try {
           new SpaceInsertion(this.diagram, candidate, this.diagram.snapshot(), []).run();
-          if (this.command.op === 'place') new ShapePlacement(this.diagram, this.command, this.diagram.snapshot(), []).run();
-          else new ShapeAlignment(this.diagram, this.command, this.diagram.snapshot(), []).run();
+          if (this.command.op === 'place') {
+            new ShapePlacement(this.diagram, this.command, this.diagram.snapshot(), []).run();
+          } else {
+            new ShapeAlignment(this.diagram, this.command, this.diagram.snapshot(), []).run();
+          }
         } catch {
           continue;
         }

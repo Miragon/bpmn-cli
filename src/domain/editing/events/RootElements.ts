@@ -61,10 +61,14 @@ export class RootElements {
     const add = (root: El | undefined): void => {
       if (root && !out.includes(root)) out.push(root);
     };
-    if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) add(el.get<El | undefined>('messageRef'));
+    if (is(el, 'bpmn:SendTask') || is(el, 'bpmn:ReceiveTask') || is(el, 'bpmn:MessageFlow')) {
+      add(el.get<El | undefined>('messageRef'));
+    }
     if (is(el, 'bpmn:Event')) {
       for (const def of el.get<El[] | undefined>('eventDefinitions') ?? []) {
-        for (const { definition, root } of Object.values(TRIGGERS)) if (root && is(def, definition)) add(def.get<El | undefined>(root.refProperty));
+        for (const { definition, root } of Object.values(TRIGGERS)) {
+          if (root && is(def, definition)) add(def.get<El | undefined>(root.refProperty));
+        }
       }
     }
     return out;

@@ -5,7 +5,11 @@ export const SEVERITIES: readonly Severity[] = ['deploy', 'runtime', 'practice']
 type UnserialisedFields = Pick<Finding, 'key' | 'leftOut' | 'subject' | 'covers'>;
 
 export function withUnserialised<TFinding extends Finding>(finding: TFinding, fields: UnserialisedFields): TFinding {
-  for (const [name, value] of Object.entries(fields)) if (value !== undefined) Object.defineProperty(finding, name, { value, enumerable: false });
+  for (const [name, value] of Object.entries(fields)) {
+    if (value !== undefined) {
+      Object.defineProperty(finding, name, { value, enumerable: false });
+    }
+  }
   return finding;
 }
 

@@ -74,7 +74,11 @@ export class RowAssigner {
         this.enqueueBranches(c2.nodes);
       }
     }
-    for (const node of nodes) for (const boundaryEvent of node.boundary) boundaryEvent.row = node.row;
+    for (const node of nodes) {
+      for (const boundaryEvent of node.boundary) {
+        boundaryEvent.row = node.row;
+      }
+    }
   }
 
   private debug(msg: string): void {
@@ -108,21 +112,28 @@ export class RowAssigner {
 
   private dropFree(row: number, iv: Branch): boolean {
     for (let passedRow = iv.originRow + 1; passedRow < row; passedRow++) {
-      if (this.inRow(passedRow).some((other) => other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) return false;
+      if (this.inRow(passedRow).some((other) => other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) {
+        return false;
+      }
     }
     return true;
   }
 
   private setRow(iv: Branch, row: number): void {
     iv.row = row;
-    for (const node of iv.nodes) node.row = row;
+    for (const node of iv.nodes) {
+      node.row = row;
+    }
     if (iv.edge) iv.edge.bandRow = row;
   }
 
   private enter(iv: Branch): void {
     const list = this.rows.get(iv.row);
-    if (list) list.push(iv);
-    else this.rows.set(iv.row, [iv]);
+    if (list) {
+      list.push(iv);
+    } else {
+      this.rows.set(iv.row, [iv]);
+    }
     this.lowest = Math.max(this.lowest, iv.row);
   }
 
@@ -135,11 +146,16 @@ export class RowAssigner {
 
   private commit(iv: Branch, row: number): void {
     this.setRow(iv, row);
-    for (const node of iv.nodes) node.band = this.branches.length;
+    for (const node of iv.nodes) {
+      node.band = this.branches.length;
+    }
     this.branches.push(iv);
     const list = this.byDrop.get(iv.dropColumn);
-    if (list) list.push(iv);
-    else this.byDrop.set(iv.dropColumn, [iv]);
+    if (list) {
+      list.push(iv);
+    } else {
+      this.byDrop.set(iv.dropColumn, [iv]);
+    }
     this.enter(iv);
   }
 
@@ -150,7 +166,9 @@ export class RowAssigner {
   private tryInsert(at: number, iv: Branch): boolean {
     const newRowByBranch = new Map<Branch, number>();
     const queue: Branch[] = this.inRow(at).filter((other) => this.overlapsRange(other, iv));
-    for (const other of queue) newRowByBranch.set(other, at + 1);
+    for (const other of queue) {
+      newRowByBranch.set(other, at + 1);
+    }
     while (queue.length) {
       const moved = queue.shift()!;
       const newRow = newRowByBranch.get(moved)!;
@@ -162,15 +180,25 @@ export class RowAssigner {
     }
     const cuts = (branch: Branch): boolean => !newRowByBranch.has(branch) && this.dropPasses(branch, at) && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to;
     if (iv.to - iv.from < this.branches.length) {
-      for (let column = iv.from; column <= iv.to; column++) if (this.byDrop.get(column)?.some(cuts)) return false;
-    } else if (this.branches.some(cuts)) return false;
+      for (let column = iv.from; column <= iv.to; column++) {
+        if (this.byDrop.get(column)?.some(cuts)) return false;
+      }
+    } else if (this.branches.some(cuts)) {
+      return false;
+    }
     for (const [branch] of newRowByBranch) {
-      if (branch.originRow < at && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to) return false;
+      if (branch.originRow < at && iv.from <= branch.dropColumn && branch.dropColumn <= iv.to) {
+        return false;
+      }
     }
     for (let passedRow = iv.originRow + 1; passedRow < at; passedRow++) {
-      if (this.inRow(passedRow).some((other) => !newRowByBranch.has(other) && other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) return false;
+      if (this.inRow(passedRow).some((other) => !newRowByBranch.has(other) && other.owner !== iv.owner && other.from <= iv.dropColumn && iv.dropColumn <= other.to)) {
+        return false;
+      }
     }
-    for (const [branch, newRow] of newRowByBranch) this.move(branch, newRow);
+    for (const [branch, newRow] of newRowByBranch) {
+      this.move(branch, newRow);
+    }
     this.commit(iv, at);
     return true;
   }
@@ -205,7 +233,9 @@ export class RowAssigner {
     const layer = this.natural.get(node) ?? node.layer;
     this.reachMemo.set(node, layer);
     let best = layer;
-    for (const edge of outgoingOf(node)) if (!edge.back) best = Math.max(best, this.reach(edge.target));
+    for (const edge of outgoingOf(node)) {
+      if (!edge.back) best = Math.max(best, this.reach(edge.target));
+    }
     this.reachMemo.set(node, best);
     return best;
   }
@@ -251,8 +281,9 @@ export class RowAssigner {
     for (const node of chainNodes) {
       for (const edge of node.out) {
         if (edge.back) continue;
-        if (!placed.has(edge.target)) queue.push({ origin: node, first: edge.target });
-        else if (edge.target !== this.chainNext.get(node) && edge.target.row === node.row && edge.target.layer > node.layer + 1 && node.out.length > 1) {
+        if (!placed.has(edge.target)) {
+          queue.push({ origin: node, first: edge.target });
+        } else if (edge.target !== this.chainNext.get(node) && edge.target.row === node.row && edge.target.layer > node.layer + 1 && node.out.length > 1) {
           const iv: Branch = { owner: node.id, from: node.layer, to: edge.target.layer, row: 0, originRow: node.row, dropColumn: node.layer, nodes: [], edge };
           this.place(iv);
         }
@@ -264,7 +295,9 @@ export class RowAssigner {
         queue.push({ origin: node, first: edge.target });
       }
       for (const boundaryEvent of node.boundary) {
-        if (boundaryEvent.compensationHandler && !placed.has(boundaryEvent.compensationHandler)) queue.push({ origin: node, first: boundaryEvent.compensationHandler });
+        if (boundaryEvent.compensationHandler && !placed.has(boundaryEvent.compensationHandler)) {
+          queue.push({ origin: node, first: boundaryEvent.compensationHandler });
+        }
       }
     }
   }
@@ -280,7 +313,9 @@ export class RowAssigner {
       for (let index = 0; index < part.length; index++) {
         const member = part[index]!;
         const next = [...member.out.map((edge) => edge.target), ...member.in.map((edge) => edge.source)];
-        for (const boundaryEvent of member.boundary) next.push(...boundaryEvent.out.map((edge) => edge.target), ...(boundaryEvent.compensationHandler ? [boundaryEvent.compensationHandler] : []));
+        for (const boundaryEvent of member.boundary) {
+          next.push(...boundaryEvent.out.map((edge) => edge.target), ...(boundaryEvent.compensationHandler ? [boundaryEvent.compensationHandler] : []));
+        }
         if (member.compensatedBy) next.push(member.compensatedBy);
         for (const neighbour of next.map(unit)) {
           if (partOf.has(neighbour)) continue;
@@ -297,7 +332,9 @@ export class RowAssigner {
       const path = [node, ...node.boundary].map((member) => groups.get(member.id)).find((groupPath) => groupPath?.length);
       if (!path) continue;
       found.add(part);
-      for (const member of part) out.set(member, path);
+      for (const member of part) {
+        out.set(member, path);
+      }
     }
     return out;
   }
@@ -319,7 +356,11 @@ export class RowAssigner {
       keys.set(node, [...key, index]);
     });
     const compare = (leftKey: number[], rightKey: number[]): number => {
-      for (let index = 0; index < Math.min(leftKey.length, rightKey.length); index++) if (leftKey[index] !== rightKey[index]) return leftKey[index]! - rightKey[index]!;
+      for (let index = 0; index < Math.min(leftKey.length, rightKey.length); index++) {
+        if (leftKey[index] !== rightKey[index]) {
+          return leftKey[index]! - rightKey[index]!;
+        }
+      }
       return leftKey.length - rightKey.length;
     };
     return [...list].sort((leftNode, rightNode) => compare(keys.get(leftNode)!, keys.get(rightNode)!));

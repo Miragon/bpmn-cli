@@ -46,8 +46,12 @@ export class DrawingDiff {
     const strips: Strip[] = [];
     const live = new Set<El>();
     for (const plane of this.run.planes) {
-      for (const shape of plane.shapes.values()) if (shape.di) live.add(shape.di);
-      for (const edge of plane.edges.values()) if (edge.di) live.add(edge.di);
+      for (const shape of plane.shapes.values()) {
+        if (shape.di) live.add(shape.di);
+      }
+      for (const edge of plane.edges.values()) {
+        if (edge.di) live.add(edge.di);
+      }
     }
     for (const [di, entry] of this.snap.byDi) {
       if (live.has(di) || !entry.bounds) continue;
@@ -65,29 +69,43 @@ export class DrawingDiff {
       const poolId = this.run.cur(entry.poolId);
       const parentId = this.run.cur(entry.parentId);
       const frameGone = (poolId && !plane.shapes.has(poolId)) || (parentId && !plane.shapes.has(parentId));
-      if (flowNode && !frameGone) strips.push({ plane, box: entry.bounds, ...(poolId ? { poolId } : {}), ...(parentId ? { parentId } : {}) });
+      if (flowNode && !frameGone) {
+        strips.push({ plane, box: entry.bounds, ...(poolId ? { poolId } : {}), ...(parentId ? { parentId } : {}) });
+      }
     }
     for (const plane of this.run.planes) {
       for (const shape of [...plane.shapes.values()]) {
         if (!is(shape.el, 'bpmn:FlowNode')) continue;
         if (shape.kind === 'boundary') {
           const hostBefore = this.run.cur(this.snap.hostOf.get(this.run.oldId(shape)));
-          if (!shape.di || !this.snap.byDi.has(shape.di) || hostBefore === undefined || hostBefore === shape.hostId || !plane.shapes.has(shape.id)) continue;
+          if (!shape.di || !this.snap.byDi.has(shape.di) || hostBefore === undefined || hostBefore === shape.hostId || !plane.shapes.has(shape.id)) {
+            continue;
+          }
           plane.shapes.delete(shape.id);
           this.run.place.reuse.set(shape.id, { shape, boundaries: [], from: plane });
           this.run.relocated.add(shape.id);
-          for (const edge of plane.edges.values()) if (edge.sourceId === shape.id || edge.targetId === shape.id) this.run.reroute.add(edge.id);
+          for (const edge of plane.edges.values()) {
+            if (edge.sourceId === shape.id || edge.targetId === shape.id) {
+              this.run.reroute.add(edge.id);
+            }
+          }
           continue;
         }
         const scopeNow = idOf(this.run.sem.scopeOf.get(shape.id));
         const scopeBefore = this.run.cur(this.snap.scopeOf.get(this.run.oldId(shape)));
         const home = this.run.sem.homePlane(this.run.planes, shape.id);
-        if (!relocated.has(shape.id) && scopeNow === scopeBefore && (!home || home === plane)) continue;
+        if (!relocated.has(shape.id) && scopeNow === scopeBefore && (!home || home === plane)) {
+          continue;
+        }
         const boundaries = [...plane.shapes.values()].filter((boundary) => boundary.hostId === shape.id);
         const content = shape.kind === 'subProcess' && shape.expanded ? PlaneQuery.contentOf(plane, shape.id) : undefined;
         plane.shapes.delete(shape.id);
-        for (const boundary of boundaries) plane.shapes.delete(boundary.id);
-        for (const contentShape of content?.shapes ?? []) plane.shapes.delete(contentShape.id);
+        for (const boundary of boundaries) {
+          plane.shapes.delete(boundary.id);
+        }
+        for (const contentShape of content?.shapes ?? []) {
+          plane.shapes.delete(contentShape.id);
+        }
         this.run.place.reuse.set(shape.id, { shape, boundaries, from: plane, ...(content ? { content } : {}) });
         this.run.relocated.add(shape.id);
         const was = shape.di ? this.snap.byDi.get(shape.di) : undefined;
@@ -98,7 +116,9 @@ export class DrawingDiff {
         const inner = new Set(content?.edges.map((edge) => edge.id) ?? []);
         for (const edge of plane.edges.values()) {
           if (inner.has(edge.id)) continue;
-          if ((edge.sourceId && own.has(edge.sourceId)) || (edge.targetId && own.has(edge.targetId))) this.run.reroute.add(edge.id);
+          if ((edge.sourceId && own.has(edge.sourceId)) || (edge.targetId && own.has(edge.targetId))) {
+            this.run.reroute.add(edge.id);
+          }
         }
       }
     }
@@ -123,8 +143,12 @@ export class DrawingDiff {
       const beyond = [...st.plane.shapes.values()].some((shape) => PlaneQuery.isLeaf(shape) && shape.bounds.x >= to && (!band || (cy(shape.bounds) >= band.y && cy(shape.bounds) <= band.y + band.height)) && !keep?.has(shape.id));
       if (!beyond) continue;
       const result = this.run.drawing(st.plane).closeStrip({ axis: 'x', from, to, gap: sp.gap, ignore, ...(band ? { within: { ...band } } : {}), ...(keep ? { keep } : {}) }) ?? (sub ? undefined : this.closeRow(st.plane, st.box, frame, from, to, sp.gap, ignore));
-      if (LayoutDebug.on()) LayoutDebug.log(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${result ? `closed, moved ${[...result.moved].join(',')}` : 'kept'}`);
-      if (result) result.moved.forEach((movedId) => this.run.place.moved.add(movedId));
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[strip] x ${Math.round(from)}..${Math.round(to)}${band ? ` in ${frame!.id}` : ''}: ${result ? `closed, moved ${[...result.moved].join(',')}` : 'kept'}`);
+      }
+      if (result) {
+        result.moved.forEach((movedId) => this.run.place.moved.add(movedId));
+      }
     }
   }
 
@@ -162,7 +186,9 @@ export class DrawingDiff {
       return other.bounds.x >= end - 3 && (!fb || (centerY >= fb.y && centerY <= fb.y + fb.height));
     };
     const tethered = [...plane.edges.values()].some((edge) => {
-      if (!edge.sourceId || !edge.targetId || result.moved.has(edge.sourceId) === result.moved.has(edge.targetId)) return false;
+      if (!edge.sourceId || !edge.targetId || result.moved.has(edge.sourceId) === result.moved.has(edge.targetId)) {
+        return false;
+      }
       const stayed = result.moved.has(edge.sourceId) ? edge.targetId : edge.sourceId;
       return edge.kind === 'association' || edge.kind === 'dataAssociation' || behind(stayed);
     });
@@ -197,8 +223,12 @@ export class DrawingDiff {
   /** Sub-processes whose requested expansion differs from their drawing collapse / expand. */
   applyExpansion(opts: IncrementalOptions): void {
     const want = new Map<string, boolean>();
-    for (const id of opts.expand ?? []) want.set(id, true);
-    for (const id of opts.collapse ?? []) want.set(id, false);
+    for (const id of opts.expand ?? []) {
+      want.set(id, true);
+    }
+    for (const id of opts.collapse ?? []) {
+      want.set(id, false);
+    }
     for (const plane of [...this.run.planes]) {
       for (const shape of [...plane.shapes.values()]) {
         if (shape.kind !== 'subProcess') {
@@ -219,7 +249,11 @@ export class DrawingDiff {
           this.run.drawing(plane).expand(shape, this.run.planes.find((plane) => plane.rootId === shape.id), this.run.sem);
         }
         this.run.active.add(shape.id);
-        for (const edge of plane.edges.values()) if (edge.sourceId === shape.id || edge.targetId === shape.id) this.run.reroute.add(edge.id);
+        for (const edge of plane.edges.values()) {
+          if (edge.sourceId === shape.id || edge.targetId === shape.id) {
+            this.run.reroute.add(edge.id);
+          }
+        }
         this.run.notes.push(`${shape.id} drawn ${desired ? 'expanded' : 'collapsed'}`);
       }
     }
@@ -229,9 +263,13 @@ export class DrawingDiff {
   laneChanges(): void {
     for (const plane of this.run.planes) {
       for (const shape of [...plane.shapes.values()]) {
-        if (!is(shape.el, 'bpmn:FlowNode') || shape.kind === 'boundary' || this.run.place.placed.has(shape.id)) continue;
+        if (!is(shape.el, 'bpmn:FlowNode') || shape.kind === 'boundary' || this.run.place.placed.has(shape.id)) {
+          continue;
+        }
         const now = this.run.sem.laneOf.get(shape.id);
-        if (now === this.run.cur(this.snap.laneOf.get(this.run.oldId(shape))) || !now) continue;
+        if (now === this.run.cur(this.snap.laneOf.get(this.run.oldId(shape))) || !now) {
+          continue;
+        }
         if (this.run.place.changeLane(plane, shape.id)) this.run.active.add(shape.id);
       }
     }

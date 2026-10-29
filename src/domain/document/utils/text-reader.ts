@@ -73,8 +73,11 @@ export function readXmlText(text: string): XDocument {
     const lt = text.indexOf('<', pos);
     const textEnd = lt < 0 ? length : lt;
     if (textEnd > pos) {
-      if (stack.length) leaf('text', pos, textEnd);
-      else if (text.slice(pos, textEnd).replace(/^﻿/, '').trim()) throw new XmlTextError('text outside the root element', pos);
+      if (stack.length) {
+        leaf('text', pos, textEnd);
+      } else if (text.slice(pos, textEnd).replace(/^﻿/, '').trim()) {
+        throw new XmlTextError('text outside the root element', pos);
+      }
     }
     if (lt < 0) break;
     if (text.startsWith('<!--', lt)) {
@@ -97,28 +100,38 @@ export function readXmlText(text: string): XDocument {
       pos = end;
       continue;
     }
-    if (text.startsWith('<!', lt)) throw new XmlTextError('DOCTYPE and other declarations are not supported', lt);
+    if (text.startsWith('<!', lt)) {
+      throw new XmlTextError('DOCTYPE and other declarations are not supported', lt);
+    }
     if (text.startsWith('</', lt)) {
       const end = until('>', lt + 2, 'end tag');
       const name = text.slice(lt + 2, end).trimEnd();
       const el = stack.pop();
-      if (!el || el.name !== name) throw new XmlTextError(`end tag </${name}> does not match <${el?.name ?? ''}>`, lt);
+      if (!el || el.name !== name) {
+        throw new XmlTextError(`end tag </${name}> does not match <${el?.name ?? ''}>`, lt);
+      }
       el.closeStart = lt;
       el.end = end + 1;
       pos = end + 1;
       continue;
     }
     let cursor = lt + 1;
-    while (cursor < length && !isWs(text[cursor]) && text[cursor] !== '/' && text[cursor] !== '>') cursor++;
+    while (cursor < length && !isWs(text[cursor]) && text[cursor] !== '/' && text[cursor] !== '>') {
+      cursor++;
+    }
     const name = text.slice(lt + 1, cursor);
-    if (!name || name.includes('<') || name.includes('=')) throw new XmlTextError('malformed start tag', lt);
+    if (!name || name.includes('<') || name.includes('=')) {
+      throw new XmlTextError('malformed start tag', lt);
+    }
     if (!stack.length && root) throw new XmlTextError('a second root element', lt);
     const attrs: XAttr[] = [];
     let tail = '';
     let selfClosing = false;
     for (;;) {
       const wsStart = cursor;
-      while (cursor < length && isWs(text[cursor])) cursor++;
+      while (cursor < length && isWs(text[cursor])) {
+        cursor++;
+      }
       const ws = text.slice(wsStart, cursor);
       if (text[cursor] === '>') {
         tail = ws;
@@ -132,21 +145,37 @@ export function readXmlText(text: string): XDocument {
         break;
       }
       if (cursor >= length) throw new XmlTextError('unterminated start tag', lt);
-      if (!ws) throw new XmlTextError('missing whitespace before an attribute', cursor);
+      if (!ws) {
+        throw new XmlTextError('missing whitespace before an attribute', cursor);
+      }
       const aStart = cursor;
-      while (cursor < length && !isWs(text[cursor]) && text[cursor] !== '=' && text[cursor] !== '/' && text[cursor] !== '>') cursor++;
+      while (cursor < length && !isWs(text[cursor]) && text[cursor] !== '=' && text[cursor] !== '/' && text[cursor] !== '>') {
+        cursor++;
+      }
       const aName = text.slice(aStart, cursor);
       if (!aName) throw new XmlTextError('malformed attribute', aStart);
-      while (cursor < length && isWs(text[cursor])) cursor++;
-      if (text[cursor] !== '=') throw new XmlTextError(`attribute ${aName} without a value`, cursor);
+      while (cursor < length && isWs(text[cursor])) {
+        cursor++;
+      }
+      if (text[cursor] !== '=') {
+        throw new XmlTextError(`attribute ${aName} without a value`, cursor);
+      }
       cursor++;
-      while (cursor < length && isWs(text[cursor])) cursor++;
+      while (cursor < length && isWs(text[cursor])) {
+        cursor++;
+      }
       const quote = text[cursor];
-      if (quote !== '"' && quote !== "'") throw new XmlTextError(`unquoted value of ${aName}`, cursor);
+      if (quote !== '"' && quote !== "'") {
+        throw new XmlTextError(`unquoted value of ${aName}`, cursor);
+      }
       const close = until(quote, cursor + 1, 'attribute value');
       const raw = text.slice(cursor + 1, close);
-      if (raw.includes('<')) throw new XmlTextError(`"<" in the value of ${aName}`, cursor);
-      if (attrs.some((attr) => attr.name === aName)) throw new XmlTextError(`duplicate attribute ${aName}`, aStart);
+      if (raw.includes('<')) {
+        throw new XmlTextError(`"<" in the value of ${aName}`, cursor);
+      }
+      if (attrs.some((attr) => attr.name === aName)) {
+        throw new XmlTextError(`duplicate attribute ${aName}`, aStart);
+      }
       attrs.push({ name: aName, ws, start: aStart, end: close + 1, raw });
       cursor = close + 1;
     }
@@ -162,10 +191,14 @@ export function readXmlText(text: string): XDocument {
     const colon = name.indexOf(':');
     const prefix = colon < 0 ? '' : name.slice(0, colon);
     const uri = ns.get(prefix);
-    if (prefix && uri === undefined) throw new XmlTextError(`unbound prefix ${prefix}`, lt);
+    if (prefix && uri === undefined) {
+      throw new XmlTextError(`unbound prefix ${prefix}`, lt);
+    }
     for (const attr of attrs) {
       const attrColon = attr.name.indexOf(':');
-      if (attrColon > 0 && attr.name.slice(0, attrColon) !== 'xmlns' && !ns.has(attr.name.slice(0, attrColon))) throw new XmlTextError(`unbound prefix ${attr.name.slice(0, attrColon)}`, attr.start);
+      if (attrColon > 0 && attr.name.slice(0, attrColon) !== 'xmlns' && !ns.has(attr.name.slice(0, attrColon))) {
+        throw new XmlTextError(`unbound prefix ${attr.name.slice(0, attrColon)}`, attr.start);
+      }
     }
     const el: XElement = {
       kind: 'element',
@@ -183,12 +216,17 @@ export function readXmlText(text: string): XDocument {
       parent,
       ns,
     };
-    if (parent) parent.children.push(el);
-    else root = el;
+    if (parent) {
+      parent.children.push(el);
+    } else {
+      root = el;
+    }
     if (!selfClosing) stack.push(el);
     pos = cursor;
   }
-  if (stack.length) throw new XmlTextError(`unclosed element <${top()!.name}>`, length);
+  if (stack.length) {
+    throw new XmlTextError(`unclosed element <${top()!.name}>`, length);
+  }
   if (!root) throw new XmlTextError('no root element', 0);
   return { text, root, comments };
 }

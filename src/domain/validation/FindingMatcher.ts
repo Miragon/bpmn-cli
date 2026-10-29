@@ -28,7 +28,9 @@ export class FindingMatcher {
 
   same(before: Finding, after: Finding): boolean {
     if (before.code !== after.code) return false;
-    if (this.rules.bySubject && (before.subject ?? '') !== (after.subject ?? '')) return false;
+    if (this.rules.bySubject && (before.subject ?? '') !== (after.subject ?? '')) {
+      return false;
+    }
     return this.sameElementOf(before.element, after.element);
   }
 
@@ -48,7 +50,9 @@ export class FindingMatcher {
 
   /** A group warning that still shares an element with `before` changed: it is not resolved. */
   stillAbout(before: Finding, after: Finding): boolean {
-    if (before.code !== after.code || !(GROUP_CODES.has(after.code) || LIST_CODES.has(after.code))) return false;
+    if (before.code !== after.code || !(GROUP_CODES.has(after.code) || LIST_CODES.has(after.code))) {
+      return false;
+    }
     if (LIST_CODES.has(after.code)) return this.same(before, after);
     const had = FindingMatcher.membersOf(before);
     return FindingMatcher.membersOf(after).some((id) => had.some((hadId) => this.sameElementOf(hadId, id)));
@@ -65,7 +69,9 @@ export class FindingMatcher {
     const out = new Map<string, string>();
     for (const [id, el] of this.before) {
       const now = (el as unknown as { id?: unknown }).id;
-      if (typeof now === 'string' && now !== id && this.doc.get(now) === el) out.set(id, now);
+      if (typeof now === 'string' && now !== id && this.doc.get(now) === el) {
+        out.set(id, now);
+      }
     }
     return out;
   }
@@ -85,8 +91,12 @@ export class FindingMatcher {
   static identityAcross(renames: ReadonlyMap<string, string>): (finding: Finding) => string {
     const rename = FindingMatcher.renamer(renames);
     return (finding) => {
-      if (finding.key !== undefined) return `k|${finding.code}|${rename(finding.key)}`;
-      if (finding.element) return `e|${finding.code}|${renames.get(finding.element) ?? finding.element}`;
+      if (finding.key !== undefined) {
+        return `k|${finding.code}|${rename(finding.key)}`;
+      }
+      if (finding.element) {
+        return `e|${finding.code}|${renames.get(finding.element) ?? finding.element}`;
+      }
       return `m|${finding.code}|${rename(finding.message)}`;
     };
   }

@@ -23,7 +23,9 @@ export class DeclaredConventions {
 
   static of(conventions: IdConventions): DeclaredConventions {
     const prefixes: Record<string, string> = {};
-    for (const [key, prefix] of Object.entries(conventions.prefixes)) if (isUsablePrefix(prefix)) prefixes[key] = prefix;
+    for (const [key, prefix] of Object.entries(conventions.prefixes)) {
+      if (isUsablePrefix(prefix)) prefixes[key] = prefix;
+    }
     const body = conventions.case ? BODY_OF_CASE[conventions.case] : undefined;
     return new DeclaredConventions(prefixes, conventions.qualifier ?? 'optional', body, new Set(conventions.ignored));
   }
@@ -32,7 +34,9 @@ export class DeclaredConventions {
   headFor(type: string, trigger: string | undefined): string | undefined {
     const plain = this.prefixes[type];
     if (plain === undefined) return undefined;
-    if (this.qualifier === 'required' && trigger && trigger !== 'none') return this.prefixes[`${type}:${trigger}`] ?? plain;
+    if (this.qualifier === 'required' && trigger && trigger !== 'none') {
+      return this.prefixes[`${type}:${trigger}`] ?? plain;
+    }
     return plain;
   }
 
@@ -45,7 +49,9 @@ export class DeclaredConventions {
     if (plain === undefined) return [];
     const key = `${type}:${trigger}`;
     const qualified = trigger && trigger !== 'none' && this.qualifier !== 'off' ? this.prefixes[key] : undefined;
-    if (!qualified) return this.qualifier === 'required' && this.ignored.has(key) ? [] : [plain];
+    if (!qualified) {
+      return this.qualifier === 'required' && this.ignored.has(key) ? [] : [plain];
+    }
     return this.qualifier === 'required' ? [qualified] : [plain, qualified];
   }
 
@@ -73,7 +79,9 @@ export class DeclaredConventions {
   get upperFirst(): boolean {
     const heads = new Set(Object.values(this.prefixes));
     let upper = 0;
-    for (const head of heads) if (/^[A-Z]/.test(head)) upper++;
+    for (const head of heads) {
+      if (/^[A-Z]/.test(head)) upper++;
+    }
     return upper * 2 > heads.size;
   }
 }

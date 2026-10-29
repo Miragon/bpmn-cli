@@ -40,7 +40,9 @@ const na = (reason) => ({ applicable: false, reason });
 function e3(model, path, avoid) {
   const ok = (node) => isTaskish(node) && node.incoming.length === 1 && node.outgoing.length === 1 && !boundariesOf(model, node.id).length && model.shapes.has(node.id) && !avoid.has(node.id) && predecessorOf(model, node) !== successorOf(model, node);
   const picked = pickNearMedian(model, path, ok);
-  if (!picked) return na('no task with exactly 1 in / 1 out and no boundary event');
+  if (!picked) {
+    return na('no task with exactly 1 in / 1 out and no boundary event');
+  }
   const node = model.nodes.get(picked.id);
   const pred = predecessorOf(model, node), succ = successorOf(model, node);
   return {
@@ -108,7 +110,9 @@ function e4(model, path, avoid) {
 function e5(model, path, avoid) {
   const leaves = (processId) => [...model.lanes.values()].filter((lane) => lane.leaf && lane.processId === processId);
   const ok = (node) => isTaskish(node) && node.laneId && model.lanes.get(node.laneId)?.leaf && leaves(node.processId).length >= 2 && model.shapes.has(node.id) && !avoid.has(node.id);
-  if (![...model.nodes.values()].some((node) => node.laneId && leaves(node.processId).length >= 2)) return na('fewer than 2 lanes');
+  if (![...model.nodes.values()].some((node) => node.laneId && leaves(node.processId).length >= 2)) {
+    return na('fewer than 2 lanes');
+  }
   const picked = pickNearMedian(model, path, ok);
   if (!picked) return na('no task in a lane');
   const node = model.nodes.get(picked.id);
@@ -144,7 +148,9 @@ function e8(model, path, timer) {
     return branchTarget && model.shapes.has(branchTarget.id) && branchTarget.scope === gateway.scope && !isGateway(branchTarget) && branchTarget.type !== 'BoundaryEvent' && branchTarget.incoming.length === 1;
   });
   const picked = pickNearMedian(model, path, (node) => node.type === 'ExclusiveGateway' && node.outgoing.length >= 2 && model.shapes.has(node.id) && !!branchOf(node));
-  if (!picked) return na('no exclusive split with a branch into a non-gateway node with one incoming flow');
+  if (!picked) {
+    return na('no exclusive split with a branch into a non-gateway node with one incoming flow');
+  }
   const branchFlow = branchOf(model.nodes.get(picked.id));
   const task = 'Activity_BenchE8', gw = 'Gateway_BenchE8', no = 'Activity_BenchE8No', noEnd = 'Event_BenchE8NoEnd';
   const ev = 'Event_BenchE9Timer', remind = 'Activity_BenchE9Remind', remindEnd = 'Event_BenchE9Reminded';
@@ -176,7 +182,9 @@ export async function generate(xml) {
   for (const [key, fn] of [['E3', e3], ['E1', e1], ['E2', e2], ['E4', e4], ['E5', e5], ['E6', e6]]) {
     const generated = fn(model, path, avoid);
     if (generated.applicable) {
-      for (const id of generated.avoid) if (id) avoid.add(id);
+      for (const id of generated.avoid) {
+        if (id) avoid.add(id);
+      }
       if (key === 'E3') avoid.add(`removed:${generated.target}`);
     }
     delete generated.avoid;
@@ -198,7 +206,11 @@ async function main() {
     console.error('usage: node tools/bench/gen-edits.mjs <file.bpmn>...');
     process.exit(2);
   }
-  for (const file of files) console.log(JSON.stringify({ file, ...(await generate(readFileSync(file, 'utf8'))) }, null, 1));
+  for (const file of files) {
+    console.log(JSON.stringify({ file, ...(await generate(readFileSync(file, 'utf8'))) }, null, 1));
+  }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

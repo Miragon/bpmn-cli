@@ -52,7 +52,9 @@ export class MutationReportBuilder {
     const out = new Map<string, string>();
     for (const { from, to, takeover } of result.changes.renames ?? []) {
       if (takeover) {
-        for (const [old, now] of out) if (now === from) out.delete(old);
+        for (const [old, now] of out) {
+          if (now === from) out.delete(old);
+        }
         continue;
       }
       let chained = false;
@@ -64,7 +66,9 @@ export class MutationReportBuilder {
       if (!chained) out.set(from, to);
     }
     const created = new Set(result.changes.created.map((change) => change.id));
-    for (const [old, now] of out) if (old === now || created.has(now)) out.delete(old);
+    for (const [old, now] of out) {
+      if (old === now || created.has(now)) out.delete(old);
+    }
     return out.size ? Object.fromEntries(out) : undefined;
   }
 

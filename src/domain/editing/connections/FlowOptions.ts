@@ -20,7 +20,9 @@ export class FlowOptions {
 
   static of(source: FlowOptionValues): FlowOptionValues {
     const out: Record<string, unknown> = {};
-    for (const [key] of FLAGS) if (source[key] !== undefined) out[key] = source[key];
+    for (const [key] of FLAGS) {
+      if (source[key] !== undefined) out[key] = source[key];
+    }
     return out as FlowOptionValues;
   }
 
@@ -30,7 +32,9 @@ export class FlowOptions {
 
   assertConsistent(details: { element?: string; related?: string[] } = {}): void {
     const violation = defaultWithConditionViolation(!!this.values.default, this.values.condition !== undefined, (field) => `--${field}`);
-    if (violation) throw usageError(violation.message, { ...details, hint: violation.hint });
+    if (violation) {
+      throw usageError(violation.message, { ...details, hint: violation.hint });
+    }
   }
 
   /** `keepEmptyCondition`: an empty condition stays, for SequenceFlows.create to refuse. */

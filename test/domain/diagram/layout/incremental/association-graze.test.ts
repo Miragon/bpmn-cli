@@ -37,7 +37,9 @@ describe('a kept association a new node touches is routed again', () => {
     expect(after.get('T')!.bounds).toMatchObject({ x: 356, y: 78 });
     expect(result.layout.rerouted).toContain('AS');
     expect(pathHits(line, after.get('T')!.bounds, -3)).toBe(false);
-    for (const id of ['N', 'D']) expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['N', 'D']) {
+      expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
   });
 
   it("a line 1.5 px above a new gateway's label leaves it", async () => {
@@ -51,7 +53,9 @@ describe('a kept association a new node touches is routed again', () => {
     expect(label.y + label.height).toBeLessThan(after.get('G')!.bounds.y);
     expect(result.layout.rerouted).toContain('AS');
     expect(pathHits(line, label, -3)).toBe(false);
-    for (const id of ['N', 'D']) expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    for (const id of ['N', 'D']) {
+      expect(after.get(id)!.bounds, id).toEqual(before.get(id)!.bounds);
+    }
     expect(result.layout.metrics!.added).toEqual([]);
   });
 

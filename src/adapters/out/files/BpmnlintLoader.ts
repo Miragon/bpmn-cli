@@ -59,7 +59,9 @@ export class BpmnlintLoader {
     let config: BpmnlintConfig;
     try {
       config = JSON.parse(text.replace(/^﻿/, '')) as BpmnlintConfig;
-      if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('not a JSON object');
+      if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        throw new Error('not a JSON object');
+      }
     } catch (err) {
       return this.broken(`${shown(abs, opts.from)} is not JSON (${firstLine(err)}; bpmnlint reads it with JSON.parse: no comments, no trailing commas)`, `Write it as strict JSON, as bpmnlint reads it; ${SKIP_HINT}`);
     }
@@ -69,7 +71,9 @@ export class BpmnlintLoader {
   }
 
   private broken(reason: string, hint: string): LoadedBpmnlint {
-    if (this.opts.explicit) throw ioError('E_LINT_CONFIG', `Cannot use the bpmnlint configuration ${this.rcPath}: ${reason}`, { file: this.rcPath, hint: 'Pass an existing .bpmnlintrc in strict JSON to --lint-config, or --no-lint-config.' });
+    if (this.opts.explicit) {
+      throw ioError('E_LINT_CONFIG', `Cannot use the bpmnlint configuration ${this.rcPath}: ${reason}`, { file: this.rcPath, hint: 'Pass an existing .bpmnlintrc in strict JSON to --lint-config, or --no-lint-config.' });
+    }
     return { ok: false, path: this.abs, where: this.where, unavailable: [{ kind: 'file', name: this.abs, pkg: this.abs, reason, hint }], detail: `${this.where}; bpmnlint did not run (bpmn validate lists why)` };
   }
 
@@ -78,7 +82,9 @@ export class BpmnlintLoader {
     const { abs, where, opts } = this;
     const notRun = `${where}; bpmnlint did not run (bpmn validate lists why)`;
     const libs = BpmnlintLibs.load();
-    if (!(libs instanceof BpmnlintLibs)) return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable(libs, opts.from)], detail: notRun }, deps: [] };
+    if (!(libs instanceof BpmnlintLibs)) {
+      return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable(libs, opts.from)], detail: notRun }, deps: [] };
+    }
     try {
       const rcDir = dirname(abs);
       const root = real(gitRoot(rcDir) ?? rcDir);
@@ -93,8 +99,12 @@ export class BpmnlintLoader {
       const parts = [where];
       if (project.length) parts.push(`project plugins: ${project.join(', ')}`);
       const left = bpmnlintUnavailableFindings([...resolved.unavailable, ...moddle.unavailable]).length;
-      if (left) parts.push(`${left} left out (W_LINT_UNAVAILABLE; bpmn validate lists ${left === 1 ? 'it' : 'them'})`);
-      if (libs.bpmnlint.version !== libs.pinned) parts.push(`bpmnlint ${libs.bpmnlint.version} from ${shown(libs.bpmnlint.dir, opts.from)} (bpmn-cli pins ${libs.pinned})`);
+      if (left) {
+        parts.push(`${left} left out (W_LINT_UNAVAILABLE; bpmn validate lists ${left === 1 ? 'it' : 'them'})`);
+      }
+      if (libs.bpmnlint.version !== libs.pinned) {
+        parts.push(`bpmnlint ${libs.bpmnlint.version} from ${shown(libs.bpmnlint.dir, opts.from)} (bpmn-cli pins ${libs.pinned})`);
+      }
       return { loaded: { ok: true, path: abs, where, engine, resolved, notes: moddle.unavailable, project, detail: parts.join('; ') }, deps: [...chain.projectDeps(), ...moddle.deps] };
     } catch (err) {
       return { loaded: { ok: false, path: abs, where, unavailable: [engineUnavailable({ message: firstLine(err), bpmnlint: libs.bpmnlint, pinned: libs.pinned }, opts.from)], detail: notRun }, deps: [] };

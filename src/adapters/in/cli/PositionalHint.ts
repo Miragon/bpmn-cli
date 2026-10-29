@@ -37,7 +37,9 @@ export class PositionalHint {
       const opt = cmd.options.find((option) => option.long === flag || option.short === flag);
       if (opt) {
         known.push(arg);
-        if (inline === undefined && (opt.required || opt.optional) && args[index + 1] !== undefined && !args[index + 1]!.startsWith('-')) known.push(args[++index]!);
+        if (inline === undefined && (opt.required || opt.optional) && args[index + 1] !== undefined && !args[index + 1]!.startsWith('-')) {
+          known.push(args[++index]!);
+        }
         continue;
       }
       const value = inline ?? (args[index + 1] !== undefined && !args[index + 1]!.startsWith('-') ? args[++index] : undefined);
@@ -51,18 +53,23 @@ export class PositionalHint {
       if (arg.variadic) {
         rewrittenWords.push(...positional.splice(0).map((word) => this.shellWord(word)));
         for (const [flagName, flagValue] of unknown) {
-          if (used.includes(flagName) || flagValue === undefined || !/keyValues/i.test(name)) continue;
+          if (used.includes(flagName) || flagValue === undefined || !/keyValues/i.test(name)) {
+            continue;
+          }
           rewrittenWords.push(`${flagName}=${this.shellWord(flagValue)}`);
           used.push(flagName);
           pairs++;
         }
         continue;
       }
-      if (positional.length) rewrittenWords.push(this.shellWord(positional.shift()!));
-      else if (unknown.has(name)) {
+      if (positional.length) {
+        rewrittenWords.push(this.shellWord(positional.shift()!));
+      } else if (unknown.has(name)) {
         rewrittenWords.push(this.shellWord(unknown.get(name) ?? `<${name}>`));
         used.push(name);
-      } else if (arg.required) rewrittenWords.push(`<${name}>`);
+      } else if (arg.required) {
+        rewrittenWords.push(`<${name}>`);
+      }
     }
     if (!used.length) return undefined;
     const usage = cmd.registeredArguments.map((argument) => (argument.required ? `<${argument.name()}>` : `[${argument.name()}${argument.variadic ? '...' : ''}]`)).join(' ');

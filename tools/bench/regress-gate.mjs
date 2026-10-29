@@ -19,7 +19,9 @@ import { ROOT } from './lib/metrics.mjs';
 const BUDGET_FILE = join(ROOT, 'tools', 'bench', 'regress-budget.json');
 
 function budget() {
-  if (process.env.LAYOUT_REGRESS_MAX) return { maxScore: Number(process.env.LAYOUT_REGRESS_MAX), from: 'LAYOUT_REGRESS_MAX' };
+  if (process.env.LAYOUT_REGRESS_MAX) {
+    return { maxScore: Number(process.env.LAYOUT_REGRESS_MAX), from: 'LAYOUT_REGRESS_MAX' };
+  }
   return { ...JSON.parse(readFileSync(BUDGET_FILE, 'utf8')), from: 'tools/bench/regress-budget.json' };
 }
 

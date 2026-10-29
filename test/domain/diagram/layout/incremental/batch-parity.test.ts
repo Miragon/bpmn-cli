@@ -95,7 +95,9 @@ async function batch(ops: object[], xml = FIXTURE): Promise<string> {
   return (await applyToXml(xml, ops, { force: true })).xml;
 }
 async function singles(ops: object[], xml = FIXTURE): Promise<string> {
-  for (const op of ops) xml = (await applyToXml(xml, [op], { force: true })).xml;
+  for (const op of ops) {
+    xml = (await applyToXml(xml, [op], { force: true })).xml;
+  }
   return xml;
 }
 

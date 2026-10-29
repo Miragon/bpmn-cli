@@ -58,9 +58,13 @@ export class SetKeyCatalog {
   static settableKeys(doc: Doc, el: El): string[] {
     const keys = new Set<string>();
     for (const definition of SetKeyCatalog.KEYS) {
-      if (!SetKeyCatalog.isPlaceholder(definition) && SetKeyCatalog.appliesTo(definition, el)) keys.add(definition.key);
+      if (!SetKeyCatalog.isPlaceholder(definition) && SetKeyCatalog.appliesTo(definition, el)) {
+        keys.add(definition.key);
+      }
     }
-    for (const genericKey of PropertyCoercer.genericKeys(doc, el)) keys.add(genericKey);
+    for (const genericKey of PropertyCoercer.genericKeys(doc, el)) {
+      keys.add(genericKey);
+    }
     keys.add('<prefix>:<attr>');
     return [...keys];
   }
@@ -76,7 +80,9 @@ export class SetKeyCatalog {
 
   static assertVendorKey(doc: Doc, el: El, key: string): void {
     const [prefix, local] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
-    if (!prefix || !local || prefix === 'xmlns') throw SetKeyCatalog.unknownKey(doc, el, key, 'vendor attributes look like prefix:name');
+    if (!prefix || !local || prefix === 'xmlns') {
+      throw SetKeyCatalog.unknownKey(doc, el, key, 'vendor attributes look like prefix:name');
+    }
   }
 
   static isPlaceholder(definition: SetKeyDoc): boolean {
@@ -106,7 +112,9 @@ export class SetKeyCatalog {
   private static readAll(el: El, doc: Doc, definitions: SetKeyDefinition[]): Record<string, unknown> {
     const values: Record<string, unknown> = {};
     for (const definition of definitions) {
-      if (definition.read && SetKeyCatalog.appliesTo(definition, el)) Object.assign(values, definition.read(el, doc));
+      if (definition.read && SetKeyCatalog.appliesTo(definition, el)) {
+        Object.assign(values, definition.read(el, doc));
+      }
     }
     return values;
   }
@@ -133,8 +141,11 @@ export class SetKeyCatalog {
       read: (el) => readIf('name', nameOf(el)),
       write: (writing, el, value) => {
         new FlowIdFollower(writing.edit).recordFormerEnd(el);
-        if (is(el, 'bpmn:Group')) new Artifacts(writing.edit).setGroupName(el, value);
-        else el.set('name', value || undefined);
+        if (is(el, 'bpmn:Group')) {
+          new Artifacts(writing.edit).setGroupName(el, value);
+        } else {
+          el.set('name', value || undefined);
+        }
         return 'left to set';
       },
     },
@@ -229,7 +240,9 @@ export class SetKeyCatalog {
       description: 'none|standard|parallel|sequential (parallel/sequential = multi-instance)',
       read: (activity) => {
         const multiInstance = multiInstanceOf(activity);
-        if (multiInstance) return { loop: multiInstance.get<boolean | undefined>('isSequential') ? 'sequential' : 'parallel' };
+        if (multiInstance) {
+          return { loop: multiInstance.get<boolean | undefined>('isSequential') ? 'sequential' : 'parallel' };
+        }
         return is(activity.get<El | undefined>('loopCharacteristics'), 'bpmn:StandardLoopCharacteristics') ? { loop: 'standard' } : {};
       },
       write: SetKeyCatalog.writeLoop,
@@ -247,7 +260,9 @@ export class SetKeyCatalog {
       description: 'Multi-instance completion condition expression (an ad-hoc sub-process without a multi-instance loop: its own completion condition)',
       read: (activity) => {
         const multiInstance = multiInstanceOf(activity);
-        if (multiInstance) return readIf('completion', expressionBody(multiInstance, 'completionCondition'));
+        if (multiInstance) {
+          return readIf('completion', expressionBody(multiInstance, 'completionCondition'));
+        }
         return is(activity, 'bpmn:AdHocSubProcess') ? readIf('completion', expressionBody(activity, 'completionCondition')) : {};
       },
       write: SetKeyCatalog.writeLoop,
@@ -258,7 +273,9 @@ export class SetKeyCatalog {
       description: 'true|false: draw the sub-process expanded (default) or collapsed',
       read: (subProcess, doc) => ({ expanded: doc.layoutRequests.requested(idOf(subProcess)) ?? diExpansionState(doc.definitions).get(idOf(subProcess)) ?? true }),
       write: (writing, el, value, key) => {
-        if (!is(el, 'bpmn:SubProcess')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to sub-processes');
+        if (!is(el, 'bpmn:SubProcess')) {
+          throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to sub-processes');
+        }
         writing.edit.doc.layoutRequests.expand(idOf(el), value ? PropertyCoercer.bool(el, key, value) : true);
         return 'left to set';
       },
@@ -273,7 +290,9 @@ export class SetKeyCatalog {
         return isEl(message) ? { message: message.get<string | undefined>('name') ?? idOf(message) } : {};
       },
       write: (writing, el, value, key) => {
-        if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to events, send tasks and receive tasks');
+        if (!is(el, 'bpmn:SendTask') && !is(el, 'bpmn:ReceiveTask')) {
+          throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to events, send tasks and receive tasks');
+        }
         writing.properties.setTaskMessage(el, value, writing.changes);
         return 'left to set';
       },
@@ -305,7 +324,9 @@ export class SetKeyCatalog {
         return innermostLane ? { lane: idOf(innermostLane) } : {};
       },
       write: (writing, el, value, key) => {
-        if (!is(el, 'bpmn:FlowNode')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to flow nodes');
+        if (!is(el, 'bpmn:FlowNode')) {
+          throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to flow nodes');
+        }
         new Lanes(writing.edit).assign(el, value ? writing.edit.require(value, 'bpmn:Lane', 'lane') : undefined, writing.changes);
         return 'left to set';
       },
@@ -314,17 +335,25 @@ export class SetKeyCatalog {
   ];
 
   private static writeEnd(writing: SetKeyWriting, flow: El, value: string, key: string): ChangeRecording {
-    if (!is(flow, 'bpmn:SequenceFlow')) throw SetKeyCatalog.unknownKey(writing.edit.doc, flow, key, 'applies to sequence flows');
-    if (!value) throw PropertyCoercer.invalid(flow, key, 'a flow always needs a source and a target');
+    if (!is(flow, 'bpmn:SequenceFlow')) {
+      throw SetKeyCatalog.unknownKey(writing.edit.doc, flow, key, 'applies to sequence flows');
+    }
+    if (!value) {
+      throw PropertyCoercer.invalid(flow, key, 'a flow always needs a source and a target');
+    }
     const node = writing.edit.require(value, 'bpmn:FlowNode');
     const renamed = new SequenceFlows(writing.edit).redirect(flow, key === 'source' ? { source: node } : { target: node });
-    if (key === 'source') new SequenceFlows(writing.edit).dropIgnoredConditions(node, writing.changes, [flow]);
+    if (key === 'source') {
+      new SequenceFlows(writing.edit).dropIgnoredConditions(node, writing.changes, [flow]);
+    }
     writing.changes.change(ChangeSet.flowEntryOf(flow, `${ChangeSet.flowEntryOf(flow).detail} (${key} changed)${renamedNote(renamed)}`));
     return 'recorded by the key';
   }
 
   private static writeLoop(writing: SetKeyWriting, el: El, value: string, key: string): ChangeRecording {
-    if (!is(el, 'bpmn:Activity')) throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to activities');
+    if (!is(el, 'bpmn:Activity')) {
+      throw SetKeyCatalog.unknownKey(writing.edit.doc, el, key, 'applies to activities');
+    }
     writing.properties.setLoopKey(el, key, value, writing.changes);
     return 'left to set';
   }
@@ -336,9 +365,13 @@ export class SetKeyCatalog {
 
   private static writeDocumentation(writing: SetKeyWriting, el: El, value: string): ChangeRecording {
     const docs = many(el, 'documentation');
-    if (!value) docs.splice(0, docs.length);
-    else if (docs[0]) docs[0].set('text', value);
-    else addTo(el, 'documentation', writing.edit.doc.moddle.create('bpmn:Documentation', { text: value }));
+    if (!value) {
+      docs.splice(0, docs.length);
+    } else if (docs[0]) {
+      docs[0].set('text', value);
+    } else {
+      addTo(el, 'documentation', writing.edit.doc.moddle.create('bpmn:Documentation', { text: value }));
+    }
     return 'left to set';
   }
 }

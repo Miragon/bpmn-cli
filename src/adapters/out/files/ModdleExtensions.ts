@@ -31,7 +31,9 @@ export class ModdleExtensions {
     private readonly from?: string,
   ) {
     const req = createRequire(join(rcDir, '__bpmn-cli__.js'));
-    for (const [prefix, value] of moddleEntries(config)) if (typeof value === 'string') this.add(prefix, value, req);
+    for (const [prefix, value] of moddleEntries(config)) {
+      if (typeof value === 'string') this.add(prefix, value, req);
+    }
   }
 
   private add(prefix: string, value: string, req: { resolve(id: string): string }): void {

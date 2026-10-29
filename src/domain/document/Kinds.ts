@@ -124,7 +124,9 @@ const REJECTED_TYPES: Record<string, string> = {
 const byToken = new Map<string, KindDef>();
 for (const def of KINDS) {
   const tokens = [def.kind, def.type, def.type.split(':')[1] ?? '', ...def.aliases];
-  for (const token of tokens) if (token) byToken.set(token.toLowerCase(), def);
+  for (const token of tokens) {
+    if (token) byToken.set(token.toLowerCase(), def);
+  }
 }
 // eventSubProcess shares its type with subProcess: keep subProcess for 'bpmn:SubProcess'
 byToken.set('bpmn:subprocess', KINDS.find((kindDef) => kindDef.kind === 'subProcess')!);
@@ -163,7 +165,9 @@ export function parseKind(token: string): ParsedKind {
       const kind = kindToken.toLowerCase().replace(/^bpmn:/, '');
       return local === kind || local === `${kind}gateway` || local === `${kind}event`;
     });
-    if (rejected) throw new BpmnError('E_UNSUPPORTED_KIND', `Kind "${kindToken}" is rejected: ${rejected[1]}`, 'usage', { hint: 'Run `bpmn kinds` for the supported kinds.' });
+    if (rejected) {
+      throw new BpmnError('E_UNSUPPORTED_KIND', `Kind "${kindToken}" is rejected: ${rejected[1]}`, 'usage', { hint: 'Run `bpmn kinds` for the supported kinds.' });
+    }
     const candidates = suggestKinds(kindToken);
     throw new BpmnError('E_UNKNOWN_KIND', `Unknown kind "${kindToken}"${candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : ''}. Run \`bpmn kinds\` for the full list.`, 'usage', {
       candidates,
@@ -239,7 +243,9 @@ export function suggestKinds(token: string, max = 4): string[] {
     const names = [def.kind, ...def.aliases].map((name) => name.toLowerCase());
     let best = Infinity;
     for (const name of names) {
-      if (name.includes(lowerToken) || lowerToken.includes(name)) best = Math.min(best, 1);
+      if (name.includes(lowerToken) || lowerToken.includes(name)) {
+        best = Math.min(best, 1);
+      }
       best = Math.min(best, levenshtein(name, lowerToken));
     }
     return { kind: def.kind, score: best };

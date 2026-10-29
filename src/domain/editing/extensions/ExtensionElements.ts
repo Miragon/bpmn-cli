@@ -20,7 +20,9 @@ export class ExtensionElements {
   apply(command: EditExtensionElements): ChangeSet {
     const doc = this.edit.doc;
     let owner = this.edit.require(command.id);
-    if (command.action !== 'add' && command.action !== 'remove') throw usageError(`Unknown ext action "${String(command.action)}"; use add or remove`, { element: command.id });
+    if (command.action !== 'add' && command.action !== 'remove') {
+      throw usageError(`Unknown ext action "${String(command.action)}"; use add or remove`, { element: command.id });
+    }
     const notes: string[] = [];
     const subscription = new ZeebeSubscription(doc);
     const message = subscription.messageFor(owner, command);
@@ -33,7 +35,9 @@ export class ExtensionElements {
     }
     const { host, command: inner } = NESTED_HOSTS.resolve(this.edit, owner, NESTED_HOSTS.normalizeIndex(command), notes);
     const changes = inner.action === 'add' ? new ExtensionInserter(doc).add(host, inner) : new ExtensionRemover(doc).remove(host, inner);
-    for (const note of notes) changes.note(note);
+    for (const note of notes) {
+      changes.note(note);
+    }
     return changes;
   }
 }

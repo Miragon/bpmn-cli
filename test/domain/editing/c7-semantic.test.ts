@@ -352,7 +352,9 @@ describe('retype warns about camunda content the new kind cannot use (W_PROPERTY
     const cs = runOps(doc, [{ op: 'retype', id: 'Activity_Review', kind: 'serviceTask' }]);
     const dropped = cs.warnings.filter((candidate) => candidate.code === 'W_PROPERTY_INAPPLICABLE');
     expect(dropped).toHaveLength(1);
-    for (const name of ['camunda:assignee', 'camunda:candidateGroups', 'camunda:formKey', 'camunda:taskListener']) expect(dropped[0]!.message).toContain(name);
+    for (const name of ['camunda:assignee', 'camunda:candidateGroups', 'camunda:formKey', 'camunda:taskListener']) {
+      expect(dropped[0]!.message).toContain(name);
+    }
     expect(dropped[0]!.message).not.toContain('camunda:asyncBefore');
     expect(dropped[0]!.message).not.toContain('camunda:inputOutput');
     const xml = await doc.toXml();

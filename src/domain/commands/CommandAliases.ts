@@ -29,7 +29,9 @@ export class CommandAliases {
     const definingKeys = definition ? Object.keys(definition.fields).filter((key) => definition.fields[key]!.alias) : [];
     const out = definingKeys.map((defKey) => raw[defKey]).filter((definedId): definedId is string => typeof definedId === 'string');
     this.eachBranchNode(definition, raw, (node) => {
-      for (const defKey of NODE_DEF_KEYS) if (typeof node[defKey] === 'string') out.push(node[defKey] as string);
+      for (const defKey of NODE_DEF_KEYS) {
+        if (typeof node[defKey] === 'string') out.push(node[defKey] as string);
+      }
     });
     return out;
   }
@@ -38,8 +40,13 @@ export class CommandAliases {
     const out: string[] = [];
     for (const slot of this.slots(this.command)) {
       const slotValue = slot.get();
-      if (typeof slotValue === 'string') out.push(slotValue);
-      else if (Array.isArray(slotValue)) for (const entry of slotValue) if (typeof entry === 'string') out.push(entry);
+      if (typeof slotValue === 'string') {
+        out.push(slotValue);
+      } else if (Array.isArray(slotValue)) {
+        for (const entry of slotValue) {
+          if (typeof entry === 'string') out.push(entry);
+        }
+      }
     }
     return out;
   }
@@ -49,8 +56,11 @@ export class CommandAliases {
     const out: Array<{ key: string; alias: string }> = [];
     for (const slot of this.slots(this.command)) {
       const slotValue = slot.get();
-      if (isAlias(slotValue)) out.push({ key: slot.key, alias: slotValue });
-      else if (Array.isArray(slotValue)) slotValue.forEach((entry, index) => isAlias(entry) && out.push({ key: `${slot.key}[${index}]`, alias: entry }));
+      if (isAlias(slotValue)) {
+        out.push({ key: slot.key, alias: slotValue });
+      } else if (Array.isArray(slotValue)) {
+        slotValue.forEach((entry, index) => isAlias(entry) && out.push({ key: `${slot.key}[${index}]`, alias: entry }));
+      }
     }
     return out;
   }
@@ -62,8 +72,11 @@ export class CommandAliases {
     const id = (alias: string, key: string): string => table.idOf(alias, index, command, key);
     for (const slot of this.slots(copy)) {
       const slotValue = slot.get();
-      if (isAlias(slotValue)) slot.put(id(slotValue, slot.key));
-      else if (Array.isArray(slotValue)) slot.put(slotValue.map((entry, entryIndex) => (isAlias(entry) ? id(entry, `${slot.key}[${entryIndex}]`) : entry)));
+      if (isAlias(slotValue)) {
+        slot.put(id(slotValue, slot.key));
+      } else if (Array.isArray(slotValue)) {
+        slot.put(slotValue.map((entry, entryIndex) => (isAlias(entry) ? id(entry, `${slot.key}[${entryIndex}]`) : entry)));
+      }
     }
     return copy;
   }
@@ -75,12 +88,20 @@ export class CommandAliases {
     };
     const raw = command as unknown as Raw;
     const definition = EditCommandDefinitions.find(command.op);
-    for (const key of definition?.referenceKeys ?? []) slot(raw, key, key);
+    for (const key of definition?.referenceKeys ?? []) {
+      slot(raw, key, key);
+    }
     const map = (holder: Raw, name: string, path: string): void => {
       const member = holder[name];
-      if (member && typeof member === 'object') for (const refKey of SET_REF_KEYS) slot(member as Raw, refKey, `${path}.${refKey}`);
+      if (member && typeof member === 'object') {
+        for (const refKey of SET_REF_KEYS) {
+          slot(member as Raw, refKey, `${path}.${refKey}`);
+        }
+      }
     };
-    if (definition?.propertyMapKey) map(raw, definition.propertyMapKey, definition.propertyMapKey);
+    if (definition?.propertyMapKey) {
+      map(raw, definition.propertyMapKey, definition.propertyMapKey);
+    }
     this.eachBranchNode(definition, raw, (node, path) => {
       slot(node, 'lane', `${path}.lane`);
       map(node, 'set', `${path}.set`);
@@ -98,6 +119,8 @@ export class CommandAliases {
 
   /** Typed library ops skip parsing: a malformed split list must reach splitFlow's own check. */
   private eachObject(list: unknown, fn: (item: Raw, index: number) => void): void {
-    if (Array.isArray(list)) list.forEach((item, index) => item && typeof item === 'object' && fn(item as Raw, index));
+    if (Array.isArray(list)) {
+      list.forEach((item, index) => item && typeof item === 'object' && fn(item as Raw, index));
+    }
   }
 }

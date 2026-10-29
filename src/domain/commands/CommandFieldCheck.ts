@@ -31,7 +31,9 @@ export class CommandFieldCheck {
   flowOptions(needsPlacement: boolean): void {
     const obj = this.fields;
     const conditionedDefault = defaultWithConditionViolation(obj['default'] === true, obj['condition'] !== undefined, this.quoted);
-    if (conditionedDefault) throw this.fail(conditionedDefault.message, conditionedDefault.hint);
+    if (conditionedDefault) {
+      throw this.fail(conditionedDefault.message, conditionedDefault.hint);
+    }
     if (!needsPlacement) return;
     const used = this.present([...FLOW_KEYS, 'flowAs']);
     const createsFlow = obj['after'] !== undefined || obj['before'] !== undefined || obj['flow'] !== undefined;
@@ -62,7 +64,9 @@ export class CommandFieldCheck {
     try {
       family = parseKind(kind).def.family;
     } catch (err) {
-      if (err instanceof BpmnError) throw this.fail(err.message, 'Run `bpmn kinds` for the list of kinds and triggers.', err.details.candidates ?? []);
+      if (err instanceof BpmnError) {
+        throw this.fail(err.message, 'Run `bpmn kinds` for the list of kinds and triggers.', err.details.candidates ?? []);
+      }
       throw err;
     }
     if (expectFamily && family !== expectFamily) {
@@ -88,9 +92,13 @@ export class CommandFieldCheck {
 
   selection(needed: boolean): void {
     const obj = this.fields;
-    if (needed && obj['ids'] === undefined && !this.hasSelector()) throw this.fail('give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["startEvent_start","endEvent_done"],"color":"green"}.');
+    if (needed && obj['ids'] === undefined && !this.hasSelector()) {
+      throw this.fail('give "ids" and / or a selector ("path", "kind", "branch")', 'Example: {"op":"color","path":["startEvent_start","endEvent_done"],"color":"green"}.');
+    }
     const path = obj['path'] as string[] | undefined;
-    if (path && path.length !== 2) throw this.fail(`"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["startEvent_start", "endEvent_done"], "via": ["flow_okToBook"].');
+    if (path && path.length !== 2) {
+      throw this.fail(`"path" takes exactly two ids (from and to), got ${path.length}`, 'Example: "path": ["startEvent_start", "endEvent_done"], "via": ["flow_okToBook"].');
+    }
     if (obj['via'] !== undefined && !path) throw this.fail('"via" needs "path"');
   }
 }

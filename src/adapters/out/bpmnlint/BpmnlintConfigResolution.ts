@@ -42,7 +42,9 @@ export class BpmnlintConfigResolution {
         continue;
       }
       if (stack.includes(name)) {
-        if (!this.unavailable.some((entry) => entry.name === name && entry.reason === CYCLE)) this.unavailable.push({ kind: 'config', name, pkg: '', reason: CYCLE });
+        if (!this.unavailable.some((entry) => entry.name === name && entry.reason === CYCLE)) {
+          this.unavailable.push({ kind: 'config', name, pkg: '', reason: CYCLE });
+        }
         continue;
       }
       if (stack.length >= MAX_DEPTH) {
@@ -100,12 +102,19 @@ export class BpmnlintConfigResolution {
   private moddleExtensions(): Record<string, object> {
     const moddleExtensions: Record<string, object> = {};
     const map: unknown = this.config.moddleExtensions;
-    if (typeof map === 'string') this.unavailable.push({ kind: 'moddle', name: 'moddleExtensions', pkg: JSON.stringify(map), reason: MODDLE_NOT_A_MAP, hint: 'Write it as an object of prefix -> descriptor, e.g. { "camunda": "camunda-bpmn-moddle/resources/camunda.json" }.' });
+    if (typeof map === 'string') {
+      this.unavailable.push({ kind: 'moddle', name: 'moddleExtensions', pkg: JSON.stringify(map), reason: MODDLE_NOT_A_MAP, hint: 'Write it as an object of prefix -> descriptor, e.g. { "camunda": "camunda-bpmn-moddle/resources/camunda.json" }.' });
+    }
     for (const [prefix, value] of moddleEntries(this.config)) {
-      if (value && typeof value === 'object') moddleExtensions[prefix] = value;
-      else if (typeof value !== 'string') this.unavailable.push({ kind: 'moddle', name: prefix, pkg: JSON.stringify(value) ?? String(value), reason: 'neither a descriptor object nor a module path (bpmnlint fails on the whole file with it)', hint: 'Name the JSON descriptor (e.g. camunda-bpmn-moddle/resources/camunda.json), or remove the moddleExtensions entry.' });
-      else if (this.opts.moddleExtensions?.[prefix]) moddleExtensions[prefix] = this.opts.moddleExtensions[prefix]!;
-      else if (!this.opts.moddleExtensions) this.unavailable.push({ kind: 'moddle', name: prefix, pkg: String(value), reason: 'a module path, which the host resolves', hint: 'Put the descriptor object into the configuration, or pass it in resolveBpmnlintConfig\'s moddleExtensions.' });
+      if (value && typeof value === 'object') {
+        moddleExtensions[prefix] = value;
+      } else if (typeof value !== 'string') {
+        this.unavailable.push({ kind: 'moddle', name: prefix, pkg: JSON.stringify(value) ?? String(value), reason: 'neither a descriptor object nor a module path (bpmnlint fails on the whole file with it)', hint: 'Name the JSON descriptor (e.g. camunda-bpmn-moddle/resources/camunda.json), or remove the moddleExtensions entry.' });
+      } else if (this.opts.moddleExtensions?.[prefix]) {
+        moddleExtensions[prefix] = this.opts.moddleExtensions[prefix]!;
+      } else if (!this.opts.moddleExtensions) {
+        this.unavailable.push({ kind: 'moddle', name: prefix, pkg: String(value), reason: 'a module path, which the host resolves', hint: 'Put the descriptor object into the configuration, or pass it in resolveBpmnlintConfig\'s moddleExtensions.' });
+      }
     }
     for (const [prefix, why] of this.rejectedDescriptors(moddleExtensions)) {
       const value = moddleEntries(this.config).find(([entryPrefix]) => entryPrefix === prefix)?.[1];

@@ -100,13 +100,23 @@ function gate(limit = 9): NamedValidator {
         const sources = new Set(flows.map((flow) => flow.get<El>('sourceRef')));
         const targets = new Set(flows.map((flow) => flow.get<El>('targetRef')));
         const starts = nodes.filter((node) => is(node, 'bpmn:StartEvent'));
-        if (starts.length > 1) for (const start of starts) out.push({ severity: 'error', code: 'E_GATE_START_EVENTS', message: `${idOf(start)} is one of ${starts.length} start events`, element: idOf(start) });
+        if (starts.length > 1) {
+          for (const start of starts) {
+            out.push({ severity: 'error', code: 'E_GATE_START_EVENTS', message: `${idOf(start)} is one of ${starts.length} start events`, element: idOf(start) });
+          }
+        }
         for (const node of nodes) {
-          if (!is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !targets.has(node)) out.push({ severity: 'error', code: 'E_GATE_UNREACHABLE', message: `${idOf(node)} has no incoming sequence flow`, element: idOf(node) });
-          if (!is(node, 'bpmn:EndEvent') && !sources.has(node)) out.push({ severity: 'error', code: 'E_GATE_DEAD_END', message: `${idOf(node)} has no outgoing sequence flow`, element: idOf(node) });
+          if (!is(node, 'bpmn:StartEvent') && !is(node, 'bpmn:BoundaryEvent') && !targets.has(node)) {
+            out.push({ severity: 'error', code: 'E_GATE_UNREACHABLE', message: `${idOf(node)} has no incoming sequence flow`, element: idOf(node) });
+          }
+          if (!is(node, 'bpmn:EndEvent') && !sources.has(node)) {
+            out.push({ severity: 'error', code: 'E_GATE_DEAD_END', message: `${idOf(node)} has no outgoing sequence flow`, element: idOf(node) });
+          }
         }
         const tasks = nodes.filter((node) => is(node, 'bpmn:Task')).length;
-        if (tasks > limit) out.push({ severity: 'warning', code: 'W_GATE_SIZE', message: `process ${idOf(processElement)} has ${tasks} tasks, more than ${limit}`, key: `size:${idOf(processElement)}` });
+        if (tasks > limit) {
+          out.push({ severity: 'warning', code: 'W_GATE_SIZE', message: `process ${idOf(processElement)} has ${tasks} tasks, more than ${limit}`, key: `size:${idOf(processElement)}` });
+        }
       }
       return out;
     },

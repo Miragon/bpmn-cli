@@ -48,17 +48,27 @@ export class EdgeRouter {
     const out = new Set<string>();
     let cur: DShape | undefined = shape;
     for (let depth = 0; cur && depth < 12; depth++) {
-      for (const id of [cur.parentId, cur.laneId, cur.poolId]) if (id) out.add(id);
+      for (const id of [cur.parentId, cur.laneId, cur.poolId]) {
+        if (id) out.add(id);
+      }
       cur = cur.parentId ? this.plane.shapes.get(cur.parentId) : undefined;
     }
     return out;
   }
 
   private commonFrame(source: DShape, target: DShape): Box | undefined {
-    if (source.kind === 'participant' || target.kind === 'participant') return undefined;
-    if (source.laneId && source.laneId === target.laneId && !source.parentId && !target.parentId) return this.plane.shapes.get(source.laneId)?.bounds;
-    if (source.parentId && source.parentId === target.parentId) return this.plane.shapes.get(source.parentId)?.bounds;
-    if (source.poolId && source.poolId === target.poolId) return this.plane.shapes.get(source.poolId)?.bounds;
+    if (source.kind === 'participant' || target.kind === 'participant') {
+      return undefined;
+    }
+    if (source.laneId && source.laneId === target.laneId && !source.parentId && !target.parentId) {
+      return this.plane.shapes.get(source.laneId)?.bounds;
+    }
+    if (source.parentId && source.parentId === target.parentId) {
+      return this.plane.shapes.get(source.parentId)?.bounds;
+    }
+    if (source.poolId && source.poolId === target.poolId) {
+      return this.plane.shapes.get(source.poolId)?.bounds;
+    }
     return undefined;
   }
 
@@ -75,9 +85,15 @@ export class EdgeRouter {
     const settled = new Set(lines);
     const ends: GatewayEnd[] = [];
     for (const other of this.plane.edges.values()) {
-      if (other === edge || other.points.length < 2 || !settled.has(other.points)) continue;
-      if (other.sourceId === gateway.id) ends.push({ side: gatewaySide(gateway.bounds, other.points[0]!), out: true });
-      if (other.targetId === gateway.id) ends.push({ side: gatewaySide(gateway.bounds, other.points[other.points.length - 1]!), out: false });
+      if (other === edge || other.points.length < 2 || !settled.has(other.points)) {
+        continue;
+      }
+      if (other.sourceId === gateway.id) {
+        ends.push({ side: gatewaySide(gateway.bounds, other.points[0]!), out: true });
+      }
+      if (other.targetId === gateway.id) {
+        ends.push({ side: gatewaySide(gateway.bounds, other.points[other.points.length - 1]!), out: false });
+      }
     }
     return ends;
   }
@@ -99,9 +115,13 @@ export class EdgeRouter {
     const out: Box[] = [];
     for (const shape of this.plane.shapes.values()) {
       if (keepOut.has(shape.id)) continue;
-      if (PlaneQuery.isLeaf(shape)) out.push(shape.bounds);
-      else if (shape.kind === 'subProcess' && shape.container) out.push(shape.bounds);
-      else if (edge.kind === 'messageFlow' && shape.kind === 'participant') out.push(shape.bounds);
+      if (PlaneQuery.isLeaf(shape)) {
+        out.push(shape.bounds);
+      } else if (shape.kind === 'subProcess' && shape.container) {
+        out.push(shape.bounds);
+      } else if (edge.kind === 'messageFlow' && shape.kind === 'participant') {
+        out.push(shape.bounds);
+      }
     }
     return out;
   }
@@ -175,7 +195,9 @@ export class EdgeRouter {
     const sorted = cands.sort((first, second) => dist(first) - dist(second) || first.x - second.x || first.y - second.y);
     for (const candidate of sorted) {
       const line = this.straight(from, box(candidate));
-      if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) return { at: box(candidate) };
+      if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) {
+        return { at: box(candidate) };
+      }
     }
     let best: { at: Box; points: Point[] } | undefined;
     let least = Infinity;
@@ -188,7 +210,9 @@ export class EdgeRouter {
       const at = box({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 });
       const points = roundPoints(OrthogonalRouter.route({ source: from, target: at, obstacles, lines, targetSides: dx >= dy ? ['top', 'bottom'] : ['left', 'right'] }));
       let cost = DOCK_CUT * obstacles.filter((obstacle) => pathHits(points, obstacle)).length + DOCK_CROSSING * crossings(points, lines) + BEND * (points.length - 2) + dist(this.nearestOn([start, end], center)!) / DOCK_CROSSING;
-      for (let step = 1; step < points.length; step++) cost += Math.abs(points[step]!.x - points[step - 1]!.x) + Math.abs(points[step]!.y - points[step - 1]!.y);
+      for (let step = 1; step < points.length; step++) {
+        cost += Math.abs(points[step]!.x - points[step - 1]!.x) + Math.abs(points[step]!.y - points[step - 1]!.y);
+      }
       if (cost >= least) continue;
       best = { at, points };
       least = cost;
@@ -201,7 +225,9 @@ export class EdgeRouter {
    * connection last, so they follow its final line.
    */
   routeRank(edge: DEdge): number {
-    if ((edge.sourceId && this.plane.edges.has(edge.sourceId)) || (edge.targetId && this.plane.edges.has(edge.targetId))) return 2;
+    if ((edge.sourceId && this.plane.edges.has(edge.sourceId)) || (edge.targetId && this.plane.edges.has(edge.targetId))) {
+      return 2;
+    }
     return edge.kind === 'messageFlow' ? 1 : 0;
   }
 
@@ -213,7 +239,9 @@ export class EdgeRouter {
       if (edge.points.length >= 2) out.push(edge.points);
       if (edge.label) out.push(this.diagonal(edge.label));
     }
-    for (const shape of this.plane.shapes.values()) if (shape.label) out.push(this.diagonal(shape.label));
+    for (const shape of this.plane.shapes.values()) {
+      if (shape.label) out.push(this.diagonal(shape.label));
+    }
     return out;
   }
 
@@ -244,12 +272,16 @@ export class EdgeRouter {
         const obstacles = this.obstaclesFor(edge, shape);
         const dock = this.flowDock(edge, flow, shape.bounds, obstacles, opts.lines);
         if (dock?.points) return source ? dock.points : dock.points.reverse();
-        if (dock) return source ? this.straight(source.bounds, dock.at) : this.straight(dock.at, shape.bounds);
+        if (dock) {
+          return source ? this.straight(source.bounds, dock.at) : this.straight(dock.at, shape.bounds);
+        }
       }
       const line = this.straight(sb, tb);
       if (!source || !target) return line;
       const obstacles = this.obstaclesFor(edge, source, target);
-      if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) return line;
+      if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) {
+        return line;
+      }
       return roundPoints(OrthogonalRouter.route({ source: source.bounds, target: target.bounds, obstacles, lines: opts.lines }));
     }
     if (!source || !target) return undefined;
@@ -274,7 +306,9 @@ export class EdgeRouter {
       ...(frame ? { frame } : {}),
     };
     const pts = OrthogonalRouter.route({ ...request, targetAvoid: taken(false) });
-    if (!targetEnds.some((end) => !end.out && (end.side === 'top' || end.side === 'bottom'))) return roundPoints(pts);
+    if (!targetEnds.some((end) => !end.out && (end.side === 'top' || end.side === 'bottom'))) {
+      return roundPoints(pts);
+    }
     const merged = OrthogonalRouter.route({ ...request, targetMerge: true, targetAvoid: taken(true) });
     return roundPoints(crossings(merged, opts.lines) <= crossings(pts, opts.lines) ? merged : pts);
   }
@@ -287,7 +321,11 @@ export class EdgeRouter {
     const around = new Set([...(source ? this.ancestors(source) : []), ...(target ? this.ancestors(target) : [])]);
     for (const end of [source, target]) {
       const host = end?.hostId ? this.plane.shapes.get(end.hostId) : undefined;
-      if (host) for (const id of [host.id, ...this.ancestors(host)]) around.add(id);
+      if (host) {
+        for (const id of [host.id, ...this.ancestors(host)]) {
+          around.add(id);
+        }
+      }
     }
     const out = new Set<string>();
     for (const shape of this.plane.shapes.values()) {
@@ -312,12 +350,16 @@ export class EdgeRouter {
       if (!shape) continue;
       own.add(shape.id);
       if (shape.hostId) own.add(shape.hostId);
-      for (const boundary of PlaneQuery.boundariesOf(this.plane, shape.id)) own.add(boundary.id);
+      for (const boundary of PlaneQuery.boundariesOf(this.plane, shape.id)) {
+        own.add(boundary.id);
+      }
     }
     for (const id of ids) {
       const shape = this.plane.shapes.get(id);
       if (!shape || own.has(id) || !PlaneQuery.isLeaf(shape)) continue;
-      if (pathHits(points, shape.bounds, -margin) || (labels && shape.label && pathHits(points, shape.label, -margin))) return true;
+      if (pathHits(points, shape.bounds, -margin) || (labels && shape.label && pathHits(points, shape.label, -margin))) {
+        return true;
+      }
     }
     return false;
   }
@@ -356,7 +398,9 @@ export class EdgeRouter {
       [edge.targetId, edge.points[edge.points.length - 1]!],
     ] as const) {
       const shape = id ? this.plane.shapes.get(id) : undefined;
-      if (shape && !containsPoint(shape.bounds, point, DETACHED_GAP)) out.push(shape.id);
+      if (shape && !containsPoint(shape.bounds, point, DETACHED_GAP)) {
+        out.push(shape.id);
+      }
     }
     return out;
   }
@@ -374,9 +418,13 @@ export class EdgeRouter {
     if (now.sourceGap > Math.max(tol, (before?.sourceGap ?? 0) + 1)) return true;
     if (now.targetGap > Math.max(tol, (before?.targetGap ?? 0) + 1)) return true;
     const flow = edge.kind === 'sequenceFlow' || edge.kind === 'messageFlow';
-    if (flow && !isOrthogonal(edge.points) && (!before || isOrthogonal(before.points))) return true;
+    if (flow && !isOrthogonal(edge.points) && (!before || isOrthogonal(before.points))) {
+      return true;
+    }
     const cut = this.cutShapes(edge, edge.points);
-    for (const id of cut) if (!before?.cut.has(id)) return true;
+    for (const id of cut) {
+      if (!before?.cut.has(id)) return true;
+    }
     return false;
   }
 }

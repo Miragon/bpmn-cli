@@ -58,12 +58,15 @@ export class DiagramCompaction {
       rerouted.push(...diagram.drawing(plane).settle(this.snap));
     }
     const closedStrips = total.strips.x + total.strips.y;
-    if (!closedStrips) notes.push('nothing to compact: no empty row or column to close');
-    else {
+    if (!closedStrips) {
+      notes.push('nothing to compact: no empty row or column to close');
+    } else {
       const part = (count: number, px: number, what: string): string[] => (count ? [`${count} empty ${what}${count > 1 ? 's' : ''} (${px} px)`] : []);
       notes.push(`closed ${[...part(total.strips.x, total.px.x, 'column'), ...part(total.strips.y, total.px.y, 'row')].join(' and ')}`);
     }
-    if (rejected.length) notes.push(`left ${total.refused} gap${total.refused > 1 ? 's' : ''} open: closing ${total.refused > 1 ? 'them' : 'it'} would add ${problemWords(rejected)}`);
+    if (rejected.length) {
+      notes.push(`left ${total.refused} gap${total.refused > 1 ? 's' : ''} open: closing ${total.refused > 1 ? 'them' : 'it'} would add ${problemWords(rejected)}`);
+    }
     return rerouted;
   }
 }

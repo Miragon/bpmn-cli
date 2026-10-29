@@ -56,7 +56,9 @@ export class NeighbourPlacer {
    * batch and the same ops as single commands choose the same row.
    */
   private chainExtent(plane: Plane, id: string, pending: ReadonlySet<string>, gap: number): number {
-    if (!this.placer.sem.successors(id).length && !is(this.placer.sem.byId.get(id), 'bpmn:EndEvent')) return SIZES.event.width + gap;
+    if (!this.placer.sem.successors(id).length && !is(this.placer.sem.byId.get(id), 'bpmn:EndEvent')) {
+      return SIZES.event.width + gap;
+    }
     let extent = 0;
     let cur = id;
     for (let step = 0; step < 4; step++) {
@@ -78,13 +80,17 @@ export class NeighbourPlacer {
     const join = this.placer.joins?.get(id);
     if (join) return join;
     const before = this.placer.placed.has(pred) ? this.placer.spliced?.get(pred) : undefined;
-    if (before && before !== id && this.chainReaches(plane, id, before)) return before;
+    if (before && before !== id && this.chainReaches(plane, id, before)) {
+      return before;
+    }
     const succ = new Set(this.placer.sem.successors(id));
     for (const flow of Semantics.sequenceFlows(el, 'incoming')) {
       const fid = idOf(flow);
       if (!fid || idOf(raw(flow, 'sourceRef')) !== pred) continue;
       const old = this.placer.oldTarget.get(fid);
-      if (old && old !== id && (succ.has(old) || this.chainReaches(plane, id, old))) return old;
+      if (old && old !== id && (succ.has(old) || this.chainReaches(plane, id, old))) {
+        return old;
+      }
     }
     for (const flow of Semantics.sequenceFlows(el, 'outgoing')) {
       const fid = idOf(flow);
@@ -103,7 +109,9 @@ export class NeighbourPlacer {
     while (queue.length && seen.size <= 50) {
       for (const successor of this.placer.sem.successors(queue.shift()!)) {
         if (successor === target) return true;
-        if (seen.has(successor) || (plane.shapes.has(successor) && !this.placer.placed.has(successor))) continue;
+        if (seen.has(successor) || (plane.shapes.has(successor) && !this.placer.placed.has(successor))) {
+          continue;
+        }
         seen.add(successor);
         queue.push(successor);
       }
@@ -131,7 +139,9 @@ export class NeighbourPlacer {
    * nothing moved.
    */
   pushBehind(plane: Plane, source: DShape, target: DShape): boolean {
-    if (cx(target.bounds) >= source.bounds.x || this.placer.leadsTo(target.id, source.id)) return false;
+    if (cx(target.bounds) >= source.bounds.x || this.placer.leadsTo(target.id, source.id)) {
+      return false;
+    }
     const fixed = new Set<string>();
     const queue = [source.id];
     for (let cur = queue.shift(); cur && fixed.size <= 500; cur = queue.shift()) {
@@ -143,7 +153,9 @@ export class NeighbourPlacer {
     }
     if (fixed.has(target.id)) return false;
     const delta = Math.ceil(right(source.bounds) + this.placer.spacingWithout(plane, [source.id, target.id]).gap - target.bounds.x);
-    if (LayoutDebug.on()) LayoutDebug.log(`[place] ${target.id}: entered backwards from ${source.id}, pushed ${delta} px`);
+    if (LayoutDebug.on()) {
+      LayoutDebug.log(`[place] ${target.id}: entered backwards from ${source.id}, pushed ${delta} px`);
+    }
     this.push(plane, source, target, { line: target.bounds.x - 0.5, delta, successor: target, fixed });
     return true;
   }
@@ -161,12 +173,22 @@ export class NeighbourPlacer {
       need = Math.max(need, right(box) + room - obstacle.x);
       return true;
     };
-    for (const obstacle of obs.boxes) if (!clear(obstacle, 20)) return undefined;
-    for (const label of obs.labels) if (!clear(label, 4)) return undefined;
-    for (const edge of plane.edges.values()) {
-      for (const point of edge.points.slice(1, -1)) if (!clear({ x: point.x, y: point.y, width: 0, height: 0 }, 10)) return undefined;
+    for (const obstacle of obs.boxes) {
+      if (!clear(obstacle, 20)) return undefined;
     }
-    if (successor && successor.bounds.x >= line && Math.abs(cy(successor.bounds) - cy(box)) <= box.height / 2 + successor.bounds.height / 2) need = Math.max(need, right(box) + gap - successor.bounds.x);
+    for (const label of obs.labels) {
+      if (!clear(label, 4)) return undefined;
+    }
+    for (const edge of plane.edges.values()) {
+      for (const point of edge.points.slice(1, -1)) {
+        if (!clear({ x: point.x, y: point.y, width: 0, height: 0 }, 10)) {
+          return undefined;
+        }
+      }
+    }
+    if (successor && successor.bounds.x >= line && Math.abs(cy(successor.bounds) - cy(box)) <= box.height / 2 + successor.bounds.height / 2) {
+      need = Math.max(need, right(box) + gap - successor.bounds.x);
+    }
     return Math.ceil(need);
   }
 
@@ -182,7 +204,9 @@ export class NeighbourPlacer {
     const el = this.placer.sem.byId.get(id);
     const kind = el ? DiagramReader.shapeKind(el) : undefined;
     const name = raw<string>(el, 'name')?.trim();
-    if (!kind || !name || kind === 'boundary' || !hasExternalLabel({ kind })) return undefined;
+    if (!kind || !name || kind === 'boundary' || !hasExternalLabel({ kind })) {
+      return undefined;
+    }
     const side = defaultLabelSide(kind);
     const over = (labelSize(name).width - size.width) / 2;
     return side === 'above' || side === 'below' ? { side, left: over, right: over } : undefined;
@@ -222,8 +246,11 @@ export class NeighbourPlacer {
       const onTop = !!host && attachedSide(main.bounds, host.bounds) === 'top';
       const floor = Math.max(bottom(main.bounds), host ? bottom(host.bounds) : -Infinity);
       const cands = xs.flatMap((left, xi) => this.rows.rowCandidates(plane, probe, frame, left, size, extent, start, sp.row, floor, exclude, 40 * xi + (onTop ? TOP_ROW : 0), anchor, cx(main.bounds)));
-      if (host && onTop) cands.push(...xs.flatMap((left, xi) => this.rows.rowsAbove(plane, probe, frame, main, left, size, extent, cy(host.bounds) - sp.row, sp.row, exclude, 40 * xi)));
-      else if (host) cands.push(...this.boundaries.topCandidates(plane, id, probe, main, host, frame, size, extent, exclude));
+      if (host && onTop) {
+        cands.push(...xs.flatMap((left, xi) => this.rows.rowsAbove(plane, probe, frame, main, left, size, extent, cy(host.bounds) - sp.row, sp.row, exclude, 40 * xi)));
+      } else if (host) {
+        cands.push(...this.boundaries.topCandidates(plane, id, probe, main, host, frame, size, extent, exclude));
+      }
       this.placeCand(plane, id, probe, this.rows.cheapest(id, plane, main, kind, cands), main);
       return;
     }
@@ -261,10 +288,15 @@ export class NeighbourPlacer {
          */
         const behind = !!successor && successor.bounds.x < maxRight + 1 && preds.some((pred) => successor.bounds.x >= right(pred.bounds)) && !preds.some((pred) => this.placer.leadsTo(successor.id, pred.id));
         const fixed = behind ? new Set(preds.flatMap((pred) => [pred.id, ...PlaneQuery.boundariesOf(plane, pred.id).map((boundary) => boundary.id)])) : undefined;
-        if (behind) this.push(plane, main, probe, { id, box, line: successor.bounds.x - 0.5, delta: Math.max(delta, Math.ceil(right(box) + Math.max(sp.gap, sGap) - successor.bounds.x)), successor, fixed });
-        else this.push(plane, main, probe, { id, box, line: maxRight + 1, delta, successor });
+        if (behind) {
+          this.push(plane, main, probe, { id, box, line: successor.bounds.x - 0.5, delta: Math.max(delta, Math.ceil(right(box) + Math.max(sp.gap, sGap) - successor.bounds.x)), successor, fixed });
+        } else {
+          this.push(plane, main, probe, { id, box, line: maxRight + 1, delta, successor });
+        }
       }
-      if (LayoutDebug.on()) LayoutDebug.log(`[place] ${id} after ${main.id}: ${successor ? `splice before ${successor.id}` : 'continuation'} at x=${left} c=${center}`);
+      if (LayoutDebug.on()) {
+        LayoutDebug.log(`[place] ${id} after ${main.id}: ${successor ? `splice before ${successor.id}` : 'continuation'} at x=${left} c=${center}`);
+      }
       this.placer.placeAt(plane, id, left, center, size);
       if (!successor) (this.placer.continued ??= new Set()).add(id);
       return;
@@ -275,7 +307,9 @@ export class NeighbourPlacer {
     const floor = Math.max(bottom(main.bounds), ...below.map((shape) => cy(shape.bounds)));
     const extent = this.chainExtent(plane, id, pending, sp.gap);
     const cands = this.rows.rowCandidates(plane, probe, frame, left, size, extent, base + sp.row, sp.row, floor, exclude, 0, main, cx(main.bounds));
-    if (!succShapes.some((shape) => cy(shape.bounds) < cy(main.bounds) - sp.rowTol && Frames.of(plane, shape) === frame)) cands.push(...this.rows.rowsAbove(plane, probe, frame, main, left, size, extent, cy(main.bounds) - sp.row, sp.row, exclude, TOP_ROW));
+    if (!succShapes.some((shape) => cy(shape.bounds) < cy(main.bounds) - sp.rowTol && Frames.of(plane, shape) === frame)) {
+      cands.push(...this.rows.rowsAbove(plane, probe, frame, main, left, size, extent, cy(main.bounds) - sp.row, sp.row, exclude, TOP_ROW));
+    }
     this.placeCand(plane, id, probe, this.rows.cheapest(id, plane, main, kind, cands), main);
   }
 

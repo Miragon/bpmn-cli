@@ -47,8 +47,11 @@ export class ExtensionLevel {
       const rank = (item: El): number => (order ? order.indexOf(ruleName(this.names.typeOf(item))) : -1);
       const mine = rank(el);
       const at = mine === -1 ? -1 : kids.findIndex((kid) => rank(kid) > mine);
-      if (at === -1) kids.push(el);
-      else kids.splice(at, 0, el);
+      if (at === -1) {
+        kids.push(el);
+      } else {
+        kids.splice(at, 0, el);
+      }
       raw['$children'] = kids;
       el.$parent = this.parent;
       return;
@@ -112,7 +115,9 @@ export class ExtensionLevel {
 
   private matches(el: El, step: Step, wanted: string): boolean {
     if (this.names.typeOf(el) !== wanted && el.$type !== step.name) return false;
-    if (step.attr !== undefined) return this.names.attrsOf(el)[step.attr] === step.value;
+    if (step.attr !== undefined) {
+      return this.names.attrsOf(el)[step.attr] === step.value;
+    }
     return true;
   }
 

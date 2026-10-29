@@ -19,7 +19,9 @@ export class MoveElementsDefinition extends EditCommandDefinition<MoveElements> 
   override check(command: CommandFieldCheck): void {
     command.placement();
     command.flowOptions(true);
-    if (!command.present(PLACEMENT_KEYS).length && command.fields['lane'] === undefined) throw command.fail('nothing to do: give a placement (after/before/flow/in) and/or "lane"');
+    if (!command.present(PLACEMENT_KEYS).length && command.fields['lane'] === undefined) {
+      throw command.fail('nothing to do: give a placement (after/before/flow/in) and/or "lane"');
+    }
   }
 
   override schemaRules(): unknown[] {

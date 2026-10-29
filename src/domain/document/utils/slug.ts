@@ -117,7 +117,11 @@ function cutWords(slug: string, max: number, names = false): string {
     words.push(word);
     length += word.length;
   }
-  if (names) while (words.length > 1 && isFiller(words[words.length - 1]!) && words.slice(0, -1).some((word) => /[A-Za-z]/.test(word))) words.pop();
+  if (names) {
+    while (words.length > 1 && isFiller(words[words.length - 1]!) && words.slice(0, -1).some((word) => /[A-Za-z]/.test(word))) {
+      words.pop();
+    }
+  }
   const out = words.join('');
   if (out && /[A-Za-z]/.test(out)) return trimSeparators(out);
   return trimSeparators(withLetter(slug, slug.slice(0, Math.max(max, 0)), (rest) => cutWords(rest, max, names)));

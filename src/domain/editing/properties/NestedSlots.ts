@@ -86,7 +86,9 @@ export class NestedSlots {
     }
     if (key.includes(':')) {
       const local = new PropertyCoercer(this.edit).camundaLocal(key);
-      if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) return;
+      if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) {
+        return;
+      }
       const owners = CAMUNDA.attr(local)?.owners ?? [];
       const onElement = CAMUNDA.attrAppliesTo(`camunda:${local}`, el);
       const multi = slot === 'loop' && owners.some((owner) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', owner));
@@ -130,7 +132,9 @@ export class NestedSlots {
    * so removing the only script resource needs an inline condition in the same command.
    */
   private assertConditionKept(el: El, target: El, key: string, full: string): void {
-    if (!new PropertyCoercer(this.edit).isResourceKey(key) || new PropertyCoercer(this.edit).resourceKeyOf(target) !== key) return;
+    if (!new PropertyCoercer(this.edit).isResourceKey(key) || new PropertyCoercer(this.edit).resourceKeyOf(target) !== key) {
+      return;
+    }
     if (target.get<string | undefined>('body')?.trim()) return;
     const id = idOf(el);
     const flow = is(el, 'bpmn:SequenceFlow');
@@ -145,7 +149,9 @@ export class NestedSlots {
   /** `replacing`: the same command sets the inline condition, so nothing is left empty. */
   setKey(el: El, slot: string, key: string, value: string, changes: ChangeSet, replacing = false): void {
     const full = `${slot}.${key}`;
-    if (key.includes(':')) value = new PropertyCoercer(this.edit).vendorValue(el, key, value, full);
+    if (key.includes(':')) {
+      value = new PropertyCoercer(this.edit).vendorValue(el, key, value, full);
+    }
     const slots = slotsOf(el);
     const ref = parseSlotRef(slot);
     if (!ref || !slots.includes(ref.slot) || !key) {
@@ -159,15 +165,20 @@ export class NestedSlots {
       target = this.create(el, refSlot, key, changes);
     }
     if (value) this.checkKey(el, refSlot, target, key, ref.text);
-    if (refSlot === 'condition' && value && new PropertyCoercer(this.edit).isResourceKey(key)) NestedSlots.dropConditionBody(el, target, changes, key);
-    if (refSlot === 'condition' && !value && !replacing) this.assertConditionKept(el, target, key, full);
+    if (refSlot === 'condition' && value && new PropertyCoercer(this.edit).isResourceKey(key)) {
+      NestedSlots.dropConditionBody(el, target, changes, key);
+    }
+    if (refSlot === 'condition' && !value && !replacing) {
+      this.assertConditionKept(el, target, key, full);
+    }
     if (key.includes(':')) {
       SetKeyCatalog.assertVendorKey(this.edit.doc, target, key);
       new PropertyCoercer(this.edit).setVendorAttribute(target, key, value);
     } else if (key === 'id') {
       if (!value) throw PropertyCoercer.invalid(el, full, 'an id cannot be empty');
-      if (idOf(target)) new IdRename(this.edit).rename(target, value);
-      else {
+      if (idOf(target)) {
+        new IdRename(this.edit).rename(target, value);
+      } else {
         this.edit.allocator.claim(value);
         target.set('id', value);
       }
@@ -175,7 +186,9 @@ export class NestedSlots {
       this.checkKey(el, refSlot, target, key, ref.text);
       const property = descriptorOf(target).propertiesByName![key]!;
       const coerced = value ? new PropertyCoercer(this.edit).coerce(el, property, value, full) : undefined;
-      if (is(target, 'bpmn:CompensateEventDefinition') && key === 'activityRef' && isEl(coerced)) this.assertCompensationInScope(el, coerced, full);
+      if (is(target, 'bpmn:CompensateEventDefinition') && key === 'activityRef' && isEl(coerced)) {
+        this.assertCompensationInScope(el, coerced, full);
+      }
       target.set(key, coerced);
     }
     changes.change(ChangeSet.entryOf(el, value ? `${full}=${value}` : `${full} removed`));

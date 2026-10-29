@@ -52,7 +52,9 @@ describe('speaking ids in a Camunda Modeler file', () => {
       'subProcess_nacharbeit',
       'startEvent_inNacharbeit',
     ]);
-    for (const id of outcome.ids) expect(id).not.toMatch(NOT_SPEAKING);
+    for (const id of outcome.ids) {
+      expect(id).not.toMatch(NOT_SPEAKING);
+    }
     // the hashed flows say nothing about their ends: they keep their ids where an edit changed the ends
     expect(flowBetween(outcome.doc, 'Activity_0k3x9qa', 'gateway_beforeGroesseMessen')).toBe('Flow_1q2w3e4');
   });
@@ -143,7 +145,9 @@ describe('the change report names a flow that took the id a renamed flow freed b
       expect(outcome.result.created.map((change) => `${change.id}: ${change.detail}`)).toEqual(['task_check: after startEvent_check', 'flow_checkToDone: task_check -> endEvent_done']);
       expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('flow_checkToCheck: startEvent_check -> task_check (was -> endEvent_done) (renamed from flow_checkToDone: its id named its old ends)');
       // the entry of the earlier op is about the spliced flow: it names its final id
-      if (ops.length === 2) expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('flow_checkToCheck: name=go');
+      if (ops.length === 2) {
+        expect(outcome.result.changed.map((change) => `${change.id}: ${change.detail}`)).toContain('flow_checkToCheck: name=go');
+      }
       expect(outcome.result.changed.map((change) => change.id)).not.toContain('flow_checkToDone');
       expect(outcome.result.renamed).toEqual({ flow_checkToDone: 'flow_checkToCheck' });
       const text = renderMutation(outcome.result);

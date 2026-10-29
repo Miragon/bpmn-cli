@@ -27,7 +27,9 @@ export class LabelPlacement {
     const name = raw<string>(el, 'name')?.trim();
     if (is(el, 'bpmn:SequenceFlow') || is(el, 'bpmn:MessageFlow')) {
       const { edge } = diagram.drawnEdge(command.id);
-      if (!name) throw modelError('E_NO_LABEL', `${command.id} has no name, so it has no label`, { element: command.id, hint: `Name it first: \`bpmn set <file> ${command.id} name=...\`.` });
+      if (!name) {
+        throw modelError('E_NO_LABEL', `${command.id} has no name, so it has no label`, { element: command.id, hint: `Name it first: \`bpmn set <file> ${command.id} name=...\`.` });
+      }
       const { width, height } = edge.label ?? labelSize(name);
       const size = { width, height };
       const box = edgeLabelAt(edge, size, command.side);
@@ -49,7 +51,9 @@ export class LabelPlacement {
         hint: 'Labels can be placed for events, gateways, data objects / stores and flows.',
       });
     }
-    if (!name) throw modelError('E_NO_LABEL', `${command.id} has no name, so it has no label`, { element: command.id, hint: `Name it first: \`bpmn set <file> ${command.id} name=...\`.` });
+    if (!name) {
+      throw modelError('E_NO_LABEL', `${command.id} has no name, so it has no label`, { element: command.id, hint: `Name it first: \`bpmn set <file> ${command.id} name=...\`.` });
+    }
     const { width, height } = shape.label ?? labelSize(name);
     const size = { width, height };
     let box = diagram.drawing(plane).labelOnSide(shape, command.side, size);

@@ -701,13 +701,17 @@ describe('writes and validate with a .bpmnlintrc (in process)', () => {
     expect(lines.length).toBe([...byRule.values()].reduce((total, count) => total + (count >= 3 ? 1 : count), 0));
     expect(lines.length).toBeLessThan(all.length / 3);
     // an error reads [bpmnlint error], a warning [bpmnlint]
-    for (const finding of all) expect(lines.some((outputLine) => outputLine.startsWith(`[bpmnlint${finding.severity === 'error' ? ' error' : ''}] ${finding.code}`)), finding.code).toBe(true);
+    for (const finding of all) {
+      expect(lines.some((outputLine) => outputLine.startsWith(`[bpmnlint${finding.severity === 'error' ? ' error' : ''}] ${finding.code}`)), finding.code).toBe(true);
+    }
     const naming = lines.find((outputLine) => outputLine.startsWith('[bpmnlint] @miragon/rules/element-id-naming x'))!;
     const [, listed, convention] = naming.match(/^\[bpmnlint\] @miragon\/rules\/element-id-naming x\d+ \[([^\]]+)\]: (Element id must match the naming convention <\w+>) \(\d+ of \d+; \d+ others with \d+ other messages, --json lists them\)$/)!;
     // the ids listed are those with the message shown
     const ids = listed!.split(', ').filter((id) => !id.startsWith('+'));
     expect(ids.length).toBeGreaterThan(2);
-    for (const id of ids) expect(all.find((finding) => finding.code === '@miragon/rules/element-id-naming' && finding.element === id)?.message, id).toBe(convention);
+    for (const id of ids) {
+      expect(all.find((finding) => finding.code === '@miragon/rules/element-id-naming' && finding.element === id)?.message, id).toBe(convention);
+    }
     const loose = ['A', 'B', 'C'].map((name): EditCommand => ({ op: 'add', kind: 'task', name, in: 'Process_RenderGallery' }));
     const write = renderMutation(mutationReport(await mutateFile(join(dir, 'gallery.bpmn'), loose, { dryRun: true, lintFrom: dir })));
     expect(write).toMatch(/^warning \[bpmnlint error\] no-disconnected x3 \[task_a, task_b, task_c\]: Element is not connected$/m);
@@ -810,7 +814,9 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
       "const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' });",
       "const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });",
       'const edit = await applyToXml(xml, ops, { validators: [lint] });',
-    ]) expect(codeOf(library)).toContain(codeOf(line));
+    ]) {
+      expect(codeOf(library)).toContain(codeOf(line));
+    }
     const engine = bpmnlintEngine();
     const resolved = await resolveBpmnlintConfig(engine, { extends: 'bpmnlint:recommended' });
     const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });
@@ -824,7 +830,9 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
       'const { conventions, notes } = idConventionsFromLint(resolved.rules[ID_NAMING_RULE], engine.plugin.naming);',
       "const lint = bpmnlintValidator(engine, resolved, { detail: 'default rules', notes });",
       'await applyToXml(xml, ops, { validators: [lint], conventions });',
-    ]) expect(codeOf(validators)).toContain(codeOf(line));
+    ]) {
+      expect(codeOf(validators)).toContain(codeOf(line));
+    }
     for (const target of ['c7', 'c8'] as const) {
       const rc = engine.plugin.getDefaultLintConfig({ engine: target });
       const resolved = await resolveBpmnlintConfig(engine, rc);
@@ -854,7 +862,9 @@ describe('the library examples (docs/library.md, docs/validators.md)', () => {
       "const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });",
       'await applyToXml(xml, ops, { validators: [bpmnlintValidator(engine, automation, { notes })], conventions });',
       "await applyToXml(xml, ops, { conventions: { prefixes: { 'bpmn:ServiceTask': 'serviceTask_', 'bpmn:SequenceFlow': 'flow_' }, case: 'camelCase' } });",
-    ]) expect(codeOf(library)).toContain(codeOf(line));
+    ]) {
+      expect(codeOf(library)).toContain(codeOf(line));
+    }
     const engine = bpmnlintEngine();
     const automation = await resolveBpmnlintConfig(engine, engine.plugin.getDefaultLintConfig({ preset: 'automation' }));
     const { conventions, notes } = idConventionsFromLint(automation.rules[ID_NAMING_RULE], engine.plugin.naming, { source: 'our rules' });

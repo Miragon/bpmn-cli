@@ -53,9 +53,13 @@ export class CleanEngine {
       if (scope.lanes.length) {
         const depth = laneDepth(scope.lanes);
         const framed = new ScopeFrame(scope).framedSize();
-        for (const lane of scope.lanes) stretchLane(lane, framed.width - framed.left + 2 * SIZES.lanePadding + depth * SIZES.laneHeader);
+        for (const lane of scope.lanes) {
+          stretchLane(lane, framed.width - framed.left + 2 * SIZES.lanePadding + depth * SIZES.laneHeader);
+        }
         writer.emitScope(scope, { x: margin + depth * SIZES.laneHeader + SIZES.lanePadding, y: margin });
-        for (const lane of scope.lanes) writer.fixLaneShapes(lane, { box: { x: margin, y: margin, width: 0, height: 0 }, participant: root, origin: { x: 0, y: 0 } }, true);
+        for (const lane of scope.lanes) {
+          writer.fixLaneShapes(lane, { box: { x: margin, y: margin, width: 0, height: 0 }, participant: root, origin: { x: 0, y: 0 } }, true);
+        }
       } else {
         writer.emitScope(scope, { x: margin, y: margin });
       }

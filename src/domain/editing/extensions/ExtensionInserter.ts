@@ -70,11 +70,15 @@ export class ExtensionInserter {
             hint: `<type> names the snippet's root elements: \`bpmn ext add <file> ${this.hosts.idOf(el)} ${this.hosts.slotPrefix(el)}${wrong[0]!.$type} --xml ...\`. To add into a container, use a path type, e.g. camunda:inputOutput/camunda:inputParameter.`,
           });
         }
-        for (const snippet of values) this.applyStepKey(snippet, last, el);
+        for (const snippet of values) {
+          this.applyStepKey(snippet, last, el);
+        }
       }
     } else {
       const attrs = { ...(command.attrs ?? {}) };
-      if (last!.index !== undefined) this.selectors.fail(command.type!, 'an [index] only selects existing elements; give the attributes as attr=value', el);
+      if (last!.index !== undefined) {
+        this.selectors.fail(command.type!, 'an [index] only selects existing elements; give the attributes as attr=value', el);
+      }
       if (last!.attr !== undefined) {
         if (attrs[last!.attr] !== undefined && attrs[last!.attr] !== last!.value) {
           throw modelError('E_INVALID_VALUE', `${last!.text} and ${last!.attr}=${attrs[last!.attr]} disagree`, { element: this.hosts.idOf(el) });
@@ -91,10 +95,16 @@ export class ExtensionInserter {
       this.insert(level, snippet, !!command.replace, out, notes, drops);
       this.misplacedWarning(el, snippet, changes);
     }
-    for (const warning of drops) changes.warn(warning);
+    for (const warning of drops) {
+      changes.warn(warning);
+    }
     this.doc.invalidate();
-    for (const note of notes) changes.note(note);
-    if (out.some((outcome) => outcome.verb !== 'unchanged')) changes.change(ChangeSet.entryOf(this.hosts.ownerOf(el), this.describeOutcomes(out.filter((outcome) => outcome.verb !== 'unchanged'), this.hosts.slotPrefix(el))));
+    for (const note of notes) {
+      changes.note(note);
+    }
+    if (out.some((outcome) => outcome.verb !== 'unchanged')) {
+      changes.change(ChangeSet.entryOf(this.hosts.ownerOf(el), this.describeOutcomes(out.filter((outcome) => outcome.verb !== 'unchanged'), this.hosts.slotPrefix(el))));
+    }
     return changes;
   }
 
@@ -125,13 +135,21 @@ export class ExtensionInserter {
     const home = this.structure.homeAt(typeName, levelType);
     if (home) {
       const homes = items.filter((item) => this.names.typeOf(item) === home);
-      if (homes.length > 1) this.duplicate(host, `${this.hosts.labelOf(host)} already has ${homes.length} ${homes[0]!.$type} elements; ${value.$type} cannot be placed unambiguously (the engines reject more than one)`, homes[0]!.$type);
-      if (homes.length === 1) this.checkInsert(host, this.names.kidsOf(homes[0]!), home, value, replace);
+      if (homes.length > 1) {
+        this.duplicate(host, `${this.hosts.labelOf(host)} already has ${homes.length} ${homes[0]!.$type} elements; ${value.$type} cannot be placed unambiguously (the engines reject more than one)`, homes[0]!.$type);
+      }
+      if (homes.length === 1) {
+        this.checkInsert(host, this.names.kidsOf(homes[0]!), home, value, replace);
+      }
       return;
     }
-    if (replace || this.names.keyOf(value) || !this.structure.isSingle(typeName, levelType)) return;
+    if (replace || this.names.keyOf(value) || !this.structure.isSingle(typeName, levelType)) {
+      return;
+    }
     const same = items.filter((item) => this.names.typeOf(item) === typeName);
-    if (same.length > 1) this.duplicate(host, `${this.hosts.labelOf(host)} already has ${same.length} ${same[0]!.$type} elements (only one is allowed); merging into them is ambiguous`, value.$type);
+    if (same.length > 1) {
+      this.duplicate(host, `${this.hosts.labelOf(host)} already has ${same.length} ${same[0]!.$type} elements (only one is allowed); merging into them is ambiguous`, value.$type);
+    }
     if (same.length === 1) this.checkMerge(host, same[0]!, value);
   }
 
@@ -148,7 +166,9 @@ export class ExtensionInserter {
       this.duplicate(host, `${this.hosts.labelOf(host)} already has a ${existing.$type} with the value "${hb.trim()}"; the new one is "${ib.trim()}" (only one ${existing.$type} is allowed)`, incoming.$type);
     }
     if (!this.names.isGeneric(existing)) return;
-    for (const kid of this.names.kidsOf(incoming)) this.checkInsert(host, this.names.kidsOf(existing), this.names.typeOf(existing), kid, false);
+    for (const kid of this.names.kidsOf(incoming)) {
+      this.checkInsert(host, this.names.kidsOf(existing), this.names.typeOf(existing), kid, false);
+    }
   }
 
   /** Inserts a value at its level; a missing container is written with the prefix the file binds to its namespace. */
@@ -180,7 +200,9 @@ export class ExtensionInserter {
           if (drop) drops.push(drop);
         }
         level.replace(match[0]!, value);
-        for (const extra of match.slice(1)) level.remove(extra);
+        for (const extra of match.slice(1)) {
+          level.remove(extra);
+        }
         out.push({ verb: 'replaced', text: `${this.names.itemLabel(value)}${level.parent ? ` in ${level.label}` : ''}` });
         notes.push(`replaced the existing ${this.names.itemLabel(value)}${level.parent ? ` in ${level.label}` : ''} of ${this.hosts.labelOf(level.host)}`);
         return;
@@ -190,7 +212,9 @@ export class ExtensionInserter {
       return;
     }
     if (replace && same.length) {
-      for (const item of same) level.remove(item);
+      for (const item of same) {
+        level.remove(item);
+      }
       level.append(value);
       out.push({ verb: 'replaced', text: `${value.$type}${level.parent ? ` in ${level.label}` : ''}` });
       notes.push(`replaced ${same.length} existing ${value.$type}`);
@@ -257,12 +281,20 @@ export class ExtensionInserter {
     const old = match[0]!;
     const lost: string[] = [];
     const now = this.names.attrsOf(value);
-    for (const [attrName, attrValue] of Object.entries(this.names.attrsOf(old))) if (now[attrName] === undefined) lost.push(`${attrName}="${attrValue}"`);
-    if (this.names.bodyOf(old) !== undefined && this.names.bodyOf(value) === undefined) lost.push(`its value "${this.names.bodyOf(old)!.trim().length > 40 ? `${this.names.bodyOf(old)!.trim().slice(0, 37)}...` : this.names.bodyOf(old)!.trim()}"`);
+    for (const [attrName, attrValue] of Object.entries(this.names.attrsOf(old))) {
+      if (now[attrName] === undefined) lost.push(`${attrName}="${attrValue}"`);
+    }
+    if (this.names.bodyOf(old) !== undefined && this.names.bodyOf(value) === undefined) {
+      lost.push(`its value "${this.names.bodyOf(old)!.trim().length > 40 ? `${this.names.bodyOf(old)!.trim().slice(0, 37)}...` : this.names.bodyOf(old)!.trim()}"`);
+    }
     const kept = new Set(this.names.kidsOf(value).map((kid) => this.names.itemLabel(kid)));
-    for (const kid of this.names.kidsOf(old)) if (!kept.has(this.names.itemLabel(kid))) lost.push(this.contentLabel(kid));
+    for (const kid of this.names.kidsOf(old)) {
+      if (!kept.has(this.names.itemLabel(kid))) lost.push(this.contentLabel(kid));
+    }
     const extra = match.length - 1;
-    if (extra) lost.push(`${extra} more ${this.names.itemLabel(old)} with the same ${this.names.keyOf(old)?.attr ?? 'key'}`);
+    if (extra) {
+      lost.push(`${extra} more ${this.names.itemLabel(old)} with the same ${this.names.keyOf(old)?.attr ?? 'key'}`);
+    }
     if (!lost.length) return undefined;
     const label = `${this.names.itemLabel(value)}${level.parent ? ` in ${level.label}` : ''}`;
     const id = this.hosts.idOf(level.host);
@@ -297,8 +329,12 @@ export class ExtensionInserter {
     }
     const sub: Outcome[] = [];
     const inner = level.inside(existing);
-    for (const kid of this.names.kidsOf(incoming)) this.insert(inner, kid, false, sub, notes, drops);
-    for (const subOutcome of sub) changes.push(`${subOutcome.verb} ${subOutcome.text.replace(` in ${inner.label}`, '').replace(` to ${inner.label}`, '')}`);
+    for (const kid of this.names.kidsOf(incoming)) {
+      this.insert(inner, kid, false, sub, notes, drops);
+    }
+    for (const subOutcome of sub) {
+      changes.push(`${subOutcome.verb} ${subOutcome.text.replace(` in ${inner.label}`, '').replace(` to ${inner.label}`, '')}`);
+    }
     const where = level.parent ? ` in ${level.label}` : '';
     if (!changes.length) {
       notes.push(`${existing.$type}${where} of ${this.hosts.labelOf(level.host)} already holds that content; nothing to add`);
@@ -341,7 +377,9 @@ export class ExtensionInserter {
   }
 
   private applyStepKey(snippet: El, step: Step, el: El): void {
-    if (step.index !== undefined) this.selectors.fail(step.text, 'an [index] only selects existing elements', el);
+    if (step.index !== undefined) {
+      this.selectors.fail(step.text, 'an [index] only selects existing elements', el);
+    }
     if (step.attr === undefined) return;
     const have = this.names.attrsOf(snippet)[step.attr];
     if (have !== undefined && have !== step.value) {
@@ -351,7 +389,9 @@ export class ExtensionInserter {
   }
 
   private describeOutcomes(out: Outcome[], prefix = ''): string {
-    if (out.every((outcome) => outcome.verb === 'added')) return `ext added ${out.map((outcome) => prefix + outcome.text).join(', ')}`;
+    if (out.every((outcome) => outcome.verb === 'added')) {
+      return `ext added ${out.map((outcome) => prefix + outcome.text).join(', ')}`;
+    }
     return `ext ${out.map((outcome) => `${outcome.verb} ${prefix}${outcome.text}`).join('; ')}`;
   }
 
@@ -360,7 +400,9 @@ export class ExtensionInserter {
    * W_C8_MISPLACED_EXTENSION replaces this warning for zeebe elements.
    */
   private misplacedWarning(host: El, snippet: El, changes: ChangeSet): void {
-    if (!snippet.$parent || snippet.$parent !== host.get<El | undefined>('extensionElements')) return;
+    if (!snippet.$parent || snippet.$parent !== host.get<El | undefined>('extensionElements')) {
+      return;
+    }
     const typeName = this.names.typeOf(snippet);
     if (typeName.startsWith('zeebe:')) {
       const local = typeName.slice('zeebe:'.length);

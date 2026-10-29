@@ -27,8 +27,11 @@ export class ElementLinks {
         for (const association of this.associations()) {
           const source = peek<El>(association, 'sourceRef');
           const target = peek<El>(association, 'targetRef');
-          if (source === el && target) attachedTo.push(shownId(target));
-          else if (target === el && source) attachedTo.push(shownId(source));
+          if (source === el && target) {
+            attachedTo.push(shownId(target));
+          } else if (target === el && source) {
+            attachedTo.push(shownId(source));
+          }
         }
         const text = peek<string>(el, 'text');
         out.push(compact<ViewAnnotation>({ id: shownId(el), text: text ? String(text) : undefined, attachedTo }));
@@ -43,7 +46,9 @@ export class ElementLinks {
       const source = peek<El>(association, 'sourceRef');
       const target = peek<El>(association, 'targetRef');
       const other = source === el ? target : target === el ? source : undefined;
-      if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((listed) => listed.id === shownId(other))) continue;
+      if (!other || !is(other, 'bpmn:TextAnnotation') || out.some((listed) => listed.id === shownId(other))) {
+        continue;
+      }
       const text = peek<string>(other, 'text');
       out.push(compact({ id: shownId(other), text: text ? String(text) : undefined }));
     }

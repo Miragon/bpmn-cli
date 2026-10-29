@@ -46,7 +46,9 @@ export class DecisionLinkWriter {
       }
     };
     const dropC7 = (keep?: string): void => {
-      for (const [key] of reader.c7DecisionRefs(el)) if (key !== keep) dropAttr(key);
+      for (const [key] of reader.c7DecisionRefs(el)) {
+        if (key !== keep) dropAttr(key);
+      }
     };
     const dropZeebe = (keep?: El): void => {
       const container = el.get<El | undefined>('extensionElements');
@@ -57,7 +59,9 @@ export class DecisionLinkWriter {
         removed.push(call.$type);
         dropped = true;
       }
-      if (dropped && container && !many(container, 'values').length) el.set('extensionElements', undefined);
+      if (dropped && container && !many(container, 'values').length) {
+        el.set('extensionElements', undefined);
+      }
     };
     let written = '';
     const writeC7 = (key: string): void => {
@@ -120,11 +124,15 @@ export class DecisionLinkWriter {
       const ownC7 = reader.c7DecisionRefs(el)[0]?.[0];
       const ownCall = ownC7 ? undefined : reader.zeebeCalls(el).find((call) => textValue((call as unknown as Record<string, unknown>)['decisionId']));
       const follow = ownLink ? undefined : this.fileEngineSpelling(el);
-      if (ownC7) writeC7(ownC7);
-      else if (ownCall) writeZeebe(ownCall, 'zeebe');
-      else if (follow?.kind === 'c7') writeC7(`${this.prefixFor(follow.uri, follow.prefix)}:decisionRef`);
-      else if (follow?.kind === 'c8') writeZeebe(reader.zeebeCalls(el)[0], follow.prefix);
-      else {
+      if (ownC7) {
+        writeC7(ownC7);
+      } else if (ownCall) {
+        writeZeebe(ownCall, 'zeebe');
+      } else if (follow?.kind === 'c7') {
+        writeC7(`${this.prefixFor(follow.uri, follow.prefix)}:decisionRef`);
+      } else if (follow?.kind === 'c8') {
+        writeZeebe(reader.zeebeCalls(el)[0], follow.prefix);
+      } else {
         dropC7();
         dropZeebe();
         el.$attrs['calledDecision'] = value;
@@ -154,12 +162,16 @@ export class DecisionLinkWriter {
         seen.set(uri ? `c7 ${uri}` : key, uri ? { kind: 'c7', uri, prefix } : undefined);
       }
       for (const call of reader.zeebeCalls(task)) {
-        if (!textValue((call as unknown as Record<string, unknown>)['decisionId'])) continue;
+        if (!textValue((call as unknown as Record<string, unknown>)['decisionId'])) {
+          continue;
+        }
         const prefix = call.$type.split(':')[0]!;
         const declared = ((call.$descriptor as { ns?: { uri?: string } }).ns?.uri ?? reader.uriOf(task, prefix)) === ZEEBE_URI;
         seen.set(declared ? 'zeebe' : call.$type, declared ? { kind: 'c8', prefix } : undefined);
       }
-      for (const key of ['calledDecision', 'calledElement']) if (textValue(task.$attrs?.[key])) seen.set(key, undefined);
+      for (const key of ['calledDecision', 'calledElement']) {
+        if (textValue(task.$attrs?.[key])) seen.set(key, undefined);
+      }
       if (seen.size > 1) return undefined;
     }
     return [...seen.values()][0];

@@ -85,7 +85,9 @@ describe('the browser bundle in a context without Node globals', () => {
   }, 60000);
 
   it('has no Node globals', () => {
-    for (const global of [...NODE_GLOBALS, 'setTimeout', 'module', 'exports']) expect(vm.runInContext(`typeof ${global}`, ctx), global).toBe('undefined');
+    for (const global of [...NODE_GLOBALS, 'setTimeout', 'module', 'exports']) {
+      expect(vm.runInContext(`typeof ${global}`, ctx), global).toBe('undefined');
+    }
   });
 
   it('applyToXml places an element on a hand-made drawing exactly like Node', async () => {
@@ -258,7 +260,9 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     const visit = (chunk: Chunk | undefined): void => {
       if (!chunk || initial.has(chunk.path)) return;
       initial.add(chunk.path);
-      for (const importPath of chunk.imports) visit(bundle.chunks.find((candidate) => candidate.path === importPath));
+      for (const importPath of chunk.imports) {
+        visit(bundle.chunks.find((candidate) => candidate.path === importPath));
+      }
     };
     visit(bundle.entry);
     const initialInputs = bundle.chunks.filter((chunk) => initial.has(chunk.path)).flatMap((chunk) => chunk.inputs);
@@ -279,7 +283,9 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   async function fresh(): Promise<{ lib: typeof core; at: string; profiles: () => string[] }> {
     const at = join(dir, `i${count++}`);
     mkdirSync(at);
-    for (const file of files) writeFileSync(join(at, file.name), file.text);
+    for (const file of files) {
+      writeFileSync(join(at, file.name), file.text);
+    }
     const base = `${pathToFileURL(at).href}/`;
     const lib = (await nativeImport(`${base}index.mjs`)) as typeof core;
     const byName = new Map(files.map((file) => [file.name, file.profile]));
@@ -302,7 +308,9 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       const visit = (module: string): void => {
         if (seen.has(module) || !bundle.graph[module]) return;
         seen.add(module);
-        for (const dependency of bundle.graph[module]) visit(dependency);
+        for (const dependency of bundle.graph[module]) {
+          visit(dependency);
+        }
       };
       visit(start);
       return seen;

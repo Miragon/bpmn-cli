@@ -25,14 +25,22 @@ export class FlowOrder {
     this.linkCatches = FlowOrder.linkCatchesOf(nodes);
     const starts = nodes.filter((node) => is(node, 'bpmn:StartEvent'));
     const entries = starts.length ? starts : nodes.filter((node) => doc.incoming(node).length === 0);
-    for (const entry of entries) this.visit(entry);
+    for (const entry of entries) {
+      this.visit(entry);
+    }
     const reachable = new Set(this.seen);
-    for (const node of nodes) if (doc.incoming(node).length === 0) this.visit(node);
-    for (const node of nodes) this.visit(node);
+    for (const node of nodes) {
+      if (doc.incoming(node).length === 0) this.visit(node);
+    }
+    for (const node of nodes) {
+      this.visit(node);
+    }
     if (is(scope, 'bpmn:AdHocSubProcess')) return;
     for (const node of nodes) {
       if (reachable.has(node)) continue;
-      if (isEventSubProcess(node) || peek<boolean>(node, 'isForCompensation') === true || is(node, 'bpmn:BoundaryEvent')) continue;
+      if (isEventSubProcess(node) || peek<boolean>(node, 'isForCompensation') === true || is(node, 'bpmn:BoundaryEvent')) {
+        continue;
+      }
       this.unreachable.add(node);
     }
   }
@@ -41,7 +49,9 @@ export class FlowOrder {
     if (this.seen.has(node) || !this.members.has(node)) return;
     this.seen.add(node);
     this.ordered.push(node);
-    for (const next of this.successors(node)) this.visit(next);
+    for (const next of this.successors(node)) {
+      this.visit(next);
+    }
   }
 
   /** treated like a plain node */

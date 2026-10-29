@@ -39,8 +39,12 @@ export class CommandParser {
     if (typeof value !== 'string') {
       throw this.fail(ctx, `"${key}" must be a string, got ${this.describe(value)}`, `Write it as a JSON string, e.g. "${key}": "...".`);
     }
-    if (spec.ref && !value.trim()) throw this.fail(ctx, `"${key}" must not be empty`);
-    if (spec.alias && !ALIAS.test(value)) throw this.fail(ctx, `"${key}" must be an alias like "$check" ($ and a letter, then letters, digits, _ or -), got "${value}"`, `Example: "${key}": "$check", then "after": "$check" in a later op.`);
+    if (spec.ref && !value.trim()) {
+      throw this.fail(ctx, `"${key}" must not be empty`);
+    }
+    if (spec.alias && !ALIAS.test(value)) {
+      throw this.fail(ctx, `"${key}" must be an alias like "$check" ($ and a letter, then letters, digits, _ or -), got "${value}"`, `Example: "${key}": "$check", then "after": "$check" in a later op.`);
+    }
     if (spec.values && !spec.values.includes(value)) {
       throw this.fail(ctx, `"${key}" must be one of ${spec.values.map((allowedValue) => `"${allowedValue}"`).join(', ')}, got "${value}"`);
     }
@@ -68,7 +72,9 @@ export class CommandParser {
     }
     const out: string[] = [];
     value.forEach((item, index) => {
-      if (typeof item !== 'string' || !item.trim()) throw this.fail(ctx, `"${key}[${index}]" must be a non-empty string, got ${this.describe(item)}`);
+      if (typeof item !== 'string' || !item.trim()) {
+        throw this.fail(ctx, `"${key}[${index}]" must be a non-empty string, got ${this.describe(item)}`);
+      }
       out.push(item);
     });
     if (spec.minItems && out.length < spec.minItems) {
@@ -91,9 +97,11 @@ export class CommandParser {
     const out: Record<string, string> = {};
     for (const [entryKey, entryValue] of Object.entries(value)) {
       if (!entryKey.trim()) throw this.fail(ctx, `"${key}" contains an empty key`);
-      if (typeof entryValue === 'string') out[entryKey] = entryValue;
-      else if (typeof entryValue === 'number' || typeof entryValue === 'boolean') out[entryKey] = String(entryValue);
-      else {
+      if (typeof entryValue === 'string') {
+        out[entryKey] = entryValue;
+      } else if (typeof entryValue === 'number' || typeof entryValue === 'boolean') {
+        out[entryKey] = String(entryValue);
+      } else {
         throw this.fail(ctx, `"${key}.${entryKey}" must be a string (numbers and booleans are converted), got ${this.describe(entryValue)}`, entryValue === null ? `Use "" to remove a property (or "unset": ["${entryKey}"] in a set op).` : undefined);
       }
     }
@@ -118,7 +126,9 @@ export class CommandParser {
   }
 
   private checkFields(ctx: CommandLocation, value: unknown, fields: Record<string, FieldSpec>): Record<string, unknown> {
-    if (!this.isPlainObject(value)) throw this.fail(ctx, `expected an object, got ${this.describe(value)}`);
+    if (!this.isPlainObject(value)) {
+      throw this.fail(ctx, `expected an object, got ${this.describe(value)}`);
+    }
     const allowed = Object.keys(fields);
     const out: Record<string, unknown> = {};
     for (const [key, raw] of Object.entries(value)) {
@@ -171,7 +181,9 @@ export class CommandParser {
   }
 
   private checkNodes(ctx: CommandLocation, key: string, value: unknown): SplitNode[] {
-    if (!Array.isArray(value)) throw this.fail(ctx, `"${key}" must be an array of node objects, got ${this.describe(value)}`, 'An empty array is allowed: the branch is then a direct gateway -> join flow.');
+    if (!Array.isArray(value)) {
+      throw this.fail(ctx, `"${key}" must be an array of node objects, got ${this.describe(value)}`, 'An empty array is allowed: the branch is then a direct gateway -> join flow.');
+    }
     return value.map((node, index) => {
       const nctx: CommandLocation = { index: ctx.index, path: `${ctx.path}.${key}[${index}]` };
       const out = this.checkFields(nctx, node, NODE_FIELDS);
@@ -183,8 +195,12 @@ export class CommandParser {
   }
 
   private checkBranches(ctx: CommandLocation, key: string, value: unknown, minItems?: number): SplitBranch[] {
-    if (!Array.isArray(value)) throw this.fail(ctx, `"${key}" must be an array of branch objects, got ${this.describe(value)}`, 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].');
-    if (minItems && value.length < minItems) throw this.fail(ctx, `"${key}" needs at least ${minItems} branch`);
+    if (!Array.isArray(value)) {
+      throw this.fail(ctx, `"${key}" must be an array of branch objects, got ${this.describe(value)}`, 'Write "branches": [{"flowName": "yes", "nodes": [{"kind": "userTask", "name": "..."}]}].');
+    }
+    if (minItems && value.length < minItems) {
+      throw this.fail(ctx, `"${key}" needs at least ${minItems} branch`);
+    }
     return value.map((branch, index) => {
       const bctx: CommandLocation = { index: ctx.index, path: `${ctx.path} ${key}[${index}]` };
       const out = this.checkFields(bctx, branch, BRANCH_FIELDS);
@@ -202,9 +218,13 @@ export class CommandParser {
 
   private parseOne(raw: unknown, index: number): EditCommand {
     const base: CommandLocation = { index, path: `ops[${index}]` };
-    if (!this.isPlainObject(raw)) throw this.fail(base, `expected an op object, got ${this.describe(raw)}`, 'Every entry looks like {"op": "add", ...}.');
+    if (!this.isPlainObject(raw)) {
+      throw this.fail(base, `expected an op object, got ${this.describe(raw)}`, 'Every entry looks like {"op": "add", ...}.');
+    }
     const name = raw['op'];
-    if (name === undefined) throw this.fail(base, `missing "op"; one of: ${COMMAND_NAMES.join(', ')}`);
+    if (name === undefined) {
+      throw this.fail(base, `missing "op"; one of: ${COMMAND_NAMES.join(', ')}`);
+    }
     if (typeof name !== 'string' || !(COMMAND_NAMES as string[]).includes(name)) {
       const alt = typeof name === 'string' ? closestKey(name, COMMAND_NAMES) : undefined;
       throw this.fail(base, `unknown op ${JSON.stringify(name)}${alt ? ` (did you mean "${alt}"?)` : ''}; one of: ${COMMAND_NAMES.join(', ')}`, undefined, alt ? [alt] : []);
@@ -219,10 +239,13 @@ export class CommandParser {
 
   parse(input: unknown): EditCommand[] {
     let ops: unknown;
-    if (Array.isArray(input)) ops = input;
-    else if (this.isPlainObject(input) && Array.isArray(input['ops'])) {
+    if (Array.isArray(input)) {
+      ops = input;
+    } else if (this.isPlainObject(input) && Array.isArray(input['ops'])) {
       const extra = Object.keys(input).filter((inputKey) => inputKey !== 'ops' && inputKey !== '$schema');
-      if (extra.length) throw usageError(`Unknown top-level key${extra.length > 1 ? 's' : ''} ${extra.map((extraKey) => `"${extraKey}"`).join(', ')}; expected only "ops"`, { hint: 'The ops file is {"ops": [...]} or a plain array of ops.' });
+      if (extra.length) {
+        throw usageError(`Unknown top-level key${extra.length > 1 ? 's' : ''} ${extra.map((extraKey) => `"${extraKey}"`).join(', ')}; expected only "ops"`, { hint: 'The ops file is {"ops": [...]} or a plain array of ops.' });
+      }
       ops = input['ops'];
     } else {
       throw usageError(`Expected an array of ops or an object {"ops": [...]}, got ${this.describe(input)}`, {
@@ -230,7 +253,9 @@ export class CommandParser {
       });
     }
     const list = ops as unknown[];
-    if (!list.length) throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "startEvent_orderReceived"}.' });
+    if (!list.length) {
+      throw usageError('The ops list is empty', { hint: 'Add at least one op, e.g. {"op": "add", "kind": "userTask", "name": "Check invoice", "after": "startEvent_orderReceived"}.' });
+    }
     const parsed = list.map((raw, index) => this.parseOne(raw, index));
     this.checkAliases(parsed);
     return parsed;
@@ -241,7 +266,9 @@ export class CommandParser {
     const defined = new Map<string, number>();
     const all = new Map<string, number>();
     commands.forEach((command, commandIndex) => {
-      for (const alias of new CommandAliases(command).defined()) if (!all.has(alias)) all.set(alias, commandIndex);
+      for (const alias of new CommandAliases(command).defined()) {
+        if (!all.has(alias)) all.set(alias, commandIndex);
+      }
     });
     commands.forEach((command, commandIndex) => {
       const raw = command as unknown as Record<string, unknown>;
@@ -251,10 +278,14 @@ export class CommandParser {
         }
       }
       for (const { key, alias } of new CommandAliases(command).references()) {
-        if (!defined.has(alias)) throw unknownAlias(commandIndex, command, key, alias, defined, all.get(alias));
+        if (!defined.has(alias)) {
+          throw unknownAlias(commandIndex, command, key, alias, defined, all.get(alias));
+        }
       }
       for (const alias of new CommandAliases(command).defined()) {
-        if (!ALIAS.test(alias)) throw usageError(`ops[${commandIndex}] (${command.op}): alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op: commandIndex, hint: 'Example: "as": "$check", then "after": "$check".' });
+        if (!ALIAS.test(alias)) {
+          throw usageError(`ops[${commandIndex}] (${command.op}): alias "${alias}" must look like $name ($ and a letter, then letters, digits, _ or -)`, { op: commandIndex, hint: 'Example: "as": "$check", then "after": "$check".' });
+        }
         if (defined.has(alias)) {
           throw new BpmnError('E_DUPLICATE_ALIAS', `ops[${commandIndex}] (${command.op}): alias ${alias} is already defined by ops[${defined.get(alias)}]`, 'usage', { op: commandIndex, hint: 'Every alias names one element of the batch: pick another name.' });
         }

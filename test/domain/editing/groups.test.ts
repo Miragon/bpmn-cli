@@ -25,7 +25,9 @@ async function boundsOf(xml: string, id: string): Promise<Box | undefined> {
   const doc = await Doc.fromXml(xml);
   for (const diagram of doc.definitions.get<Array<{ plane: { planeElement?: Array<{ bpmnElement?: { id: string }; bounds?: Box }> } }>>('diagrams')) {
     const shape = (diagram.plane.planeElement ?? []).find((pe) => pe.bpmnElement?.id === id);
-    if (shape?.bounds) return { x: shape.bounds.x, y: shape.bounds.y, width: shape.bounds.width, height: shape.bounds.height };
+    if (shape?.bounds) {
+      return { x: shape.bounds.x, y: shape.bounds.y, width: shape.bounds.width, height: shape.bounds.height };
+    }
   }
   return undefined;
 }
@@ -48,7 +50,9 @@ describe('add group', () => {
     expect(holds(box, (await boundsOf(out, 'D'))!)).toBe(true);
     expect(holds(box, (await boundsOf(out, 'A'))!)).toBe(false);
     expect(out).toContain(`id="${id}_di"`);
-    for (const kept of ['A', 'B', 'C', 'D', 'G1', 'G2']) expect(await boundsOf(out, kept)).toEqual(await boundsOf(xml, kept));
+    for (const kept of ['A', 'B', 'C', 'D', 'G1', 'G2']) {
+      expect(await boundsOf(out, kept)).toEqual(await boundsOf(xml, kept));
+    }
   });
 
   it('draws the group on a new drawing (full redraw), with members created in the same batch', async () => {

@@ -28,15 +28,20 @@ export class XIndex<TItem> {
     }
     for (let columnIndex = first; columnIndex <= last; columnIndex++) {
       const column = this.columns.get(columnIndex);
-      if (column) column.push(id);
-      else this.columns.set(columnIndex, [id]);
+      if (column) {
+        column.push(id);
+      } else {
+        this.columns.set(columnIndex, [id]);
+      }
     }
   }
 
   /** Ids count from 0 in insertion order. `fn` must not query this index itself. */
   each(lo: number, hi: number, fn: (item: TItem, id: number) => boolean | void, from = 0): boolean {
     const first = Math.floor(lo / X_BUCKET), last = Math.floor(hi / X_BUCKET);
-    if (!(last - first <= X_COLUMNS)) return this.items.some((item, id) => id >= from && fn(item, id) === true);
+    if (!(last - first <= X_COLUMNS)) {
+      return this.items.some((item, id) => id >= from && fn(item, id) === true);
+    }
     const { items, seen } = this;
     const queryId = ++this.query;
     for (let columnIndex = first - 1; columnIndex <= last; columnIndex++) {
@@ -45,8 +50,11 @@ export class XIndex<TItem> {
       let position = 0;
       for (let hiK = from ? ids.length : 0; position < hiK; ) {
         const mid = (position + hiK) >> 1;
-        if (ids[mid]! < from) position = mid + 1;
-        else hiK = mid;
+        if (ids[mid]! < from) {
+          position = mid + 1;
+        } else {
+          hiK = mid;
+        }
       }
       for (; position < ids.length; position++) {
         const id = ids[position]!;
