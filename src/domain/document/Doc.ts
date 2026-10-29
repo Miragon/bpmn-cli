@@ -393,7 +393,7 @@ export class Doc {
     const procs = this.processes();
     if (procs.length === 1) return procs[0]!;
     if (!procs.length) {
-      throw modelError('E_NO_PROCESS', 'The file contains no process', { hint: 'Create one with `bpmn new`.' });
+      throw modelError('E_NO_PROCESS', 'The file contains no process', { hint: 'Add a participant with `bpmn add <file> participant <name>`, or recreate the file with `bpmn new <file> --force`.' });
     }
     throw modelError('E_AMBIGUOUS_SCOPE', `The file has ${procs.length} processes; specify the scope with --in <processId|subProcessId>`, {
       candidates: procs.map((proc) => proc.get<string>('id')),

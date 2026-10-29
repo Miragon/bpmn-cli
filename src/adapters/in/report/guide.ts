@@ -46,7 +46,7 @@ const ID_LOOKUP_ERRORS: ErrorDoc[] = [
 
 /** Codes of scope and placement. */
 const SCOPE_AND_PLACEMENT_ERRORS: ErrorDoc[] = [
-  { code: 'E_NO_PROCESS', meaning: 'The file contains no process.', fix: 'Create one with `bpmn new`, or add a participant.' },
+  { code: 'E_NO_PROCESS', meaning: 'The file contains no process.', fix: 'Add a participant with `bpmn add <file> participant <name>`, or recreate the file with `bpmn new <file> --force`.' },
   { code: 'E_AMBIGUOUS_SCOPE', meaning: 'The file has several processes and the command did not say which one.', fix: 'Add --in <processId|subProcessId|participantId>.' },
   { code: 'E_BLACK_BOX', meaning: 'The participant has no process (black-box pool), so nothing can be placed in it.', fix: 'Pick a participant with a process, or create a new pool without --black-box.' },
   { code: 'E_INVALID_SCOPE', meaning: 'The --in container does not fit the kind: data objects and text annotations need a process, sub-process or participant, lanes need a process, participant or lane, not a sub-process.', fix: 'Pass --in <processId|subProcessId|participantId> (lanes: or a lane id for nesting).' },

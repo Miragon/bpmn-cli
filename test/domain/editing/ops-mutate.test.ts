@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { isBpmnError } from '../../../src/domain/document/utils/errors.js';
-import { is, many, type El } from '../../../src/domain/document/utils/moddle.js';
+import { idOf, is, many, type El } from '../../../src/domain/document/utils/moddle.js';
 import { listExtensions } from '../../../src/index.js';
 import { ExtensionElements } from '../../../src/domain/editing/extensions/ExtensionElements.js';
 import { ElementOrder } from '../../../src/domain/editing/elements/ElementOrder.js';
@@ -525,8 +525,11 @@ describe('remove', () => {
 
     const cs2 = new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['P_Shop'] });
     expect(doc.collaboration()).toBeUndefined();
-    expect(doc.get('Process_1')).toBeUndefined();
-    expect(doc.processes()).toHaveLength(0);
+    expect(doc.processes()).toHaveLength(1);
+    const [emptyProcess] = doc.processes();
+    expect(emptyProcess!.get('isExecutable')).toBe(true);
+    expect(many(emptyProcess!, 'flowElements')).toHaveLength(0);
+    expect(cs2.created.find((change) => change.id === idOf(emptyProcess!))?.kind).toBe('process');
     expect(cs2.notes.some((note) => /collaboration Collab removed/.test(note))).toBe(true);
     await expectRoundTrip(doc);
   });

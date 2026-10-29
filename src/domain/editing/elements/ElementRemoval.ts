@@ -1,6 +1,7 @@
 import type { EditSession } from '../../document/EditSession.js';
 import { modelError, usageError } from '../../document/utils/errors.js';
-import { is, many, removeFrom, walk, type El } from '../../document/utils/moddle.js';
+import { insertInto, is, many, removeFrom, walk, type El } from '../../document/utils/moddle.js';
+import { typeRequest } from '../../document/utils/requests.js';
 import { ChangeSet } from '../../document/ChangeSet.js';
 import { FlowBridge } from '../connections/FlowBridge.js';
 import { idOf } from '../../document/utils/elements.js';
@@ -326,6 +327,7 @@ export class ElementRemoval {
   private removeParticipant(participant: El, changes: ChangeSet): void {
     const collaboration = participant.$parent as El | undefined;
     const process = participant.get<El | undefined>('processRef');
+    const collaborationIndex = collaboration ? many(this.edit.doc.definitions, 'rootElements').indexOf(collaboration) : -1;
     detachFromParent(participant);
     this.edit.doc.ids.release(idOf(participant));
     changes.remove(ChangeSet.entryOf(participant));
@@ -338,6 +340,20 @@ export class ElementRemoval {
       this.cascade(collaboration, changes);
       changes.note(`collaboration ${idOf(collaboration)} removed: no participants left`);
     }
+    if (!this.edit.doc.participants().length && !this.edit.doc.processes().length) {
+      this.replaceRemovedLastPool(process ?? participant, Math.max(collaborationIndex, 0), changes);
+    }
+  }
+
+  private replaceRemovedLastPool(removed: El, rootIndex: number, changes: ChangeSet): void {
+    const name = removed.get<string | undefined>('name');
+    const isExecutable = is(removed, 'bpmn:Process') && removed.get<boolean | undefined>('isExecutable') === true;
+    const id = this.edit.allocator.allocate(typeRequest('bpmn:Process', { ...(name ? { name } : {}), context: '' })).id;
+    const replacement = this.edit.doc.create('bpmn:Process', { id, ...(name ? { name } : {}), isExecutable });
+    insertInto(this.edit.doc.definitions, 'rootElements', rootIndex, replacement);
+    changes.create({ id, kind: 'process', ...(name ? { name } : {}), detail: `empty process: the last pool was removed (${isExecutable ? 'executable' : 'not executable'})` });
+    changes.note(`process ${id} created: the last pool was removed, so the file keeps an empty process`);
+    this.edit.doc.invalidate();
   }
 
   /**
