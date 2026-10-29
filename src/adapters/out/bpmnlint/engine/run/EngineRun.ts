@@ -6,7 +6,7 @@ import type { EnginePlatformInfo } from '../../../../../domain/validation/Engine
 import { lint as lintRules, type RuleEntry } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { BpmnlintEngineReport } from '../../bpmnlint-contract.js';
 import type { EngineKit } from '../../engine-kit.js';
-import type { Findings } from '../rules/CamundaRule.js';
+import type { Impact } from '../rules/CamundaRule.js';
 import { WrittenModel } from '../rules/support/WrittenModel.js';
 import { CompatVerdicts } from './CompatVerdicts.js';
 import { EngineFindings } from './EngineFindings.js';
@@ -16,8 +16,8 @@ type Engine = EnginePlatformInfo['platform'];
 /** One engine's rules for an engine version and the moddle extension they read, as `rules/c7` and `rules/c8` build them. */
 export interface EngineEntry {
   moddleExtensions: Record<string, unknown>;
-  /** The findings of bpmn-cli's rules, with their codes and impacts. */
-  findings: Findings;
+  /** The code and impact of each of bpmn-cli's rules, by `bpmn-cli/<rule>`. */
+  codes: Readonly<Record<string, readonly [code: string, impact: Impact]>>;
   rules(version: string | undefined): RuleEntry[];
   writtenFileRules: ReadonlySet<string>;
   /** What the rules need of the file that the parse for them no longer shows. */

@@ -1,4 +1,4 @@
-import { defineRule as declareRule, EngineRule, type DeclaredRuleFactory, type Engine, type ModdleElement, type Reporter, type ReportPath, type RuleDeclaration } from '@miragon/bpmnlint-plugin-rules/engine';
+import { defineRule as declareRule, EngineRule, type DeclaredRuleFactory, type Engine, type ModdleElement, type Reporter, type ReportPath } from '@miragon/bpmnlint-plugin-rules/engine';
 import { reportErrors } from 'bpmnlint-plugin-camunda-compat/rules/utils/reporter.js';
 import type { VendorHost } from './support/VendorHost.js';
 
@@ -8,16 +8,18 @@ export { ERROR_TYPES } from 'bpmnlint-plugin-camunda-compat/rules/utils/error-ty
 /** What the engine does with a file the rule reports: refuses it, fails or ignores a setting when it runs, or runs it other than a reader expects. */
 export type Impact = 'deploy' | 'runtime' | 'practice';
 
-/** The findings a rule reports (`data.finding`, else the rule's name), each with its bpmn-cli code and impact. */
-export type Findings = Readonly<Record<string, readonly [code: string, impact: Impact]>>;
+/** The bpmn-cli code a rule reports and its impact. */
+export interface RuleCode {
+  code: string;
+  impact: Impact;
+}
 
-/** A bpmn-cli engine rule: the plugin's rule factory and the findings it reports. */
-export type CamundaRuleFactory = DeclaredRuleFactory & { findings: Findings };
+/** A bpmn-cli engine rule: the plugin's rule factory with the code and impact of its findings. */
+export type CamundaRuleFactory = DeclaredRuleFactory & RuleCode;
 
-/** The plugin's `defineRule` with the rule's findings, from which bpmn-cli takes codes, severities and the category. */
-export function defineRule<const Name extends string>(declaration: RuleDeclaration<Name> & { findings: Findings }, RuleClass: new (config?: object) => EngineRule): CamundaRuleFactory {
-  const { findings, ...rest } = declaration;
-  return Object.assign(declareRule(rest, RuleClass), { findings });
+/** The plugin's `defineRule` of an engine-specific rule for the engine its name starts with, with the code and impact from which bpmn-cli takes the finding's code, its severity and the rule's category. */
+export function defineRule<const Name extends `${Engine}-${string}`>({ ruleName, code, impact }: { ruleName: Name } & RuleCode, RuleClass: new (config?: object) => EngineRule): CamundaRuleFactory {
+  return Object.assign(declareRule({ ruleName, kind: 'engine-specific', targetEngine: ruleName.slice(0, 2) as Engine }, RuleClass), { code, impact });
 }
 
 /** What a report says besides its message: camunda-compat's `path` and `data.type`, the fix, the element holding the property (the reported one unless given) and the elements it names. */
@@ -32,10 +34,9 @@ export interface ReportData {
 /**
  * The base of every bpmn-cli engine rule. A rule implements `visit(node)`, which the plugin's
  * single walk calls for each element (return false to skip its children), and reports through
- * `report(finding, at, message, data)`.
+ * `report(at, message, data)`.
  * Every report has camunda-compat's shape (`path`, `data.type`), so `run/` maps own and compat
- * findings alike, and carries the finding it belongs to in `data.finding`, from which bpmn-cli
- * takes the code and severity the rule declares in `defineRule`.
+ * findings alike; bpmn-cli takes its code and severity from what the rule declares in `defineRule`.
  */
 export abstract class CamundaRule extends EngineRule {
   private reporter!: Reporter;
@@ -47,14 +48,14 @@ export abstract class CamundaRule extends EngineRule {
 
   protected abstract visit(node: ModdleElement): boolean | void;
 
-  protected report(finding: string, at: ModdleElement, message: string, { path, ...data }: ReportData): void {
+  protected report(at: ModdleElement, message: string, { path, ...data }: ReportData): void {
     const node = data.node ?? at;
-    reportErrors(at, this.reporter, { message, path, data: { ...data, node, parentNode: node === at ? null : at, finding } });
+    reportErrors(at, this.reporter, { message, path, data: { ...data, node, parentNode: node === at ? null : at } });
   }
 
   /** A finding on the element a finding about `host` lands on. */
-  protected reportOn(host: VendorHost, finding: string, message: string, data: ReportData): void {
-    this.report(finding, host.target, message, data);
+  protected reportOn(host: VendorHost, message: string, data: ReportData): void {
+    this.report(host.target, message, data);
   }
 }
 

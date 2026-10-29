@@ -14,7 +14,7 @@ const ENGINES = [
 
 describe('every engine rule has a bpmn-cli code', () => {
   for (const { platform, entry, compatRules, major } of ENGINES) {
-    it(`${platform}: the rules of every camunda-compat version, and each finding of bpmn-cli's own`, () => {
+    it(`${platform}: the rules of every camunda-compat version, and each rule of bpmn-cli's own`, () => {
       const rules = new Set<string>();
       const verdicts = new CompatVerdicts(ENGINE_KIT, platform, undefined as never, {}, undefined);
       for (let minor = 0; minor < 40; minor++) {
@@ -28,7 +28,7 @@ describe('every engine rule has a bpmn-cli code', () => {
       expect(tabled.filter((rule) => !rules.has(rule)).sort()).toEqual([]);
       const own = entry.rules(undefined).filter((rule) => rule.name.startsWith('bpmn-cli/'));
       expect(own.length).toBeGreaterThan(4);
-      expect(Object.values(entry.findings).filter(([code]) => !code.startsWith(`W_${platform.toUpperCase()}_`))).toEqual([]);
+      expect(Object.values(entry.codes).filter(([code]) => !code.startsWith(`W_${platform.toUpperCase()}_`))).toEqual([]);
     });
   }
 });

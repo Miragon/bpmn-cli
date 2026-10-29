@@ -83,12 +83,10 @@ export interface EngineRuleCase {
 }
 
 /**
- * bpmnlint's `verify` for one finding of an engine rule (`data.finding`, else the rule's name),
- * comparing what a host reads of its reports: element, message, path and `data.type`, but not the
- * moddle objects camunda-compat puts in `data`. The rule's other findings are left out.
+ * bpmnlint's `verify` for an engine rule, comparing what a host reads of its reports: element,
+ * message, path and `data.type`, but not the moddle objects camunda-compat puts in `data`.
  */
 export function verifyEngineRule(
-  finding: string,
   rule: DeclaredRuleFactory,
   cases: {
     valid: EngineRuleCase[];
@@ -101,7 +99,7 @@ export function verifyEngineRule(
     });
     const { root } = await moddleElement;
     const reports = await linter.lint(root, { rules: { [rule.ruleName]: ['error', config] } });
-    return (reports[rule.ruleName] ?? []).filter((report: any) => (report.data?.finding ?? rule.ruleName) === finding).map((report: any) => ({
+    return (reports[rule.ruleName] ?? []).map((report: any) => ({
       id: report.id,
       message: report.message,
       ...(report.path ? { path: report.path } : {}),

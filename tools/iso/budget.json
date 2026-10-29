@@ -11,12 +11,12 @@
   },
   "onDemand": {
     "c7": {
-      "minified": 119,
-      "gzip": 35
+      "minified": 127,
+      "gzip": 36
     },
     "c8": {
-      "minified": 366,
-      "gzip": 102
+      "minified": 370,
+      "gzip": 103
     },
     "engine": {
       "minified": 27,
