@@ -299,21 +299,6 @@ describe('c7-event-gateway', () => {
         report: wrongTrigger('intermediateCatchEvent T1'),
       },
       {
-        name: 'a catch event after the gateway with another incoming flow',
-        moddleElement: model(
-          eventGateway(
-            [TIMER_CATCH, msgCatch('M1')],
-            '<bpmn:sequenceFlow id="F2" sourceRef="Start" targetRef="T1" />',
-          ),
-        ),
-        report: {
-          id: 'G',
-          message:
-            'intermediateCatchEvent:message T1 after event-based gateway G has other incoming flows; the engines refuse the file',
-          type: ERROR_TYPES.PROPERTY_NOT_ALLOWED,
-        },
-      },
-      {
         name: 'two gateway branches wait for the same message name',
         moddleElement: model(eventGateway([msgCatch('M1'), msgCatch('M1b')])),
         report: {

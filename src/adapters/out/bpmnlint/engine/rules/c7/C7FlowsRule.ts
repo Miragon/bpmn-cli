@@ -18,8 +18,8 @@ const REFERENCE_BY_TRIGGER: Record<string, string> = { message: 'messageRef', si
  * Camunda 7 refuses to deploy most of them; a transaction without start event fails when the
  * process runs, and a lone flow without condition is taken as the default flow.
  *
- * - `c7-event-gateway`: a target other than a message, timer, signal or conditional catch event; a
- *   target with other incoming flows; two branches waiting for one message or signal name.
+ * - `c7-event-gateway`: a target other than a message, timer, signal or conditional catch event; two
+ *   branches waiting for one message or signal name.
  * - `c7-exclusive-gateway`: no outgoing flow; a condition on the default flow or on the only
  *   outgoing flow; a flow without condition next to a default flow, or several without condition
  *   and no default flow.
@@ -100,9 +100,6 @@ class C7FlowsRule extends C7Rule {
       if (definitions.length !== 1 || !WAITING_TRIGGERS.includes(ElementKinds.trigger(definition))) {
         this.report('c7-event-gateway', node, `${leadsTo}; after an event-based gateway the engines accept only message, timer, signal and conditional catch events and refuse the file`, { path: null, type: ERROR_TYPES.EVENT_BASED_GATEWAY_TARGET_NOT_ALLOWED, node: target, sequenceFlow: flow, hint: `\`bpmn set <file> ${target.id} trigger=message message=<MessageName>\` (or trigger=timer timer=PT1H).` });
         continue;
-      }
-      if (graph.incoming(target).length > 1) {
-        this.report('c7-event-gateway', node, `${ElementKinds.describe(target)} after event-based gateway ${node.id} has other incoming flows; the engines refuse the file`, { path: null, type: ERROR_TYPES.PROPERTY_NOT_ALLOWED, node: target, sequenceFlow: flow, property: 'incoming', hint: `Join before the gateway instead, and keep only ${flow.id} into ${target.id} (\`bpmn set <file> <otherFlowId> target=<nodeId>\`).` });
       }
       const trigger = ElementKinds.trigger(definition);
       const referenceProperty = REFERENCE_BY_TRIGGER[trigger];
