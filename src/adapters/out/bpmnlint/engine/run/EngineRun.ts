@@ -6,13 +6,10 @@ import type { EnginePlatformInfo } from '../../../../../domain/validation/Engine
 import { lint as lintRules, type RuleEntry } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { BpmnlintEngineReport } from '../../bpmnlint-contract.js';
 import type { EngineKit } from '../../engine-kit.js';
-import { CamundaBooleans } from '../CamundaBooleans.js';
+import type { Findings } from '../rules/CamundaRule.js';
+import { WrittenModel } from '../rules/support/WrittenModel.js';
 import { CompatVerdicts } from './CompatVerdicts.js';
 import { EngineFindings } from './EngineFindings.js';
-import type { Findings } from '../rules/CamundaRule.js';
-import { PublishMessages } from '../PublishMessages.js';
-import { UnknownVendorElements } from '../UnknownVendorElements.js';
-import { UnprefixedAttributes } from '../UnprefixedAttributes.js';
 
 type Engine = EnginePlatformInfo['platform'];
 
@@ -22,6 +19,7 @@ export interface EngineEntry {
   /** The findings of bpmn-cli's rules, with their codes and impacts. */
   findings: Findings;
   rules(version: string | undefined): RuleEntry[];
+  writtenFileRules: ReadonlySet<string>;
   /** What the rules need of the file that the parse for them no longer shows. */
   afterParse?(definitions: unknown, warnings: readonly ImportWarning[], vendor: { operaton: boolean; prefix: string }): void;
 }
@@ -32,8 +30,8 @@ const EXECUTION_PLATFORMS: Record<Engine, string> = { c7: 'Camunda Platform', c8
 /**
  * One engine's rules on a document, loaded on demand: camunda-compat's config for the file's
  * engine version and bpmn-cli's own rules, on the document parsed again
- * with the engine's moddle extension. The checks a typed parse cannot see (unknown vendor
- * elements, unprefixed attributes, publishMessage) are bpmn-cli's own.
+ * with the engine's moddle extension. What that parse drops or rewrites (unknown vendor elements,
+ * unprefixed attributes, booleans, publishMessage) the rules read in the file as written.
  */
 export class EngineRun {
   private readonly moddle: BpmnModdle;
@@ -50,22 +48,15 @@ export class EngineRun {
     const ns = new this.kit.DocumentNamespaces(doc);
     const { rootElement, elementsById, warnings } = await this.moddle.fromXML(this.lintedXml(await doc.toXml(), info, ns));
     this.entry.afterParse?.(rootElement, warnings, this.vendor(ns, info));
+    WrittenModel.record(rootElement, { definitions: doc.definitions, namespaces: ns, decisionLinks: new this.kit.DecisionLinkReader(doc) });
     (rootElement as unknown as { $attrs: Record<string, unknown> }).$attrs['modeler:executionPlatform'] = EXECUTION_PLATFORMS[this.engine];
     const verdicts = new CompatVerdicts(this.kit, this.engine, doc, elementsById, info.version);
     const results = lintRules(rootElement, verdicts.rules(this.entry.rules(info.version))) as Record<string, BpmnlintEngineReport[]>;
     const failures = this.failuresOf(results);
-    const published = this.engine === 'c8' ? new PublishMessages(this.kit, doc, ns, this.engine) : undefined;
-    const ownFindings = published ? published.findings() : new CamundaBooleans(this.kit, doc, ns, this.engine).findings();
-    verdicts.apply(results, published?.hosts);
-    const lint = new EngineFindings(this.kit, this.engine, elementsById, this.entry.findings, (id, key) => this.spelling(doc, ns, id, key), ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe').of(results);
-    const findings = [
-      ...lint,
-      ...new UnprefixedAttributes(this.kit, doc, ns, this.engine).findings(),
-      ...ownFindings,
-      ...[...failures].map(([rule, message]) => this.kit.makeFinding('practice', 'W_LINT_FAILED', `The ${ENGINE_NAMES[this.engine]} rule ${rule} failed: ${message}; its findings are left out`, undefined, { subject: `failed:${rule}`, hint: 'Report the file and the rule: it is a bug of the rule, not of the model.' })),
-      ...new UnknownVendorElements(this.kit, doc, ns, this.engine, this.moddle).findings(),
-    ];
-    return this.inDocumentOrder(doc, findings);
+    verdicts.apply(results);
+    const lint = new EngineFindings(this.kit, this.engine, elementsById, this.entry, (id, key) => this.spelling(doc, ns, id, key), ns.prefixOf(this.kit.ZEEBE.uri) ?? 'zeebe').of(results);
+    const failed = [...failures].map(([rule, message]) => this.kit.makeFinding('practice', 'W_LINT_FAILED', `The ${ENGINE_NAMES[this.engine]} rule ${rule} failed: ${message}; its findings are left out`, undefined, { subject: `failed:${rule}`, hint: 'Report the file and the rule: it is a bug of the rule, not of the model.' }));
+    return this.inDocumentOrder(doc, [...lint, ...failed]);
   }
 
   /** Operaton reads its own namespace like the camunda one: the rules read the camunda properties. */

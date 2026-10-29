@@ -14,10 +14,11 @@ interface EnginePlugin {
 
 /** bpmn-cli's rules ready to run, as `bpmn-cli/<rule>`: the category of their strictest finding, told the `<major>.<minor>` engine version. */
 export class RuleEntries {
-  /** camunda-compat's rules for an engine version with bpmn-cli's `rules`, and the moddle extension they read. */
-  static entry(kit: EngineKit, rules: readonly CamundaRuleFactory[], { moddleExtensions, compatRules }: EnginePlugin, afterParse?: EngineEntry['afterParse']): EngineEntry {
+  /** camunda-compat's rules for an engine version with bpmn-cli's `rules` and the `writtenFileRules` after them, and the moddle extension they read. */
+  static entry(kit: EngineKit, rules: readonly CamundaRuleFactory[], writtenFileRules: readonly CamundaRuleFactory[], { moddleExtensions, compatRules }: EnginePlugin, afterParse?: EngineEntry['afterParse']): EngineEntry {
     RuleKit.use(kit);
-    return { moddleExtensions, findings: Object.assign({}, ...rules.map((rule) => rule.findings)), rules: (version) => [...compatRules(version), ...RuleEntries.of(rules, version)], afterParse };
+    const own = [...rules, ...writtenFileRules];
+    return { moddleExtensions, findings: Object.assign({}, ...own.map((rule) => rule.findings)), rules: (version) => [...compatRules(version), ...RuleEntries.of(own, version)], writtenFileRules: new Set(writtenFileRules.map((rule) => `bpmn-cli/${rule.ruleName}`)), afterParse };
   }
 
   private static of(rules: readonly CamundaRuleFactory[], version: string | undefined): RuleEntry[] {

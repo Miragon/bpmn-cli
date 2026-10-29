@@ -145,13 +145,15 @@ engine is checked and run in one walk of the file by the engine entry point of
 - camunda-compat's rules for the file's `modeler:executionPlatformVersion` (`compatRules` of the
   plugin's `camunda-7` / `camunda-8` entry; the latest without one; `--json` platform names the
   version);
-- bpmn-cli's own rules for what camunda-compat leaves out, six for Camunda 7 and five for Camunda 8 in
+- bpmn-cli's own rules for what camunda-compat leaves out, nine for Camunda 7 and eight for Camunda 8 in
   `src/adapters/out/bpmnlint/engine/rules/`, written on the plugin's `EngineRule`: `c7-events`,
   `c7-flows`, `c7-implementation`, `c7-values`, `c7-extension-content`, `c7-vendor-content` and
   `c8-events`, `c8-subscriptions`, `c8-extensions`, `c8-vendor-content`, `c8-feel-expression`
   (`bpmn-cli/<rule>`). Each declares the checks it reports with their code and
   severity, and gives its hint with the finding;
-- a few checks on content the engine's parser drops (`bpmn-cli` in the tables).
+- among them the rules on content the engine's parser drops or rewrites, which read the file as
+  written: `c7-unprefixed-attributes`, `c7-camunda-booleans`, `c7-unknown-vendor-elements` and
+  `c8-unprefixed-attributes`, `c8-publish-message`, `c8-unknown-vendor-elements`.
 
 bpmn-cli maps each camunda-compat rule to its code. The hint of a camunda-compat finding is built
 from where it points; its message is camunda-compat's. A rule's severity says what the finding
@@ -187,7 +189,7 @@ camunda-compat's `feel` is off).
 
 | code | rules |
 | --- | --- |
-| `W_C7_BAD_VALUE` | `bpmn-cli/c7-values`, bpmn-cli (non-exact booleans) |
+| `W_C7_BAD_VALUE` | `bpmn-cli/c7-values`, `bpmn-cli/c7-camunda-booleans` |
 | `W_C7_DANGLING_REF` | `bpmn-cli/c7-vendor-content` |
 | `W_C7_DEPLOY_AD_HOC_SUBPROCESS` | `bpmn-cli/c7-flows` |
 | `W_C7_DEPLOY_BAD_VALUE` | `bpmn-cli/c7-values` |
@@ -210,7 +212,7 @@ camunda-compat's `feel` is off).
 | `W_C7_DEPLOY_MESSAGE` | `bpmn-cli/c7-events` |
 | `W_C7_DEPLOY_MULTI_INSTANCE` | `bpmn-cli/c7-values` |
 | `W_C7_DEPLOY_RESULT_VARIABLE` | `bpmn-cli/c7-implementation` |
-| `W_C7_DEPLOY_SCHEMA` | bpmn-cli (unprefixed attributes) |
+| `W_C7_DEPLOY_SCHEMA` | `bpmn-cli/c7-unprefixed-attributes` |
 | `W_C7_DEPLOY_SCRIPT` | `bpmn-cli/c7-implementation` |
 | `W_C7_DEPLOY_SIGNAL` | `bpmn-cli/c7-events` |
 | `W_C7_DEPLOY_START_EVENT` | `bpmn-cli/c7-flows` |
@@ -218,10 +220,10 @@ camunda-compat's `feel` is off).
 | `W_C7_FOREIGN_CONTENT` | `bpmn-cli/c7-vendor-content` |
 | `W_C7_MESSAGE_NO_IMPLEMENTATION` | `bpmn-cli/c7-implementation` |
 | `W_C7_MISPLACED_ATTRIBUTE` | `bpmn-cli/c7-vendor-content` |
-| `W_C7_MISPLACED_EXTENSION` | `bpmn-cli/c7-vendor-content` |
+| `W_C7_MISPLACED_EXTENSION` | `bpmn-cli/c7-vendor-content`, `bpmn-cli/c7-unknown-vendor-elements` |
 | `W_C7_TRANSACTION_NO_START` | `bpmn-cli/c7-flows` |
 | `W_C7_UNKNOWN_ATTRIBUTE` | `bpmn-cli/c7-vendor-content` |
-| `W_C7_UNKNOWN_ELEMENT` | bpmn-cli |
+| `W_C7_UNKNOWN_ELEMENT` | `bpmn-cli/c7-unknown-vendor-elements` |
 
 </details>
 
@@ -242,12 +244,12 @@ camunda-compat's `feel` is off).
 | `W_C8_DEPLOY_EXECUTABLE` | `camunda-compat/executable-process` |
 | `W_C8_DEPLOY_EXPRESSION` | `camunda-compat/feel`, `camunda-compat/feel-compatibility`, `camunda-compat/no-expression`, `bpmn-cli/c8-feel-expression` |
 | `W_C8_DEPLOY_EXTENSION` | `camunda-compat/agent-fromai-contract`, `camunda-compat/agent-tool-documentation`, `camunda-compat/agent-tool-output-key`, `camunda-compat/connector-properties`, `camunda-compat/duplicate-task-headers`, `camunda-compat/io-mapping`, `camunda-compat/no-binding-type`, `camunda-compat/no-job-priority-definition`, `camunda-compat/no-version-tag`, `camunda-compat/no-zeebe-properties`, `camunda-compat/secrets`, `camunda-compat/start-event-form`, `camunda-compat/start-event-form-embedded`, `camunda-compat/unresolvable-secret-reference`, `camunda-compat/variable-name`, `camunda-compat/version-tag`, `bpmn-cli/c8-extensions` |
-| `W_C8_DEPLOY_IMPLEMENTATION` | `camunda-compat/implementation`, `bpmn-cli/c8-subscriptions`, bpmn-cli (`zeebe:publishMessage`) |
+| `W_C8_DEPLOY_IMPLEMENTATION` | `camunda-compat/implementation`, `bpmn-cli/c8-subscriptions`, `bpmn-cli/c8-publish-message` |
 | `W_C8_DEPLOY_LINK` | `camunda-compat/link-event`, `bpmn-cli/c8-events` |
 | `W_C8_DEPLOY_LISTENER` | `camunda-compat/before-all-execution-listener`, `camunda-compat/cancel-execution-listener`, `camunda-compat/duplicate-execution-listener-headers`, `camunda-compat/duplicate-execution-listeners`, `camunda-compat/execution-listener`, `camunda-compat/no-before-all-execution-listener`, `camunda-compat/no-cancel-execution-listener`, `camunda-compat/no-execution-listener-headers`, `camunda-compat/no-execution-listeners`, `camunda-compat/no-task-listeners`, `camunda-compat/task-listener`, `bpmn-cli/c8-extensions` |
-| `W_C8_DEPLOY_MESSAGE` | `camunda-compat/message-reference`, `camunda-compat/subscription`, `bpmn-cli/c8-subscriptions`, bpmn-cli (`zeebe:publishMessage`) |
+| `W_C8_DEPLOY_MESSAGE` | `camunda-compat/message-reference`, `camunda-compat/subscription`, `bpmn-cli/c8-subscriptions`, `bpmn-cli/c8-publish-message` |
 | `W_C8_DEPLOY_MULTI_INSTANCE` | `camunda-compat/loop-characteristics` |
-| `W_C8_DEPLOY_SCHEMA` | bpmn-cli (unprefixed attributes) |
+| `W_C8_DEPLOY_SCHEMA` | `bpmn-cli/c8-unprefixed-attributes` |
 | `W_C8_DEPLOY_SIGNAL` | `camunda-compat/signal-reference`, `bpmn-cli/c8-subscriptions` |
 | `W_C8_DEPLOY_START_EVENT` | `bpmnlint/start-event-required`, `camunda-compat/no-multiple-none-start-events`, `bpmn-cli/c8-events` |
 | `W_C8_DEPLOY_TIMER` | `camunda-compat/timer`, `bpmn-cli/c8-events` |
@@ -258,11 +260,11 @@ camunda-compat's `feel` is off).
 | `W_C8_FOREIGN_CONTENT` | `bpmn-cli/c8-vendor-content` |
 | `W_C8_JOB_WORKER_USER_TASK` | `camunda-compat/zeebe-user-task` |
 | `W_C8_MISPLACED_ATTRIBUTE` | `bpmn-cli/c8-vendor-content` |
-| `W_C8_MISPLACED_EXTENSION` | `bpmn-cli/c8-vendor-content` |
+| `W_C8_MISPLACED_EXTENSION` | `bpmn-cli/c8-vendor-content`, `bpmn-cli/c8-unknown-vendor-elements` |
 | `W_C8_STANDARD_LOOP` | `camunda-compat/loop-characteristics` |
 | `W_C8_UNKNOWN_ATTRIBUTE` | `bpmn-cli/c8-vendor-content` |
-| `W_C8_UNKNOWN_ELEMENT` | bpmn-cli |
-| `W_C8_UNSUPPORTED_IMPLEMENTATION` | bpmn-cli (`zeebe:publishMessage`) |
+| `W_C8_UNKNOWN_ELEMENT` | `bpmn-cli/c8-unknown-vendor-elements` |
+| `W_C8_UNSUPPORTED_IMPLEMENTATION` | `bpmn-cli/c8-publish-message` |
 
 </details>
 

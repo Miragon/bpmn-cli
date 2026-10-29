@@ -9,13 +9,17 @@ import c7Flows from './C7FlowsRule.js';
 import c7Implementation from './C7ImplementationRule.js';
 import c7Values from './C7ValuesRule.js';
 import c7VendorContent from './C7VendorContentRule.js';
+import c7CamundaBooleans from './C7CamundaBooleansRule.js';
+import c7UnknownVendorElements from './C7UnknownVendorElementsRule.js';
+import c7UnprefixedAttributes from './C7UnprefixedAttributesRule.js';
 
 /** bpmn-cli's Camunda 7 rules: the checks camunda-compat's `camunda-platform-7-*` configs leave out. */
 export class Camunda7Rules {
   static readonly RULES = [c7Flows, c7Implementation, c7Values, c7Events, c7ExtensionContent, c7VendorContent];
+  static readonly WRITTEN_FILE_RULES = [c7UnprefixedAttributes, c7CamundaBooleans, c7UnknownVendorElements];
 
   /** camunda-compat's rules for an engine version with these, as `bpmn-cli/<rule>`, and the moddle extension they read. */
   static entry(kit: EngineKit): EngineEntry {
-    return RuleEntries.entry(kit, Camunda7Rules.RULES, { compatRules, moddleExtensions }, (definitions, warnings, vendor) => C7Diagram.record(definitions, vendor, warnings));
+    return RuleEntries.entry(kit, Camunda7Rules.RULES, Camunda7Rules.WRITTEN_FILE_RULES, { compatRules, moddleExtensions }, (definitions, warnings, vendor) => C7Diagram.record(definitions, vendor, warnings));
   }
 }

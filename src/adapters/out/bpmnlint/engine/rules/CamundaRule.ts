@@ -30,7 +30,7 @@ export interface ReportData {
 }
 
 /** A bpmn-cli engine rule: every report in camunda-compat's shape, with the finding it is in `data.finding`. */
-abstract class CamundaRule extends EngineRule {
+export abstract class CamundaRule extends EngineRule {
   private reporter!: Reporter;
 
   protected checkElement(node: ModdleElement, reporter: Reporter): boolean | void {

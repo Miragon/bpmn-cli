@@ -200,9 +200,9 @@ document of that platform is validated. PNG rendering and the project's `.bpmnli
 | --- | ---: |
 | everything `@miragon/bpmn-cli` exports | 1067.9 / 335.7 KB |
 | `applyToXml` only | 775.7 / 242.4 KB |
-| Camunda 7 rules, on demand | 108.3 / 31.1 KB |
-| Camunda 8 rules, on demand | 354.1 / 98.6 KB |
-| engine run (bpmnlint and the mapping to `W_C7_*` / `W_C8_*`), on demand | 37.8 / 13.1 KB |
+| Camunda 7 rules, on demand | 118.7 / 34.3 KB |
+| Camunda 8 rules, on demand | 365.3 / 101.8 KB |
+| engine run (bpmnlint and the mapping to `W_C7_*` / `W_C8_*`), on demand | 26.9 / 10.0 KB |
 
 ::: warning No Camunda 7 / 8 call at the top level of the entry module
 The rule chunks share packages with the core (min-dash), which a bundler puts into the entry chunk:

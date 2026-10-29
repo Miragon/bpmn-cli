@@ -26,6 +26,7 @@ const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 
 const EXECUTABLE_ONLY = ['bpmnlint/start-event-required', 'camunda-compat/history-time-to-live'];
 /** It reports a send task with a zeebe:publishMessage as one without an implementation. */
 const COMPAT_IMPLEMENTATION = 'camunda-compat/implementation';
+const PUBLISH_MESSAGE = 'bpmn-cli/c8-publish-message';
 
 /**
  * camunda-compat's rules that report a property of white space only as missing, where Camunda 8.9
@@ -70,10 +71,10 @@ export class CompatVerdicts {
     });
   }
 
-  /** `published`: the elements whose zeebe:publishMessage is the implementation the typed parse dropped. */
-  apply(results: Results, published: ReadonlySet<string> = new Set()): void {
+  apply(results: Results): void {
     this.withoutNonExecutableProcesses(results);
     if (this.engine !== 'c8') return;
+    const published = new Set(results[PUBLISH_MESSAGE]?.map((report) => report.id));
     const implementations = results[COMPAT_IMPLEMENTATION];
     if (implementations) results[COMPAT_IMPLEMENTATION] = implementations.filter((report) => !report.id || !published.has(report.id));
     const duplicated = new Set(Object.entries(results).flatMap(([rule, reports]) => reports.filter((report) => EngineFindings.findingOf(rule, report) === OWN_DUPLICATES).map((report) => report.id)));

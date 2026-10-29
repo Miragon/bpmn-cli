@@ -5,7 +5,7 @@ import { EngineCodes } from './EngineCodes.js';
 import { EngineHint } from './EngineHint.js';
 import { ElementKinds } from '../rules/support/ElementKinds.js';
 import type { EngineKit } from '../../engine-kit.js';
-import type { Findings } from '../rules/CamundaRule.js';
+import type { EngineEntry } from './EngineRun.js';
 
 /** The engine layers set what a finding means by its bpmnlint category. */
 const SEVERITY_OF_CATEGORY: Record<string, Severity> = { error: 'deploy', warn: 'runtime', info: 'practice' };
@@ -35,7 +35,7 @@ export class EngineFindings {
     private readonly kit: EngineKit,
     private readonly platform: 'c7' | 'c8',
     private readonly elementsById: Readonly<Record<string, unknown>>,
-    private readonly findings: Findings,
+    private readonly entry: Pick<EngineEntry, 'findings' | 'writtenFileRules'>,
     private readonly spelling: (id: string, key: string) => string,
     private readonly zeebePrefix: string,
   ) {
@@ -46,19 +46,23 @@ export class EngineFindings {
    * One finding per subject of an element: where an own rule and camunda-compat both report it
    * (a misplaced zeebe:taskDefinition), the own rule's says what bpmn-cli's code says; where two
    * camunda-compat rules report it with one code (io-mapping and variable-name), the first says it.
+   * The findings of the rules on the file as written follow, and tell no subject apart.
    */
   of(results: Record<string, BpmnlintEngineReport[]>): ProfileFinding[] {
     const out: ProfileFinding[] = [];
+    const written: ProfileFinding[] = [];
     const ownSubjects = new Set<string>();
     const compat: Array<{ finding: ProfileFinding; identity: string }> = [];
     for (const [rule, reports] of Object.entries(results)) {
-      for (const report of reports) {
-        const [code, severity] = this.findings[EngineFindings.findingOf(rule, report)] ?? this.compatCodeOf(rule, report);
+      for (const report of this.entry.writtenFileRules.has(rule) ? EngineFindings.inWrittenOrder(reports) : reports) {
+        const [code, severity] = this.entry.findings[EngineFindings.findingOf(rule, report)] ?? this.compatCodeOf(rule, report);
         const related = this.relatedIds(report);
         const subject = this.subjectOf(report);
         const finding = this.kit.makeFinding(severity, code, String(report.message), report.id ?? undefined, { hint: this.spelledHint(this.hint.of(report, rule), rule), subject, ...(related.length ? { related } : {}) });
         const identity = `${report.id ?? ''}|${subject}`;
-        if (rule.startsWith(OWN_RULES)) {
+        if (this.entry.writtenFileRules.has(rule)) {
+          written.push(finding);
+        } else if (rule.startsWith(OWN_RULES)) {
           if (subject) ownSubjects.add(identity);
           out.push(finding);
         } else {
@@ -74,7 +78,11 @@ export class EngineFindings {
       reported.add(key);
       return true;
     };
-    return [...out, ...compat.filter(firstOfSubject).map(({ finding }) => finding)];
+    return [...out, ...compat.filter(firstOfSubject).map(({ finding }) => finding), ...written];
+  }
+
+  private static inWrittenOrder(reports: BpmnlintEngineReport[]): BpmnlintEngineReport[] {
+    return [...reports].sort((left, right) => Number(left.data?.writtenAt) - Number(right.data?.writtenAt));
   }
 
   private compatCodeOf(rule: string, report: BpmnlintEngineReport): readonly [string, Severity] {
@@ -88,6 +96,7 @@ export class EngineFindings {
   }
 
   private subjectOf(report: BpmnlintEngineReport): string {
+    if (typeof report.data?.subject === 'string') return report.data.subject;
     const path = report.path ?? [];
     const at = path.indexOf('extensionElements');
     const host = report.id ? (this.elementsById[report.id] as ModdleNode | undefined) : undefined;
