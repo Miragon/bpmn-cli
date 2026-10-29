@@ -9,6 +9,7 @@ import { IdRename } from '../../../src/domain/editing/ids/IdRename.js';
 import { ChangeSet } from '../../../src/domain/document/ChangeSet.js';
 import { definitionsXml, docFromXml, linearDoc } from '../../helpers/helpers.js';
 import { ElementRemoval } from '../../../src/domain/editing/elements/ElementRemoval.js';
+import { Lanes } from '../../../src/domain/editing/elements/Lanes.js';
 import { ElementTypeChange } from '../../../src/domain/editing/elements/ElementTypeChange.js';
 import { ElementMove } from '../../../src/domain/editing/elements/ElementMove.js';
 import { Properties } from '../../../src/domain/editing/properties/Properties.js';
@@ -463,19 +464,48 @@ describe('remove', () => {
     await expectRoundTrip(doc);
   });
 
-  it('removes lanes (members unassigned, empty lane set dropped)', async () => {
+  it('removes lanes (members go to the lane drawn over their band, empty lane set dropped)', async () => {
     const doc = await fullDoc();
-    const cs = new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['Lane_Sales'] });
-    expect(doc.get('Lane_Sales')).toBeUndefined();
-    expect(doc.get('Start')).toBeDefined();
-    expect(ids(doc.lanesOf(doc.require('Start')))).toEqual([]);
-    expect(ids(many(doc.require('LaneSet_1'), 'lanes'))).toEqual(['Lane_Ops']);
-    expect(cs.removed).toEqual([{ id: 'Lane_Sales', kind: 'lane', name: 'Sales' }]);
-    new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['Lane_Ops'] });
+    const cs = new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['Lane_Ops'] });
+    expect(doc.get('Lane_Ops')).toBeUndefined();
+    expect(ids(doc.lanesOf(doc.require('Task_B')))).toEqual(['Lane_Sales']);
+    expect(ids(many(doc.require('LaneSet_1'), 'lanes'))).toEqual(['Lane_Sales']);
+    expect(cs.removed).toEqual([{ id: 'Lane_Ops', kind: 'lane', name: 'Ops' }]);
+    expect(cs.notes).toContain('6 member(s) of Lane_Ops moved to Lane_Sales');
+    new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['Lane_Sales'] });
     expect(doc.get('LaneSet_1')).toBeUndefined();
     expect(many(doc.require('Process_1'), 'laneSets')).toHaveLength(0);
     expect((await doc.toXml()).includes('laneSet')).toBe(false);
     await expectRoundTrip(doc);
+  });
+
+  it('removing the first lane hands its members to the lane below', async () => {
+    const doc = await fullDoc();
+    new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['Lane_Sales'] });
+    expect(ids(doc.lanesOf(doc.require('Start')))).toEqual(['Lane_Ops']);
+    expect(ids(doc.lanesOf(doc.require('Task_A')))).toEqual(['Lane_Ops']);
+  });
+
+  it('removing nested lanes hands members to the neighbouring leaf, the last one to the parent lane', async () => {
+    const doc = await fullDoc();
+    const session = new EditSession(doc);
+    const lanes = new Lanes(session);
+    lanes.createLane({ op: 'add', kind: 'lane', name: 'Inbound', in: 'Lane_Sales' }, new ChangeSet());
+    lanes.createLane({ op: 'add', kind: 'lane', name: 'Outbound', in: 'Lane_Sales', members: ['Gw'] }, new ChangeSet());
+    new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['lane_inbound'] });
+    expect(ids(doc.lanesOf(doc.require('Start')))).toEqual(['lane_outbound']);
+    new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['lane_outbound'] });
+    expect(doc.require('Lane_Sales').get('childLaneSet')).toBeUndefined();
+    expect(ids(doc.lanesOf(doc.require('Gw')))).toEqual(['Lane_Sales']);
+    expect(ids(doc.lanesOf(doc.require('Start')))).toEqual(['Lane_Sales']);
+  });
+
+  it('removing a lane with child lanes hands all their members to the leaf above', async () => {
+    const doc = await fullDoc();
+    new Lanes(new EditSession(doc)).createLane({ op: 'add', kind: 'lane', name: 'Inbound', in: 'Lane_Sales' }, new ChangeSet());
+    new Lanes(new EditSession(doc)).createLane({ op: 'add', kind: 'lane', name: 'Outbound', in: 'Lane_Sales' }, new ChangeSet());
+    new ElementRemoval(new EditSession(doc)).remove({ op: 'remove', ids: ['Lane_Ops'] });
+    expect(ids(doc.lanesOf(doc.require('Task_B')))).toEqual(['lane_outbound']);
   });
 
   it('removes a participant with its process and message flows; the collaboration goes with the last one', async () => {

@@ -7,6 +7,7 @@ import { idOf } from '../../document/utils/elements.js';
 import { contains, detachFromParent, nearestWithId, referencesToAny } from '../utils/containment.js';
 import type { RemoveElements } from '../../commands/types.js';
 import { SequenceFlows } from '../connections/SequenceFlows.js';
+import { Lanes } from './Lanes.js';
 
 /**
  * Runs the `remove` op: deletes elements with everything that references them.
@@ -186,6 +187,7 @@ export class ElementRemoval {
     }
     const subtree = [...walk(el, { bpmnOnly: true })];
     const removed = new Set(subtree);
+    const handover = is(el, 'bpmn:Lane') ? ElementRemoval.laneHandover(el, subtree) : undefined;
     const parent = detachFromParent(el);
     for (const element of subtree) {
       const id = element.get<string | undefined>('id');
@@ -201,8 +203,58 @@ export class ElementRemoval {
     }
     this.edit.doc.invalidate();
     this.afterDetach(el, parent, changes);
+    if (handover) {
+      this.handOver(el, handover, changes);
+    }
     this.cleanupReferences(removed, changes);
     this.edit.doc.invalidate();
+  }
+
+  /** The lane drawn over the removed band once it is gone, and the members it takes over. */
+  private static laneHandover(lane: El, subtree: El[]): { heir: El; members: El[] } | undefined {
+    const laneSet = lane.$parent as El | undefined;
+    if (!laneSet) {
+      return undefined;
+    }
+    const siblings = many(laneSet, 'lanes');
+    const position = siblings.indexOf(lane);
+    const heir = ElementRemoval.heirOf(laneSet, siblings[position - 1], siblings[position + 1]);
+    if (!heir) {
+      return undefined;
+    }
+    const members = subtree.filter((element) => is(element, 'bpmn:Lane')).flatMap((member) => [...many(member, 'flowNodeRef')]);
+    return members.length ? { heir, members } : undefined;
+  }
+
+  private static heirOf(laneSet: El, above: El | undefined, below: El | undefined): El | undefined {
+    if (above) {
+      return ElementRemoval.edgeLeaf(above, 'last');
+    }
+    if (below) {
+      return ElementRemoval.edgeLeaf(below, 'first');
+    }
+    const owner = laneSet.$parent as El | undefined;
+    return owner && is(owner, 'bpmn:Lane') ? owner : undefined;
+  }
+
+  private static edgeLeaf(lane: El, edge: 'first' | 'last'): El {
+    const childLaneSet = lane.get<El | undefined>('childLaneSet');
+    const children = childLaneSet ? many(childLaneSet, 'lanes') : [];
+    const next = edge === 'first' ? children[0] : children[children.length - 1];
+    return next ? ElementRemoval.edgeLeaf(next, edge) : lane;
+  }
+
+  private handOver(lane: El, { heir, members }: { heir: El; members: El[] }, changes: ChangeSet): void {
+    this.edit.doc.invalidate();
+    const lanes = new Lanes(this.edit);
+    const remaining = members.filter((node) => this.isAttached(node));
+    if (!remaining.length) {
+      return;
+    }
+    for (const node of remaining) {
+      lanes.assign(node, heir, changes);
+    }
+    changes.note(`${remaining.length} member(s) of ${idOf(lane)} moved to ${idOf(heir)}`);
   }
 
   private afterDetach(el: El, parent: El | undefined, changes: ChangeSet): void {

@@ -35,6 +35,22 @@ describe('Cli in-process', () => {
     expect(await bpmn(['--version'])).toEqual({ code: 0, out: '9.9.9\n', err: '' });
   });
 
+  it('keeps lane membership in step with the drawn lanes when lanes are added and removed', async () => {
+    const file = join(dir, 'lanes.bpmn');
+    await bpmn(['new', file, '--name', 'Shop', '--no-lint-config']);
+    await bpmn(['add', file, 'start', 'S']);
+    await bpmn(['add', file, 'userTask', 'A', '--after', 'startEvent_s']);
+    await bpmn(['add', file, 'participant', 'Shop']);
+    await bpmn(['add', file, 'lane', 'Sales', '--in', 'participant_shop']);
+    expect((await bpmn(['validate', file])).out).not.toContain('W_NOT_IN_LANE');
+    await bpmn(['add', file, 'lane', 'Billing', '--in', 'participant_shop']);
+    await bpmn(['set', file, 'startEvent_s', 'lane=lane_sales']);
+    await bpmn(['set', file, 'userTask_a', 'lane=lane_billing']);
+    await bpmn(['remove', file, 'lane_billing']);
+    expect((await bpmn(['validate', file])).out).not.toContain('W_NOT_IN_LANE');
+    expect(readFileSync(file, 'utf8')).toMatch(/<bpmn:lane id="lane_sales" name="Sales">\s*<bpmn:flowNodeRef>startEvent_s<\/bpmn:flowNodeRef>\s*<bpmn:flowNodeRef>userTask_a<\/bpmn:flowNodeRef>/);
+  });
+
   it('creates, changes and reads a model, also from stdin', async () => {
     const file = join(dir, 'order.bpmn');
     expect((await bpmn(['new', file, '--name', 'Order', '--no-lint-config'])).code).toBe(0);

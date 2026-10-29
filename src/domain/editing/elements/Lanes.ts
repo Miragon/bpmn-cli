@@ -14,7 +14,7 @@ import type { AddElement } from '../../commands/types.js';
 export class Lanes {
   constructor(private readonly edit: EditSession) {}
 
-  /** The first child lane of a lane inherits all of the parent's members. */
+  /** The first child lane of a lane inherits all of the parent's members, the first lane of a process all of its flow nodes. */
   createLane(command: AddElement, changes: ChangeSet): El {
     const doc = this.edit.doc;
     const { process, parentLane } = this.resolveLaneContainer(command);
@@ -24,18 +24,8 @@ export class Lanes {
     addTo(laneSet, 'lanes', lane);
     changes.create({ id, kind: 'lane', ...(command.name ? { name: command.name } : {}), detail: parentLane ? `in lane ${idOf(parentLane)}` : `in ${idOf(process)}` });
     let extra: El[] = [];
-    if (parentLane && many(laneSet, 'lanes').length === 1) {
-      const inherited = [...many(parentLane, 'flowNodeRef')];
-      if (inherited.length) {
-        for (const node of inherited) {
-          removeFrom(parentLane, 'flowNodeRef', node);
-          addTo(lane, 'flowNodeRef', node);
-        }
-        changes.note(`moved ${inherited.length} member(s) of ${idOf(parentLane)} into its first child lane ${id}`);
-        if (command.members?.length) {
-          extra = inherited.filter((node) => !command.members!.includes(idOf(node)));
-        }
-      }
+    if (many(laneSet, 'lanes').length === 1) {
+      extra = parentLane ? this.takeOverMembers(lane, parentLane, [...many(parentLane, 'flowNodeRef')], command, changes) : this.takeOverMembers(lane, process, doc.flowNodes(process), command, changes);
     }
     if (!doc.participantOf(process)) {
       changes.warn({
@@ -48,18 +38,39 @@ export class Lanes {
     for (const memberId of command.members ?? []) {
       this.assign(this.edit.require(memberId, 'bpmn:FlowNode', 'flow node'), lane, changes);
     }
-    if (extra.length && parentLane) {
+    if (extra.length) {
       const extraIds = extra.map(idOf);
+      const owner = parentLane ?? process;
+      const reason = parentLane ? 'because a lane with child lanes has no direct members' : 'because the first lane covers the whole pool';
       changes.warn({
         code: 'W_OPTION_IGNORED',
-        message: `--members ${command.members!.join(',')}: ${id} also received the other ${extra.length} member(s) of ${idOf(parentLane)} (${extraIds.join(', ')}), because a lane with child lanes has no direct members`,
+        message: `--members ${command.members!.join(',')}: ${id} also received the other ${extra.length} member(s) of ${idOf(owner)} (${extraIds.join(', ')}), ${reason}`,
         element: id,
         related: extraIds,
-        hint: `Move them into a sibling lane: \`bpmn add <file> lane "<name>" --in ${idOf(parentLane)} --members ${extraIds.join(',')}\`.`,
+        hint: `Move them into a sibling lane: \`bpmn add <file> lane "<name>" --in ${idOf(owner)} --members ${extraIds.join(',')}\`.`,
       });
     }
     doc.invalidate();
     return lane;
+  }
+
+  /** Returns the taken-over nodes that `--members` did not list. */
+  private takeOverMembers(lane: El, owner: El, nodes: El[], command: AddElement, changes: ChangeSet): El[] {
+    if (!nodes.length) {
+      return [];
+    }
+    for (const node of nodes) {
+      if (is(owner, 'bpmn:Lane')) {
+        removeFrom(owner, 'flowNodeRef', node);
+      }
+      addTo(lane, 'flowNodeRef', node);
+    }
+    const ownerLabel = is(owner, 'bpmn:Lane') ? `${idOf(owner)} into its first child lane` : `${idOf(owner)} into its first lane`;
+    changes.note(`moved ${nodes.length} member(s) of ${ownerLabel} ${idOf(lane)}`);
+    if (!command.members?.length) {
+      return [];
+    }
+    return nodes.filter((node) => !command.members!.includes(idOf(node)));
   }
 
   /** `undefined` removes the lane membership; attached boundary events follow. */

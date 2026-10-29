@@ -11,6 +11,7 @@ import { diExpansionState, resolveExpanded } from '../../../src/domain/diagram/u
 import { many } from '../../../src/domain/document/utils/moddle.js';
 import { FlowBridge } from '../../../src/domain/editing/connections/FlowBridge.js';
 import { NodePlacement } from '../../../src/domain/editing/elements/NodePlacement.js';
+import { Lanes } from '../../../src/domain/editing/elements/Lanes.js';
 import { runOps } from '../../../src/index.js';
 import { mutateDoc } from '../../../src/index.js';
 import { ChangeSet } from '../../../src/domain/document/ChangeSet.js';
@@ -352,6 +353,7 @@ describe('layout', () => {
       { op: 'connect', source: 'dataObject_doc', target: 'B' },
       { op: 'add', kind: 'lane', name: 'L1', in: 'P', members: ['S', 'A', 'E'] },
     ]);
+    new Lanes(new EditSession(doc)).assign(doc.require('B'), undefined, new ChangeSet());
     const members = () => many(doc.get('lane_l1')!, 'flowNodeRef').map((node) => node.get('id'));
     expect(members()).toEqual(['S', 'A', 'E']);
     const layoutOutcome = await new FullLayout(doc.model).run();
