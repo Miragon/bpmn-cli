@@ -45,7 +45,7 @@ export class FlowRules {
     }
   }
 
-  assertEndpoints(source: El, target: El): void {
+  assertEndpoints(source: El, target: El, replacing?: El): void {
     this.assertRoles(source, target);
     const sScope = this.doc.scopeOf(source);
     const tScope = this.doc.scopeOf(target);
@@ -60,6 +60,7 @@ export class FlowRules {
         },
       );
     }
+    this.assertSingleIncomingAfterEventGateway(source, target, replacing);
   }
 
   assertCondition(expr: string | undefined): void {
@@ -77,6 +78,33 @@ export class FlowRules {
       ...(flowId ? { element: flowId } : {}),
       hint: `Branch by condition with an exclusive gateway instead: \`bpmn retype <file> ${idOf(source)} exclusiveGateway\`.`,
     });
+  }
+
+  private assertSingleIncomingAfterEventGateway(source: El, target: El, replacing?: El): void {
+    const others = this.doc.incoming(target).filter((flow) => flow !== replacing);
+    if (!others.length) {
+      return;
+    }
+    const isEventGateway = (node: El | undefined): node is El => !!node && is(node, 'bpmn:EventBasedGateway');
+    const gateway = isEventGateway(source) ? source : others.map((flow) => flow.get<El | undefined>('sourceRef')).find(isEventGateway);
+    if (!gateway) {
+      return;
+    }
+    throw modelError('E_INVALID_TARGET', `${idOf(target)} follows event-based gateway ${idOf(gateway)} and can have no other incoming sequence flow (BPMN 2.0 10.6.6)`, {
+      element: idOf(target),
+      related: [idOf(gateway), ...others.map(idOf)],
+      hint: `Join before the gateway instead: ${FlowRules.joinBefore(gateway, source, replacing)}.`,
+    });
+  }
+
+  private static joinBefore(gateway: El, source: El, replacing?: El): string {
+    if (source === gateway) {
+      return `\`bpmn set <file> <flowId> target=${idOf(gateway)}\``;
+    }
+    if (replacing) {
+      return `\`bpmn set <file> ${idOf(replacing)} target=${idOf(gateway)}\``;
+    }
+    return `\`bpmn connect <file> ${idOf(source)} ${idOf(gateway)}\``;
   }
 
   private static refusal(role: Role, node: El): EndpointRule | undefined {

@@ -713,6 +713,22 @@ describe('lint warnings', () => {
     expect(findingsOf(ok, 'W_EVENT_GATEWAY_TARGET')).toEqual([]);
   });
 
+  it('E_INVALID_TARGET on an extra flow into a target of an event-based gateway', async () => {
+    const doc = await processDoc(
+      body(
+        [{ tag: 'startEvent', id: 'Start' }, { tag: 'task', id: 'A' }, { tag: 'eventBasedGateway', id: 'Gw' }, { tag: 'intermediateCatchEvent', id: 'Msg', inner: messageDef }, { tag: 'endEvent', id: 'End' }],
+        [
+          { id: 'F1', from: 'Start', to: 'A' },
+          { id: 'F2', from: 'A', to: 'Gw' },
+          { id: 'F3', from: 'Gw', to: 'Msg' },
+          { id: 'F4', from: 'A', to: 'Msg' },
+          { id: 'F5', from: 'Msg', to: 'End' },
+        ],
+      ),
+    );
+    expect(findingsOf(doc, 'E_INVALID_TARGET').map((finding) => [finding.element, finding.related])).toEqual([['F4', ['A', 'Msg']]]);
+  });
+
   it('W_EMPTY_SUBPROCESS', async () => {
     const doc = await processDoc(chain([{ tag: 'subProcess', id: 'Sub' }]));
     expect(findingsOf(doc, 'W_EMPTY_SUBPROCESS').map((finding) => finding.element)).toEqual(['Sub']);

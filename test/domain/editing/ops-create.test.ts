@@ -18,6 +18,7 @@ import { EventDefinitions } from '../../../src/domain/editing/events/EventDefini
 import { ElementCreation } from '../../../src/domain/editing/elements/ElementCreation.js';
 import { BranchSplit } from '../../../src/domain/editing/connections/BranchSplit.js';
 import { EditSession } from '../../../src/domain/document/EditSession.js';
+import { SequenceFlows } from '../../../src/domain/editing/connections/SequenceFlows.js';
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                              */
@@ -70,6 +71,18 @@ const WITH_GATEWAY = definitionsXml(`
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="GW" />
     <bpmn:sequenceFlow id="F2" sourceRef="GW" targetRef="Task_A" name="yes" />
     <bpmn:sequenceFlow id="F3" sourceRef="Task_A" targetRef="End" />`);
+
+const EVENT_GATEWAY = definitionsXml(`
+    <bpmn:startEvent id="Start"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="Task_A"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing></bpmn:task>
+    <bpmn:eventBasedGateway id="Gw"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="Event_Paid"><bpmn:incoming>F3</bpmn:incoming><bpmn:outgoing>F4</bpmn:outgoing><bpmn:messageEventDefinition /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="Event_Loose"><bpmn:messageEventDefinition /></bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="End"><bpmn:incoming>F4</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Task_A" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_A" targetRef="Gw" />
+    <bpmn:sequenceFlow id="F3" sourceRef="Gw" targetRef="Event_Paid" />
+    <bpmn:sequenceFlow id="F4" sourceRef="Event_Paid" targetRef="End" />`);
 
 const WITH_JOIN = definitionsXml(`
     <bpmn:startEvent id="Start"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
@@ -709,6 +722,19 @@ describe('connect', () => {
     expect(codeOf(() => connect(doc, { source: 'Start', target: 'Start' }))).toBe('E_INVALID_ENDPOINT');
     expect(codeOf(() => connect(doc, { source: 'Task_A', target: 'task_b', message: 'M' }))).toBe('E_INVALID_VALUE');
     await roundTrip(doc);
+  });
+
+  it('refuses a second incoming flow into a target of an event-based gateway, both ways', async () => {
+    const doc = await docFromXml(EVENT_GATEWAY);
+    const before = await doc.toXml();
+    expect(codeOf(() => connect(doc, { source: 'Task_A', target: 'Event_Paid' }))).toBe('E_INVALID_TARGET');
+    expect(codeOf(() => connect(doc, { source: 'Gw', target: 'Task_A' }))).toBe('E_INVALID_TARGET');
+    expect(await doc.toXml()).toBe(before);
+    const sequenceFlows = new SequenceFlows(new EditSession(doc));
+    expect(codeOf(() => sequenceFlows.redirect(doc.require('F2'), { target: doc.require('Event_Paid') }))).toBe('E_INVALID_TARGET');
+    expect(await doc.toXml()).toBe(before);
+    sequenceFlows.redirect(doc.require('F3'), { target: doc.require('Event_Loose') });
+    expect(doc.require('Event_Loose').get<El[]>('incoming').map((flow) => flow.id)).toEqual(['F3']);
   });
 
   it('refuses a flow out of a link throw event and into a link catch event', async () => {

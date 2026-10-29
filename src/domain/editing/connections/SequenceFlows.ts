@@ -75,7 +75,7 @@ export class SequenceFlows {
     const doc = this.edit.doc;
     const source = ends.source ?? flow.get<El>('sourceRef');
     const target = ends.target ?? flow.get<El>('targetRef');
-    new FlowRules(this.edit.doc).assertEndpoints(source, target);
+    new FlowRules(this.edit.doc).assertEndpoints(source, target, flow);
     const oldSource = flow.get<El | undefined>('sourceRef');
     const oldTarget = flow.get<El | undefined>('targetRef');
     if (oldSource && oldSource !== source) {
