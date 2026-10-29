@@ -1,7 +1,5 @@
-import { is } from 'bpmnlint-utils';
-
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
-import { CAMUNDA_URI } from '../DiagramNamespaces.js';
+import { CAMUNDA_URI, DiagramNamespaces } from '../DiagramNamespaces.js';
 
 const OPERATON = 'operaton';
 
@@ -42,8 +40,7 @@ export class C7Diagram {
   }
 
   static of(node: ModdleElement): C7DiagramFacts {
-    let definitions = node;
-    while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
+    const definitions = DiagramNamespaces.definitionsOf(node);
     return (definitions && C7Diagram.recorded.get(definitions)) ?? C7Diagram.declared(definitions);
   }
 

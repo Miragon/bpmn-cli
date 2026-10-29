@@ -26,9 +26,14 @@ export class ElementKinds {
     return owner ? `the ${kind.replace(/^[^:]*:/, '')} of ${ElementKinds.describe(owner)}` : kind;
   }
 
+  /** A type as the XML names its element: `zeebe:TaskDefinition` -> `zeebe:taskDefinition`, `InputOutput` -> `inputOutput`. */
+  static xmlName(type: string): string {
+    const colon = type.indexOf(':');
+    return `${type.slice(0, colon + 1)}${type.charAt(colon + 1).toLowerCase()}${type.slice(colon + 2)}`;
+  }
+
   /** How an engine message names the trigger of an event definition: `timer`, `message`, ... */
   static trigger(definition: ModdleElement): string {
-    const local = String(definition.$type).replace(/^[^:]*:/, '').replace(/EventDefinition$/, '');
-    return local.charAt(0).toLowerCase() + local.slice(1);
+    return ElementKinds.xmlName(String(definition.$type).replace(/^[^:]*:/, '').replace(/EventDefinition$/, ''));
   }
 }

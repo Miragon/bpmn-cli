@@ -2,6 +2,7 @@ import { is } from 'bpmnlint-utils';
 
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
 import { CAMUNDA_URI, DiagramNamespaces } from '../DiagramNamespaces.js';
+import { ElementKinds } from '../ElementKinds.js';
 import { Shell } from '../Shell.js';
 import { EngineScope } from '../EngineScope.js';
 import { type ForeignAttribute, type TreeElement, VendorHost } from '../VendorHost.js';
@@ -56,7 +57,7 @@ export class C7Host extends VendorHost {
     return (this.node.extensionElements?.values ?? []).map((value: ModdleElement, index: number) => {
       const type = String(value.$type);
       const isCamunda = !value.$descriptor?.isGeneric && type.startsWith('camunda:');
-      return { value, index, local: C7Host.lowerFirst(type.slice(type.indexOf(':') + 1)), uri: isCamunda ? CAMUNDA_URI : namespaces.uriOf(type), isCamunda };
+      return { value, index, local: ElementKinds.xmlName(type.slice(type.indexOf(':') + 1)), uri: isCamunda ? CAMUNDA_URI : namespaces.uriOf(type), isCamunda };
     });
   }
 
@@ -139,9 +140,5 @@ export class C7Host extends VendorHost {
     const value = Object.prototype.hasOwnProperty.call(element, name) ? element[name] : (element.$attrs?.[name] ?? C7Diagram.unresolved(element).get(name));
     if (value === undefined || value === null) return undefined;
     return typeof value === 'object' ? value.id : String(value);
-  }
-
-  private static lowerFirst(name: string): string {
-    return name.charAt(0).toLowerCase() + name.slice(1);
   }
 }

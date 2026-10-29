@@ -78,7 +78,7 @@ export class VendorHost {
   private collect(element: ModdleElement, prefix: string, trail: string, path: ReportPath, found: TreeElement[]): void {
     const type = String(element.$type);
     const local = type.slice(type.indexOf(':') + 1);
-    const name = `${prefix}:${local.charAt(0).toLowerCase()}${local.slice(1)}`;
+    const name = `${prefix}:${ElementKinds.xmlName(local)}`;
     found.push({ element, where: `${name}${trail ? ` (in ${trail})` : ''} of ${this.describe()}`, path });
     for (const property of element.$descriptor?.properties ?? []) {
       if (property.isAttr || property.isReference || !String(property.type).startsWith(type.slice(0, type.indexOf(':') + 1))) continue;

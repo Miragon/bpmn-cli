@@ -24,35 +24,35 @@ export class DiagramNamespaces {
   private readonly uriByPrefix = new Map<string, string>();
 
   private constructor(definitions: ModdleElement) {
-    for (const [name, uri] of Object.entries(definitions?.$attrs ?? {})) {
-      if (name.startsWith('xmlns:') && typeof uri === 'string') {
-        this.uriByPrefix.set(name.slice('xmlns:'.length), uri);
-      }
-    }
+    for (const [name, uri] of Object.entries(definitions?.$attrs ?? {})) if (name.startsWith('xmlns:') && typeof uri === 'string') this.uriByPrefix.set(name.slice('xmlns:'.length), uri);
+  }
+
+  /** The `bpmn:Definitions` of the diagram `node` belongs to. */
+  static definitionsOf(node: ModdleElement): ModdleElement | undefined {
+    let definitions = node;
+    while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
+    return definitions;
   }
 
   /** The namespaces of the diagram `node` belongs to. */
   static forElement(node: ModdleElement): DiagramNamespaces {
-    let definitions = node;
-    while (definitions && !is(definitions, 'bpmn:Definitions')) {
-      definitions = definitions.$parent;
-    }
-
-    let namespaces = DiagramNamespaces.byDefinitions.get(definitions ?? DiagramNamespaces);
-    if (!namespaces) {
-      namespaces = new DiagramNamespaces(definitions);
-      DiagramNamespaces.byDefinitions.set(definitions ?? DiagramNamespaces, namespaces);
-    }
+    const definitions = DiagramNamespaces.definitionsOf(node);
+    const key = definitions ?? DiagramNamespaces;
+    let namespaces = DiagramNamespaces.byDefinitions.get(key);
+    if (!namespaces) DiagramNamespaces.byDefinitions.set(key, (namespaces = new DiagramNamespaces(definitions)));
     return namespaces;
   }
 
   /** The URI of a prefixed name (`zeebe:foo`), or of the prefix of a type (`zeebe:TaskDefinition`). */
   uriOf(prefixedName: string): string | undefined {
     const colon = prefixedName.indexOf(':');
-    if (colon === -1) {
-      return undefined;
-    }
+    if (colon === -1) return undefined;
     const prefix = prefixedName.slice(0, colon);
     return this.uriByPrefix.get(prefix) ?? PACKAGE_URIS[prefix];
+  }
+
+  /** The first prefix the diagram declares for `uri`. */
+  prefixOf(uri: string): string | undefined {
+    return [...this.uriByPrefix].find(([, declared]) => declared === uri)?.[0];
   }
 }

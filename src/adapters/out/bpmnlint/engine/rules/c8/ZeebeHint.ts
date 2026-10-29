@@ -1,7 +1,6 @@
-import { is } from 'bpmnlint-utils';
-
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
-import { ZEEBE_URI } from '../DiagramNamespaces.js';
+import { DiagramNamespaces, ZEEBE_URI } from '../DiagramNamespaces.js';
+import { ElementKinds } from '../ElementKinds.js';
 import { SetCommand } from '../SetCommand.js';
 import { Shell } from '../Shell.js';
 
@@ -52,16 +51,12 @@ export class ZeebeHint extends SetCommand {
 
   /** `zeebe:TaskDefinition` -> `zeebe:taskDefinition`, the element name a message shows. */
   static typeName(element: ModdleElement): string {
-    const [prefix, local = ''] = String(element.$type).split(':');
-    return `${prefix}:${local.charAt(0).toLowerCase()}${local.slice(1)}`;
+    return ElementKinds.xmlName(String(element.$type));
   }
 
   /** The prefix the diagram of `el` declares for the zeebe namespace, `zeebe` when it declares none. */
   static prefixOf(el: ModdleElement): string {
-    let definitions = el;
-    while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
-    const declaration = Object.entries(definitions?.$attrs ?? {}).find(([name, uri]) => name.startsWith('xmlns:') && uri === ZEEBE_URI);
-    return declaration ? declaration[0].slice('xmlns:'.length) : 'zeebe';
+    return DiagramNamespaces.forElement(el).prefixOf(ZEEBE_URI) ?? 'zeebe';
   }
 
   private replaceWith(name: string, attributes: Record<string, string>, fix: Record<string, string>): string {

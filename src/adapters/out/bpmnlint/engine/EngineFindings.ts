@@ -3,6 +3,7 @@ import type { ProfileFinding, Severity } from '../../../../domain/document/Findi
 import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
 import { EngineCodes } from './EngineCodes.js';
 import { EngineHint } from './EngineHint.js';
+import { ElementKinds } from './rules/ElementKinds.js';
 import type { EngineKit } from '../engine-kit.js';
 import type { Findings } from './rules/CamundaRules.js';
 
@@ -93,7 +94,7 @@ export class EngineFindings {
     if (at === 0 && path[1] === 'values' && typeof path[2] === 'number') {
       const type = host?.extensionElements?.values?.[path[2]]?.$type;
       const local = type?.slice(type.indexOf(':') + 1);
-      if (local) return [`ext:${local.charAt(0).toLowerCase()}${local.slice(1)}`, ...path.slice(3)].join('.');
+      if (local) return [`ext:${ElementKinds.xmlName(local)}`, ...path.slice(3)].join('.');
     }
     if (path.length === 1 && typeof path[0] === 'string') return `attr:${report.id ? this.spelling(report.id, this.attributeKey(host, path[0])) : this.attributeKey(host, path[0])}`;
     return path.join('.');

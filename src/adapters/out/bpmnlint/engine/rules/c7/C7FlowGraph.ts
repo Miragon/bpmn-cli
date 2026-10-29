@@ -1,6 +1,7 @@
 import { is } from 'bpmnlint-utils';
 
 import type { ModdleElement } from '@miragon/bpmnlint-plugin-rules/engine';
+import { DiagramNamespaces } from '../DiagramNamespaces.js';
 
 /**
  * The sequence flows and boundary events of a diagram by the node they connect to, read from
@@ -20,8 +21,7 @@ export class C7FlowGraph {
 
   /** The graph of the diagram `node` belongs to. */
   static forElement(node: ModdleElement): C7FlowGraph {
-    let definitions = node;
-    while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
+    const definitions = DiagramNamespaces.definitionsOf(node);
     const key = definitions ?? C7FlowGraph;
     let graph = C7FlowGraph.byDefinitions.get(key);
     if (!graph) {

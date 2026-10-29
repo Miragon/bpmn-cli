@@ -2,7 +2,7 @@ import { is } from 'bpmnlint-utils';
 import { C7Rule, defineRule, ERROR_TYPES, type ModdleElement, type ReportData } from '../CamundaRules.js';
 
 import { ElementKinds } from '../ElementKinds.js';
-import { CAMUNDA_URI, ZEEBE_URI } from '../DiagramNamespaces.js';
+import { CAMUNDA_URI, DiagramNamespaces, ZEEBE_URI } from '../DiagramNamespaces.js';
 import { DidYouMean } from '../DidYouMean.js';
 import { RuleKit } from '../RuleKit.js';
 import { Shell } from '../Shell.js';
@@ -151,10 +151,8 @@ class C7VendorContent extends C7Rule {
       if (referenced ? referenced.$instanceOf(property.type) : unresolved === undefined) continue;
       const id = referenced ? referenced.id : unresolved;
       const typeName = property.type.replace(/^bpmn:/, '');
-      let definitions = host.node;
-      while (definitions && !is(definitions, 'bpmn:Definitions')) definitions = definitions.$parent;
-      const candidates = (definitions?.rootElements ?? []).filter((root: ModdleElement) => is(root, property.type)).map((root: ModdleElement) => root.id ?? '').slice(0, 5);
-      this.reportContent(host, 'c7-dangling-reference', `${host.typeName(extension.local)} of ${host.describe()} references ${name}="${id}", which is not a ${property.type} in the file; the engines ignore the mapping when it runs`, { path: host.extensionPath(extension.index, name), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: `Point it at an existing one${candidates.length ? ` (${candidates.join(', ')})` : ''}. ${host.rebuild(extension, { [name]: `<${typeName.charAt(0).toLowerCase()}${typeName.slice(1)}Id>` })}` });
+      const candidates = (DiagramNamespaces.definitionsOf(host.node)?.rootElements ?? []).filter((root: ModdleElement) => is(root, property.type)).map((root: ModdleElement) => root.id ?? '').slice(0, 5);
+      this.reportContent(host, 'c7-dangling-reference', `${host.typeName(extension.local)} of ${host.describe()} references ${name}="${id}", which is not a ${property.type} in the file; the engines ignore the mapping when it runs`, { path: host.extensionPath(extension.index, name), type: ERROR_TYPES.PROPERTY_VALUE_NOT_ALLOWED, node: element, property: name, hint: `Point it at an existing one${candidates.length ? ` (${candidates.join(', ')})` : ''}. ${host.rebuild(extension, { [name]: `<${ElementKinds.xmlName(typeName)}Id>` })}` });
     }
   }
 

@@ -1,4 +1,5 @@
 import type { BpmnlintEngineReport } from '../bpmnlint-contract.js';
+import { ElementKinds } from './rules/ElementKinds.js';
 import { Shell } from './rules/Shell.js';
 
 /** camunda-compat's error types (`data.type`), the ones a hint tells apart. */
@@ -173,7 +174,7 @@ export class EngineHint {
     const values = container?.values as ModdleNode[] | undefined;
     const index = second && values ? values.indexOf(second) : -1;
     if (!container?.$type || !second?.$type || index < 0) return undefined;
-    return `Keep one: \`bpmn ext remove <file> ${id} '${this.xmlName(container.$type)}/${this.xmlName(second.$type)}[${index}]'\`.`;
+    return `Keep one: \`bpmn ext remove <file> ${id} '${ElementKinds.xmlName(container.$type)}/${ElementKinds.xmlName(second.$type)}[${index}]'\`.`;
   }
 
   /**
@@ -236,7 +237,7 @@ export class EngineHint {
   private extAdd(address: Address, ext: { element: ModdleNode } | undefined, report: BpmnlintEngineReport): string {
     if (ext) return this.extRebuild(address.target, address.slot, ext.element, undefined, false);
     const required = report.data?.requiredExtensionElement ?? report.data?.requiredChildElement;
-    const named = (Array.isArray(required) ? required : [required ?? '<type>']).map((type) => this.xmlName(String(type)));
+    const named = (Array.isArray(required) ? required : [required ?? '<type>']).map((type) => ElementKinds.xmlName(String(type)));
     const types = named.includes('zeebe:taskDefinition') ? ['zeebe:taskDefinition', ...named.filter((type) => type !== 'zeebe:taskDefinition')] : named;
     const present = types.filter((type) => this.extensionTypes(address.node).includes(type));
     if (present.length > 1) return `Keep one: ${present.map((type, index) => `${index ? '(or ' : ''}\`bpmn ext remove <file> ${address.target} ${type}\`${index ? ')' : ''}`).join(' ')}.`;
@@ -259,7 +260,7 @@ export class EngineHint {
    * the one to fix; an element with child elements is rebuilt from its XML.
    */
   private extRebuild(target: string, slot: string, element: ModdleNode, property: string | undefined, feel: boolean): string {
-    const type = this.xmlName(String(element.$type));
+    const type = ElementKinds.xmlName(String(element.$type));
     const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && Object.hasOwn(element, candidate.name) && element[candidate.name] !== undefined && typeof element[candidate.name] !== 'object').map((candidate) => Shell.quote(`${candidate.name}=${String(element[candidate.name])}`));
     const required = REQUIRED_ATTRIBUTES[type]?.split(' ').filter((pair) => !attributes.some((attribute) => attribute.startsWith(`${pair.split('=')[0]}=`))) ?? [];
     const fixed = property ? [Shell.quote(`${property}=${feel ? '=<expression>' : (PLACEHOLDERS[property] ?? `<${property}>`)}`)] : required;
@@ -277,8 +278,8 @@ export class EngineHint {
     if (typeof list !== 'string' || typeof position !== 'number' || typeof property !== 'string') return undefined;
     const element = (container[list] as ModdleNode[] | undefined)?.[position];
     if (!element?.$type) return undefined;
-    const containerName = this.xmlName(String(container.$type));
-    const childName = this.xmlName(String(element.$type));
+    const containerName = ElementKinds.xmlName(String(container.$type));
+    const childName = ElementKinds.xmlName(String(element.$type));
     const added = containerName === 'zeebe:ioMapping' ? childName : `${containerName}/${childName}`;
     const attributes = (element.$descriptor?.properties ?? []).filter((candidate) => candidate.isAttr && candidate.name !== property && typeof element[candidate.name] === 'string' && element[candidate.name] !== '').map((candidate) => Shell.quote(`${candidate.name}=${String(element[candidate.name])}`));
     const fixed = Shell.quote(`${property}=${PLACEHOLDERS[property] ?? `<${property}>`}`);
@@ -292,13 +293,7 @@ export class EngineHint {
   }
 
   private extensionTypes(node: ModdleNode): string[] {
-    return (((node.extensionElements as ModdleNode | undefined)?.values as ModdleNode[] | undefined) ?? []).map((value) => this.xmlName(String(value.$type)));
-  }
-
-  /** The element name of a type as the XML writes it: `zeebe:TaskDefinition` -> `zeebe:taskDefinition`. */
-  private xmlName(type: string): string {
-    const colon = type.indexOf(':');
-    return `${type.slice(0, colon + 1)}${type.charAt(colon + 1).toLowerCase()}${type.slice(colon + 2)}`;
+    return (((node.extensionElements as ModdleNode | undefined)?.values as ModdleNode[] | undefined) ?? []).map((value) => ElementKinds.xmlName(String(value.$type)));
   }
 
   /** `<topic>` for `camunda:topic`, `<variable>` for `camunda:resultVariable`. */
