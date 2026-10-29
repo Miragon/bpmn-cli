@@ -1,8 +1,8 @@
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { El } from '../../../../domain/document/utils/moddle.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { ElementKinds } from './rules/ElementKinds.js';
-import { SetCommand } from './rules/SetCommand.js';
+import { ElementKinds } from './rules/support/ElementKinds.js';
+import { SetCommand } from './rules/support/SetCommand.js';
 
 /**
  * camunda booleans other than the exact `true` / `false`: the engines read only `true`, so

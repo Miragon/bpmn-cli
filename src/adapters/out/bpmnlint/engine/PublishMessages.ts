@@ -1,7 +1,7 @@
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { El } from '../../../../domain/document/utils/moddle.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { ElementKinds } from './rules/ElementKinds.js';
+import { ElementKinds } from './rules/support/ElementKinds.js';
 
 /**
  * `zeebe:publishMessage`, which Camunda 8.9 checks but does not run. zeebe-bpmn-moddle does not

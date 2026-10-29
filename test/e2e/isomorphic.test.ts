@@ -243,7 +243,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     }],
   };
   const RULES = 'src/adapters/out/bpmnlint/engine/rules';
-  const ENGINE_RUN = 'src/adapters/out/bpmnlint/engine/EngineRun.ts';
+  const ENGINE_RUN = 'src/adapters/out/bpmnlint/engine/run/EngineRun.ts';
   let c7: string;
   let c8: string;
   let bundle: Bundle;
@@ -325,7 +325,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     expect(own.filter((module) => core.has(module))).toEqual([]);
     expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency))).toEqual([]);
     for (const rules of [`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`]) expect([...reach(rules)].filter((module) => module.startsWith('src/') && core.has(module)), rules).toEqual([]);
-    expect(bundle.chunks.find((chunk) => chunk.inputs.includes(ENGINE_RUN))!.inputs).toEqual(expect.arrayContaining(['src/adapters/out/bpmnlint/engine/UnknownVendorElements.ts', 'src/adapters/out/bpmnlint/engine/CompatVerdicts.ts', 'src/adapters/out/bpmnlint/engine/EngineHint.ts']));
+    expect(bundle.chunks.find((chunk) => chunk.inputs.includes(ENGINE_RUN))!.inputs).toEqual(expect.arrayContaining(['src/adapters/out/bpmnlint/engine/UnknownVendorElements.ts', 'src/adapters/out/bpmnlint/engine/run/CompatVerdicts.ts', 'src/adapters/out/bpmnlint/engine/run/EngineHint.ts']));
   });
 
   it('the instances load natively and record what they evaluate', async () => {

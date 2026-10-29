@@ -1,9 +1,9 @@
 import type { ProfileFinding } from '../../../../domain/document/Finding.js';
 import type { El } from '../../../../domain/document/utils/moddle.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { ElementKinds } from './rules/ElementKinds.js';
-import { SetCommand } from './rules/SetCommand.js';
-import { Shell } from './rules/Shell.js';
+import { ElementKinds } from './rules/support/ElementKinds.js';
+import { SetCommand } from './rules/support/SetCommand.js';
+import { Shell } from './rules/support/Shell.js';
 
 /**
  * Attributes without a namespace prefix that the BPMN schema does not define, which both engines

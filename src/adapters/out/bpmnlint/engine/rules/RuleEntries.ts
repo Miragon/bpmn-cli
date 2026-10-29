@@ -1,7 +1,7 @@
 import type { RuleEntry } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { EngineKit } from '../../engine-kit.js';
-import type { EngineEntry } from '../EngineRun.js';
-import type { CamundaRuleFactory, Findings, Impact } from './CamundaRules.js';
+import type { EngineEntry } from '../run/EngineRun.js';
+import type { CamundaRuleFactory, Findings, Impact } from './CamundaRule.js';
 import { RuleKit } from './RuleKit.js';
 
 const CATEGORY_OF_IMPACT: Record<Impact, RuleEntry['category']> = { deploy: 'error', runtime: 'warn', practice: 'info' };

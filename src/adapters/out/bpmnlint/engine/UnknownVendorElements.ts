@@ -8,9 +8,9 @@ import type { ZeebeElementType } from '../../../../domain/document/vendor/ZeebeD
 import type { EnginePlatformInfo } from '../../../../domain/validation/EngineLint.js';
 import type { EngineKit } from '../engine-kit.js';
 import { OwnModelCheck } from './OwnModelCheck.js';
-import { ElementKinds } from './rules/ElementKinds.js';
-import { DidYouMean } from './rules/DidYouMean.js';
-import { SetCommand } from './rules/SetCommand.js';
+import { ElementKinds } from './rules/support/ElementKinds.js';
+import { DidYouMean } from './rules/support/DidYouMean.js';
+import { SetCommand } from './rules/support/SetCommand.js';
 
 const ENGINE_NAME = { c7: 'the engines', c8: 'Camunda 8' };
 

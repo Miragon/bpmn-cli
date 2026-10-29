@@ -17,7 +17,7 @@ import { runProfile, validateWithEngine } from '../../helpers/engine.js';
 import { describe, expect, it } from 'vitest';
 import { validateXml } from '../../../src/api.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
-import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/TimerValue.js';
+import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/support/TimerValue.js';
 
 
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0"';

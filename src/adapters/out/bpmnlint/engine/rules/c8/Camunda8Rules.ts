@@ -1,12 +1,12 @@
 import { compatRules, moddleExtensions } from '@miragon/bpmnlint-plugin-rules/camunda-8';
 import type { EngineKit } from '../../../engine-kit.js';
-import type { EngineEntry } from '../../EngineRun.js';
+import type { EngineEntry } from '../../run/EngineRun.js';
 import { RuleEntries } from '../RuleEntries.js';
-import c8Events from './C8Events.js';
-import c8Extensions from './C8Extensions.js';
-import c8FeelExpression from './C8FeelExpression.js';
-import c8Subscriptions from './C8Subscriptions.js';
-import c8VendorContent from './C8VendorContent.js';
+import c8Events from './C8EventsRule.js';
+import c8Extensions from './C8ExtensionsRule.js';
+import c8FeelExpression from './C8FeelExpressionRule.js';
+import c8Subscriptions from './C8SubscriptionsRule.js';
+import c8VendorContent from './C8VendorContentRule.js';
 
 /** bpmn-cli's Camunda 8 rules: the checks camunda-compat's `camunda-cloud-8-*` configs leave out. */
 export class Camunda8Rules {

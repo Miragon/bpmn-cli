@@ -5,7 +5,7 @@ import { firstLine } from '../../../domain/document/utils/text.js';
 import type { EnginePlatformInfo } from '../../../domain/validation/EngineLint.js';
 import type { EngineLintPort } from '../../../application/port/out/EngineLintPort.js';
 import { ENGINE_KIT } from './engine-kit.js';
-import type { EngineRun } from './engine/EngineRun.js';
+import type { EngineRun } from './engine/run/EngineRun.js';
 
 type Engine = EnginePlatformInfo['platform'];
 
@@ -17,11 +17,11 @@ const ENGINE_NAMES: Record<Engine, string> = { c7: 'Camunda 7', c8: 'Camunda 8' 
  */
 const LOADERS: Record<Engine, () => Promise<EngineRun>> = {
   c7: async () => {
-    const [{ Camunda7Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c7/Camunda7Rules.js'), import('./engine/EngineRun.js')]);
+    const [{ Camunda7Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c7/Camunda7Rules.js'), import('./engine/run/EngineRun.js')]);
     return new EngineRun(ENGINE_KIT, 'c7', Camunda7Rules.entry(ENGINE_KIT));
   },
   c8: async () => {
-    const [{ Camunda8Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c8/Camunda8Rules.js'), import('./engine/EngineRun.js')]);
+    const [{ Camunda8Rules }, { EngineRun }] = await Promise.all([import('./engine/rules/c8/Camunda8Rules.js'), import('./engine/run/EngineRun.js')]);
     return new EngineRun(ENGINE_KIT, 'c8', Camunda8Rules.entry(ENGINE_KIT));
   },
 };

@@ -381,7 +381,7 @@ npx vitest run test/e2e/isomorphic.test.ts
   bundler would split them: the initial chunks of the whole entry and of an
   `applyToXml`-only entry, and the chunks loaded on demand (the Camunda 7
   and the Camunda 8 entry of `@miragon/bpmnlint-plugin-rules`, and bpmn-cli's
-  engine run in `src/adapters/out/bpmnlint/engine/` with bpmnlint's linter).
+  engine run in `src/adapters/out/bpmnlint/engine/run/` with bpmnlint's linter).
   It fails when a rule module is in the initial chunks of
   either entry, naming it; when a module of the engine run imports a module the entry
   loads, naming both (Rollup / Vite would put that module into the host's

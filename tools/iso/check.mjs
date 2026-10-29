@@ -12,7 +12,7 @@
  *  - the bundle contains the adapters (dist/adapters/), the node entry (dist/node.js) or the CLI (dist/cli.js);
  *  - a module of the engine rules that load on demand (ON_DEMAND: the
  *    Camunda 7 and Camunda 8 rules in src/adapters/out/bpmnlint/engine/rules/,
- *    bpmnlint's linter and the engine run in src/adapters/out/bpmnlint/engine/,
+ *    bpmnlint's linter and the engine run in src/adapters/out/bpmnlint/engine/run/,
  *    src/adapters/out/bpmnlint/BpmnlintEngineLint.ts LOADERS) is
  *    in the initial chunks of the whole entry or of the applyToXml-only
  *    entry, naming the module, or is no chunk of its own;
@@ -51,7 +51,7 @@ const problems = [];
 
 /** What loads on demand, by the module that marks its chunk; `rules`: modules that must never be in the initial chunks. */
 const RULES = 'dist/adapters/out/bpmnlint/engine/rules';
-const ENGINE_RUN = ['EngineRun', 'EngineFindings', 'EngineCodes', 'EngineHint', 'CompatVerdicts', 'OwnModelCheck', 'CamundaBooleans', 'PublishMessages', 'UnknownVendorElements', 'UnprefixedAttributes'].map((name) => `dist/adapters/out/bpmnlint/engine/${name}.js`);
+const ENGINE_RUN = ['run/EngineRun', 'run/EngineFindings', 'run/EngineCodes', 'run/EngineHint', 'run/CompatVerdicts', 'OwnModelCheck', 'CamundaBooleans', 'PublishMessages', 'UnknownVendorElements', 'UnprefixedAttributes'].map((name) => `dist/adapters/out/bpmnlint/engine/${name}.js`);
 const ON_DEMAND = [
   { name: 'c7', label: 'Camunda 7 rules', marker: `${RULES}/c7/Camunda7Rules.js`, rules: [`${RULES}/c7/Camunda7Rules.js`], when: 'the first Camunda 7 document a call validates' },
   { name: 'c8', label: 'Camunda 8 rules', marker: `${RULES}/c8/Camunda8Rules.js`, rules: [`${RULES}/c8/Camunda8Rules.js`], when: 'the first Camunda 8 document a call validates' },
