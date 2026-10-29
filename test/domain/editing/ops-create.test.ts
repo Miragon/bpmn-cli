@@ -515,12 +515,12 @@ describe('lanes', () => {
     const doc = await linearDoc();
     const cs = add(doc, { kind: 'lane', name: 'Sales', members: ['Start', 'Task_A'] });
     expect(cs.created[0]).toMatchObject({ id: 'lane_sales', kind: 'lane', name: 'Sales', detail: 'in Process_1' });
-    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_LANES_WITHOUT_POOL']);
-    expect(cs.changed.map((change) => `${change.id}:${change.detail}`)).toEqual(['Start:lane lane_sales', 'Task_A:lane lane_sales']);
+    expect(cs.warnings.map((warning) => warning.code)).toEqual(['W_LANES_WITHOUT_POOL', 'W_OPTION_IGNORED']);
+    expect(cs.warnings[1]!.related).toEqual(['End']);
     const laneSet = ids(many(doc.require('Process_1'), 'laneSets'));
     expect(laneSet).toHaveLength(1);
     expect(laneSet[0]).toBe('laneSet_process');
-    expect(ids(many(doc.require('lane_sales'), 'flowNodeRef'))).toEqual(['Start', 'Task_A']);
+    expect(ids(many(doc.require('lane_sales'), 'flowNodeRef'))).toEqual(['Start', 'Task_A', 'End']);
 
     add(doc, { kind: 'participant', name: 'Shop' });
     const cs2 = add(doc, { kind: 'lane', name: 'Backoffice', in: 'participant_shop', members: ['End', 'Task_A'] });
@@ -530,6 +530,18 @@ describe('lanes', () => {
     expect(laneOf(doc, doc.require('Task_A'))?.get('id')).toBe('lane_backoffice');
     const { xml } = await roundTrip(doc);
     expect(xml).toMatch(/<bpmn:laneSet id="laneSet_process">\s*<bpmn:lane id="lane_sales" name="Sales">\s*<bpmn:flowNodeRef>Start<\/bpmn:flowNodeRef>/);
+  });
+
+  it('gives the first lane of a process all its flow nodes, later lanes none', async () => {
+    const doc = await linearDoc();
+    add(doc, { kind: 'participant', name: 'Shop' });
+    const cs = add(doc, { kind: 'lane', name: 'Sales', in: 'participant_shop' });
+    expect(cs.warnings).toHaveLength(0);
+    expect(cs.notes.some((note) => note.includes('moved 3 member(s) of Process_1 into its first lane lane_sales'))).toBe(true);
+    expect(ids(many(doc.require('lane_sales'), 'flowNodeRef'))).toEqual(['Start', 'Task_A', 'End']);
+    add(doc, { kind: 'lane', name: 'Billing', in: 'participant_shop' });
+    expect(ids(many(doc.require('lane_billing'), 'flowNodeRef'))).toEqual([]);
+    expect(ids(many(doc.require('lane_sales'), 'flowNodeRef'))).toEqual(['Start', 'Task_A', 'End']);
   });
 
   it('nests lanes inside a lane, moving the parent members into the first child', async () => {
