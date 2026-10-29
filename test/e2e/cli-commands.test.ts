@@ -51,6 +51,28 @@ describe('Cli in-process', () => {
     expect(readFileSync(file, 'utf8')).toMatch(/<bpmn:lane id="lane_sales" name="Sales">\s*<bpmn:flowNodeRef>startEvent_s<\/bpmn:flowNodeRef>\s*<bpmn:flowNodeRef>userTask_a<\/bpmn:flowNodeRef>/);
   });
 
+  it('keeps a file editable after its last pool is removed', async () => {
+    const file = join(dir, 'last-pool.bpmn');
+    expect((await bpmn(['new', file, '--name', 'Order', '--no-lint-config'])).code).toBe(0);
+    expect((await bpmn(['add', file, 'start', 'Order received'])).code).toBe(0);
+    expect(await bpmn(['add', file, 'participant', 'Shop', '--id', 'Participant_Shop'])).toMatchObject({ code: 0, err: '' });
+    expect(await bpmn(['remove', file, 'Participant_Shop'])).toMatchObject({ code: 0, err: '' });
+    expect(await bpmn(['add', file, 'start', 'Again'])).toMatchObject({ code: 0, err: '' });
+    const xml = readFileSync(file, 'utf8');
+    expect(xml).toContain('name="Again"');
+    expect(xml).toContain('bpmndi:BPMNPlane');
+  });
+
+  it('keeps the removed process name and executable flag in the process left behind', async () => {
+    const file = join(dir, 'last-pool-c8.bpmn');
+    expect((await bpmn(['new', file, '--name', 'Order', '--target', 'camunda8', '--no-lint-config'])).code).toBe(0);
+    expect(await bpmn(['add', file, 'participant', 'Shop', '--id', 'Participant_Shop'])).toMatchObject({ code: 0, err: '' });
+    expect(await bpmn(['remove', file, 'Participant_Shop'])).toMatchObject({ code: 0, err: '' });
+    const xml = readFileSync(file, 'utf8');
+    expect(xml).toMatch(/<bpmn:process id="[^"]+" name="Order" isExecutable="true"/);
+    expect(xml).not.toContain('Process_1');
+  });
+
   it('creates, changes and reads a model, also from stdin', async () => {
     const file = join(dir, 'order.bpmn');
     expect((await bpmn(['new', file, '--name', 'Order', '--no-lint-config'])).code).toBe(0);
