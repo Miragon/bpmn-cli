@@ -62,9 +62,9 @@
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run build && biome lint && knip && knip --production --exclude dependencies && npm run cycles && jscpd && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
+    "gate": "npm run build && biome lint && knip && knip --production --exclude dependencies && npm run architecture && jscpd && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
     "prepublishOnly": "npm run build",
-    "cycles": "depcruise src --config .dependency-cruiser.cjs"
+    "architecture": "depcruise src --config .dependency-cruiser.cjs"
   },
   "dependencies": {
     "@miragon/bpmnlint-plugin-rules": "0.19.0",
@@ -78,7 +78,6 @@
     "@biomejs/biome": "2.5.15",
     "@swc/core": "1.16.20",
     "@types/node": "^26.0.0",
-    "archunit": "2.5.4",
     "camunda-bpmn-moddle": "8.0.2",
     "dependency-cruiser": "18.7.0",
     "esbuild": "^0.28.2",

@@ -29,7 +29,7 @@ npm run gate            # everything a change has to pass before it is handed ov
 ```
 
 `npm run gate` builds, runs knip twice (the second time in production mode: code in `src/` that only
-tests use fails unless its export is tagged `@internal`), the duplication budget of `src/` (jscpd,
+tests use fails unless its export is tagged `@internal`), the architecture rules (dependency-cruiser), the duplication budget of `src/` (jscpd,
 `.jscpd.json`), the tests, the isomorphism check of the browser-safe core, the layout-regression
 budget and a short fuzz campaign. CI runs `typecheck` and `gate` on every pull
 request and every push to `main`. The test layers, the benchmark and the fuzzer, and how to run
@@ -78,11 +78,11 @@ them on a private corpus without copying it into the repository, are described i
   the services with their adapters. Every public function that works on a document goes
   through a use case, even one that only forwards to the domain: the entries import values only
   from `application/` and `adapters/`, and from `domain/` only types, re-exporting just the
-  public classes, constants and pure helpers. `test/architecture.test.ts` (ArchUnitTS) checks the rings: the domain
+  public classes, constants and pure helpers. `npm run architecture` (dependency-cruiser, `.dependency-cruiser.cjs`) checks the rings: the domain
   imports neither the application nor the adapters, the application no adapter, an adapter no
   other adapter (the CLI only the reports, the files only bpmnlint and the document store, the memory adapters only the document store), the driving adapter no service, only adapters and entries import `node:*`,
   `application/` holds only ports and services, and the root of `src/` only the entries.
-  `npm run cycles` (dependency-cruiser) keeps `src/` free of import cycles; type-only imports may point back.
+  It also keeps `src/` free of import cycles; type-only imports may point back.
 
   **Classes first, helpers in `utils/`.** Each module builds on classes, one per file, the file
   named like the class (`domain/document/ModelError.ts`, `domain/diagram/di/DrawingCheckpoint.ts`). Stateless helper
