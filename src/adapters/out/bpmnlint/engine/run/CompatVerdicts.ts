@@ -3,7 +3,6 @@ import type { EnginePlatformInfo } from '../../../../../domain/validation/Engine
 import type { RuleEntry } from '@miragon/bpmnlint-plugin-rules/engine';
 import type { BpmnlintEngineReport } from '../../bpmnlint-contract.js';
 import type { EngineKit } from '../../engine-kit.js';
-import { EngineFindings } from './EngineFindings.js';
 
 type Engine = EnginePlatformInfo['platform'];
 
@@ -11,7 +10,7 @@ type Engine = EnginePlatformInfo['platform'];
  * Where bpmn-cli reads camunda-compat's severity differently: a user task needs no form to run,
  * and a job worker user task works (the engines' layers would say runtime for both); Camunda 7.20+
  * refuses a process without a history time to live unless the engine sets a default.
- * c8-feel-expression checks FEEL with the grammar Camunda 8 accepts, names and values without = too.
+ * c8-feel-expression-valid checks FEEL with the grammar Camunda 8 accepts, names and values without = too.
  */
 const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 'off'>> = {
   c7: { 'camunda-compat/history-time-to-live': 'error' },
@@ -26,7 +25,7 @@ const SEVERITY_OVERRIDES: Record<Engine, Record<string, RuleEntry['category'] | 
 const EXECUTABLE_ONLY = ['bpmnlint/start-event-required', 'camunda-compat/history-time-to-live'];
 /** It reports a send task with a zeebe:publishMessage as one without an implementation. */
 const COMPAT_IMPLEMENTATION = 'camunda-compat/implementation';
-const PUBLISH_MESSAGE = 'bpmn-cli/c8-publish-message';
+const PUBLISH_MESSAGE = ['c8-publish-message-no-task-definition', 'c8-publish-message-unsupported'].map((rule) => `bpmn-cli/${rule}`);
 
 /**
  * camunda-compat's rules that report a property of white space only as missing, where Camunda 8.9
@@ -38,7 +37,7 @@ const COMPAT_TIMER = 'camunda-compat/timer';
 const FLOW_CONDITION = 'camunda-compat/sequence-flow-condition';
 /** camunda-compat says from 8.10 on; Camunda 8.9 deploys it (engine-checked). */
 const JOB_PRIORITY = { rule: 'camunda-compat/no-job-priority-definition', since: [8, 9] };
-const OWN_DUPLICATES = 'c8-duplicate-extension';
+const OWN_DUPLICATES = 'bpmn-cli/c8-extension-element-unique';
 /** Reported on every element of a group; the engine refuses the second and later ones. */
 const REPEATS = new Set(['camunda.elementMultipleNotAllowed', 'camunda.elementPropertyValueDuplicated']);
 
@@ -74,12 +73,12 @@ export class CompatVerdicts {
   apply(results: Results): void {
     this.withoutNonExecutableProcesses(results);
     if (this.engine !== 'c8') return;
-    const published = new Set(results[PUBLISH_MESSAGE]?.map((report) => report.id));
+    const published = new Set(PUBLISH_MESSAGE.flatMap((rule) => results[rule] ?? []).map((report) => report.id));
     const implementations = results[COMPAT_IMPLEMENTATION];
     if (implementations) {
       results[COMPAT_IMPLEMENTATION] = implementations.filter((report) => !report.id || !published.has(report.id));
     }
-    const duplicated = new Set(Object.entries(results).flatMap(([rule, reports]) => reports.filter((report) => EngineFindings.findingOf(rule, report) === OWN_DUPLICATES).map((report) => report.id)));
+    const duplicated = new Set(results[OWN_DUPLICATES]?.map((report) => report.id));
     for (const [rule, reports] of Object.entries(results)) {
       if (!rule.startsWith('camunda-compat/')) continue;
       results[rule] = this.withoutFirstOfRepeats(reports.filter((report) => !this.dropped(rule, report, duplicated)));
