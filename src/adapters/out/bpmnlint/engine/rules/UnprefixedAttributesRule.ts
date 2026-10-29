@@ -5,6 +5,18 @@ import { SetCommand } from './support/SetCommand.js';
 import { Shell } from './support/Shell.js';
 import { WrittenModel } from './support/WrittenModel.js';
 
+/**
+ * Attributes without a namespace prefix that the BPMN schema does not define, for either engine
+ * (`C7UnprefixedAttributesRule`, `C8UnprefixedAttributesRule` name the findings).
+ * Both engines validate the file against the schema and refuse it. The typed parse turns some of
+ * them into the vendor attribute of that name, so the rule reads each element as the file writes
+ * it (`WrittenModel`) and reports on its typed twin. The hint suggests the prefixed vendor
+ * attribute where one fits, converts bpmn-cli's own unprefixed decision link, and else says how
+ * to remove it.
+ *
+ * @example an unprefixed assignee
+ * <bpmn:userTask id="Review" assignee="anna" />  <!-- camunda:assignee -->
+ */
 export abstract class UnprefixedAttributesRule extends CamundaRule {
   private model!: WrittenModel;
 

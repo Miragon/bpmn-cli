@@ -13,6 +13,20 @@ type CamundaType = NonNullable<ReturnType<EngineKit['CAMUNDA']['type']>>;
 
 const ENGINE_NAME = { c7: 'the engines', c8: 'Camunda 8' };
 
+/**
+ * Extension elements of the engine's own namespace that its descriptor does not know, or that sit
+ * where the engine does not read them, for either engine (`C7UnknownVendorElementsRule`,
+ * `C8UnknownVendorElementsRule` name the findings).
+ * The engine ignores them silently. The typed parse drops them with a warning that names neither
+ * the element nor where it sat, so the rule reads the extension elements of each element of an
+ * executable process as the file writes them (`WrittenModel`) and reports on the typed twin, with
+ * the known name a typo most likely meant.
+ *
+ * @example a misspelled extension element
+ * <bpmn:serviceTask id="Charge">
+ *   <bpmn:extensionElements><zeebe:taskDefinitions type="charge" /></bpmn:extensionElements>  <!-- zeebe:taskDefinition -->
+ * </bpmn:serviceTask>
+ */
 export abstract class UnknownVendorElementsRule extends CamundaRule {
   private model!: WrittenModel;
   private node!: ModdleElement;

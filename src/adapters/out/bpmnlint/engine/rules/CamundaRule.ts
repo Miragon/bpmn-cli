@@ -29,7 +29,14 @@ export interface ReportData {
   [detail: string]: unknown;
 }
 
-/** A bpmn-cli engine rule: every report in camunda-compat's shape, with the finding it is in `data.finding`. */
+/**
+ * The base of every bpmn-cli engine rule. A rule implements `visit(node)`, which the plugin's
+ * single walk calls for each element (return false to skip its children), and reports through
+ * `report(finding, at, message, data)`.
+ * Every report has camunda-compat's shape (`path`, `data.type`), so `run/` maps own and compat
+ * findings alike, and carries the finding it belongs to in `data.finding`, from which bpmn-cli
+ * takes the code and severity the rule declares in `defineRule`.
+ */
 export abstract class CamundaRule extends EngineRule {
   private reporter!: Reporter;
 
