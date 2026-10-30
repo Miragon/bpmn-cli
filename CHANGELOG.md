@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.9.0](https://github.com/Miragon/bpmn-cli/compare/v0.8.0...v0.9.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* always rename flow ids that name their source and target, drop the keep-flow-ids mode ([#127](https://github.com/Miragon/bpmn-cli/issues/127))
+* files without a .bpmnlintrc get element-id-naming's default ids even where their existing ids look different; idConventionsFromLint needs the naming namespace of @miragon/bpmnlint-plugin-rules 0.19 or later; MutationResult.conventions and the conventionsLines export are removed.
+* the bpmn-auto-layout engine is removed, together with the `engine` option and the `--engine` flag. Full redraws always use the built-in clean engine.
+* mutationWarnings, opWarnings, renderAround, renderContext, renderMetrics, decisionLinkOf, scopeView, assertLossless, kindsSectionJson, runFormatOps, viewDoc and renderShown are no longer exported from @miragon/bpmn-cli, and layoutDocToFile no longer from @miragon/bpmn-cli/node. None of them was documented in docs/library.md.
+* use c7, c8 and none as the only platform value and drop the unused in-memory store ([#110](https://github.com/Miragon/bpmn-cli/issues/110))
+* the exported TypeScript names change without aliases (Op, AddOp, ... FormatOp, isFormatOp, FormatOps -> EditCommand, AddElement, ... DiagramCommand). A diagram command can no longer name an element a later command of the same batch adds (E_NOT_FOUND), and mixed batches such as add, place, add draw in their order, so their coordinates differ.
+
+### Features
+
+* **kinds:** support complex gateways in plain BPMN ([#74](https://github.com/Miragon/bpmn-cli/issues/74)) ([#91](https://github.com/Miragon/bpmn-cli/issues/91)) ([d535609](https://github.com/Miragon/bpmn-cli/commit/d535609efca08648767ed538f0185156d806b986))
+* **kinds:** support groups with members tied by category value ([#73](https://github.com/Miragon/bpmn-cli/issues/73)) ([#92](https://github.com/Miragon/bpmn-cli/issues/92)) ([de47b90](https://github.com/Miragon/bpmn-cli/commit/de47b90781bc081ec489bf9edd74431e3b01164f))
+
+
+### Bug Fixes
+
+* **flows:** keep conditions off flows out of parallel and event-based gateways ([#94](https://github.com/Miragon/bpmn-cli/issues/94)) ([5b7e7a6](https://github.com/Miragon/bpmn-cli/commit/5b7e7a6cc9a3fb5e50eb891ce2aaffa64f340d01))
+* **flows:** refuse sequence flows out of link throw and into link catch events ([#95](https://github.com/Miragon/bpmn-cli/issues/95)) ([8bc7e52](https://github.com/Miragon/bpmn-cli/commit/8bc7e52d117bcee3738c7ad24100400c51d22750))
+* keep a single incoming flow on targets of an event-based gateway ([#132](https://github.com/Miragon/bpmn-cli/issues/132)) ([59a5fff](https://github.com/Miragon/bpmn-cli/commit/59a5fffaedee7de1797220f65fdafcb7aea652af)), closes [#78](https://github.com/Miragon/bpmn-cli/issues/78)
+* keep an empty process when the last pool is removed so the file stays editable ([#134](https://github.com/Miragon/bpmn-cli/issues/134)) ([fb6f0d9](https://github.com/Miragon/bpmn-cli/commit/fb6f0d97d62532b2ba3738199b40367ca9a4e7e7))
+* keep lane membership in step with the drawn lanes when adding and removing lanes ([#133](https://github.com/Miragon/bpmn-cli/issues/133)) ([208146e](https://github.com/Miragon/bpmn-cli/commit/208146e19566068d0380980759467c62716d1751))
+* make room only for what follows an inserted node and keep the rest of a hand-made drawing in place ([#119](https://github.com/Miragon/bpmn-cli/issues/119)) ([a6b8447](https://github.com/Miragon/bpmn-cli/commit/a6b8447c840f6af0297e1b4f36aa4b6f6de3218a))
+* **plugin:** serve the plugin from the release branch, moved only after npm publish ([#125](https://github.com/Miragon/bpmn-cli/issues/125)) ([1668579](https://github.com/Miragon/bpmn-cli/commit/1668579ac0bc21d86ec68787b31f816a65deb8d2))
+* stop counting crossings with a text annotation's line as a layout problem ([#139](https://github.com/Miragon/bpmn-cli/issues/139)) ([5c80757](https://github.com/Miragon/bpmn-cli/commit/5c807576f0e9693a943ff38bf9f24043c2ff796d))
+* stop re-scanning waiting edges per routing line in incremental routing ([#122](https://github.com/Miragon/bpmn-cli/issues/122)) ([aecf52b](https://github.com/Miragon/bpmn-cli/commit/aecf52b6234e2838dbc9810a85723da1d86a1ce4))
+* **validate:** refuse boundary events on event sub-processes ([#84](https://github.com/Miragon/bpmn-cli/issues/84)) ([9e68e25](https://github.com/Miragon/bpmn-cli/commit/9e68e25d66d7ae31a63064b42ff0abd1c1c496d2))
+
+
+### Code Refactoring
+
+* always rename flow ids that name their source and target, drop the keep-flow-ids mode ([#127](https://github.com/Miragon/bpmn-cli/issues/127)) ([8739607](https://github.com/Miragon/bpmn-cli/commit/87396076bca7b54cd509e31ce2392ca1909fe0d5))
+* arrange src as a hexagon of domain, application and adapters ([#103](https://github.com/Miragon/bpmn-cli/issues/103)) ([c9b4b39](https://github.com/Miragon/bpmn-cli/commit/c9b4b39cd30a303149f3fb236a55f055fbe00f4e))
+* drop the learned id style, new ids follow element-id-naming ([#118](https://github.com/Miragon/bpmn-cli/issues/118)) ([b998c7d](https://github.com/Miragon/bpmn-cli/commit/b998c7d5bdc688079648cc675cd63da5a2f125e1))
+* make the codebase smaller and gate on duplication and test-only code ([#112](https://github.com/Miragon/bpmn-cli/issues/112)) ([247e1e1](https://github.com/Miragon/bpmn-cli/commit/247e1e1e7e5ddc8a006e05bd2c06d7ccc1cea3e8))
+* move linting out of the domain and merge duplicated domain concepts ([#116](https://github.com/Miragon/bpmn-cli/issues/116)) ([ef1945f](https://github.com/Miragon/bpmn-cli/commit/ef1945f15bdf940e3ba8ee99aa245c2be43f8ccc))
+* use c7, c8 and none as the only platform value and drop the unused in-memory store ([#110](https://github.com/Miragon/bpmn-cli/issues/110)) ([6ebce59](https://github.com/Miragon/bpmn-cli/commit/6ebce59943e7489a1e5a65908cd1c4fc34b2fc12))
+
 ## [0.8.0](https://github.com/Miragon/bpmn-cli/compare/v0.7.0...v0.8.0) (2026-10-21)
 
 

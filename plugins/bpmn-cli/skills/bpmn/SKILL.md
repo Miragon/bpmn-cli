@@ -4,7 +4,7 @@ description: Creates, changes, lays out and validates BPMN 2.0 process models (.
 when_to_use: Use whenever a request creates or touches a .bpmn file or a process diagram, even when it does not say BPMN, e.g. "model the order process", "Prozess modellieren", "BPMN anpassen".
 allowed-tools:
   - Bash(bpmn *)
-  - Bash(npx -y @miragon/bpmn-cli@0.8.0 *) # x-release-please-version
+  - Bash(npx -y @miragon/bpmn-cli@0.9.0 *) # x-release-please-version
 ---
 
 # BPMN models with the bpmn CLI
@@ -24,7 +24,7 @@ If that fails or prints a version older than the one pinned here, use this
 instead of `bpmn` in every command (Node 22.12+; the first call downloads it):
 
 ```bash
-npx -y @miragon/bpmn-cli@0.8.0 --version   # x-release-please-version
+npx -y @miragon/bpmn-cli@0.9.0 --version   # x-release-please-version
 ```
 
 The examples below say `bpmn`. Run each `bpmn` command as its own command line
