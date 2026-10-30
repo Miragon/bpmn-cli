@@ -132,13 +132,13 @@ export class RouteGrid {
     const { start, end } = seg;
     const x1 = Math.min(start.x, end.x), x2 = Math.max(start.x, end.x), y1 = Math.min(start.y, end.y), y2 = Math.max(start.y, end.y);
     const cost = (point: Point): number => (seg.ends?.some((endPoint) => Math.abs(endPoint.x - point.x) + Math.abs(endPoint.y - point.y) < END_ZONE) ? 2 * CROSS : CROSS);
-    if (seg.kind !== 'h') {
+    if (seg.kind !== 'h' && !seg.free) {
       for (let row = RouteGrid.upper(ys, y1); row < ny && ys[row]! < y2; row++) {
         const crossX = seg.kind === 'v' ? start.x : start.x + ((ys[row]! - start.y) * (end.x - start.x)) / (end.y - start.y);
         this.crossRow(row, crossX, cost({ x: crossX, y: ys[row]! }));
       }
     }
-    if (seg.kind !== 'v') {
+    if (seg.kind !== 'v' && !seg.free) {
       for (let column = RouteGrid.upper(xs, x1); column < nx && xs[column]! < x2; column++) {
         const crossY = seg.kind === 'h' ? start.y : start.y + ((xs[column]! - start.x) * (end.y - start.y)) / (end.x - start.x);
         this.crossColumn(column, crossY, cost({ x: xs[column]!, y: crossY }));

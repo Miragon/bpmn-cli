@@ -6,7 +6,8 @@ export function routedArtifacts(layout: ScopeLayout): GArtifact[] {
   return layout.artifacts.filter((artifact) => artifact.kind !== 'annotation' || !!artifact.anchorNode?.host);
 }
 
-export function obstacles(layout: ScopeLayout): Box[] {
+/** nodes, boundary events and `artifacts`, by default those placed before routing */
+export function obstacles(layout: ScopeLayout, artifacts = routedArtifacts(layout)): Box[] {
   const boxes: Box[] = [];
   for (const node of layout.nodes) {
     boxes.push(node.box);
@@ -14,7 +15,7 @@ export function obstacles(layout: ScopeLayout): Box[] {
       boxes.push(boundaryEvent.box);
     }
   }
-  for (const artifact of routedArtifacts(layout)) {
+  for (const artifact of artifacts) {
     boxes.push(artifact.box);
   }
   return boxes;

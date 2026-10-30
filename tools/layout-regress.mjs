@@ -15,7 +15,8 @@
  *   node tools/layout-regress.mjs --compare base.json  # per-file better / worse
  *
  * Metrics (weight in the score):
- *   crossings 5      two edges crossing properly
+ *   crossings 5      two edges crossing properly, neither the dotted line of a text
+ *                    annotation (a line through the annotation's text is `through`)
  *   overlaps 10      two leaf shapes overlapping (a boundary event may overlap its host;
  *                    pools, lanes, expanded sub-processes and groups are no leaves)
  *   through 8        an edge segment cutting a shape it does not connect (a real
@@ -35,9 +36,9 @@
  *   laneGap 2        lanes not filling their pool
  *   failed 50        the layout command itself failed
  *
- * Crossings between a dotted association and a sequence flow, and joins
- * bundling into a gateway's bottom vertex, are conventional in BPMN: expect a
- * residual score rather than zero.
+ * Crossings between a compensation or data association and a sequence flow,
+ * and joins bundling into a gateway's bottom vertex, are conventional in BPMN:
+ * expect a residual score rather than zero.
  */
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -104,6 +105,8 @@ const collinear = ([firstStart, firstEnd], [secondStart, secondEnd]) => {
 };
 const glyph = (lb, name) => { const est = Math.max(6, name.length * 6); const glyphWidth = Math.min(est, 90); const lines = Math.max(1, Math.ceil(est / 90)); return { x: lb.x + lb.width / 2 - glyphWidth / 2, y: lb.y, width: glyphWidth, height: lines * 14 }; };
 const idOf = (el) => el && el.id;
+// the same rule as src/domain/diagram/utils/annotations.ts
+const annotationLine = (el) => is(el, 'bpmn:Association') && (is(el.sourceRef, 'bpmn:TextAnnotation') || is(el.targetRef, 'bpmn:TextAnnotation'));
 
 const KEYS = ['crossings', 'overlaps', 'through', 'diagonal', 'missing', 'labelClash', 'labelOnLine', 'inOut', 'parallelRun', 'outsideLane', 'outsidePool', 'outsideSub', 'edgeLeavesLane', 'edgeOutside', 'msgThroughPool', 'laneGap', 'failed'];
 const WEIGHTS = { crossings: 5, overlaps: 10, through: 8, diagonal: 3, missing: 10, labelClash: 2, labelOnLine: 1, inOut: 3, parallelRun: 1, outsideLane: 6, outsidePool: 8, outsideSub: 8, edgeLeavesLane: 1, edgeOutside: 4, msgThroughPool: 5, laneGap: 2, failed: 50 };
@@ -223,7 +226,7 @@ async function analyse(xml) {
     for (let firstIndex = 0; firstIndex < edges.length; firstIndex++) {
       for (let secondIndex = firstIndex + 1; secondIndex < edges.length; secondIndex++) {
         const firstSegments = segs(edges[firstIndex].pts), secondSegments = segs(edges[secondIndex].pts);
-        if (firstSegments.some((firstSegment) => secondSegments.some((secondSegment) => cross(firstSegment, secondSegment)))) {
+        if (!annotationLine(edges[firstIndex].el) && !annotationLine(edges[secondIndex].el) && firstSegments.some((firstSegment) => secondSegments.some((secondSegment) => cross(firstSegment, secondSegment)))) {
           report.crossings.push(`${edges[firstIndex].id}x${edges[secondIndex].id}`);
         }
         const related = [...edges[firstIndex].ends].some((endId) => edges[secondIndex].ends.has(endId));

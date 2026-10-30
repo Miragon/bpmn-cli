@@ -7,12 +7,16 @@ import { raw } from '../../utils/raw.js';
 import type { DEdge, DShape, Plane } from '../../di/types.js';
 import { attachedSide } from '../../utils/sides.js';
 import { hasExternalLabel, labelAt, labelSideOf, ORDER, type LabelSide } from '../../utils/labels.js';
+import { isAnnotationLine } from '../../utils/annotations.js';
 
 interface Clutter {
   shapes: Box[];
   labels: Box[];
   segments: Array<[{ x: number; y: number }, { x: number; y: number }]>;
-  /** of lines crossing a connection of the owner, which the crossing repair may route again */
+  /**
+   * of lines crossing a connection of the owner, which the crossing repair may route again (never
+   * when either is an annotation line)
+   */
   crossing: Clutter['segments'];
 }
 
@@ -51,10 +55,10 @@ export class LabelPlacer {
         segments.push([tl, tr], [tr, br], [br, bl], [bl, tl]);
       }
     }
-    const own = [...this.plane.edges.values()].filter((edge) => edge.sourceId === ownerId || edge.targetId === ownerId);
+    const own = [...this.plane.edges.values()].filter((edge) => (edge.sourceId === ownerId || edge.targetId === ownerId) && !isAnnotationLine(edge.el));
     for (const edge of this.plane.edges.values()) {
       if (edge.label && edge.id !== ownerId) labels.push(edge.label);
-      const into = !own.includes(edge) && own.some((mine) => polylinesCross(mine.points, edge.points)) ? crossing : segments;
+      const into = !own.includes(edge) && !isAnnotationLine(edge.el) && own.some((mine) => polylinesCross(mine.points, edge.points)) ? crossing : segments;
       into.push(...toSegments(edge.points));
     }
     return { shapes, labels, segments, crossing };

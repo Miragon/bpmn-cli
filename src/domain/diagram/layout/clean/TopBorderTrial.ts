@@ -11,6 +11,7 @@ import { ScopeLabels } from './ScopeLabels.js';
 import { XIndex } from './XIndex.js';
 import { nameOf } from '../../utils/names.js';
 import { obstacles, routedArtifacts } from '../../utils/scope.js';
+import { isAnnotationLine } from '../../utils/annotations.js';
 
 /**
  * Moves a boundary event whose flows all lead up to its host's top border when that draws
@@ -45,8 +46,10 @@ export class TopBorderTrial extends ArrangementTrial {
     let linkCrossings = 0;
     const look = (): void => {
       new LinkRouter(layout).route();
-      const links = [...layout.compensations.map((compensation) => compensation.points), ...routedArtifacts(layout).flatMap((artifact) => artifact.links.map((link) => link.points))];
-      linkCrossings = this.crossingPairs(layout.edges.map((edge) => edge.points), links);
+      const artifactLinks = routedArtifacts(layout).flatMap((artifact) => artifact.links);
+      const compensations = layout.compensations.map((compensation) => compensation.points);
+      const links = [...compensations, ...artifactLinks.map((link) => link.points)];
+      linkCrossings = this.crossingPairs(layout.edges.map((edge) => edge.points), [...compensations, ...artifactLinks.filter((link) => !isAnnotationLine(link.el)).map((link) => link.points)]);
       const segments = [...layout.edges.map((edge) => [edge, edge.points] as const), ...links.map((pts) => [undefined, pts] as const)].map(([edge, pts]) => [edge, pts.slice(1).map((point, index): [Point, Point] => [pts[index]!, point])] as const);
       const shapes = layout.nodes.flatMap((node) => [node.box, ...node.boundary.map((boundaryEvent) => boundaryEvent.box)]).concat(routedArtifacts(layout).map((artifact) => artifact.box));
       const scopeLabels = new ScopeLabels(layout);

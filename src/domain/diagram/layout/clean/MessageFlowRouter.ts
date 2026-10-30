@@ -9,6 +9,8 @@ export interface MessagePool {
   /** leaf shapes only: no pools, lanes or expanded sub-process frames */
   obstacles: Box[];
   lines: Segment[];
+  /** of `lines`, those a leg pays for crossing: all but annotation lines (default: `lines`) */
+  crossable?: Segment[];
   /** after the pool and lane headers */
   contentLeft: number;
 }
@@ -266,11 +268,12 @@ export class MessageFlowRouter {
     if (!pool || is(el, 'bpmn:Participant')) return straight(exits[0]!);
     const border = up ? pool.box.y : pool.box.y + pool.box.height;
     const obstacles = this.obstaclesFor(pool, box, own, up);
-    const score = (pts: Point[]): number => this.hits(pts, obstacles) * 1000 + crossings(pts, pool.lines) * 5 + this.alongCost(pts, pool.lines);
+    const crossable = pool.crossable ?? pool.lines;
+    const score = (pts: Point[]): number => this.hits(pts, obstacles) * 1000 + crossings(pts, crossable) * 5 + this.alongCost(pts, pool.lines);
     const clean = exits
       .map((exitX, exitIndex) => ({ x: exitX, line: [{ x: exitX, y: edge }, { x: exitX, y: border }], exitIndex }))
       .filter(({ line }) => !this.hits(line, obstacles) && this.alongCost(line, pool.lines) < 300)
-      .map(({ x: exitX, line, exitIndex }) => ({ x: exitX, score: exitIndex === 0 ? -1 : crossings(line, pool.lines) * 5 + exitIndex }));
+      .map(({ x: exitX, line, exitIndex }) => ({ x: exitX, score: exitIndex === 0 ? -1 : crossings(line, crossable) * 5 + exitIndex }));
     if (clean.length) {
       return straight(clean.reduce((bestExit, candidate) => (candidate.score < bestExit.score ? candidate : bestExit)).x);
     }

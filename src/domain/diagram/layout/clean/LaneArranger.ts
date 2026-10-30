@@ -133,9 +133,11 @@ export class LaneArranger {
     this.growFirstLane(yOf() - beforeRouting, true);
     this.fitLaneLoops();
     const beforeNotes = yOf();
-    new ScopeArtifactPlacer(scope).placeAnnotations();
+    const artifacts = new ScopeArtifactPlacer(scope);
+    artifacts.refreshFlowAnchors();
+    artifacts.placeAnnotations();
     this.growFirstLane(yOf() - beforeNotes, false);
-    new LinkRouter(scope).route();
+    new LinkRouter(scope, true).route();
     growToFit(scope);
     const last = leaves[leaves.length - 1]!;
     for (const lane of leaves) {

@@ -120,7 +120,7 @@ model.
 | loops | underneath the elements they span, entering from below |
 | joins | entries from below share the bottom vertex and rise straight into it |
 | sub-processes | laid out recursively, expanded by default; event sub-processes below the content |
-| annotations, data | annotations above their element, data below |
+| annotations, data | annotations above their element (beside a data object, under a flow when the spot above would reach over its lane's top border), data below; the lines of notes on one element join, and a note's line stays in the lane both its ends lie in unless that costs a long detour |
 | pools | stacked vertically; message flows run vertically in the gap between pools |
 | labels | gateway names above, event names below, flow names above their longest horizontal segment |
 

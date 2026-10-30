@@ -282,15 +282,18 @@ fewest layout problems, and after other ops of a batch only the batch op
 `test/domain/diagram/layout/incremental/room-making.test.ts` checks issue #18, stage B, on synthetic
 hand-drawn models (`test/fixtures/layout-room/`), the eval's model and a
 public scenario: a boundary path above a line from an earlier boundary event
-opens the row below its host (the line and its end move down), a decision
-spliced into a branch with a bypass right under it puts its new "no" branch
-above the row, single commands and the batch alike and without a crossing;
+opens the row below its host (the line and its end move down), above a text
+annotation's line too when that costs about as much as crossing it (the note
+moves down), and not onto such a line running through the spot of its end
+event, a decision spliced into a branch with a bypass right under it
+puts its new "no" branch above the row, single commands and the batch alike and without a crossing;
 every eval batch plus the reminder path scores 0, the reminder path that
 crossed the "no" flow goes above the approval on its own; a branch row in a
 transaction keeps clear of the transaction's cancel event (audit #63); the
 local repair routes an existing line a new flow crosses again (reported in
-`rerouted` and a note), and starts a chain that still crosses at its next
-row candidate (`agent__o2c`), deterministically. Its later blocks hold the
+`rerouted` and a note), tries nothing for a text annotation's line a new
+flow crosses, and starts a chain that still crosses at its next row
+candidate (`agent__o2c`), deterministically. Its later blocks hold the
 findings of the stage B verification, each failing on the stage B build: a
 path added to a boundary event on its host's top border (`place --side
 top`, then the reminder; and a batch with a second path connected later)

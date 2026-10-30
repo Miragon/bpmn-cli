@@ -6,7 +6,8 @@
  *    inside the box (allowed for the box) is on the text
  *  - only when no spot keeps the text clear, the first one clear for the box
  *  - a line crossing the owner's own connection does not push the text aside: the crossing repair
- *    routes it again, and then along the side the label dodged to
+ *    routes it again, and then along the side the label dodged to; an annotation line does, as its
+ *    crossing is no problem the repair would remove
  *  - flow labels alike
  */
 import { describe, expect, it } from 'vitest';
@@ -90,5 +91,12 @@ describe('label spots keep the drawn text off lines', () => {
     // starting below In, V stays where it is: the label goes above
     const kept = plane([sh('E', 'event', [300, 200, 36, 36], 'Order rejected')], lines(230));
     expect(new Drawing(kept).placeShapeLabel(kept.shapes.get('E')!)).toEqual({ x: 284, y: 166, width: 68, height: 28 });
+    // V as the line of a text annotation crossing In stays where it is too: the text keeps off it, right of the event
+    const note = els.moddle.create('bpmn:TextAnnotation', { id: 'Y' });
+    const [incoming, line] = lines(100);
+    const annotated = plane([sh('E', 'event', [300, 200, 36, 36], 'Order rejected')], [incoming!, { ...line!, el: els.moddle.create('bpmn:Association', { id: 'V', sourceRef: note }), kind: 'association' }]);
+    const box = new Drawing(annotated).placeShapeLabel(annotated.shapes.get('E')!)!;
+    expect(box).toEqual({ x: 342, y: 204, width: 68, height: 28 });
+    expect(linesOverText(annotated, box, 'Order rejected')).toEqual([]);
   });
 });

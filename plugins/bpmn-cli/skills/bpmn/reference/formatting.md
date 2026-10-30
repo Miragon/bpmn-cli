@@ -20,9 +20,10 @@ bpmn metrics order-to-cash.bpmn
 right with their column across the diagram (`c0..cN`; ` … ` marks a wide gap),
 wide empty columns, colours, labels moved off their default side, and the
 layout problems with ids. `metrics` prints the score (0 is best) and every
-problem: crossings, overlaps, flows through shapes (`through`), labels on lines,
-nodes outside their lane or pool, frames covering foreign shapes, flows running
-backwards, and more.
+problem: crossings (not with an annotation's dotted line), overlaps, flows
+through shapes (`through`, a note's text too), labels on lines, nodes outside
+their lane or pool, frames covering foreign shapes, flows running backwards,
+and more.
 
 ## 2. Look at it
 

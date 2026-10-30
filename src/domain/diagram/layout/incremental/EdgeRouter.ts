@@ -4,6 +4,7 @@ import { OrthogonalRouter, type RouteRequest } from './OrthogonalRouter.js';
 import type { Side, DEdge, DShape, Plane } from '../../di/types.js';
 import { borderDistance, borderPoint, containsPoint, cx, cy, degenerate, isOrthogonal, pathHits, roundPoints, type Box, type Point } from '../../utils/geom.js';
 import { PlaneQuery } from '../../di/PlaneQuery.js';
+import { isAnnotationLine } from '../../utils/annotations.js';
 
 export interface RouteOptions {
   lines: Point[][];
@@ -231,6 +232,11 @@ export class EdgeRouter {
     return edge.kind === 'messageFlow' ? 1 : 0;
   }
 
+  /** The lines of the annotations on the plane: a route that is none crosses them for free. */
+  private annotationLines(): Set<readonly Point[]> {
+    return new Set([...this.plane.edges.values()].filter((edge) => isAnnotationLine(edge.el)).map((edge) => edge.points));
+  }
+
   /** Every label counts as one diagonal line, so the router keeps off labels when that is cheap. */
   routingLines(except?: string): Point[][] {
     const out: Point[][] = [];
@@ -257,7 +263,7 @@ export class EdgeRouter {
    * nothing. Undefined when an end has no shape on the plane.
    * A gateway takes one connection per vertex while one is free (explicit sides are taken as they
    * are); a join's entries may share its top / bottom vertex as in bpmn-js when that adds no
-   * crossing.
+   * crossing. Only an annotation line pays for crossing an annotation line.
    */
   routeEdge(edge: DEdge, opts: RouteOptions): Point[] | undefined {
     const source = edge.sourceId ? this.plane.shapes.get(edge.sourceId) : undefined;
@@ -282,7 +288,7 @@ export class EdgeRouter {
       if (!obstacles.some((obstacle) => pathHits(line, obstacle)) && !this.touchesFresh(edge, line)) {
         return line;
       }
-      return roundPoints(OrthogonalRouter.route({ source: source.bounds, target: target.bounds, obstacles, lines: opts.lines }));
+      return roundPoints(OrthogonalRouter.route({ source: source.bounds, target: target.bounds, obstacles, lines: opts.lines, ...(isAnnotationLine(edge.el) ? {} : { freeLines: this.annotationLines() }) }));
     }
     if (!source || !target) return undefined;
     const obstacles = this.obstaclesFor(edge, source, target);
@@ -293,6 +299,7 @@ export class EdgeRouter {
     const ends = (gateway: DShape): GatewayEnd[] => (gateway.kind === 'gateway' && !message ? this.gatewayEnds(edge, gateway, opts.lines) : []);
     const targetEnds = ends(target);
     const taken = (shareEntries: boolean): Side[] => (opts.targetSides ? [] : this.takenSides(targetEnds, shareEntries));
+    const free = this.annotationLines();
     const request: RouteRequest = {
       source: source.bounds,
       target: target.bounds,
@@ -300,6 +307,7 @@ export class EdgeRouter {
       targetSides,
       obstacles,
       lines: opts.lines,
+      freeLines: free,
       sourceMiddle: source.kind === 'gateway',
       targetMiddle: target.kind === 'gateway',
       sourceAvoid: opts.sourceSides ? [] : this.takenSides(ends(source), false),
@@ -310,7 +318,8 @@ export class EdgeRouter {
       return roundPoints(pts);
     }
     const merged = OrthogonalRouter.route({ ...request, targetMerge: true, targetAvoid: taken(true) });
-    return roundPoints(crossings(merged, opts.lines) <= crossings(pts, opts.lines) ? merged : pts);
+    const counted = opts.lines.filter((line) => !free.has(line));
+    return roundPoints(crossings(merged, counted) <= crossings(pts, counted) ? merged : pts);
   }
 
   /** For a message flow foreign pools count too; the frames around either end never do. */

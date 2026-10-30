@@ -203,6 +203,9 @@ removes overlaps.
 
 Scores the drawing: `score 0: no layout problems`, or one line per problem with its ids, such as
 `crossings [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]`. Every write prints the same score before and after.
+A crossing with the dotted line of a text annotation is no problem, and flows are not routed around one
+(only another annotation line keeps off it; where new nodes go, it only breaks a tie); a line through the
+annotation's text is (`through`).
 
 ## `render`
 

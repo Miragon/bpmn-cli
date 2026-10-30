@@ -1,7 +1,8 @@
 /**
  * An association docked on a flow, when no straight line reaches the flow, is routed to the middle
  * of every segment and keeps the route crossing the fewest lines, not the route to the segment
- * nearest the annotation (src/domain/diagram/layout/incremental/EdgeRouter.ts `flowDock`):
+ * nearest the annotation (src/domain/diagram/layout/incremental/EdgeRouter.ts `flowDock`). Its
+ * crossings are no layout problem, so they are counted on the drawn lines:
  *  - a note on a loop under the row: the loop's near segment lies behind two flows going down, the
  *    association docks on another segment of the loop across one line
  *  - the public scenario: 'Max 3 iterations' on the loop of Approved? no longer crosses both new
@@ -63,7 +64,9 @@ describe('an association docks on the segment of a flow its route crosses the fe
     ];
     const applied = await applyToXml(xml, ops, { force: true });
     expect(applied.result.layout?.mode).toBe('incremental');
-    const crossed = (applied.result.layout?.metrics?.added ?? []).filter((problem) => problem.kind === 'crossings' && problem.ids.includes('Association_3'));
+    const drawn = edges(await Doc.fromXml(applied.xml));
+    const line = drawn.get('Association_3')!.points;
+    const crossed = [...drawn.values()].filter((edge) => edge.id !== 'Association_3' && crossings(line, [edge.points]) > 0);
     expect(crossed.length).toBeLessThanOrEqual(1);
   });
 });

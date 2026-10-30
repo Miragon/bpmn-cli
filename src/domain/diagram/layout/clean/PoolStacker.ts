@@ -10,6 +10,7 @@ import type { ScopePlacer } from './ScopePlacer.js';
 import type { Segment } from '../../utils/geom.js';
 import { laneDepth, stretchLane } from '../../utils/lanes.js';
 import { isContainerShape, poolOf } from '../../utils/pools.js';
+import { isAnnotationLine } from '../../utils/annotations.js';
 
 export interface PoolLayout {
   participant: El;
@@ -133,6 +134,7 @@ export class PoolStacker {
   private messageView(pool: PoolLayout): MessagePool {
     const obstacles: Box[] = [];
     const lines: Segment[] = [];
+    const crossable: Segment[] = [];
     for (const diagramElement of pool.di ?? []) {
       const el = diagramElement.get<El | undefined>('bpmnElement');
       if (!el) continue;
@@ -142,12 +144,14 @@ export class PoolStacker {
         continue;
       }
       const pts = many(diagramElement, 'waypoint').map((waypoint) => ({ x: waypoint.get<number>('x'), y: waypoint.get<number>('y') }));
+      const note = isAnnotationLine(el);
       for (let index = 0; index + 1 < pts.length; index++) {
         lines.push([pts[index]!, pts[index + 1]!]);
+        if (!note) crossable.push([pts[index]!, pts[index + 1]!]);
       }
     }
     const depth = pool.scope?.lanes.length ? laneDepth(pool.scope.lanes) : 0;
-    return { box: pool.box, obstacles, lines, contentLeft: pool.box.x + SIZES.participantHeader + depth * SIZES.laneHeader };
+    return { box: pool.box, obstacles, lines, crossable, contentLeft: pool.box.x + SIZES.participantHeader + depth * SIZES.laneHeader };
   }
 
   private shiftPool(pool: PoolLayout, dy: number): void {

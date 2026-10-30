@@ -7,16 +7,19 @@
  *  - a branch or exception path whose rows below all cross a line opens the
  *    row right below its anchor: the space tool pushes the shapes and the
  *    horizontal segments of the lines running under the anchor down (bypass
- *    and loop-back lines); a branch also tries the rows above its anchor, a
- *    boundary path its host's top border with the path above it. The row
- *    choice counts the chain that follows on the row (domain/diagram/layout/incremental/NodePlacer.ts
- *    chainCost). Single commands and the batch give the same shapes.
+ *    and loop-back lines; a text annotation's line too when that costs about
+ *    as much as crossing it); a branch also tries the rows above its anchor,
+ *    a boundary path its host's top border with the path above it. The row
+ *    choice counts the chain that follows on the row
+ *    (domain/diagram/layout/incremental/RowChooser.ts chainCost). Single
+ *    commands and the batch give the same shapes.
  *  - a branch row keeps clear of the boundary events on its frame's bottom
  *    border (audit #63).
  *  - a crossing left between a new and an existing connection: the existing
  *    one is routed again with the new shapes as obstacles, else the chain
  *    starts at its next row candidate; a trial is kept only when it adds no
- *    hard problem and lowers the score (CrossingRepair.ts repair).
+ *    hard problem and lowers the score (CrossingRepair.ts repair). A
+ *    crossing with a text annotation's line is none to repair.
  *
  * The later blocks hold the findings of the stage B verification, each
  * failing on the stage B build: the path of an event on its host's top
@@ -29,6 +32,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, metricsXml, newXml } from '../../../../../src/api.js';
 import { diffProblems } from '../../../../../src/domain/diagram/utils/problems.js';
+import { polylinesCross } from '../../../../../src/domain/diagram/utils/geom.js';
 import { LayoutAnalysis } from '../../../../../src/domain/diagram/di/LayoutAnalysis.js';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', '..', '..');
@@ -79,6 +83,31 @@ describe('a crossing-aware row choice that makes room (issue #18 (2))', () => {
     const line = waypoints(single, 'Flow_ClaimInvalidToClaimRejected');
     expect(Math.max(...line.map((point) => point.y))).toBeGreaterThan(remind.y + remind.height);
     expect(boundsOf(single, 'Event_ClaimRejected').y).toBeGreaterThan(remind.y + remind.height);
+  });
+
+  it("the same path above a text annotation's line: crossing it would be allowed, yet opening the row costs about the same, so the path goes right below the host and the note down", async () => {
+    // with the crossing free the path went a row further down and right instead (x=510, y=340)
+    const xml = fixture('note-line-under-host.bpmn');
+    const single = await singles(xml, reminder);
+    expect(await added(xml, single)).toEqual([]);
+    expect(shapes(await batch(xml, reminder))).toEqual(shapes(single));
+    expect(boundsOf(single, 'Activity_RemindApprover')).toEqual({ x: 375, y: 200, width: 100, height: 80 });
+    expect(boundsOf(single, 'TextAnnotation_CheckedByFinance')).toEqual({ x: 672, y: 300, width: 120, height: 30 });
+    expect(waypoints(single, 'Association_CheckClaimNote')).toEqual([
+      { x: 240, y: 140 },
+      { x: 240, y: 315 },
+      { x: 672, y: 315 },
+    ]);
+    expect(polylinesCross(waypoints(single, 'flow_approvalOverdueToRemindApprover'), waypoints(single, 'Association_CheckClaimNote'))).toBe(false);
+  });
+
+  it("the same path where a text annotation's line runs through the spot of its end event: the path goes elsewhere, the line is not routed round it, nothing added", async () => {
+    // crossing the line is a tie-break, but a new node on it would push the line aside
+    const xml = fixture('note-line-across-chain.bpmn');
+    const single = await singles(xml, reminder);
+    expect(await added(xml, single)).toEqual([]);
+    expect(shapes(await batch(xml, reminder))).toEqual(shapes(single));
+    expect(waypoints(single, 'Association_PayClaimNote')).toEqual(waypoints(xml, 'Association_PayClaimNote'));
   });
 
   it('a decision spliced into a branch with a bypass right under it: the new "no" branch goes above the row, no crossing', async () => {
@@ -172,6 +201,25 @@ describe('the local repair after placement (issue #18 (3))', () => {
     // the hand drawing is kept otherwise: the new task where a single command puts it, nothing moved
     expect(applied.result.layout?.moved ?? []).toEqual([]);
     expect(cy(boundsOf(applied.xml, 'Activity_SendOffer'))).toBe(cy(boundsOf(xml, 'Activity_PrepareOffer')));
+  });
+
+  it('a new flow across the line of a text annotation starts no repair: no line is routed again, none is tried', async () => {
+    // the new flow runs straight down from "Approve claim" into the rejection path drawn below, through the dotted line
+    // from "Check claim" to its note
+    const xml = fixture('note-line-above-path.bpmn');
+    const lines: string[] = [];
+    const applied = await applyToXml(xml, [{ op: 'connect', source: 'Activity_ApproveClaim', target: 'Activity_RejectClaim', id: 'Flow_ApproveClaimToRejectClaim' }], { force: true, debug: (line) => lines.push(line) });
+    expect(await added(xml, applied.xml)).toEqual([]);
+    const flow = waypoints(applied.xml, 'Flow_ApproveClaimToRejectClaim');
+    const note = waypoints(applied.xml, 'Association_CheckClaimNote');
+    expect(flow).toEqual([
+      { x: 400, y: 140 },
+      { x: 400, y: 260 },
+    ]);
+    expect(note).toEqual(waypoints(xml, 'Association_CheckClaimNote'));
+    expect(polylinesCross(flow, note)).toBe(true);
+    expect(lines.filter((line) => line.startsWith('[repair]'))).toEqual([]);
+    expect(applied.result.layout?.rerouted ?? []).toEqual([]);
   });
 
   it('a chain that still crosses starts at its next row candidate, kept because the score goes down (public scenario)', async () => {
