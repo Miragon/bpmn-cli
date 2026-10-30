@@ -1,5 +1,6 @@
 import { enclosingProcess, is, type El } from '../../document/utils/moddle.js';
 import type { Box, Point } from './types.js';
+import { isAnnotationLine } from '../utils/annotations.js';
 import { containsPoint, cx, cy, overlaps, segmentHits, segmentsCross, type Segment } from '../utils/geom.js';
 import { collinear, drawnEnds, glyph, hits, inside, joinTail, lookup, readDrawnPlane, subTitleOf, type Edge, type MetricIndex, type Shape } from '../utils/harness.js';
 import { idOf, raw, rawList } from '../utils/raw.js';
@@ -101,14 +102,17 @@ export class PlaneAnalysis {
     }
   }
 
-  /** crossings of any two edges, collinear runs of unrelated edges */
+  /**
+   * crossings of two edges, neither an annotation line (only a line through the annotation's text
+   * counts, as `through`); collinear runs of unrelated edges
+   */
   private checkEdgePairs(): void {
     const { edges, add } = this;
     for (let firstIndex = 0; firstIndex < edges.length; firstIndex++) {
       for (let secondIndex = firstIndex + 1; secondIndex < edges.length; secondIndex++) {
         const first = edges[firstIndex]!;
         const second = edges[secondIndex]!;
-        if (first.segs.some((sa) => second.segs.some((sb) => segmentsCross(...sa, ...sb)))) {
+        if (!isAnnotationLine(first.el) && !isAnnotationLine(second.el) && first.segs.some((sa) => second.segs.some((sb) => segmentsCross(...sa, ...sb)))) {
           add('crossings', `${first.id}x${second.id}`, [first.id, second.id]);
         }
         const related = [...first.ends].some((end) => second.ends.has(end));

@@ -134,6 +134,68 @@ describe('layoutProblems', () => {
     expect(metrics.score).toBe(WEIGHTS.crossings);
   });
 
+  it("an annotation line crosses a flow and another annotation line for free; a data association does not, and a line through the annotation's text is through", async () => {
+    // N1 -> C crosses F1 and N2 -> A; the data association D -> S crosses F1 and runs through N2
+    const body = `${task('A')}${task('B')}${task('C')}<bpmn:task id="D" name="D"><bpmn:dataOutputAssociation id="DOA"><bpmn:targetRef>S</bpmn:targetRef></bpmn:dataOutputAssociation></bpmn:task>
+      <bpmn:dataStoreReference id="S" />${flow('F1', 'A', 'B')}
+      <bpmn:textAnnotation id="N1"><bpmn:text>one</bpmn:text></bpmn:textAnnotation><bpmn:textAnnotation id="N2"><bpmn:text>two</bpmn:text></bpmn:textAnnotation>
+      <bpmn:association id="AS1" sourceRef="N1" targetRef="C" /><bpmn:association id="AS2" sourceRef="N2" targetRef="A" />`;
+    const di = [
+      shape('A', [100, 100, 100, 80]),
+      shape('B', [500, 100, 100, 80]),
+      shape('C', [250, 300, 100, 80]),
+      shape('D', [420, 300, 100, 80]),
+      shape('S', [430, 10, 50, 50]),
+      shape('N1', [250, 0, 100, 30]),
+      shape('N2', [380, 220, 100, 30]),
+      edge('F1', [
+        [200, 140],
+        [500, 140],
+      ]),
+      edge('DOA', [
+        [455, 300],
+        [455, 60],
+      ]),
+      edge('AS1', [
+        [300, 30],
+        [300, 300],
+      ]),
+      edge('AS2', [
+        [380, 235],
+        [200, 170],
+      ]),
+    ];
+    const metrics = await measure(processXml(body, di));
+    expect(metrics.problems).toEqual([
+      { kind: 'crossings', ids: ['F1', 'DOA'] },
+      { kind: 'through', ids: ['DOA', 'N2'] },
+    ]);
+    // the annotation lines first in the DI: either edge of a pair may be one
+    expect(only((await measure(processXml(body, [...di].reverse()))).problems, 'crossings')).toEqual([{ kind: 'crossings', ids: ['DOA', 'F1'] }]);
+  });
+
+  it('a compensation association is no annotation line: its crossing counts', async () => {
+    const body = `${task('A')}<bpmn:boundaryEvent id="CB" attachedToRef="A"><bpmn:compensateEventDefinition /></bpmn:boundaryEvent><bpmn:task id="H" name="H" isForCompensation="true" />
+      ${task('P')}${task('Q')}${flow('F2', 'P', 'Q')}<bpmn:association id="CA" associationDirection="One" sourceRef="CB" targetRef="H" />`;
+    const di = [
+      shape('A', [200, 100, 100, 80]),
+      shape('CB', [232, 162, 36, 36]),
+      shape('H', [200, 320, 100, 80]),
+      shape('P', [50, 220, 100, 60]),
+      shape('Q', [400, 220, 100, 60]),
+      edge('F2', [
+        [150, 250],
+        [400, 250],
+      ]),
+      edge('CA', [
+        [250, 198],
+        [250, 320],
+      ]),
+    ];
+    const metrics = await measure(processXml(body, di));
+    expect(metrics.problems).toEqual([{ kind: 'crossings', ids: ['F2', 'CA'] }]);
+  });
+
   it('finds a flow running through a shape it does not connect (once per pair)', async () => {
     const body = `${task('A')}${task('B')}${task('C')}${flow('F1', 'A', 'C')}`;
     const di = [

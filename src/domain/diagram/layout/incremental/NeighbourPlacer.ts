@@ -223,7 +223,7 @@ export class NeighbourPlacer {
    * neighbours on one side (events below, gateways above) keep apart. A new branch takes the
    * cheapest free row below the anchor's branches in its own frame (one into another lane does not
    * count), or a row above an anchor without a branch above, which wins only when every row below
-   * crosses.
+   * crosses a line (not a text annotation's).
    */
   placeAfter(plane: Plane, id: string, preds: DShape[], pending: ReadonlySet<string>): void {
     const sp = this.placer.spacingFor(plane);

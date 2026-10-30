@@ -5,6 +5,7 @@ import { PlaneQuery } from '../../di/PlaneQuery.js';
 
 import type { DShape, Plane, ShapeKind } from '../../di/types.js';
 import { attachedSide, defaultSides } from '../../utils/sides.js';
+import { isAnnotationLine } from '../../utils/annotations.js';
 import { OrthogonalRouter } from './OrthogonalRouter.js';
 import type { NodePlacer, Probe } from './NodePlacer.js';
 import type { PlacementObstacles } from './PlacementObstacles.js';
@@ -32,11 +33,16 @@ export interface Cand {
 }
 
 const CROSSING = 300;
+/**
+ * a crossing with a text annotation's line: no layout problem, only a tie-break between rows that
+ * cost about the same (less than a row further down, so no path is sent away for it)
+ */
+const ANNOTATION_CROSSING = 25;
 /** an existing line through the room the new nodes take: it is routed around them */
 const LINE_HIT = 400;
 /** a trial route through a label, per segment that hits it */
 const LABEL_HIT = 100;
-/** an opened row: base, per shape it moves (capped: one crossing always costs more) */
+/** an opened row: base, per shape it moves (capped: one crossing of a line always costs more) */
 const OPEN_ROW = 100;
 const OPEN_PER_SHAPE = 3;
 const OPEN_MAX_SHAPES = 40;
@@ -83,8 +89,9 @@ export class RowChooser {
   }
 
   /**
-   * A trial route from `from` to a candidate box, charged for cut shapes, crossed lines, labels
-   * hit, bends and length. `shift` approximates a row opened by the space tool.
+   * A trial route from `from` to a candidate box, charged for cut shapes, crossed lines (an
+   * annotation line only a tie-break), labels hit, bends and length; it crosses annotation lines as
+   * the router does. `shift` approximates a row opened by the space tool.
    */
   private connectionCost(plane: Plane, from: DShape, to: Box, toKind: ShapeKind, shift?: Shift): number {
     const host = from.hostId ? plane.shapes.get(from.hostId) : undefined;
@@ -95,11 +102,17 @@ export class RowChooser {
         obstacles.push(this.shiftedBox(other.bounds, shift));
       }
     }
-    const flows = [...plane.edges.values()].map((edge) => this.shiftedLine(edge.points, shift)).filter((points) => points.length >= 2);
-    const lines = this.placer.drawing(plane).routingLines().map((line) => this.shiftedLine(line, shift));
+    const notes = new Set([...plane.edges.values()].filter((edge) => isAnnotationLine(edge.el)).map((edge) => edge.points));
+    const crossed = [...plane.edges.values()].map((edge) => ({ line: this.shiftedLine(edge.points, shift), cost: isAnnotationLine(edge.el) ? ANNOTATION_CROSSING : CROSSING })).filter(({ line }) => line.length >= 2);
+    const freeLines = new Set<readonly Point[]>();
+    const lines = this.placer.drawing(plane).routingLines().map((line) => {
+      const shifted = this.shiftedLine(line, shift);
+      if (notes.has(line)) freeLines.add(shifted);
+      return shifted;
+    });
     const hostBox = host ? this.shiftedBox(host.bounds, shift) : undefined;
     const sourceSides = from.kind === 'boundary' && hostBox ? [attachedSide(from.bounds, hostBox)] : defaultSides(from.kind, 'source');
-    const pts = OrthogonalRouter.route({ source: from.bounds, target: to, sourceSides, targetSides: defaultSides(toKind, 'target'), obstacles, lines });
+    const pts = OrthogonalRouter.route({ source: from.bounds, target: to, sourceSides, targetSides: defaultSides(toKind, 'target'), obstacles, lines, freeLines });
     let cost = 0;
     for (let index = 0; index + 1 < pts.length; index++) {
       cost += Math.abs(pts[index + 1]!.x - pts[index]!.x) + Math.abs(pts[index + 1]!.y - pts[index]!.y);
@@ -108,11 +121,11 @@ export class RowChooser {
     for (const obstacle of obstacles) {
       if (obstacle !== hostBox && pathHits(pts, obstacle)) cost += 2000;
     }
-    for (const line of flows) {
+    for (const { line, cost: crossing } of crossed) {
       for (let index = 0; index + 1 < pts.length; index++) {
         for (let lineIndex = 0; lineIndex + 1 < line.length; lineIndex++) {
           if (segmentsCross(pts[index]!, pts[index + 1]!, line[lineIndex]!, line[lineIndex + 1]!)) {
-            cost += CROSSING;
+            cost += crossing;
           }
         }
       }
@@ -129,14 +142,19 @@ export class RowChooser {
   }
 
   /**
-   * The rest of the chain on the candidate's row: a line crossing its run costs a crossing, a line
-   * through the room it takes (or through the box of an opened or top row) costs LINE_HIT.
+   * The rest of the chain on the candidate's row: a line crossing its run costs a crossing (an
+   * annotation line only a tie-break, but LINE_HIT where it runs through the chain's nodes, as it
+   * is routed around them), a line through the room it takes (or through the box of an opened or
+   * top row) costs LINE_HIT.
    */
   private chainCost(plane: Plane, box: Box, cand: Cand): number {
     const shift = cand.insert ?? cand.grow;
     const extent = cand.extent ?? 0;
+    const gap = this.placer.spacingFor(plane).gap;
     const run = extent > 0 ? ([{ x: right(box), y: cy(box) }, { x: right(box) + extent, y: cy(box) }] as const) : undefined;
     const rest = extent > 0 ? { x: right(box), y: box.y, width: extent, height: box.height } : undefined;
+    /** the chain's nodes start one gap right of the box (chainExtent) */
+    const nodes = extent > gap ? { x: right(box) + gap, y: box.y, width: extent - gap, height: box.height } : undefined;
     const head = cand.insert || cand.top ? box : undefined;
     let cost = 0;
     for (const edge of plane.edges.values()) {
@@ -145,7 +163,11 @@ export class RowChooser {
         const segmentStart = line[index]!;
         const segmentEnd = line[index + 1]!;
         if (run && segmentsCross(run[0], run[1], segmentStart, segmentEnd)) {
-          cost += CROSSING;
+          const note = isAnnotationLine(edge.el);
+          cost += note ? ANNOTATION_CROSSING : CROSSING;
+          if (note && nodes && segmentHits(segmentStart, segmentEnd, nodes, 2)) {
+            cost += LINE_HIT;
+          }
           if (LayoutDebug.on()) {
             LayoutDebug.log(`[place]   chain at c=${cand.centre} crosses ${edge.id}`);
           }
@@ -219,7 +241,7 @@ export class RowChooser {
   /**
    * Rows at or below `first`: the first free rows and, when the first row is taken or a line runs
    * between the anchor (left downwards at `descend`) and it, that row opened with the space tool.
-   * An opened row costs less than one crossing.
+   * An opened row costs less than one crossing of a line (not of a text annotation's).
    */
   rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>, frame: DShape | undefined, left: number, size: { width: number; height: number }, extent: number, first: number, step: number, floor: number, exclude: ReadonlySet<string>, basePenalty = 0, anchor?: DShape, descend?: number): Cand[] {
     const rows = this.freeRows(plane, frame, left, size.width, size.height, first, step, exclude, 3, extent);

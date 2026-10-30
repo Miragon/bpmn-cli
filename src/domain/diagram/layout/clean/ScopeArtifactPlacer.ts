@@ -1,14 +1,16 @@
 import { is, many, type El, idOf } from '../../../document/utils/moddle.js';
 import { METRICS, defaultSizeOf } from '../../utils/sizes.js';
-import { overlaps } from '../../utils/geom.js';
+import { overlaps, toSegments } from '../../utils/geom.js';
 import type { Box, GArtifact, GEdge, GNode, LinkEnd, Point, ScopeLayout } from '../../di/types.js';
 import { ChannelRouter } from './ChannelRouter.js';
+import { LinkRouter } from './LinkRouter.js';
 import { ScopeLabels } from './ScopeLabels.js';
 import { routedSegments, shiftScope } from '../../utils/scope.js';
 
 /**
- * Places a scope's data objects, stores and text annotations and builds their links:
- * data before routing so the router avoids it, annotations above their anchor after routing.
+ * Places a scope's data objects, stores and text annotations and builds their links: data and the
+ * notes of boundary events before routing so the router avoids them, the other notes above their
+ * anchor (beside a data object) after routing.
  */
 export class ScopeArtifactPlacer {
   constructor(private readonly layout: ScopeLayout) {}
@@ -55,13 +57,18 @@ export class ScopeArtifactPlacer {
       art.anchor = end;
       if ('kind' in end && 'boundary' in end) art.anchorNode = end;
     };
+    /** A note owns its line, also to a data object: the data object still hangs below its node. */
+    const ownerOf = (...ends: Array<GNode | GArtifact | LinkEnd | undefined>): GArtifact | undefined => {
+      const arts = ends.filter((end): end is GArtifact => !!end && 'links' in end);
+      return arts.find((artifact) => artifact.kind === 'annotation') ?? arts[0];
+    };
     for (const el of many(scope, 'artifacts')) {
       if (!is(el, 'bpmn:Association')) continue;
       const source = el.get<El | undefined>('sourceRef');
       const target = el.get<El | undefined>('targetRef');
       const from = resolve(source);
       const to = resolve(target);
-      const art = from && 'links' in from ? (from as GArtifact) : to && 'links' in to ? (to as GArtifact) : undefined;
+      const art = ownerOf(from, to);
       if (!from || !to || !art) {
         if (source && target && !layout.compensations.some((compensation) => compensation.el === el)) {
           layout.crossLinks.push({ el, id: idOf(el), sourceId: idOf(source), targetId: idOf(target) });
@@ -136,9 +143,12 @@ export class ScopeArtifactPlacer {
   }
 
   /**
-   * A note whose spot above its anchor is taken goes into a band above the whole content.
-   * The label of an event on its host's top border blocks the spot above the host too. The band
-   * holds its notes in anchor order, so no two association lines cross.
+   * A note on a data object goes beside it first. A note on a flow whose spot above would cross the
+   * top border of the flow's lane (not the first lane's, that lane grows) goes under the flow, near
+   * its point, when there is room. A note whose spot above its anchor is taken (by a shape, a label,
+   * a flow or a compensation line) goes into a band above the whole content. The label of an event
+   * on its host's top border blocks the spot above the host too. The band holds its notes in anchor
+   * order, so no two association lines cross.
    */
   placeAnnotations(): void {
     const { layout } = this;
@@ -164,12 +174,12 @@ export class ScopeArtifactPlacer {
     for (const edge of layout.edges) {
       if (edge.label) boxes.push(edge.label);
     }
-    const segments = routedSegments(layout);
+    const segments = [...routedSegments(layout), ...layout.compensations.flatMap((compensation) => toSegments(LinkRouter.compensationPath(compensation.event.box, compensation.handler.box)))];
     const collides = (box: Box): boolean =>
       boxes.some((obstacle) => overlaps(obstacle, box, 6)) ||
       segments.some(([start, end]) => Math.min(start.x, end.x) < box.x + box.width + 4 && Math.max(start.x, end.x) > box.x - 4 && Math.min(start.y, end.y) < box.y + box.height + 4 && Math.max(start.y, end.y) > box.y - 4);
-    const settle = (note: GArtifact, cx: number, top: number, check: (box: Box) => boolean): Box | undefined => {
-      for (let step = 0; step <= 8; step++) {
+    const settle = (note: GArtifact, cx: number, top: number, check: (box: Box) => boolean, steps = 8): Box | undefined => {
+      for (let step = 0; step <= steps; step++) {
         for (const dir of step ? [1, -1] : [0]) {
           const left = Math.max(0, Math.round(cx - note.width / 2 + dir * step * (note.width / 2 + 20)));
           const box = { x: left, y: top, width: note.width, height: note.height };
@@ -190,7 +200,7 @@ export class ScopeArtifactPlacer {
         continue;
       }
       const top = anchor.y - 16 - note.height;
-      const box = top >= 0 ? settle(note, anchorX(note), top, collides) : undefined;
+      const box = this.besideData(note, collides) ?? this.underFlow(note, top, (under) => settle(note, anchorX(note), under, collides, 1)) ?? (top >= 0 ? settle(note, anchorX(note), top, collides) : undefined);
       if (box) {
         note.box = box;
         boxes.push(box);
@@ -236,6 +246,33 @@ export class ScopeArtifactPlacer {
     }
     const midpoint = best ? { x: (best[0].x + best[1].x) / 2, y: (best[0].y + best[1].y) / 2 } : { x: 0, y: 0 };
     return { x: midpoint.x, y: midpoint.y, width: 0, height: 0 };
+  }
+
+  /**
+   * A note on a flow whose spot above (`top`) would cross the top border of the flow's lane settles
+   * under the flow, near its point: not in the first lane (it grows), not for a point on a lane
+   * border, only where the lane holds it.
+   */
+  private underFlow(note: GArtifact, top: number, settle: (top: number) => Box | undefined): Box | undefined {
+    const point = note.anchor?.flow ? note.anchor.box : undefined;
+    const lane = point && this.layout.laneBands?.slice(1).find((band) => point.y > band.top && point.y < band.bottom);
+    return lane && top < lane.top && top + note.height > lane.top && point.y + 16 + note.height <= lane.bottom ? settle(point.y + 16) : undefined;
+  }
+
+  /**
+   * Right, then left of a data object at its height: the spot above it is its node's. A note that
+   * would reach below the data object's lane goes up to end on the lane's border; the last lane
+   * grows to hold it instead.
+   */
+  private besideData(note: GArtifact, collides: (box: Box) => boolean): Box | undefined {
+    const data = this.layout.artifacts.find((artifact) => artifact === note.anchor && artifact.kind !== 'annotation');
+    if (!data) return undefined;
+    const node = data.anchorNode;
+    const lane = node && this.layout.laneBands?.slice(0, -1).find((band) => band.nodes.has(node.host ?? node));
+    const y = Math.round(Math.min(data.box.y + data.box.height / 2 - note.height / 2, (lane?.bottom ?? Infinity) - note.height));
+    return [data.box.x + data.box.width + 20, data.box.x - 20 - note.width]
+      .map((x) => ({ x: Math.round(x), y, width: note.width, height: note.height }))
+      .find((spot) => spot.x >= 0 && spot.y >= 0 && !collides(spot));
   }
 
   private belowX(node: GNode): number {

@@ -145,7 +145,8 @@ export class BoundaryPlacer {
   /**
    * Rows above the host for the first node of a path from an event on the bottom border placed
    * by the CLI, when the path starts with this node and the top border has a free spot. They cost
-   * TOP_ROW more than a row below: a clean row below wins, one crossing a line loses.
+   * TOP_ROW more than a row below: a clean row below wins, one crossing a line (not a text
+   * annotation's) loses.
    * An event drawn by hand keeps its border; the CLI's sits where placeBoundary puts it.
    */
   topCandidates(plane: Plane, id: string, probe: Probe, event: DShape, host: DShape, frame: DShape | undefined, size: { width: number; height: number }, extent: number, exclude: ReadonlySet<string>): Cand[] {

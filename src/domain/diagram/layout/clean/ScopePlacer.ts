@@ -53,7 +53,7 @@ export class ScopePlacer {
     artifacts.refreshFlowAnchors();
     this.placeEventSubs(layout);
     artifacts.placeAnnotations();
-    new LinkRouter(layout).route();
+    new LinkRouter(layout, true).route();
     growToFit(layout);
     return layout;
   }

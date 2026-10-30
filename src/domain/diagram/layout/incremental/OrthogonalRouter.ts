@@ -26,6 +26,8 @@ export interface RouteRequest {
   /** neither source nor target; the caller excludes containers */
   obstacles: Box[];
   lines?: Point[][];
+  /** of `lines`, those crossing which costs nothing: annotation lines, for a route that is none */
+  freeLines?: ReadonlySet<readonly Point[]>;
   frame?: Box;
   margin?: number;
 }
@@ -68,7 +70,8 @@ interface Attempt extends Found {
 /**
  * Orthogonal routing of one connection, pure geometry: A* over a Hanan grid near the ends,
  * retried over the whole plane when the route still cuts an obstacle. Minimises length,
- * 150 per bend, 200 per crossing and 300 per collinear overlap; independent of input order.
+ * 150 per bend, 200 per crossing (none of a free line) and 300 per collinear overlap; independent
+ * of input order.
  */
 export class OrthogonalRouter {
   private constructor(private readonly context: Ctx) {}
@@ -213,7 +216,7 @@ export class OrthogonalRouter {
    * Marks as `merge` the shared tail of each line entering a `mergeAt` port vertically: its last
    * run, a short hook with the run before it, and the runs back to where it parts from another.
    */
-  private static lineSegments(lines: Point[][], mergeAt: readonly Port[] = [], hook = 0): Seg[] {
+  private static lineSegments(lines: Point[][], mergeAt: readonly Port[] = [], hook = 0, free: ReadonlySet<readonly Point[]> = new Set()): Seg[] {
     const segs: Seg[] = [];
     const entries: Array<{ port: Port; runs: Run[] }> = [];
     for (const line of lines) {
@@ -225,7 +228,7 @@ export class OrthogonalRouter {
         if (dx < EPS && dy < EPS) continue;
         const kind = dy < EPS ? 'h' : dx < EPS ? 'v' : 'd';
         const ends = kind === 'd' ? [] : [...(index === 0 ? [start] : []), ...(index + 2 === line.length ? [end] : [])];
-        segs.push({ start, end, kind, ...(ends.length ? { ends } : {}) });
+        segs.push({ start, end, kind, ...(ends.length ? { ends } : {}), ...(free.has(line) ? { free: true } : {}) });
       }
       const end = line[line.length - 1];
       const port = end && mergeAt.find((candidate) => Math.abs(candidate.x - end.x) <= OVERLAP_TOL && Math.abs(candidate.y - end.y) <= OVERLAP_TOL);
@@ -280,7 +283,7 @@ export class OrthogonalRouter {
       margin,
       stub,
       obstacles,
-      segs: OrthogonalRouter.lineSegments(req.lines ?? [], mergeAt, target.width + 2 * stub),
+      segs: OrthogonalRouter.lineSegments(req.lines ?? [], mergeAt, target.width + 2 * stub, req.freeLines),
       src: OrthogonalRouter.makePorts(source, OrthogonalRouter.sidesOf(req.sourceSides, SOURCE_DEFAULT), SRC_RANK, target, obstacles, margin, stub, docked, req.sourceMiddle === true, req.sourceAvoid),
       tgt,
       tMiddle: req.targetMiddle === true,
@@ -526,7 +529,7 @@ export class OrthogonalRouter {
       }
       for (const seg of this.context.segs) {
         if (segmentsCross(start, end, seg.start, seg.end)) {
-          penalty += CROSS;
+          penalty += seg.free ? 0 : CROSS;
         } else if ((!seg.merge || index < tail) && OrthogonalRouter.segmentsOverlap(start, end, seg.start, seg.end)) {
           penalty += OVERLAP;
         }

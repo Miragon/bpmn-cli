@@ -90,4 +90,6 @@ export interface Seg {
   ends?: Point[];
   /** on the shared tail into a join's top / bottom port: following it there is no overlap */
   merge?: boolean;
+  /** crossing it costs nothing, running along it still does */
+  free?: boolean;
 }

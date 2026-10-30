@@ -6,7 +6,7 @@
  * against the quality metrics of the layout checker (the same metrics as
  * tools/layout-regress.mjs):
  *
- *   crossings  proper crossings between any two edges
+ *   crossings  proper crossings between two edges, neither a text annotation's line
  *   overlaps   overlapping leaf shapes (a boundary event may overlap its host)
  *   through    edge segments cutting through a shape they do not connect
  *   diagonal   non-orthogonal sequence / message flow segments
@@ -43,6 +43,7 @@ import { JoinColumnTrial } from '../../../../../src/domain/diagram/layout/clean/
 import { ScopeGrid } from '../../../../../src/domain/diagram/layout/clean/ScopeGrid.js';
 import { ScopePlacer } from '../../../../../src/domain/diagram/layout/clean/ScopePlacer.js';
 import { shiftNode } from '../../../../../src/domain/diagram/utils/scope.js';
+import { isAnnotationLine } from '../../../../../src/domain/diagram/utils/annotations.js';
 import { LayoutAnalysis } from '../../../../../src/domain/diagram/di/LayoutAnalysis.js';
 import { DiagramReader } from '../../../../../src/domain/diagram/di/DiagramReader.js';
 import { is, many, type El } from '../../../../../src/domain/document/utils/moddle.js';
@@ -333,7 +334,7 @@ function checkDi(doc: Doc, planes: Plane[]): Report {
     for (let index = 0; index < plane.edges.length; index++) {
       for (let otherIndex = index + 1; otherIndex < plane.edges.length; otherIndex++) {
         const first = plane.edges[index]!, second = plane.edges[otherIndex]!;
-        if (segments(first.points).some((s1) => segments(second.points).some((s2) => properCross(s1, s2)))) {
+        if (!isAnnotationLine(first.el) && !isAnnotationLine(second.el) && segments(first.points).some((s1) => segments(second.points).some((s2) => properCross(s1, s2)))) {
           report.crossings.push(`${first.id}x${second.id}`);
         }
       }
@@ -2119,6 +2120,45 @@ describe('clean layout engine', () => {
     expect(laid.box('N').y, 'the note below the host').toBeGreaterThan(bottom(laid.box('A1')));
   });
 
+  /**
+   * Stock late, the timer of Reserve stock in the branch of an exclusive split with an empty branch, leads into the
+   * parallel split PS behind its join. The note on Unpaid, the timer of Send invoice in PS's lower branch, also points
+   * at PS.
+   */
+  function noteOnSplitDoc(): Doc {
+    return proc([
+      start('S', 'Order received'),
+      task('A', 'Check order', 'S'),
+      { op: 'split', after: 'A', kind: 'exclusiveGateway', id: 'G', joinId: 'GJ', branches: [{ nodes: [{ kind: 'task', id: 'C', name: 'Check stock' }, { kind: 'task', id: 'R', name: 'Reserve stock' }] }, { nodes: [] }] },
+      { op: 'split', after: 'GJ', kind: 'parallelGateway', id: 'PS', joinId: 'PJ', branches: [{ nodes: [{ kind: 'task', id: 'K', name: 'Pack goods' }, { kind: 'task', id: 'H', name: 'Ship goods' }] }, { nodes: [{ kind: 'task', id: 'I', name: 'Send invoice' }] }] },
+      end('E', 'PJ', 'Done'),
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BI', on: 'I', name: 'Unpaid', timer: 'P14D', nonInterrupting: true },
+      { op: 'add', kind: 'boundaryEvent:timer', id: 'BR', on: 'R', name: 'Stock late', timer: 'P1D' },
+      { op: 'connect', source: 'BR', target: 'PS' },
+      { op: 'add', kind: 'textAnnotation', id: 'N', text: 'Dunning letter', to: 'BI' },
+      { op: 'connect', source: 'N', target: 'PS' },
+    ]);
+  }
+
+  it('a crossing with the line of a note does not keep a boundary event off its host\'s top border: Stock late\'s way over the top crosses no flow, and the split\'s flow into Send invoice leaves the freed bottom vertex across the line from Unpaid\'s note into the split', async () => {
+    // from the bottom border Stock late's way below crossed the empty branch's rise into the join (score 5); counted,
+    // the note line's crossing on the top border would have kept the event there
+    const lines: string[] = [];
+    const laid = await LayoutDebug.during(
+      (line) => lines.push(line),
+      async () => layout('boundary-top-border-note-line', noteOnSplitDoc()),
+    );
+    expectClean(laid);
+    expect(lines.filter((line) => line.startsWith('[boundary] '))).toEqual([expect.stringMatching(/^\[boundary\] BR moves to the top border/)]);
+    expectUpOverTop(laid, 'BR', 'PS', 'R', 'into the split');
+    const split = laid.box('PS');
+    const invoice = flowBetween(laid, 'PS', 'I');
+    expect(invoice.points[0], 'out of the split\'s bottom vertex').toEqual({ x: cx(split), y: bottom(split) });
+    const note = laid.planes[0]!.edges.find((edge) => isAnnotationLine(edge.el) && edge.ends.has('PS'))!;
+    expect(segments(invoice.points).some((segment) => segments(note.points).some((other) => properCross(segment, other))), 'the flow into Send invoice crosses the note line').toBe(true);
+    expect(LayoutAnalysis.of(laid.out.model.definitions).score).toBe(0);
+  });
+
   /** start -> "Poll status" -> end with a named self loop on the task. */
   function selfLoopDoc(): Doc {
     return proc([start('S'), task('A', 'Poll status', 'S'), end('E', 'A'), { op: 'connect', source: 'A', target: 'A', name: 'again' }]);
@@ -2959,6 +2999,75 @@ describe('clean layout engine', () => {
     const outA = dataEdges.find((edge) => is(edge.el, 'bpmn:DataOutputAssociation') && edge.ends.has('A'))!;
     expect(outA.points[1]!.y).toBe(laid.box('DO').y);
     expect(outA.points[0]!.y).toBe(bottom(laid.box('A')));
+  });
+
+  it('a note on a data object or store leaves it below its task and sits right beside it, its line docking on the data', async () => {
+    // a note is linked either way: DO -> N as `add textAnnotation to` draws it, N2 -> DS as a connect from the note
+    const doc = (...notes: EditCommand[]): Doc =>
+      proc([
+        start('S'),
+        task('A', 'Create order', 'S'),
+        task('B', 'Check order', 'A'),
+        task('C', 'Store order', 'B'),
+        end('E', 'C'),
+        { op: 'add', kind: 'dataObject', id: 'DO', name: 'Order', in: 'P' },
+        { op: 'connect', source: 'A', target: 'DO' },
+        { op: 'add', kind: 'dataStore', id: 'DS', name: 'Orders DB', in: 'P' },
+        { op: 'connect', source: 'DS', target: 'C' },
+        ...notes,
+      ]);
+    const bare = await layout('data-bare', doc());
+    const laid = await layout(
+      'data-notes',
+      doc(
+        { op: 'add', kind: 'textAnnotation', id: 'N', text: 'Kept for ten years', to: 'DO' },
+        { op: 'add', kind: 'textAnnotation', id: 'N2', text: 'Nightly backup' },
+        { op: 'connect', source: 'N2', target: 'DS' },
+      ),
+    );
+    expectClean(laid);
+    expectLabelsClear(laid);
+    for (const id of ['S', 'A', 'B', 'C', 'E', 'DO', 'DS']) {
+      expect(laid.box(id), `${id} as without the notes`).toEqual(bare.box(id));
+    }
+    for (const [noteId, dataId, noteFirst] of [['N', 'DO', false], ['N2', 'DS', true]] as const) {
+      const note = laid.box(noteId), data = laid.box(dataId);
+      expect(note.x, `${noteId} right of ${dataId}`).toBe(right(data) + 20);
+      expect(Math.abs(cy(note) - cy(data)), `${noteId} at the height of ${dataId}`).toBeLessThanOrEqual(0.5);
+      const line = laid.planes[0]!.edges.find((edge) => edge.ends.has(noteId))!;
+      expect(isAnnotationLine(line.el)).toBe(true);
+      expect(line.ends.has(dataId)).toBe(true);
+      const y = line.points[0]!.y;
+      const ends = [{ x: right(data), y }, { x: note.x, y }];
+      expect(line.points, `${line.id}: one horizontal segment from its source to its target`).toEqual(noteFirst ? ends.reverse() : ends);
+      expect(y).toBeGreaterThan(note.y);
+      expect(y).toBeLessThan(bottom(note));
+    }
+  });
+
+  it('a note on a data object whose right side holds the next data object sits left beside it', async () => {
+    const laid = await layout(
+      'data-note-left',
+      proc([
+        start('S'),
+        task('A', 'Create order', 'S'),
+        task('B', 'Check order', 'A'),
+        end('E', 'B'),
+        { op: 'add', kind: 'dataObject', id: 'D1', name: 'Order', in: 'P' },
+        { op: 'connect', source: 'B', target: 'D1' },
+        { op: 'add', kind: 'dataObject', id: 'D2', name: 'Invoice', in: 'P' },
+        { op: 'connect', source: 'B', target: 'D2' },
+        { op: 'add', kind: 'textAnnotation', id: 'N', text: 'Draft', to: 'D1' },
+      ]),
+    );
+    expectClean(laid);
+    expectLabelsClear(laid);
+    const note = laid.box('N'), d1 = laid.box('D1');
+    expect(laid.box('D2').x).toBeGreaterThan(right(d1));
+    expect(right(note), 'N left of D1').toBe(d1.x - 20);
+    expect(Math.abs(cy(note) - cy(d1))).toBeLessThanOrEqual(0.5);
+    const y = laid.points('association_orderToN')[0]!.y;
+    expect(laid.points('association_orderToN')).toEqual([{ x: d1.x, y }, { x: right(note), y }]);
   });
 
   /** start -> "Check twice" -> "Send" -> end with a note on the task (N1) and a note on the flow between the tasks (N2). */

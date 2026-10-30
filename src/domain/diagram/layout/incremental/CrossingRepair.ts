@@ -5,6 +5,7 @@ import { TrialGuard, type TrialPolicy } from '../../di/TrialGuard.js';
 import type { DEdge, Plane, Point } from '../../di/types.js';
 import { copyBox, polylinesCross, samePoints, toSegments } from '../../utils/geom.js';
 import { collinear } from '../../utils/harness.js';
+import { isAnnotationLine } from '../../utils/annotations.js';
 import { raw } from '../../utils/raw.js';
 import { isHardProblem, problemKey, type LayoutMetrics } from '../../utils/problems.js';
 import { PlaneWriter } from '../../di/PlaneWriter.js';
@@ -19,7 +20,8 @@ const CHAIN_RETRIES = 2;
 const RUN_SLACK = 20;
 
 /**
- * Removes crossings between connections drawn in this run and existing ones: first by rerouting,
+ * Removes crossings between connections drawn in this run and existing ones (an annotation line's
+ * crossings are no problem, so none of them is repaired): first by rerouting,
  * then by placing the new chain at its next row candidate. A trial stays only when it lowers the
  * score and adds no hard problem and no crossing among the hand-drawn lines. A hand-drawn line is
  * not laid on top of the others to save a crossing: it would read as their continuation.
@@ -30,9 +32,10 @@ export class CrossingRepair {
   private newCrossings(): Array<[DEdge, DEdge, Plane]> {
     const out: Array<[DEdge, DEdge, Plane]> = [];
     for (const plane of this.run.planes) {
-      const fresh = [...plane.edges.values()].filter((edge) => this.run.newEdges.has(edge.id) && edge.points.length >= 2);
+      const lines = [...plane.edges.values()].filter((edge) => edge.points.length >= 2 && !isAnnotationLine(edge.el));
+      const fresh = lines.filter((edge) => this.run.newEdges.has(edge.id));
       if (!fresh.length) continue;
-      const kept = [...plane.edges.values()].filter((edge) => !this.run.newEdges.has(edge.id) && edge.points.length >= 2);
+      const kept = lines.filter((edge) => !this.run.newEdges.has(edge.id));
       for (const freshEdge of fresh) {
         for (const edge of kept) {
           if (polylinesCross(freshEdge.points, edge.points)) {
@@ -166,7 +169,7 @@ export class CrossingRepair {
       }
     };
     const crossesNewDrawnLine = (plane: Plane, target: DEdge, pts: readonly Point[]): boolean =>
-      [...plane.edges.values()].some((other) => other !== target && !this.run.newEdges.has(other.id) && other.points.length >= 2 && polylinesCross(pts, other.points) && !polylinesCross(target.points, other.points));
+      [...plane.edges.values()].some((other) => other !== target && !this.run.newEdges.has(other.id) && other.points.length >= 2 && !isAnnotationLine(other.el) && polylinesCross(pts, other.points) && !polylinesCross(target.points, other.points));
     /** collinear with more of the drawn lines that share no end with the edge than its points are, measured like a parallel run */
     const runsAlongDrawnLines = (plane: Plane, target: DEdge, pts: Point[]): boolean => {
       const along = (points: Point[]): number => {
