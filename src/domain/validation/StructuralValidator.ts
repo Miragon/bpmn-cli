@@ -3,9 +3,8 @@ import type { Finding } from '../document/Finding.js';
 import { isEventSubProcess, isRejectedType } from '../document/Kinds.js';
 import { completeMirrorLists } from '../document/utils/mirror.js';
 import { is, walk, type El, shownId } from '../document/utils/moddle.js';
-import type { PlatformChoice } from '../document/vendor/PlatformDetection.js';
 import type { ProfileFinding } from '../document/Finding.js';
-import { PLATFORM_PROFILES, type PlatformSummary, type ProfileReport } from './profiles/PlatformProfiles.js';
+import { PlatformCheck, type PlatformSummary, type ProfileReport } from './PlatformCheck.js';
 import type { ValidatorReport } from './validators.js';
 import { FlowOrder } from './FlowOrder.js';
 import { lintCoveredBy } from './utils/finding-coverage.js';
@@ -25,24 +24,16 @@ export interface ValidationResult {
   validators?: ValidatorReport[];
 }
 
-export interface ValidateOptions {
-  /** omitted runs no profile; a given one's rules must be loaded first (loadProfile) */
-  platform?: PlatformChoice;
-}
-
 /**
- * Structural validation (errors block writes) and lint (warnings), optionally followed by
- * the platform profile's engine-specific findings.
+ * Structural validation (errors block writes) and lint (warnings); `withProfile` adds the
+ * platform's engine-specific findings.
  */
 export class StructuralValidator {
   constructor(private readonly doc: Doc) {}
 
   /** Completes the incoming/outgoing mirror lists first: the only change it makes to the model. */
-  validate(opts: ValidateOptions = {}): ValidationResult {
-    const result = this.validateStructure();
-    if (opts.platform === undefined) return result;
-    const report = PLATFORM_PROFILES.run(this.doc, opts.platform);
-    return this.withProfile(result, report, report.findings);
+  validate(): ValidationResult {
+    return this.validateStructure();
   }
 
   /**
@@ -53,27 +44,11 @@ export class StructuralValidator {
     return completeMirrorLists(this.doc.definitions);
   }
 
-  /**
-   * A lint warning a shown platform finding repeats is dropped (it adds the engine's verdict),
-   * and so is a platform finding an E_INVALID_HOST already reports.
-   */
+  /** A lint warning a shown platform finding repeats is dropped (it adds the engine's verdict). */
   withProfile(result: ValidationResult, report: ProfileReport, shown: ProfileFinding[], delta?: { added: ProfileFinding[]; resolved: ProfileFinding[] }): ValidationResult {
-    const invalidHost = new Set(
-      [...result.errors, ...result.warnings]
-        .filter((error) => error.code === 'E_INVALID_HOST' || (error.code === 'W_PREEXISTING_ERROR' && error.message.startsWith('E_INVALID_HOST')))
-        .map((error) => error.element),
-    );
-    const repeated = (finding: ProfileFinding): boolean => (finding.code === 'W_C7_DEPLOY_BOUNDARY_HOST' || finding.code === 'W_C8_DEPLOY_BOUNDARY_HOST') && invalidHost.has(finding.element);
-    if (invalidHost.size) {
-      shown = shown.filter((finding) => !repeated(finding));
-      report = { ...report, findings: report.findings.filter((finding) => !repeated(finding)) };
-      if (delta) {
-        delta = { added: delta.added.filter((finding) => !repeated(finding)), resolved: delta.resolved };
-      }
-    }
     const covered = lintCoveredBy(shown);
     const warnings = result.warnings.filter((warning) => !covered(warning));
-    const platform: PlatformSummary = { ...PLATFORM_PROFILES.summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
+    const platform: PlatformSummary = { ...PlatformCheck.summarize(report), ...(delta ? { added: delta.added, resolved: delta.resolved } : {}) };
     return { errors: result.errors, warnings: [...warnings, ...shown], platform };
   }
 

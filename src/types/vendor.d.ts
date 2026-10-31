@@ -30,3 +30,9 @@ declare module 'bpmn-moddle' {
     toXML(element: ModdleElement, options?: { format?: boolean; preamble?: boolean }): Promise<{ xml: string }>;
   }
 }
+
+declare module 'bpmnlint/lib/linter.js' {
+  /** bpmnlint's linter; bpmn-cli types what it uses in adapters/out/bpmnlint/bpmnlint-contract.ts */
+  const Linter: new (options: { config?: unknown; resolver: unknown; transformRule?: unknown }) => { lint(root: unknown): Promise<Record<string, unknown[]>> };
+  export default Linter;
+}

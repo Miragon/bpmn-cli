@@ -23,6 +23,8 @@ export interface PlatformInfo {
   detail: string;
   /** c7 only: the profile then reads operaton:* before camunda:* like Operaton does. */
   operaton?: boolean;
+  /** `modeler:executionPlatformVersion` of an engine file, e.g. `8.9.0`: the engine rules check against it */
+  version?: string;
 }
 
 const OPERATON_NOTE = 'only Operaton reads the operaton namespace, Camunda 7 and CIB seven ignore it';
@@ -51,8 +53,9 @@ export class PlatformDetection {
       info.platform === 'c7' && operaton > 0 ? { ...info, operaton: true, ...(info.source === 'namespace-use' ? {} : { detail: `${info.detail}; ${operaton} operaton attribute(s)/element(s): ${OPERATON_NOTE}` }) } : info;
     if (declared !== undefined) {
       const platform = this.fromExecutionPlatform(declared);
+      const version = ns.executionPlatformVersion();
       if (platform) {
-        return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"` });
+        return withOperaton({ platform, source: 'executionPlatform', detail: `modeler:executionPlatform "${declared}"`, ...(version ? { version } : {}) });
       }
     }
     if (c7 || c8) {
@@ -78,9 +81,9 @@ export class PlatformDetection {
   /** The choice picks the profile; whether content is read as Operaton's still comes from the file. */
   resolve(choice: PlatformChoice = 'auto'): PlatformInfo {
     if (choice === 'auto') return this.info();
-    const info: PlatformInfo = { platform: choice, source: 'option', detail: '--platform option' };
-    if (choice !== 'c7') return info;
     const detected = this.info();
+    const info: PlatformInfo = { platform: choice, source: 'option', detail: '--platform option', ...(detected.platform === choice && detected.version ? { version: detected.version } : {}) };
+    if (choice !== 'c7') return info;
     return detected.operaton ? { ...info, operaton: true, detail: `--platform option; the file uses the operaton namespace: ${OPERATON_NOTE}` } : info;
   }
 

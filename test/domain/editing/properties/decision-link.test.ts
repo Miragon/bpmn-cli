@@ -13,16 +13,15 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../../src/domain/document/Doc.js';
 import { runOps } from '../../../../src/index.js';
+import { runProfile } from '../../../helpers/engine.js';
 import { COMMANDS } from '../../../../src/adapters/in/report/CommandCatalogue.js';
 import { ERROR_CATALOGUE } from '../../../../src/adapters/in/report/guide.js';
 import { guideText, kindsJson } from '../../../../src/index.js';
 import { checkFile } from '../../../../src/node.js';
-import { mutateDoc, type MutationOptions, loadProfiles, runProfile, buildView, elementDetail, findElements } from '../../../../src/index.js';
+import { mutateDoc, type MutationOptions, buildView, elementDetail, findElements } from '../../../../src/index.js';
 import { SetKeyCatalog } from '../../../../src/domain/editing/properties/SetKeyCatalog.js';
 import { cli } from '../../../helpers/cli.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const BPMN = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"';
 const CAMUNDA = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn"';
@@ -104,24 +103,24 @@ describe('set <id> calledDecision=<decision>', () => {
 
   it('Camunda 7: camunda:decisionRef; a hand-written unprefixed link is converted (W_C7_DEPLOY_SCHEMA resolved)', async () => {
     const source = model('<bpmn:businessRuleTask id="R" calledDecision="old" />', C7);
-    expect(runProfile(await Doc.fromXml(source)).findings.map((finding) => finding.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
+    expect((await runProfile(await Doc.fromXml(source))).findings.map((finding) => finding.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
     const { doc, result } = await set(source, { calledDecision: 'risk' });
     expect(doc.require('R').$attrs).toEqual({ 'camunda:decisionRef': 'risk' });
     expect(result.changes.changed[0]!.detail).toBe('calledDecision=risk (camunda:decisionRef); removed calledDecision');
-    expect(runProfile(doc).findings).toEqual([]);
+    expect((await runProfile(doc)).findings).toEqual([]);
     expect(result.validation.platform?.resolved?.map((finding) => finding.code).sort()).toEqual(['W_C7_DEPLOY_IMPLEMENTATION', 'W_C7_DEPLOY_SCHEMA']);
   });
 
   it('Camunda 7: the schema finding\'s hint is that command, and following it deploys', async () => {
     const file = join(dir, 'c7-hint.bpmn');
     writeFileSync(file, model('<bpmn:businessRuleTask id="R" calledDecision="risk" />', C7));
-    const schema = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((finding) => finding.code === 'W_C7_DEPLOY_SCHEMA');
+    const schema = (await runProfile(await Doc.fromXml(readFileSync(file, 'utf8')))).findings.find((finding) => finding.code === 'W_C7_DEPLOY_SCHEMA');
     expect(schema!.hint).toBe("Write the decision link in the engines' spelling: `bpmn set <file> R calledDecision=risk` (camunda:decisionRef; the unprefixed calledDecision is removed).");
     const result = cli('set', file, 'R', 'calledDecision=risk', '--no-layout');
     expect(result.code, result.err).toBe(0);
-    expect(runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings).toEqual([]);
+    expect((await runProfile(await Doc.fromXml(readFileSync(file, 'utf8')))).findings).toEqual([]);
     // next to another implementation the attribute is only removed
-    const withClass = runProfile(await Doc.fromXml(model('<bpmn:businessRuleTask id="R" calledDecision="risk" camunda:class="x.Rules" />', C7))).findings;
+    const withClass = (await runProfile(await Doc.fromXml(model('<bpmn:businessRuleTask id="R" calledDecision="risk" camunda:class="x.Rules" />', C7)))).findings;
     expect(withClass.filter((finding) => finding.code === 'W_C7_DEPLOY_SCHEMA').map((finding) => finding.hint)).toEqual(['Remove it: `bpmn set <file> R calledDecision=` (vendor attributes need their namespace prefix, e.g. camunda:<name>).']);
   }, 60000);
 

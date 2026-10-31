@@ -4,7 +4,8 @@ import { modelError } from '../document/utils/errors.js';
 import type { EditCommand } from '../commands/types.js';
 import { PlatformDetection, type PlatformChoice } from '../document/vendor/PlatformDetection.js';
 import type { ProfileFinding } from '../document/Finding.js';
-import { PLATFORM_PROFILES, type ProfileReport } from './profiles/PlatformProfiles.js';
+import type { EngineLint } from './EngineLint.js';
+import { PlatformCheck, type ProfileReport } from './PlatformCheck.js';
 import { StructuralValidator, type ValidationResult } from './StructuralValidator.js';
 import { coveredLint, lintCoveredBy, lintKey } from './utils/finding-coverage.js';
 import { counts, preexisting, validatorRefusal, withValidatorReports } from './utils/validator-issues.js';
@@ -23,6 +24,7 @@ export interface ValidationDelta {
 
 export interface BaselineOptions {
   platform?: PlatformChoice;
+  engine?: EngineLint;
   force?: boolean;
   validators?: Validator[];
   file?: string;
@@ -56,7 +58,7 @@ export class FindingBaseline {
 
   static async capture(doc: Doc, opts: BaselineOptions): Promise<FindingBaseline> {
     const { errors, warnings } = new StructuralValidator(doc).validate();
-    const profile = PLATFORM_PROFILES.run(doc, opts.platform);
+    const profile = await new PlatformCheck(opts.engine).run(doc, opts.platform);
     const index = new Map(doc.byId());
     const validators = new ValidatorSet(opts.validators);
     const context: Omit<ValidatorContext, 'doc' | 'phase'> = { ...(opts.file ? { file: opts.file } : {}), platform: validators.size ? PlatformDetection.of(doc).resolve(opts.platform ?? 'auto').platform : 'none', ops: opts.ops };
@@ -64,13 +66,12 @@ export class FindingBaseline {
     return new FindingBaseline(doc, opts, { errors, warnings }, new FindingMatcher(index, doc), new FindingMatcher(index, doc, { bySubject: true, reusedIdIsNew: true }), doc.source ? profile : { ...profile, findings: [] }, validators, context, validatorsBefore);
   }
 
-  /** The ops can change the platform (camunda: / zeebe: content), so its rules may load now. */
+  /** The ops can change the platform (camunda: / zeebe: content): it is detected again. */
   async afterCommands(): Promise<ValidationResult> {
     const validator = new StructuralValidator(this.doc);
     const raw = (this.raw = validator.validate());
     const structural = this.separatePreexisting(raw);
-    await PLATFORM_PROFILES.ensure(this.doc, this.opts.platform);
-    const after = (this.profileAfter = PLATFORM_PROFILES.run(this.doc, this.opts.platform));
+    const after = (this.profileAfter = await new PlatformCheck(this.opts.engine).run(this.doc, this.opts.platform));
     const delta = this.profileMatcher.delta(this.profileBefore.findings, after.findings);
     const validation = (this.validation = validator.withProfile(structural, after, delta.added, delta));
     if (validation.errors.length && !this.opts.force) {

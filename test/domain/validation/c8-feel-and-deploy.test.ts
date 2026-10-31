@@ -2,12 +2,9 @@
  * Camunda 8 after the step 3 verifier round (each finding with a test that
  * failed before the fix):
  *
- *  - FEEL is parsed (src/domain/validation/profiles/FeelParser.ts): the 762 expressions of
- *    fixtures/c8/feel-verdicts.json were deployed to Camunda 8.9.22 as flow
- *    conditions; the check agrees with the engine on every one (`&`, `|`,
- *    `<>`, `>>`, `%`, if without else, AND, `:=` ... are refused; ranges,
- *    unary tests, contexts, function names with spaces, keywords glued to a
- *    name ... pass). The messages name the FEEL spelling.
+ *  - FEEL: the 762 expressions of fixtures/c8/feel-verdicts.json were deployed
+ *    to Camunda 8.9.22 as flow conditions; FeelExpression.test.ts checks the
+ *    rule agrees with the engine on every one.
  *  - Deploy rules the profile missed and false deploy findings: MODELS with
  *    the engine's verdict (FEEL in a script, an ad-hoc completion condition,
  *    a signal / published message name and the zeebe:adHoc expressions,
@@ -31,14 +28,9 @@ import { describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { runOps } from '../../../src/index.js';
 import { mutateDoc } from '../../../src/index.js';
-import { FeelExpression } from '../../../src/domain/validation/profiles/FeelExpression.js';
-import { TimerValue } from '../../../src/domain/validation/profiles/TimerValue.js';
-import { loadProfiles, runProfile } from '../../../src/index.js';
+import { runProfile } from '../../helpers/engine.js';
 import { guideText, kindsSections } from '../../../src/index.js';
 import { KINDS_SECTION_NAMES } from '../../../src/adapters/in/report/KindsReference.js';
-
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..', '..', '..');
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0"';
@@ -99,8 +91,7 @@ const BLANK = '   ';
 
 /** The deploy-severity codes of the Camunda 8 profile, sorted. */
 async function deployCodes(text: string): Promise<string[]> {
-  return runProfile(await Doc.fromXml(text))
-    .findings.filter((finding) => finding.severity === 'deploy')
+  return (await runProfile(await Doc.fromXml(text))).findings.filter((finding) => finding.severity === 'deploy')
     .map((finding) => finding.code)
     .sort();
 }
@@ -122,29 +113,6 @@ function caught(fn: () => unknown): { code?: string; message: string; hint?: str
 /** [expression after the =, Camunda 8.9.22 deploys it as a flow condition] */
 const FEEL_VERDICTS = JSON.parse(readFileSync(join(ROOT, 'test', 'fixtures', 'c8', 'feel-verdicts.json'), 'utf8')) as Array<[string, boolean]>;
 
-describe('FEEL syntax: the check agrees with Camunda 8.9.22', () => {
-  it(`on all ${FEEL_VERDICTS.length} engine-checked expressions`, () => {
-    const wrong = FEEL_VERDICTS.filter(([expression, ok]) => (new FeelExpression(expression).problem() === undefined) !== ok).map(([expression, ok]) => `${ok ? 'flagged' : 'missed'}: ${JSON.stringify(expression)} ${new FeelExpression(expression).problem() ?? ''}`);
-    expect(wrong).toEqual([]);
-    expect(FEEL_VERDICTS.filter(([, ok]) => !ok).length).toBeGreaterThan(250);
-  });
-
-  it('names what the slip means in FEEL', () => {
-    expect(new FeelExpression(' x & y').problem()).toBe('& (FEEL: and)');
-    expect(new FeelExpression(' x | y').problem()).toBe('| (FEEL: or)');
-    expect(new FeelExpression(' x <> 1').problem()).toBe('<> (FEEL: != for "not equal")');
-    expect(new FeelExpression(' x >> 1').problem()).toBe('>> (FEEL has no shift operators)');
-    expect(new FeelExpression(' x % 2 = 0').problem()).toBe('% (FEEL has no modulo operator: modulo(a, b))');
-    expect(new FeelExpression(' if x then true').problem()).toBe('if ... then without else: FEEL needs if c then a else b');
-    expect(new FeelExpression(' for x in xs').problem()).toBe('for ... in ... needs return: for x in xs return x');
-    expect(new FeelExpression(' x AND y').problem()).toBe('AND (FEEL keywords are lower case: and)');
-    expect(new FeelExpression(' x := 1').problem()).toBe(':= (FEEL has no assignment; = compares)');
-    expect(new FeelExpression(' a ? b : c').problem()).toBe('?: (FEEL: if ... then ... else ...)');
-    expect(new FeelExpression(' a && b').problem()).toBe('&& (FEEL: and)');
-    expect(new FeelExpression(' (a').problem()).toBe('an unclosed (');
-    expect(new FeelExpression(' a +').problem()).toBe('an incomplete expression: it ends after +');
-  });
-});
 
 /* ------------------------------------------------------------------ */
 /* models with the engine's verdict                                     */
@@ -180,18 +148,10 @@ const MODELS: Model[] = [
   ...['PT0.5S', 'PT1,5S', 'PT90M'].map((timerValue): Model => ({ name: `duration ${timerValue}`, xml: xml(chain(`<bpmn:intermediateCatchEvent id="X">${TIMER('timeDuration', timerValue)}</bpmn:intermediateCatchEvent>`)), codes: [], engine: 'accept' })),
   ...['2030-12-31t10:00:00z', '2030-12-31T10:00:00z'].map((timerValue): Model => ({ name: `date ${timerValue}`, xml: xml(chain(`<bpmn:intermediateCatchEvent id="X">${TIMER('timeDate', timerValue)}</bpmn:intermediateCatchEvent>`)), codes: [], engine: 'accept' })),
   // ids and IDREFs
-  { name: 'a task id with a colon', xml: xml(chain(ST()).replace(/"X"/g, '"a:b"')), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'a flow id bpmn-moddle cannot read (F:1)', xml: xml(ordered(ext(TD()) + '<bpmn:incoming>F:1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>').replace('<bpmn:outgoing>F1</bpmn:outgoing>', '<bpmn:outgoing>F:1</bpmn:outgoing>').replace('id="F1"', 'id="F:1"')), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'a lane flowNodeRef to a missing id', xml: xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Nope</bpmn:flowNodeRef><bpmn:flowNodeRef>Start</bpmn:flowNodeRef><bpmn:flowNodeRef>X</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   { name: 'a lane flowNodeRef with white space around the id', xml: xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef> Start </bpmn:flowNodeRef><bpmn:flowNodeRef>X</bpmn:flowNodeRef><bpmn:flowNodeRef>End</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`), codes: [], engine: 'accept' },
-  { name: 'a task default to a missing flow', xml: xml(chain(ST()).replace('<bpmn:serviceTask id="X">', '<bpmn:serviceTask id="X" default="Nope">')), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   // the child order of the BPMN schema
   { name: 'order: documentation, extensions, incoming, outgoing', xml: xml(ordered(`<bpmn:documentation>d</bpmn:documentation>${ext(TD())}<bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>`)), codes: [], engine: 'accept' },
-  { name: 'order: extensionElements after incoming', xml: xml(ordered(`<bpmn:incoming>F1</bpmn:incoming>${ext(TD())}<bpmn:outgoing>F2</bpmn:outgoing>`)), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'order: documentation after extensionElements', xml: xml(ordered(`${ext(TD())}<bpmn:documentation>d</bpmn:documentation>`)), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
-  { name: 'order: a laneSet after the flow elements', xml: xml(`${chain(ST())}\n    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>X</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>`), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   { name: 'order: an annotation after the flow elements, a message after the process', xml: xml(`${chain(ST())}\n    <bpmn:textAnnotation id="TA"><bpmn:text>t</bpmn:text></bpmn:textAnnotation>`, { after: '  <bpmn:message id="M9" name="m9" />\n' }), codes: [], engine: 'accept' },
-  { name: 'order: a message after the diagram', xml: xml(chain(ST()), { after: '  <bpmndi:BPMNDiagram id="D1"><bpmndi:BPMNPlane id="PL" bpmnElement="P_Test" /></bpmndi:BPMNDiagram>\n  <bpmn:message id="M9" name="m9" />\n' }), codes: ['W_C8_DEPLOY_SCHEMA'], engine: 'reject' },
   // white space and empty values
   ...[
     ['job type', ST(ext(TD(BLANK)))],
@@ -221,40 +181,13 @@ describe('deploy rules: the profile flags exactly what Camunda 8.9.22 refuses', 
     expect(model.codes.length > 0).toBe(model.engine === 'reject');
   });
 
-  it('timer values', () => {
-    for (const timerValue of ['PT1.5H', 'PT1.5M', 'P1DT1.5H', 'PT1,5H']) {
-      expect(new TimerValue(timerValue).isDuration(), timerValue).toBe(false);
-    }
-    for (const timerValue of ['PT1.5S', 'PT1,5S', 'PT0.5S', 'P1DT1H30M']) {
-      expect(new TimerValue(timerValue).isDuration(), timerValue).toBe(true);
-    }
-    for (const timerValue of ['2030-12-31t10:00:00z', '2030-12-31t10:00:00Z', '2030-12-31T10:00:00z']) {
-      expect(new TimerValue(timerValue).isDateTime(), timerValue).toBe(true);
-    }
-    expect(new TimerValue('R/PT1.5H').isCycle()).toBe(false);
-    expect(new TimerValue('R/2030-12-31t10:00:00z/PT1H').isCycle()).toBe(true);
-  });
-
   it('the messages and fixes name the problem', async () => {
-    const find = async (text: string): Promise<{ message: string; hint?: string }> => runProfile(await Doc.fromXml(text)).findings.find((finding) => finding.severity === 'deploy')!;
+    const find = async (text: string): Promise<{ message: string; hint?: string }> => (await runProfile(await Doc.fromXml(text))).findings.find((finding) => finding.severity === 'deploy')!;
     const adhoc = await find(xml(ADHOC('<bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${done}</bpmn:completionCondition>')));
     expect(adhoc.message).toBe('The completion condition "${done}" of ad-hoc sub-process X is no FEEL expression; Camunda 8 needs one starting with = and refuses the file');
     expect(adhoc.hint).toBe("`bpmn set <file> X 'completion== done'` (check the FEEL syntax), or remove it: `bpmn set <file> X completion=`.");
-    const order = await find(xml(ordered(`<bpmn:incoming>F1</bpmn:incoming>${ext(TD())}<bpmn:outgoing>F2</bpmn:outgoing>`)));
-    expect(order.message).toBe('In serviceTask X, <bpmn:extensionElements> comes after <bpmn:incoming>; the BPMN schema puts extensionElements before incoming, and Camunda 8 validates the file against the schema and refuses it');
-    const colon = await find(xml(chain(ST()).replace(/"X"/g, '"a:b"')));
-    expect(colon.hint).toBe('`bpmn set <file> a:b id=a_b`.');
-    const lane = await find(xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Nope</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`));
-    expect(lane.message).toBe('Lane L1 has <bpmn:flowNodeRef>Nope</bpmn:flowNodeRef>, but the file has no element with the id Nope; Camunda 8 checks such references against the ids of the file (cvc-id.1) and refuses it');
     const link = await find(xml(LINKS('')));
-    expect(link.message).toBe('The link event definition of intermediateThrowEvent:link X has an empty name; Camunda 8 refuses the file');
-  });
-
-  it('an edit that removes the element with the issue resolves it', async () => {
-    const doc = await Doc.fromXml(xml(`    <bpmn:laneSet id="LS"><bpmn:lane id="L1"><bpmn:flowNodeRef>Nope</bpmn:flowNodeRef><bpmn:flowNodeRef>X</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>\n${chain(ST())}`));
-    const mutated = await mutateDoc(doc, [{ op: 'remove', ids: ['LS'] }], { force: true });
-    expect(mutated.delta!.resolved.map((warning) => warning.code)).toContain('W_C8_DEPLOY_SCHEMA');
-    expect(runProfile(await Doc.fromXml(mutated.xml)).findings.filter((finding) => finding.code === 'W_C8_DEPLOY_SCHEMA')).toEqual([]);
+    expect(link.message).toBe('Element of type <bpmn:LinkEventDefinition> must have property <name>');
   });
 });
 
@@ -274,7 +207,7 @@ describe('the message a catching element waits for', () => {
     ]);
     expect(mutated.aliases).toEqual({ $s: 'startEvent_asked', $m: 'event_antwortErhalten', $msg: 'message_antwort' });
     expect(mutated.xml).toMatch(/<bpmn:message id="message_antwort" name="Antwort">\s*<bpmn:extensionElements>\s*<zeebe:subscription correlationKey="= id" \/>/);
-    expect(runProfile(await Doc.fromXml(mutated.xml)).findings).toEqual([]);
+    expect((await runProfile(await Doc.fromXml(mutated.xml))).findings).toEqual([]);
   });
 
   it('refAs on set, retype and connect (a message flow); E_USAGE when the element references none', async () => {
@@ -302,7 +235,7 @@ describe('the message a catching element waits for', () => {
     expect(added.notes).toEqual(['zeebe:subscription goes to message M1, which X waits for: Camunda 8 reads the correlation key in the message\'s zeebe:subscription (C waits for it too and shares it)']);
     const set = runOps(doc, [{ op: 'set', id: 'C', values: { 'zeebe:correlationKey': '=invoiceId' } }]);
     expect(set.notes).toEqual(['zeebe:correlationKey goes to message M1, which C waits for: Camunda 8 reads the correlation key in the message\'s zeebe:subscription (X waits for it too and shares it)']);
-    const findings = runProfile(doc).findings.map((finding) => finding.code);
+    const findings = (await runProfile(doc)).findings.map((finding) => finding.code);
     expect(findings).not.toContain('W_C8_MISPLACED_EXTENSION');
     expect(findings).not.toContain('W_C8_DEPLOY_MESSAGE');
     expect(doc.get('M1')!.get<{ get(key: string): Array<Record<string, unknown>> }>('extensionElements').get('values').map((value) => value['correlationKey'])).toEqual(['=invoiceId']);

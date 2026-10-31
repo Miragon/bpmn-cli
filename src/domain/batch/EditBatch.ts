@@ -6,7 +6,6 @@ import { reportedImportWarnings } from '../editing/utils/decision-link-warnings.
 import { ModelCommands, type BatchRun } from './ModelCommands.js';
 import { withoutProfileDuplicates } from '../validation/utils/finding-coverage.js';
 import type { EditCommand } from '../commands/types.js';
-import { PLATFORM_PROFILES } from '../validation/profiles/PlatformProfiles.js';
 import type { ValidationResult } from '../validation/StructuralValidator.js';
 import { FindingBaseline, type ValidationDelta } from '../validation/FindingBaseline.js';
 import { ModelViewBuilder } from '../views/ModelViewBuilder.js';
@@ -43,10 +42,10 @@ export class EditBatch {
    */
   async run(file = this.doc.file): Promise<MutationResult> {
     return LayoutDebug.during(this.opts.debug, async () => {
-      await this.guard();
+      this.doc.assertLossless(this.opts);
       const asRead = await this.textAsRead();
       const diagram = await BatchDrawing.capture(this.doc, this.commands, this.opts, asRead, EditBatch.removeElements);
-      const findings = await FindingBaseline.capture(this.doc, { platform: this.opts.platform, force: this.opts.force, validators: this.opts.validators, file: this.opts.file ?? this.doc.file, ops: this.commands });
+      const findings = await FindingBaseline.capture(this.doc, { platform: this.opts.platform, engine: this.opts.engine, force: this.opts.force, validators: this.opts.validators, file: this.opts.file ?? this.doc.file, ops: this.commands });
       const importWarnings = reportedImportWarnings(this.doc).map((warning) => warning.message.split('\n')[0]!);
       const { batch, last } = await this.runCommands(diagram);
       await this.validateAndDropProfileDuplicates(findings, batch);
@@ -60,12 +59,6 @@ export class EditBatch {
 
   private static removeElements(doc: Doc, ids: string[]): void {
     new ModelCommands(doc).runBatch([{ op: 'remove', ids, ifExists: true }]);
-  }
-
-  /** Loads the platform profiles, a chunk of their own in a browser bundle, before anything runs. */
-  private async guard(): Promise<void> {
-    this.doc.assertLossless(this.opts);
-    await PLATFORM_PROFILES.ensure(this.doc, this.opts.platform);
   }
 
   private async runCommands(diagram: BatchDrawing): Promise<{ batch: BatchRun; last?: DrawingSegment }> {

@@ -16,10 +16,9 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { opsExample } from '../../../src/domain/commands/utils/op-fields.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
-import { renderView, runOps, mutateDoc, loadProfiles, runProfile, buildView, elementDetail } from '../../../src/index.js';
+import { renderView, runOps, mutateDoc, buildView, elementDetail } from '../../../src/index.js';
+import { runProfile } from '../../helpers/engine.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const ROOT = join(import.meta.dirname, '..', '..', '..');
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud"';
@@ -68,7 +67,7 @@ describe('set: zeebe settings are extension elements', () => {
     // the attributes the descriptor puts on BPMN elements, unknown names and other vendors pass
     runOps(st, [{ op: 'set', id: 'X', values: { 'zeebe:modelerTemplate': 'io.example.charge', 'zeebe:typo': 'x' } }]);
     expect(st.require('X').$attrs).toMatchObject({ 'zeebe:modelerTemplate': 'io.example.charge', 'zeebe:typo': 'x' });
-    expect(runProfile(st).findings.map((finding) => finding.code)).toEqual(['W_C8_UNKNOWN_ATTRIBUTE', 'W_C8_DEPLOY_IMPLEMENTATION']);
+    expect((await runProfile(st)).findings.map((finding) => finding.code)).toEqual(['W_C8_UNKNOWN_ATTRIBUTE', 'W_C8_DEPLOY_IMPLEMENTATION']);
   });
 });
 
@@ -237,7 +236,7 @@ describe('the hints of the Camunda 8 profile, run through the CLI', () => {
   it.each(REFUSED.map(([name, model], caseIndex) => [name, model, caseIndex] as const))('%s: following the first command of every deploy hint leaves no deploy finding', async (_name, model, caseIndex) => {
     const file = join(dir, `m${caseIndex}.bpmn`);
     writeFileSync(file, model);
-    const deployFindings = async (): Promise<Array<{ code: string; element?: string; hint?: string; message: string }>> => runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.filter((finding) => finding.severity === 'deploy');
+    const deployFindings = async (): Promise<Array<{ code: string; element?: string; hint?: string; message: string }>> => (await runProfile(await Doc.fromXml(readFileSync(file, 'utf8')))).findings.filter((finding) => finding.severity === 'deploy');
     const before = await deployFindings();
     expect(before.length).toBeGreaterThan(0);
     const tried = new Set<string>();

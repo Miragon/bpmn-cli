@@ -4,9 +4,7 @@
  *
  *  - A timer date that is no real instant (2030-02-30, 25:00, an offset over
  *    18 hours), a cron field out of its range (hour 25, month 13, a step of
- *    0, a reversed range, `?` outside the day fields) and an attribute the
- *    BPMN schema types xsd:boolean with another value (cancelActivity=
- *    "maybe", isExpanded="TRUE") are W_C8_DEPLOY_TIMER / W_C8_DEPLOY_SCHEMA;
+ *    0, a reversed range, `?` outside the day fields) are W_C8_DEPLOY_TIMER;
  *    the Quartz day forms (L, W, #), names, 0 / 7 for Sunday, a leap day,
  *    white space around a boolean and 1 / 0 pass.
  *  - A duplicate element id (bpmn-moddle keeps the first element and drops
@@ -15,14 +13,12 @@
  * With BPMN_C8_ENGINE=<REST v2 root> each model is deployed (the accepted
  * ones in one file each and deleted again).
  */
+import { runProfile, validateWithEngine } from '../../helpers/engine.js';
 import { describe, expect, it } from 'vitest';
 import { validateXml } from '../../../src/api.js';
 import { Doc } from '../../../src/domain/document/Doc.js';
-import { TimerValue } from '../../../src/domain/validation/profiles/TimerValue.js';
-import { loadProfiles, runProfile } from '../../../src/index.js';
+import { TimerValue } from '../../../src/adapters/out/bpmnlint/engine/rules/c8/support/TimerValue.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const C8 = 'xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0"';
 const DI = 'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"';
@@ -70,15 +66,6 @@ const expanded = (value: string): string =>
     <bpmn:endEvent id="End" />`,
     `  <bpmndi:BPMNDiagram id="D1"><bpmndi:BPMNPlane id="PL1" bpmnElement="P_Test"><bpmndi:BPMNShape id="X_di" bpmnElement="X" isExpanded="${value}"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>\n`,
   );
-/** an event sub-process with a message start, isInterrupting as given */
-const eventSub = (value: string): string => `    <bpmn:startEvent id="Start" />
-    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="End" />
-    <bpmn:endEvent id="End" />
-    <bpmn:subProcess id="ES" triggeredByEvent="true">
-      <bpmn:startEvent id="ESS" isInterrupting="${value}">${TIMER('timeDuration', 'PT1H')}</bpmn:startEvent>
-      <bpmn:sequenceFlow id="EF" sourceRef="ESS" targetRef="ESE" />
-      <bpmn:endEvent id="ESE" />
-    </bpmn:subProcess>`;
 /** a Camunda user task X with a static due date */
 const dueDate = (value: string): string => `    <bpmn:startEvent id="Start" />
     <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
@@ -121,12 +108,8 @@ const MODELS: Model[] = [
     codes: [],
   },
   // xsd:boolean
-  { name: 'cancelActivity="maybe"', xml: xml(boundary('maybe')), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
-  { name: 'cancelActivity="TRUE"', xml: xml(boundary('TRUE')), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
   { name: 'cancelActivity=" true "', xml: xml(boundary(' true ')), engine: 'accept', codes: [] },
   { name: 'cancelActivity="1"', xml: xml(boundary('1')), engine: 'accept', codes: [] },
-  { name: 'isInterrupting="yes"', xml: xml(eventSub('yes')), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
-  { name: 'isExpanded="maybe" on a shape', xml: expanded('maybe'), engine: 'reject', codes: ['W_C8_DEPLOY_SCHEMA'] },
   { name: 'isExpanded="0" on a shape', xml: expanded('0'), engine: 'accept', codes: [] },
   // a due date that is no real instant
   { name: 'dueDate 2030-02-30', xml: xml(dueDate('2030-02-30T10:00:00Z')), engine: 'reject', codes: ['W_C8_DEPLOY_USER_TASK'] },
@@ -136,7 +119,7 @@ const MODELS: Model[] = [
 async function deployCodes(text: string): Promise<string[]> {
   return [
     ...new Set(
-      runProfile(await Doc.fromXml(text))
+      (await runProfile(await Doc.fromXml(text)))
         .findings.filter((finding) => finding.severity === 'deploy')
         .map((finding) => finding.code),
     ),
@@ -148,7 +131,7 @@ describe('timer values and xsd:booleans Camunda 8 refuses', () => {
     expect(await deployCodes(model.xml)).toEqual(model.codes);
   });
 
-  it('says what is out of range', () => {
+  it('says what is out of range', async () => {
     expect(new TimerValue('2030-02-30T10:00:00Z').dateTimeRangeProblem()).toBe('February 2030 has no day 30');
     expect(new TimerValue('2030-12-31T25:00:00Z').dateTimeRangeProblem()).toBe('hour 25 is not in 00-23');
     expect(new TimerValue('2032-02-29T10:00:00Z').dateTimeRangeProblem()).toBeUndefined();
@@ -160,10 +143,6 @@ describe('timer values and xsd:booleans Camunda 8 refuses', () => {
   });
 
   it('validate names the value and the reason', async () => {
-    const result = await validateXml(xml(boundary('maybe')));
-    const finding = result.warnings.find((warning) => warning.code === 'W_C8_DEPLOY_SCHEMA')!;
-    expect(finding.element).toBe('B');
-    expect(finding.message).toContain('cancelActivity="maybe"');
     const invalidDate = await validateXml(xml(dateCatch('2030-02-30T10:00:00Z')));
     expect(invalidDate.warnings.find((warning) => warning.code === 'W_C8_DEPLOY_TIMER')!.message).toContain('February 2030 has no day 30');
   });

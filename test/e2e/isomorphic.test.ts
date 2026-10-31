@@ -242,6 +242,8 @@ describe('the engine rules load on demand, only for their platform (an ESM split
         xml.includes('id="Task_Recv"') ? [{ severity: 'ERROR', code: 'E_HOST_LOOSE', message: 'Task_Recv has no sequence flow', element: 'Task_Recv' }] : [],
     }],
   };
+  const RULES = 'src/adapters/out/bpmnlint/engine/rules';
+  const ENGINE_RUN = 'src/adapters/out/bpmnlint/engine/run/EngineRun.ts';
   let c7: string;
   let c8: string;
   let bundle: Bundle;
@@ -251,7 +253,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   beforeAll(async () => {
     bundle = await bundleCore({ entry: join('src', 'index.ts'), splitting: true, minify: false });
     expect(bundle.violations).toEqual([]);
-    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes('src/domain/validation/profiles/C7Profile.ts') ? 'c7' : chunk.inputs.includes('src/domain/validation/profiles/C8Profile.ts') ? 'c8' : undefined);
+    const profileOf = (chunk: Chunk): 'c7' | 'c8' | undefined => (chunk.inputs.includes(`${RULES}/c7/Camunda7Rules.ts`) ? 'c7' : chunk.inputs.includes(`${RULES}/c8/Camunda8Rules.ts`) ? 'c8' : undefined);
     files = bundle.chunks.map((chunk) => {
       const text = chunk.text.replace(/(["'])\.\/([\w.-]+)\.js\1/g, (_m, quote: string, name: string) => `${quote}./${name}.mjs${quote}`);
       return { name: basename(chunk.path).replace(/\.js$/, '.mjs'), text: `(globalThis.${LOADS} ??= []).push(import.meta.url);\n${text}`, profile: profileOf(chunk) };
@@ -266,7 +268,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     };
     visit(bundle.entry);
     const initialInputs = bundle.chunks.filter((chunk) => initial.has(chunk.path)).flatMap((chunk) => chunk.inputs);
-    expect(initialInputs.filter((file) => /^src\/platform\/profiles\/(EngineProfile|EngineRules|RuleRun|C7Profile|C8Profile|FeelExpression|FeelParser|FeelError|TimerValue|SchemaText|BpmnSchema|utils\/\w+|c[78]\/\w+|c[78]\/utils\/\w+)\.ts$/.test(file))).toEqual([]);
+    expect(initialInputs.filter((file) => file.startsWith('src/adapters/out/bpmnlint/engine/') || file.startsWith('node_modules/bpmnlint-plugin-camunda-compat/') || file === 'node_modules/bpmnlint/lib/linter.js')).toEqual([]);
     expect(files.filter((file) => file.profile).map((file) => file.profile).sort()).toEqual(['c7', 'c8']);
     dir = realpathSync(mkdtempSync(join(tmpdir(), 'bpmn-lazy-profiles-')));
     writeFileSync(join(dir, 'import.cjs'), 'module.exports = (url) => import(url);\n');
@@ -296,7 +298,7 @@ describe('the engine rules load on demand, only for their platform (an ESM split
   it('the entry chunk is the one of the requested entry, though esbuild makes every import() target an entry point', () => {
     expect(bundle.chunks.filter((chunk) => chunk.entry).map((chunk) => chunk.entryPoint)).toEqual(['src/index.ts']);
     expect(bundle.entry.entryPoint).toBe('src/index.ts');
-    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining(['src/domain/validation/profiles/C7Profile.ts', 'src/domain/validation/profiles/C8Profile.ts']));
+    expect(bundle.chunks.map((chunk) => chunk.entryPoint)).toEqual(expect.arrayContaining([`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`, ENGINE_RUN]));
   });
 
   it('the rule chunks import nothing the entry loads (a host whose entry module awaits a call at top level does not wait for itself)', () => {
@@ -315,22 +317,23 @@ describe('the engine rules load on demand, only for their platform (an ESM split
       visit(start);
       return seen;
     };
+    // the engine run and the rules get the core from ENGINE_KIT; the packages they use share
+    // packages (min-dash) with the core, which a host may not await at top level (docs/library.md)
     const core = reach('src/index.ts');
-    expect(core.has('src/domain/document/utils/moddle.ts') && core.has('src/domain/validation/profiles/PlatformProfiles.ts')).toBe(true);
-    for (const rules of ['src/domain/validation/profiles/C7Profile.ts', 'src/domain/validation/profiles/C8Profile.ts']) {
-      const own = [...reach(rules)];
-      expect(own.filter((module) => core.has(module)), rules).toEqual([]);
-      expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency)), rules).toEqual([]);
-      const chunk = bundle.chunks.find((chunk) => chunk.inputs.includes(rules))!;
-      expect(chunk.imports.filter((importPath) => initial.has(importPath)), rules).toEqual([]);
+    expect(core.has('src/domain/document/utils/moddle.ts') && core.has('src/adapters/out/bpmnlint/BpmnlintEngineLint.ts')).toBe(true);
+    const own = [...reach(ENGINE_RUN)];
+    expect(own.filter((module) => core.has(module))).toEqual([]);
+    expect(own.flatMap((module) => bundle.graph[module] ?? []).filter((dependency) => core.has(dependency))).toEqual([]);
+    for (const rules of [`${RULES}/c7/Camunda7Rules.ts`, `${RULES}/c8/Camunda8Rules.ts`]) {
+      expect([...reach(rules)].filter((module) => module.startsWith('src/') && core.has(module)), rules).toEqual([]);
     }
-    expect(bundle.chunks.find((chunk) => chunk.inputs.includes('src/domain/validation/profiles/C8Profile.ts'))!.inputs).toEqual(expect.arrayContaining(['src/domain/validation/profiles/FeelParser.ts', 'src/domain/validation/profiles/FeelExpression.ts', 'src/domain/validation/profiles/TimerValue.ts', 'src/domain/validation/profiles/SchemaText.ts', 'src/domain/validation/profiles/BpmnSchema.ts']));
+    expect(bundle.chunks.find((chunk) => chunk.inputs.includes(ENGINE_RUN))!.inputs).toEqual(expect.arrayContaining(['src/adapters/out/bpmnlint/engine/run/EngineFindings.ts', 'src/adapters/out/bpmnlint/engine/run/CompatVerdicts.ts', 'src/adapters/out/bpmnlint/engine/run/EngineHint.ts']));
   });
 
   it('the instances load natively and record what they evaluate', async () => {
     const { lib, at } = await fresh();
     expect(loads()).toContain(`${pathToFileURL(at).href}/index.mjs`);
-    expect(typeof lib.loadProfile).toBe('function');
+    expect('loadProfile' in lib).toBe(false);
   });
 
   it('a plain model loads no profile chunk', async () => {
@@ -406,36 +409,23 @@ describe('the engine rules load on demand, only for their platform (an ESM split
     const second = await fresh();
     const toEight = await second.lib.applyToXml(plain, toC8);
     expect(second.profiles()).toEqual(['c8']);
+    // camunda-compat's sequence-flow-condition reports the flows themselves, and as refused at deploy
     expect(toEight.result.validation.platform).toMatchObject({ platform: 'c8', counts: { deploy: 1, runtime: 3, practice: 0 }, resolved: [] });
     expect(brief(toEight.result.validation.platform?.added)).toEqual([
       'W_C8_MISPLACED_EXTENSION Task_A',
-      'W_C8_EXCLUSIVE_GATEWAY Gw_Split F3',
-      'W_C8_EXCLUSIVE_GATEWAY Gw_Split F4',
       'W_C8_DEPLOY_TIMER Timer_1',
+      'W_C8_EXCLUSIVE_GATEWAY F3',
+      'W_C8_EXCLUSIVE_GATEWAY F4',
     ]);
     expect(JSON.stringify(toEight.result)).toBe(JSON.stringify((await core.applyToXml(plain, toC8)).result));
   });
 
-  it('the synchronous building blocks need the rules loaded first (E_PROFILE_NOT_LOADED; loadProfile / loadProfiles)', async () => {
+  it('validateDoc is the structural validation alone and loads no rule chunk', async () => {
     const { lib, profiles } = await fresh();
-    const doc = await lib.Doc.fromXml(c7);
-    expect(() => lib.runProfile(doc)).toThrow(expect.objectContaining({ code: 'E_PROFILE_NOT_LOADED', category: 'usage' }));
-    expect(() => lib.validateDoc(doc, { platform: 'auto' })).toThrow(expect.objectContaining({ code: 'E_PROFILE_NOT_LOADED' }));
-    expect(() => lib.runProfile(doc, 'c8')).toThrow(expect.objectContaining({ code: 'E_PROFILE_NOT_LOADED', details: expect.objectContaining({ platform: 'c8' }) }));
-    // no rules needed: plain BPMN, platform 'none', the structural validation
-    expect(lib.runProfile(doc, 'none').findings).toEqual([]);
-    expect(lib.runProfile(await lib.Doc.fromXml(plain)).platform).toBe('none');
-    expect(lib.validateDoc(doc).errors).toEqual([]);
-    await lib.loadProfile('none');
+    const result = lib.validateDoc(await lib.Doc.fromXml(c7));
+    expect(result.errors).toEqual([]);
+    expect(result.platform).toBeUndefined();
     expect(profiles()).toEqual([]);
-    await Promise.all([lib.loadProfile('c7'), lib.loadProfile('c7')]);
-    await lib.loadProfile('c7');
-    expect(profiles()).toEqual(['c7']);
-    expect(JSON.stringify(lib.runProfile(doc))).toBe(JSON.stringify(core.runProfile(await core.Doc.fromXml(c7))));
-    await lib.loadProfiles();
-    expect(profiles()).toEqual(['c7', 'c8']);
-    expect(lib.runProfile(doc, 'c8').platform).toBe('c8');
-    await expect(lib.loadProfile('camunda7' as never)).rejects.toMatchObject({ code: 'E_USAGE' });
   });
 
   it('a profile chunk that fails to load rejects with E_PROFILE_LOAD before a result exists; a later call imports it again (Node loads it)', async () => {

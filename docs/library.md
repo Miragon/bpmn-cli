@@ -120,14 +120,14 @@ validator like the CLI ([bpmnlint](bpmnlint.md)). Plugins the project installed 
 
 A host that keeps a parsed model between calls uses the pipeline on a `Doc`:
 `Doc.fromXml(xml)`, then `mutateDoc(doc, ops, opts)`, `layoutDoc`, `checkDoc`. They never write.
-Every other part (views, metrics, the diagram commands, the platform profile) is exported too:
+Every other part (views, metrics, the diagram commands, the platform detection) is exported too:
 `runOps(doc, commands)` runs commands on a `Doc`, `parseOps(json)` reads the ops JSON into
 `EditCommand`s.
 
-::: warning Load the profile rules before runProfile
-`runProfile` and `validateDoc(doc, { platform })` are synchronous: call `await loadProfiles()`
-once before them, otherwise they throw `E_PROFILE_NOT_LOADED` on a Camunda 7 / 8 document.
-`mutateDoc`, `checkDoc` and the in-memory API load the rules themselves.
+::: tip The Camunda 7 / 8 rules run in the async calls
+`validateDoc(doc)` is the structural validation and lint alone. The engine rules (`W_C7_*` /
+`W_C8_*`) are bpmnlint rules that load on demand; `checkDoc`, `mutateDoc` and the in-memory API run
+them.
 :::
 
 ### bpmnlint as a validator
@@ -191,17 +191,24 @@ await applyToXml(xml, ops, {
 
 ## Browser bundles
 
-The core runs in a browser; CI fails on anything Node-only. The Camunda 7 and 8 rules are
-chunks of their own, fetched the first time a document of that platform is validated
-(`loadProfile('c7')` prefetches). PNG rendering and bpmnlint live in `@miragon/bpmn-cli/node`
-only.
+The core runs in a browser; CI fails on anything Node-only. The Camunda 7 and 8 rules (bpmnlint,
+camunda-compat and the Miragon engine layer) are chunks of their own, fetched the first time a
+document of that platform is validated. PNG rendering and the project's `.bpmnlintrc` live in
+`@miragon/bpmn-cli/node` only.
 
 | bundle (minified / gzip) | size |
 | --- | ---: |
-| everything `@miragon/bpmn-cli` exports | 1103.3 / 346.7 KB |
-| `applyToXml` only | 799.8 / 250.3 KB |
-| Camunda 7 rules, on demand | 64.4 / 18.8 KB |
-| Camunda 8 rules, on demand | 88.3 / 25.2 KB |
+| everything `@miragon/bpmn-cli` exports | 1067.9 / 335.7 KB |
+| `applyToXml` only | 775.7 / 242.4 KB |
+| Camunda 7 rules, on demand | 118.7 / 34.3 KB |
+| Camunda 8 rules, on demand | 365.3 / 101.8 KB |
+| engine run (bpmnlint and the mapping to `W_C7_*` / `W_C8_*`), on demand | 26.9 / 10.0 KB |
+
+::: warning No Camunda 7 / 8 call at the top level of the entry module
+The rule chunks share packages with the core (min-dash), which a bundler puts into the entry chunk:
+a rule chunk then imports the entry chunk. An entry module that awaits a Camunda 7 / 8 call at its
+top level waits for itself. Make the first call from a function the entry module calls.
+:::
 
 `node tools/iso/check.mjs --table` prints the current sizes.
 
