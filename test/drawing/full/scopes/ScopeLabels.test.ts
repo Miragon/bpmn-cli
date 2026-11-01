@@ -9,11 +9,10 @@ describe('ScopeLabels', () => {
     expect(ScopeLabels.of(scope.at('e'), 'event')).toBeUndefined();
   });
 
-  it('puts an event label below, or above for a message flow docking at the bottom', () => {
+  it('puts an event label below', () => {
     const scope = new ScopeSketch().node('event', 'e', 100, 100, { name: 'Done' });
 
     expect(ScopeLabels.of(scope.at('e'), 'event')!.y).toBe(142);
-    expect(ScopeLabels.of(scope.at('e'), 'event', { above: true })!.bottom).toBe(94);
   });
 
   it('puts a gateway label above, to the upper left when a flow uses the top', () => {

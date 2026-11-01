@@ -36,16 +36,6 @@ describe('Groups', () => {
     expect(undrawn!.label).toBeInstanceOf(Box);
   });
 
-  it('knows the members of every group, empty ones too', async () => {
-    const document = await Fixtures.read('drawing/group-around-nothing.bpmn');
-
-    const members = new Groups(document.tree).members();
-
-    expect(members.get('around_nothing')).toEqual([]);
-    expect(members.get('on_a_shape')).toEqual([]);
-    expect(members.get('named_group')).toEqual(['member']);
-  });
-
   it('orders the groups of an element outermost first', () => {
     const inner = { id: 'inner', bounds: new Box(0, 0, 10, 10), members: ['a'] };
     const outer = { id: 'outer', bounds: new Box(0, 0, 100, 100), members: ['a'] };

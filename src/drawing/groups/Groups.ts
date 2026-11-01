@@ -42,16 +42,6 @@ export class Groups {
     return undrawn;
   }
 
-  members(): Map<string, string[]> {
-    const members = new Map([...this.shapes.groupElements().keys()].map((id): [string, string[]] => [id, []]));
-    for (const group of [...this.remembered(), ...this.undrawn()]) {
-      if (!members.get(group.id)?.length) {
-        members.set(group.id, group.members);
-      }
-    }
-    return members;
-  }
-
   relabel(group: BpmnElement, name: string): void {
     for (const planeElement of this.shapes.planes().flatMap((plane) => plane.list('planeElement'))) {
       const box = planeElement.is('bpmndi:BPMNShape') && planeElement.peek('bpmnElement') === group ? DiagramIndex.boxOf(planeElement.peek<BpmnElement>('bounds')) : undefined;

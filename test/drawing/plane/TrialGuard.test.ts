@@ -45,10 +45,8 @@ describe('TrialGuard', () => {
 
   it('asks for a lower score under a lowering policy, and keeps the new base', async () => {
     const { guard } = await guarded({ ...TrialGuard.NO_WORSE, lower: true });
-    const { score } = guard;
 
-    expect(guard.judge().ok).toBe(false);
-    expect(guard.score).toBe(score);
+    expect(guard.judge()).toMatchObject({ ok: false, after: expect.any(Number) });
   });
 
   it('counts anew after a kept trial under a rebasing policy', async () => {

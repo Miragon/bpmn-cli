@@ -4,10 +4,6 @@ import { GNode, type GArtifact, type ScopeLayout } from './GNode.js';
 
 export type LabelKind = 'event' | 'gateway' | 'boundary' | 'data';
 
-export interface LabelOptions {
-  above?: boolean;
-}
-
 export class ScopeLabels {
   private static readonly GATEWAY_LABEL_WRAP = 80;
   private static readonly DATA_SPOTS = [0, -0.6, 0.6, -1.2, 1.2];
@@ -15,24 +11,23 @@ export class ScopeLabels {
 
   constructor(private readonly layout: ScopeLayout) {}
 
-  static of(element: GNode | GArtifact, kind: LabelKind, options: LabelOptions = {}): Box | undefined {
+  static of(element: GNode | GArtifact, kind: LabelKind): Box | undefined {
     const { name } = element.el;
     if (!name) {
       return undefined;
     }
     if (!(element instanceof GNode)) {
-      return ScopeLabels.centred(name, element.box, options);
+      return ScopeLabels.below(name, element.box);
     }
     if (kind === 'gateway') {
       return ScopeLabels.ofGateway(element, name);
     }
-    return kind === 'boundary' ? ScopeLabels.ofBoundary(element, name) : ScopeLabels.centred(name, element.box, options);
+    return kind === 'boundary' ? ScopeLabels.ofBoundary(element, name) : ScopeLabels.below(name, element.box);
   }
 
-  private static centred(name: string, box: Box, { above }: LabelOptions): Box {
+  private static below(name: string, box: Box): Box {
     const { width, height } = TextMetrics.labelSize(name);
-    const y = above ? box.y - height - 6 : box.y + box.height + 6;
-    return new Box(Math.round(box.center.x - width / 2), y, width, height);
+    return new Box(Math.round(box.center.x - width / 2), box.y + box.height + 6, width, height);
   }
 
   private static ofGateway(node: GNode, name: string): Box {

@@ -9,17 +9,11 @@ describe('Swatches', () => {
     return document.diagram.planes()[0]!.list('planeElement').find((element) => element.peek<BpmnElement>('bpmnElement')?.id === id)!;
   }
 
-  it('reads a swatch, a custom colour and no colour', async () => {
-    expect((await diOf('blue_task')) && Swatches.of(await diOf('blue_task'))?.color).toBe('blue');
-    expect(Swatches.of(await diOf('custom_flow'))).toEqual({ color: 'custom', stroke: '#123456' });
-    expect(Swatches.of(await diOf('plain_task'))).toBeUndefined();
-  });
-
   it('paints a shape and its label with a swatch, and says it changed', async () => {
     const di = await diOf('labelled_end');
 
     expect(Swatches.set(di, 'green')).toBe(true);
-    expect(Swatches.of(di)?.color).toBe('green');
+    expect(Swatches.colorsOf(di, Swatches.SHAPE_COLORS)['bioc:stroke']).toBe(Swatches.TABLE.green.stroke);
     expect(di.peek<BpmnElement>('label')!.get('color:color')).toBe(Swatches.TABLE.green.stroke);
     expect(Swatches.set(di, 'green')).toBe(false);
   });
@@ -36,6 +30,6 @@ describe('Swatches', () => {
     const di = await diOf('blue_task');
 
     expect(Swatches.set(di, undefined)).toBe(true);
-    expect(Swatches.of(di)).toBeUndefined();
+    expect(Swatches.colorsOf(di, Swatches.SHAPE_COLORS)).toEqual({});
   });
 });

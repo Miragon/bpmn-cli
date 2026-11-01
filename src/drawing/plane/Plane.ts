@@ -29,10 +29,6 @@ export class Plane {
     public di?: BpmnElement,
   ) {}
 
-  static with(planes: readonly Plane[], id: string): Plane | undefined {
-    return planes.find((plane) => plane.shapes.has(id) || plane.edges.has(id));
-  }
-
   static drawingsOf(planes: readonly Plane[]): PlaneDrawing[] {
     return planes.filter((plane) => !plane.deleted).map((plane) => plane.drawing());
   }

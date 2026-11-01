@@ -2,12 +2,6 @@ import type { BpmnElement } from '../../model/index.js';
 
 export type SwatchName = 'blue' | 'orange' | 'green' | 'red' | 'purple';
 
-export interface SwatchReading {
-  color: SwatchName | 'custom';
-  fill?: string;
-  stroke?: string;
-}
-
 export class Swatches {
   static readonly SHAPE_COLORS: readonly string[] = ['bioc:stroke', 'bioc:fill', 'color:background-color', 'color:border-color'];
   static readonly EDGE_COLORS: readonly string[] = ['bioc:stroke', 'bioc:fill', 'color:border-color'];
@@ -42,19 +36,6 @@ export class Swatches {
       Swatches.paint(di, label, Swatches.TABLE[swatch]);
     }
     return Swatches.fingerprint(di) !== before;
-  }
-
-  static of(di: BpmnElement): SwatchReading | undefined {
-    const edge = di.is('bpmndi:BPMNEdge');
-    const own = Swatches.colorsOf(di, edge ? Swatches.EDGE_COLORS : Swatches.SHAPE_COLORS);
-    const stroke = own['bioc:stroke'] ?? own['color:border-color'];
-    const fill = own['bioc:fill'] ?? own['color:background-color'];
-    if (!stroke && !fill) {
-      return undefined;
-    }
-    const isSwatch = (name: SwatchName): boolean => Swatches.TABLE[name].stroke === stroke?.toLowerCase() && (edge || Swatches.TABLE[name].fill === fill?.toLowerCase());
-    const name = (Object.keys(Swatches.TABLE) as SwatchName[]).find(isSwatch);
-    return { color: name ?? 'custom', ...(fill ? { fill } : {}), ...(stroke ? { stroke } : {}) };
   }
 
   private static fingerprint(di: BpmnElement): string {

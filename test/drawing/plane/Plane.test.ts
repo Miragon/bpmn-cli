@@ -64,14 +64,6 @@ describe('Plane', () => {
     expect((await planeOf('models/incremental/lanesub.bpmn')).verticalBand()).toBeUndefined();
   });
 
-  it('finds the plane an id is drawn on', async () => {
-    const plane = await planeOf('models/incremental/boundary.bpmn');
-
-    expect(Plane.with([plane], 'F5')).toBe(plane);
-    expect(Plane.with([plane], 'A')).toBe(plane);
-    expect(Plane.with([plane], 'missing')).toBeUndefined();
-  });
-
   it('gives the scorer an unmoved shape as read and a moved one rounded', async () => {
     const plane = await planeOf('models/incremental/boundary.bpmn');
     plane.shapes.get('C')!.bounds.translate(10.4, 0);

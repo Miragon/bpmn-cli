@@ -114,10 +114,6 @@ export class GNode {
     this.height = size.height;
   }
 
-  get name(): string | undefined {
-    return this.el.name;
-  }
-
   get isEvent(): boolean {
     return this.kind === 'start' || this.kind === 'end' || this.kind === 'event';
   }

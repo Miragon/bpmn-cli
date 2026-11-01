@@ -26,14 +26,9 @@ export class TrialGuard {
     private readonly planes: readonly Plane[],
     private readonly homes: ElementHomes,
     private readonly policy: TrialPolicy = TrialGuard.NO_WORSE,
-    private readonly scorer = new Scorer(),
   ) {
     this.base = this.measure();
     this.counts = this.countsOf(this.base);
-  }
-
-  get score(): number {
-    return this.base.score;
   }
 
   judge(): Verdict {
@@ -55,7 +50,7 @@ export class TrialGuard {
   }
 
   private measure(): LayoutScore {
-    return this.scorer.scoreDrawing(Plane.drawingsOf(this.planes), this.homes);
+    return new Scorer().scoreDrawing(Plane.drawingsOf(this.planes), this.homes);
   }
 
   private addedTo(measured: LayoutScore): LayoutProblem[] {

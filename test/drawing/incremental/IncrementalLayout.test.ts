@@ -3,12 +3,26 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { IncrementalLayout } from '../../../src/drawing/incremental/IncrementalLayout.js';
+import { DrawingSnapshot } from '../../../src/drawing/DrawingSnapshot.js';
 import { DrawingPair, type RecordedChanges } from '../../support/DrawingPair.js';
-import { BpmnError, Scorer } from '../../support/ModelValues.js';
+import { Box, BpmnError, ChangeSet, Scorer, type BpmnDocument, type BpmnElement } from '../../support/ModelValues.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 const WALKS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'corpus', 'walks');
+const LONG_TITLE = Array.from({ length: 12 }, () => 'Clarify the order').join(' ');
 const noChanges: RecordedChanges = { created: [], changed: [], removed: [], relocated: [], expand: [], collapse: [], renamed: [] };
+
+function boxOf(document: BpmnDocument, id: string): Box {
+  const shapes = document.diagram.planes().flatMap((plane) => plane.list('planeElement'));
+  const bounds = shapes.find((di) => di.peek<BpmnElement>('bpmnElement')?.peek('id') === id)!.peek<BpmnElement>('bounds')!;
+  return new Box(bounds.peek<number>('x')!, bounds.peek<number>('y')!, bounds.peek<number>('width')!, bounds.peek<number>('height')!);
+}
+
+function expansion(id: string, expanded: boolean): ChangeSet {
+  const changes = new ChangeSet();
+  changes.expansions.expand(id, expanded);
+  return changes;
+}
 
 describe('IncrementalLayout', () => {
   const rows = readdirSync(WALKS).flatMap((walk) => DrawingPair.walkSteps(walk).map((step, index) => ({ row: `${walk}#${index} ${step.name}`, step })));
@@ -45,6 +59,41 @@ describe('IncrementalLayout', () => {
     const { notes } = await new IncrementalLayout(document, before).place(changes);
 
     expect(notes).toContain('Activity_Fzs3 drawn collapsed');
+  });
+
+  it('draws a collapsed sub-process at the size of a task, its content on a plane of its own, and closes the strip it left', async () => {
+    const { document, before } = await DrawingPair.drawn('models/incremental/sub.bpmn');
+
+    await new IncrementalLayout(document, before).place(expansion('SP', false));
+
+    expect(boxOf(document, 'SP')).toMatchObject({ width: 100, height: 80 });
+    expect(boxOf(document, 'T').x).toBeLessThan(700);
+    expect(document.diagram.planes().map((plane) => plane.peek<BpmnElement>('bpmnElement')?.peek('id'))).toEqual(['P1', 'SP']);
+  });
+
+  it('draws an expanded sub-process around its content and pushes what stands to its right', async () => {
+    const { document, before } = await DrawingPair.drawn('models/incremental/sub.bpmn');
+    await new IncrementalLayout(document, before).place(expansion('SP', false));
+
+    const { notes } = await new IncrementalLayout(document, DrawingSnapshot.of(document)).place(expansion('SP', true));
+
+    const sub = boxOf(document, 'SP');
+    expect(notes).toContain('SP drawn expanded');
+    expect(sub.width).toBeGreaterThanOrEqual(350);
+    expect(boxOf(document, 'ST').isInside(sub)).toBe(true);
+    expect(boxOf(document, 'T').x).toBeGreaterThan(sub.right);
+    expect(document.diagram.planes()).toHaveLength(1);
+  });
+
+  it('moves the label of a flow off a sub-process title that grew over it', async () => {
+    const xml = Fixtures.text('models/incremental/sub.bpmn')
+      .replace('<bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="SP"/>', '<bpmn:sequenceFlow id="F1" name="Start" sourceRef="S" targetRef="SP"/>')
+      .replace('<di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>', '<di:waypoint x="240" y="200"/><bpmndi:BPMNLabel><dc:Bounds x="420" y="125" width="30" height="14"/></bpmndi:BPMNLabel></bpmndi:BPMNEdge>');
+    const { document, before, changes } = await DrawingPair.of(xml, xml.replace('name="Sub"', `name="${LONG_TITLE}"`), noChanges);
+
+    const { notes } = await new IncrementalLayout(document, before).place(changes);
+
+    expect(notes).toContain('label of F1 moved off the name of SP');
   });
 
   it('routes a line again that does not reach its end, and says so', async () => {

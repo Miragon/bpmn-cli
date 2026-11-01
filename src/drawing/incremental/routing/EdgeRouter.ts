@@ -4,7 +4,7 @@ import type { DShape } from '../../plane/DShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { ShapeSides, type Side } from '../../plane/ShapeSides.js';
 import { AssociationRoutes } from './AssociationRoutes.js';
-import { EdgeDamage, type EdgeBefore, type GrazeOptions } from './EdgeDamage.js';
+import { EdgeDamage, type EdgeBefore } from './EdgeDamage.js';
 import { EdgeObstacles } from './EdgeObstacles.js';
 import { OrthogonalRouter } from './OrthogonalRouter.js';
 import type { RouteRequest } from './RouteScene.js';
@@ -85,12 +85,12 @@ export class EdgeRouter {
     return source && target ? this.routeFlow(edge, source, target, opts) : undefined;
   }
 
-  grazes(edge: DEdge, ids: Iterable<string>, options?: GrazeOptions): boolean {
-    return this.damage.grazes(edge, ids, options);
+  grazes(edge: DEdge, ids: Iterable<string>): boolean {
+    return this.damage.grazes(edge, ids);
   }
 
-  touchesFresh(edge: DEdge, points?: readonly Point[]): boolean {
-    return this.damage.touchesFresh(edge, points);
+  touchesFresh(edge: DEdge): boolean {
+    return this.damage.touchesFresh(edge);
   }
 
   edgeBefore(edge: DEdge): EdgeBefore {

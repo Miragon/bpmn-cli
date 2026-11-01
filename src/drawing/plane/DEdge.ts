@@ -36,16 +36,6 @@ export class DEdge {
     return [rounded[0]!, new Point(Math.round(last.x), Math.round(last.y))];
   }
 
-  private static distanceAndSide({ start, end, horizontal }: Run, middle: Point): { distance: number; side: LabelSide } {
-    const low = horizontal ? Math.min(start.x, end.x) : Math.min(start.y, end.y);
-    const high = horizontal ? Math.max(start.x, end.x) : Math.max(start.y, end.y);
-    const along = horizontal ? middle.x : middle.y;
-    const beyond = Math.max(0, low - along, along - high);
-    const across = horizontal ? middle.y - start.y : middle.x - start.x;
-    const sides: [LabelSide, LabelSide] = horizontal ? ['above', 'below'] : ['left', 'right'];
-    return { distance: Math.hypot(beyond, across), side: across < 0 ? sides[0] : sides[1] };
-  }
-
   drawing(): EdgeDrawing {
     const { id, el, di, points, label } = this;
     const current = DEdge.waypointsOf(di);
@@ -55,23 +45,6 @@ export class DEdge {
   translate(dx: number, dy: number): void {
     new Polyline(this.points).translate(dx, dy);
     this.label?.translate(dx, dy);
-  }
-
-  labelSide(): LabelSide | undefined {
-    const { label, points } = this;
-    if (!label || points.length < 2) {
-      return undefined;
-    }
-    let best: LabelSide | undefined;
-    let bestDistance = Number.POSITIVE_INFINITY;
-    for (const run of this.runs()) {
-      const { distance, side } = DEdge.distanceAndSide(run, label.center);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        best = side;
-      }
-    }
-    return best;
   }
 
   labelAt({ width, height }: Pick<Box, 'width' | 'height'>, side: LabelSide): Box | undefined {
@@ -85,10 +58,6 @@ export class DEdge {
       return new Box(Math.round((start.x + end.x) / 2 - width / 2), Math.round(side === 'above' ? start.y - height - DEdge.ABOVE_GAP : start.y + DEdge.ABOVE_GAP), width, height);
     }
     return new Box(Math.round(side === 'left' ? start.x - width - DEdge.BESIDE_GAP : start.x + DEdge.BESIDE_GAP), Math.round((start.y + end.y) / 2 - height / 2), width, height);
-  }
-
-  private runs(): Run[] {
-    return new Polyline(this.points).segments().map(({ start, end }) => ({ start, end, horizontal: Math.abs(start.y - end.y) <= Math.abs(start.x - end.x) }));
   }
 
   private longestStraightRun(horizontal: boolean): Run | undefined {
