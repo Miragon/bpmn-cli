@@ -90,7 +90,7 @@ export async function minimizeWalk(walkDir, options = {}) {
   mkdirSync(out, { recursive: true });
   const exec = await makeExecutor({ exec: summary.config.exec, via: summary.config.via, workDir: join(out, 'probe') });
   const metrics = await loadMetrics();
-  const render = first.kind === 'render' ? await loadRender() : undefined;
+  const render = first.kind === 'render' ? await loadRender({ exec: summary.config.exec, workDir: join(out, 'probe') }) : undefined;
   const xml = readFileSync(summary.modelPath, 'utf8');
   const detEvery = /nondeterministic/.test(first.kind) ? 1 : 0;
   const test = async (list) => {

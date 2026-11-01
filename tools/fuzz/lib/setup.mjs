@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadHardKinds, loadMainApi } from '../../oracle/lib/main-tools.mjs';
@@ -22,7 +23,25 @@ export async function loadMetrics() {
   return { measure: main.layoutProblemsOfXml, diff: main.diffProblems, hard: [...hard], keys: [...main.METRIC_KEYS], weights: { ...main.METRIC_WEIGHTS } };
 }
 
-export async function loadRender() {
+function renderingCli(bin, workDir) {
+  mkdirSync(workDir, { recursive: true });
+  const [file, png] = [join(workDir, 'rendered.bpmn'), join(workDir, 'rendered.png')];
+  return {
+    draw(xml) {
+      writeFileSync(file, xml);
+      const { status, stdout, stderr } = spawnSync(process.execPath, [bin, 'render', file, '-o', png, '--problems', '--json'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+      if (status !== 0) {
+        throw new Error(`exit ${status}: ${stderr || stdout}`);
+      }
+      return JSON.parse(stdout);
+    },
+  };
+}
+
+export async function loadRender({ exec = 'cli', workDir, bin }) {
+  if (exec === 'cli') {
+    return renderingCli(bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir);
+  }
   const { renderXml } = await loadLibrary();
   return { draw: (xml) => renderXml(xml, { problems: true }) };
 }

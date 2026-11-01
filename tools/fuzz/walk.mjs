@@ -14,7 +14,7 @@ export async function walkOnce(model, options) {
   const summary = await runWalk({
     xml: readFileSync(model, 'utf8'), model: basename(model), seed: options.seed, steps: options.steps,
     exec: await makeExecutor({ exec: options.exec, via: options.via, workDir: join(out, 'work') }), metrics: await loadMetrics(),
-    render: options.render ? await loadRender() : undefined,
+    render: options.render ? await loadRender({ exec: options.exec, workDir: join(out, 'work') }) : undefined,
     semantic: options.semantic, format: options.format, detEvery: options.detEvery, hardSeverity: options.hard,
     replay: options.replay ? JSON.parse(readFileSync(options.replay, 'utf8')) : undefined,
     onStep: (entry, xml) => {
