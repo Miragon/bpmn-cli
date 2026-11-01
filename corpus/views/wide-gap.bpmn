@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" id="Definitions_WideGap" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Gap" isExecutable="true">
+    <bpmn:task id="First" />
+    <bpmn:task id="Second" />
+    <bpmn:task id="Far" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Gap">
+    <bpmndi:BPMNPlane id="Plane_Gap" bpmnElement="Process_Gap">
+      <bpmndi:BPMNShape id="Shape_First" bpmnElement="First"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Second" bpmnElement="Second"><dc:Bounds x="260" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Far" bpmnElement="Far"><dc:Bounds x="960" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

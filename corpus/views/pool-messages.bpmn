@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_PoolMessages" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_Order" name="Order" />
+  <bpmn:message id="Message_Receipt" name="Receipt" />
+  <bpmn:collaboration id="Collaboration_Shop">
+    <bpmn:participant id="Pool_Customer" name="Customer" />
+    <bpmn:participant id="Pool_Shop" name="Shop" processRef="Process_Shop" />
+    <bpmn:messageFlow id="Flow_Order" name="Order" sourceRef="Pool_Customer" targetRef="Pool_Shop" messageRef="Message_Order" />
+    <bpmn:messageFlow id="Flow_Named" name="Receipt" sourceRef="Pool_Shop" targetRef="Pool_Customer" />
+    <bpmn:messageFlow id="Flow_Other" name="Other" sourceRef="Pool_Shop" targetRef="Pool_Customer" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Shop" isExecutable="true">
+    <bpmn:startEvent id="Start_Order"><bpmn:outgoing>Flow_1</bpmn:outgoing><bpmn:messageEventDefinition id="Def_Order" messageRef="Message_Order" /></bpmn:startEvent>
+    <bpmn:sendTask id="Send_Receipt" messageRef="Message_Receipt"><bpmn:incoming>Flow_1</bpmn:incoming><bpmn:outgoing>Flow_2</bpmn:outgoing></bpmn:sendTask>
+    <bpmn:receiveTask id="Receive_Order" messageRef="Message_Order"><bpmn:incoming>Flow_2</bpmn:incoming><bpmn:outgoing>Flow_3</bpmn:outgoing></bpmn:receiveTask>
+    <bpmn:endEvent id="End_Receipt"><bpmn:incoming>Flow_3</bpmn:incoming><bpmn:messageEventDefinition id="Def_Receipt" messageRef="Message_Receipt" /></bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_Order" targetRef="Send_Receipt" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Send_Receipt" targetRef="Receive_Order" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Receive_Order" targetRef="End_Receipt" />
+  </bpmn:process>
+</bpmn:definitions>
