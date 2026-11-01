@@ -35,7 +35,7 @@ describe('EdgeObstacles', () => {
     expect(EdgeObstacles.solidFor(plane.shapes.get('ESP')!, plane.edges.get('F1')!)).toBe(true);
   });
 
-  it('frees only the lines of annotations', async () => {
+  it('never counts a crossing with the line of a text annotation against a route', async () => {
     const plane = await planeOf('models/incremental/collabnote.bpmn');
 
     expect([...new EdgeObstacles(plane).freeLines()]).toEqual([plane.edges.get('As')!.points]);
