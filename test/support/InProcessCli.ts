@@ -1,7 +1,7 @@
 import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { Writable } from 'node:stream';
+import { Readable, Writable } from 'node:stream';
 import { Cli } from '../../src/cli/index.js';
 
 export interface CliRun {
@@ -31,7 +31,7 @@ export class InProcessCli {
   async run(words: string[], { stdin = '', isTTY = false }: { stdin?: string; isTTY?: boolean } = {}): Promise<CliRun> {
     const [stdout, stderr]: string[][] = [[], []];
     const out = Object.assign(InProcessCli.collecting(stdout!), { isTTY });
-    const exit = await new Cli({ stdout: out as never, stderr: InProcessCli.collecting(stderr!) as never, stdin: [stdin], env: {} }).run(words);
+    const exit = await new Cli({ stdout: out as never, stderr: InProcessCli.collecting(stderr!) as never, stdin: Readable.from([stdin]), env: {} }).run(words);
     return { exit, stdout: stdout!.join(''), stderr: stderr!.join('') };
   }
 
