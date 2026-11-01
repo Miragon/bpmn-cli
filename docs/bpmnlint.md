@@ -1,10 +1,10 @@
 # bpmnlint
 
-bpmn-cli runs your project's `.bpmnlintrc` in `bpmn validate` and in every write. The agent sees a
-rule violation in the result of the command that caused it, not later in CI.
+`bpmn validate` runs your project's `.bpmnlintrc`, the same gate CI runs. A write does not: it loads no
+plugin code, and its state line says that `bpmn validate` lists the rest.
 
 ::: tip From the CLI
-`bpmn guide bpmnlint` and `bpmn guide conventions` print the full reference.
+`bpmn guide bpmnlint` and `bpmn guide conventions` print the short form.
 :::
 
 ## Quick start
@@ -64,7 +64,7 @@ A `.bpmnlintrc` can name plugins of the repository, and `bpmn validate` then run
 | --- | --- |
 | default | the nearest `.bpmnlintrc` from the model's directory up to the repository root |
 | `--lint-config <path>` | that file (must exist and be strict JSON, else `E_LINT_CONFIG`) |
-| `--no-lint-config` | no bpmnlint, no [id conventions](#id-conventions) |
+| `--no-lint-config` | no bpmnlint |
 | no `.bpmnlintrc` found | nothing of bpmnlint |
 
 bpmnlint's own CLI reads the `.bpmnlintrc` of the working directory. bpmn-cli takes the one nearest to
@@ -74,37 +74,20 @@ the model, so keep one per repository, or let CI use the same files.
 
 An error reads `[bpmnlint error] <rule>` and fails the check (exit 2). A warning reads
 `[bpmnlint] <rule>`; `--strict` exits 5 on it. Three or more findings of one rule are one line.
+A finding the structure checks already report, such as a dead end, is listed once.
 
 ```console
 $ bpmn validate models/order.bpmn
-[bpmnlint error] local/external-task-topic serviceTask_bookOrder: External task has no topic
 W_C7_DEPLOY_EXTERNAL_TOPIC serviceTask_bookOrder: serviceTask serviceTask_bookOrder is an external task without camunda:topic; the engines refuse the file  (`bpmn set <file> serviceTask_bookOrder camunda:topic=<topic>`.)
-[bpmnlint] @miragon/rules/element-id-naming x3 [Event_OrderReceived]: Element id must match the naming convention <startEvent_camelCase> (1 of 3; 2 others with 2 other messages, --json lists them)
+[bpmnlint] @miragon/rules/element-id-naming Activity_CheckOrder: Element id must match the naming convention <userTask_camelCase>
 platform: c7 (modeler:executionPlatform "Camunda Platform") - 1 refused at deploy, 0 runtime, 0 practice finding(s)
-validator bpmnlint (.bpmnlintrc in .; project plugins: bpmnlint-plugin-local@1.0.0): 1 error(s), 3 warning(s) in the file
+validator bpmnlint (.bpmnlintrc in .): 0 error(s), 1 warning(s) in the file
 layout: ok
-1 error(s), 4 warning(s)
+valid, 2 warning(s)
 ```
 
-## Writes
-
-A write lists only the findings the change added and never refuses because of them. The rest is
-counted in the validator line.
-
-```console
-$ bpmn add models/order.bpmn serviceTask "Book order" --after Activity_CheckOrder camunda:type=external
-created serviceTask serviceTask_bookOrder "Book order" - after Activity_CheckOrder
-...
-warning W_C7_DEPLOY_EXTERNAL_TOPIC serviceTask_bookOrder: serviceTask serviceTask_bookOrder is an external task without camunda:topic; the engines refuse the file  (`bpmn set <file> serviceTask_bookOrder camunda:topic=<topic>`.)
-warning [bpmnlint error] local/external-task-topic serviceTask_bookOrder: External task has no topic
-validator bpmnlint (.bpmnlintrc in .; project plugins: bpmnlint-plugin-local@1.0.0): 1 error(s), 3 warning(s) in the result (1 added, 0 resolved, 3 already in the file)
-layout: ok - full (engine-owned diagram: redrawn)
-written: models/order.bpmn
-```
-
-The new ids follow `element-id-naming`, so the write adds none of its findings. Under
-`bpmnlint:recommended` a file from `bpmn new` has no start and no end event yet, so `bpmn validate`
-exits 2 until the first `apply` batch adds them.
+Under `bpmnlint:recommended` a file from `bpmn new` has no start and no end event yet, so `bpmn validate`
+exits 2 until the first batch adds them.
 
 ## Id conventions
 
@@ -150,9 +133,8 @@ switches a type off.
 }
 ```
 
-With it, a user task "Check order" becomes `ut_check_order`, a timer boundary event
-`timerEvent_payment_overdue` and the flow between two tasks `flow_check_order_to_ship_order`. A
-taken id gets `_2` under snake_case (`ut_check_order_2`), `2` under camelCase and PascalCase
+With it, a user task "Check order" becomes `ut_check_order` and a start event "Order received"
+`startEvent_order_received`. A taken id gets `_2` under snake_case (`ut_check_order_2`), `2` under camelCase and PascalCase
 (`userTask_checkOrder2`) and `-2` under kebab-case. Under `any` the body is camelCase.
 
 ### Types the rule does not check
@@ -181,49 +163,39 @@ fits, with the `bpmn set` that renames it. A flow whose id names its ends in the
 
 ### Choosing ids yourself
 
-An explicit id is taken as given: `--id` on `bpmn add`, `"id"` in an `apply` op, `--flow-id` /
+An explicit id is taken as given: `--id` on `bpmn add`, `"id"` in an operation, `--flow-id` /
 `"flowId"` for the flow into a new node and `"joinId"` for the join of a split.
 
 ### Checking
 
-`bpmn show <file> --conventions` lists the patterns new ids follow and where each comes from, also
-for a file that does not exist yet:
+`bpmn conventions <file>` lists the patterns new ids follow and where they come from, also for a file
+that does not exist yet:
 
 ```console
-$ bpmn show models/order.bpmn --conventions
+$ bpmn conventions models/order.bpmn
 conventions of models/order.bpmn
-element-id-naming (.bpmnlintrc in .): warn, case camelCase, eventDefinitionQualifier optional
-  <kind>_{name:camel}             lint      task userTask serviceTask scriptTask sendTask receiveTask manualTask businessRuleTask subProcess callActivity startEvent endEvent participant lane dataObject dataStore textAnnotation group collaboration
-  subProcess_{name:camel}         lint      eventSubProcess adHocSubProcess transaction
-  gateway_{name:camel}            lint      exclusiveGateway parallelGateway inclusiveGateway complexGateway eventBasedGateway
-  event_{name:camel}              lint      intermediateCatchEvent intermediateThrowEvent boundaryEvent
-  {name:camel}                    bpmn-cli  process (not checked; unnamed: Process_1)
-  message_{name:camel}            bpmn-cli  message (not checked)
-  flow_{source}To{target}         lint      sequenceFlow
-  messageFlow_{source}To{target}  lint      messageFlow
-  events with a trigger: <trigger><Prefix> (timerStartEvent_, messageEvent_, errorEndEvent_) also accepted, new ids take the plain prefix
-sources: lint = element-id-naming; bpmn-cli = bpmn-cli's own prefix for a type element-id-naming does not check
+element-id-naming (.bpmnlintrc in .): warn, case snake_case, eventDefinitionQualifier required
+  task_{name:snake}              task
+  ut_{name:snake}                userTask
+  serviceTask_{name:snake}       serviceTask
+...
+  gateway_{name:snake}           exclusiveGateway parallelGateway inclusiveGateway complexGateway eventBasedGateway
+  startEvent_{name:snake}        startEvent
+...
 ```
 
-The sources: `lint` is the `.bpmnlintrc`'s `element-id-naming`, `default` its defaults with nothing
-declared (no `.bpmnlintrc`, `--no-lint-config`, the rule off), `bpmn-cli` a type the rule does not
-check. `bpmn validate` reports ids that break the rule.
-A value new ids cannot follow (a prefix that cannot start an id, an unknown case) gets a
+Without a `.bpmnlintrc` it says so and lists the rule's defaults. `bpmn validate` reports ids that break
+the rule. A value new ids cannot follow (a prefix that cannot start an id, an unknown case) gets a
 `W_CONFIG_IGNORED` note.
-
-::: warning Breaking change
-Earlier versions learned the id style from the file's own ids (`Activity_CheckOrder`,
-`Flow_CheckOrderToShipOrder`). A file without a `.bpmnlintrc` now gets the defaults above even
-where its existing ids look different. Library hosts that call `idConventionsFromLint` pass the
-`naming` namespace of `@miragon/bpmnlint-plugin-rules` 0.19 or later.
-:::
 
 ## Project code
 
-A rule resolves from bpmn-cli's bundled rules first, then from the repository's `node_modules`. Only
-that last source runs project code, and only inside a git repository owned by the user running
-bpmn-cli. A plugin that cannot be resolved or may not run is left out with one `W_LINT_UNAVAILABLE`
-that says why; the rest runs.
+bpmn-cli's bundled rules and the repository's `node_modules` can both serve a plugin. When the project
+installs a plugin that bpmn-cli also bundles, the project's copy runs, as it does in the project's CI; the
+bundled copy runs only when the project has none. A rule the project's copy lacks is left out and named.
+
+Project code runs only inside a git repository owned by the user running bpmn-cli. A plugin that cannot
+be resolved or may not run is left out with one `W_LINT_UNAVAILABLE` that says why; the rest runs.
 
 In Claude Code the skill pre-approves `bpmn` commands, so project plugin code runs without a
 prompt. In a repository you do not trust, pass `--no-lint-config`.
@@ -237,12 +209,9 @@ prompt. In a repository you do not trust, pass `--no-lint-config`.
 | `import-warning` error | bpmnlint cannot read an attribute: add a moddle extension that declares it |
 | dead ends reported on nodes that have flows | the file keeps no `incoming` / `outgoing` lists; bpmnlint in CI reports them too |
 | `W_LINT_FAILED` | a rule threw; its findings are left out |
-| `W_LINT_UNAVAILABLE: bpmnlint could not be loaded` | the project's bpmnlint is older than 11.14: update it, or run bpmn-cli with `npx` |
-
-A long-running host keeps a project plugin that loaded; restart it after changing the plugin.
 
 ## Next steps
 
 - [Camunda 7 and Camunda 8](camunda.md): the engine rules bpmn-cli checks itself.
 - [Commands](commands.md): `validate` and the options of every write.
-- [Validators](validators.md): the same validator in a host that embeds the library.
+- [Validators](validators.md): a host's own rules inside a write.

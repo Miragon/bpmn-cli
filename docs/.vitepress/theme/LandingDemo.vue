@@ -71,7 +71,7 @@ onBeforeUnmount(() => clearTimeout(timer))
     </div>
     <div class="terminal">
       <p class="line"><span class="prompt">$ </span>{{ command.slice(0, typedChars) }}<span v-if="typing" class="caret" aria-hidden="true" /></p>
-      <p class="line" :class="{ pending: shownLines < 1 }"><span class="ok">created</span> userTask userTask_approveInvoice "Approve invoice" - after userTask_checkInvoice</p>
+      <p class="line" :class="{ pending: shownLines < 1 }"><span class="ok">created</span> userTask: userTask_approveInvoice</p>
       <p class="line quiet" :class="{ pending: shownLines < 2 }">note: inserted between userTask_checkInvoice and endEvent_done</p>
       <p class="line" :class="{ pending: shownLines < 3 }"><span class="ok">written:</span> order.bpmn</p>
     </div>

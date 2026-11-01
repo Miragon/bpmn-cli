@@ -9,7 +9,7 @@ A command line tool that lets an AI agent (or a human at a shell) edit BPMN 2.0 
 **semantically**: it names elements and operations, and the CLI keeps the drawing. No BPMN XML,
 no diagram coordinates.
 
-![bpmn commands grow a small order process: an approval step, a gateway with a rejection branch, a branch name the CLI asked for, and a clean validate](docs/assets/demo.gif)
+![The order process drawn by bpmn render: Order received, Check invoice, the gateway Invoice ok? with the branches Book invoice and Ask customer, and a message flow to the Customer pool](docs/public/shots/walkthrough-3-pools.svg)
 
 ## Why
 
@@ -25,25 +25,25 @@ writes the XML and the drawing. What you get:
   large models fit into its context.
 - **Correct by construction.** The agent names elements and changes; references, ids and
   coordinates are the CLI's job.
-- **Careful with your drawing.** A diagram made in Camunda Modeler or bpmn-js stays as it is; new
-  elements are fitted in next to their neighbours.
+- **Careful with your drawing.** A diagram stays as it is; new elements are fitted in next to their
+  neighbours, and `bpmn layout` redraws only when you ask.
 - **Ready to deploy.** Camunda 7 and Camunda 8 settings are set by name and checked before you
   deploy.
 
 ## Install
 
-Requires Node 22.12+.
+Requires Node 24 or later.
 
 ```
 npm install -g @miragon/bpmn-cli   # puts `bpmn` on your PATH
 brew install miragon/tap/bpmn-cli  # or with Homebrew (pulls in Node)
-bpmn guide --short                 # the agent cheat sheet (`bpmn guide` for all of it)
+bpmn guide                         # the core of the help, and its topics
 ```
 
 ## Quick start
 
 ```
-$ bpmn new order.bpmn --name "Order handling"
+$ bpmn new order.bpmn "Order handling"
 $ bpmn add order.bpmn start "Order received"
 $ bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
 $ bpmn add order.bpmn end "Done" --after userTask_checkInvoice
@@ -52,7 +52,7 @@ process orderHandling "Order handling" executable
   startEvent startEvent_orderReceived "Order received" -> userTask_checkInvoice (flow_orderReceivedToCheckInvoice)
   userTask userTask_checkInvoice "Check invoice" -> endEvent_done (flow_checkInvoiceToDone)
   endEvent endEvent_done "Done"
-problems: none
+state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)
 ```
 
 The result is a normal `.bpmn` file that opens in Camunda Modeler / bpmn-js with a laid-out
@@ -63,15 +63,16 @@ process step by step.
 
 | Task | Commands |
 | --- | --- |
-| Read a model | `show`, `find`, `metrics` |
-| Change the process | `new`, `add`, `connect`, `set`, `remove`, `retype`, `move`, `order`, `ext` |
-| Change several things at once | `apply` (a batch of ops as JSON) |
-| Format the diagram | `place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact`, `layout` |
+| Read a model | `show`, `find`, `diagram`, `conventions` |
+| Change the process | `new`, `add`, `connect`, `set`, `remove`, `retype`, `move`, `order`, `ext add`, `ext remove` |
+| Change several things at once | `apply` (a batch of operations as JSON) |
+| Format the diagram | `place`, `color`, `label`, `route`, `space`, `tidy`, `compact`, `layout` |
 | Look at the diagram | `render` (PNG or SVG, no browser) |
 | Check before deploying | `validate` (also runs the project's `.bpmnlintrc`) |
-| Ask the CLI itself | `guide`, `kinds`, `--help` |
+| Ask the CLI itself | `guide`, `--help` |
 
-Details: [command reference](https://miragon.github.io/bpmn-cli/commands).
+Details: [command reference](https://miragon.github.io/bpmn-cli/commands). Coming from 0.9:
+[From 0.9 to 1.0](https://miragon.github.io/bpmn-cli/migration).
 
 ## Claude Code plugin
 
@@ -96,18 +97,19 @@ Details: [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda).
 
 ## bpmnlint
 
-A project's bpmnlint configuration (`.bpmnlintrc`) runs in `bpmn validate` and in every write: the
-agent sees the findings its change added and fixes them in the same batch, instead of in CI. The
-ids bpmn-cli generates follow `@miragon/rules/element-id-naming`: the prefixes and case the
+A project's bpmnlint configuration (`.bpmnlintrc`) runs in `bpmn validate`, the gate an agent runs
+before it calls a model done, so it fixes the findings instead of meeting them in CI. The ids
+bpmn-cli generates follow `@miragon/rules/element-id-naming`: the prefixes and case the
 `.bpmnlintrc` declares, else the rule's defaults (`userTask_checkInvoice`,
 `flow_checkInvoiceToBookInvoice`), so they pass the rule out of the box
-(`bpmn show <file> --conventions` lists them).
+(`bpmn conventions <file>` lists them).
 
 Details: [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint).
 
 ## Library use
 
-The package is also a library that edits BPMN in memory, in Node and in the browser.
+The package is also a library that edits BPMN in memory, in Node and in the browser: ten exports that
+take and return strings and data.
 
 Details: [library use](https://miragon.github.io/bpmn-cli/library), [validators](https://miragon.github.io/bpmn-cli/validators).
 
@@ -117,14 +119,16 @@ The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)
 
 - [Command reference](https://miragon.github.io/bpmn-cli/commands): every command with its options
 - [Syntax and output](https://miragon.github.io/bpmn-cli/reference): ids, kinds, triggers, placement, set keys, output, errors and exit codes
-- [Ops JSON](https://miragon.github.io/bpmn-cli/ops): the batch format of `bpmn apply`
-- [Layout and formatting](https://miragon.github.io/bpmn-cli/layout): layout modes and the diagram-only commands
+- [Operations](https://miragon.github.io/bpmn-cli/ops): the batch format of `bpmn apply`
+- [Layout and formatting](https://miragon.github.io/bpmn-cli/layout): how a write draws, and the diagram-only commands
 - [The contract and its limits](https://miragon.github.io/bpmn-cli/contract): what the CLI guarantees, what a write changes, limitations
 - [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda): platform settings with worked examples
-- [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate and every write
+- [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate
 - [A worked session](https://miragon.github.io/bpmn-cli/walkthrough): one process from an empty file to a validated model
 - [Library use](https://miragon.github.io/bpmn-cli/library)
 - [Validators](https://miragon.github.io/bpmn-cli/validators): a library host's own checks inside the write
+- [From 0.9 to 1.0](https://miragon.github.io/bpmn-cli/migration): what a user types and a host calls differently
+- [Architecture](https://miragon.github.io/bpmn-cli/architecture): the modules, what each holds and what it does not do
 - For maintainers, in the repository only: [testing](docs/testing.md),
   [releasing](docs/releasing.md) and the [plan to 1.0](docs/plan/README.md)
 

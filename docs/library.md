@@ -1,6 +1,6 @@
 # Library use
 
-bpmn-cli as a package, for tools that embed it, such as a modeler or design-iq. Agents and
+bpmn-cli as a package, for tools that embed it, such as a modeler or a modelling workspace. Agents and
 scripts use the CLI.
 
 ## Quick start
@@ -9,18 +9,12 @@ scripts use the CLI.
 npm install @miragon/bpmn-cli
 ```
 
-The functions take the XML as a string and return the new XML with the result the CLI prints:
+The functions take the XML as a string and return the new XML with what the CLI prints:
 
 ```ts
-import {
-  applyToXml,
-  BpmnError,
-  newXml,
-  renderMutation,
-  showXml,
-} from '@miragon/bpmn-cli';
+import { applyToXml, BpmnError, newXml, showXml } from '@miragon/bpmn-cli';
 
-let { xml } = await newXml({ processName: 'Order handling' });
+let xml = await newXml({ name: 'Order handling' });
 const edit = await applyToXml(xml, [
   { op: 'add', kind: 'start', name: 'Order received' },
   {
@@ -31,182 +25,209 @@ const edit = await applyToXml(xml, [
   },
   { op: 'add', kind: 'end', name: 'Done', after: 'userTask_checkInvoice' },
 ]);
-if (!edit.unchanged) xml = edit.xml; // and save it
+if (!edit.unchanged) {
+  xml = edit.xml;
+}
 
-edit.result.created.map((c) => c.id);
+edit.created.map((change) => change.id);
 // ['startEvent_orderReceived', 'userTask_checkInvoice',
 //  'flow_orderReceivedToCheckInvoice', 'endEvent_done',
 //  'flow_checkInvoiceToDone']
 
-edit.result.layout.mode;
-// 'full' (no diagram before: drawn from scratch)
+edit.state;
+// { errors: 0, warnings: 0 }
 
-renderMutation(edit.result);
-// the text `bpmn apply` prints: created ... / layout: ok - full (...)
-
-await showXml(xml);
-// the `bpmn show` text of the README quick start
+(await showXml(xml)).text;
+// the text of `bpmn show`
 
 try {
   await applyToXml(xml, [
     { op: 'add', kind: 'userTask', name: 'Ship', after: 'userTask_check' },
   ]);
-} catch (err) {
-  if (!(err instanceof BpmnError)) throw err;
-  err.code;               // 'E_NOT_FOUND'
-  err.details.candidates; // ['userTask_checkInvoice']
+} catch (error) {
+  if (!(error instanceof BpmnError)) {
+    throw error;
+  }
+  error.code;               // 'E_NOT_FOUND'
+  error.category;           // 'model'
+  error.details.candidates; // ['userTask_checkInvoice']
 }
 ```
 
-A failure throws a `BpmnError` (`code`, `details`, `toJSON()` for the CLI's `--json` error). Nothing
-is half done: the caller still has its input.
+A failure throws a `BpmnError` (`code`, `category`, `details`). Nothing is half done: the caller still
+has its input. The categories are `usage`, `model`, `layout`, `io` and `internal`.
 
-## Two entries
+## The contract
 
-| entry | runs in | holds |
-| --- | --- | --- |
-| `@miragon/bpmn-cli` | Node and the browser | the core: strings in, strings and data out |
-| `@miragon/bpmn-cli/node` | Node only | the core plus the file helpers the CLI uses |
+`@miragon/bpmn-cli` exports ten things at run time: eight functions, one per command that is not an
+operation, plus `OPS_SCHEMA` and `BpmnError`. The package has one entry, and it runs in Node and in the
+browser. `./package.json` is exported too, for the version.
 
-## The in-memory API
+```ts
+export function applyToXml(xml: string, operations: Operation[], options?: EditOptions): Promise<EditResult>;
+export function showXml(xml: string, options?: ShowOptions): Promise<ShowResult>;
+export function findXml(xml: string, options?: FindOptions): Promise<FindResult>;
+export function diagramXml(xml: string): Promise<DiagramResult>;
+export function renderXml(xml: string, options?: RenderOptions): Promise<RenderedImage>;
+export function validateXml(xml: string, options?: ValidateOptions): Promise<ValidationReport>;
+export function newXml(options?: NewOptions): Promise<string>;
+export function kindsJson(options?: { conventions?: IdConventions }): KindTableResult;
 
-Every function runs the CLI command it names, without a file:
+export const OPS_SCHEMA: JsonSchema;
+
+export class BpmnError extends Error {
+  readonly code: string;
+  readonly category: ErrorCategory;
+  readonly details: ErrorDetails;
+}
+```
 
 | function | like |
 | --- | --- |
-| `applyToXml(xml, ops, opts?)` | `bpmn apply` |
-| `newXml(opts?)` | `bpmn new` |
-| `layoutXml(xml, opts?)` | `bpmn layout` |
-| `validateXml(xml, opts?)` | `bpmn validate --json` |
-| `viewXml(xml, opts?)`, `showXml(xml, opts?)` | `bpmn show --json`, `bpmn show` |
-| `findXml(xml, text)` | `bpmn find --json` |
-| `renderSvg(xml, opts?)` | `bpmn render --format svg` |
+| `applyToXml` | `bpmn apply`, and every edit and draw command |
+| `showXml` | `bpmn show` |
+| `findXml` | `bpmn find` |
+| `diagramXml` | `bpmn diagram` |
+| `renderXml` | `bpmn render`, as SVG; PNG is the CLI's |
+| `validateXml` | `bpmn validate`, without the project's lint unless you pass it as a validator |
+| `newXml` | `bpmn new` |
+| `kindsJson` | the tables of `bpmn guide kinds` and `bpmn guide triggers`, as data, each kind with the pattern of its new ids |
 
-`ops` is the [ops JSON](ops.md#ops-json-bpmn-apply) of `bpmn apply`; its TypeScript type is
-`EditCommand`, one type per command named after what it does (`AddElement`, `ConnectElements`,
-`PlaceShapes`, `RerouteFlow`, ...; the diagram commands together are `DiagramCommand`). The
-commands of a batch run in their order: a diagram command sees the layout of the commands before
-it. A writing function returns
-`{ xml, unchanged, result }`: `unchanged` is `true` when there is nothing to save, `result` is what
-the CLI prints with `--json`. `renderMutation(result)` gives the CLI's text.
-
-### Options
-
-| option | values | CLI |
-| --- | --- | --- |
-| `layout` | `'auto'` (default), `'incremental'`, `'full'`, `false` | `--layout`, `--no-layout` |
-| `force` | write despite a guard | `--force` |
-| `platform` | `'auto'`, `'c7'`, `'c8'`, `'none'` | `--platform` |
-| `validators` | host validators ([Validators](validators.md)) | none |
-| `conventions` | declared id conventions (below) | the `.bpmnlintrc` |
-
-The full signatures ship as TypeScript types with the package.
-
-## File helpers (`@miragon/bpmn-cli/node`) {#file-helpers-miragon-bpmn-cli-node}
-
-| helper | runs |
-| --- | --- |
-| `mutateFile(file, ops, opts)` | what every mutating command runs |
-| `layoutFile(file, opts)` | `bpmn layout` |
-| `checkFile(file, { platform, validators })` | `bpmn validate` |
-| `loadDoc(file, { force })` | read a file with the lossy-import guard |
-| `writeAtomic(file, text)` | write a temp file, then rename it |
-
-They add `out`, `dryRun` and `backup`, and run the project's `.bpmnlintrc` as an advisory
-validator like the CLI ([bpmnlint](bpmnlint.md)). Plugins the project installed run only with
-`lintProjectCode: true`.
-
-## Building blocks
-
-A host that keeps a parsed model between calls uses the pipeline on a `Doc`:
-`Doc.fromXml(xml)`, then `mutateDoc(doc, ops, opts)`, `layoutDoc`, `checkDoc`. They never write.
-Every other part (views, metrics, the diagram commands, the platform profile) is exported too:
-`runOps(doc, commands)` runs commands on a `Doc`, `parseOps(json)` reads the ops JSON into
-`EditCommand`s.
-
-::: warning Load the profile rules before runProfile
-`runProfile` and `validateDoc(doc, { platform })` are synchronous: call `await loadProfiles()`
-once before them, otherwise they throw `E_PROFILE_NOT_LOADED` on a Camunda 7 / 8 document.
-`mutateDoc`, `checkDoc` and the in-memory API load the rules themselves.
-:::
-
-### bpmnlint as a validator
-
-A bpmnlint configuration as an advisory validator ([Validators](validators.md#advisory-validators)).
-In Node `bpmnlintEngine()` gives the engine; a browser host bundles bpmnlint's `Linter` itself.
+## Options
 
 ```ts
-import {
-  applyToXml,
-  bpmnlintValidator,
-  resolveBpmnlintConfig,
-} from '@miragon/bpmn-cli';
-import { bpmnlintEngine } from '@miragon/bpmn-cli/node';
+interface EditOptions {
+  validators?: Validator[];
+  force?: boolean;
+  conventions?: IdConventions;
+}
 
-const engine = bpmnlintEngine();
-const resolved = await resolveBpmnlintConfig(engine, {
-  extends: 'bpmnlint:recommended',
-});
-const lint = bpmnlintValidator(engine, resolved, { detail: 'our rules' });
-const edit = await applyToXml(xml, ops, { validators: [lint] });
+interface ShowOptions {
+  id?: string;
+  in?: string;
+  around?: string;
+  depth?: number;
+}
 
-edit.result.warnings.added;
-// the bpmnlint findings the change added, an error with severity 'error'
+interface FindOptions {
+  text?: string;
+  kind?: string;
+  in?: string;
+}
+
+interface RenderOptions {
+  ids?: string[];
+  around?: string;
+  depth?: number;
+  path?: [from: string, to: string];
+  problems?: boolean;
+}
+
+interface ValidateOptions {
+  validators?: Validator[];
+}
+
+interface NewOptions {
+  name?: string;
+  id?: string;
+  target?: 'camunda8' | 'camunda7' | 'none';
+  conventions?: IdConventions;
+}
 ```
 
-### Declared id conventions
+The platform comes from the file's namespaces, so there is no option for it. The full signatures ship as
+TypeScript types with the package.
 
-Without `conventions` new ids follow the defaults of `@miragon/rules/element-id-naming`. A host
-whose lint configures that rule otherwise passes the same configuration's conventions, or its lint
-reports bpmn-cli's new ids. `idConventionsFromLint` takes the `naming` namespace of
-`@miragon/bpmnlint-plugin-rules` 0.19 or later (`engine.plugin.naming`; earlier plugins lack its
-`ElementIdConvention`). A table of your own works too ([bpmnlint](bpmnlint.md#id-conventions) has
-the rules):
+## Results
+
+`operations` is the JSON of [`bpmn apply`](ops.md); `OPS_SCHEMA` says what each operation takes and
+`applyToXml` refuses the rest. `OPS_SCHEMA.$defs.drawingOp` lists the 8 drawing operations.
+
+`EditResult` holds:
+
+| field | means |
+| --- | --- |
+| `xml`, `unchanged` | the new text; `unchanged` is `true` when there is nothing to save |
+| `created`, `changed`, `removed` | `{ id, kind, name, detail }` per element |
+| `renamed` | the ids a write renamed |
+| `aliases` | each `$name` of the batch with its id |
+| `findings` | check findings at the touched elements, plus every host-validator finding the change added |
+| `preexisting` | the host-validator errors the file had before, which do not block |
+| `state` | the counts of errors and warnings in the whole file |
+| `score` | the layout score before and after, its counts per kind, the problems added and resolved |
+| `format` | what the drawing operations did |
+| `notes` | short remarks such as `appended after userTask_checkInvoice` |
+
+Each read returns `{ text, ... }`: what the command prints, and the same answer as data, which `--json`
+prints.
 
 ```ts
-const automation = await resolveBpmnlintConfig(
-  engine,
-  engine.plugin.getDefaultLintConfig({ preset: 'automation' }),
-);
-const { conventions, notes } = idConventionsFromLint(
-  automation.rules[ID_NAMING_RULE],
-  engine.plugin.naming,
-  { source: 'our rules' },
-);
-await applyToXml(xml, ops, {
-  validators: [bpmnlintValidator(engine, automation, { notes })],
-  conventions,
-});
+const outline = await showXml(xml);
+outline.view.kind;                    // 'model'
 
-await applyToXml(xml, ops, {
+const element = await showXml(xml, { id: 'userTask_checkInvoice' });
+element.view.kind;                    // 'element'
+
+const { hits, total } = await findXml(xml, { kind: 'task', in: 'orderHandling' });
+hits[0];
+// { id: 'userTask_checkInvoice', kind: 'userTask', name: 'Check invoice', in: 'orderHandling' }
+
+const { score, counts, problems, rows } = await diagramXml(xml);
+
+const { svg, width, height } = await renderXml(xml);
+
+const { ok, findings, state, platform, validators, layout } = await validateXml(xml);
+```
+
+An option narrows a result, it never changes its type. Every id in a result comes as
+`{ id, kind, name }`, an input the next call takes.
+
+`validateXml` also draws a copy of the model in full, as `bpmn layout` would: a failure is an error, the
+layout's warnings count as warnings. A write never runs this dry run.
+
+## Redrawing
+
+There is no separate layout function. `applyToXml(xml, [{ op: 'layout' }])` draws in full, the way out
+when a write answers `E_LAYOUT_INCREMENTAL`; `{ op: 'tidy' }` and the other drawing operations go the same
+way. A `set` of `expanded` collapses or expands a sub-process in place.
+
+## Declared id conventions
+
+Without `conventions` new ids follow the defaults of `@miragon/rules/element-id-naming`. A host whose lint
+configures that rule otherwise passes the same conventions, or its lint reports bpmn-cli's new ids. The
+CLI reads them from the nearest `.bpmnlintrc` ([bpmnlint](bpmnlint.md#id-conventions) has the rules); a
+library host declares them:
+
+```ts
+await applyToXml(xml, operations, {
   conventions: {
     prefixes: {
-      'bpmn:ServiceTask': 'serviceTask_',
+      'bpmn:ServiceTask': 'st_',
       'bpmn:SequenceFlow': 'flow_',
     },
-    case: 'camelCase',
+    case: 'snake_case',
   },
 });
 ```
 
+`kindsJson({ conventions })` adds to each kind the pattern its new ids follow; it needs no XML.
+
+## Project lint
+
+The library does not load bpmnlint: a write stays free of plugin code, and only `bpmn validate` runs a
+project's `.bpmnlintrc`. A host that wants those rules runs bpmnlint itself and passes the result as a
+[validator](validators.md).
+
 ## Browser bundles
 
-The core runs in a browser; CI fails on anything Node-only. The Camunda 7 and 8 rules are
-chunks of their own, fetched the first time a document of that platform is validated
-(`loadProfile('c7')` prefetches). PNG rendering and bpmnlint live in `@miragon/bpmn-cli/node`
-only.
-
-| bundle (minified / gzip) | size |
-| --- | ---: |
-| everything `@miragon/bpmn-cli` exports | 1103.3 / 346.7 KB |
-| `applyToXml` only | 799.8 / 250.3 KB |
-| Camunda 7 rules, on demand | 64.4 / 18.8 KB |
-| Camunda 8 rules, on demand | 88.3 / 25.2 KB |
-
-`node tools/iso/check.mjs --table` prints the current sizes.
+The package runs in a browser; `npm run iso` fails on anything Node-only. The Camunda 7 and 8 rules are
+chunks of their own, loaded the first time a document of that platform is checked, and `renderXml` loads
+the painter on demand. The set `applyToXml`, `showXml`, `findXml`, `validateXml`, `kindsJson`, `OPS_SCHEMA`
+and `BpmnError` weighs about 800 KB minified, held by a budget. PNG output and bpmnlint are the CLI's.
 
 ## Next steps
 
 - [Validators](validators.md): block or report with your own rules.
-- [Ops JSON](ops.md#ops-json-bpmn-apply): every op `applyToXml` takes.
+- [Operations](ops.md): every operation `applyToXml` takes.
 - [Guarantees and limits](contract.md): what a write changes.
+- [From 0.9 to 1.0](migration.md): what a host changes.

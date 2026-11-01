@@ -21,7 +21,7 @@ export default miragonDocs({
     {
       text: "Getting started",
       link: "/getting-started",
-      activeMatch: "^/(getting-started|claude-code-plugin|walkthrough|contract)",
+      activeMatch: "^/(getting-started|claude-code-plugin|walkthrough|contract|migration)",
     },
     { text: "Commands", link: "/commands", activeMatch: "^/(commands|reference|ops|camunda|layout|bpmnlint)" },
     { text: "Library", link: "/library", activeMatch: "^/(library|validators)" },
@@ -36,6 +36,7 @@ export default miragonDocs({
         { text: "Claude Code plugin", link: "/claude-code-plugin" },
         { text: "A worked session", link: "/walkthrough" },
         { text: "Guarantees and limits", link: "/contract" },
+        { text: "From 0.9 to 1.0", link: "/migration" },
       ],
     },
     {
@@ -43,7 +44,7 @@ export default miragonDocs({
       items: [
         { text: "Commands", link: "/commands" },
         { text: "Syntax and output", link: "/reference" },
-        { text: "Ops JSON (bpmn apply)", link: "/ops" },
+        { text: "Operations (bpmn apply)", link: "/ops" },
         { text: "Camunda 7 and Camunda 8", link: "/camunda" },
         { text: "Layout and formatting", link: "/layout" },
         { text: "bpmnlint", link: "/bpmnlint" },

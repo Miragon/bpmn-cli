@@ -11,28 +11,30 @@ edit models that people also edit by hand.
 
 1. **You edit the model, not the drawing.** Commands name elements by id. `bpmn show` prints the
    model without coordinates.
-2. **The CLI keeps the picture.** Every write ends with *validate -> layout -> atomic write*
-   ([Layout modes](layout.md#layout-modes)).
+2. **The CLI keeps the picture.** Every write checks, draws and then writes atomically
+   ([How a write draws](layout.md#how-a-write-draws)).
 3. **Ids speak and follow the project's conventions.** A new id says what it names, with the
    prefixes and case of `element-id-naming` ([Ids](reference.md#ids)). Existing ids stay, except
    a flow id that names its ends.
 4. **Nothing is half done.** A command or a whole `apply` batch succeeds completely or leaves the
-   file untouched. Errors the file already had do not block (`W_PREEXISTING_ERROR`); new ones do,
-   unless `--force`. The project's [bpmnlint](bpmnlint.md) reports but never blocks a write.
+   file untouched. Errors the file already had do not block; new ones do, unless `--force`. The
+   project's [bpmnlint](bpmnlint.md) runs in `bpmn validate`, never in a write.
 5. **Conventions instead of coordinates.** Sub-processes are expanded, branches follow one rule,
    exclusive gateways are named as a question. `bpmn validate` checks these.
 
-## The DI contract
+## The drawing
 
 | case | what happens |
 | --- | --- |
-| a drawing made by hand or with the format commands | kept: bounds, waypoints, colours; new elements are placed locally |
-| a new file, no diagram, the engine's own unchanged drawing | drawn by the engine |
-| `--relayout`, `bpmn layout` | redrawn; colours stay, manual positions do not |
+| a plane with shapes | kept: bounds, waypoints, colours; new elements are placed locally |
+| an empty plane, a file without a diagram | drawn in full |
+| `bpmn layout`, a last `layout` operation | redrawn; colours stay, manual positions do not |
+| a change that finds no place | refused with `E_LAYOUT_INCREMENTAL`; the hint names `layout` |
 | DI ids | stay on a redraw |
-| expanded / collapsed | kept from the existing DI |
-| `--no-layout` | old DI stays; new elements get a shape on the next write |
+| expanded / collapsed | kept; `set <id> expanded=false` changes it in place |
 | lanes | drawn only inside a pool |
+| a new shape | the bpmn-js size: task 100 by 80, gateway 50 by 50, event 36 by 36, whatever its name or boundary events |
+| a shape a person drew | keeps its size; only `bpmn layout` sets each shape to the standard size |
 
 Branches: at a split the default flow runs straight (else the first flow to an end event). The
 other branches are drawn alternately below and above it in declaration order. `bpmn order`
@@ -51,19 +53,30 @@ A write rewrites only the elements the change touched, so a git diff shows only 
 - Fallback: where the text cannot be kept exactly, bpmn-moddle writes the whole file, with a
   note.
 
+## What a write checks
+
+- A write checks the new document once and reports the findings at the elements it touched. The rest of
+  the file is counted in the state line; `bpmn validate` lists it.
+- The layout score informs, it does not refuse: a write that raises it succeeds, and the result says so.
+- Project lint runs only in `bpmn validate`, where a project gate runs anyway.
+
 ## Limitations
 
 - One root is laid out: the collaboration, or the single process.
 - Not supported as new elements: choreographies. A file that has one stays editable.
-- No Camunda 7 / 8 engine runs a `complexGateway`; the Camunda profiles report it.
-- A group (`add group "<Name>" --members <id,...>`) is tied to its members without
+- No Camunda 7 / 8 engine runs a `complexGateway`; the Camunda checks report it.
+- A group (`add group "<Name>" --members <ids...>`) is tied to its members without
   coordinates: every member references the group's category value
   (`categoryValueRef`, BPMN 2.0), and the layout draws the box around them. A group drawn
   in a modeler has only its box; `show` lists the elements that box holds.
-- Vertical pools and lanes are redrawn in full instead of placed incrementally.
+- The incremental layout edits horizontal pools and lanes only. A write never turns a drawing: a change
+  that needs a new place in a vertical pool answers `E_LAYOUT_INCREMENTAL`, and only `bpmn layout`, which
+  draws horizontally, redraws it.
+- Many boundary events on one task are an antipattern: they take the free spots on the border, then
+  overlap, and the layout score counts it; `place --side` answers `E_NO_ROOM`.
 - Lossy imports are refused (`E_IMPORT_LOSSY`); `--force` drops what bpmn-moddle cannot read.
 - Broken links in hand-edited files are not repaired; `bpmn validate` reports them.
-- The Camunda 8 profile checks FEEL syntax, not meaning. The engine finds the rest.
+- The Camunda 8 checks read FEEL syntax, not meaning. The engine finds the rest.
 - A flow id that names its ends is renamed when an edit changes its ends (a splice, a
   `move`, `set source=`). Code that names flow ids (generated code, tests) follows the
   `renamed:` report.
@@ -75,6 +88,6 @@ merged file (`E_IMPORT_LOSSY`): rename one of them while resolving the merge.
 
 ## Next steps
 
-- [Layout](layout.md): modes, engines and the format commands.
+- [Layout](layout.md): how a write draws, and the draw commands.
 - [Syntax and output](reference.md): how ids are made.
-- [bpmnlint](bpmnlint.md): project rules on every write.
+- [bpmnlint](bpmnlint.md): the project's rules in `bpmn validate`.

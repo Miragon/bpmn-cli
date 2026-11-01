@@ -1,11 +1,12 @@
 # Syntax and output
 
-How new ids are made, the element kinds and triggers, where a node goes, the keys `set` takes, and
-what a command prints and exits with.
+How new ids are made, the element kinds and triggers, where a node goes, flags and keys, and what a
+command prints and exits with.
 
 ::: tip From the CLI
-`bpmn kinds` prints every table here in full, `bpmn guide <topic>` the rules. Both are generated
-from the code.
+`bpmn guide kinds`, `bpmn guide triggers`, `bpmn guide set-keys`, `bpmn guide nested-keys`,
+`bpmn guide zeebe-elements`, `bpmn guide ids` and `bpmn guide exit-codes` print every table here in
+full. They are generated from the code.
 :::
 
 ## Ids
@@ -13,12 +14,12 @@ from the code.
 Elements are addressed by id, never by name (names may repeat). A new id says what it names and
 follows `@miragon/rules/element-id-naming`: the prefixes and case the project's `.bpmnlintrc`
 declares, else the rule's defaults below. The ids the file already has do not change that.
-Explicit ids (`--id`, `"id"` in ops JSON) are taken as given.
+Explicit ids (`--id`, `"id"` in an operation) are taken as given.
 
 | element | id | example |
 | --- | --- | --- |
 | named | prefix + name | `userTask_checkInvoice` |
-| unnamed | prefix + kind and place | `gateway_afterArchive`, `event_timerOnArchive` |
+| unnamed | prefix + kind and place | `gateway_afterCheckInvoice`, `event_timerOnCheckInvoice` |
 | flow | its two ends | `flow_checkInvoiceToBookInvoice` |
 | join of a split | split id + `Join` | `gateway_invoiceOkJoin` |
 | named process | its name | `orderToCash` (unnamed: `Process_1`) |
@@ -29,7 +30,7 @@ were probably meant.
 A flow whose id names its ends in this form is renamed when an edit changes them (`renamed:` in the
 result); an older flow id (`Flow_AToB`) stays as it is.
 
-Names become ASCII words (`Prüfung buchen` gives `userTask_pruefungBuchen`), at most 40 characters
+Names become ASCII words (`Prüfung buchen` gives `task_pruefungBuchen`), at most 40 characters
 of them: a longer name loses its last words, and a single longer word is cut at 40. An id has at
 most 64 characters, a collision suffix included. An id within that is not cut again. A longer one
 loses whole words: of the cuts that fit, the one with the most words is taken, then the longest.
@@ -38,7 +39,7 @@ Also, a number a cut would leave at the end of the id goes too where it would re
 like a collision suffix. A taken id gets `2`, `3` (`_2` under snake_case, `-2` under kebab-case)
 and a `W_ID_SUFFIXED` warning.
 
-`bpmn show <file> --conventions` lists what applies. Existing ids never change for the rule.
+`bpmn conventions <file>` lists what applies. Existing ids never change for the rule.
 How to get ids that match: [bpmnlint](bpmnlint.md#id-conventions).
 
 ## Kinds
@@ -48,36 +49,37 @@ type (`bpmn:UserTask`). Events take a trigger suffix (`startEvent:message`, `bou
 
 | family | kinds (aliases) | id prefix |
 | --- | --- | --- |
-| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask`, `sendTask`, `receiveTask`, `manualTask`, `businessRuleTask` (`rule`) | the kind: `task_`, `userTask_`, ... |
-| sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess`, `transaction` | `subProcess_` |
+| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask` (`script`), `sendTask` (`send`), `receiveTask` (`receive`), `manualTask` (`manual`), `businessRuleTask` (`rule`) | the kind: `task_`, `userTask_`, ... |
+| sub-processes | `subProcess` (`sub`), `eventSubProcess` (`eventSub`; needs a start event inside: create it as `eventSubProcess:<trigger>`, or add both in one `bpmn apply`), `adHocSubProcess` (`adhoc`), `transaction` | `subProcess_` |
 | call activity | `callActivity` (`call`) | `callActivity_` |
-| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` | `gateway_` |
+| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `complexGateway` (`complex`), `eventBasedGateway` (`eventBased`) | `gateway_` |
 | events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`, `--on <hostId>`) | `startEvent_`, `endEvent_`, else `event_` |
 | pools and lanes | `participant` (`pool`; the first wraps the process, `--black-box` for one without), `lane` | `participant_`, `lane_` |
 | data | `dataObject` (`data`), `dataStore` (`store`) | `dataObject_`, `dataStore_` |
-| artifacts | `textAnnotation` (`note`), `group` (`--members <id,...>`) | `textAnnotation_`, `group_` |
+| artifacts | `textAnnotation` (`note`), `group` (`--members <ids...>`) | `textAnnotation_`, `group_` |
 
-Choreographies are rejected (`E_UNSUPPORTED_KIND`). No Camunda 7 / 8 engine runs a
-`complexGateway`: the Camunda profiles report it (`W_C7_DEPLOY_COMPLEX_GATEWAY`,
+Choreographies are refused (`E_USAGE`). No Camunda 7 / 8 engine runs a
+`complexGateway`: the Camunda checks report it (`W_C7_DEPLOY_COMPLEX_GATEWAY`,
 `W_C8_DEPLOY_UNSUPPORTED`); use `exclusiveGateway` or `inclusiveGateway` there.
 
 ## Triggers
 
-The trigger is the kind's suffix, its details an option: `bpmn add order.bpmn boundary:timer
-"Late" --on task_archive --timer P2D`. Messages, errors and signals are found by name and
+The trigger is the kind's suffix, its details are keys: `bpmn add order.bpmn boundary:timer
+"Late" --on task_archive timer=P2D`. Messages, errors and signals are found by name and
 created when missing.
 
-| trigger | option |
+| trigger | keys |
 | --- | --- |
-| `message` | `--message <name>` |
-| `timer` | `--timer <iso>` (`R/PT1H`, `P2D`, a date) |
-| `error` | `--error <name>` `[--error-code <code>]` |
-| `signal` | `--signal <name>` |
-| `escalation` | `--escalation <name>` |
-| `conditional` | `--when <expr>` |
-| `link` | `--link <name>` |
+| `message` | `message=<name>` |
+| `timer` | `timer=<iso>`: `R/PT1H` is a cycle, `PT5M` a duration, a date a date |
+| `error` | `error=<name>`, `errorCode=<code>` |
+| `signal` | `signal=<name>` |
+| `escalation` | `escalation=<name>`, `escalationCode=<code>` |
+| `conditional` | `when=<expr>` |
+| `link` | `link=<name>` |
 | `none`, `compensate`, `terminate`, `cancel` | none |
 
+`nonInterrupting=true` makes a boundary event or an event sub-process start non-interrupting.
 `retype` keeps the current trigger unless you write `<kind>:none`. Which trigger fits which event:
 `bpmn guide triggers`.
 
@@ -86,7 +88,7 @@ created when missing.
 `add` and `move` place a flow node with one of these. Without one the node goes into the only
 process, unconnected.
 
-| option | rule |
+| flag | rule |
 | --- | --- |
 | `--after <X>` | append after X, or splice into its single outgoing flow: `X -> node -> old successor` |
 | `--before <Y>` | the mirror image |
@@ -100,51 +102,71 @@ Sequence flows never cross pools (`E_CROSS_SCOPE`): use a message flow. Branch o
 `bpmn order` sets it, `set <flowId> default=true` picks the branch that runs straight. The same
 table: `bpmn guide placement`.
 
+## Flag or key=value {#flag-or-key-value}
+
+Each input of a command has one form.
+
+| form | says | for example |
+| --- | --- | --- |
+| `--flag` | where the element goes | `--after <id>`, `--before`, `--flow`, `--in <scopeId>`, `--on <activityId>`, `--lane <laneId>`, `--to` |
+| `--flag` | which id it gets, and what is made with it: the flow into it, a pool's process, a lane's members | `--id <id>`, `--flow-name`, `--flow-id`, `--condition`, `--language`, `--default`, `--process`, `--members` |
+| `--flag` | how the command runs | `-o`, `--dry-run`, `--force`, `--json`, `--if-absent`, `--replace` |
+| `key=value` | what the element holds | `timer=P2D`, `doc="Four eyes"`, `camunda:assignee=kermit`, on a flow `name=yes condition="=ok"` |
+
+- `key=value` takes the keys of `bpmn set`, the same on `add`, `retype`, `connect` and `set`; in a
+  batch they go under `"set"`. What `bpmn add --help` lists is a flag; every other input is a key.
+- A key the element does not take answers `E_UNKNOWN_KEY` with the keys it does take, so
+  `add userTask ... timer=P2D` is refused, not ignored. An unknown flag answers `E_USAGE`.
+- On `ext add` the keys are the extension element's attributes, and `body=` its text.
+- The draw commands keep their flags (`--color`, `--side`, `--by`): they change how a shape is drawn,
+  which no key holds.
+
 ## Set keys
 
-`bpmn set <file> <id> key=value ...`. `key=` or `--unset key` removes a property. An unknown key
-fails with `E_UNKNOWN_KEY` and lists the keys the element accepts.
+`bpmn set <file> <id> key=value ...`. `key=` removes a property.
 
 | applies to | keys |
 | --- | --- |
 | any element | `id` (every reference follows), `name`, `doc`, any BPMN attribute, vendor attributes (`camunda:assignee`) |
 | sequence flows | `condition`, `language`, `default`, `source`, `target` |
-| events | `trigger`, `timer`, `message`, `error`, `signal`, `when`, ... |
+| events | `trigger`, `timer`, `message`, `error`, `signal`, `when`, `nonInterrupting`, ... |
 | activities | `loop` (`standard` / `parallel` / `sequential`), `cardinality`, `completion` |
 | flow nodes | `lane` (lane id; empty removes the membership), `default` (id of the default outgoing flow; empty clears it) |
+| sub-processes | `expanded` (`false` collapses in place), `triggeredByEvent` |
 | business rule tasks | `calledDecision`, written as `camunda:decisionRef` or `zeebe:calledDecision` |
+| message flows, send and receive tasks | `message` |
+| text annotations | `text` |
 | nested elements | `definition.<key>`, `loop.<key>`, `condition.<key>` |
 
 Camunda 8 settings are extension elements, not set keys ([Camunda](camunda.md)). Every key:
-`bpmn kinds --section setKeys,nestedKeys`.
+`bpmn guide set-keys nested-keys`.
 
 ## Output, errors and exit codes
 
 | exit | meaning |
 | --- | --- |
 | 0 | ok (warnings allowed) |
-| 1 | usage error (`E_USAGE`) |
-| 2 | model or validation error (`E_NOT_FOUND`, `E_VALIDATION`, ...) |
-| 3 | layout error |
-| 4 | I/O or parse error |
-| 5 | `--strict` and the result has warnings |
+| 1 | usage error: unknown command, flag, operation or key (`E_USAGE`) |
+| 2 | model or validation error (`E_NOT_FOUND`, `E_VALIDATION`, ...); `validate`: also an error of project lint |
+| 3 | layout error (`E_LAYOUT_*`) |
+| 4 | file, parse or render error (`E_FILE_NOT_FOUND`, `E_PARSE`, `E_IMPORT_LOSSY`) |
+| 5 | `validate --strict` and the file has warnings |
 | 70 | internal error (`BPMN_DEBUG=1` prints the stack) |
 
-A mutating command prints what it created, changed and removed, then warnings, the layout and the
-file line:
+A write prints what it did in at most 1 KB, then the layout score, the state and the file line. Findings
+are those at the elements it touched; the state counts the whole file, and `bpmn validate` lists it.
 
 ```console
 $ bpmn add order.bpmn end "Done" --after userTask_checkInvoice
-created endEvent endEvent_done "Done" - after userTask_checkInvoice
-created sequenceFlow flow_checkInvoiceToDone - userTask_checkInvoice -> endEvent_done
+created endEvent: endEvent_done
+created sequenceFlow: flow_checkInvoiceToDone
 note: appended after userTask_checkInvoice
-resolved: W_NO_END orderHandling, W_DEAD_END userTask_checkInvoice
-layout: ok - full (engine-owned diagram: redrawn)
 layout quality: score 0 -> 0
+state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)
 written: order.bpmn
 ```
 
-`--json` prints the same as one line (shortened):
+`--json` prints the same as one line, never cut (shortened):
 
 ```json
 {
@@ -152,22 +174,33 @@ written: order.bpmn
   "file": "order.bpmn",
   "written": true,
   "unchanged": false,
-  "created": [{ "id": "endEvent_done", "kind": "endEvent", "name": "Done" }],
-  "warnings": { "added": [], "resolved": [], "preexistingCount": 0 },
-  "layout": { "status": "ok", "mode": "full" },
-  "importWarnings": []
+  "created": [
+    { "id": "endEvent_done", "kind": "endEvent", "name": "Done", "detail": "after userTask_checkInvoice" },
+    { "id": "flow_checkInvoiceToDone", "kind": "sequenceFlow", "detail": "userTask_checkInvoice -> endEvent_done" }
+  ],
+  "changed": [],
+  "removed": [],
+  "renamed": [],
+  "aliases": {},
+  "findings": [],
+  "preexisting": [],
+  "state": { "errors": 0, "warnings": 0 },
+  "score": { "before": { "score": 0 }, "after": { "score": 0 } }
 }
 ```
 
-Errors go to stderr as `error E_CODE: message` with a hint and candidate ids. Every code with its
-fix: `bpmn kinds --section errors`. `-` as the file reads the model from stdin.
+Errors go to stderr, and every refusal names a fix:
 
-### Environment
+```console
+$ bpmn add order.bpmn userTask Ship --after userTask_check
+error E_NOT_FOUND: No element with id "userTask_check" (did you mean: userTask_checkInvoice?)
+  element: userTask_check
+  candidates: userTask_checkInvoice
+  op: #0
+  hint: Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.
+```
 
-| variable | effect |
-| --- | --- |
-| `BPMN_LAYOUT_DEBUG` | layout diagnostics on stderr |
-| `BPMN_DEBUG` | the stack trace of an internal error |
+`bpmn guide errors` lists the common codes with their fix. `-` as the file reads the model from stdin.
 
 ## Quoting
 
@@ -176,4 +209,4 @@ Write `--condition '${amount > 100}'`. In double quotes the shell expands `${...
 :::
 
 Names with spaces need quotes (`"Check invoice"`), and so does a whole pair (`name="Check it"`).
-In ops JSON nothing is expanded.
+In a batch file nothing is expanded.

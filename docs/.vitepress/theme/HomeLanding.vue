@@ -62,7 +62,7 @@ async function copyInstall() {
             </div>
           </div>
           <p class="meta">
-            <span>Needs Node 22.12+</span>
+            <span>Needs Node 24+</span>
             <span class="pre-release">
               <span class="marker" aria-hidden="true" />
               <span><strong>Pre-1.0:</strong> pin the version, a minor can break a command.</span>

@@ -2,13 +2,15 @@
 
 Install bpmn-cli, then build, look at and validate a first model.
 
-**Requirements:** Node.js 22.12 or later (Homebrew brings it). For the plugin, also
+**Requirements:** Node.js 24 or later (Homebrew brings it). For the plugin, also
 [Claude Code](https://code.claude.com/docs).
 
 ::: tip Let Claude do the modelling
 With the [plugin](./claude-code-plugin.md), Claude runs these commands for you. Ask in plain words,
 for example _"Model the order process with lanes for sales, warehouse and accounting."_
 :::
+
+Coming from 0.9? [From 0.9 to 1.0](./migration.md) lists what changed.
 
 ## 1. Install
 
@@ -39,7 +41,7 @@ Check it with `bpmn --version`.
 ## 2. Build a first model
 
 ```sh
-bpmn new order.bpmn --name "Order handling"
+bpmn new order.bpmn "Order handling"
 bpmn add order.bpmn start "Order received"
 bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
 bpmn add order.bpmn end "Done" --after userTask_checkInvoice
@@ -48,15 +50,16 @@ bpmn add order.bpmn end "Done" --after userTask_checkInvoice
 Each command prints the ids it created for the next one to use. The last one prints:
 
 ```txt
-created endEvent endEvent_done "Done" - after userTask_checkInvoice
-created sequenceFlow flow_checkInvoiceToDone - userTask_checkInvoice -> endEvent_done
-...
-resolved: W_NO_END orderHandling, W_DEAD_END userTask_checkInvoice
-...
+created endEvent: endEvent_done
+created sequenceFlow: flow_checkInvoiceToDone
+note: appended after userTask_checkInvoice
+layout quality: score 0 -> 0
+state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)
 written: order.bpmn
 ```
 
-A warning carries the command that fixes it; `resolved:` lists the ones this change fixed.
+A warning carries the command that fixes it. The two last lines before `written:` are on every write:
+how the drawing's score changed, and how many problems the whole file has.
 
 ## 3. Look at it
 
@@ -71,7 +74,7 @@ process orderHandling "Order handling" executable
   startEvent startEvent_orderReceived "Order received" -> userTask_checkInvoice (flow_orderReceivedToCheckInvoice)
   userTask userTask_checkInvoice "Check invoice" -> endEvent_done (flow_checkInvoiceToDone)
   endEvent endEvent_done "Done"
-problems: none
+state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)
 ```
 
 `bpmn render` draws it:
@@ -107,7 +110,7 @@ Add the `bin` folder of `npm prefix -g` to your `PATH`, or use `npx -y @miragon/
 :::
 
 ::: details `bpmn` fails at start
-Check `node --version`: bpmn-cli needs 22.12 or later. Or install with Homebrew.
+Check `node --version`: bpmn-cli needs 24 or later. Or install with Homebrew.
 :::
 
 ::: details Claude edits the `.bpmn` XML by hand
@@ -118,4 +121,4 @@ The plugin is not active. See [Check that it works](./claude-code-plugin.md#chec
 
 - [A worked session](./walkthrough.md): a gateway, a batch and two pools.
 - [Camunda 7 and Camunda 8](./camunda.md): make the model deployable.
-- [Commands](./commands.md): every command. `bpmn guide --short` prints the cheat sheet.
+- [Commands](./commands.md): every command. `bpmn guide` prints the core of the help.

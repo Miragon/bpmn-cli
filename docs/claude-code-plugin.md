@@ -3,7 +3,7 @@
 With the plugin, Claude creates and changes `.bpmn` files through the CLI: it names the elements,
 keeps your drawing and validates the model before it is done.
 
-**Requirements:** Claude Code and Node.js 22.12 or later. The skill runs `bpmn` when it is on your
+**Requirements:** Claude Code and Node.js 24 or later. The skill runs `bpmn` when it is on your
 PATH, else `npx -y @miragon/bpmn-cli@<version>`.
 
 ## Install
@@ -34,13 +34,12 @@ Claude runs `bpmn` commands and never writes the XML itself. After a change to t
 renders the result and looks at it:
 
 <figure class="diagram">
-  <img src="/shots/plugin-change.svg" alt="The order process with a non-interrupting timer on Check invoice, followed by Send reminder and Reminder sent, the new elements marked green" />
-  <figcaption>The reminder added by one <code>bpmn apply</code> batch, new elements in green</figcaption>
+  <img src="/shots/plugin-change.svg" alt="The order process with a non-interrupting timer on Check invoice, followed by Send reminder and Reminder sent" />
+  <figcaption>The reminder added by one <code>bpmn apply</code> batch</figcaption>
 </figure>
 
-It then runs `bpmn validate`. With a `.bpmnlintrc` in the repository, it also fixes the
-[bpmnlint](./bpmnlint.md) findings its change added. Renders go to `.bpmn-render/`; add it to
-`.gitignore`.
+It then runs `bpmn validate`, which also runs the [bpmnlint](./bpmnlint.md) rules of a `.bpmnlintrc` in
+the repository, and fixes what it finds. Renders go to `.bpmn-render/`; add it to `.gitignore`.
 
 ## Check that it works
 
