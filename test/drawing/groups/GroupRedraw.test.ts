@@ -79,4 +79,38 @@ describe('GroupRedraw', () => {
     expect(items.get('named_group')!.label).toBeDefined();
     expect(items.get('named_group')!.box.isInside(items.get('on_a_shape')!.box)).toBe(true);
   });
+
+  it('measures the drawing with its lines and their labels when a kept group moves', async () => {
+    const document = await Fixtures.read('models/incremental/groups.bpmn');
+    const plane = withoutGroupShapes(document);
+    const lowest = Math.max(...plane.list('planeElement').flatMap((element) => element.list('waypoint').map((waypoint) => waypoint.peek<number>('y') ?? 0)));
+    const blocked = { id: 'G1', root: 'P1', bounds: new Box(GroupShapes.items(plane).get('A')!.box.x, GroupShapes.items(plane).get('A')!.box.y, 100, 80), members: [] };
+
+    expect(redraw(document, [blocked]).moved).toEqual(['G1']);
+    expect(GroupShapes.items(plane).get('G1')!.box.y).toBeGreaterThan(lowest);
+  });
+
+  it('fits a group again when a group drawn later lies inside it', async () => {
+    const document = await Fixtures.read('drawing/group-around-nothing.bpmn');
+    const plane = withoutGroupShapes(document);
+    const first = { id: 'named_group', root: 'process', bounds: new Box(0, 0, 10, 10), members: ['task', 'member', 'fresh_member'] };
+    const second = { id: 'on_a_shape', root: 'process', bounds: new Box(0, 0, 20, 20), members: ['member'] };
+
+    const result = redraw(document, [second, first]);
+
+    const items = GroupShapes.items(plane);
+    expect(result.drawn).toHaveLength(2);
+    expect(items.get('on_a_shape')!.box.isInside(items.get('named_group')!.box)).toBe(true);
+  });
+
+  it('goes to the plane holding most members, the old root on a tie', async () => {
+    const document = await Fixtures.read('models/incremental/twoviews.bpmn');
+    const group = document.tree.build('bpmn:Group', { id: 'fresh_group' });
+    Fixtures.element(document, 'P1').add('artifacts', group);
+
+    const result = redraw(document, [{ id: 'fresh_group', root: 'P1', bounds: new Box(0, 0, 10, 10), members: ['A'] }]);
+
+    expect(result.drawn).toEqual(['fresh_group']);
+    expect(GroupShapes.items(document.diagram.planes()[1]).has('fresh_group')).toBe(true);
+  });
 });

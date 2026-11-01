@@ -93,7 +93,6 @@ all of `di/` but `DiIds`, `DiIdMemo` and what scoring took.
   `RecordedScopes` reads `corpus/drawing/channel-router-scopes.json`, 33 scopes with main's result. The tests of `FullLayout`,
   `IncrementalLayout`, `DrawingOperationRunner` and `DiagramDrawing` pin the thin classes ("not ported yet"): replace those cases.
 - Prove a port against main before the whole layout runs: wrap the class in `.oracle/main/dist` by `prototype`, drive it with `layoutXml` over `corpus/`,
-  dump input and output as JSON, build the same input for the port, compare exactly. It found a bug the tests did not; the router needs a build of
-  values only. The layout probe then judges the total.
+  dump input and output as JSON, build the same input for the port, compare exactly. The layout probe then judges the total.
 - `npm run oracle -- --entry drawing --probe layout` scores the 115 scenarios and the 156 walk steps. The row in `progress.json` holds 2 until both
   totals are no higher than main's; the commit that finishes step 11 removes it.

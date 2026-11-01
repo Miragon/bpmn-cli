@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BoundaryWays } from '../../../../src/drawing/full/routing/BoundaryWays.js';
 import { FlowPaths } from '../../../../src/drawing/full/routing/FlowPaths.js';
 import { RoutingArea } from '../../../../src/drawing/full/routing/RoutingArea.js';
+import { Point } from '../../../support/ModelValues.js';
 import { ScopeSketch } from '../../../support/ScopeSketch.js';
 
 describe('BoundaryWays', () => {
@@ -63,5 +64,34 @@ describe('BoundaryWays', () => {
 
     expect(ways[0]?.make()?.below).toBe(true);
     expect(ways[1]?.make()).toBeDefined();
+  });
+
+  it('leaves out a target side a flow already ends on', () => {
+    const scope = new ScopeSketch().node('task', 'host', 0, 200).boundary('event', 'host', 32, { onTop: true }).node('task', 'target', 300, 0).node('task', 'other', 100, 40).flow('event', 'target').flow('other', 'target');
+    const area = new RoutingArea(scope.layout());
+    const line = scope.edge('other', 'target');
+    line.points = [new Point(200, 40), new Point(300, 40)];
+    area.record(line, false);
+
+    expect(new BoundaryWays(area, new FlowPaths(area), scope.at('event'), scope.at('target')).fromTopBorder()).toHaveLength(1);
+  });
+
+  it('keeps a way over the top inside the lane band', () => {
+    const scope = new ScopeSketch().node('task', 'host', 0, 200).boundary('event', 'host', 32, { onTop: true }).node('task', 'target', 300, 100).node('task', 'above_the_lane', 100, -100).flow('event', 'target');
+    const layout = scope.layout();
+    layout.laneBands = [{ nodes: new Set([scope.at('host'), scope.at('target')]), top: 50, bottom: 400 }];
+    const area = new RoutingArea(layout);
+
+    const [first] = new BoundaryWays(area, new FlowPaths(area), scope.at('event'), scope.at('target')).fromTopBorder();
+
+    expect(first?.make()?.over?.y).toBeLessThan(100);
+  });
+
+  it('gives no way over the host through a shape or along a routed flow', () => {
+    const scope = new ScopeSketch().node('task', 'host', 0, 200).boundary('event', 'host', 32, { onTop: true }).node('task', 'target', 300, 0).node('task', 'wall', 25, -500, { height: 680, width: 50 }).flow('event', 'target');
+
+    const ways = waysOf(scope, 'event', 'target').fromTopBorder().map((maker) => maker.make());
+
+    expect(ways.every((way) => way === undefined)).toBe(true);
   });
 });

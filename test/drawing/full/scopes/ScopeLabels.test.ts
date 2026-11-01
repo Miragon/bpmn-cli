@@ -71,4 +71,41 @@ describe('ScopeLabels', () => {
 
     expect(first!.overlaps(second!, 2)).toBe(false);
   });
+
+  it('counts the labels of a collapsed sub-process from the right', () => {
+    const scope = new ScopeSketch().node('subProcess', 'sub', 0, 0).boundary('left', 'sub', 0, { name: 'L' }).boundary('right', 'sub', 40, { name: 'R' });
+
+    expect(ScopeLabels.of(scope.at('left'), 'boundary')!.right).toBeLessThan(scope.at('left').box.x);
+  });
+
+  it('stacks a third label on the top border, and turns the first of two left', () => {
+    const three = new ScopeSketch().node('task', 'host', 0, 100).boundary('a', 'host', 0, { onTop: true, name: 'A' }).boundary('b', 'host', 30, { onTop: true, name: 'B' }).boundary('c', 'host', 60, { onTop: true, name: 'C' });
+    const two = new ScopeSketch().node('task', 'host', 0, 100).boundary('a', 'host', 0, { onTop: true, name: 'A' }).boundary('b', 'host', 60, { onTop: true, name: 'B' });
+
+    expect(ScopeLabels.of(three.at('a'), 'boundary')!.y).toBeLessThan(ScopeLabels.of(three.at('c'), 'boundary')!.y);
+    expect(ScopeLabels.of(two.at('a'), 'boundary')!.right).toBeLessThan(two.at('a').box.x);
+  });
+
+  it('measures a boundary event without a host at its own height', () => {
+    const scope = new ScopeSketch().node('task', 'host', 0, 0).boundary('event', 'host', 0, { name: 'Lost' });
+    scope.at('event').host = undefined;
+
+    expect(ScopeLabels.of(scope.at('event'), 'boundary')!.y).toBe(scope.at('event').box.center.y + 2);
+  });
+
+  it('gives a note no label', () => {
+    const scope = new ScopeSketch().node('task', 'a', 0, 0);
+    const layout = scope.layout();
+    layout.artifacts.push(ScopeSketch.artifact('bpmn:TextAnnotation', 'note', 'annotation', { width: 100, height: 30 }));
+
+    expect(new ScopeLabels(layout).placedData()).toEqual([]);
+  });
+
+  it('labels an event sub-process and an expanded sub-process not at all', () => {
+    const scope = new ScopeSketch().node('eventSubProcess', 'es', 0, 0, { name: 'Handler' }).node('task', 'a', 200, 0, { name: 'Task' });
+    const layout = scope.layout();
+    scope.at('a').child = ScopeSketch.emptyLayout(scope.at('a').el, [], []);
+
+    expect(new ScopeLabels(layout).shapes()).toEqual([]);
+  });
 });

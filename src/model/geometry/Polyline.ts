@@ -100,15 +100,12 @@ export class Polyline {
 
   simplified(): Point[] {
     const kept: Point[] = [];
-    for (const point of this.points) {
-      const last = kept.at(-1);
-      if (!last || last.x !== point.x || last.y !== point.y) {
-        const previous = kept.at(-2);
-        if (previous && last && ((previous.x === last.x && last.x === point.x) || (previous.y === last.y && last.y === point.y))) {
-          kept.pop();
-        }
-        kept.push(point.copy());
+    for (const point of this.deduped()) {
+      const [previous, last] = [kept.at(-2), kept.at(-1)];
+      if (previous && last && ((previous.x === last.x && last.x === point.x) || (previous.y === last.y && last.y === point.y))) {
+        kept.pop();
       }
+      kept.push(point.copy());
     }
     return kept.length === 1 && this.points.length > 1 ? [kept[0]!, kept[0]!.copy()] : kept;
   }

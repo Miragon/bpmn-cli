@@ -75,6 +75,18 @@ describe('ShapeSizes', () => {
     expect(ShapeSizes.of(Fixtures.element(document, 'B'))).toEqual({ width: 36, height: 36 });
   });
 
+  it('sizes gateways, data and notes by the table', async () => {
+    const gateways = await Fixtures.read('layout/gallery__01-xor-join.bpmn');
+    const data = await Fixtures.read('scoring/data-association.bpmn');
+    const notes = await Fixtures.read('layout/artifacts__01-annotations-basic.bpmn');
+    const sizesOf = (document: typeof data, type: string) => [...document.tree.walk()].filter((element) => element.is(type)).map(ShapeSizes.of);
+
+    expect(sizesOf(gateways, 'bpmn:Gateway')[0]).toEqual({ width: 50, height: 50 });
+    expect(sizesOf(data, 'bpmn:DataObjectReference')[0]).toEqual({ width: 36, height: 50 });
+    expect(sizesOf(await Fixtures.read('layout/artifacts__14b-kitchen-nonotes.bpmn'), 'bpmn:DataStoreReference')[0]).toEqual({ width: 50, height: 50 });
+    expect(sizesOf(notes, 'bpmn:TextAnnotation')[0]!.width).toBeGreaterThanOrEqual(100);
+  });
+
   it('grows an annotation with its text, 100 to 300 wide', () => {
     expect(ShapeSizes.ofAnnotation(undefined)).toEqual({ width: 100, height: 30 });
     expect(ShapeSizes.ofAnnotation('x'.repeat(30)).width).toBe(220);

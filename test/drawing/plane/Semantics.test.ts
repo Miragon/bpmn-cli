@@ -40,6 +40,26 @@ describe('Semantics', () => {
     expect(semantics.homePlane(planes, 'missing')).toBeUndefined();
   });
 
+  it('finds the own plane of a collapsed sub-process and of a process without pool', async () => {
+    const { semantics, planes } = await read('layout/subproc__s03-collapsed.bpmn');
+    const collapsed = [...semantics.byId.values()].find((element) => element.is('bpmn:SubProcess') && element.list('flowElements').length)!;
+    const inner = collapsed.list('flowElements')[0]!;
+
+    expect(semantics.homePlane(planes, inner.id)?.rootId).toBe(collapsed.id);
+    expect(semantics.homePlane(planes, collapsed.id)).toBeDefined();
+  });
+
+  it('takes a data association to the plane of its activity and a note of a collaboration to its plane', async () => {
+    const data = await read('scoring/data-association.bpmn');
+    const association = [...data.semantics.byId.values()].find((element) => element.is('bpmn:DataAssociation'));
+    const notes = await read('models/incremental/collabnote.bpmn');
+    const collaboration = notes.semantics.collaboration!;
+
+    expect(association && data.semantics.homePlane(data.planes, association.id)).toBe(association && data.planes[0]);
+    expect(collaboration.list('artifacts').every((artifact) => notes.semantics.homePlane(notes.planes, artifact.id)?.rootId === collaboration.id)).toBe(true);
+    expect(notes.semantics.homePlane(notes.planes, 'nothing')).toBeUndefined();
+  });
+
   it('follows flows both ways', async () => {
     const { semantics } = await read('models/incremental/boundary.bpmn');
 

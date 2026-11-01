@@ -51,6 +51,14 @@ describe('Plane', () => {
     expect(plane.spacing(() => undefined)).toEqual({ gap: 60, row: 140, rowTol: 35 });
   });
 
+  it('skips flows of boundary events and frames when it measures, and rows too close to tell', async () => {
+    const plane = await planeOf('models/incremental/lanesub.bpmn');
+    const tasks = [...plane.edges.values()].filter((edge) => edge.sourceId === 'T1');
+
+    expect(plane.spacing((edge) => (tasks.includes(edge) ? edge : undefined)).gap).toBeGreaterThanOrEqual(40);
+    expect(plane.spacing((edge) => ({ sourceId: edge.targetId, targetId: edge.sourceId })).gap).toBe(60);
+  });
+
   it('finds a vertical pool or lane', async () => {
     expect((await planeOf('models/incremental/vertical.bpmn')).verticalBand()?.id).toBeDefined();
     expect((await planeOf('models/incremental/lanesub.bpmn')).verticalBand()).toBeUndefined();

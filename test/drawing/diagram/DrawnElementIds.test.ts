@@ -27,4 +27,14 @@ describe('DrawnElementIds', () => {
 
     expect(new DrawnElementIds(document).give()).toEqual([]);
   });
+
+  it('names what it finds in a collaboration, pools, lanes, events and lines', async () => {
+    const document = await Fixtures.read('drawing/idless-pool.bpmn');
+
+    const given = new DrawnElementIds(document).give();
+
+    expect(given.map(({ kind }) => kind).sort()).toEqual(['association', 'association', 'collaboration', 'lane', 'participant', 'process', 'startEvent:timer', 'task']);
+    expect(new Set(given.map(({ id }) => id)).size).toBe(given.length);
+    expect(given.every(({ id }) => id)).toBe(true);
+  });
 });
