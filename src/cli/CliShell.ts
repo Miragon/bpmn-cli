@@ -6,12 +6,13 @@ import { IdConventionsReader } from './files/IdConventionsReader.js';
 import { EditResultText } from './output/EditResultText.js';
 import { ExitCode } from './output/ExitCode.js';
 
-export type CliStream = Pick<NodeJS.WriteStream, 'write'> & { readonly isTTY?: boolean };
+export type CliStream = Pick<NodeJS.WriteStream, 'write'> & Partial<Pick<NodeJS.WriteStream, 'on'>> & { readonly isTTY?: boolean };
 
 export interface CliProcess extends StandardInput {
   readonly stdout: CliStream;
   readonly stderr: CliStream;
   readonly env: NodeJS.ProcessEnv;
+  exit?(code: number): never;
 }
 
 export class CliShell {

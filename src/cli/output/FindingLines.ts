@@ -54,11 +54,6 @@ export class FindingLines {
     });
   }
 
-  list(findings: readonly Finding[]): string {
-    const groups = FindingLines.grouped(findings, (finding) => `${FindingLines.tag(finding)}${finding.code}`);
-    return [...groups].map(([key, group]) => (group.length === 1 ? `${key}${group[0]!.element ? ` ${group[0]!.element}` : ''}` : `${key} x${group.length} [${FindingLines.elementsOf(group)}]`)).join(', ');
-  }
-
   private isAdvisory({ validator }: Finding): boolean {
     return validator !== undefined && this.advisory.has(validator);
   }

@@ -70,7 +70,7 @@ describe('bpmn with a .bpmnlintrc', () => {
     const file = join(inRepository(NAMING), 'order.bpmn');
     await cli.run(['new', file, 'Order']);
 
-    expect((await cli.run(['add', file, 'userTask', 'Check it', '--in', 'order'])).stdout).toContain('created userTask: Task_CheckIt');
+    expect((await cli.run(['add', file, 'userTask', 'Check it', '--in', 'Order'])).stdout).toContain('created userTask: Task_CheckIt');
     expect((await cli.run(['conventions', file])).stdout).toContain('case PascalCase');
   });
 

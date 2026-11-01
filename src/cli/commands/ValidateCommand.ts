@@ -30,7 +30,7 @@ export class ValidateCommand {
   private async run(path: string, { strict, lintConfig, json }: ValidateFlags): Promise<void> {
     const { shell } = this;
     const validators = await this.validators(path, lintConfig);
-    const report = await validateXml(await shell.file.read(path), { validators });
+    const report = ProjectLintValidator.withoutRepeats(await validateXml(await shell.file.read(path), { validators }));
     if (json) {
       const { ok, ...rest } = report;
       shell.printJson({ ok, file: path, ...rest });
