@@ -1,6 +1,6 @@
 import { ProblemKinds, type ProblemKind } from './ProblemKinds.js';
 
-export type ProblemLocation = { plane: string; x: number; y: number };
+type ProblemLocation = { plane: string; x: number; y: number };
 
 export interface LayoutProblem {
   kind: ProblemKind;

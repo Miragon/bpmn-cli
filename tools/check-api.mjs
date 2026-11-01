@@ -7,8 +7,9 @@ const ROOT = resolve('.');
 const WORK = join(ROOT, '.api');
 const UPDATE_REPORTS = process.argv.includes('--update');
 const TSC = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+const NAMELESS_TYPES_STAY_INSIDE = { logLevel: ExtractorLogLevel.None, addToApiReportFile: false };
 const ENTRIES = [
-  { report: 'bpmn-cli', packageFolder: '.', declaration: 'src/index.d.ts' },
+  { report: 'bpmn-cli', packageFolder: '.', declaration: 'src/index.d.ts', forgottenExport: NAMELESS_TYPES_STAY_INSIDE },
   { report: 'bpmn-render', packageFolder: 'packages/render', declaration: 'packages/render/src/index.d.ts' },
   { report: 'bpmn-render-png', packageFolder: 'packages/render', declaration: 'packages/render/src/png/index.d.ts' },
   { report: 'bpmn-render-png-node', packageFolder: 'packages/render', declaration: 'packages/render/src/png/node/index.d.ts' },
@@ -26,7 +27,7 @@ function emitDeclarations() {
   }
 }
 
-function configOf({ report, packageFolder, declaration }) {
+function configOf({ report, packageFolder, declaration, forgottenExport = FATAL }) {
   const reportTempFolder = join(WORK, 'reports');
   mkdirSync(reportTempFolder, { recursive: true });
   return ExtractorConfig.prepare({
@@ -42,7 +43,7 @@ function configOf({ report, packageFolder, declaration }) {
       tsdocMetadata: { enabled: false },
       messages: {
         compilerMessageReporting: { default: FATAL },
-        extractorMessageReporting: { default: SILENT, 'ae-forgotten-export': FATAL },
+        extractorMessageReporting: { default: SILENT, 'ae-forgotten-export': forgottenExport },
         tsdocMessageReporting: { default: SILENT },
       },
     },

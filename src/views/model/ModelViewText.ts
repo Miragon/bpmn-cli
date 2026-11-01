@@ -2,7 +2,7 @@ import type { ViewAnnotation, ViewData } from '../facts/index.js';
 import { ElementLine, FlowLine, Phrase, type ElementRef, type MessageFlowEnds } from '../lines/index.js';
 import { ProcessOutline, type ViewLane, type ViewNode, type ViewProcess } from './ProcessOutline.js';
 
-export interface ViewParticipant extends ElementRef {
+interface ViewParticipant extends ElementRef {
   process?: ElementRef | undefined;
 }
 
@@ -21,7 +21,7 @@ export interface ViewRoot extends ElementRef {
   correlationKey?: string | undefined;
 }
 
-export interface CutCount {
+interface CutCount {
   shown: number;
   total: number;
 }

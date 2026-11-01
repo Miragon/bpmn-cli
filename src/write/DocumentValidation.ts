@@ -7,7 +7,7 @@ export interface ValidateOptions {
   validators?: readonly Validator[] | undefined;
 }
 
-export interface PlatformSummary extends PlatformInfo {
+interface PlatformSummary extends PlatformInfo {
   counts: Record<Severity, number>;
 }
 

@@ -1,4 +1,4 @@
-import type { Change, EditResult, Finding, FormatResult, ScoreChange } from '../../api/index.js';
+import type { Change, EditResult, Finding, FormatResult, ScoreDifference } from '../../api/index.js';
 import { FindingLines } from './FindingLines.js';
 
 export interface WriteReport {
@@ -7,7 +7,7 @@ export interface WriteReport {
   dryRun: boolean;
 }
 
-type ListedProblem = ScoreChange['added'][number];
+type ListedProblem = ScoreDifference['added'][number];
 
 export class EditResultText {
   static readonly MAX_BYTES = 1024;

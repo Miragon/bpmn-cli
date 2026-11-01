@@ -1,9 +1,16 @@
 import type { DrawingReport, FormatResult } from '../drawing/index.js';
 import type { OperationRun } from '../edit/index.js';
 import { type Change, type Finding, type FindingCounts, Findings, type ValidatorIssue } from '../model/index.js';
-import type { ScoreChange } from '../scoring/index.js';
+import type { LayoutProblem, ScoreChange, ScoreSummary } from '../scoring/index.js';
 import type { HostDelta } from './FindingDelta.js';
 import type { IdRenames, RenamedId } from './IdRenames.js';
+
+export interface ScoreDifference {
+  before?: ScoreSummary;
+  after: ScoreSummary;
+  added: LayoutProblem[];
+  resolved: LayoutProblem[];
+}
 
 export interface EditResult {
   xml: string;
@@ -16,7 +23,7 @@ export interface EditResult {
   findings: Finding[];
   preexisting: ValidatorIssue[];
   state: FindingCounts;
-  score: ScoreChange;
+  score: ScoreDifference;
   format: FormatResult[];
   notes: string[];
 }
@@ -42,6 +49,7 @@ export class WriteOutcome {
 
   result(): EditResult {
     const { input, xml, run, drawing, renames, checks, host, score } = this.parts;
+    const { before, after, added, resolved } = score;
     const { created, changed, removed, notes } = run.changes;
     return {
       xml,
@@ -54,7 +62,7 @@ export class WriteOutcome {
       findings: [...this.ofTheChange(), ...host.added, ...drawing.warnings.map(Findings.ofLayout)],
       preexisting: host.preexisting,
       state: Findings.countOf(checks),
-      score,
+      score: { ...(before ? { before } : {}), after, added, resolved },
       format: drawing.format,
       notes: [...notes, ...drawing.notes],
     };

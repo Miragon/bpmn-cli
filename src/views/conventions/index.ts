@@ -1,1 +1,1 @@
-export { KindTable, type Kind, type KindTableResult, type TriggerRow } from './KindTable.js';
+export { KindTable, type KindTableResult } from './KindTable.js';

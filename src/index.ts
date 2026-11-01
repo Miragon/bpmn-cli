@@ -1,1 +1,2 @@
-export * from './api/index.js';
+export { applyToXml, BpmnError, diagramXml, findXml, kindsJson, newXml, OPS_SCHEMA, renderXml, showXml, validateXml } from './api/index.js';
+export type { Change, DiagramResult, EditOptions, EditResult, ElementDetailData, Finding, FindOptions, FindResult, FormatResult, IdConventions, ModelViewData, NewOptions, Operation, RenderOptions, ShowOptions, ShowResult, Suggestion, SvgImage, ValidateOptions, ValidationReport, Validator, ValidatorContext, ValidatorFinding } from './api/index.js';

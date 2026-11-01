@@ -5,7 +5,7 @@ export { Point } from './geometry/Point.js';
 export { Polyline } from './geometry/Polyline.js';
 export { Samples } from './geometry/Samples.js';
 export { Segment } from './geometry/Segment.js';
-export { BpmnError, type CommandRefusal, type CommandWords, type ErrorCategory, type ErrorDetails } from './errors/BpmnError.js';
+export { BpmnError, type CommandRefusal, type CommandWords, type ErrorDetails } from './errors/BpmnError.js';
 export { ModelError } from './errors/ModelError.js';
 export { Findings, type Finding, type FindingCounts, type ProfileFinding, type Severity, type Suggestion, type ValidatorFinding, type ValidatorIssue, type ValidatorSeverity } from './findings/Findings.js';
 export { BpmnDocument } from './document/BpmnDocument.js';
