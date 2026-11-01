@@ -33,7 +33,9 @@ export class ExtensionInserter {
     const changes = new ChangeSet();
     this.checks.assertCanHoldExtensions(el);
     const hasXml = command.xml !== undefined && command.xml.trim() !== '';
-    this.assertOneSource(el, command, hasXml);
+    if (!hasXml && !command.type) {
+      throw BpmnError.usage('ext add needs --type <prefix:localName> (with --attr key=value / --body) or --xml <snippet>', { element: this.hosts.idOf(el) });
+    }
     const steps = command.type ? this.selectors.parse(command.type, el) : [];
     const out: Outcome[] = [];
     const notes: string[] = [];
@@ -57,15 +59,6 @@ export class ExtensionInserter {
       changes.change(ChangeEntries.of(this.hosts.ownerOf(el), this.describeOutcomes(effective, this.hosts.slotPrefix(el))));
     }
     return changes;
-  }
-
-  private assertOneSource(el: BpmnElement, command: ExtOperation, hasXml: boolean): void {
-    if (hasXml && ((command.attrs && Object.keys(command.attrs).length) || (command.body !== undefined && command.body !== ''))) {
-      throw BpmnError.usage('--xml cannot be combined with attr=value or --body', { element: this.hosts.idOf(el), hint: 'Put everything into the XML snippet, or use <type> attr=value --body <text>.' });
-    }
-    if (!hasXml && !command.type) {
-      throw BpmnError.usage('ext add needs --type <prefix:localName> (with --attr key=value / --body) or --xml <snippet>', { element: this.hosts.idOf(el) });
-    }
   }
 
   private snippetValues(el: BpmnElement, xml: string, steps: Step[]): BpmnElement[] {
@@ -137,13 +130,12 @@ export class ExtensionInserter {
     if (present) {
       return present;
     }
-    const where = level.parent ? ` in ${level.label}` : '';
     const [prefix, local] = home.split(':') as [string, string];
     const uri = this.names.canonicalUri(prefix);
     const ns = this.names.resolvePrefix(level.host, prefix, uri ? { [prefix]: uri } : {});
     const container = this.document.tree.buildAny(`${ns.prefix}:${local}`, ns.uri, {});
     level.append(container);
-    notes.push(`created ${container.type}${where} for ${value.type}`);
+    notes.push(`created ${container.type}${level.where} for ${value.type}`);
     return container;
   }
 
@@ -158,8 +150,8 @@ export class ExtensionInserter {
     for (const extra of match.slice(1)) {
       level.remove(extra);
     }
-    out.push({ verb: 'replaced', text: `${this.names.itemLabel(value)}${level.parent ? ` in ${level.label}` : ''}` });
-    notes.push(`replaced the existing ${this.names.itemLabel(value)}${level.parent ? ` in ${level.label}` : ''} of ${this.hosts.labelOf(level.host)}`);
+    out.push({ verb: 'replaced', text: `${this.names.itemLabel(value)}${level.where}` });
+    notes.push(`replaced the existing ${this.names.itemLabel(value)}${level.where} of ${this.hosts.labelOf(level.host)}`);
   }
 
   private replaceSame(level: ExtensionLevel, same: BpmnElement[], value: BpmnElement, out: Outcome[], notes: string[]): void {
@@ -167,7 +159,7 @@ export class ExtensionInserter {
       level.remove(item);
     }
     level.append(value);
-    out.push({ verb: 'replaced', text: `${value.type}${level.parent ? ` in ${level.label}` : ''}` });
+    out.push({ verb: 'replaced', text: `${value.type}${level.where}` });
     notes.push(`replaced ${same.length} existing ${value.type}`);
   }
 
@@ -177,7 +169,7 @@ export class ExtensionInserter {
     out.push({ verb: 'added', text: `${this.names.itemLabel(value)}${into}` });
   }
 
-  private merge(level: ExtensionLevel, existing: BpmnElement, incoming: BpmnElement, notes: string[], drops: Finding[] = []): Outcome {
+  private merge(level: ExtensionLevel, existing: BpmnElement, incoming: BpmnElement, notes: string[], drops: Finding[]): Outcome {
     const changes = this.mergeOwnContent(existing, incoming);
     const sub: Outcome[] = [];
     const inner = level.enter(existing);
@@ -187,12 +179,11 @@ export class ExtensionInserter {
     for (const subOutcome of sub) {
       changes.push(`${subOutcome.verb} ${subOutcome.text.replace(` in ${inner.label}`, '').replace(` to ${inner.label}`, '')}`);
     }
-    const where = level.parent ? ` in ${level.label}` : '';
     if (!changes.length) {
-      notes.push(`${existing.type}${where} of ${this.hosts.labelOf(level.host)} already holds that content; nothing to add`);
-      return { verb: 'unchanged', text: `${existing.type}${where}` };
+      notes.push(`${existing.type}${level.where} of ${this.hosts.labelOf(level.host)} already holds that content; nothing to add`);
+      return { verb: 'unchanged', text: `${existing.type}${level.where}` };
     }
-    return { verb: 'merged', text: `${existing.type}${where} (${changes.join(', ')})` };
+    return { verb: 'merged', text: `${existing.type}${level.where} (${changes.join(', ')})` };
   }
 
   private mergeOwnContent(existing: BpmnElement, incoming: BpmnElement): string[] {
@@ -263,7 +254,7 @@ export class ExtensionInserter {
     snippet.set(step.attr, step.value);
   }
 
-  private describeOutcomes(out: Outcome[], prefix = ''): string {
+  private describeOutcomes(out: Outcome[], prefix: string): string {
     if (out.every((outcome) => outcome.verb === 'added')) {
       return `ext added ${out.map((outcome) => prefix + outcome.text).join(', ')}`;
     }

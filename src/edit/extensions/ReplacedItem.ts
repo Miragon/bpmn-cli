@@ -22,7 +22,7 @@ export class ReplacedItem {
     if (!lost.length) {
       return undefined;
     }
-    const label = `${this.names.itemLabel(value)}${level.parent ? ` in ${level.label}` : ''}`;
+    const label = `${this.names.itemLabel(value)}${level.where}`;
     const id = this.hosts.idOf(level.host);
     const snippet = extra ? undefined : this.snippetOf(this.mergedCopy(old, value));
     const type = `${this.hosts.slotPrefix(level.host)}${this.addTypeFor(level, value)}`;
@@ -72,17 +72,11 @@ export class ReplacedItem {
     return attr ? escaped.replace(/"/g, '&quot;') : escaped;
   }
 
-  private snippetOf(el: BpmnElement): string | undefined {
-    if (!this.names.isGeneric(el)) {
-      return undefined;
-    }
+  private snippetOf(el: BpmnElement): string {
     const attrs = Object.entries(this.names.attrsOf(el))
       .map(([attrName, attrValue]) => ` ${attrName}="${ReplacedItem.escapeXml(attrValue, true)}"`)
       .join('');
     const kids = this.names.kidsOf(el).map((kid) => this.snippetOf(kid));
-    if (kids.some((kidSnippet) => kidSnippet === undefined)) {
-      return undefined;
-    }
     const body = el.peek('$body');
     const text = typeof body === 'string' ? ReplacedItem.escapeXml(body, false) : '';
     if (!kids.length && !text) {

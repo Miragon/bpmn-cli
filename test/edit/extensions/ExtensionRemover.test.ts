@@ -72,6 +72,15 @@ describe('ExtensionRemover', () => {
     expect(items('approve')[0]!.type).toBe('camunda:formData');
   });
 
+  it('keeps a connector that lost its id, since an empty connector is no pure container', async () => {
+    const { remove, items } = await remover();
+
+    const changes = remove('connectorOnly', { type: 'camunda:connector/camunda:connectorId' });
+
+    expect(changes.notes).toEqual([]);
+    expect(items('connectorOnly')[0]!.type).toBe('camunda:connector');
+  });
+
   it('takes a type in any case when nothing matches exactly', async () => {
     const { remove, items } = await remover();
 

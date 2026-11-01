@@ -51,7 +51,7 @@ export class NestedHosts {
     return { ...rest, index: ref.index, ...(slot !== undefined ? { slot: slot as ExtOperation['slot'] } : {}) };
   }
 
-  resolve(edit: EditSession, owner: BpmnElement, command: ExtOperation, notes: string[] = []): { host: BpmnElement; command: ExtOperation } {
+  resolve(edit: EditSession, owner: BpmnElement, command: ExtOperation, notes: string[]): { host: BpmnElement; command: ExtOperation } {
     const split = command.type ? this.splitSlot(command.type) : undefined;
     if (split && command.slot && command.slot !== split.slot) {
       throw BpmnError.usage(`"slot": "${command.slot}" and the type prefix ${split.slot}. disagree`, { element: owner.id, hint: 'Give the slot once: as the type prefix (loop.camunda:...) or as "slot".' });
@@ -60,7 +60,7 @@ export class NestedHosts {
     if (slotText === undefined) {
       return { host: owner, command };
     }
-    const ref = NestedHosts.slotRefOf(owner, slotText);
+    const ref = NestedHosts.slotRefOf(owner, ElementSlots.parseRef(slotText)!);
     const what = split?.rest ?? (command.index !== undefined ? String(command.index) : (command.type ?? '<type>'));
     const id = owner.id;
     const resolved = new NestedResolution(owner, ref, `${ref.text}.${what}`, (prefix) => `bpmn ext ${command.action} <file> ${id} '${prefix}.${what}'${command.action === 'add' ? ' ...' : ''}`).resolve();
@@ -73,12 +73,8 @@ export class NestedHosts {
     return { host: nested, command: { ...rest, ...(split ? { type: split.rest } : {}) } };
   }
 
-  private static slotRefOf(owner: BpmnElement, slotText: string): SlotRef {
+  private static slotRefOf(owner: BpmnElement, ref: SlotRef): SlotRef {
     const id = owner.id;
-    const ref = ElementSlots.parseRef(slotText);
-    if (!ref) {
-      throw BpmnError.usage(`Unknown slot "${String(slotText)}"; use ${ElementSlots.NAMES.join(', ')}`, { element: id });
-    }
     const { slot } = ref;
     if (!ElementSlots.slotsOf(owner).includes(slot)) {
       throw BpmnError.model('E_WRONG_KIND', `${Kinds.label(owner)} ${id} has no ${ElementSlots.TEXT[slot]} (${slot}.)`, {

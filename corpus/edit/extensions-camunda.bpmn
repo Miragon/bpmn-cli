@@ -29,6 +29,13 @@
         </camunda:formData>
       </bpmn:extensionElements>
     </bpmn:userTask>
+    <bpmn:serviceTask id="connectorOnly" name="Only a connector">
+      <bpmn:extensionElements>
+        <camunda:connector>
+          <camunda:connectorId>http</camunda:connectorId>
+        </camunda:connector>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
     <bpmn:task id="bare" name="Bare" />
     <bpmn:serviceTask id="twice" name="Two containers">
       <bpmn:extensionElements>

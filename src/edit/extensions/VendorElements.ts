@@ -42,12 +42,8 @@ export class VendorElements {
       return { prefix: this.bpmnPrefix(), uri: DeclaredNamespaces.BPMN };
     }
     const uri = inline ?? document.namespaces.uriOf(prefix);
-    if (!uri) {
-      document.namespaces.declare(prefix);
-      return { prefix, uri: document.namespaces.uriOf(prefix)! };
-    }
-    const existing = this.filePrefixFor(uri);
-    if (existing) {
+    const existing = uri ? document.namespaces.prefixFor(uri) : undefined;
+    if (uri && existing) {
       return { prefix: existing, uri };
     }
     const bound = (document.tree.definitions.attrs as Record<string, unknown>)[`xmlns:${prefix}`];
@@ -58,7 +54,7 @@ export class VendorElements {
       });
     }
     document.namespaces.declare(prefix, uri);
-    return { prefix, uri };
+    return { prefix, uri: uri! };
   }
 
   createGeneric(el: BpmnElement, name: string, attrs: Record<string, string>, body: string | undefined, scope: Record<string, string>, nested: boolean): BpmnElement {
@@ -139,10 +135,7 @@ export class VendorElements {
   }
 
   private siblingsOf(el: BpmnElement): readonly BpmnElement[] {
-    const { parent } = el;
-    if (!parent) {
-      return [el];
-    }
+    const parent = el.parent!;
     return parent.is('bpmn:ExtensionElements') ? parent.list('values') : this.kidsOf(parent);
   }
 
@@ -154,17 +147,8 @@ export class VendorElements {
     return uri ? `{${uri}}${local}` : fallback;
   }
 
-  private filePrefixFor(uri: string): string | undefined {
-    for (const [attrName, attrValue] of Object.entries(this.document.tree.definitions.attrs as Record<string, unknown>)) {
-      if (attrName.startsWith('xmlns:') && attrValue === uri) {
-        return attrName.slice(6);
-      }
-    }
-    return undefined;
-  }
-
   private bpmnPrefix(): string {
-    return this.filePrefixFor(DeclaredNamespaces.BPMN) ?? 'bpmn';
+    return this.document.namespaces.prefixFor(DeclaredNamespaces.BPMN) ?? 'bpmn';
   }
 
   private splitName(name: string, el: BpmnElement): { prefix: string; local: string } {
@@ -195,7 +179,7 @@ export class VendorElements {
       return value;
     }
     const attrs = this.document.tree.definitions.attrs as Record<string, unknown>;
-    if (!this.filePrefixFor(DeclaredNamespaces.BPMN) && attrs['xmlns'] === DeclaredNamespaces.BPMN) {
+    if (!this.document.namespaces.prefixFor(DeclaredNamespaces.BPMN) && attrs['xmlns'] === DeclaredNamespaces.BPMN) {
       return match[2]!;
     }
     return `${this.bpmnPrefix()}:${match[2]}`;

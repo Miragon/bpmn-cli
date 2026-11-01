@@ -5,7 +5,7 @@ import { NestedHosts } from '../../../src/edit/extensions/NestedHosts.js';
 import { VendorElements } from '../../../src/edit/extensions/VendorElements.js';
 import type { ExtOperation } from '../../../src/operations/index.js';
 import { Fixtures } from '../../support/Fixtures.js';
-import { type BpmnElement, ChangeSet } from '../../support/ModelValues.js';
+import type { BpmnElement } from '../../support/ModelValues.js';
 
 async function checks(path = 'edit/extensions-camunda.bpmn') {
   const document = await Fixtures.readForWrite(path);

@@ -31,8 +31,8 @@ describe('NestedHosts', () => {
     const looped = document.tree.require('looped');
     const double = document.tree.require('double');
 
-    const { host } = hosts.resolve(edit, looped, ext({ id: 'looped', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle' }));
-    const { host: signal } = hosts.resolve(edit, double, ext({ id: 'double', action: 'add', type: 'definition[1].camunda:x' }));
+    const { host } = hosts.resolve(edit, looped, ext({ id: 'looped', action: 'add', type: 'loop.camunda:failedJobRetryTimeCycle' }), []);
+    const { host: signal } = hosts.resolve(edit, double, ext({ id: 'double', action: 'add', type: 'definition[1].camunda:x' }), []);
 
     expect(hosts.ownerOf(host)).toBe(looped);
     expect(hosts.idOf(host)).toBe('looped');
@@ -68,7 +68,7 @@ describe('NestedHosts', () => {
     const looped = document.tree.require('looped');
 
     expect(() => hosts.normalizeIndex(ext({ id: 'x', action: 'remove', type: 'loop.0', slot: 'definition' }))).toThrow(expect.objectContaining({ code: 'E_USAGE' }));
-    expect(() => hosts.resolve(edit, looped, ext({ id: 'looped', action: 'add', type: 'loop.camunda:x', slot: 'definition' }))).toThrow(expect.objectContaining({ code: 'E_USAGE', message: expect.stringContaining('disagree') }));
+    expect(() => hosts.resolve(edit, looped, ext({ id: 'looped', action: 'add', type: 'loop.camunda:x', slot: 'definition' }), [])).toThrow(expect.objectContaining({ code: 'E_USAGE', message: expect.stringContaining('disagree') }));
   });
 
   it('keeps the element as host when no slot is named', async () => {
@@ -76,22 +76,31 @@ describe('NestedHosts', () => {
     const call = document.tree.require('call');
     const command = ext({ id: 'call', action: 'add', type: 'camunda:x' });
 
-    expect(hosts.resolve(edit, call, command)).toEqual({ host: call, command });
+    expect(hosts.resolve(edit, call, command, [])).toEqual({ host: call, command });
   });
 
   it('takes the slot of the operation, and the condition of a flow', async () => {
     const { document, edit } = await session();
 
-    const { host, command } = hosts.resolve(edit, document.tree.require('flow_conditional'), ext({ id: 'flow_conditional', action: 'add', type: 'camunda:x', slot: 'condition' }));
+    const { host, command } = hosts.resolve(edit, document.tree.require('flow_conditional'), ext({ id: 'flow_conditional', action: 'add', type: 'camunda:x', slot: 'condition' }), []);
 
     expect(host.is('bpmn:FormalExpression')).toBe(true);
     expect(command).toEqual({ op: 'ext', id: 'flow_conditional', action: 'add', type: 'camunda:x' });
   });
 
+  it('asks which event definition an event with two means, with the ext add that says so', async () => {
+    const { document, edit } = await session();
+
+    expect(() => hosts.resolve(edit, document.tree.require('double'), ext({ id: 'double', action: 'add', type: 'definition.camunda:x' }), [])).toThrow(expect.objectContaining({
+      code: 'E_AMBIGUOUS_NESTED',
+      details: expect.objectContaining({ hint: expect.stringContaining("bpmn ext add <file> double 'definition[signal].camunda:x' ...") }),
+    }));
+  });
+
   it('refuses a slot the element cannot have', async () => {
     const { document, edit } = await session();
 
-    expect(() => hosts.resolve(edit, document.tree.require('bare'), ext({ id: 'bare', action: 'add', type: 'definition.camunda:x' }))).toThrow(expect.objectContaining({ code: 'E_WRONG_KIND', message: expect.stringContaining('has no event definition (definition.)') }));
+    expect(() => hosts.resolve(edit, document.tree.require('bare'), ext({ id: 'bare', action: 'add', type: 'definition.camunda:x' }), [])).toThrow(expect.objectContaining({ code: 'E_WRONG_KIND', message: expect.stringContaining('has no event definition (definition.)') }));
   });
 
   it.each([
@@ -102,13 +111,13 @@ describe('NestedHosts', () => {
   ] as const)('explains how to get the missing %s on %s (%s)', async (type, id, platform, hint) => {
     const { document, edit } = await session(undefined, platform);
 
-    expect(() => hosts.resolve(edit, document.tree.require(id), ext({ id, action: 'add', type }))).toThrow(expect.objectContaining({ code: 'E_NO_NESTED_ELEMENT', details: expect.objectContaining({ hint: expect.stringContaining(hint) }) }));
+    expect(() => hosts.resolve(edit, document.tree.require(id), ext({ id, action: 'add', type }), [])).toThrow(expect.objectContaining({ code: 'E_NO_NESTED_ELEMENT', details: expect.objectContaining({ hint: expect.stringContaining(hint) }) }));
   });
 
   it('has nothing to remove from a nested element that does not exist', async () => {
     const { document, edit } = await session();
 
-    expect(() => hosts.resolve(edit, document.tree.require('bare'), ext({ id: 'bare', action: 'remove', index: 0, slot: 'loop' }))).toThrow(expect.objectContaining({ code: 'E_NO_EXTENSION', message: expect.stringContaining('so no extension elements there') }));
+    expect(() => hosts.resolve(edit, document.tree.require('bare'), ext({ id: 'bare', action: 'remove', index: 0, slot: 'loop' }), [])).toThrow(expect.objectContaining({ code: 'E_NO_EXTENSION', message: expect.stringContaining('so no extension elements there') }));
   });
 
   it('creates a parallel multi-instance for the first Zeebe loop element', async () => {
@@ -128,8 +137,8 @@ describe('NestedHosts', () => {
     const { document, edit } = await session('edit/extensions-zeebe.bpmn');
     const plain = document.tree.require('plain');
 
-    expect(() => hosts.resolve(edit, plain, ext({ id: 'plain', action: 'add', type: 'loop.zeebe:properties' }))).toThrow(expect.objectContaining({ code: 'E_NO_NESTED_ELEMENT' }));
-    expect(() => hosts.resolve(edit, plain, ext({ id: 'plain', action: 'add', xml: '<zeebe:properties />', slot: 'loop' }))).toThrow(expect.objectContaining({ code: 'E_NO_NESTED_ELEMENT' }));
-    expect(hosts.resolve(edit, plain, ext({ id: 'plain', action: 'add', xml: ' <zeebe:loopCharacteristics />', slot: 'loop' })).host.is('bpmn:MultiInstanceLoopCharacteristics')).toBe(true);
+    expect(() => hosts.resolve(edit, plain, ext({ id: 'plain', action: 'add', type: 'loop.zeebe:properties' }), [])).toThrow(expect.objectContaining({ code: 'E_NO_NESTED_ELEMENT' }));
+    expect(() => hosts.resolve(edit, plain, ext({ id: 'plain', action: 'add', xml: '<zeebe:properties />', slot: 'loop' }), [])).toThrow(expect.objectContaining({ code: 'E_NO_NESTED_ELEMENT' }));
+    expect(hosts.resolve(edit, plain, ext({ id: 'plain', action: 'add', xml: ' <zeebe:loopCharacteristics />', slot: 'loop' }), []).host.is('bpmn:MultiInstanceLoopCharacteristics')).toBe(true);
   });
 });

@@ -24,6 +24,10 @@ export class ExtensionLevel {
     return this.parent ? this.names.itemLabel(this.parent) : 'extensionElements';
   }
 
+  get where(): string {
+    return this.parent ? ` in ${this.label}` : '';
+  }
+
   enter(parent: BpmnElement): ExtensionLevel {
     return new ExtensionLevel(this.document, this.names, this.host, parent);
   }
@@ -68,10 +72,7 @@ export class ExtensionLevel {
       this.parent.set('$children', kids.length ? kids : undefined);
       return;
     }
-    const container = this.host.get<BpmnElement | undefined>('extensionElements');
-    if (container) {
-      container.remove('values', el);
-    }
+    this.host.get<BpmnElement>('extensionElements').remove('values', el);
   }
 
   select(step: Step): Array<{ el: BpmnElement; level: ExtensionLevel }> {

@@ -57,6 +57,12 @@ describe('VendorElements', () => {
     expect(document.tree.definitions.attrs['xmlns:acme']).toBe('http://acme.example');
   });
 
+  it('refuses a prefix nobody declared', async () => {
+    const { document, names } = await vendor();
+
+    expect(() => names.resolvePrefix(document.tree.require('call'), 'acme', {})).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_NAMESPACE' }));
+  });
+
   it('refuses a snippet that binds a prefix of the file to another namespace', async () => {
     const { document, names } = await vendor();
     const call = document.tree.require('call');

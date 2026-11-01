@@ -23,7 +23,7 @@ export class ExtensionSnippetReader {
     private readonly hosts: NestedHosts,
   ) {}
 
-  parse(el: BpmnElement, xml: string, nested = false): BpmnElement[] {
+  parse(el: BpmnElement, xml: string, nested: boolean): BpmnElement[] {
     let roots: RawNode[];
     try {
       roots = this.read(xml);

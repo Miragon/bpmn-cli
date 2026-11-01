@@ -112,22 +112,15 @@ export class ExtensionRemover {
   private pruneEmpty(host: BpmnElement, level: ExtensionLevel, changes: ChangeSet): void {
     let cur: BpmnElement | undefined = level.parent;
     while (cur && this.names.isGeneric(cur)) {
-      if (this.names.kidsOf(cur).length || this.names.bodyOf(cur) !== undefined || Object.keys(this.names.attrsOf(cur)).length) {
+      if (this.names.kidsOf(cur).length || this.names.bodyOf(cur) !== undefined || Object.keys(this.names.attrsOf(cur)).length || !this.structure.isPureContainer(this.names.typeOf(cur))) {
         return;
       }
-      if (!this.structure.isPureContainer(this.names.typeOf(cur))) {
-        return;
-      }
-      const parent = cur.parent;
-      if (!parent) {
-        return;
-      }
+      const parent: BpmnElement = cur.parent!;
       if (parent.is('bpmn:ExtensionElements')) {
         parent.remove('values', cur);
-        changes.note(`removed the empty ${cur.type} of ${this.hosts.labelOf(host)}`);
-        return;
+      } else {
+        level.enter(parent).remove(cur);
       }
-      level.enter(parent).remove(cur);
       changes.note(`removed the empty ${cur.type} of ${this.hosts.labelOf(host)}`);
       cur = parent;
     }

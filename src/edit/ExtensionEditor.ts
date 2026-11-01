@@ -1,4 +1,4 @@
-import { BpmnError, type ChangeSet } from '../model/index.js';
+import type { ChangeSet } from '../model/index.js';
 import type { ExtOperation } from '../operations/index.js';
 import { ZeebeSubscription } from './events/ZeebeSubscription.js';
 import { ExtensionInserter } from './extensions/ExtensionInserter.js';
@@ -12,14 +12,11 @@ export class ExtensionEditor {
   apply(command: ExtOperation): ChangeSet {
     const document = this.edit.document;
     let owner = this.edit.require(command.id);
-    if (command.action !== 'add' && command.action !== 'remove') {
-      throw BpmnError.usage(`Unknown ext action "${String(command.action)}"; use add or remove`, { element: command.id });
-    }
     const notes: string[] = [];
     const subscription = new ZeebeSubscription(document);
     const message = subscription.messageFor(owner, command);
     if (message) {
-      notes.push(subscription.note(owner, message, `${subscription.addedTypeText(command)}`));
+      notes.push(subscription.note(owner, message, subscription.addedTypeText(command)));
       const split = command.type ? NestedHosts.INSTANCE.splitSlot(command.type) : undefined;
       const { slot: _slot, ...rest } = command;
       command = { ...rest, id: message.id, ...(split ? { type: split.rest } : {}) };

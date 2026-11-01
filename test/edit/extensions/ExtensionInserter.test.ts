@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ExtensionInserter } from '../../../src/edit/extensions/ExtensionInserter.js';
 import { NestedHosts } from '../../../src/edit/extensions/NestedHosts.js';
 import { VendorElements } from '../../../src/edit/extensions/VendorElements.js';
+import { EditSession } from '../../../src/edit/session/EditSession.js';
 import type { ExtOperation } from '../../../src/operations/index.js';
 import { Fixtures } from '../../support/Fixtures.js';
 import type { BpmnElement } from '../../support/ModelValues.js';
@@ -167,7 +168,7 @@ describe('ExtensionInserter', () => {
   it('reports for a nested host under the prefix of the slot', async () => {
     const { document, names } = await inserter();
     const looped = document.tree.require('looped');
-    const { host } = NestedHosts.INSTANCE.resolve({ document, platform: () => 'c7' } as never, looped, ext('looped', { type: 'loop.camunda:connector' }));
+    const { host } = NestedHosts.INSTANCE.resolve(new EditSession(document), looped, ext('looped', { type: 'loop.camunda:connector' }), []);
 
     const changes = new ExtensionInserter(document).add(host, ext('looped', { type: 'camunda:connector' }));
 

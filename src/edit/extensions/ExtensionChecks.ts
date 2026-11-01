@@ -62,16 +62,13 @@ export class ExtensionChecks {
     if (hb !== undefined && ib !== undefined && hb.trim() !== ib.trim()) {
       this.duplicate(host, `${this.hosts.labelOf(host)} already has a ${existing.type} with the value "${hb.trim()}"; the new one is "${ib.trim()}" (only one ${existing.type} is allowed)`, incoming.type);
     }
-    if (!this.names.isGeneric(existing)) {
-      return;
-    }
     for (const kid of this.names.kidsOf(incoming)) {
       this.checkInsert(host, this.names.kidsOf(existing), this.names.typeOf(existing), kid, false);
     }
   }
 
   warnMisplaced(host: BpmnElement, snippet: BpmnElement, changes: ChangeSet): void {
-    if (!snippet.parent || snippet.parent !== host.get<BpmnElement | undefined>('extensionElements')) {
+    if (snippet.parent !== host.get<BpmnElement | undefined>('extensionElements')) {
       return;
     }
     const typeName = this.names.typeOf(snippet);

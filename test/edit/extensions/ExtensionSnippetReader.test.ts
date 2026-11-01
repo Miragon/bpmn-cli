@@ -16,7 +16,8 @@ describe('ExtensionSnippetReader', () => {
 
     const [io, retry] = snippets.parse(call, `<?xml version="1.0"?><!-- two roots -->
       <camunda:inputOutput><camunda:inputParameter name='a&amp;b'>1 &lt; 2</camunda:inputParameter><camunda:outputParameter name="r" /></camunda:inputOutput>
-      <camunda:failedJobRetryTimeCycle>R1/PT1M</camunda:failedJobRetryTimeCycle>`);
+      <camunda:failedJobRetryTimeCycle>R1/PT1M</camunda:failedJobRetryTimeCycle>
+    `, false);
 
     const [input, output] = names.kidsOf(io!);
     expect(names.attrsOf(input!)).toEqual({ name: 'a&b' });
@@ -28,7 +29,7 @@ describe('ExtensionSnippetReader', () => {
   it('keeps CDATA as text and drops the white space around children', async () => {
     const { snippets, names, call } = await reader();
 
-    const [script, wrapper] = snippets.parse(call, '<camunda:script><![CDATA[a < b]]></camunda:script><camunda:inputOutput>\n  <camunda:inputParameter name="x" />\n</camunda:inputOutput>');
+    const [script, wrapper] = snippets.parse(call, '<camunda:script><![CDATA[a < b]]></camunda:script><camunda:inputOutput>\n  <camunda:inputParameter name="x" />\n</camunda:inputOutput>', false);
 
     expect(names.bodyOf(script!)).toBe('a < b');
     expect(names.bodyOf(wrapper!)).toBeUndefined();
@@ -37,7 +38,7 @@ describe('ExtensionSnippetReader', () => {
   it('resolves a prefix the snippet binds itself, on its children too', async () => {
     const { snippets, document, call } = await reader();
 
-    const [root] = snippets.parse(call, '<c:inputOutput xmlns:c="http://camunda.org/schema/1.0/bpmn"><c:inputParameter name="x" /></c:inputOutput>');
+    const [root] = snippets.parse(call, '<c:inputOutput xmlns:c="http://camunda.org/schema/1.0/bpmn"><c:inputParameter name="x" /></c:inputOutput>', false);
 
     expect(root!.type).toBe('camunda:inputOutput');
     expect(new VendorElements(document, NestedHosts.INSTANCE).kidsOf(root!)[0]!.type).toBe('camunda:inputParameter');
@@ -59,19 +60,19 @@ describe('ExtensionSnippetReader', () => {
   ])('refuses %s as invalid XML, on the task', async (_case, xml, why) => {
     const { snippets, call } = await reader();
 
-    expect(() => snippets.parse(call, xml)).toThrow(expect.objectContaining({ code: 'E_INVALID_XML', message: expect.stringContaining(why), details: expect.objectContaining({ element: 'call' }) }));
+    expect(() => snippets.parse(call, xml, false)).toThrow(expect.objectContaining({ code: 'E_INVALID_XML', message: expect.stringContaining(why), details: expect.objectContaining({ element: 'call' }) }));
   });
 
   it('refuses a snippet without an element', async () => {
     const { snippets, call } = await reader();
 
-    expect(() => snippets.parse(call, '<!-- only this -->')).toThrow(expect.objectContaining({ code: 'E_INVALID_XML', message: 'The extension snippet contains no elements' }));
+    expect(() => snippets.parse(call, '<!-- only this -->', false)).toThrow(expect.objectContaining({ code: 'E_INVALID_XML', message: 'The extension snippet contains no elements' }));
   });
 
   it('refuses a default namespace, which extension elements cannot use', async () => {
     const { snippets, call } = await reader();
 
-    expect(() => snippets.parse(call, '<camunda:a xmlns="http://x" />')).toThrow(expect.objectContaining({ code: 'E_INVALID_XML', message: expect.stringContaining('declares a default namespace') }));
+    expect(() => snippets.parse(call, '<camunda:a xmlns="http://x" />', false)).toThrow(expect.objectContaining({ code: 'E_INVALID_XML', message: expect.stringContaining('declares a default namespace') }));
   });
 
   it('accepts a bpmn: root only where it nests inside a vendor element', async () => {
@@ -79,6 +80,6 @@ describe('ExtensionSnippetReader', () => {
     const timer = '<bpmn:timerEventDefinition />';
 
     expect(snippets.parse(call, timer, true)[0]!.type).toBe('bpmn:timerEventDefinition');
-    expect(() => snippets.parse(call, timer)).toThrow(expect.objectContaining({ code: 'E_INVALID_VALUE' }));
+    expect(() => snippets.parse(call, timer, false)).toThrow(expect.objectContaining({ code: 'E_INVALID_VALUE' }));
   });
 });
