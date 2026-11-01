@@ -67,9 +67,14 @@ function lintInputs() {
   return corpusModels('lint').map((model) => ({ id: `${model}#validate`, lintModel: model }));
 }
 
-function fieldDifferences(id, main, subject) {
+function fieldDifferences(id, main, subject, cause = '') {
   const fields = ['exit', 'code', 'verdict', 'refusedAtDeploy'].filter((field) => main[field] !== subject[field]);
-  return fields.map((field) => `${id}: ${field}: main ${main[field]}, subject ${subject[field]}`);
+  return fields.map((field) => `${id}: ${field}: main ${main[field]}, subject ${subject[field]}${cause}`);
+}
+
+function errorsOnlyMainHas(rowsThatDiffer) {
+  const elements = rowsThatDiffer.filter((row) => / main only: \S+ error /.test(row)).map((row) => row.split(' ').at(-1)).sort();
+  return elements.length ? `, main's errors alone: ${elements.join(', ')}` : '';
 }
 
 function rowDifferences(id, main, subject) {
@@ -103,8 +108,9 @@ export default {
   async compare(input, { main, subject }) {
     const { id, lintModel } = input;
     const [mainFacts, subjectFacts] = lintModel ? await Promise.all([main.validateProject(placedProjectOf(lintModel)), subject.validateProject(placedProjectOf(lintModel))]) : await Promise.all([main.cli(input), subject.cli(input)]);
+    const rows = rowDifferences(id, mainFacts, subjectFacts);
     return {
-      differences: [...fieldDifferences(id, mainFacts, subjectFacts), ...rowDifferences(id, mainFacts, subjectFacts), ...editDifferences(id, mainFacts, subjectFacts)],
+      differences: [...fieldDifferences(id, mainFacts, subjectFacts, lintModel ? errorsOnlyMainHas(rows) : ''), ...rows, ...editDifferences(id, mainFacts, subjectFacts)],
       measures: { calls: 1 },
     };
   },
