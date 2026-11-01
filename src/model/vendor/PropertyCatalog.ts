@@ -36,6 +36,7 @@ export class PropertyCatalog {
     subProcess: (element) => element.is('bpmn:SubProcess'),
     textAnnotation: (element) => element.is('bpmn:TextAnnotation'),
     'sendTask, receiveTask': (element) => element.is('bpmn:SendTask') || element.is('bpmn:ReceiveTask'),
+    messageFlow: (element) => element.is('bpmn:MessageFlow'),
     businessRuleTask: (element) => element.is('bpmn:BusinessRuleTask'),
     conditionalEvent: (element) => element.is('bpmn:Event') && Triggers.of(element) === 'conditional',
   };

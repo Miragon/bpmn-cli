@@ -24,6 +24,12 @@ export async function openBuild(root) {
       const result = await api.mutateDoc(await api.Doc.fromXml(xml), ops, { dryRun: true, layout });
       return { xml: result.xml };
     }),
+    semanticEdit: (xml, ops) => attempt(async () => {
+      const write = async (force) => api.mutateDoc(await api.Doc.fromXml(xml), ops, { dryRun: true, layout: false, force });
+      const result = await write(false).catch((error) => (error.code === 'E_VALIDATION' ? write(true) : Promise.reject(error)));
+      const { created, changed, removed } = result.changes;
+      return { xml: result.xml, created, changed, removed };
+    }),
     layout: (xml) => attempt(async () => ({ xml: (await api.layoutXml(xml, { force: true })).xml })),
     findings: (xml, platform) => attempt(async () => ({ rows: findingRows(await api.validateXml(xml, { platform })) })),
     render: (xml, plane) => attempt(async () => {

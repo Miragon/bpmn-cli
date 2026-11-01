@@ -108,6 +108,10 @@ export class BpmnElement {
     return BpmnElement.wrapped((this.raw as unknown as Record<string, unknown>)[property]) as ReadCopy<TValue> | undefined;
   }
 
+  ownEntries(): Array<[string, unknown]> {
+    return Object.entries(this.raw).map(([property, value]) => [property, BpmnElement.wrapped(value)]);
+  }
+
   list<TItem = BpmnElement>(property: string): readonly TItem[] {
     const value = this.peek<TItem[]>(property);
     return Array.isArray(value) ? (value as readonly TItem[]) : [];
