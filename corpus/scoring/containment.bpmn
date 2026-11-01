@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool" processRef="process" />
+  </bpmn:collaboration>
+  <bpmn:process id="process">
+    <bpmn:laneSet id="lanes">
+      <bpmn:lane id="lane_upper"><bpmn:flowNodeRef>task_in_lane</bpmn:flowNodeRef><bpmn:flowNodeRef>task_below_lane</bpmn:flowNodeRef><bpmn:flowNodeRef>sub</bpmn:flowNodeRef><bpmn:flowNodeRef>task_out_of_pool</bpmn:flowNodeRef></bpmn:lane>
+      <bpmn:lane id="lane_lower"></bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="task_in_lane" />
+    <bpmn:task id="task_below_lane" />
+    <bpmn:subProcess id="sub">
+      <bpmn:task id="task_in_sub" />
+      <bpmn:task id="task_out_of_sub" />
+    </bpmn:subProcess>
+    <bpmn:task id="task_out_of_pool" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_di" bpmnElement="pool" isHorizontal="true"><dc:Bounds x="100" y="100" width="800" height="300" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="lane_upper_di" bpmnElement="lane_upper" isHorizontal="true"><dc:Bounds x="130" y="100" width="770" height="180" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="lane_lower_di" bpmnElement="lane_lower" isHorizontal="true"><dc:Bounds x="130" y="280" width="770" height="120" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_in_lane_di" bpmnElement="task_in_lane"><dc:Bounds x="200" y="120" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_below_lane_di" bpmnElement="task_below_lane"><dc:Bounds x="200" y="270" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sub_di" bpmnElement="sub" isExpanded="true"><dc:Bounds x="400" y="130" width="300" height="150" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_in_sub_di" bpmnElement="task_in_sub"><dc:Bounds x="420" y="160" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_out_of_sub_di" bpmnElement="task_out_of_sub"><dc:Bounds x="620" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_out_of_pool_di" bpmnElement="task_out_of_pool"><dc:Bounds x="950" y="120" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process">
+    <bpmn:startEvent id="event_on_task" name="Started" />
+    <bpmn:task id="task" />
+    <bpmn:startEvent id="event_first" name="First" />
+    <bpmn:startEvent id="event_second" name="Second" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="event_on_task_di" bpmnElement="event_on_task"><dc:Bounds x="100" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="120" y="160" width="60" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_di" bpmnElement="task"><dc:Bounds x="100" y="150" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_first_di" bpmnElement="event_first"><dc:Bounds x="400" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="390" y="150" width="60" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_second_di" bpmnElement="event_second"><dc:Bounds x="500" y="100" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="420" y="155" width="60" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

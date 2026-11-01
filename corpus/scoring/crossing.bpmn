@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process">
+    <bpmn:task id="task_a" />
+    <bpmn:task id="task_b" />
+    <bpmn:task id="task_c" />
+    <bpmn:task id="task_d" />
+    <bpmn:textAnnotation id="note" />
+    <bpmn:sequenceFlow id="flow_down" sourceRef="task_a" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_up" sourceRef="task_c" targetRef="task_d" />
+    <bpmn:association id="line_across" sourceRef="note" targetRef="task_c" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="task_a_di" bpmnElement="task_a"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_b_di" bpmnElement="task_b"><dc:Bounds x="300" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_c_di" bpmnElement="task_c"><dc:Bounds x="100" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_d_di" bpmnElement="task_d"><dc:Bounds x="300" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="note_di" bpmnElement="note"><dc:Bounds x="500" y="180" width="100" height="40" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_down_di" bpmnElement="flow_down"><di:waypoint x="200" y="160" /><di:waypoint x="250" y="160" /><di:waypoint x="250" y="320" /><di:waypoint x="300" y="320" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_up_di" bpmnElement="flow_up"><di:waypoint x="200" y="340" /><di:waypoint x="230" y="340" /><di:waypoint x="230" y="250" /><di:waypoint x="280" y="250" /><di:waypoint x="280" y="140" /><di:waypoint x="300" y="140" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="line_across_di" bpmnElement="line_across"><di:waypoint x="500" y="200" /><di:waypoint x="150" y="200" /><di:waypoint x="150" y="300" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

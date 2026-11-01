@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process">
+    <bpmn:subProcess id="sub_visited">
+      <bpmn:task id="task_at_home" />
+    </bpmn:subProcess>
+    <bpmn:task id="task_visiting" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="sub_visited_di" bpmnElement="sub_visited" isExpanded="true"><dc:Bounds x="100" y="100" width="300" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_at_home_di" bpmnElement="task_at_home"><dc:Bounds x="130" y="130" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_visiting_di" bpmnElement="task_visiting"><dc:Bounds x="220" y="180" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
