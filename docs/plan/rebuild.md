@@ -243,16 +243,6 @@ Build drawing.
 - Files: `src/drawing/`, `test/drawing/`, `corpus/walks/`.
 - Done when: the layout probe is green without edit, over the scenarios and the walks.
 
-### 12. Edit
-
-Build edit.
-
-- Today: folders by BPMN noun that import in a ring and reach drawing 5 times.
-- After: `ModelOperationRunner` and one class per operation at the root, the BPMN parts below; changes leave as a
-  `ChangeSet`; no drawing import.
-- Files: `src/edit/`, `test/edit/`.
-- Done when: the edits probe is green for semantics without DI over `corpus/walks/`.
-
 ### 13. Write, views and api
 
 Build write, views and api.
