@@ -38,18 +38,30 @@ time of a write was measured three commits earlier, at 4cbec59.
 
 ## At a glance
 
-| measure | today | 1.0 | details |
-| --- | --- | --- | --- |
-| lines in `src/` and `packages/` | 53,642 | ≤ 47,000 | [modules](modules.md#modules) |
-| packages: published · private | 1 · 0 | 1 · 2 | [packages](modules.md#packages) |
-| core modules with one entry | 0 | 10 | [modules](modules.md#modules) |
-| `utils/` files · exported free functions | 84 · 455 | 0 · 8 | [classes](code.md#classes) |
-| classes with a mirrored test | 0 of 320 | all | [tests](code.md#tests) |
-| commands · flag slots · shared write flags | 28 · 443 · 15 | 26 · 143 · 4 | [flags](flags.md) |
-| exports of `.` / `./node` | 94 / 18 | 10 / 0 | [contract](modules.md#contract) |
-| `bpmn add` on a Camunda 8 model of 500 nodes, with a `.bpmnlintrc` | 1,109 ms | ≈ 480 ms, an estimate: no project lint and no full redraw in a write | [write step](rebuild.md#13-write-views-and-api) |
-| text of a write result | up to 9.2 KB | ≤ 1 KB | [target](cli.md#target) |
-| folder cycles in `src/`, type imports included | 64 | 0 | [guardrails](code.md#guardrails) |
+| measure | today | target | measured | details |
+| --- | --- | --- | --- | --- |
+| lines in `src/` and `packages/` | 53,642 | ≤ 47,000 | 51,280: missed by 4,280 ([why](#the-line-target-missed)) | [modules](modules.md#modules) |
+| packages: published · private | 1 · 0 | 1 · 2 | 1 · 2 | [packages](modules.md#packages) |
+| core modules with one entry | 0 | 10 | 10 | [modules](modules.md#modules) |
+| `utils/` files · exported free functions | 84 · 455 | 0 · 8 | 0 · 8 | [classes](code.md#classes) |
+| classes with a mirrored test | 0 of 320 | all | all 519 | [tests](code.md#tests) |
+| commands · flag slots · shared write flags | 28 · 443 · 15 | 26 · 143 · 4 | 26 · 143 · 4 | [flags](flags.md) |
+| exports of `.` / `./node` | 94 / 18 | 10 / 0 | 10 / 0 | [contract](modules.md#contract) |
+| `bpmn add` on a Camunda 8 model of 500 nodes, with a `.bpmnlintrc` | 1,109 ms | ≈ 480 ms, an estimate: no project lint and no full redraw in a write | 631 ms, main 1,154 ms in the same run, median of 9: 45 % faster, the estimate missed | [write step](rebuild.md#13-write-views-and-api) |
+| text of a write result | up to 9.2 KB | ≤ 1 KB | ≤ 1 KB, cut at 1,024 bytes; 940 bytes on a batch of 81 operations | [target](cli.md#target) |
+| folder cycles in `src/`, type imports included | 64 | 0 | 0 | [guardrails](code.md#guardrails) |
+
+### The line target missed
+
+47,000 lines was not reached: `src/` and `packages/` hold 51,280, 2,362 fewer than today, and
+`budgets.json` holds them at 51,500. drawing is the difference: it has 19,233 lines against the 14,500
+of the estimate, because main's two layouts were ported, not reinvented, and cutting their free functions
+into classes of at most 300 lines added to them. edit (8,440 against 7,500) and checks (6,068 against
+5,600) ran over the same way; write (524 against 1,200) and api (42 against 300) stayed under. Going lower
+now means changing what the layouts do, which the oracle would have to judge, so the number stands.
+
+The write missed its estimate as a read explains: `bpmn show` on the same file takes 389 ms, so loading
+the CLI and parsing take most of it.
 
 ## Users
 
@@ -180,4 +192,4 @@ ask-miragon moves from 0.5.0 to 1.0 along its [map](modules.md#contract).
   changes every hash.
 - A made decision leaves the table as an ADR in `docs/adr/`. A shipped release shrinks to one line.
 
-Today's layers: [architecture.md](../architecture.md). Gate: [testing.md](../testing.md).
+The layers at 1.0: [architecture.md](../architecture.md). Gate: [testing.md](../testing.md).

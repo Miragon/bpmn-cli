@@ -4,7 +4,7 @@ Accepted, 2026-11-01.
 
 ## Context
 
-The 321 parity models of Miragon/bpmn-cli#123 cover one rule case each, but its tests build them from template strings at run time.
+The 1,076 parity models of Miragon/bpmn-cli#123, from its 109 rule specs, cover 1,077 rule cases, but its tests build them from template strings at run time.
 
 ## Decision
 
