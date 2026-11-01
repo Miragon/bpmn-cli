@@ -229,16 +229,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 5. Render
-
-Build `packages/render`.
-
-- Today: 1,801 lines in the core; the renderer reads DI through drawing and crops through views.
-- After: the [render package](modules.md#render-package), private, our painter ported, ≈ 20 golden
-  SVGs, its own API report.
-- Files: `packages/render/`.
-- Done when: image probe and iso check green; a browser bundle draws the corpus.
-
 ### 6. Lint
 
 Build `packages/lint`.
