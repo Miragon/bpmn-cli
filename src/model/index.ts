@@ -28,7 +28,7 @@ export { Triggers, type DefinedTrigger, type Trigger } from './kinds/Triggers.js
 export { EditDistance } from './ids/EditDistance.js';
 export { IdAllocator } from './ids/IdAllocator.js';
 export { IdCut } from './ids/IdCut.js';
-export { IdDefaults, type IdConventions, type IdState, type QualifierMode } from './ids/IdDefaults.js';
+export { type IdConventions, type IdState, type QualifierMode } from './ids/IdDefaults.js';
 export { IdRegistry } from './ids/IdRegistry.js';
 export { IdRequests, type IdRequest } from './ids/IdRequests.js';
 export { IdSlug } from './ids/IdSlug.js';

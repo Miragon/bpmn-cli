@@ -1,6 +1,7 @@
 import { naming } from '@miragon/bpmnlint-plugin-rules';
 import { describe, expect, it } from 'vitest';
-import { type BpmnElement, IdDefaults, Kinds, NewDocument, Triggers, type DefinedTrigger } from '../../src/model/index.js';
+import { IdDefaults } from '../../src/model/ids/IdDefaults.js';
+import { type BpmnElement, Kinds, NewDocument, Triggers, type DefinedTrigger } from '../../src/model/index.js';
 
 const { tree } = new NewDocument().create();
 const convention = new naming.ElementIdConvention();
