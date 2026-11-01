@@ -14,9 +14,9 @@ names `sem`, `defs`. Copy, run it, fix imports, then let tsc list the rest. Spli
 ## Decisions
 
 - **`Box` and `Point`**: always the classes of `model/geometry`, never a literal, also in hot code. `box.right` costs nothing.
-  `box.center` allocates, as `center(box)` did: hold it in a local in a loop. The port of the router takes 25 ms where
-  main takes 21 ms over 317 scopes, from `new Polyline(...)` and its segments, not from `Box`; in a hot loop hold one
-  `Polyline`, do not build it per test.
+  `box.center` allocates, as `center(box)` did: hold it in a local in a loop. The port of the router takes 25 to 27 ms where
+  main takes 21 ms over 317 scopes (tsx adds some of it). In its profile `Polyline`'s spans and segments lead and no getter of `Box`
+  shows: in a hot loop hold one `Polyline`, do not build it per test.
 - **`El` becomes `BpmnElement`**: `GNode.el`, `DShape.el` and `di` hold the wrapper. `BpmnTree` and `BpmnElement.of` return one
   wrapper per object, so `===`, `Map` and `Set` hold. Read `el.name`, `el.peek<T>('p')`, `el.list('p')`. No cache for names: main's
   `nameOf` goes. `el.id` calls moddle's `get`; on what may lack an id use `el.peek<string>('id')`.

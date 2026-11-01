@@ -24,7 +24,7 @@ export class DiagramDrawing {
 
   constructor(private readonly document: BpmnDocument) {}
 
-  private static kept(mode: DrawingMode): Layout {
+  private static untouched(mode: DrawingMode): Layout {
     return { mode, warnings: [], expanded: [], placed: [], moved: [], rerouted: [], reshaped: [], pruned: [], notes: [] };
   }
 
@@ -40,7 +40,7 @@ export class DiagramDrawing {
       return this.drawInFull(changes);
     }
     const onlyDrawingOperations = operations.length > 0 && changes.isEmpty && !changes.relocated.length && !this.hasExpansions(changes);
-    return onlyDrawingOperations ? DiagramDrawing.kept('kept') : this.placeChanges(before, changes);
+    return onlyDrawingOperations ? DiagramDrawing.untouched('kept') : this.placeChanges(before, changes);
   }
 
   private hasExpansions({ expansions }: ChangeSet): boolean {
@@ -60,7 +60,7 @@ export class DiagramDrawing {
     if (givenIds.length) {
       changes.note(`${givenIds.length} element(s) without id got one in the id conventions so that the redrawn diagram can show them: ${givenIds.map(({ id }) => id).join(', ')}`);
     }
-    return { ...DiagramDrawing.kept('full'), warnings, expanded, notes };
+    return { ...DiagramDrawing.untouched('full'), warnings, expanded, notes };
   }
 
   private async placeChanges(before: DrawingSnapshot, changes: ChangeSet): Promise<Layout> {
@@ -70,7 +70,7 @@ export class DiagramDrawing {
     const ids = new DiIds(tree.definitions);
     const { drawn } = groups.redraw(groups.undrawn(), (id) => ids.shape(id));
     this.relabelRenamedGroups(before, groups);
-    return { ...DiagramDrawing.kept('incremental'), ...report, placed: [...report.placed, ...drawn] };
+    return { ...DiagramDrawing.untouched('incremental'), ...report, placed: [...report.placed, ...drawn] };
   }
 
   private async placeOrRefuse(before: DrawingSnapshot, changes: ChangeSet): Promise<IncrementalReport> {
