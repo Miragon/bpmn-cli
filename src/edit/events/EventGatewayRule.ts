@@ -27,7 +27,7 @@ export class EventGatewayRule {
       message: `Event-based gateway ${gateway.id} now leads to ${target.id} (${flow.id}): ${problem}`,
       element: gateway.id,
       related: [target.id, flow.id],
-      hint: `Put a catch event in front of ${target.id}: \`bpmn add <file> intermediateCatchEvent:timer "<Name>" --flow ${flow.id} --timer PT1H\` (or :message --message <Name>), or remove the flow (\`bpmn remove <file> ${flow.id}\`).`,
+      hint: `Put a catch event in front of ${target.id}: \`bpmn add <file> intermediateCatchEvent:timer "<Name>" --flow ${flow.id} timer=PT1H\` (or :message message=<Name>), or remove the flow (\`bpmn remove <file> ${flow.id}\`).`,
     });
   }
 

@@ -83,7 +83,7 @@ export class ExtensionChecks {
         code: 'W_MISPLACED_EXTENSION',
         message: `${snippet.type} on ${this.hosts.labelOf(host)} (${host.type}) is not read by Camunda 8: it belongs on ${hosts.length > 5 ? `${hosts.slice(0, 5).join(', ')}, ...` : hosts.join(', ')}`,
         element: this.hosts.idOf(host),
-        hint: `Remove it (\`bpmn ext remove <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}${snippet.type}\`) and add it where it is read (\`bpmn kinds\` lists the zeebe elements per kind).`,
+        hint: `Remove it (\`bpmn ext remove <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}${snippet.type}\`) and add it where it is read (\`bpmn guide zeebe-elements\` lists the zeebe elements).`,
       });
       return;
     }
@@ -112,7 +112,7 @@ export class ExtensionChecks {
   private duplicate(host: BpmnElement, message: string, related?: string): never {
     throw BpmnError.model('E_DUPLICATE_EXTENSION', message, {
       element: this.hosts.idOf(host),
-      hint: `Pass --replace to replace it as a whole${related ? ` (ext add <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}${related} ... --replace)` : ''}, or remove the old one first with \`bpmn ext remove <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}<selector>\` (see \`bpmn ext list\`).`,
+      hint: `Pass --replace to replace it as a whole${related ? ` (ext add <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}${related} ... --replace)` : ''}, or remove the old one first with \`bpmn ext remove <file> ${this.hosts.idOf(host)} ${this.hosts.slotPrefix(host)}<selector>\` (see \`bpmn show <file> ${this.hosts.idOf(host)}\`).`,
     });
   }
 }

@@ -42,7 +42,7 @@ export class BranchReach {
       throw BpmnError.model('E_AMBIGUOUS_BRANCH', `${root.id} is reached by ${incoming.length} paths (${incoming.map((flow) => flow.get<BpmnElement>('sourceRef').id).join(', ')}); its downstream is not the branch of one path`, {
         element: root.id,
         candidates: incoming.map((flow) => flow.id),
-        hint: `Remove the branch from a node only one path reaches (the first node after the split), or remove ${root.id} alone (\`bpmn remove <file> ${root.id} --bridge-all\` reconnects the paths to its successor).`,
+        hint: `Remove the branch from a node only one path reaches (the first node after the split), or remove ${root.id} alone (\`bpmn remove <file> ${root.id} --bridge all\` reconnects the paths to its successor).`,
       });
     }
   }

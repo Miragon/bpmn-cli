@@ -106,8 +106,8 @@ describe('ElementRemoval', () => {
   });
 
   it.each([
-    ['all', '--bridge-all'],
-    ['none', '--no-bridge'],
+    ['all', '--bridge all'],
+    ['none', '--bridge none'],
   ])('refuses a bridge of kind %s beside a removed branch', async (bridge, flag) => {
     await expect(remove(ORDER, { ids: ['reject'], withBranch: true, bridge })).rejects.toMatchObject({ code: 'E_USAGE', message: expect.stringContaining(`drop ${flag}`) });
   });

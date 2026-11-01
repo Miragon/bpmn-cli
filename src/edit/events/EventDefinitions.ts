@@ -59,7 +59,7 @@ export class EventDefinitions {
     if (event.is('bpmn:StartEvent') && EventDefinitions.EVENT_SUBPROCESS_ONLY.includes(trigger) && !Kinds.isEventSubProcess(this.edit.document.scopes.scopeOf(event))) {
       throw BpmnError.model('E_INVALID_TRIGGER', `A startEvent:${trigger} is only allowed inside an event sub-process (${event.id} is not)`, {
         element: event.id,
-        hint: `Create the event sub-process together with its start in one command: \`add eventSubProcess "Handle errors" --${trigger === 'compensate' ? 'error <Name>' : `${trigger} <Name>`}\` (or eventSubProcess:${trigger}); or add the start with --in <eventSubProcessId> in the same \`apply\` batch as the eventSubProcess.`,
+        hint: `Create the event sub-process together with its start in one command: \`bpmn add <file> eventSubProcess:${trigger} "Handle errors"\`; or add the start with --in <eventSubProcessId> in the same \`apply\` batch as the eventSubProcess.`,
       });
     }
   }
@@ -69,7 +69,7 @@ export class EventDefinitions {
       if (!(EventDefinitions.TIMER_KINDS as ReadonlyArray<string>).includes(override)) {
         throw BpmnError.model('E_INVALID_VALUE', `Unknown timer kind "${override}"; use one of ${EventDefinitions.TIMER_KINDS.join(', ')}`, {
           candidates: [...EventDefinitions.TIMER_KINDS],
-          hint: 'Drop --timer-kind to classify from the value (R... -> cycle, P... -> duration, else date).',
+          hint: 'The value tells the kind: R... -> cycle, P... -> duration, else date.',
         });
       }
       return override as TimerKind;
@@ -139,7 +139,7 @@ export class EventDefinitions {
 
   private static assertCondition(when: string): void {
     if (!when.trim()) {
-      throw BpmnError.model('E_INVALID_VALUE', 'The condition expression is empty', { hint: "Quote expressions with single quotes, e.g. --when '${approved}'." });
+      throw BpmnError.model('E_INVALID_VALUE', 'The condition expression is empty', { hint: "Quote expressions with single quotes, e.g. 'when=${approved}'." });
     }
   }
 

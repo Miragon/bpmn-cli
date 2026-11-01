@@ -19,7 +19,7 @@ export class ElementRemoval {
   remove(command: RemoveOperation): ChangeSet {
     const changes = new ChangeSet();
     if (command.withBranch && command.bridge) {
-      throw BpmnError.usage(`--with-branch removes the node's whole downstream path and bridges nothing: drop ${command.bridge === 'all' ? '--bridge-all' : '--no-bridge'}`);
+      throw BpmnError.usage(`--with-branch removes the node's whole downstream path and bridges nothing: drop ${command.bridge === 'all' ? '--bridge all' : '--bridge none'}`);
     }
     if (command.withBranch) {
       this.removeBranches(command, changes);

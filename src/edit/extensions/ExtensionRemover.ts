@@ -44,7 +44,7 @@ export class ExtensionRemover {
     } else if (command.type) {
       victims = this.select(el, top, this.selectors.parse(command.type, el), command.type);
     } else {
-      throw BpmnError.usage('ext remove needs --type <prefix:localName> or --index <n>', { element: this.hosts.idOf(el) });
+      throw BpmnError.usage('ext remove needs a selector: <prefix:localName> or an index <n>', { element: this.hosts.idOf(el) });
     }
     const texts: string[] = [];
     for (const { el: victim, level } of victims) {

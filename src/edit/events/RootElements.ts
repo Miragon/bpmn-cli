@@ -17,7 +17,7 @@ export class RootElements {
     const document = this.edit.document;
     const key = nameOrId.trim();
     if (!key) {
-      throw BpmnError.model('E_INVALID_VALUE', `The ${RootElements.ROOT_PREFIX[type].toLowerCase()} name is empty`, { hint: 'Pass a name, e.g. --message OrderReceived.' });
+      throw BpmnError.model('E_INVALID_VALUE', `The ${RootElements.ROOT_PREFIX[type].toLowerCase()} name is empty`, { hint: 'Pass a name, e.g. message=OrderReceived.' });
     }
     const existing = document.tree.rootElementsOfType(type);
     let el = existing.find((candidate) => candidate.id === key) ?? existing.find((candidate) => candidate.get<string | undefined>('name') === key);

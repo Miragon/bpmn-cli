@@ -104,7 +104,7 @@ export class ElementTypeChange {
       return KindParser.parse(kind);
     } catch (err) {
       const { message, details } = err as BpmnError;
-      throw BpmnError.model('E_UNKNOWN_KIND', message, { element: id, candidates: details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
+      throw BpmnError.model('E_UNKNOWN_KIND', message, { element: id, candidates: details.candidates ?? [], hint: 'Run `bpmn guide kinds` for the list of kinds.' });
     }
   }
 

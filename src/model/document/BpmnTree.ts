@@ -118,7 +118,7 @@ export class BpmnTree {
       return BpmnError.model('E_NOT_FOUND', `"${id}" is not a BPMN element: it is the id of ${[...new Set(vendor.map(({ type }) => type))].join(', ')} vendor extension data inside ${owners.join(', ')}`, {
         element: id,
         candidates: owners,
-        hint: `Vendor extension elements are edited through their BPMN element: \`bpmn ext list <file> ${owners[0]}\`, then \`bpmn ext add|remove <file> ${owners[0]} ...\`.`,
+        hint: `Vendor extension elements are edited through their BPMN element: \`bpmn show <file> ${owners[0]}\`, then \`bpmn ext add|remove <file> ${owners[0]} ...\`.`,
       });
     }
     const candidates = new IdSuggestions(this.all(), batch).for(id, 5);

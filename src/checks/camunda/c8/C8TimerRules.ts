@@ -76,7 +76,7 @@ export class C8TimerRules extends C8Rules {
     if (range) {
       reporter.deploy({ code: 'W_C8_DEPLOY_TIMER', element: el, subject: 'timer:value', message: `The ${kind} "${value}" of ${label} is no valid ${kind === 'timeDate' || !/^\S+( +\S+){5}$/.test(value) ? 'date-time' : 'cron expression'}: ${range}; Camunda 8 refuses the file`, hint: `\`bpmn set <file> ${el.id} ${ShellWords.quote(`timer=${C8TimerRules.EXAMPLE[kind]}`)}\` (with a value in range).` });
     } else {
-      reporter.deploy({ code: 'W_C8_DEPLOY_TIMER', element: el, subject: 'timer:value', message: `The ${kind} "${value}" of ${label} is not ${C8TimerRules.EXPECTED[kind]}; Camunda 8 refuses the file`, hint: `\`bpmn set <file> ${el.id} ${ShellWords.quote(`timer=${C8TimerRules.EXAMPLE[kind]}`)}\` (or a FEEL expression: ${ShellWords.quote('timer==<expression>')} with --timer-kind ${kind.replace('time', '').toLowerCase()}).` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_TIMER', element: el, subject: 'timer:value', message: `The ${kind} "${value}" of ${label} is not ${C8TimerRules.EXPECTED[kind]}; Camunda 8 refuses the file`, hint: `\`bpmn set <file> ${el.id} ${ShellWords.quote(`timer=${C8TimerRules.EXAMPLE[kind]}`)}\` (or a FEEL expression: ${ShellWords.quote('timer==<expression>')}).` });
     }
   }
 }

@@ -53,10 +53,10 @@ export class JoinBridge {
 
   private static assertOneSuccessor(node: BpmnElement, outgoing: readonly BpmnElement[]): void {
     if (outgoing.length > 1) {
-      throw BpmnError.model('E_AMBIGUOUS_BRIDGE', `${node.id} has ${outgoing.length} outgoing flows (${outgoing.map((element) => element.id).join(', ')}): --bridge-all connects the predecessors of a join to its one successor, and here it is not clear which predecessor goes to which successor`, {
+      throw BpmnError.model('E_AMBIGUOUS_BRIDGE', `${node.id} has ${outgoing.length} outgoing flows (${outgoing.map((element) => element.id).join(', ')}): --bridge all connects the predecessors of a join to its one successor, and here it is not clear which predecessor goes to which successor`, {
         element: node.id,
         candidates: outgoing.map((element) => element.id),
-        hint: `Remove the branches you do not need first (\`bpmn remove <file> <firstNodeOfBranch> --with-branch\`), or remove ${node.id} without bridging (\`--no-bridge\`) and connect what should stay with \`bpmn connect\`.`,
+        hint: `Remove the branches you do not need first (\`bpmn remove <file> <firstNodeOfBranch> --with-branch\`), or remove ${node.id} without bridging (\`--bridge none\`) and connect what should stay with \`bpmn connect\`.`,
       });
     }
   }
@@ -118,7 +118,7 @@ export class JoinBridge {
       {
         element: node.id,
         candidates: incoming.map((element) => element.id),
-        hint: `Say which: \`bpmn remove <file> ${node.id} --bridge-all\` (each path runs on to ${successor.id} on its own), or \`bpmn remove <file> ${node.id} --no-bridge\` and connect what should stay with \`bpmn connect\`.`,
+        hint: `Say which: \`bpmn remove <file> ${node.id} --bridge all\` (each path runs on to ${successor.id} on its own), or \`bpmn remove <file> ${node.id} --bridge none\` and connect what should stay with \`bpmn connect\`.`,
       },
     );
   }

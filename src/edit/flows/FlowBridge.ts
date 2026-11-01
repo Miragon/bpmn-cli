@@ -156,15 +156,15 @@ export class FlowBridge {
     if (!problem) {
       return;
     }
-    const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${successor.id} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${outFlow.id} --timer PT1H\`)`;
+    const catchFirst = `put an intermediate catch event (message / timer / signal / conditional) in front of ${successor.id} first (\`bpmn add <file> intermediateCatchEvent:timer "<name>" --flow ${outFlow.id} timer=PT1H\`)`;
     const rejectedBy = new EventGatewayRule(this.edit).rule === 'engines' ? 'which the engines reject' : 'which BPMN 2.0 does not allow';
     throw BpmnError.model('E_INVALID_BRIDGE', `${this.command === 'move' ? 'Moving' : 'Bridging'} ${via} would connect the event-based gateway ${predecessor.id} to ${successor.id}, ${rejectedBy}: ${problem}`, {
       element: node.id,
       related: [predecessor.id, successor.id],
       hint:
         this.command === 'move'
-          ? `A move always bridges its old place: ${catchFirst}, or take ${via} out without a bridge (\`bpmn remove <file> ${via.split(', ').join(' ')} --no-bridge\`) and add it again at the new place.`
-          : `Remove without bridging (\`bpmn remove <file> ${node.id} --no-bridge\`; the gateway loses that branch) and wire the gateway yourself, or ${catchFirst}, or remove ${successor.id} in the same command.`,
+          ? `A move always bridges its old place: ${catchFirst}, or take ${via} out without a bridge (\`bpmn remove <file> ${via.split(', ').join(' ')} --bridge none\`) and add it again at the new place.`
+          : `Remove without bridging (\`bpmn remove <file> ${node.id} --bridge none\`; the gateway loses that branch) and wire the gateway yourself, or ${catchFirst}, or remove ${successor.id} in the same command.`,
     });
   }
 }

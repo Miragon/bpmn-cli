@@ -153,7 +153,7 @@ describe('ExtensionInserter', () => {
     ['a snippet root of another type', { type: 'camunda:inputParameter', xml: '<camunda:outputParameter />' }, 'E_INVALID_VALUE', "The --xml snippet's root <camunda:outputParameter> does not match"],
     ['a position on a snippet', { type: 'camunda:inputParameter[0]', xml: '<camunda:inputParameter />' }, 'E_INVALID_VALUE', 'an [index] only selects existing elements'],
     ['a key that contradicts the snippet', { type: 'camunda:inputParameter[name=a]', xml: '<camunda:inputParameter name="b" />' }, 'E_INVALID_VALUE', 'and the snippet\'s name="b" disagree'],
-    ['a blank snippet without a type', { xml: '  ' }, 'E_USAGE', 'ext add needs --type'],
+    ['a blank snippet without a type', { xml: '  ' }, 'E_USAGE', 'ext add needs a type'],
     ['a path through two matches', { type: 'camunda:executionListener/camunda:script' }, 'E_AMBIGUOUS_EXTENSION', 'camunda:executionListener matches 2 elements'],
     ['a selected container that does not exist', { type: 'camunda:inputOutput[0]/camunda:inputParameter', attrs: { name: 'x' } }, 'E_NO_EXTENSION', 'approve has no camunda:inputOutput[0]'],
     ['a container only its own attributes could make', { type: 'camunda:field/camunda:string' }, 'E_NO_EXTENSION', 'approve has no camunda:field to add into'],

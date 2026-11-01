@@ -34,7 +34,7 @@ export class ExtensionInserter {
     this.checks.assertCanHoldExtensions(el);
     const hasXml = command.xml !== undefined && command.xml.trim() !== '';
     if (!hasXml && !command.type) {
-      throw BpmnError.usage('ext add needs --type <prefix:localName> (with --attr key=value / --body) or --xml <snippet>', { element: this.hosts.idOf(el) });
+      throw BpmnError.usage('ext add needs a type <prefix:localName> (with key=value / body=<text>) or --xml <snippet>', { element: this.hosts.idOf(el) });
     }
     const steps = command.type ? this.selectors.parse(command.type, el) : [];
     const out: Outcome[] = [];
@@ -211,7 +211,7 @@ export class ExtensionInserter {
         throw BpmnError.model('E_AMBIGUOUS_EXTENSION', `${step.text} matches ${hits.length} elements of ${this.hosts.labelOf(host)}; say which one`, {
           element: this.hosts.idOf(host),
           candidates: hits.map((hit) => this.names.itemLabel(hit.el)),
-          hint: `Use [attr=value] or [index] in the path, e.g. ${step.name}[0]/... (see \`bpmn ext list <file> ${this.hosts.idOf(host)} --json\`).`,
+          hint: `Use [attr=value] or [index] in the path, e.g. ${step.name}[0]/... (see \`bpmn show <file> ${this.hosts.idOf(host)}\`).`,
         });
       }
       level = level.enter(hits.length === 1 ? hits[0]!.el : this.createContainer(host, level, step, out, notes));

@@ -136,6 +136,6 @@ describe('ExtensionRemover', () => {
   it('asks for a type or an index when the selector is empty', async () => {
     const { remove } = await remover();
 
-    expect(() => remove('call', { type: '' })).toThrow(expect.objectContaining({ code: 'E_USAGE', message: 'ext remove needs --type <prefix:localName> or --index <n>' }));
+    expect(() => remove('call', { type: '' })).toThrow(expect.objectContaining({ code: 'E_USAGE', message: 'ext remove needs a selector: <prefix:localName> or an index <n>' }));
   });
 });

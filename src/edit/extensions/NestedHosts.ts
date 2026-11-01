@@ -110,7 +110,7 @@ export class NestedHosts {
     };
     throw BpmnError.model(command.action === 'remove' ? 'E_NO_EXTENSION' : 'E_NO_NESTED_ELEMENT', `${Kinds.label(owner)} ${id} has no ${ElementSlots.TEXT[slot]}${command.action === 'remove' ? ', so no extension elements there' : ' to hold extension elements'}`, {
       element: id,
-      hint: command.action === 'remove' ? 'Nothing to remove; `bpmn ext list <file> <id>` shows what is there.' : `${first[slot][0]!.toUpperCase()}${first[slot].slice(1)}.`,
+      hint: command.action === 'remove' ? 'Nothing to remove; `bpmn show <file> <id>` shows what is there.' : `${first[slot][0]!.toUpperCase()}${first[slot].slice(1)}.`,
     });
   }
 
