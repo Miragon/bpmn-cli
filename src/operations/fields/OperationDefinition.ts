@@ -48,7 +48,7 @@ export abstract class OperationDefinition {
     }
     for (const [key, field] of Object.entries(this.fields)) {
       if (field.traits.required && values[key] === undefined) {
-        throw location.refusal(`missing required key "${key}" (${field.help})`);
+        throw location.refusal((word) => `missing required key ${word(key)} (${field.help})`);
       }
     }
     return values;

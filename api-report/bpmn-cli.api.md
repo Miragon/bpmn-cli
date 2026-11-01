@@ -47,6 +47,21 @@ export interface Change {
 }
 
 // @public (undocumented)
+export interface CommandRefusal {
+    // (undocumented)
+    code?: string;
+    // (undocumented)
+    hint?: CommandWords;
+    // (undocumented)
+    message: CommandWords;
+}
+
+// @public (undocumented)
+export type CommandWords = Array<string | {
+    key: string;
+}>;
+
+// @public (undocumented)
 export interface CropOptions {
     // (undocumented)
     around?: string | undefined;
@@ -256,6 +271,8 @@ export type ErrorCategory = 'usage' | 'model' | 'layout' | 'io' | 'internal';
 export interface ErrorDetails {
     // (undocumented)
     [key: string]: unknown;
+    // (undocumented)
+    asCommand?: CommandRefusal;
     // (undocumented)
     candidates?: string[];
     // (undocumented)

@@ -16,7 +16,7 @@ export class MoveOperationDefinition extends OperationDefinition {
   protected override check(operation: OperationCheck): void {
     operation.placement();
     if (!operation.present([...OperationCheck.PLACEMENT_KEYS, 'lane']).length) {
-      throw operation.fail('nothing to do: give a placement (after/before/flow/in) and/or "lane"');
+      throw operation.fail((key, bare) => `nothing to do: give a placement (${bare('after')}/${bare('before')}/${bare('flow')}/${bare('in')}) and/or ${key('lane')}`);
     }
   }
 }

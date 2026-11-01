@@ -1,5 +1,5 @@
 import { type Family, Kinds } from '../../model/index.js';
-import { FieldSets, FieldValues, OperationDefinition, OperationField, type OperationCheck, type OperationOf } from '../fields/index.js';
+import { FieldSets, FieldValues, OperationDefinition, OperationField, RefusalWording, type OperationCheck, type OperationOf } from '../fields/index.js';
 import { SplitNodeDefinition } from './SplitNodeDefinition.js';
 
 export type AddOperation = OperationOf<AddOperationDefinition>;
@@ -36,7 +36,7 @@ export class AddOperationDefinition extends OperationDefinition {
     operation.placement();
     operation.flowIntoNode();
     if (operation.fields['ifAbsent'] === true && operation.fields['id'] === undefined) {
-      throw operation.fail('"ifAbsent" needs an explicit "id" to check for', 'Add "id": "<Prefix>_<Name>" or drop ifAbsent.');
+      throw operation.fail((key) => `${key('ifAbsent')} needs an explicit ${key('id')} to check for`, RefusalWording.onlyInBatch('Add "id": "<Prefix>_<Name>" or drop ifAbsent.'));
     }
   }
 

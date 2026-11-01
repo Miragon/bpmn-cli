@@ -1,4 +1,4 @@
-import { FieldSets, FieldValues, OperationDefinition, OperationField, type OperationCheck, type OperationOf } from '../fields/index.js';
+import { FieldSets, FieldValues, OperationDefinition, OperationField, RefusalWording, type OperationCheck, type OperationOf } from '../fields/index.js';
 
 export type SetOperation = OperationOf<SetOperationDefinition>;
 
@@ -15,7 +15,7 @@ export class SetOperationDefinition extends OperationDefinition {
 
   protected override check(operation: OperationCheck): void {
     if (!Object.keys(operation.fields['set'] as object).length) {
-      throw operation.fail('nothing to do: "set" is empty', 'Example: {"op":"set","id":"task_x","set":{"name":"New name"}}.');
+      throw operation.fail((key) => `nothing to do: ${key('set')} is empty`, RefusalWording.onlyInBatch('Example: {"op":"set","id":"task_x","set":{"name":"New name"}}.'));
     }
   }
 }

@@ -5,11 +5,6 @@ import { OperationLocation } from '../../../src/operations/fields/OperationLocat
 const checkOf = (fields: Record<string, unknown>): OperationCheck => new OperationCheck(new OperationLocation(0, 'ops[0]'), fields);
 
 describe('OperationCheck', () => {
-  it('quotes keys for a message', () => {
-    expect(OperationCheck.quoted(['a', 'b'])).toBe('"a", "b"');
-    expect(OperationCheck.quoted(['a', 'b'], ' and ')).toBe('"a" and "b"');
-  });
-
   it('lists the keys that are given', () => {
     expect(checkOf({ a: 1, b: undefined }).present(['a', 'b', 'c'])).toEqual(['a']);
   });

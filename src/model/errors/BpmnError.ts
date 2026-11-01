@@ -2,12 +2,21 @@ import { ModelError } from './ModelError.js';
 
 export type ErrorCategory = 'usage' | 'model' | 'layout' | 'io' | 'internal';
 
+export type CommandWords = Array<string | { key: string }>;
+
+export interface CommandRefusal {
+  message: CommandWords;
+  hint?: CommandWords;
+  code?: string;
+}
+
 export interface ErrorDetails {
   element?: string;
   related?: string[];
   candidates?: string[];
   hint?: string;
   op?: number;
+  asCommand?: CommandRefusal;
   [key: string]: unknown;
 }
 
@@ -65,6 +74,7 @@ export class BpmnError extends Error {
   }
 
   toJSON(): Record<string, unknown> {
-    return { code: this.code, message: this.message, ...this.details };
+    const { asCommand: _asCommand, ...details } = this.details;
+    return { code: this.code, message: this.message, ...details };
   }
 }

@@ -1,4 +1,5 @@
 import { BpmnError } from '../../model/index.js';
+import { RefusalWording, type Wording } from './RefusalWording.js';
 
 export class OperationLocation {
   constructor(
@@ -10,11 +11,14 @@ export class OperationLocation {
     return new OperationLocation(this.index, `${this.path}.${step}`);
   }
 
-  refusal(message: string, hint?: string, candidates: string[] = []): BpmnError {
-    return BpmnError.usage(`${this.path}: ${message}`, {
+  refusal(message: Wording, hint?: Wording, candidates: string[] = [], commandCode?: string): BpmnError {
+    const wording = new RefusalWording(message, hint);
+    const { batchHint } = wording;
+    return BpmnError.usage(`${this.path}: ${wording.batchMessage}`, {
       op: this.index,
-      ...(hint ? { hint } : {}),
+      ...(batchHint ? { hint: batchHint } : {}),
       ...(candidates.length ? { candidates } : {}),
+      asCommand: wording.asCommand(commandCode),
     });
   }
 }

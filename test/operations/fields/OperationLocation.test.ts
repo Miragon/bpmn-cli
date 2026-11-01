@@ -7,11 +7,17 @@ describe('OperationLocation', () => {
     expect(refusal.code).toBe('E_USAGE');
     expect(refusal.category).toBe('usage');
     expect(refusal.message).toBe('ops[2] (add): no good');
-    expect(refusal.details).toEqual({ op: 2, hint: 'try this', candidates: ['that'] });
+    expect(refusal.details).toMatchObject({ op: 2, hint: 'try this', candidates: ['that'] });
   });
 
   it('leaves hint and candidates out when there are none', () => {
-    expect(new OperationLocation(0, 'ops[0]').refusal('no good').details).toEqual({ op: 0 });
+    expect(new OperationLocation(0, 'ops[0]').refusal('no good').details).toEqual({ op: 0, asCommand: { message: ['no good'] } });
+  });
+
+  it('keeps apart how a batch and a single command read the refusal', () => {
+    const refusal = new OperationLocation(0, 'ops[0] (add)').refusal((key) => `${key('flowName')} needs more`, undefined, [], 'E_OTHER');
+    expect(refusal.message).toBe('ops[0] (add): "flowName" needs more');
+    expect(refusal.details.asCommand).toEqual({ message: ['', { key: 'flowName' }, ' needs more'], code: 'E_OTHER' });
   });
 
   it('steps into a nested list and keeps the index of the operation', () => {

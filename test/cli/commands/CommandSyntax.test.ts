@@ -45,6 +45,12 @@ describe('CommandSyntax', () => {
     expect(parsed('space', 'f.bpmn', { after: 'a', by: '-80' }, {})).toMatchObject({ by: -80 });
   });
 
+  it('names a field as it is typed: a flag, a positional, or the bare field', () => {
+    const add = CommandSyntax.ofOperation({ op: 'add' })!;
+
+    expect(['flowName', 'kind', 'set.x'].map((field) => add.wordFor(field))).toEqual(['--flow-name', '<kind>', 'set.x']);
+  });
+
   it('writes an operation back as the words of its command', () => {
     expect(CommandSyntax.ofOperation({ op: 'set' })?.wordsOf({ op: 'set', id: 'a', set: { condition: '' } })).toEqual({ command: ['set'], rest: ['a', 'condition='] });
     expect(CommandSyntax.ofOperation({ op: 'remove' })?.wordsOf({ op: 'remove', ids: ['a'], withBranch: true })).toEqual({ command: ['remove'], rest: ['a', '--with-branch'] });

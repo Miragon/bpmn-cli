@@ -2,6 +2,7 @@ import type * as z from 'zod/mini';
 import type { BpmnError } from '../../model/index.js';
 import { FieldValues } from './FieldValues.js';
 import type { OperationLocation } from './OperationLocation.js';
+import { RefusalWording } from './RefusalWording.js';
 
 export class FieldRefusal {
   private static readonly HINTS: Readonly<Record<string, (key: string, input: unknown) => string>> = {
@@ -28,7 +29,7 @@ export class FieldRefusal {
   }
 
   at(location: OperationLocation): BpmnError {
-    return location.refusal(`"${this.place()}" ${this.issue.message}, got ${FieldRefusal.describe(this.issue.input)}`, this.hint());
+    return location.refusal((key) => `${key(this.place())} ${this.issue.message}, got ${FieldRefusal.describe(this.issue.input)}`, RefusalWording.onlyInBatch(this.hint()));
   }
 
   private place(): string {

@@ -8,6 +8,7 @@ describe('BpmnError', () => {
 
     expect([error.code, error.category, error.details.element]).toEqual(['E_NOT_FOUND', 'model', 'task']);
     expect(error.toJSON()).toEqual({ code: 'E_NOT_FOUND', message: 'No element', element: 'task' });
+    expect(BpmnError.usage('x', { op: 0, asCommand: { message: ['y'] } }).toJSON()).toEqual({ code: 'E_USAGE', message: 'x', op: 0 });
   });
 
   it.each([

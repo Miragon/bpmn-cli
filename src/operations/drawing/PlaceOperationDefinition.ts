@@ -1,4 +1,4 @@
-import { FieldSets, FieldValues, OperationCheck, OperationDefinition, OperationField, type OperationOf } from '../fields/index.js';
+import { FieldSets, FieldValues, OperationDefinition, OperationField, RefusalWording, type OperationCheck, type OperationOf } from '../fields/index.js';
 
 export type PlaceOperation = OperationOf<PlaceOperationDefinition>;
 
@@ -7,7 +7,7 @@ export class PlaceOperationDefinition extends OperationDefinition {
     ['rowOf', 'below', 'above'],
     ['columnOf', 'after', 'before'],
   ];
-  private static readonly SIDE_EXAMPLE = 'Example: {"op":"place","ids":["event_overdue"],"side":"top"}.';
+  private static readonly SIDE_EXAMPLE = RefusalWording.onlyInBatch('Example: {"op":"place","ids":["event_overdue"],"side":"top"}.');
 
   readonly name = 'place';
   readonly description = 'Diagram only: move shapes (rigid group) to the row and/or column of another element (= `bpmn place`).';
@@ -35,16 +35,16 @@ export class PlaceOperationDefinition extends OperationDefinition {
       this.checkSide(operation);
       return;
     }
-    operation.groups(PlaceOperationDefinition.TARGET_GROUPS, 'nothing to do: give a row ("rowOf", "below" or "above") and/or a column ("columnOf", "after" or "before"), or "side" for a boundary event');
+    operation.groups(PlaceOperationDefinition.TARGET_GROUPS, (key) => `nothing to do: give a row (${key('rowOf')}, ${key('below')} or ${key('above')}) and/or a column (${key('columnOf')}, ${key('after')} or ${key('before')}), or ${key('side')} for a boundary event`);
   }
 
   private checkSide(operation: OperationCheck): void {
     const targets = operation.present(PlaceOperationDefinition.TARGET_GROUPS.flat());
     if (targets.length) {
-      throw operation.fail(`"side" moves a boundary event to a border of its host; it cannot be combined with ${OperationCheck.quoted(targets)}`, PlaceOperationDefinition.SIDE_EXAMPLE);
+      throw operation.fail((key) => `${key('side')} moves a boundary event to a border of its host; it cannot be combined with ${targets.map(key).join(', ')}`, PlaceOperationDefinition.SIDE_EXAMPLE);
     }
     if (operation.hasSelector() || (operation.fields['ids'] as string[] | undefined)?.length !== 1) {
-      throw operation.fail('"side" takes exactly one id (the boundary event)', PlaceOperationDefinition.SIDE_EXAMPLE);
+      throw operation.fail((key) => `${key('side')} takes exactly one id (the boundary event)`, PlaceOperationDefinition.SIDE_EXAMPLE);
     }
   }
 }

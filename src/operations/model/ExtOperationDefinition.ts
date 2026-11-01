@@ -1,4 +1,4 @@
-import { FieldValues, OperationCheck, OperationDefinition, OperationField, type OperationOf } from '../fields/index.js';
+import { FieldValues, OperationDefinition, OperationField, type OperationCheck, type OperationOf } from '../fields/index.js';
 
 export type ExtOperation = OperationOf<ExtOperationDefinition>;
 
@@ -39,14 +39,14 @@ export class ExtOperationDefinition extends OperationDefinition {
       throw operation.fail('"index" only applies to action "remove"');
     }
     if (xml !== undefined && (attrs !== undefined || body !== undefined)) {
-      throw operation.fail('"xml" cannot be combined with "attrs" or "body"', 'Put everything into the XML snippet, or use type + attrs + body.');
+      throw operation.fail((key) => `${key('xml')} cannot be combined with ${key('attrs')} or ${key('body')}`, 'Put everything into the XML snippet, or use type + attrs + body.');
     }
   }
 
   private checkRemove(operation: OperationCheck): void {
     const addOnly = operation.present(['attrs', 'body', 'xml', 'replace']);
     if (addOnly.length) {
-      throw operation.fail(`${OperationCheck.quoted(addOnly)} only apply to action "add"`);
+      throw operation.fail((key) => `${addOnly.map(key).join(', ')} only apply to action "add"`);
     }
     if ((operation.fields['type'] === undefined) === (operation.fields['index'] === undefined)) {
       throw operation.fail('ext remove needs exactly one of "type" or "index"', 'Run `bpmn show <file> <id>` to see types and indexes.');

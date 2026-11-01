@@ -14,6 +14,6 @@ export class SpaceOperationDefinition extends OperationDefinition {
   override readonly schemaRules = [{ oneOf: [{ required: ['after'] }, { required: ['below'] }] }];
 
   protected override check(operation: OperationCheck): void {
-    operation.groups([['after', 'below']], 'give "after" (horizontal space right of an element) or "below" (vertical space below it)');
+    operation.groups([['after', 'below']], (key) => `give ${key('after')} (horizontal space right of an element) or ${key('below')} (vertical space below it)`);
   }
 }

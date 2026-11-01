@@ -160,6 +160,11 @@ export class CommandSyntax {
     }));
   }
 
+  wordFor(field: string): string {
+    const flag = this.flags().find((candidate) => candidate.field === field);
+    return flag?.usage.split(' ')[0] ?? this.shape.words.find((word) => word.field === field)?.usage ?? field;
+  }
+
   parse(words: readonly unknown[]): CommandInput {
     const [path, ...values] = words as [string, ...unknown[]];
     const flags = words.at(-2) as SharedFlags & Record<string, unknown>;

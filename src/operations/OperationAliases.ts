@@ -1,5 +1,6 @@
 import { BpmnError, EditDistance } from '../model/index.js';
 import { FieldValues } from './fields/FieldValues.js';
+import { OperationLocation } from './fields/OperationLocation.js';
 import { OperationCatalog, type Operation } from './OperationCatalog.js';
 import { SplitNodeDefinition } from './model/SplitNodeDefinition.js';
 
@@ -24,8 +25,8 @@ export class OperationAliases {
     const closest = candidates[0];
     const close = closest !== undefined && later === undefined && distance(closest) <= Math.max(1, EditDistance.typoTolerance(alias.length)) ? ` (did you mean ${closest}?)` : '';
     const listing = defined.size ? `defined so far: ${[...defined].map(([name, opIndex]) => `${name} (ops[${opIndex}])`).join(', ')}` : 'no op before it defines one';
-    const message = `ops[${index}] (${operation.op}): "${key}": alias ${alias} is not defined${OperationAliases.whereDefined(later, index)}${close}; ${listing}`;
-    return new BpmnError('E_UNKNOWN_ALIAS', message, 'usage', { op: index, candidates, hint: OperationAliases.HOW_TO_DEFINE });
+    const refusal = new OperationLocation(index, `ops[${index}] (${operation.op})`).refusal((word) => `${word(key)}: alias ${alias} is not defined${OperationAliases.whereDefined(later, index)}${close}; ${listing}`, undefined, [], 'E_UNKNOWN_ALIAS');
+    return new BpmnError('E_UNKNOWN_ALIAS', refusal.message, 'usage', { ...refusal.details, candidates, hint: OperationAliases.HOW_TO_DEFINE });
   }
 
   static assertBatch(operations: readonly Operation[]): void {
@@ -93,7 +94,7 @@ export class OperationAliases {
     for (const [key, aliasKey] of Object.entries(this.definition().aliasKeyOfNewId)) {
       const newId = (operation as unknown as Holder)[key];
       if (typeof newId === 'string' && newId.startsWith('$')) {
-        throw BpmnError.usage(`ops[${index}] (${operation.op}): "${key}" is the id of the new element, not an alias; give the alias with "${aliasKey}": "${newId}"`, { op: index });
+        throw new OperationLocation(index, `ops[${index}] (${operation.op})`).refusal((word) => `${word(key)} is the id of the new element, not an alias; give the alias with ${word(aliasKey)}: "${newId}"`);
       }
     }
     for (const { key, alias } of this.references()) {
