@@ -1,25 +1,25 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "files": { "includes": ["src/**/*.ts", "test/**/*.ts", "tools/**/*.mjs", "!tools/fuzz/out"] },
+  "files": { "includes": ["src/**/*.ts", "packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "test/**/*.ts", "tools/**/*.mjs", "!!.oracle"] },
   "plugins": ["./tools/biome/block-statements.grit"],
   "formatter": { "enabled": false },
   "assist": { "enabled": false },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": false,
+      "preset": "none",
       "complexity": {
-        "noExcessiveCognitiveComplexity": { "level": "warn", "options": { "maxAllowedComplexity": 25 } },
-        "noExcessiveLinesPerFunction": { "level": "warn", "options": { "maxLines": 80 } }
+        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 15 } },
+        "noExcessiveLinesPerFunction": { "level": "error", "options": { "maxLines": 50 } }
       },
       "style": {
-        "noNestedTernary": "warn"
+        "noNestedTernary": "error"
       }
     }
   },
   "overrides": [
     {
-      "includes": ["test/**", "tools/**"],
+      "includes": ["test/**", "packages/*/test/**", "tools/**"],
       "linter": {
         "rules": {
           "complexity": { "noExcessiveCognitiveComplexity": "off", "noExcessiveLinesPerFunction": "off" },

@@ -56,8 +56,9 @@
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run typecheck && npm run oracle",
-    "prepublishOnly": "npm run build"
+    "gate": "npm run typecheck && npm run lint && npm run oracle",
+    "prepublishOnly": "npm run build",
+    "lint": "biome lint"
   },
   "dependencies": {
     "@miragon/bpmnlint-plugin-rules": "0.19.0",
