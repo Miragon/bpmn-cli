@@ -41,7 +41,7 @@ export class BandReordering {
       return bands.find((band) => subtrees.get(band)!.has(laneId));
     }
     const { y } = bounds.center;
-    return shape.poolId === poolId && !shape.container ? bands.find((band) => y >= band.bounds.y && y < band.bounds.bottom) : undefined;
+    return shape.poolId === poolId && (!shape.container || kind === 'subProcess') ? bands.find((band) => y >= band.bounds.y && y < band.bounds.bottom) : undefined;
   }
 
   private static moveBand(drawing: Drawing, band: DShape, members: readonly DShape[], dy: number): void {

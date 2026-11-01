@@ -76,6 +76,13 @@ describe('BandReordering', () => {
     expect(boxOf(diagram, 'Free').y - boxOf(diagram, 'Top').y).toBe(boxOf(before, 'Free').y - boxOf(before, 'Top').y);
   });
 
+  it('takes a sub-process without lane along with the band it stands in, content and all', async () => {
+    const { diagram } = await order('lanes-sub-without-lane', { id: 'Pool', lanes: ['Low', 'Top'] });
+
+    expect(boxOf(diagram, 'Free').isInside(boxOf(diagram, 'Top'))).toBe(true);
+    expect(boxOf(diagram, 'Inner').isInside(boxOf(diagram, 'Free'))).toBe(true);
+  });
+
   it('says when fewer than two pools are drawn', async () => {
     const { notes } = await order('lanes', { id: 'collaboration_p', pools: ['Pool'] });
 
