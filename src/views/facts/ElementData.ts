@@ -42,7 +42,8 @@ export class ElementData {
   }
 
   nodesWithin(process: BpmnElement): BpmnElement[] {
-    return [...this.document.tree.walk(process)].filter((element) => element.is('bpmn:FlowNode'));
+    const scopes = [...this.document.tree.walk(process)].filter((element) => element.is('bpmn:Process') || element.is('bpmn:SubProcess'));
+    return scopes.flatMap((scope) => this.document.scopes.flowNodes(scope));
   }
 
   private static usedBy(element: BpmnElement): DataLinks {
