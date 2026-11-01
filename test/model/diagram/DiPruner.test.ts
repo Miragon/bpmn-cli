@@ -38,7 +38,7 @@ describe('DiPruner', () => {
 
     const pruned = DiPruner.prune(document.tree.definitions, document.tree.all());
 
-    expect([pruned, document.diagram.hasDiagram()]).toEqual([[], false]);
+    expect([pruned, document.tree.definitions.list('diagrams')]).toEqual([[], []]);
   });
 
   it('keeps a plane without a root, which shows the first process, and prunes nothing from a whole diagram', async () => {

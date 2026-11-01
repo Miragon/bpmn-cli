@@ -16,10 +16,6 @@ export class FlowGraph {
     return scope.list('flowElements').filter((element) => element.is('bpmn:SequenceFlow'));
   }
 
-  allSequenceFlows(): BpmnElement[] {
-    return [...this.tree.all().values()].filter((element) => element.is('bpmn:SequenceFlow'));
-  }
-
   messageFlows(): readonly BpmnElement[] {
     return this.tree.collaboration()?.list('messageFlows') ?? [];
   }

@@ -42,7 +42,6 @@ export class BpmnDocument {
   readonly importWarnings: ImportWarning[];
   readonly file: string | undefined;
   readonly source: DocumentSource | undefined;
-  followFlowEnds = true;
   private style: IdStyle | undefined;
   private declared: IdConventions | undefined;
 

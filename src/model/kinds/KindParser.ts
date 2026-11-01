@@ -50,18 +50,6 @@ export class KindParser {
     return { def, trigger };
   }
 
-  static assertToken(value: string): void {
-    try {
-      KindParser.parse(value);
-    } catch (error) {
-      if (!(error instanceof BpmnError)) {
-        throw error;
-      }
-      const { candidates } = error.details;
-      throw new BpmnError(error.code, error.message, 'usage', { ...(candidates?.length ? { candidates } : {}), hint: 'Run `bpmn guide kinds` for the full list of kinds and triggers.' });
-    }
-  }
-
   static parseToAdd(token: string): ParsedKind {
     try {
       return KindParser.parse(token);

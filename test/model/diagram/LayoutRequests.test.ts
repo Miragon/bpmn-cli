@@ -16,7 +16,7 @@ describe('LayoutRequests', () => {
     requests.expand('sub_adhoc', true);
     requests.expand('sub_adhoc', false);
 
-    expect([requests.requested('sub_adhoc'), requests.requested('sub_events')]).toEqual([false, undefined]);
+    expect(requests.expansion()).toEqual({ expand: [], collapse: ['sub_adhoc'] });
   });
 
   it('lets the merged requests win over those already held and keeps the rest', () => {

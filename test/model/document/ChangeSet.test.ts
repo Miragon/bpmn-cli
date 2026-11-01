@@ -14,7 +14,6 @@ describe('ChangeSet', () => {
 
     expect(changes.isEmpty).toBe(false);
     expect(changes.touchedIds()).toEqual(['a', 'b']);
-    expect(changes.toJSON()).toEqual({ created: [change('a')], changed: [change('b')], removed: [change('c')], warnings: [{ code: 'W_X', message: 'M' }], notes: ['n'] });
   });
 
   it('lists one changed element once per detail', () => {
@@ -106,6 +105,6 @@ describe('ChangeSet', () => {
 
     expect(merged.created.map(({ id }) => id)).toEqual(['flow_z', 'b']);
     expect([merged.relocated, merged.notes, merged.bindings.length, merged.replaced.length, merged.warnings.length]).toEqual([['b'], ['n'], 1, 1, 1]);
-    expect(merged.expansions.requested('sub')).toBe(false);
+    expect(merged.expansions.expansion().collapse).toContain('sub');
   });
 });

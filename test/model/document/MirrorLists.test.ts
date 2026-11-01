@@ -47,7 +47,7 @@ describe('MirrorLists', () => {
 
   it('drops an entry that a re-ended flow took along from a node that listed nothing', async () => {
     const document = await Fixtures.read('models/roundtrip/listless.bpmn');
-    const flow = document.flows.allSequenceFlows()[0]!;
+    const flow = document.tree.processes().flatMap((process) => document.flows.sequenceFlows(process))[0]!;
     const source = flow.get<BpmnElement>('sourceRef');
     const mirror = new MirrorLists(document.tree.definitions);
 

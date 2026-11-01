@@ -28,10 +28,6 @@ export class DiagramIndex {
     return this.tree.definitions.list('diagrams').flatMap((diagram) => diagram.get<BpmnElement | undefined>('plane') ?? []);
   }
 
-  hasDiagram(): boolean {
-    return this.tree.definitions.list('diagrams').length > 0;
-  }
-
   expansionState(): Map<string, boolean> {
     const state = new Map<string, boolean>();
     for (const shape of this.planes().flatMap((plane) => plane.list('planeElement'))) {

@@ -19,7 +19,7 @@ describe('DocumentReader', () => {
 
   it('completes the flow lists in memory and remembers what the file listed', async () => {
     const document = await Fixtures.read('models/roundtrip/listless.bpmn');
-    const flow = document.flows.allSequenceFlows()[0]!;
+    const flow = document.tree.processes().flatMap((process) => document.flows.sequenceFlows(process))[0]!;
 
     expect(document.source?.mirror.listed.size).toBe(0);
     expect(document.flows.outgoing(flow.get('sourceRef'))).toContain(flow);

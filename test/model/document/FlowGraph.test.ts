@@ -12,18 +12,17 @@ describe('FlowGraph', () => {
 
   it('completes the flows of a file that never listed them', async () => {
     const { tree, flows } = await Fixtures.read('models/roundtrip/listless.bpmn');
-    const flow = flows.allSequenceFlows()[0]!;
+    const flow = flows.sequenceFlows(tree.processes()[0]!)[0]!;
 
     expect(flows.outgoing(flow.get('sourceRef'))).toContain(flow);
     expect(tree.has(flow.id)).toBe(true);
   });
 
-  it('lists the sequence flows of one scope and of the whole file', async () => {
+  it('lists the sequence flows of one scope', async () => {
     const { tree, flows } = await Fixtures.read('model/events.bpmn');
 
     expect(flows.sequenceFlows(tree.require('sub_adhoc'))).toEqual([]);
     expect(flows.sequenceFlows(tree.require('Process_events'))).toHaveLength(9);
-    expect(flows.allSequenceFlows()).toHaveLength(9);
   });
 
   it('finds participants and message flows of a collaboration, and the pool of a process', async () => {

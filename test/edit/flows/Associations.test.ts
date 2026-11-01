@@ -109,31 +109,4 @@ describe('Associations', () => {
 
     expect(changes.created.map(({ kind }) => kind)).toEqual(['dataAssociation', 'dataAssociation']);
   });
-
-  it('removes a read and the placeholder only it used', async () => {
-    const { associations, document, element } = await endpoints();
-
-    associations.removeDataAssociation(document.tree.require('in_read'));
-
-    expect(element('a_reader').list('dataInputAssociations')).toEqual([]);
-    expect(element('a_reader').list('properties')).toEqual([]);
-    expect(document.tree.has('in_read')).toBe(false);
-  });
-
-  it('keeps a placeholder another read still uses', async () => {
-    const { associations, changes, document, element } = await endpoints();
-    associations.createDataAssociation(element('a_data2'), element('a_reader'), {}, changes);
-
-    associations.removeDataAssociation(document.tree.require('in_read'));
-
-    expect(element('a_reader').list('properties').map(({ id }) => id)).toEqual(['property_slot']);
-  });
-
-  it('removes a write', async () => {
-    const { associations, document, element } = await endpoints();
-
-    associations.removeDataAssociation(document.tree.require('out_read'));
-
-    expect(element('a_reader').list('dataOutputAssociations')).toEqual([]);
-  });
 });

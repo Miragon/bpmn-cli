@@ -11,10 +11,6 @@ export class LayoutRequests {
     }
   }
 
-  requested(id: string): boolean | undefined {
-    return this.expansions.get(id);
-  }
-
   expansion(): { expand: string[]; collapse: string[] } {
     const requests = [...this.expansions];
     return { expand: requests.filter(([, expanded]) => expanded).map(([id]) => id), collapse: requests.filter(([, expanded]) => !expanded).map(([id]) => id) };

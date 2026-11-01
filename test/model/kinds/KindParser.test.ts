@@ -32,11 +32,6 @@ describe('KindParser', () => {
     expect(() => KindParser.parse('choreographyTask')).toThrow(expect.objectContaining({ code: 'E_UNSUPPORTED_KIND', message: expect.stringContaining('choreographies are not supported') }));
   });
 
-  it('turns the refusal of a token into a usage error that points to the list of kinds', () => {
-    expect(() => KindParser.assertToken('bpmn:userTask')).not.toThrow();
-    expect(() => KindParser.assertToken('x')).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_KIND', category: 'usage', details: expect.objectContaining({ hint: 'Run `bpmn guide kinds` for the full list of kinds and triggers.' }) }));
-  });
-
   it('reads an event sub-process with the trigger of the start event inside it', () => {
     const parsed = KindParser.parseToAdd('eventSub:message');
 

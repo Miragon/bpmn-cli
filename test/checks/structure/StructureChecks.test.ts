@@ -18,7 +18,7 @@ describe('StructureChecks', () => {
   it('completes the incoming and outgoing lists a file left out', async () => {
     const document = await Fixtures.read('models/roundtrip/listless.bpmn');
     new StructureChecks(document).all();
-    const flow = document.flows.allSequenceFlows()[0]!;
+    const flow = document.tree.processes().flatMap((process) => document.flows.sequenceFlows(process))[0]!;
 
     expect(document.flows.outgoing(flow.get('sourceRef'))).toContain(flow);
   });

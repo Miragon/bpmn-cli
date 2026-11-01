@@ -8,7 +8,6 @@ describe('BpmnDocument', () => {
     expect(document.scopes.scopeOf(document.tree.require('task_review'))?.id).toBe('Process_events');
     expect(document.flows.outgoing(document.tree.require('task_review'))).toHaveLength(1);
     expect(document.namespaces.prefixFor('http://www.omg.org/spec/BPMN/20100524/DI')).toBe('bpmndi');
-    expect(document.followFlowEnds).toBe(true);
     expect(document.flowRules.canStart(document.tree.require('task_review'))).toBe(true);
   });
 

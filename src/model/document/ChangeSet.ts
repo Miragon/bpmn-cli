@@ -80,10 +80,6 @@ export class ChangeSet {
     return [...new Set([...this.created, ...this.changed].map((entry) => entry.id))];
   }
 
-  toJSON(): Record<string, unknown> {
-    return { created: this.created, changed: this.changed, removed: this.removed, warnings: this.warnings, notes: this.notes };
-  }
-
   private applyRename(rename: Rename): void {
     const element = ChangeEntries.elementOf(rename);
     const created = this.created.some((entry) => entry.id === rename.from || entry.id === rename.to);

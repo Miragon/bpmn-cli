@@ -94,6 +94,11 @@ scoring, the scenario rows with drawing, `test/contract/` with write, views and 
 and bench with the CLI. The names test reads the guide and hints from the CLI step, and the skill and
 `docs/architecture.md` from the skill and docs step.
 
+- knip reaches no class member: 6.x dropped the report (`--include classMembers` is an invalid type), and
+  5.88's, tried on this code, lists 44 members, most of them in use through destructuring, a getter or
+  `tools/build-help.mjs`, so it cannot gate. Read by hand once, it showed 7 members only tests called,
+  deleted. `VERSION` and `NOTICE` of `CamundaSchema` and `ZeebeSchema`, which only their tests read, stay:
+  the data a vendored copy has to carry.
 - Dropped: every `warn` level (nobody reads 327 warnings); fuzz in the gate (the property test covers
   its invariants); the test layout part of `repo-hygiene.test.ts` (the structure check replaces it).
 - Not added: mutation testing; it costs minutes per run for what the cases per public method ask anyway.

@@ -72,24 +72,6 @@ export class Associations {
     return association;
   }
 
-  removeDataAssociation(association: BpmnElement): void {
-    const document = this.edit.document;
-    const node = association.parent!;
-    if (association.is('bpmn:DataInputAssociation')) {
-      node.remove('dataInputAssociations', association);
-      const property = association.get<BpmnElement | undefined>('targetRef');
-      const stillUsed = node.list('dataInputAssociations').some((inputAssociation) => inputAssociation.get<BpmnElement | undefined>('targetRef') === property);
-      if (property && !stillUsed && property.get<string | undefined>('name') === Associations.PLACEHOLDER_PROPERTY) {
-        node.remove('properties', property);
-        document.ids.registry.release(property.id);
-      }
-    } else {
-      node.remove('dataOutputAssociations', association);
-    }
-    document.ids.registry.release(association.id);
-    document.tree.invalidate();
-  }
-
   private static contextBetween(source: BpmnElement, target: BpmnElement): string {
     return `${new ElementLabels(source).label()} To ${new ElementLabels(target).label()}`;
   }

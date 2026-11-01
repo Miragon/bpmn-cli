@@ -3,11 +3,9 @@ import { DiagramIndex } from '../../../src/model/diagram/DiagramIndex.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 describe('DiagramIndex', () => {
-  it('knows a diagram to be there only when the file draws one', async () => {
-    const drawn = await Fixtures.read('model/events.bpmn');
+  it('has no plane when the file draws nothing', async () => {
     const undrawn = await Fixtures.read('model/c8-vendor.bpmn');
 
-    expect([drawn.diagram.hasDiagram(), undrawn.diagram.hasDiagram()]).toEqual([true, false]);
     expect(undrawn.diagram.planes()).toEqual([]);
   });
 

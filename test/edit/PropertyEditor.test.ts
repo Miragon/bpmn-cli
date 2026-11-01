@@ -66,8 +66,8 @@ describe('PropertyEditor', () => {
   });
 
   it('asks for a sub-process to open or close', async () => {
-    expect((await set('sub_plain', { expanded: '' })).changes.expansions.requested('sub_plain')).toBe(true);
-    expect((await set('sub_plain', { expanded: 'false' })).changes.expansions.requested('sub_plain')).toBe(false);
+    expect((await set('sub_plain', { expanded: '' })).changes.expansions.expansion().expand).toEqual(['sub_plain']);
+    expect((await set('sub_plain', { expanded: 'false' })).changes.expansions.expansion().collapse).toEqual(['sub_plain']);
   });
 
   it('removes a stray decision attribute from a task that calls none', async () => {

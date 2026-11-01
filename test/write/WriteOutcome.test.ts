@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { DrawingReport } from '../../src/drawing/index.js';
 import type { OperationRun } from '../../src/edit/index.js';
 import type { Finding } from '../../src/model/index.js';
-import type { ScoredProblems } from '../../src/scoring/index.js';
 import { IdRenames } from '../../src/write/IdRenames.js';
 import { type WriteOutcomeParts, WriteOutcome } from '../../src/write/WriteOutcome.js';
 import { ChangeSet, ScoreChange } from '../support/ModelValues.js';
 
-const noScore = { counts: {}, score: 0, problems: [] } as unknown as ScoredProblems;
+const noScore = { counts: {}, score: 0, problems: [] } as unknown as ConstructorParameters<typeof ScoreChange>[1];
 
 const partsWith = (build: (changes: ChangeSet) => void, fields: Partial<WriteOutcomeParts> = {}): WriteOutcomeParts => {
   const changes = new ChangeSet();

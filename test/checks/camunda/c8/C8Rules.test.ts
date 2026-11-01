@@ -16,7 +16,7 @@ class ConditionRule extends C8Rules {
 describe('C8Rules', () => {
   it('tells a FEEL condition and names a flow by its kind and id', async () => {
     const document = await Fixtures.read('engine/verdicts/c8-feel-and-deploy/000-condition-x-y.bpmn');
-    const flow = document.flows.allSequenceFlows().find((candidate) => candidate.peek('conditionExpression'))!;
+    const flow = document.tree.processes().flatMap((process) => document.flows.sequenceFlows(process)).find((candidate) => candidate.peek('conditionExpression'))!;
     const rule = new ConditionRule(new RuleContext(document, EngineRows.namespacesOf(document), 'zeebe'));
     const reporter = new RuleReporter(document.tree.definitions);
     rule.check(flow, reporter);
