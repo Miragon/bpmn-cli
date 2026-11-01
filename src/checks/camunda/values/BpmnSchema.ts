@@ -55,7 +55,7 @@ export class BpmnSchema {
   }
 
   typeOf(local: string, uri: string, parentType: string | undefined): string | undefined {
-    const prefix = uri === this.bpmnNs ? 'bpmn' : uri === BpmnSchema.BPMNDI_NS ? 'bpmndi' : undefined;
+    const prefix = this.prefixOf(uri);
     if (!prefix) {
       return undefined;
     }
@@ -77,44 +77,55 @@ export class BpmnSchema {
   }
 
   slotsOf(type: string): Map<string, number> {
-    let out = this.slots.get(type);
-    if (out) {
-      return out;
+    const known = this.slots.get(type);
+    if (known) {
+      return known;
     }
-    out = new Map();
-    const descriptor = this.descriptor(type);
-    descriptor?.properties.forEach((property, slot) => {
+    const out = new Map<string, number>();
+    this.descriptor(type)?.properties.forEach((property, slot) => {
       if (property.isAttr || property.isBody || property.isVirtual) {
         return;
       }
-      const names = new Set([property.name]);
-      if (!property.isReference && property.type.startsWith('bpmn:')) {
-        for (const bpmnType of this.bpmnTypes) {
-          if (this.isA(bpmnType, property.type)) {
-            names.add(bpmnType.charAt(5).toLowerCase() + bpmnType.slice(6));
-          }
-        }
-      }
-      if (!property.isReference && property.type.startsWith('bpmndi:')) {
-        names.add(property.type.slice('bpmndi:'.length));
-      }
-      for (const name of names) {
-        out!.set(name, out!.has(name) && out!.get(name) !== slot ? -1 : slot);
+      for (const name of this.elementNames(property)) {
+        out.set(name, out.has(name) && out.get(name) !== slot ? -1 : slot);
       }
     });
-    for (const group of BpmnSchema.SAME_SLOT) {
-      const at = group.map((name) => out!.get(name)).filter((slot): slot is number => slot !== undefined && slot >= 0);
-      if (at.length < 2) {
-        continue;
-      }
-      const first = Math.min(...at);
-      for (const name of group) {
-        if ((out.get(name) ?? -1) >= 0) {
-          out.set(name, first);
-        }
-      }
-    }
+    BpmnSchema.SAME_SLOT.forEach((group) => BpmnSchema.shareSlot(group, out));
     this.slots.set(type, out);
     return out;
+  }
+
+  private prefixOf(uri: string): string | undefined {
+    if (uri === this.bpmnNs) {
+      return 'bpmn';
+    }
+    return uri === BpmnSchema.BPMNDI_NS ? 'bpmndi' : undefined;
+  }
+
+  private elementNames(property: Descriptor['properties'][number]): Set<string> {
+    const names = new Set([property.name]);
+    if (property.isReference) {
+      return names;
+    }
+    if (property.type.startsWith('bpmn:')) {
+      this.bpmnTypes.filter((bpmnType) => this.isA(bpmnType, property.type)).forEach((bpmnType) => names.add(bpmnType.charAt(5).toLowerCase() + bpmnType.slice(6)));
+    }
+    if (property.type.startsWith('bpmndi:')) {
+      names.add(property.type.slice('bpmndi:'.length));
+    }
+    return names;
+  }
+
+  private static shareSlot(group: string[], slots: Map<string, number>): void {
+    const at = group.map((name) => slots.get(name)).filter((slot): slot is number => slot !== undefined && slot >= 0);
+    if (at.length < 2) {
+      return;
+    }
+    const first = Math.min(...at);
+    for (const name of group) {
+      if ((slots.get(name) ?? -1) >= 0) {
+        slots.set(name, first);
+      }
+    }
   }
 }

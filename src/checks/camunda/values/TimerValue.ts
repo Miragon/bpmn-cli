@@ -64,6 +64,10 @@ export class TimerValue {
     if (second > 59) {
       return `second ${match[6]} is not in 00-59`;
     }
+    return this.offsetProblem();
+  }
+
+  private offsetProblem(): string | undefined {
     const offset = /([+-])(\d{2}):(\d{2})(?::(\d{2}))?(?:\[[^\]]+\])?$/.exec(this.value.trim());
     if (offset && (Number(offset[3]) > 59 || Number(offset[4] ?? 0) > 59 || Number(offset[2]) * 3600 + Number(offset[3]) * 60 + Number(offset[4] ?? 0) > 18 * 3600)) {
       return `offset ${offset[0].replace(/\[.*$/, '')} is not within ±18:00`;
@@ -103,25 +107,33 @@ export class TimerValue {
     const fields = this.value.trim().split(/ +/);
     for (let index = 0; index < 6; index++) {
       const spec = TimerValue.CRON_FIELDS[index]!;
-      if (!this.validCronField(fields[index] ?? '', spec)) {
+      if (!TimerValue.validCronField(fields[index] ?? '', spec)) {
         return `the ${spec.name} field "${fields[index] ?? ''}" is not ${spec.names ? `in ${spec.min}-${spec.max} or ${spec.names[0]}-${spec.names[spec.names.length - 1]}` : `in ${spec.min}-${spec.max}`}${spec.question ? ' (or ?)' : ''}`;
       }
     }
     return undefined;
   }
 
-  private validCronField(field: string, spec: CronField): boolean {
+  private static cronNumber(text: string, names: string[] | undefined): number | undefined {
+    const nameIndex = names?.indexOf(text.toUpperCase()) ?? -1;
+    if (nameIndex >= 0) {
+      return nameIndex + 1;
+    }
+    return /^\d+$/.test(text) ? Number(text) : undefined;
+  }
+
+  private static cronValue(text: string, spec: CronField): number | undefined {
+    const number = TimerValue.cronNumber(text, spec.names);
+    return number !== undefined && number >= spec.min && number <= spec.max ? number : undefined;
+  }
+
+  private static validCronField(field: string, spec: CronField): boolean {
     if (spec.quartz?.test(field)) {
       return /^[0-9A-Za-z#?,\-/]+$/.test(field);
     }
     if (spec.question && field === '?') {
       return true;
     }
-    const value = (text: string): number | undefined => {
-      const nameIndex = spec.names?.indexOf(text.toUpperCase()) ?? -1;
-      const number = nameIndex >= 0 ? nameIndex + 1 : /^\d+$/.test(text) ? Number(text) : undefined;
-      return number !== undefined && number >= spec.min && number <= spec.max ? number : undefined;
-    };
     return field.split(',').every((part) => {
       const [range, step, ...rest] = part.split('/');
       if (rest.length || range === undefined || range === '') {
@@ -135,12 +147,12 @@ export class TimerValue {
       }
       const ends = range.split('-');
       if (ends.length === 1) {
-        return value(ends[0]!) !== undefined;
+        return TimerValue.cronValue(ends[0]!, spec) !== undefined;
       }
       if (ends.length !== 2) {
         return false;
       }
-      const [low, high] = ends.map(value);
+      const [low, high] = ends.map((end) => TimerValue.cronValue(end, spec));
       return low !== undefined && high !== undefined && low <= high;
     });
   }
