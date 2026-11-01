@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_host" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_host" isExecutable="true">
+    <bpmn:startEvent id="start"><bpmn:outgoing>flow_startToShip</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow_startToShip" sourceRef="start" targetRef="ship" />
+    <bpmn:subProcess id="ship"><bpmn:incoming>flow_startToShip</bpmn:incoming><bpmn:outgoing>flow_shipToEnd</bpmn:outgoing></bpmn:subProcess>
+    <bpmn:sequenceFlow id="flow_shipToEnd" sourceRef="ship" targetRef="end" />
+    <bpmn:endEvent id="end"><bpmn:incoming>flow_shipToEnd</bpmn:incoming></bpmn:endEvent>
+    <bpmn:boundaryEvent id="boundary_shipTimeout" attachedToRef="ship">
+      <bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:subProcess id="cancelOrder" triggeredByEvent="true">
+      <bpmn:startEvent id="cancelRequested"><bpmn:messageEventDefinition /></bpmn:startEvent>
+    </bpmn:subProcess>
+  </bpmn:process>
+</bpmn:definitions>

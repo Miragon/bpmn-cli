@@ -16,8 +16,28 @@ export class ElementOrder {
     return this.orderOutgoing(command);
   }
 
+  private static listed(ids: readonly string[], noun: string, owner: BpmnElement, memberOf: (id: string) => BpmnElement): BpmnElement[] {
+    const listed: BpmnElement[] = [];
+    for (const id of ids) {
+      const member = memberOf(id);
+      if (listed.includes(member)) {
+        throw BpmnError.usage(`${noun} ${id} is listed twice`, { element: owner.id });
+      }
+      listed.push(member);
+    }
+    return listed;
+  }
+
+  private static reordered(current: readonly BpmnElement[], listed: readonly BpmnElement[]): BpmnElement[] | undefined {
+    const ordered = [...listed, ...current.filter((element) => !listed.includes(element))];
+    return ordered.every((element, index) => current[index] === element) ? undefined : ordered;
+  }
+
+  private static idsOf(elements: readonly BpmnElement[]): string {
+    return elements.map((element) => element.id).join(', ');
+  }
+
   private orderPools(command: OrderOperation): ChangeSet {
-    const document = this.edit.document;
     const changes = new ChangeSet();
     const collab = this.edit.require(command.id, 'bpmn:Collaboration', 'collaboration');
     const ids = command.pools ?? command.flows ?? [];
@@ -25,42 +45,35 @@ export class ElementOrder {
       throw BpmnError.usage('order needs the participant ids in the wanted top-to-bottom order', { element: command.id });
     }
     const participants = collab.list('participants');
-    const listed: BpmnElement[] = [];
-    for (const id of ids) {
+    const listed = ElementOrder.listed(ids, 'Participant', collab, (id) => {
       const participant = this.edit.require(id, 'bpmn:Participant', 'participant (pool)');
       if (!participants.includes(participant)) {
         throw BpmnError.model('E_NOT_PARTICIPANT', `${id} is not a participant of ${collab.id}`, {
           element: collab.id,
           related: [id],
           candidates: participants.map((element) => element.id),
-          hint: `Pools of ${collab.id} (in declaration order): ${participants.map((element) => element.id).join(', ')}.`,
+          hint: `Pools of ${collab.id} (in declaration order): ${ElementOrder.idsOf(participants)}.`,
         });
       }
-      if (listed.includes(participant)) {
-        throw BpmnError.usage(`Participant ${id} is listed twice`, { element: collab.id });
-      }
-      listed.push(participant);
-    }
-    const ordered = [...listed, ...participants.filter((participant) => !listed.includes(participant))];
-    if (ordered.every((participant, index) => participants[index] === participant)) {
+      return participant;
+    });
+    const ordered = ElementOrder.reordered(participants, listed);
+    if (!ordered) {
       changes.note(`${collab.id}: pools already declared in this order (the drawing follows it)`);
       return changes;
     }
     collab.set('participants', ordered);
-    document.tree.invalidate();
-    changes.change(ChangeEntries.of(collab, `pool order: ${ordered.map((element) => element.id).join(', ')}`));
+    this.edit.document.tree.invalidate();
+    changes.change(ChangeEntries.of(collab, `pool order: ${ElementOrder.idsOf(ordered)}`));
     return changes;
   }
 
   private orderLanes(command: OrderOperation): ChangeSet {
-    const document = this.edit.document;
     const changes = new ChangeSet();
     const owner = this.edit.require(command.id, ['bpmn:Process', 'bpmn:Participant', 'bpmn:Lane'], 'process, participant or lane');
-    const ids = command.lanes ?? command.flows ?? [];
-    const set = document.scopes.laneSetOf(owner);
+    const set = this.edit.document.scopes.laneSetOf(owner);
     const lanes = set ? set.list('lanes') : [];
-    const listed: BpmnElement[] = [];
-    for (const id of ids) {
+    const listed = ElementOrder.listed(command.lanes ?? command.flows ?? [], 'Lane', owner, (id) => {
       const lane = this.edit.require(id, 'bpmn:Lane', 'lane');
       if (!lanes.includes(lane)) {
         throw BpmnError.model('E_NOT_CHILD_LANE', `${id} is not a direct child lane of ${owner.id}`, {
@@ -68,60 +81,51 @@ export class ElementOrder {
           related: [id],
           candidates: lanes.map((element) => element.id),
           hint: lanes.length
-            ? `LaneMembership of ${owner.id} (top to bottom): ${lanes.map((element) => element.id).join(', ')}. Nested lanes are ordered with their parent lane as id.`
+            ? `Lanes of ${owner.id} (top to bottom): ${ElementOrder.idsOf(lanes)}. Nested lanes are ordered with their parent lane as id.`
             : `${owner.id} has no lanes. Order the lanes of a pool by the participant (or process) id, nested lanes by their parent lane id.`,
         });
       }
-      if (listed.includes(lane)) {
-        throw BpmnError.usage(`Lane ${id} is listed twice`, { element: owner.id });
-      }
-      listed.push(lane);
-    }
-    const ordered = [...listed, ...lanes.filter((lane) => !listed.includes(lane))];
-    if (ordered.every((lane, index) => lanes[index] === lane)) {
+      return lane;
+    });
+    const ordered = ElementOrder.reordered(lanes, listed);
+    if (!ordered) {
       changes.note(`${owner.id}: lanes already in this order`);
       return changes;
     }
     set!.set('lanes', ordered);
-    document.tree.invalidate();
-    changes.change(ChangeEntries.of(owner, `lane order: ${ordered.map((element) => element.id).join(', ')}`));
+    this.edit.document.tree.invalidate();
+    changes.change(ChangeEntries.of(owner, `lane order: ${ElementOrder.idsOf(ordered)}`));
     return changes;
   }
 
   private orderOutgoing(command: OrderOperation): ChangeSet {
-    const document = this.edit.document;
     const changes = new ChangeSet();
     const node = this.edit.require(command.id, 'bpmn:FlowNode');
     if (!command.flows?.length) {
       throw BpmnError.usage('order needs the flow ids in the wanted order', { element: command.id });
     }
-    const outgoing = document.flows.outgoing(node);
-    const listed: BpmnElement[] = [];
-    for (const flowId of command.flows) {
+    const outgoing = this.edit.document.flows.outgoing(node);
+    const listed = ElementOrder.listed(command.flows, 'Flow', node, (flowId) => {
       const flow = this.edit.require(flowId, 'bpmn:SequenceFlow', 'sequence flow');
       if (!outgoing.includes(flow)) {
         throw BpmnError.model('E_NOT_OUTGOING', `${flowId} is not an outgoing flow of ${node.id}`, {
           element: node.id,
           related: [flowId],
           candidates: outgoing.map((element) => element.id),
-          hint: `Outgoing flows of ${node.id}: ${outgoing.map((element) => element.id).join(', ') || 'none'}.`,
+          hint: `Outgoing flows of ${node.id}: ${ElementOrder.idsOf(outgoing) || 'none'}.`,
         });
       }
-      if (listed.includes(flow)) {
-        throw BpmnError.usage(`Flow ${flowId} is listed twice`, { element: node.id });
-      }
-      listed.push(flow);
-    }
-    const ordered = [...listed, ...outgoing.filter((flow) => !listed.includes(flow))];
-    const unchanged = ordered.every((flow, index) => outgoing[index] === flow);
-    if (unchanged) {
+      return flow;
+    });
+    const ordered = ElementOrder.reordered(outgoing, listed);
+    if (!ordered) {
       changes.note(`${node.id}: outgoing flows already in this order`);
       return changes;
     }
     ElementOrder.rewriteOutgoing(node, ordered);
     this.redeclare(node, ordered);
-    document.tree.invalidate();
-    changes.change(ChangeEntries.of(node, `outgoing order: ${ordered.map((element) => element.id).join(', ')}`));
+    this.edit.document.tree.invalidate();
+    changes.change(ChangeEntries.of(node, `outgoing order: ${ElementOrder.idsOf(ordered)}`));
     return changes;
   }
 
@@ -131,21 +135,14 @@ export class ElementOrder {
   }
 
   private redeclare(node: BpmnElement, ordered: BpmnElement[]): void {
-    const scope = this.edit.document.scopes.scopeOf(node) ?? node.parent;
-    if (!scope) {
-      return;
-    }
-    const list = scope.list('flowElements');
-    const positions = ordered.map((flow) => list.indexOf(flow)).filter((position) => position >= 0);
-    const nodeIndex = list.indexOf(node);
-    let at = positions.length ? Math.min(...positions) : list.length;
+    const scope = this.edit.document.scopes.scopeOf(node)!;
+    const declared = scope.list('flowElements');
+    const positions = ordered.map((flow) => declared.indexOf(flow)).filter((position) => position >= 0);
+    const firstFlow = positions.length ? Math.min(...positions) : declared.length;
+    const flowsLeadTheNode = firstFlow <= declared.indexOf(node);
     for (const flow of ordered) {
       scope.remove('flowElements', flow);
     }
-    const nodeIndexAfter = list.indexOf(node);
-    if (nodeIndex !== -1 && at <= nodeIndex) {
-      at = nodeIndexAfter + 1;
-    }
-    scope.insert('flowElements', Math.min(at, list.length), ...ordered);
+    scope.insert('flowElements', flowsLeadTheNode ? scope.list('flowElements').indexOf(node) + 1 : firstFlow, ...ordered);
   }
 }

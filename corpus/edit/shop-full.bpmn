@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collab">
+    <bpmn:participant id="P_Shop" name="Shop" processRef="Process_1" />
+    <bpmn:participant id="P_Customer" name="Customer" processRef="Process_2" />
+    <bpmn:messageFlow id="MF1" sourceRef="Task_Send" targetRef="P_Customer" />
+    <bpmn:messageFlow id="MF2" sourceRef="P_Customer" targetRef="Task_B" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Sales" name="Sales">
+        <bpmn:flowNodeRef>Start</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_A</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Timer_A</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gw</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Ops" name="Ops">
+        <bpmn:flowNodeRef>Task_B</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Send</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Remind</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Sub</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Call</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Start" name="Started"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Task_A" />
+    <bpmn:userTask id="Task_A" name="Do A" camunda:assignee="alice">
+      <bpmn:extensionElements><zeebe:taskDefinition type="a" /></bpmn:extensionElements>
+      <bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DOA1"><bpmn:targetRef>DOR_Order</bpmn:targetRef></bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Timer_A" attachedToRef="Task_A"><bpmn:outgoing>F_T</bpmn:outgoing>
+      <bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="F_T" sourceRef="Timer_A" targetRef="Task_Remind" />
+    <bpmn:task id="Task_Remind" name="Remind"><bpmn:incoming>F_T</bpmn:incoming></bpmn:task>
+    <bpmn:sequenceFlow id="F2" sourceRef="Task_A" targetRef="Gw" />
+    <bpmn:exclusiveGateway id="Gw" name="Ok?" default="F_no"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F_yes</bpmn:outgoing><bpmn:outgoing>F_no</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="F_yes" name="yes" sourceRef="Gw" targetRef="Task_B"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${ok}</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="F_no" name="no" sourceRef="Gw" targetRef="Task_Send" />
+    <bpmn:serviceTask id="Task_B" name="B"><bpmn:incoming>F_yes</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing>
+      <bpmn:property id="Prop_B" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DIA1"><bpmn:sourceRef>DOR_Order</bpmn:sourceRef><bpmn:targetRef>Prop_B</bpmn:targetRef></bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="F3" sourceRef="Task_B" targetRef="Sub" />
+    <bpmn:sendTask id="Task_Send" name="Send"><bpmn:incoming>F_no</bpmn:incoming><bpmn:outgoing>F4</bpmn:outgoing></bpmn:sendTask>
+    <bpmn:sequenceFlow id="F4" sourceRef="Task_Send" targetRef="Sub" />
+    <bpmn:subProcess id="Sub" name="Sub"><bpmn:incoming>F3</bpmn:incoming><bpmn:incoming>F4</bpmn:incoming><bpmn:outgoing>F5</bpmn:outgoing>
+      <bpmn:startEvent id="SubStart"><bpmn:outgoing>SF1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:sequenceFlow id="SF1" sourceRef="SubStart" targetRef="SubTask" />
+      <bpmn:task id="SubTask" name="Inner"><bpmn:incoming>SF1</bpmn:incoming><bpmn:outgoing>SF2</bpmn:outgoing></bpmn:task>
+      <bpmn:sequenceFlow id="SF2" sourceRef="SubTask" targetRef="SubEnd" />
+      <bpmn:endEvent id="SubEnd"><bpmn:incoming>SF2</bpmn:incoming></bpmn:endEvent>
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="F5" sourceRef="Sub" targetRef="Call" />
+    <bpmn:callActivity id="Call" name="Call customer" calledElement="Process_2"><bpmn:incoming>F5</bpmn:incoming><bpmn:outgoing>F6</bpmn:outgoing></bpmn:callActivity>
+    <bpmn:sequenceFlow id="F6" sourceRef="Call" targetRef="End" />
+    <bpmn:endEvent id="End" name="Done"><bpmn:incoming>F6</bpmn:incoming></bpmn:endEvent>
+    <bpmn:dataObjectReference id="DOR_Order" name="Order" dataObjectRef="DO_Order" />
+    <bpmn:dataObject id="DO_Order" />
+    <bpmn:textAnnotation id="Note_1"><bpmn:text>hello</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="Assoc_1" sourceRef="Task_A" targetRef="Note_1" />
+  </bpmn:process>
+  <bpmn:process id="Process_2" isExecutable="false">
+    <bpmn:startEvent id="C_Start"><bpmn:outgoing>CF1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:sequenceFlow id="CF1" sourceRef="C_Start" targetRef="C_Task" />
+    <bpmn:task id="C_Task" name="Customer task"><bpmn:incoming>CF1</bpmn:incoming></bpmn:task>
+  </bpmn:process>
+  <bpmn:message id="Message_Order" name="OrderReceived" />
+</bpmn:definitions>

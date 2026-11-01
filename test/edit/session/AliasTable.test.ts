@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { AliasTable } from '../../../src/edit/session/AliasTable.js';
+import type { Operation } from '../../../src/operations/index.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
-const OPERATION = { op: 'remove', ids: ['$check'] } as const;
+const OPERATION = { op: 'remove', ids: ['$check'] } satisfies Operation;
 
 async function tableWithCheck() {
   const document = await Fixtures.readForWrite('edit/order-check.bpmn');
