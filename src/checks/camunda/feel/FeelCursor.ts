@@ -93,7 +93,7 @@ export class FeelCursor {
     const tok = this.peek();
     const prev = this.pos > 0 ? this.tokens[this.pos - 1] : undefined;
     const sentence = hint !== undefined && !hint.startsWith('expected');
-    throw this.foreignSyntax(tok, prev, sentence) ?? (tok.kind === 'end' ? this.endOfInput(tok, prev, sentence ? hint : undefined) : this.unexpectedToken(tok, prev, hint, sentence));
+    throw this.foreignSyntax(tok, prev, sentence) ?? (tok.kind === 'end' ? this.endOfInput(tok, prev, sentence ? hint : undefined) : FeelCursor.unexpectedToken(tok, prev, hint, sentence));
   }
 
   private foreignSyntax(tok: FeelToken, prev: FeelToken | undefined, sentence: boolean): FeelError | undefined {
@@ -127,7 +127,7 @@ export class FeelCursor {
     return new FeelError(tok.pos, prev ? `an incomplete expression: it ends after ${prev.text}` : 'an empty expression');
   }
 
-  private unexpectedToken(tok: FeelToken, prev: FeelToken | undefined, hint: string | undefined, sentence: boolean): FeelError {
+  private static unexpectedToken(tok: FeelToken, prev: FeelToken | undefined, hint: string | undefined, sentence: boolean): FeelError {
     const what = tok.kind === 'str' ? `the string ${tok.text}` : `"${tok.text}"`;
     if (sentence) {
       return new FeelError(tok.pos, `${hint} (at ${what}, column ${tok.pos + 1})`);

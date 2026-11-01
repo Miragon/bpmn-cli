@@ -48,7 +48,7 @@ export class FeelPrimaries {
   }
 
   expectName(hint: string): void {
-    if (this.isName(this.cursor.peek())) {
+    if (FeelPrimaries.isName(this.cursor.peek())) {
       this.cursor.next();
     } else {
       this.cursor.unexpected(hint);
@@ -73,7 +73,7 @@ export class FeelPrimaries {
     }
   }
 
-  private isName(token: FeelToken): boolean {
+  private static isName(token: FeelToken): boolean {
     return token.kind === 'tick' || (token.kind === 'word' && !FeelPrimaries.RESERVED.has(token.text));
   }
 
@@ -181,7 +181,7 @@ export class FeelPrimaries {
 
   private namedArgAhead(): boolean {
     let nameLength = 0;
-    while (this.isName(this.cursor.peek(nameLength))) {
+    while (FeelPrimaries.isName(this.cursor.peek(nameLength))) {
       nameLength++;
     }
     return nameLength > 0 && this.cursor.isOp(':', nameLength);

@@ -1,6 +1,5 @@
 import { FeelError } from './FeelError.js';
 
-
 export type FeelTokenKind = 'num' | 'str' | 'temporal' | 'word' | 'tick' | 'op' | 'end';
 
 export interface FeelToken {

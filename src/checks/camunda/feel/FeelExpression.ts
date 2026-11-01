@@ -7,7 +7,6 @@ export class FeelExpression {
 
   constructor(private readonly expression: string) {}
 
-
   problem(): string | undefined {
     const code = this.withoutStringsAndComments();
     if (/[$#]\{/.test(code)) {
