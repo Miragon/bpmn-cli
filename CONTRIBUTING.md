@@ -18,9 +18,9 @@ npm ci
 npm run gate
 ```
 
-1.0 is being rebuilt from zero on this branch; [the plan](docs/plan/README.md) is the spec, and each
-step fills the skeleton below. It is a TypeScript CLI and library on npm workspaces, tested with
-[Vitest](https://vitest.dev/). Node 24 or later is required.
+It is a TypeScript CLI and library on npm workspaces, tested with [Vitest](https://vitest.dev/). Node 24
+or later is required. `npm run dev -- <command>` builds and runs the CLI. Until the rebuild is merged,
+[the plan](docs/plan/README.md) is the spec.
 
 ## Scripts (the quality gate)
 
@@ -32,35 +32,40 @@ step fills the skeleton below. It is a TypeScript CLI and library on npm workspa
 | `lint` | biome: block statements, function size, nested ternaries; errors only |
 | `structure` | `tools/check-structure.mjs`: classes, free functions, mirrored tests, sizes, folders, no comments |
 | `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
-| `knip` | dead files, exports and dependencies; `knip.ts`'s `TEMPORARY_UNTIL_CODE_USES_THEM` only shrinks, and an entry a step no longer needs fails |
-| `knip:production` | test-only code in `src/`; in the gate only with `KNIP_PRODUCTION_GATES=1` until step 13 removes that switch |
+| `knip` | dead files, exports and dependencies |
+| `knip:production` | test-only code in `src/` |
 | `jscpd` | copied code over 0.25 % |
-| `budgets` | `budgets.json`: lines per module and package, runtime exports, the coverage floors |
+| `budgets` | `budgets.json`: lines per module and package, runtime exports, commands, flag slots, the coverage floors |
 | `api` | the public `.d.ts` against the reports in `api-report/`; `npm run api:update` writes them when a change is meant |
 | `iso` | Node code in `.` or render's `.`; design-iq's import set over its budget |
-| `coverage` | the tests, with 90 % lines and 85 % branches per module and package once it holds code; raise only |
+| `bundle` | the painter, camunda-compat, bpmnlint or resvg loaded on a write |
+| `coverage` | the tests, with 90 % lines and 85 % branches per module and package; raise only |
+| `build` | the bundles, and the help tables written from the catalogues |
+| `timings` | `--version` over 60 ms; `bpmn add` on a model of 500 nodes slower than main |
 | `oracle` | every difference from main that `tools/oracle/differences.json` does not explain |
 
-CI runs the gate on every pull request and every push to `main`. The rules behind it are in
+CI runs the gate on every pull request and every push to `main`. What each layer holds, and the oracle,
+the corpus, fuzz and bench: [docs/testing.md](docs/testing.md). The rules behind them are in
 [docs/plan/code.md](docs/plan/code.md).
 
 ## How the package is laid out
 
-- `src/`: ten modules, each entered only through its `index.ts`, and `src/index.ts`, the contract:
-  [docs/plan/modules.md](docs/plan/modules.md).
+- `src/`: ten modules, each entered only through its `index.ts`, and `src/index.ts`, the contract. Which
+  module does what, and which way imports go: [docs/architecture.md](docs/architecture.md).
 - `packages/render` and `packages/lint`: private workspaces whose `exports` point at their TypeScript
   sources, so tsc, vitest and esbuild reach `@miragon/bpmn-render/text` and the others without a build.
 - `test/`: mirrors `src/`, one test per class; `test/repo/` proves the guardrails on planted repositories.
-- `corpus/`: every BPMN input of the oracle and the tests.
-- `tools/`: the oracle and the guardrails' checks.
-- `docs/adr/`: the decisions behind the rebuild.
+- `corpus/`: every BPMN input of the oracle and the tests, all of it synthetic or public.
+- `tools/`: the oracle, the fuzz, the bench and the guardrails' checks.
+- `docs/adr/`: the decisions behind 1.0.
 - `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
   VitePress site with its own `package.json` and lockfile. `npm --prefix docs ci` once, then
   `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
   fails the build; the `docs` workflow builds it on every pull request that touches `docs/` and
   deploys it from `main`). A new page goes into the sidebar in `docs/.vitepress/config.ts`;
-  maintainer notes (`testing.md`, `releasing.md`, the audit, the plan in `plan/`) stay out of the
-  site via `srcExclude`.
+  maintainer notes (`testing.md`, `releasing.md`, the plan in `plan/`, the decisions in `adr/`) stay
+  out of the site via `srcExclude`. `npm --prefix docs run shots` draws the pictures with the built CLI,
+  from the recipes in `docs/shots/`.
   The site is built with the Miragon docs kit: `docs/.vitepress/config.ts` passes the repo's name,
   nav and sidebar to its `miragonDocs()`, and the kit sets the theme, the colours light and dark,
   the GitHub-style heading anchors and the legal row. The kit in `docs/.vitepress/miragon/` and the
@@ -77,6 +82,16 @@ private package lists what it loads itself; the core lists the same at the same 
 bundles load them at run time, and `test/repo/hygiene.test.ts` holds the two equal. `bpmnlint` and
 `@miragon/bpmnlint-plugin-rules` are pinned exactly: they decide which findings an agent sees.
 
+### Where new code goes
+
+- A new operation is one `OperationDefinition` in `src/operations/`; the schema, the parser, the command
+  and its flags follow from it. What it does goes into `src/edit/` or `src/drawing/runners/`.
+- A new check goes into `src/checks/`, a new layout problem into `src/scoring/` as a `ScoringCriterion`.
+- A new read goes into `src/views/` with its text class beside it, and reaches the contract through
+  `src/api/index.ts` only when a command needs it.
+- `docs/architecture.md` has a section per module; a new module or a renamed class changes it, and
+  `test/contract/architecture.test.ts` says so.
+
 ## Ground rules
 
 - **Conventional Commits.** Commit messages and PR titles follow
@@ -89,6 +104,9 @@ bundles load them at run time, and `test/repo/hygiene.test.ts` holds the two equ
 - **Block style.** The bodies of `if`, `else` and loops are blocks on lines of their own, with
   `} else {` on the closing line. `biome lint` enforces this with the plugin
   `tools/biome/block-statements.grit`.
+- **No comments.** Names carry the meaning. One class per file, named like it; a helper of one class is
+  a `private` method, a helper of many a method of its value. No free functions but the 8 of the contract,
+  no `utils`, and a mirrored test per class. `npm run structure` holds this.
 
 ## Before opening a PR
 
@@ -110,5 +128,5 @@ The details are in [docs/releasing.md](docs/releasing.md).
 
 ## Reporting bugs
 
-Use the GitHub issue templates. Attaching the `.bpmn` file and the exact command (or the ops JSON
+Use the GitHub issue templates. Attaching the `.bpmn` file and the exact command (or the operations JSON
 of `bpmn apply`) is by far the fastest path to a fix.

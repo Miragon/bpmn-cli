@@ -25,10 +25,43 @@ repository or in GitHub secrets.
    tarball, writes `Formula/bpmn-cli.rb` with its sha256, installs and tests the formula, and pushes it
    to [Miragon/homebrew-tap](https://github.com/Miragon/homebrew-tap) (see [Homebrew](#homebrew)).
 
-The `ci` workflow (`.github/workflows/ci.yml`) runs `npm run typecheck` and `npm run gate` on every pull
-request, including the release PRs.
+The `ci` workflow (`.github/workflows/ci.yml`) runs `npm run gate` on every pull request, including the
+release PRs, and on every push to `main`.
 
 To force a specific version, add a `Release-As: X.Y.Z` footer to a commit on `main`.
+
+## Release candidates
+
+The release candidates `1.0.0-rc.N` go to the npm dist-tag `next`; `latest` stays on the 0.x releases until
+1.0.0. release-please does not take part: a release candidate is cut by hand from the branch of the rebuild.
+
+1. Set `version` in `package.json` to `1.0.0-rc.N` and commit it. `npm test` must pass.
+2. Tag that commit and push the tag:
+   ```
+   git tag v1.0.0-rc.N
+   git push origin v1.0.0-rc.N
+   ```
+3. The push of a tag `v1.0.0-rc.*` starts `release-please.yml`, whose job `publish-rc` checks that the tag
+   names the version in `package.json`, runs `npm ci`, `npm run build` and `npm test`, and runs
+   `npm publish --tag next` with an OIDC token. The file keeps its name, so npm's trusted publishing
+   accepts it.
+4. The same tag starts `nightly.yml`, since GitHub starts a schedule only from the default branch: the fuzz
+   and the bench run on the candidate.
+
+A release candidate moves neither the `release` branch nor the Homebrew tap, and bumps no plugin file, so
+users of `latest`, the tap and the marketplace see nothing. Try one with:
+
+```
+npm view @miragon/bpmn-cli dist-tags
+npm install -g @miragon/bpmn-cli@next
+```
+
+From rc.1 the contract is frozen: the API report changes only to fix a bug, named in the next candidate's
+notes. The live engine run goes once over `corpus/engine/` on the candidate
+([testing](testing.md#live-engines)).
+
+1.0.0 itself comes from `main`, through a release PR with `Release-As: 1.0.0`; with `bump-minor-pre-major`
+release-please would propose 0.10.0 for a breaking change. It goes to `latest` as every release does.
 
 ## One-time npm setup
 
