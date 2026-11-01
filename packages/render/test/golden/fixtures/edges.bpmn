@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_Invoice" name="Invoice" />
+  <bpmn:collaboration id="Collaboration_Edges">
+    <bpmn:participant id="Participant_A" />
+    <bpmn:participant id="Participant_B" />
+    <bpmn:messageFlow id="Flow_Envelope" sourceRef="Participant_A" targetRef="Participant_B" messageRef="Message_Invoice" />
+    <bpmn:messageFlow id="Flow_Initiating" sourceRef="Participant_B" targetRef="Participant_A" messageRef="Message_Invoice" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Edges">
+    <bpmn:task id="Task_A" />
+    <bpmn:task id="Task_B" />
+    <bpmn:sequenceFlow id="Flow_Conditional" name="Yes" sourceRef="Task_A" targetRef="Task_B">
+      <bpmn:conditionExpression xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="bpmn:tFormalExpression">ok</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Corner" name="Around" sourceRef="Task_A" targetRef="Task_B" />
+    <bpmn:sequenceFlow id="Flow_Tiny" name="No" sourceRef="Task_A" targetRef="Task_B" />
+    <bpmn:sequenceFlow id="Flow_Both" sourceRef="Task_A" targetRef="Task_B" />
+    <bpmn:sequenceFlow id="Flow_Pointless" sourceRef="Task_A" targetRef="Task_B" />
+    <bpmn:association id="Association_Both" associationDirection="Both" sourceRef="Task_A" targetRef="Task_B" />
+    <bpmn:association id="Association_None" associationDirection="None" sourceRef="Task_A" targetRef="Task_B" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_Edges">
+      <bpmndi:BPMNEdge id="Conditional_di" bpmnElement="Flow_Conditional"><di:waypoint x="100" y="100" /><di:waypoint x="200" y="100" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Corner_di" bpmnElement="Flow_Corner"><di:waypoint x="100" y="200" /><di:waypoint x="200" y="200" /><di:waypoint x="200" y="300" /><bpmndi:BPMNLabel><dc:Bounds x="150" y="180" width="40" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Tiny_di" bpmnElement="Flow_Tiny"><di:waypoint x="300" y="100" /><di:waypoint x="300.4" y="100" /><di:waypoint x="300.4" y="200" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Both_di" bpmnElement="Flow_Both"><di:waypoint x="400" y="100" /><di:waypoint x="400" y="100" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Pointless_di" bpmnElement="Flow_Pointless"><di:waypoint x="500" y="100" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="AssociationBoth_di" bpmnElement="Association_Both"><di:waypoint x="600" y="100" /><di:waypoint x="700" y="100" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="AssociationNone_di" bpmnElement="Association_None"><di:waypoint x="600" y="200" /><di:waypoint x="700" y="200" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Envelope_di" bpmnElement="Flow_Envelope" messageVisibleKind="non_initiating"><di:waypoint x="100" y="400" /><di:waypoint x="100" y="500" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Initiating_di" bpmnElement="Flow_Initiating" messageVisibleKind="initiating"><di:waypoint x="200" y="400" /><di:waypoint x="200" y="500" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

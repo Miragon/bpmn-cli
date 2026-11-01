@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Pool" processRef="Process_Pool" />
+    <bpmn:participant id="Participant_Other" />
+    <bpmn:messageFlow id="Flow_Messages" sourceRef="Participant_Pool" targetRef="Participant_Other" />
+    <bpmn:textAnnotation id="Note_Pool" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Pool">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Sales" />
+    </bpmn:laneSet>
+    <bpmn:task id="Task_Pool" />
+    <bpmn:subProcess id="Sub_Expanded">
+      <bpmn:task id="Task_Inside" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="Sub_Collapsed">
+      <bpmn:task id="Task_Collapsed" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:process id="Process_Unseen">
+    <bpmn:task id="Task_Unseen" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="Pool_di" bpmnElement="Participant_Pool" isHorizontal="true"><dc:Bounds x="100" y="100" width="600" height="300" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Expanded_di" bpmnElement="Sub_Expanded" isExpanded="true"><dc:Bounds x="200" y="120" width="300" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Collapsed_di" bpmnElement="Sub_Collapsed"><dc:Bounds x="520" y="120" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="Diagram_2">
+    <bpmndi:BPMNPlane id="Plane_2" bpmnElement="Sub_Collapsed" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Gateways">
+    <bpmn:complexGateway id="Gateway_Star" />
+    <bpmn:exclusiveGateway id="Gateway_Plain" />
+    <bpmn:eventBasedGateway id="Gateway_ParallelEvents" eventGatewayType="Parallel" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Process_Gateways">
+      <bpmndi:BPMNShape id="Star_di" bpmnElement="Gateway_Star"><dc:Bounds x="100" y="100" width="50" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Plain_di" bpmnElement="Gateway_Plain"><dc:Bounds x="200" y="100" width="50" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Events_di" bpmnElement="Gateway_ParallelEvents"><dc:Bounds x="300" y="100" width="50" height="50" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

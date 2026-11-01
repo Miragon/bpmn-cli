@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_Bands">
+    <bpmn:participant id="Participant_Many" processRef="Process_Bands">
+      <bpmn:participantMultiplicity id="Multiplicity_1" />
+    </bpmn:participant>
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Bands">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Tinted" />
+    </bpmn:laneSet>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_Bands">
+      <bpmndi:BPMNShape id="Many_di" bpmnElement="Participant_Many" isHorizontal="true"><dc:Bounds x="100" y="100" width="600" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Tinted_di" bpmnElement="Lane_Tinted" isHorizontal="true" bioc:fill="#bbdefb"><dc:Bounds x="130" y="100" width="570" height="200" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
