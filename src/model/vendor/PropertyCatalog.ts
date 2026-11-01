@@ -1,9 +1,10 @@
 import type { BpmnDocument } from '../document/BpmnDocument.js';
 import type { BpmnElement, PropertyDescriptor } from '../document/BpmnElement.js';
 import { BpmnError } from '../errors/BpmnError.js';
-import { ElementSlots } from '../kinds/ElementSlots.js';
+import { ElementSlots, type NestedSlot } from '../kinds/ElementSlots.js';
 import { Kinds } from '../kinds/Kinds.js';
 import { Triggers } from '../kinds/Triggers.js';
+import { CAMUNDA } from './CamundaDescriptor.js';
 import { PropertyKeys, type PropertyDefinition } from './PropertyKeys.js';
 
 export interface PropertyDoc {
@@ -93,6 +94,12 @@ export class PropertyCatalog {
 
   genericKeys(): string[] {
     return (this.element.descriptor.properties ?? []).filter((property) => property.name !== 'id' && this.isSettable(property)).map((property) => property.name);
+  }
+
+  nestedKeys(slot: NestedSlot): string[] {
+    const generic = this.genericKeys().filter((key) => key !== 'body');
+    const keys = ['id', ...generic, ...CAMUNDA.attrsFor(this.element).map((attribute) => attribute.name)];
+    return [...new Set(keys)].map((key) => `${slot}.${key}`);
   }
 
   settableKeys(): string[] {

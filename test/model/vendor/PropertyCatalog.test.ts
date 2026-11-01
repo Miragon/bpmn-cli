@@ -35,6 +35,26 @@ describe('PropertyCatalog', () => {
     expect(start).not.toContain('condition');
   });
 
+  it('lists the nested keys of a loop with its Camunda attributes', async () => {
+    const { tree } = await Fixtures.read('model/events.bpmn');
+
+    const keys = PropertyCatalog.of(tree.build('bpmn:MultiInstanceLoopCharacteristics')).nestedKeys('loop');
+
+    expect(keys).toContain('loop.id');
+    expect(keys).toContain('loop.isSequential');
+    expect(keys).toContain('loop.camunda:collection');
+  });
+
+  it('leaves the body out of the nested keys of a condition, which condition= sets', async () => {
+    const { tree } = await Fixtures.read('model/events.bpmn');
+
+    const keys = PropertyCatalog.of(tree.build('bpmn:FormalExpression')).nestedKeys('condition');
+
+    expect(keys).toContain('condition.language');
+    expect(keys).toContain('condition.camunda:resource');
+    expect(keys).not.toContain('condition.body');
+  });
+
   it('adds the conditional keys only to an event that waits for a condition', async () => {
     const conditional = (await catalogOf('catch_condition')).settableKeys();
     const timer = (await catalogOf('catch_date')).settableKeys();
