@@ -23,8 +23,8 @@ describe('FindCommand', () => {
     const topic = (await cli.run(['find', cli.copied('views/names-over-lines.bpmn'), 'second'])).stdout.trimEnd().split('\n');
 
     expect(lines.map((line) => line.split('\t')[0])).toEqual(['task_lines', 'task_topic']);
-    expect(lines[0]).toBe('task_lines\ttask\tCheck the order');
-    expect(topic).toEqual(['task_topic\tserviceTask\t\t\tcamunda:topic=first second']);
+    expect(lines[0]).toBe('task_lines\ttask\tCheck the order\tProcess_lines');
+    expect(topic).toEqual(['task_topic\tserviceTask\t\tProcess_lines\tcamunda:topic=first second']);
   });
 
   it('leaves the name as it is in the JSON', async () => {
