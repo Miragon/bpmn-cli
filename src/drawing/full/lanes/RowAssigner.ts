@@ -7,6 +7,12 @@ interface Chain {
   join?: GNode | undefined;
 }
 
+interface Queued {
+  origin: GNode;
+  first: GNode;
+  above?: boolean | undefined;
+}
+
 export class RowAssigner {
   private static readonly reaches = new WeakMap<ReadonlyMap<GNode, number>, Map<GNode, number>>();
   private static readonly LOOP_BACK_REACH = -0.5;
@@ -15,7 +21,7 @@ export class RowAssigner {
   private readonly branches = new RowBranches();
   private readonly reachMemo: Map<GNode, number>;
   private readonly chainNext = new Map<GNode, GNode>();
-  private readonly queue: Array<{ origin: GNode; first: GNode }> = [];
+  private readonly queue: Queued[] = [];
 
   constructor(
     private readonly layout: ScopeLayout,
@@ -47,6 +53,7 @@ export class RowAssigner {
         spineLeft = false;
       }
     }
+    this.branches.startAtRowZero();
     for (const node of nodes) {
       for (const event of node.boundary) {
         event.row = node.row;
@@ -70,10 +77,15 @@ export class RowAssigner {
   private placeQueued(): void {
     const { queue, placed } = this;
     while (queue.length) {
-      const { origin, first } = queue.shift()!;
+      const { origin, first, above } = queue.shift()!;
       if (!placed.has(first)) {
         const chain = this.chain(first);
-        this.branches.place({ owner: origin.id, from: origin.layer, to: RowAssigner.farthest(chain), row: 0, originRow: origin.row, dropColumn: origin.layer, nodes: chain.nodes });
+        const branch = { owner: origin.id, from: origin.layer, to: RowAssigner.farthest(chain), row: 0, originRow: origin.row, dropColumn: origin.layer, nodes: chain.nodes };
+        if (above) {
+          this.branches.placeAbove(branch, origin.row - 1);
+        } else {
+          this.branches.place(branch);
+        }
         this.enqueueBranches(chain.nodes);
       }
     }
@@ -156,9 +168,11 @@ export class RowAssigner {
 
   private enqueueBoundaryWays(node: GNode): void {
     const { placed, queue } = this;
-    for (const edge of node.boundary.flatMap((event) => event.out)) {
-      if (!edge.back && !placed.has(edge.target)) {
-        queue.push({ origin: node, first: edge.target });
+    for (const event of node.boundary) {
+      for (const edge of event.out) {
+        if (!edge.back && !placed.has(edge.target)) {
+          queue.push({ origin: node, first: edge.target, above: event.onTop });
+        }
       }
     }
     for (const { compensationHandler } of node.boundary) {

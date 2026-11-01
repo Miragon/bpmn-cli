@@ -77,6 +77,23 @@ export class RowBranches {
     }
   }
 
+  placeAbove(branch: Branch, row: number): void {
+    let free = row;
+    while (!this.intervalFree(free, branch)) {
+      free--;
+    }
+    this.commit(branch, free);
+  }
+
+  startAtRowZero(): void {
+    const topRow = Math.min(0, ...this.rows.keys());
+    if (topRow < 0) {
+      for (const branch of this.branches) {
+        RowBranches.setRow(branch, branch.row - topRow);
+      }
+    }
+  }
+
   private inRow(row: number): Branch[] {
     return this.rows.get(row) ?? [];
   }
