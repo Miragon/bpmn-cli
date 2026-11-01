@@ -1,10 +1,10 @@
 import { Box, DiagramIndex, type BpmnElement } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
+import type { EngineDrawing } from '../../full/FullLayout.js';
 import { Plane } from '../../plane/Plane.js';
 import { ModelOrder } from '../run/ModelOrder.js';
 import type { LayoutRun } from '../run/LayoutRun.js';
 import type { BlockAdopter } from './BlockAdopter.js';
-import type { EngineDrawing } from './EngineDrawing.js';
 
 export class ContainerPlacer {
   constructor(

@@ -79,11 +79,22 @@ function rebased(snapshot, document, renamed) {
   return snapshot;
 }
 
+function undoExpansionHints(snapshot, { expand, collapse }) {
+  const requested = new Set([...expand, ...collapse]);
+  for (const [di, { id, expanded }] of snapshot.byDi) {
+    if (expanded !== undefined && requested.has(snapshot.currentId(id))) {
+      di.set('isExpanded', expanded);
+    }
+  }
+  return snapshot;
+}
+
 async function afterModelOperations(drawing, step) {
   const reader = new drawing.DocumentReader();
   const document = await reader.read(step.noLayout.file);
   const before = drawing.DrawingSnapshot.of(await reader.read(step.before));
-  return { document, snapshot: rebased(before, document, step.noLayout.renamed), changes: changesOf(drawing, step.noLayout) };
+  const snapshot = undoExpansionHints(rebased(before, document, step.noLayout.renamed), step.noLayout);
+  return { document, snapshot, changes: changesOf(drawing, step.noLayout) };
 }
 
 async function onFileBefore(drawing, step) {

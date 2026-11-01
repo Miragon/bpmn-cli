@@ -1,9 +1,9 @@
 import { DiagramIndex, type BpmnElement } from '../../../model/index.js';
+import type { Block, EngineDrawing } from '../../full/FullLayout.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { ModelOrder } from '../run/ModelOrder.js';
 import type { LayoutRun } from '../run/LayoutRun.js';
 import type { BlockAdopter } from './BlockAdopter.js';
-import type { Block, EngineDrawing } from './EngineDrawing.js';
 
 export class NewNodes {
   private static readonly ARTIFACT_SHAPES = ['bpmn:DataObjectReference', 'bpmn:DataStoreReference', 'bpmn:TextAnnotation'];

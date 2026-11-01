@@ -1,10 +1,10 @@
 import { Box, DiagramIndex, Point } from '../../../model/index.js';
+import type { Block } from '../../full/FullLayout.js';
 import type { DEdge } from '../../plane/DEdge.js';
 import type { DShape } from '../../plane/DShape.js';
 import { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import type { LayoutRun } from '../run/LayoutRun.js';
-import type { Block } from './EngineDrawing.js';
 
 export class BlockAdopter {
   constructor(private readonly run: LayoutRun) {}

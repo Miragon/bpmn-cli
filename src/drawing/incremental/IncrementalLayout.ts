@@ -1,5 +1,6 @@
 import { DiPruner, type Box, type BpmnDocument, type ChangeSet } from '../../model/index.js';
 import type { DrawingSnapshot } from '../DrawingSnapshot.js';
+import { FullLayout, type EngineDrawing } from '../full/FullLayout.js';
 import type { DEdge } from '../plane/DEdge.js';
 import type { Plane } from '../plane/Plane.js';
 import { PlaneReader } from '../plane/PlaneReader.js';
@@ -22,7 +23,6 @@ import { ModelOrder } from './run/ModelOrder.js';
 import { RunCheckpoint } from './run/RunCheckpoint.js';
 import { BlockAdopter } from './steps/BlockAdopter.js';
 import { ContainerPlacer } from './steps/ContainerPlacer.js';
-import { EngineDrawing } from './steps/EngineDrawing.js';
 import { NewNodes } from './steps/NewNodes.js';
 import { RunReport, type IncrementalReport } from './steps/RunReport.js';
 
@@ -105,7 +105,7 @@ export class IncrementalLayout {
     const { before, document } = this;
     const edgesBefore = new Map<DEdge, EdgeBefore>();
     let engineRun: Promise<EngineDrawing> | undefined;
-    const engine = (): Promise<EngineDrawing> => (engineRun ??= EngineDrawing.of(document, changes.expansions));
+    const engine = (): Promise<EngineDrawing> => (engineRun ??= FullLayout.engineDrawing(document, changes.expansions));
     const adopter = new BlockAdopter(run);
     const containers = new ContainerPlacer(run, before, adopter, engine);
     run.place.hooks.planeFor = (id) => containers.planeFor(id);
