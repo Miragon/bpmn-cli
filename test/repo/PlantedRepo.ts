@@ -55,6 +55,10 @@ export class PlantedRepo {
     return this.run(process.execPath, [join(REPOSITORY, 'tools', 'iso', 'check.mjs'), this.root]);
   }
 
+  checkBundle(): ToolRun {
+    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-bundle.mjs'), this.root]);
+  }
+
   plantBudgets(changes: object): void {
     const budgets: object = JSON.parse(readFileSync(join(REPOSITORY, 'budgets.json'), 'utf8'));
     this.plant('budgets.json', JSON.stringify({ ...budgets, ...changes }));

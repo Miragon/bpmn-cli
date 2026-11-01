@@ -4,6 +4,8 @@ import { build } from 'esbuild';
 import { bundlesOf } from './build/bundles.mjs';
 
 const ROOT = realpathSync(resolve(process.argv[2] ?? '.'));
+const STATIC = 'import-statement';
+const CLI_ENTRY = 'src/cli/index.ts';
 const WRITE_COMMANDS = ['src/cli/commands/EditCommand.ts', 'src/cli/commands/ApplyCommand.ts'];
 const NEVER_ON_A_WRITE = [
   { name: 'the painter', path: /^packages\/render\/src\/(?!text\/)/ },
@@ -27,16 +29,16 @@ function reachable(metafile, starts, kinds) {
   return seen;
 }
 
-function loaded(metafile, outputs) {
+function loaded(metafile, outputs, kinds) {
   return [...outputs].flatMap((path) => {
     const { inputs, imports } = metafile.outputs[path];
     const bundled = Object.entries(inputs).filter(([, { bytesInOutput }]) => bytesInOutput > 0).map(([input]) => input);
-    return [...bundled, ...imports.filter(({ external }) => external).map(({ path: imported }) => imported)];
+    return [...bundled, ...imports.filter(({ kind, external }) => external && kinds.includes(kind)).map(({ path: imported }) => imported)];
   });
 }
 
-function offenders(metafile, outputs, entry) {
-  const modules = new Set(loaded(metafile, outputs));
+function offenders(metafile, starts, kinds, entry) {
+  const modules = new Set(loaded(metafile, reachable(metafile, starts, kinds), kinds));
   return NEVER_ON_A_WRITE.flatMap(({ name, path }) => {
     const hit = [...modules].find((module) => path.test(module));
     return hit ? [`${entry} loads ${name} on a write: ${hit}`] : [];
@@ -44,7 +46,7 @@ function offenders(metafile, outputs, entry) {
 }
 
 function outputsHolding(metafile, inputs) {
-  return Object.entries(metafile.outputs).filter(([, output]) => inputs.some((input) => output.inputs[input]?.bytesInOutput > 0) || (output.entryPoint && output.inputs[output.entryPoint])).map(([path]) => path);
+  return Object.entries(metafile.outputs).filter(([, output]) => output.entryPoint === CLI_ENTRY || inputs.some((input) => output.inputs[input]?.bytesInOutput > 0)).map(([path]) => path);
 }
 
 async function metafileOf(options) {
@@ -54,9 +56,7 @@ async function metafileOf(options) {
 
 async function cliProblems(cli) {
   const metafile = await metafileOf(cli);
-  const entries = Object.entries(metafile.outputs).filter(([, { entryPoint }]) => entryPoint).map(([path]) => path);
-  const onAWrite = reachable(metafile, [...entries, ...outputsHolding(metafile, WRITE_COMMANDS)], ['import-statement']);
-  return offenders(metafile, onAWrite, 'the CLI');
+  return offenders(metafile, outputsHolding(metafile, WRITE_COMMANDS), [STATIC], 'the CLI');
 }
 
 async function libraryProblems(library) {
@@ -64,7 +64,7 @@ async function libraryProblems(library) {
   const { entryPoints: _entryPoints, ...options } = library;
   const metafile = await metafileOf({ ...options, stdin });
   const [entry] = Object.entries(metafile.outputs).find(([, { entryPoint }]) => entryPoint === 'write.ts');
-  return offenders(metafile, reachable(metafile, [entry], ['import-statement', 'dynamic-import']), 'applyToXml');
+  return offenders(metafile, [entry], [STATIC, 'dynamic-import'], 'applyToXml');
 }
 
 const { library, cli } = bundlesOf(ROOT);
