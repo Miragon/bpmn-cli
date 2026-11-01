@@ -1,0 +1,30 @@
+# Runs main and the rebuild on the same inputs: tools/oracle fails on a difference that
+# tools/oracle/differences.json does not explain. The checkout is the pull request's head, not
+# GitHub's merge commit, so main is judged at the commit the branch sits on.
+name: oracle
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm run oracle
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oracle-result
+          path: .oracle/result.json
+          if-no-files-found: ignore
