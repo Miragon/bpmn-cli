@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:operaton="http://operaton.org/schema/1.0/bpmn" id="Definitions_extensionsOperaton" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_operaton" isExecutable="true">
+    <bpmn:serviceTask id="call" name="Call">
+      <bpmn:extensionElements>
+        <operaton:inputOutput>
+          <operaton:inputParameter name="draft">1</operaton:inputParameter>
+        </operaton:inputOutput>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:task id="bare" name="Bare" />
+  </bpmn:process>
+</bpmn:definitions>

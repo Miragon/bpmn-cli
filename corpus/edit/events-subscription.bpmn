@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_subscription" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_paid" name="Paid" />
+  <bpmn:message id="Message_shipped" name="Shipped">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=orderId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:process id="Process_subscription" isExecutable="true">
+    <bpmn:intermediateCatchEvent id="catch_paid" name="Paid">
+      <bpmn:messageEventDefinition id="definition_paid" messageRef="Message_paid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_shipped" name="Shipped">
+      <bpmn:messageEventDefinition id="definition_shipped" messageRef="Message_shipped" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_nothing" name="No message yet">
+      <bpmn:messageEventDefinition id="definition_nothing" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_timer" name="Timer" />
+    <bpmn:receiveTask id="receive_paid" name="Receive paid" messageRef="Message_paid" />
+    <bpmn:receiveTask id="receive_shipped" name="Receive shipped" messageRef="Message_shipped" />
+    <bpmn:task id="task_plain" name="Plain" />
+  </bpmn:process>
+</bpmn:definitions>

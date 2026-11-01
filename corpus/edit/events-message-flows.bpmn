@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_messageFlows" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_flows">
+    <bpmn:participant id="participant_shop" name="Shop" processRef="Process_shop" />
+    <bpmn:participant id="participant_bank" name="Bank" processRef="Process_bank" />
+    <bpmn:messageFlow id="flow_invoice" sourceRef="throw_invoice" targetRef="catch_invoice" />
+    <bpmn:messageFlow id="flow_refund" sourceRef="throw_timed" targetRef="start_refund" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_shop" isExecutable="true">
+    <bpmn:intermediateThrowEvent id="throw_invoice" name="Send invoice">
+      <bpmn:messageEventDefinition id="definition_invoiceOut" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="throw_timed" name="Send refund">
+      <bpmn:signalEventDefinition id="definition_refundOut" />
+    </bpmn:intermediateThrowEvent>
+  </bpmn:process>
+  <bpmn:process id="Process_bank" isExecutable="false">
+    <bpmn:intermediateCatchEvent id="catch_invoice" name="Invoice">
+      <bpmn:messageEventDefinition id="definition_invoiceIn" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:startEvent id="start_refund" name="Refund" />
+  </bpmn:process>
+</bpmn:definitions>

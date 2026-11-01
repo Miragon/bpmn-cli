@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_extensionsCamunda" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_extensions" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:serviceTask id="call" name="Call" camunda:type="external" camunda:topic="t">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="draft">1</camunda:inputParameter>
+          <camunda:inputParameter name="final"><camunda:script scriptFormat="groovy">x</camunda:script></camunda:inputParameter>
+          <camunda:outputParameter name="result">${r}</camunda:outputParameter>
+        </camunda:inputOutput>
+        <camunda:failedJobRetryTimeCycle>R3/PT5M</camunda:failedJobRetryTimeCycle>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="approve" name="Approve">
+      <bpmn:extensionElements>
+        <camunda:formData businessKey="a">
+          <camunda:formField id="amount" type="long"><camunda:validation><camunda:constraint name="required" /></camunda:validation></camunda:formField>
+        </camunda:formData>
+        <camunda:executionListener event="start" expression="${a}" />
+        <camunda:executionListener event="end" expression="${b}" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:userTask id="forms" name="Two fields">
+      <bpmn:extensionElements>
+        <camunda:formData>
+          <camunda:formField id="first"><camunda:validation><camunda:constraint name="required" /></camunda:validation></camunda:formField>
+          <camunda:formField id="second"><camunda:validation><camunda:constraint name="required" /></camunda:validation></camunda:formField>
+        </camunda:formData>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:task id="bare" name="Bare" />
+    <bpmn:serviceTask id="twice" name="Two containers">
+      <bpmn:extensionElements>
+        <camunda:inputOutput />
+        <camunda:inputOutput />
+        <camunda:failedJobRetryTimeCycle>R1/PT1M</camunda:failedJobRetryTimeCycle>
+        <camunda:failedJobRetryTimeCycle>R2/PT1M</camunda:failedJobRetryTimeCycle>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="twins" name="Twin parameters">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="x">1</camunda:inputParameter>
+          <camunda:inputParameter name="x">2</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="connected" name="Connected">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="url">outer</camunda:inputParameter>
+        </camunda:inputOutput>
+        <camunda:connector>
+          <camunda:connectorId>http</camunda:connectorId>
+          <camunda:inputOutput>
+            <camunda:inputParameter name="url">inner</camunda:inputParameter>
+          </camunda:inputOutput>
+        </camunda:connector>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:task id="looped" name="Looped">
+      <bpmn:multiInstanceLoopCharacteristics camunda:collection="${items}">
+        <bpmn:extensionElements>
+          <camunda:failedJobRetryTimeCycle>R1/PT1M</camunda:failedJobRetryTimeCycle>
+        </bpmn:extensionElements>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:task>
+    <bpmn:intermediateCatchEvent id="timerCatch"><bpmn:timerEventDefinition id="def_timer" /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="double"><bpmn:messageEventDefinition id="def_message" /><bpmn:signalEventDefinition id="def_signal" /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="triggerless" />
+    <bpmn:sequenceFlow id="flow_plain" sourceRef="start" targetRef="call" />
+    <bpmn:sequenceFlow id="flow_conditional" sourceRef="call" targetRef="approve">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+</bpmn:definitions>
