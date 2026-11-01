@@ -147,6 +147,36 @@ describe('SeparationRun', () => {
     expect(plane.shapes.get('SP')!.bounds.width).toBe(400);
   });
 
+  it('takes a pushed task out of the sub-process it landed in', async () => {
+    const plane = await planeOf('models/incremental/sub.bpmn');
+    const baseline = new Map([...plane.shapes.values()].map((shape) => [shape.id, shape.bounds.copy()] as const));
+    const task = plane.shapes.get('T')!;
+    task.bounds.x = 500;
+    run(plane, { active: [], moved: ['T'], baseline });
+
+    expect(task.bounds.overlaps(plane.shapes.get('SP')!.bounds)).toBe(false);
+  });
+
+  it('takes a sub-process off the task it was pushed onto', async () => {
+    const plane = await planeOf('models/incremental/sub.bpmn');
+    const baseline = new Map([...plane.shapes.values()].map((shape) => [shape.id, shape.bounds.copy()] as const));
+    const frame = plane.shapes.get('SP')!;
+    new SpaceTool(plane).shiftShape('SP', 200, 0);
+    run(plane, { active: [], moved: ['SP'], baseline });
+
+    expect(frame.bounds.overlaps(plane.shapes.get('T')!.bounds)).toBe(false);
+  });
+
+  it('leaves a task that lay on the sub-process before', async () => {
+    const plane = await planeOf('models/incremental/sub.bpmn');
+    const task = plane.shapes.get('T')!;
+    task.bounds.x = 500;
+    const baseline = new Map([...plane.shapes.values()].map((shape) => [shape.id, shape.bounds.copy()] as const));
+    const result = run(plane, { active: [], moved: ['T'], baseline });
+
+    expect(result.moved.size).toBe(0);
+  });
+
   it('ignores an active id that is not drawn', async () => {
     expect(run(await planeOf(), { active: ['nope'] }).moved.size).toBe(0);
   });

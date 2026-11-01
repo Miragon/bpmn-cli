@@ -6,6 +6,7 @@ import type { SpaceTool } from '../space/SpaceTool.js';
 
 export interface SeparateOptions {
   active: Iterable<string>;
+  moved?: Iterable<string>;
   movable?: Iterable<string>;
   pinned?: Iterable<string>;
   locked?: { ids: Iterable<string>; axes: ReadonlyArray<'x' | 'y'> };
@@ -76,6 +77,10 @@ export class SeparationRun {
     const locked = this.toUnits(options.locked?.ids ?? []);
     this.lockedX = new Set(options.locked?.axes.includes('x') ? locked : []);
     this.lockedY = new Set(options.locked?.axes.includes('y') ? locked : []);
+    for (const id of this.swallowed(this.toUnits(options.moved ?? []))) {
+      this.active.add(id);
+      this.movable.add(id);
+    }
   }
 
   private static gapX(first: Box, second: Box): number {
@@ -151,6 +156,18 @@ export class SeparationRun {
 
   private nested(first: DShape, second: DShape): boolean {
     return this.inside(first, second) || this.inside(second, first);
+  }
+
+  private swallows(frame: DShape, other: DShape): boolean {
+    const [frameBefore, otherBefore] = [this.baseline?.get(frame.id), this.baseline?.get(other.id)];
+    const overlapsNow = frame !== other && frame.container && other.kind !== 'annotation' && !this.nested(frame, other) && frame.bounds.overlaps(other.bounds);
+    return overlapsNow && !(frameBefore && otherBefore?.overlaps(frameBefore));
+  }
+
+  private swallowed(moved: ReadonlySet<string>): string[] {
+    const units = [...this.units.values()];
+    const pairs = units.flatMap((frame) => units.filter((other) => this.swallows(frame, other)).flatMap((other) => [frame.id, other.id]));
+    return pairs.filter((id) => moved.has(id));
   }
 
   private baselineBox(id: string): Box | undefined {

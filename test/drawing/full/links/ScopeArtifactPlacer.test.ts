@@ -34,6 +34,21 @@ describe('ScopeArtifactPlacer', () => {
     expect(hanging.box.x).toBeGreaterThan(sketch.at('join').box.center.x);
   });
 
+  it('hangs data below the expanded sub-process it would reach into', () => {
+    const sketch = new ScopeSketch().node('task', 'a', 0, 40).node('subProcess', 'wide', 105, 0, { width: 300, height: 200 });
+    sketch.at('wide').child = sketch.layout();
+    const layout = sketch.layout();
+    const [first, second] = [data('first'), data('second')];
+    first.anchorNode = sketch.at('a');
+    second.anchorNode = sketch.at('a');
+    layout.artifacts.push(first, second);
+
+    new ScopeArtifactPlacer(layout).placeAttached();
+
+    expect(second.box.y).toBeGreaterThan(200);
+    expect(second.box.overlaps(first.box)).toBe(false);
+  });
+
   it('places the note of a boundary event with the attached artifacts', () => {
     const sketch = new ScopeSketch().node('task', 'a', 300, 0).boundary('event', 'a', 360);
     const layout = sketch.layout();

@@ -101,10 +101,14 @@ export class ScopeArtifactPlacer {
     const centerX = node.entriesFromBelow().length ? node.box.center.x + placer.JOIN_RISE_ROOM + artifact.width / 2 : placer.belowX(node);
     const top = node.box.bottom + (node.boundary.length ? placer.BELOW_BOUNDARY_NODE : placer.BELOW_NODE);
     let box = new Box(Math.round(centerX - artifact.width / 2), top, artifact.width, artifact.height);
-    while (!free(box)) {
-      box = new Box(box.x + artifact.width + placer.DATA_APART, top, artifact.width, artifact.height);
+    for (let frame = this.frameOver(box); frame || !free(box); frame = this.frameOver(box)) {
+      box = frame ? new Box(box.x, frame.box.bottom + placer.BELOW_NODE, artifact.width, artifact.height) : new Box(box.x + artifact.width + placer.DATA_APART, box.y, artifact.width, artifact.height);
     }
     return box;
+  }
+
+  private frameOver(box: Box): GNode | undefined {
+    return this.layout.nodes.find((node) => node.child && node.box.overlaps(box));
   }
 
   private placeUnanchored(): void {

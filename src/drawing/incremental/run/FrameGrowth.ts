@@ -35,7 +35,7 @@ export class FrameGrowth {
         continue;
       }
       const neighbours = moving.flatMap((id) => [...semantics.predecessors(id), ...semantics.successors(id)]).filter((id) => plane.shapes.has(id));
-      const result = this.run.drawing(plane).separation.separate({ active: moving.filter((id) => place.placed.has(id) || active.has(id)), movable: new Set([...moving, ...neighbours]), baseline: this.baseline });
+      const result = this.run.drawing(plane).separation.separate({ active: moving.filter((id) => place.placed.has(id) || active.has(id)), moved: moving, movable: new Set([...moving, ...neighbours]), baseline: this.baseline });
       this.noteMoved([...result.moved, ...result.resized]);
       if (result.unresolved.length) {
         this.run.notes.push(`overlap left: ${result.unresolved.map(([firstId, secondId]) => `${firstId}~${secondId}`).join(', ')}`);
