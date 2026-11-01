@@ -5,21 +5,21 @@ import { FeelPrimaries } from '../../../../src/checks/camunda/feel/FeelPrimaries
 describe('FeelPrimaries', () => {
   const primariesOver = (expression: string) => {
     const cursor = new FeelCursor(expression);
-    return Object.assign(new FeelPrimaries(cursor, () => cursor.next()), { cursor });
+    return { cursor, primaries: new FeelPrimaries(cursor, () => cursor.next()) };
   };
 
   it('takes a literal off the expression', () => {
-    const primaries = primariesOver('1');
+    const { cursor, primaries } = primariesOver('1');
     primaries.primary();
 
-    expect(primaries.cursor.peek().kind).toBe('end');
+    expect(cursor.peek().kind).toBe('end');
   });
 
   it('reads a type name of several words', () => {
-    expect(() => primariesOver('years and months duration').typeName()).not.toThrow();
+    expect(() => primariesOver('years and months duration').primaries.typeName()).not.toThrow();
   });
 
   it('asks for a name where none is', () => {
-    expect(() => primariesOver('1').expectName('a name')).toThrow('a name');
+    expect(() => primariesOver('1').primaries.expectName('a name')).toThrow('a name');
   });
 });
