@@ -125,8 +125,8 @@ The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)
 - [A worked session](https://miragon.github.io/bpmn-cli/walkthrough): one process from an empty file to a validated model
 - [Library use](https://miragon.github.io/bpmn-cli/library)
 - [Validators](https://miragon.github.io/bpmn-cli/validators): a library host's own checks inside the write
-- For maintainers, in the repository only: [testing](docs/testing.md) and
-  [releasing](docs/releasing.md)
+- For maintainers, in the repository only: [testing](docs/testing.md),
+  [releasing](docs/releasing.md) and the [plan to 1.0](docs/plan/README.md)
 
 ## Contributing
 

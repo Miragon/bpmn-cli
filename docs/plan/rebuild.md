@@ -1,0 +1,368 @@
+# Rebuild
+
+How do we build 1.0 from zero without losing what today's code does right? The rebuild grows on the
+branch `rebuild`, one draft PR into main; main keeps the old code and its fixes, and judges every difference.
+
+## Where
+
+| option | against it | verdict |
+| --- | --- | --- |
+| a new repository | loses the issues, the marketplace path, npm trusted publishing, the Homebrew job, the docs URL | no |
+| refactor in place, module by module | new code bends to old seams: 231 model symbols, 64 folder cycles | fallback, if the owner stops the rebuild |
+| main rebuilds, the old code on a fix branch | main has no working CLI for ≈ 40 PRs, and fixes need a second release line | no |
+| a new tree beside `src/` | two gates and two document models in one tree | no |
+| a branch `rebuild`, one draft PR rebased onto main; main keeps the old code and its fixes | one PR to review, always up to date with main, which the oracle has proven | **yes** |
+
+- Main stays as users know it: the docs site, the marketplace through the `release` branch, releases at
+  the owner's call. It takes fixes, no features, until 1.0.
+- `rebuild` is rebased onto main whenever main moves, at the latest before a step starts. The rebase
+  carries main's `docs/`, `plugins/`, `.github/`, changelog and version bumps along.
+- After a rebase, `git diff <old base> <new base> -- src test` lists what main's new commits changed in
+  the old code. Each change is ported into the new code, its regression becomes a named case, and when
+  no input of `corpus/` reaches it, its input joins `corpus/`; old files the rebase touched or brought
+  back are deleted again. So every fix reaches the rebuild, not only those the oracle's inputs happen to
+  touch.
+- The oracle builds main at the commit `rebuild` sits on, so between two rebases the judge stands still.
+- This plan ends with the draft PR, not with a merge ([later](#later)).
+- Operation JSON stays as on main but for these fields; `tools/oracle` maps them, so recorded edits replay:
+
+| operation | today | 1.0 |
+| --- | --- | --- |
+| `add`, `retype` | `timer`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`, `doc`, `text` | the same names under `set` ([flag or key](flags.md#flag-or-keyvalue)) |
+| `add` | `collapsed` | `set: { expanded: false }` |
+| `connect` | `name`, `condition`, `language`, `default`, `message` | the same names under `set` |
+| `remove` | `bridge: false`, `bridgeAll: true` | `bridge: "none"`, `bridge: "all"` |
+| `add`, `retype` | `timerKind` | goes: `timer` tells the kinds apart |
+| `set` | `values: { key: value }`, `unset: [key]` | `set: { key: value }`, and `set: { key: "" }` to unset |
+| `move` | `flowName`, `flowId`, `condition`, `language`, `default` | go: `set` on the flow after the move |
+| `tidy` | `path`, `via`, `kind`, `branch` | go: `ids` |
+| `place`, `color` | `via`, `kind` | go: `branch`, or ids from `find --kind` |
+| `align` | the operation | goes: one `place` per id |
+| `layout` | no operation; `layoutXml` | new: redraws in full; its `expand` and `collapse` become `set: { expanded }` |
+
+## What carries over
+
+| ported: the algorithm or data, into new classes with new mirrored tests | written new |
+| --- | --- |
+| text preservation (262 of 265 no-ops on private real models byte-identical), both layouts (harness budget 264), the FEEL parser, the Camunda check rules, the codes; the id rules (`document/ids/`, 961 lines), since the edits probe compares ids; the inputs in `corpus/`; the 7 eval prompts | the CLI, the operation schema, the transaction, the result, the views, the contract, the render API, the help |
+
+The 2,593 unit tests are not ported: they are a checklist, and the 23 fix commits' regressions become
+named cases.
+
+## Oracle
+
+`tools/oracle` runs main and the rebuild on the same input and asks main for every answer: main at the
+commit `rebuild` sits on, built in a worktree and cached by that commit. A rebase moves it to main's new
+head.
+
+Until the write step, each new module is judged through an entry of its own in `tools/oracle/entries/`,
+added in its step's first commit: render's is the package's `.`, for the image probe; lint's is
+`ProjectLint` against main's `projectBpmnlint` (`src/node.ts:68`), for the findings probe; model,
+checks, drawing and edit follow. Until the step is done, an entry reports its differences in CI and
+fails only when their count per probe rises above the count kept in `tools/oracle/progress.json`; the
+commit that finishes the step makes it gate. A rebase that changes main's answers updates
+`progress.json` in the same rebase. The write step removes the module entries and the CLI step lint's:
+from then on the oracle compares only the public surface.
+
+Each probe comes with the step that first needs it, and so does its folder of `corpus/`; the tables name
+the step. Every recording runs main's own tools in main's worktree, so no probe needs a tool the gate
+step deletes, and a rebase records again what main's new commits change. Main answers on every run, and
+the codes come from its `kindsJson()`. Words of this section:
+
+- a walk is one recorded run of today's fuzz tool (`tools/fuzz/`): a list of steps, each the operations and the
+  file before them; `--mode incremental` is the layout mode it ran in;
+- main answers a walk step through `mutateDoc`, its internal write, once with `layout: false` (the file
+  after the model operations, before any drawing) and once with the layout;
+- roundtrip is `tools/roundtrip.mjs`: per model a no-op, a rename and an insert whose bytes it compares;
+- a phase is `before` or `after`: a host validator runs on the file before and after the change.
+
+| folder | holds | step |
+| --- | --- | ---: |
+| `models/` | 52 fixtures | 3 |
+| `layout/` | the 115 layout scenarios from `tools/scenarios/`, each with main's score over all 26 kinds; `scores.json`, main's counts per kind on every corpus file | 3 |
+| `edits/` | per model roundtrip's three edits, and the edits `tools/bench/gen-edits.mjs` generates, written out as operation JSON | 3 |
+| `lint/` | the 10 examples of [process-engine-blueprints](https://github.com/Miragon/process-engine-blueprints), each its `.bpmnlintrc`, its models, 36 in all, and its `package.json`, which the oracle installs so that the project's plugin runs (0.17.0 there); plus models for each case `packages/lint` handles | 6 |
+| `design-iq/` | the arguments of design-iq's `bpmn-edit*.test.ts` calls, and the paths of `OPS_SCHEMA` it reads. The operations step runs those tests in a design-iq checkout, its head on that day, recorded in `COMMIT`, and the write step runs them again on design-iq's head then; a shim installed in place of `@miragon/bpmn-cli` logs each call, and a Proxy around `OPS_SCHEMA` logs each read. Main answers the calls, with each validator answer per phase; plus one written call per row of design-iq's [map](modules.md#contract) that its tests do not reach, such as `showXml` with `scope` | 8 |
+| `engine/` | the cases of main's 8 test files that run against live engines, as `.bpmn`: #123's 321 parity models, synthetic, one per rule case. #123's tests build each from template strings at run time (`engineModel('c7', …)`), so the checks step runs them once on its branch and writes each model out; one JSON of their codes, and the 401 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22 that main's tests record: `c7-profile` 82, `c8-profile` 151, `c7-profile-rules` 55, `c8-feel-and-deploy` 38, `c7-schema-rules` 33, `c8-values` 27, `e2e/camunda7-rules` 15, plus the models `c8-ops` fixes, which must deploy; the 762 FEEL verdicts of main's FEEL tests | 9 |
+| `walks/` | the fuzz walks in `--mode incremental`, per step the operations and the file before. Main answers through `mutateDoc`: the file after `layout: false` with `changes.created`, `changes.relocated` and the expansion requests, and the file after the layout | 11 |
+| `cli/` | one golden call per kept command and flag | 14 |
+
+| probe | input | must match | may differ | step |
+| --- | --- | --- | --- | ---: |
+| bytes | `corpus/edits/`: roundtrip's no-op (`set` a name to itself), rename and insert | bytes where main keeps them; changed lines ≤ main's | | 3 |
+| findings | corpus for Camunda 7, Camunda 8 and no engine; `corpus/lint/` from step 6, `corpus/engine/` from step 9 | code, severity and element | wording | 3 |
+| layout | 115 scenarios drawn in full; from step 11 each walk step's model operations drawn incrementally from its `layout: false` file, and each walk step with drawing operations run on its file before | the total over the 115 scenarios and the total over the walk steps no higher than main's, as main's `tools/bench/regress-gate.mjs` judges its total today | coordinates; the score of one file or step, and a hard defect main lacks there: the probe lists them, as the fuzz's `--hard warn` does | 3 |
+| image | corpus, every plane | ≤ 0.5 % of pixels differ, both rasterised by the same resvg-wasm | SVG bytes | 3 |
+| edits | `corpus/walks/` replayed, the bench edits of `corpus/edits/`, `corpus/design-iq/` | semantics without DI, ids, created, changed and removed, refusal codes, the host-validator findings added and those from before (`preexisting`) | DI, the result fields the allow-list names | 12 |
+| CLI | `corpus/cli/` | exit code; in `--json`, the fields the edits and findings probes compare; `validate`'s `valid, N warning(s)` and `- N refused at deploy` (3 eval graders match them) | other JSON fields, other text | 14 |
+
+- Only the allow-list `tools/oracle/differences.json` (probe, pattern, reason) may differ. It starts with
+  what goes on the [commands](cli.md#commands) and [flags](flags.md) pages, the
+  [behaviour that goes](cli.md#behaviour-that-goes), and, for `corpus/lint/`, the rule changes from
+  bpmnlint 11 to 12 and the plugin [decision](README.md#decisions).
+- The [layout score](modules.md#layout-score) is the weighted sum of layout problems; lower is better.
+  The oracle's score is the harness score: the 17 kinds that today's `tools/layout-regress.mjs` sums,
+  which main's gate holds at 264 over the 115 scenarios (`tools/bench/regress-budget.json`). Hard defects are the kinds the layout score
+  weights 6 or more.
+- The fuzz counts hard defects as errors by default; `--hard warn` counts them as warnings, so a run
+  goes on and the layout probe judges them.
+- The layout probe scores both sides with main's scorers, run in main's worktree at the commit
+  `rebuild` sits on: layout-regress's analyser and weights for the score, and main's
+  `layoutProblemsOfXml` for the hard defects. After 1.0
+  both come from the tag `pre-1.0`, since 1.0 exports no scorer. The rebuild's `Scorer` never grades
+  itself here; the fuzz and the bench use the same scorers. `Scorer`'s mirrored test holds it to main's
+  counts per kind in `corpus/layout/scores.json`.
+- design-iq's recorded calls reach 1.0 through `tools/oracle/design-iq-map`, the
+  [map](modules.md#contract).
+- A rebase that brings a fix changes main's answers; the same rebase ports the fix or names it in the
+  list.
+- After 1.0 the oracle compares the last release with main.
+
+## Order
+
+```mermaid
+flowchart LR
+  naming[naming subpath] --> model
+  oracle[oracle] --> gate[gate]
+  gate --> render[render] & lint[lint] & model[model]
+  model --> operations[operations] & checks[checks] & scoring[scoring]
+  render --> scoring
+  scoring & operations --> drawing[drawing]
+  operations --> edit[edit]
+  checks & drawing & edit --> write[write, views, api]
+  write & lint --> cli[cli, rc.1] --> skill[skill, docs] --> consumers[consumers] --> ready[draft PR ready]
+```
+
+| step | ≈ lines | ≈ commits | why here |
+| --- | ---: | ---: | --- |
+| naming subpath | in the plugin | 1 | model and `cli/files` read id conventions without bpmnlint |
+| oracle, gate | 2.5k in `tools/` | 6 | no code without a judge and a gate; each later probe comes with the step that first needs it |
+| render | 2.1k | 3 | small and standalone; scoring and drawing need its `./text` |
+| lint | 0.8k | 2 | needs nothing of the core |
+| model | 6.7k | 5 | every module reads it |
+| operations, checks | 1.2k, 5.6k | 2, 5 | need only model; checks runs beside drawing |
+| scoring | 1.4k | 2 | needs only model and render's `./text`; drawing judges its moves with it |
+| drawing | 14.5k | 10 | the largest risk, so it starts as soon as operations and scoring exist; recorded walks judge it without edit |
+| edit | 7.5k | 6 | beside drawing |
+| write, views, api | 4.4k | 4 | joins the three siblings |
+| cli | 1.9k | 3 | the top layer |
+
+≈ 46k lines in `src/` and `packages/`, ≈ 2.5k in `tools/`, ≈ 48 commits in one draft PR, and one PR in the plugin; no estimate in weeks.
+
+## Releases
+
+| line | until the draft PR is done | after a merge |
+| --- | --- | --- |
+| main, the old code | fixes only; releases as today, at the owner's call | 1.x only; no fix line for the old code |
+| `@miragon/bpmn-cli` from `rebuild` | nothing until the CLI step, then `1.0.0-rc.N` on `next`; moves neither the `release` branch nor the Homebrew tap; bumps no plugin file | `1.0.0` from main on `latest`; the `release` branch and the tap follow as with every release |
+| `packages/render` | private, built into the core's library and CLI | published as `@miragon/bpmn-render` only when its [trigger](README.md#triggers) fires |
+| `packages/lint` | private, built into the core's CLI | published only when its [trigger](README.md#triggers) fires |
+
+Today `release-please.yml` publishes without `--tag`, feeds the tap on every release and bumps the
+skill's pin. release-please does not run on `rebuild`: a rebase replaces the commits its tags name, and
+its release PR would be a second PR. From the CLI step on, `release-please.yml` on `rebuild` also runs
+on a pushed tag `v1.0.0-rc.N`: it publishes that commit, whose `package.json` holds the same version,
+with `--tag next`, and feeds no tap. The file keeps its name, so npm's trusted publishing, which trusts
+`release-please.yml`, accepts it.
+
+From rc.1 the contract is frozen: the API report changes only to fix a bug, named in the next rc's
+notes, so design-iq's branch breaks only on purpose.
+
+Why 1.0.0, not 0.10: the rebuild is the one break, with an API report from day one; more 0.x minors
+invite today's churn of 15 repo-wide restructures in 20 days.
+
+## Done
+
+The draft PR is done when, rebased onto main's head:
+
+1. Oracle: 0 differences outside the allow-list, in every probe, over the whole corpus.
+2. The 79 private real models, kept outside the repository ([testing](../testing.md#private-corpora)), run
+   locally: the bytes and layout probes no worse than main.
+3. One live run over `corpus/engine/` on the release candidate agrees with every recorded verdict on the
+   four engines.
+4. Each eval, with the graders unchanged, scores on the release candidate at least as on main, median of
+   3 runs each.
+5. design-iq green on the release candidate in its own CI, on a branch of its own, and bpmn-to-code's
+   skills name no retired command or flag.
+6. Every hard [guardrail](code.md#guardrails) green; `bpmn add` on a Camunda 8 model of 500 nodes no
+   slower than main on the same machine, median of 5; 7 nightly fuzz runs in a row without an
+   error-severity violation, with hard layout defects counted as warnings (`--hard warn`, as in today's
+   gate); the layout probe judges those against main.
+
+## Later
+
+Merging the draft PR and shipping 1.0.0 are not part of this plan. For that day:
+
+- Main's ruleset asks for linear history; the PR merges by rebase, without conflicts, so release-please
+  reads each commit's `BREAKING CHANGE:` footer into the 1.0.0 changelog.
+- release-please goes back to main's release line with `release-as: 1.0.0`; with
+  `bump-minor-pre-major` it would propose 0.10.0 for a breaking change.
+- Main's last commit before the merge is tagged `pre-1.0`, from which the oracle takes main's scorers.
+- Merge and publish 1.0.0 on the same day: the docs site deploys on every push to main, and
+  bpmn-to-code's marketplace takes the bpmn-cli plugin from `ref: main` (`marketplace.json:19`), so
+  both show 1.0 with the merge.
+
+## Steps
+
+The [checklist](README.md#steps) orders the steps. Each step is one commit or a few in the draft PR,
+whose CI runs the gate on every push. A commit that changes what a user types or reads carries a
+`BREAKING CHANGE:` footer that says what to use instead. Every step keeps green what earlier steps set, and every oracle
+entry that already gates; only knip's production run reports the modules unused until write, views and
+api import them in step 13.
+
+### 2. Naming subpath
+
+Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
+
+- Today: bpmn-cli reads `element-id-naming`'s options through bpmnlint (`IdConventionsReader.ts`). The
+  plugin, at 0.19.0, exports the rule, which loads only `bpmnlint-utils`, but not its defaults or its
+  option reader.
+- After: the plugin exports `./naming`, the rule's defaults and its option reader, without bpmnlint;
+  model takes the defaults, `cli/files` reads conventions with it.
+- Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
+- Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
+
+### 3. Oracle
+
+Build the oracle.
+
+- Today: the tools use main's internals (4.6k lines in `tools/`).
+- After: `tools/oracle` with main's build in a worktree, the allow-list, `progress.json` and the probes
+  bytes, findings, layout and image; the rest later ([above](#oracle)).
+- Files: `corpus/models/`, `corpus/layout/`, `corpus/edits/`, `tools/oracle/`, the oracle workflow.
+- Done when: main against itself, twice: 0 differences; a change planted per probe (a byte in the
+  writer, a moved shape, a renamed code) turns only that probe red; so does each later probe.
+
+### 4. Gate
+
+Clear `rebuild` and set the gate.
+
+- Today: `rebuild` is a copy of main; biome only warns; no coverage; nothing checks classes and their tests.
+- After: `src/`, `test/` and `tools/` deleted but `tools/oracle/`; `corpus/`, `plugins/`, `docs/`,
+  `.github/` kept; npm workspaces; Node 24 alone, in `engines` and every workflow; the [guardrails](code.md#guardrails); ten empty modules, two empty
+  packages; the decisions as ADRs.
+- Files: `package.json`, `.github/workflows/`, the guardrails' configs, `tools/check-structure.mjs`,
+  `budgets.json`, `docs/adr/`.
+- Done when: `npm run gate` passes, and a planted `utils.ts` fails it.
+
+### 5. Render
+
+Build `packages/render`.
+
+- Today: 1,801 lines in the core; the renderer reads DI through drawing and crops through views.
+- After: the [render package](modules.md#render-package), private, our painter ported, ≈ 20 golden
+  SVGs, its own API report.
+- Files: `packages/render/`.
+- Done when: image probe and iso check green; a browser bundle draws the corpus.
+
+### 6. Lint
+
+Build `packages/lint`.
+
+- Today: 1,757 lines of bpmnlint adapters, run on every write; bpmnlint 11.15.
+- After: the [lint package](modules.md#lint-package) on bpmnlint 12, private, importing nothing of the
+  core; a plugin the project installs runs before the bundled copy ([decision](README.md#decisions)).
+- Files: `packages/lint/`, `corpus/lint/` with each example's `package.json`.
+- Done when: its oracle entry gates, taking the import warnings from main's answer; on the blueprints'
+  examples, each with its own plugin installed, it reports what bpmnlint 12's CLI reports there.
+
+### 7. Model
+
+Build model.
+
+- Today: 18 `utils` files; `Doc` has ≈ 48 methods; `moddle.ts` has 168 importers.
+- After: the [model row](modules.md#modules), DI bookkeeping moved in; no class over 12 public methods.
+- Files: `src/model/`, `test/model/`.
+- Done when: the bytes probe is green for the corpus read and written back, and for roundtrip's `rename`
+  (`layout: false`) done through `BpmnElement`.
+
+### 8. Operations
+
+Build operations on `zod/mini`.
+
+- Today: ≈ 1.7k lines of own schema code in `FieldSpec`, `CommandParser`, `OpsSchemaBuilder`.
+- After: one `OperationDefinition` per operation on zod/mini, which also writes `OPS_SCHEMA`, with
+  `$defs.drawingOp` for the 8 drawing operations; 17 operations, `align` out,
+  `layout` in; element keys under `set`.
+- Files: `src/operations/`, `test/operations/`, `corpus/design-iq/`, the design-iq shim.
+- Done when: design-iq's recorded schema reads find the same names, properties and required keys, but for
+  the keys moved under `set`; an old key such as `timer` is refused.
+
+### 9. Checks
+
+Build checks.
+
+- Today: Camunda checks by profile, host validators and the before/after compare in the same folder;
+  `DocumentCheck` draws a dry run; no live workflow.
+- After: the [checks row](modules.md#modules), only bpmn-cli's own rules, no layout code; a
+  live job runs the four engines as containers and deploys `corpus/engine/` when it or a pinned engine
+  version changes.
+- Files: `src/checks/`, `test/checks/`, `corpus/engine/`, `tools/oracle/live-engines.mjs`, its workflow.
+- Done when: the findings probe is green; FEEL verdicts and `corpus/engine/` pass; a live run agrees.
+
+### 10. Scoring
+
+Build scoring.
+
+- Today: the score sits in the layout code, 18 check methods in one class of 575 lines, and a second copy in
+  `tools/layout-regress.mjs` that is kept equal by hand.
+- After: the [layout score](modules.md#layout-score) as its own module: `Scorer`, one `ScoringCriterion`
+  per problem or group of problems, `ProblemKinds`; it imports only model and render's `./text`.
+- Files: `src/scoring/`, `test/scoring/`, `corpus/layout/`.
+- Done when: `Scorer` gives main's counts per kind on every corpus file, and every kind but `failed` has its criterion.
+
+### 11. Drawing
+
+Build drawing.
+
+- Today: an ownership check redraws, failures redraw everything, vertical lanes turn horizontal.
+- After: incremental on a drawn plane, full on an empty one, a `layout` operation redraws; failures are errors
+  with hints; lanes keep their direction; `TrialGuard` asks `Scorer`. The first commit fits
+  `ChannelRouter` into the size limits.
+- Files: `src/drawing/`, `test/drawing/`, `corpus/walks/`.
+- Done when: the layout probe is green without edit, over the scenarios and the walks.
+
+### 12. Edit
+
+Build edit.
+
+- Today: folders by BPMN noun that import in a ring and reach drawing 5 times.
+- After: `ModelOperationRunner` and one class per operation at the root, the BPMN parts below; changes leave as a
+  `ChangeSet`; no drawing import.
+- Files: `src/edit/`, `test/edit/`.
+- Done when: the edits probe is green for semantics without DI over `corpus/walks/`.
+
+### 13. Write, views and api
+
+Build write, views and api.
+
+- Today: a write runs 21 stages, parses up to 6 times, takes 1,109 ms; 94 exports.
+- After: the [contract](modules.md#contract); checks run once, on the new document, and on the old one
+  only to tell new errors from old; `HostValidators`, `FindingDelta` and `DocumentValidation`; the layout
+  score before and after.
+- Files: `src/write/`, `src/views/`, `src/api/`, `tools/oracle/design-iq-map`.
+- Done when: every probe but the CLI's green through `applyToXml`, `validateXml` and `renderXml`; the
+  design-iq replay green; ≤ 2 parses per write.
+
+### 14. CLI and rc.1
+
+Build the CLI and ship 1.0.0-rc.1.
+
+- Today: 29 command classes; help in TypeScript.
+- After: the [target](cli.md#target), help in Markdown, one esbuild bundle with `packages/lint` inside,
+  release candidates as [above](#releases).
+- Files: `src/cli/`, `bin/bpmn.js`, `test/cli/`, `test/e2e/`, `corpus/cli/`, `tools/fuzz/`,
+  `tools/bench/`, the tag job in `release-please.yml`, the nightly workflow.
+- Done when: the CLI probe green, text results ≤ 1 KB, `--version` ≤ 60 ms, rc.1 on `next`; nightly
+  fuzz and bench ran on it.
+
+### 15. Skill, evals and docs
+
+Update the skill and its evals, rework the docs.
+
+- Today: all describe main's CLI; `docs/architecture.md` walks today's layers in 377 lines.
+- After: 1.0, with a migration note; project lint findings come only from `bpmn validate`; element
+  properties are `key=value`; builds over several writes end with `bpmn layout`; the
+  [architecture doc](modules.md#architecture-doc) as a compact map.
+- Files: `plugins/bpmn-cli/`, `docs/`, `test/contract/`, `test/e2e/plugin.test.ts`.
+- Done when: same graders, no eval worse than on main (median of 3).

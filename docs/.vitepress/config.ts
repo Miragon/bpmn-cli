@@ -15,7 +15,7 @@ export default miragonDocs({
   footerMessage: "Released under the MIT License.",
 
   // Notes for maintainers, read on GitHub: not pages of the site.
-  srcExclude: ["releasing.md", "testing.md"],
+  srcExclude: ["releasing.md", "testing.md", "plan/**"],
 
   nav: [
     {

@@ -111,7 +111,8 @@ them on a private corpus without copying it into the repository, are described i
   `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
   fails the build; the `docs` workflow builds it on every pull request that touches `docs/` and
   deploys it from `main`). A new page goes into the sidebar in `docs/.vitepress/config.ts`;
-  maintainer notes (`testing.md`, `releasing.md`, the audit) stay out of the site via `srcExclude`.
+  maintainer notes (`testing.md`, `releasing.md`, the audit, the plan in `plan/`) stay out of the
+  site via `srcExclude`.
   The site is built with the Miragon docs kit: `docs/.vitepress/config.ts` passes the repo's name,
   nav and sidebar to its `miragonDocs()`, and the kit sets the theme, the colours light and dark,
   the GitHub-style heading anchors and the legal row. The kit in `docs/.vitepress/miragon/` and the
