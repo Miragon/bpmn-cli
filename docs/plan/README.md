@@ -120,7 +120,7 @@ what is there after, which files it touches and when it is done; steps 1, 16 and
   ruleset, since each rebase force-pushes it · done when the draft PR runs the gate
 - [ ] **2. Naming subpath**: publish `./naming` from `@miragon/bpmnlint-plugin-rules`, the one change
   outside the draft PR · [card](rebuild.md#2-naming-subpath)
-- [ ] **3. Oracle** · needs 1 · [card](rebuild.md#3-oracle)
+- [x] **3. Oracle** · needs 1
 
 From here main takes fixes only; each rebase brings them in ([where](rebuild.md#where)).
 

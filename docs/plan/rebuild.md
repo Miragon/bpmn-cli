@@ -118,6 +118,13 @@ the codes come from its `kindsJson()`. Words of this section:
   list.
 - After 1.0 the oracle compares the last release with main.
 
+`npm run oracle` judges (`--probe`, `--entry`, `--filter`, `--jobs`) and leaves its result in
+`.oracle/result.json`; `npm run oracle:record` records `corpus/` again; `npm run oracle:selftest` runs main
+against itself twice and plants one change per probe in a throwaway copy of the build. A later probe, entry
+or recording is one file in `tools/oracle/probes/`, `entries/` or `recordings/`, and its proof one in
+`plants/`. An entry named in `progress.json` reports up to its counts; any other entry gates, so the commit
+that finishes a step removes its row.
+
 ## Order
 
 ```mermaid
@@ -221,17 +228,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
   model takes the defaults, `cli/files` reads conventions with it.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
-
-### 3. Oracle
-
-Build the oracle.
-
-- Today: the tools use main's internals (4.6k lines in `tools/`).
-- After: `tools/oracle` with main's build in a worktree, the allow-list, `progress.json` and the probes
-  bytes, findings, layout and image; the rest later ([above](#oracle)).
-- Files: `corpus/models/`, `corpus/layout/`, `corpus/edits/`, `tools/oracle/`, the oracle workflow.
-- Done when: main against itself, twice: 0 differences; a change planted per probe (a byte in the
-  writer, a moved shape, a renamed code) turns only that probe red; so does each later probe.
 
 ### 4. Gate
 
