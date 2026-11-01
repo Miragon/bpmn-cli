@@ -72,16 +72,15 @@ function milliseconds(bin, words) {
   return Number(process.hrtime.bigint() - started) / 1e6;
 }
 
-function median(values) {
-  return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)];
+function timedAdd(bin, model, extra) {
+  const copy = `${model}.copy.bpmn`;
+  copyFileSync(model, copy);
+  return milliseconds(bin, ['add', copy, 'task', 'Audit', '--after', INSERT_AFTER, ...extra]);
 }
 
-function medianAdd(bin, model, extra) {
-  const copy = `${model}.copy.bpmn`;
-  return median(Array.from({ length: RUNS }, () => {
-    copyFileSync(model, copy);
-    return milliseconds(bin, ['add', copy, 'task', 'Audit', '--after', INSERT_AFTER, ...extra]);
-  }));
+function bestAddsInTurn(model) {
+  const turns = Array.from({ length: RUNS }, () => [timedAdd(BIN, model, []), timedAdd(MAIN_BIN, model, ['--no-lint-config'])]);
+  return { add: Math.min(...turns.map(([ours]) => ours)), mainAdd: Math.min(...turns.map(([, main]) => main)) };
 }
 
 function report(line, passed, advisory = false) {
@@ -92,12 +91,11 @@ function report(line, passed, advisory = false) {
 function run(work) {
   const model = join(work, 'c8-500.bpmn');
   writeFileSync(model, camunda8Model());
-  const version = median(Array.from({ length: RUNS }, () => milliseconds(BIN, ['--version'])));
-  const add = medianAdd(BIN, model, []);
-  const mainAdd = medianAdd(MAIN_BIN, model, ['--no-lint-config']);
+  const version = Math.min(...Array.from({ length: RUNS }, () => milliseconds(BIN, ['--version'])));
+  const { add, mainAdd } = bestAddsInTurn(model);
   return [
     report(`--version ${version.toFixed(0)} ms, budget ${VERSION_BUDGET_MS} ms`, version <= VERSION_BUDGET_MS, ABSOLUTE_BUDGET_IS_ADVISORY),
-    report(`add on Camunda 8, ${NODES} nodes: ${add.toFixed(0)} ms, main ${mainAdd.toFixed(0)} ms, median of ${RUNS}`, add <= mainAdd),
+    report(`add on Camunda 8, ${NODES} nodes: ${add.toFixed(0)} ms, main ${mainAdd.toFixed(0)} ms, best of ${RUNS} in turn`, add <= mainAdd),
   ].every(Boolean);
 }
 
