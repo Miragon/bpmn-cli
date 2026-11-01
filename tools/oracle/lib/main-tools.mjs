@@ -46,7 +46,7 @@ export const loadRoundtrip = once(() => {
   ]);
 });
 
-const loadHardKinds = once(async () => {
+export const loadHardKinds = once(async () => {
   const [api, { hardKinds }] = await Promise.all([loadMainApi(), importFromMain('tools/fuzz/lib/metric-kinds.mjs')]);
   return new Set(hardKinds({ KEYS: api.METRIC_KEYS, WEIGHTS: api.METRIC_WEIGHTS }));
 });

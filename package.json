@@ -64,6 +64,8 @@
     "oracle": "node tools/oracle/run.mjs",
     "oracle:record": "node tools/oracle/record.mjs",
     "oracle:selftest": "node tools/oracle/selftest.mjs",
+    "fuzz": "node tools/fuzz/run.mjs",
+    "bench": "node tools/bench/run.mjs",
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
