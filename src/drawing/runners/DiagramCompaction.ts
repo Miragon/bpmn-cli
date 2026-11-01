@@ -56,9 +56,6 @@ export class DiagramCompaction {
   private addTarget(targets: Targets, id: string): void {
     const { diagram } = this;
     diagram.document.tree.require(id);
-    if (!diagram.planes.length) {
-      throw diagram.noDiagram();
-    }
     const root = diagram.planes.find((plane) => plane.rootId === id);
     if (root && !root.shapes.has(id)) {
       targets.set(root, undefined);

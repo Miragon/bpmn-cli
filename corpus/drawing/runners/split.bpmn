@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions_p" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="S" name="Start">
+      <bpmn:outgoing>flow_startToWhich</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow_startToWhich" sourceRef="S" targetRef="G" />
+    <bpmn:exclusiveGateway id="G" name="Which?">
+      <bpmn:incoming>flow_startToWhich</bpmn:incoming>
+      <bpmn:outgoing>F_a</bpmn:outgoing>
+      <bpmn:outgoing>F_b</bpmn:outgoing>
+      <bpmn:outgoing>F_c</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="A1" name="A one">
+      <bpmn:incoming>F_a</bpmn:incoming>
+      <bpmn:outgoing>flow_aOneToATwo</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="A2" name="A two">
+      <bpmn:incoming>flow_aOneToATwo</bpmn:incoming>
+      <bpmn:outgoing>flow_aTwoToJ</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow_aTwoToJ" sourceRef="A2" targetRef="J" />
+    <bpmn:sequenceFlow id="flow_aOneToATwo" sourceRef="A1" targetRef="A2" />
+    <bpmn:sequenceFlow id="F_a" name="a" sourceRef="G" targetRef="A1" />
+    <bpmn:task id="B1" name="B one">
+      <bpmn:incoming>F_b</bpmn:incoming>
+      <bpmn:outgoing>flow_bOneToBTwo</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="B2" name="B two">
+      <bpmn:incoming>flow_bOneToBTwo</bpmn:incoming>
+      <bpmn:outgoing>flow_bTwoToJ</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow_bTwoToJ" sourceRef="B2" targetRef="J" />
+    <bpmn:sequenceFlow id="flow_bOneToBTwo" sourceRef="B1" targetRef="B2" />
+    <bpmn:sequenceFlow id="F_b" name="b" sourceRef="G" targetRef="B1" />
+    <bpmn:sequenceFlow id="F_c" name="c" sourceRef="G" targetRef="J" />
+    <bpmn:exclusiveGateway id="J">
+      <bpmn:incoming>flow_aTwoToJ</bpmn:incoming>
+      <bpmn:incoming>flow_bTwoToJ</bpmn:incoming>
+      <bpmn:incoming>F_c</bpmn:incoming>
+      <bpmn:outgoing>flow_jToEnd</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="End" name="End">
+      <bpmn:incoming>flow_jToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_jToEnd" sourceRef="J" targetRef="End" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_P">
+    <bpmndi:BPMNPlane id="BPMNPlane_P" bpmnElement="P">
+      <bpmndi:BPMNShape id="BPMNShape_S" bpmnElement="S">
+        <dc:Bounds x="80" y="111" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="75" y="153" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_G" bpmnElement="G" isMarkerVisible="true">
+        <dc:Bounds x="176" y="104" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="174" y="84" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_A1" bpmnElement="A1">
+        <dc:Bounds x="286" y="89" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_A2" bpmnElement="A2">
+        <dc:Bounds x="446" y="89" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_B1" bpmnElement="B1">
+        <dc:Bounds x="286" y="289" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_B2" bpmnElement="B2">
+        <dc:Bounds x="446" y="289" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_J" bpmnElement="J" isMarkerVisible="true">
+        <dc:Bounds x="606" y="104" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_End" bpmnElement="End">
+        <dc:Bounds x="716" y="111" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="718" y="153" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_startToWhich" bpmnElement="flow_startToWhich">
+        <di:waypoint x="116" y="129" />
+        <di:waypoint x="176" y="129" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_aTwoToJ" bpmnElement="flow_aTwoToJ">
+        <di:waypoint x="546" y="129" />
+        <di:waypoint x="606" y="129" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_aOneToATwo" bpmnElement="flow_aOneToATwo">
+        <di:waypoint x="386" y="129" />
+        <di:waypoint x="446" y="129" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_F_a" bpmnElement="F_a">
+        <di:waypoint x="226" y="129" />
+        <di:waypoint x="286" y="129" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="234" y="111" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_bTwoToJ" bpmnElement="flow_bTwoToJ">
+        <di:waypoint x="546" y="329" />
+        <di:waypoint x="631" y="329" />
+        <di:waypoint x="631" y="154" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_bOneToBTwo" bpmnElement="flow_bOneToBTwo">
+        <di:waypoint x="386" y="329" />
+        <di:waypoint x="446" y="329" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_F_b" bpmnElement="F_b">
+        <di:waypoint x="201" y="154" />
+        <di:waypoint x="201" y="329" />
+        <di:waypoint x="286" y="329" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="209" y="311" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_F_c" bpmnElement="F_c">
+        <di:waypoint x="201" y="154" />
+        <di:waypoint x="201" y="229" />
+        <di:waypoint x="631" y="229" />
+        <di:waypoint x="631" y="154" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="209" y="211" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_jToEnd" bpmnElement="flow_jToEnd">
+        <di:waypoint x="656" y="129" />
+        <di:waypoint x="716" y="129" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

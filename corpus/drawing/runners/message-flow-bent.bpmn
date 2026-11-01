@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collab">
+    <bpmn:participant id="Top" processRef="P" />
+    <bpmn:participant id="Partner" />
+    <bpmn:messageFlow id="M" name="Request" sourceRef="A" targetRef="Partner" />
+  </bpmn:collaboration>
+  <bpmn:process id="P"><bpmn:task id="A" name="A" /><bpmn:task id="B" name="B" /></bpmn:process>
+  <bpmndi:BPMNDiagram id="D">
+    <bpmndi:BPMNPlane id="Plane" bpmnElement="Collab">
+      <bpmndi:BPMNShape id="Top_di" bpmnElement="Top" isHorizontal="true"><dc:Bounds x="100" y="100" width="600" height="400" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_di" bpmnElement="A"><dc:Bounds x="200" y="130" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B_di" bpmnElement="B"><dc:Bounds x="600" y="130" width="80" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Partner_di" bpmnElement="Partner" isHorizontal="true"><dc:Bounds x="100" y="560" width="600" height="60" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="M_di" bpmnElement="M"><di:waypoint x="250" y="210" /><di:waypoint x="250" y="350" /><di:waypoint x="450" y="350" /><di:waypoint x="450" y="540" /><di:waypoint x="460" y="540" /><di:waypoint x="460" y="560" /><bpmndi:BPMNLabel><dc:Bounds x="310" y="340" width="60" height="20" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

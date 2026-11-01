@@ -84,6 +84,50 @@ describe('DrawnDiagram', () => {
     expect(await new DocumentWriter().plain(diagram.document)).toContain('x="1234"');
   });
 
+  it('hands out one drawing per plane', async () => {
+    const diagram = await drawn('models/incremental/boundary.bpmn');
+    const [plane] = diagram.planes;
+
+    expect(diagram.drawing(plane!)).toBe(diagram.drawing(plane!));
+  });
+
+  it('remembers what its planes showed before an operation', async () => {
+    const diagram = await drawn('models/incremental/boundary.bpmn');
+    const before = diagram.snapshot();
+
+    diagram.drawnShape('C').shape.bounds.x += 500;
+
+    expect(before.changedShapes()).toEqual(['C']);
+  });
+
+  it('measures the drawing in memory, without writing it', async () => {
+    const diagram = await drawn('drawing/runners/overlaps.bpmn');
+    const overlapping = diagram.measure().score;
+    const xml = await new DocumentWriter().plain(diagram.document);
+
+    diagram.drawnShape('D').shape.bounds.x += 500;
+    diagram.drawnShape('B').shape.bounds.x += 500;
+
+    expect(diagram.measure().score).toBeLessThan(overlapping);
+    expect(await new DocumentWriter().plain(diagram.document)).toBe(xml);
+  });
+
+  it('undoes a change that makes the drawing worse and names what it would add', async () => {
+    const diagram = await drawn('drawing/runners/branching.bpmn');
+    const [plane] = diagram.planes;
+    const guard = diagram.guard(plane!);
+    const { shape } = diagram.drawnShape('E');
+    const { x } = shape.bounds;
+    const onto = (): { moved: Set<string>; resized: Set<string> } => {
+      shape.bounds.x = diagram.drawnShape('B').shape.bounds.x;
+      return { moved: new Set(['E']), resized: new Set() };
+    };
+
+    expect(guard.attempt(onto)).toBe(false);
+    expect(diagram.drawnShape('E').shape.bounds.x).toBe(x);
+    expect(guard.rejected).not.toEqual([]);
+  });
+
   it('words at most three problems, each once', () => {
     const problems = ['a', 'b', 'c', 'd', 'a'].map((id) => ({ kind: 'overlaps' as const, ids: [id] }));
 

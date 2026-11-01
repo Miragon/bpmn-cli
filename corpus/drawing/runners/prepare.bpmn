@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions_p" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="S" name="Start">
+      <bpmn:outgoing>flow_startToSub</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Sub" name="Prepare">
+      <bpmn:incoming>flow_startToSub</bpmn:incoming>
+      <bpmn:outgoing>flow_subToOk</bpmn:outgoing>
+      <bpmn:startEvent id="S1" name="Begin">
+        <bpmn:outgoing>flow_beginToPack</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:task id="T1" name="Pack">
+        <bpmn:incoming>flow_beginToPack</bpmn:incoming>
+        <bpmn:outgoing>flow_packToPacked</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="E1" name="Packed">
+        <bpmn:incoming>flow_packToPacked</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="flow_packToPacked" sourceRef="T1" targetRef="E1" />
+      <bpmn:sequenceFlow id="flow_beginToPack" sourceRef="S1" targetRef="T1" />
+    </bpmn:subProcess>
+    <bpmn:exclusiveGateway id="G" name="Ok?">
+      <bpmn:incoming>flow_subToOk</bpmn:incoming>
+      <bpmn:outgoing>flow_okToShip</bpmn:outgoing>
+      <bpmn:outgoing>flow_okToReturn</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="B" name="Ship">
+      <bpmn:incoming>flow_okToShip</bpmn:incoming>
+      <bpmn:outgoing>flow_shipToShipped</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E" name="Shipped">
+      <bpmn:incoming>flow_shipToShipped</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_shipToShipped" sourceRef="B" targetRef="E" />
+    <bpmn:sequenceFlow id="flow_okToShip" name="yes" sourceRef="G" targetRef="B" />
+    <bpmn:task id="C" name="Return">
+      <bpmn:incoming>flow_okToReturn</bpmn:incoming>
+      <bpmn:outgoing>flow_returnToRefund</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="C2" name="Refund">
+      <bpmn:incoming>flow_returnToRefund</bpmn:incoming>
+      <bpmn:outgoing>flow_refundToReturned</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E2" name="Returned">
+      <bpmn:incoming>flow_refundToReturned</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_refundToReturned" sourceRef="C2" targetRef="E2" />
+    <bpmn:sequenceFlow id="flow_returnToRefund" sourceRef="C" targetRef="C2" />
+    <bpmn:sequenceFlow id="flow_okToReturn" name="no" sourceRef="G" targetRef="C" />
+    <bpmn:sequenceFlow id="flow_subToOk" sourceRef="Sub" targetRef="G" />
+    <bpmn:sequenceFlow id="flow_startToSub" sourceRef="S" targetRef="Sub" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_P">
+    <bpmndi:BPMNPlane id="BPMNPlane_P" bpmnElement="P">
+      <bpmndi:BPMNShape id="BPMNShape_S" bpmnElement="S">
+        <dc:Bounds x="93" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="88" y="189" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Sub" bpmnElement="Sub" isExpanded="true">
+        <dc:Bounds x="189" y="87" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_S1" bpmnElement="S1">
+        <dc:Bounds x="219" y="154" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="214" y="196" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_T1" bpmnElement="T1">
+        <dc:Bounds x="315" y="132" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_E1" bpmnElement="E1">
+        <dc:Bounds x="475" y="154" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="466" y="196" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_packToPacked" bpmnElement="flow_packToPacked">
+        <di:waypoint x="415" y="172" />
+        <di:waypoint x="475" y="172" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_beginToPack" bpmnElement="flow_beginToPack">
+        <di:waypoint x="255" y="172" />
+        <di:waypoint x="315" y="172" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_G" bpmnElement="G" isMarkerVisible="true">
+        <dc:Bounds x="601" y="140" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="610" y="120" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_B" bpmnElement="B">
+        <dc:Bounds x="711" y="302" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_E" bpmnElement="E">
+        <dc:Bounds x="903" y="324" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="891" y="366" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_C" bpmnElement="C">
+        <dc:Bounds x="711" y="125" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_C2" bpmnElement="C2">
+        <dc:Bounds x="871" y="125" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_E2" bpmnElement="E2">
+        <dc:Bounds x="1031" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1015" y="189" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_shipToShipped" bpmnElement="flow_shipToShipped">
+        <di:waypoint x="811" y="342" />
+        <di:waypoint x="903" y="342" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_okToShip" bpmnElement="flow_okToShip">
+        <di:waypoint x="626" y="190" />
+        <di:waypoint x="626" y="342" />
+        <di:waypoint x="711" y="342" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="634" y="324" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_refundToReturned" bpmnElement="flow_refundToReturned">
+        <di:waypoint x="971" y="165" />
+        <di:waypoint x="1031" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_returnToRefund" bpmnElement="flow_returnToRefund">
+        <di:waypoint x="811" y="165" />
+        <di:waypoint x="871" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_okToReturn" bpmnElement="flow_okToReturn">
+        <di:waypoint x="651" y="165" />
+        <di:waypoint x="711" y="165" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="659" y="147" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_subToOk" bpmnElement="flow_subToOk">
+        <di:waypoint x="541" y="165" />
+        <di:waypoint x="601" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_startToSub" bpmnElement="flow_startToSub">
+        <di:waypoint x="129" y="165" />
+        <di:waypoint x="189" y="165" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
