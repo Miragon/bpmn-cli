@@ -2,7 +2,7 @@ import type { Box } from './Box.js';
 import { Point } from './Point.js';
 import { Segment } from './Segment.js';
 
-export interface BoxesByX {
+interface BoxesByX {
   each(low: number, high: number, visit: (box: Box) => boolean | void): boolean;
 }
 
@@ -110,7 +110,7 @@ export class Polyline {
     return kept.length === 1 && this.points.length > 1 ? [kept[0]!, kept[0]!.copy()] : kept;
   }
 
-  deduped(): Point[] {
+  private deduped(): Point[] {
     return this.points.filter((point, index) => index === 0 || point.x !== this.points[index - 1]!.x || point.y !== this.points[index - 1]!.y);
   }
 

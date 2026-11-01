@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { Box } from '../../../src/model/geometry/Box.js';
 import { Point } from '../../../src/model/geometry/Point.js';
-import { type BoxesByX, Polyline } from '../../../src/model/geometry/Polyline.js';
+import { type BoxSource, Polyline } from '../../../src/model/geometry/Polyline.js';
 
 describe('Polyline', () => {
   const route = new Polyline([new Point(0, 0), new Point(100, 0), new Point(100, 100)]);
   const shape = new Box(40, -20, 20, 40);
   const elsewhere = new Box(300, 300, 20, 20);
 
-  function indexed(boxes: readonly Box[]): BoxesByX {
+  function indexed(boxes: readonly Box[]): Exclude<BoxSource, readonly Box[]> {
     return {
       each(_low, _high, visit) {
         return boxes.some((box) => visit(box) === true);
@@ -69,7 +69,7 @@ describe('Polyline', () => {
   });
 
   it('drops repeated points and rounds to whole pixels', () => {
-    expect(new Polyline([new Point(1, 1), new Point(1, 1), new Point(2, 1)]).deduped()).toEqual([new Point(1, 1), new Point(2, 1)]);
+    expect(new Polyline([new Point(1, 1), new Point(1, 1), new Point(2, 1)]).rounded()).toEqual([new Point(1, 1), new Point(2, 1)]);
     expect(new Polyline([new Point(1.2, 1.2), new Point(0.9, 1.4), new Point(5.6, 1)]).rounded()).toEqual([new Point(1, 1), new Point(6, 1)]);
   });
 

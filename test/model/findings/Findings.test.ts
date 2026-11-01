@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { type Finding, Findings } from '../../../src/model/findings/Findings.js';
 
 describe('Findings', () => {
+  it('turns a warning of the layout into a finding at its element', () => {
+    expect(Findings.ofLayout({ code: 'DI_NOT_CREATED', elementId: 'flow', message: 'no shape' })).toEqual({ code: 'W_LAYOUT_DI_NOT_CREATED', message: 'no shape', element: 'flow', severity: 'warning' });
+  });
+
+  it('counts errors and everything else as warnings', () => {
+    const findings: Finding[] = [{ code: 'E_X', message: '', severity: 'error' }, { code: 'W_C8_X', message: '', severity: 'deploy' }, { code: 'W_X', message: '' }];
+
+    expect(Findings.countOf(findings)).toEqual({ errors: 1, warnings: 2 });
+  });
+
   it('makes a finding with only the fields it has', () => {
     expect(Findings.make('deploy', 'W_C8_X', 'Refused', undefined)).toEqual({ code: 'W_C8_X', message: 'Refused', severity: 'deploy' });
   });

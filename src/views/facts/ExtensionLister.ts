@@ -1,4 +1,4 @@
-import { BpmnElement, ElementSlots } from '../../model/index.js';
+import { BpmnElement, ElementSlots, ElementText } from '../../model/index.js';
 import type { ExtensionFacts } from '../lines/index.js';
 
 export interface ExtensionInfo extends ExtensionFacts {
@@ -8,7 +8,7 @@ export interface ExtensionInfo extends ExtensionFacts {
 
 export class ExtensionLister {
   private static genericAttrs(extension: BpmnElement): Record<string, string> {
-    const kept = extension.ownEntries().filter(([name, value]) => !name.startsWith('$') && value !== undefined && value !== null && typeof value !== 'object' && typeof value !== 'function');
+    const kept = ElementText.ownEntries(extension).filter(([name, value]) => !name.startsWith('$') && value !== undefined && value !== null && typeof value !== 'object' && typeof value !== 'function');
     return Object.fromEntries(kept.map(([name, value]) => [name, String(value)]));
   }
 

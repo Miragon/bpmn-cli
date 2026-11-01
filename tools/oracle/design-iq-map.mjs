@@ -123,6 +123,26 @@ export function designIqCalls() {
   return calls.flatMap((call, index) => (FUNCTIONS_OF_THE_REPORT.includes(call.function) ? [] : [{ id: `design-iq/${index}:${call.function}`, call }]));
 }
 
+function namesOf(references) {
+  return references.map(({ $ref }) => $ref.split('/').at(-1));
+}
+
+function readsOfSchema(schema) {
+  const { $defs: definitions } = schema;
+  const operations = namesOf(definitions.op.oneOf);
+  return { operations: operations.filter((name) => definitions[name]?.properties && definitions[name]?.required) };
+}
+
+export function recordedSchema() {
+  const { formatOperations, reads } = JSON.parse(recorded('schema-reads.json'));
+  const operations = reads.filter(({ path }) => path.at(-1) === '$ref').map(({ value }) => value.split('/').at(-1));
+  return { operations, drawing: formatOperations };
+}
+
+export function schemaFacts(schema) {
+  return { ...readsOfSchema(schema), drawing: namesOf(schema.$defs.drawingOp.oneOf) };
+}
+
 export function recordedFacts(call) {
   return call.refused ? refusalOnMain(call) : FACTS_OF_MAIN[call.function](call.answer, call);
 }

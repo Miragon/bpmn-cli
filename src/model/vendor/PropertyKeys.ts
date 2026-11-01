@@ -2,7 +2,7 @@ import type { BpmnDocument } from '../document/BpmnDocument.js';
 import type { BpmnElement } from '../document/BpmnElement.js';
 import { EventTrigger } from '../kinds/EventTrigger.js';
 
-export type PropertyReader = (element: BpmnElement, document: BpmnDocument) => Record<string, unknown>;
+type PropertyReader = (element: BpmnElement, document: BpmnDocument) => Record<string, unknown>;
 
 export interface PropertyDefinition {
   key: string;

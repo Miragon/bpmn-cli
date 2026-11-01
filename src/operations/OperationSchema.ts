@@ -5,7 +5,7 @@ import { OperationCatalog } from './OperationCatalog.js';
 
 export type JsonSchema = Record<string, unknown>;
 
-export class OperationSchema {
+class OperationSchema {
   private static referencesTo(definitions: readonly OperationDefinition[]): JsonSchema {
     return { oneOf: definitions.map(({ name }) => ({ $ref: `#/$defs/${name}` })) };
   }

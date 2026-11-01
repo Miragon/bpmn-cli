@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_note" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_note" isExecutable="false">
+    <bpmn:startEvent id="start" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="flow_startToEnd" sourceRef="start" targetRef="end" />
+    <bpmn:group id="group_reviewed" categoryValueRef="value_reviewed" />
+    <bpmn:association id="association_startToGroup" sourceRef="start" targetRef="group_reviewed" />
+  </bpmn:process>
+  <bpmn:category id="category_reviewed">
+    <bpmn:categoryValue id="value_reviewed" value="Reviewed" />
+  </bpmn:category>
+</bpmn:definitions>

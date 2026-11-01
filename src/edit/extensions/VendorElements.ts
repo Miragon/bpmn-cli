@@ -1,4 +1,4 @@
-import { type BpmnDocument, BpmnElement, BpmnError, CamundaDescriptor, DeclaredNamespaces, ZeebeDescriptor } from '../../model/index.js';
+import { type BpmnDocument, BpmnElement, BpmnError, CamundaDescriptor, DeclaredNamespaces, ElementText, ZeebeDescriptor } from '../../model/index.js';
 import { ExtensionStructure } from './ExtensionStructure.js';
 
 export interface ElementHosts {
@@ -85,7 +85,7 @@ export class VendorElements {
 
   attrsOf(el: BpmnElement): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const [rawKey, rawValue] of el.ownEntries()) {
+    for (const [rawKey, rawValue] of ElementText.ownEntries(el)) {
       if (rawKey.startsWith('$') || rawValue === undefined || rawValue === null || typeof rawValue === 'object' || typeof rawValue === 'function') {
         continue;
       }

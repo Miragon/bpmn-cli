@@ -3,6 +3,13 @@ import { ElementText } from '../../../src/model/kinds/ElementText.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 describe('ElementText', () => {
+  it('lists the attributes of a vendor element', async () => {
+    const document = await Fixtures.read('model/events.bpmn');
+    const input = document.tree.buildAny('zeebe:input', 'http://camunda.org/schema/zeebe/1.0', { source: '=a' });
+
+    expect(ElementText.ownEntries(input).filter(([property]) => property === 'source')).toEqual([['source', '=a']]);
+  });
+
   it('shows the id of an element and a question mark when there is no element', async () => {
     const document = await Fixtures.read('model/events.bpmn');
 

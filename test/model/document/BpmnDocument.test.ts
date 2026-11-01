@@ -70,6 +70,19 @@ describe('BpmnDocument', () => {
     expect(document.ids.allocate({ key: 'task', name: 'Check' }).id).toBe('T_check');
   });
 
+  it('keeps a decision link out of the reported import warnings of a file without an engine', async () => {
+    const document = await Fixtures.read('edit/properties-decisions-bare.bpmn');
+
+    expect(document.importWarnings).not.toEqual([]);
+    expect(document.reportedImportWarnings).toEqual([]);
+  });
+
+  it('reports a decision link in a file for an engine, which refuses it', async () => {
+    const document = await Fixtures.read('edit/properties-decisions.bpmn');
+
+    expect(document.reportedImportWarnings).toEqual(document.importWarnings);
+  });
+
   it('refuses to write a lossy import back unless forced', async () => {
     const document = await Fixtures.read('model/lossy.bpmn');
 

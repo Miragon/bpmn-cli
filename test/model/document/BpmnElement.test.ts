@@ -129,13 +129,6 @@ describe('BpmnElement', () => {
     expect(lane.list('flowNodeRef')).toEqual([task]);
   });
 
-  it('lists the attributes of a vendor element, wrapped where they hold elements', async () => {
-    const document = await Fixtures.read('model/events.bpmn');
-    const input = document.tree.buildAny('zeebe:input', 'http://camunda.org/schema/zeebe/1.0', { source: '=a' });
-
-    expect(input.ownEntries().filter(([property]) => property === 'source')).toEqual([['source', '=a']]);
-  });
-
   it('moves an element by setting its parent', async () => {
     const document = await Fixtures.read('model/events.bpmn');
     const task = document.tree.require('task_inside');

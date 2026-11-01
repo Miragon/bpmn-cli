@@ -13,6 +13,10 @@ export class ElementText {
     return `${Kinds.label(element)} ${element.id}${name ? ` "${name}"` : ''}`;
   }
 
+  static ownEntries(element: BpmnElement): Array<[string, unknown]> {
+    return Object.keys(element.raw).map((property) => [property, element.peek(property)]);
+  }
+
   static vendorAttributes(element: BpmnElement): Record<string, string> {
     const attributes: Record<string, string> = {};
     for (const [name, value] of Object.entries(element.attrs)) {

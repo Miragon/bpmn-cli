@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OperationCatalog } from '../../src/operations/OperationCatalog.js';
-import { OperationSchema } from '../../src/operations/OperationSchema.js';
+import { OPS_SCHEMA } from '../../src/operations/OperationSchema.js';
 import { Fixtures } from '../support/Fixtures.js';
 
 interface Read {
@@ -43,7 +43,7 @@ const FLAGS: [string, string[], number][] = [
   ['label', ['id'], 1],
 ];
 
-const schema = new OperationSchema().write() as { $defs: Record<string, Entry & { oneOf: { $ref: string }[] }> };
+const schema = OPS_SCHEMA as { $defs: Record<string, Entry & { oneOf: { $ref: string }[] }> };
 const recorded = JSON.parse(Fixtures.text('design-iq/schema-reads.json')) as { formatOperations: string[]; reads: Read[] };
 const entryOf = (name: string): Entry => schema.$defs[name]!;
 const namesIn = (union: string): string[] => schema.$defs[union]!.oneOf.map(({ $ref }) => $ref.split('/').at(-1)!);

@@ -1,4 +1,4 @@
-export { ConventionsTable, KindTable, type ConventionsFacts, type ConventionsOptions, type ConventionsResult, type ConventionsRow, type Kind, type KindTableResult, type TriggerRow, type Undeclared } from './conventions/index.js';
+export { KindTable, type Kind, type KindTableResult, type TriggerRow } from './conventions/index.js';
 export { DiagramView, type DiagramFacts, type DiagramResult, type PlaneRows, type RowFrame, type RowFrameKind, type WideGap } from './diagram/index.js';
 export type { ElementCatch, ElementDetailData, ElementLane, ElementLink, ElementMessage, EventSubProcessCatch } from './element/index.js';
 export type { DataLinks, ElementSummary, ExtensionInfo, Implementation, PartnerFlow, ViewAnnotation, ViewData } from './facts/index.js';

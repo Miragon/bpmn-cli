@@ -1,4 +1,4 @@
-import { BoxBorder, Interval, Point, Polyline, type Box } from '../../../model/index.js';
+import { BoxBorder, Interval, Point, type Box } from '../../../model/index.js';
 import { ChannelRouter } from '../routing/ChannelRouter.js';
 import type { GNode, LaneBandInfo } from '../scopes/GNode.js';
 import { LinkPath } from './LinkPath.js';
@@ -36,7 +36,7 @@ export class LinkPaths {
   }
 
   private static add(paths: Point[][], ...points: Point[]): void {
-    const path = new Polyline(points).deduped();
+    const path = points.filter(({ x, y }, index) => index === 0 || x !== points[index - 1]!.x || y !== points[index - 1]!.y);
     if (path.length >= 2) {
       paths.push(path);
     }
