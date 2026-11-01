@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ModelOperationRunner } from '../../src/edit/ModelOperationRunner.js';
 import { Fixtures } from '../support/Fixtures.js';
+import { DocumentWriter } from '../support/ModelValues.js';
 
 async function run(ops: unknown[], path = 'edit/order-check.bpmn', options = {}) {
   const document = await Fixtures.readForWrite(path);
@@ -114,6 +115,15 @@ describe('ModelOperationRunner', () => {
 
   it('lists eight removed elements of a refused retype and counts the others', async () => {
     await expect(run([{ op: 'retype', id: 'Sub', kind: 'task' }], 'edit/sub-process-many.bpmn')).rejects.toMatchObject({ code: 'E_WOULD_DROP_CONTENT', message: expect.stringMatching(/ and \d+ more\)/) });
+  });
+
+  it('frees the DI id of a removed element for a rename later in the batch, as two commands would', async () => {
+    const { document } = await run([
+      { op: 'remove', ids: ['task_taken'] },
+      { op: 'set', id: 'task_suffix', set: { id: 'task_taken' } },
+    ], 'edit/properties-ids.bpmn');
+
+    expect(await new DocumentWriter().plain(document)).toContain('id="task_taken_di" bpmnElement="task_taken"');
   });
 
   it('follows the platform the call names', async () => {

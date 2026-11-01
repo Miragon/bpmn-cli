@@ -50,6 +50,7 @@ describe('ElementCreation', () => {
     ['a trigger an event sub-process cannot start with', { kind: 'eventSubProcess:terminate' }, 'E_INVALID_TRIGGER'],
     ['a boundary event without a trigger', { kind: 'boundaryEvent', on: 'check' }, 'E_TRIGGER_REQUIRED'],
     ['a condition without text', { kind: 'task', after: 'gateway_ok', condition: '  ' }, 'E_INVALID_VALUE'],
+    ['a condition behind a parallel gateway', { kind: 'task', after: 'gateway_fork', condition: '${ok}' }, 'E_INVALID_VALUE', 'model/gateways.bpmn'],
     ['a start event without a trigger inside an event sub-process', { kind: 'startEvent', in: 'cancelOrder' }, 'E_TRIGGER_REQUIRED', 'edit/event-sub-host.bpmn'],
     ['a placement on a pool', { kind: 'participant', name: 'Bank', after: 'pack' }, 'E_INVALID_PLACEMENT', 'edit/two-pools.bpmn'],
     ['a lane behind a node', { kind: 'lane', name: 'Returns', after: 'pack' }, 'E_INVALID_PLACEMENT', 'edit/two-pools.bpmn'],

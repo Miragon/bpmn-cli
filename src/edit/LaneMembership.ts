@@ -153,7 +153,7 @@ export class LaneMembership {
     }
     const container = this.edit.require(command.in, ['bpmn:Process', 'bpmn:Participant', 'bpmn:Lane', 'bpmn:SubProcess'], 'lane container');
     if (container.is('bpmn:SubProcess')) {
-      throw BpmnError.model('E_INVALID_SCOPE', `LaneMembership can only be created at process level, not inside sub-process ${command.in}`, {
+      throw BpmnError.model('E_INVALID_SCOPE', `Lanes can only be created at process level, not inside sub-process ${command.in}`, {
         element: command.in,
         hint: 'Use --in <processId|participantId|laneId>.',
       });

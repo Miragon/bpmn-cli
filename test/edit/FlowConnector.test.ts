@@ -135,6 +135,10 @@ describe('FlowConnector', () => {
     await expect(connect(operation, 'edit/flows-endpoints.bpmn')).rejects.toMatchObject({ message: expect.stringContaining(message) });
   });
 
+  it('refuses a condition on a flow out of a parallel gateway', async () => {
+    await expect(connect({ source: 'gateway_fork', target: 'task_other', set: { condition: '${ok}' } }, 'model/gateways.bpmn')).rejects.toMatchObject({ code: 'E_INVALID_VALUE', message: expect.stringContaining('cannot have a condition') });
+  });
+
   it('warns of a task made a target of an event-based gateway', async () => {
     const { changes } = await connect({ source: 'gw_wait', target: 't_otherWay' }, 'edit/flows-bridge.bpmn');
 
