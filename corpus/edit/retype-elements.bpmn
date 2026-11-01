@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_retype" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_paid" name="Paid" />
+  <bpmn:process id="Process_retype" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_retype">
+      <bpmn:lane id="lane_main" name="Main">
+        <bpmn:flowNodeRef>task_first</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>gateway_choice</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>flow_toFirst</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="task_first" name="First" custom="kept">
+      <bpmn:documentation>Keep this</bpmn:documentation>
+      <bpmn:incoming>flow_toFirst</bpmn:incoming>
+      <bpmn:outgoing>flow_toChoice</bpmn:outgoing>
+      <bpmn:standardLoopCharacteristics />
+    </bpmn:task>
+    <bpmn:boundaryEvent id="boundary_first" attachedToRef="task_first">
+      <bpmn:timerEventDefinition id="definition_first"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT5M</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="gateway_choice" default="flow_no">
+      <bpmn:incoming>flow_toChoice</bpmn:incoming>
+      <bpmn:outgoing>flow_yes</bpmn:outgoing>
+      <bpmn:outgoing>flow_no</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="send_paid" name="Send" messageRef="Message_paid">
+      <bpmn:incoming>flow_yes</bpmn:incoming>
+    </bpmn:sendTask>
+    <bpmn:scriptTask id="script_run" name="Run" scriptFormat="javascript">
+      <bpmn:incoming>flow_no</bpmn:incoming>
+      <bpmn:script>run()</bpmn:script>
+    </bpmn:scriptTask>
+    <bpmn:complexGateway id="gateway_complex">
+      <bpmn:activationCondition xsi:type="bpmn:tFormalExpression">${n &gt; 1}</bpmn:activationCondition>
+    </bpmn:complexGateway>
+    <bpmn:subProcess id="sub_collapsed" name="Collapsed">
+      <bpmn:task id="sub_inner" name="Inner" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="sub_connected">
+      <bpmn:incoming>flow_toConnected</bpmn:incoming>
+    </bpmn:subProcess>
+    <bpmn:subProcess id="sub_handler" triggeredByEvent="true" />
+    <bpmn:intermediateCatchEvent id="catch_timer" name="Later">
+      <bpmn:timerEventDefinition id="definition_later"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="throw_plain" name="Say" />
+    <bpmn:task id="task_loose">
+      <bpmn:outgoing>flow_toConnected</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow_toFirst" sourceRef="start" targetRef="task_first" />
+    <bpmn:sequenceFlow id="flow_toChoice" sourceRef="task_first" targetRef="gateway_choice" />
+    <bpmn:sequenceFlow id="flow_yes" sourceRef="gateway_choice" targetRef="send_paid">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_no" sourceRef="gateway_choice" targetRef="script_run" />
+    <bpmn:sequenceFlow id="flow_toConnected" sourceRef="task_loose" targetRef="sub_connected" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_main">
+    <bpmndi:BPMNPlane id="BPMNPlane_main" bpmnElement="Process_retype">
+      <bpmndi:BPMNShape id="task_first_di" bpmnElement="task_first"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sub_collapsed_di" bpmnElement="sub_collapsed" isExpanded="false"><dc:Bounds x="300" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_sub">
+    <bpmndi:BPMNPlane id="BPMNPlane_sub" bpmnElement="sub_collapsed">
+      <bpmndi:BPMNShape id="sub_inner_di" bpmnElement="sub_inner"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -53,15 +53,6 @@ describe('EventDefinitions', () => {
     expect(definitionOf(event).get<BpmnElement>(property).get('body')).toBe(timer);
   });
 
-  it('builds a timer without a value', async () => {
-    const { document, events } = await editing();
-    const event = document.tree.require('catch_message');
-
-    events.setTrigger(event, 'timer');
-
-    expect(definitionOf(event).get('timeDuration')).toBeUndefined();
-  });
-
   it.each([
     ['an empty timer', 'catch_message', 'timer', { timer: '  ' }],
     ['a timer kind BPMN does not know', 'catch_message', 'timer', { timer: 'PT1H', timerKind: 'weekly' }],
@@ -88,35 +79,40 @@ describe('EventDefinitions', () => {
     expect(definitionOf(event).get<BpmnElement>(property).id).toBe(root);
   });
 
-  it('writes the code of a new error and of a new escalation onto their root elements', async () => {
+  it('writes the code of an error and of an escalation onto their root elements, new or existing', async () => {
     const { document, events } = await editing();
 
     events.setTrigger(document.tree.require('end_plain'), 'error', { error: 'Broken', errorCode: 'E9' });
     events.setTrigger(document.tree.require('throw_plain'), 'escalation', { escalation: 'Higher', escalationCode: 'E8' });
+    events.setTrigger(document.tree.require('end_error'), 'error', { error: 'Late', errorCode: 'E2' });
+    events.setTrigger(document.tree.require('end_escalation'), 'escalation', { escalation: 'Up', escalationCode: 'E3' });
 
     expect(document.tree.rootElementsOfType('bpmn:Error').at(-1)?.get('errorCode')).toBe('E9');
     expect(document.tree.rootElementsOfType('bpmn:Escalation').at(-1)?.get('escalationCode')).toBe('E8');
+    expect(document.tree.require('Error_late').get('errorCode')).toBe('E2');
+    expect(document.tree.require('Escalation_up').get('escalationCode')).toBe('E3');
   });
 
-  it('leaves a message event without a root element when no name is given', async () => {
+  it('builds a condition around its expression', async () => {
     const { document, events } = await editing();
-    const event = document.tree.require('end_plain');
+    const event = document.tree.require('catch_message');
 
-    events.setTrigger(event, 'message');
+    events.setTrigger(event, 'conditional', { when: '${ok}' });
 
-    expect(definitionOf(event).get('messageRef')).toBeUndefined();
+    expect(definitionOf(event).get<BpmnElement>('condition').get('body')).toBe('${ok}');
   });
 
-  it('builds a condition, with or without its expression', async () => {
+  it.each([
+    ['timer', 'timeDuration'],
+    ['message', 'messageRef'],
+    ['conditional', 'condition'],
+  ] as const)('builds a %s definition without detail when no option names one', async (trigger, property) => {
     const { document, events } = await editing();
-    const withExpression = document.tree.require('catch_message');
-    const without = document.tree.require('catch_signal');
+    const event = document.tree.require('catch_signal');
 
-    events.setTrigger(withExpression, 'conditional', { when: '${ok}' });
-    events.setTrigger(without, 'conditional');
+    events.setTrigger(event, trigger);
 
-    expect(definitionOf(withExpression).get<BpmnElement>('condition').get('body')).toBe('${ok}');
-    expect(definitionOf(without).get('condition')).toBeUndefined();
+    expect(definitionOf(event).get(property)).toBeUndefined();
   });
 
   it('names a new link after the option, else after the event, else not at all', async () => {
@@ -133,22 +129,15 @@ describe('EventDefinitions', () => {
     expect(definitionOf(document.tree.require('catch_signal')).get('name')).toBeUndefined();
   });
 
-  it('gives a trigger without detail its bare definition, and an id on Camunda 8', async () => {
+  it('gives a trigger without detail its bare definition, with an id on Camunda 8, and takes it away again with none', async () => {
     const { document, events } = await editing('c8');
     const event = document.tree.require('end_plain');
 
     events.setTrigger(event, 'terminate');
-
     expect(definitionOf(event).get<string>('id')).toContain('terminateEventDefinition');
-  });
-
-  it('removes the definition when the trigger becomes none', async () => {
-    const { document, events } = await editing();
-    const event = document.tree.require('end_error');
-
     events.setTrigger(event, 'none');
 
-    expect(event.get('eventDefinitions')).toEqual([]);
+    expect(event.list('eventDefinitions')).toEqual([]);
   });
 
   it('keeps one matching definition and warns about the others', async () => {
@@ -211,16 +200,6 @@ describe('EventDefinitions', () => {
 
     expect(definitionOf(event)).toBe(definition);
     expect(definition.get<BpmnElement>('messageRef').get('name')).toBe('Fresh');
-  });
-
-  it('updates the code of the error an event has', async () => {
-    const { document, events } = await editing();
-
-    events.setTrigger(document.tree.require('end_error'), 'error', { error: 'Late', errorCode: 'E2' });
-    events.setTrigger(document.tree.require('end_escalation'), 'escalation', { escalation: 'Up', escalationCode: 'E3' });
-
-    expect(document.tree.require('Error_late').get('errorCode')).toBe('E2');
-    expect(document.tree.require('Escalation_up').get('escalationCode')).toBe('E3');
   });
 
   it('renames the link of a link event, clears it, and leaves it without an option', async () => {
