@@ -40,6 +40,14 @@ describe('DocumentValidation', () => {
     expect(findings).toContainEqual(expect.objectContaining({ code: 'W_LAYOUT_DI_NOT_CREATED', element: 'association_startToGroup', severity: 'warning' }));
   });
 
+  it('reports a redraw that fails as a finding of its own, not as a crash', async () => {
+    const { ok, layout, findings } = await report('write/nested-too-deep-to-draw.bpmn');
+
+    expect(ok).toBe(false);
+    expect(layout).toMatchObject({ status: 'failed', error: { code: 'E_INTERNAL' } });
+    expect(findings).toContainEqual(expect.objectContaining({ code: 'E_INTERNAL', severity: 'error' }));
+  });
+
   it('runs host validators once with the phase check, on the text as given', async () => {
     const seen: Array<[string, ValidatorContext]> = [];
     const gate: Validator = {
