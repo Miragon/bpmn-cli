@@ -1,0 +1,1 @@
+module.exports = () => ({ check: { enter(node, reporter) { if (node.id === 'work') { reporter.report(node.id, 'entered'); } }, leave(node, reporter) { if (node.id === 'work') { reporter.report(node.id, 'left'); } } } });

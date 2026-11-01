@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "probe": "findings",
+    "pattern": "^lint/examples/[^:]+\\.bpmn#(c7|c8|none): main only: @miragon/rules/element-id-naming error Association_",
+    "reason": "The plugin decision (ADR 6): main's bundled 0.19 answers first and names association ids; the examples pin 0.17, whose copy now runs and does not, as bpmnlint 12's CLI reports there"
+  },
+  {
+    "probe": "findings",
+    "pattern": "^lint/cases/project-copy-runs/model\\.bpmn#(c7|c8|none): main only: @miragon/rules/(element-id-naming|no-generated-ids) warning ",
+    "reason": "The plugin decision (ADR 6): the project installs its own @miragon/bpmnlint-plugin-rules, so its config runs, not the bundled one main answers with"
+  },
+  {
+    "probe": "findings",
+    "pattern": "^lint/cases/project-copy-lacks-a-rule/model\\.bpmn#(c7|c8|none): (main only: @miragon/rules/no-generated-ids error Activity_0049ryx|subject only: W_LINT_UNAVAILABLE warning -)$",
+    "reason": "The plugin decision (ADR 6): a rule the project's copy lacks is left out and named, as the project's CI fails on it; main falls back to the bundled rule"
+  }
+]

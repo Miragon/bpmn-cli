@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "start-event-required": 1,
+    "end-event-required": "WARN",
+    "no-disconnected": [
+      "error",
+      {
+        "any": "option"
+      }
+    ],
+    "no-implicit-end": "info",
+    "single-blank-start-event": 3,
+    "no-implicit-start": "off",
+    "label-required": 0,
+    "no-bpmndi": "unheard-of"
+  }
+}

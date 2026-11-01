@@ -1,0 +1,10 @@
+{
+  "extends": [
+    "bpmnlint:recommended",
+    "plugin:camunda-compat/camunda-platform-7-24",
+    "plugin:@miragon/rules/all"
+  ],
+  "moddleExtensions": {
+    "camunda": "camunda-bpmn-moddle/resources/camunda.json"
+  }
+}

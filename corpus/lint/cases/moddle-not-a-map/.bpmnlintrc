@@ -1,0 +1,4 @@
+{
+  "extends": "bpmnlint:recommended",
+  "moddleExtensions": "camunda-bpmn-moddle/resources/camunda.json"
+}

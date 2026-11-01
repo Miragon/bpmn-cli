@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:eventBasedGateway id="choice" />
+    <bpmn:intermediateCatchEvent id="wait_a"><bpmn:timerEventDefinition id="timer_a" /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="wait_b"><bpmn:timerEventDefinition id="timer_b" /></bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="flow_1" sourceRef="start" targetRef="choice" />
+    <bpmn:sequenceFlow id="flow_2" sourceRef="choice" targetRef="wait_a" />
+    <bpmn:sequenceFlow id="flow_3" sourceRef="choice" targetRef="wait_b" />
+    <bpmn:sequenceFlow id="flow_4" sourceRef="wait_a" targetRef="end" />
+    <bpmn:sequenceFlow id="flow_5" sourceRef="wait_b" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>

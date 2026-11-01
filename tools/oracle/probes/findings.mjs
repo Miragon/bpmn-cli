@@ -20,7 +20,7 @@ function unmatched(rows, others) {
 export default {
   name: 'findings',
   inputs() {
-    return corpusModels('models', 'layout').flatMap((model) => PLATFORMS.map((platform) => ({ id: `${model}#${platform}`, model, platform })));
+    return corpusModels('models', 'layout', 'lint').flatMap((model) => PLATFORMS.map((platform) => ({ id: `${model}#${platform}`, model, platform })));
   },
   async compare({ id, model, platform }, { main, subject }) {
     const xml = readCorpus(model);

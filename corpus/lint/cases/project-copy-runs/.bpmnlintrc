@@ -1,0 +1,6 @@
+{
+  "extends": "plugin:@miragon/rules/recommended-for-automation",
+  "rules": {
+    "@miragon/rules/project-only": "error"
+  }
+}

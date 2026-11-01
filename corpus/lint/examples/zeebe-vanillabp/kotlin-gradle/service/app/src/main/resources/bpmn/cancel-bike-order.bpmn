@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_1d2hcmz" targetNamespace="http://miragon.io/miravelo/bike-order" exporter="Camunda Modeler" exporterVersion="5.46.1" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:process id="cancelBikeOrder" name="Cancel Bike Order" isExecutable="true">
+    <bpmn:startEvent id="startEvent_cancellationRequired" name="Cancellation required">
+      <bpmn:outgoing>flow_startToRequestCancellation</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="flow_startToRequestCancellation" sourceRef="startEvent_cancellationRequired" targetRef="serviceTask_requestCancellation" />
+    <bpmn:exclusiveGateway id="gateway_cancellationPossible" name="Cancellation possible?" default="flow_possibleToJoin">
+      <bpmn:incoming>flow_requestToCancellationPossible</bpmn:incoming>
+      <bpmn:outgoing>flow_notPossibleToClarifyReturn</bpmn:outgoing>
+      <bpmn:outgoing>flow_possibleToJoin</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_requestToCancellationPossible" sourceRef="serviceTask_requestCancellation" targetRef="gateway_cancellationPossible" />
+    <bpmn:sequenceFlow id="flow_notPossibleToClarifyReturn" name="No" sourceRef="gateway_cancellationPossible" targetRef="userTask_clarifyReturn">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=cancellationPossible</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:endEvent id="endEvent_orderReversed" name="Order reversed">
+      <bpmn:incoming>flow_joinToReversed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_possibleToJoin" name="Yes" sourceRef="gateway_cancellationPossible" targetRef="gateway_join" />
+    <bpmn:userTask id="userTask_clarifyReturn" name="Clarify return with supplier">
+      <bpmn:documentation>Kept deliberately as an ENGINE-ONLY task to show the trade-off. It is completed straight through the Camunda 8 REST API, so the completion never passes through our domain services: any data sent along lands only in process variables and never reaches the domain model. In other words, for capturing business data this is NOT best practice. The task carries an external form reference instead of a Camunda Form: VanillaBP binds a Camunda user task by that reference, so the Tasklist no longer renders a form for it. Contrast this with "Clarify alternative with customer" in bike-leasing.bpmn, which offers a domain REST endpoint (POST /api/bike-leasing/{id}/clarify-alternative) that updates the aggregate before completing the task.</bpmn:documentation>
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition externalReference="clarifyReturn" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_notPossibleToClarifyReturn</bpmn:incoming>
+      <bpmn:outgoing>flow_clarifyReturnToBookCosts</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_clarifyReturnToBookCosts" sourceRef="userTask_clarifyReturn" targetRef="serviceTask_bookCosts" />
+    <bpmn:exclusiveGateway id="gateway_join">
+      <bpmn:incoming>flow_possibleToJoin</bpmn:incoming>
+      <bpmn:incoming>flow_bookCostsToJoin</bpmn:incoming>
+      <bpmn:outgoing>flow_joinToReversed</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_joinToReversed" sourceRef="gateway_join" targetRef="endEvent_orderReversed" />
+    <bpmn:sequenceFlow id="flow_bookCostsToJoin" sourceRef="serviceTask_bookCosts" targetRef="gateway_join" />
+    <bpmn:serviceTask id="serviceTask_bookCosts" name="Book costs">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="miravelo.bookCosts" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_clarifyReturnToBookCosts</bpmn:incoming>
+      <bpmn:outgoing>flow_bookCostsToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="serviceTask_requestCancellation" name="Request cancellation">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="miravelo.requestCancellation" retries="3" />
+        <!-- The routing value the cancellation-possible gateway reads, set on the workflow aggregate. -->
+        <zeebe:ioMapping>
+          <zeebe:output source="=cancellationPossible" target="cancellationPossible" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_startToRequestCancellation</bpmn:incoming>
+      <bpmn:outgoing>flow_requestToCancellationPossible</bpmn:outgoing>
+    </bpmn:serviceTask>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="cancelBikeOrder">
+      <bpmndi:BPMNShape id="Event_1nljdw6_di" bpmnElement="startEvent_cancellationRequired">
+        <dc:Bounds x="172" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="159" y="125" width="61" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1kv4mu2_di" bpmnElement="gateway_cancellationPossible" isMarkerVisible="true">
+        <dc:Bounds x="395" y="75" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="380" y="53" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_0aqcoyk_di" bpmnElement="endEvent_orderReversed">
+        <dc:Bounds x="852" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="831" y="125" width="79" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_1hcxmnz_di" bpmnElement="userTask_clarifyReturn">
+        <dc:Bounds x="480" y="160" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_0kt0isq_di" bpmnElement="gateway_join" isMarkerVisible="true">
+        <dc:Bounds x="755" y="75" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0utgrb1_di" bpmnElement="serviceTask_bookCosts">
+        <dc:Bounds x="620" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_0zc9mkg_di" bpmnElement="serviceTask_requestCancellation">
+        <dc:Bounds x="250" y="60" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_startToRequestCancellation_di" bpmnElement="flow_startToRequestCancellation">
+        <di:waypoint x="208" y="100" />
+        <di:waypoint x="250" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_requestToCancellationPossible_di" bpmnElement="flow_requestToCancellationPossible">
+        <di:waypoint x="350" y="100" />
+        <di:waypoint x="395" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_notPossibleToClarifyReturn_di" bpmnElement="flow_notPossibleToClarifyReturn">
+        <di:waypoint x="420" y="125" />
+        <di:waypoint x="420" y="200" />
+        <di:waypoint x="480" y="200" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="432" y="153" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_possibleToJoin_di" bpmnElement="flow_possibleToJoin">
+        <di:waypoint x="445" y="100" />
+        <di:waypoint x="755" y="100" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="591" y="82" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_clarifyReturnToBookCosts_di" bpmnElement="flow_clarifyReturnToBookCosts">
+        <di:waypoint x="580" y="200" />
+        <di:waypoint x="620" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_joinToReversed_di" bpmnElement="flow_joinToReversed">
+        <di:waypoint x="805" y="100" />
+        <di:waypoint x="852" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_bookCostsToJoin_di" bpmnElement="flow_bookCostsToJoin">
+        <di:waypoint x="720" y="200" />
+        <di:waypoint x="780" y="200" />
+        <di:waypoint x="780" y="125" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
