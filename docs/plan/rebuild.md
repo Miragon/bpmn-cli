@@ -232,17 +232,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 11. Drawing
-
-Build drawing.
-
-- Today: an ownership check redraws, failures redraw everything, vertical lanes turn horizontal.
-- After: incremental on a drawn plane, full on an empty one, a `layout` operation redraws; failures are errors
-  with hints; lanes keep their direction; `TrialGuard` asks `Scorer`. The first commit fits
-  `ChannelRouter` into the size limits.
-- Files: `src/drawing/`, `test/drawing/`, `corpus/walks/`.
-- Done when: the layout probe is green without edit, over the scenarios and the walks.
-
 ### 13. Write, views and api
 
 Build write, views and api.

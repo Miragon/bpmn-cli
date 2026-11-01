@@ -136,7 +136,7 @@ Done when render draws the corpus in Node and in a browser bundle, and lint's or
 - [x] **8. Operations** · needs 7
 - [x] **9. Checks** · needs 7
 - [x] **10. Scoring** · needs 5, 7
-- [ ] **11. Drawing** · needs 8, 10 · [card](rebuild.md#11-drawing)
+- [x] **11. Drawing** · needs 8, 10
 - [x] **12. Edit** · needs 8
 - [ ] **13. Write, views and api** · needs 9 to 12 · [card](rebuild.md#13-write-views-and-api)
 - [ ] **14. CLI, ship rc.1** · needs 6, 13 · [card](rebuild.md#14-cli-and-rc1)

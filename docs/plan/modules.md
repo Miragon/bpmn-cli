@@ -241,10 +241,10 @@ and ships in bpmnlint 11.15 and 12, in the config `bpmnlint:all`.
   0.6 to 1.6 times the default, so a file with 120 by 80 tasks got more of them.
 - A shape a person drew keeps its size; only `bpmn layout`, which redraws everything, sets each shape
   to the table, as today.
-- A shape never grows for what it carries: a task stays 100 by 80 with any number of boundary events.
-  They take the free spots on the border, bottom first, then top, in both layouts, as the incremental
-  layout searches today; when none is left, they overlap and the layout score counts it. Many boundary
-  events on one task are an antipattern, and bpmn-cli has no workaround for one
+- A shape never grows for what it carries: a task stays 100 by 80 with any name and any number of
+  boundary events. A long name wraps inside the shape. Boundary events take the free spots on the
+  border, bottom first, then top, in both layouts, as the incremental layout searches today; when none
+  is left, they overlap and the layout score counts it. Many boundary events on one task are an antipattern, and bpmn-cli has no workaround for one
   ([decisions](README.md#decisions)). The scenario `artifacts/10-three-boundaries`, today a task of
   148 by 80, then scores what the standard size scores; the scenarios' total holds it.
 
