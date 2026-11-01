@@ -24,16 +24,14 @@ export class C8SchemaRules extends C8Rules {
     }
     const first = processes[0]!;
     const what = processes.length === 1 ? `Process ${first.id} is not executable` : `None of the ${processes.length} processes is executable`;
-    reporter.deploy({ code: 'W_C8_DEPLOY_EXECUTABLE', element: first, subject: 'executable', message: `${what} (no isExecutable="true"); Camunda 8 refuses to deploy a file without an executable process`, hint: `\`bpmn set <file> ${first.id} isExecutable=true\`.` });
+    reporter.deploy({ code: 'W_C8_DEPLOY_EXECUTABLE', element: first, subject: 'executable', message: `${what} (no isExecutable="true"); Camunda 8 refuses to deploy a file without an executable process`, hint: `\`bpmn set <file> ${first.id} isExecutable=true\`.`, fix: { op: 'set', id: first.id, set: { isExecutable: true } } });
   }
 
   private checkSchema(reporter: RuleReporter): void {
     if ((this.document.tree.definitions.peek<BpmnElement>('extensionElements')?.list('values') ?? []).length) {
       reporter.deploy({ code: 'W_C8_DEPLOY_SCHEMA', element: this.document.tree.definitions, subject: 'definitions', message: `bpmn:definitions carries bpmn:extensionElements, which the BPMN schema does not allow there; Camunda 8 refuses the file`, hint: `Move the content to the process: \`bpmn ext remove <file> ${this.document.tree.definitions.id ?? '<definitionsId>'} <type>\`, then \`bpmn ext add <file> <processId> <type> ...\`.` });
     }
-    for (const attributes of this.unprefixedAttributes()) {
-      attributes.keys.forEach((key) => this.checkSchemaAttribute(attributes, key, reporter));
-    }
+    this.forEachUnprefixedAttribute((attributes, key) => this.checkSchemaAttribute(attributes, key, reporter));
   }
 
   private checkSchemaAttribute(attributes: UnprefixedAttributes, key: string, reporter: RuleReporter): void {

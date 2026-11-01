@@ -40,7 +40,7 @@ export class ScopeChecks {
       const link = Triggers.isLinkCatch(node) ? FlowOrder.linkNameOf(node) : undefined;
       this.findings.warning('W_UNREACHABLE', `${this.findings.describe(node)} is not reachable from any start event${link ? ` (no throwing link event "${link}" pairs with it)` : ''}`, ElementText.shownId(node), {
         hint: link
-          ? `Link events pair by link name: add the throwing side with \`bpmn add <file> intermediateThrowEvent:link "<Name>" --after <nodeId> --link ${link}\`, or remove it.`
+          ? `Link events pair by link name: add the throwing side with \`bpmn add <file> intermediateThrowEvent:link "<Name>" --after <nodeId> link=${link}\`, or remove it.`
           : `Connect it (\`bpmn connect <file> <fromId> ${ElementText.shownId(node)}\` or \`bpmn move <file> ${ElementText.shownId(node)} --after <nodeId>\`) or remove it.`,
       });
     }

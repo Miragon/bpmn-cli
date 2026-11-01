@@ -56,7 +56,7 @@ export class C7FlowRules extends C7Rules {
   private checkGatewayBranch(gw: BpmnElement, flow: BpmnElement, target: BpmnElement, names: Map<string, BpmnElement>, reporter: RuleReporter): void {
     const leadsTo = `Event-based gateway ${gw.id} leads to ${this.describe(target, undefined)}`;
     if (!target.is('bpmn:IntermediateCatchEvent')) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_EVENT_GATEWAY', element: gw, subject: `target:${target.id}`, message: `${leadsTo}; the engines accept only intermediate catch events (message, timer, signal, conditional) there and refuse the file`, hint: `Put a catch event in front of it: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${flow.id} --message <MessageName>\` (or :timer --timer PT1H).`, related: [target.id, flow.id] });
+      reporter.deploy({ code: 'W_C7_DEPLOY_EVENT_GATEWAY', element: gw, subject: `target:${target.id}`, message: `${leadsTo}; the engines accept only intermediate catch events (message, timer, signal, conditional) there and refuse the file`, hint: `Put a catch event in front of it: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${flow.id} message=<MessageName>\` (or :timer timer=PT1H).`, related: [target.id, flow.id] });
       return;
     }
     const defs = this.actedOn(target);
@@ -85,7 +85,7 @@ export class C7FlowRules extends C7Rules {
   }
 
   private static reportConditionedDefault(gw: BpmnElement, flow: BpmnElement, reporter: RuleReporter): void {
-    reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `default:${flow.id}`, message: `Default flow ${flow.id} of exclusive gateway ${gw.id} has a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} condition=\`.`, related: [flow.id] });
+    reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `default:${flow.id}`, message: `Default flow ${flow.id} of exclusive gateway ${gw.id} has a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} condition=\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, set: { condition: '' } } });
   }
 
   private checkExclusiveGateway(gw: BpmnElement, reporter: RuleReporter): void {
@@ -112,7 +112,7 @@ export class C7FlowRules extends C7Rules {
       }
     } else if (unconditioned.length === 1) {
       const flow = unconditioned[0]!;
-      reporter.practice({ code: 'W_C7_EXCLUSIVE_GATEWAY_DEFAULT', element: gw, subject: `implicit:${flow.id}`, message: `Flow ${flow.id} of exclusive gateway ${gw.id} has no condition and is not the default flow; the engines take it as the default and log a warning`, hint: `\`bpmn set <file> ${flow.id} default=true\`.`, related: [flow.id] });
+      reporter.practice({ code: 'W_C7_EXCLUSIVE_GATEWAY_DEFAULT', element: gw, subject: `implicit:${flow.id}`, message: `Flow ${flow.id} of exclusive gateway ${gw.id} has no condition and is not the default flow; the engines take it as the default and log a warning`, hint: `\`bpmn set <file> ${flow.id} default=true\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, set: { default: true } } });
     }
   }
 
@@ -123,7 +123,7 @@ export class C7FlowRules extends C7Rules {
     if (flow === def) {
       C7FlowRules.reportConditionedDefault(gw, flow, reporter);
     } else {
-      reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `single:${flow.id}`, message: `Exclusive gateway ${gw.id} has a single outgoing flow ${flow.id} with a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} condition=\`.`, related: [flow.id] });
+      reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `single:${flow.id}`, message: `Exclusive gateway ${gw.id} has a single outgoing flow ${flow.id} with a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} condition=\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, set: { condition: '' } } });
     }
   }
 
@@ -133,7 +133,7 @@ export class C7FlowRules extends C7Rules {
     if (!flows.length) {
       return;
     }
-    reporter.deploy({ code: 'W_C7_DEPLOY_COMPLEX_GATEWAY', element: el, subject: 'complexGateway', message: `Complex gateway ${el.id} is connected; the engines do not run complex gateways and refuse the file (invalid ${incoming.length ? 'destination' : 'source'} '${el.id}' of sequence flow ${flows[0]?.id})`, hint: `\`bpmn retype <file> ${el.id} inclusiveGateway\` (or exclusiveGateway: one path).`, related: flows.map(({ id }) => id) });
+    reporter.deploy({ code: 'W_C7_DEPLOY_COMPLEX_GATEWAY', element: el, subject: 'complexGateway', message: `Complex gateway ${el.id} is connected; the engines do not run complex gateways and refuse the file (invalid ${incoming.length ? 'destination' : 'source'} '${el.id}' of sequence flow ${flows[0]?.id})`, hint: `\`bpmn retype <file> ${el.id} inclusiveGateway\` (or exclusiveGateway: one path).`, related: flows.map(({ id }) => id), fix: { op: 'retype', id: el.id, kind: 'inclusiveGateway' } });
   }
 
   private static listed(noun: string, elements: BpmnElement[]): string {

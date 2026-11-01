@@ -44,7 +44,7 @@ export class C8DefinitionRules extends C8Rules {
     const associated = (scope?.list('artifacts') ?? []).some((artifact) => artifact.is('bpmn:Association') && artifact.peek<BpmnElement>('sourceRef') === el);
     const out = this.outgoing.get(el) ?? [];
     if (!associated || out.length) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_DEFINITION', element: el, subject: 'compensationBoundary', message: `Compensation boundary event ${el.id} ${!associated ? 'has no association to a compensation handler' : 'has an outgoing sequence flow'}; Camunda 8 refuses the file`, hint: !associated ? `Connect it to its handler (an activity with isForCompensation=true): \`bpmn connect <file> ${el.id} <handlerId>\`.` : `Remove the flow (\`bpmn remove <file> ${out[0]?.id} --no-bridge\`) and connect the handler instead: \`bpmn connect <file> ${el.id} <handlerId>\`.` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_DEFINITION', element: el, subject: 'compensationBoundary', message: `Compensation boundary event ${el.id} ${!associated ? 'has no association to a compensation handler' : 'has an outgoing sequence flow'}; Camunda 8 refuses the file`, hint: !associated ? `Connect it to its handler (an activity with isForCompensation=true): \`bpmn connect <file> ${el.id} <handlerId>\`.` : `Remove the flow (\`bpmn remove <file> ${out[0]?.id} --bridge none\`) and connect the handler instead: \`bpmn connect <file> ${el.id} <handlerId>\`.` });
     }
   }
 
@@ -94,7 +94,7 @@ export class C8DefinitionRules extends C8Rules {
       reporter.deploy({ code: 'W_C8_DEPLOY_ERROR', element: el, subject: 'errorCode', message: `${label} catches the error code "${code}", an expression; Camunda 8 needs a static code on catching error events and refuses the file`, hint: `\`bpmn set <file> ${el.id} errorCode=<CODE>\` (or no code: it catches every error).`, related: err ? [err.id] : [] });
     }
     if (this.nonInterrupting(el)) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_ERROR', element: el, subject: 'nonInterrupting', message: `${label} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, hint: `\`bpmn set <file> ${el.id} nonInterrupting=false\`.` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_ERROR', element: el, subject: 'nonInterrupting', message: `${label} is a non-interrupting error event; Camunda 8 refuses it (error events always interrupt)`, hint: `\`bpmn set <file> ${el.id} nonInterrupting=false\`.`, fix: { op: 'set', id: el.id, set: { nonInterrupting: false } } });
     }
   }
 

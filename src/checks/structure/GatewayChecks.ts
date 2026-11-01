@@ -41,14 +41,14 @@ export class GatewayChecks {
     if (!this.isJoinGateway(node) || !this.findings.nameOf(node)) {
       return;
     }
-    this.findings.warning('W_NAMED_JOIN', `Joining gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} name=\`.` });
+    this.findings.warning('W_NAMED_JOIN', `Joining gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} name=\`.`, fix: { op: 'set', id: ElementText.shownId(node), set: { name: '' } } });
   }
 
   private checkParallelName(node: BpmnElement): void {
     if (!node.is('bpmn:ParallelGateway') || !this.findings.nameOf(node)) {
       return;
     }
-    this.findings.warning('W_NAMED_PARALLEL', `Parallel gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} name=\`.` });
+    this.findings.warning('W_NAMED_PARALLEL', `Parallel gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} name=\`.`, fix: { op: 'set', id: ElementText.shownId(node), set: { name: '' } } });
   }
 
   private checkIgnoredConditions(node: BpmnElement, outgoing: BpmnElement[]): void {

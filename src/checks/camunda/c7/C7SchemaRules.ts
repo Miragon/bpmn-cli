@@ -13,9 +13,7 @@ export class C7SchemaRules extends C7Rules {
   }
 
   private checkSchemaAttributes(reporter: RuleReporter): void {
-    for (const attributes of this.unprefixedAttributes()) {
-      attributes.keys.forEach((key) => this.checkSchemaAttribute(attributes, key, reporter));
-    }
+    this.forEachUnprefixedAttribute((attributes, key) => this.checkSchemaAttribute(attributes, key, reporter));
   }
 
   private checkSchemaAttribute(attributes: UnprefixedAttributes, key: string, reporter: RuleReporter): void {

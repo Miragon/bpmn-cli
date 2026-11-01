@@ -51,6 +51,11 @@ export abstract class CamundaRules {
     return ElementAddress.of(el, owner);
   }
 
+  protected unsetCommand(el: BpmnElement, owner: BpmnElement | undefined, key: string): string {
+    const address = this.addressOf(el, owner);
+    return address ? `\`bpmn set <file> ${address.slot(`${key}=`)}\`` : 'edit the XML';
+  }
+
   protected attr(el: BpmnElement | undefined, name: string): string | undefined {
     const value = el?.peek<unknown>(name);
     return value === undefined || value === null ? undefined : String(value);
@@ -100,7 +105,13 @@ export abstract class CamundaRules {
     return [...this.document.tree.walk(this.document.tree.definitions, { bpmnOnly: true })].filter((element) => element.is('bpmn:EventDefinition'));
   }
 
-  protected unprefixedAttributes(): UnprefixedAttributes[] {
+  protected forEachUnprefixedAttribute(visit: (attributes: UnprefixedAttributes, key: string) => void): void {
+    for (const attributes of this.unprefixedAttributes()) {
+      attributes.keys.forEach((key) => visit(attributes, key));
+    }
+  }
+
+  private unprefixedAttributes(): UnprefixedAttributes[] {
     const found: UnprefixedAttributes[] = [];
     for (const el of this.document.tree.walk(this.document.tree.definitions, { bpmnOnly: true })) {
       const keys = Object.keys(el.attrs).filter((key) => !key.includes(':') && key !== 'xmlns');

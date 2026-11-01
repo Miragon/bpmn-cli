@@ -133,14 +133,14 @@ export class C7StartEventRules extends C7Rules {
     const trigger = this.triggerName(def);
     const ref = (prop: string): string => ShellWords.quote(this.nameOf(def.peek<BpmnElement>(prop)) ?? '<Name>');
     const option: Record<string, string> = {
-      message: `--message ${ref('messageRef')}`,
-      signal: `--signal ${ref('signalRef')}`,
-      error: `--error ${ref('errorRef')}`,
-      escalation: `--escalation ${ref('escalationRef')}`,
-      timer: '--timer <value>',
-      conditional: `--when ${ShellWords.quote('${expression}')}`,
+      message: `message=${ref('messageRef')}`,
+      signal: `signal=${ref('signalRef')}`,
+      error: `error=${ref('errorRef')}`,
+      escalation: `escalation=${ref('escalationRef')}`,
+      timer: 'timer=<value>',
+      conditional: ShellWords.quote('when=${expression}'),
     };
-    const opts = [option[trigger] ?? '', extra.peek<boolean>('isInterrupting') === false ? '--non-interrupting' : ''].filter(Boolean).join(' ');
+    const opts = [option[trigger] ?? '', extra.peek<boolean>('isInterrupting') === false ? 'nonInterrupting=true' : ''].filter(Boolean).join(' ');
     return `then keep its ${trigger} trigger in an event sub-process of its own: \`bpmn add <file> eventSubProcess:${trigger} "<Name>" --in ${this.document.scopes.scopeOf(scope)?.id ?? '<parentId>'}${opts ? ` ${opts}` : ''}\``;
   }
 }

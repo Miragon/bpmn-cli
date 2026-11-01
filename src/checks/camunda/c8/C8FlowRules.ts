@@ -37,18 +37,18 @@ export class C8FlowRules extends C8Rules {
   }
 
   checkTransaction(el: BpmnElement, reporter: RuleReporter): void {
-    reporter.deploy({ code: 'W_C8_DEPLOY_UNSUPPORTED', element: el, subject: 'transaction', message: `${this.describe(el)} is a transaction; Camunda 8 does not support transactions and refuses the file`, hint: `\`bpmn retype <file> ${el.id} subProcess\` (an embedded sub-process).` });
+    reporter.deploy({ code: 'W_C8_DEPLOY_UNSUPPORTED', element: el, subject: 'transaction', message: `${this.describe(el)} is a transaction; Camunda 8 does not support transactions and refuses the file`, hint: `\`bpmn retype <file> ${el.id} subProcess\` (an embedded sub-process).`, fix: { op: 'retype', id: el.id, kind: 'subProcess' } });
   }
 
   private static checkComplexGateway(el: BpmnElement, reporter: RuleReporter): void {
-    reporter.deploy({ code: 'W_C8_DEPLOY_UNSUPPORTED', element: el, subject: 'complexGateway', message: `Complex gateway ${el.id}: Camunda 8 does not support complex gateways and refuses the file`, hint: `\`bpmn retype <file> ${el.id} inclusiveGateway\` (or exclusiveGateway: one path).` });
+    reporter.deploy({ code: 'W_C8_DEPLOY_UNSUPPORTED', element: el, subject: 'complexGateway', message: `Complex gateway ${el.id}: Camunda 8 does not support complex gateways and refuses the file`, hint: `\`bpmn retype <file> ${el.id} inclusiveGateway\` (or exclusiveGateway: one path).`, fix: { op: 'retype', id: el.id, kind: 'inclusiveGateway' } });
   }
 
   checkAdHoc(el: BpmnElement, reporter: RuleReporter): void {
     const nodes = this.document.scopes.flowNodes(el);
     for (const node of nodes) {
       if (node.is('bpmn:StartEvent') || node.is('bpmn:EndEvent')) {
-        reporter.deploy({ code: 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', element: el, subject: `adHoc:${node.id}`, message: `Ad-hoc sub-process ${el.id} contains the ${node.is('bpmn:StartEvent') ? 'start' : 'end'} event ${node.id}; Camunda 8 refuses start and end events in ad-hoc sub-processes`, hint: `\`bpmn remove <file> ${node.id}\`.`, related: [node.id] });
+        reporter.deploy({ code: 'W_C8_DEPLOY_AD_HOC_SUBPROCESS', element: el, subject: `adHoc:${node.id}`, message: `Ad-hoc sub-process ${el.id} contains the ${node.is('bpmn:StartEvent') ? 'start' : 'end'} event ${node.id}; Camunda 8 refuses start and end events in ad-hoc sub-processes`, hint: `\`bpmn remove <file> ${node.id}\`.`, related: [node.id], fix: { op: 'remove', ids: [node.id] } });
       }
     }
     if (!nodes.some((node) => node.is('bpmn:Activity'))) {
@@ -100,7 +100,7 @@ export class C8FlowRules extends C8Rules {
     const flows = this.outgoing.get(gw) ?? [];
     const listed = flows.filter((flow) => !this.unlisted.has(flow) || this.unlisted.get(flow) !== gw);
     if (flows.length < 2) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_GATEWAY', element: gw, subject: 'branches', message: `Event-based gateway ${gw.id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, hint: `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${gw.id} --timer PT1H\`.` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_GATEWAY', element: gw, subject: 'branches', message: `Event-based gateway ${gw.id} has ${flows.length} outgoing flow${flows.length === 1 ? '' : 's'}; Camunda 8 needs at least two and refuses the file`, hint: `Add a branch: \`bpmn add <file> intermediateCatchEvent:timer "<Timeout>" --after ${gw.id} timer=PT1H\`.` });
     } else if (listed.length < 2) {
       reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_GATEWAY', element: gw, subject: 'branches', message: `Event-based gateway ${gw.id} has ${flows.length} outgoing flows, but the file lists ${listed.length} of them as its <bpmn:outgoing> entries; Camunda 8 counts the listed ones and refuses the file`, hint: `Add the missing <bpmn:outgoing>${flows.filter((flow) => !listed.includes(flow)).map(({ id: flowId }) => flowId).join('</bpmn:outgoing>, <bpmn:outgoing>')}</bpmn:outgoing> entries to ${gw.id} in the XML (Camunda Modeler writes them; this file leaves the lists out, and \`bpmn\` keeps a file's style).` });
     }
@@ -112,7 +112,7 @@ export class C8FlowRules extends C8Rules {
       const defs = target.list('eventDefinitions');
       const ok = target.is('bpmn:IntermediateCatchEvent') && defs.length === 1 && Triggers.EVENT_GATEWAY_TRIGGERS.includes(this.triggerName(defs[0]!) as Trigger);
       if (!ok) {
-        reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_GATEWAY', element: gw, subject: `target:${target.id}`, message: `Event-based gateway ${gw.id} leads to ${this.describe(target)}; Camunda 8 allows only message, timer, signal and conditional intermediate catch events after it and refuses the file`, hint: target.is('bpmn:ReceiveTask') ? `Use a message catch event: \`bpmn retype <file> ${target.id} intermediateCatchEvent:message --message ${ShellWords.quote(this.nameOf(this.messageOf(target)) ?? '<MessageName>')}\`.` : `Put a catch event in between: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${flow.id} --message <MessageName>\` (or retype ${target.id}).`, related: [target.id, flow.id] });
+        reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_GATEWAY', element: gw, subject: `target:${target.id}`, message: `Event-based gateway ${gw.id} leads to ${this.describe(target)}; Camunda 8 allows only message, timer, signal and conditional intermediate catch events after it and refuses the file`, hint: target.is('bpmn:ReceiveTask') ? `Use a message catch event: \`bpmn retype <file> ${target.id} intermediateCatchEvent:message message=${ShellWords.quote(this.nameOf(this.messageOf(target)) ?? '<MessageName>')}\`.` : `Put a catch event in between: \`bpmn add <file> intermediateCatchEvent:message "<Name>" --flow ${flow.id} message=<MessageName>\` (or retype ${target.id}).`, related: [target.id, flow.id] });
       }
     }
   }

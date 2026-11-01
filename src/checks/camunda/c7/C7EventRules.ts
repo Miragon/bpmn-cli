@@ -17,13 +17,10 @@ export class C7EventRules extends C7Rules {
   }
 
   check(element: BpmnElement, reporter: RuleReporter): void {
-    if (!reporter.executable) {
-      return;
-    }
-    if (element.is('bpmn:Event')) {
+    if (reporter.executable && element.is('bpmn:Event')) {
       this.checkEvent(element, reporter);
     }
-    if (element.is('bpmn:ReceiveTask')) {
+    if (reporter.executable && element.is('bpmn:ReceiveTask')) {
       this.checkReceiveTask(element, reporter);
     }
   }
@@ -55,7 +52,7 @@ export class C7EventRules extends C7Rules {
     if (!host || host.peek<boolean>('isForCompensation') !== true) {
       return;
     }
-    reporter.deploy({ code: 'W_C7_DEPLOY_BOUNDARY_HOST', element: el, subject: 'compensationHost', message: `Boundary event ${el.id} is attached to the compensation handler ${host.id}; the engines refuse boundary events on compensation handlers`, hint: `Remove it: \`bpmn remove <file> ${el.id}\` (or attach it to a normal activity: \`bpmn move <file> ${el.id} --on <activityId>\`).`, related: [host.id] });
+    reporter.deploy({ code: 'W_C7_DEPLOY_BOUNDARY_HOST', element: el, subject: 'compensationHost', message: `Boundary event ${el.id} is attached to the compensation handler ${host.id}; the engines refuse boundary events on compensation handlers`, hint: `Remove it: \`bpmn remove <file> ${el.id}\` (or attach it to a normal activity: \`bpmn move <file> ${el.id} --on <activityId>\`).`, related: [host.id], fix: { op: 'remove', ids: [el.id] } });
   }
 
   private checkDefinition(el: BpmnElement, def: BpmnElement, reporter: RuleReporter): void {
@@ -122,26 +119,26 @@ export class C7EventRules extends C7Rules {
   }
 
   private checkEscalationDefinition(el: BpmnElement, def: BpmnElement, reporter: RuleReporter): void {
-    if (C7EventRules.isThrowing(el)) {
-      this.checkThrownEscalation(el, def, reporter);
-    } else if (el.is('bpmn:BoundaryEvent')) {
+    if (el.is('bpmn:BoundaryEvent')) {
       this.checkEscalationHost(el, reporter);
+    } else if (C7EventRules.isThrowing(el)) {
+      this.checkThrownEscalation(el, def, reporter);
     }
   }
 
   private checkThrownEscalation(el: BpmnElement, def: BpmnElement, reporter: RuleReporter): void {
     const label = this.describe(el, undefined);
     const esc = def.peek<BpmnElement>('escalationRef');
-    if (!esc) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_ESCALATION', element: el, subject: 'escalationRef', message: `${label} throws no escalation (no escalationRef); the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} escalation=<Name> escalationCode=<CODE>\`.` });
-    } else if (!this.nonEmpty(esc.peek<string>('escalationCode'))) {
+    if (esc && !this.nonEmpty(esc.peek<string>('escalationCode'))) {
       reporter.deploy({ code: 'W_C7_DEPLOY_ESCALATION', element: el, subject: 'escalationCode', message: `Escalation ${esc.id} thrown by ${label} has no escalationCode; the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} escalationCode=<CODE>\`.`, related: [esc.id] });
+    } else if (!esc) {
+      reporter.deploy({ code: 'W_C7_DEPLOY_ESCALATION', element: el, subject: 'escalationRef', message: `${label} throws no escalation (no escalationRef); the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} escalation=<Name> escalationCode=<CODE>\`.` });
     }
   }
 
   private checkEscalationHost(el: BpmnElement, reporter: RuleReporter): void {
     const host = el.peek<BpmnElement>('attachedToRef');
-    if (!host || host.is('bpmn:SubProcess') || host.is('bpmn:CallActivity') || host.is('bpmn:UserTask')) {
+    if (!host || ['bpmn:SubProcess', 'bpmn:CallActivity', 'bpmn:UserTask'].some((type) => host.is(type))) {
       return;
     }
     reporter.deploy({ code: 'W_C7_DEPLOY_ESCALATION', element: el, subject: 'escalationHost', message: `Escalation boundary event ${el.id} is attached to ${this.describe(host, undefined)}; the engines allow it only on sub-processes, call activities and user tasks and refuse the file`, hint: `Attach it elsewhere (\`bpmn move <file> ${el.id} --on <subProcessId>\`) or remove it: \`bpmn remove <file> ${el.id}\`.`, related: [host.id] });
@@ -176,11 +173,8 @@ export class C7EventRules extends C7Rules {
 
   private checkCompensationRef(el: BpmnElement, def: BpmnElement, reporter: RuleReporter): void {
     const ref = def.peek<BpmnElement>('activityRef');
-    if (!ref) {
-      return;
-    }
     const scope = this.document.scopes.scopeOf(el);
-    if (!scope) {
+    if (!ref || !scope) {
       return;
     }
     const allowed: Array<BpmnElement | undefined> = [scope];

@@ -165,7 +165,7 @@ export class C7ExtensionContentRules extends C7Rules {
     if (!outputs) {
       return;
     }
-    const dropOutputs = hostId ? `Remove the output parameters: rebuild the mapping without them (\`bpmn ext list <file> ${hostId} --json\`, then \`bpmn ext add <file> ${hostId} ${this.prefix}:inputOutput --replace --xml '...'\`).` : 'Remove them from the XML.';
+    const dropOutputs = hostId ? `Remove the output parameters: rebuild the mapping without them (\`bpmn show <file> ${hostId}\`, then \`bpmn ext add <file> ${hostId} ${this.prefix}:inputOutput --replace --xml '...'\`).` : 'Remove them from the XML.';
     if (host.is('bpmn:EndEvent')) {
       reporter.deploy({ code: 'W_C7_DEPLOY_INPUT_OUTPUT', element: host, owner, subject: 'io:output', message: `${this.prefix}:outputParameter on end event ${hostId}: the engines refuse output mappings on end events`, hint: dropOutputs });
     } else if (this.isMultiInstance(host)) {

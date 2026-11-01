@@ -122,7 +122,7 @@ export abstract class C8Rules extends CamundaRules {
     if (!addr) {
       return 'Fix it in the XML.';
     }
-    return `See it with \`bpmn ext list <file> ${addr.id} --json\`, then rebuild it: \`bpmn ext add <file> ${addr.id} ${ShellWords.quote(`${addr.prefix}${type}`)} --replace --xml '<${type} ...>...</${type}>'\`.`;
+    return `See it with \`bpmn show <file> ${addr.id}\`, then rebuild it: \`bpmn ext add <file> ${addr.id} ${ShellWords.quote(`${addr.prefix}${type}`)} --replace --xml '<${type} ...>...</${type}>'\`.`;
   }
 
   protected checkFeel(el: BpmnElement, owner: BpmnElement | undefined, subject: string, what: string, value: string | undefined, fix: string, reporter: RuleReporter): boolean {

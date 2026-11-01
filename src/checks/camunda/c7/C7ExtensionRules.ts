@@ -230,7 +230,7 @@ export class C7ExtensionRules extends C7Rules {
     if (els.length < 2 || read === undefined || (!read && local !== 'failedJobRetryTimeCycle')) {
       return;
     }
-    const merge = hostId ? `Merge them into one: \`bpmn ext list <file> ${hostId} --json\`, then \`bpmn ext add <file> ${hostId} ${ShellWords.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.` : 'Merge them in the XML.';
+    const merge = hostId ? `Merge them into one: \`bpmn show <file> ${hostId}\`, then \`bpmn ext add <file> ${hostId} ${ShellWords.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.` : 'Merge them in the XML.';
     const subject = `dup:${local}${uri === CAMUNDA.uri ? '' : `@${uri}`}`;
     if (read) {
       reporter.deploy({ code: 'W_C7_DEPLOY_DUPLICATE_EXTENSION', element: host, owner, subject, message: `${where} has ${els.length} ${type} elements; the engines refuse the file (ENGINE-01009 multiple elements with tag name ${local})`, hint: merge });

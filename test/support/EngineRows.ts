@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import type { Finding } from '../../src/model/index.js';
-import { type BpmnDocument, PlatformDetection } from '../../src/model/index.js';
+import { type BpmnDocument, type CamundaElementType, CAMUNDA, DeclaredNamespaces, DocumentNamespaces, ModdleParser, PlatformDetection } from '../../src/model/index.js';
 import { Fixtures } from './Fixtures.js';
 
 type Verdict = 'accept' | 'reject';
@@ -51,6 +51,22 @@ export class EngineRows {
     private readonly className: string,
     private readonly checksOf: ChecksOf,
   ) {}
+
+  static moddle(): ReturnType<typeof ModdleParser.moddle> {
+    return ModdleParser.moddle();
+  }
+
+  static bpmnUri(): string {
+    return DeclaredNamespaces.BPMN;
+  }
+
+  static namespacesOf(document: BpmnDocument): DocumentNamespaces {
+    return new DocumentNamespaces(document.tree.definitions);
+  }
+
+  static camundaType(name: string): CamundaElementType {
+    return CAMUNDA.type(name)!;
+  }
 
   static feel(): FeelRow[] {
     return EngineRows.read<FeelRow>('engine/feel/verdicts.json');

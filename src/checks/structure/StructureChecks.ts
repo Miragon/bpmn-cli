@@ -49,7 +49,7 @@ export class StructureChecks {
     const rejected = Kinds.REJECTED_TYPES[element.type];
     if (rejected) {
       const id = ElementText.shownId(element);
-      this.findings.error('E_UNSUPPORTED_KIND', `${element.type} ${id} is not supported: ${rejected}`, id, { hint: `Remove it: \`bpmn remove <file> ${id}\`.` });
+      this.findings.error('E_UNSUPPORTED_KIND', `${element.type} ${id} is not supported: ${rejected}`, id, { hint: `Remove it: \`bpmn remove <file> ${id}\`.`, fix: { op: 'remove', ids: [id] } });
     }
     if (element.is('bpmn:SequenceFlow')) {
       this.flows.checkSequenceFlow(element, scope);

@@ -19,7 +19,7 @@ export class C7AttributeRules extends C7Rules {
     const addr = this.addressOf(el, owner);
     const where = this.describe(el, owner);
     const local = key.slice(key.indexOf(':') + 1);
-    const unset = addr ? `\`bpmn set <file> ${addr.slot(`${key}=`)}\`` : 'edit the XML';
+    const unset = this.unsetCommand(el, owner, key);
     if (uri === ZEEBE.uri) {
       reporter.runtime({ code: 'W_C7_FOREIGN_CONTENT', element: el, owner, subject: `attr:${key}`, message: `${where} carries the Camunda 8 attribute ${key}, which Camunda 7 ignores`, hint: `Remove it: ${unset}, and use the camunda attribute instead (\`bpmn kinds\` lists them).` });
       return;

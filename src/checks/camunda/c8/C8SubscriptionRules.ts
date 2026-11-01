@@ -40,7 +40,7 @@ export class C8SubscriptionRules extends C8Rules {
     if (starts.length) {
       return `Keep one: \`bpmn remove <file> ${starts[1]?.id}\`.`;
     }
-    return event ? `\`bpmn add <file> startEvent:message "<Name>" --in ${id} --message <MessageName>\` (or timer, error, signal, escalation, conditional).` : `\`bpmn add <file> startEvent "<Name>" --in ${id}\`, then connect it to the first node.`;
+    return event ? `\`bpmn add <file> startEvent:message "<Name>" --in ${id} message=<MessageName>\` (or timer, error, signal, escalation, conditional).` : `\`bpmn add <file> startEvent "<Name>" --in ${id}\`, then connect it to the first node.`;
   }
 
   private static checkProcessStarts(scope: BpmnElement, starts: BpmnElement[], reporter: RuleReporter): void {
@@ -132,7 +132,7 @@ export class C8SubscriptionRules extends C8Rules {
   private checkLinks(proc: BpmnElement, reporter: RuleReporter): void {
     const links = new LinkEvents(this.document, this.allFlowNodes(proc, (node) => node.is('bpmn:SubProcess')), (node) => C8SubscriptionRules.soleDefinition(node, 'bpmn:LinkEventDefinition')?.peek<string>('name'));
     for (const { el, name, scope } of links.unmatchedThrows()) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_LINK', element: el, subject: `link:${name}`, message: `Link throw event ${el.id} goes to "${name}", but ${scope?.id} has no link catch event of that name; Camunda 8 refuses the file`, hint: `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${scope?.id} --link ${ShellWords.quote(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${el.id} link=<Name>\`).` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_LINK', element: el, subject: `link:${name}`, message: `Link throw event ${el.id} goes to "${name}", but ${scope?.id} has no link catch event of that name; Camunda 8 refuses the file`, hint: `\`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${scope?.id} link=${ShellWords.quote(name)}\`, then continue from it (or rename the link: \`bpmn set <file> ${el.id} link=<Name>\`).` });
     }
     for (const { first, el, name } of links.duplicateCatches()) {
       reporter.deploy({ code: 'W_C8_DEPLOY_LINK', element: el, subject: `linkCatch:${name}`, message: `Link catch events ${first.id} and ${el.id} share the name "${name}" in process ${proc.id}; Camunda 8 refuses the file`, hint: `\`bpmn set <file> ${el.id} link=<OtherName>\` (and its throw events).`, related: [first.id] });

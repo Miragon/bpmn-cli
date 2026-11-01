@@ -83,7 +83,7 @@ export class C7SubscriptionRules extends C7Rules {
       }
       const sid = scope?.id ?? '<scopeId>';
       const elsewhere = links.catchNamed(name);
-      reporter.deploy({ code: 'W_C7_DEPLOY_LINK', element: el, subject: `link:target:${name}`, message: `Link throw event ${el.id} jumps to "${name}", but ${elsewhere ? `the catch event of that name (${elsewhere.id}) is in another scope` : 'no link catch event has that name'}; the engines resolve links within one (sub-)process (${sid}) and refuse the file`, hint: `Add the catching side in ${sid}: \`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${sid} --link ${ShellWords.quote(name)}\` and continue from it, or point the throw at an existing catch: \`bpmn set <file> ${el.id} link=<Name>\`.`, related: elsewhere ? [elsewhere.id] : [] });
+      reporter.deploy({ code: 'W_C7_DEPLOY_LINK', element: el, subject: `link:target:${name}`, message: `Link throw event ${el.id} jumps to "${name}", but ${elsewhere ? `the catch event of that name (${elsewhere.id}) is in another scope` : 'no link catch event has that name'}; the engines resolve links within one (sub-)process (${sid}) and refuse the file`, hint: `Add the catching side in ${sid}: \`bpmn add <file> intermediateCatchEvent:link "<Name>" --in ${sid} link=${ShellWords.quote(name)}\` and continue from it, or point the throw at an existing catch: \`bpmn set <file> ${el.id} link=<Name>\`.`, related: elsewhere ? [elsewhere.id] : [] });
     }
   }
 

@@ -24,7 +24,7 @@ export class C8EventRules extends C8Rules {
   private static checkBoundaryHost(el: BpmnElement, reporter: RuleReporter): void {
     const host = el.peek<BpmnElement>('attachedToRef');
     if (host && host.peek<boolean>('isForCompensation') === true) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_BOUNDARY_HOST', element: el, subject: 'compensationHost', message: `Boundary event ${el.id} is attached to the compensation handler ${host.id}; Camunda 8 refuses boundary events on compensation handlers`, hint: `Remove it: \`bpmn remove <file> ${el.id}\` (or attach it to a normal activity: \`bpmn move <file> ${el.id} --on <activityId>\`).`, related: [host.id] });
+      reporter.deploy({ code: 'W_C8_DEPLOY_BOUNDARY_HOST', element: el, subject: 'compensationHost', message: `Boundary event ${el.id} is attached to the compensation handler ${host.id}; Camunda 8 refuses boundary events on compensation handlers`, hint: `Remove it: \`bpmn remove <file> ${el.id}\` (or attach it to a normal activity: \`bpmn move <file> ${el.id} --on <activityId>\`).`, related: [host.id], fix: { op: 'remove', ids: [el.id] } });
     }
   }
 
@@ -67,7 +67,7 @@ export class C8EventRules extends C8Rules {
       return false;
     }
     if (parent && parent.is('bpmn:SubProcess') && !Kinds.isEventSubProcess(parent) && !parent.is('bpmn:AdHocSubProcess')) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_START_EVENT', element: el, subject: 'subStartType', message: `Start event ${el.id} of sub-process ${parent.id} has a ${trigger} trigger; Camunda 8 allows only a none start event in an embedded sub-process and refuses the file`, hint: `\`bpmn set <file> ${el.id} trigger=none\` (an event sub-process takes triggered starts: \`bpmn add <file> eventSubProcess:${trigger} ... --in ${parent.id}\`).` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_START_EVENT', element: el, subject: 'subStartType', message: `Start event ${el.id} of sub-process ${parent.id} has a ${trigger} trigger; Camunda 8 allows only a none start event in an embedded sub-process and refuses the file`, hint: `\`bpmn set <file> ${el.id} trigger=none\` (an event sub-process takes triggered starts: \`bpmn add <file> eventSubProcess:${trigger} ... --in ${parent.id}\`).`, fix: { op: 'set', id: el.id, set: { trigger: 'none' } } });
       return true;
     }
     if (Kinds.isEventSubProcess(parent) && def.is('bpmn:CompensateEventDefinition')) {

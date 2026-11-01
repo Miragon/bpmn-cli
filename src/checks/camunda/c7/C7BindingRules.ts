@@ -73,7 +73,7 @@ export class C7BindingRules extends C7Rules {
     } else if (bindingValue === 'versionTag' && versionTag && this.c7(el, versionTag) === undefined) {
       reporter.deploy({ code: 'W_C7_DEPLOY_BINDING_VERSION', element: el, subject: binding, message: `${this.describe(el, undefined)} has ${this.prefix}:${binding}="versionTag" but no ${this.prefix}:${versionTag}; the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:${versionTag}=<tag>\` (or \`${this.prefix}:${binding}=latest\`).` });
     } else if (!allowed.includes(bindingValue)) {
-      reporter.runtime({ code: 'W_C7_BAD_VALUE', element: el, subject: `attr:${binding}`, message: `${this.prefix}:${binding}="${bindingValue}" on ${this.describe(el, undefined)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:${binding}=latest\`.` });
+      reporter.runtime({ code: 'W_C7_BAD_VALUE', element: el, subject: `attr:${binding}`, message: `${this.prefix}:${binding}="${bindingValue}" on ${this.describe(el, undefined)} is not one of ${allowed.join(', ')}; the engines accept the file but cannot resolve the reference as intended`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:${binding}=latest\`.`, fix: { op: 'set', id: el.id, set: { [`${this.prefix}:${binding}`]: 'latest' } } });
     }
   }
 
@@ -98,7 +98,7 @@ export class C7BindingRules extends C7Rules {
     this.checkBinding(el, 'decisionRefBinding', 'decisionRefVersion', 'decisionRefVersionTag', C7BindingRules.BINDINGS, reporter);
     const map = this.c7(el, 'mapDecisionResult');
     if (map !== undefined && !C7BindingRules.DECISION_MAPPERS.includes(map)) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_BAD_VALUE', element: el, subject: 'attr:mapDecisionResult', message: `${this.prefix}:mapDecisionResult="${map}" on ${this.describe(el, undefined)} is not one of ${C7BindingRules.DECISION_MAPPERS.join(', ')}; the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:mapDecisionResult=singleEntry\` (or another of the four).` });
+      reporter.deploy({ code: 'W_C7_DEPLOY_BAD_VALUE', element: el, subject: 'attr:mapDecisionResult', message: `${this.prefix}:mapDecisionResult="${map}" on ${this.describe(el, undefined)} is not one of ${C7BindingRules.DECISION_MAPPERS.join(', ')}; the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:mapDecisionResult=singleEntry\` (or another of the four).`, fix: { op: 'set', id: el.id, set: { [`${this.prefix}:mapDecisionResult`]: 'singleEntry' } } });
     }
   }
 
@@ -112,7 +112,7 @@ export class C7BindingRules extends C7Rules {
     }
     const binding = this.c7(el, 'formRefBinding');
     if (binding === undefined || !C7BindingRules.FORM_BINDINGS.includes(binding)) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_FORM', element: el, subject: 'formRefBinding', message: `${this.describe(el, undefined)} has ${this.prefix}:formRef but ${binding === undefined ? `no ${this.prefix}:formRefBinding` : `${this.prefix}:formRefBinding="${binding}"`} (one of ${C7BindingRules.FORM_BINDINGS.join(', ')} is required); the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:formRefBinding=latest\`.` });
+      reporter.deploy({ code: 'W_C7_DEPLOY_FORM', element: el, subject: 'formRefBinding', message: `${this.describe(el, undefined)} has ${this.prefix}:formRef but ${binding === undefined ? `no ${this.prefix}:formRefBinding` : `${this.prefix}:formRefBinding="${binding}"`} (one of ${C7BindingRules.FORM_BINDINGS.join(', ')} is required); the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:formRefBinding=latest\`.`, fix: { op: 'set', id: el.id, set: { [`${this.prefix}:formRefBinding`]: 'latest' } } });
     } else if (binding === 'version' && this.c7(el, 'formRefVersion') === undefined) {
       reporter.deploy({ code: 'W_C7_DEPLOY_BINDING_VERSION', element: el, subject: 'formRefBinding', message: `${this.describe(el, undefined)} has ${this.prefix}:formRefBinding="version" but no ${this.prefix}:formRefVersion; the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:formRefVersion=<n>\` (or ${this.prefix}:formRefBinding=latest).` });
     }
@@ -157,6 +157,6 @@ export class C7BindingRules extends C7Rules {
     if (priority === undefined || this.isNumber(priority) || this.isExpression(priority)) {
       return;
     }
-    reporter.runtime({ code: 'W_C7_BAD_VALUE', element: el, subject: 'attr:priority', message: `${this.prefix}:priority="${priority}" on ${this.describe(el, undefined)} is not a number or expression; creating the task fails`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:priority=50\`.` });
+    reporter.runtime({ code: 'W_C7_BAD_VALUE', element: el, subject: 'attr:priority', message: `${this.prefix}:priority="${priority}" on ${this.describe(el, undefined)} is not a number or expression; creating the task fails`, hint: `\`bpmn set <file> ${el.id} ${this.prefix}:priority=50\`.`, fix: { op: 'set', id: el.id, set: { [`${this.prefix}:priority`]: '50' } } });
   }
 }

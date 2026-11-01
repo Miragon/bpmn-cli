@@ -140,10 +140,10 @@ export abstract class C7Rules extends CamundaRules {
     const slot = addr.prefix;
     const type = vendorElement.type;
     if (CAMUNDA.isSingle(local)) {
-      return `See it with \`bpmn ext list <file> ${addr.id} --json\`, then rebuild it: \`bpmn ext add <file> ${addr.id} ${ShellWords.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
+      return `See it with \`bpmn show <file> ${addr.id}\`, then rebuild it: \`bpmn ext add <file> ${addr.id} ${ShellWords.slotted(slot, type)} --replace --xml '<${type}>...</${type}>'\`.`;
     }
     const flat = this.extAddArgs(vendorElement, type, fix);
-    const again = flat ? `\`bpmn ext add <file> ${addr.id} ${ShellWords.slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${addr.id} ${ShellWords.slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn ext list <file> ${addr.id} --json\` shows it)`;
+    const again = flat ? `\`bpmn ext add <file> ${addr.id} ${ShellWords.slotted(slot, flat)}\`` : `\`bpmn ext add <file> ${addr.id} ${ShellWords.slotted(slot, type)} --xml '<${type} ...>...</${type}>'\` (\`bpmn show <file> ${addr.id}\` shows it)`;
     return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${addr.id} ${ShellWords.quote(`${slot}${this.selectorOf(host, vendorElement)}`)}\`, then ${again}.`;
   }
 
