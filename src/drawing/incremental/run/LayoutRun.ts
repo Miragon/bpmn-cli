@@ -16,7 +16,6 @@ export interface RunSets {
   fromEngine: Set<string>;
   active: Set<string>;
   relocated: Set<string>;
-  grown: Set<string>;
   routedNow: Map<string, EdgeBefore>;
 }
 
@@ -29,7 +28,6 @@ export class LayoutRun implements RunSets {
   fromEngine = new Set<string>();
   active = new Set<string>();
   relocated = new Set<string>();
-  grown = new Set<string>();
   routedNow = new Map<string, EdgeBefore>();
 
   constructor(
@@ -43,8 +41,8 @@ export class LayoutRun implements RunSets {
     this.notes = place.notes;
   }
 
-  private static copyOf({ reroute, newEdges, fromEngine, active, relocated, grown, routedNow }: RunSets): RunSets {
-    return { reroute: new Set(reroute), newEdges: new Set(newEdges), fromEngine: new Set(fromEngine), active: new Set(active), relocated: new Set(relocated), grown: new Set(grown), routedNow: new Map(routedNow) };
+  private static copyOf({ reroute, newEdges, fromEngine, active, relocated, routedNow }: RunSets): RunSets {
+    return { reroute: new Set(reroute), newEdges: new Set(newEdges), fromEngine: new Set(fromEngine), active: new Set(active), relocated: new Set(relocated), routedNow: new Map(routedNow) };
   }
 
   drawing(plane: Plane): Drawing {

@@ -29,18 +29,6 @@ describe('LabelRefresh', () => {
     expect(scene.place.notes).toContain('label of Event_End moved off a new line');
   });
 
-  it('moves a kept label off a grown shape', async () => {
-    const scene = await PlacementScene.of('add-after');
-    const end = scene.shape('Event_End');
-    const report = scene.shape('Activity_Report');
-    end.label = new Box(report.bounds.x + 5, report.bounds.y + 5, 40, 14);
-    scene.run.grown.add(report.id);
-
-    refreshOf(scene).labels(new Set());
-
-    expect(scene.place.notes).toContain('label of Event_End moved off a grown shape');
-  });
-
   it('fits the label of a renamed event and a renamed flow, leaves engine drawings alone', async () => {
     const scene = await PlacementScene.of('add-after');
     const end = scene.shape('Event_End');

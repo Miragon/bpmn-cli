@@ -45,22 +45,6 @@ describe('TextMetrics', () => {
     expect(TextMetrics.titleDepth('Check the incoming order', 100)).toBeCloseTo(7 + 2 * 14.4, 6);
   });
 
-  it('leaves a task whose name fits at its size', () => {
-    expect(TextMetrics.activitySize('Check', { width: 100, height: 80 })).toBeUndefined();
-  });
-
-  it('widens a task in 20 px steps before it grows higher', () => {
-    const name = 'Check the incoming order for completeness and correctness of every position';
-    expect(TextMetrics.activitySize(name, { width: 100, height: 80 })).toEqual({ width: 120, height: 80 });
-  });
-
-  it('makes a task higher once 200 px are not wide enough', () => {
-    const name = Array.from({ length: 40 }, () => 'position').join(' ');
-    const size = TextMetrics.activitySize(name, { width: 100, height: 80 });
-    expect(size?.width).toBeLessThanOrEqual(200);
-    expect(size?.height).toBeGreaterThan(80);
-  });
-
   it('sizes an external label on one line', () => {
     expect(TextMetrics.labelSize('Rejected')).toEqual({ width: 68, height: 14, lines: 1 });
   });

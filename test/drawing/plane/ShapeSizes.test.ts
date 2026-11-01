@@ -1,27 +1,7 @@
-import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { ShapeSizes } from '../../../src/drawing/plane/ShapeSizes.js';
 import { Fixtures } from '../../support/Fixtures.js';
-
-const require = createRequire(import.meta.url);
-
-interface Report {
-  id: string;
-  message: string;
-}
-
-interface RuleNode {
-  $type: string;
-  $parent?: RuleNode;
-}
-
-interface Rule {
-  check: (node: RuleNode, reporter: { report: (id: string, message: string) => void }) => void;
-}
-
-function standardSize(): Rule {
-  return (require('bpmnlint/rules/standard-size') as () => Rule)();
-}
+import { StandardSize } from '../../support/StandardSize.js';
 
 const SHAPES: Array<[string, string, string]> = [
   ['bpmn:task', 'task', 'TASK'],
@@ -43,27 +23,15 @@ function model(size: (name: string) => { width: number; height: number }): strin
   return `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn"><bpmn:process id="process"><bpmn:dataObject id="data" />${elements}</bpmn:process><bpmndi:BPMNDiagram id="diagram"><bpmndi:BPMNPlane id="plane" bpmnElement="process">${shapes}</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>`;
 }
 
-async function reportsOn(xml: string): Promise<Report[]> {
-  const { BpmnModdle } = require('bpmn-moddle') as { BpmnModdle: new () => { fromXML(xml: string): Promise<{ rootElement: { diagrams: Array<{ plane: { planeElement: RuleNode[] } }> } }> } };
-  const { rootElement } = await new BpmnModdle().fromXML(xml);
-  const rule = standardSize();
-  const reports: Report[] = [];
-  const reporter = { report: (id: string, message: string): void => void reports.push({ id, message }) };
-  for (const shape of rootElement.diagrams[0]!.plane.planeElement) {
-    rule.check(shape, reporter);
-  }
-  return reports;
-}
-
 describe('ShapeSizes', () => {
   const table = ShapeSizes as unknown as Record<string, { width: number; height: number }>;
 
   it("holds each shape to bpmnlint's standard-size", async () => {
-    expect(await reportsOn(model((name) => table[name]!))).toEqual([]);
+    expect(await StandardSize.reportsOn(model((name) => table[name]!))).toEqual([]);
   });
 
   it('is reported by standard-size 1 px larger, one report per shape', async () => {
-    const reports = await reportsOn(model((name) => ({ width: table[name]!.width + 1, height: table[name]!.height + 1 })));
+    const reports = await StandardSize.reportsOn(model((name) => ({ width: table[name]!.width + 1, height: table[name]!.height + 1 })));
 
     expect(reports).toHaveLength(SHAPES.length);
   });

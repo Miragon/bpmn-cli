@@ -158,7 +158,7 @@ export class IncrementalLayout {
 
   private async draw({ run, nodes, routing, edges, growth, labels, report }: Steps): Promise<string[]> {
     await nodes.place((plane, id) => routing.routeNow(plane, id));
-    growth.growForNames();
+    growth.growForTitles();
     growth.separateAll();
     growth.growGroups();
     edges.collect();

@@ -15,7 +15,6 @@ export interface LabelSize extends TextSize {
 }
 
 export class TextMetrics {
-  static readonly BOTTOM_ROOM = 17;
   static readonly LABEL_LINE = 14;
 
   private static readonly ARIAL: Readonly<Record<string, number>> = {
@@ -36,9 +35,6 @@ export class TextMetrics {
   private static readonly LINE_HEIGHT = 14.4;
   private static readonly PADDING = 7;
   private static readonly SOFT_BREAK = '\u00AD';
-  private static readonly SIZE_STEP = 20;
-  private static readonly MAX_ACTIVITY_WIDTH = 200;
-  private static readonly MAX_HEIGHT_STEPS = 5;
   private static readonly MAX_REMEMBERED_NAMES = 4096;
   private static readonly MAX_LINES = 500;
   private static readonly MAX_SHORTENINGS = 200;
@@ -80,23 +76,6 @@ export class TextMetrics {
 
   static titleDepth(name: string | undefined, width: number): number {
     return name && name.trim() ? TextMetrics.PADDING + TextMetrics.innerLines(name, width) * TextMetrics.LINE_HEIGHT : 0;
-  }
-
-  static activitySize(name: string, size: TextSize, bottomRoom = 0): TextSize | undefined {
-    if (!name.trim() || TextMetrics.fitsInside(name, size, bottomRoom)) {
-      return undefined;
-    }
-    const widths: number[] = [];
-    const widest = Math.max(TextMetrics.MAX_ACTIVITY_WIDTH, size.width);
-    for (let width = size.width + TextMetrics.SIZE_STEP; width <= widest; width += TextMetrics.SIZE_STEP) {
-      if (TextMetrics.fitsInside(name, { width, height: size.height }, bottomRoom)) {
-        return { width, height: size.height };
-      }
-      widths.push(width);
-    }
-    const fewest = TextMetrics.innerLines(name, widths.at(-1) ?? size.width);
-    const width = [size.width, ...widths].find((candidate) => TextMetrics.innerLines(name, candidate) <= fewest) ?? size.width;
-    return { width, height: TextMetrics.heightFor(name, width, size.height, bottomRoom) };
   }
 
   static labelSize(name: string, maxWidth = 90): LabelSize {
@@ -155,21 +134,6 @@ export class TextMetrics {
 
   private static innerLines(name: string, width: number): number {
     return TextMetrics.wrap(name, width - 2 * TextMetrics.PADDING).length;
-  }
-
-  private static fitsInside(name: string, size: TextSize, bottomRoom: number): boolean {
-    return TextMetrics.innerLines(name, size.width) * TextMetrics.LINE_HEIGHT <= size.height - 2 * Math.max(4, bottomRoom) + 0.01;
-  }
-
-  private static heightFor(name: string, width: number, startHeight: number, bottomRoom: number): number {
-    let height = startHeight;
-    for (let step = 1; step <= TextMetrics.MAX_HEIGHT_STEPS; step++) {
-      height = startHeight + step * TextMetrics.SIZE_STEP;
-      if (TextMetrics.fitsInside(name, { width, height }, bottomRoom)) {
-        break;
-      }
-    }
-    return height;
   }
 
   private static measuredLabel(name: string, maxWidth: number): LabelSize {

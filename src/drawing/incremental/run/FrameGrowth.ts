@@ -1,24 +1,13 @@
-import { TextMetrics } from '@miragon/bpmn-render/text';
-import { Box, type BpmnElement } from '../../../model/index.js';
+import { Box } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
 import type { DShape } from '../../plane/DShape.js';
 import { Frames } from '../../plane/Frames.js';
-import type { Plane, Spacing } from '../../plane/Plane.js';
-import { ShapeSides } from '../../plane/ShapeSides.js';
+import type { Plane } from '../../plane/Plane.js';
 import type { LayoutRun } from './LayoutRun.js';
 
-interface Grown {
-  old: Box;
-  width: number;
-  height: number;
-}
-
 export class FrameGrowth {
-  private static readonly FRAME_PAD = 15;
   private static readonly GROUP_PAD = 15;
   private static readonly TITLE_ROOM = 4;
-  private static readonly MIN_NEXT_GAP = 40;
-  private static readonly ROW_MARGIN = 10;
 
   constructor(
     private readonly run: LayoutRun,
@@ -26,13 +15,12 @@ export class FrameGrowth {
     private readonly baseline: ReadonlyMap<string, Box>,
   ) {}
 
-  growForNames(): void {
+  growForTitles(): void {
     for (const plane of this.run.planes) {
-      const spacing = this.run.place.spacing.get(plane) ?? plane.spacing();
       for (const shape of [...plane.shapes.values()]) {
         const name = shape.el.peek<string>('name');
-        if (name && (shape.kind === 'task' || shape.kind === 'subProcess') && !this.run.fromEngine.has(shape.id) && name !== this.before.names.get(this.run.oldId(shape))) {
-          this.growForName(plane, shape, name, spacing);
+        if (name && shape.kind === 'subProcess' && shape.container && !this.run.fromEngine.has(shape.id) && name !== this.before.names.get(this.run.oldId(shape))) {
+          this.growForTitle(plane, shape);
         }
       }
     }
@@ -80,60 +68,6 @@ export class FrameGrowth {
     for (const id of ids) {
       this.run.place.moved.add(id);
     }
-  }
-
-  private textRoom(plane: Plane, shape: DShape): number {
-    const { el } = shape;
-    const marker = shape.kind === 'subProcess' || el.is('bpmn:CallActivity') || !!el.peek<BpmnElement>('loopCharacteristics') || el.peek<boolean>('isForCompensation') === true;
-    const below = plane.boundariesOf(shape.id).some((boundary) => ShapeSides.attached(boundary.bounds, shape.bounds) === 'bottom');
-    return marker || below ? TextMetrics.BOTTOM_ROOM : 0;
-  }
-
-  private growForName(plane: Plane, shape: DShape, name: string, spacing: Spacing): void {
-    if (shape.container) {
-      this.growForTitle(plane, shape);
-      return;
-    }
-    const size = TextMetrics.activitySize(name, shape.bounds, this.textRoom(plane, shape));
-    if (!size) {
-      return;
-    }
-    const old = shape.bounds.copy();
-    const { width, height } = size;
-    if (width > old.width) {
-      this.makeRoomOnRow(plane, shape, { old, width, height }, spacing);
-    }
-    shape.bounds = new Box(old.x, Math.round(old.center.y - height / 2), width, height);
-    const frame = new Frames(plane).of(shape);
-    const inner = frame ? Frames.interior(frame, FrameGrowth.FRAME_PAD) : undefined;
-    if (inner && shape.bounds.y < inner.y) {
-      shape.bounds.y = Math.round(inner.y);
-    }
-    const drawing = this.run.drawing(plane);
-    drawing.frames.reseatBoundaries(shape, old);
-    this.noteMoved(drawing.space.fitInFrame(shape.id, FrameGrowth.FRAME_PAD).moved);
-    this.run.active.add(shape.id);
-    this.run.place.moved.add(shape.id);
-    this.run.grown.add(shape.id);
-    this.run.notes.push(`${shape.id} grew to ${width}x${height} to fit its name`);
-  }
-
-  private makeRoomOnRow(plane: Plane, shape: DShape, { old, width, height }: Grown, spacing: Spacing): void {
-    const growth = width - old.width;
-    const own = new Set([shape.id, ...plane.boundariesOf(shape.id).map((boundary) => boundary.id)]);
-    const top = old.center.y - height / 2;
-    const onRow = (box: Box): boolean => box.y < top + height + FrameGrowth.ROW_MARGIN && box.bottom > top - FrameGrowth.ROW_MARGIN;
-    const frames = new Frames(plane);
-    const next = [...plane.shapes.values()].filter((other) => !own.has(other.id) && (other.isLeaf || (other.kind === 'subProcess' && other.container && !frames.within(shape, other))) && other.bounds.x >= old.right - 0.5 && onRow(other.bounds));
-    const lefts = next.flatMap(({ bounds, label }) => [bounds.x, ...(label && onRow(label) && label.right > old.right ? [Math.max(old.right, label.x)] : [])]);
-    const free = Math.min(Number.POSITIVE_INFINITY, ...lefts.map((left) => left - old.right));
-    if (free - growth >= Math.min(spacing.gap, FrameGrowth.MIN_NEXT_GAP)) {
-      return;
-    }
-    const sub = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
-    const frame = sub ?? (shape.poolId ? plane.shapes.get(shape.poolId) : undefined);
-    const result = this.run.drawing(plane).space.makeSpace({ axis: 'x', line: old.right + 0.5, delta: growth, keep: own, anchors: [shape.id], ...(frame ? { within: frame.bounds.copy() } : {}), ...(sub ? { frame: sub.id } : {}) });
-    this.noteMoved([...result.moved, ...result.resized]);
   }
 
   private growForTitle(plane: Plane, shape: DShape): void {

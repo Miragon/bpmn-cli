@@ -25,10 +25,6 @@ export interface TextBox {
 // @public (undocumented)
 export class TextMetrics {
     // (undocumented)
-    static activitySize(name: string, size: TextSize, bottomRoom?: number): TextSize | undefined;
-    // (undocumented)
-    static readonly BOTTOM_ROOM = 17;
-    // (undocumented)
     static readonly LABEL_LINE = 14;
     // (undocumented)
     static labelSize(name: string, maxWidth?: number): LabelSize;

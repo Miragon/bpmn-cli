@@ -14,11 +14,10 @@ export class LabelRefresh {
   labels(routed: ReadonlySet<string>): void {
     for (const plane of this.run.planes) {
       const fresh = [...plane.edges.values()].filter((edge) => routed.has(edge.id)).map((edge) => new Polyline(edge.points));
-      const grown = [...this.run.grown].flatMap((id) => plane.shapes.get(id) ?? []);
       const drawing = this.run.drawing(plane);
       for (const shape of plane.shapes.values()) {
         if (!this.run.fromEngine.has(shape.id)) {
-          this.refreshShape(drawing, shape, fresh, grown);
+          this.refreshShape(drawing, shape, fresh);
         }
       }
       for (const edge of plane.edges.values()) {
@@ -33,7 +32,7 @@ export class LabelRefresh {
     }
   }
 
-  private refreshShape(drawing: Drawing, shape: DShape, fresh: readonly Polyline[], grown: readonly DShape[]): void {
+  private refreshShape(drawing: Drawing, shape: DShape, fresh: readonly Polyline[]): void {
     const { label } = shape;
     const external = DShape.hasExternalLabel(shape.kind);
     const { labels } = drawing;
@@ -42,9 +41,6 @@ export class LabelRefresh {
     } else if (label && external && fresh.some((line) => line.hits(label, 1))) {
       labels.placeShapeLabel(shape);
       this.run.notes.push(`label of ${shape.id} moved off a new line`);
-    } else if (label && external && grown.some((other) => other !== shape && label.overlaps(other.bounds))) {
-      labels.placeShapeLabel(shape);
-      this.run.notes.push(`label of ${shape.id} moved off a grown shape`);
     } else {
       this.refreshRenamed(drawing, shape);
     }

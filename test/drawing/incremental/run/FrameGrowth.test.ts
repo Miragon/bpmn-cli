@@ -7,42 +7,32 @@ describe('FrameGrowth', () => {
   const growthOf = (scene: PlacementScene): FrameGrowth => new FrameGrowth(scene.run, scene.parts.before, new Map([...scene.plane.shapes.values()].map((shape) => [shape.id, shape.bounds.copy()])));
   const LONG_NAME = 'An activity with a name that takes more lines than the hundred pixels of its shape can show';
 
-  it('grows an activity that does not fit its new name, wider first, and makes room on its row', async () => {
+  it('keeps a task at its size for a long new name, and its neighbour where it stood', async () => {
     const scene = await PlacementScene.of('rename');
     const task = scene.shape('Activity_Evaluate');
-    const next = scene.shape('Activity_StandardTrack');
-    const nextX = next.bounds.x;
+    const box = task.bounds.copy();
+    const next = scene.shape('Activity_StandardTrack').bounds.copy();
     task.el.set('name', LONG_NAME);
 
-    growthOf(scene).growForNames();
+    growthOf(scene).growForTitles();
 
-    expect(task.bounds.width).toBeGreaterThan(100);
-    expect(next.bounds.x).toBeGreaterThanOrEqual(nextX);
-    expect(next.bounds.x).toBeGreaterThanOrEqual(task.bounds.right + 40);
-    expect(scene.run.grown.has(task.id)).toBe(true);
-    expect(scene.place.notes[0]).toContain('to fit its name');
+    expect(task.bounds).toEqual(box);
+    expect(scene.shape('Activity_StandardTrack').bounds).toEqual(next);
+    expect(scene.place.notes).toEqual([]);
   });
 
-  it('leaves an activity whose name fits, and one the engine drew', async () => {
-    const scene = await PlacementScene.of('rename');
-    const engine = scene.shape('Activity_Review');
-    engine.el.set('name', LONG_NAME);
-    scene.run.fromEngine.add(engine.id);
-
-    growthOf(scene).growForNames();
-
-    expect(engine.bounds.width).toBe(100);
-    expect(scene.shape('Activity_Evaluate').bounds.width).toBe(100);
-  });
-
-  it('keeps a grown activity under its frame title and inside its pool', async () => {
+  it('leaves a sub-process the engine drew', async () => {
     const scene = await PlacementScene.drawn('models/incremental/sub.bpmn');
-    const task = scene.shape('ST');
-    task.el.set('name', `${LONG_NAME} ${LONG_NAME} ${LONG_NAME}`);
+    const sub = scene.shape('SP');
+    const inner = scene.shape('ST');
+    inner.bounds = new Box(inner.bounds.x, sub.bounds.y + 22, 100, 80);
+    const box = inner.bounds.copy();
+    sub.el.set('name', `${LONG_NAME} ${LONG_NAME} ${LONG_NAME} ${LONG_NAME} ${LONG_NAME} ${LONG_NAME}`);
+    scene.run.fromEngine.add(sub.id);
 
-    growthOf(scene).growForNames();
+    growthOf(scene).growForTitles();
 
-    expect(task.bounds.isInside(scene.shape('SP').bounds)).toBe(true);
+    expect(inner.bounds).toEqual(box);
   });
 
   it('makes room below a longer title of a sub-process', async () => {
@@ -52,7 +42,7 @@ describe('FrameGrowth', () => {
     inner.bounds = new Box(inner.bounds.x, sub.bounds.y + 22, 100, 80);
     sub.el.set('name', `${LONG_NAME} ${LONG_NAME} ${LONG_NAME} ${LONG_NAME} ${LONG_NAME} ${LONG_NAME}`);
 
-    growthOf(scene).growForNames();
+    growthOf(scene).growForTitles();
 
     expect(inner.bounds.y).toBeGreaterThan(sub.bounds.y + 22);
     expect(scene.place.notes[0]).toContain('of room below its new title');
