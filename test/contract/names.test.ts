@@ -13,6 +13,8 @@ interface Names {
 }
 
 const CORPUS = join(import.meta.dirname, '..', '..', 'corpus');
+const SKILL = join(import.meta.dirname, '..', '..', 'plugins', 'bpmn-cli', 'skills', 'bpmn');
+const RETIRED_WORDS_COLUMN = /^\| [^|]*(?=\|)/gm;
 const COMMAND = /(?:^|[`(\s])bpmn ([a-z]+)(?: (add|remove))?([^`\n]*)/gm;
 const FLAG = /(?<![\w-])--[a-z][a-z-]*/g;
 const PROGRAM_FLAGS = ['--help', '--version'];
@@ -37,6 +39,12 @@ function unknownNames(text: string, { flagsOf, anyFlag }: Names): string[] {
     return ' ';
   });
   return [...unknown, ...[...withoutCommands.matchAll(FLAG)].map(([flag]) => flag).filter((flag) => !anyFlag.has(flag))];
+}
+
+function skillText(): string {
+  const reference = join(SKILL, 'reference');
+  const files = [join(SKILL, 'SKILL.md'), ...readdirSync(reference).filter((name) => name !== 'migration.md').map((name) => join(reference, name))];
+  return [...files.map((file) => readFileSync(file, 'utf8')), readFileSync(join(reference, 'migration.md'), 'utf8').replace(RETIRED_WORDS_COLUMN, '')].join('\n');
 }
 
 function modelsIn(folder: string): string[] {
@@ -90,6 +98,10 @@ describe('the names of the guide and the hints', () => {
     const guide = HelpTopics.text([]) + HelpTopics.text(HelpTopics.names());
 
     expect(unknownNames(guide.replaceAll('bpmn <command>', ''), names)).toEqual([]);
+  });
+
+  it('names in the skill only commands and flags that exist, beside the retired words of its migration table', () => {
+    expect(unknownNames(skillText().replaceAll('bpmn <command>', ''), names)).toEqual([]);
   });
 
   it('names in the hints of the corpus only commands and flags that exist', async () => {
