@@ -46,7 +46,7 @@
   ],
   "scripts": {
     "build": "node tools/build/run.mjs && node tools/build-help.mjs",
-    "dev": "tsx src/cli/index.ts",
+    "dev": "npm run build && node bin/bpmn.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",

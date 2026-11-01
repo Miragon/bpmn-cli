@@ -36,6 +36,18 @@ describe('the budgets', () => {
     expect(status).toBe(1);
   });
 
+  it('measure the commands and flag slots of the CLI', () => {
+    repo.plant('package.json', '{}');
+    repo.plant('src/cli/CliProgram.ts', 'export class CliProgram {\n  commander = { commands: [{ commands: [{ commands: [], options: [1, 2] }] }, { commands: [], options: [1] }] };\n}\n');
+    expect(repo.checkBudgets().output).toContain('2 commands, 3 flag slots');
+
+    repo.plantBudgets({ commands: 1, flagSlots: 2 });
+    const { status, output } = repo.checkBudgets();
+    expect(output).toContain('the CLI has 2 commands, over its budget of 1');
+    expect(output).toContain('the CLI has 3 flagSlots, over its budget of 2');
+    expect(status).toBe(1);
+  });
+
   it('fail on a module over its lines', () => {
     repo.plant('src/api/index.ts', exportsOfCount(301));
     const { status, output } = repo.checkBudgets();
