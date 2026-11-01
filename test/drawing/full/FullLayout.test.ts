@@ -4,11 +4,9 @@ import { LayoutRequests } from '../../support/ModelValues.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 describe('FullLayout', () => {
-  it('is not ported yet', async () => {
+  it('redraws a model and names no warning when every shape has a home', async () => {
     const document = await Fixtures.read('models/incremental/boundary.bpmn');
 
-    expect(() => new FullLayout(document, new LayoutRequests()).draw()).toThrow(/not ported yet/);
+    expect(new FullLayout(document, new LayoutRequests()).draw().warnings).toEqual([]);
   });
-
-  it.todo('holds the 115 scenarios of corpus/layout to main in total, on the full step');
 });
