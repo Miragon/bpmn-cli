@@ -47,7 +47,9 @@ export interface Change {
 }
 
 // @public (undocumented)
-export interface DiagramResult extends DiagramFacts {
+export interface DiagramResult extends Omit<DiagramFacts, 'score'> {
+    // (undocumented)
+    score: number | null;
     // (undocumented)
     text: string;
 }
