@@ -21,6 +21,7 @@ export class PlantedRepo {
       this.plant(`src/${module}/index.ts`, 'export {};\n');
     }
     this.plant('packages/render/src/index.ts', 'export {};\n');
+    this.plant('packages/render/src/text/index.ts', 'export {};\n');
     this.plant('packages/lint/src/index.ts', 'export {};\n');
     this.plant('tsconfig.json', JSON.stringify({ compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext' } }));
   }
