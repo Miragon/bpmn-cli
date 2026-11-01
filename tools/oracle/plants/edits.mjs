@@ -1,6 +1,6 @@
 export default {
   probe: 'edits',
-  target: 'domain/editing/connections/SequenceFlows.js',
-  find: `const scope = doc.scopeOf(source);`,
-  replace: `const scope = doc.scopeOf(source); attrs = { ...attrs, name: attrs.name ?? 'planted' };`,
+  target: 'domain/document/ChangeSet.js',
+  find: `this.removed.push(change);`,
+  replace: `this.removed.push({ ...change, kind: 'planted' });`,
 };

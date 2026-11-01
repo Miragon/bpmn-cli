@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_twoPools" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_shop">
+    <bpmn:participant id="participant_customer" name="Customer" processRef="Process_customer" />
+    <bpmn:participant id="participant_shop" name="Shop" processRef="Process_shop" />
+    <bpmn:participant id="participant_bank" name="Bank" />
+    <bpmn:messageFlow id="flow_orderToReceive" name="order" sourceRef="send_order" targetRef="receive_order" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_customer" isExecutable="false">
+    <bpmn:startEvent id="startEvent_wish">
+      <bpmn:outgoing>flow_wishToSend</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sendTask id="send_order" name="Send order">
+      <bpmn:incoming>flow_wishToSend</bpmn:incoming>
+    </bpmn:sendTask>
+    <bpmn:sequenceFlow id="flow_wishToSend" sourceRef="startEvent_wish" targetRef="send_order" />
+  </bpmn:process>
+  <bpmn:process id="Process_shop" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_shop">
+      <bpmn:lane id="lane_sales" name="Sales">
+        <bpmn:flowNodeRef>receive_order</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>pack</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="lane_stock" name="Stock">
+        <bpmn:flowNodeRef>ship</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>endEvent_shipped</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:receiveTask id="receive_order" name="Receive order">
+      <bpmn:outgoing>flow_receiveToPack</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:task id="pack" name="Pack">
+      <bpmn:incoming>flow_receiveToPack</bpmn:incoming>
+      <bpmn:outgoing>flow_packToShip</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="ship" name="Ship">
+      <bpmn:incoming>flow_packToShip</bpmn:incoming>
+      <bpmn:outgoing>flow_shipToEnd</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="endEvent_shipped" name="Shipped">
+      <bpmn:incoming>flow_shipToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_receiveToPack" sourceRef="receive_order" targetRef="pack" />
+    <bpmn:sequenceFlow id="flow_packToShip" sourceRef="pack" targetRef="ship" />
+    <bpmn:sequenceFlow id="flow_shipToEnd" sourceRef="ship" targetRef="endEvent_shipped" />
+  </bpmn:process>
+</bpmn:definitions>
