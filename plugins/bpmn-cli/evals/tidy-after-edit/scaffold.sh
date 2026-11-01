@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scaffold of the eval case "tidy-after-edit": writes invoice-approval.bpmn into the empty workspace.
 # An invoice approval drawn by hand: the gateway's label sits on "Approve invoice", and the rejection
-# branch crosses the reminder path of the timer on "Approve invoice" (`bpmn metrics`: labelClash, crossings).
+# branch crosses the reminder path of the timer on "Approve invoice" (`bpmn diagram`: labelClash, crossings).
 set -euo pipefail
 cat > invoice-approval.bpmn <<'BPMN_FIXTURE'
 <?xml version="1.0" encoding="UTF-8"?>

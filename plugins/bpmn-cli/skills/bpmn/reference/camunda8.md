@@ -5,13 +5,13 @@ Camunda 8 reads the `zeebe:` namespace, and almost every setting is a zeebe
 start with `=`: write `attr==<expression>` on the command line (the first `=`
 separates key and value, so `source==order.total` is `source="=order.total"`);
 in ops JSON write `"source": "=order.total"`. The CLI reference is
-`bpmn guide camunda8` and `bpmn kinds --section zeebeElements` (every zeebe
-element, where it goes, its attributes). The examples run on `shipping.bpmn`
+`bpmn guide camunda8` and `bpmn guide zeebe-elements` (every zeebe element,
+where it goes, its attributes). The examples run on `shipping.bpmn`
 from [recipes.md](recipes.md) (recipe 5).
 
 ## A new file
 
-`bpmn new <file> --name "..." --target camunda8` writes the `zeebe:` and
+`bpmn new <file> "<name>" --target camunda8` writes the `zeebe:` and
 `modeler:` namespaces and the platform (`Camunda Cloud`, 8.9.0). In a Camunda 8
 file new user tasks get `zeebe:userTask` (Camunda user tasks, like the Modeler
 creates them) and new event definitions an id.
@@ -27,7 +27,7 @@ creates them) and new event definitions an id.
 | DMN decision | `set <file> <id> calledDecision=<decisionId>`, then `ext add <file> <id> zeebe:calledDecision resultVariable=<variable>` |
 | call activity | `ext add <file> <id> zeebe:calledElement processId=<processId> propagateAllChildVariables=false` (the BPMN `calledElement` is not read) |
 | FEEL script task | `ext add <file> <id> zeebe:script expression==<FEEL> resultVariable=<variable>` |
-| message correlation | in a batch: `"message": "<Name>", "refAs": "$msg"` on the event / receive task, then an `ext` op on `"$msg"` adding `zeebe:subscription` with `correlationKey` `=<FEEL>`; on the command line `ext add <file> <eventId> zeebe:subscription correlationKey==<FEEL>` writes it on the message the event references (the result notes it) |
+| message correlation | in a batch: `"set": { "message": "<Name>" }, "refAs": "$msg"` on the event / receive task, then an `ext` op on `"$msg"` adding `zeebe:subscription` with `correlationKey` `=<FEEL>`; on the command line `ext add <file> <eventId> zeebe:subscription correlationKey==<FEEL>` writes it on the message the event references (the result notes it) |
 | multi-instance | `ext add <file> <id> loop.zeebe:loopCharacteristics inputCollection==<FEEL> inputElement=<variable>` (creates the parallel loop) |
 | condition | `add ... --condition '= amount > 1000'`, `set <file> <flowId> 'condition== amount > 1000'` |
 
@@ -40,7 +40,7 @@ bpmn add shipping.bpmn callActivity "Notify customer" --id callActivity_notifyCu
 bpmn ext add shipping.bpmn callActivity_notifyCustomer zeebe:calledElement processId=notify-customer propagateAllChildVariables=false
 bpmn ext add shipping.bpmn callActivity_notifyCustomer loop.zeebe:loopCharacteristics inputCollection==order.contacts inputElement=contact
 bpmn ext add shipping.bpmn serviceTask_createShippingLabel zeebe:header key=carrier value=ups
-bpmn ext list shipping.bpmn serviceTask_createShippingLabel
+bpmn show shipping.bpmn serviceTask_createShippingLabel
 bpmn ext remove shipping.bpmn serviceTask_createShippingLabel 'zeebe:header[key=carrier]'
 bpmn validate shipping.bpmn --strict
 ```
@@ -49,9 +49,9 @@ bpmn validate shipping.bpmn --strict
   second `ext add` adds `assignee` to the existing `candidateGroups`.
 - A zeebe attribute set on the element itself is refused (`set X
   zeebe:assignee=...` is `E_WRONG_HOST`; the hint is the `ext add`).
-- `show --around` / `show <id> --context` print each implementation in one line
+- `show --around` prints each implementation in one line
   (`zeebe:taskDefinition type=create-shipping-label retries=5, io: in address;
-  out shippingLabelId`); `ext list` prints the whole tree.
+  out shippingLabelId`); `show <file> <id>` prints the extensions numbered.
 
 ## Validate before deploying
 
