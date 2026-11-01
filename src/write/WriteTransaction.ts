@@ -55,7 +55,7 @@ export class WriteTransaction {
       return [];
     }
     const before = await new DocumentReader().read(input);
-    return delta.newErrors(errors, await new ModelChecks(before).all());
+    return delta.newErrors(errors, await new ModelChecks(before).onWrite());
   }
 
   async apply(xml: string, input: unknown): Promise<EditResult> {
@@ -81,7 +81,7 @@ export class WriteTransaction {
     const run = new ModelOperationRunner(document, { force }).run(operations);
     const drawing = await this.draw(document, snapshot, run);
     const score = new ScoreChange(scoreBefore, this.scoreOf(document));
-    const checks = await new ModelChecks(document).all();
+    const checks = await new ModelChecks(document).onWrite();
     const renames = new IdRenames(run.changes);
     const delta = new FindingDelta(renames.newIds());
     const addedErrors = await WriteTransaction.errorsAdded(input, checks, delta);

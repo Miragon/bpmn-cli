@@ -67,7 +67,7 @@ and one judges the drawing.
 | term | whose rules | asks | codes | runs | lives |
 | --- | --- | --- | --- | --- | --- |
 | structure checks | bpmn-cli's | is the file BPMN the CLI can read, change and draw | `E_*`, `W_*` | every write, `validate` | `checks/structure` |
-| Camunda checks | bpmn-cli's | what Camunda 7 or 8 rejects at deploy, FEEL included | `W_C7_*`, `W_C8_*` | every write and `validate` on executable processes | `checks/camunda` |
+| Camunda checks | bpmn-cli's | what Camunda 7 or 8 rejects at deploy, FEEL included | `W_C7_*`, `W_C8_*` | writes on executable processes, `validate` on all | `checks/camunda` |
 | host validators | the embedding app's | whatever the app asks | the app's | writes, before and after; `validate`, once | `write`: `HostValidators` runs them |
 | project lint | the project's `.bpmnlintrc` | the project's naming and modelling rules | bpmnlint rule names | `validate` only | `packages/lint`, handed in by cli as a validator |
 | layout score | bpmn-cli's | how well the model is drawn | problem kinds such as `crossings` | every write, `diagram`, the layout's trials | `scoring` |

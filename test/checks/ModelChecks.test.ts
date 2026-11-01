@@ -26,6 +26,15 @@ describe('ModelChecks', () => {
     expect(codes).not.toContain('W_NO_START');
   });
 
+  it('holds on a write the structure of a process no engine runs, without its Camunda findings', async () => {
+    const document = await Fixtures.read('write/c7-not-executable.bpmn');
+
+    const codes = (await new ModelChecks(document).onWrite()).map(({ code }) => code);
+
+    expect(codes).toContain('W_NO_START');
+    expect(codes.filter((code) => code.startsWith('W_C7_'))).toEqual([]);
+  });
+
   it('runs no Camunda checks on a platform of none', async () => {
     const document = await Fixtures.read('engine/verdicts/c7-profile/065-boundary-event-on-a-compensation-handler.bpmn');
 

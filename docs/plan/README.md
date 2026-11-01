@@ -85,7 +85,7 @@ outside, and one judges the drawing:
 | term | whose rules | asks | codes | runs | lives at 1.0 |
 | --- | --- | --- | --- | --- | --- |
 | structure checks | bpmn-cli's | is the file BPMN the CLI can read, change and draw | `E_*`, `W_*` | writes with model operations, `validate` | `checks/structure` |
-| Camunda checks | bpmn-cli's | what Camunda 7 or 8 rejects at deploy, FEEL included | `W_C7_*`, `W_C8_*` | writes with model operations on executable processes, `validate` | `checks/camunda` |
+| Camunda checks | bpmn-cli's | what Camunda 7 or 8 rejects at deploy, FEEL included | `W_C7_*`, `W_C8_*` | writes with model operations on executable processes, `validate` on every process, since Camunda 8 refuses a file without an executable one | `checks/camunda` |
 | host validators | the embedding app's, such as design-iq's save gate | whatever the app asks | the app's | writes, before and after; `validate`, once | `write`: `HostValidators` runs them |
 | project lint | the project's `.bpmnlintrc` | the project's naming and modelling rules | bpmnlint rule names | `validate` only | `packages/lint`, handed in by cli as a validator |
 | layout score | bpmn-cli's | how well the model is drawn | problem kinds such as `crossings` | every write, `diagram`, the layout's trials | `scoring` |

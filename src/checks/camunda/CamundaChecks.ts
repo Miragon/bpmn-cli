@@ -1,4 +1,4 @@
-import { type BpmnDocument, type Platform, PlatformDetection, type ProfileFinding } from '../../model/index.js';
+import { type BpmnDocument, type BpmnElement, type Platform, PlatformDetection, type ProfileFinding } from '../../model/index.js';
 
 export class CamundaChecks {
   constructor(
@@ -18,5 +18,30 @@ export class CamundaChecks {
       return new C8Checks(this.document).findings();
     }
     return [];
+  }
+
+  async onExecutableProcesses(): Promise<ProfileFinding[]> {
+    const executable = this.document.tree.processes().filter(CamundaChecks.isExecutable);
+    if (!executable.length) {
+      return [];
+    }
+    return (await this.all()).filter(({ element }) => !this.isInOtherProcess(element, executable));
+  }
+
+  private static isExecutable(process: BpmnElement): boolean {
+    return process.peek<boolean>('isExecutable') === true;
+  }
+
+  private static processOf(element: BpmnElement | undefined): BpmnElement | undefined {
+    let current = element;
+    while (current && !current.is('bpmn:Process')) {
+      current = current.parent;
+    }
+    return current;
+  }
+
+  private isInOtherProcess(id: string | undefined, executable: readonly BpmnElement[]): boolean {
+    const process = CamundaChecks.processOf(id === undefined ? undefined : this.document.tree.byId(id));
+    return process !== undefined && !executable.includes(process);
   }
 }

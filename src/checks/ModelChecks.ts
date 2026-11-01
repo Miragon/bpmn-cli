@@ -17,9 +17,17 @@ export class ModelChecks {
   }
 
   async all(): Promise<Finding[]> {
+    return this.combined(await new CamundaChecks(this.document, this.platform).all());
+  }
+
+  async onWrite(): Promise<Finding[]> {
+    return this.combined(await new CamundaChecks(this.document, this.platform).onExecutableProcesses());
+  }
+
+  private combined(camundaFindings: ProfileFinding[]): Finding[] {
     const structure = new StructureChecks(this.document).all();
     const invalidHosts = new Set(structure.filter(({ code }) => code === 'E_INVALID_HOST').map(({ element }) => element));
-    const camunda = (await new CamundaChecks(this.document, this.platform).all()).filter(({ code, element }) => !ModelChecks.BOUNDARY_HOST_CODES.includes(code) || !invalidHosts.has(element));
+    const camunda = camundaFindings.filter(({ code, element }) => !ModelChecks.BOUNDARY_HOST_CODES.includes(code) || !invalidHosts.has(element));
     return [...ModelChecks.withoutRepeats(structure, camunda), ...camunda];
   }
 

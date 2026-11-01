@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_mixed" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_runs" isExecutable="true">
+    <bpmn:startEvent id="start_runs" />
+    <bpmn:task id="task_runs" camunda:asyncBefore="true" customAttribute="a" />
+    <bpmn:sequenceFlow id="flow_runs" sourceRef="start_runs" targetRef="task_runs" />
+  </bpmn:process>
+  <bpmn:process id="Process_sketch" isExecutable="false">
+    <bpmn:startEvent id="start_sketch" />
+    <bpmn:subProcess id="sub_sketch">
+      <bpmn:task id="task_sketch" camunda:asyncBefore="true" customAttribute="a" />
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="flow_sketch" sourceRef="start_sketch" targetRef="sub_sketch" />
+  </bpmn:process>
+</bpmn:definitions>

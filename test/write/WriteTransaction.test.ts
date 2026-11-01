@@ -136,6 +136,12 @@ describe('WriteTransaction', () => {
     expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ severity: 'error', element: 'Activity_OnCancel' })]));
   });
 
+  it('counts no deploy finding of a process no engine runs', async () => {
+    const { findings } = await write(Fixtures.text('edit/properties-decisions-zeebe.bpmn'), [{ op: 'set', id: 'Process_zeebeLink', set: { name: 'Sketch' } }]);
+
+    expect(findings.map(({ code }) => code)).not.toContain('W_C8_DEPLOY_EXECUTABLE');
+  });
+
   it('counts an error elsewhere in the state and leaves it out of the findings', async () => {
     const { findings, state } = await write(Fixtures.text('edit/events-gateway.bpmn'), [{ op: 'set', id: 'loose_task', set: { name: 'Renamed' } }]);
 
