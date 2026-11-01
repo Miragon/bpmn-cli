@@ -1,4 +1,4 @@
-import { ChangeEntries, DiagramIndex, DiPruner, Point, Polyline, type Box, type BpmnDocument, type BpmnElement } from '../model/index.js';
+import { Box, ChangeEntries, DiagramIndex, DiPruner, Point, Polyline, type BpmnDocument, type BpmnElement } from '../model/index.js';
 import { Stickies, type ResolvedAnchor, type StickyAnchor } from './diagram/Stickies.js';
 import { Plane } from './plane/Plane.js';
 import { PlaneReader, type EdgeEnds } from './plane/PlaneReader.js';
@@ -23,6 +23,11 @@ export interface SnapEntry {
 export interface ChangedEnd {
   end: 'source' | 'target';
   id: string;
+}
+
+export interface RedrawnElements {
+  moved: string[];
+  rerouted: string[];
 }
 
 export class DrawingSnapshot {
@@ -73,6 +78,14 @@ export class DrawingSnapshot {
       return undefined;
     }
     return this.els.get(oldId)?.peek<string>('id') ?? oldId;
+  }
+
+  redrawnIn({ tree }: BpmnDocument): RedrawnElements {
+    const drawn = new Map([...this.byDi.values()].map((entry) => [this.currentId(entry.id), entry]));
+    const planes = new PlaneReader(tree.definitions, Semantics.of(tree.definitions)).planes();
+    const moved = planes.flatMap((plane) => [...plane.shapes.values()]).filter(({ id, bounds }) => !Box.same(drawn.get(id)?.bounds, bounds));
+    const rerouted = planes.flatMap((plane) => [...plane.edges.values()]).filter(({ id, points }) => !new Polyline(drawn.get(id)?.points ?? []).same(new Polyline(points)));
+    return { moved: moved.map(({ id }) => id), rerouted: rerouted.map(({ id }) => id) };
   }
 
   changedEnds(edge: BpmnElement): ChangedEnd[] {

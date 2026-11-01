@@ -40,6 +40,18 @@ describe('DrawingSnapshot', () => {
     expect(snapshot.byDi.get(shape)!.bounds!.x).toBe(before);
   });
 
+  it('tells what a document drew differently, and that it drew the same again', async () => {
+    const document = await Fixtures.read('models/incremental/boundary.bpmn');
+    const snapshot = DrawingSnapshot.of(document);
+
+    expect(snapshot.redrawnIn(document)).toEqual({ moved: [], rerouted: [] });
+
+    const [shape] = document.diagram.planes()[0]!.list('planeElement').filter((element) => element.is('bpmndi:BPMNShape'));
+    shape!.get<BpmnElement>('bounds').set('x', 7);
+
+    expect(snapshot.redrawnIn(document).moved).toEqual([shape!.get<BpmnElement>('bpmnElement').id]);
+  });
+
   it('takes an id before the operations to the id now', async () => {
     const document = await Fixtures.read('models/incremental/boundary.bpmn');
     const snapshot = DrawingSnapshot.of(document);

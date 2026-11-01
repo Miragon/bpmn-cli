@@ -30,9 +30,15 @@ export class DiagramDrawing {
 
   async update(before: DrawingSnapshot, changes: ChangeSet, operations: readonly DrawnOperation[]): Promise<DrawingReport> {
     const layout = await this.draw(before, changes, operations);
-    const format = new DrawingOperationRunner(this.document).run(operations, layout.mode === 'kept');
+    const redrawn = this.layoutResults(before, operations);
+    const format = [...redrawn, ...new DrawingOperationRunner(this.document).run(operations, layout.mode === 'kept')].sort((first, second) => first.index - second.index);
     const stickies = new Stickies(this.document.tree.definitions).follow(before.resolvedAnchors(this.document));
     return { ...layout, format, stickies };
+  }
+
+  private layoutResults(before: DrawingSnapshot, operations: readonly DrawnOperation[]): FormatResult[] {
+    const index = operations.findIndex(({ op }) => op === 'layout');
+    return index === -1 ? [] : [{ op: 'layout', index, ...before.redrawnIn(this.document) }];
   }
 
   private draw(before: DrawingSnapshot, changes: ChangeSet, operations: readonly DrawnOperation[]): Promise<Layout> {

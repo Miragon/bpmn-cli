@@ -50,6 +50,25 @@ describe('WriteTransaction', () => {
     expect(format).toEqual([expect.objectContaining({ op: 'color', index: 0, colored: ['check'] })]);
   });
 
+  it('reports what a layout operation moved under format, at its place in the batch', async () => {
+    const drawn = Fixtures.text('models/incremental/orders.bpmn');
+
+    const { format } = await write(drawn, [{ op: 'set', id: 'Task_A', set: { name: 'Audit' } }, { op: 'layout' }]);
+
+    expect(format).toHaveLength(1);
+    expect(format[0]).toMatchObject({ op: 'layout', index: 1 });
+    expect(format[0]!.moved.length + format[0]!.rerouted.length).toBeGreaterThan(0);
+  });
+
+  it('reports a layout that changes nothing with empty lists', async () => {
+    const { xml } = await write(Fixtures.text('models/incremental/orders.bpmn'), [{ op: 'layout' }]);
+
+    const { format, unchanged } = await write(xml, [{ op: 'layout' }]);
+
+    expect(unchanged).toBe(true);
+    expect(format).toEqual([{ op: 'layout', index: 0, moved: [], rerouted: [] }]);
+  });
+
   it('counts a drawing operation behind the model operations in the batch', async () => {
     const { format } = await write(orderCheck, [{ op: 'set', id: 'check', set: { name: 'Check' } }, { op: 'color', ids: ['check'], color: 'red' }]);
 
