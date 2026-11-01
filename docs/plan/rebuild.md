@@ -62,8 +62,9 @@ added in its step's first commit: render's is the package's `.`, for the image p
 checks, drawing and edit follow. An entry with `sidesFor` names both sides of an input itself. Until the step is done, an entry reports its differences in CI and
 fails only when their count per probe rises above the count kept in `tools/oracle/progress.json`; the
 commit that finishes the step makes it gate. A rebase that changes main's answers updates
-`progress.json` in the same rebase. The write step removes the module entries and the CLI step lint's:
-from then on the oracle compares only the public surface.
+`progress.json` in the same rebase. The write step removes the module entries and the CLI step `lint`:
+from then on the oracle compares only the public surface, but for `lint-cli`, which stays and gates, as
+bpmnlint 12's CLI answers no public call.
 
 Each probe comes with the step that first needs it, and so does its folder of `corpus/`; the tables name
 the step. Every recording runs main's own tools in main's worktree, so no probe needs a tool the gate

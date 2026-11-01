@@ -72,9 +72,15 @@ async function plantedChange(plant) {
   rmSync(plantedRoot, { recursive: true, force: true });
 }
 
+async function lintAgainstBpmnlintsCli() {
+  const { runs: [run] } = await runOracle({ entryNames: ['lint-cli'], filter: 'lint/' });
+  check(run.differences.length === 0 && run.measures.findings > 0, `packages/lint against bpmnlint 12's CLI: ${run.differences.length} differences over ${run.measures.findings} findings`);
+}
+
 const started = performance.now();
 ensureMainBuilt({ log: console.log });
 await mainAgainstItselfTwice();
+await lintAgainstBpmnlintsCli();
 for (const plant of await loadModules('plants')) {
   await plantedChange(plant);
 }
