@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:category id="category">
+    <bpmn:categoryValue id="named_value" value="Billing" />
+    <bpmn:categoryValue id="fresh_value" value="Fresh" />
+  </bpmn:category>
+  <bpmn:process id="process" isExecutable="false">
+    <bpmn:task id="task" name="Check" />
+    <bpmn:task id="member" name="Bill" />
+    <bpmn:task id="fresh_member" name="Fresh" />
+    <bpmn:group id="around_nothing" />
+    <bpmn:group id="named_group" categoryValueRef="named_value" />
+    <bpmn:group id="on_a_shape" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="task_di" bpmnElement="task">
+        <dc:Bounds x="100" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="member_di" bpmnElement="member">
+        <dc:Bounds x="300" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="fresh_member_di" bpmnElement="fresh_member">
+        <dc:Bounds x="500" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="around_nothing_di" bpmnElement="around_nothing">
+        <dc:Bounds x="100" y="400" width="200" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="named_group_di" bpmnElement="named_group">
+        <dc:Bounds x="280" y="60" width="140" height="140" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="330" y="65" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

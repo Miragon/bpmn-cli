@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process" isExecutable="false">
+    <bpmn:task id="blue_task" name="Blue">
+      <bpmn:outgoing>custom_flow</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="labelled_end" name="End">
+      <bpmn:incoming>custom_flow</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="plain_task" name="Plain" />
+    <bpmn:sequenceFlow id="custom_flow" sourceRef="blue_task" targetRef="labelled_end" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="blue_task_di" bpmnElement="blue_task" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+        <dc:Bounds x="100" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="labelled_end_di" bpmnElement="labelled_end">
+        <dc:Bounds x="300" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel color:color="#831311">
+          <dc:Bounds x="305" y="165" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="plain_task_di" bpmnElement="plain_task">
+        <dc:Bounds x="100" y="300" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="custom_flow_di" bpmnElement="custom_flow" bioc:stroke="#123456">
+        <di:waypoint x="200" y="140" />
+        <di:waypoint x="300" y="140" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

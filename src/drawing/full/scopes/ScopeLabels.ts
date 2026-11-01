@@ -1,8 +1,6 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
 import { Box } from '../../../model/index.js';
-import { GArtifact } from './GArtifact.js';
-import type { GNode } from './GNode.js';
-import type { ScopeLayout } from './ScopeLayout.js';
+import { GNode, type GArtifact, type ScopeLayout } from './GNode.js';
 
 export type LabelKind = 'event' | 'gateway' | 'boundary' | 'data';
 
@@ -18,11 +16,11 @@ export class ScopeLabels {
   constructor(private readonly layout: ScopeLayout) {}
 
   static of(element: GNode | GArtifact, kind: LabelKind, options: LabelOptions = {}): Box | undefined {
-    const { name } = element;
+    const { name } = element.el;
     if (!name) {
       return undefined;
     }
-    if (element instanceof GArtifact) {
+    if (!(element instanceof GNode)) {
       return ScopeLabels.centred(name, element.box, options);
     }
     if (kind === 'gateway') {

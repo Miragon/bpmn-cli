@@ -1,7 +1,6 @@
 import { Point, Polyline } from '../../../model/index.js';
 import { ShapeSizes } from '../../plane/ShapeSizes.js';
-import type { GEdge } from '../scopes/GEdge.js';
-import type { GNode } from '../scopes/GNode.js';
+import type { GEdge, GNode, LaneBandInfo } from '../scopes/GNode.js';
 import type { BorderSlots } from './BorderSlots.js';
 import type { Channels } from './Channels.js';
 import { RoutingArea, type Route } from './RoutingArea.js';
@@ -89,7 +88,7 @@ export class LoopRoute {
     );
   }
 
-  private waysBelow(band: ReturnType<RoutingArea['bandOf']>): LoopWay[] {
+  private waysBelow(band: LaneBandInfo | undefined): LoopWay[] {
     const { area, source, target, x1, x2 } = this;
     const { loopGap } = ShapeSizes.GAPS;
     const channelY = area.channels.free(x1, x2, area.rangeBottom(x1, x2, band) + loopGap, loopGap / 2);
@@ -104,7 +103,7 @@ export class LoopRoute {
     return this.combine(exits, entries, area.usedBottom, { list: area.channels, y: channelY });
   }
 
-  private waysOverTop(band: ReturnType<RoutingArea['bandOf']>): LoopWay[] {
+  private waysOverTop(band: LaneBandInfo | undefined): LoopWay[] {
     const { area, source, target, x1, x2 } = this;
     const { box } = source;
     const { loopGap } = ShapeSizes.GAPS;

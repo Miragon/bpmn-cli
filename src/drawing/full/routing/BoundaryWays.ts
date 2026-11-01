@@ -1,12 +1,14 @@
 import { Point, Polyline, type Box } from '../../../model/index.js';
 import { ShapeSizes } from '../../plane/ShapeSizes.js';
-import { GEdge } from '../scopes/GEdge.js';
-import { GNode } from '../scopes/GNode.js';
-import type { LaneBandInfo } from '../scopes/ScopeLayout.js';
+import { GNode, type LaneBandInfo } from '../scopes/GNode.js';
+import type { Channel } from './Channels.js';
 import type { FlowPaths } from './FlowPaths.js';
 import type { RoutingArea } from './RoutingArea.js';
 import { RunHeights } from './RunHeights.js';
-import type { Way, WayMaker } from './UpRoute.js';
+
+export type Way = { points: Point[]; x?: number | undefined; below?: boolean; top?: number | undefined; over?: Channel; spare?: Box };
+
+export type WayMaker = { penalty?: number | undefined; make: () => Way | undefined };
 
 type OverEnd = { to: number; down: (runY: number) => Point[]; top?: number | undefined; penalty: number };
 
@@ -48,7 +50,7 @@ export class BoundaryWays {
   fromTopBorder(): WayMaker[] {
     const { centerX, eventBox, targetBox } = this;
     const band = this.routing.bandOf(this.event);
-    const ends = this.overEnds().filter((end) => end.top !== undefined || end.to - centerX >= GEdge.RUN_CLEAR);
+    const ends = this.overEnds().filter((end) => end.top !== undefined || end.to - centerX >= GNode.RUN_CLEAR);
     const xs = ends.map((end) => end.to);
     this.area = this.routing.runArea(Math.min(centerX, ...xs), Math.max(centerX, ...xs));
     const topArea = this.inBand(band);
@@ -67,7 +69,7 @@ export class BoundaryWays {
     const { centerX, gapX, targetBox, routing } = this;
     const { hGap } = ShapeSizes.GAPS;
     const band = routing.bandOf(this.event);
-    const slots = this.target.riseSlots().filter((slotX) => Math.abs(slotX - centerX) >= GEdge.RUN_CLEAR);
+    const slots = this.target.riseSlots().filter((slotX) => Math.abs(slotX - centerX) >= GNode.RUN_CLEAR);
     const hookX = targetBox.right + hGap / 2;
     const hostGaps = [host.box.right + hGap / 4, host.box.x - (hGap * 3) / 4];
     const xs = [centerX, gapX, hookX, ...slots, ...hostGaps];
@@ -109,7 +111,7 @@ export class BoundaryWays {
     const targetY = targetBox.center.y;
     const intoSide = { to: gapX, up: (runY: number): Point[] => [new Point(gapX, runY), new Point(gapX, targetY), new Point(targetBox.x, targetY)], penalty: BoundaryWays.GAP_PENALTY };
     const hook = { to: hookX, up: (runY: number): Point[] => paths.hookFromBelow(target, runY), penalty: BoundaryWays.HOOK_PENALTY, x: target.riseX() };
-    return [...risings, ...(gapX - centerX >= GEdge.RUN_CLEAR ? [intoSide] : []), hook];
+    return [...risings, ...(gapX - centerX >= GNode.RUN_CLEAR ? [intoSide] : []), hook];
   }
 
   private waysBelow({ to, up, penalty, x }: RiseEnd, band: LaneBandInfo | undefined): WayMaker[] {
@@ -117,7 +119,7 @@ export class BoundaryWays {
     const way = (runY: number): Way => ({ points: [new Point(centerX, eventBox.bottom), new Point(centerX, runY), ...up(runY)], ...(x !== undefined ? { x } : {}), below: true });
     const deepWay = (): Way | undefined => {
       const near = this.runTo(to);
-      const floor = Math.max(near, routing.rangeBottom(centerX, to, band) + ShapeSizes.GAPS.loopGap) - GEdge.RUN_CLEAR;
+      const floor = Math.max(near, routing.rangeBottom(centerX, to, band) + ShapeSizes.GAPS.loopGap) - GNode.RUN_CLEAR;
       const deep = new RunHeights(centerX, to, this.area).below(floor);
       return deep > near ? way(deep) : undefined;
     };
@@ -132,12 +134,12 @@ export class BoundaryWays {
     const topArea = this.inBand(band);
     const from = Math.min(this.targetBox.y, host.box.y);
     const ends = this.overEnds();
-    return hostGaps.flatMap((gapX, rank) => (this.canLeaveThrough(gapX) ? ends.filter((end) => end.top !== undefined || this.gapX - gapX >= GEdge.RUN_CLEAR).map((end) => this.overHost(gapX, rank, end, topArea, from)) : []));
+    return hostGaps.flatMap((gapX, rank) => (this.canLeaveThrough(gapX) ? ends.filter((end) => end.top !== undefined || this.gapX - gapX >= GNode.RUN_CLEAR).map((end) => this.overHost(gapX, rank, end, topArea, from)) : []));
   }
 
   private canLeaveThrough(gapX: number): boolean {
     const { centerX, event } = this;
-    if (gapX < 0 || Math.abs(gapX - centerX) < GEdge.RUN_CLEAR) {
+    if (gapX < 0 || Math.abs(gapX - centerX) < GNode.RUN_CLEAR) {
       return false;
     }
     const low = Math.min(gapX, centerX);

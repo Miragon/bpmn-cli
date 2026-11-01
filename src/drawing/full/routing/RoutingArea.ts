@@ -1,14 +1,13 @@
 import { Box, Point, Polyline, type Segment } from '../../../model/index.js';
 import { DrawnEdge } from '../../../scoring/index.js';
-import type { GEdge } from '../scopes/GEdge.js';
-import type { GNode } from '../scopes/GNode.js';
+import type { GEdge, GNode, LaneBandInfo, ScopeLayout } from '../scopes/GNode.js';
+import { Scope } from '../scopes/Scope.js';
 import { ScopeLabels } from '../scopes/ScopeLabels.js';
-import type { LaneBandInfo, ScopeLayout } from '../scopes/ScopeLayout.js';
 import { XIndex } from '../scopes/XIndex.js';
 import { BorderSlots } from './BorderSlots.js';
 import { Channels } from './Channels.js';
 
-export type ChosenChannel = { list: Channels; y: number; x1: number; x2: number };
+type ChosenChannel = { list: Channels; y: number; x1: number; x2: number };
 
 export type Route = { points: Point[]; channel?: ChosenChannel | undefined; runsBelow?: boolean | undefined; runsAbove?: boolean | undefined };
 
@@ -36,7 +35,8 @@ export class RoutingArea {
   private readonly labelsAbove: XIndex<Box>;
 
   constructor(readonly layout: ScopeLayout) {
-    this.obstacles = layout.obstacles();
+    const scope = new Scope(layout);
+    this.obstacles = scope.obstacles();
     this.boxes = RoutingArea.indexOf(this.obstacles);
     this.allNodes = [...layout.nodes, ...layout.nodes.flatMap((node) => node.boundary)];
     const { below, above } = RoutingArea.eventLabels(layout);
@@ -48,7 +48,7 @@ export class RoutingArea {
         this.gatewaySpots.set(node, label);
       }
     }
-    const dataLabels = layout.routedArtifacts().flatMap((artifact) => (artifact.kind === 'annotation' ? [] : (ScopeLabels.of(artifact, 'data') ?? [])));
+    const dataLabels = scope.routedArtifacts().flatMap((artifact) => (artifact.kind === 'annotation' ? [] : (ScopeLabels.of(artifact, 'data') ?? [])));
     const labelSpots = [...below, ...above, ...this.gatewaySpots.values(), ...dataLabels];
     this.spots = RoutingArea.indexOf(labelSpots);
     this.openRow = new Set(layout.edges.filter((edge) => this.isOpenRow(edge, labelSpots)));
@@ -64,6 +64,11 @@ export class RoutingArea {
       }
     }
     return crossings;
+  }
+
+  static straightLine({ source, target }: GEdge): Point[] {
+    const lineY = Math.round((source.box.center.y + target.box.center.y) / 2);
+    return [new Point(source.box.right, lineY), new Point(target.box.x, lineY)];
   }
 
   static xSpan({ start, end }: Segment): [number, number] {
@@ -191,7 +196,7 @@ export class RoutingArea {
 
   private isOpenRow(edge: GEdge, labelSpots: readonly Box[]): boolean {
     const { source, target } = edge;
-    return !edge.back && edge.bandY !== undefined && Math.abs(source.box.center.y - target.box.center.y) < RoutingArea.SAME_ROW && !new Polyline(edge.straightLine()).hitsAny([...this.obstacles, ...labelSpots], [source.box, target.box]);
+    return !edge.back && edge.bandY !== undefined && Math.abs(source.box.center.y - target.box.center.y) < RoutingArea.SAME_ROW && !new Polyline(RoutingArea.straightLine(edge)).hitsAny([...this.obstacles, ...labelSpots], [source.box, target.box]);
   }
 
   private routedAcross(low: number, high: number, band: LaneBandInfo | undefined): Segment[] {

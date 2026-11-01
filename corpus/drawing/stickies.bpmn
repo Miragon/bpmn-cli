@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bpmiq="https://bpmiq.io/schema/1.0/bpmiq" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process" isExecutable="false">
+    <bpmn:extensionElements>
+      <bpmiq:sticky id="sticky_near_task" x="150" y="40" width="60" height="60" />
+      <bpmiq:sticky x="460" y="300" />
+      <bpmiq:sticky id="sticky_without_place" />
+    </bpmn:extensionElements>
+    <bpmn:task id="task" name="Check">
+      <bpmn:outgoing>flow</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="next" name="Ship">
+      <bpmn:incoming>flow</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow" sourceRef="task" targetRef="next" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="task_di" bpmnElement="task">
+        <dc:Bounds x="100" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="next_di" bpmnElement="next">
+        <dc:Bounds x="400" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_di" bpmnElement="flow">
+        <di:waypoint x="200" y="140" />
+        <di:waypoint x="400" y="140" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

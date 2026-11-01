@@ -1,6 +1,6 @@
 import { Point, Polyline } from '../../../model/index.js';
 import { ShapeSizes } from '../../plane/ShapeSizes.js';
-import type { GEdge } from '../scopes/GEdge.js';
+import type { GEdge } from '../scopes/GNode.js';
 import type { FlowPaths } from './FlowPaths.js';
 import type { Route, RoutingArea } from './RoutingArea.js';
 import { RunHeights } from './RunHeights.js';

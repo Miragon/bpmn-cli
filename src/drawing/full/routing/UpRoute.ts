@@ -1,15 +1,9 @@
-import { Point, Polyline, type Box } from '../../../model/index.js';
+import { Point, Polyline } from '../../../model/index.js';
 import { ShapeSizes } from '../../plane/ShapeSizes.js';
-import type { GEdge } from '../scopes/GEdge.js';
-import type { GNode } from '../scopes/GNode.js';
-import { BoundaryWays } from './BoundaryWays.js';
-import type { Channel } from './Channels.js';
+import type { GEdge, GNode } from '../scopes/GNode.js';
+import { BoundaryWays, type Way, type WayMaker } from './BoundaryWays.js';
 import type { FlowPaths } from './FlowPaths.js';
 import { RoutingArea, type Route } from './RoutingArea.js';
-
-export type Way = { points: Point[]; x?: number | undefined; below?: boolean; top?: number | undefined; over?: Channel; spare?: Box };
-
-export type WayMaker = { penalty?: number | undefined; make: () => Way | undefined };
 
 type ScoredWay = Way & { score: number; faults: number };
 

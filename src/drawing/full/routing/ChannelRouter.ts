@@ -1,7 +1,6 @@
 import { Polyline, type Box, type Point, type Segment } from '../../../model/index.js';
-import { GEdge } from '../scopes/GEdge.js';
-import type { GNode } from '../scopes/GNode.js';
-import type { ScopeLayout } from '../scopes/ScopeLayout.js';
+import { GNode, type GEdge, type ScopeLayout } from '../scopes/GNode.js';
+import { Scope } from '../scopes/Scope.js';
 import { XIndex } from '../scopes/XIndex.js';
 import { DownRoute } from './DownRoute.js';
 import { FlowLabelSpot } from './FlowLabelSpot.js';
@@ -14,6 +13,7 @@ import { UpRoute } from './UpRoute.js';
 export class ChannelRouter {
   private static readonly CLEAR_OF_THE_TOP = 10;
   private static readonly SAME_ROW = 1;
+  private static readonly DATA_OFFSET = 30;
 
   private readonly area: RoutingArea;
   private readonly paths: FlowPaths;
@@ -25,13 +25,25 @@ export class ChannelRouter {
     this.sameRow = new SameRowRoute(this.area, this.paths);
   }
 
+  static riseFrom(edge: GEdge): number {
+    return edge.bandY ?? (edge.source.host ? edge.source.box.bottom + GNode.RUN_CLEAR : edge.source.box.center.y);
+  }
+
+  static dataX({ box, boundary, keepsBoundaryLeft }: GNode): number {
+    const centerX = box.center.x;
+    if (!boundary.length) {
+      return centerX + Math.min(ChannelRouter.DATA_OFFSET, box.width / 2 - 10);
+    }
+    return keepsBoundaryLeft ? centerX + ChannelRouter.DATA_OFFSET : centerX - ChannelRouter.DATA_OFFSET;
+  }
+
   route(): void {
     const { layout, area } = this;
     for (const edge of [...this.forwardFlows(), ...this.loops()]) {
       this.routeEdge(edge);
     }
     this.markTopsUsed();
-    const lowestRun = Math.max(0, ...layout.edges.filter((edge) => edge.runsBelow).map((edge) => edge.points[1]!.y + GEdge.RUN_CLEAR));
+    const lowestRun = Math.max(0, ...layout.edges.filter((edge) => edge.runsBelow).map((edge) => edge.points[1]!.y + GNode.RUN_CLEAR));
     layout.height = Math.max(layout.height, area.channels.lowest() + ChannelRouter.CLEAR_OF_THE_TOP, lowestRun);
     this.moveBelowTop();
   }
@@ -166,7 +178,7 @@ export class ChannelRouter {
     for (const node of layout.nodes) {
       node.shift(0, dy);
     }
-    for (const artifact of layout.routedArtifacts()) {
+    for (const artifact of new Scope(layout).routedArtifacts()) {
       artifact.box.y += dy;
     }
     for (const edge of layout.edges) {

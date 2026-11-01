@@ -1,6 +1,6 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
 import { Box, type Point } from '../../../model/index.js';
-import type { GEdge } from '../scopes/GEdge.js';
+import type { GEdge } from '../scopes/GNode.js';
 
 export class FlowLabelSpot {
   constructor(private readonly edge: GEdge) {}
@@ -20,8 +20,8 @@ export class FlowLabelSpot {
   }
 
   box(): Box | undefined {
-    const { edge } = this;
-    const { name, points } = edge;
+    const { points, el } = this.edge;
+    const { name } = el;
     if (!name || points.length < 2) {
       return undefined;
     }

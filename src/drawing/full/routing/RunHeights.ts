@@ -1,5 +1,5 @@
 import type { Box } from '../../../model/index.js';
-import { GEdge } from '../scopes/GEdge.js';
+import { GNode } from '../scopes/GNode.js';
 
 export class RunHeights {
   private readonly left: number;
@@ -12,12 +12,12 @@ export class RunHeights {
 
   below(from: number): number {
     const near = this.near();
-    let runY = from + GEdge.RUN_CLEAR;
+    let runY = from + GNode.RUN_CLEAR;
     for (let moved = true; moved; ) {
       moved = false;
       for (const box of near) {
         if (RunHeights.isTooClose(box, runY)) {
-          runY = box.bottom + GEdge.RUN_CLEAR;
+          runY = box.bottom + GNode.RUN_CLEAR;
           moved = true;
         }
       }
@@ -27,12 +27,12 @@ export class RunHeights {
 
   above(from: number): number {
     const near = this.near();
-    let runY = from - GEdge.RUN_CLEAR;
+    let runY = from - GNode.RUN_CLEAR;
     for (let moved = true; moved; ) {
       moved = false;
       for (const box of near) {
         if (RunHeights.isTooClose(box, runY)) {
-          runY = box.y - GEdge.RUN_CLEAR;
+          runY = box.y - GNode.RUN_CLEAR;
           moved = true;
         }
       }
@@ -41,7 +41,7 @@ export class RunHeights {
   }
 
   private static isTooClose(box: Box, runY: number): boolean {
-    return box.y < runY + GEdge.RUN_CLEAR && box.bottom + GEdge.RUN_CLEAR > runY;
+    return box.y < runY + GNode.RUN_CLEAR && box.bottom + GNode.RUN_CLEAR > runY;
   }
 
   private near(): Box[] {

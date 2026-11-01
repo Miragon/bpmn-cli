@@ -93,6 +93,26 @@ export class Polyline {
     return this.segments().every(({ start, end }) => Math.abs(start.x - end.x) <= tolerance || Math.abs(start.y - end.y) <= tolerance);
   }
 
+  crossingCount(lines: readonly Polyline[]): number {
+    const theirs = lines.flatMap((line) => line.segments());
+    return this.segments().reduce((sum, segment) => sum + theirs.filter((their) => segment.crosses(their)).length, 0);
+  }
+
+  simplified(): Point[] {
+    const kept: Point[] = [];
+    for (const point of this.points) {
+      const last = kept.at(-1);
+      if (!last || last.x !== point.x || last.y !== point.y) {
+        const previous = kept.at(-2);
+        if (previous && last && ((previous.x === last.x && last.x === point.x) || (previous.y === last.y && last.y === point.y))) {
+          kept.pop();
+        }
+        kept.push(point.copy());
+      }
+    }
+    return kept.length === 1 && this.points.length > 1 ? [kept[0]!, kept[0]!.copy()] : kept;
+  }
+
   deduped(): Point[] {
     return this.points.filter((point, index) => index === 0 || point.x !== this.points[index - 1]!.x || point.y !== this.points[index - 1]!.y);
   }

@@ -1,11 +1,87 @@
-import { Box, type BpmnElement } from '../../../model/index.js';
-import type { GEdge } from './GEdge.js';
-import type { ScopeLayout } from './ScopeLayout.js';
+import { Box, type BpmnElement, type Point } from '../../../model/index.js';
+import type { LaneBox } from './LaneBox.js';
 
 export type GNodeKind = 'start' | 'end' | 'event' | 'gateway' | 'task' | 'subProcess' | 'eventSubProcess';
 
+export interface GEdge {
+  el: BpmnElement;
+  id: string;
+  source: GNode;
+  target: GNode;
+  back: boolean;
+  bandRow?: number | undefined;
+  bandY?: number | undefined;
+  points: Point[];
+  label?: Box | undefined;
+  runsBelow?: boolean | undefined;
+  runsAbove?: boolean | undefined;
+}
+
+export interface LinkEnd {
+  box: Box;
+  flow?: GEdge;
+}
+
+interface ArtifactLink {
+  el: BpmnElement;
+  id: string;
+  from: LinkEnd;
+  to: LinkEnd;
+  points: Point[];
+}
+
+export type GArtifactKind = 'annotation' | 'dataObject' | 'dataStore';
+
+export interface GArtifact {
+  el: BpmnElement;
+  id: string;
+  kind: GArtifactKind;
+  width: number;
+  height: number;
+  box: Box;
+  anchor?: LinkEnd | undefined;
+  anchorNode?: GNode | undefined;
+  links: ArtifactLink[];
+}
+
+export interface LaneBandInfo {
+  nodes: Set<GNode>;
+  top: number;
+  bottom: number;
+}
+
+interface Compensation {
+  el: BpmnElement;
+  id: string;
+  event: GNode;
+  handler: GNode;
+  points: Point[];
+}
+
+interface CrossLink {
+  el: BpmnElement;
+  id: string;
+  sourceId: string;
+  targetId: string;
+}
+
+export interface ScopeLayout {
+  el: BpmnElement;
+  nodes: GNode[];
+  edges: GEdge[];
+  artifacts: GArtifact[];
+  eventSubs: GNode[];
+  compensations: Compensation[];
+  width: number;
+  height: number;
+  lanes: LaneBox[];
+  laneBands?: LaneBandInfo[] | undefined;
+  crossLinks: CrossLink[];
+}
+
 export class GNode {
-  private static readonly DATA_OFFSET = 30;
+  static readonly RUN_CLEAR = 15;
+
   private static readonly BOTTOM_SLOT_OFFSET = 25;
   private static readonly WIDE_ENOUGH_FOR_SLOTS = 100;
 
@@ -59,14 +135,6 @@ export class GNode {
 
   get topX(): number {
     return this.child ? this.box.x + Math.min(40, this.box.width / 4) : this.box.center.x;
-  }
-
-  get dataX(): number {
-    const centerX = this.box.center.x;
-    if (!this.boundary.length) {
-      return centerX + Math.min(GNode.DATA_OFFSET, this.box.width / 2 - 10);
-    }
-    return this.keepsBoundaryLeft ? centerX + GNode.DATA_OFFSET : centerX - GNode.DATA_OFFSET;
   }
 
   shift(dx: number, dy: number): void {

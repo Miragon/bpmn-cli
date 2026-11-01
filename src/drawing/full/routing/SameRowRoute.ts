@@ -1,5 +1,5 @@
 import { Polyline } from '../../../model/index.js';
-import type { GEdge } from '../scopes/GEdge.js';
+import type { GEdge } from '../scopes/GNode.js';
 import type { FlowPaths } from './FlowPaths.js';
 import { RoutingArea, type Route } from './RoutingArea.js';
 
@@ -11,7 +11,7 @@ export class SameRowRoute {
 
   of(edge: GEdge): Route {
     const { source, target } = edge;
-    const straight = edge.straightLine();
+    const straight = RoutingArea.straightLine(edge);
     if (edge.bandY !== undefined) {
       return { points: this.inBandOrStraight(edge, edge.bandY, straight) };
     }
