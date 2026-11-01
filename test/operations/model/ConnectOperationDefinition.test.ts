@@ -18,9 +18,9 @@ const EXAMPLES: Example[] = [
 
 describe('ConnectOperationDefinition', () => {
   it('hints at the end, not at set, for a key that names one', () => {
-    const read = () => new ConnectOperationDefinition().read({ from: 'a', target: 'b' }, new OperationLocation(0, 'ops[0]'));
+    const read = () => new ConnectOperationDefinition().read({ from: 'a', to: 'b' }, new OperationLocation(0, 'ops[0]'));
 
-    expect(read).toThrow(expect.objectContaining({ details: expect.objectContaining({ hint: 'connect names its ends with "source" and "target": {"target":"b","source":"a"}.' }) }));
+    expect(read).toThrow(expect.objectContaining({ details: expect.objectContaining({ hint: 'connect names its ends with "source" and "target": {"source":"a","target":"b"}.' }) }));
   });
 
   it.each(EXAMPLES)('%s', (_says, operation, refusal, parsedAs) => {

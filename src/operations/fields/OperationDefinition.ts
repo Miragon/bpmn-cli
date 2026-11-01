@@ -69,7 +69,7 @@ export abstract class OperationDefinition {
     const { [key]: value, ...rest } = input;
     const named = this.fieldOfWord[key];
     if (named) {
-      return { key: named, hint: `${this.name} names its ends with "source" and "target": ${JSON.stringify({ ...known(Object.entries(rest)), [named]: value })}.` };
+      return { key: named, hint: `${this.name} names its ends with "source" and "target": ${JSON.stringify(known(Object.entries(input).map(([word, given]): [string, unknown] => [this.fieldOfWord[word] ?? word, given])))}.` };
     }
     if (this.fields['id'] && input['id'] === undefined && OperationDefinition.ID_LIKE.has(key)) {
       return { key: 'id', hint: `${this.name} names its element with "id": ${JSON.stringify({ ...known(Object.entries(rest)), id: value })}.` };
