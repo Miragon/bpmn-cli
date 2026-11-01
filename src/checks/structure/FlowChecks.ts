@@ -26,10 +26,7 @@ export class FlowChecks {
       return;
     }
     if (source.is('bpmn:BoundaryEvent') && Triggers.of(source) === 'compensate') {
-      this.findings.error('E_INVALID_SOURCE', `Compensate boundary event ${ElementText.shownId(source)} cannot have outgoing sequence flows (${ElementText.shownId(flow)} -> ${ElementText.shownId(target)})`, ElementText.shownId(flow), {
-        related: [ElementText.shownId(source), ElementText.shownId(target)],
-        hint: `The compensation handler is linked by an association, not a sequence flow: \`bpmn remove <file> ${ElementText.shownId(flow)}\`, then \`bpmn connect <file> ${ElementText.shownId(source)} ${ElementText.shownId(target)}\`.`,
-      });
+      this.findings.error('E_INVALID_SOURCE', `Compensate boundary event ${ElementText.shownId(source)} cannot have outgoing sequence flows (${ElementText.shownId(flow)} -> ${ElementText.shownId(target)})`, ElementText.shownId(flow), { related: [ElementText.shownId(source), ElementText.shownId(target)], hint: `The compensation handler is linked by an association, not a sequence flow: \`bpmn remove <file> ${ElementText.shownId(flow)}\`, then \`bpmn connect <file> ${ElementText.shownId(source)} ${ElementText.shownId(target)}\`.` });
     }
     const ends: Array<[BpmnElement, string, string]> = [
       [source, 'E_INVALID_SOURCE', 'source'],
@@ -39,48 +36,33 @@ export class FlowChecks {
       if (end.peek<boolean>('isForCompensation') !== true) {
         continue;
       }
-      this.findings.error(code, `Compensation handler ${this.findings.describe(end)} cannot be the ${role} of a sequence flow (${ElementText.shownId(flow)})`, ElementText.shownId(flow), {
-        related: [ElementText.shownId(source), ElementText.shownId(target)],
-        hint: `A compensation handler hangs off a compensate boundary event by association only: \`bpmn remove <file> ${ElementText.shownId(flow)}\`, or make it a normal activity with \`bpmn set <file> ${ElementText.shownId(end)} isForCompensation=false\`.`,
-      });
+      this.findings.error(code, `Compensation handler ${this.findings.describe(end)} cannot be the ${role} of a sequence flow (${ElementText.shownId(flow)})`, ElementText.shownId(flow), { related: [ElementText.shownId(source), ElementText.shownId(target)], hint: `A compensation handler hangs off a compensate boundary event by association only: \`bpmn remove <file> ${ElementText.shownId(flow)}\`, or make it a normal activity with \`bpmn set <file> ${ElementText.shownId(end)} isForCompensation=false\`.` });
     }
     const endpointScope = this.document.scopes.scopeOf(source);
     if (endpointScope && endpointScope !== scope) {
-      this.findings.error('E_CROSS_SCOPE', `${this.findings.describe(flow)} is declared in ${ElementText.shownId(scope)} but connects nodes of ${ElementText.shownId(endpointScope)}`, ElementText.shownId(flow), {
-        related: [ElementText.shownId(source), ElementText.shownId(target)],
-        hint: `Remove the flow with \`bpmn remove <file> ${ElementText.shownId(flow)}\` and re-create it with \`bpmn connect <file> ${ElementText.shownId(source)} ${ElementText.shownId(target)}\`.`,
-      });
+      this.findings.error('E_CROSS_SCOPE', `${this.findings.describe(flow)} is declared in ${ElementText.shownId(scope)} but connects nodes of ${ElementText.shownId(endpointScope)}`, ElementText.shownId(flow), { related: [ElementText.shownId(source), ElementText.shownId(target)], hint: `Remove the flow with \`bpmn remove <file> ${ElementText.shownId(flow)}\` and re-create it with \`bpmn connect <file> ${ElementText.shownId(source)} ${ElementText.shownId(target)}\`.` });
     }
   }
 
   checkFlowLinks(node: BpmnElement): void {
-    for (const flow of this.incomingOf(node)) {
+    for (const flow of node.list('incoming')) {
       if (flow.is('bpmn:SequenceFlow') && flow.peek<BpmnElement>('targetRef') !== node) {
-        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${ElementText.shownId(flow)} as incoming, but the flow targets ${ElementText.shownId(flow.peek<BpmnElement>('targetRef'))}`, ElementText.shownId(node), {
-          related: [ElementText.shownId(flow)],
-          hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:incoming>${ElementText.shownId(flow)}</bpmn:incoming> entry from ${ElementText.shownId(node)} in the XML (missing entries are added automatically).`,
-        });
+        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${ElementText.shownId(flow)} as incoming, but the flow targets ${ElementText.shownId(flow.peek<BpmnElement>('targetRef'))}`, ElementText.shownId(node), { related: [ElementText.shownId(flow)], hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:incoming>${ElementText.shownId(flow)}</bpmn:incoming> entry from ${ElementText.shownId(node)} in the XML (missing entries are added automatically).` });
       }
     }
-    for (const flow of this.outgoingOf(node)) {
+    for (const flow of node.list('outgoing')) {
       if (flow.is('bpmn:SequenceFlow') && flow.peek<BpmnElement>('sourceRef') !== node) {
-        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${ElementText.shownId(flow)} as outgoing, but the flow starts at ${ElementText.shownId(flow.peek<BpmnElement>('sourceRef'))}`, ElementText.shownId(node), {
-          related: [ElementText.shownId(flow)],
-          hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:outgoing>${ElementText.shownId(flow)}</bpmn:outgoing> entry from ${ElementText.shownId(node)} in the XML (missing entries are added automatically).`,
-        });
+        this.findings.error('E_FLOW_LINKS', `${this.findings.describe(node)} lists ${ElementText.shownId(flow)} as outgoing, but the flow starts at ${ElementText.shownId(flow.peek<BpmnElement>('sourceRef'))}`, ElementText.shownId(node), { related: [ElementText.shownId(flow)], hint: `incoming/outgoing must mirror sourceRef/targetRef: delete the stale <bpmn:outgoing>${ElementText.shownId(flow)}</bpmn:outgoing> entry from ${ElementText.shownId(node)} in the XML (missing entries are added automatically).` });
       }
     }
   }
 
   checkDefaultFlow(node: BpmnElement): void {
     const def = node.peek<BpmnElement>('default');
-    if (!def || this.outgoingOf(node).includes(def)) {
+    if (!def || node.list('outgoing').includes(def)) {
       return;
     }
-    this.findings.error('E_INVALID_DEFAULT', `Default flow ${ElementText.shownId(def)} of ${this.findings.describe(node)} is not one of its outgoing flows`, ElementText.shownId(node), {
-      related: [ElementText.shownId(def)],
-      hint: `Mark one of the outgoing flows instead: \`bpmn set <file> <flowId> default=true\`.`,
-    });
+    this.findings.error('E_INVALID_DEFAULT', `Default flow ${ElementText.shownId(def)} of ${this.findings.describe(node)} is not one of its outgoing flows`, ElementText.shownId(node), { related: [ElementText.shownId(def)], hint: `Mark one of the outgoing flows instead: \`bpmn set <file> <flowId> default=true\`.` });
   }
 
   checkMessageFlows(): void {
@@ -94,10 +76,7 @@ export class FlowChecks {
       for (const end of [source, target]) {
         if (!end.is('bpmn:InteractionNode')) {
           bad = true;
-          this.findings.error('E_INVALID_MESSAGE_FLOW', `Message flow ${ElementText.shownId(mf)} ends at ${this.findings.describe(end)}, which cannot send or receive messages`, ElementText.shownId(mf), {
-            related: [ElementText.shownId(end)],
-            hint: 'Message flows connect participants, tasks, events, sub-processes and call activities (not gateways or data).',
-          });
+          this.findings.error('E_INVALID_MESSAGE_FLOW', `Message flow ${ElementText.shownId(mf)} ends at ${this.findings.describe(end)}, which cannot send or receive messages`, ElementText.shownId(mf), { related: [ElementText.shownId(end)], hint: 'Message flows connect participants, tasks, events, sub-processes and call activities (not gateways or data).' });
         }
       }
       if (bad) {
@@ -106,16 +85,9 @@ export class FlowChecks {
       const sPool = this.poolOf(source);
       const tPool = this.poolOf(target);
       if (sPool && tPool && sPool === tPool) {
-        this.findings.error('E_MESSAGE_FLOW_SAME_POOL', `Message flow ${ElementText.shownId(mf)} connects ${ElementText.shownId(source)} and ${ElementText.shownId(target)} inside the same pool ${ElementText.shownId(sPool)}`, ElementText.shownId(mf), {
-          related: [ElementText.shownId(source), ElementText.shownId(target)],
-          hint: `Inside a pool use a sequence flow: \`bpmn remove <file> ${ElementText.shownId(mf)}\` then \`bpmn connect <file> ${ElementText.shownId(source)} ${ElementText.shownId(target)}\`.`,
-        });
+        this.findings.error('E_MESSAGE_FLOW_SAME_POOL', `Message flow ${ElementText.shownId(mf)} connects ${ElementText.shownId(source)} and ${ElementText.shownId(target)} inside the same pool ${ElementText.shownId(sPool)}`, ElementText.shownId(mf), { related: [ElementText.shownId(source), ElementText.shownId(target)], hint: `Inside a pool use a sequence flow: \`bpmn remove <file> ${ElementText.shownId(mf)}\` then \`bpmn connect <file> ${ElementText.shownId(source)} ${ElementText.shownId(target)}\`.` });
       }
     }
-  }
-
-  private outgoingOf(node: BpmnElement): readonly BpmnElement[] {
-    return node.list('outgoing');
   }
 
   private leavesTheReportToAnotherIncoming(flow: BpmnElement, source: BpmnElement, target: BpmnElement): boolean {
@@ -123,10 +95,6 @@ export class FlowChecks {
       return false;
     }
     return this.document.flows.incoming(target).some((other) => other !== flow && !other.get<BpmnElement>('sourceRef').is('bpmn:EventBasedGateway'));
-  }
-
-  private incomingOf(node: BpmnElement): readonly BpmnElement[] {
-    return node.list('incoming');
   }
 
   private poolOf(el: BpmnElement): BpmnElement | undefined {

@@ -76,29 +76,9 @@ export class FlowOrder {
   }
 
   private successors(node: BpmnElement): BpmnElement[] {
-    const out: BpmnElement[] = [];
-    for (const flow of this.document.flows.outgoing(node)) {
-      const target = flow.peek<BpmnElement>('targetRef');
-      if (target) {
-        out.push(target);
-      }
-    }
-    if (node.is('bpmn:Activity')) {
-      for (const boundary of this.document.scopes.boundaryEventsOf(node)) {
-        for (const flow of this.document.flows.outgoing(boundary)) {
-          const target = flow.peek<BpmnElement>('targetRef');
-          if (target) {
-            out.push(target);
-          }
-        }
-      }
-    }
-    if (Triggers.isLinkThrow(node)) {
-      const name = FlowOrder.linkNameOf(node);
-      if (name) {
-        out.push(...(this.linkCatches.get(name) ?? []));
-      }
-    }
-    return out;
+    const boundaries = node.is('bpmn:Activity') ? this.document.scopes.boundaryEventsOf(node) : [];
+    const targets = [node, ...boundaries].flatMap((source) => this.document.flows.outgoing(source)).map((flow) => flow.peek<BpmnElement>('targetRef'));
+    const name = Triggers.isLinkThrow(node) ? FlowOrder.linkNameOf(node) : undefined;
+    return [...targets.filter((target): target is BpmnElement => !!target), ...(name ? (this.linkCatches.get(name) ?? []) : [])];
   }
 }

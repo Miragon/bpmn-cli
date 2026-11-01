@@ -28,14 +28,10 @@ export class ScopeChecks {
   private checkStartAndEnd(scope: BpmnElement, nodes: BpmnElement[]): void {
     const isProcess = scope.is('bpmn:Process');
     if (!Kinds.isEventSubProcess(scope) && !nodes.some((node) => node.is('bpmn:StartEvent'))) {
-      this.findings.warning('W_NO_START', `${isProcess ? 'Process' : 'Sub-process'} ${ElementText.shownId(scope)} has no start event`, ElementText.shownId(scope), {
-        hint: `Add one: \`bpmn add <file> startEvent "<Name>" --in ${ElementText.shownId(scope)}\` (or --before <firstNodeId>).`,
-      });
+      this.findings.warning('W_NO_START', `${isProcess ? 'Process' : 'Sub-process'} ${ElementText.shownId(scope)} has no start event`, ElementText.shownId(scope), { hint: `Add one: \`bpmn add <file> startEvent "<Name>" --in ${ElementText.shownId(scope)}\` (or --before <firstNodeId>).` });
     }
     if (!nodes.some((node) => node.is('bpmn:EndEvent'))) {
-      this.findings.warning('W_NO_END', `${isProcess ? 'Process' : 'Sub-process'} ${ElementText.shownId(scope)} has no end event`, ElementText.shownId(scope), {
-        hint: `Add one after the last node: \`bpmn add <file> endEvent "<Name>" --after <nodeId>\`.`,
-      });
+      this.findings.warning('W_NO_END', `${isProcess ? 'Process' : 'Sub-process'} ${ElementText.shownId(scope)} has no end event`, ElementText.shownId(scope), { hint: `Add one after the last node: \`bpmn add <file> endEvent "<Name>" --after <nodeId>\`.` });
     }
   }
 
@@ -53,17 +49,13 @@ export class ScopeChecks {
   private checkNode(node: BpmnElement, adHoc: boolean): void {
     const outgoing = this.document.flows.outgoing(node);
     const incoming = this.document.flows.incoming(node);
-    if (!outgoing.length && !adHoc && !this.isDeadEndExempt(node)) {
-      this.findings.warning('W_DEAD_END', `${this.findings.describe(node)} has no outgoing flow`, ElementText.shownId(node), {
-        hint: `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${ElementText.shownId(node)}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${ElementText.shownId(node)}\`).`,
-      });
+    if (!outgoing.length && !adHoc && !ScopeChecks.isDeadEndExempt(node)) {
+      this.findings.warning('W_DEAD_END', `${this.findings.describe(node)} has no outgoing flow`, ElementText.shownId(node), { hint: `Continue the flow (\`bpmn add <file> <kind> "<Name>" --after ${ElementText.shownId(node)}\`) or end it (\`bpmn add <file> endEvent "<Name>" --after ${ElementText.shownId(node)}\`).` });
     }
     this.gatewayChecks.lint(node, outgoing);
     this.checkImplicitSplitAndJoin(node, outgoing, incoming);
     if (node.is('bpmn:SubProcess') && !this.document.scopes.flowNodes(node).length) {
-      this.findings.warning('W_EMPTY_SUBPROCESS', `${this.findings.describe(node)} contains no nodes`, ElementText.shownId(node), {
-        hint: `Add content: \`bpmn add <file> startEvent "<Name>" --in ${ElementText.shownId(node)}\` ... or remove it.`,
-      });
+      this.findings.warning('W_EMPTY_SUBPROCESS', `${this.findings.describe(node)} contains no nodes`, ElementText.shownId(node), { hint: `Add content: \`bpmn add <file> startEvent "<Name>" --in ${ElementText.shownId(node)}\` ... or remove it.` });
     }
   }
 
@@ -72,16 +64,10 @@ export class ScopeChecks {
       return;
     }
     if (outgoing.length >= 2) {
-      this.findings.warning('W_IMPLICIT_SPLIT', `${this.findings.describe(node)} has ${outgoing.length} outgoing flows (implicit split)`, ElementText.shownId(node), {
-        related: outgoing.map((element) => ElementText.shownId(element)),
-        hint: `Split through a gateway instead: \`bpmn add <file> parallelGateway --flow ${ElementText.shownId(outgoing[0])}\` (or exclusiveGateway "<Question?>" for alternatives), then \`bpmn set <file> ${ElementText.shownId(outgoing[1])} source=<gatewayId>\` for each other outgoing flow (new branches: a {"op":"split"} op in \`bpmn apply <file> ops.json\`).`,
-      });
+      this.findings.warning('W_IMPLICIT_SPLIT', `${this.findings.describe(node)} has ${outgoing.length} outgoing flows (implicit split)`, ElementText.shownId(node), { related: outgoing.map((element) => ElementText.shownId(element)), hint: `Split through a gateway instead: \`bpmn add <file> parallelGateway --flow ${ElementText.shownId(outgoing[0])}\` (or exclusiveGateway "<Question?>" for alternatives), then \`bpmn set <file> ${ElementText.shownId(outgoing[1])} source=<gatewayId>\` for each other outgoing flow (new branches: a {"op":"split"} op in \`bpmn apply <file> ops.json\`).` });
     }
     if (incoming.length >= 2) {
-      this.findings.warning('W_IMPLICIT_JOIN', `${this.findings.describe(node)} has ${incoming.length} incoming flows (implicit join)`, ElementText.shownId(node), {
-        related: incoming.map((element) => ElementText.shownId(element)),
-        hint: `Join through a gateway instead: \`bpmn add <file> exclusiveGateway --flow ${ElementText.shownId(incoming[0])}\` (parallelGateway to synchronise), then \`bpmn set <file> ${ElementText.shownId(incoming[1])} target=<gatewayId>\` for each other incoming flow.`,
-      });
+      this.findings.warning('W_IMPLICIT_JOIN', `${this.findings.describe(node)} has ${incoming.length} incoming flows (implicit join)`, ElementText.shownId(node), { related: incoming.map((element) => ElementText.shownId(element)), hint: `Join through a gateway instead: \`bpmn add <file> exclusiveGateway --flow ${ElementText.shownId(incoming[0])}\` (parallelGateway to synchronise), then \`bpmn set <file> ${ElementText.shownId(incoming[1])} target=<gatewayId>\` for each other incoming flow.` });
     }
   }
 
@@ -103,27 +89,14 @@ export class ScopeChecks {
         continue;
       }
       const [first, ...rest] = els;
-      this.findings.warning('W_DUPLICATE_NAME', `${els.length} ${Kinds.label(first!)} elements are named "${this.findings.nameOf(first!)}" (${els.map((element) => ElementText.shownId(element)).join(', ')})`, ElementText.shownId(first), {
-        related: rest.map((element) => ElementText.shownId(element)),
-        hint: 'Distinct names keep the model unambiguous; rename with `bpmn set <file> <id> name="<New name>"`.',
-      });
+      this.findings.warning('W_DUPLICATE_NAME', `${els.length} ${Kinds.label(first!)} elements are named "${this.findings.nameOf(first!)}" (${els.map((element) => ElementText.shownId(element)).join(', ')})`, ElementText.shownId(first), { related: rest.map((element) => ElementText.shownId(element)), hint: 'Distinct names keep the model unambiguous; rename with `bpmn set <file> <id> name="<New name>"`.' });
     }
   }
 
-  private isDeadEndExempt(node: BpmnElement): boolean {
-    if (node.is('bpmn:EndEvent') || Kinds.isEventSubProcess(node)) {
-      return true;
-    }
-    if (node.peek<boolean>('isForCompensation') === true) {
-      return true;
-    }
+  private static isDeadEndExempt(node: BpmnElement): boolean {
     const trigger = Triggers.of(node);
-    if (node.is('bpmn:IntermediateThrowEvent') && trigger === 'link') {
-      return true;
-    }
-    if (node.is('bpmn:BoundaryEvent') && trigger === 'compensate') {
-      return true;
-    }
-    return false;
+    const pairedThrow = node.is('bpmn:IntermediateThrowEvent') && trigger === 'link';
+    const compensating = node.is('bpmn:BoundaryEvent') && trigger === 'compensate';
+    return node.is('bpmn:EndEvent') || Kinds.isEventSubProcess(node) || node.peek<boolean>('isForCompensation') === true || pairedThrow || compensating;
   }
 }
