@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:c="http://camunda.org/schema/1.0/bpmn" id="Definitions_ownPrefix" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_ownPrefix" isExecutable="false">
+    <bpmn:businessRuleTask id="task_new" />
+    <bpmn:businessRuleTask id="task_empty" />
+    <bpmn:subProcess id="sub_deep">
+      <bpmn:businessRuleTask id="task_deep" c:decisionRef="deep" />
+    </bpmn:subProcess>
+  </bpmn:process>
+</bpmn:definitions>

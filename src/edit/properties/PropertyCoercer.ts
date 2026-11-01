@@ -34,13 +34,6 @@ export class PropertyCoercer {
         }
         return Number(value);
       }
-      case 'Real': {
-        const numeric = Number(value);
-        if (!value.trim() || Number.isNaN(numeric)) {
-          throw PropertyCoercer.invalidValue(el, label, `"${value}" is not a number`);
-        }
-        return numeric;
-      }
       default: {
         const literals = PropertyCatalog.of(el).enumLiterals(property.type) ?? [];
         const hit = literals.find((literal) => literal.toLowerCase() === value.trim().toLowerCase());

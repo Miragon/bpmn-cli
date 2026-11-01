@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_ids" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:error id="Error_late" errorCode="E1" />
+  <bpmn:process id="Process_main" isExecutable="true">
+    <bpmn:callActivity id="call_camunda" calledElement="Process_sub" />
+    <bpmn:callActivity id="call_other" calledElement="Process_elsewhere" />
+    <bpmn:callActivity id="call_zeebe">
+      <bpmn:extensionElements>
+        <zeebe:calledElement processId="Process_sub" />
+      </bpmn:extensionElements>
+    </bpmn:callActivity>
+    <bpmn:callActivity id="call_zeebeOther">
+      <bpmn:extensionElements>
+        <zeebe:calledElement processId="Process_elsewhere" />
+      </bpmn:extensionElements>
+    </bpmn:callActivity>
+    <bpmn:serviceTask id="task_handler">
+      <bpmn:extensionElements>
+        <camunda:errorEventDefinition id="handler_late" errorRef="Error_late" />
+        <camunda:errorEventDefinition id="handler_other" errorRef="Error_other" />
+        <camunda:inputOutput />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:task id="task_suffix" />
+    <bpmn:task id="task_bpmn" />
+    <bpmn:task id="task_handmade" />
+    <bpmn:task id="task_taken" />
+    <bpmn:startEvent id="startEvent_daily" name="Daily">
+      <bpmn:outgoing>Flow_startEvent_daily_task_suffix</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="timer_daily"><bpmn:timeCycle>R/P1D</bpmn:timeCycle></bpmn:timerEventDefinition>
+    </bpmn:startEvent>
+    <bpmn:task id="task_prepare" name="Prepare">
+      <bpmn:outgoing>flow_prepareToFinished</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="task_finished" name="Finished">
+      <bpmn:incoming>flow_prepareToFinished</bpmn:incoming>
+      <bpmn:terminateEventDefinition id="terminate_finished" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_prepareToFinished" sourceRef="task_prepare" targetRef="task_finished" />
+    <bpmn:userTask id="task_0a1b2c3" />
+    <bpmn:task id="Activity_0a1b2c3" />
+  </bpmn:process>
+  <bpmn:process id="Process_sub" isExecutable="true" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_main">
+      <bpmndi:BPMNShape id="task_suffix_di" bpmnElement="task_suffix"><dc:Bounds x="0" y="0" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_task_bpmn" bpmnElement="task_bpmn"><dc:Bounds x="200" y="0" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_0abc123" bpmnElement="task_handmade"><dc:Bounds x="400" y="0" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_taken_di" bpmnElement="task_taken"><dc:Bounds x="600" y="0" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

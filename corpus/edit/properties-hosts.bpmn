@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_hosts" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_hosts">
+    <bpmn:participant id="participant_process" processRef="Process_hosts" />
+    <bpmn:participant id="participant_blackBox" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_hosts" isExecutable="true">
+    <bpmn:intermediateCatchEvent id="catch_message">
+      <bpmn:messageEventDefinition id="message_def" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="end_mixed">
+      <bpmn:signalEventDefinition id="signal_mixed" />
+      <bpmn:messageEventDefinition id="message_mixed" />
+    </bpmn:endEvent>
+    <bpmn:intermediateCatchEvent id="catch_script">
+      <bpmn:conditionalEventDefinition id="conditional_script">
+        <bpmn:condition xsi:type="bpmn:tFormalExpression">${ready}</bpmn:condition>
+      </bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_timer">
+      <bpmn:timerEventDefinition id="timer_def" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="throw_none" />
+    <bpmn:serviceTask id="task_service" />
+    <bpmn:userTask id="task_user" />
+    <bpmn:task id="task_plain" />
+    <bpmn:receiveTask id="task_receive" />
+    <bpmn:exclusiveGateway id="gateway_split" />
+    <bpmn:sequenceFlow id="flow_plain" sourceRef="gateway_split" targetRef="task_plain" />
+  </bpmn:process>
+</bpmn:definitions>

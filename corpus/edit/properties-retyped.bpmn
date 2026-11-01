@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:acme="http://acme.example/schema" id="Definitions_retyped" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_retyped" isExecutable="true">
+    <bpmn:task id="task_clean" name="Clean" camunda:asyncBefore="true" acme:flag="on">
+      <bpmn:extensionElements>
+        <acme:thing />
+        <zeebe:input source="=a" target="b" />
+      </bpmn:extensionElements>
+    </bpmn:task>
+    <bpmn:serviceTask id="task_oneAttribute" camunda:assignee="alice" />
+    <bpmn:serviceTask id="task_twoAttributes" camunda:assignee="alice" camunda:candidateGroups="sales" />
+    <bpmn:task id="task_listeners">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="a" />
+        <camunda:taskListener class="b" />
+      </bpmn:extensionElements>
+    </bpmn:task>
+    <bpmn:userTask id="task_zeebe">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="a" resultVariable="b" />
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="task_mixed" camunda:assignee="alice">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="a" resultVariable="b" />
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:textAnnotation id="note_template" zeebe:modelerTemplate="x" />
+    <bpmn:textAnnotation id="note_other" acme:flag="on" />
+  </bpmn:process>
+</bpmn:definitions>

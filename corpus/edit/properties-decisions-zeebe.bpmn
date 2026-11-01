@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:z="http://camunda.org/schema/zeebe/1.0" id="Definitions_zeebeLink" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_zeebeLink" isExecutable="false">
+    <bpmn:businessRuleTask id="task_linked">
+      <bpmn:extensionElements>
+        <z:calledDecision decisionId="first" />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="task_new" />
+    <bpmn:businessRuleTask id="task_host">
+      <bpmn:extensionElements>
+        <z:taskHeaders />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
+  </bpmn:process>
+</bpmn:definitions>

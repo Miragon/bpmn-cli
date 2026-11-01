@@ -211,31 +211,23 @@ export class NestedSlots {
   }
 
   private assertCompensationInScope(event: BpmnElement, activity: BpmnElement, full: string): void {
-    if (!activity.is('bpmn:Activity')) {
-      return;
-    }
-    const scope = this.edit.document.scopes.scopeOf(event);
-    if (!scope) {
-      return;
-    }
+    const { scopes: tree } = this.edit.document;
+    const scope = tree.scopeOf(event)!;
     const scopes = [scope];
     if (scope.is('bpmn:SubProcess') && scope.get<boolean | undefined>('triggeredByEvent')) {
-      const outer = this.edit.document.scopes.scopeOf(scope);
-      if (outer) {
-        scopes.push(outer);
-      }
+      scopes.push(tree.scopeOf(scope)!);
     }
-    const actual = this.edit.document.scopes.scopeOf(activity);
-    if (actual && scopes.includes(actual)) {
+    const actual = tree.scopeOf(activity)!;
+    if (scopes.includes(actual)) {
       return;
     }
     const candidates = scopes.flatMap((sc) => sc.list('flowElements').filter((flowElement) => flowElement.is('bpmn:Activity') && !(flowElement.is('bpmn:SubProcess') && flowElement.get<boolean | undefined>('triggeredByEvent'))).map((element) => element.id));
     const id = event.id;
-    throw BpmnError.model('E_CROSS_SCOPE', `${full}=${activity.id}: ${activity.id} is in ${actual ? actual.id : '?'}, not in the scope of ${id} (${scopes.map((element) => element.id).join(' / ')}); a compensation event can only compensate activities of its own scope`, {
+    throw BpmnError.model('E_CROSS_SCOPE', `${full}=${activity.id}: ${activity.id} is in ${actual.id}, not in the scope of ${id} (${scopes.map((element) => element.id).join(' / ')}); a compensation event can only compensate activities of its own scope`, {
       element: id,
       related: [activity.id],
       candidates,
-      hint: `Name an activity of ${scopes.map((element) => element.id).join(' or ')}: ${candidates.join(', ') || 'none'}. To compensate ${activity.id}, throw the compensation inside ${actual ? actual.id : 'its scope'} (e.g. an event sub-process or an intermediate throw event there). The engines refuse the file otherwise.`,
+      hint: `Name an activity of ${scopes.map((element) => element.id).join(' or ')}: ${candidates.join(', ') || 'none'}. To compensate ${activity.id}, throw the compensation inside ${actual.id} (e.g. an event sub-process or an intermediate throw event there). The engines refuse the file otherwise.`,
     });
   }
 }

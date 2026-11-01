@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_flows" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_flows" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:exclusiveGateway id="gateway_split" default="flow_other" />
+    <bpmn:parallelGateway id="gateway_fork" />
+    <bpmn:eventBasedGateway id="gateway_wait" />
+    <bpmn:task id="task_plain" default="flow_plain_a" />
+    <bpmn:task id="task_a" />
+    <bpmn:task id="task_b" />
+    <bpmn:task id="task_c" />
+    <bpmn:task id="task_d" />
+    <bpmn:endEvent id="end" />
+    <bpmn:intermediateCatchEvent id="catch_resource">
+      <bpmn:conditionalEventDefinition id="condition_resource">
+        <bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://ready.groovy" />
+      </bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="flow_in" sourceRef="start" targetRef="gateway_split" />
+    <bpmn:sequenceFlow id="flow_juel" sourceRef="gateway_split" targetRef="task_a">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_script" sourceRef="gateway_split" targetRef="task_b">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy">size &gt; 1</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_resource" sourceRef="gateway_split" targetRef="task_c">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://check.groovy" />
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_other" sourceRef="gateway_split" targetRef="task_d" />
+    <bpmn:sequenceFlow id="flow_plain_a" sourceRef="task_plain" targetRef="task_a" />
+    <bpmn:sequenceFlow id="flow_plain_b" sourceRef="task_plain" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_fork_a" sourceRef="gateway_fork" targetRef="task_a" />
+    <bpmn:sequenceFlow id="flow_wait_b" sourceRef="gateway_wait" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_conditional" sourceRef="gateway_split" targetRef="end">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${late}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+</bpmn:definitions>
