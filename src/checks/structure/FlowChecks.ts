@@ -94,7 +94,7 @@ export class FlowChecks {
     if (!source.is('bpmn:EventBasedGateway')) {
       return false;
     }
-    return this.document.flows.incoming(target).some((other) => other !== flow && !other.get<BpmnElement>('sourceRef').is('bpmn:EventBasedGateway'));
+    return this.document.flows.incoming(target).some((other) => other !== flow && !other.get<BpmnElement | undefined>('sourceRef')?.is('bpmn:EventBasedGateway'));
   }
 
   private poolOf(el: BpmnElement): BpmnElement | undefined {

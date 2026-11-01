@@ -1,4 +1,4 @@
-import { BpmnError, type BpmnDocument, type BpmnElement } from '../../model/index.js';
+import { BpmnError, type BpmnDocument, type BpmnElement, FlowEnds } from '../../model/index.js';
 
 export interface Selection {
   ids?: string[] | undefined;
@@ -69,8 +69,8 @@ export class ElementSelector {
   branch(flowId: string, centreX: SelectionView['centreX']): BpmnElement[] {
     const { flows, tree } = this.document;
     const flow = tree.require(flowId, 'bpmn:SequenceFlow', 'sequence flow');
-    const source = flow.peek<BpmnElement>('sourceRef')!;
-    const target = flow.peek<BpmnElement>('targetRef')!;
+    const source = new FlowEnds(flow).source;
+    const target = new FlowEnds(flow).target;
     const forward: Forward = (from, to) => {
       const start = centreX(ElementSelector.idOf(from));
       const end = centreX(ElementSelector.idOf(to));

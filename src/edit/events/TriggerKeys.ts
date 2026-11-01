@@ -31,6 +31,13 @@ export class TriggerKeys {
     }
   }
 
+  static assertNoneWithoutTrigger(eventSubProcess: BpmnElement, startKeys: ElementKeys): void {
+    const [untriggered] = Object.keys(startKeys);
+    if (untriggered) {
+      throw PropertyCatalog.of(eventSubProcess).unknownKey(untriggered, 'it belongs to the start event, and this event sub-process names no trigger');
+    }
+  }
+
   static optionsOf(keys: ElementKeys, element: BpmnElement): TriggerOptions {
     const options: Record<string, unknown> = {};
     for (const key of TriggerKeys.ALL) {

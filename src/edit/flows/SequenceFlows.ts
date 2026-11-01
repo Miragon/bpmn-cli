@@ -1,4 +1,4 @@
-import { type BpmnElement, type ChangeSet, ElementLabels } from '../../model/index.js';
+import { type BpmnElement, type ChangeSet, ElementLabels, FlowEnds } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { DeclarationOrder } from './DeclarationOrder.js';
 import { FlowConditions } from './FlowConditions.js';
@@ -65,8 +65,8 @@ export class SequenceFlows {
 
   redirect(flow: BpmnElement, ends: { source?: BpmnElement; target?: BpmnElement }): string | undefined {
     const document = this.edit.document;
-    const source = ends.source ?? flow.get<BpmnElement>('sourceRef');
-    const target = ends.target ?? flow.get<BpmnElement>('targetRef');
+    const source = ends.source ?? new FlowEnds(flow).source;
+    const target = ends.target ?? new FlowEnds(flow).target;
     this.edit.document.flowRules.assertEndpoints(source, target, flow);
     const oldSource = flow.get<BpmnElement | undefined>('sourceRef');
     const oldTarget = flow.get<BpmnElement | undefined>('targetRef');
@@ -89,9 +89,9 @@ export class SequenceFlows {
 
   splice(flow: BpmnElement, node: BpmnElement, flowId?: string): { first: BpmnElement; second: BpmnElement; renamedFrom?: string } {
     const document = this.edit.document;
-    const target = flow.get<BpmnElement>('targetRef');
+    const target = new FlowEnds(flow).target;
     const scope = document.scopes.scopeOf(flow)!;
-    const source = flow.get<BpmnElement>('sourceRef');
+    const source = new FlowEnds(flow).source;
     const rules = this.edit.document.flowRules;
     rules.assertRoles(source, node);
     rules.assertRoles(node, target);

@@ -1,4 +1,4 @@
-import type { BpmnDocument, BpmnElement, Finding } from '../../model/index.js';
+import { type BpmnDocument, type BpmnElement, type Finding, FlowEnds } from '../../model/index.js';
 import { NodePlacement, type Placement } from './NodePlacement.js';
 
 interface CrossLane {
@@ -24,8 +24,8 @@ export class LaneInheritance {
     if (!flow) {
       return new LaneInheritance(lane);
     }
-    const source = flow.get<BpmnElement>('sourceRef');
-    const target = flow.get<BpmnElement>('targetRef');
+    const source = new FlowEnds(flow).source;
+    const target = new FlowEnds(flow).target;
     const from = document.scopes.laneOf(source);
     const to = document.scopes.laneOf(target);
     if (from === to) {

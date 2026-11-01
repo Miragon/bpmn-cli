@@ -136,6 +136,30 @@ describe('WriteTransaction', () => {
     expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ severity: 'error', element: 'Activity_OnCancel' })]));
   });
 
+  it.each([
+    ['splices into a flow without ends', { op: 'add', kind: 'task', flow: 'f_dangling' }],
+    ['moves a node onto a flow without ends', { op: 'move', ids: ['t_self'], flow: 'f_dangling' }],
+    ['makes a flow without ends the default', { op: 'set', id: 'f_dangling', set: { default: 'true' } }],
+    ['gives a flow without ends a condition', { op: 'set', id: 'f_dangling', set: { condition: '${x}' } }],
+    ['redirects a flow without ends', { op: 'set', id: 'f_dangling', set: { source: 't_self' } }],
+    ['places the branch of a flow without ends', { op: 'place', branch: 'f_dangling', below: 't_self' }],
+  ])('refuses a write that %s', async (_case, operation) => {
+    const refusal = await refusalOf(write(Fixtures.text('edit/flows-bridge.bpmn'), [operation]));
+
+    expect(refusal.code).toBe('E_DANGLING_REF');
+    expect(refusal.details['element']).toBe('f_dangling');
+  });
+
+  it.each([
+    ['removes a node with a flow that has no target', { op: 'remove', ids: ['first'] }],
+    ['removes the branch of a node with a flow that has no target', { op: 'remove', ids: ['first'], withBranch: true }],
+    ['splits after a node with a flow that has no target', { op: 'split', after: 'first', name: 'Which?', branches: [{ nodes: [{ kind: 'task' }] }, { nodes: [{ kind: 'task' }] }] }],
+  ])('refuses a forced write that %s', async (_case, operation) => {
+    const refusal = await refusalOf(write(Fixtures.text('edit/dangling-references.bpmn'), [operation], { force: true }));
+
+    expect(refusal.code).toBe('E_DANGLING_REF');
+  });
+
   it('counts no deploy finding of a process no engine runs', async () => {
     const { findings } = await write(Fixtures.text('edit/properties-decisions-zeebe.bpmn'), [{ op: 'set', id: 'Process_zeebeLink', set: { name: 'Sketch' } }]);
 

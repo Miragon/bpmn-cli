@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, Kinds } from '../../model/index.js';
+import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, Kinds, FlowEnds } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { FlowBridge } from './FlowBridge.js';
 import { SequenceFlows } from './SequenceFlows.js';
@@ -35,7 +35,7 @@ export class JoinBridge {
       return;
     }
     const outFlow = outgoing[0]!;
-    const successor = outFlow.get<BpmnElement>('targetRef');
+    const successor = new FlowEnds(outFlow).target;
     for (const inFlow of incoming) {
       this.single.assertAllowed(node, inFlow, outFlow, removing);
     }
@@ -74,7 +74,7 @@ export class JoinBridge {
 
   private bridgeIncoming(inFlow: BpmnElement, node: BpmnElement, successor: BpmnElement): string[] {
     const { changes } = this;
-    const predecessor = inFlow.get<BpmnElement>('sourceRef');
+    const predecessor = new FlowEnds(inFlow).source;
     const already = this.edit.document.flows.outgoing(predecessor).some((flow) => flow !== inFlow && flow.get<BpmnElement | undefined>('targetRef') === successor);
     if (predecessor === successor || already) {
       new SequenceFlows(this.edit).remove(inFlow, changes);
@@ -110,8 +110,8 @@ export class JoinBridge {
       return;
     }
     const incoming = this.edit.document.flows.incoming(node);
-    const successor = this.edit.document.flows.outgoing(node)[0]!.get<BpmnElement>('targetRef');
-    const preds = [...new Set(incoming.map((flow) => flow.get<BpmnElement>('sourceRef').id))];
+    const successor = new FlowEnds(this.edit.document.flows.outgoing(node)[0]!).target;
+    const preds = [...new Set(incoming.map((flow) => new FlowEnds(flow).source.id))];
     throw BpmnError.model(
       'E_AMBIGUOUS_BRIDGE',
       `${node.id} is a ${JoinBridge.joinKind(node)} join of ${incoming.length} paths (${preds.join(', ')}): bridging them to ${successor.id} ends the synchronisation (${successor.id} would run once per path), removing it without a bridge leaves ${successor.id} unconnected`,

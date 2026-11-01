@@ -1,4 +1,4 @@
-import { type BpmnElement, CAMUNDA, type ChangeSet, DiIdStyle, ElementWalk, IdCut, IdRegistry, type IdRequest, IdRequests, type IdState, Kinds, Triggers } from '../../model/index.js';
+import { type BpmnElement, CAMUNDA, type ChangeSet, DiIdStyle, ElementWalk, IdCut, IdRegistry, type IdRequest, IdRequests, type IdState, Kinds, Triggers, FlowEnds } from '../../model/index.js';
 import { FlowIdFollower } from '../flows/FlowIdFollower.js';
 import type { EditSession } from '../session/EditSession.js';
 
@@ -71,7 +71,7 @@ export class IdRename {
     }
     const wanted = IdCut.cutAt(stale.suggested, IdCut.MAX_ID);
     const next = allocator.regenerated(wanted, style.suffixSep());
-    const flows = new FlowIdFollower(this.edit).namedAfter(el).map((flow) => ({ flow, was: `${flow.get<BpmnElement>('sourceRef').id} -> ${flow.get<BpmnElement>('targetRef').id}` }));
+    const flows = new FlowIdFollower(this.edit).namedAfter(el).map((flow) => ({ flow, was: `${new FlowEnds(flow).source.id} -> ${new FlowEnds(flow).target.id}` }));
     this.rename(el, next);
     allocator.markGenerated(next, wanted);
     this.edit.journal.recordRegenerated(id, next, undefined, el);

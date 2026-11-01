@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ChangeEntries, ChangeSet, Kinds } from '../model/index.js';
+import { type BpmnElement, BpmnError, ChangeEntries, ChangeSet, Kinds, FlowEnds } from '../model/index.js';
 import type { MoveOperation } from '../operations/index.js';
 import { LaneInheritance } from './containers/LaneInheritance.js';
 import { MoveAnchors } from './containers/MoveAnchors.js';
@@ -95,8 +95,8 @@ export class ElementMove {
   }
 
   private fixFlow(flow: BpmnElement, scope: BpmnElement, changes: ChangeSet): void {
-    const src = flow.get<BpmnElement>('sourceRef');
-    const tgt = flow.get<BpmnElement>('targetRef');
+    const src = new FlowEnds(flow).source;
+    const tgt = new FlowEnds(flow).target;
     if (this.edit.document.scopes.scopeOf(src) === scope && this.edit.document.scopes.scopeOf(tgt) === scope) {
       ElementMove.redeclareFlow(flow, src, scope);
       return;

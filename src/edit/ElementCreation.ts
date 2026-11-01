@@ -173,7 +173,7 @@ export class ElementCreation {
     this.writeContent(node, element);
     this.joinLane(element, explicitLane, inherited, changes);
     if (def.kind === 'eventSubProcess') {
-      this.startEventSubProcess(element, named, keys, changes);
+      this.addStartEvent(element, named, keys, changes);
     }
     return element;
   }
@@ -248,18 +248,14 @@ export class ElementCreation {
     }
   }
 
-  private startEventSubProcess(element: BpmnElement, trigger: Trigger | undefined, keys: ElementKeys, changes: ChangeSet): void {
-    const [untriggered] = Object.keys(TriggerKeys.present(keys));
-    if (!trigger && untriggered) {
-      throw PropertyCatalog.of(element).unknownKey(untriggered, 'it belongs to the start event, and this event sub-process names no trigger');
+  private addStartEvent(eventSubProcess: BpmnElement, trigger: Trigger | undefined, keys: ElementKeys, changes: ChangeSet): void {
+    const { id } = eventSubProcess;
+    const startKeys = TriggerKeys.present(keys);
+    if (!trigger) {
+      TriggerKeys.assertNoneWithoutTrigger(eventSubProcess, startKeys);
+      return;
     }
-    if (trigger) {
-      this.addStartEvent(element.id, trigger, keys, changes);
-    }
-  }
-
-  private addStartEvent(id: string, trigger: Trigger, keys: ElementKeys, changes: ChangeSet): void {
-    const start = this.add({ op: 'add', kind: `startEvent:${trigger}`, in: id, set: { ...TriggerKeys.present(keys) } });
+    const start = this.add({ op: 'add', kind: `startEvent:${trigger}`, in: id, set: { ...startKeys } });
     const entry = start.created[0];
     if (entry) {
       entry.detail = `start of event sub-process ${id}`;

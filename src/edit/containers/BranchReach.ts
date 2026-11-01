@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError } from '../../model/index.js';
+import { type BpmnElement, BpmnError, FlowEnds } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 
 export interface Branch {
@@ -39,7 +39,7 @@ export class BranchReach {
   private assertOnePath(root: BpmnElement): void {
     const incoming = this.edit.document.flows.incoming(root);
     if (incoming.length > 1) {
-      throw BpmnError.model('E_AMBIGUOUS_BRANCH', `${root.id} is reached by ${incoming.length} paths (${incoming.map((flow) => flow.get<BpmnElement>('sourceRef').id).join(', ')}); its downstream is not the branch of one path`, {
+      throw BpmnError.model('E_AMBIGUOUS_BRANCH', `${root.id} is reached by ${incoming.length} paths (${incoming.map((flow) => new FlowEnds(flow).source.id).join(', ')}); its downstream is not the branch of one path`, {
         element: root.id,
         candidates: incoming.map((flow) => flow.id),
         hint: `Remove the branch from a node only one path reaches (the first node after the split), or remove ${root.id} alone (\`bpmn remove <file> ${root.id} --bridge all\` reconnects the paths to its successor).`,
@@ -49,7 +49,7 @@ export class BranchReach {
 
   private successorsOf(node: BpmnElement): BpmnElement[] {
     return [
-      ...this.edit.document.flows.outgoing(node).map((flow) => flow.get<BpmnElement>('targetRef')),
+      ...this.edit.document.flows.outgoing(node).map((flow) => new FlowEnds(flow).target),
       ...(node.is('bpmn:Activity') ? this.edit.document.scopes.boundaryEventsOf(node) : []),
       ...this.compensationHandlers(node),
     ];
@@ -57,9 +57,9 @@ export class BranchReach {
 
   private predecessorsOf(node: BpmnElement): BpmnElement[] {
     if (node.is('bpmn:BoundaryEvent')) {
-      return [node.get<BpmnElement>('attachedToRef')];
+      return [node.get<BpmnElement | undefined>('attachedToRef')].filter((host) => host !== undefined);
     }
-    const preds = this.edit.document.flows.incoming(node).map((flow) => flow.get<BpmnElement>('sourceRef'));
+    const preds = this.edit.document.flows.incoming(node).map((flow) => new FlowEnds(flow).source);
     if (node.get<boolean | undefined>('isForCompensation')) {
       preds.push(...this.compensationSources(node));
     }

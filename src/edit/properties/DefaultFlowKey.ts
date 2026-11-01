@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, PropertyCatalog } from '../../model/index.js';
+import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, PropertyCatalog, FlowEnds } from '../../model/index.js';
 import { FlowConditions } from '../flows/FlowConditions.js';
 import type { EditSession } from '../session/EditSession.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
@@ -35,7 +35,7 @@ export class DefaultFlowKey {
   }
 
   private makeDefaultFlow(flow: BpmnElement, changes: ChangeSet): void {
-    const source = flow.get<BpmnElement>('sourceRef');
+    const source = new FlowEnds(flow).source;
     const previous = source.get<BpmnElement | undefined>('default');
     const expr = flow.get<BpmnElement | undefined>('conditionExpression');
     const resourceKey = new PropertyCoercer(this.edit).resourceKeyOf(expr);

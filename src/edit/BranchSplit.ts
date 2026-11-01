@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ChangeEntries, ChangeSet, ElementLabels, KindParser } from '../model/index.js';
+import { type BpmnElement, BpmnError, ChangeEntries, ChangeSet, ElementLabels, KindParser, FlowEnds } from '../model/index.js';
 import type { AddOperation, SplitBranch, SplitOperation } from '../operations/index.js';
 import { ElementCreation } from './ElementCreation.js';
 import { FlowConnector } from './FlowConnector.js';
@@ -71,7 +71,7 @@ export class BranchSplit {
     }
     const spliced = !isGateway && outgoing.length === 1 ? outgoing[0] : undefined;
     const lane = document.scopes.laneOf(anchor);
-    return { anchor, scope, spliced, successor: spliced?.get<BpmnElement>('targetRef'), withJoin: command.join !== false, kind, lane: lane ? { lane: lane.id } : {} };
+    return { anchor, scope, spliced, successor: spliced && new FlowEnds(spliced).target, withJoin: command.join !== false, kind, lane: lane ? { lane: lane.id } : {} };
   }
 
   private addGateway(command: SplitOperation, point: SplitPoint, changes: ChangeSet): BpmnElement {

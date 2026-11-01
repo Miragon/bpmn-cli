@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, type ChangeSet, Kinds } from '../../model/index.js';
+import { type BpmnElement, BpmnError, type ChangeSet, Kinds, FlowEnds } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 
 export class FlowConditions {
@@ -9,7 +9,7 @@ export class FlowConditions {
   }
 
   setDefault(flow: BpmnElement, isDefault: boolean): void {
-    const source = flow.get<BpmnElement>('sourceRef');
+    const source = new FlowEnds(flow).source;
     if (isDefault) {
       if (!Kinds.branchesByCondition(source) && !source.is('bpmn:Activity')) {
         throw BpmnError.model('E_INVALID_DEFAULT', `Only exclusive/inclusive/complex gateways and activities can have a default flow (${source.id} is a ${Kinds.label(source)})`, {
@@ -29,7 +29,7 @@ export class FlowConditions {
   setCondition(flow: BpmnElement, expr: string | undefined, language?: string): void {
     const rules = this.edit.document.flowRules;
     rules.assertCondition(expr);
-    rules.assertConditionTaken(flow.get<BpmnElement>('sourceRef'), expr, flow.id);
+    rules.assertConditionTaken(new FlowEnds(flow).source, expr, flow.id);
     if (expr) {
       flow.set('conditionExpression', this.expression(expr, language));
       const source = flow.get<BpmnElement | undefined>('sourceRef');

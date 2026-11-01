@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ElementWalk } from '../../model/index.js';
+import { type BpmnElement, BpmnError, ElementWalk, FlowEnds } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { NodePlacement, type PlacementOptions } from './NodePlacement.js';
 
@@ -56,7 +56,7 @@ export class MoveAnchors {
   assertChainAnchor(nodes: BpmnElement[], options: PlacementOptions): void {
     const mode = NodePlacement.modeOf(options);
     const flow = mode === 'flow' ? this.edit.require(options.flow!, 'bpmn:SequenceFlow', 'sequence flow') : undefined;
-    const after = mode === 'after' || mode === 'between' ? this.edit.require(options.after!, 'bpmn:FlowNode') : flow?.get<BpmnElement>('sourceRef');
+    const after = mode === 'after' || mode === 'between' ? this.edit.require(options.after!, 'bpmn:FlowNode') : flow && new FlowEnds(flow).source;
     const before = mode === 'before' || mode === 'between' ? this.edit.require(options.before!, 'bpmn:FlowNode') : undefined;
     const held = MoveAnchors.heldAnchor(nodes.slice(1), after, before);
     if (!held) {
@@ -79,11 +79,11 @@ export class MoveAnchors {
     }
     const onlyIn = (node: BpmnElement): BpmnElement | undefined => {
       const flows = this.edit.document.flows.incoming(node);
-      return flows.length === 1 ? flows[0]!.get<BpmnElement>('sourceRef') : undefined;
+      return flows.length === 1 ? new FlowEnds(flows[0]!).source : undefined;
     };
     const onlyOut = (node: BpmnElement): BpmnElement | undefined => {
       const flows = this.edit.document.flows.outgoing(node);
-      return flows.length === 1 ? flows[0]!.get<BpmnElement>('targetRef') : undefined;
+      return flows.length === 1 ? new FlowEnds(flows[0]!).target : undefined;
     };
     for (let index = 1; index < nodes.length; index++) {
       if ((nodes[index - 1]!).is('bpmn:Gateway') || onlyIn(nodes[index]!) !== nodes[index - 1]) {
@@ -117,7 +117,7 @@ export class MoveAnchors {
     }
     if (placement.flow) {
       const flow = this.edit.require(placement.flow, 'bpmn:SequenceFlow', 'sequence flow');
-      out.push(flow.get<BpmnElement>('sourceRef'), flow.get<BpmnElement>('targetRef'));
+      out.push(new FlowEnds(flow).source, new FlowEnds(flow).target);
     }
     if (placement.on) {
       out.push(this.edit.require(placement.on, 'bpmn:Activity', 'activity'));

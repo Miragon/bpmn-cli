@@ -83,11 +83,15 @@ export class C7StartEventRules extends C7Rules {
     return [...new Set(flows.map((flow) => flow.peek<BpmnElement>('targetRef')?.id).filter((targetId): targetId is string => !!targetId))].join(', ');
   }
 
+  private reachableFromTargetOf(flow: BpmnElement): Iterable<BpmnElement> {
+    const target = flow.peek<BpmnElement>('targetRef');
+    return target ? this.reachableFrom(target) : [];
+  }
+
   private meetingNodes(own: BpmnElement[], reached: Set<BpmnElement>): Set<string> {
     const meet = new Set<string>();
     for (const flow of own) {
-      const target = flow.peek<BpmnElement>('targetRef')!;
-      for (const node of this.reachableFrom(target)) {
+      for (const node of this.reachableFromTargetOf(flow)) {
         if (reached.has(node) && !node.is('bpmn:EndEvent') && node.id) {
           meet.add(node.id);
         }

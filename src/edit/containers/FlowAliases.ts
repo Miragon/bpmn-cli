@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, type ChangeSet, Kinds } from '../../model/index.js';
+import { type BpmnElement, BpmnError, type ChangeSet, Kinds, FlowEnds } from '../../model/index.js';
 import type { AddOperation } from '../../operations/index.js';
 import type { EditSession } from '../session/EditSession.js';
 
@@ -25,7 +25,7 @@ export class FlowAliases {
         hint: 'outAs names the flow an add creates out of the new node: a splice, a prepend or "to" creates one. Otherwise connect the node with a connect op that has "as".',
       });
     }
-    const ends = out.map((flow) => `${flow.id} to ${flow.get<BpmnElement>('targetRef').id}`).join(', ');
+    const ends = out.map((flow) => `${flow.id} to ${new FlowEnds(flow).target.id}`).join(', ');
     throw BpmnError.usage(`outAs ${alias}: ${node.id} gets ${out.length} flows out of it from this placement (${ends})`, {
       element: node.id,
       related: out.map((flow) => flow.id),

@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet } from '../../model/index.js';
+import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, FlowEnds } from '../../model/index.js';
 import { EventGatewayRule } from '../events/EventGatewayRule.js';
 import type { EditSession } from '../session/EditSession.js';
 import { SequenceFlows } from './SequenceFlows.js';
@@ -23,8 +23,8 @@ export class FlowBridge {
     }
     const inFlow = incoming[0]!;
     const outFlow = outgoing[0]!;
-    const predecessor = inFlow.get<BpmnElement>('sourceRef');
-    const successor = outFlow.get<BpmnElement>('targetRef');
+    const predecessor = new FlowEnds(inFlow).source;
+    const successor = new FlowEnds(outFlow).target;
     if (predecessor === successor && !FlowBridge.canLoopToItself(predecessor)) {
       this.detach(node, false);
       if (predecessor !== node) {
@@ -44,13 +44,13 @@ export class FlowBridge {
     }
     const inFlow = entries[0]!;
     const outFlow = exits[0]!;
-    const predecessor = inFlow.get<BpmnElement>('sourceRef');
-    const successor = outFlow.get<BpmnElement>('targetRef');
+    const predecessor = new FlowEnds(inFlow).source;
+    const successor = new FlowEnds(outFlow).target;
     if ((predecessor === successor && !FlowBridge.canLoopToItself(predecessor)) || document.scopes.scopeOf(predecessor) !== document.scopes.scopeOf(successor)) {
       return;
     }
     const via = group.map((element) => element.id).join(', ');
-    this.assertAllowed(outFlow.get<BpmnElement>('sourceRef'), inFlow, outFlow, undefined, via);
+    this.assertAllowed(new FlowEnds(outFlow).source, inFlow, outFlow, undefined, via);
     this.carry(inFlow, outFlow, via, 'group');
   }
 
@@ -72,9 +72,9 @@ export class FlowBridge {
     const entries: BpmnElement[] = [];
     const exits: BpmnElement[] = [];
     for (const member of inside) {
-      entries.push(...flows.incoming(member).filter((flow) => !inside.has(flow.get<BpmnElement>('sourceRef'))));
+      entries.push(...flows.incoming(member).filter((flow) => !inside.has(new FlowEnds(flow).source)));
       if (!member.is('bpmn:BoundaryEvent')) {
-        exits.push(...flows.outgoing(member).filter((flow) => !inside.has(flow.get<BpmnElement>('targetRef'))));
+        exits.push(...flows.outgoing(member).filter((flow) => !inside.has(new FlowEnds(flow).target)));
       }
     }
     return { entries, exits };
@@ -92,7 +92,7 @@ export class FlowBridge {
     if (bridge && incoming.length === 1 && outgoing.length === 1) {
       const inFlow = incoming[0]!;
       const outFlow = outgoing[0]!;
-      if (outFlow.get<BpmnElement>('targetRef') !== node && inFlow.get<BpmnElement>('sourceRef') !== node) {
+      if (new FlowEnds(outFlow).target !== node && new FlowEnds(inFlow).source !== node) {
         this.carry(inFlow, outFlow, node.id, 'node');
         return;
       }
@@ -106,8 +106,8 @@ export class FlowBridge {
   private carry(inFlow: BpmnElement, outFlow: BpmnElement, via: string, policy: CarryPolicy): void {
     const { changes } = this;
     const document = this.edit.document;
-    const predecessor = inFlow.get<BpmnElement>('sourceRef');
-    const successor = outFlow.get<BpmnElement>('targetRef');
+    const predecessor = new FlowEnds(inFlow).source;
+    const successor = new FlowEnds(outFlow).target;
     const outName = outFlow.get<string | undefined>('name');
     const outCond = outFlow.get<BpmnElement | undefined>('conditionExpression');
     if (outName && !inFlow.get<string | undefined>('name')) {
@@ -144,8 +144,8 @@ export class FlowBridge {
   }
 
   assertAllowed(node: BpmnElement, inFlow: BpmnElement, outFlow: BpmnElement, removing?: ReadonlySet<string>, via: string = node.id): void {
-    const predecessor = inFlow.get<BpmnElement>('sourceRef');
-    const successor = outFlow.get<BpmnElement>('targetRef');
+    const predecessor = new FlowEnds(inFlow).source;
+    const successor = new FlowEnds(outFlow).target;
     if (!predecessor.is('bpmn:EventBasedGateway') || successor === node) {
       return;
     }

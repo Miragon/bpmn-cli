@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, ElementText, Kinds } from '../../model/index.js';
+import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, ElementText, Kinds, FlowEnds } from '../../model/index.js';
 import { DeclarationOrder } from '../flows/DeclarationOrder.js';
 import { FlowOptions, type FlowOptionValues } from '../flows/FlowOptions.js';
 import { SequenceFlows } from '../flows/SequenceFlows.js';
@@ -222,8 +222,8 @@ export class NodePlacement {
 
   private assertSpliceable(node: BpmnElement, flow: BpmnElement): void {
     const rules = this.edit.document.flowRules;
-    const src = flow.get<BpmnElement>('sourceRef');
-    const tgt = flow.get<BpmnElement>('targetRef');
+    const src = new FlowEnds(flow).source;
+    const tgt = new FlowEnds(flow).target;
     const scope = this.edit.document.scopes.scopeOf(flow);
     const scopeId = scope ? scope.id : '<scope>';
     const kind = Kinds.label(node);
@@ -245,8 +245,8 @@ export class NodePlacement {
 
   private spliceWithOptions(node: BpmnElement, flow: BpmnElement, changes: ChangeSet): BpmnElement {
     this.assertSpliceable(node, flow);
-    const src = flow.get<BpmnElement>('sourceRef');
-    const tgt = flow.get<BpmnElement>('targetRef');
+    const src = new FlowEnds(flow).source;
+    const tgt = new FlowEnds(flow).target;
     const { second, renamedFrom } = new SequenceFlows(this.edit).splice(flow, node, this.placement.flowId);
     changes.create(ChangeEntries.ofFlow(second));
     changes.change(ChangeEntries.ofFlow(flow, `${src.id} -> ${node.id} (was -> ${tgt.id})${ChangeEntries.renamedNote(renamedFrom)}`));

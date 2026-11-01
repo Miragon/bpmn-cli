@@ -1,4 +1,4 @@
-import { type BpmnElement, DiIdStyle, ElementLabels, type IdRequest, IdRequests, IdSlug, IdWords } from '../../model/index.js';
+import { type BpmnElement, DiIdStyle, ElementLabels, type IdRequest, IdRequests, IdSlug, IdWords, FlowEnds } from '../../model/index.js';
 import type { EditSession, FormerEnd } from '../session/EditSession.js';
 
 export class FlowIdFollower {
@@ -101,6 +101,6 @@ export class FlowIdFollower {
   }
 
   private static connectionRequestOf(flow: BpmnElement): IdRequest {
-    return ElementLabels.flowRequest(flow.type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', flow.get<BpmnElement>('sourceRef'), flow.get<BpmnElement>('targetRef'));
+    return ElementLabels.flowRequest(flow.type as 'bpmn:SequenceFlow' | 'bpmn:MessageFlow', new FlowEnds(flow).source, new FlowEnds(flow).target);
   }
 }
