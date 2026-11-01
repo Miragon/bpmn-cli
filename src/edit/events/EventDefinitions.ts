@@ -1,4 +1,5 @@
-import { type BpmnElement, BpmnError, CAMUNDA, type DefinedTrigger, EventTrigger, type Finding, Kinds, type Trigger, type TriggerOptions, Triggers } from '../../model/index.js';
+import { type BpmnElement, BpmnError, type DefinedTrigger, EventTrigger, type Finding, Kinds, type Trigger, type TriggerOptions, Triggers } from '../../model/index.js';
+import { PropertyCoercer } from '../properties/PropertyCoercer.js';
 import type { EditSession } from '../session/EditSession.js';
 import { Camunda8Defaults } from './Camunda8Defaults.js';
 import { DefinitionRemoval } from './DefinitionRemoval.js';
@@ -198,13 +199,14 @@ export class EventDefinitions {
     const expr = def.get<BpmnElement | undefined>('condition');
     const dropped: string[] = [];
     if (expr && expr.get<string | undefined>('body') !== opts.when) {
-      const resourceKey = Object.keys(expr.attrs ?? {}).find((attrKey) => /^[^:]+:resource$/.test(attrKey) && CAMUNDA.reads(this.edit.document.namespaces.uriOf(attrKey.split(':')[0]!)));
+      const coercer = new PropertyCoercer(this.edit);
+      const resourceKey = Object.keys(expr.attrs).find((attrKey) => coercer.isResourceKey(attrKey));
       const language = expr.get<string | undefined>('language');
       if (resourceKey) {
         dropped.push(`${resourceKey} ${String(expr.attrs[resourceKey])}`);
         delete expr.attrs[resourceKey];
       }
-      if (language && (resourceKey || (/^\s*[$#]\{[\s\S]*\}\s*$/.test(opts.when) && language.toLowerCase() !== 'juel'))) {
+      if (language && (resourceKey || (PropertyCoercer.isExpression(opts.when) && language.toLowerCase() !== 'juel'))) {
         dropped.push(`language ${language}`);
         expr.set('language', undefined);
       }

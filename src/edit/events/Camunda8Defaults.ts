@@ -1,4 +1,5 @@
 import { type BpmnElement, ElementLabels, IdRequests, IdWords, ZeebeDescriptor } from '../../model/index.js';
+import { ExtensionLevel } from '../extensions/ExtensionLevel.js';
 import type { EditSession } from '../session/EditSession.js';
 
 export class Camunda8Defaults {
@@ -15,13 +16,7 @@ export class Camunda8Defaults {
     }
     const prefix = this.edit.document.namespaces.prefixFor(ZeebeDescriptor.URI) ?? 'zeebe';
     this.edit.document.namespaces.declare(prefix, ZeebeDescriptor.URI);
-    let ext = container;
-    if (!ext) {
-      ext = this.edit.document.tree.build('bpmn:ExtensionElements');
-      ext.parent = el;
-      el.set('extensionElements', ext);
-    }
-    ext.add('values', this.edit.document.tree.buildAny(`${prefix}:userTask`, ZeebeDescriptor.URI, {}));
+    ExtensionLevel.containerOn(el, this.edit.document).add('values', this.edit.document.tree.buildAny(`${prefix}:userTask`, ZeebeDescriptor.URI, {}));
     return true;
   }
 

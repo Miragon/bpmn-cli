@@ -12,6 +12,17 @@ export class ExtensionLevel {
     readonly parent?: BpmnElement,
   ) {}
 
+  static containerOn(host: BpmnElement, document: BpmnDocument): BpmnElement {
+    const existing = host.get<BpmnElement | undefined>('extensionElements');
+    if (existing) {
+      return existing;
+    }
+    const container = document.tree.build('bpmn:ExtensionElements');
+    container.parent = host;
+    host.set('extensionElements', container);
+    return container;
+  }
+
   static present(levels: ExtensionLevel[]): string[] {
     return [...new Set(levels.flatMap((lv) => lv.items().map((item) => lv.names.itemLabel(item))))];
   }
@@ -56,7 +67,7 @@ export class ExtensionLevel {
       el.parent = this.parent;
       return;
     }
-    this.ensureContainer().add('values', el);
+    ExtensionLevel.containerOn(this.host, this.document).add('values', el);
   }
 
   replace(old: BpmnElement, el: BpmnElement): void {
@@ -125,14 +136,4 @@ export class ExtensionLevel {
     return true;
   }
 
-  private ensureContainer(): BpmnElement {
-    const el = this.host;
-    let container = el.get<BpmnElement | undefined>('extensionElements');
-    if (!container) {
-      container = this.document.tree.build('bpmn:ExtensionElements');
-      container.parent = el;
-      el.set('extensionElements', container);
-    }
-    return container;
-  }
 }

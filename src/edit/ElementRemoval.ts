@@ -132,7 +132,7 @@ export class ElementRemoval {
     const removed = new Set(subtree);
     const handover = el.is('bpmn:Lane') ? ElementRemoval.laneHandover(el, subtree) : undefined;
     const parent = new ElementContainment(el).detach();
-    this.references.releaseIds(subtree);
+    this.edit.releaseIdsBelow(el);
     if (el.get<string | undefined>('id')) {
       changes.remove(ElementRemoval.removedEntry(el));
     }

@@ -76,6 +76,10 @@ export class PropertyCoercer {
     return true;
   }
 
+  static isExpression(body: string): boolean {
+    return /^\s*[$#]\{[\s\S]*\}\s*$/.test(body);
+  }
+
   isResourceKey(key: string): boolean {
     const [prefix, local] = key.split(':');
     return local === 'resource' && !!prefix && CAMUNDA.reads(this.edit.document.namespaces.uriOf(prefix));

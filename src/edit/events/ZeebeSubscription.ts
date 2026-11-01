@@ -49,7 +49,7 @@ export class ZeebeSubscription {
   }
 
   addedTypeText(command: ExtOperation): string {
-    return command.type ? (this.hosts.splitSlot(command.type)?.rest ?? command.type).split('/')[0]! : 'zeebe:subscription';
+    return command.type ? this.baseType(command.type) : 'zeebe:subscription';
   }
 
   setCorrelationKey(el: BpmnElement, key: string, value: string, changes: ChangeSet): boolean {
@@ -88,9 +88,13 @@ export class ZeebeSubscription {
     return def ? { catching: true, message: def.get<BpmnElement | undefined>('messageRef') } : { catching: false };
   }
 
+  private baseType(type: string): string {
+    return (this.hosts.splitSlot(type)?.rest ?? type).split('/')[0]!;
+  }
+
   private addedType(command: ExtOperation): string | undefined {
     if (command.type) {
-      return this.names.canonicalName((this.hosts.splitSlot(command.type)?.rest ?? command.type).split('/')[0]!);
+      return this.names.canonicalName(this.baseType(command.type));
     }
     const match = command.xml ? /^\s*<([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)([^>]*)>/.exec(command.xml) : null;
     if (!match) {

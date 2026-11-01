@@ -53,12 +53,9 @@ export class MessageFlows {
     MessageFlows.assertEndpoint(target, 'target');
     this.assertDifferentPools(source, target);
     const id = this.edit.allocator.explicitOr(request.id, ElementLabels.flowRequest('bpmn:MessageFlow', source, target));
-    const message = request.message ? new RootElements(this.edit).ensure('bpmn:Message', request.message) : undefined;
-    if (message?.created) {
-      changes.create({ id: message.el.id, kind: 'message', name: message.el.get<string>('name'), detail: 'root element' });
-    }
+    const message = request.message ? new RootElements(this.edit).ensureMessage(request.message, changes) : undefined;
     const named = request.name ? { name: request.name } : {};
-    const flow = document.tree.create('bpmn:MessageFlow', { id, ...named, sourceRef: source, targetRef: target, ...(message ? { messageRef: message.el } : {}) });
+    const flow = document.tree.create('bpmn:MessageFlow', { id, ...named, sourceRef: source, targetRef: target, ...(message ? { messageRef: message } : {}) });
     collaboration.add('messageFlows', flow);
     changes.create({ id, kind: 'messageFlow', ...named, detail: `${source.id} -> ${target.id}` });
     document.tree.invalidate();

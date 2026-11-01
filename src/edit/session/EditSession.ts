@@ -1,4 +1,4 @@
-import { type BpmnDocument, type BpmnElement, ChangeEntries, type IdAllocator, type IdConventions, type IdStyle, type Platform } from '../../model/index.js';
+import { type BpmnDocument, type BpmnElement, ChangeEntries, ElementWalk, type IdAllocator, type IdConventions, type IdStyle, type Platform } from '../../model/index.js';
 import { EditJournal } from './EditJournal.js';
 
 export interface BatchContext {
@@ -44,6 +44,15 @@ export class EditSession {
 
   requireScope(id: string | undefined): BpmnElement {
     return this.document.scopes.requireScope(id, this.batch);
+  }
+
+  releaseIdsBelow(root: BpmnElement): void {
+    for (const element of new ElementWalk(root).depthFirst({ bpmnOnly: true })) {
+      const id = element.get<string | undefined>('id');
+      if (id) {
+        this.allocator.registry.release(id);
+      }
+    }
   }
 
   begin(): void {

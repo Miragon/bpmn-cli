@@ -36,6 +36,14 @@ export class RootElements {
     return { el, created };
   }
 
+  ensureMessage(name: string, changes: ChangeSet): BpmnElement {
+    const { el, created } = this.ensure('bpmn:Message', name);
+    if (created) {
+      changes.create({ id: el.id, kind: 'message', name: el.get<string>('name'), detail: 'root element' });
+    }
+    return el;
+  }
+
   static bindRefAs(changes: ChangeSet, alias: string | undefined, el: BpmnElement | undefined): void {
     if (!alias || !el) {
       return;

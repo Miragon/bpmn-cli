@@ -80,11 +80,7 @@ export class PropertyEditor {
       task.set('messageRef', undefined);
       return;
     }
-    const { el: message, created } = new RootElements(this.edit).ensure('bpmn:Message', name);
-    task.set('messageRef', message);
-    if (created) {
-      changes.create({ id: message.id, kind: 'message', name: message.get<string>('name'), detail: 'root element' });
-    }
+    task.set('messageRef', new RootElements(this.edit).ensureMessage(name, changes));
   }
 
   private assertDefaultWithoutCondition(element: BpmnElement, entries: ReadonlyArray<[string, string]>): void {

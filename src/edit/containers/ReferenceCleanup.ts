@@ -10,15 +10,6 @@ export class ReferenceCleanup {
     private readonly cascade: Cascade,
   ) {}
 
-  releaseIds(elements: readonly BpmnElement[]): void {
-    for (const element of elements) {
-      const id = element.get<string | undefined>('id');
-      if (id) {
-        this.edit.document.ids.registry.release(id);
-      }
-    }
-  }
-
   isAttached(el: BpmnElement): boolean {
     return new ElementContainment(el).isAttachedTo(this.edit.document.tree.definitions);
   }
@@ -67,7 +58,7 @@ export class ReferenceCleanup {
       return;
     }
     new ElementContainment(laneSet).detach();
-    this.releaseIds([laneSet]);
+    this.edit.releaseIdsBelow(laneSet);
     const lsId = laneSet.get<string | undefined>('id');
     changes.note(`lane set${lsId ? ` ${lsId}` : ''} removed: no lanes left`);
   }
@@ -78,7 +69,7 @@ export class ReferenceCleanup {
       return;
     }
     parent.remove('properties', target);
-    this.releaseIds([target]);
+    this.edit.releaseIdsBelow(target);
   }
 
   private dropUnusedBacking(backing: BpmnElement | undefined, changes: ChangeSet): void {
@@ -141,7 +132,7 @@ export class ReferenceCleanup {
   private dropDiagramHolder(holder: BpmnElement): void {
     const gone = holder.is('bpmndi:BPMNPlane') ? (holder.parent as BpmnElement) : holder;
     new ElementContainment(gone).detach();
-    this.releaseIds([...new ElementWalk(gone).depthFirst({ bpmnOnly: true })]);
+    this.edit.releaseIdsBelow(gone);
   }
 
   private static makeBlackBox({ holder, prop, target }: ElementReference, changes: ChangeSet): void {

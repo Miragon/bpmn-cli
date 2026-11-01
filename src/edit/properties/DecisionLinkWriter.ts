@@ -1,4 +1,5 @@
 import { type BpmnElement, BpmnError, CamundaDescriptor, type ChangeSet, DecisionLinkReader, ElementText, ElementWalk, Kinds, type Platform, ZeebeDescriptor } from '../../model/index.js';
+import { ExtensionLevel } from '../extensions/ExtensionLevel.js';
 import type { EditSession } from '../session/EditSession.js';
 
 type EngineSpelling = { kind: 'c7'; uri: string; prefix: string } | { kind: 'c8'; prefix: string };
@@ -117,12 +118,7 @@ export class DecisionLinkWriter {
     const { tree } = this.edit.document;
     const prefix = this.prefixFor(ZeebeDescriptor.URI, usual);
     const call = tree.buildAny(`${prefix}:calledDecision`, ZeebeDescriptor.URI, {});
-    let container = el.get<BpmnElement | undefined>('extensionElements');
-    if (!container) {
-      container = tree.build('bpmn:ExtensionElements');
-      container.parent = el;
-      el.set('extensionElements', container);
-    }
+    const container = ExtensionLevel.containerOn(el, this.edit.document);
     call.parent = container;
     container.add('values', call);
     return call;

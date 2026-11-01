@@ -1,4 +1,4 @@
-import { BpmnElement, BpmnError, ChangeEntries, ChangeSet, ElementWalk, type KindDefinition, KindParser, Kinds, type PropertyDescriptor, type Trigger, type TriggerOptions, Triggers } from '../model/index.js';
+import { BpmnElement, BpmnError, ChangeEntries, ChangeSet, type KindDefinition, KindParser, Kinds, type PropertyDescriptor, type Trigger, type TriggerOptions, Triggers } from '../model/index.js';
 import type { RetypeOperation } from '../operations/index.js';
 import { ElementContainment } from './containers/ElementContainment.js';
 import { ElementRemoval } from './ElementRemoval.js';
@@ -208,12 +208,7 @@ export class ElementTypeChange {
 
   private dropDiagram(diagram: BpmnElement): void {
     this.edit.document.tree.definitions.remove('diagrams', diagram);
-    for (const element of new ElementWalk(diagram).depthFirst()) {
-      const id = element.get<string | undefined>('id');
-      if (id) {
-        this.edit.document.ids.registry.release(id);
-      }
-    }
+    this.edit.releaseIdsBelow(diagram);
   }
 
   private static isReappliedKindProp(name: string): boolean {

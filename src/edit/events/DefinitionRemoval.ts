@@ -1,4 +1,4 @@
-import { type BpmnElement, ElementText, ElementWalk, type Finding, type Trigger } from '../../model/index.js';
+import { type BpmnElement, ElementText, type Finding, type Trigger } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 
 export class DefinitionRemoval {
@@ -9,7 +9,7 @@ export class DefinitionRemoval {
     event.set('eventDefinitions', undefined);
     const warnings: Finding[] = [];
     for (const def of defs) {
-      this.releaseIds(def);
+      this.edit.releaseIdsBelow(def);
       const lost = ElementText.vendorContent(def);
       if (!lost.length) {
         continue;
@@ -30,7 +30,7 @@ export class DefinitionRemoval {
     const others = defs.filter((definition) => definition !== keep);
     event.set('eventDefinitions', [keep]);
     for (const def of others) {
-      this.releaseIds(def);
+      this.edit.releaseIdsBelow(def);
     }
     return [
       {
@@ -40,15 +40,6 @@ export class DefinitionRemoval {
         hint: 'Set the trigger of the definition the event should keep; the others cannot be kept on the same event.',
       },
     ];
-  }
-
-  private releaseIds(def: BpmnElement): void {
-    for (const element of new ElementWalk(def).depthFirst({ bpmnOnly: true })) {
-      const id = element.get<string | undefined>('id');
-      if (id) {
-        this.edit.document.ids.registry.release(id);
-      }
-    }
   }
 
   private static definitionText(definition: BpmnElement): string {

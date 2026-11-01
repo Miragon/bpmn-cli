@@ -1,4 +1,4 @@
-import { type BpmnElement, type ChangeSet, ElementText, ElementWalk, Kinds } from '../../model/index.js';
+import { type BpmnElement, type ChangeSet, ElementText, Kinds } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 
@@ -89,12 +89,7 @@ export class LoopKeys {
     if (!old) {
       return;
     }
-    for (const element of new ElementWalk(old).depthFirst({ bpmnOnly: true })) {
-      const id = element.get<string | undefined>('id');
-      if (id) {
-        this.edit.document.ids.registry.release(id);
-      }
-    }
+    this.edit.releaseIdsBelow(old);
     const lost = ElementText.vendorContent(old);
     if (!lost.length) {
       return;

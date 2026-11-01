@@ -6,10 +6,6 @@ import { PropertyCoercer } from './PropertyCoercer.js';
 export class ConditionKeys {
   constructor(private readonly edit: EditSession) {}
 
-  private static isJuel(body: string): boolean {
-    return /^\s*[$#]\{[\s\S]*\}\s*$/.test(body);
-  }
-
   write(flow: BpmnElement, keys: Map<string, string>, changes: ChangeSet): void {
     const existing = flow.get<BpmnElement | undefined>('conditionExpression');
     const resourceKey = new PropertyCoercer(this.edit).resourceKeyOf(existing);
@@ -61,7 +57,7 @@ export class ConditionKeys {
     if (keys.has('language')) {
       return keys.get('language') || undefined;
     }
-    if (oldLanguage && (resourceKey || (ConditionKeys.isJuel(condition) && oldLanguage.toLowerCase() !== 'juel'))) {
+    if (oldLanguage && (resourceKey || (PropertyCoercer.isExpression(condition) && oldLanguage.toLowerCase() !== 'juel'))) {
       dropped.push(`language ${oldLanguage}`);
       return undefined;
     }
