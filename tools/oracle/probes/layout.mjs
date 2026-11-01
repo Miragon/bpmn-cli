@@ -10,7 +10,7 @@ function scenarioInputs() {
 }
 
 function walkInputs() {
-  return walkFiles().flatMap((file) => walkSteps(file).filter((step) => !step.refused).map(({ index }) => ({ id: `walks/${file}#${index}`, file, index, kind: WALK_STEP })));
+  return walkFiles().flatMap((file) => walkSteps(file).filter((step) => step.after).map(({ index }) => ({ id: `walks/${file}#${index}`, file, index, kind: WALK_STEP })));
 }
 
 async function scenarioDrawings({ model }, { main, subject }) {
