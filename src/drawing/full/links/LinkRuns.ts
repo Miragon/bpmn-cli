@@ -2,7 +2,7 @@ import type { Box } from '../../../model/index.js';
 import type { LaneBandInfo } from '../scopes/GNode.js';
 import { LinkPath } from './LinkPath.js';
 
-export type LinkEndKind = 'shape' | 'flow';
+type LinkEndKind = 'shape' | 'flow';
 
 export interface LinkEnds {
   artifactBox: Box;
