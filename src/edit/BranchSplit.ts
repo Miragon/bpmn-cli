@@ -31,10 +31,6 @@ export class BranchSplit {
     return def.kind;
   }
 
-  private static createdId(changes: ChangeSet): string {
-    return changes.created[0]!.id;
-  }
-
   private static missingJoinReason(withJoin: boolean, continuing: readonly BranchEnd[]): string | undefined {
     if (!withJoin) {
       return 'join is false';
@@ -63,10 +59,7 @@ export class BranchSplit {
     const { document } = this.edit;
     const kind = BranchSplit.gatewayKind(command.kind);
     const anchor = this.edit.require(command.after, 'bpmn:FlowNode');
-    const scope = document.scopes.scopeOf(anchor);
-    if (!scope) {
-      throw BpmnError.model('E_INVALID_PLACEMENT', `${command.after} is not inside a process`, { element: command.after });
-    }
+    const scope = document.scopes.scopeOf(anchor)!;
     const outgoing = document.flows.outgoing(anchor);
     const isGateway = anchor.is('bpmn:Gateway');
     if (!isGateway && outgoing.length > 1) {
@@ -86,7 +79,8 @@ export class BranchSplit {
     const named = { ...(command.name ? { name: command.name } : {}), ...(command.id ? { id: command.id } : {}) };
     const created = new ElementCreation(this.edit).add({ op: 'add', kind: point.kind, ...named, in: scope.id, ...point.lane }, new ElementLabels(anchor).anchorContext('After'));
     changes.merge(created);
-    const gatewayId = BranchSplit.createdId(created);
+    const gatewayEntry = created.created[0]!;
+    const gatewayId = gatewayEntry.id;
     const gateway = this.edit.require(gatewayId);
     changes.bind(command.as, gateway);
     if (spliced) {
@@ -100,10 +94,7 @@ export class BranchSplit {
       changes.create(ChangeEntries.ofFlow(flow));
       changes.note(`appended ${gatewayId} after ${command.after}`);
     }
-    const entry = changes.created.find((change) => change.id === gatewayId);
-    if (entry) {
-      entry.detail = spliced ? `between ${command.after} and ${successor!.id}` : `after ${command.after}`;
-    }
+    gatewayEntry.detail = spliced ? `between ${command.after} and ${successor!.id}` : `after ${command.after}`;
     return gateway;
   }
 
@@ -124,7 +115,7 @@ export class BranchSplit {
       const add: AddOperation = { ...node, ...(index === 0 ? { ...flowOptions, ...own } : own), op: 'add', after: previous };
       const created = new ElementCreation(this.edit).add(add);
       changes.merge(created);
-      previous = BranchSplit.createdId(created);
+      previous = created.created[0]!.id;
     });
     return { end: previous, flowOptions, direct: false };
   }
@@ -160,15 +151,13 @@ export class BranchSplit {
     const wanted = this.joinIdFor(command, gateway, point.kind, changes);
     const created = new ElementCreation(this.edit).add({ op: 'add', kind: point.kind, ...(command.joinName ? { name: command.joinName } : {}), id: wanted.id, in: point.scope.id, ...point.lane });
     changes.merge(created);
-    const joinId = BranchSplit.createdId(created);
+    const joinEntry = created.created[0]!;
+    const joinId = joinEntry.id;
     if (wanted.base !== undefined) {
       this.edit.allocator.markGenerated(joinId, wanted.base);
     }
     changes.bind(command.joinAs, this.edit.document.tree.byId(joinId));
-    const entry = changes.created.find((change) => change.id === joinId);
-    if (entry) {
-      entry.detail = `join of ${gateway.id}`;
-    }
+    joinEntry.detail = `join of ${gateway.id}`;
     return joinId;
   }
 

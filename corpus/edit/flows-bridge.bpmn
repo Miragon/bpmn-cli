@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_flowsBridge" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_bridge" isExecutable="true">
+    <bpmn:exclusiveGateway id="gw_a" default="f_aDefault">
+      <bpmn:outgoing>f_aPlain</bpmn:outgoing>
+      <bpmn:outgoing>f_aNamed</bpmn:outgoing>
+      <bpmn:outgoing>f_aDefault</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_plain">
+      <bpmn:incoming>f_aPlain</bpmn:incoming>
+      <bpmn:outgoing>f_plainOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_afterPlain">
+      <bpmn:incoming>f_plainOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_named">
+      <bpmn:incoming>f_aNamed</bpmn:incoming>
+      <bpmn:outgoing>f_namedOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_afterNamed">
+      <bpmn:incoming>f_namedOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_defaulted">
+      <bpmn:incoming>f_aDefault</bpmn:incoming>
+      <bpmn:outgoing>f_defaultedOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_afterDefault">
+      <bpmn:incoming>f_defaultedOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_left">
+      <bpmn:outgoing>f_leftIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gw_merge">
+      <bpmn:incoming>f_leftIn</bpmn:incoming>
+      <bpmn:incoming>f_rightIn</bpmn:incoming>
+      <bpmn:outgoing>f_mergeOut</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_right">
+      <bpmn:outgoing>f_rightIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_merged">
+      <bpmn:incoming>f_mergeOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_taken">
+      <bpmn:outgoing>f_taskIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gw_mergeTask">
+      <bpmn:incoming>f_taskIn</bpmn:incoming>
+      <bpmn:incoming>f_task2In</bpmn:incoming>
+      <bpmn:outgoing>f_mergeTaskOut</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_taken2">
+      <bpmn:outgoing>f_task2In</bpmn:outgoing>
+      <bpmn:outgoing>f_takenDirect</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_join2">
+      <bpmn:incoming>f_mergeTaskOut</bpmn:incoming>
+      <bpmn:incoming>f_takenDirect</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_otherJoin">
+      <bpmn:outgoing>f_otherIntoJoin</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gw_mergeGw">
+      <bpmn:incoming>f_otherIntoJoin</bpmn:incoming>
+      <bpmn:incoming>f_gwOut</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_g1">
+      <bpmn:outgoing>f_gwIn1</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gw_merge2">
+      <bpmn:incoming>f_gwIn1</bpmn:incoming>
+      <bpmn:incoming>f_gwIn2</bpmn:incoming>
+      <bpmn:outgoing>f_gwOut</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_g2">
+      <bpmn:outgoing>f_gwIn2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_p1">
+      <bpmn:outgoing>f_p1In</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:parallelGateway id="gw_sync">
+      <bpmn:incoming>f_p1In</bpmn:incoming>
+      <bpmn:incoming>f_p2In</bpmn:incoming>
+      <bpmn:outgoing>f_syncOut</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:task id="t_p2">
+      <bpmn:outgoing>f_p2In</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_synced">
+      <bpmn:incoming>f_syncOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_fork1">
+      <bpmn:outgoing>f_forkIn1</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gw_fork">
+      <bpmn:incoming>f_forkIn1</bpmn:incoming>
+      <bpmn:incoming>f_forkIn2</bpmn:incoming>
+      <bpmn:outgoing>f_forkOut1</bpmn:outgoing>
+      <bpmn:outgoing>f_forkOut2</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_fork2">
+      <bpmn:outgoing>f_forkIn2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_forked1">
+      <bpmn:incoming>f_forkOut1</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_forked2">
+      <bpmn:incoming>f_forkOut2</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_beforeWait">
+      <bpmn:outgoing>f_toWait</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:eventBasedGateway id="gw_wait">
+      <bpmn:incoming>f_toWait</bpmn:incoming>
+      <bpmn:outgoing>f_toMsg</bpmn:outgoing>
+      <bpmn:outgoing>f_toTimer</bpmn:outgoing>
+      <bpmn:outgoing>f_toSig</bpmn:outgoing>
+      <bpmn:outgoing>f_toTaken</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="catch_msg">
+      <bpmn:incoming>f_toMsg</bpmn:incoming>
+      <bpmn:outgoing>f_msgOut</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="def_msg" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="t_afterMsg">
+      <bpmn:incoming>f_msgOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:intermediateCatchEvent id="catch_timer">
+      <bpmn:incoming>f_toTimer</bpmn:incoming>
+      <bpmn:outgoing>f_timerOut</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="def_timer" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_next">
+      <bpmn:incoming>f_timerOut</bpmn:incoming>
+      <bpmn:timerEventDefinition id="def_next" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_sig">
+      <bpmn:incoming>f_toSig</bpmn:incoming>
+      <bpmn:outgoing>f_sigOut</bpmn:outgoing>
+      <bpmn:signalEventDefinition id="def_sig" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_taken">
+      <bpmn:incoming>f_sigOut</bpmn:incoming>
+      <bpmn:incoming>f_toTaken</bpmn:incoming>
+      <bpmn:timerEventDefinition id="def_taken" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:exclusiveGateway id="gw_back">
+      <bpmn:incoming>f_backIn</bpmn:incoming>
+      <bpmn:outgoing>f_backOut</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_mid">
+      <bpmn:incoming>f_backOut</bpmn:incoming>
+      <bpmn:outgoing>f_backIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_loop">
+      <bpmn:incoming>f_loopIn</bpmn:incoming>
+      <bpmn:outgoing>f_loopOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_mid2">
+      <bpmn:incoming>f_loopOut</bpmn:incoming>
+      <bpmn:outgoing>f_loopIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_self">
+      <bpmn:incoming>f_self</bpmn:incoming>
+      <bpmn:outgoing>f_self</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_groupBefore">
+      <bpmn:outgoing>f_groupIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_danglingHost" />
+    <bpmn:sequenceFlow id="f_dangling" />
+    <bpmn:task id="t_group1">
+      <bpmn:incoming>f_groupIn</bpmn:incoming>
+      <bpmn:outgoing>f_groupMid</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_group2">
+      <bpmn:incoming>f_groupMid</bpmn:incoming>
+      <bpmn:outgoing>f_groupOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_groupAfter">
+      <bpmn:incoming>f_groupOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_escaped">
+      <bpmn:incoming>f_escape</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_two1">
+      <bpmn:outgoing>f_twoIn1</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_two">
+      <bpmn:incoming>f_twoIn1</bpmn:incoming>
+      <bpmn:incoming>f_twoIn2</bpmn:incoming>
+      <bpmn:outgoing>f_twoOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_two2">
+      <bpmn:outgoing>f_twoIn2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_twoAfter">
+      <bpmn:incoming>f_twoOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_noteBefore">
+      <bpmn:outgoing>f_noteIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_noted">
+      <bpmn:incoming>f_noteIn</bpmn:incoming>
+      <bpmn:outgoing>f_noteOut</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_noteAfter">
+      <bpmn:incoming>f_noteOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_scopeBefore">
+      <bpmn:outgoing>f_scopeIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:intermediateCatchEvent id="catch_twoWays">
+      <bpmn:incoming>f_toTwoWays</bpmn:incoming>
+      <bpmn:incoming>f_otherWay</bpmn:incoming>
+      <bpmn:outgoing>f_twoWaysOut</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="def_twoWays" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="t_otherWay">
+      <bpmn:outgoing>f_otherWay</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_afterTwoWays">
+      <bpmn:incoming>f_twoWaysOut</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:task id="t_cycleA">
+      <bpmn:incoming>f_cycleOut</bpmn:incoming>
+      <bpmn:outgoing>f_cycleA</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_cycleB">
+      <bpmn:outgoing>f_cycleB</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gw_cycle">
+      <bpmn:incoming>f_cycleA</bpmn:incoming>
+      <bpmn:incoming>f_cycleB</bpmn:incoming>
+      <bpmn:outgoing>f_cycleOut</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="t_selfJoin">
+      <bpmn:incoming>f_selfJoinIn</bpmn:incoming>
+      <bpmn:incoming>f_selfJoin</bpmn:incoming>
+      <bpmn:outgoing>f_selfJoin</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="t_selfJoinBefore">
+      <bpmn:outgoing>f_selfJoinIn</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="b_group" attachedToRef="t_group1">
+      <bpmn:outgoing>f_escape</bpmn:outgoing>
+    </bpmn:boundaryEvent>
+    <bpmn:subProcess id="s_sub">
+      <bpmn:incoming>f_scopeIn</bpmn:incoming>
+      <bpmn:startEvent id="s_start">
+        <bpmn:outgoing>f_innerIn</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:task id="s_task">
+        <bpmn:incoming>f_innerIn</bpmn:incoming>
+      </bpmn:task>
+      <bpmn:sequenceFlow id="f_innerIn" sourceRef="s_start" targetRef="s_task" />
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="f_aPlain" sourceRef="gw_a" targetRef="t_plain" />
+    <bpmn:sequenceFlow id="f_plainOut" name="done" sourceRef="t_plain" targetRef="t_afterPlain">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${x}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_aNamed" name="in" sourceRef="gw_a" targetRef="t_named">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${in}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_namedOut" name="out" sourceRef="t_named" targetRef="t_afterNamed">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${y}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_aDefault" sourceRef="gw_a" targetRef="t_defaulted" />
+    <bpmn:sequenceFlow id="f_defaultedOut" sourceRef="t_defaulted" targetRef="t_afterDefault">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${z}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_leftIn" sourceRef="t_left" targetRef="gw_merge" />
+    <bpmn:sequenceFlow id="f_rightIn" sourceRef="t_right" targetRef="gw_merge" />
+    <bpmn:sequenceFlow id="f_mergeOut" name="merged" sourceRef="gw_merge" targetRef="t_merged">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${m}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_taskIn" sourceRef="t_taken" targetRef="gw_mergeTask" />
+    <bpmn:sequenceFlow id="f_task2In" sourceRef="t_taken2" targetRef="gw_mergeTask" />
+    <bpmn:sequenceFlow id="f_mergeTaskOut" sourceRef="gw_mergeTask" targetRef="t_join2" />
+    <bpmn:sequenceFlow id="f_takenDirect" sourceRef="t_taken2" targetRef="t_join2" />
+    <bpmn:sequenceFlow id="f_otherIntoJoin" sourceRef="t_otherJoin" targetRef="gw_mergeGw" />
+    <bpmn:sequenceFlow id="f_gwIn1" sourceRef="t_g1" targetRef="gw_merge2" />
+    <bpmn:sequenceFlow id="f_gwIn2" sourceRef="t_g2" targetRef="gw_merge2" />
+    <bpmn:sequenceFlow id="f_gwOut" sourceRef="gw_merge2" targetRef="gw_mergeGw" />
+    <bpmn:sequenceFlow id="f_p1In" sourceRef="t_p1" targetRef="gw_sync" />
+    <bpmn:sequenceFlow id="f_p2In" sourceRef="t_p2" targetRef="gw_sync" />
+    <bpmn:sequenceFlow id="f_syncOut" sourceRef="gw_sync" targetRef="t_synced" />
+    <bpmn:sequenceFlow id="f_forkIn1" sourceRef="t_fork1" targetRef="gw_fork" />
+    <bpmn:sequenceFlow id="f_forkIn2" sourceRef="t_fork2" targetRef="gw_fork" />
+    <bpmn:sequenceFlow id="f_forkOut1" sourceRef="gw_fork" targetRef="t_forked1" />
+    <bpmn:sequenceFlow id="f_forkOut2" sourceRef="gw_fork" targetRef="t_forked2" />
+    <bpmn:sequenceFlow id="f_toWait" sourceRef="t_beforeWait" targetRef="gw_wait" />
+    <bpmn:sequenceFlow id="f_toMsg" sourceRef="gw_wait" targetRef="catch_msg" />
+    <bpmn:sequenceFlow id="f_msgOut" sourceRef="catch_msg" targetRef="t_afterMsg" />
+    <bpmn:sequenceFlow id="f_toTimer" sourceRef="gw_wait" targetRef="catch_timer" />
+    <bpmn:sequenceFlow id="f_timerOut" sourceRef="catch_timer" targetRef="catch_next" />
+    <bpmn:sequenceFlow id="f_toSig" sourceRef="gw_wait" targetRef="catch_sig" />
+    <bpmn:sequenceFlow id="f_sigOut" sourceRef="catch_sig" targetRef="catch_taken" />
+    <bpmn:sequenceFlow id="f_toTaken" sourceRef="gw_wait" targetRef="catch_taken" />
+    <bpmn:sequenceFlow id="f_backOut" sourceRef="gw_back" targetRef="t_mid" />
+    <bpmn:sequenceFlow id="f_backIn" sourceRef="t_mid" targetRef="gw_back" />
+    <bpmn:sequenceFlow id="f_loopOut" sourceRef="t_loop" targetRef="t_mid2" />
+    <bpmn:sequenceFlow id="f_loopIn" sourceRef="t_mid2" targetRef="t_loop" />
+    <bpmn:sequenceFlow id="f_self" sourceRef="t_self" targetRef="t_self" />
+    <bpmn:sequenceFlow id="f_groupIn" sourceRef="t_groupBefore" targetRef="t_group1" />
+    <bpmn:sequenceFlow id="f_groupMid" sourceRef="t_group1" targetRef="t_group2" />
+    <bpmn:sequenceFlow id="f_groupOut" name="onward" sourceRef="t_group2" targetRef="t_groupAfter">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${g}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="f_escape" sourceRef="b_group" targetRef="t_escaped" />
+    <bpmn:sequenceFlow id="f_twoIn1" sourceRef="t_two1" targetRef="t_two" />
+    <bpmn:sequenceFlow id="f_twoIn2" sourceRef="t_two2" targetRef="t_two" />
+    <bpmn:sequenceFlow id="f_twoOut" sourceRef="t_two" targetRef="t_twoAfter" />
+    <bpmn:sequenceFlow id="f_noteIn" sourceRef="t_noteBefore" targetRef="t_noted" />
+    <bpmn:sequenceFlow id="f_noteOut" sourceRef="t_noted" targetRef="t_noteAfter" />
+    <bpmn:sequenceFlow id="f_scopeIn" sourceRef="t_scopeBefore" targetRef="s_sub" />
+    <bpmn:sequenceFlow id="f_toTwoWays" sourceRef="gw_wait" targetRef="catch_twoWays" />
+    <bpmn:sequenceFlow id="f_otherWay" sourceRef="t_otherWay" targetRef="catch_twoWays" />
+    <bpmn:sequenceFlow id="f_twoWaysOut" sourceRef="catch_twoWays" targetRef="t_afterTwoWays" />
+    <bpmn:sequenceFlow id="f_cycleA" sourceRef="t_cycleA" targetRef="gw_cycle" />
+    <bpmn:sequenceFlow id="f_cycleB" sourceRef="t_cycleB" targetRef="gw_cycle" />
+    <bpmn:sequenceFlow id="f_cycleOut" sourceRef="gw_cycle" targetRef="t_cycleA" />
+    <bpmn:sequenceFlow id="f_selfJoinIn" sourceRef="t_selfJoinBefore" targetRef="t_selfJoin" />
+    <bpmn:sequenceFlow id="f_selfJoin" sourceRef="t_selfJoin" targetRef="t_selfJoin" />
+    <bpmn:textAnnotation id="note_kept"><bpmn:text>Keep</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="association_out" sourceRef="note_kept" targetRef="f_noteOut" />
+  </bpmn:process>
+</bpmn:definitions>

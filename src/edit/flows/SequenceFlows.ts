@@ -48,8 +48,8 @@ export class SequenceFlows {
     if (source && source.get<BpmnElement | undefined>('default') === flow) {
       source.set('default', undefined);
     }
-    const scope = flow.parent;
-    const nodes = scope ? scope.list('flowElements').filter((flowElement) => flowElement.is('bpmn:FlowNode')) : [];
+    const scope = flow.parent!;
+    const nodes = scope.list('flowElements').filter((flowElement) => flowElement.is('bpmn:FlowNode'));
     for (const node of new Set([source, flow.get<BpmnElement | undefined>('targetRef'), ...nodes])) {
       if (!node) {
         continue;
@@ -57,9 +57,7 @@ export class SequenceFlows {
       node.remove('outgoing', flow);
       node.remove('incoming', flow);
     }
-    if (scope) {
-      scope.remove('flowElements', flow);
-    }
+    scope.remove('flowElements', flow);
     document.ids.registry.release(flow.id);
     document.tree.invalidate();
   }
@@ -96,7 +94,7 @@ export class SequenceFlows {
     const rules = this.edit.document.flowRules;
     rules.assertRoles(source, node);
     rules.assertRoles(node, target);
-    new DeclarationOrder(scope).insertAfter(new DeclarationOrder(scope).lastFlowOf(source) ?? source, node);
+    new DeclarationOrder(scope).insertAfter(new DeclarationOrder(scope).lastFlowOf(source), node);
     target.remove('incoming', flow);
     flow.set('targetRef', node);
     node.add('incoming', flow);
@@ -174,10 +172,7 @@ export class SequenceFlows {
 
   private dropAssociations(flow: BpmnElement, changes: ChangeSet): void {
     for (const association of this.associationsOf(flow)) {
-      const parent = association.parent;
-      if (parent) {
-        parent.remove('artifacts', association);
-      }
+      association.parent!.remove('artifacts', association);
       this.edit.document.ids.registry.release(association.id);
       changes.remove({ id: association.id, kind: 'association' });
     }

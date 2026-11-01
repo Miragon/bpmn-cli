@@ -1,22 +1,19 @@
-import { type BpmnElement, BpmnError, Kinds, Triggers } from '../../model/index.js';
+import { type BpmnElement, BpmnError, Kinds } from '../../model/index.js';
 import { ElementContainment } from '../containers/ElementContainment.js';
 import type { EditSession } from '../session/EditSession.js';
+import { Associations } from './Associations.js';
 
 export type ConnectionKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation';
 
 export class ConnectionKinds {
   constructor(private readonly edit: EditSession) {}
 
-  private static ends(flow: BpmnElement): [BpmnElement | undefined, BpmnElement | undefined] {
-    return [flow.get<BpmnElement | undefined>('sourceRef'), flow.get<BpmnElement | undefined>('targetRef')];
+  static joins(flow: BpmnElement, source: BpmnElement, target: BpmnElement): boolean {
+    return flow.get<BpmnElement | undefined>('sourceRef') === source && flow.get<BpmnElement | undefined>('targetRef') === target;
   }
 
   private static associates(artifact: BpmnElement, source: BpmnElement, target: BpmnElement): boolean {
-    if (!artifact.is('bpmn:Association')) {
-      return false;
-    }
-    const [from, to] = ConnectionKinds.ends(artifact);
-    return (from === source && to === target) || (from === target && to === source);
+    return artifact.is('bpmn:Association') && (ConnectionKinds.joins(artifact, source, target) || ConnectionKinds.joins(artifact, target, source));
   }
 
   private static existingAssociation(source: BpmnElement, target: BpmnElement): BpmnElement | undefined {
@@ -62,7 +59,7 @@ export class ConnectionKinds {
       case 'sequenceFlow':
         return this.edit.document.flows.outgoing(source).find((flow) => flow.get<BpmnElement | undefined>('targetRef') === target);
       case 'messageFlow':
-        return this.edit.document.flows.messageFlows().find((flow) => flow.get<BpmnElement | undefined>('sourceRef') === source && flow.get<BpmnElement | undefined>('targetRef') === target);
+        return this.edit.document.flows.messageFlows().find((flow) => ConnectionKinds.joins(flow, source, target));
       case 'association':
         return ConnectionKinds.existingAssociation(source, target);
       default:
@@ -71,7 +68,7 @@ export class ConnectionKinds {
   }
 
   private kindBetweenNodes(source: BpmnElement, target: BpmnElement): ConnectionKind {
-    if (source.is('bpmn:BoundaryEvent') && Triggers.of(source) === 'compensate' && target.is('bpmn:Activity')) {
+    if (Associations.isCompensationPair(source, target)) {
       return 'association';
     }
     const from = this.edit.document.scopes.processOf(source);

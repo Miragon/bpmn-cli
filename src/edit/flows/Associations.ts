@@ -27,10 +27,7 @@ export class Associations {
       });
     }
     const note = sourceIsNote ? source : target;
-    const container = new ElementContainment(note).artifactContainer() ?? new ElementContainment(sourceIsNote ? target : source).artifactContainer();
-    if (!container) {
-      throw BpmnError.model('E_INVALID_SCOPE', `Cannot find a process or collaboration to hold the association of ${note.id}`, { element: note.id });
-    }
+    const container = new ElementContainment(note).artifactContainer()!;
     const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:Association', { context: Associations.contextBetween(source, target) }));
     const association = document.tree.create('bpmn:Association', {
       id,
@@ -77,19 +74,17 @@ export class Associations {
 
   removeDataAssociation(association: BpmnElement): void {
     const document = this.edit.document;
-    const node = association.parent;
-    if (node) {
-      if (association.is('bpmn:DataInputAssociation')) {
-        node.remove('dataInputAssociations', association);
-        const property = association.get<BpmnElement | undefined>('targetRef');
-        const stillUsed = node.list('dataInputAssociations').some((inputAssociation) => inputAssociation.get<BpmnElement | undefined>('targetRef') === property);
-        if (property && !stillUsed && property.get<string | undefined>('name') === Associations.PLACEHOLDER_PROPERTY) {
-          node.remove('properties', property);
-          document.ids.registry.release(property.id);
-        }
-      } else {
-        node.remove('dataOutputAssociations', association);
+    const node = association.parent!;
+    if (association.is('bpmn:DataInputAssociation')) {
+      node.remove('dataInputAssociations', association);
+      const property = association.get<BpmnElement | undefined>('targetRef');
+      const stillUsed = node.list('dataInputAssociations').some((inputAssociation) => inputAssociation.get<BpmnElement | undefined>('targetRef') === property);
+      if (property && !stillUsed && property.get<string | undefined>('name') === Associations.PLACEHOLDER_PROPERTY) {
+        node.remove('properties', property);
+        document.ids.registry.release(property.id);
       }
+    } else {
+      node.remove('dataOutputAssociations', association);
     }
     document.ids.registry.release(association.id);
     document.tree.invalidate();
@@ -99,7 +94,7 @@ export class Associations {
     return `${new ElementLabels(source).label()} To ${new ElementLabels(target).label()}`;
   }
 
-  private static isCompensationPair(source: BpmnElement, target: BpmnElement): boolean {
+  static isCompensationPair(source: BpmnElement, target: BpmnElement): boolean {
     return source.is('bpmn:BoundaryEvent') && Triggers.of(source) === 'compensate' && target.is('bpmn:Activity');
   }
 

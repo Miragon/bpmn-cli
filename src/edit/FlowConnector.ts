@@ -83,7 +83,7 @@ export class FlowConnector {
   private warnDuplicate(command: ConnectOperation, source: BpmnElement, target: BpmnElement, kind: ConnectionKind, changes: ChangeSet): void {
     const { flows } = this.edit.document;
     const candidates = kind === 'sequenceFlow' ? flows.outgoing(source) : flows.messageFlows();
-    const ids = candidates.filter((flow) => flow.get<BpmnElement | undefined>('sourceRef') === source && flow.get<BpmnElement | undefined>('targetRef') === target).map((flow) => flow.id);
+    const ids = candidates.filter((flow) => ConnectionKinds.joins(flow, source, target)).map((flow) => flow.id);
     const twice = kind === 'sequenceFlow' ? 'Two flows between the same nodes run the target twice (or join with itself). ' : '';
     changes.warn({
       code: 'W_DUPLICATE_FLOW',

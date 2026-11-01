@@ -55,8 +55,7 @@ export class MessageFlows {
     const id = this.edit.allocator.explicitOr(request.id, ElementLabels.flowRequest('bpmn:MessageFlow', source, target));
     const message = request.message ? new RootElements(this.edit).ensure('bpmn:Message', request.message) : undefined;
     if (message?.created) {
-      const name = message.el.get<string | undefined>('name');
-      changes.create({ id: message.el.id, kind: 'message', ...(name ? { name } : {}), detail: 'root element' });
+      changes.create({ id: message.el.id, kind: 'message', name: message.el.get<string>('name'), detail: 'root element' });
     }
     const named = request.name ? { name: request.name } : {};
     const flow = document.tree.create('bpmn:MessageFlow', { id, ...named, sourceRef: source, targetRef: target, ...(message ? { messageRef: message.el } : {}) });
@@ -82,8 +81,7 @@ export class MessageFlows {
     if (element.is('bpmn:Participant')) {
       return element;
     }
-    const process = this.edit.document.scopes.processOf(element);
-    return process ? this.edit.document.flows.participantOf(process) : undefined;
+    return this.edit.document.flows.participantOf(this.edit.document.scopes.processOf(element)!);
   }
 
   private requireParticipant(element: BpmnElement): BpmnElement {

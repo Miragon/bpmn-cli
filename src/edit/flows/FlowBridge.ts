@@ -146,7 +146,7 @@ export class FlowBridge {
     new SequenceFlows(this.edit).carryAssociations(outFlow, inFlow, changes);
     new SequenceFlows(this.edit).remove(outFlow, changes);
     changes.remove(ChangeEntries.ofFlow(outFlow));
-    if (policy === 'group' && outFlow.id && !document.tree.has(outFlow.id)) {
+    if (policy === 'group') {
       document.ids.registry.claim(outFlow.id);
     }
     const renamed = new SequenceFlows(this.edit).redirect(inFlow, { target: successor });
@@ -206,22 +206,15 @@ export class FlowBridge {
     const { changes } = this;
     const predecessor = inFlow.get<BpmnElement>('sourceRef');
     const already = this.edit.document.flows.outgoing(predecessor).some((flow) => flow !== inFlow && flow.get<BpmnElement | undefined>('targetRef') === successor);
-    if (predecessor === successor || predecessor === node || already) {
+    if (predecessor === successor || already) {
       new SequenceFlows(this.edit).remove(inFlow, changes);
       changes.remove(ChangeEntries.ofFlow(inFlow));
-      changes.note(`not bridged: ${predecessor.id} ${FlowBridge.unbridgedReason(predecessor, node, successor)}`);
+      changes.note(`not bridged: ${predecessor.id} ${predecessor === successor ? 'is the successor itself' : `already flows to ${successor.id}`}`);
       return [];
     }
     const renamed = new SequenceFlows(this.edit).redirect(inFlow, { target: successor });
     changes.change(ChangeEntries.ofFlow(inFlow, `${predecessor.id} -> ${successor.id} (bridged ${node.id})${ChangeEntries.renamedNote(renamed)}`));
     return [predecessor.id];
-  }
-
-  private static unbridgedReason(predecessor: BpmnElement, node: BpmnElement, successor: BpmnElement): string {
-    if (predecessor === successor) {
-      return 'is the successor itself';
-    }
-    return predecessor === node ? 'is the removed node' : `already flows to ${successor.id}`;
   }
 
   private warnImplicitJoin(node: BpmnElement, successor: BpmnElement, sync: boolean): void {
