@@ -78,7 +78,7 @@ Each catches what a unit test cannot see. All are hard gates but the last row, a
 | v8 coverage | untested branches below 90 % lines, 85 % branches per module and package; raise only |
 | `budgets.json` | lines per module and package, exports, commands, flag slots or the guide's 20 KB grow; the lines start at the estimates of the [modules](modules.md#modules) table, and raising one needs a reason in the commit |
 | jscpd | copied code over 0.25 % |
-| `test/contract/`: spy test, result fixtures | over 2 parses or 3 serialisations per write |
+| `test/contract/`: spy test, result fixtures | over 2 parses or 3 serialisations per write, one parse more when the new file has an error, to read the old one |
 | esbuild metafile | the painter (render's `.` or `./png`), camunda-compat or bpmnlint loaded on a write |
 | `FullLayout`'s scenario rows, 115 models of `corpus/layout/` | their total above main's, a budget that only falls; it lists each scenario that scores higher |
 | `test/contract/`: names test | the skill, the guide or a hint the corpus produces names a command or flag 1.0 lacks; `docs/architecture.md` lacks a module or names a class that does not exist |
