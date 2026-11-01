@@ -67,6 +67,13 @@ describe('ShapePlacement', () => {
     await expect(place('two-pools', { ids: ['Need'], rowOf: 'Pick' })).rejects.toMatchObject({ code: 'E_NO_ROOM', details: { related: ['Pick', 'Supplier'] } });
   });
 
+  it('never pushes a task into a sub-process it does not belong to', async () => {
+    const { diagram } = await place('place-over-sub-process', { ids: ['ST'], columnOf: 'Activity_Fzs7' });
+
+    expect(boxOf(diagram, 'ST').center.x).toBe(boxOf(diagram, 'Activity_Fzs7').center.x);
+    expect(boxOf(diagram, 'businessRuleTask_fz9Customer').overlaps(boxOf(diagram, 'Activity_Fzs7'))).toBe(false);
+  });
+
   it('hands a side to the boundary event', async () => {
     const { notes } = await place('boundary-path', { ids: ['TB'], side: 'bottom' });
 

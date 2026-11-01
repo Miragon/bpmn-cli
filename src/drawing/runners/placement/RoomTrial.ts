@@ -168,19 +168,28 @@ export class RoomTrial {
   }
 
   private newOverlaps(): Array<[string, string]> {
-    const { bounds } = this.request.before;
     const leaves = this.plane.leaves();
     const collided: Array<[string, string]> = [];
     for (const [index, first] of leaves.entries()) {
       for (const second of leaves.slice(index + 1)) {
         const hosted = first.hostId === second.id || second.hostId === first.id;
-        const was = [bounds.get(first.id), bounds.get(second.id)] as const;
-        if (!hosted && first.bounds.overlaps(second.bounds) && !(was[0] && was[1] && was[0].overlaps(was[1]))) {
+        if (!hosted && this.newlyOverlap(first, second)) {
           collided.push([first.id, second.id]);
         }
       }
     }
-    return collided;
+    return [...collided, ...this.newFrameIntrusions(leaves)];
+  }
+
+  private newFrameIntrusions(leaves: readonly DShape[]): Array<[string, string]> {
+    const subProcesses = this.shapes().filter((shape) => shape.kind === 'subProcess' && shape.container);
+    return subProcesses.flatMap((frame) => leaves.filter((leaf) => !this.isInside(leaf, frame.id) && this.newlyOverlap(leaf, frame)).map((leaf): [string, string] => [leaf.id, frame.id]));
+  }
+
+  private newlyOverlap(first: DShape, second: DShape): boolean {
+    const { bounds } = this.request.before;
+    const was = [bounds.get(first.id), bounds.get(second.id)] as const;
+    return first.bounds.overlaps(second.bounds) && !(was[0] && was[1] && was[0].overlaps(was[1]));
   }
 
   private strayed(): StrayShape[] {

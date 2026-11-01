@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Defs_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P1" isExecutable="true">
+    <bpmn:startEvent id="S"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:subProcess id="SP" name="Sub"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>
+      <bpmn:startEvent id="SS"><bpmn:outgoing>G1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:task id="ST" name="Inner"><bpmn:incoming>flow_fz9CustomerToInner</bpmn:incoming><bpmn:outgoing>G2</bpmn:outgoing></bpmn:task>
+      <bpmn:endEvent id="SE"><bpmn:incoming>flow_fzs7ToSE</bpmn:incoming></bpmn:endEvent>
+      <bpmn:sequenceFlow id="G1" sourceRef="SS" targetRef="businessRuleTask_fz9Customer"/>
+      <bpmn:businessRuleTask id="businessRuleTask_fz9Customer" name="Fz9 customer">
+        <bpmn:incoming>G1</bpmn:incoming>
+        <bpmn:outgoing>flow_fz9CustomerToInner</bpmn:outgoing>
+      </bpmn:businessRuleTask>
+      <bpmn:sequenceFlow id="flow_fz9CustomerToInner" sourceRef="businessRuleTask_fz9Customer" targetRef="ST"/>
+      <bpmn:sequenceFlow id="G2" sourceRef="ST" targetRef="Activity_Fzs7"/>
+      <bpmn:subProcess id="Activity_Fzs7" name="Fzs7 sub">
+        <bpmn:incoming>G2</bpmn:incoming>
+        <bpmn:outgoing>flow_fzs7ToSE</bpmn:outgoing>
+        <bpmn:startEvent id="Event_Fzs7s" name="Fzs7 start">
+          <bpmn:outgoing>flow_fzs7sToFzs7i</bpmn:outgoing>
+        </bpmn:startEvent>
+        <bpmn:task id="Activity_Fzs7i" name="Fzs7 inner">
+          <bpmn:incoming>flow_fzs7sToFzs7i</bpmn:incoming>
+          <bpmn:outgoing>flow_fzs7iToFzs7e</bpmn:outgoing>
+        </bpmn:task>
+        <bpmn:endEvent id="Event_Fzs7e" name="Fzs7 end">
+          <bpmn:incoming>flow_fzs7iToFzs7e</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:sequenceFlow id="flow_fzs7iToFzs7e" sourceRef="Activity_Fzs7i" targetRef="Event_Fzs7e"/>
+        <bpmn:sequenceFlow id="flow_fzs7sToFzs7i" sourceRef="Event_Fzs7s" targetRef="Activity_Fzs7i"/>
+      </bpmn:subProcess>
+      <bpmn:sequenceFlow id="flow_fzs7ToSE" sourceRef="Activity_Fzs7" targetRef="SE"/>
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="BE" name="Timeout" attachedToRef="SP"><bpmn:outgoing>F6</bpmn:outgoing><bpmn:timerEventDefinition id="TD1"/></bpmn:boundaryEvent>
+    <bpmn:endEvent id="E2" name="Late"><bpmn:incoming>F6</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="F6" sourceRef="BE" targetRef="E2"/>
+    <bpmn:task id="T" name="After"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="E"><bpmn:incoming>F3</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="SP"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="SP" targetRef="T"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="T" targetRef="E"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="D1">
+    <bpmndi:BPMNPlane id="PL1" bpmnElement="P1">
+      <bpmndi:BPMNShape id="S_di" bpmnElement="S"><dc:Bounds x="152" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SP_di" bpmnElement="SP" isExpanded="true"><dc:Bounds x="240" y="100" width="964" height="325"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SS_di" bpmnElement="SS"><dc:Bounds x="272" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ST_di" bpmnElement="ST"><dc:Bounds x="520" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SE_di" bpmnElement="SE"><dc:Bounds x="1086" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BE_di" bpmnElement="BE"><dc:Bounds x="1116" y="407" width="36" height="36"/><bpmndi:BPMNLabel><dc:Bounds x="1154" y="445" width="44" height="14"/></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E2_di" bpmnElement="E2"><dc:Bounds x="1116" y="507" width="36" height="36"/><bpmndi:BPMNLabel><dc:Bounds x="1122" y="550" width="24" height="14"/></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F6_di" bpmnElement="F6"><di:waypoint x="1134" y="443"/><di:waypoint x="1134" y="507"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="T_di" bpmnElement="T"><dc:Bounds x="1264" y="160" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_di" bpmnElement="E"><dc:Bounds x="1426" y="182" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1"><di:waypoint x="188" y="200"/><di:waypoint x="240" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2"><di:waypoint x="1204" y="200"/><di:waypoint x="1264" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3"><di:waypoint x="1364" y="200"/><di:waypoint x="1426" y="200"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="G1_di" bpmnElement="G1"><di:waypoint x="290" y="182"/><di:waypoint x="290" y="145"/><di:waypoint x="853" y="145"/><di:waypoint x="853" y="160"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="G2_di" bpmnElement="G2"><di:waypoint x="570" y="240"/><di:waypoint x="570" y="338"/><di:waypoint x="677" y="338"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Activity_Fzs7_di" bpmnElement="Activity_Fzs7" isExpanded="true">
+        <dc:Bounds x="677" y="260" width="352" height="155"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Fzs7s_di" bpmnElement="Event_Fzs7s">
+        <dc:Bounds x="707" y="327" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="684" y="369" width="82" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Fzs7i_di" bpmnElement="Activity_Fzs7i">
+        <dc:Bounds x="803" y="305" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Fzs7e_di" bpmnElement="Event_Fzs7e">
+        <dc:Bounds x="963" y="327" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="947" y="369" width="68" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_fzs7iToFzs7e_di" bpmnElement="flow_fzs7iToFzs7e">
+        <di:waypoint x="903" y="345"/>
+        <di:waypoint x="963" y="345"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_fzs7sToFzs7i_di" bpmnElement="flow_fzs7sToFzs7i">
+        <di:waypoint x="743" y="345"/>
+        <di:waypoint x="803" y="345"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_fzs7ToSE_di" bpmnElement="flow_fzs7ToSE">
+        <di:waypoint x="1029" y="338"/>
+        <di:waypoint x="1104" y="338"/>
+        <di:waypoint x="1104" y="218"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="businessRuleTask_fz9Customer_di" bpmnElement="businessRuleTask_fz9Customer">
+        <dc:Bounds x="803" y="160" width="100" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_fz9CustomerToInner_di" bpmnElement="flow_fz9CustomerToInner">
+        <di:waypoint x="853" y="240"/>
+        <di:waypoint x="853" y="255"/>
+        <di:waypoint x="595" y="255"/>
+        <di:waypoint x="595" y="240"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
