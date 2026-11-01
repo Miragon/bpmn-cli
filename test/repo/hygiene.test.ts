@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -10,7 +11,6 @@ interface Manifest {
 }
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.oracle', '.api', 'coverage', 'results', 'out', 'cache']);
 const TEXT = /\.(ts|mts|mjs|js|json|md|bpmn|sh|txt|yml|yaml)$|^(LICENSE.*|\.gitignore)$/;
 const LOCAL_PATHS = [
   ['/', 'Users/'],
@@ -20,19 +20,9 @@ const LOCAL_PATHS = [
   ['claude', '-501'],
 ].map((localPath) => localPath.join(''));
 
-function files(dir: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      if (!SKIP_DIRS.has(name)) {
-        out.push(...files(full));
-      }
-    } else if (TEXT.test(name)) {
-      out.push(full);
-    }
-  }
-  return out;
+function trackedTextFiles(): string[] {
+  const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\0');
+  return tracked.filter((file) => TEXT.test(basename(file)) && existsSync(join(ROOT, file)));
 }
 
 function manifestAt(folder: string): Manifest {
@@ -50,9 +40,7 @@ function driftFromCore(core: Manifest, part: Manifest): string[] {
   });
 }
 
-const repoFiles = files(ROOT)
-  .map((file) => relative(ROOT, file))
-  .filter((file) => file !== 'package-lock.json');
+const repoFiles = trackedTextFiles().filter((file) => file !== 'package-lock.json');
 const core = manifestAt('.');
 
 describe('repository hygiene', () => {
