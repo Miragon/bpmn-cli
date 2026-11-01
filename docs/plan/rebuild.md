@@ -200,6 +200,10 @@ The draft PR is done when, rebased onto main's head:
    error-severity violation, with hard layout defects counted as warnings (`--hard warn`, as in today's
    gate); the layout probe judges those against main.
 
+### Open fuzz case
+
+`di:noDi`, on main too: artifacts__04b-data-crossscope, seed 504788352 (`node tools/fuzz/walk.mjs corpus/layout/artifacts__04b-data-crossscope.bpmn --seed 504788352 --steps 30 --exec lib`). Left open: collapsing a sub-process whose task reads a data object of the parent scope puts the two ends on different planes, so the association has no plane to be drawn on. A fix decides what such an association means, which is no small change.
+
 ## Later
 
 Merging the draft PR and shipping 1.0.0 are not part of this plan. For that day:
@@ -235,16 +239,12 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 
 ### 14. CLI and rc.1
 
-Build the CLI and ship 1.0.0-rc.1.
+The CLI is built and gates. Left: ship 1.0.0-rc.1 and run the first nightly.
 
-- Today: 29 command classes; help in TypeScript.
-- After: the [target](cli.md#target), help in Markdown, one esbuild bundle with `packages/lint` inside,
-  release candidates as [above](#releases).
-- Files: `src/cli/`, `bin/bpmn.js`, `test/cli/`, `test/e2e/`, `corpus/cli/`, `tools/fuzz/`,
-  `tools/bench/`, the tag job in `release-please.yml`, the nightly workflow, and in
-  `tools/check-budgets.mjs` the measures of the commands, flag slots and the guide's 20 KB.
-- Done when: the CLI probe green, text results ≤ 1 KB, `--version` ≤ 60 ms, rc.1 on `next`; nightly
-  fuzz and bench ran on it.
+- Today: the [target](cli.md#target) and the tag and nightly workflows are on the branch; no release candidate is on npm, and the nightly's schedule runs only from the default branch.
+- After: [release candidates](#releases) on `next`.
+- Files: none but the tag.
+- Done when: rc.1 on `next`; nightly fuzz and bench ran on it.
 
 ### 15. Skill, evals and docs
 
