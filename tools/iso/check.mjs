@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 const ROOT = realpathSync(resolve(process.argv[2] ?? '.'));
 const NODE_GLOBALS = ['process', 'Buffer', 'global', 'require', '__dirname', '__filename', 'setImmediate', 'clearImmediate'];
 const SENTINEL = '__ISO_NODE_GLOBAL_';
-const BROWSER_ENTRIES = ['src/index.ts', 'packages/render/src/index.ts'];
+const BROWSER_ENTRIES = ['src/index.ts', 'packages/render/src/index.ts', 'packages/render/src/text/index.ts'];
 const CORE_ENTRY = 'src/index.ts';
 const DESIGN_IQ_IMPORTS = ['applyToXml', 'showXml', 'findXml', 'validateXml', 'kindsJson', 'OPS_SCHEMA', 'BpmnError'];
 const KILOBYTE = 1024;
