@@ -98,7 +98,7 @@ participant participant_orderHandling "Order handling"  c0..c5   row 1: c0 start
 ```
 
 Every write prints the same score before and after. Lower is better, 0 means no problems. Graders read
-`.score` from `--json`. A crossing with the dotted line of a text annotation is no problem, and flows are
+`.score` from `--json`, which is `null` on a file without a drawing. A crossing with the dotted line of a text annotation is no problem, and flows are
 not routed around one; a line through the annotation's text is (`through`).
 
 ## `conventions`

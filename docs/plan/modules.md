@@ -329,7 +329,7 @@ interface NewOptions {
 - Each read returns `{ text, ... }`: what the command prints, and the same answer as data, which
   `--json` prints. `ShowResult` holds a `view`, the outline (`ModelView`, also when cut by `in` or
   `around`) or one element (`ElementDetail`), told apart by `view.kind`; `FindResult` holds `hits` and
-  `total`; `DiagramResult` holds `score`, `counts`, `problems` and `rows`. An option narrows a result,
+  `total`; `DiagramResult` holds `score`, `null` on a file without a drawing, `counts`, `problems` and `rows`. An option narrows a result,
   never changes its type. Each view has a text class beside it, so the read texts (≈ 0.7k) live in
   views, one job per class.
 - Every id in a result comes as `{ id, kind, name }`, an input the next call takes; today's duplicate

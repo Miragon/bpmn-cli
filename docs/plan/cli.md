@@ -215,7 +215,8 @@ participant Participant_Insurer  c0..c11
   `event`, `gateway`). Event definitions are no hits; associations only with `--kind association`. No
   hit prints nothing and exits 0; columns are separated by tabs when piped, so `cut -f1` gives the ids.
 - `diagram` judges the whole drawing; graders read `.score` from `--json`. A file without a drawing
-  prints `no diagram: bpmn layout <file> draws one` instead of one `missing` line per element.
+  prints `no diagram: bpmn layout <file> draws one` instead of one `missing` line per element, and its
+  `.score` is `null`, its counts 0.
 - `show` ends, like a write, with the state line: `state: 0 errors, 1 warning (bpmn validate lists
   them and runs the project's lint)`. `find` prints only its hits, so its output pipes.
 

@@ -34,7 +34,7 @@ describe('the contract', () => {
   it('answers show, find and diagram from the text', async () => {
     expect((await showXml(orderCheck, { id: 'check' })).view.kind).toBe('element');
     expect((await findXml(orderCheck, { text: 'check' })).total).toBeGreaterThan(0);
-    expect((await diagramXml(orderCheck)).score).toBeGreaterThanOrEqual(0);
+    expect((await diagramXml(Fixtures.text('models/incremental/orders.bpmn'))).score).toBeGreaterThanOrEqual(0);
   });
 
   it('paints an image and checks a file', async () => {

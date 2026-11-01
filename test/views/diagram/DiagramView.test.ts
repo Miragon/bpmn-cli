@@ -49,12 +49,14 @@ describe('DiagramView', () => {
     expect(rows[0]?.frames[0]).toMatchObject({ kind: 'process', gaps: [{ row: 0, before: [2] }] });
   });
 
-  it('says how to draw a file without a drawing, and keeps its data', async () => {
-    const { text, rows, counts } = await answer('models/views/claims.bpmn');
+  it('says how to draw a file without a drawing, and gives it no score', async () => {
+    const { text, score, rows, counts, problems } = await answer('models/views/claims.bpmn');
 
     expect(text).toBe('no diagram: bpmn layout <file> draws one');
+    expect(score).toBeNull();
     expect(rows).toEqual([]);
-    expect(counts.missing).toBeGreaterThan(0);
+    expect(problems).toEqual([]);
+    expect(counts.missing).toBe(0);
   });
 
   it('treats a diagram with nothing on it like no drawing', async () => {

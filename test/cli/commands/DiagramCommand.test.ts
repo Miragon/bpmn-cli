@@ -16,6 +16,12 @@ describe('DiagramCommand', () => {
     expect((await cli.run(['diagram', cli.copied('edit/order-check.bpmn')])).stdout).toContain('no diagram');
   });
 
+  it('answers a file without a drawing with no score in the JSON', async () => {
+    const { score } = JSON.parse((await cli.run(['diagram', cli.copied('edit/order-check.bpmn'), '--json'])).stdout);
+
+    expect(score).toBeNull();
+  });
+
   it('names the file in its JSON', async () => {
     const file = cli.copied('models/incremental/orders.bpmn');
 

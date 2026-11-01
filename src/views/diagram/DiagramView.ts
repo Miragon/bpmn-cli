@@ -1,11 +1,12 @@
 import { PlaneReader, type Plane, type Semantics } from '../../drawing/index.js';
 import { Kinds, type BpmnDocument } from '../../model/index.js';
-import { DrawnPlane, ElementHomes, Scorer } from '../../scoring/index.js';
+import { DrawnPlane, ElementHomes, ProblemKinds, Scorer } from '../../scoring/index.js';
 import { DiagramColumns, type PlaneShape } from './DiagramColumns.js';
 import { DiagramViewText, type DiagramFacts, type PlaneRows, type RowFrame, type RowFrameKind } from './DiagramViewText.js';
 
-export interface DiagramResult extends DiagramFacts {
+export interface DiagramResult extends Omit<DiagramFacts, 'score'> {
   text: string;
+  score: number | null;
 }
 
 export class DiagramView {
@@ -39,11 +40,12 @@ export class DiagramView {
   }
 
   answer(): DiagramResult {
+    if (!this.planes.some((plane) => plane.shapes.size + plane.edges.size > 0)) {
+      return { text: 'no diagram: bpmn layout <file> draws one', score: null, counts: ProblemKinds.perKind(() => 0), problems: [], rows: [] };
+    }
     const { score, counts, problems } = new Scorer().scoreDrawing(DrawnPlane.read(this.document), new ElementHomes(this.document));
-    const rows = this.planes.map((plane) => this.rowsOn(plane));
-    const drawn = this.planes.some((plane) => plane.shapes.size + plane.edges.size > 0);
-    const result = { score, counts, problems, rows };
-    return { text: drawn ? new DiagramViewText(result).text() : 'no diagram: bpmn layout <file> draws one', ...result };
+    const result = { score, counts, problems, rows: this.planes.map((plane) => this.rowsOn(plane)) };
+    return { text: new DiagramViewText(result).text(), ...result };
   }
 
   private rowsOn(plane: Plane): PlaneRows {
