@@ -1,11 +1,15 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { bundlesOf } from './build/bundles.mjs';
 
 const ROOT = resolve(process.argv[2] ?? '.');
 const CORE_ENTRY = 'src/index.ts';
+const CLI_PROGRAM = 'src/cli/CliProgram.ts';
+const MEASURED_CLI_OUTPUT = 'node_modules/.cache/bpmn-budgets';
 const COVERAGE_FLOOR = { lines: 90, branches: 85 };
-const MEASURED_FROM_THE_CLI_STEP = ['commands', 'flagSlots', 'guideKilobytes'];
+const RECORDED = ['commands', 'flagSlots', 'guideKilobytes'];
 const PARTS = [
   'src/model',
   'src/operations',
@@ -76,17 +80,46 @@ async function checkRuntimeExports() {
 }
 
 function checkRecordedBudgets() {
-  for (const budget of MEASURED_FROM_THE_CLI_STEP) {
+  for (const budget of RECORDED) {
     if (budgets[budget] === undefined) {
       problems.push(`budgets.json lacks ${budget}`);
     }
   }
 }
 
+function leavesOf(command) {
+  return command.commands.length ? command.commands.flatMap(leavesOf) : [command];
+}
+
+async function cliCommands() {
+  const output = join(ROOT, MEASURED_CLI_OUTPUT);
+  await build({ ...bundlesOf(ROOT).cli, entryPoints: { program: CLI_PROGRAM }, outdir: output });
+  const { CliProgram } = await import(pathToFileURL(join(output, 'program.js')).href);
+  const silent = { write: () => true };
+  const { commander } = new CliProgram({ stdout: silent, stderr: silent, stdin: [], env: {} }, '0');
+  rmSync(output, { recursive: true, force: true });
+  return leavesOf(commander);
+}
+
+async function checkCommandsAndFlags() {
+  if (!existsSync(join(ROOT, CLI_PROGRAM))) {
+    return { commands: 0, flagSlots: 0 };
+  }
+  const commands = await cliCommands();
+  const measured = { commands: commands.length, flagSlots: commands.reduce((sum, { options }) => sum + options.length, 0) };
+  for (const [budget, count] of Object.entries(measured)) {
+    if (count > budgets[budget]) {
+      problems.push(`the CLI has ${count} ${budget}, over its budget of ${budgets[budget]}`);
+    }
+  }
+  return measured;
+}
+
 const total = checkLines();
 checkCoverageFloors();
 checkRecordedBudgets();
 const runtimeExports = await checkRuntimeExports();
+const { commands, flagSlots } = await checkCommandsAndFlags();
 
 for (const problem of problems) {
   console.error(`budgets: ${problem}`);
@@ -94,4 +127,4 @@ for (const problem of problems) {
 if (problems.length > 0) {
   process.exit(1);
 }
-console.log(`budgets: ${total} lines, ${runtimeExports} runtime exports; ${MEASURED_FROM_THE_CLI_STEP.join(', ')} are measured once the CLI exists`);
+console.log(`budgets: ${total} lines, ${runtimeExports} runtime exports, ${commands} commands, ${flagSlots} flag slots`);

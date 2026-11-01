@@ -206,7 +206,8 @@ export class CommandSyntax {
     const fields: Record<string, unknown> = {};
     this.shape.words.forEach(({ field }, index) => {
       const value = values[index];
-      if (value !== undefined && field !== 'set' && field !== 'attrs') {
+      const isGiven = Array.isArray(value) ? value.length > 0 : value !== undefined;
+      if (isGiven && field !== 'set' && field !== 'attrs') {
         fields[field] = value;
       }
     });
