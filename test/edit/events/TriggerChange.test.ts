@@ -29,7 +29,7 @@ describe('TriggerChange', () => {
 
     change.change('signal', { signal: 'Stop' }, changes);
 
-    expect(element.get<Array<{ type: string }>>('eventDefinitions')[0]?.type).toBe('bpmn:SignalEventDefinition');
+    expect(element.list('eventDefinitions')[0]?.type).toBe('bpmn:SignalEventDefinition');
   });
 
   it('merges the options of the same trigger and forgets the old timer kind with a new timer', async () => {
@@ -37,7 +37,7 @@ describe('TriggerChange', () => {
 
     change.change('timer', { timer: 'R/PT1M' }, changes);
 
-    expect(element.get<Array<{ get(name: string): unknown }>>('eventDefinitions')[0]?.get('timeCycle')).toBeDefined();
+    expect(element.list('eventDefinitions')[0]?.get('timeCycle')).toBeDefined();
   });
 
   it('keeps an event non-interrupting through a strict change', async () => {
@@ -85,7 +85,7 @@ describe('TriggerChange', () => {
 
     change.change(undefined, {}, changes);
 
-    expect(element.get<unknown[]>('eventDefinitions')).toHaveLength(1);
+    expect(element.list('eventDefinitions')).toHaveLength(1);
   });
 
   it('refuses a trigger that breaks a message flow out of a throw event', async () => {

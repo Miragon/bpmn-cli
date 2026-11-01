@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ZeebeSubscription } from '../../../src/edit/events/ZeebeSubscription.js';
-import { ChangeSet } from '../../support/ModelValues.js';
+import { type BpmnElement, ChangeSet } from '../../support/ModelValues.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 const ADD = { op: 'ext', id: 'x', action: 'add', type: 'zeebe:subscription' } as const;
@@ -10,8 +10,8 @@ async function subscribing() {
   return { document, subscription: new ZeebeSubscription(document), changes: new ChangeSet() };
 }
 
-function subscriptionsOf(element: { get<T>(name: string): T }): Array<{ peek(name: string): unknown }> {
-  return element.get<{ get<T>(name: string): T } | undefined>('extensionElements')?.get('values') ?? [];
+function subscriptionsOf(element: BpmnElement): readonly BpmnElement[] {
+  return element.get<BpmnElement>('extensionElements').list('values');
 }
 
 describe('ZeebeSubscription', () => {

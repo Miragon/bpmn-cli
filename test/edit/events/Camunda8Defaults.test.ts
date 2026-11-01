@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Camunda8Defaults } from '../../../src/edit/events/Camunda8Defaults.js';
 import { EditSession } from '../../../src/edit/session/EditSession.js';
 import { Fixtures } from '../../support/Fixtures.js';
+import type { BpmnElement } from '../../support/ModelValues.js';
 
 async function editing(path: string, platform?: 'c7' | 'c8') {
   const document = await Fixtures.readForWrite(path);
@@ -14,7 +15,7 @@ describe('Camunda8Defaults', () => {
     const task = document.tree.require('check');
 
     expect(defaults.userTask(task)).toBe(true);
-    expect(task.get<{ list(name: string): Array<{ type: string }> }>('extensionElements').list('values').map(({ type }) => type)).toEqual(['zeebe:userTask']);
+    expect(task.get<BpmnElement>('extensionElements').list('values').map(({ type }) => type)).toEqual(['zeebe:userTask']);
     expect(document.namespaces.prefixFor('http://camunda.org/schema/zeebe/1.0')).toBe('zeebe');
   });
 
@@ -24,7 +25,7 @@ describe('Camunda8Defaults', () => {
 
     defaults.userTask(task);
 
-    expect(task.get<{ list(name: string): Array<{ type: string }> }>('extensionElements').list('values').at(-1)?.type).toBe('zeebe:userTask');
+    expect(task.get<BpmnElement>('extensionElements').list('values').at(-1)?.type).toBe('zeebe:userTask');
   });
 
   it('leaves a user task that is marked already, a service task, and every task off Camunda 8', async () => {

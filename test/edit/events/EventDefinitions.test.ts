@@ -2,16 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { EventDefinitions } from '../../../src/edit/events/EventDefinitions.js';
 import { EditSession } from '../../../src/edit/session/EditSession.js';
 import { Fixtures } from '../../support/Fixtures.js';
-
-type Holder = { get<T>(name: string): T; id: string; attrs: Record<string, unknown> };
+import type { BpmnElement } from '../../support/ModelValues.js';
 
 async function editing(platform?: 'c8') {
   const document = await Fixtures.readForWrite('edit/events-triggers.bpmn');
   return { document, events: new EventDefinitions(new EditSession(document, platform)) };
 }
 
-function definitionOf(event: Holder): Holder {
-  return event.get<Holder[]>('eventDefinitions')[0]!;
+function definitionOf(event: BpmnElement): BpmnElement {
+  return event.list('eventDefinitions')[0]!;
 }
 
 describe('EventDefinitions', () => {
@@ -37,7 +36,7 @@ describe('EventDefinitions', () => {
 
     events.setTrigger(start, 'error', { error: 'Late' });
 
-    expect(definitionOf(start).get<Holder>('errorRef').id).toBe('Error_late');
+    expect(definitionOf(start).get<BpmnElement>('errorRef').id).toBe('Error_late');
   });
 
   it.each([
@@ -51,7 +50,7 @@ describe('EventDefinitions', () => {
 
     events.setTrigger(event, 'timer', { timer, timerKind });
 
-    expect(definitionOf(event).get<Holder>(property).get('body')).toBe(timer);
+    expect(definitionOf(event).get<BpmnElement>(property).get('body')).toBe(timer);
   });
 
   it('builds a timer without a value', async () => {
@@ -86,7 +85,7 @@ describe('EventDefinitions', () => {
 
     events.setTrigger(event, trigger, { [trigger]: name });
 
-    expect(definitionOf(event).get<Holder>(property).id).toBe(root);
+    expect(definitionOf(event).get<BpmnElement>(property).id).toBe(root);
   });
 
   it('writes the code of a new error and of a new escalation onto their root elements', async () => {
@@ -116,7 +115,7 @@ describe('EventDefinitions', () => {
     events.setTrigger(withExpression, 'conditional', { when: '${ok}' });
     events.setTrigger(without, 'conditional');
 
-    expect(definitionOf(withExpression).get<Holder>('condition').get('body')).toBe('${ok}');
+    expect(definitionOf(withExpression).get<BpmnElement>('condition').get('body')).toBe('${ok}');
     expect(definitionOf(without).get('condition')).toBeUndefined();
   });
 
@@ -160,7 +159,7 @@ describe('EventDefinitions', () => {
 
     expect(warnings.map(({ code }) => code)).toEqual(['W_PROPERTY_DROPPED']);
     expect(definitionOf(event).id).toBe('both_timer');
-    expect(definitionOf(event).get<Holder>('timeDuration').get('body')).toBe('PT2H');
+    expect(definitionOf(event).get<BpmnElement>('timeDuration').get('body')).toBe('PT2H');
   });
 
   it('replaces two definitions of the same trigger by a new one', async () => {
@@ -169,7 +168,7 @@ describe('EventDefinitions', () => {
 
     events.setTrigger(event, 'message', { message: 'Paid' });
 
-    expect(event.get<Holder[]>('eventDefinitions')).toHaveLength(1);
+    expect(event.list('eventDefinitions')).toHaveLength(1);
     expect(definitionOf(event).id).not.toBe('twice_first');
   });
 
@@ -182,9 +181,9 @@ describe('EventDefinitions', () => {
     events.setTrigger(double, 'timer', { timer: 'PT9M', timerKind: 'cycle' });
 
     expect(definitionOf(event).get('timeDuration')).toBeUndefined();
-    expect(definitionOf(event).get<Holder>('timeCycle').get('body')).toBe('R/PT9M');
+    expect(definitionOf(event).get<BpmnElement>('timeCycle').get('body')).toBe('R/PT9M');
     expect(definitionOf(double).get('timeDuration')).toBeUndefined();
-    expect(definitionOf(double).get<Holder>('timeCycle').get('body')).toBe('PT9M');
+    expect(definitionOf(double).get<BpmnElement>('timeCycle').get('body')).toBe('PT9M');
   });
 
   it('gives a bare timer its expression and keeps a timer no option changes', async () => {
@@ -196,8 +195,8 @@ describe('EventDefinitions', () => {
     events.setTrigger(kept, 'timer', { timer: 'PT5M' });
     events.setTrigger(kept, 'timer');
 
-    expect(definitionOf(bare).get<Holder>('timeDuration').get('body')).toBe('PT1M');
-    expect(definitionOf(kept).get<Holder>('timeDuration').get('body')).toBe('PT5M');
+    expect(definitionOf(bare).get<BpmnElement>('timeDuration').get('body')).toBe('PT1M');
+    expect(definitionOf(kept).get<BpmnElement>('timeDuration').get('body')).toBe('PT5M');
   });
 
   it('repoints the definition an event has at the root element named, and only when it differs', async () => {
@@ -206,12 +205,12 @@ describe('EventDefinitions', () => {
     const definition = definitionOf(event);
 
     events.setTrigger(event, 'message', { message: 'Paid' });
-    expect(definition.get<Holder>('messageRef').id).toBe('Message_paid');
+    expect(definition.get<BpmnElement>('messageRef').id).toBe('Message_paid');
     events.setTrigger(event, 'message', { message: 'Fresh' });
     events.setTrigger(event, 'message');
 
     expect(definitionOf(event)).toBe(definition);
-    expect(definition.get<Holder>('messageRef').get('name')).toBe('Fresh');
+    expect(definition.get<BpmnElement>('messageRef').get('name')).toBe('Fresh');
   });
 
   it('updates the code of the error an event has', async () => {
@@ -243,7 +242,7 @@ describe('EventDefinitions', () => {
     const event = document.tree.require('catch_script');
 
     const [warning] = events.setTrigger(event, 'conditional', { when: '${ok}' });
-    const condition = definitionOf(event).get<Holder>('condition');
+    const condition = definitionOf(event).get<BpmnElement>('condition');
 
     expect(warning?.message).toContain('camunda:resource check.groovy and language groovy of the condition of catch_script were dropped: the new inline condition replaces the script resource');
     expect(condition.attrs['camunda:resource']).toBeUndefined();
@@ -254,7 +253,7 @@ describe('EventDefinitions', () => {
   it('drops a script language under an expression and keeps it under script text', async () => {
     const { document, events } = await editing();
     const event = document.tree.require('catch_groovy');
-    const condition = definitionOf(event).get<Holder>('condition');
+    const condition = definitionOf(event).get<BpmnElement>('condition');
 
     expect(events.setTrigger(event, 'conditional', { when: 'return true' })).toEqual([]);
     expect(condition.get('language')).toBe('groovy');
@@ -274,7 +273,7 @@ describe('EventDefinitions', () => {
     expect(events.setTrigger(juel, 'conditional')).toEqual([]);
     events.setTrigger(bare, 'conditional', { when: '${ok}' });
 
-    expect(definitionOf(juel).get<Holder>('condition').get('language')).toBe('juel');
-    expect(definitionOf(bare).get<Holder>('condition').get('body')).toBe('${ok}');
+    expect(definitionOf(juel).get<BpmnElement>('condition').get('language')).toBe('juel');
+    expect(definitionOf(bare).get<BpmnElement>('condition').get('body')).toBe('${ok}');
   });
 });

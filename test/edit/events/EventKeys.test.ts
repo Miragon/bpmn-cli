@@ -16,7 +16,7 @@ describe('EventKeys', () => {
   it('sets a trigger with its detail and reports both', async () => {
     const { element, changes } = await writing('end_plain', { trigger: 'message', message: 'Paid' });
 
-    expect(element.get<Array<{ type: string }>>('eventDefinitions')[0]?.type).toBe('bpmn:MessageEventDefinition');
+    expect(element.list('eventDefinitions')[0]?.type).toBe('bpmn:MessageEventDefinition');
     expect(changes.changed).toEqual([expect.objectContaining({ id: 'end_plain', detail: 'trigger=message message=Paid' })]);
   });
 
