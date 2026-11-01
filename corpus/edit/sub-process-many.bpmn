@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_many" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_many" isExecutable="true">
+    <bpmn:subProcess id="Sub" name="Handle">
+      <bpmn:task id="one" />
+      <bpmn:task id="two" />
+      <bpmn:task id="three" />
+      <bpmn:task id="four" />
+      <bpmn:task id="five" />
+      <bpmn:task id="six" />
+      <bpmn:task id="seven" />
+      <bpmn:task id="eight" />
+      <bpmn:task id="nine" />
+    </bpmn:subProcess>
+  </bpmn:process>
+</bpmn:definitions>

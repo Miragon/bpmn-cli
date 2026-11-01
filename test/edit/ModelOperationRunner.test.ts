@@ -84,6 +84,38 @@ describe('ModelOperationRunner', () => {
     expect((await run(retype, path, { force: true })).document.tree.has('Sub_task')).toBe(false);
   });
 
+  it('hands an operation of each kind to its class', async () => {
+    const { changes } = await run([
+      { op: 'move', ids: ['reject'], after: 'gateway_ok', before: 'gateway_join' },
+      { op: 'order', id: 'gateway_ok', flows: ['flow_okToReject'] },
+      { op: 'ext', id: 'ship', action: 'add', type: 'zeebe:taskDefinition', attrs: { type: 'ship' } },
+      { op: 'split', after: 'ship', branches: [{ nodes: [{ kind: 'task', name: 'Left' }] }, { nodes: [{ kind: 'task', name: 'Right' }] }] },
+    ]);
+
+    expect(changes.changed.map(({ id }) => id)).toContain('gateway_ok');
+    expect(changes.created.map(({ id }) => id)).toEqual(expect.arrayContaining(['task_left', 'task_right']));
+  });
+
+  it('points an id a batch renamed twice to its last name', async () => {
+    await expect(run([
+      { op: 'set', id: 'check', set: { id: 'task_first' } },
+      { op: 'set', id: 'task_first', set: { id: 'task_last' } },
+      { op: 'set', id: 'check', set: { name: 'Gone' } },
+    ])).rejects.toMatchObject({ code: 'E_NOT_FOUND', message: expect.stringContaining('task_last') });
+  });
+
+  it('points an id a retype regenerated to the new one', async () => {
+    await expect(run([
+      { op: 'add', kind: 'task', name: 'Review', after: 'check' },
+      { op: 'retype', id: 'task_review', kind: 'userTask' },
+      { op: 'set', id: 'task_review', set: { name: 'Gone' } },
+    ])).rejects.toMatchObject({ code: 'E_NOT_FOUND', message: expect.stringContaining('userTask_review') });
+  });
+
+  it('lists eight removed elements of a refused retype and counts the others', async () => {
+    await expect(run([{ op: 'retype', id: 'Sub', kind: 'task' }], 'edit/sub-process-many.bpmn')).rejects.toMatchObject({ code: 'E_WOULD_DROP_CONTENT', message: expect.stringMatching(/ and \d+ more\)/) });
+  });
+
   it('follows the platform the call names', async () => {
     const { changes } = await run([{ op: 'add', kind: 'userTask', name: 'Review', after: 'check' }], 'edit/order-check.bpmn', { platform: 'c8' });
 

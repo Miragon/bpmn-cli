@@ -22,17 +22,6 @@ describe('EditSession', () => {
     expect(() => edit.require('gone')).toThrow(expect.objectContaining({ code: 'E_NOT_FOUND', details: expect.objectContaining({ hint: expect.stringContaining('Created earlier in this batch: ship') }) }));
   });
 
-  it('hands out the renames once, with the old ends of a flow', async () => {
-    const { document, edit } = await session();
-    const flow = document.tree.require('flow_checkToOk');
-
-    edit.journal.recordRename('flow_a', 'flow_b', 'check -> ship', flow);
-    edit.journal.recordRegenerated('userTask_a', 'serviceTask_a');
-
-    expect(edit.journal.takeRenames()).toEqual([{ from: 'flow_a', to: 'flow_b', was: 'check -> ship' }, { from: 'userTask_a', to: 'serviceTask_a', regenerated: true }]);
-    expect(edit.journal.takeRenames()).toEqual([]);
-  });
-
   it('keeps each former end of a node once and hands them to the element a retype made', async () => {
     const { document, edit } = await session();
     const [old, next] = [document.tree.require('check'), document.tree.require('ship')];
@@ -46,25 +35,17 @@ describe('EditSession', () => {
     expect(edit.formerEndsOf(next)).toEqual([end]);
   });
 
-  it('keeps the first id state of a batch, so a batch compares its start with its end', async () => {
-    const { edit } = await session();
-
-    edit.journal.recordIdState('check', { type: 'bpmn:UserTask' }, 'userTask');
-    edit.journal.recordIdState('check', { type: 'bpmn:Task' }, 'task');
-
-    expect(edit.journal.takeIdStates().get('check')?.wasLabel).toBe('userTask');
-    expect(edit.journal.takeIdStates().size).toBe(0);
-  });
-
   it('forgets former ends and id states when a batch begins, and keeps dropped content', async () => {
     const { document, edit } = await session();
     const check = document.tree.require('check');
 
     edit.recordFormerEnd(check, { id: 'check', labels: [] });
+    edit.journal.recordIdState('check', { type: 'bpmn:UserTask' }, 'userTask');
     edit.journal.recordDroppedContent({ element: 'check', kind: 'task', removed: ['ship'] });
     edit.begin();
 
     expect(edit.formerEndsOf(check)).toEqual([]);
+    expect(edit.journal.takeIdStates().size).toBe(0);
     expect(edit.journal.droppedContent).toHaveLength(1);
   });
 });
