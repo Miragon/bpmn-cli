@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_chain" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_chain" isExecutable="true">
+    <bpmn:startEvent id="S"><bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="S" targetRef="X" />
+    <bpmn:task id="X"><bpmn:incoming>Flow_1</bpmn:incoming><bpmn:outgoing>Flow_4</bpmn:outgoing></bpmn:task>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="X" targetRef="A" />
+    <bpmn:task id="A"><bpmn:incoming>Flow_4</bpmn:incoming><bpmn:outgoing>Flow_2</bpmn:outgoing></bpmn:task>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="A" targetRef="B" />
+    <bpmn:task id="B"><bpmn:incoming>Flow_2</bpmn:incoming><bpmn:outgoing>Flow_3</bpmn:outgoing></bpmn:task>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="B" targetRef="C" />
+    <bpmn:task id="C"><bpmn:incoming>Flow_3</bpmn:incoming></bpmn:task>
+  </bpmn:process>
+</bpmn:definitions>

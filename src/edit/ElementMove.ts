@@ -56,24 +56,8 @@ export class ElementMove {
     }
   }
 
-  private static placementOf(command: MoveOperation): PlacementOptions {
-    const placement: PlacementOptions = {};
-    if (command.after) {
-      placement.after = command.after;
-    }
-    if (command.before) {
-      placement.before = command.before;
-    }
-    if (command.flow) {
-      placement.flow = command.flow;
-    }
-    if (command.in) {
-      placement.in = command.in;
-    }
-    if (command.on) {
-      placement.on = command.on;
-    }
-    return placement;
+  private static placementOf({ after, before, flow, in: scope, on }: MoveOperation): PlacementOptions {
+    return { after, before, flow, in: scope, on };
   }
 
   private deepestLane(el: BpmnElement): BpmnElement | undefined {
