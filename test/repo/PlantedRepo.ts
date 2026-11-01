@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +49,19 @@ export class PlantedRepo {
 
   checkBudgets(): ToolRun {
     return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-budgets.mjs'), this.root]);
+  }
+
+  checkIso(): ToolRun {
+    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'iso', 'check.mjs'), this.root]);
+  }
+
+  plantBudgets(changes: object): void {
+    const budgets: object = JSON.parse(readFileSync(join(REPOSITORY, 'budgets.json'), 'utf8'));
+    this.plant('budgets.json', JSON.stringify({ ...budgets, ...changes }));
+  }
+
+  plantedBudgets(): string {
+    return readFileSync(join(this.root, 'budgets.json'), 'utf8');
   }
 
   cruise(): ToolRun {
