@@ -31,6 +31,10 @@ describe('EditResultText', () => {
     expect(textOf({ format })).toContain('format place #0: colored a; label placed b; moved a; rerouted f; note: n\nformat tidy #1: no change');
   });
 
+  it('names an id once, however many changes it took', () => {
+    expect(textOf({ changed: [change('a'), change('a')] })).toContain('changed: a\n');
+  });
+
   it('tells a dry run, an unchanged file and a copy of it apart', () => {
     expect(textOf({}, { written: false, dryRun: true })).toContain('dry run: f.bpmn not written\n'.trimEnd());
     expect(textOf({ unchanged: true }, { written: false, dryRun: true })).toContain('not written (unchanged)');
