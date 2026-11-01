@@ -65,7 +65,7 @@ export class CommandSyntax {
     retype: { operation: 'retype', words: [CommandSyntax.ID, CommandSyntax.KIND, CommandSyntax.SET] },
     move: { operation: 'move', words: [CommandSyntax.IDS] },
     order: { operation: 'order', words: [CommandSyntax.ID, { usage: '<ids...>', field: 'flows' }] },
-    'ext add': { operation: 'ext', action: 'add', words: [CommandSyntax.ID, { usage: '<type>', field: 'type' }, { usage: CommandSyntax.PAIRS, field: 'attrs' }], notFlags: CommandSyntax.EXTENSION_ONLY },
+    'ext add': { operation: 'ext', action: 'add', words: [CommandSyntax.ID, { usage: '[type]', field: 'type' }, { usage: CommandSyntax.PAIRS, field: 'attrs' }], notFlags: CommandSyntax.EXTENSION_ONLY },
     'ext remove': { operation: 'ext', action: 'remove', words: [CommandSyntax.ID, { usage: '<selector>', field: 'type' }], notFlags: [...CommandSyntax.EXTENSION_ONLY, 'xml', 'replace'] },
     layout: { operation: 'layout', words: [] },
     tidy: { operation: 'tidy', words: [CommandSyntax.OPTIONAL_IDS] },
@@ -225,7 +225,7 @@ export class CommandSyntax {
       return { ...fields, ...CommandSyntax.extensionRemoval(type as string) };
     }
     if (this.name === 'ext add') {
-      return { ...fields, type, ...CommandSyntax.extensionAttributes(pairs) };
+      return { ...fields, ...(type === undefined ? {} : { type }), ...CommandSyntax.extensionAttributes(pairs) };
     }
     const nameIsKey = typeof name === 'string' && CommandSyntax.KEY_WORD.test(name);
     const set = CommandSyntax.pairs(nameIsKey ? [name, ...pairs] : pairs);

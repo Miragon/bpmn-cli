@@ -50,7 +50,7 @@ edit            new <file> [name]   add <file> <kind> [name] [key=value…]
                 connect <file> <sourceId> <targetId> [key=value…]   set <file> <id> [key=value…]
                 remove <file> <ids…>   retype <file> <id> <kind> [key=value…]   move <file> <ids…>
                 order <file> <id> <ids…>   apply <file> [operations]
-                ext add <file> <id> <type> [key=value…]   ext remove <file> <id> <selector>
+                ext add <file> <id> [type] [key=value…]   ext remove <file> <id> <selector>
 draw            layout <file>   tidy <file> [ids…]   compact <file> [ids…]   place <file> [ids…]
                 color <file> [ids…]   label <file> <id>   route <file> <flowId>   space <file>
 image           render <file> [ids…]

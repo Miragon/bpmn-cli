@@ -33,6 +33,10 @@ describe('CommandSyntax', () => {
     expect(parsed('ext add', 'f.bpmn', 'a', 'zeebe:x', ['type=y', 'id=z', 'body=b'], {}, {})).toEqual({ op: 'ext', action: 'add', id: 'a', type: 'zeebe:x', attrs: { type: 'y', id: 'z' }, body: 'b' });
   });
 
+  it('takes a raw snippet in place of the type and the keys of ext add', () => {
+    expect(parsed('ext add', 'f.bpmn', 'a', undefined, [], { xml: '<zeebe:taskHeaders />' }, {})).toEqual({ op: 'ext', action: 'add', id: 'a', xml: '<zeebe:taskHeaders />' });
+  });
+
   it('reads the selector of ext remove as an index, a slot or a type', () => {
     expect(parsed('ext remove', 'f.bpmn', 'a', '2', {}, {})).toMatchObject({ index: 2 });
     expect(parsed('ext remove', 'f.bpmn', 'a', 'loop.1', {}, {})).toMatchObject({ index: 1, slot: 'loop' });

@@ -17,7 +17,7 @@ bpmn retype <file> <id> <kind> [key=value…]
 bpmn move <file> <ids…>
 bpmn order <file> <id> <ids…>
 bpmn apply <file> [operations]
-bpmn ext add <file> <id> <type> [key=value…]
+bpmn ext add <file> <id> [type] [key=value…]
 bpmn ext remove <file> <id> <selector>
 bpmn layout <file>
 bpmn tidy <file> [ids…]

@@ -16,6 +16,13 @@ describe('EditCommand', () => {
     expect((await cli.run(['ext', '--help'])).stdout).toContain('vendor extension elements');
   });
 
+  it('adds a raw snippet to an element without a type', async () => {
+    const file = cli.copied('edit/order-check.bpmn');
+
+    expect((await cli.run(['ext', 'add', file, 'check', '--xml', '<camunda:properties xmlns:camunda="http://camunda.org/schema/1.0/bpmn"/>', '--dry-run'])).exit).toBe(0);
+    expect((await cli.run(['ext', 'add', file, 'check'])).stderr).toMatch(/^error E_USAGE: ext add needs "type"/);
+  });
+
   it('names an unknown kind with its own code', async () => {
     expect(await cli.run(['retype', cli.copied('edit/order-check.bpmn'), 'check', 'nope'])).toMatchObject({ exit: 1, stderr: expect.stringMatching(/^error E_UNKNOWN_KIND: Unknown kind "nope"/) });
   });
