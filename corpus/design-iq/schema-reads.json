@@ -1,0 +1,1909 @@
+{
+ "main": "089ba0554f4a6d6a2fc186cd0b5c59f773a300f0",
+ "formatOperations": [
+  "place",
+  "align",
+  "color",
+  "label",
+  "route",
+  "space",
+  "tidy",
+  "compact"
+ ],
+ "reads": [
+  {
+   "read": "read",
+   "path": [
+    "$defs"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "length"
+   ],
+   "value": 17
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "0"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "0",
+    "$ref"
+   ],
+   "value": "#/$defs/add"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "1"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "1",
+    "$ref"
+   ],
+   "value": "#/$defs/connect"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "2"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "2",
+    "$ref"
+   ],
+   "value": "#/$defs/set"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "3"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "3",
+    "$ref"
+   ],
+   "value": "#/$defs/remove"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "4"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "4",
+    "$ref"
+   ],
+   "value": "#/$defs/retype"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "5"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "5",
+    "$ref"
+   ],
+   "value": "#/$defs/move"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "6"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "6",
+    "$ref"
+   ],
+   "value": "#/$defs/order"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "7"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "7",
+    "$ref"
+   ],
+   "value": "#/$defs/ext"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "8"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "8",
+    "$ref"
+   ],
+   "value": "#/$defs/split"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "9"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "9",
+    "$ref"
+   ],
+   "value": "#/$defs/place"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "10"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "10",
+    "$ref"
+   ],
+   "value": "#/$defs/align"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "11"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "11",
+    "$ref"
+   ],
+   "value": "#/$defs/color"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "12"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "12",
+    "$ref"
+   ],
+   "value": "#/$defs/label"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "13"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "13",
+    "$ref"
+   ],
+   "value": "#/$defs/route"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "14"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "14",
+    "$ref"
+   ],
+   "value": "#/$defs/space"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "15"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "15",
+    "$ref"
+   ],
+   "value": "#/$defs/tidy"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "16"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "op",
+    "oneOf",
+    "16",
+    "$ref"
+   ],
+   "value": "#/$defs/compact"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact",
+    "properties"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact",
+    "properties",
+    "as"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact",
+    "properties",
+    "flowId"
+   ]
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "add",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "kind",
+    "name",
+    "id",
+    "as",
+    "flowAs",
+    "outAs",
+    "refAs",
+    "after",
+    "before",
+    "flow",
+    "in",
+    "on",
+    "to",
+    "lane",
+    "flowName",
+    "flowId",
+    "condition",
+    "language",
+    "default",
+    "timer",
+    "timerKind",
+    "message",
+    "error",
+    "errorCode",
+    "signal",
+    "escalation",
+    "escalationCode",
+    "when",
+    "link",
+    "nonInterrupting",
+    "collapsed",
+    "ifAbsent",
+    "doc",
+    "set",
+    "process",
+    "blackBox",
+    "text",
+    "members"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "add",
+    "required",
+    "1"
+   ],
+   "value": "kind"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "connect",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "source",
+    "target",
+    "name",
+    "id",
+    "as",
+    "refAs",
+    "condition",
+    "language",
+    "default",
+    "message",
+    "ifAbsent"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "required",
+    "length"
+   ],
+   "value": 3
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "required",
+    "1"
+   ],
+   "value": "source"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "connect",
+    "required",
+    "2"
+   ],
+   "value": "target"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "set",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "id",
+    "values",
+    "unset",
+    "refAs"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "set",
+    "required",
+    "1"
+   ],
+   "value": "id"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "remove",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids",
+    "bridge",
+    "bridgeAll",
+    "withBranch",
+    "ifExists"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "remove",
+    "required",
+    "1"
+   ],
+   "value": "ids"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "retype",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "id",
+    "kind",
+    "timer",
+    "timerKind",
+    "message",
+    "error",
+    "errorCode",
+    "signal",
+    "escalation",
+    "escalationCode",
+    "when",
+    "link",
+    "nonInterrupting",
+    "refAs"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "required",
+    "length"
+   ],
+   "value": 3
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "required",
+    "1"
+   ],
+   "value": "id"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "retype",
+    "required",
+    "2"
+   ],
+   "value": "kind"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "move",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids",
+    "after",
+    "before",
+    "flow",
+    "in",
+    "on",
+    "flowName",
+    "flowId",
+    "condition",
+    "language",
+    "default",
+    "lane"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "move",
+    "required",
+    "1"
+   ],
+   "value": "ids"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "order",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "id",
+    "flows",
+    "lanes",
+    "pools"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "order",
+    "required",
+    "1"
+   ],
+   "value": "id"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "ext",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "id",
+    "action",
+    "type",
+    "attrs",
+    "body",
+    "xml",
+    "replace",
+    "index",
+    "slot"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "required",
+    "length"
+   ],
+   "value": 3
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "required",
+    "1"
+   ],
+   "value": "id"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "ext",
+    "required",
+    "2"
+   ],
+   "value": "action"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "split",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "after",
+    "kind",
+    "name",
+    "id",
+    "as",
+    "join",
+    "joinId",
+    "joinAs",
+    "joinName",
+    "branches"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "required",
+    "length"
+   ],
+   "value": 3
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "required",
+    "1"
+   ],
+   "value": "after"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "split",
+    "required",
+    "2"
+   ],
+   "value": "branches"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "place",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids",
+    "path",
+    "via",
+    "kind",
+    "branch",
+    "rowOf",
+    "below",
+    "above",
+    "columnOf",
+    "after",
+    "before",
+    "side"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place",
+    "required",
+    "length"
+   ],
+   "value": 1
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "place",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "align",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids",
+    "path",
+    "via",
+    "kind",
+    "branch",
+    "axis",
+    "to"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "align",
+    "required",
+    "1"
+   ],
+   "value": "axis"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "color",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids",
+    "path",
+    "via",
+    "kind",
+    "branch",
+    "color"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "color",
+    "required",
+    "1"
+   ],
+   "value": "color"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "label",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "id",
+    "side"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "required",
+    "length"
+   ],
+   "value": 3
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "required",
+    "1"
+   ],
+   "value": "id"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "label",
+    "required",
+    "2"
+   ],
+   "value": "side"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "route",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "id",
+    "exit",
+    "entry"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "required",
+    "length"
+   ],
+   "value": 2
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "route",
+    "required",
+    "1"
+   ],
+   "value": "id"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "space",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "after",
+    "below",
+    "by"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space",
+    "required",
+    "length"
+   ],
+   "value": 1
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "space",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "tidy",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids",
+    "path",
+    "via",
+    "kind",
+    "branch"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy",
+    "required",
+    "length"
+   ],
+   "value": 1
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "tidy",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  },
+  {
+   "read": "keys",
+   "path": [
+    "$defs",
+    "compact",
+    "properties"
+   ],
+   "keys": [
+    "op",
+    "ids"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact",
+    "required"
+   ]
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact",
+    "required",
+    "length"
+   ],
+   "value": 1
+  },
+  {
+   "read": "read",
+   "path": [
+    "$defs",
+    "compact",
+    "required",
+    "0"
+   ],
+   "value": "op"
+  }
+ ]
+}
