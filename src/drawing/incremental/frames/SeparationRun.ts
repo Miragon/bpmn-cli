@@ -278,6 +278,7 @@ export class SeparationRun {
     }
     this.used.set(unit, (this.used.get(unit) ?? new Set()).add(direction));
     this.active.add(unit);
+    this.skipped.clear();
     if (this.grow) {
       const { moved, resized } = this.space.fitInFrame(unit, SeparationRun.GROW_PAD);
       moved.forEach((id) => result.moved.add(id));

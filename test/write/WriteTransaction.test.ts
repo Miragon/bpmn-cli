@@ -26,6 +26,14 @@ describe('WriteTransaction', () => {
     expect(result.state).toEqual({ errors: 0, warnings: expect.any(Number) });
   });
 
+  it('keeps a new sub-process off an end event it gave up on before other moves freed the way', async () => {
+    const add = { op: 'add', kind: 'subProcess', name: 'Review', id: 'review', after: 'H' };
+    const inside = [{ op: 'add', kind: 'startEvent', name: 'In', id: 'in', in: 'review' }, { op: 'add', kind: 'serviceTask', name: 'Check', id: 'check', after: 'in' }, { op: 'add', kind: 'endEvent', name: 'Out', after: 'check' }];
+    const { score } = await write(Fixtures.text('write/pool-tight-behind-a-long-name.bpmn'), [add, ...inside]);
+
+    expect(score.after.counts['frameIntrusion']).toBe(0);
+  });
+
   it('keeps the file byte for byte when a name is set to itself', async () => {
     const drawn = Fixtures.text('models/incremental/orders.bpmn');
     const [, id, name] = /<(?:bpmn:)?\w*[tT]ask id="([^"]+)" name="([^"]+)"/.exec(drawn)!;
