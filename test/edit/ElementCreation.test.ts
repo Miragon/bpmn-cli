@@ -66,6 +66,12 @@ describe('ElementCreation', () => {
     expect(document.tree.has('boundary_new')).toBe(false);
   });
 
+  it('takes no id among the keys of what it creates', async () => {
+    const document = await order();
+
+    expect(() => added(document, { kind: 'userTask', after: 'ship', set: { id: 'taken' } })).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_KEY' }));
+  });
+
   it('leaves an element that exists alone when asked to add it only if absent', async () => {
     const document = await order();
 

@@ -1,4 +1,4 @@
-import { type AnchorContext, type BpmnElement, BpmnError, ChangeEntries, ChangeSet, type Family, type IdRequest, IdRequests, type KindDefinition, KindParser, Kinds, type Trigger } from '../model/index.js';
+import { type AnchorContext, type BpmnElement, BpmnError, ChangeEntries, ChangeSet, type Family, type IdRequest, IdRequests, type KindDefinition, KindParser, Kinds, PropertyCatalog, type Trigger } from '../model/index.js';
 import type { AddOperation } from '../operations/index.js';
 import { AddPlacement } from './containers/AddPlacement.js';
 import { Artifacts } from './containers/Artifacts.js';
@@ -51,6 +51,9 @@ export class ElementCreation {
     const element = this.createOfFamily({ command, def, trigger, keys, changes }, idContext);
     if (!Kinds.FLOW_NODE_FAMILIES.has(def.family)) {
       this.finishWithoutLane(element, command, def, changes);
+    }
+    if (keys['id'] !== undefined) {
+      throw PropertyCatalog.of(element).unknownKey('id', 'the operation\'s own "id" names a new element, `--id` on the command line');
     }
     const rest = TriggerKeys.remainingKeys(keys, ElementCreation.consumedKeys(def));
     if (Object.keys(rest).length) {
