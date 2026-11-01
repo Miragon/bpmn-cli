@@ -7,6 +7,7 @@ bpmn new <file> [name] --target <camunda8|camunda7>
 bpmn show <file> [id]
 bpmn add <file> <kind[:trigger]> [name] --after <id> [key=value…]
 bpmn set <file> <id> [key=value…]
+bpmn render <file> -o <image>
 bpmn validate <file>
 ```
 
@@ -15,6 +16,7 @@ bpmn new claim.bpmn "Claim handling" --target camunda8
 bpmn show order.bpmn userTask_check
 bpmn add order.bpmn serviceTask Notify --after serviceTask_charge --lane lane_billing
 bpmn set order.bpmn userTask_check doc="Four eyes"
+bpmn render order.bpmn -o order.png
 bpmn validate order.bpmn
 ```
 
