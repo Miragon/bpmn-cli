@@ -81,6 +81,7 @@ export interface ScopeLayout {
 
 export class GNode {
   static readonly RUN_CLEAR = 15;
+  static readonly RISE_KEEP = 5;
 
   private static readonly BOTTOM_SLOT_OFFSET = 25;
   private static readonly WIDE_ENOUGH_FOR_SLOTS = 100;

@@ -293,7 +293,7 @@ export class WriteTransaction {
     const scoreBefore = scorer.score(document);
 
     const changes = new ModelOperationRunner(document, this.options.conventions).run(operations.model);
-    new DiagramDrawing(document).update(snapshot, changes, operations.drawing);
+    await new DiagramDrawing(document).update(snapshot, changes, operations.drawing);
     const score = scoreBefore.to(scorer.score(document));
 
     const findings = new ModelChecks(document).all();
@@ -399,18 +399,18 @@ import type { DrawingOperation } from '../operations/index.js';
 export class DiagramDrawing {
   constructor(private readonly document: BpmnDocument) {}
 
-  update(before: DrawingSnapshot, changes: ChangeSet, operations: DrawingOperation[]): void {
+  async update(before: DrawingSnapshot, changes: ChangeSet, operations: readonly DrawnOperation[]): Promise<DrawingReport> {
     if (before.isEmpty() || operations.some((operation) => operation.op === 'layout')) {
-      new FullLayout(this.document).draw();
+      new FullLayout(this.document, changes.expansions).draw();
     } else {
-      new IncrementalLayout(this.document, before).place(changes);
+      await new IncrementalLayout(this.document, before).place(changes);
     }
     new DrawingOperationRunner(this.document).run(operations);
   }
 }
 ```
 
-When the incremental layout cannot place a change, the write fails with `E_LAYOUT_INCREMENTAL` and the
+`update` is async because a new pool or sub-process takes its block from a full drawing of a parsed copy. `DrawnOperation` is a `DrawingOperation` or an `order`: an `order` of lanes or pools is a model operation whose bands drawing restacks, so write passes those in `operations` too. When the incremental layout cannot place a change, the write fails with `E_LAYOUT_INCREMENTAL` and the
 hint to end the batch with a `layout` operation, which then skips the incremental placement; the user's drawing
 is never replaced behind their back.
 

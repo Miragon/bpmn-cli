@@ -15,7 +15,6 @@ type OverEnd = { to: number; down: (runY: number) => Point[]; top?: number | und
 type RiseEnd = { to: number; up: (runY: number) => Point[]; penalty: number; x?: number | undefined };
 
 export class BoundaryWays {
-  private static readonly RISE_KEEP = 5;
   private static readonly SLOT_RANK = 0.1;
   private static readonly GAP_PENALTY = 0.5;
   private static readonly HOOK_PENALTY = 1;
@@ -93,7 +92,7 @@ export class BoundaryWays {
 
   private isClearRise(slotX: number): boolean {
     const { targetBox } = this;
-    const keep = BoundaryWays.RISE_KEEP;
+    const keep = GNode.RISE_KEEP;
     const runY = this.runTo(slotX);
     return !this.routing.boxes.near(slotX - keep, slotX + keep).some((box) => box !== targetBox && box.x - keep < slotX && slotX < box.right + keep && box.y < runY && box.bottom > targetBox.bottom);
   }

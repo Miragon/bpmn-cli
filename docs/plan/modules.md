@@ -48,7 +48,7 @@ src/
 ├── operations/   fields/ model/ drawing/
 ├── edit/     flows/ events/ properties/ extensions/ containers/ session/
 ├── scoring/  plane/ shapes/ flows/ labels/
-├── drawing/  plane/ incremental/{placement,routing,frames}/ full/{scopes,lanes,routing,trials}/ runners/
+├── drawing/  plane/ groups/ diagram/ incremental/{placement,routing,frames}/ full/{scopes,lanes,routing,links,trials}/ runners/
 ├── checks/   structure/ camunda/{rules,values,feel,c7,c8}/
 ├── views/    model/ element/ around/ find/ diagram/ conventions/ image/
 ├── write/
@@ -69,8 +69,10 @@ holds `OperationDefinition`, `OperationField` and what they share behind its own
 whose operations drawing's `runners/` runs; `camunda/rules/` holds `CamundaRules` and `RuleReporter`, `camunda/c7/` and `camunda/c8/`
 one rule class per theme as today, `camunda/values/` holds `TimerValue`, `LinkEvents`, `SchemaText`, `BpmnSchema` and `C7DescriptorNames`;
 `structure/` and `camunda/` never import each other.
-Today's `di/` becomes `plane/`. The full layout keeps its own `routing/`, so a replacement of the full
-layout swaps `full/` as one folder. In scoring, `plane/` holds `ScoringCriterion`, `ProblemKinds` and what every criterion reads;
+Today's `di/` becomes `plane/`, with `groups/` for what draws groups again and `diagram/` for what lies over a whole
+drawing: colours, stickies and the ids a redraw gives. The full layout keeps its own `routing/`, so a replacement of the full
+layout swaps `full/` as one folder; so its graph (`GNode` and the interfaces beside it) sits in `full/scopes/`, not in `plane/`.
+`routing/` holds `ChannelRouter` and its parts, `links/` the routers of associations and message flows. In scoring, `plane/` holds `ScoringCriterion`, `ProblemKinds` and what every criterion reads;
 `shapes/`, `flows/` and `labels/` hold the criteria, grouped by what they measure.
 
 ## Direction
