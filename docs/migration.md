@@ -50,7 +50,7 @@ Every write keeps `-o`, `--dry-run`, `--force` and `--json`.
 | `--show` | `bpmn show <file>` |
 | `--layout <mode>` | gone: a plane with shapes is drawn incrementally, an empty one in full |
 | `--relayout`, `--layout full` | `bpmn layout <file>`, or a last `layout` operation |
-| `--no-layout` | gone: vertical lanes stay vertical |
+| `--no-layout` | gone, without a replacement for vertical lanes: a write that places, moves or routes something on a vertical plane answers `E_LAYOUT_INCREMENTAL`; `bpmn layout` redraws it horizontally |
 | `--strict` | `bpmn validate --strict` |
 | `--lint-config`, `--no-lint-config` | `bpmn validate --lint-config`, `--no-lint-config` |
 | `--backup` | Git, or `-o` |
@@ -110,7 +110,7 @@ Operations are parsed strictly: an unknown key answers `E_USAGE` and names the k
 | every write with model operations redrew a diagram the CLI drew itself | the drawing stays; a build from scratch over several writes ends with `bpmn layout` |
 | when the incremental layout failed, a full redraw replaced the drawing | `E_LAYOUT_INCREMENTAL` with a hint to a last `layout` operation |
 | a model operation could follow a drawing operation in one batch | `E_USAGE`: model operations first, or two batches |
-| a write turned vertical lanes horizontal | lanes keep their direction; a change that needs a new place in a vertical pool answers `E_LAYOUT_INCREMENTAL` |
+| a write turned vertical lanes horizontal | a write that places, moves or routes something on a vertical plane answers `E_LAYOUT_INCREMENTAL`; `set`, `retype`, `ext` and the drawing commands pass, and `bpmn layout` redraws it horizontally |
 | every write ran the `.bpmnlintrc` before and after | `bpmn validate` runs it; a write loads no plugin code |
 | a write reported warnings anywhere in the file | warnings at the touched elements; the state line counts the rest. An error a write adds anywhere still refuses, as in 0.9 |
 | a new shape took the median size of its kind on the plane | the bpmn-js size: task 100 by 80, gateway 50 by 50, event 36 by 36 |

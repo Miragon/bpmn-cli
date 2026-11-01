@@ -17,6 +17,7 @@ One rule: a plane with shapes is drawn incrementally, an empty one in full.
 | a plane with shapes | untouched shapes and lines stay; new elements go next to their neighbours and room is made |
 | an empty plane | drawn in full |
 | `bpmn layout`, or a `layout` operation at the end of a batch | the engine redraws everything; colours and DI ids are kept, positions are not |
+| a vertical plane | a write that places, moves or routes something answers `E_LAYOUT_INCREMENTAL`; `set`, `retype`, `ext` and the drawing commands pass; `bpmn layout` redraws it horizontally |
 
 So a drawing you formatted by hand, here or in a modeler, stays as it is. A build from scratch over
 several writes grows incrementally and ends with `bpmn layout`, which draws it in one piece.

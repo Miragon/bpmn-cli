@@ -223,7 +223,7 @@ drawn in full.
   asks.
 - `E_LAYOUT_INCREMENTAL`: the change found no place and nothing was written. A
   last `layout` op gets it through; on a hand-made diagram ask the user first.
-- Vertical lanes stay vertical.
+- On a vertical plane a write that places, moves or routes something answers `E_LAYOUT_INCREMENTAL`; `set`, `retype`, `ext` and the drawing commands pass, and `bpmn layout` redraws it horizontally.
 
 ## Formatting without XML
 

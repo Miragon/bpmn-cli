@@ -16,7 +16,7 @@ Use the right column.
 | `--render <file>` | `bpmn render <file> <ids...> -o <image>` |
 | `--layout full`, `--relayout` | `bpmn layout <file>`, or a last `layout` op |
 | `--layout incremental`, `--layout auto` | gone: a plane with shapes keeps its drawing |
-| `--no-layout` | gone: vertical lanes stay vertical |
+| `--no-layout` | gone, without a replacement for vertical lanes: a write that places, moves or routes something on a vertical plane answers `E_LAYOUT_INCREMENTAL`; `bpmn layout` redraws it horizontally |
 | `--strict` on a write | `bpmn validate <file> --strict` |
 | `--lint-config`, `--no-lint-config` on a write | the same flags on `bpmn validate` |
 | `--backup` | Git, or `-o <file>` |

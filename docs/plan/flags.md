@@ -125,7 +125,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 | `--show` | prints the model after the write | none: no use | 0 | goes: `bpmn show` |
 | `--layout` | picks `auto`, `incremental` or `full` | an override nobody needs | skill 13 · docs 9 · diq 1 | goes: one rule: a plane with shapes is drawn incrementally, an empty one in full |
 | `--relayout` | redraws in full | same as `--layout full` | skill 3 · docs 2 | goes: `bpmn layout`, or a last `layout` operation |
-| `--no-layout` | leaves the drawing as it is | the workaround that keeps vertical lanes, which a write turns horizontal today | skill 2 · docs 7 | goes: vertical lanes stay vertical |
+| `--no-layout` | leaves the drawing as it is | the workaround that keeps vertical lanes, which a write turns horizontal today | skill 2 · docs 7 | goes, without a replacement: a write that places, moves or routes something on a vertical plane answers `E_LAYOUT_INCREMENTAL`; `set`, `retype`, `ext` and the drawing commands pass, `bpmn layout` redraws horizontally; an open decision for the owner |
 | `--strict` | exit 5 on warnings | a gate wants it on `validate` | skill 10 · docs 9 · evals 6 | goes: `bpmn validate --strict` |
 | `--lint-config` | picks the `.bpmnlintrc` | project lint belongs to `validate` | docs 2 | goes: `bpmn validate --lint-config` |
 | `--no-lint-config` | reads no `.bpmnlintrc` | as above | skill 1 · docs 7 | goes: `bpmn validate --no-lint-config` |

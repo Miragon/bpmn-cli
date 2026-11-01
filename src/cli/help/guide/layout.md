@@ -1,6 +1,6 @@
 # Layout
 
-One rule: a plane with shapes is drawn incrementally, an empty one in full. A write keeps vertical lanes vertical; a `layout` redraw turns them horizontal.
+One rule: a plane with shapes is drawn incrementally, an empty one in full. On a vertical plane a write that places, moves or routes something answers `E_LAYOUT_INCREMENTAL`; `set`, `retype`, `ext` and the drawing commands pass, and `bpmn layout` redraws it horizontally.
 
 `E_LAYOUT_INCREMENTAL`: the change found no place. Add a last `layout` operation to the batch, or run the command below; it redraws everything, so your hand-placed shapes move.
 

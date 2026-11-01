@@ -334,8 +334,8 @@ interface NewOptions {
   views, one job per class.
 - Every id in a result comes as `{ id, kind, name }`, an input the next call takes; today's duplicate
   fields of the element view (`type` beside `kind`, `properties` beside the attributes) go. A change
-  adds `detail` (`after check`); a find hit adds `in`, its innermost lane, sub-process or pool, and
-  `match`, the vendor value that matched when neither id nor name did.
+  adds `detail` (`after check`); a find hit adds `in`, the id of its innermost lane, sub-process or pool,
+  a string, as `--in` takes it, and `match`, the vendor value that matched when neither id nor name did.
 - `kindsJson({ conventions })` adds to each kind the id pattern new ids of it follow; `bpmn conventions`
   prints that table. It needs no XML, so it also answers for a file that does not exist yet.
 - ask-miragon returns find hits as data (`server.ts:264`) and sorts findings along the view
@@ -377,7 +377,7 @@ the same way.
 
 | design-iq at 26a9517, on bpmn-cli 0.9.0; `bpmn-edit.ts` unless named | 1.0 |
 | --- | --- |
-| `findXml(xml, text)` (l. 333), its hits' `scope` and `match` (l. 357) | `(await findXml(xml, { text })).hits`, the same hits, `in` in place of `scope`: the innermost lane, sub-process or pool |
+| `findXml(xml, text)` (l. 333), its hits' `scope` and `match` (l. 357) | `(await findXml(xml, { text })).hits`, the same hits, `in` in place of `scope`: the id, a string, of the innermost lane, sub-process or pool |
 | `showXml(xml, { id, context })` (l. 335) | `(await showXml(xml, { id })).text` |
 | `showXml(xml, { scope })` (l. 339) | `showXml(xml, { in: scope })`, which also takes a lane |
 | `layoutXml(xml, { tidy })` (l. 290) | `applyToXml(xml, [{ op: 'tidy' }])` |
@@ -393,7 +393,8 @@ the same way.
 | `NamedValidator` (l. 393), `Warning` (l. 431, 520) | `Validator`, `Finding` |
 | `BpmnError` (l. 494) and its categories (l. 499) | the same `code`, `category` (`usage`, `model`, `layout`, `io`, `internal`) and `details` |
 | options `platform` and `file` (l. 243) | gone: the file's namespaces give the platform, and Camunda checks run only on executable processes |
-| CLI words in hints, `CLI_WORDS` (l. 578 to 594) | the same table on 1.0's names: `diagram` for `show --layout` and `metrics`, `tidy` for `layout --tidy`, `guide` for `kinds` |
+| `set calledDecision=` under `platform: none` on a Camunda 7 file (`bpmn-edit-tools` fixture) | writes `camunda:decisionRef`, since the platform comes from the file and no `platform: none` exists; design-iq's fixture and test adapt |
+| CLI words in hints, `CLI_WORDS` (l. 578 to 594) | the same table on 1.0's names: `diagram` for `show --layout` and `metrics`, `tidy` for `layout --tidy`, `guide` for `kinds`; the `state` line carries no backticks around `bpmn validate`, so `CLI_WORDS` must match it bare |
 | the `problems:` that end `showXml`'s text today | `validateXml(xml).findings`, which design-iq's `validate_bpmn` adds to its own (`http/mcp.ts:1033`); `show` ends with the state line, whose `bpmn validate` `CLI_WORDS` turns into `validate_bpmn` |
 | a drawing operation before the model operation that adds its target (`bpmn-edit-tools.test.ts:300`) | `E_USAGE` with the hint to send the model operations first, where 0.9 answers `E_NOT_FOUND` ([behaviour that goes](cli.md#behaviour-that-goes)) |
 
