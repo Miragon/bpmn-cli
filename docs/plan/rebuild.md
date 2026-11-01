@@ -232,18 +232,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 13. Write, views and api
-
-Build write, views and api.
-
-- Today: a write runs 21 stages, parses up to 6 times, takes 1,109 ms; 94 exports.
-- After: the [contract](modules.md#contract); checks run once, on the new document, and on the old one
-  only to tell new errors from old; `HostValidators`, `FindingDelta` and `DocumentValidation`; the layout
-  score before and after.
-- Files: `src/write/`, `src/views/`, `src/api/`, `tools/oracle/design-iq-map`.
-- Done when: every probe but the CLI's green through `applyToXml`, `validateXml` and `renderXml`; the
-  design-iq replay green; ≤ 2 parses per write.
-
 ### 14. CLI and rc.1
 
 Build the CLI and ship 1.0.0-rc.1.

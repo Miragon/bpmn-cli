@@ -138,7 +138,7 @@ Done when render draws the corpus in Node and in a browser bundle, and lint's or
 - [x] **10. Scoring** · needs 5, 7
 - [x] **11. Drawing** · needs 8, 10
 - [x] **12. Edit** · needs 8
-- [ ] **13. Write, views and api** · needs 9 to 12 · [card](rebuild.md#13-write-views-and-api)
+- [x] **13. Write, views and api** · needs 9 to 12 · [card](rebuild.md#13-write-views-and-api)
 - [ ] **14. CLI, ship rc.1** · needs 6, 13 · [card](rebuild.md#14-cli-and-rc1)
 
 Done when every probe is green outside the allow-list and rc.1 is on `next`.
