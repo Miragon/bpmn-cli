@@ -1,17 +1,28 @@
 import { BpmnError, type BpmnDocument, type BpmnElement, type ErrorDetails } from '../../model/index.js';
-import { ProblemReport, type LayoutProblem } from '../../scoring/index.js';
-import { DEdge } from '../plane/DEdge.js';
+import { ElementHomes, ProblemReport, Scorer, type LayoutProblem, type LayoutScore } from '../../scoring/index.js';
+import { Drawing } from '../incremental/Drawing.js';
+import { OperationBefore } from '../incremental/OperationBefore.js';
+import type { DEdge } from '../plane/DEdge.js';
 import type { DShape } from '../plane/DShape.js';
-import type { Plane } from '../plane/Plane.js';
+import { Plane } from '../plane/Plane.js';
 import { PlaneReader } from '../plane/PlaneReader.js';
 import { PlaneWriter } from '../plane/PlaneWriter.js';
 import { Semantics } from '../plane/Semantics.js';
+import { TrialGuard } from '../plane/TrialGuard.js';
+import type { Attempt } from './compaction/Compactor.js';
+
+export interface PlaneGuard {
+  attempt: Attempt;
+  rejected: LayoutProblem[];
+}
 
 export class DrawnDiagram {
   private static readonly SHOWN_PROBLEMS = 3;
 
   readonly semantics: Semantics;
   readonly planes: Plane[];
+  private readonly drawings = new Map<Plane, Drawing>();
+  private homes: ElementHomes | undefined;
 
   constructor(readonly document: BpmnDocument) {
     this.semantics = Semantics.of(document.tree.definitions);
@@ -96,6 +107,31 @@ export class DrawnDiagram {
       const hint = 'Shapes inside a collapsed sub-process live on their own diagram; refer to elements of the same one (or expand the sub-process: `bpmn set <file> <subProcessId> expanded=true`).';
       throw BpmnError.model('E_DIFFERENT_DIAGRAM', `${id} and ${referenceId} are drawn on different diagrams`, { element: id, related: [referenceId], hint });
     }
+  }
+
+  drawing(plane: Plane): Drawing {
+    const drawing = this.drawings.get(plane) ?? new Drawing(plane);
+    this.drawings.set(plane, drawing);
+    return drawing;
+  }
+
+  measure(): LayoutScore {
+    return new Scorer().scoreDrawing(Plane.drawingsOf(this.planes), this.elementHomes());
+  }
+
+  snapshot(): OperationBefore {
+    return new OperationBefore(this.planes.map((plane) => this.drawing(plane)));
+  }
+
+  guard(plane: Plane): PlaneGuard {
+    const trials = new TrialGuard(this.planes, this.elementHomes());
+    const drawing = this.drawing(plane);
+    return { attempt: (change, force) => drawing.attempt(trials, change, force), rejected: trials.rejected };
+  }
+
+  private elementHomes(): ElementHomes {
+    this.homes ??= new ElementHomes(this.document);
+    return this.homes;
   }
 
   private noShapeHint(element: BpmnElement, id: string): string {
