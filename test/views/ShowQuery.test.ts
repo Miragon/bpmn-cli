@@ -34,11 +34,11 @@ describe('ShowQuery', () => {
     expect(view).toMatchObject({ kind: 'model', cut: { in: { id: 'Lane_Fraud', kind: 'lane', name: 'Fraud team' } } });
   });
 
-  it('counts a broken reference as an error in the state', async () => {
+  it('counts two root processes without a collaboration as an error in the state', async () => {
     const { state, text } = new ShowQuery(await Fixtures.read('views/long-outline.bpmn')).answer();
 
-    expect(state.errors).toBeGreaterThan(0);
-    expect(text).toContain('state: ');
+    expect(state).toEqual({ errors: 1, warnings: 0 });
+    expect(text).toContain("state: 1 error, 0 warnings (bpmn validate lists them and runs the project's lint)");
   });
 
   it.each([
