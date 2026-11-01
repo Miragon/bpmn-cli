@@ -87,27 +87,25 @@ outside, and one judges the drawing:
 
 ## Decisions
 
-Made from 2026-10-30 to 2026-11-01; the gate step records each as an ADR in `docs/adr/`.
+Made from 2026-10-30 to 2026-11-01; each is an ADR in `docs/adr/`.
 
-| decision | effect |
-| --- | --- |
-| The rebuild grows on its own branch, `rebuild`, as one draft PR into main, one commit or a few per step. It is rebased onto main whenever main moves. Main keeps today's code, takes fixes and releases at the owner's call. | the oracle judges against the commit `rebuild` sits on, and each rebase ports main's new fixes; this plan ends with the draft PR, the merge comes later ([where](rebuild.md#where)) |
-| 1.0 runs on Node 24 and later only, as bpmnlint 12 asks; every workflow runs Node 24 alone. | `engines` becomes `>=24`, the CI job on Node 22.12 goes, and the migration note says so ([gate](rebuild.md#4-gate)) |
-| The oracle judges the layout as main's gate does today: the total over the 115 scenarios and the total over the walk steps score no higher than main's. | a single file or step that scores higher is listed, not failed, as the fuzz's `--hard warn` lists hard defects ([oracle](rebuild.md#oracle)) |
-| The Camunda checks stay bpmn-cli's own code. The experiment [#123](https://github.com/Miragon/bpmn-cli/pull/123), which runs them as bpmnlint rules, and plugin [#113](https://github.com/Miragon/bpmnlint-rules/pull/113) stay open; 1.0 does not need them. | each Camunda rule stays a class over the moddle object, so bpmnlint can run it later ([triggers](#triggers)) |
-| Project lint happens only in `bpmn validate`, on bpmnlint 12 as in the blueprints' CI, in the private package `packages/lint`. | a write runs no project lint; lint imports nothing of the core and can be published as it is ([lint package](modules.md#lint-package)) |
-| When a project installs a bpmnlint plugin that bpmn-cli also ships, such as `@miragon/bpmnlint-plugin-rules`, the project's copy runs; bpmn-cli's copy runs only when the project has none installed. Today bpmn-cli's copy answers first (`ChainResolver.ts:30`), so `bpmn validate` can pass a file that the project's CI, on a newer plugin, fails. | `bpmn validate` lints like the project's CI; a test compares lint with bpmnlint 12's CLI on the blueprints' configs ([lint package](modules.md#lint-package)) |
-| Shapes bpmn-cli creates get the bpmn-js size, the size bpmnlint's `standard-size` checks: 100 by 80 for a task, 50 by 50 for a gateway, 36 by 36 for an event. A shape never grows for what it carries. | a new shape no longer copies its neighbours, a task never widens; `ShapeSizes`' test holds the table to the rule, and `test/corpus/` runs the rule over every drawn model ([shape sizes](modules.md#shape-sizes)) |
-| bpmn-cli has no workaround for an antipattern: it draws and edits by the standard, and a check or the layout score shows what is off. | the three workarounds of today go: a task widened for three boundary events, a new shape sized like hand-drawn neighbours, a boundary event pushed over the corner ([behaviour that goes](cli.md#behaviour-that-goes)) |
-| The docs are reworked for 1.0, and `docs/architecture.md` becomes a compact map: per module what it does, what it holds, why it exists and what it deliberately does not do. | it carries the modules table on when `docs/plan/` goes, in a fixed shape that an agent check can later compare with the code ([architecture doc](modules.md#architecture-doc), [triggers](#triggers)) |
-| render and lint stay private packages until someone outside bpmn-cli needs one; esbuild builds them into what bpmn-cli ships. | no second release line and no exact pin before 1.0; publishing one later changes no code ([packages](modules.md#packages), [triggers](#triggers)) |
-| Where a consumer reads something 1.0 drops, the consumer adapts along its map; bpmn-cli keeps it only when a consumer cannot do without it or it costs bpmn-cli nothing. | design-iq lists `validateXml`'s findings in its own `validate_bpmn` and drops the layout mode; bpmn-cli keeps the host validator phases and `validate`'s layout dry run ([contract](modules.md#contract)) |
-| ask-miragon moves from 0.5.0 to 1.0 after the release, as a follow-up. | the contract keeps what its [map](modules.md#contract) needs |
-| #123's 321 parity models go into `corpus/engine/`: synthetic, one per rule case, the cases of main's Camunda check tests written as files. | #123's tests build each model from template strings at run time, so the checks step runs them once on its branch and writes each model out |
-| Operations are parsed strictly, as today: a key an operation does not take is refused, never dropped. | a batch or design-iq call that still sends `"timer": "P2D"` on `add` answers `E_USAGE` with the keys `add` takes, as today, instead of a timer event without its timer; no table keeps retired inputs ([operations](layers.md#operations-each-operation-defined-once)) |
-| A flag says where an element goes, what is made with it (its id, the flow into it, a lane's members) and how the command runs; what the element holds is a `key=value`, with the keys of `bpmn set`. | `add` and `retype` lose their event flags, `connect` its `--name` and `--condition`, `layout` its `--expand` and `--collapse` ([flag or key](flags.md#flag-or-keyvalue)) |
-| The layout score is a module of its own, `scoring`, below drawing: a `Scorer` runs one `ScoringCriterion` class per problem or group of problems; it imports only model and render's `./text`, and only drawing, write and views import it. | the 115 layout scenarios run in drawing's tests from `corpus/layout/`; `tools/layout-regress.mjs` and its second copy of the analysis go ([layout score](modules.md#layout-score)) |
-| Each read answers one question: `show` describes the model or one element, `find` lists ids, `diagram` judges the drawing, `conventions` names the id patterns. A flag narrows an answer, never changes its shape. | `find` stays a command; `metrics` and `show --layout` become `diagram`; `ext list` and `--context` go into `show <id>` ([reads](cli.md#how-the-reads-answer)) |
+- [1. Rebuild on one branch, one draft PR into main](../adr/0001-rebuild-on-one-branch.md)
+- [2. Node 24 and later only](../adr/0002-node-24-alone.md)
+- [3. The oracle judges the layout by totals](../adr/0003-oracle-judges-layout-by-totals.md)
+- [4. The Camunda checks stay bpmn-cli's own code](../adr/0004-camunda-checks-stay-our-code.md)
+- [5. Project lint runs only in `bpmn validate`](../adr/0005-project-lint-only-in-validate.md)
+- [6. The project's copy of a bpmnlint plugin runs](../adr/0006-the-projects-plugin-copy-runs.md)
+- [7. New shapes get the bpmn-js size](../adr/0007-shapes-get-the-bpmn-js-size.md)
+- [8. No workaround for an antipattern](../adr/0008-no-workaround-for-an-antipattern.md)
+- [9. Rework the docs, with a compact architecture map](../adr/0009-compact-architecture-doc.md)
+- [10. Render and lint stay private packages](../adr/0010-render-and-lint-stay-private.md)
+- [11. Consumers adapt to what 1.0 drops](../adr/0011-consumers-adapt.md)
+- [12. ask-miragon moves after 1.0](../adr/0012-ask-miragon-moves-after-1-0.md)
+- [13. #123's parity models go into the corpus](../adr/0013-parity-models-go-into-the-corpus.md)
+- [14. Operations are parsed strictly](../adr/0014-operations-parse-strictly.md)
+- [15. What a flag says, and what a key says](../adr/0015-flag-or-key-value.md)
+- [16. The layout score is a module of its own](../adr/0016-scoring-is-a-module.md)
+- [17. Each read answers one question](../adr/0017-each-read-answers-one-question.md)
 
 ## Steps
 
@@ -126,7 +124,7 @@ From here main takes fixes only; each rebase brings them in ([where](rebuild.md#
 
 ### The packages: render and lint
 
-- [ ] **4. Gate**: clear `rebuild` and set the guardrails · needs 3 · [card](rebuild.md#4-gate)
+- [x] **4. Gate**: clear `rebuild` and set the guardrails · needs 3
 - [ ] **5. Render**: build `packages/render` · needs 4 · [card](rebuild.md#5-render)
 - [ ] **6. Lint**: build `packages/lint` · needs 4 · [card](rebuild.md#6-lint)
 

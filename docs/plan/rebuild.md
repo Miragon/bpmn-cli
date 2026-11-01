@@ -229,18 +229,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 4. Gate
-
-Clear `rebuild` and set the gate.
-
-- Today: `rebuild` is a copy of main; biome only warns; no coverage; nothing checks classes and their tests.
-- After: `src/`, `test/` and `tools/` deleted but `tools/oracle/`; `corpus/`, `plugins/`, `docs/`,
-  `.github/` kept; npm workspaces; Node 24 alone, in `engines` and every workflow; the [guardrails](code.md#guardrails); ten empty modules, two empty
-  packages; the decisions as ADRs.
-- Files: `package.json`, `.github/workflows/`, the guardrails' configs, `tools/check-structure.mjs`,
-  `budgets.json`, `docs/adr/`.
-- Done when: `npm run gate` passes, and a planted `utils.ts` fails it.
-
 ### 5. Render
 
 Build `packages/render`.
@@ -348,7 +336,8 @@ Build the CLI and ship 1.0.0-rc.1.
 - After: the [target](cli.md#target), help in Markdown, one esbuild bundle with `packages/lint` inside,
   release candidates as [above](#releases).
 - Files: `src/cli/`, `bin/bpmn.js`, `test/cli/`, `test/e2e/`, `corpus/cli/`, `tools/fuzz/`,
-  `tools/bench/`, the tag job in `release-please.yml`, the nightly workflow.
+  `tools/bench/`, the tag job in `release-please.yml`, the nightly workflow, and in
+  `tools/check-budgets.mjs` the measures of the commands, flag slots and the guide's 20 KB.
 - Done when: the CLI probe green, text results ≤ 1 KB, `--version` ≤ 60 ms, rc.1 on `next`; nightly
   fuzz and bench ran on it.
 
