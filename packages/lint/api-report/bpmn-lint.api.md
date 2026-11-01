@@ -4,6 +4,50 @@
 
 ```ts
 
+// @public (undocumented)
+export interface LintFinding {
+    // (undocumented)
+    code: string;
+    // (undocumented)
+    element?: string;
+    // (undocumented)
+    hint?: string;
+    // (undocumented)
+    message: string;
+    // (undocumented)
+    severity: LintSeverity;
+}
+
+// @public (undocumented)
+export interface LintInput {
+    // (undocumented)
+    importWarnings: readonly ReportedImportWarning[];
+    // (undocumented)
+    platform: LintPlatform;
+    // (undocumented)
+    xml: string;
+}
+
+// @public (undocumented)
+export type LintPlatform = 'c7' | 'c8' | 'none';
+
+// @public (undocumented)
+export type LintSeverity = 'error' | 'warning';
+
+// @public (undocumented)
+export class ProjectLint {
+    // (undocumented)
+    static at(configPath: string): ProjectLint;
+    // (undocumented)
+    run(input: LintInput): Promise<LintFinding[]>;
+}
+
+// @public (undocumented)
+export interface ReportedImportWarning {
+    // (undocumented)
+    message: string;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```
