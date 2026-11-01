@@ -127,7 +127,7 @@ what is there after, which files it touches and when it is done; steps 1, 16 and
 
 ### Before the rebuild: the judge
 
-- [ ] **1. Branch**: branch `rebuild` off main at 089ba05 and open it as a draft PR into main, without a
+- [x] **1. Branch**: branch `rebuild` off main at 089ba05 and open it as a draft PR into main, without a
   ruleset, since each rebase force-pushes it · done when the draft PR runs the gate
 - [ ] **2. Naming subpath**: publish `./naming` from `@miragon/bpmnlint-plugin-rules`, the one change
   outside the draft PR · [card](rebuild.md#2-naming-subpath)
