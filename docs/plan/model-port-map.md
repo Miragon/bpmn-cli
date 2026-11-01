@@ -222,3 +222,20 @@
 | `EventTrigger.read`, `interruptingOnly`, `ALWAYS_INTERRUPTING`, `TIMER_PROPS`, `TriggerOptions` | the same on `EventTrigger` in model |
 | `EventTrigger.details`, `describe` | views': only views read them |
 | `EventTrigger.optionsOf` | edit's: it knows the operation's keys |
+
+## Scoring
+
+Through `../scoring/index.js`; `homes` is `new ElementHomes(document)`.
+
+| old symbol on main | new call |
+| --- | --- |
+| `LayoutAnalysis.ofXml(xml)`, `LayoutAnalysis.of(defs, { importWarnings })` | `new Scorer().score(document)` |
+| `LayoutAnalysis.of(defs)`, without the import warnings | `new Scorer().scoreDrawing(DrawnPlane.read(document), homes)` |
+| `PlaneWriter.write(planes)` then `LayoutAnalysis.of(defs)` | `new Scorer().scoreDrawing(planes, homes)`, each plane a `PlaneDrawing` |
+| `LayoutMetrics`, `scoreOf(counts)` | `LayoutScore`, with `counts`, `problems` and `score` |
+| `MetricKey`, `KEYS`, `WEIGHTS[k]`, `perKey(make)` | `ProblemKind`, `ProblemKinds.ALL`, `ProblemKinds.recordOf(k).weight`, `ProblemKinds.perKind(make)` |
+| `isHardProblem(p)`, `problemKey(p)` | `ProblemKinds.isHard(p.kind)`, `ProblemReport.identityOf(p)` |
+| `LayoutProblem`, `ProblemLocation`, `MetricsSummary`, `MetricsDelta` | `LayoutProblem`, `ProblemLocation`, `ScoreSummary`, `ScoreChange` |
+| `diffProblems(a, b)`, `metricsDelta(a, b)` | `a.to(b)`; `new ScoreChange(undefined, b)` when there was no drawing before |
+| `new ProblemLocator(defs).locate(problems)` | `new ProblemLocator(document).locate(problems)` |
+| `collinear(a, b)`, `glyph(box, name)` | `DrawnEdge.collinearLength(a, b)`, `DrawnPlane.glyph(box, name)` |

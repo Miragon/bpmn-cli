@@ -86,6 +86,7 @@ the codes come from its `kindsJson()`. Words of this section:
 | `design-iq/` | the arguments of design-iq's `bpmn-edit*.test.ts` calls, and the paths of `OPS_SCHEMA` it reads. The operations step runs those tests in a design-iq checkout, its head on that day, recorded in `COMMIT`, and the write step runs them again on design-iq's head then; a shim installed in place of `@miragon/bpmn-cli` logs each call, and a Proxy around `OPS_SCHEMA` logs each read. Main answers the calls, with each validator answer per phase; plus one written call per row of design-iq's [map](modules.md#contract) that its tests do not reach, such as `showXml` with `scope` | 8 |
 | `engine/` | the cases of main's 8 test files that run against live engines, as `.bpmn`: #123's 321 parity models, synthetic, one per rule case. #123's tests build each from template strings at run time (`engineModel('c7', …)`), so the checks step runs them once on its branch and writes each model out; one JSON of their codes, and the 401 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22 that main's tests record: `c7-profile` 82, `c8-profile` 151, `c7-profile-rules` 55, `c8-feel-and-deploy` 38, `c7-schema-rules` 33, `c8-values` 27, `e2e/camunda7-rules` 15, plus the models `c8-ops` fixes, which must deploy; the 762 FEEL verdicts of main's FEEL tests | 9 |
 | `walks/` | the fuzz walks in `--mode incremental`, per step the operations and the file before. Main answers through `mutateDoc`: the file after `layout: false` with `changes.created`, `changes.relocated` and the expansion requests, and the file after the layout | 11 |
+| `scoring/` | small models, one or two per scoring criterion, each with the problem it shows; `ScoringCriterion`'s test runs every criterion on them | 10 |
 | `cli/` | one golden call per kept command and flag | 14 |
 
 | probe | input | must match | may differ | step |
@@ -254,17 +255,6 @@ Build checks.
   version changes.
 - Files: `src/checks/`, `test/checks/`, `corpus/engine/`, `tools/oracle/live-engines.mjs`, its workflow.
 - Done when: the findings probe is green; FEEL verdicts and `corpus/engine/` pass; a live run agrees.
-
-### 10. Scoring
-
-Build scoring.
-
-- Today: the score sits in the layout code, 18 check methods in one class of 575 lines, and a second copy in
-  `tools/layout-regress.mjs` that is kept equal by hand.
-- After: the [layout score](modules.md#layout-score) as its own module: `Scorer`, one `ScoringCriterion`
-  per problem or group of problems, `ProblemKinds`; it imports only model and render's `./text`.
-- Files: `src/scoring/`, `test/scoring/`, `corpus/layout/`.
-- Done when: `Scorer` gives main's counts per kind on every corpus file, and every kind but `failed` has its criterion.
 
 ### 11. Drawing
 

@@ -29,7 +29,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | model | hold a document, write it back byte for byte | `BpmnDocument`, `BpmnTree`, `BpmnElement`, `DocumentReader`, `DocumentWriter`, `TextPreservation`, `ChangeSet`, `DiagramIndex`, `Kinds`, `IdAllocator`, `PropertyCatalog`, `NewDocument`, `BpmnError`; the geometry values `Point`, `Box`, `Segment`, `Polyline` | draw, check, edit | 6.7k |
 | operations | describe each operation once: fields, rules, help | `OperationDefinition` (one subclass per operation, such as `AddOperationDefinition`), `OperationField`, `OperationCatalog`, `OperationParser` (returns the operation values, such as `AddOperation`), `OperationSchema` (writes `OPS_SCHEMA`) | apply an operation | 1.2k |
 | edit | apply model operations to the semantics | `ModelOperationRunner`, one class per model operation ([below](#direction)), `LaneMembership` | touch DI, the diagram's coordinates | 7.5k |
-| scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
+| scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
 | drawing | decide coordinates | `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard` (keeps a move only when `Scorer` finds it no worse), `ShapeSizes` ([below](#shape-sizes)) | change semantics, paint, judge itself | 14.5k |
 | checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
 | views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, each with its text class beside it (`ModelViewText`); `ImageView` | write | 2.9k |
@@ -190,6 +190,11 @@ Scorer ──runs──> every ScoringCriterion, on every plane ──reports─
 - Inside drawing the score also steers, as today: `TrialGuard` and the incremental layout's
   `CrossingRepair` try a move, ask `Scorer`, and undo the move when it adds a hard defect or raises the
   score. So `compact` and `space` never make a drawing worse.
+- Drawing asks without touching the DI: `new ElementHomes(document)` holds where each element belongs and
+  lasts until the semantics change, and `scorer.scoreDrawing(planes, homes)` judges the shapes and edges
+  drawing holds in memory, a `PlaneDrawing` per plane, about 1 ms on a model of 120 DI elements. Coordinates
+  go in as `PlaneWriter` would store them: a moved element rounded to whole pixels, an unmoved one as read.
+  Unlike `score(document)` it reports no `failed`, as today's trials and writes do not.
 - Tests sit with the modules, not in `tools/`:
   - each criterion's mirrored test reads small fixtures: two tasks on top of each other give one overlap,
     a boundary event on its host none;
