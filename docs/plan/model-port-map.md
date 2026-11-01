@@ -239,3 +239,28 @@ Through `../scoring/index.js`; `homes` is `new ElementHomes(document)`.
 | `diffProblems(a, b)`, `metricsDelta(a, b)` | `a.to(b)`; `new ScoreChange(undefined, b)` when there was no drawing before |
 | `new ProblemLocator(defs).locate(problems)` | `new ProblemLocator(document).locate(problems)` |
 | `collinear(a, b)`, `glyph(box, name)` | `DrawnEdge.collinearLength(a, b)`, `DrawnPlane.glyph(box, name)` |
+
+## Operations
+
+Through `../operations/index.js`.
+
+| old symbol on main | new call |
+| --- | --- |
+| `EditCommand`, `DiagramCommand` | `Operation`, `ModelOperation`, `DrawingOperation` |
+| `AddElement`, `ConnectElements`, `SetProperties`, `RemoveElements`, `ChangeElementType`, `MoveElements`, `ReorderElements`, `EditExtensionElements`, `SplitIntoBranches`, `SplitBranch` | `AddOperation`, `ConnectOperation`, `SetOperation`, `RemoveOperation`, `RetypeOperation`, `MoveOperation`, `OrderOperation`, `ExtOperation`, `SplitOperation`, `SplitBranch` |
+| `PlaceShapes`, `ColorElements`, `PlaceLabel`, `RerouteFlow`, `InsertSpace`, `TidyShapes`, `CompactDiagram` | `PlaceOperation`, `ColorOperation`, `LabelOperation`, `RouteOperation`, `SpaceOperation`, `TidyOperation`, `CompactOperation`, and the new `LayoutOperation` |
+| `new CommandParser().parse(input)`, `parseOpsJson(text)` | `new OperationParser().parse(input)`, which takes a list, `{ ops }` or JSON text and returns `{ model, drawing }`, each in batch order; an index into `drawing` plus `model.length` is the op's index |
+| `isDiagramCommand(c)` | `OperationCatalog.isDrawing(operation)` |
+| `COMMAND_NAMES`, `DIAGRAM_COMMAND_NAMES` | `OperationCatalog.names()`, `OperationCatalog.DRAWING` |
+| `EditCommandDefinitions.find(name)` | `OperationCatalog.find(name)` |
+| `OPS_SCHEMA` | `new OperationSchema().write()`, which api keeps in the const |
+| `new CommandAliases(c).defined()`, `.references()`, `.referencedIds()` | the same on `new OperationAliases(operation)` |
+| `new CommandAliases(c).resolve(table, i)` | `new OperationAliases(operation).resolve((alias, key) => id)`; `key` says where the alias stands, for `table.idOf(alias, i, operation, key)` |
+| `unknownAlias(...)` | `OperationAliases.unknown(...)` |
+| `isAlias(x)` | `OperationAliases.isAlias(x)` |
+| `AliasTable` | stays to port with edit: it holds the elements of a running batch; `resolve` and `OperationAliases.unknown` are all it needs of operations |
+| `ReorderTarget` | the same, `new ReorderTarget(document, operation)` |
+| `parseSpaceAmount(x)` | `SpaceAmount.parse(x)` |
+| `parseBranches`, `defaultWithConditionViolation` in edit | gone: `applyToXml` always parses, so a batch reaches edit checked |
+| `opsExample()` | to the `guide ops` topic, with the keys under `set` |
+| `placementViolation`, `groupViolation` in cli | gone: `OperationParser` answers for the flags too |

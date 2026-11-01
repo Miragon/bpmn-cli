@@ -83,7 +83,7 @@ the codes come from its `kindsJson()`. Words of this section:
 | `layout/` | the 115 layout scenarios from `tools/scenarios/`, each with main's score over all 26 kinds; `scores.json`, main's counts per kind on every corpus file | 3 |
 | `edits/` | per model roundtrip's three edits, and the edits `tools/bench/gen-edits.mjs` generates, written out as operation JSON | 3 |
 | `lint/` | the 10 examples of [process-engine-blueprints](https://github.com/Miragon/process-engine-blueprints), each its `.bpmnlintrc`, its models, 36 in all, and its `package.json`, which the oracle installs so that the project's plugin runs (0.17.0 there); plus models for each case `packages/lint` handles | 6 |
-| `design-iq/` | the arguments of design-iq's `bpmn-edit*.test.ts` calls, and the paths of `OPS_SCHEMA` it reads. The operations step runs those tests in a design-iq checkout, its head on that day, recorded in `COMMIT`, and the write step runs them again on design-iq's head then; a shim installed in place of `@miragon/bpmn-cli` logs each call, and a Proxy around `OPS_SCHEMA` logs each read. Main answers the calls, with each validator answer per phase; plus one written call per row of design-iq's [map](modules.md#contract) that its tests do not reach, such as `showXml` with `scope` | 8 |
+| `design-iq/` | the arguments of design-iq's `bpmn-edit*.test.ts` calls, and the paths of `OPS_SCHEMA` it reads. The operations step runs those tests in a design-iq checkout, its head on that day, recorded in `COMMIT`, and the write step runs them again on design-iq's head then; a shim installed in place of `@miragon/bpmn-cli` logs each call, and a Proxy around `OPS_SCHEMA` logs each read. Main answers the calls, with each validator answer per phase; plus one written call per row of design-iq's [map](modules.md#contract) that its tests do not reach, such as `showXml` with `scope`. It needs a design-iq checkout, so `node tools/oracle/design-iq-record.mjs [checkout]` records it, not `npm run oracle:record` | 8 |
 | `engine/` | the cases of main's 8 test files that run against live engines, as `.bpmn`: #123's 321 parity models, synthetic, one per rule case. #123's tests build each from template strings at run time (`engineModel('c7', …)`), so the checks step runs them once on its branch and writes each model out; one JSON of their codes, and the 401 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22 that main's tests record: `c7-profile` 82, `c8-profile` 151, `c7-profile-rules` 55, `c8-feel-and-deploy` 38, `c7-schema-rules` 33, `c8-values` 27, `e2e/camunda7-rules` 15, plus the models `c8-ops` fixes, which must deploy; the 762 FEEL verdicts of main's FEEL tests | 9 |
 | `walks/` | the fuzz walks in `--mode incremental`, per step the operations and the file before. Main answers through `mutateDoc`: the file after `layout: false` with `changes.created`, `changes.relocated` and the expansion requests, and the file after the layout | 11 |
 | `scoring/` | small models, one or two per scoring criterion, each with the problem it shows; `ScoringCriterion`'s test runs every criterion on them | 10 |
@@ -231,18 +231,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
   model takes the defaults, `cli/files` reads conventions with it.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
-
-### 8. Operations
-
-Build operations on `zod/mini`.
-
-- Today: ≈ 1.7k lines of own schema code in `FieldSpec`, `CommandParser`, `OpsSchemaBuilder`.
-- After: one `OperationDefinition` per operation on zod/mini, which also writes `OPS_SCHEMA`, with
-  `$defs.drawingOp` for the 8 drawing operations; 17 operations, `align` out,
-  `layout` in; element keys under `set`.
-- Files: `src/operations/`, `test/operations/`, `corpus/design-iq/`, the design-iq shim.
-- Done when: design-iq's recorded schema reads find the same names, properties and required keys, but for
-  the keys moved under `set`; an old key such as `timer` is refused.
 
 ### 9. Checks
 

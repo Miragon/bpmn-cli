@@ -108,26 +108,27 @@ sequenceDiagram
 ### operations: each operation defined once
 
 `src/operations/model/`, the model operations. Everything about the `add` operation lives in one class, `AddOperationDefinition`, an
-`OperationDefinition`: each field with its type, help and rules. `OperationField`, in `operations/fields/`, builds one field.
+`OperationDefinition`: each field with its type, help and rules. `OperationField`, in `operations/fields/`, builds one field from a zod/mini schema of `FieldValues`.
 The module only describes operations; edit and drawing apply them. What `OperationParser` returns are values, such as
 an `AddOperation`, typed as `ModelOperation` or `DrawingOperation`.
 
 ```ts
-import * as z from 'zod/mini';
-import { OperationDefinition } from '../fields/OperationDefinition.js';
-import { OperationField } from '../fields/OperationField.js';
+import { FieldSets, FieldValues, OperationDefinition, OperationField, type OperationOf } from '../fields/index.js';
+
+export type AddOperation = OperationOf<AddOperationDefinition>;
 
 export class AddOperationDefinition extends OperationDefinition {
   readonly name = 'add';
 
   readonly fields = {
-    kind: OperationField.required(z.string(), 'the element kind, such as userTask or boundaryEvent:timer'),
-    name: OperationField.optional(z.string(), 'the label'),
-    after: OperationField.optional(z.string(), 'append after this node, or splice into its outgoing flow'),
-    on: OperationField.optional(z.string(), 'boundary events: the activity they sit on'),
-    lane: OperationField.optional(z.string(), 'the lane of the node'),
-    id: OperationField.optional(z.string(), 'an explicit id'),
-    set: OperationField.keys('what the element holds: the keys of bpmn set'),
+    kind: FieldSets.kind,
+    name: OperationField.optional(FieldValues.text, 'the label'),
+    as: OperationField.alias('the name a later operation of the batch uses for it'),
+    after: OperationField.optional(FieldValues.reference, 'append after this node, or splice into its outgoing flow'),
+    on: OperationField.optional(FieldValues.reference, 'boundary events: the activity they sit on'),
+    lane: OperationField.optional(FieldValues.reference, 'the lane of the node'),
+    id: OperationField.optional(FieldValues.reference, 'an explicit id'),
+    set: FieldSets.elementKeys,
   };
 }
 ```
@@ -145,8 +146,9 @@ key such as `timer` on `add` too. The schema entry, shortened:
   "properties": {
     "op": { "const": "add" },
     "kind": { "type": "string", "description": "the element kind, such as userTask or boundaryEvent:timer" },
-    "after": { "type": "string", "description": "append after this node, or splice into its outgoing flow" },
-    "on": { "type": "string", "description": "boundary events: the activity they sit on" },
+    "as": { "type": "string", "pattern": "^\\$[A-Za-z_][A-Za-z0-9_-]*$", "description": "the name a later operation of the batch uses for it", "x-batch-only": true },
+    "after": { "type": "string", "pattern": "\\S", "description": "append after this node, or splice into its outgoing flow" },
+    "on": { "type": "string", "pattern": "\\S", "description": "boundary events: the activity they sit on" },
     "set": { "type": "object", "description": "what the element holds: the keys of bpmn set" }
   },
   "required": ["op", "kind"],
@@ -155,6 +157,7 @@ key such as `timer` on `add` too. The schema entry, shortened:
 ```
 
 A new field of `add` is one line in `AddOperationDefinition` plus its tests; the schema, the flag and the help follow.
+`x-batch-only` marks a field no flag comes of.
 
 ### cli: words in, text out
 
@@ -397,7 +400,7 @@ export class DiagramDrawing {
   constructor(private readonly document: BpmnDocument) {}
 
   update(before: DrawingSnapshot, changes: ChangeSet, operations: DrawingOperation[]): void {
-    if (before.isEmpty() || operations.some((operation) => operation.redrawsInFull())) {
+    if (before.isEmpty() || operations.some((operation) => operation.op === 'layout')) {
       new FullLayout(this.document).draw();
     } else {
       new IncrementalLayout(this.document, before).place(changes);

@@ -27,8 +27,8 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | module | job | key classes, one job each | does not | ≈ lines |
 | --- | --- | --- | --- | ---: |
 | model | hold a document, write it back byte for byte | `BpmnDocument`, `BpmnTree`, `BpmnElement`, `DocumentReader`, `DocumentWriter`, `TextPreservation`, `ChangeSet`, `DiagramIndex`, `Kinds`, `IdAllocator`, `PropertyCatalog`, `NewDocument`, `BpmnError`; the geometry values `Point`, `Box`, `Segment`, `Polyline` | draw, check, edit | 6.7k |
-| operations | describe each operation once: fields, rules, help | `OperationDefinition` (one subclass per operation, such as `AddOperationDefinition`), `OperationField`, `OperationCatalog`, `OperationParser` (returns the operation values, such as `AddOperation`), `OperationSchema` (writes `OPS_SCHEMA`) | apply an operation | 1.2k |
-| edit | apply model operations to the semantics | `ModelOperationRunner`, one class per model operation ([below](#direction)), `LaneMembership` | touch DI, the diagram's coordinates | 7.5k |
+| operations | describe each operation once: fields, rules, help | `OperationDefinition` (one subclass per operation, such as `AddOperationDefinition`), `OperationField`, `FieldValues` (the zod/mini schemas), `OperationCatalog`, `OperationParser` (returns the operation values, such as `AddOperation`), `OperationSchema` (writes `OPS_SCHEMA`), `OperationAliases` (where a `$name` stands in an operation), `ReorderTarget` (what an `order` orders, for edit and drawing) | apply an operation | 1.2k |
+| edit | apply model operations to the semantics | `ModelOperationRunner`, one class per model operation ([below](#direction)), `LaneMembership`, `AliasTable` (what each `$name` of the running batch names) | touch DI, the diagram's coordinates | 7.5k |
 | scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
 | drawing | decide coordinates | `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard` (keeps a move only when `Scorer` finds it no worse), `ShapeSizes` ([below](#shape-sizes)) | change semantics, paint, judge itself | 14.5k |
 | checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
@@ -65,7 +65,7 @@ tools/oracle/
 
 Each folder holds at most 12 files; today `layout/incremental` has 26 and `layout/clean` 25. A base
 class, or a value two subfolders share, sits in a sibling subfolder, never in the parent: `operations/fields/`
-holds `OperationDefinition` and `OperationField`, `model/` the 9 model operation definitions and `drawing/` the 8 drawing operation definitions,
+holds `OperationDefinition`, `OperationField` and what they share behind its own `index.ts`, `model/` the 9 model operation definitions with split's branch and node and `drawing/` the 8 drawing operation definitions,
 whose operations drawing's `runners/` runs; `camunda/rules/` holds `CamundaRules` and `RuleReporter`, `camunda/c7/` and `camunda/c8/`
 one rule class per theme as today, `camunda/values/` holds `TimerValue`, `LinkEvents` and `SchemaText`;
 `structure/` and `camunda/` never import each other.

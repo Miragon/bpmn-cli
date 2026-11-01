@@ -76,8 +76,8 @@ How a command is defined:
 - The 17 edit commands have no class of their own: one class, `EditCommand`, serves them all, and
   `CommandSyntax` gives it each command's positionals, flags and help, read from `OPS_SCHEMA`. Each operation
   but `split` is one command, and `ext` is two (`ext add`, `ext remove`); `split` takes nested
-  branches, so only `apply` takes it. A flag is its field in kebab case; batch-only aliases such as `as`
-  ([not flags](flags.md#not-flags)) make none. Four inputs need code of their own in `CommandSyntax`:
+  branches, so only `apply` takes it. A flag is its field in kebab case; batch-only fields such as `as`, marked
+  `x-batch-only` in `OPS_SCHEMA` ([not flags](flags.md#not-flags)), make none. Four inputs need code of their own in `CommandSyntax`:
   `add`'s `[name]`, `ext add`'s `body=`, `ext remove`'s `<selector>` and `place --side`. The code is on
   [layers by example](layers.md#cli-words-in-text-out).
 - `key=value` fills the operation's `set`, read by the one property catalogue, on `add`, `retype`, `connect`

@@ -338,7 +338,8 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 - `order`, `apply`, `ext remove` and `compact` have no own flags; `ext list`, `align`, `kinds` and
   `metrics` go with their command.
 - Batch-only operation fields (`as`, `flowAs`, `outAs`, `refAs`) name an element for a later operation of the same
-  `apply`; `CommandSyntax` makes no flag of them.
+  `apply`; `CommandSyntax` makes no flag of them. `order`'s `lanes` and `pools`, which its `<ids…>` cover, and `ext`'s
+  `index` and `slot`, which its `<selector>` covers, are batch-only too.
 - `move`'s operation fields `flowName`, `flowId`, `condition`, `language` and `default` have no flag today and
   0 uses; they leave the operation, so no flag appears. `set <flowId>` after the move does the same.
 
