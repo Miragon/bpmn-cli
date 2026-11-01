@@ -29,8 +29,7 @@ export class Camunda8Defaults {
     if (this.edit.platform() !== 'c8' || def.get<string | undefined>('id')) {
       return;
     }
-    const eventId = event.get<string | undefined>('id') ?? '';
-    const label = (eventId && IdWords.speakingStem(eventId)) || new ElementLabels(event).label();
+    const label = IdWords.speakingStem(event.id) || new ElementLabels(event).label();
     def.set('id', this.edit.allocator.allocate(IdRequests.typeRequest(def.type, { context: label })).id);
   }
 }

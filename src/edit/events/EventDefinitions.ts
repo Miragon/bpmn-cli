@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, CAMUNDA, EventTrigger, type Finding, Kinds, type Trigger, type TriggerOptions, Triggers } from '../../model/index.js';
+import { type BpmnElement, BpmnError, CAMUNDA, type DefinedTrigger, EventTrigger, type Finding, Kinds, type Trigger, type TriggerOptions, Triggers } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { Camunda8Defaults } from './Camunda8Defaults.js';
 import { DefinitionRemoval } from './DefinitionRemoval.js';
@@ -24,22 +24,22 @@ export class EventDefinitions {
   setTrigger(event: BpmnElement, trigger: Trigger, opts: TriggerOptions = {}): Finding[] {
     this.assertTriggerAllowed(event, trigger);
     new InterruptingFlag(this.edit).apply(event, trigger, opts);
-    const defs = event.get<BpmnElement[] | undefined>('eventDefinitions') ?? [];
-    const matching = trigger !== 'none' ? defs.filter((definition) => definition.is(Triggers.TABLE[trigger].definition)) : [];
-    const same = matching.length === 1 ? matching[0] : undefined;
-    if (same && trigger !== 'none') {
-      const others = defs.length > 1 ? new DefinitionRemoval(this.edit).dropOthers(event, same, trigger) : [];
-      const warnings = this.updateDefinition(event, same, trigger, opts);
-      this.edit.document.tree.invalidate();
-      return [...others, ...warnings];
-    }
-    const fresh = trigger !== 'none' ? this.buildDefinition(event, trigger, opts) : undefined;
-    const warnings = new DefinitionRemoval(this.edit).dropAll(event, trigger);
-    if (fresh) {
-      event.add('eventDefinitions', fresh);
-      new Camunda8Defaults(this.edit).definitionId(event, fresh);
-    }
+    const warnings = trigger === 'none' ? new DefinitionRemoval(this.edit).dropAll(event, trigger) : this.define(event, trigger, opts);
     this.edit.document.tree.invalidate();
+    return warnings;
+  }
+
+  private define(event: BpmnElement, trigger: DefinedTrigger, opts: TriggerOptions): Finding[] {
+    const defs = event.list('eventDefinitions');
+    const [same, ...more] = defs.filter((definition) => definition.is(Triggers.TABLE[trigger].definition));
+    if (same && !more.length) {
+      const others = defs.length > 1 ? new DefinitionRemoval(this.edit).dropOthers(event, same, trigger) : [];
+      return [...others, ...this.updateDefinition(event, same, trigger, opts)];
+    }
+    const fresh = this.buildDefinition(event, trigger, opts);
+    const warnings = new DefinitionRemoval(this.edit).dropAll(event, trigger);
+    event.add('eventDefinitions', fresh);
+    new Camunda8Defaults(this.edit).definitionId(event, fresh);
     return warnings;
   }
 
@@ -91,20 +91,16 @@ export class EventDefinitions {
     return this.edit.document.tree.build('bpmn:FormalExpression', { body });
   }
 
-  private buildDefinition(event: BpmnElement, trigger: Exclude<Trigger, 'none'>, opts: TriggerOptions): BpmnElement {
+  private buildDefinition(event: BpmnElement, trigger: DefinedTrigger, opts: TriggerOptions): BpmnElement {
     const { tree } = this.edit.document;
     const type = Triggers.TABLE[trigger].definition;
+    if (EventDefinitions.isRefTrigger(trigger)) {
+      const name = opts[trigger];
+      return tree.build(type, name ? { [EventDefinitions.REF_TRIGGERS[trigger].prop]: this.rootElement(trigger, name, opts) } : {});
+    }
     switch (trigger) {
       case 'timer':
         return this.buildTimer(type, opts);
-      case 'message':
-        return tree.build(type, this.rootReference('messageRef', 'bpmn:Message', opts.message));
-      case 'error':
-        return tree.build(type, this.rootReference('errorRef', 'bpmn:Error', opts.error, { errorCode: opts.errorCode }));
-      case 'signal':
-        return tree.build(type, this.rootReference('signalRef', 'bpmn:Signal', opts.signal));
-      case 'escalation':
-        return tree.build(type, this.rootReference('escalationRef', 'bpmn:Escalation', opts.escalation, { escalationCode: opts.escalationCode }));
       case 'conditional':
         return this.buildConditional(type, opts);
       case 'link': {
@@ -134,26 +130,32 @@ export class EventDefinitions {
   }
 
   private buildConditional(type: string, opts: TriggerOptions): BpmnElement {
-    if (opts.when !== undefined && !opts.when.trim()) {
-      throw BpmnError.model('E_INVALID_VALUE', 'The condition expression is empty', { hint: "Quote expressions with single quotes, e.g. --when '${approved}'." });
+    if (opts.when !== undefined) {
+      EventDefinitions.assertCondition(opts.when);
     }
     return this.edit.document.tree.build(type, opts.when ? { condition: this.expression(opts.when) } : {});
   }
 
-  private rootReference(prop: string, type: RootRefType, name: string | undefined, extra?: Record<string, string | undefined>): Record<string, BpmnElement> {
-    return name ? { [prop]: new RootElements(this.edit).ensure(type, name, extra).el } : {};
+  private static assertCondition(when: string): void {
+    if (!when.trim()) {
+      throw BpmnError.model('E_INVALID_VALUE', 'The condition expression is empty', { hint: "Quote expressions with single quotes, e.g. --when '${approved}'." });
+    }
+  }
+
+  private rootElement(trigger: RefTrigger, name: string, opts: TriggerOptions): BpmnElement {
+    const { type, code } = EventDefinitions.REF_TRIGGERS[trigger];
+    return new RootElements(this.edit).ensure(type, name, code ? { [code]: opts[code] } : {}).el;
   }
 
   private updateReference(def: BpmnElement, trigger: RefTrigger, opts: TriggerOptions): void {
-    const spec = EventDefinitions.REF_TRIGGERS[trigger];
     const name = opts[trigger];
     if (name === undefined) {
       return;
     }
-    const extra = spec.code ? { [spec.code]: opts[spec.code] } : {};
-    const { el } = new RootElements(this.edit).ensure(spec.type, name, extra);
-    if (def.get<BpmnElement | undefined>(spec.prop) !== el) {
-      def.set(spec.prop, el);
+    const { prop } = EventDefinitions.REF_TRIGGERS[trigger];
+    const el = this.rootElement(trigger, name, opts);
+    if (def.get<BpmnElement | undefined>(prop) !== el) {
+      def.set(prop, el);
     }
   }
 
@@ -192,9 +194,7 @@ export class EventDefinitions {
     if (opts.when === undefined) {
       return [];
     }
-    if (!opts.when.trim()) {
-      throw BpmnError.model('E_INVALID_VALUE', 'The condition expression is empty', { hint: "Quote expressions with single quotes, e.g. --when '${approved}'." });
-    }
+    EventDefinitions.assertCondition(opts.when);
     const expr = def.get<BpmnElement | undefined>('condition');
     const dropped: string[] = [];
     if (expr && expr.get<string | undefined>('body') !== opts.when) {
@@ -223,7 +223,7 @@ export class EventDefinitions {
     ];
   }
 
-  private updateDefinition(event: BpmnElement, def: BpmnElement, trigger: Exclude<Trigger, 'none'>, opts: TriggerOptions): Finding[] {
+  private updateDefinition(event: BpmnElement, def: BpmnElement, trigger: DefinedTrigger, opts: TriggerOptions): Finding[] {
     if (EventDefinitions.isRefTrigger(trigger)) {
       this.updateReference(def, trigger, opts);
     } else if (trigger === 'timer') {

@@ -103,10 +103,8 @@ export class ElementTypeChange {
     try {
       return KindParser.parse(kind);
     } catch (err) {
-      if (err instanceof BpmnError) {
-        throw BpmnError.model('E_UNKNOWN_KIND', err.message, { element: id, candidates: err.details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
-      }
-      throw err;
+      const { message, details } = err as BpmnError;
+      throw BpmnError.model('E_UNKNOWN_KIND', message, { element: id, candidates: details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
     }
   }
 
@@ -208,10 +206,7 @@ export class ElementTypeChange {
     });
   }
 
-  private dropDiagram(diagram: BpmnElement | undefined): void {
-    if (!diagram || !diagram.is('bpmndi:BPMNDiagram')) {
-      return;
-    }
+  private dropDiagram(diagram: BpmnElement): void {
     this.edit.document.tree.definitions.remove('diagrams', diagram);
     for (const element of new ElementWalk(diagram).depthFirst()) {
       const id = element.get<string | undefined>('id');
@@ -258,7 +253,7 @@ export class ElementTypeChange {
   private repointReferences(el: BpmnElement, next: BpmnElement): void {
     for (const ref of new ElementContainment(this.edit.document.tree.definitions).referencesToAny(new Set([el]))) {
       if (ref.holder.is('bpmndi:BPMNPlane') && !next.is('bpmn:SubProcess')) {
-        this.dropDiagram(ref.holder.parent);
+        this.dropDiagram(ref.holder.parent as BpmnElement);
         continue;
       }
       if (ref.isMany) {

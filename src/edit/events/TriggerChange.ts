@@ -148,8 +148,7 @@ export class TriggerChange {
       return;
     }
     if (el.is('bpmn:StartEvent')) {
-      const scope = this.edit.document.scopes.scopeOf(el);
-      if (!scope || !scope.is('bpmn:SubProcess') || !scope.get<boolean | undefined>('triggeredByEvent')) {
+      if (!Kinds.isEventSubProcess(this.edit.document.scopes.scopeOf(el))) {
         throw BpmnError.model('E_INVALID_TRIGGER', `Start event ${el.id} is not inside an event sub-process and cannot be non-interrupting`, {
           element: el.id,
           hint: 'Only start events of an eventSubProcess can be non-interrupting.',

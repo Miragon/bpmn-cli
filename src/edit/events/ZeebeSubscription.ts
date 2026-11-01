@@ -63,12 +63,11 @@ export class ZeebeSubscription {
       return false;
     }
     const type = `${key.slice(0, idx)}:subscription`;
-    const existing = (message.get<BpmnElement | undefined>('extensionElements')?.get<BpmnElement[]>('values') ?? []).filter((extension) => this.names.typeOf(extension) === 'zeebe:subscription');
-    if (existing.length) {
-      const subscription = existing[0]!;
+    const subscription = (message.get<BpmnElement | undefined>('extensionElements')?.get<BpmnElement[]>('values') ?? []).find((extension) => this.names.typeOf(extension) === 'zeebe:subscription');
+    if (subscription) {
       if (subscription.peek('correlationKey') !== value) {
         subscription.set('correlationKey', value);
-        changes.change(ChangeEntries.of(message, `${existing[0]!.type} correlationKey=${value}`));
+        changes.change(ChangeEntries.of(message, `${subscription.type} correlationKey=${value}`));
       }
     } else {
       changes.merge(new ExtensionInserter(document).add(message, { op: 'ext', id: message.id, action: 'add', type, attrs: { correlationKey: value } }));
