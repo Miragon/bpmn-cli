@@ -35,6 +35,12 @@ describe('the cost of one write', () => {
     expect(serialisations.mock.calls.length).toBeLessThanOrEqual(MAX_SERIALISATIONS);
   });
 
+  it('parses a third time only when the write touches an element with an error, to tell it from a new one', async () => {
+    await applyToXml(Fixtures.text('edit/events-gateway.bpmn'), [{ op: 'set', id: 'loose_plain', set: { name: 'Still plain' } }]);
+
+    expect(parses).toHaveBeenCalledTimes(MAX_PARSES + 1);
+  });
+
   it('parses the old file a second time only to tell a new error from an old one, and refuses before it serialises the new one', async () => {
     await applyToXml(DRAWN, [{ op: 'add', kind: 'eventSubProcess', name: 'Handle', in: 'Proc_A' }]).catch(() => undefined);
 

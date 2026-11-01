@@ -2,10 +2,10 @@ import { ModelChecks } from '../checks/index.js';
 import { DiagramDrawing, type DrawingReport, type DrawnOperation, DrawingSnapshot } from '../drawing/index.js';
 import { ModelOperationRunner, type OperationRun } from '../edit/index.js';
 import { type BpmnDocument, BpmnError, DocumentReader, DocumentWriter, type Finding, type IdConventions, type ValidatorIssue } from '../model/index.js';
-import { type Operation, OperationParser, type ParsedOperations } from '../operations/index.js';
+import { OperationParser, type OrderOperation, type ParsedOperations } from '../operations/index.js';
 import { DrawnPlane, ElementHomes, type LayoutScore, ScoreChange, Scorer } from '../scoring/index.js';
 import { FindingDelta } from './FindingDelta.js';
-import { HostValidators, type Validator, type ValidatorRun } from './HostValidators.js';
+import { type HostContext, HostValidators, type Validator, type ValidatorRun } from './HostValidators.js';
 import { IdRenames } from './IdRenames.js';
 import { type EditResult, WriteOutcome } from './WriteOutcome.js';
 
@@ -23,14 +23,14 @@ export class WriteTransaction {
   constructor(private readonly options: EditOptions = {}) {}
 
   private static drawnOf({ model, drawing }: OperationRun): { operations: DrawnOperation[]; positions: number[] } {
-    const orders = [...model.entries()].filter((entry): entry is [number, Extract<Operation, { op: 'order' }>] => entry[1].op === 'order');
+    const orders = [...model.entries()].filter((entry): entry is [number, OrderOperation] => entry[1].op === 'order');
     return {
       operations: [...orders.map(([, order]) => order), ...drawing],
       positions: [...orders.map(([position]) => position), ...drawing.map((_, position) => model.length + position)],
     };
   }
 
-  private static hostContext(document: BpmnDocument, { model, drawing }: ParsedOperations): ConstructorParameters<typeof HostValidators>[1] {
+  private static hostContext(document: BpmnDocument, { model, drawing }: ParsedOperations): HostContext {
     return { platform: document.platform(), file: document.file, operations: [...model, ...drawing], importWarnings: document.reportedImportWarnings };
   }
 

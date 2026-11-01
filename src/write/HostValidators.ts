@@ -11,6 +11,8 @@ export interface ValidatorContext {
   importWarnings: ReadonlyArray<{ message: string }>;
 }
 
+export type HostContext = Omit<ValidatorContext, 'phase'>;
+
 export interface Validator {
   name: string;
   detail?: string | undefined;
@@ -32,7 +34,7 @@ export class HostValidators {
 
   constructor(
     validators: readonly Validator[] | undefined,
-    private readonly context: Omit<ValidatorContext, 'phase'>,
+    private readonly context: HostContext,
   ) {
     this.validators = validators ?? [];
     this.validators.forEach(HostValidators.assertRunnable);

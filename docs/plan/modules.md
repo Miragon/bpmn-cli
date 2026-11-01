@@ -32,8 +32,8 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
 | drawing | decide coordinates | `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard` (keeps a move only when `Scorer` finds it no worse), `ShapeSizes` ([below](#shape-sizes)) | change semantics, paint, judge itself | 14.5k |
 | checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `ModelChecks` (both below, without what the second repeats of the first, `all()` and `at(ids)`), `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
-| views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, each with its text class beside it (`ModelViewText`), which holds the data type it prints; `ImageView`; `facts/` the readers the views share, `lines/` the text values | write | 2.9k |
-| write | run one write as a transaction, and `validate`; the rules that come from outside | `WriteTransaction`, `EditResult`, `HostValidators` (runs the host's validators), `FindingDelta` (what a write added, from every source), `DocumentValidation` (the checks, the host validators and the layout dry run of `validate`), `ValidationReport` | read flags or files, hold rules of its own | 1.2k |
+| views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, `KindTable` (`kindsJson`), each with its text class beside it (`ModelViewText`), which holds the data type it prints; `ImageView`; `facts/` the readers the views share, `lines/` the text values | write | 2.9k |
+| write | run one write as a transaction, and `validate`; the rules that come from outside | `WriteTransaction`, `WriteOutcome` (makes the `EditResult`), `IdRenames`, `HostValidators` (runs the host's validators), `FindingDelta` (what a write added, from every source), `DocumentValidation` (the checks, the host validators and the layout dry run of `validate`; makes the `ValidationReport`), `NewModel` (`newXml`) | read flags or files, hold rules of its own | 1.2k |
 | api | the contract | the 8 functions of `index.ts`, one line each into a class | hold logic | 0.3k |
 | cli | the Node shell: words, files, text, exit codes | `Cli`, `EditCommand` (one class for all 17 edit commands), `CommandSyntax` (a command's positionals, flags and help), `NewCommand`, `ShowCommand`, `FindCommand`, `DiagramCommand`, `ConventionsCommand`, `ValidateCommand`, `ApplyCommand`, `RenderCommand`, `GuideCommand`, `CliShell`, `BpmnFile`, `IdConventionsReader`, `EditResultText`, `HelpTopics`, `ProjectLintValidator` | model logic | 1.9k |
 | `packages/lint` | run the project's `.bpmnlintrc` through bpmnlint, for `validate` | `ProjectLint`, `LintConfig`, `LintPlugins`, `LintRules`, `RuleGuard`, `LintFindings` | import the core, run on writes | 0.8k |
@@ -258,7 +258,7 @@ export function applyToXml(xml: string, operations: Operation[], options?: EditO
 export function showXml(xml: string, options?: ShowOptions): Promise<ShowResult>;
 export function findXml(xml: string, options?: FindOptions): Promise<FindResult>;
 export function diagramXml(xml: string): Promise<DiagramResult>;
-export function renderXml(xml: string, options?: RenderOptions): Promise<SvgImage>;
+export function renderXml(xml: string, options?: RenderOptions): Promise<RenderedImage>;
 export function validateXml(xml: string, options?: ValidateOptions): Promise<ValidationReport>;
 export function newXml(options?: NewOptions): Promise<string>;
 export function kindsJson(options?: { conventions?: IdConventions }): { kinds: Kind[]; triggers: Trigger[] };
@@ -352,7 +352,8 @@ interface NewOptions {
 - Exported as types beside the 10: the six option types above, `Operation`, `IdConventions`, `EditResult`,
   `ShowResult` with its views, `FindResult`, `DiagramResult`, `SvgImage`, `ValidationReport`, `Change`, `Finding`, `Suggestion`,
   `FormatResult`, `Validator`, `ValidatorContext` and `ValidatorFinding`.
-- `newXml` and `kindsJson` call model's `NewDocument` and `Kinds`.
+- `newXml` draws model's `NewDocument` through `NewModel`, an empty plane as today; `kindsJson` reads model's `Kinds` and views' `ConventionsTable` through `KindTable`.
+- `Operation` is the JSON of one operation, `{ op: string; [field: string]: unknown }`: `OPS_SCHEMA` says what each takes and `applyToXml` refuses the rest, and the typed values of `OperationParser` stay inside, since they would bring zod's types into the report. `EditResult` and `ValidationReport` are plain data; `WriteOutcome` and `DocumentValidation` make them.
 - `kindsJson()` keeps the two sections consumers read, `kinds` and `triggers`; today's other 13
   sections, such as the set keys and the codes, become `guide` topics.
 - The host validator hook stays: a host validator is a `Validator` the embedding app passes in
@@ -364,8 +365,8 @@ interface NewOptions {
 - `Validator` keeps `name`, `detail`, `blocks` and `validate(xml, context)`; `ValidatorFinding` keeps
   `severity`, `code` or `ruleId`, `message`, `element`, `related`, `hint` and `key`. `validateDoc` and
   `covers` go: no host uses them.
-- A validator's context keeps `phase` (`before`, `after` or `check`), `platform`, `file` and the
-  operations, and gains `importWarnings`, the import warnings the report already holds. cli passes
+- A validator's context keeps `phase` (`before`, `after` or `check`), `platform`, `file` (no option sets
+  it any more, so a host reads it as undefined) and the operations, under `operations` where today says `ops`, and gains `importWarnings`, the import warnings the report already holds. cli passes
   them to lint, which then needs no `BpmnDocument` of the core (today `ctx.doc()`, `BpmnlintValidator.ts:89`).
 
 design-iq at 1.0: the oracle replays its recorded calls along this map, and the consumers step ports it
@@ -373,7 +374,7 @@ the same way.
 
 | design-iq at 26a9517, on bpmn-cli 0.9.0; `bpmn-edit.ts` unless named | 1.0 |
 | --- | --- |
-| `findXml(xml, text)` (l. 333), its hits' `scope` and `match` (l. 357) | `(await findXml(xml, { text })).hits`, the same hits, `scope` named `in` |
+| `findXml(xml, text)` (l. 333), its hits' `scope` and `match` (l. 357) | `(await findXml(xml, { text })).hits`, the same hits, `in` in place of `scope`: the innermost lane, sub-process or pool |
 | `showXml(xml, { id, context })` (l. 335) | `(await showXml(xml, { id })).text` |
 | `showXml(xml, { scope })` (l. 339) | `showXml(xml, { in: scope })`, which also takes a lane |
 | `layoutXml(xml, { tidy })` (l. 290) | `applyToXml(xml, [{ op: 'tidy' }])` |
@@ -384,7 +385,7 @@ the same way.
 | `layout.mode` and `layout.reason` of a result (l. 449) | gone: a write draws incrementally, an empty plane or a `layout` operation in full; `score` and `format` stay |
 | a model built over many `edit_process` calls, which 0.9 redraws by its ownership check | `edit_process`'s description tells the agent to end a build from scratch with `layout_process`, as the skill ends one with `bpmn layout` |
 | `KINDS` (l. 634) | `kindsJson().kinds` |
-| `kindsJson().triggers` (l. 639) | the same, without `timerKind`, which design-iq's test of its tool text expects (`bpmn-edit-tools.test.ts:137`) |
+| `kindsJson().triggers` (l. 639) | the same rows as a list, each named by its `trigger`, and without `timerKind`, which design-iq's test of its tool text expects (`bpmn-edit-tools.test.ts:137`); `prefix` of a kind becomes `pattern`; the `option` of a trigger goes with its flag |
 | `FORMAT_OP_NAMES` (l. 550, 618) | `OPS_SCHEMA.$defs.drawingOp`, a `oneOf` of the 8 drawing operations, read as design-iq reads `$defs.op`; no eleventh runtime export |
 | `NamedValidator` (l. 393), `Warning` (l. 431, 520) | `Validator`, `Finding` |
 | `BpmnError` (l. 494) and its categories (l. 499) | the same `code`, `category` (`usage`, `model`, `layout`, `io`, `internal`) and `details` |

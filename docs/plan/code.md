@@ -36,6 +36,7 @@ Folders: `src/<module>/index.ts` is the only way in. A subfolder names a domain 
   `describe('ElementCreation')`; a package mirrors its own `src/` in its own `test/`. Only `test/e2e/`,
   `test/contract/`, `test/corpus/`, `test/repo/`, `test/support/` and render's `test/golden/` mirror no
   class; the [guardrails](#guardrails) say what each holds.
+- `src/api/index.ts` holds no class, so `test/contract/TheContract.test.ts` holds it.
 - A mirrored test imports by value its class and the classes of its own module that build its input in
   production. It reaches another module only through `test/support/`: one `Fixtures` class that reads
   `corpus/` into a `BpmnDocument`, plus builders of values, at most 12 files.
