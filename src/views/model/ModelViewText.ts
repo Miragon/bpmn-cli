@@ -122,7 +122,7 @@ export class ModelViewText {
       return;
     }
     const pad = ElementLine.INDENT.repeat(depth);
-    const room = Math.max(0, ModelViewText.MAX_LINES - this.out.length);
+    const room = Math.max(0, ModelViewText.MAX_LINES - this.out.length - (title ? 1 : 0));
     if (room && title) {
       this.out.push(`${pad}${title}`);
     }
