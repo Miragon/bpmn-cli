@@ -1,0 +1,457 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" modeler:executionPlatform="Camunda Cloud">
+  <bpmn:process id="Process_InsuranceClaim" name="Insurance claim" isExecutable="true">
+    <bpmn:startEvent id="Event_ClaimReceived" name="Claim received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_ClaimReceived" />
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_RegisterClaim" name="Register claim">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_1">
+        <bpmn:targetRef>DataObjectReference_ClaimFile</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:subProcess id="Activity_AssessClaim" name="Assess claim">
+      <bpmn:incoming>Flow_18</bpmn:incoming>
+      <bpmn:outgoing>Flow_12</bpmn:outgoing>
+      <bpmn:startEvent id="Event_AssessmentStarted" name="Assessment started">
+        <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_CheckCoverage" name="Check coverage">
+        <bpmn:incoming>Flow_3</bpmn:incoming>
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:exclusiveGateway id="Gateway_Covered" name="Covered?" default="Flow_6">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:userTask id="Activity_EstimateDamage" name="Estimate damage">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+        <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:exclusiveGateway id="Gateway_Amount10k" name="Amount &#62; 10k?" default="Flow_11">
+        <bpmn:incoming>Flow_7</bpmn:incoming>
+        <bpmn:outgoing>Flow_8</bpmn:outgoing>
+        <bpmn:outgoing>Flow_11</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:intermediateThrowEvent id="Event_LargeClaim" name="Large claim">
+        <bpmn:incoming>Flow_8</bpmn:incoming>
+        <bpmn:outgoing>Flow_9</bpmn:outgoing>
+        <bpmn:escalationEventDefinition escalationRef="Escalation_LargeClaim" />
+      </bpmn:intermediateThrowEvent>
+      <bpmn:userTask id="Activity_ApproveAmount" name="Approve amount">
+        <bpmn:incoming>Flow_9</bpmn:incoming>
+        <bpmn:incoming>Flow_11</bpmn:incoming>
+        <bpmn:outgoing>Flow_10</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_AssessmentDone" name="Assessment done">
+        <bpmn:incoming>Flow_10</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_ApproveAmount" targetRef="Event_AssessmentDone" />
+      <bpmn:sequenceFlow id="Flow_9" sourceRef="Event_LargeClaim" targetRef="Activity_ApproveAmount" />
+      <bpmn:sequenceFlow id="Flow_8" name="yes" sourceRef="Gateway_Amount10k" targetRef="Event_LargeClaim">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${amount &gt; 10000}</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:sequenceFlow id="Flow_11" name="no" sourceRef="Gateway_Amount10k" targetRef="Activity_ApproveAmount" />
+      <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_EstimateDamage" targetRef="Gateway_Amount10k" />
+      <bpmn:sequenceFlow id="Flow_5" name="yes" sourceRef="Gateway_Covered" targetRef="Activity_EstimateDamage">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${covered}</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:endEvent id="Event_NotCovered" name="Not covered">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+        <bpmn:errorEventDefinition errorRef="Error_NotCovered" />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_6" name="no" sourceRef="Gateway_Covered" targetRef="Event_NotCovered" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_CheckCoverage" targetRef="Gateway_Covered" />
+      <bpmn:sequenceFlow id="Flow_3" sourceRef="Event_AssessmentStarted" targetRef="Activity_CheckCoverage" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_NotCovered_2" name="Not covered" attachedToRef="Activity_AssessClaim">
+      <bpmn:outgoing>Flow_15</bpmn:outgoing>
+      <bpmn:errorEventDefinition errorRef="Error_NotCovered" />
+    </bpmn:boundaryEvent>
+    <bpmn:sendTask id="Activity_SendRejection" name="Send rejection">
+      <bpmn:incoming>Flow_15</bpmn:incoming>
+      <bpmn:outgoing>Flow_16</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_ClaimRejected" name="Claim rejected">
+      <bpmn:incoming>Flow_16</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_16" sourceRef="Activity_SendRejection" targetRef="Event_ClaimRejected" />
+    <bpmn:sequenceFlow id="Flow_15" sourceRef="Event_NotCovered_2" targetRef="Activity_SendRejection" />
+    <bpmn:boundaryEvent id="Event_LargeClaim_2" name="Large claim" cancelActivity="false" attachedToRef="Activity_AssessClaim">
+      <bpmn:outgoing>Flow_14</bpmn:outgoing>
+      <bpmn:escalationEventDefinition escalationRef="Escalation_LargeClaim" />
+    </bpmn:boundaryEvent>
+    <bpmn:userTask id="Activity_InformManager" name="Inform manager">
+      <bpmn:incoming>Flow_14</bpmn:incoming>
+      <bpmn:outgoing>Flow_17</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_ManagerInformed" name="Manager informed">
+      <bpmn:incoming>Flow_17</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_17" sourceRef="Activity_InformManager" targetRef="Event_ManagerInformed" />
+    <bpmn:sequenceFlow id="Flow_14" sourceRef="Event_LargeClaim_2" targetRef="Activity_InformManager" />
+    <bpmn:serviceTask id="Activity_PayOut" name="Pay out">
+      <bpmn:incoming>Flow_12</bpmn:incoming>
+      <bpmn:outgoing>Flow_13</bpmn:outgoing>
+      <bpmn:property id="Property_1" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_1">
+        <bpmn:sourceRef>DataObjectReference_ClaimFile</bpmn:sourceRef>
+        <bpmn:targetRef>Property_1</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_ClaimSettled" name="Claim settled">
+      <bpmn:incoming>Flow_13</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_13" sourceRef="Activity_PayOut" targetRef="Event_ClaimSettled" />
+    <bpmn:sequenceFlow id="Flow_12" sourceRef="Activity_AssessClaim" targetRef="Activity_PayOut" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_RegisterClaim" targetRef="Activity_FraudCheck" />
+    <bpmn:subProcess id="Activity_FraudCheck" name="Fraud check">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_18</bpmn:outgoing>
+      <bpmn:startEvent id="Event_1">
+        <bpmn:outgoing>Flow_19</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_ScreenClaimant" name="Screen claimant">
+        <bpmn:incoming>Flow_19</bpmn:incoming>
+        <bpmn:outgoing>Flow_20</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:userTask id="Activity_ReviewSuspiciousClaim" name="Review suspicious claim">
+        <bpmn:incoming>Flow_20</bpmn:incoming>
+        <bpmn:outgoing>Flow_21</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_2">
+        <bpmn:incoming>Flow_21</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_21" sourceRef="Activity_ReviewSuspiciousClaim" targetRef="Event_2" />
+      <bpmn:sequenceFlow id="Flow_20" sourceRef="Activity_ScreenClaimant" targetRef="Activity_ReviewSuspiciousClaim" />
+      <bpmn:sequenceFlow id="Flow_19" sourceRef="Event_1" targetRef="Activity_ScreenClaimant" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_FraudCheckOverdue" name="Fraud check overdue" cancelActivity="false" attachedToRef="Activity_FraudCheck">
+      <bpmn:outgoing>Flow_22</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P3D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sendTask id="Activity_RemindReviewer" name="Remind reviewer">
+      <bpmn:incoming>Flow_22</bpmn:incoming>
+      <bpmn:outgoing>Flow_23</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Reminded" name="Reminded">
+      <bpmn:incoming>Flow_23</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_23" sourceRef="Activity_RemindReviewer" targetRef="Event_Reminded" />
+    <bpmn:sequenceFlow id="Flow_22" sourceRef="Event_FraudCheckOverdue" targetRef="Activity_RemindReviewer" />
+    <bpmn:sequenceFlow id="Flow_18" sourceRef="Activity_FraudCheck" targetRef="Activity_AssessClaim" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_ClaimReceived" targetRef="Activity_RegisterClaim" />
+    <bpmn:dataObject id="DataObject_ClaimFile" />
+    <bpmn:dataObjectReference id="DataObjectReference_ClaimFile" name="Claim file" dataObjectRef="DataObject_ClaimFile" />
+    <bpmn:subProcess id="Activity_ClaimWithdrawn" name="Claim withdrawn" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_3" name="Withdrawal received">
+        <bpmn:outgoing>Flow_24</bpmn:outgoing>
+        <bpmn:messageEventDefinition messageRef="Message_Withdrawal" />
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_CancelClaim" name="Cancel claim">
+        <bpmn:incoming>Flow_24</bpmn:incoming>
+        <bpmn:outgoing>Flow_25</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="Event_ClaimCancelled" name="Claim cancelled">
+        <bpmn:incoming>Flow_25</bpmn:incoming>
+        <bpmn:terminateEventDefinition />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_25" sourceRef="Activity_CancelClaim" targetRef="Event_ClaimCancelled" />
+      <bpmn:sequenceFlow id="Flow_24" sourceRef="Event_3" targetRef="Activity_CancelClaim" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:message id="Message_ClaimReceived" name="ClaimReceived" />
+  <bpmn:error id="Error_NotCovered" name="NotCovered" />
+  <bpmn:escalation id="Escalation_LargeClaim" name="LargeClaim" />
+  <bpmn:message id="Message_Withdrawal" name="Withdrawal" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_InsuranceClaim">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_InsuranceClaim" bpmnElement="Process_InsuranceClaim">
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClaimReceived" bpmnElement="Event_ClaimReceived">
+        <dc:Bounds x="80" y="159" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="53" y="201" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_RegisterClaim" bpmnElement="Activity_RegisterClaim">
+        <dc:Bounds x="176" y="137" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_AssessClaim" bpmnElement="Activity_AssessClaim">
+        <dc:Bounds x="908" y="137" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_NotCovered_2" bpmnElement="Event_NotCovered_2">
+        <dc:Bounds x="965" y="199" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1005" y="221" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_LargeClaim_2" bpmnElement="Event_LargeClaim_2">
+        <dc:Bounds x="921" y="199" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="961" y="221" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendRejection" bpmnElement="Activity_SendRejection">
+        <dc:Bounds x="1068" y="333" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClaimRejected" bpmnElement="Event_ClaimRejected">
+        <dc:Bounds x="1228" y="355" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1201" y="397" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_InformManager" bpmnElement="Activity_InformManager">
+        <dc:Bounds x="1068" y="473" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ManagerInformed" bpmnElement="Event_ManagerInformed">
+        <dc:Bounds x="1228" y="495" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1201" y="537" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PayOut" bpmnElement="Activity_PayOut">
+        <dc:Bounds x="1068" y="137" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClaimSettled" bpmnElement="Event_ClaimSettled">
+        <dc:Bounds x="1228" y="159" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1201" y="201" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_FraudCheck" bpmnElement="Activity_FraudCheck" isExpanded="true">
+        <dc:Bounds x="336" y="99" width="512" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_1" bpmnElement="Event_1">
+        <dc:Bounds x="366" y="166" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ScreenClaimant" bpmnElement="Activity_ScreenClaimant">
+        <dc:Bounds x="462" y="144" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReviewSuspiciousClaim" bpmnElement="Activity_ReviewSuspiciousClaim">
+        <dc:Bounds x="622" y="144" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_2" bpmnElement="Event_2">
+        <dc:Bounds x="782" y="166" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_21" bpmnElement="Flow_21">
+        <di:waypoint x="722" y="184" />
+        <di:waypoint x="782" y="184" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_20" bpmnElement="Flow_20">
+        <di:waypoint x="562" y="184" />
+        <di:waypoint x="622" y="184" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_19" bpmnElement="Flow_19">
+        <di:waypoint x="402" y="184" />
+        <di:waypoint x="462" y="184" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FraudCheckOverdue" bpmnElement="Event_FraudCheckOverdue">
+        <dc:Bounds x="805" y="236" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="845" y="244" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_RemindReviewer" bpmnElement="Activity_RemindReviewer">
+        <dc:Bounds x="908" y="613" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Reminded" bpmnElement="Event_Reminded">
+        <dc:Bounds x="1100" y="635" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1088" y="677" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ClaimWithdrawn" bpmnElement="Activity_ClaimWithdrawn" isExpanded="true">
+        <dc:Bounds x="80" y="753" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_3" bpmnElement="Event_3">
+        <dc:Bounds x="110" y="820" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="83" y="862" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CancelClaim" bpmnElement="Activity_CancelClaim">
+        <dc:Bounds x="206" y="798" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClaimCancelled" bpmnElement="Event_ClaimCancelled">
+        <dc:Bounds x="366" y="820" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="339" y="862" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_25" bpmnElement="Flow_25">
+        <di:waypoint x="306" y="838" />
+        <di:waypoint x="366" y="838" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_24" bpmnElement="Flow_24">
+        <di:waypoint x="146" y="838" />
+        <di:waypoint x="206" y="838" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_16" bpmnElement="Flow_16">
+        <di:waypoint x="1168" y="373" />
+        <di:waypoint x="1228" y="373" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_15" bpmnElement="Flow_15">
+        <di:waypoint x="983" y="235" />
+        <di:waypoint x="983" y="373" />
+        <di:waypoint x="1068" y="373" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_17" bpmnElement="Flow_17">
+        <di:waypoint x="1168" y="513" />
+        <di:waypoint x="1228" y="513" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_14" bpmnElement="Flow_14">
+        <di:waypoint x="939" y="235" />
+        <di:waypoint x="939" y="513" />
+        <di:waypoint x="1068" y="513" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_13" bpmnElement="Flow_13">
+        <di:waypoint x="1168" y="177" />
+        <di:waypoint x="1228" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="1008" y="177" />
+        <di:waypoint x="1068" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="177" />
+        <di:waypoint x="336" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_23" bpmnElement="Flow_23">
+        <di:waypoint x="1008" y="653" />
+        <di:waypoint x="1100" y="653" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_22" bpmnElement="Flow_22">
+        <di:waypoint x="823" y="272" />
+        <di:waypoint x="823" y="653" />
+        <di:waypoint x="908" y="653" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_18" bpmnElement="Flow_18">
+        <di:waypoint x="848" y="177" />
+        <di:waypoint x="908" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="177" />
+        <di:waypoint x="176" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_ClaimFile" bpmnElement="DataObjectReference_ClaimFile">
+        <dc:Bounds x="208" y="968" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="189" y="1024" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_1" bpmnElement="DataOutputAssociation_1">
+        <di:waypoint x="226" y="217" />
+        <di:waypoint x="226" y="968" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_1" bpmnElement="DataInputAssociation_1">
+        <di:waypoint x="244" y="977" />
+        <di:waypoint x="1074" y="217" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Activity_AssessClaim">
+    <bpmndi:BPMNPlane id="BPMNPlane_Activity_AssessClaim" bpmnElement="Activity_AssessClaim">
+      <bpmndi:BPMNShape id="BPMNShape_Event_AssessmentStarted" bpmnElement="Event_AssessmentStarted">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="53" y="144" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CheckCoverage" bpmnElement="Activity_CheckCoverage">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Covered" bpmnElement="Gateway_Covered" isMarkerVisible="true">
+        <dc:Bounds x="336" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="331" y="75" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_EstimateDamage" bpmnElement="Activity_EstimateDamage">
+        <dc:Bounds x="446" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Amount10k" bpmnElement="Gateway_Amount10k" isMarkerVisible="true">
+        <dc:Bounds x="606" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="586" y="61" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_LargeClaim" bpmnElement="Event_LargeClaim">
+        <dc:Bounds x="716" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="694" y="144" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ApproveAmount" bpmnElement="Activity_ApproveAmount">
+        <dc:Bounds x="812" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_AssessmentDone" bpmnElement="Event_AssessmentDone">
+        <dc:Bounds x="972" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="945" y="144" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_NotCovered" bpmnElement="Event_NotCovered">
+        <dc:Bounds x="478" y="220" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="456" y="262" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="912" y="120" />
+        <di:waypoint x="972" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="752" y="120" />
+        <di:waypoint x="812" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="656" y="120" />
+        <di:waypoint x="716" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="664" y="102" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="631" y="145" />
+        <di:waypoint x="631" y="190" />
+        <di:waypoint x="792" y="190" />
+        <di:waypoint x="792" y="120" />
+        <di:waypoint x="812" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="639" y="172" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="546" y="120" />
+        <di:waypoint x="606" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="386" y="120" />
+        <di:waypoint x="446" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="394" y="102" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="238" />
+        <di:waypoint x="478" y="238" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="220" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

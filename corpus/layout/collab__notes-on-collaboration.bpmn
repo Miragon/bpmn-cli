@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_Shop" />
+    <bpmn:participant id="Participant_Customer" name="Customer" />
+    <bpmn:messageFlow id="Flow_Order" name="Order" sourceRef="Participant_Customer" targetRef="Event_OrderReceived" />
+    <bpmn:messageFlow id="Flow_Invoice" name="Invoice" sourceRef="Activity_SendInvoice" targetRef="Participant_Customer" />
+    <bpmn:textAnnotation id="TextAnnotation_Sla">
+      <bpmn:text>within 2 days</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_Sla" sourceRef="Activity_Pack" targetRef="TextAnnotation_Sla" />
+    <bpmn:textAnnotation id="TextAnnotation_Portal">
+      <bpmn:text>orders come in through the web portal</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_Portal" sourceRef="TextAnnotation_Portal" targetRef="Participant_Customer" />
+    <bpmn:textAnnotation id="TextAnnotation_Pdf">
+      <bpmn:text>PDF by e-mail</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_Pdf" sourceRef="TextAnnotation_Pdf" targetRef="Flow_Invoice" />
+    <bpmn:textAnnotation id="TextAnnotation_Loose">
+      <bpmn:text>draft</bpmn:text>
+    </bpmn:textAnnotation>
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Shop" name="Shop" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Sales" name="Sales">
+        <bpmn:flowNodeRef>Event_OrderReceived</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_SendInvoice</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Warehouse" name="Warehouse">
+        <bpmn:flowNodeRef>Activity_Pack</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_OrderReceived" name="Order received">
+      <bpmn:messageEventDefinition id="MessageEventDefinition_1" />
+    </bpmn:startEvent>
+    <bpmn:task id="Activity_Pack" name="Pack goods" />
+    <bpmn:sendTask id="Activity_SendInvoice" name="Send invoice" />
+    <bpmn:endEvent id="Event_Done" name="Done" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_OrderReceived" targetRef="Activity_Pack" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Pack" targetRef="Activity_SendInvoice" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_SendInvoice" targetRef="Event_Done" />
+  </bpmn:process>
+</bpmn:definitions>

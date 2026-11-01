@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- synthetic: a claims process for the reading views (show --around, show <id> --context) -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_Claims" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_Claims">
+    <bpmn:participant id="Participant_Insurer" name="Insurer" processRef="Process_Claims" />
+    <bpmn:participant id="Participant_Customer" name="Customer" />
+    <bpmn:messageFlow id="Flow_Claim" name="Claim" sourceRef="Participant_Customer" targetRef="Event_ClaimReceived" messageRef="Message_Claim" />
+    <bpmn:messageFlow id="Flow_Decision" name="Decision" sourceRef="Activity_SendDecision" targetRef="Participant_Customer" />
+    <bpmn:textAnnotation id="TextAnnotation_Sla">
+      <bpmn:text>Answer within 5 days</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_Sla" sourceRef="Activity_SendDecision" targetRef="TextAnnotation_Sla" />
+  </bpmn:collaboration>
+  <bpmn:message id="Message_Claim" name="Claim" />
+  <bpmn:message id="Message_Cancel" name="Cancel" />
+  <bpmn:error id="Error_Fraud" name="Fraud" errorCode="FRAUD" />
+  <bpmn:process id="Process_Claims" name="Claims" isExecutable="true" camunda:historyTimeToLive="180">
+    <bpmn:laneSet id="LaneSet_Claims">
+      <bpmn:lane id="Lane_Office" name="Office">
+        <bpmn:flowNodeRef>Event_ClaimReceived</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Assess</bpmn:flowNodeRef>
+        <bpmn:childLaneSet id="LaneSet_Office">
+          <bpmn:lane id="Lane_Clerks" name="Clerks">
+            <bpmn:flowNodeRef>Gateway_Covered</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>Activity_Pay</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>Activity_SendDecision</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+          </bpmn:lane>
+        </bpmn:childLaneSet>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Fraud" name="Fraud team">
+        <bpmn:flowNodeRef>Activity_Investigate</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Closed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_OnCancel</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_ClaimReceived" name="Claim received">
+      <bpmn:outgoing>Flow_ToAssess</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="Def_Claim" messageRef="Message_Claim" />
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Activity_Assess" name="Assess claim">
+      <bpmn:incoming>Flow_ToAssess</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToCovered</bpmn:outgoing>
+      <bpmn:startEvent id="Event_AssessStart" name="Assessment started">
+        <bpmn:outgoing>Flow_ToCheck</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_CheckPolicy" name="Check policy" camunda:type="external" camunda:topic="check-policy">
+        <bpmn:extensionElements>
+          <camunda:inputOutput>
+            <camunda:inputParameter name="policyId">${policyId}</camunda:inputParameter>
+            <camunda:outputParameter name="covered">${covered}</camunda:outputParameter>
+          </camunda:inputOutput>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_ToCheck</bpmn:incoming>
+        <bpmn:outgoing>Flow_ToRate</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:userTask id="Activity_RateDamage" name="Rate damage" camunda:assignee="clerk">
+        <bpmn:incoming>Flow_ToRate</bpmn:incoming>
+        <bpmn:outgoing>Flow_ToAssessEnd</bpmn:outgoing>
+        <bpmn:dataOutputAssociation id="DataOutputAssociation_Rating">
+          <bpmn:targetRef>DataObjectReference_ClaimFile</bpmn:targetRef>
+        </bpmn:dataOutputAssociation>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_AssessEnd" name="Assessed">
+        <bpmn:incoming>Flow_ToAssessEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_ToCheck" sourceRef="Event_AssessStart" targetRef="Activity_CheckPolicy" />
+      <bpmn:sequenceFlow id="Flow_ToRate" sourceRef="Activity_CheckPolicy" targetRef="Activity_RateDamage" />
+      <bpmn:sequenceFlow id="Flow_ToAssessEnd" sourceRef="Activity_RateDamage" targetRef="Event_AssessEnd" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_FraudSuspected" name="Fraud suspected" attachedToRef="Activity_Assess">
+      <bpmn:outgoing>Flow_ToInvestigate</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="Def_Fraud" errorRef="Error_Fraud" />
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="Gateway_Covered" name="Covered?" default="Flow_NotCovered">
+      <bpmn:incoming>Flow_ToCovered</bpmn:incoming>
+      <bpmn:outgoing>Flow_Covered</bpmn:outgoing>
+      <bpmn:outgoing>Flow_NotCovered</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_Pay" name="Pay claim" camunda:type="external" camunda:topic="pay-claim">
+      <bpmn:incoming>Flow_Covered</bpmn:incoming>
+      <bpmn:outgoing>Flow_PaidToDecision</bpmn:outgoing>
+      <bpmn:dataInputAssociation id="DataInputAssociation_ClaimFile">
+        <bpmn:sourceRef>DataObjectReference_ClaimFile</bpmn:sourceRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:sendTask id="Activity_SendDecision" name="Send decision" camunda:type="external" camunda:topic="send-decision">
+      <bpmn:incoming>Flow_PaidToDecision</bpmn:incoming>
+      <bpmn:incoming>Flow_NotCovered</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToDone</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Done" name="Claim handled">
+      <bpmn:incoming>Flow_ToDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Activity_Investigate" name="Investigate fraud" camunda:candidateGroups="fraud">
+      <bpmn:incoming>Flow_ToInvestigate</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToClosed</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_Closed" name="Claim closed">
+      <bpmn:incoming>Flow_ToClosed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="Activity_OnCancel" name="Handle cancellation" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_CancelRequested" name="Cancellation requested" isInterrupting="false">
+        <bpmn:outgoing>Flow_ToCancelled</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="Def_Cancel" messageRef="Message_Cancel" />
+      </bpmn:startEvent>
+      <bpmn:endEvent id="Event_Cancelled" name="Cancellation noted">
+        <bpmn:incoming>Flow_ToCancelled</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_ToCancelled" sourceRef="Event_CancelRequested" targetRef="Event_Cancelled" />
+    </bpmn:subProcess>
+    <bpmn:dataObjectReference id="DataObjectReference_ClaimFile" name="Claim file" dataObjectRef="DataObject_ClaimFile" />
+    <bpmn:dataObject id="DataObject_ClaimFile" />
+    <bpmn:textAnnotation id="TextAnnotation_Pay">
+      <bpmn:text>Paid by bank transfer</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_Pay" sourceRef="Activity_Pay" targetRef="TextAnnotation_Pay" />
+    <bpmn:sequenceFlow id="Flow_ToAssess" sourceRef="Event_ClaimReceived" targetRef="Activity_Assess" />
+    <bpmn:sequenceFlow id="Flow_ToCovered" sourceRef="Activity_Assess" targetRef="Gateway_Covered" />
+    <bpmn:sequenceFlow id="Flow_Covered" name="yes" sourceRef="Gateway_Covered" targetRef="Activity_Pay">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${covered}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_NotCovered" name="no" sourceRef="Gateway_Covered" targetRef="Activity_SendDecision" />
+    <bpmn:sequenceFlow id="Flow_PaidToDecision" sourceRef="Activity_Pay" targetRef="Activity_SendDecision" />
+    <bpmn:sequenceFlow id="Flow_ToDone" sourceRef="Activity_SendDecision" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_ToInvestigate" sourceRef="Event_FraudSuspected" targetRef="Activity_Investigate" />
+    <bpmn:sequenceFlow id="Flow_ToClosed" sourceRef="Activity_Investigate" targetRef="Event_Closed" />
+  </bpmn:process>
+</bpmn:definitions>

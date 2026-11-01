@@ -1,0 +1,283 @@
+{
+ "model": "layout/controlflow__s10.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_CollectData",
+     "values": {
+      "name": "Collect data"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_CollectData",
+     "values": {
+      "name": "Collect data"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_CollectData",
+     "values": {
+      "name": "Collect data X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_CollectData",
+     "values": {
+      "name": "Collect data X"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "insert": {
+   "ops": [
+    {
+     "op": "add",
+     "kind": "task",
+     "name": "Audit step",
+     "after": "Activity_CollectData"
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 6,
+  "flowNodes": 6,
+  "leafLanes": 0,
+  "edits": {
+   "E1": {
+    "applicable": false,
+    "reason": "no non-gateway node with exactly one outgoing flow"
+   },
+   "E2": {
+    "applicable": true,
+    "target": "Gateway_Sufficient",
+    "onPath": true,
+    "expect": {
+     "kind": "branch",
+     "gateway": "Gateway_Sufficient",
+     "task": "Activity_BenchE2",
+     "end": "Event_BenchE2End"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE2",
+      "name": "Bench branch task",
+      "after": "Gateway_Sufficient",
+      "flowName": "bench",
+      "condition": "${bench}"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE2End",
+      "name": "Bench branch end",
+      "after": "Activity_BenchE2"
+     }
+    ]
+   },
+   "E3": {
+    "applicable": true,
+    "target": "Activity_Analyse",
+    "onPath": true,
+    "expect": {
+     "kind": "removed",
+     "id": "Activity_Analyse",
+     "pred": "Activity_CollectData",
+     "succ": "Activity_Report"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "remove",
+      "ids": [
+       "Activity_Analyse"
+      ]
+     }
+    ]
+   },
+   "E4": {
+    "applicable": false,
+    "reason": "no task"
+   },
+   "E5": {
+    "applicable": false,
+    "reason": "fewer than 2 lanes"
+   },
+   "E6": {
+    "applicable": true,
+    "target": "Activity_Report",
+    "onPath": true,
+    "expect": {
+     "kind": "name",
+     "id": "Activity_Report",
+     "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "set",
+      "id": "Activity_Report",
+      "values": {
+       "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+      }
+     }
+    ]
+   },
+   "E7": {
+    "applicable": true,
+    "steps": [
+     "E2",
+     "E3",
+     "E6"
+    ]
+   },
+   "E8": {
+    "applicable": true,
+    "target": "Gateway_Sufficient",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gateway_Sufficient",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Event_End",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "Flow_5"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Event_End"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     }
+    ]
+   },
+   "E9": {
+    "applicable": true,
+    "target": "Gateway_Sufficient",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gateway_Sufficient",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Event_End",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd",
+     "timer": {
+      "event": "Event_BenchE9Timer",
+      "task": "Activity_BenchE9Remind",
+      "end": "Event_BenchE9Reminded"
+     }
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "Flow_5"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Event_End"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     },
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE9Timer",
+      "name": "Bench 3 days",
+      "on": "Activity_BenchE8",
+      "timer": "P3D",
+      "nonInterrupting": true
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE9Remind",
+      "name": "Bench reminder",
+      "after": "Event_BenchE9Timer"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE9Reminded",
+      "name": "Bench reminded",
+      "after": "Activity_BenchE9Remind"
+     }
+    ]
+   }
+  }
+ }
+}

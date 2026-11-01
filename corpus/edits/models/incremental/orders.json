@@ -1,0 +1,323 @@
+{
+ "model": "models/incremental/orders.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Task_A",
+     "values": {
+      "name": "Check order"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Task_A",
+     "values": {
+      "name": "Check order"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Task_A",
+     "values": {
+      "name": "Check order X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Task_A",
+     "values": {
+      "name": "Check order X"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "insert": {
+   "ops": [
+    {
+     "op": "add",
+     "kind": "task",
+     "name": "Audit step",
+     "after": "Task_A"
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 8,
+  "flowNodes": 17,
+  "leafLanes": 2,
+  "edits": {
+   "E1": {
+    "applicable": true,
+    "target": "Sub_1",
+    "onPath": true,
+    "expect": {
+     "kind": "inserted",
+     "id": "Activity_BenchE1",
+     "type": "bpmn:UserTask",
+     "pred": "Sub_1",
+     "succ": "End_3"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE1",
+      "name": "Bench inserted task",
+      "after": "Sub_1"
+     }
+    ]
+   },
+   "E2": {
+    "applicable": false,
+    "reason": "no exclusive gateway with >= 2 outgoing flows"
+   },
+   "E3": {
+    "applicable": true,
+    "target": "Task_B",
+    "onPath": true,
+    "expect": {
+     "kind": "removed",
+     "id": "Task_B",
+     "pred": "Gw_Split",
+     "succ": "Gw_Join"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "remove",
+      "ids": [
+       "Task_B"
+      ]
+     }
+    ]
+   },
+   "E4": {
+    "applicable": true,
+    "target": "Task_Notify",
+    "onPath": true,
+    "expect": {
+     "kind": "boundary",
+     "host": "Task_Notify",
+     "event": "Event_BenchE4",
+     "end": "Event_BenchE4End"
+    },
+    "note": "trigger differs: bpmn-cli timer boundary, bpmn-edit error boundary (no timer op)",
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE4",
+      "name": "Bench timeout",
+      "on": "Task_Notify",
+      "timer": "PT1H"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE4End",
+      "name": "Bench timed out",
+      "after": "Event_BenchE4"
+     }
+    ]
+   },
+   "E5": {
+    "applicable": true,
+    "target": "Task_A",
+    "onPath": true,
+    "expect": {
+     "kind": "lane",
+     "id": "Task_A",
+     "from": "Lane_1",
+     "to": "Lane_2"
+    },
+    "touched": [
+     "Task_A",
+     "Timer_1"
+    ],
+    "ops": [
+     {
+      "op": "set",
+      "id": "Task_A",
+      "values": {
+       "lane": "Lane_2"
+      }
+     }
+    ]
+   },
+   "E6": {
+    "applicable": true,
+    "target": "Task_Esc",
+    "onPath": false,
+    "expect": {
+     "kind": "name",
+     "id": "Task_Esc",
+     "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "set",
+      "id": "Task_Esc",
+      "values": {
+       "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+      }
+     }
+    ]
+   },
+   "E7": {
+    "applicable": true,
+    "steps": [
+     "E1",
+     "E3",
+     "E4",
+     "E5",
+     "E6"
+    ]
+   },
+   "E8": {
+    "applicable": true,
+    "target": "Gw_Split",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gw_Split",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Task_B",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "F3"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Task_B"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     }
+    ]
+   },
+   "E9": {
+    "applicable": true,
+    "target": "Gw_Split",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gw_Split",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Task_B",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd",
+     "timer": {
+      "event": "Event_BenchE9Timer",
+      "task": "Activity_BenchE9Remind",
+      "end": "Event_BenchE9Reminded"
+     }
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "F3"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Task_B"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     },
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE9Timer",
+      "name": "Bench 3 days",
+      "on": "Activity_BenchE8",
+      "timer": "P3D",
+      "nonInterrupting": true
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE9Remind",
+      "name": "Bench reminder",
+      "after": "Event_BenchE9Timer"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE9Reminded",
+      "name": "Bench reminded",
+      "after": "Activity_BenchE9Remind"
+     }
+    ]
+   }
+  }
+ }
+}

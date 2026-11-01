@@ -1,0 +1,188 @@
+{
+ "model": "layout/subproc__s15-lanes-sub-eventsub.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_TakeOrder",
+     "values": {
+      "name": "Take order"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_TakeOrder",
+     "values": {
+      "name": "Take order"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_TakeOrder",
+     "values": {
+      "name": "Take order X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_TakeOrder",
+     "values": {
+      "name": "Take order X"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "insert": {
+   "ops": [
+    {
+     "op": "add",
+     "kind": "task",
+     "name": "Audit step",
+     "after": "Activity_TakeOrder"
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 5,
+  "flowNodes": 16,
+  "leafLanes": 2,
+  "edits": {
+   "E1": {
+    "applicable": true,
+    "target": "Activity_Confirm",
+    "onPath": true,
+    "expect": {
+     "kind": "inserted",
+     "id": "Activity_BenchE1",
+     "type": "bpmn:UserTask",
+     "pred": "Activity_Confirm",
+     "succ": "Event_Done"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE1",
+      "name": "Bench inserted task",
+      "after": "Activity_Confirm"
+     }
+    ]
+   },
+   "E2": {
+    "applicable": false,
+    "reason": "no exclusive gateway with >= 2 outgoing flows"
+   },
+   "E3": {
+    "applicable": true,
+    "target": "Activity_TakeOrder",
+    "onPath": true,
+    "expect": {
+     "kind": "removed",
+     "id": "Activity_TakeOrder",
+     "pred": "Event_Start",
+     "succ": "Activity_Fulfilment"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "remove",
+      "ids": [
+       "Activity_TakeOrder"
+      ]
+     }
+    ]
+   },
+   "E4": {
+    "applicable": true,
+    "target": "Activity_Inform",
+    "onPath": false,
+    "expect": {
+     "kind": "boundary",
+     "host": "Activity_Inform",
+     "event": "Event_BenchE4",
+     "end": "Event_BenchE4End"
+    },
+    "note": "trigger differs: bpmn-cli timer boundary, bpmn-edit error boundary (no timer op)",
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE4",
+      "name": "Bench timeout",
+      "on": "Activity_Inform",
+      "timer": "PT1H"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE4End",
+      "name": "Bench timed out",
+      "after": "Event_BenchE4"
+     }
+    ]
+   },
+   "E5": {
+    "applicable": false,
+    "reason": "no task in a lane"
+   },
+   "E6": {
+    "applicable": true,
+    "target": "Activity_Pack",
+    "onPath": false,
+    "expect": {
+     "kind": "name",
+     "id": "Activity_Pack",
+     "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "set",
+      "id": "Activity_Pack",
+      "values": {
+       "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+      }
+     }
+    ]
+   },
+   "E7": {
+    "applicable": true,
+    "steps": [
+     "E1",
+     "E3",
+     "E4",
+     "E6"
+    ]
+   },
+   "E8": {
+    "applicable": false,
+    "reason": "no exclusive split with a branch into a non-gateway node with one incoming flow"
+   },
+   "E9": {
+    "applicable": false,
+    "reason": "no exclusive split with a branch into a non-gateway node with one incoming flow"
+   }
+  }
+ }
+}

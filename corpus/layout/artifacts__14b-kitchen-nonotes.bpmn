@@ -1,0 +1,447 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_KS" name="Kitchen sink" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Order placed">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_OrderPlaced" />
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_Validate" name="Validate order">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_2">
+        <bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Valid" name="Valid?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_Valid</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Invalid</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:subProcess id="Activity_Fulfil" name="Fulfil order">
+      <bpmn:incoming>Flow_Valid</bpmn:incoming>
+      <bpmn:outgoing>Flow_12</bpmn:outgoing>
+      <bpmn:startEvent id="Event_FStart">
+        <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_Reserve" name="Reserve stock">
+        <bpmn:incoming>Flow_3</bpmn:incoming>
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+        <bpmn:dataOutputAssociation id="DataOutputAssociation_1">
+          <bpmn:targetRef>DataObjectReference_Pick</bpmn:targetRef>
+        </bpmn:dataOutputAssociation>
+        <bpmn:multiInstanceLoopCharacteristics />
+      </bpmn:serviceTask>
+      <bpmn:parallelGateway id="Gateway_Fork">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+        <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      </bpmn:parallelGateway>
+      <bpmn:callActivity id="Activity_Charge" name="Charge payment" calledElement="Process_Payment">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      </bpmn:callActivity>
+      <bpmn:boundaryEvent id="Event_CompCharge" attachedToRef="Activity_Charge">
+        <bpmn:compensateEventDefinition />
+      </bpmn:boundaryEvent>
+      <bpmn:boundaryEvent id="Event_PayErr" name="Payment declined" attachedToRef="Activity_Charge">
+        <bpmn:outgoing>Flow_11</bpmn:outgoing>
+        <bpmn:errorEventDefinition errorRef="Error_Declined" />
+      </bpmn:boundaryEvent>
+      <bpmn:endEvent id="Event_FErr" name="Fulfilment failed">
+        <bpmn:incoming>Flow_11</bpmn:incoming>
+        <bpmn:errorEventDefinition errorRef="Error_FulfilFailed" />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_11" sourceRef="Event_PayErr" targetRef="Event_FErr" />
+      <bpmn:parallelGateway id="Gateway_Join">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+        <bpmn:incoming>Flow_8</bpmn:incoming>
+        <bpmn:outgoing>Flow_9</bpmn:outgoing>
+      </bpmn:parallelGateway>
+      <bpmn:intermediateThrowEvent id="Event_Tracking" name="Send tracking">
+        <bpmn:incoming>Flow_9</bpmn:incoming>
+        <bpmn:outgoing>Flow_10</bpmn:outgoing>
+        <bpmn:messageEventDefinition messageRef="Message_Tracking" />
+      </bpmn:intermediateThrowEvent>
+      <bpmn:endEvent id="Event_FEnd">
+        <bpmn:incoming>Flow_10</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_10" sourceRef="Event_Tracking" targetRef="Event_FEnd" />
+      <bpmn:sequenceFlow id="Flow_9" sourceRef="Gateway_Join" targetRef="Event_Tracking" />
+      <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Charge" targetRef="Gateway_Join" />
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Gateway_Fork" targetRef="Activity_Charge" />
+      <bpmn:userTask id="Activity_Pack" name="Pack parcel">
+        <bpmn:incoming>Flow_7</bpmn:incoming>
+        <bpmn:outgoing>Flow_8</bpmn:outgoing>
+        <bpmn:property id="Property_1" name="__targetRef_placeholder" />
+        <bpmn:dataInputAssociation id="DataInputAssociation_1">
+          <bpmn:sourceRef>DataObjectReference_Pick</bpmn:sourceRef>
+          <bpmn:targetRef>Property_1</bpmn:targetRef>
+        </bpmn:dataInputAssociation>
+      </bpmn:userTask>
+      <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_Pack" targetRef="Gateway_Join" />
+      <bpmn:sequenceFlow id="Flow_7" sourceRef="Gateway_Fork" targetRef="Activity_Pack" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Reserve" targetRef="Gateway_Fork" />
+      <bpmn:sequenceFlow id="Flow_3" sourceRef="Event_FStart" targetRef="Activity_Reserve" />
+      <bpmn:serviceTask id="Activity_Refund" name="Refund payment" isForCompensation="true" />
+      <bpmn:dataObject id="DataObject_PickList" />
+      <bpmn:dataObjectReference id="DataObjectReference_Pick" name="Pick list" dataObjectRef="DataObject_PickList" />
+      <bpmn:association id="Association_1" associationDirection="One" sourceRef="Event_CompCharge" targetRef="Activity_Refund" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_FulfilErr" name="Fulfilment failed" attachedToRef="Activity_Fulfil">
+      <bpmn:outgoing>Flow_15</bpmn:outgoing>
+      <bpmn:errorEventDefinition errorRef="Error_FulfilFailed" />
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="Event_SLA" name="SLA breached" cancelActivity="false" attachedToRef="Activity_Fulfil">
+      <bpmn:outgoing>Flow_17</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P3D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sendTask id="Activity_Delay" name="Inform customer about delay">
+      <bpmn:incoming>Flow_17</bpmn:incoming>
+      <bpmn:outgoing>Flow_18</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Informed" name="Customer informed">
+      <bpmn:incoming>Flow_18</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_18" sourceRef="Activity_Delay" targetRef="Event_Informed" />
+    <bpmn:sequenceFlow id="Flow_17" sourceRef="Event_SLA" targetRef="Activity_Delay" />
+    <bpmn:userTask id="Activity_HandleFail" name="Handle failure">
+      <bpmn:incoming>Flow_15</bpmn:incoming>
+      <bpmn:outgoing>Flow_16</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_16" sourceRef="Activity_HandleFail" targetRef="Activity_Close" />
+    <bpmn:sequenceFlow id="Flow_15" sourceRef="Event_FulfilErr" targetRef="Activity_HandleFail" />
+    <bpmn:userTask id="Activity_Close" name="Close order">
+      <bpmn:incoming>Flow_12</bpmn:incoming>
+      <bpmn:incoming>Flow_16</bpmn:incoming>
+      <bpmn:outgoing>Flow_13</bpmn:outgoing>
+      <bpmn:property id="Property_2" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_2">
+        <bpmn:sourceRef>DataObjectReference_Order</bpmn:sourceRef>
+        <bpmn:targetRef>Property_2</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_3">
+        <bpmn:targetRef>DataStoreReference_OrderDb</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_End" name="Order done">
+      <bpmn:incoming>Flow_13</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_13" sourceRef="Activity_Close" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_12" sourceRef="Activity_Fulfil" targetRef="Activity_Close" />
+    <bpmn:sequenceFlow id="Flow_Valid" name="yes" sourceRef="Gateway_Valid" targetRef="Activity_Fulfil" />
+    <bpmn:sendTask id="Activity_Reject" name="Reject order">
+      <bpmn:incoming>Flow_Invalid</bpmn:incoming>
+      <bpmn:outgoing>Flow_14</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Rejected" name="Order rejected">
+      <bpmn:incoming>Flow_14</bpmn:incoming>
+      <bpmn:terminateEventDefinition />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_14" sourceRef="Activity_Reject" targetRef="Event_Rejected" />
+    <bpmn:sequenceFlow id="Flow_Invalid" name="no" sourceRef="Gateway_Valid" targetRef="Activity_Reject" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Validate" targetRef="Gateway_Valid" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Validate" />
+    <bpmn:subProcess id="Activity_CancelSub" name="Cancellation" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_CancellationStart" name="Order cancelled">
+        <bpmn:outgoing>Flow_19</bpmn:outgoing>
+        <bpmn:messageEventDefinition messageRef="Message_CancelOrder" />
+      </bpmn:startEvent>
+      <bpmn:intermediateThrowEvent id="Event_UndoAll" name="Undo bookings">
+        <bpmn:incoming>Flow_19</bpmn:incoming>
+        <bpmn:outgoing>Flow_20</bpmn:outgoing>
+        <bpmn:compensateEventDefinition />
+      </bpmn:intermediateThrowEvent>
+      <bpmn:endEvent id="Event_CancelEnd" name="Cancelled">
+        <bpmn:incoming>Flow_20</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_20" sourceRef="Event_UndoAll" targetRef="Event_CancelEnd" />
+      <bpmn:sequenceFlow id="Flow_19" sourceRef="Event_CancellationStart" targetRef="Event_UndoAll" />
+    </bpmn:subProcess>
+    <bpmn:dataObject id="DataObject_Order" />
+    <bpmn:dataObjectReference id="DataObjectReference_Order" name="Order" dataObjectRef="DataObject_Order" />
+    <bpmn:dataStoreReference id="DataStoreReference_OrderDb" name="Order DB" dataStoreRef="DataStore_OrderDB" />
+  </bpmn:process>
+  <bpmn:message id="Message_OrderPlaced" name="OrderPlaced" />
+  <bpmn:message id="Message_Tracking" name="Tracking" />
+  <bpmn:error id="Error_Declined" name="Declined" />
+  <bpmn:error id="Error_FulfilFailed" name="FulfilFailed" />
+  <bpmn:message id="Message_CancelOrder" name="CancelOrder" />
+  <bpmn:dataStore id="DataStore_OrderDB" name="Order DB" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_KS">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_KS" bpmnElement="Process_KS">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="421" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="54" y="463" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Validate" bpmnElement="Activity_Validate">
+        <dc:Bounds x="176" y="399" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Valid" bpmnElement="Gateway_Valid" isMarkerVisible="true">
+        <dc:Bounds x="336" y="414" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="338" y="394" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Fulfil" bpmnElement="Activity_Fulfil" isExpanded="true">
+        <dc:Bounds x="446" y="99" width="828" height="679" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FStart" bpmnElement="Event_FStart">
+        <dc:Bounds x="476" y="185" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Reserve" bpmnElement="Activity_Reserve">
+        <dc:Bounds x="572" y="163" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Fork" bpmnElement="Gateway_Fork">
+        <dc:Bounds x="732" y="178" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Charge" bpmnElement="Activity_Charge">
+        <dc:Bounds x="842" y="163" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CompCharge" bpmnElement="Event_CompCharge">
+        <dc:Bounds x="899" y="225" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_PayErr" bpmnElement="Event_PayErr">
+        <dc:Bounds x="855" y="225" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="895" y="233" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FErr" bpmnElement="Event_FErr">
+        <dc:Bounds x="1009" y="322" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="982" y="364" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Join" bpmnElement="Gateway_Join">
+        <dc:Bounds x="1002" y="178" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Tracking" bpmnElement="Event_Tracking">
+        <dc:Bounds x="1112" y="185" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1085" y="227" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FEnd" bpmnElement="Event_FEnd">
+        <dc:Bounds x="1208" y="185" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Pack" bpmnElement="Activity_Pack">
+        <dc:Bounds x="842" y="558" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Refund" bpmnElement="Activity_Refund">
+        <dc:Bounds x="867" y="418" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="873" y="261" />
+        <di:waypoint x="873" y="340" />
+        <di:waypoint x="1009" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="1148" y="203" />
+        <di:waypoint x="1208" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="1052" y="203" />
+        <di:waypoint x="1112" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="942" y="203" />
+        <di:waypoint x="1002" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="782" y="203" />
+        <di:waypoint x="842" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="942" y="598" />
+        <di:waypoint x="1082" y="598" />
+        <di:waypoint x="1082" y="243" />
+        <di:waypoint x="1027" y="243" />
+        <di:waypoint x="1027" y="228" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="757" y="228" />
+        <di:waypoint x="757" y="598" />
+        <di:waypoint x="842" y="598" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="672" y="203" />
+        <di:waypoint x="732" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="512" y="203" />
+        <di:waypoint x="572" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="917" y="261" />
+        <di:waypoint x="917" y="418" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Pick" bpmnElement="DataObjectReference_Pick">
+        <dc:Bounds x="604" y="698" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="589" y="754" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_1" bpmnElement="DataOutputAssociation_1">
+        <di:waypoint x="622" y="243" />
+        <di:waypoint x="622" y="698" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_1" bpmnElement="DataInputAssociation_1">
+        <di:waypoint x="640" y="715" />
+        <di:waypoint x="842" y="621" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FulfilErr" bpmnElement="Event_FulfilErr">
+        <dc:Bounds x="1231" y="760" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1271" y="768" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_SLA" bpmnElement="Event_SLA">
+        <dc:Bounds x="1187" y="760" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1227" y="782" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Delay" bpmnElement="Activity_Delay">
+        <dc:Bounds x="1334" y="997" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Informed" bpmnElement="Event_Informed">
+        <dc:Bounds x="1526" y="1019" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1499" y="1061" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_HandleFail" bpmnElement="Activity_HandleFail">
+        <dc:Bounds x="1334" y="857" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Close" bpmnElement="Activity_Close">
+        <dc:Bounds x="1494" y="399" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_End" bpmnElement="Event_End">
+        <dc:Bounds x="1654" y="421" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1635" y="463" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Reject" bpmnElement="Activity_Reject">
+        <dc:Bounds x="810" y="1137" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Rejected" bpmnElement="Event_Rejected">
+        <dc:Bounds x="1366" y="1159" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1339" y="1201" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CancelSub" bpmnElement="Activity_CancelSub" isExpanded="true">
+        <dc:Bounds x="80" y="1277" width="288" height="120" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CancellationStart" bpmnElement="Event_CancellationStart">
+        <dc:Bounds x="110" y="1322" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="83" y="1364" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_UndoAll" bpmnElement="Event_UndoAll">
+        <dc:Bounds x="206" y="1322" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="179" y="1364" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_CancelEnd" bpmnElement="Event_CancelEnd">
+        <dc:Bounds x="302" y="1322" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="287" y="1364" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_20" bpmnElement="Flow_20">
+        <di:waypoint x="242" y="1340" />
+        <di:waypoint x="302" y="1340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_19" bpmnElement="Flow_19">
+        <di:waypoint x="146" y="1340" />
+        <di:waypoint x="206" y="1340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_18" bpmnElement="Flow_18">
+        <di:waypoint x="1434" y="1037" />
+        <di:waypoint x="1526" y="1037" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_17" bpmnElement="Flow_17">
+        <di:waypoint x="1205" y="796" />
+        <di:waypoint x="1205" y="1037" />
+        <di:waypoint x="1334" y="1037" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_16" bpmnElement="Flow_16">
+        <di:waypoint x="1434" y="897" />
+        <di:waypoint x="1544" y="897" />
+        <di:waypoint x="1544" y="479" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_15" bpmnElement="Flow_15">
+        <di:waypoint x="1249" y="796" />
+        <di:waypoint x="1249" y="897" />
+        <di:waypoint x="1334" y="897" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_13" bpmnElement="Flow_13">
+        <di:waypoint x="1594" y="439" />
+        <di:waypoint x="1654" y="439" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="1274" y="439" />
+        <di:waypoint x="1494" y="439" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_Valid" bpmnElement="Flow_Valid">
+        <di:waypoint x="386" y="439" />
+        <di:waypoint x="446" y="439" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="394" y="421" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_14" bpmnElement="Flow_14">
+        <di:waypoint x="910" y="1177" />
+        <di:waypoint x="1366" y="1177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_Invalid" bpmnElement="Flow_Invalid">
+        <di:waypoint x="361" y="464" />
+        <di:waypoint x="361" y="1177" />
+        <di:waypoint x="810" y="1177" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="1159" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="439" />
+        <di:waypoint x="336" y="439" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="439" />
+        <di:waypoint x="176" y="439" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Order" bpmnElement="DataObjectReference_Order">
+        <dc:Bounds x="208" y="1457" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="207" y="1513" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_2" bpmnElement="DataOutputAssociation_2">
+        <di:waypoint x="226" y="479" />
+        <di:waypoint x="226" y="1457" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_2" bpmnElement="DataInputAssociation_2">
+        <di:waypoint x="244" y="1468" />
+        <di:waypoint x="1494" y="479" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataStoreReference_OrderDb" bpmnElement="DataStoreReference_OrderDb">
+        <dc:Bounds x="1519" y="1457" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1514" y="1513" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_3" bpmnElement="DataOutputAssociation_3">
+        <di:waypoint x="1544" y="479" />
+        <di:waypoint x="1544" y="1457" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

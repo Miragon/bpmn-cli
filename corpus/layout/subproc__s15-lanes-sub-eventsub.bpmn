@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_Main" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Main" name="s15-lanes-sub-eventsub" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_CS" name="Customer service">
+        <bpmn:flowNodeRef>Event_Start</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_TakeOrder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Confirm</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Inform</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Informed</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_WH" name="Warehouse">
+        <bpmn:flowNodeRef>Activity_Fulfilment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Overdue</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_OrderError</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_TakeOrder" name="Take order">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_1">
+        <bpmn:targetRef>DataObjectReference_Order</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:subProcess id="Activity_Fulfilment" name="Fulfilment">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:startEvent id="Event_FStart" name="F start">
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_Pick" name="Pick">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:userTask id="Activity_Pack" name="Pack">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+        <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_FDone" name="F done">
+        <bpmn:incoming>Flow_7</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Pack" targetRef="Event_FDone" />
+      <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Pick" targetRef="Activity_Pack" />
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Event_FStart" targetRef="Activity_Pick" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_Overdue" name="Overdue" cancelActivity="false" attachedToRef="Activity_Fulfilment">
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sendTask id="Activity_Inform" name="Inform customer">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Informed" name="Informed">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Activity_Inform" targetRef="Event_Informed" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Event_Overdue" targetRef="Activity_Inform" />
+    <bpmn:userTask id="Activity_Confirm" name="Confirm">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Confirm" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Fulfilment" targetRef="Activity_Confirm" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_TakeOrder" targetRef="Activity_Fulfilment" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_TakeOrder" />
+    <bpmn:subProcess id="Activity_OrderError" name="Order error" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_1">
+        <bpmn:outgoing>Flow_10</bpmn:outgoing>
+        <bpmn:errorEventDefinition errorRef="Error_OrderError" />
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_FixOrder" name="Fix order">
+        <bpmn:incoming>Flow_10</bpmn:incoming>
+        <bpmn:outgoing>Flow_11</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_Fixed" name="Fixed">
+        <bpmn:incoming>Flow_11</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_11" sourceRef="Activity_FixOrder" targetRef="Event_Fixed" />
+      <bpmn:sequenceFlow id="Flow_10" sourceRef="Event_1" targetRef="Activity_FixOrder" />
+    </bpmn:subProcess>
+    <bpmn:dataObject id="DataObject_Order" />
+    <bpmn:dataObjectReference id="DataObjectReference_Order" name="Order" dataObjectRef="DataObject_Order" />
+    <bpmn:textAnnotation id="TextAnnotation_Note">
+      <bpmn:text>Orders arrive by phone or web</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1" sourceRef="TextAnnotation_Note" targetRef="Activity_TakeOrder" />
+  </bpmn:process>
+  <bpmn:error id="Error_OrderError" name="OrderError" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Shop" bpmnElement="Participant_Shop" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="1144" height="948" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_CS" bpmnElement="Lane_CS" isHorizontal="true">
+        <dc:Bounds x="110" y="80" width="1114" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_WH" bpmnElement="Lane_WH" isHorizontal="true">
+        <dc:Bounds x="110" y="360" width="1114" height="668" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="170" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="169" y="174" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_TakeOrder" bpmnElement="Activity_TakeOrder">
+        <dc:Bounds x="266" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Fulfilment" bpmnElement="Activity_Fulfilment" isExpanded="true">
+        <dc:Bounds x="426" y="409" width="512" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FStart" bpmnElement="Event_FStart">
+        <dc:Bounds x="456" y="476" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="448" y="518" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Pick" bpmnElement="Activity_Pick">
+        <dc:Bounds x="552" y="454" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Pack" bpmnElement="Activity_Pack">
+        <dc:Bounds x="712" y="454" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FDone" bpmnElement="Event_FDone">
+        <dc:Bounds x="872" y="476" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="867" y="518" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="812" y="494" />
+        <di:waypoint x="872" y="494" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="652" y="494" />
+        <di:waypoint x="712" y="494" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="492" y="494" />
+        <di:waypoint x="552" y="494" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Overdue" bpmnElement="Event_Overdue">
+        <dc:Bounds x="895" y="546" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="935" y="568" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Inform" bpmnElement="Activity_Inform">
+        <dc:Bounds x="998" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Informed" bpmnElement="Event_Informed">
+        <dc:Bounds x="1158" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1146" y="314" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Confirm" bpmnElement="Activity_Confirm">
+        <dc:Bounds x="998" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="1158" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1160" y="174" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_OrderError" bpmnElement="Activity_OrderError" isExpanded="true">
+        <dc:Bounds x="170" y="643" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_1" bpmnElement="Event_1">
+        <dc:Bounds x="200" y="710" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_FixOrder" bpmnElement="Activity_FixOrder">
+        <dc:Bounds x="296" y="688" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Fixed" bpmnElement="Event_Fixed">
+        <dc:Bounds x="456" y="710" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="455" y="752" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="396" y="728" />
+        <di:waypoint x="456" y="728" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="236" y="728" />
+        <di:waypoint x="296" y="728" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="1098" y="290" />
+        <di:waypoint x="1158" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="931" y="564" />
+        <di:waypoint x="1048" y="564" />
+        <di:waypoint x="1048" y="330" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="1098" y="150" />
+        <di:waypoint x="1158" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="938" y="487" />
+        <di:waypoint x="1128" y="487" />
+        <di:waypoint x="1128" y="205" />
+        <di:waypoint x="1048" y="205" />
+        <di:waypoint x="1048" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="316" y="190" />
+        <di:waypoint x="316" y="487" />
+        <di:waypoint x="426" y="487" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="206" y="150" />
+        <di:waypoint x="266" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Order" bpmnElement="DataObjectReference_Order">
+        <dc:Bounds x="298" y="858" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="297" y="914" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_1" bpmnElement="DataOutputAssociation_1">
+        <di:waypoint x="316" y="190" />
+        <di:waypoint x="316" y="858" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_Note" bpmnElement="TextAnnotation_Note">
+        <dc:Bounds x="196" y="968" width="240" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="316" y="968" />
+        <di:waypoint x="316" y="190" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

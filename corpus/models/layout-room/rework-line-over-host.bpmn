@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Orders" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0">
+  <bpmn:process id="Process_Orders" name="Orders" isExecutable="false">
+    <bpmn:startEvent id="Event_OrderReceived" name="Order received">
+      <bpmn:outgoing>Flow_OrderReceivedToEnterOrder</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_EnterOrder" name="Enter order">
+      <bpmn:incoming>Flow_OrderReceivedToEnterOrder</bpmn:incoming>
+      <bpmn:incoming>Flow_ShipOrderToEnterOrder</bpmn:incoming>
+      <bpmn:outgoing>Flow_EnterOrderToCheckOrder</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_CheckOrder" name="Check order">
+      <bpmn:incoming>Flow_EnterOrderToCheckOrder</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckOrderToUrgent</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Urgent" name="Urgent?">
+      <bpmn:incoming>Flow_CheckOrderToUrgent</bpmn:incoming>
+      <bpmn:outgoing>Flow_UrgentNo</bpmn:outgoing>
+      <bpmn:outgoing>Flow_UrgentYes</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Activity_ShipOrder" name="Ship order">
+      <bpmn:incoming>Flow_UrgentNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_ShipOrderToOrderShipped</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ShipOrderToEnterOrder</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_OrderShipped" name="Order shipped">
+      <bpmn:incoming>Flow_ShipOrderToOrderShipped</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Activity_Escalate" name="Escalate">
+      <bpmn:incoming>Flow_UrgentYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalateToEscalated</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_Escalated" name="Escalated">
+      <bpmn:incoming>Flow_EscalateToEscalated</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_OrderReceivedToEnterOrder" sourceRef="Event_OrderReceived" targetRef="Activity_EnterOrder" />
+    <bpmn:sequenceFlow id="Flow_EnterOrderToCheckOrder" sourceRef="Activity_EnterOrder" targetRef="Activity_CheckOrder" />
+    <bpmn:sequenceFlow id="Flow_CheckOrderToUrgent" sourceRef="Activity_CheckOrder" targetRef="Gateway_Urgent" />
+    <bpmn:sequenceFlow id="Flow_UrgentNo" name="no" sourceRef="Gateway_Urgent" targetRef="Activity_ShipOrder" />
+    <bpmn:sequenceFlow id="Flow_ShipOrderToOrderShipped" sourceRef="Activity_ShipOrder" targetRef="Event_OrderShipped" />
+    <bpmn:sequenceFlow id="Flow_UrgentYes" name="yes" sourceRef="Gateway_Urgent" targetRef="Activity_Escalate" />
+    <bpmn:sequenceFlow id="Flow_EscalateToEscalated" sourceRef="Activity_Escalate" targetRef="Event_Escalated" />
+    <bpmn:sequenceFlow id="Flow_ShipOrderToEnterOrder" sourceRef="Activity_ShipOrder" targetRef="Activity_EnterOrder" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Orders">
+      <bpmndi:BPMNShape id="Event_OrderReceived_di" bpmnElement="Event_OrderReceived">
+        <dc:Bounds x="150" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="140" y="223" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_EnterOrder_di" bpmnElement="Activity_EnterOrder">
+        <dc:Bounds x="240" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CheckOrder_di" bpmnElement="Activity_CheckOrder">
+        <dc:Bounds x="400" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Urgent_di" bpmnElement="Gateway_Urgent">
+        <dc:Bounds x="570" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="560" y="230" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ShipOrder_di" bpmnElement="Activity_ShipOrder">
+        <dc:Bounds x="680" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_OrderShipped_di" bpmnElement="Event_OrderShipped">
+        <dc:Bounds x="834" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="824" y="223" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Escalate_di" bpmnElement="Activity_Escalate">
+        <dc:Bounds x="680" y="520" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Escalated_di" bpmnElement="Event_Escalated">
+        <dc:Bounds x="834" y="542" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="824" y="583" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_OrderReceivedToEnterOrder_di" bpmnElement="Flow_OrderReceivedToEnterOrder">
+        <di:waypoint x="186" y="200" />
+        <di:waypoint x="240" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EnterOrderToCheckOrder_di" bpmnElement="Flow_EnterOrderToCheckOrder">
+        <di:waypoint x="340" y="200" />
+        <di:waypoint x="400" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CheckOrderToUrgent_di" bpmnElement="Flow_CheckOrderToUrgent">
+        <di:waypoint x="500" y="200" />
+        <di:waypoint x="570" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_UrgentNo_di" bpmnElement="Flow_UrgentNo">
+        <di:waypoint x="620" y="200" />
+        <di:waypoint x="680" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ShipOrderToOrderShipped_di" bpmnElement="Flow_ShipOrderToOrderShipped">
+        <di:waypoint x="780" y="200" />
+        <di:waypoint x="834" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_UrgentYes_di" bpmnElement="Flow_UrgentYes">
+        <di:waypoint x="595" y="225" />
+        <di:waypoint x="595" y="560" />
+        <di:waypoint x="680" y="560" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_EscalateToEscalated_di" bpmnElement="Flow_EscalateToEscalated">
+        <di:waypoint x="780" y="560" />
+        <di:waypoint x="834" y="560" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ShipOrderToEnterOrder_di" bpmnElement="Flow_ShipOrderToEnterOrder">
+        <di:waypoint x="730" y="160" />
+        <di:waypoint x="730" y="150" />
+        <di:waypoint x="290" y="150" />
+        <di:waypoint x="290" y="160" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Worker" name="Worker" processRef="Process_Main" />
+    <bpmn:participant id="Participant_Client" name="Client" processRef="Process_Client" />
+    <bpmn:messageFlow id="Flow_12" name="Job" sourceRef="Activity_SendJob" targetRef="Event_JobReceived" />
+    <bpmn:messageFlow id="Flow_13" name="Result" sourceRef="Activity_SendResult" targetRef="Activity_WaitResult" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Main" name="s12-msgflow-far" isExecutable="true">
+    <bpmn:startEvent id="Event_JobReceived" name="Job received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Job" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Activity_Compute" name="Compute">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sendTask id="Activity_SendResult" name="Send result">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_WorkerDone" name="Worker done">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_SendResult" targetRef="Event_WorkerDone" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Compute" targetRef="Activity_SendResult" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_JobReceived" targetRef="Activity_Compute" />
+  </bpmn:process>
+  <bpmn:process id="Process_Client" isExecutable="false">
+    <bpmn:startEvent id="Event_ClientStart" name="Client start">
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_S1" name="Step 1">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_S2" name="Step 2">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sendTask id="Activity_SendJob" name="Send job">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:userTask id="Activity_S4" name="Step 4">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_S5" name="Step 5">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_S6" name="Step 6">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:receiveTask id="Activity_WaitResult" name="Wait result">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:outgoing>Flow_11</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:endEvent id="Event_ClientDone" name="Client done">
+      <bpmn:incoming>Flow_11</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="Activity_WaitResult" targetRef="Event_ClientDone" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_S6" targetRef="Activity_WaitResult" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Activity_S5" targetRef="Activity_S6" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_S4" targetRef="Activity_S5" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_SendJob" targetRef="Activity_S4" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_S2" targetRef="Activity_SendJob" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_S1" targetRef="Activity_S2" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Event_ClientStart" targetRef="Activity_S1" />
+  </bpmn:process>
+  <bpmn:message id="Message_Job" name="Job" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Worker" bpmnElement="Participant_Worker" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="1342" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_JobReceived" bpmnElement="Event_JobReceived">
+        <dc:Bounds x="140" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="114" y="174" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Compute" bpmnElement="Activity_Compute">
+        <dc:Bounds x="236" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendResult" bpmnElement="Activity_SendResult">
+        <dc:Bounds x="396" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_WorkerDone" bpmnElement="Event_WorkerDone">
+        <dc:Bounds x="556" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="534" y="174" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="496" y="150" />
+        <di:waypoint x="556" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="336" y="150" />
+        <di:waypoint x="396" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="176" y="150" />
+        <di:waypoint x="236" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Client" bpmnElement="Participant_Client" isHorizontal="true">
+        <dc:Bounds x="80" y="310" width="1342" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClientStart" bpmnElement="Event_ClientStart">
+        <dc:Bounds x="140" y="362" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="114" y="404" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_S1" bpmnElement="Activity_S1">
+        <dc:Bounds x="236" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_S2" bpmnElement="Activity_S2">
+        <dc:Bounds x="396" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendJob" bpmnElement="Activity_SendJob">
+        <dc:Bounds x="556" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_S4" bpmnElement="Activity_S4">
+        <dc:Bounds x="716" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_S5" bpmnElement="Activity_S5">
+        <dc:Bounds x="876" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_S6" bpmnElement="Activity_S6">
+        <dc:Bounds x="1036" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_WaitResult" bpmnElement="Activity_WaitResult">
+        <dc:Bounds x="1196" y="340" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClientDone" bpmnElement="Event_ClientDone">
+        <dc:Bounds x="1356" y="362" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1334" y="404" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="1296" y="380" />
+        <di:waypoint x="1356" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="1136" y="380" />
+        <di:waypoint x="1196" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="976" y="380" />
+        <di:waypoint x="1036" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="816" y="380" />
+        <di:waypoint x="876" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="656" y="380" />
+        <di:waypoint x="716" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="496" y="380" />
+        <di:waypoint x="556" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="336" y="380" />
+        <di:waypoint x="396" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="176" y="380" />
+        <di:waypoint x="236" y="380" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="606" y="340" />
+        <di:waypoint x="606" y="270" />
+        <di:waypoint x="158" y="270" />
+        <di:waypoint x="158" y="168" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="166" y="252" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_13" bpmnElement="Flow_13">
+        <di:waypoint x="446" y="190" />
+        <di:waypoint x="446" y="270" />
+        <di:waypoint x="1246" y="270" />
+        <di:waypoint x="1246" y="340" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="454" y="252" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

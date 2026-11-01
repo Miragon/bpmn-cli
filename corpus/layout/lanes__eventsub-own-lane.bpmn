@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Orders" name="Orders" processRef="Process_Orders" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Orders" name="Orders" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Sales" name="Sales">
+        <bpmn:flowNodeRef>Event_Received</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Check</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Stock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_OnCancel</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Warehouse" name="Warehouse">
+        <bpmn:flowNodeRef>Activity_Pick</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Shipping" name="Shipping">
+        <bpmn:flowNodeRef>Activity_Ship</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_Backorder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_Join</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_Received" name="Order received" />
+    <bpmn:task id="Activity_Check" name="Check order" />
+    <bpmn:exclusiveGateway id="Gateway_Stock" name="In stock?" default="Flow_4" />
+    <bpmn:task id="Activity_Pick" name="Pick items" />
+    <bpmn:task id="Activity_Ship" name="Ship order" />
+    <bpmn:task id="Activity_Backorder" name="Place backorder" />
+    <bpmn:exclusiveGateway id="Gateway_Join" />
+    <bpmn:endEvent id="Event_Done" name="Order done" />
+    <bpmn:subProcess id="Activity_OnCancel" name="Handle cancellation" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_Cancelled" name="Cancelled">
+        <bpmn:messageEventDefinition id="MessageEventDefinition_1" />
+      </bpmn:startEvent>
+      <bpmn:task id="Activity_Refund" name="Refund" />
+      <bpmn:endEvent id="Event_Refunded" name="Refunded" />
+      <bpmn:sequenceFlow id="Flow_C1" sourceRef="Event_Cancelled" targetRef="Activity_Refund" />
+      <bpmn:sequenceFlow id="Flow_C2" sourceRef="Activity_Refund" targetRef="Event_Refunded" />
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Received" targetRef="Activity_Check" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Check" targetRef="Gateway_Stock" />
+    <bpmn:sequenceFlow id="Flow_4" name="yes" sourceRef="Gateway_Stock" targetRef="Activity_Pick" />
+    <bpmn:sequenceFlow id="Flow_5" name="no" sourceRef="Gateway_Stock" targetRef="Activity_Backorder" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Pick" targetRef="Activity_Ship" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Ship" targetRef="Gateway_Join" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_Backorder" targetRef="Gateway_Join" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Gateway_Join" targetRef="Event_Done" />
+  </bpmn:process>
+</bpmn:definitions>

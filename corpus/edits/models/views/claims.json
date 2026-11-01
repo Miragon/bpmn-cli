@@ -1,0 +1,96 @@
+{
+ "model": "models/views/claims.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Assess",
+     "values": {
+      "name": "Assess claim"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Assess",
+     "values": {
+      "name": "Assess claim"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Assess",
+     "values": {
+      "name": "Assess claim X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Assess",
+     "values": {
+      "name": "Assess claim X"
+     }
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 6,
+  "flowNodes": 16,
+  "leafLanes": 2,
+  "edits": {
+   "E1": {
+    "applicable": false,
+    "reason": "no non-gateway node with exactly one outgoing flow"
+   },
+   "E2": {
+    "applicable": false,
+    "reason": "no exclusive gateway with >= 2 outgoing flows"
+   },
+   "E3": {
+    "applicable": false,
+    "reason": "no task with exactly 1 in / 1 out and no boundary event"
+   },
+   "E4": {
+    "applicable": false,
+    "reason": "no task"
+   },
+   "E5": {
+    "applicable": false,
+    "reason": "no task in a lane"
+   },
+   "E6": {
+    "applicable": false,
+    "reason": "no task"
+   },
+   "E7": {
+    "applicable": false,
+    "steps": []
+   },
+   "E8": {
+    "applicable": false,
+    "reason": "no exclusive split with a branch into a non-gateway node with one incoming flow"
+   },
+   "E9": {
+    "applicable": false,
+    "reason": "no exclusive split with a branch into a non-gateway node with one incoming flow"
+   }
+  }
+ }
+}

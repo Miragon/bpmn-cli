@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_S19" name="s19" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="A customer sends in a completely new purchase order through the web portal">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_Check" name="Check the order against the customer master data and the credit limit">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:incoming>Flow_13</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Check" targetRef="Gateway_Long" />
+    <bpmn:exclusiveGateway id="Gateway_Long" name="Is the order complete, the customer known and the credit limit sufficient for the total amount?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_Book" name="Book">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Book" targetRef="Gateway_Long_join" />
+    <bpmn:sequenceFlow id="Flow_3" name="yes, everything is fine and we can continue with the fulfilment process" sourceRef="Gateway_Long" targetRef="Activity_Book" />
+    <bpmn:userTask id="Activity_Clarify" name="Clarify">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_Escalate" name="Escalate after three working days without any response from the customer" attachedToRef="Activity_Clarify">
+      <bpmn:outgoing>Flow_11</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT3D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_Cancelled" name="The order was cancelled because the customer did not respond in time">
+      <bpmn:incoming>Flow_11</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="Event_Escalate" targetRef="Event_Cancelled" />
+    <bpmn:userTask id="Activity_Correct" name="Correct">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_Correct" targetRef="Gateway_Long_join" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Clarify" targetRef="Activity_Correct" />
+    <bpmn:sequenceFlow id="Flow_4" name="no, the customer has to be contacted and the order has to be corrected first" sourceRef="Gateway_Long" targetRef="Activity_Clarify" />
+    <bpmn:userTask id="Activity_Approve" name="Approve">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+      <bpmn:outgoing>Flow_13</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Activity_Approve" targetRef="Gateway_Long_join" />
+    <bpmn:sequenceFlow id="Flow_13" name="the sales manager rejected the approval, so re-check the order with the new limits" sourceRef="Activity_Approve" targetRef="Activity_Check" />
+    <bpmn:sequenceFlow id="Flow_6" name="the credit limit is exceeded so the order needs approval by the sales manager" sourceRef="Gateway_Long" targetRef="Activity_Approve" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Check" />
+    <bpmn:exclusiveGateway id="Gateway_Long_join">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:intermediateCatchEvent id="Event_WaitSync" name="Wait for the nightly synchronisation run of the ERP system to finish">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:outgoing>Flow_12</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT12H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Event_Success" name="The order has been successfully processed and handed over to logistics">
+      <bpmn:incoming>Flow_12</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_12" sourceRef="Event_WaitSync" targetRef="Event_Success" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Gateway_Long_join" targetRef="Event_WaitSync" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_S19">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_S19" bpmnElement="Process_S19">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="160" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="53" y="202" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Check" bpmnElement="Activity_Check">
+        <dc:Bounds x="176" y="138" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Long" bpmnElement="Gateway_Long" isMarkerVisible="true">
+        <dc:Bounds x="336" y="153" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="316" y="35" width="90" height="112" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Book" bpmnElement="Activity_Book">
+        <dc:Bounds x="446" y="138" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Clarify" bpmnElement="Activity_Clarify">
+        <dc:Bounds x="446" y="297" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Escalate" bpmnElement="Event_Escalate">
+        <dc:Bounds x="503" y="359" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="543" y="311" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Cancelled" bpmnElement="Event_Cancelled">
+        <dc:Bounds x="638" y="456" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="611" y="498" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Correct" bpmnElement="Activity_Correct">
+        <dc:Bounds x="606" y="297" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Approve" bpmnElement="Activity_Approve">
+        <dc:Bounds x="446" y="552" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Long_join" bpmnElement="Gateway_Long_join" isMarkerVisible="true">
+        <dc:Bounds x="766" y="153" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_WaitSync" bpmnElement="Event_WaitSync">
+        <dc:Bounds x="876" y="160" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="849" y="202" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Success" bpmnElement="Event_Success">
+        <dc:Bounds x="972" y="160" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="945" y="202" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="178" />
+        <di:waypoint x="336" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="546" y="178" />
+        <di:waypoint x="766" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="386" y="178" />
+        <di:waypoint x="446" y="178" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="394" y="90" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="521" y="395" />
+        <di:waypoint x="521" y="474" />
+        <di:waypoint x="638" y="474" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="706" y="337" />
+        <di:waypoint x="791" y="337" />
+        <di:waypoint x="791" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="546" y="337" />
+        <di:waypoint x="606" y="337" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="361" y="203" />
+        <di:waypoint x="361" y="337" />
+        <di:waypoint x="446" y="337" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="249" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="546" y="592" />
+        <di:waypoint x="791" y="592" />
+        <di:waypoint x="791" y="203" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_13" bpmnElement="Flow_13">
+        <di:waypoint x="496" y="632" />
+        <di:waypoint x="496" y="662" />
+        <di:waypoint x="226" y="662" />
+        <di:waypoint x="226" y="218" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="398" y="560" width="90" height="98" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="361" y="203" />
+        <di:waypoint x="361" y="592" />
+        <di:waypoint x="446" y="592" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="504" width="90" height="84" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="178" />
+        <di:waypoint x="176" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="912" y="178" />
+        <di:waypoint x="972" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="816" y="178" />
+        <di:waypoint x="876" y="178" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

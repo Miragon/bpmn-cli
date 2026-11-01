@@ -1,0 +1,285 @@
+{
+ "model": "models/layout-room/timer-on-subprocess.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_HandleCase",
+     "values": {
+      "name": "Handle case"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_HandleCase",
+     "values": {
+      "name": "Handle case"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_HandleCase",
+     "values": {
+      "name": "Handle case X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_HandleCase",
+     "values": {
+      "name": "Handle case X"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "insert": {
+   "ops": [
+    {
+     "op": "add",
+     "kind": "task",
+     "name": "Audit step",
+     "after": "Activity_WorkCase"
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 5,
+  "flowNodes": 9,
+  "leafLanes": 0,
+  "edits": {
+   "E1": {
+    "applicable": true,
+    "target": "Activity_HandleCase",
+    "onPath": true,
+    "expect": {
+     "kind": "inserted",
+     "id": "Activity_BenchE1",
+     "type": "bpmn:UserTask",
+     "pred": "Activity_HandleCase",
+     "succ": "Gateway_CaseMerge"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE1",
+      "name": "Bench inserted task",
+      "after": "Activity_HandleCase"
+     }
+    ]
+   },
+   "E2": {
+    "applicable": true,
+    "target": "Gateway_Express",
+    "onPath": true,
+    "expect": {
+     "kind": "branch",
+     "gateway": "Gateway_Express",
+     "task": "Activity_BenchE2",
+     "end": "Event_BenchE2End"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE2",
+      "name": "Bench branch task",
+      "after": "Gateway_Express",
+      "flowName": "bench",
+      "condition": "${bench}"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE2End",
+      "name": "Bench branch end",
+      "after": "Activity_BenchE2"
+     }
+    ]
+   },
+   "E3": {
+    "applicable": true,
+    "target": "Activity_WorkCase",
+    "onPath": false,
+    "expect": {
+     "kind": "removed",
+     "id": "Activity_WorkCase",
+     "pred": "Event_WorkStarted",
+     "succ": "Event_WorkDone"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "remove",
+      "ids": [
+       "Activity_WorkCase"
+      ]
+     }
+    ]
+   },
+   "E4": {
+    "applicable": false,
+    "reason": "no task"
+   },
+   "E5": {
+    "applicable": false,
+    "reason": "fewer than 2 lanes"
+   },
+   "E6": {
+    "applicable": false,
+    "reason": "no task"
+   },
+   "E7": {
+    "applicable": true,
+    "steps": [
+     "E1",
+     "E2",
+     "E3"
+    ]
+   },
+   "E8": {
+    "applicable": true,
+    "target": "Gateway_Express",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gateway_Express",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Activity_HandleCase",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "Flow_ExpressNo"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Activity_HandleCase"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     }
+    ]
+   },
+   "E9": {
+    "applicable": true,
+    "target": "Gateway_Express",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gateway_Express",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Activity_HandleCase",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd",
+     "timer": {
+      "event": "Event_BenchE9Timer",
+      "task": "Activity_BenchE9Remind",
+      "end": "Event_BenchE9Reminded"
+     }
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "Flow_ExpressNo"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Activity_HandleCase"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     },
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE9Timer",
+      "name": "Bench 3 days",
+      "on": "Activity_BenchE8",
+      "timer": "P3D",
+      "nonInterrupting": true
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE9Remind",
+      "name": "Bench reminder",
+      "after": "Event_BenchE9Timer"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE9Reminded",
+      "name": "Bench reminded",
+      "after": "Activity_BenchE9Remind"
+     }
+    ]
+   }
+  }
+ }
+}

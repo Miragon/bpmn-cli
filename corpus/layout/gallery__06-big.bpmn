@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Claims" name="Claims" isExecutable="true">
+    <bpmn:startEvent id="Event_ClaimReceived" name="Claim received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_RegisterClaim" name="Register claim">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_RegisterClaim" targetRef="Gateway_ClaimType" />
+    <bpmn:exclusiveGateway id="Gateway_ClaimType" name="Claim type?" default="Flow_8">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_FetchCarData" name="Fetch car data">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Activity_AssessCarDamage" name="Assess car damage">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Activity_AssessCarDamage" targetRef="Gateway_ClaimType_join" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_FetchCarData" targetRef="Activity_AssessCarDamage" />
+    <bpmn:sequenceFlow id="Flow_3" name="car" sourceRef="Gateway_ClaimType" targetRef="Activity_FetchCarData">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=type="car"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:userTask id="Activity_ScheduleInspection" name="Schedule inspection">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_InspectHouse" name="Inspect house">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_7Days" name="7 days" cancelActivity="false" attachedToRef="Activity_InspectHouse">
+      <bpmn:outgoing>Flow_22</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P7D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sendTask id="Activity_EscalateToManager" name="Escalate to manager">
+      <bpmn:incoming>Flow_22</bpmn:incoming>
+      <bpmn:outgoing>Flow_23</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Escalated" name="Escalated">
+      <bpmn:incoming>Flow_23</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_23" sourceRef="Activity_EscalateToManager" targetRef="Event_Escalated" />
+    <bpmn:sequenceFlow id="Flow_22" sourceRef="Event_7Days" targetRef="Activity_EscalateToManager" />
+    <bpmn:businessRuleTask id="Activity_EstimateHouseDamage" name="Estimate house damage">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_EstimateHouseDamage" targetRef="Gateway_ClaimType_join" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_InspectHouse" targetRef="Activity_EstimateHouseDamage" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_ScheduleInspection" targetRef="Activity_InspectHouse" />
+    <bpmn:sequenceFlow id="Flow_5" name="house" sourceRef="Gateway_ClaimType" targetRef="Activity_ScheduleInspection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=type="house"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:userTask id="Activity_ManualAssessment" name="Manual assessment">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_11</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="Activity_ManualAssessment" targetRef="Gateway_ClaimType_join" />
+    <bpmn:sequenceFlow id="Flow_8" name="other" sourceRef="Gateway_ClaimType" targetRef="Activity_ManualAssessment" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_ClaimReceived" targetRef="Activity_RegisterClaim" />
+    <bpmn:exclusiveGateway id="Gateway_ClaimType_join">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+      <bpmn:incoming>Flow_11</bpmn:incoming>
+      <bpmn:incoming>Flow_21</bpmn:incoming>
+      <bpmn:outgoing>Flow_12</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_12" sourceRef="Gateway_ClaimType_join" targetRef="Gateway_1" />
+    <bpmn:parallelGateway id="Gateway_1">
+      <bpmn:incoming>Flow_12</bpmn:incoming>
+      <bpmn:outgoing>Flow_13</bpmn:outgoing>
+      <bpmn:outgoing>Flow_14</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Activity_CalculatePayout" name="Calculate payout">
+      <bpmn:incoming>Flow_13</bpmn:incoming>
+      <bpmn:outgoing>Flow_15</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="Flow_15" sourceRef="Activity_CalculatePayout" targetRef="Gateway_1_join" />
+    <bpmn:sequenceFlow id="Flow_13" sourceRef="Gateway_1" targetRef="Activity_CalculatePayout" />
+    <bpmn:userTask id="Activity_CheckFraudIndicators" name="Check fraud indicators">
+      <bpmn:incoming>Flow_14</bpmn:incoming>
+      <bpmn:outgoing>Flow_16</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_16" sourceRef="Activity_CheckFraudIndicators" targetRef="Gateway_1_join" />
+    <bpmn:sequenceFlow id="Flow_14" sourceRef="Gateway_1" targetRef="Activity_CheckFraudIndicators" />
+    <bpmn:parallelGateway id="Gateway_1_join">
+      <bpmn:incoming>Flow_15</bpmn:incoming>
+      <bpmn:incoming>Flow_16</bpmn:incoming>
+      <bpmn:outgoing>Flow_17</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:exclusiveGateway id="Gateway_Approve" name="Approve?" default="Flow_20">
+      <bpmn:incoming>Flow_17</bpmn:incoming>
+      <bpmn:outgoing>Flow_18</bpmn:outgoing>
+      <bpmn:outgoing>Flow_20</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_PayOut" name="Pay out">
+      <bpmn:incoming>Flow_18</bpmn:incoming>
+      <bpmn:outgoing>Flow_19</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_ClaimSettled" name="Claim settled">
+      <bpmn:incoming>Flow_19</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_19" sourceRef="Activity_PayOut" targetRef="Event_ClaimSettled" />
+    <bpmn:sequenceFlow id="Flow_18" name="yes" sourceRef="Gateway_Approve" targetRef="Activity_PayOut">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=approved</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:userTask id="Activity_ReworkAssessment" name="Rework assessment">
+      <bpmn:incoming>Flow_20</bpmn:incoming>
+      <bpmn:outgoing>Flow_21</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_21" sourceRef="Activity_ReworkAssessment" targetRef="Gateway_ClaimType_join" />
+    <bpmn:sequenceFlow id="Flow_20" name="no" sourceRef="Gateway_Approve" targetRef="Activity_ReworkAssessment" />
+    <bpmn:sequenceFlow id="Flow_17" sourceRef="Gateway_1_join" targetRef="Gateway_Approve" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Claims">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Claims" bpmnElement="Process_Claims">
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClaimReceived" bpmnElement="Event_ClaimReceived">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="53" y="144" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_RegisterClaim" bpmnElement="Activity_RegisterClaim">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_ClaimType" bpmnElement="Gateway_ClaimType" isMarkerVisible="true">
+        <dc:Bounds x="336" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="321" y="75" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_FetchCarData" bpmnElement="Activity_FetchCarData">
+        <dc:Bounds x="446" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_AssessCarDamage" bpmnElement="Activity_AssessCarDamage">
+        <dc:Bounds x="606" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ScheduleInspection" bpmnElement="Activity_ScheduleInspection">
+        <dc:Bounds x="446" y="239" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_InspectHouse" bpmnElement="Activity_InspectHouse">
+        <dc:Bounds x="606" y="239" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_7Days" bpmnElement="Event_7Days">
+        <dc:Bounds x="663" y="301" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="703" y="323" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_EscalateToManager" bpmnElement="Activity_EscalateToManager">
+        <dc:Bounds x="766" y="398" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Escalated" bpmnElement="Event_Escalated">
+        <dc:Bounds x="933" y="420" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="918" y="462" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_EstimateHouseDamage" bpmnElement="Activity_EstimateHouseDamage">
+        <dc:Bounds x="766" y="239" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ManualAssessment" bpmnElement="Activity_ManualAssessment">
+        <dc:Bounds x="446" y="538" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_ClaimType_join" bpmnElement="Gateway_ClaimType_join" isMarkerVisible="true">
+        <dc:Bounds x="926" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_1" bpmnElement="Gateway_1">
+        <dc:Bounds x="1036" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CalculatePayout" bpmnElement="Activity_CalculatePayout">
+        <dc:Bounds x="1146" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CheckFraudIndicators" bpmnElement="Activity_CheckFraudIndicators">
+        <dc:Bounds x="1146" y="239" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_1_join" bpmnElement="Gateway_1_join">
+        <dc:Bounds x="1306" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Approve" bpmnElement="Gateway_Approve" isMarkerVisible="true">
+        <dc:Bounds x="1416" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1411" y="75" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PayOut" bpmnElement="Activity_PayOut">
+        <dc:Bounds x="1526" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ClaimSettled" bpmnElement="Event_ClaimSettled">
+        <dc:Bounds x="1686" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1659" y="144" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReworkAssessment" bpmnElement="Activity_ReworkAssessment">
+        <dc:Bounds x="1526" y="239" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="706" y="120" />
+        <di:waypoint x="926" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="546" y="120" />
+        <di:waypoint x="606" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="386" y="120" />
+        <di:waypoint x="446" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="394" y="102" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_23" bpmnElement="Flow_23">
+        <di:waypoint x="866" y="438" />
+        <di:waypoint x="933" y="438" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_22" bpmnElement="Flow_22">
+        <di:waypoint x="681" y="337" />
+        <di:waypoint x="681" y="438" />
+        <di:waypoint x="766" y="438" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="866" y="279" />
+        <di:waypoint x="951" y="279" />
+        <di:waypoint x="951" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="706" y="279" />
+        <di:waypoint x="766" y="279" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="546" y="279" />
+        <di:waypoint x="606" y="279" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="279" />
+        <di:waypoint x="446" y="279" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="261" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="546" y="578" />
+        <di:waypoint x="1006" y="578" />
+        <di:waypoint x="1006" y="160" />
+        <di:waypoint x="951" y="160" />
+        <di:waypoint x="951" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="578" />
+        <di:waypoint x="446" y="578" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="560" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="976" y="120" />
+        <di:waypoint x="1036" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_15" bpmnElement="Flow_15">
+        <di:waypoint x="1246" y="120" />
+        <di:waypoint x="1306" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_13" bpmnElement="Flow_13">
+        <di:waypoint x="1086" y="120" />
+        <di:waypoint x="1146" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_16" bpmnElement="Flow_16">
+        <di:waypoint x="1246" y="279" />
+        <di:waypoint x="1331" y="279" />
+        <di:waypoint x="1331" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_14" bpmnElement="Flow_14">
+        <di:waypoint x="1061" y="145" />
+        <di:waypoint x="1061" y="279" />
+        <di:waypoint x="1146" y="279" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_19" bpmnElement="Flow_19">
+        <di:waypoint x="1626" y="120" />
+        <di:waypoint x="1686" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_18" bpmnElement="Flow_18">
+        <di:waypoint x="1466" y="120" />
+        <di:waypoint x="1526" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1474" y="102" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_21" bpmnElement="Flow_21">
+        <di:waypoint x="1576" y="319" />
+        <di:waypoint x="1576" y="608" />
+        <di:waypoint x="1006" y="608" />
+        <di:waypoint x="1006" y="160" />
+        <di:waypoint x="951" y="160" />
+        <di:waypoint x="951" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_20" bpmnElement="Flow_20">
+        <di:waypoint x="1441" y="145" />
+        <di:waypoint x="1441" y="279" />
+        <di:waypoint x="1526" y="279" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1449" y="261" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_17" bpmnElement="Flow_17">
+        <di:waypoint x="1356" y="120" />
+        <di:waypoint x="1416" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

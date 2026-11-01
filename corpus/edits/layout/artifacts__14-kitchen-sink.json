@@ -1,0 +1,302 @@
+{
+ "model": "layout/artifacts__14-kitchen-sink.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Validate",
+     "values": {
+      "name": "Validate order"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Validate",
+     "values": {
+      "name": "Validate order"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Validate",
+     "values": {
+      "name": "Validate order X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "Activity_Validate",
+     "values": {
+      "name": "Validate order X"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "insert": {
+   "ops": [
+    {
+     "op": "add",
+     "kind": "task",
+     "name": "Audit step",
+     "after": "Activity_Validate"
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 6,
+  "flowNodes": 29,
+  "leafLanes": 0,
+  "edits": {
+   "E1": {
+    "applicable": true,
+    "target": "Activity_Fulfil",
+    "onPath": true,
+    "expect": {
+     "kind": "inserted",
+     "id": "Activity_BenchE1",
+     "type": "bpmn:UserTask",
+     "pred": "Activity_Fulfil",
+     "succ": "Activity_Close"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE1",
+      "name": "Bench inserted task",
+      "after": "Activity_Fulfil"
+     }
+    ]
+   },
+   "E2": {
+    "applicable": false,
+    "reason": "no exclusive gateway with >= 2 outgoing flows"
+   },
+   "E3": {
+    "applicable": true,
+    "target": "Activity_Validate",
+    "onPath": true,
+    "expect": {
+     "kind": "removed",
+     "id": "Activity_Validate",
+     "pred": "Event_Start",
+     "succ": "Gateway_Valid"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "remove",
+      "ids": [
+       "Activity_Validate"
+      ]
+     }
+    ]
+   },
+   "E4": {
+    "applicable": true,
+    "target": "Activity_Close",
+    "onPath": true,
+    "expect": {
+     "kind": "boundary",
+     "host": "Activity_Close",
+     "event": "Event_BenchE4",
+     "end": "Event_BenchE4End"
+    },
+    "note": "trigger differs: bpmn-cli timer boundary, bpmn-edit error boundary (no timer op)",
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE4",
+      "name": "Bench timeout",
+      "on": "Activity_Close",
+      "timer": "PT1H"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE4End",
+      "name": "Bench timed out",
+      "after": "Event_BenchE4"
+     }
+    ]
+   },
+   "E5": {
+    "applicable": false,
+    "reason": "fewer than 2 lanes"
+   },
+   "E6": {
+    "applicable": true,
+    "target": "Activity_HandleFail",
+    "onPath": false,
+    "expect": {
+     "kind": "name",
+     "id": "Activity_HandleFail",
+     "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "set",
+      "id": "Activity_HandleFail",
+      "values": {
+       "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+      }
+     }
+    ]
+   },
+   "E7": {
+    "applicable": true,
+    "steps": [
+     "E1",
+     "E3",
+     "E4",
+     "E6"
+    ]
+   },
+   "E8": {
+    "applicable": true,
+    "target": "Gateway_Valid",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gateway_Valid",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Activity_Fulfil",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "Flow_Valid"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Activity_Fulfil"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     }
+    ]
+   },
+   "E9": {
+    "applicable": true,
+    "target": "Gateway_Valid",
+    "onPath": true,
+    "expect": {
+     "kind": "decision",
+     "gateway": "Gateway_Valid",
+     "task": "Activity_BenchE8",
+     "decision": "Gateway_BenchE8",
+     "succ": "Activity_Fulfil",
+     "no": "Activity_BenchE8No",
+     "noEnd": "Event_BenchE8NoEnd",
+     "timer": {
+      "event": "Event_BenchE9Timer",
+      "task": "Activity_BenchE9Remind",
+      "end": "Event_BenchE9Reminded"
+     }
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "add",
+      "kind": "userTask",
+      "id": "Activity_BenchE8",
+      "name": "Bench approval",
+      "flow": "Flow_Valid"
+     },
+     {
+      "op": "add",
+      "kind": "exclusiveGateway",
+      "id": "Gateway_BenchE8",
+      "name": "Bench approved?",
+      "after": "Activity_BenchE8",
+      "before": "Activity_Fulfil"
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE8No",
+      "name": "Bench rejection",
+      "after": "Gateway_BenchE8",
+      "flowName": "no"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE8NoEnd",
+      "name": "Bench rejected",
+      "after": "Activity_BenchE8No"
+     },
+     {
+      "op": "add",
+      "kind": "boundaryEvent:timer",
+      "id": "Event_BenchE9Timer",
+      "name": "Bench 3 days",
+      "on": "Activity_BenchE8",
+      "timer": "P3D",
+      "nonInterrupting": true
+     },
+     {
+      "op": "add",
+      "kind": "sendTask",
+      "id": "Activity_BenchE9Remind",
+      "name": "Bench reminder",
+      "after": "Event_BenchE9Timer"
+     },
+     {
+      "op": "add",
+      "kind": "endEvent",
+      "id": "Event_BenchE9Reminded",
+      "name": "Bench reminded",
+      "after": "Activity_BenchE9Remind"
+     }
+    ]
+   }
+  }
+ }
+}

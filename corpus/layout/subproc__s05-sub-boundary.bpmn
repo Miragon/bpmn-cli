@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Main" name="s05-sub-boundary" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Activity_Order" name="Process order">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:startEvent id="Event_OStart" name="Order start">
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_Validate" name="Validate">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:serviceTask id="Activity_Book" name="Book">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="Event_ODone" name="Order done">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Book" targetRef="Event_ODone" />
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Validate" targetRef="Activity_Book" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Event_OStart" targetRef="Activity_Validate" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_Reminder" name="Reminder" cancelActivity="false" attachedToRef="Activity_Order">
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="Event_Failed" name="Failed" attachedToRef="Activity_Order">
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+      <bpmn:errorEventDefinition errorRef="Error_OrderFailed" />
+    </bpmn:boundaryEvent>
+    <bpmn:userTask id="Activity_HandleFailure" name="Handle failure">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_FailedEnd" name="Failed end">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_HandleFailure" targetRef="Event_FailedEnd" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="Event_Failed" targetRef="Activity_HandleFailure" />
+    <bpmn:sendTask id="Activity_SendReminder" name="Send reminder">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Reminded" name="Reminded">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_SendReminder" targetRef="Event_Reminded" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_Reminder" targetRef="Activity_SendReminder" />
+    <bpmn:serviceTask id="Activity_Ship" name="Ship">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Ship" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Order" targetRef="Activity_Ship" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Order" />
+  </bpmn:process>
+  <bpmn:error id="Error_OrderFailed" name="OrderFailed" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Main">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Main" bpmnElement="Process_Main">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="159" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="201" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Order" bpmnElement="Activity_Order" isExpanded="true">
+        <dc:Bounds x="176" y="99" width="512" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OStart" bpmnElement="Event_OStart">
+        <dc:Bounds x="206" y="166" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="184" y="208" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Validate" bpmnElement="Activity_Validate">
+        <dc:Bounds x="302" y="144" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Book" bpmnElement="Activity_Book">
+        <dc:Bounds x="462" y="144" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ODone" bpmnElement="Event_ODone">
+        <dc:Bounds x="622" y="166" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="603" y="208" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="562" y="184" />
+        <di:waypoint x="622" y="184" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="402" y="184" />
+        <di:waypoint x="462" y="184" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="242" y="184" />
+        <di:waypoint x="302" y="184" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Reminder" bpmnElement="Event_Reminder">
+        <dc:Bounds x="645" y="236" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="685" y="258" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Failed" bpmnElement="Event_Failed">
+        <dc:Bounds x="601" y="236" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="641" y="258" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_HandleFailure" bpmnElement="Activity_HandleFailure">
+        <dc:Bounds x="748" y="473" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_FailedEnd" bpmnElement="Event_FailedEnd">
+        <dc:Bounds x="908" y="495" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="889" y="537" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendReminder" bpmnElement="Activity_SendReminder">
+        <dc:Bounds x="748" y="333" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Reminded" bpmnElement="Event_Reminded">
+        <dc:Bounds x="908" y="355" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="896" y="397" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Ship" bpmnElement="Activity_Ship">
+        <dc:Bounds x="748" y="137" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="908" y="159" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="910" y="201" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="848" y="513" />
+        <di:waypoint x="908" y="513" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="619" y="272" />
+        <di:waypoint x="619" y="513" />
+        <di:waypoint x="748" y="513" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="848" y="373" />
+        <di:waypoint x="908" y="373" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="663" y="272" />
+        <di:waypoint x="663" y="373" />
+        <di:waypoint x="748" y="373" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="848" y="177" />
+        <di:waypoint x="908" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="688" y="177" />
+        <di:waypoint x="748" y="177" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="177" />
+        <di:waypoint x="176" y="177" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

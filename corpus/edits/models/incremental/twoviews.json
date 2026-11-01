@@ -1,0 +1,142 @@
+{
+ "model": "models/incremental/twoviews.bpmn",
+ "roundtrip": {
+  "noop": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "A",
+     "values": {
+      "name": "Task A"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "noop-nl": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "A",
+     "values": {
+      "name": "Task A"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "A",
+     "values": {
+      "name": "Task A X"
+     }
+    }
+   ],
+   "layout": false
+  },
+  "rename-a": {
+   "ops": [
+    {
+     "op": "set",
+     "id": "A",
+     "values": {
+      "name": "Task A X"
+     }
+    }
+   ],
+   "layout": "auto"
+  },
+  "insert": {
+   "ops": [
+    {
+     "op": "add",
+     "kind": "task",
+     "name": "Audit step",
+     "after": "A"
+    }
+   ],
+   "layout": "auto"
+  }
+ },
+ "bench": {
+  "pathLength": 5,
+  "flowNodes": 7,
+  "leafLanes": 0,
+  "edits": {
+   "E1": {
+    "applicable": false,
+    "reason": "no non-gateway node with exactly one outgoing flow"
+   },
+   "E2": {
+    "applicable": false,
+    "reason": "no exclusive gateway with >= 2 outgoing flows"
+   },
+   "E3": {
+    "applicable": true,
+    "target": "C",
+    "onPath": true,
+    "expect": {
+     "kind": "removed",
+     "id": "C",
+     "pred": "A",
+     "succ": "D"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "remove",
+      "ids": [
+       "C"
+      ]
+     }
+    ]
+   },
+   "E4": {
+    "applicable": false,
+    "reason": "no task"
+   },
+   "E5": {
+    "applicable": false,
+    "reason": "fewer than 2 lanes"
+   },
+   "E6": {
+    "applicable": true,
+    "target": "A",
+    "onPath": true,
+    "expect": {
+     "kind": "name",
+     "id": "A",
+     "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+    },
+    "touched": [],
+    "ops": [
+     {
+      "op": "set",
+      "id": "A",
+      "values": {
+       "name": "Check all submitted documents thoroughly and inform the responsible clerk about the outcome"
+      }
+     }
+    ]
+   },
+   "E7": {
+    "applicable": true,
+    "steps": [
+     "E3",
+     "E6"
+    ]
+   },
+   "E8": {
+    "applicable": false,
+    "reason": "no exclusive split with a branch into a non-gateway node with one incoming flow"
+   },
+   "E9": {
+    "applicable": false,
+    "reason": "no exclusive split with a branch into a non-gateway node with one incoming flow"
+   }
+  }
+ }
+}

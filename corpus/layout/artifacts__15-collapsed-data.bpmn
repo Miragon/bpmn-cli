@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_DataSub" name="Data in subprocess" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_Collect" name="Collect data">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="DataOutputAssociation_2">
+        <bpmn:targetRef>DataObjectReference_App</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:subProcess id="Activity_Sub" name="Process application">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      <bpmn:startEvent id="Event_SubStart">
+        <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_Score" name="Score applicant">
+        <bpmn:incoming>Flow_3</bpmn:incoming>
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+        <bpmn:property id="Property_2" name="__targetRef_placeholder" />
+        <bpmn:dataInputAssociation id="DataInputAssociation_2">
+          <bpmn:sourceRef>DataStoreReference_Db</bpmn:sourceRef>
+          <bpmn:targetRef>Property_2</bpmn:targetRef>
+        </bpmn:dataInputAssociation>
+        <bpmn:dataOutputAssociation id="DataOutputAssociation_1">
+          <bpmn:targetRef>DataObjectReference_Score</bpmn:targetRef>
+        </bpmn:dataOutputAssociation>
+      </bpmn:serviceTask>
+      <bpmn:userTask id="Activity_Review" name="Review score">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+        <bpmn:property id="Property_1" name="__targetRef_placeholder" />
+        <bpmn:dataInputAssociation id="DataInputAssociation_1">
+          <bpmn:sourceRef>DataObjectReference_Score</bpmn:sourceRef>
+          <bpmn:targetRef>Property_1</bpmn:targetRef>
+        </bpmn:dataInputAssociation>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_SubEnd">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Review" targetRef="Event_SubEnd" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Score" targetRef="Activity_Review" />
+      <bpmn:sequenceFlow id="Flow_3" sourceRef="Event_SubStart" targetRef="Activity_Score" />
+      <bpmn:dataObject id="DataObject_ScoreSheet" />
+      <bpmn:dataObjectReference id="DataObjectReference_Score" name="Score sheet" dataObjectRef="DataObject_ScoreSheet" />
+      <bpmn:dataStoreReference id="DataStoreReference_Db" name="Applicant DB" dataStoreRef="DataStore_ApplicantDB" />
+      <bpmn:textAnnotation id="TextAnnotation_Score">
+        <bpmn:text>Uses the internal scoring model v3</bpmn:text>
+      </bpmn:textAnnotation>
+      <bpmn:association id="Association_1" sourceRef="TextAnnotation_Score" targetRef="Activity_Score" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Event_ScoreFail" name="Scoring failed" attachedToRef="Activity_Sub">
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+      <bpmn:errorEventDefinition errorRef="Error_ScoreFail" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Event_Failed" name="Failed">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Event_ScoreFail" targetRef="Event_Failed" />
+    <bpmn:userTask id="Activity_Inform" name="Inform applicant">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:property id="Property_3" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="DataInputAssociation_3">
+        <bpmn:sourceRef>DataObjectReference_App</bpmn:sourceRef>
+        <bpmn:targetRef>Property_3</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_End" name="Done">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Inform" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Sub" targetRef="Activity_Inform" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Collect" targetRef="Activity_Sub" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Collect" />
+    <bpmn:dataObject id="DataObject_Application" />
+    <bpmn:dataObjectReference id="DataObjectReference_App" name="Application" dataObjectRef="DataObject_Application" />
+  </bpmn:process>
+  <bpmn:dataStore id="DataStore_ApplicantDB" name="Applicant DB" />
+  <bpmn:error id="Error_ScoreFail" name="ScoreFail" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_DataSub">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_DataSub" bpmnElement="Process_DataSub">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="121" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="163" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Collect" bpmnElement="Activity_Collect">
+        <dc:Bounds x="176" y="99" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Sub" bpmnElement="Activity_Sub">
+        <dc:Bounds x="336" y="99" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ScoreFail" bpmnElement="Event_ScoreFail">
+        <dc:Bounds x="393" y="161" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="433" y="169" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Failed" bpmnElement="Event_Failed">
+        <dc:Bounds x="528" y="258" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="523" y="300" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Inform" bpmnElement="Activity_Inform">
+        <dc:Bounds x="496" y="99" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_End" bpmnElement="Event_End">
+        <dc:Bounds x="656" y="121" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="658" y="163" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="411" y="197" />
+        <di:waypoint x="411" y="276" />
+        <di:waypoint x="528" y="276" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="596" y="139" />
+        <di:waypoint x="656" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="436" y="139" />
+        <di:waypoint x="496" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="139" />
+        <di:waypoint x="336" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="139" />
+        <di:waypoint x="176" y="139" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_App" bpmnElement="DataObjectReference_App">
+        <dc:Bounds x="208" y="354" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="186" y="410" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_2" bpmnElement="DataOutputAssociation_2">
+        <di:waypoint x="226" y="179" />
+        <di:waypoint x="226" y="354" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_3" bpmnElement="DataInputAssociation_3">
+        <di:waypoint x="244" y="366" />
+        <di:waypoint x="496" y="177" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Activity_Sub">
+    <bpmndi:BPMNPlane id="BPMNPlane_Activity_Sub" bpmnElement="Activity_Sub">
+      <bpmndi:BPMNShape id="BPMNShape_Event_SubStart" bpmnElement="Event_SubStart">
+        <dc:Bounds x="80" y="192" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Score" bpmnElement="Activity_Score">
+        <dc:Bounds x="176" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Review" bpmnElement="Activity_Review">
+        <dc:Bounds x="336" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_SubEnd" bpmnElement="Event_SubEnd">
+        <dc:Bounds x="496" y="192" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="436" y="120" />
+        <di:waypoint x="496" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataObjectReference_Score" bpmnElement="DataObjectReference_Score">
+        <dc:Bounds x="208" y="310" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="186" y="366" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataOutputAssociation_1" bpmnElement="DataOutputAssociation_1">
+        <di:waypoint x="226" y="250" />
+        <di:waypoint x="226" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_1" bpmnElement="DataInputAssociation_1">
+        <di:waypoint x="244" y="321" />
+        <di:waypoint x="336" y="249" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_DataStoreReference_Db" bpmnElement="DataStoreReference_Db">
+        <dc:Bounds x="271" y="310" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="252" y="366" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_DataInputAssociation_2" bpmnElement="DataInputAssociation_2">
+        <di:waypoint x="282" y="310" />
+        <di:waypoint x="248" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_Score" bpmnElement="TextAnnotation_Score">
+        <dc:Bounds x="86" y="80" width="280" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="226" y="110" />
+        <di:waypoint x="226" y="170" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

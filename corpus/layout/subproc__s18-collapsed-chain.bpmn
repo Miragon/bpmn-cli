@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Main" name="s18-collapsed-chain" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Activity_Outer" name="Outer">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:startEvent id="Event_OStart" name="O start">
+        <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_OuterTask" name="Outer task">
+        <bpmn:incoming>Flow_3</bpmn:incoming>
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:subProcess id="Activity_Inner" name="Inner">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+        <bpmn:startEvent id="Event_IStart" name="I start">
+          <bpmn:outgoing>Flow_7</bpmn:outgoing>
+        </bpmn:startEvent>
+        <bpmn:serviceTask id="Activity_InnerTask" name="Inner task">
+          <bpmn:incoming>Flow_7</bpmn:incoming>
+          <bpmn:outgoing>Flow_8</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:endEvent id="Event_IDone" name="I done">
+          <bpmn:incoming>Flow_8</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_InnerTask" targetRef="Event_IDone" />
+        <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_IStart" targetRef="Activity_InnerTask" />
+      </bpmn:subProcess>
+      <bpmn:subProcess id="Activity_InnerExp" name="Inner expanded">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+        <bpmn:startEvent id="Event_IEStart" name="IE start">
+          <bpmn:outgoing>Flow_9</bpmn:outgoing>
+        </bpmn:startEvent>
+        <bpmn:serviceTask id="Activity_IETask" name="IE task">
+          <bpmn:incoming>Flow_9</bpmn:incoming>
+          <bpmn:outgoing>Flow_10</bpmn:outgoing>
+        </bpmn:serviceTask>
+        <bpmn:endEvent id="Event_IEDone" name="IE done">
+          <bpmn:incoming>Flow_10</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:sequenceFlow id="Flow_10" sourceRef="Activity_IETask" targetRef="Event_IEDone" />
+        <bpmn:sequenceFlow id="Flow_9" sourceRef="Event_IEStart" targetRef="Activity_IETask" />
+      </bpmn:subProcess>
+      <bpmn:endEvent id="Event_ODone" name="O done">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_InnerExp" targetRef="Event_ODone" />
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Inner" targetRef="Activity_InnerExp" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_OuterTask" targetRef="Activity_Inner" />
+      <bpmn:sequenceFlow id="Flow_3" sourceRef="Event_OStart" targetRef="Activity_OuterTask" />
+    </bpmn:subProcess>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Outer" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Outer" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Main">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Main" bpmnElement="Process_Main">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="144" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Outer" bpmnElement="Activity_Outer">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="336" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="338" y="144" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Activity_Inner">
+    <bpmndi:BPMNPlane id="BPMNPlane_Activity_Inner" bpmnElement="Activity_Inner">
+      <bpmndi:BPMNShape id="BPMNShape_Event_IStart" bpmnElement="Event_IStart">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="72" y="144" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_InnerTask" bpmnElement="Activity_InnerTask">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_IDone" bpmnElement="Event_IDone">
+        <dc:Bounds x="336" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="331" y="144" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Activity_Outer">
+    <bpmndi:BPMNPlane id="BPMNPlane_Activity_Outer" bpmnElement="Activity_Outer">
+      <bpmndi:BPMNShape id="BPMNShape_Event_OStart" bpmnElement="Event_OStart">
+        <dc:Bounds x="80" y="140" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="72" y="182" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_OuterTask" bpmnElement="Activity_OuterTask">
+        <dc:Bounds x="176" y="118" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Inner" bpmnElement="Activity_Inner">
+        <dc:Bounds x="336" y="118" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_InnerExp" bpmnElement="Activity_InnerExp" isExpanded="true">
+        <dc:Bounds x="496" y="80" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_IEStart" bpmnElement="Event_IEStart">
+        <dc:Bounds x="526" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="514" y="189" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_IETask" bpmnElement="Activity_IETask">
+        <dc:Bounds x="622" y="125" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_IEDone" bpmnElement="Event_IEDone">
+        <dc:Bounds x="782" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="774" y="189" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="722" y="165" />
+        <di:waypoint x="782" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="562" y="165" />
+        <di:waypoint x="622" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_ODone" bpmnElement="Event_ODone">
+        <dc:Bounds x="908" y="140" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="903" y="182" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="848" y="158" />
+        <di:waypoint x="908" y="158" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="436" y="158" />
+        <di:waypoint x="496" y="158" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="276" y="158" />
+        <di:waypoint x="336" y="158" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="116" y="158" />
+        <di:waypoint x="176" y="158" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

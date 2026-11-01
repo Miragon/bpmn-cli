@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Offers" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0">
+  <bpmn:process id="Process_Offers" name="Offers" isExecutable="false">
+    <bpmn:startEvent id="Event_RequestReceived" name="Request received">
+      <bpmn:outgoing>Flow_RequestReceivedToPrepareOffer</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_PrepareOffer" name="Prepare offer">
+      <bpmn:incoming>Flow_RequestReceivedToPrepareOffer</bpmn:incoming>
+    </bpmn:userTask>
+    <bpmn:startEvent id="Event_DataReceived" name="Data received">
+      <bpmn:outgoing>Flow_DataReceivedToCollectData</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_CollectData" name="Collect data">
+      <bpmn:incoming>Flow_DataReceivedToCollectData</bpmn:incoming>
+      <bpmn:outgoing>Flow_CollectDataToArchiveData</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Activity_ArchiveData" name="Archive data">
+      <bpmn:incoming>Flow_CollectDataToArchiveData</bpmn:incoming>
+      <bpmn:outgoing>Flow_ArchiveDataToDataArchived</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_DataArchived" name="Data archived">
+      <bpmn:incoming>Flow_ArchiveDataToDataArchived</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_RequestReceivedToPrepareOffer" sourceRef="Event_RequestReceived" targetRef="Activity_PrepareOffer" />
+    <bpmn:sequenceFlow id="Flow_DataReceivedToCollectData" sourceRef="Event_DataReceived" targetRef="Activity_CollectData" />
+    <bpmn:sequenceFlow id="Flow_CollectDataToArchiveData" sourceRef="Activity_CollectData" targetRef="Activity_ArchiveData" />
+    <bpmn:sequenceFlow id="Flow_ArchiveDataToDataArchived" sourceRef="Activity_ArchiveData" targetRef="Event_DataArchived" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Offers">
+    <bpmndi:BPMNPlane id="BPMNPlane_Offers" bpmnElement="Process_Offers">
+      <bpmndi:BPMNShape id="Event_RequestReceived_di" bpmnElement="Event_RequestReceived">
+        <dc:Bounds x="102" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="76" y="225" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PrepareOffer_di" bpmnElement="Activity_PrepareOffer">
+        <dc:Bounds x="180" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_DataReceived_di" bpmnElement="Event_DataReceived">
+        <dc:Bounds x="102" y="382" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="85" y="425" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CollectData_di" bpmnElement="Activity_CollectData">
+        <dc:Bounds x="180" y="360" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ArchiveData_di" bpmnElement="Activity_ArchiveData">
+        <dc:Bounds x="480" y="0" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_DataArchived_di" bpmnElement="Event_DataArchived">
+        <dc:Bounds x="622" y="22" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="605" y="65" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_RequestReceivedToPrepareOffer_di" bpmnElement="Flow_RequestReceivedToPrepareOffer">
+        <di:waypoint x="138" y="200" />
+        <di:waypoint x="180" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DataReceivedToCollectData_di" bpmnElement="Flow_DataReceivedToCollectData">
+        <di:waypoint x="138" y="400" />
+        <di:waypoint x="180" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CollectDataToArchiveData_di" bpmnElement="Flow_CollectDataToArchiveData">
+        <di:waypoint x="280" y="400" />
+        <di:waypoint x="305" y="400" />
+        <di:waypoint x="305" y="40" />
+        <di:waypoint x="480" y="40" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ArchiveDataToDataArchived_di" bpmnElement="Flow_ArchiveDataToDataArchived">
+        <di:waypoint x="580" y="40" />
+        <di:waypoint x="622" y="40" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Main" name="s06-eventsub-nested" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Activity_Payment" name="Payment">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:startEvent id="Event_PStart" name="Pay start">
+        <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Activity_Charge" name="Charge">
+        <bpmn:incoming>Flow_3</bpmn:incoming>
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="Event_Paid" name="Paid">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Charge" targetRef="Event_Paid" />
+      <bpmn:sequenceFlow id="Flow_3" sourceRef="Event_PStart" targetRef="Activity_Charge" />
+      <bpmn:subProcess id="Activity_ChargeError" name="Handle charge error" triggeredByEvent="true">
+        <bpmn:startEvent id="Event_1">
+          <bpmn:outgoing>Flow_5</bpmn:outgoing>
+          <bpmn:errorEventDefinition errorRef="Error_ChargeFailed" />
+        </bpmn:startEvent>
+        <bpmn:userTask id="Activity_Refund" name="Refund">
+          <bpmn:incoming>Flow_5</bpmn:incoming>
+          <bpmn:outgoing>Flow_6</bpmn:outgoing>
+        </bpmn:userTask>
+        <bpmn:endEvent id="Event_Refunded" name="Refunded">
+          <bpmn:incoming>Flow_6</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_Refund" targetRef="Event_Refunded" />
+        <bpmn:sequenceFlow id="Flow_5" sourceRef="Event_1" targetRef="Activity_Refund" />
+      </bpmn:subProcess>
+    </bpmn:subProcess>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Payment" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Payment" />
+    <bpmn:subProcess id="Activity_Timeout" name="Global timeout" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_2">
+        <bpmn:outgoing>Flow_7</bpmn:outgoing>
+        <bpmn:timerEventDefinition>
+          <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
+        </bpmn:timerEventDefinition>
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_Cancel" name="Cancel">
+        <bpmn:incoming>Flow_7</bpmn:incoming>
+        <bpmn:outgoing>Flow_8</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_Cancelled" name="Cancelled">
+        <bpmn:incoming>Flow_8</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_Cancel" targetRef="Event_Cancelled" />
+      <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_2" targetRef="Activity_Cancel" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:error id="Error_ChargeFailed" name="ChargeFailed" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Main">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Main" bpmnElement="Process_Main">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="247" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="289" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Payment" bpmnElement="Activity_Payment" isExpanded="true">
+        <dc:Bounds x="176" y="80" width="412" height="370" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_PStart" bpmnElement="Event_PStart">
+        <dc:Bounds x="206" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="191" y="189" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Charge" bpmnElement="Activity_Charge">
+        <dc:Bounds x="302" y="125" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Paid" bpmnElement="Event_Paid">
+        <dc:Bounds x="462" y="147" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="464" y="189" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ChargeError" bpmnElement="Activity_ChargeError" isExpanded="true">
+        <dc:Bounds x="206" y="265" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_1" bpmnElement="Event_1">
+        <dc:Bounds x="236" y="332" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Refund" bpmnElement="Activity_Refund">
+        <dc:Bounds x="332" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Refunded" bpmnElement="Event_Refunded">
+        <dc:Bounds x="492" y="332" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="480" y="374" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="432" y="350" />
+        <di:waypoint x="492" y="350" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="272" y="350" />
+        <di:waypoint x="332" y="350" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="402" y="165" />
+        <di:waypoint x="462" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="242" y="165" />
+        <di:waypoint x="302" y="165" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="648" y="247" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="650" y="289" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Timeout" bpmnElement="Activity_Timeout" isExpanded="true">
+        <dc:Bounds x="80" y="510" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_2" bpmnElement="Event_2">
+        <dc:Bounds x="110" y="577" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Cancel" bpmnElement="Activity_Cancel">
+        <dc:Bounds x="206" y="555" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Cancelled" bpmnElement="Event_Cancelled">
+        <dc:Bounds x="366" y="577" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="351" y="619" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="306" y="595" />
+        <di:waypoint x="366" y="595" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="146" y="595" />
+        <di:waypoint x="206" y="595" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="588" y="265" />
+        <di:waypoint x="648" y="265" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="265" />
+        <di:waypoint x="176" y="265" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

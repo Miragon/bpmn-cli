@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic roundtrip fixture: formatting another tool wrote, which an edit must keep -->
+<bpmn:definitions xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Styled" targetNamespace="http://bpmn.io/schema/bpmn" modeler:executionPlatform="Camunda Platform" modeler:executionPlatformVersion="7.24.0">
+    <bpmn:process id="Process_Styled" camunda:historyTimeToLive="180" isExecutable="true">
+        <!-- the order starts here -->
+        <bpmn:startEvent id="Start" name="Order received">
+            <bpmn:outgoing>Flow_1</bpmn:outgoing>
+        </bpmn:startEvent>
+        <bpmn:userTask id="Task_Check" camunda:asyncBefore="true" name="Check order" camunda:assignee="clerk">
+            <bpmn:incoming>Flow_1</bpmn:incoming>
+            <bpmn:outgoing>Flow_2</bpmn:outgoing>
+        </bpmn:userTask>
+        <bpmn:exclusiveGateway id="Gateway_Ok" name="Order ok?" default="Flow_No">
+            <bpmn:incoming>Flow_2</bpmn:incoming>
+            <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
+            <bpmn:outgoing>Flow_No</bpmn:outgoing>
+        </bpmn:exclusiveGateway>
+        <!-- scripted step: the script stays readable -->
+        <bpmn:scriptTask id="Task_Script" name="Pick &amp; pack" scriptFormat="javascript">
+            <bpmn:incoming>Flow_Yes</bpmn:incoming>
+            <bpmn:outgoing>Flow_4</bpmn:outgoing>
+            <bpmn:script><![CDATA[var total = a < b && c > 0 ? a : b;]]></bpmn:script>
+        </bpmn:scriptTask>
+        <bpmn:endEvent id='End' name='Done'>
+            <bpmn:incoming>Flow_4</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:endEvent id="End_Rejected" name="Rejected">
+            <bpmn:incoming>Flow_No</bpmn:incoming>
+        </bpmn:endEvent>
+        <bpmn:sequenceFlow id="Flow_1" sourceRef="Start" targetRef="Task_Check"/>
+        <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_Check" targetRef="Gateway_Ok"/>
+        <bpmn:sequenceFlow id="Flow_Yes" name="yes" sourceRef="Gateway_Ok" targetRef="Task_Script">
+            <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[${amount < 100 && ok}]]></bpmn:conditionExpression>
+        </bpmn:sequenceFlow>
+        <bpmn:sequenceFlow id="Flow_No" name="no" sourceRef="Gateway_Ok" targetRef="End_Rejected"/>
+        <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_Script" targetRef="End"/>
+    </bpmn:process>
+    <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+        <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_Styled">
+            <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
+                <dc:Bounds x="152" y="102" width="36" height="36"/>
+                <bpmndi:BPMNLabel><dc:Bounds x="131" y="145" width="79" height="14"/></bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Task_Check_di" bpmnElement="Task_Check">
+                <dc:Bounds x="240" y="80" width="100" height="80"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Gateway_Ok_di" bpmnElement="Gateway_Ok" isMarkerVisible="true">
+                <dc:Bounds x="395" y="95" width="50" height="50"/>
+                <bpmndi:BPMNLabel><dc:Bounds x="395" y="65" width="50" height="14"/></bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="Task_Script_di" bpmnElement="Task_Script">
+                <dc:Bounds x="500" y="80" width="100" height="80"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="End_di" bpmnElement="End">
+                <dc:Bounds x="652" y="102" width="36" height="36"/>
+                <bpmndi:BPMNLabel><dc:Bounds x="657" y="145" width="27" height="14"/></bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape id="End_Rejected_di" bpmnElement="End_Rejected">
+                <dc:Bounds x="402" y="222" width="36" height="36"/>
+                <bpmndi:BPMNLabel><dc:Bounds x="398" y="265" width="44" height="14"/></bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+                <di:waypoint x="188" y="120"/>
+                <di:waypoint x="240" y="120"/>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+                <di:waypoint x="340" y="120"/>
+                <di:waypoint x="395" y="120"/>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_Yes_di" bpmnElement="Flow_Yes">
+                <di:waypoint x="445" y="120"/>
+                <di:waypoint x="500" y="120"/>
+                <bpmndi:BPMNLabel><dc:Bounds x="463" y="102" width="18" height="14"/></bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_No_di" bpmnElement="Flow_No">
+                <di:waypoint x="420" y="145"/>
+                <di:waypoint x="420" y="222"/>
+                <bpmndi:BPMNLabel><dc:Bounds x="428" y="173" width="14" height="14"/></bpmndi:BPMNLabel>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+                <di:waypoint x="600" y="120"/>
+                <di:waypoint x="652" y="120"/>
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+    <!-- end of the synthetic fixture -->
+</bpmn:definitions>

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Main" name="s07-two-eventsubs" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_A" name="Task A">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_B" name="Task B">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_B" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_A" targetRef="Activity_B" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_A" />
+    <bpmn:subProcess id="Activity_CancelSub" name="Cancel requested" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_1" isInterrupting="false">
+        <bpmn:outgoing>Flow_4</bpmn:outgoing>
+        <bpmn:messageEventDefinition messageRef="Message_Cancel" />
+      </bpmn:startEvent>
+      <bpmn:userTask id="Activity_Cancel" name="Cancel">
+        <bpmn:incoming>Flow_4</bpmn:incoming>
+        <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      </bpmn:userTask>
+      <bpmn:endEvent id="Event_Cancelled" name="Cancelled">
+        <bpmn:incoming>Flow_5</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Cancel" targetRef="Event_Cancelled" />
+      <bpmn:sequenceFlow id="Flow_4" sourceRef="Event_1" targetRef="Activity_Cancel" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="Activity_ErrorSub" name="On error" triggeredByEvent="true">
+      <bpmn:startEvent id="Event_2">
+        <bpmn:outgoing>Flow_6</bpmn:outgoing>
+        <bpmn:errorEventDefinition errorRef="Error_Boom" />
+      </bpmn:startEvent>
+      <bpmn:scriptTask id="Activity_Log" name="Log">
+        <bpmn:incoming>Flow_6</bpmn:incoming>
+        <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      </bpmn:scriptTask>
+      <bpmn:endEvent id="Event_Logged" name="Logged">
+        <bpmn:incoming>Flow_7</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_Log" targetRef="Event_Logged" />
+      <bpmn:sequenceFlow id="Flow_6" sourceRef="Event_2" targetRef="Activity_Log" />
+    </bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:message id="Message_Cancel" name="Cancel" />
+  <bpmn:error id="Error_Boom" name="Boom" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Main">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Main" bpmnElement="Process_Main">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="144" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_A" bpmnElement="Activity_A">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_B" bpmnElement="Activity_B">
+        <dc:Bounds x="336" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="496" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="498" y="144" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CancelSub" bpmnElement="Activity_CancelSub" isExpanded="true">
+        <dc:Bounds x="80" y="220" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_1" bpmnElement="Event_1">
+        <dc:Bounds x="110" y="287" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Cancel" bpmnElement="Activity_Cancel">
+        <dc:Bounds x="206" y="265" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Cancelled" bpmnElement="Event_Cancelled">
+        <dc:Bounds x="366" y="287" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="351" y="329" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="306" y="305" />
+        <di:waypoint x="366" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="146" y="305" />
+        <di:waypoint x="206" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ErrorSub" bpmnElement="Activity_ErrorSub" isExpanded="true">
+        <dc:Bounds x="80" y="435" width="352" height="155" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_2" bpmnElement="Event_2">
+        <dc:Bounds x="110" y="502" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Log" bpmnElement="Activity_Log">
+        <dc:Bounds x="206" y="480" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Logged" bpmnElement="Event_Logged">
+        <dc:Bounds x="366" y="502" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="361" y="544" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="306" y="520" />
+        <di:waypoint x="366" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="146" y="520" />
+        <di:waypoint x="206" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="436" y="120" />
+        <di:waypoint x="496" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

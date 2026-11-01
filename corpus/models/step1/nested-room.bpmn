@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic hand drawing: the event sub-process EV at the bottom of OUT has free room on its right inside OUT;
+     AFTER (right of OUT) lies in OUT's rows but above EV's rows. -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Defs_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="M1" name="Cancel"/>
+  <bpmn:process id="P1" isExecutable="true">
+    <bpmn:startEvent id="S"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:subProcess id="OUT" name="Outer"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing>
+      <bpmn:startEvent id="OS"><bpmn:outgoing>G1</bpmn:outgoing></bpmn:startEvent>
+      <bpmn:task id="OT" name="Work"><bpmn:incoming>G1</bpmn:incoming><bpmn:outgoing>G2</bpmn:outgoing></bpmn:task>
+      <bpmn:endEvent id="OE"><bpmn:incoming>G2</bpmn:incoming></bpmn:endEvent>
+      <bpmn:sequenceFlow id="G1" sourceRef="OS" targetRef="OT"/>
+      <bpmn:sequenceFlow id="G2" sourceRef="OT" targetRef="OE"/>
+      <bpmn:subProcess id="EV" name="On cancel" triggeredByEvent="true">
+        <bpmn:startEvent id="ES" isInterrupting="false"><bpmn:outgoing>H1</bpmn:outgoing><bpmn:messageEventDefinition id="MD1" messageRef="M1"/></bpmn:startEvent>
+        <bpmn:task id="EH" name="Handle"><bpmn:incoming>H1</bpmn:incoming><bpmn:outgoing>H2</bpmn:outgoing></bpmn:task>
+        <bpmn:endEvent id="EE"><bpmn:incoming>H2</bpmn:incoming></bpmn:endEvent>
+        <bpmn:sequenceFlow id="H1" sourceRef="ES" targetRef="EH"/>
+        <bpmn:sequenceFlow id="H2" sourceRef="EH" targetRef="EE"/>
+      </bpmn:subProcess>
+    </bpmn:subProcess>
+    <bpmn:task id="AFTER" name="After"><bpmn:incoming>F2</bpmn:incoming><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
+    <bpmn:endEvent id="E"><bpmn:incoming>F3</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="S" targetRef="OUT"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="OUT" targetRef="AFTER"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="AFTER" targetRef="E"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="D1">
+    <bpmndi:BPMNPlane id="PL1" bpmnElement="P1">
+      <bpmndi:BPMNShape id="S_di" bpmnElement="S"><dc:Bounds x="100" y="272" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="OUT_di" bpmnElement="OUT" isExpanded="true"><dc:Bounds x="180" y="80" width="600" height="460"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="OS_di" bpmnElement="OS"><dc:Bounds x="210" y="142" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="OT_di" bpmnElement="OT"><dc:Bounds x="290" y="120" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="OE_di" bpmnElement="OE"><dc:Bounds x="450" y="142" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EV_di" bpmnElement="EV" isExpanded="true"><dc:Bounds x="210" y="340" width="340" height="160"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ES_di" bpmnElement="ES"><dc:Bounds x="240" y="402" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EH_di" bpmnElement="EH"><dc:Bounds x="320" y="380" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EE_di" bpmnElement="EE"><dc:Bounds x="470" y="402" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="AFTER_di" bpmnElement="AFTER"><dc:Bounds x="840" y="250" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_di" bpmnElement="E"><dc:Bounds x="1000" y="272" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1"><di:waypoint x="136" y="290"/><di:waypoint x="180" y="290"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2"><di:waypoint x="780" y="290"/><di:waypoint x="840" y="290"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3"><di:waypoint x="940" y="290"/><di:waypoint x="1000" y="290"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="G1_di" bpmnElement="G1"><di:waypoint x="246" y="160"/><di:waypoint x="290" y="160"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="G2_di" bpmnElement="G2"><di:waypoint x="390" y="160"/><di:waypoint x="450" y="160"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="H1_di" bpmnElement="H1"><di:waypoint x="276" y="420"/><di:waypoint x="320" y="420"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="H2_di" bpmnElement="H2"><di:waypoint x="420" y="420"/><di:waypoint x="470" y="420"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

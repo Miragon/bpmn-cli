@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_AE" name="Annotations on events" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_Draft" name="Write draft">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_Review" name="Review draft">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_Overdue" name="Review overdue" cancelActivity="false" attachedToRef="Activity_Review">
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">P2D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:sendTask id="Activity_Nudge" name="Nudge reviewer">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Nudged" name="Nudged">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_Nudge" targetRef="Event_Nudged" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Event_Overdue" targetRef="Activity_Nudge" />
+    <bpmn:exclusiveGateway id="Gateway_Appr" name="Approved?">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Activity_Publish" name="Publish">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_End" name="Published">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Publish" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_4" name="yes" sourceRef="Gateway_Appr" targetRef="Activity_Publish" />
+    <bpmn:sequenceFlow id="Flow_6" name="no, rework" sourceRef="Gateway_Appr" targetRef="Activity_Draft" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Review" targetRef="Gateway_Appr" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Draft" targetRef="Activity_Review" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Draft" />
+    <bpmn:textAnnotation id="TextAnnotation_End">
+      <bpmn:text>Published to the public site</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1" sourceRef="TextAnnotation_End" targetRef="Event_End" />
+    <bpmn:textAnnotation id="TextAnnotation_Bnd">
+      <bpmn:text>Only on working days</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_2" sourceRef="TextAnnotation_Bnd" targetRef="Event_Overdue" />
+    <bpmn:textAnnotation id="TextAnnotation_Loop">
+      <bpmn:text>Max 3 iterations</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_3" sourceRef="TextAnnotation_Loop" targetRef="Flow_6" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_AE">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_AE" bpmnElement="Process_AE">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="250" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="292" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Draft" bpmnElement="Activity_Draft">
+        <dc:Bounds x="176" y="228" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Review" bpmnElement="Activity_Review">
+        <dc:Bounds x="336" y="228" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Overdue" bpmnElement="Event_Overdue">
+        <dc:Bounds x="393" y="290" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="433" y="298" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Nudge" bpmnElement="Activity_Nudge">
+        <dc:Bounds x="496" y="387" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Nudged" bpmnElement="Event_Nudged">
+        <dc:Bounds x="688" y="409" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="683" y="451" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Appr" bpmnElement="Gateway_Appr" isMarkerVisible="true">
+        <dc:Bounds x="521" y="243" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="513" y="223" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Publish" bpmnElement="Activity_Publish">
+        <dc:Bounds x="656" y="228" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_End" bpmnElement="Event_End">
+        <dc:Bounds x="816" y="250" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="801" y="292" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="596" y="337" />
+        <di:waypoint x="688" y="337" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="411" y="236" />
+        <di:waypoint x="411" y="337" />
+        <di:waypoint x="496" y="337" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="756" y="178" />
+        <di:waypoint x="816" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="571" y="178" />
+        <di:waypoint x="656" y="178" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="579" y="160" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="546" y="153" />
+        <di:waypoint x="546" y="108" />
+        <di:waypoint x="226" y="108" />
+        <di:waypoint x="226" y="138" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="464" y="90" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="436" y="178" />
+        <di:waypoint x="521" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="178" />
+        <di:waypoint x="336" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="178" />
+        <di:waypoint x="176" y="178" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_End" bpmnElement="TextAnnotation_End">
+        <dc:Bounds x="714" y="80" width="240" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_1" bpmnElement="Association_1">
+        <di:waypoint x="834" y="110" />
+        <di:waypoint x="834" y="250" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_Bnd" bpmnElement="TextAnnotation_Bnd">
+        <dc:Bounds x="331" y="80" width="160" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_2" bpmnElement="Association_2">
+        <di:waypoint x="411" y="110" />
+        <di:waypoint x="411" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_TextAnnotation_Loop" bpmnElement="TextAnnotation_Loop">
+        <dc:Bounds x="1026" y="80" width="160" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Association_3" bpmnElement="Association_3">
+        <di:waypoint x="1026" y="96" />
+        <di:waypoint x="386" y="108" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

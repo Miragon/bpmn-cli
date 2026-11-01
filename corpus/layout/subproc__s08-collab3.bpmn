@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_Shop" name="Shop" processRef="Process_Main" />
+    <bpmn:participant id="Participant_Customer" name="Customer" />
+    <bpmn:participant id="Participant_Supplier" name="Supplier" processRef="Process_Supplier" />
+    <bpmn:messageFlow id="Flow_9" name="Order" sourceRef="Participant_Customer" targetRef="Event_OrderReceived" />
+    <bpmn:messageFlow id="Flow_10" name="Offer" sourceRef="Activity_SendOffer" targetRef="Participant_Customer" />
+    <bpmn:messageFlow id="Flow_11" name="Stock order" sourceRef="Activity_OrderStock" targetRef="Event_OrderArrives" />
+    <bpmn:messageFlow id="Flow_12" name="Goods" sourceRef="Activity_ShipGoods" targetRef="Activity_ReceiveGoods" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Main" name="s08-collab3" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Sales" name="Sales">
+        <bpmn:flowNodeRef>Event_OrderReceived</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_CheckOrder</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_SendOffer</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Logistics" name="Logistics">
+        <bpmn:flowNodeRef>Activity_OrderStock</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Activity_ReceiveGoods</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_Done</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Event_OrderReceived" name="Order received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_Order" />
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_CheckOrder" name="Check order">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sendTask id="Activity_SendOffer" name="Send offer">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:sendTask id="Activity_OrderStock" name="Order stock">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="Activity_ReceiveGoods" name="Receive goods">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:endEvent id="Event_Done" name="Done">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_ReceiveGoods" targetRef="Event_Done" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_OrderStock" targetRef="Activity_ReceiveGoods" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_SendOffer" targetRef="Activity_OrderStock" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_CheckOrder" targetRef="Activity_SendOffer" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_OrderReceived" targetRef="Activity_CheckOrder" />
+  </bpmn:process>
+  <bpmn:process id="Process_Supplier" isExecutable="false">
+    <bpmn:startEvent id="Event_OrderArrives" name="Order arrives">
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="Message_StockOrder" />
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_PickGoods" name="Pick goods">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sendTask id="Activity_ShipGoods" name="Ship goods">
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:endEvent id="Event_Shipped" name="Shipped">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Activity_ShipGoods" targetRef="Event_Shipped" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_PickGoods" targetRef="Activity_ShipGoods" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Event_OrderArrives" targetRef="Activity_PickGoods" />
+  </bpmn:process>
+  <bpmn:message id="Message_Order" name="Order" />
+  <bpmn:message id="Message_StockOrder" name="StockOrder" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Collaboration_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_Collaboration_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Shop" bpmnElement="Participant_Shop" isHorizontal="true">
+        <dc:Bounds x="80" y="80" width="892" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Sales" bpmnElement="Lane_Sales" isHorizontal="true">
+        <dc:Bounds x="110" y="80" width="862" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Lane_Logistics" bpmnElement="Lane_Logistics" isHorizontal="true">
+        <dc:Bounds x="110" y="220" width="862" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OrderReceived" bpmnElement="Event_OrderReceived">
+        <dc:Bounds x="170" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="143" y="174" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CheckOrder" bpmnElement="Activity_CheckOrder">
+        <dc:Bounds x="266" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SendOffer" bpmnElement="Activity_SendOffer">
+        <dc:Bounds x="426" y="110" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_OrderStock" bpmnElement="Activity_OrderStock">
+        <dc:Bounds x="586" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ReceiveGoods" bpmnElement="Activity_ReceiveGoods">
+        <dc:Bounds x="746" y="250" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Done" bpmnElement="Event_Done">
+        <dc:Bounds x="906" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="908" y="314" width="32" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="846" y="290" />
+        <di:waypoint x="906" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="686" y="290" />
+        <di:waypoint x="746" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="476" y="190" />
+        <di:waypoint x="476" y="290" />
+        <di:waypoint x="586" y="290" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="366" y="150" />
+        <di:waypoint x="426" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="206" y="150" />
+        <di:waypoint x="266" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Customer" bpmnElement="Participant_Customer" isHorizontal="true">
+        <dc:Bounds x="80" y="440" width="892" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Participant_Supplier" bpmnElement="Participant_Supplier" isHorizontal="true">
+        <dc:Bounds x="80" y="580" width="892" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_OrderArrives" bpmnElement="Event_OrderArrives">
+        <dc:Bounds x="140" y="632" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="113" y="674" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_PickGoods" bpmnElement="Activity_PickGoods">
+        <dc:Bounds x="236" y="610" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ShipGoods" bpmnElement="Activity_ShipGoods">
+        <dc:Bounds x="396" y="610" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Shipped" bpmnElement="Event_Shipped">
+        <dc:Bounds x="556" y="632" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="548" y="674" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="496" y="650" />
+        <di:waypoint x="556" y="650" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="336" y="650" />
+        <di:waypoint x="396" y="650" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="176" y="650" />
+        <di:waypoint x="236" y="650" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="188" y="440" />
+        <di:waypoint x="188" y="168" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="194" y="297" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="476" y="190" />
+        <di:waypoint x="476" y="440" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="482" y="308" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_11" bpmnElement="Flow_11">
+        <di:waypoint x="636" y="330" />
+        <di:waypoint x="636" y="470" />
+        <di:waypoint x="158" y="470" />
+        <di:waypoint x="158" y="632" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="166" y="452" width="81" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_12" bpmnElement="Flow_12">
+        <di:waypoint x="446" y="610" />
+        <di:waypoint x="446" y="470" />
+        <di:waypoint x="796" y="470" />
+        <di:waypoint x="796" y="330" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="454" y="452" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
