@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, CAMUNDA, ElementSlots, Kinds, type NestedSlot, type Trigger, Triggers, ZEEBE, ZeebeDescriptor } from '../../model/index.js';
+import { type BpmnElement, BpmnError, CAMUNDA, ElementSlots, Kinds, type NestedSlot, type Trigger, Triggers, ZEEBE } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 
@@ -84,12 +84,8 @@ export class VendorHosts {
   }
 
   assertZeebeHost(el: BpmnElement, key: string, value: string): void {
-    const idx = key.indexOf(':');
-    if (idx <= 0 || this.edit.document.namespaces.uriOf(key.slice(0, idx)) !== ZeebeDescriptor.URI) {
-      return;
-    }
-    const local = key.slice(idx + 1);
-    if (ZEEBE.attr(local)) {
+    const local = new PropertyCoercer(this.edit).zeebeLocal(key);
+    if (!local || ZEEBE.attr(local)) {
       return;
     }
     const owners = ZEEBE.typeNames().filter((typeName) => ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
@@ -100,7 +96,7 @@ export class VendorHosts {
       return;
     }
     const target = here[0] ?? (loop ? 'zeebe:loopCharacteristics' : 'zeebe:subscription');
-    const type = `${key.slice(0, idx)}:${target.slice('zeebe:'.length)}`;
+    const type = `${key.slice(0, key.indexOf(':'))}:${target.slice('zeebe:'.length)}`;
     const pair = VendorHosts.shellPair(local, value);
     const command = here.length ? `\`bpmn ext add <file> ${el.id} ${type} ${pair}\`` : VendorHosts.elsewhereCommand(el, key, value, type, pair, loop);
     throw BpmnError.model('E_WRONG_HOST', `${key} is not an attribute of ${Kinds.label(el)} ${el.id}: Camunda 8 reads ${local} on the ${type} extension element`, {

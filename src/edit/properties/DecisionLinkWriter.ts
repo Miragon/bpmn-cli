@@ -129,7 +129,7 @@ export class DecisionLinkWriter {
   }
 
   private static dropAttribute({ el, removed }: LinkWrite, key: string): void {
-    if (el.attrs && Object.prototype.hasOwnProperty.call(el.attrs, key)) {
+    if (Object.prototype.hasOwnProperty.call(el.attrs, key)) {
       delete el.attrs[key];
       removed.push(key);
     }
@@ -203,7 +203,7 @@ export class DecisionLinkWriter {
 
   private static noteBareLinks(task: BpmnElement, seen: Map<string, EngineSpelling | undefined>): void {
     for (const key of ['calledDecision', 'calledElement']) {
-      if (DecisionLinkReader.textValue(task.attrs?.[key])) {
+      if (DecisionLinkReader.textValue(task.attrs[key])) {
         seen.set(key, undefined);
       }
     }

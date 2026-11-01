@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, CAMUNDA, PropertyCatalog, type PropertyDescriptor } from '../../model/index.js';
+import { type BpmnElement, BpmnError, CAMUNDA, PropertyCatalog, type PropertyDescriptor, ZeebeDescriptor } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 
 export class PropertyCoercer {
@@ -76,7 +76,7 @@ export class PropertyCoercer {
     if (value || key.includes(':') || el.descriptor.propertiesByName?.[key]) {
       return false;
     }
-    if (!el.attrs || !Object.prototype.hasOwnProperty.call(el.attrs, key)) {
+    if (!Object.prototype.hasOwnProperty.call(el.attrs, key)) {
       return false;
     }
     delete el.attrs[key];
@@ -92,7 +92,7 @@ export class PropertyCoercer {
     if (!expr) {
       return undefined;
     }
-    return Object.keys(expr.attrs ?? {}).find((attrKey) => this.isResourceKey(attrKey) && expr.attrs[attrKey] !== undefined && expr.attrs[attrKey] !== '');
+    return Object.keys(expr.attrs).find((attrKey) => this.isResourceKey(attrKey) && expr.attrs[attrKey] !== undefined && expr.attrs[attrKey] !== '');
   }
 
   camundaLocal(key: string): string | undefined {
@@ -101,6 +101,14 @@ export class PropertyCoercer {
       return undefined;
     }
     return CAMUNDA.reads(this.edit.document.namespaces.uriOf(key.slice(0, idx))) ? key.slice(idx + 1) : undefined;
+  }
+
+  zeebeLocal(key: string): string | undefined {
+    const idx = key.indexOf(':');
+    if (idx <= 0 || this.edit.document.namespaces.uriOf(key.slice(0, idx)) !== ZeebeDescriptor.URI) {
+      return undefined;
+    }
+    return key.slice(idx + 1);
   }
 
   setModelProperty(element: BpmnElement, key: string, value: string): void {

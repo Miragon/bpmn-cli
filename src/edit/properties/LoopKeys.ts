@@ -29,7 +29,7 @@ export class LoopKeys {
     const mode = (value || 'none').trim().toLowerCase();
     if (mode === 'none') {
       el.set('loopCharacteristics', undefined);
-      this.dropReplaced(el, current, mode, changes);
+      this.dropLoop(el, current, mode, changes);
     } else if (mode === 'standard') {
       this.makeStandard(el, current, changes);
     } else if (mode === 'parallel' || mode === 'sequential') {
@@ -46,7 +46,7 @@ export class LoopKeys {
     const loop = this.edit.document.tree.build('bpmn:StandardLoopCharacteristics');
     loop.parent = el;
     el.set('loopCharacteristics', loop);
-    this.dropReplaced(el, current, 'standard', changes);
+    this.dropLoop(el, current, 'standard', changes);
   }
 
   private makeMultiInstance(el: BpmnElement, mode: string, current: BpmnElement | undefined, changes: ChangeSet): void {
@@ -54,12 +54,6 @@ export class LoopKeys {
     const multi = isMulti ? current! : this.createMultiInstance(el);
     multi.set('isSequential', mode === 'sequential');
     if (!isMulti) {
-      this.dropReplaced(el, current, mode, changes);
-    }
-  }
-
-  private dropReplaced(el: BpmnElement, current: BpmnElement | undefined, mode: string, changes: ChangeSet): void {
-    if (current) {
       this.dropLoop(el, current, mode, changes);
     }
   }
@@ -91,7 +85,10 @@ export class LoopKeys {
     return multi;
   }
 
-  private dropLoop(el: BpmnElement, old: BpmnElement, mode: string, changes: ChangeSet): void {
+  private dropLoop(el: BpmnElement, old: BpmnElement | undefined, mode: string, changes: ChangeSet): void {
+    if (!old) {
+      return;
+    }
     for (const element of new ElementWalk(old).depthFirst({ bpmnOnly: true })) {
       const id = element.get<string | undefined>('id');
       if (id) {

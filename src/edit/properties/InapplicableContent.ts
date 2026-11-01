@@ -1,8 +1,13 @@
-import { type BpmnElement, CAMUNDA, ElementText, type Finding, type KindDefinition, ZEEBE, ZeebeDescriptor } from '../../model/index.js';
+import { type BpmnElement, CAMUNDA, ElementText, type Finding, type KindDefinition, ZEEBE } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
+import { PropertyCoercer } from './PropertyCoercer.js';
 
 export class InapplicableContent {
-  constructor(private readonly edit: EditSession) {}
+  private readonly coercer: PropertyCoercer;
+
+  constructor(edit: EditSession) {
+    this.coercer = new PropertyCoercer(edit);
+  }
 
   warningFor(el: BpmnElement, to: KindDefinition): Finding | undefined {
     const attrs = Object.keys(ElementText.vendorAttributes(el)).filter((key) => this.isInapplicableAttribute(key, el));
@@ -34,7 +39,7 @@ export class InapplicableContent {
     if (name) {
       return CAMUNDA.attrAppliesTo(name, el) === false;
     }
-    const zeebeName = this.zeebeLocal(key);
+    const zeebeName = this.coercer.zeebeLocal(key);
     const def = zeebeName ? ZEEBE.attr(zeebeName) : undefined;
     return !!def && !def.owners.some((owner) => el.is(owner));
   }
@@ -44,30 +49,19 @@ export class InapplicableContent {
     if (name) {
       return CAMUNDA.allowedOn(name, el) === false;
     }
-    const zeebeName = this.zeebeLocal(ext.type);
+    const zeebeName = this.coercer.zeebeLocal(ext.type);
     return zeebeName ? ZEEBE.allowedOn(zeebeName, el) === false && !ZEEBE.nestedOnly(zeebeName) : false;
   }
 
   private descriptorText(names: string[]): string {
-    if (names.every((extName) => this.zeebeLocal(extName))) {
+    if (names.every((extName) => this.coercer.zeebeLocal(extName))) {
       return 'Zeebe (Camunda 8)';
     }
-    return names.some((extName) => this.zeebeLocal(extName)) ? 'Camunda 7 and Zeebe' : 'Camunda';
+    return names.some((extName) => this.coercer.zeebeLocal(extName)) ? 'Camunda 7 and Zeebe' : 'Camunda';
   }
 
   private camundaName(name: string): string | undefined {
-    const idx = name.indexOf(':');
-    if (idx <= 0 || !CAMUNDA.reads(this.edit.document.namespaces.uriOf(name.slice(0, idx)))) {
-      return undefined;
-    }
-    return `camunda:${name.slice(idx + 1)}`;
-  }
-
-  private zeebeLocal(name: string): string | undefined {
-    const idx = name.indexOf(':');
-    if (idx <= 0 || this.edit.document.namespaces.uriOf(name.slice(0, idx)) !== ZeebeDescriptor.URI) {
-      return undefined;
-    }
-    return name.slice(idx + 1);
+    const local = this.coercer.camundaLocal(name);
+    return local ? `camunda:${local}` : undefined;
   }
 }

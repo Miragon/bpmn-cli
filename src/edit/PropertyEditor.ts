@@ -63,10 +63,6 @@ export class PropertyEditor {
     return trimmed.toLowerCase().startsWith('bpmn:') ? trimmed.slice(5) : trimmed;
   }
 
-  writtenKeys(): string[] {
-    return Object.keys(this.writers);
-  }
-
   set(command: SetOperation): ChangeSet {
     const changes = new ChangeSet();
     const element = this.edit.require(command.id);

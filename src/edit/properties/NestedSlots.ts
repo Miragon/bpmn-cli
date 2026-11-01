@@ -1,4 +1,4 @@
-import { BpmnElement, BpmnError, CAMUNDA, ChangeEntries, type ChangeSet, ElementSlots, Kinds, type NestedSlot, PropertyCatalog, type SlotRef, Triggers, VendorDescriptor, ZEEBE, ZeebeDescriptor } from '../../model/index.js';
+import { BpmnElement, BpmnError, CAMUNDA, ChangeEntries, type ChangeSet, ElementSlots, Kinds, type NestedSlot, PropertyCatalog, type SlotRef, Triggers, VendorDescriptor, ZEEBE } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { IdRename } from './IdRename.js';
 import { NestedResolution } from './NestedResolution.js';
@@ -10,11 +10,6 @@ export class NestedSlots {
   };
 
   constructor(private readonly edit: EditSession) {}
-
-  keysOf(slot: NestedSlot, target: BpmnElement): string[] {
-    const keys = ['id', ...PropertyCatalog.of(target).genericKeys().filter((genericKey) => !NestedSlots.NESTED_BLOCKED[genericKey]), ...CAMUNDA.attrsFor(target).map((attr) => attr.name)];
-    return [...new Set(keys)].map((slotKey) => `${slot}.${slotKey}`);
-  }
 
   private create(el: BpmnElement, slot: NestedSlot, key: string, changes: ChangeSet): BpmnElement {
     const id = el.id;
@@ -66,16 +61,15 @@ export class NestedSlots {
   }
 
   private assertNoZeebeOwner(el: BpmnElement, target: BpmnElement, key: string, prefix: string): void {
-    const zi = key.indexOf(':');
-    if (zi <= 0 || this.edit.document.namespaces.uriOf(key.slice(0, zi)) !== ZeebeDescriptor.URI || ZEEBE.attr(key.slice(zi + 1))) {
+    const local = new PropertyCoercer(this.edit).zeebeLocal(key);
+    if (!local || ZEEBE.attr(local)) {
       return;
     }
-    const local = key.slice(zi + 1);
     const owner = ZEEBE.typeNames().find((typeName) => ZEEBE.allowedOn(typeName, target) === true && ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
     if (owner) {
       throw BpmnError.model('E_WRONG_HOST', `${key} is not an attribute of the ${Kinds.typeLabel(target)} of ${Kinds.label(el)} ${el.id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
         element: el.id,
-        hint: `Use \`bpmn ext add <file> ${el.id} ${prefix}.${key.slice(0, zi)}:${owner.slice('zeebe:'.length)} ${local}=<value>\`.`,
+        hint: `Use \`bpmn ext add <file> ${el.id} ${prefix}.${key.slice(0, key.indexOf(':'))}:${owner.slice('zeebe:'.length)} ${local}=<value>\`.`,
       });
     }
   }

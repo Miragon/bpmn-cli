@@ -51,7 +51,7 @@ export class IdRename {
       if (element.peek(ref.attr) === old) {
         element.set(ref.attr, newId);
       }
-      if (element.attrs?.[ref.attr] === old) {
+      if (element.attrs[ref.attr] === old) {
         element.attrs[ref.attr] = newId;
       }
     }
