@@ -5,7 +5,6 @@ const LOADED_BY_REQUIRE_IN_LINT = ['bpmn-moddle'];
 const TEMPORARY_UNTIL_CODE_USES_THEM = {
   core: [
     '@miragon/bpmn-lint',
-    '@miragon/bpmn-render',
     'commander',
     'zod',
   ],
