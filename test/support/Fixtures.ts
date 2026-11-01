@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type BpmnDocument, type BpmnElement, DocumentReader } from '../../src/model/index.js';
+import { OperationParser, type ParsedOperations } from '../../src/operations/index.js';
 
 const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
 
@@ -16,6 +17,10 @@ export class Fixtures {
 
   static readForWrite(path: string): Promise<BpmnDocument> {
     return new DocumentReader().readForWrite(Fixtures.text(path));
+  }
+
+  static operations(operations: unknown[]): ParsedOperations {
+    return new OperationParser().parse(operations);
   }
 
   static element(document: BpmnDocument, id: string): BpmnElement {

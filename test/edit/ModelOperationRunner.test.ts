@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ModelOperationRunner } from '../../src/edit/ModelOperationRunner.js';
-import { OperationParser } from '../../src/operations/index.js';
 import { Fixtures } from '../support/Fixtures.js';
 
 async function run(ops: unknown[], path = 'edit/order-check.bpmn', options = {}) {
   const document = await Fixtures.readForWrite(path);
-  const outcome = new ModelOperationRunner(document, options).run(new OperationParser().parse(ops));
+  const outcome = new ModelOperationRunner(document, options).run(Fixtures.operations(ops));
   return { document, ...outcome };
 }
 
