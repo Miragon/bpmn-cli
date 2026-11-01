@@ -12,6 +12,12 @@ export abstract class C7Rules extends CamundaRules {
   ];
   static readonly SERVICE_LIKE = ['bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:BusinessRuleTask'];
   private static readonly SELECTOR_KEYS = ['id', 'name', 'event', 'target', 'source', 'errorRef'];
+  private static readonly ACTING_ORDERS: Array<[string, string[]]> = [
+    ['bpmn:IntermediateCatchEvent', ['Timer', 'Signal', 'Message', 'Link', 'Conditional']],
+    ['bpmn:BoundaryEvent', ['Timer', 'Signal', 'Message', 'Conditional']],
+    ['bpmn:IntermediateThrowEvent', ['Signal', 'Message']],
+    ['bpmn:EndEvent', ['Message', 'Signal']],
+  ];
 
   protected override addressOf(el: BpmnElement, owner: BpmnElement | undefined): ElementAddress | undefined {
     if (owner && el !== owner && !owner.id) {
@@ -24,12 +30,18 @@ export abstract class C7Rules extends CamundaRules {
     if (!owner || !owner.list('eventDefinitions').includes(def)) {
       return undefined;
     }
-    const side = owner.is('bpmn:CatchEvent') ? 'catch' : owner.is('bpmn:ThrowEvent') ? 'throw' : undefined;
+    const side = C7Rules.sideOf(owner);
     if (!side) {
       return undefined;
     }
     const rule = C7Rules.SIDE_RULES.find((sideRule) => def.is(sideRule.def) && sideRule[kind].includes(local));
     return rule && rule.side !== side ? rule.where : undefined;
+  }
+  private static sideOf(event: BpmnElement): 'catch' | 'throw' | undefined {
+    if (event.is('bpmn:CatchEvent')) {
+      return 'catch';
+    }
+    return event.is('bpmn:ThrowEvent') ? 'throw' : undefined;
   }
 
   protected isExpression(value: string): boolean {
@@ -99,17 +111,7 @@ export abstract class C7Rules extends CamundaRules {
   }
 
   protected children(el: BpmnElement, local?: string): BpmnElement[] {
-    const kids = el.peek<unknown[]>('$children');
-    if (!Array.isArray(kids)) {
-      return [];
-    }
-    return (kids as BpmnElement[]).filter((child) => {
-      if (!child || typeof child !== 'object' || typeof child.type !== 'string' || !child.isGeneric) {
-        return false;
-      }
-      const uri = this.ns.uriOfElement(child);
-      return CAMUNDA.reads(uri) && (local === undefined || IdWords.localName(child.type) === local);
-    });
+    return this.genericChildren(el, local, (uri) => CAMUNDA.reads(uri));
   }
 
   protected isMultiInstance(el: BpmnElement | undefined): boolean {
@@ -145,34 +147,21 @@ export abstract class C7Rules extends CamundaRules {
     return `Replace just this one (--replace would remove every ${type}): \`bpmn ext remove <file> ${addr.id} ${ShellWords.quote(`${slot}${this.selectorOf(host, vendorElement)}`)}\`, then ${again}.`;
   }
 
-  private actingOrder(el: BpmnElement): string[] | undefined {
-    if (el.is('bpmn:IntermediateCatchEvent')) {
-      return ['Timer', 'Signal', 'Message', 'Link', 'Conditional'];
+  private static actingOrder(el: BpmnElement): string[] | undefined {
+    const order = C7Rules.ACTING_ORDERS.find(([type]) => el.is(type))?.[1];
+    if (order || !el.is('bpmn:StartEvent')) {
+      return order;
     }
-    if (el.is('bpmn:BoundaryEvent')) {
-      return ['Timer', 'Signal', 'Message', 'Conditional'];
+    const parent = el.parent;
+    if (parent && Kinds.isEventSubProcess(parent)) {
+      return ['Message', 'Signal', 'Timer', 'Conditional'];
     }
-    if (el.is('bpmn:IntermediateThrowEvent')) {
-      return ['Signal', 'Message'];
-    }
-    if (el.is('bpmn:EndEvent')) {
-      return ['Message', 'Signal'];
-    }
-    if (el.is('bpmn:StartEvent')) {
-      const parent = el.parent;
-      if (parent && Kinds.isEventSubProcess(parent)) {
-        return ['Message', 'Signal', 'Timer', 'Conditional'];
-      }
-      if (parent && parent.is('bpmn:Process')) {
-        return ['Timer', 'Message', 'Signal', 'Conditional'];
-      }
-    }
-    return undefined;
+    return parent?.is('bpmn:Process') ? ['Timer', 'Message', 'Signal', 'Conditional'] : undefined;
   }
 
   protected actingDefinition(el: BpmnElement): BpmnElement | undefined {
     const defs = el.list('eventDefinitions');
-    const order = defs.length > 1 ? this.actingOrder(el) : undefined;
+    const order = defs.length > 1 ? C7Rules.actingOrder(el) : undefined;
     if (!order) {
       return undefined;
     }

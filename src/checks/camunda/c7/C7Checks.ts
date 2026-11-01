@@ -1,7 +1,7 @@
 import { type BpmnDocument, type BpmnElement, CAMUNDA, CamundaDescriptor, DocumentNamespaces } from '../../../model/index.js';
 import { C7AttributeRules } from './C7AttributeRules.js';
 import { C7BindingRules } from './C7BindingRules.js';
-import { C7DescriptorNames } from './C7DescriptorNames.js';
+import { C7DescriptorNames } from '../values/C7DescriptorNames.js';
 import { C7EventRules } from './C7EventRules.js';
 import { C7ExtensionContentRules } from './C7ExtensionContentRules.js';
 import { C7ExtensionRules } from './C7ExtensionRules.js';

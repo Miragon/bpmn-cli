@@ -1,4 +1,5 @@
 import { type BpmnElement } from '../../../model/index.js';
+import { ShellWords } from './ShellWords.js';
 
 export class ElementAddress {
   constructor(
@@ -13,6 +14,9 @@ export class ElementAddress {
     }
     const prefix = ElementAddress.nestedPrefix(element, owner);
     return prefix ? new ElementAddress(owner.id, prefix) : own;
+  }
+  slot(text: string): string {
+    return `${this.id} ${ShellWords.quote(`${this.prefix}${text}`)}`;
   }
 
   private static nestedPrefix(element: BpmnElement, owner: BpmnElement): string | undefined {

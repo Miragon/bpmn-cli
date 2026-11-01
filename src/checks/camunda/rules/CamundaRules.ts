@@ -1,7 +1,14 @@
-import { type BpmnDocument, type BpmnElement, type DocumentNamespaces, IdWords } from '../../../model/index.js';
+import { type BpmnDocument, type BpmnElement, DecisionLinkReader, type DocumentNamespaces, IdWords } from '../../../model/index.js';
 import { ElementAddress } from './ElementAddress.js';
 import type { RuleContext } from './RuleContext.js';
 import type { RuleReporter } from './RuleReporter.js';
+
+export interface RuleSite {
+  host: BpmnElement;
+  owner: BpmnElement | undefined;
+  where: string;
+  reporter: RuleReporter;
+}
 
 export interface ExtValue {
   el: BpmnElement;
@@ -67,9 +74,26 @@ export abstract class CamundaRules {
     return IdWords.lcfirst(IdWords.localName(definition.type).replace(/EventDefinition$/, ''));
   }
 
+  protected allFlowNodes(scope: BpmnElement, opens: (node: BpmnElement) => boolean): BpmnElement[] {
+    return this.document.scopes.flowNodes(scope).flatMap((node) => (opens(node) ? [node, ...this.allFlowNodes(node, opens)] : [node]));
+  }
+
+  protected genericChildren(el: BpmnElement, local: string | undefined, reads: (uri: string | undefined) => boolean): BpmnElement[] {
+    const kids = el.peek<unknown[]>('$children');
+    if (!Array.isArray(kids)) {
+      return [];
+    }
+    return (kids as BpmnElement[]).filter((child) => child && typeof child.type === 'string' && child.isGeneric && reads(this.ns.uriOfElement(child)) && (local === undefined || IdWords.localName(child.type) === local));
+  }
+
   protected extensionValues(el: BpmnElement | undefined): ExtValue[] {
     const values = el?.peek<BpmnElement>('extensionElements')?.list('values') ?? [];
     return values.map((extension, index) => ({ el: extension, uri: extension.isGeneric ? this.ns.uriOfElement(extension) : undefined, local: IdWords.localName(extension.type), index }));
+  }
+
+  protected decisionLinkOf({ el, owner, id }: UnprefixedAttributes, key: string): ReturnType<DecisionLinkReader['linkOf']> {
+    const unprefixedLink = el === owner && !!id && el.is('bpmn:BusinessRuleTask') && (key === 'calledDecision' || key === 'calledElement');
+    return unprefixedLink ? new DecisionLinkReader(this.document.namespaces).linkOf(el) : undefined;
   }
 
   protected unprefixedAttributes(): UnprefixedAttributes[] {

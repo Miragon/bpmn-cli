@@ -73,11 +73,7 @@ export abstract class C8Rules extends CamundaRules {
   }
 
   protected kids(el: BpmnElement, local?: string): BpmnElement[] {
-    const raw = el.peek<unknown[]>('$children');
-    if (!Array.isArray(raw)) {
-      return [];
-    }
-    return (raw as BpmnElement[]).filter((child) => child && typeof child.type === 'string' && child.isGeneric && this.ns.uriOfElement(child) === ZEEBE.uri && (local === undefined || IdWords.localName(child.type) === local));
+    return this.genericChildren(el, local, (uri) => uri === ZEEBE.uri);
   }
 
   protected zeebeName(local: string): string {
