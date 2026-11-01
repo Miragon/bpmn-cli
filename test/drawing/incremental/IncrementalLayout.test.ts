@@ -1,15 +1,67 @@
+import { readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DrawingSnapshot } from '../../../src/drawing/DrawingSnapshot.js';
 import { IncrementalLayout } from '../../../src/drawing/incremental/IncrementalLayout.js';
-import { ChangeSet } from '../../support/ModelValues.js';
+import { DrawingPair, type RecordedChanges } from '../../support/DrawingPair.js';
+import { BpmnError, Scorer } from '../../support/ModelValues.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
-describe('IncrementalLayout', () => {
-  it('is not ported yet', async () => {
-    const document = await Fixtures.read('models/incremental/boundary.bpmn');
+const WALKS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'corpus', 'walks');
+const noChanges: RecordedChanges = { created: [], changed: [], removed: [], relocated: [], expand: [], collapse: [], renamed: [] };
 
-    await expect(new IncrementalLayout(document, DrawingSnapshot.of(document)).place(new ChangeSet())).rejects.toThrow(/not ported yet/);
+describe('IncrementalLayout', () => {
+  const rows = readdirSync(WALKS).flatMap((walk) => DrawingPair.walkSteps(walk).map((step, index) => ({ row: `${walk}#${index} ${step.name}`, step })));
+
+  it.each(rows)('places a walk step no worse than main: $row', async ({ step }) => {
+    const { document, before, changes } = await DrawingPair.of(step.before, step.noLayout.file, step.noLayout);
+
+    await new IncrementalLayout(document, before).place(changes);
+
+    const main = await DrawingPair.parsed(step.after!);
+    expect(new Scorer().score(document).score).toBeLessThanOrEqual(new Scorer().score(main).score);
   });
 
-  it.todo('places what the ChangeSet names and leaves the rest of the drawing, on the incremental step');
+  it('keeps every shape of an unchanged drawing and reports nothing', async () => {
+    const xml = Fixtures.text('models/incremental/orders.bpmn');
+    const { document, before, changes } = await DrawingPair.of(xml, xml, noChanges);
+
+    const report = await new IncrementalLayout(document, before).place(changes);
+
+    expect(report).toMatchObject({ placed: [], moved: [], rerouted: [], reshaped: [] });
+  });
+
+  it('draws what the ChangeSet created next to its neighbours, in the order it was created', async () => {
+    const { document, before, changes } = await DrawingPair.read('add-after');
+
+    const report = await new IncrementalLayout(document, before).place(changes);
+
+    expect(report.placed).toEqual(expect.arrayContaining(changes.created.map(({ id }) => id)));
+  });
+
+  it('collapses the sub-process the ChangeSet asks to collapse', async () => {
+    const { document, before, changes } = await DrawingPair.read('expand-toggle');
+
+    const { notes } = await new IncrementalLayout(document, before).place(changes);
+
+    expect(notes).toContain('Activity_Fzs3 drawn collapsed');
+  });
+
+  it('passes a vertical plane when nothing is placed, moved or routed on it', async () => {
+    const xml = Fixtures.text('models/incremental/vertical.bpmn');
+    const { document, before, changes } = await DrawingPair.of(xml, xml, noChanges);
+
+    await expect(new IncrementalLayout(document, before).place(changes)).resolves.toMatchObject({ placed: [] });
+  });
+
+  it('refuses to place on a vertical plane and says that a last layout operation turns the lanes', async () => {
+    const before = Fixtures.text('models/incremental/vertical.bpmn');
+    const added = before.replace('<bpmn:task id="A"', '<bpmn:task id="New" name="New"/><bpmn:task id="A"');
+    const { document, before: snapshot, changes } = await DrawingPair.of(before, added, noChanges);
+
+    const failure = await new IncrementalLayout(document, snapshot).place(changes).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(BpmnError);
+    expect(failure).toMatchObject({ code: 'E_LAYOUT_INCREMENTAL', details: { hint: expect.stringContaining('turns the lanes horizontal') } });
+  });
 });

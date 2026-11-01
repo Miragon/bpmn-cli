@@ -1,0 +1,273 @@
+{
+ "add-flow": {
+  "created": [
+   "manualTask_fz2ArchiveContractShipNotifyDocument",
+   "flow_fz2ArchiveContractShipNotifyDocumentToTaskD"
+  ],
+  "changed": [
+   "F3"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "remove-node": {
+  "created": [],
+  "changed": [],
+  "removed": [
+   "Flow_2",
+   "Flow_9",
+   "Flow_3",
+   "Flow_4",
+   "Gateway_Score"
+  ],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "add-boundary": {
+  "created": [
+   "Event_Fzb3",
+   "message_msg3",
+   "Activity_Fzbh3",
+   "flow_fzb3ToFzbh3"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "add-after": {
+  "created": [
+   "serviceTask_fz1ShipNotifyPaymentOrderApproveAndShip",
+   "flow_fz1ShipNotifyPaymentOrderApproveAndShipToSufficient"
+  ],
+  "changed": [
+   "Flow_4"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "retype": {
+  "created": [],
+  "changed": [
+   "Activity_E"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "add-branch": {
+  "created": [
+   "businessRuleTask_fz7Payment",
+   "flow_outerToFz7Payment",
+   "flow_fz7PaymentToD"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "add-annotation": {
+  "created": [
+   "TextAnnotation_Fzt0",
+   "association_fzt0ToAutoFix"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "add-data": {
+  "created": [
+   "DataObjectReference_Fzd6",
+   "association_fzd6ToAnalyse"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "connect": {
+  "created": [
+   "flow_collectDataToDataArchived"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "add-subprocess": {
+  "created": [
+   "Activity_Fzs3",
+   "flow_fzs3ToE",
+   "Event_Fzs3s",
+   "Activity_Fzs3i",
+   "flow_fzs3sToFzs3i",
+   "Event_Fzs3e",
+   "flow_fzs3iToFzs3e"
+  ],
+  "changed": [
+   "F4"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "split": {
+  "created": [
+   "gateway_fz8Split",
+   "task_fz8B0N0",
+   "flow_fz8SplitToFz8B0N0",
+   "sendTask_fz8B0N1",
+   "flow_fz8B0N0ToFz8B0N1",
+   "manualTask_fz8B1N0",
+   "flow_fz8SplitToFz8B1N0",
+   "gateway_fz8SplitJoin",
+   "flow_fz8B0N1ToFz8SplitJoin",
+   "flow_fz8B1N0ToFz8SplitJoin",
+   "flow_fz8SplitJoinToFz4EscalateInvoiceEscalateNotifyShip"
+  ],
+  "changed": [
+   "flow_checkClaimToFz8Split"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": [
+   {
+    "from": "flow_checkClaimToFz4EscalateInvoiceEscalateNotifyShip",
+    "to": "flow_checkClaimToFz8Split"
+   }
+  ]
+ },
+ "move-after": {
+  "created": [],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "rename": {
+  "created": [],
+  "changed": [
+   "Activity_Evaluate"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "move-lane": {
+  "created": [],
+  "changed": [
+   "Event_Fixed"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "expand-toggle": {
+  "created": [],
+  "changed": [
+   "Activity_Fzs3"
+  ],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [
+   "Activity_Fzs3"
+  ],
+  "renamed": []
+ },
+ "remove-flow": {
+  "created": [],
+  "changed": [],
+  "removed": [
+   "F4"
+  ],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "join-backwards": {
+  "created": [
+   "F5"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "crossing-kept": {
+  "created": [
+   "businessRuleTask_fz0Escalate",
+   "flow_typeToFz0Escalate",
+   "flow_fz0EscalateToStandardCheck"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "chain-retry": {
+  "created": [
+   "Event_Fzb3",
+   "Activity_Fzbh3",
+   "flow_fzb3ToFzbh3",
+   "flow_fzbh3ToIntake"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ },
+ "seat-on-top": {
+  "created": [
+   "Event_Fzb9",
+   "message_msg9",
+   "Activity_Fzbh9",
+   "flow_fzb9ToFzbh9",
+   "flow_fzbh9ToFzbh3"
+  ],
+  "changed": [],
+  "removed": [],
+  "relocated": [],
+  "expand": [],
+  "collapse": [],
+  "renamed": []
+ }
+}

@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_S23" name="s23" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Activity_Intake" name="Intake">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:incoming>flow_fzbh3ToIntake</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Intake" targetRef="Gateway_Type" />
+    <bpmn:exclusiveGateway id="Gateway_Type" name="Type?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+      <bpmn:outgoing>flow_typeToFz0Escalate</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Activity_StandardCheck" name="Standard check">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:incoming>flow_fz0EscalateToStandardCheck</bpmn:incoming>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="Event_Fzb3" name="Fzb3" cancelActivity="false" attachedToRef="Activity_StandardCheck">
+      <bpmn:outgoing>flow_fzb3ToFzbh3</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="Event_Fzb9" name="Fzb9" cancelActivity="false" attachedToRef="Activity_StandardCheck">
+      <bpmn:outgoing>flow_fzb9ToFzbh9</bpmn:outgoing>
+      <bpmn:messageEventDefinition messageRef="message_msg9" />
+    </bpmn:boundaryEvent>
+    <bpmn:userTask id="Activity_Fzbh9" name="Fzb9 handling">
+      <bpmn:incoming>flow_fzb9ToFzbh9</bpmn:incoming>
+      <bpmn:outgoing>flow_fzbh9ToFzbh3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_fzbh9ToFzbh3" sourceRef="Activity_Fzbh9" targetRef="Activity_Fzbh3" />
+    <bpmn:sequenceFlow id="flow_fzb9ToFzbh9" sourceRef="Event_Fzb9" targetRef="Activity_Fzbh9" />
+    <bpmn:userTask id="Activity_Fzbh3" name="Fzb3 handling">
+      <bpmn:incoming>flow_fzb3ToFzbh3</bpmn:incoming>
+      <bpmn:incoming>flow_fzbh9ToFzbh3</bpmn:incoming>
+      <bpmn:outgoing>flow_fzbh3ToIntake</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_fzbh3ToIntake" sourceRef="Activity_Fzbh3" targetRef="Activity_Intake" />
+    <bpmn:sequenceFlow id="flow_fzb3ToFzbh3" sourceRef="Event_Fzb3" targetRef="Activity_Fzbh3" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="Activity_StandardCheck" targetRef="Gateway_Type_join" />
+    <bpmn:sequenceFlow id="Flow_3" name="standard" sourceRef="Gateway_Type" targetRef="Activity_StandardCheck" />
+    <bpmn:task id="Activity_SpecialCheck" name="Special check">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_SecondOpinion" name="Second opinion">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_7</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="Activity_SecondOpinion" targetRef="Gateway_Type_join" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_SpecialCheck" targetRef="Activity_SecondOpinion" />
+    <bpmn:sequenceFlow id="Flow_4" name="special" sourceRef="Gateway_Type" targetRef="Activity_SpecialCheck" />
+    <bpmn:callActivity id="businessRuleTask_fz0Escalate" name="Fz0 escalate">
+      <bpmn:incoming>flow_typeToFz0Escalate</bpmn:incoming>
+      <bpmn:outgoing>flow_fz0EscalateToStandardCheck</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:sequenceFlow id="flow_fz0EscalateToStandardCheck" sourceRef="businessRuleTask_fz0Escalate" targetRef="Activity_StandardCheck" />
+    <bpmn:sequenceFlow id="flow_typeToFz0Escalate" sourceRef="Gateway_Type" targetRef="businessRuleTask_fz0Escalate" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_Intake" />
+    <bpmn:exclusiveGateway id="Gateway_Type_join">
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:incoming>Flow_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_8</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="Gateway_Type_join" targetRef="Gateway_Amount" />
+    <bpmn:exclusiveGateway id="Gateway_Amount" name="Amount?">
+      <bpmn:incoming>Flow_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_9</bpmn:outgoing>
+      <bpmn:outgoing>Flow_10</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Activity_AutoApprove" name="Auto approve">
+      <bpmn:incoming>Flow_9</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="Event_Fzb8" name="Fzb8" attachedToRef="Activity_AutoApprove">
+      <bpmn:outgoing>flow_fzb8ToFzbh8</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="signal_sig8" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Activity_Fzbh8" name="Fzb8 handling">
+      <bpmn:incoming>flow_fzb8ToFzbh8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_fzb8ToFzbh8" sourceRef="Event_Fzb8" targetRef="Activity_Fzbh8" />
+    <bpmn:sequenceFlow id="Flow_9" name="small" sourceRef="Gateway_Amount" targetRef="Activity_AutoApprove" />
+    <bpmn:task id="Activity_ManagerApproval" name="Manager approval">
+      <bpmn:incoming>Flow_10</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="Event_Fzb5" name="Fzb5" attachedToRef="Activity_ManagerApproval">
+      <bpmn:outgoing>flow_fzb5ToFzbh5</bpmn:outgoing>
+      <bpmn:signalEventDefinition signalRef="signal_sig5" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="Activity_Fzbh5" name="Fzb5 handling">
+      <bpmn:incoming>flow_fzb5ToFzbh5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_fzb5ToFzbh5" sourceRef="Event_Fzb5" targetRef="Activity_Fzbh5" />
+    <bpmn:sequenceFlow id="Flow_10" name="large" sourceRef="Gateway_Amount" targetRef="Activity_ManagerApproval" />
+    <bpmn:task id="Activity_Archive" name="Archive">
+      <bpmn:outgoing>flow_archiveToAmountJoin</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_Amount_join">
+      <bpmn:incoming>flow_archiveToAmountJoin</bpmn:incoming>
+    </bpmn:exclusiveGateway>
+    <bpmn:sequenceFlow id="flow_archiveToAmountJoin" sourceRef="Activity_Archive" targetRef="Gateway_Amount_join" />
+  </bpmn:process>
+  <bpmn:signal id="signal_sig5" name="Sig5" />
+  <bpmn:signal id="signal_sig8" name="Sig8" />
+  <bpmn:message id="message_msg9" name="Msg9" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_S23">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_S23" bpmnElement="Process_S23">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="79" y="144" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Intake" bpmnElement="Activity_Intake">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Type" bpmnElement="Gateway_Type" isMarkerVisible="true">
+        <dc:Bounds x="336" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="342" y="75" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_StandardCheck" bpmnElement="Activity_StandardCheck">
+        <dc:Bounds x="446" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SpecialCheck" bpmnElement="Activity_SpecialCheck">
+        <dc:Bounds x="446" y="308" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_SecondOpinion" bpmnElement="Activity_SecondOpinion">
+        <dc:Bounds x="606" y="308" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Type_join" bpmnElement="Gateway_Type_join" isMarkerVisible="true">
+        <dc:Bounds x="766" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Amount" bpmnElement="Gateway_Amount" isMarkerVisible="true">
+        <dc:Bounds x="876" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="875" y="75" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_AutoApprove" bpmnElement="Activity_AutoApprove">
+        <dc:Bounds x="986" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_ManagerApproval" bpmnElement="Activity_ManagerApproval">
+        <dc:Bounds x="986" y="308" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Amount_join" bpmnElement="Gateway_Amount_join" isMarkerVisible="true">
+        <dc:Bounds x="1306" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Archive" bpmnElement="Activity_Archive">
+        <dc:Bounds x="1146" y="318" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="546" y="120" />
+        <di:waypoint x="766" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="386" y="120" />
+        <di:waypoint x="446" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="394" y="102" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_7" bpmnElement="Flow_7">
+        <di:waypoint x="706" y="348" />
+        <di:waypoint x="791" y="348" />
+        <di:waypoint x="791" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="546" y="348" />
+        <di:waypoint x="606" y="348" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="348" />
+        <di:waypoint x="446" y="348" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="369" y="330" width="53" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_8" bpmnElement="Flow_8">
+        <di:waypoint x="816" y="120" />
+        <di:waypoint x="876" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_9" bpmnElement="Flow_9">
+        <di:waypoint x="926" y="120" />
+        <di:waypoint x="986" y="120" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="934" y="102" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_10" bpmnElement="Flow_10">
+        <di:waypoint x="901" y="145" />
+        <di:waypoint x="901" y="348" />
+        <di:waypoint x="986" y="348" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="909" y="330" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_businessRuleTask_fz0Escalate" bpmnElement="businessRuleTask_fz0Escalate">
+        <dc:Bounds x="446" y="448" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_fz0EscalateToStandardCheck" bpmnElement="flow_fz0EscalateToStandardCheck">
+        <di:waypoint x="546" y="488" />
+        <di:waypoint x="561" y="488" />
+        <di:waypoint x="561" y="190" />
+        <di:waypoint x="496" y="190" />
+        <di:waypoint x="496" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_typeToFz0Escalate" bpmnElement="flow_typeToFz0Escalate">
+        <di:waypoint x="361" y="145" />
+        <di:waypoint x="361" y="488" />
+        <di:waypoint x="446" y="488" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Fzb3" bpmnElement="Event_Fzb3">
+        <dc:Bounds x="503" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="543" y="162" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Fzbh3" bpmnElement="Activity_Fzbh3">
+        <dc:Bounds x="606" y="448" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_fzbh3ToIntake" bpmnElement="flow_fzbh3ToIntake">
+        <di:waypoint x="656" y="528" />
+        <di:waypoint x="656" y="543" />
+        <di:waypoint x="226" y="543" />
+        <di:waypoint x="226" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_fzb3ToFzbh3" bpmnElement="flow_fzb3ToFzbh3">
+        <di:waypoint x="521" y="178" />
+        <di:waypoint x="521" y="199" />
+        <di:waypoint x="576" y="199" />
+        <di:waypoint x="576" y="488" />
+        <di:waypoint x="606" y="488" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_archiveToAmountJoin" bpmnElement="flow_archiveToAmountJoin">
+        <di:waypoint x="1246" y="358" />
+        <di:waypoint x="1331" y="358" />
+        <di:waypoint x="1331" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Fzb5" bpmnElement="Event_Fzb5">
+        <dc:Bounds x="1043" y="370" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1083" y="390" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Fzbh5" bpmnElement="Activity_Fzbh5">
+        <dc:Bounds x="1043" y="480" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1027" y="522" width="68" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_fzb5ToFzbh5" bpmnElement="flow_fzb5ToFzbh5">
+        <di:waypoint x="1061" y="406" />
+        <di:waypoint x="1061" y="480" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_Event_Fzb8" bpmnElement="Event_Fzb8">
+        <dc:Bounds x="1043" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1083" y="162" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Fzbh8" bpmnElement="Activity_Fzbh8">
+        <dc:Bounds x="1043" y="252" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1085" y="256" width="68" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_fzb8ToFzbh8" bpmnElement="flow_fzb8ToFzbh8">
+        <di:waypoint x="1061" y="178" />
+        <di:waypoint x="1061" y="252" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

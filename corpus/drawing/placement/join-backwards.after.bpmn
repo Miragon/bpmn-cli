@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Defs" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process" isExecutable="true">
+    <bpmn:startEvent id="Start"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:task id="Split" name="Split"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>F2</bpmn:outgoing><bpmn:outgoing>F3</bpmn:outgoing></bpmn:task>
+    <bpmn:exclusiveGateway id="Join"><bpmn:incoming>F2</bpmn:incoming><bpmn:incoming>F5</bpmn:incoming><bpmn:outgoing>F4</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:task id="Other" name="Other"><bpmn:incoming>F3</bpmn:incoming><bpmn:outgoing>F5</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="Last" name="Last"><bpmn:incoming>F4</bpmn:incoming></bpmn:task>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Split"/>
+    <bpmn:sequenceFlow id="F2" sourceRef="Split" targetRef="Join"/>
+    <bpmn:sequenceFlow id="F3" sourceRef="Split" targetRef="Other"/>
+    <bpmn:sequenceFlow id="F5" sourceRef="Other" targetRef="Join"/>
+    <bpmn:sequenceFlow id="F4" sourceRef="Join" targetRef="Last"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram">
+    <bpmndi:BPMNPlane id="Plane" bpmnElement="Process">
+      <bpmndi:BPMNShape id="Start_di" bpmnElement="Start"><dc:Bounds x="100" y="122" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Split_di" bpmnElement="Split"><dc:Bounds x="200" y="100" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Join_di" bpmnElement="Join" isMarkerVisible="true"><dc:Bounds x="360" y="115" width="50" height="50"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Other_di" bpmnElement="Other"><dc:Bounds x="500" y="240" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Last_di" bpmnElement="Last"><dc:Bounds x="800" y="100" width="100" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="F1_di" bpmnElement="F1"><di:waypoint x="136" y="140"/><di:waypoint x="200" y="140"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F2_di" bpmnElement="F2"><di:waypoint x="300" y="140"/><di:waypoint x="360" y="140"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F3_di" bpmnElement="F3"><di:waypoint x="250" y="180"/><di:waypoint x="250" y="280"/><di:waypoint x="500" y="280"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F4_di" bpmnElement="F4"><di:waypoint x="410" y="140"/><di:waypoint x="800" y="140"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
