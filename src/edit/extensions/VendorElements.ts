@@ -1,6 +1,9 @@
 import { type BpmnDocument, BpmnElement, BpmnError, CamundaDescriptor, DeclaredNamespaces, ZeebeDescriptor } from '../../model/index.js';
 import { ExtensionStructure } from './ExtensionStructure.js';
-import type { NestedHosts } from './NestedHosts.js';
+
+export interface ElementHosts {
+  idOf(host: BpmnElement): string;
+}
 
 export class VendorElements {
   private static readonly NAME_RE = /^([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)$/;
@@ -9,7 +12,7 @@ export class VendorElements {
 
   constructor(
     private readonly document: BpmnDocument,
-    private readonly hosts: NestedHosts,
+    private readonly hosts: ElementHosts,
   ) {}
 
   typeOf(el: BpmnElement): string {
