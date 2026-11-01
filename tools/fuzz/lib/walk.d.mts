@@ -12,13 +12,14 @@ export interface WalkSummary {
   steps: number;
   ok: number;
   errors: number;
+  warnings: number;
   violations: Violation[];
   ops: Array<{ name: string; ops: unknown[] }>;
 }
 
 export interface WalkMetrics {
   measure(xml: string): Promise<{ counts?: Record<string, number>; problems?: readonly unknown[]; score?: number | null }>;
-  diff(before: readonly unknown[], after: readonly unknown[]): { added: never[] };
+  diff(before: readonly never[], after: readonly never[]): { added: unknown[] };
   hard: string[];
 }
 

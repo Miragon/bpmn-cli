@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { applyToXml, BpmnError, diagramXml, kindsJson } from '../../src/index.js';
 import { type Executor, libExecutor } from '../../tools/fuzz/lib/exec.mjs';
 import { analyse, diInvariants } from '../../tools/fuzz/lib/analyse.mjs';
-import { runWalk, type WalkSummary } from '../../tools/fuzz/lib/walk.mjs';
+import { runWalk, type WalkMetrics, type WalkSummary } from '../../tools/fuzz/lib/walk.mjs';
+import { ProblemKinds, ScoreChange } from '../support/ModelValues.js';
 
 const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
 const STEPS = 15;
@@ -16,12 +17,17 @@ const WALKS = [...SYNTHETIC, ...SCENARIOS].flatMap((path, index) => [{ path, see
 const ORDERS = 'models/incremental/orders.bpmn';
 
 const library = libExecutor({ applyToXml, BpmnError });
-const scoringWithoutJudging = { measure: diagramXml, diff: () => ({ added: [] }), hard: [] };
+const scored = (problems: readonly never[]): ConstructorParameters<typeof ScoreChange>[1] => ({ counts: ProblemKinds.perKind(() => 0), score: 0, problems });
+const realChecks: WalkMetrics = {
+  measure: diagramXml,
+  diff: (before, after) => ({ added: new ScoreChange(scored(before), scored(after)).added }),
+  hard: ProblemKinds.ALL.filter((kind) => ProblemKinds.isHard(kind)),
+};
 
 const textOf = (path: string) => readFileSync(join(CORPUS, path), 'utf8');
 
 function walk(path: string, seed: number, steps: number, exec: Executor = library, detEvery = EVERY_FOURTH_STEP): Promise<WalkSummary> {
-  return runWalk({ xml: textOf(path), model: path, seed, steps, exec, metrics: scoringWithoutJudging, detEvery });
+  return runWalk({ xml: textOf(path), model: path, seed, steps, exec, metrics: realChecks, detEvery, hardSeverity: 'warn' });
 }
 
 function errorsOf({ violations }: WalkSummary): string[] {
@@ -48,12 +54,14 @@ describe('seeded random walks through the public API', () => {
     expect(WALKS.length).toBeGreaterThanOrEqual(48);
   });
 
-  it.each(WALKS)('keeps the DI complete and the bytes deterministic over $path, seed $seed', async ({ path, seed }) => {
-    const summary = await walk(path, seed, STEPS);
+  it('keeps the DI complete and the bytes deterministic over every walk, with hard defects counted as warnings', async () => {
+    const summaries = await Promise.all(WALKS.map(({ path, seed }) => walk(path, seed, STEPS)));
+    const warnings = summaries.reduce((sum, { warnings: found }) => sum + found, 0);
+    console.info(`random walks: ${WALKS.length} walks, ${warnings} warnings, the hard defects among them`);
 
-    expect(errorsOf(summary)).toEqual([]);
-    expect(summary.ok).toBeGreaterThan(0);
-  });
+    expect(summaries.flatMap(errorsOf)).toEqual([]);
+    expect(summaries.every(({ ok }) => ok > 0)).toBe(true);
+  }, 120000);
 
   it('gives the same steps and the same result for the same seed', async () => {
     const [first, second] = [await walk(ORDERS, 7, 6, library, 0), await walk(ORDERS, 7, 6, library, 0)];
@@ -83,6 +91,14 @@ describe('the invariants of a walk over planted defects', () => {
     const flaky = sabotaged((xml) => (calls++ % 2 ? xml.replace(/<\/((?:\w+:)?definitions)>/, '<!-- again --></$1>') : xml));
 
     expect(kindsOf(await walk(ORDERS, 11, 1, flaky, 1))).toContain('nondeterministic');
+  });
+
+  it('counts a hard defect the write adds as a warning, and goes on', async () => {
+    const piled = sabotaged((xml) => xml.replace(/(<(?:\w+:)?Bounds )x="[^"]*" y="[^"]*"/g, '$1x="200" y="200"'));
+
+    const { violations } = await walk(ORDERS, 11, 1, piled, 0);
+
+    expect(violations.filter(({ kind }) => kind.startsWith('hard:')).map(({ severity }) => severity)).toContain('warn');
   });
 
   it('names a crash and a file written on failure', async () => {
