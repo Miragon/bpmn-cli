@@ -116,7 +116,7 @@ export class BpmnDocument {
     throw BpmnError.io('E_IMPORT_LOSSY', `${this.file ?? 'The XML'} contains content bpmn-moddle cannot represent; writing it back would lose data`, {
       ...(this.file ? { file: this.file } : {}),
       warnings: lossy.map((warning) => warning.message.split('\n')[0]),
-      hint: 'Fix the XML, or pass --force (MutationOptions.force) to write anyway (the reported content will be dropped).',
+      hint: 'Fix the XML, or pass --force to write anyway (the reported content will be dropped).',
     });
   }
 }

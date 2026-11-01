@@ -8,7 +8,7 @@ export class AddOperationDefinition extends OperationDefinition {
   private static readonly NODE = new SplitNodeDefinition().fields;
 
   readonly name = 'add';
-  readonly description = 'Create one element and wire it in (= `bpmn add`).';
+  readonly description = 'Create one element and wire it in.';
   readonly fields = {
     kind: FieldSets.kind,
     name: AddOperationDefinition.NODE.name,

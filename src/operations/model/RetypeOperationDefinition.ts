@@ -4,7 +4,7 @@ export type RetypeOperation = OperationOf<RetypeOperationDefinition>;
 
 export class RetypeOperationDefinition extends OperationDefinition {
   readonly name = 'retype';
-  readonly description = 'Change the kind of an element, keeping id, name, flows and extensions (= `bpmn retype`).';
+  readonly description = 'Change the kind of an element, keeping id, name, flows and extensions.';
   readonly fields = {
     id: OperationField.required(FieldValues.reference, 'Element id.'),
     kind: FieldSets.kind,

@@ -4,7 +4,7 @@ export type SetOperation = OperationOf<SetOperationDefinition>;
 
 export class SetOperationDefinition extends OperationDefinition {
   readonly name = 'set';
-  readonly description = 'Set or remove properties of an element (= `bpmn set`).';
+  readonly description = 'Set or remove properties of an element.';
   readonly fields = {
     id: OperationField.required(FieldValues.reference, 'Element id.'),
     set: OperationField.required(FieldValues.keys, 'Properties to set (`bpmn guide set-keys` lists the keys per element family); an empty string removes the property.'),

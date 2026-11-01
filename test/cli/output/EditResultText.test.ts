@@ -12,6 +12,13 @@ describe('EditResultText', () => {
     expect(textOf({ unchanged: true }).split('\n')[0]).toBe('no changes');
   });
 
+  it('lists no change of a write that left the file as it was', () => {
+    const text = textOf({ unchanged: true, changed: [change('check')] }, { written: false });
+
+    expect(text.split('\n')[0]).toBe('no changes');
+    expect(text).not.toContain('changed: check');
+  });
+
   it('ends with the score, the state and the file', () => {
     expect(textOf().split('\n')).toEqual(['drawing changed', 'layout quality: score 4 -> 9', "state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)", 'written: f.bpmn']);
   });

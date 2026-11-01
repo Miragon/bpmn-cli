@@ -18,6 +18,10 @@ const RETIRED_WORDS_COLUMN = /^\| [^|]*(?=\|)/gm;
 const COMMAND = /(?:^|[`(\s])bpmn ([a-z]+)(?: (add|remove))?([^`\n]*)/gm;
 const FLAG = /(?<![\w-])--[a-z][a-z-]*/g;
 const PROGRAM_FLAGS = ['--help', '--version'];
+const SOURCES = join(import.meta.dirname, '..', '..', 'src');
+const HINT = /\bhint: (?:'([^'\n]*)'|`([^`\n]*)`|"([^"\n]*)")/g;
+const TEMPLATE_VALUE = /\$\{[^}]*\}/g;
+const TYPE_NAME = /(?<![=:\w])[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g;
 
 function namesOfTheCli(): Names {
   const { stdout, stderr, stdin, env } = process;
@@ -81,8 +85,25 @@ async function hintsOfRefusedCall(call: Parameters<typeof onRebuild>[1]): Promis
   return hints;
 }
 
+function filesBelow(folder: string): string[] {
+  return readdirSync(folder).flatMap((name) => {
+    const path = join(folder, name);
+    return statSync(path).isDirectory() ? filesBelow(path) : [path];
+  });
+}
+
+function typeNamesInHints(): string[] {
+  const sources = filesBelow(SOURCES).filter((path) => path.endsWith('.ts')).map((path) => readFileSync(path, 'utf8'));
+  const hints = sources.flatMap((source) => [...source.matchAll(HINT)].map(([, single, tick, double]) => (single ?? tick ?? double)!.replace(TEMPLATE_VALUE, '')));
+  return [...new Set(hints.flatMap((hint) => [...hint.matchAll(TYPE_NAME)].map(([word]) => word)))];
+}
+
 describe('the names of the guide and the hints', () => {
   const names = namesOfTheCli();
+
+  it('names no type of the code in a hint', () => {
+    expect(typeNamesInHints()).toEqual([]);
+  });
 
   it('knows the 26 commands', () => {
     expect(names.flagsOf.size).toBe(26);

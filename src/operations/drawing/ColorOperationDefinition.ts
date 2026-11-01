@@ -4,7 +4,7 @@ export type ColorOperation = OperationOf<ColorOperationDefinition>;
 
 export class ColorOperationDefinition extends OperationDefinition {
   readonly name = 'color';
-  readonly description = 'Diagram only: colour shapes and connections with a bpmn-js colour picker colour (= `bpmn color`).';
+  readonly description = 'Diagram only: colour shapes and connections with a bpmn-js colour picker colour.';
   readonly fields = {
     ids: OperationField.optional(FieldValues.references(1), 'Shapes and connections to colour.'),
     ...FieldSets.selectors,

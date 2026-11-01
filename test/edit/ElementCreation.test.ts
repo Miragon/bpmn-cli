@@ -100,7 +100,7 @@ describe('ElementCreation', () => {
   it('takes no id among the keys of what it creates', async () => {
     const document = await order();
 
-    expect(() => added(document, { kind: 'userTask', after: 'ship', set: { id: 'taken' } })).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_KEY' }));
+    expect(() => added(document, { kind: 'userTask', after: 'ship', set: { id: 'taken' } })).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_KEY', details: expect.objectContaining({ candidates: expect.not.arrayContaining(['id']) }) }));
   });
 
   it('leaves an element that exists alone when asked to add it only if absent', async () => {

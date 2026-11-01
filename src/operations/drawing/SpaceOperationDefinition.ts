@@ -4,7 +4,7 @@ export type SpaceOperation = OperationOf<SpaceOperationDefinition>;
 
 export class SpaceOperationDefinition extends OperationDefinition {
   readonly name = 'space';
-  readonly description = "Diagram only: insert space right of / below an element like the modeler's space tool (= `bpmn space`).";
+  readonly description = "Diagram only: insert space right of / below an element like the modeler's space tool.";
   readonly fields = {
     after: OperationField.optional(FieldValues.reference, 'Insert horizontal space right of this element (everything starting right of it moves right, frames grow).'),
     below: OperationField.optional(FieldValues.reference, 'Insert vertical space below this element (everything starting below it moves down, frames grow).'),

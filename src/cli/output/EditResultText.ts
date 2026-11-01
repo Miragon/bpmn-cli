@@ -84,7 +84,7 @@ export class EditResultText {
   private headLines(): string[] {
     const { created, changed, removed, renamed, aliases, format, notes, findings } = this.result;
     const createdIds = new Set(created.map(({ id }) => id));
-    const changedIds = [...new Set(changed.map(({ id }) => id))].filter((id) => !createdIds.has(id));
+    const changedIds = this.result.unchanged ? [] : [...new Set(changed.map(({ id }) => id))].filter((id) => !createdIds.has(id));
     const changes = [
       ...EditResultText.createdLines(created),
       ...(Object.keys(aliases).length ? [`aliases: ${Object.entries(aliases).map(([alias, id]) => `${alias} = ${id}`).join(', ')}`] : []),

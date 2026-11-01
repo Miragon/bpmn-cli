@@ -11,10 +11,18 @@ const EXAMPLES: Example[] = [
   ['needs a target', { source: 'a' }, 'missing required key "target"'],
   ['refuses name outside set', { source: 'a', target: 'b', name: 'yes' }, 'unknown key "name"'],
   ['refuses message outside set', { source: 'a', target: 'b', message: 'Order' }, 'unknown key "message"'],
+  ['names its ends source and target, not from', { from: 'a', target: 'b' }, 'unknown key "from" (did you mean "source"?)'],
+  ['names its ends source and target, not to', { source: 'a', to: 'b' }, 'unknown key "to" (did you mean "target"?)'],
   ['refuses a default flow with a condition under set', { source: 'a', target: 'b', set: { default: true, condition: '=ok' } }, 'mutually exclusive'],
 ];
 
 describe('ConnectOperationDefinition', () => {
+  it('hints at the end, not at set, for a key that names one', () => {
+    const read = () => new ConnectOperationDefinition().read({ from: 'a', target: 'b' }, new OperationLocation(0, 'ops[0]'));
+
+    expect(read).toThrow(expect.objectContaining({ details: expect.objectContaining({ hint: 'connect names its ends with "source" and "target": {"target":"b","source":"a"}.' }) }));
+  });
+
   it.each(EXAMPLES)('%s', (_says, operation, refusal, parsedAs) => {
     const read = () => new ConnectOperationDefinition().read(operation, new OperationLocation(0, 'ops[0]'));
     if (refusal) {

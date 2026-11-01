@@ -23,6 +23,10 @@ describe('EditCommand', () => {
     expect((await cli.run(['ext', 'add', file, 'check'])).stderr).toMatch(/^error E_USAGE: ext add needs "type"/);
   });
 
+  it('describes a command without naming the command again', async () => {
+    expect((await cli.run(['add', '--help'])).stdout).not.toContain('(= `bpmn');
+  });
+
   it('names an unknown kind with its own code', async () => {
     expect(await cli.run(['retype', cli.copied('edit/order-check.bpmn'), 'check', 'nope'])).toMatchObject({ exit: 1, stderr: expect.stringMatching(/^error E_UNKNOWN_KIND: Unknown kind "nope"/) });
   });

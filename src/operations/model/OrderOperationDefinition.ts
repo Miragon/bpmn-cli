@@ -4,7 +4,7 @@ export type OrderOperation = OperationOf<OrderOperationDefinition>;
 
 export class OrderOperationDefinition extends OperationDefinition {
   readonly name = 'order';
-  readonly description = 'Set the top-to-bottom order of the outgoing flows of a node, of the lanes of a pool / process / parent lane, or of the pools of a collaboration (= `bpmn order`).';
+  readonly description = 'Set the top-to-bottom order of the outgoing flows of a node, of the lanes of a pool / process / parent lane, or of the pools of a collaboration.';
   readonly fields = {
     id: OperationField.required(FieldValues.reference, 'Node whose outgoing flows are ordered, the process / participant / parent lane whose lanes are ordered, or the collaboration whose pools are ordered.'),
     flows: OperationField.optional(FieldValues.references(1), 'Outgoing flow ids in the wanted top-to-bottom order; unlisted flows follow in their old order.'),

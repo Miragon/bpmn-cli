@@ -4,7 +4,7 @@ export type ExtOperation = OperationOf<ExtOperationDefinition>;
 
 export class ExtOperationDefinition extends OperationDefinition {
   readonly name = 'ext';
-  readonly description = 'Add or remove vendor extension elements (= `bpmn ext`).';
+  readonly description = 'Add or remove vendor extension elements.';
   readonly fields = {
     id: OperationField.required(FieldValues.reference, 'Element id.'),
     action: OperationField.required(FieldValues.choice(['add', 'remove']), 'What to do with the extension elements.'),

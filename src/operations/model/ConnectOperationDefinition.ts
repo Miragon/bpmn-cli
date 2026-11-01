@@ -4,7 +4,7 @@ export type ConnectOperation = OperationOf<ConnectOperationDefinition>;
 
 export class ConnectOperationDefinition extends OperationDefinition {
   readonly name = 'connect';
-  readonly description = 'Connect two elements; the connection kind (sequence flow, message flow, association, data association) is inferred (= `bpmn connect`).';
+  readonly description = 'Connect two elements; the connection kind (sequence flow, message flow, association, data association) is inferred.';
   readonly fields = {
     source: OperationField.required(FieldValues.reference, 'Source element id.'),
     target: OperationField.required(FieldValues.reference, 'Target element id.'),
@@ -14,6 +14,7 @@ export class ConnectOperationDefinition extends OperationDefinition {
     ifAbsent: OperationField.optional(FieldValues.flag, 'Succeed without changes when an identical connection already exists.'),
     set: OperationField.optional(FieldValues.keys, 'What the connection holds: the keys of `bpmn set` on it: name, condition, language, default, message.'),
   };
+  protected override readonly fieldOfWord = { from: 'source', to: 'target' };
   override readonly referenceKeys = ['source', 'target'];
   override readonly aliasKeyOfNewId = { id: 'as' };
   override readonly schemaRules = [{ properties: { set: { not: { required: ['default', 'condition'], properties: { default: { enum: [true, 'true'] } } } } } }];

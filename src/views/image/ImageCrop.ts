@@ -23,6 +23,12 @@ export class ImageCrop {
     this.planes = new PlaneReader(document.tree.definitions).planes();
   }
 
+  private static assertBothEnds(path: readonly string[]): void {
+    if (path.length !== 2) {
+      throw BpmnError.usage('A path takes two ids: where it starts and where it ends');
+    }
+  }
+
   private static refuseMixed({ ids, around, depth, path }: CropOptions): void {
     const asked = [...(around !== undefined ? ['--around'] : []), ...(path ? ['--path'] : []), ...(ids?.length ? ['element ids'] : [])];
     if (asked.length > 1) {
@@ -61,6 +67,7 @@ export class ImageCrop {
       return { ...this.withItsArtifacts([...distances.keys()].map(({ id }) => id)), depth: used };
     }
     if (path) {
+      ImageCrop.assertBothEnds(path);
       return this.withItsArtifacts(new FlowPath(this.document).between(...path).map(({ id }) => id));
     }
     return ids?.length ? this.ofIds([...new Set(ids)]) : {};

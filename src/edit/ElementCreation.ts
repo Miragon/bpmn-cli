@@ -53,7 +53,7 @@ export class ElementCreation {
       this.finishWithoutLane(element, command, def, changes);
     }
     if (keys['id'] !== undefined) {
-      throw PropertyCatalog.of(element).unknownKey('id', 'the operation\'s own "id" names a new element, `--id` on the command line');
+      throw PropertyCatalog.of(element).unknownKey('id', 'the operation\'s own "id" names a new element, `--id` on the command line', ['id']);
     }
     const rest = TriggerKeys.remainingKeys(keys, ElementCreation.consumedKeys(def));
     if (Object.keys(rest).length) {

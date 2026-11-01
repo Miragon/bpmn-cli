@@ -4,7 +4,7 @@ export type MoveOperation = OperationOf<MoveOperationDefinition>;
 
 export class MoveOperationDefinition extends OperationDefinition {
   readonly name = 'move';
-  readonly description = 'Relocate nodes to another place or lane (= `bpmn move`).';
+  readonly description = 'Relocate nodes to another place or lane.';
   readonly fields = {
     ids: OperationField.required(FieldValues.references(1), 'Node ids to move (boundary events follow their host).'),
     ...FieldSets.placement,

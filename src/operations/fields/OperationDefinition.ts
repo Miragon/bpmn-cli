@@ -22,6 +22,7 @@ export abstract class OperationDefinition {
   abstract readonly fields: FieldMap;
   readonly referenceKeys: readonly string[] = [];
   readonly aliasKeyOfNewId: Readonly<Record<string, string>> = {};
+  protected readonly fieldOfWord: Readonly<Record<string, string>> = {};
   readonly schemaRules: readonly unknown[] = [];
 
   protected check(_operation: OperationCheck): void {}
@@ -66,6 +67,10 @@ export abstract class OperationDefinition {
   private repairOf(key: string, input: Record<string, unknown>): { key: string; hint: string } | undefined {
     const known = (entries: [string, unknown][]) => Object.fromEntries(entries.filter(([fieldKey]) => fieldKey === 'op' || this.fields[fieldKey]));
     const { [key]: value, ...rest } = input;
+    const named = this.fieldOfWord[key];
+    if (named) {
+      return { key: named, hint: `${this.name} names its ends with "source" and "target": ${JSON.stringify({ ...known(Object.entries(rest)), [named]: value })}.` };
+    }
     if (this.fields['id'] && input['id'] === undefined && OperationDefinition.ID_LIKE.has(key)) {
       return { key: 'id', hint: `${this.name} names its element with "id": ${JSON.stringify({ ...known(Object.entries(rest)), id: value })}.` };
     }

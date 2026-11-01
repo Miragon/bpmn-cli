@@ -27,7 +27,7 @@ export class NeighbourhoodWalk {
 
   window(id: string, depth = NeighbourhoodWalk.DEFAULT_DEPTH): NeighbourhoodWindow {
     if (!Number.isInteger(depth) || depth < 0) {
-      throw BpmnError.usage(`--depth must be a whole number >= 0, got ${String(depth)}`);
+      throw BpmnError.usage('--depth must be a whole number >= 0');
     }
     const element = this.document.tree.require(id);
     const seeds = NeighbourhoodWalk.seedsOf(element, id);

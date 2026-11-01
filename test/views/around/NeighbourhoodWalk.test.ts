@@ -52,6 +52,10 @@ describe('NeighbourhoodWalk', () => {
     await expect(window(id, depth)).rejects.toMatchObject({ code });
   });
 
+  it('says what --depth takes without echoing a value that is no number', async () => {
+    await expect(window('Activity_Pay', Number('abc'))).rejects.toMatchObject({ code: 'E_USAGE', message: '--depth must be a whole number >= 0' });
+  });
+
   it('points to --in for a whole container', async () => {
     await expect(window('Process_Claims')).rejects.toMatchObject({ details: { hint: expect.stringContaining('--in') } });
   });

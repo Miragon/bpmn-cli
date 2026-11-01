@@ -10,7 +10,7 @@ export class PlaceOperationDefinition extends OperationDefinition {
   private static readonly SIDE_EXAMPLE = RefusalWording.onlyInBatch('Example: {"op":"place","ids":["event_overdue"],"side":"top"}.');
 
   readonly name = 'place';
-  readonly description = 'Diagram only: move shapes (rigid group) to the row and/or column of another element (= `bpmn place`).';
+  readonly description = 'Diagram only: move shapes (rigid group) to the row and/or column of another element.';
   readonly fields = {
     ids: OperationField.optional(FieldValues.references(1), 'Shapes moved as one rigid group; the first id is the reference that lands on the target row / column. Boundary events, labels and the content of an expanded sub-process follow.'),
     ...FieldSets.selectors,

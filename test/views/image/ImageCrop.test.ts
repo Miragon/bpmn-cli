@@ -17,6 +17,10 @@ describe('ImageCrop', () => {
     expect(fit?.length).toBeGreaterThan(1);
   });
 
+  it('asks for both ends of a path', async () => {
+    await expect(crop({ path: ['Event_InnerStart'] as unknown as [string, string] })).rejects.toMatchObject({ code: 'E_USAGE', message: 'A path takes two ids: where it starts and where it ends' });
+  });
+
   it('fits the shortest path between two ids', async () => {
     const { fit } = await crop({ path: ['Event_InnerStart', 'Event_InnerEnd'] });
 
