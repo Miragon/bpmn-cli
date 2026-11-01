@@ -8,7 +8,7 @@ import { IdRequests, type IdRequest } from './IdRequests.js';
 import { IdSlug } from './IdSlug.js';
 import { IdWords } from './IdWords.js';
 
-export type PrefixSource = 'lint' | 'default' | 'bpmn-cli';
+type PrefixSource = 'lint' | 'default' | 'bpmn-cli';
 
 export interface StalePrefix {
   was?: string;

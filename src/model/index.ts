@@ -32,7 +32,7 @@ export { IdDefaults, type IdConventions, type IdState, type QualifierMode } from
 export { IdRegistry } from './ids/IdRegistry.js';
 export { IdRequests, type IdRequest } from './ids/IdRequests.js';
 export { IdSlug } from './ids/IdSlug.js';
-export { IdStyle, type PrefixSource } from './ids/IdStyle.js';
+export { IdStyle } from './ids/IdStyle.js';
 export { type BatchContext } from './ids/IdSuggestions.js';
 export { IdWords, type ContextWord } from './ids/IdWords.js';
 export { CAMUNDA, CamundaDescriptor, type CamundaElementType } from './vendor/CamundaDescriptor.js';
