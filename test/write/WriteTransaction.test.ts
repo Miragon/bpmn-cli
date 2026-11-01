@@ -116,6 +116,26 @@ describe('WriteTransaction', () => {
     expect(result.state.errors).toBeGreaterThan(0);
   });
 
+  it.each([
+    ['removes the only start of an event sub-process', { op: 'remove', ids: ['Event_CancelRequested'] }, 'Activity_OnCancel'],
+    ['removes the pool of a collaboration with message flows', { op: 'remove', ids: ['Participant_Insurer'] }, undefined],
+    ['turns an event sub-process into a plain one around its message start', { op: 'set', id: 'Activity_OnCancel', set: { triggeredByEvent: false } }, undefined],
+  ])('refuses a write that %s, though the error sits at an element it did not touch', async (_change, operation, element) => {
+    const claims = Fixtures.text('models/views/claims.bpmn');
+
+    const refusal = await refusalOf(write(claims, [operation]));
+
+    expect(refusal.code).toBe('E_VALIDATION');
+    expect(refusal.details['errors']).toEqual(expect.arrayContaining([expect.objectContaining(element ? { element } : { code: expect.stringMatching(/^E_/) })]));
+  });
+
+  it('reports a forced error at an untouched element among the findings', async () => {
+    const { findings, state } = await write(Fixtures.text('models/views/claims.bpmn'), [{ op: 'remove', ids: ['Event_CancelRequested'] }], { force: true });
+
+    expect(state.errors).toBeGreaterThan(0);
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ severity: 'error', element: 'Activity_OnCancel' })]));
+  });
+
   it('counts an error elsewhere in the state and leaves it out of the findings', async () => {
     const { findings, state } = await write(Fixtures.text('edit/events-gateway.bpmn'), [{ op: 'set', id: 'loose_task', set: { name: 'Renamed' } }]);
 

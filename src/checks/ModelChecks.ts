@@ -23,11 +23,6 @@ export class ModelChecks {
     return [...ModelChecks.withoutRepeats(structure, camunda), ...camunda];
   }
 
-  async at(elements: Iterable<string>): Promise<Finding[]> {
-    const touched = new Set(elements);
-    return (await this.all()).filter(({ element }) => element !== undefined && touched.has(element));
-  }
-
   private static withoutRepeats(structure: Finding[], camunda: ProfileFinding[]): Finding[] {
     const branches = new Set(camunda.filter(({ code }) => /^W_C[78]_.*EVENT_GATEWAY/.test(code)).map(ModelChecks.branch));
     const unstarted = new Set(camunda.filter(({ code, related }) => ModelChecks.START_CODES.includes(code) && !related?.length).map(({ element }) => element));

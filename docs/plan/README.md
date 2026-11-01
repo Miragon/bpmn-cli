@@ -92,9 +92,10 @@ outside, and one judges the drawing:
 
 - checks holds only bpmn-cli's own rules about the model. It neither runs foreign rules nor compares a
   before with an after.
-- What a write added is told by one class, `FindingDelta` in write. Structure and Camunda checks it
-  compares at the touched elements, checking the old document there only when the new one has errors;
-  host validators run on the old file, then on the new one, and it compares their findings over the
+- What a write added is told by one class, `FindingDelta` in write. The new document is checked once,
+  whole. Without an error anywhere nothing more runs; with one the old document is checked whole too,
+  and an error whose key it lacks refuses without `force`, wherever it sits. Warnings are reported at the
+  touched elements and counted elsewhere. Host validators run on the old file, then on the new one, and it compares their findings over the
   whole file, by `key`. Only a write has a before.
 
 ## Decisions

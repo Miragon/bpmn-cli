@@ -19,6 +19,7 @@ const partsWith = (build: (changes: ChangeSet) => void, fields: Partial<WriteOut
     drawing: { warnings: [], format: [], notes: [] } as unknown as DrawingReport,
     renames: new IdRenames(changes),
     checks: [],
+    addedErrors: [],
     host: { added: [], blocking: [], preexisting: [] },
     score: new ScoreChange(noScore, noScore),
     ...fields,
@@ -35,6 +36,14 @@ describe('WriteOutcome', () => {
 
     expect(findings).toEqual([warningAt('new')]);
     expect(state).toEqual({ errors: 1, warnings: 2 });
+  });
+
+  it('reports an error the write added at an element it did not touch', () => {
+    const added = { code: 'E_EVENT_SUBPROCESS_NO_START', message: 'no start', severity: 'error', element: 'old' } as Finding;
+
+    const { findings } = new WriteOutcome(partsWith((changes) => changes.create({ id: 'new', kind: 'task' }), { checks: [warningAt('old'), added], addedErrors: [added] })).result();
+
+    expect(findings).toEqual([added]);
   });
 
   it('lists an operation warning once when a check says the same', () => {

@@ -51,8 +51,9 @@ flowchart TD
 4. `ModelOperationRunner` applies the model operations to the semantics and records them in a `ChangeSet`.
 5. `DiagramDrawing` compares the document with the snapshot and draws: incrementally at what the
    `ChangeSet` names, in full on an empty plane or with a `layout` operation. Drawing operations run last.
-6. `Scorer` scores the new drawing, `ModelChecks` checks the new document once, and `FindingDelta` tells
-   whether an error at a touched element is new. A new error refuses the write.
+6. `Scorer` scores the new drawing, `ModelChecks` checks the new document once, whole, and when it has an
+   error `FindingDelta` compares it with the old document, checked whole too. A new error, wherever it
+   sits, refuses the write.
 7. `DocumentWriter` writes only what changed; host validators run on the new text, and `FindingDelta`
    compares their findings with those from before.
 8. `WriteOutcome` makes the `EditResult`, `EditResultText` prints it in at most 1 KB, and `BpmnFile` writes
@@ -72,9 +73,9 @@ and one judges the drawing.
 | layout score | bpmn-cli's | how well the model is drawn | problem kinds such as `crossings` | every write, `diagram`, the layout's trials | `scoring` |
 
 - checks holds only bpmn-cli's own rules. It neither runs foreign rules nor compares a before with an after.
-- What a write added is told by one class, `FindingDelta`. Structure and Camunda checks it compares at the
-  touched elements, checking the old document there only when the new one has errors there; host
-  validators run on the old file and the new one, and it compares their findings over the whole file.
+- What a write added is told by one class, `FindingDelta`. Structure and Camunda checks it compares over the
+  whole file, checking the old document only when the new one has errors; warnings are reported at the
+  touched elements and counted elsewhere. Host validators run on the old file and the new one, and it compares their findings over the whole file.
 
 ## model
 

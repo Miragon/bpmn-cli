@@ -50,7 +50,7 @@ What changed without a word of its own:
   over several writes ends with `bpmn layout <file>`.
 - A write no longer runs the project's `.bpmnlintrc`: its findings come only from
   `bpmn validate`. A write reports findings at the elements it touched and counts
-  the rest in its `state:` line.
+  the rest in its `state:` line; an error it adds anywhere still refuses.
 - `show` no longer lists problems: `bpmn validate` and `bpmn diagram` do.
 - A failed incremental layout no longer falls back to a redraw: it answers
   `E_LAYOUT_INCREMENTAL`.

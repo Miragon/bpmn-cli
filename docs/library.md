@@ -151,7 +151,7 @@ TypeScript types with the package.
 | `created`, `changed`, `removed` | `{ id, kind, name, detail }` per element |
 | `renamed` | the ids a write renamed |
 | `aliases` | each `$name` of the batch with its id |
-| `findings` | check findings at the touched elements, plus every host-validator finding the change added |
+| `findings` | check findings at the touched elements, every error the change added elsewhere, plus every host-validator finding the change added |
 | `preexisting` | the host-validator errors the file had before, which do not block |
 | `state` | the counts of errors and warnings in the whole file |
 | `score` | the layout score before and after, its counts per kind, the problems added and resolved |

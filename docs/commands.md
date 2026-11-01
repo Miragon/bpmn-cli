@@ -238,8 +238,8 @@ a layout dry run.
 | `1 error(s), 2 warning(s)` | 2 |
 
 A `W_C7_DEPLOY_*` or `W_C8_DEPLOY_*` warning means the engine refuses the file. A bpmnlint error
-fails the check ([bpmnlint](bpmnlint.md)). A write reports only what it touched and counts the rest in
-its state line; `validate` lists everything.
+fails the check ([bpmnlint](bpmnlint.md)). A write reports what it touched and any error it adds, and counts the
+rest in its state line; `validate` lists everything.
 
 ## `layout`
 

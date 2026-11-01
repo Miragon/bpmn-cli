@@ -31,12 +31,4 @@ describe('ModelChecks', () => {
 
     expect((await new ModelChecks(document, 'none').all()).every(({ code }) => /^[EW]_(?!C[78]_)/.test(code))).toBe(true);
   });
-
-  it('tells the findings at the touched elements', async () => {
-    const document = await Fixtures.read('engine/structure/boundary-event-without-a-host.bpmn');
-    const checks = new ModelChecks(document);
-
-    expect((await checks.at(['B'])).map(({ code }) => code).sort()).toEqual((await checks.all()).filter(({ element }) => element === 'B').map(({ code }) => code).sort());
-    expect(await checks.at(['Start'])).toEqual([]);
-  });
 });

@@ -55,8 +55,9 @@ A write rewrites only the elements the change touched, so a git diff shows only 
 
 ## What a write checks
 
-- A write checks the new document once and reports the findings at the elements it touched. The rest of
-  the file is counted in the state line; `bpmn validate` lists it.
+- A write checks the new document once, whole, and refuses an error it adds, wherever that sits. It reports
+  the findings at the elements it touched; the rest of the file is counted in the state line, and
+  `bpmn validate` lists it.
 - The layout score informs, it does not refuse: a write that raises it succeeds, and the result says so.
 - Project lint runs only in `bpmn validate`, where a project gate runs anyway.
 

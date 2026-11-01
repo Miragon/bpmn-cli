@@ -154,7 +154,8 @@ Camunda 8 settings are extension elements, not set keys ([Camunda](camunda.md)).
 | 70 | internal error (`BPMN_DEBUG=1` prints the stack) |
 
 A write prints what it did in at most 1 KB, then the layout score, the state and the file line. Findings
-are those at the elements it touched; the state counts the whole file, and `bpmn validate` lists it.
+are those at the elements it touched, plus any error `--force` let it add elsewhere; the state counts the
+whole file, and `bpmn validate` lists it.
 
 ```console
 $ bpmn add order.bpmn end "Done" --after userTask_checkInvoice

@@ -39,9 +39,4 @@ export class IdRenames {
   newIds(): ReadonlyMap<string, string> {
     return this.lasting;
   }
-
-  oldIdsOf(ids: Iterable<string>): string[] {
-    const oldOf = new Map([...this.lasting].map(([from, to]) => [to, from]));
-    return [...ids].map((id) => oldOf.get(id) ?? id);
-  }
 }

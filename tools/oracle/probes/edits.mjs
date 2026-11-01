@@ -73,6 +73,9 @@ export function differencesOf(id, mainResult, subjectResult) {
   if (mainResult.refused) {
     return [];
   }
+  if (mainResult.needsForce !== undefined && mainResult.needsForce !== subjectResult.needsForce) {
+    return [`${id}: E_VALIDATION: main ${mainResult.needsForce ? 'refuses' : 'writes'}, subject ${subjectResult.needsForce ? 'refuses' : 'writes'}`];
+  }
   const compared = [
     ['semantics', semanticLines(mainResult.xml), semanticLines(subjectResult.xml)],
     ...['created', 'changed', 'removed'].map((field) => [field, entries(mainResult[field]), entries(subjectResult[field])]),

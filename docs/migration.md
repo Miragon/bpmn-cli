@@ -112,7 +112,7 @@ Operations are parsed strictly: an unknown key answers `E_USAGE` and names the k
 | a model operation could follow a drawing operation in one batch | `E_USAGE`: model operations first, or two batches |
 | a write turned vertical lanes horizontal | lanes keep their direction; a change that needs a new place in a vertical pool answers `E_LAYOUT_INCREMENTAL` |
 | every write ran the `.bpmnlintrc` before and after | `bpmn validate` runs it; a write loads no plugin code |
-| a write reported findings anywhere in the file | findings at the touched elements; the state line counts the rest |
+| a write reported warnings anywhere in the file | warnings at the touched elements; the state line counts the rest. An error a write adds anywhere still refuses, as in 0.9 |
 | a new shape took the median size of its kind on the plane | the bpmn-js size: task 100 by 80, gateway 50 by 50, event 36 by 36 |
 | a task grew for its boundary events or its name | 100 by 80 whatever the count or the name; a long name wraps |
 | `place --side` put a boundary event over the host's corner when the border was full | `E_NO_ROOM` |

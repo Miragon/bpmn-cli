@@ -31,7 +31,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | edit | apply model operations to the semantics | `ModelOperationRunner`, one class per model operation ([below](#direction)), `LaneMembership`, `AliasTable` (what each `$name` of the running batch names) | touch DI, the diagram's coordinates | 7.5k |
 | scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
 | drawing | decide coordinates | `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard` (keeps a move only when `Scorer` finds it no worse), `ShapeSizes` ([below](#shape-sizes)) | change semantics, paint, judge itself | 14.5k |
-| checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `ModelChecks` (both below, without what the second repeats of the first, `all()` and `at(ids)`), `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
+| checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `ModelChecks` (both below, without what the second repeats of the first), `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
 | views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, `KindTable` (`kindsJson`), each with its text class beside it (`ModelViewText`), which holds the data type it prints; `ImageView`; `facts/` the readers the views share, `lines/` the text values | write | 2.9k |
 | write | run one write as a transaction, and `validate`; the rules that come from outside | `WriteTransaction`, `WriteOutcome` (makes the `EditResult`), `IdRenames`, `HostValidators` (runs the host's validators), `FindingDelta` (what a write added, from every source), `DocumentValidation` (the checks, the host validators and the layout dry run of `validate`; makes the `ValidationReport`), `NewModel` (`newXml`) | read flags or files, hold rules of its own | 1.2k |
 | api | the contract | the 8 functions of `index.ts`, one line each into a class | hold logic | 0.3k |
@@ -114,10 +114,12 @@ flowchart TD
 - An empty plane, or a batch with a `layout` operation, is drawn in full; every other write changes the
   drawing incrementally at the elements the `ChangeSet` names. A model operation after a drawing operation in one
   batch is refused with `E_USAGE` and the hint to send two batches, so one `DrawingSnapshot` per write holds.
-- A write checks the new document once. The result reports the findings at the touched elements and
-  counts the rest in `state`; only when it has errors there is the old document checked at the same
-  elements, to tell a new error from one the file already had. `FindingDelta`, in write, makes that
-  comparison for the structure and Camunda checks. Host validators run on every write, as today: on the
+- A write checks the new document once, whole. Without an error anywhere nothing more runs. With an
+  error the old document is checked whole too, and an error whose key, its code and element, the old
+  one lacks refuses the write without `force` and is reported in `findings`, even at an element the write
+  did not touch. Warnings are reported at the touched elements and counted in `state`, as is every
+  error the file already had. `FindingDelta`, in write, makes that comparison for the structure and
+  Camunda checks. Host validators run on every write, as today: on the
   old file with `phase: 'before'`, then on the new one with `phase: 'after'`; `FindingDelta` takes a
   finding with the `key` of one from before as one the file already had
   ([who finds what](README.md#who-finds-what)).
@@ -339,7 +341,7 @@ interface NewOptions {
 - ask-miragon returns find hits as data (`server.ts:264`) and sorts findings along the view
   (`analyze.ts:94`).
 - `EditResult` keeps `xml`, `unchanged`, the ids created, changed, removed and renamed, `aliases`
-  (`$name` to id), `findings` (check findings at touched elements, plus every host-validator finding
+  (`$name` to id), `findings` (check findings at touched elements, every error the change added at any other element, plus every host-validator finding
   the change added, with or without an element: design-iq's name none, `bpmn-edit.ts:384`),
   `preexisting` (the host-validator errors the file had before, which do not block; design-iq lists
   them when its save gate refuses, `bpmn-edit.ts:475`), `state` (the counts of errors and warnings in

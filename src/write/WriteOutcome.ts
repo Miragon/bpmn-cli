@@ -28,6 +28,7 @@ export interface WriteOutcomeParts {
   drawing: DrawingReport;
   renames: IdRenames;
   checks: readonly Finding[];
+  addedErrors: readonly Finding[];
   host: HostDelta;
   score: ScoreChange;
 }
@@ -50,7 +51,7 @@ export class WriteOutcome {
       removed,
       renamed: renames.list(),
       aliases: run.aliases,
-      findings: [...this.atTouchedElements(), ...host.added, ...drawing.warnings.map(Findings.ofLayout)],
+      findings: [...this.ofTheChange(), ...host.added, ...drawing.warnings.map(Findings.ofLayout)],
       preexisting: host.preexisting,
       state: Findings.countOf(checks),
       score,
@@ -59,10 +60,11 @@ export class WriteOutcome {
     };
   }
 
-  private atTouchedElements(): Finding[] {
-    const { run, checks } = this.parts;
+  private ofTheChange(): Finding[] {
+    const { run, checks, addedErrors } = this.parts;
     const touched = new Set(run.changes.touchedIds());
-    const found = checks.filter(({ element }) => element !== undefined && touched.has(element));
+    const added = new Set(addedErrors);
+    const found = checks.filter((finding) => added.has(finding) || (finding.element !== undefined && touched.has(finding.element)));
     const reported = new Set(found.map(WriteOutcome.findingKey));
     return [...run.changes.warnings.filter((warning) => !reported.has(WriteOutcome.findingKey(warning))), ...found];
   }

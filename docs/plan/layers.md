@@ -305,9 +305,10 @@ export class WriteTransaction {
 }
 ```
 
-- `EditResult.of` keeps the findings at the touched elements and counts the others in `state`. When one
-  of them is an error, the old document is checked at the touched elements, to tell a new error from one
-  the file already had; a new error without `force` refuses the write with a `BpmnError`.
+- `EditResult.of` keeps the findings at the touched elements and counts the others in `state`. When the
+  new document has an error anywhere, the old document is checked whole, to tell a new error from one the
+  file already had; a new error without `force` refuses the write with a `BpmnError`, and with `force` it
+  is reported in `findings`, even at an element the write did not touch.
 - `scoreBefore.to(...)` keeps both scores, the counts per kind and the problems the write added and
   resolved; the text prints them as `layout quality: score 0 -> 0`, as today
   ([layout score](modules.md#layout-score)).

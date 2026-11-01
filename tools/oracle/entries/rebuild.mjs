@@ -94,10 +94,14 @@ function subjectOf(api) {
     semanticEdit: (xml, operations) => attempt(async () => {
       if (!operations.length) {
         await api.validateXml(xml);
-        return { xml, created: [], changed: [], removed: [] };
+        return { xml, created: [], changed: [], removed: [], needsForce: false };
       }
-      const { xml: written, created, changed, removed } = await write(xml, operations).catch((error) => (error.code === 'E_VALIDATION' ? write(xml, operations, { force: true }) : Promise.reject(error)));
-      return { xml: written, created, changed, removed };
+      let needsForce = false;
+      const { xml: written, created, changed, removed } = await write(xml, operations).catch((error) => {
+        needsForce = error.code === 'E_VALIDATION';
+        return needsForce ? write(xml, operations, { force: true }) : Promise.reject(error);
+      });
+      return { xml: written, created, changed, removed, needsForce };
     }),
     layout: (xml) => attempt(async () => ({ xml: (await api.applyToXml(xml, [{ op: 'layout' }], { force: true })).xml })),
     walkStep: (step) => attempt(async () => {

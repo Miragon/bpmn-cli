@@ -49,6 +49,15 @@ export class WriteTransaction {
     });
   }
 
+  private static async errorsAdded(input: string, checks: readonly Finding[], delta: FindingDelta): Promise<Finding[]> {
+    const errors = checks.filter(({ severity }) => severity === 'error');
+    if (!errors.length) {
+      return [];
+    }
+    const before = await new DocumentReader().read(input);
+    return delta.newErrors(errors, await new ModelChecks(before).all());
+  }
+
   async apply(xml: string, input: unknown): Promise<EditResult> {
     const operations = new OperationParser().parse(input);
     const document = await new DocumentReader().readForWrite(xml);
@@ -75,13 +84,16 @@ export class WriteTransaction {
     const checks = await new ModelChecks(document).all();
     const renames = new IdRenames(run.changes);
     const delta = new FindingDelta(renames.newIds());
-    await this.refuseNewErrors(input, run, checks, renames, delta);
+    const addedErrors = await WriteTransaction.errorsAdded(input, checks, delta);
+    if (addedErrors.length && !force) {
+      throw WriteTransaction.structureRefusal(addedErrors);
+    }
     const xml = await new DocumentWriter().write(document, run.changes);
     const host = delta.ofHostValidators(hostBefore, await hosts.run(xml, 'after'));
     if (host.blocking.length && !force) {
       throw WriteTransaction.hostRefusal(host.blocking);
     }
-    return new WriteOutcome({ input, xml, run, drawing, renames, checks, host, score }).result();
+    return new WriteOutcome({ input, xml, run, drawing, renames, checks, addedErrors, host, score }).result();
   }
 
   private async draw(document: BpmnDocument, snapshot: DrawingSnapshot, run: OperationRun): Promise<DrawingReport> {
@@ -99,18 +111,5 @@ export class WriteTransaction {
 
   private scoreOf(document: BpmnDocument): LayoutScore {
     return this.scorer.scoreDrawing(DrawnPlane.read(document), new ElementHomes(document));
-  }
-
-  private async refuseNewErrors(input: string, { changes }: OperationRun, checks: readonly Finding[], renames: IdRenames, delta: FindingDelta): Promise<void> {
-    const touched = new Set(changes.touchedIds());
-    const errors = checks.filter(({ severity, element }) => severity === 'error' && element !== undefined && touched.has(element));
-    if (this.options.force || !errors.length) {
-      return;
-    }
-    const before = await new DocumentReader().read(input);
-    const added = delta.newErrors(errors, await new ModelChecks(before).at(renames.oldIdsOf(touched)));
-    if (added.length) {
-      throw WriteTransaction.structureRefusal(added);
-    }
   }
 }

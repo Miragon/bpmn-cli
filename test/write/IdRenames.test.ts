@@ -29,8 +29,4 @@ describe('IdRenames', () => {
     expect(taken.list()).toEqual([{ from: 'b', to: 'gone', takeover: true }]);
     expect(taken.newIds().size).toBe(0);
   });
-
-  it('answers the old id of a renamed element and any other id as it is', () => {
-    expect(renames([{ from: 'old', to: 'new' }]).oldIdsOf(['new', 'same'])).toEqual(['old', 'same']);
-  });
 });
