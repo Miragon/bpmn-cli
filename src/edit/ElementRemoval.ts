@@ -132,13 +132,8 @@ export class ElementRemoval {
     const removed = new Set(subtree);
     const handover = el.is('bpmn:Lane') ? ElementRemoval.laneHandover(el, subtree) : undefined;
     const parent = new ElementContainment(el).detach();
-    for (const element of subtree) {
-      const id = element.get<string | undefined>('id');
-      if (id) {
-        this.edit.document.ids.registry.release(id);
-      }
-    }
-    if (ElementRemoval.isReportable(el) || el.get<string | undefined>('id')) {
+    this.references.releaseIds(subtree);
+    if (el.get<string | undefined>('id')) {
       changes.remove(ElementRemoval.removedEntry(el));
     }
     for (const element of subtree) {
@@ -156,10 +151,7 @@ export class ElementRemoval {
   }
 
   private static laneHandover(lane: BpmnElement, subtree: BpmnElement[]): { heir: BpmnElement; members: BpmnElement[] } | undefined {
-    const laneSet = lane.parent;
-    if (!laneSet) {
-      return undefined;
-    }
+    const laneSet = lane.parent!;
     const siblings = laneSet.list('lanes');
     const position = siblings.indexOf(lane);
     const heir = ElementRemoval.heirOf(laneSet, siblings[position - 1], siblings[position + 1]);
@@ -191,20 +183,16 @@ export class ElementRemoval {
   private handOver(lane: BpmnElement, { heir, members }: { heir: BpmnElement; members: BpmnElement[] }, changes: ChangeSet): void {
     this.edit.document.tree.invalidate();
     const lanes = new LaneMembership(this.edit);
-    const remaining = members.filter((node) => this.references.isAttached(node));
-    if (!remaining.length) {
-      return;
-    }
-    for (const node of remaining) {
+    for (const node of members) {
       lanes.assign(node, heir, changes);
     }
-    changes.note(`${remaining.length} member(s) of ${lane.id} moved to ${heir.id}`);
+    changes.note(`${members.length} member(s) of ${lane.id} moved to ${heir.id}`);
   }
 
   private removeParticipant(participant: BpmnElement, changes: ChangeSet): void {
-    const collaboration = participant.parent;
+    const collaboration = participant.parent!;
     const process = participant.get<BpmnElement | undefined>('processRef');
-    const collaborationIndex = collaboration ? this.edit.document.tree.definitions.list('rootElements').indexOf(collaboration) : -1;
+    const collaborationIndex = this.edit.document.tree.definitions.list('rootElements').indexOf(collaboration);
     new ElementContainment(participant).detach();
     this.edit.document.ids.registry.release(participant.id);
     changes.remove(ChangeEntries.of(participant));
@@ -213,12 +201,12 @@ export class ElementRemoval {
     if (process && this.references.isAttached(process) && !this.edit.document.flows.participants().some((otherParticipant) => otherParticipant.get<BpmnElement | undefined>('processRef') === process)) {
       this.cascade(process, changes);
     }
-    if (collaboration && collaboration.is('bpmn:Collaboration') && this.references.isAttached(collaboration) && !collaboration.list('participants').length) {
+    if (!collaboration.list('participants').length) {
       this.cascade(collaboration, changes);
       changes.note(`collaboration ${collaboration.id} removed: no participants left`);
     }
     if (!this.edit.document.flows.participants().length && !this.edit.document.tree.processes().length) {
-      this.replaceRemovedLastPool(process ?? participant, Math.max(collaborationIndex, 0), changes);
+      this.replaceRemovedLastPool(process ?? participant, collaborationIndex, changes);
     }
   }
 

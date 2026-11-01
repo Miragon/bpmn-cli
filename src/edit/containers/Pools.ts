@@ -97,13 +97,13 @@ export class Pools {
       return { process, mode: 'bind' };
     }
     if (!document.tree.collaboration()) {
-      const unbound = document.tree.processes().filter((process) => !document.flows.participantOf(process));
-      if (unbound.length === 1) {
-        return { process: unbound[0]!, mode: 'wrap' };
+      const processes = document.tree.processes();
+      if (processes.length === 1) {
+        return { process: processes[0]!, mode: 'wrap' };
       }
-      if (unbound.length > 1) {
-        throw BpmnError.model('E_AMBIGUOUS_SCOPE', `The file has ${unbound.length} processes; say which one the participant wraps with --process <processId>`, {
-          candidates: unbound.map((element) => element.id),
+      if (processes.length > 1) {
+        throw BpmnError.model('E_AMBIGUOUS_SCOPE', `The file has ${processes.length} processes; say which one the participant wraps with --process <processId>`, {
+          candidates: processes.map((element) => element.id),
         });
       }
     }

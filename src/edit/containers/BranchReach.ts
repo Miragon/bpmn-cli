@@ -70,10 +70,14 @@ export class BranchReach {
     if (!node.is('bpmn:BoundaryEvent')) {
       return [];
     }
-    return [...this.edit.document.tree.all().values()].filter((association) => association.is('bpmn:Association') && association.get<BpmnElement | undefined>('sourceRef') === node).map((association) => association.get<BpmnElement>('targetRef')).filter((target) => !!target && !!target.get<boolean | undefined>('isForCompensation'));
+    return this.associations().filter((association) => association.get<BpmnElement | undefined>('sourceRef') === node).map((association) => association.get<BpmnElement>('targetRef')).filter((target) => !!target && !!target.get<boolean | undefined>('isForCompensation'));
   }
 
   private compensationSources(handler: BpmnElement): BpmnElement[] {
-    return [...this.edit.document.tree.all().values()].filter((association) => association.is('bpmn:Association') && association.get<BpmnElement | undefined>('targetRef') === handler).map((association) => association.get<BpmnElement>('sourceRef')).filter((source): source is BpmnElement => !!source && source.is('bpmn:BoundaryEvent'));
+    return this.associations().filter((association) => association.get<BpmnElement | undefined>('targetRef') === handler).map((association) => association.get<BpmnElement>('sourceRef')).filter((source): source is BpmnElement => !!source && source.is('bpmn:BoundaryEvent'));
+  }
+
+  private associations(): BpmnElement[] {
+    return [...this.edit.document.tree.all().values()].filter((element) => element.is('bpmn:Association'));
   }
 }

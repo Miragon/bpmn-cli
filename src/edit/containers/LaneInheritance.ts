@@ -49,7 +49,7 @@ export class LaneInheritance {
       : `the lane of ${(lane === cross.to ? cross.target : cross.source).id}`;
     return {
       code: 'W_LANE_INHERITED',
-      message: `${id} is in ${lane.id} (${side}); the flow it went into runs from ${cross.source.id} in ${cross.from ? cross.from.id : 'no lane'} to ${cross.target.id} in ${cross.to ? cross.to.id : 'no lane'}`,
+      message: `${id} is in ${lane.id} (${side}); ${LaneInheritance.flowWords(cross)}`,
       element: id,
       related: [lane.id, other.id],
       hint: `If ${other.id} does it: \`bpmn move <file> ${id} --lane ${other.id}\` (or --lane ${other.id} when adding).`,
@@ -62,7 +62,11 @@ export class LaneInheritance {
       return undefined;
     }
     const there = this.lane;
-    return `${id} stays in its lane ${own.id}; the flow it went into runs from ${cross.source.id} in ${cross.from ? cross.from.id : 'no lane'} to ${cross.target.id} in ${cross.to ? cross.to.id : 'no lane'}${there ? ` (\`bpmn move <file> ${id} --lane ${there.id}\` puts it on the row the layout gives a node there)` : ''}`;
+    return `${id} stays in its lane ${own.id}; ${LaneInheritance.flowWords(cross)}${there ? ` (\`bpmn move <file> ${id} --lane ${there.id}\` puts it on the row the layout gives a node there)` : ''}`;
+  }
+
+  private static flowWords({ source, target, from, to }: CrossLane): string {
+    return `the flow it went into runs from ${source.id} in ${from ? from.id : 'no lane'} to ${target.id} in ${to ? to.id : 'no lane'}`;
   }
 
   private static anchorOf(document: BpmnDocument, placement: Placement): BpmnElement | undefined {
@@ -82,7 +86,7 @@ export class LaneInheritance {
   }
 
   private static splicedFlow(document: BpmnDocument, placement: Placement): BpmnElement | undefined {
-    const get = (id: string | undefined): BpmnElement | undefined => (id ? document.tree.byId(id) : undefined);
+    const get = (id: string | undefined): BpmnElement | undefined => document.tree.byId(id!);
     switch (NodePlacement.modeOf(placement)) {
       case 'flow':
         return get(placement.flow);

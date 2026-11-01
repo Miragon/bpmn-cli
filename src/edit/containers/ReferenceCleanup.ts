@@ -10,6 +10,15 @@ export class ReferenceCleanup {
     private readonly cascade: Cascade,
   ) {}
 
+  releaseIds(elements: readonly BpmnElement[]): void {
+    for (const element of elements) {
+      const id = element.get<string | undefined>('id');
+      if (id) {
+        this.edit.document.ids.registry.release(id);
+      }
+    }
+  }
+
   isAttached(el: BpmnElement): boolean {
     return new ElementContainment(el).isAttachedTo(this.edit.document.tree.definitions);
   }
@@ -57,16 +66,9 @@ export class ReferenceCleanup {
     if (laneSet.list('lanes').length) {
       return;
     }
-    const owner = laneSet.parent;
-    if (owner && owner.is('bpmn:Lane')) {
-      owner.set('childLaneSet', undefined);
-    } else if (owner) {
-      owner.remove('laneSets', laneSet);
-    }
+    new ElementContainment(laneSet).detach();
+    this.releaseIds([laneSet]);
     const lsId = laneSet.get<string | undefined>('id');
-    if (lsId) {
-      this.edit.document.ids.registry.release(lsId);
-    }
     changes.note(`lane set${lsId ? ` ${lsId}` : ''} removed: no lanes left`);
   }
 
@@ -76,10 +78,7 @@ export class ReferenceCleanup {
       return;
     }
     parent.remove('properties', target);
-    const pid = target.get<string | undefined>('id');
-    if (pid) {
-      this.edit.document.ids.registry.release(pid);
-    }
+    this.releaseIds([target]);
   }
 
   private dropUnusedBacking(backing: BpmnElement | undefined, changes: ChangeSet): void {
@@ -93,9 +92,9 @@ export class ReferenceCleanup {
     if (!value || !this.isAttached(value) || this.referencesTo(value).some((reference) => reference.holder.is('bpmn:Group'))) {
       return;
     }
-    const category = value.parent as BpmnElement;
+    const category = value.parent!;
     this.cascade(value, changes);
-    if (category.is('bpmn:Category') && !category.list('categoryValue').length) {
+    if (!category.list('categoryValue').length) {
       this.cascade(category, changes);
     }
   }
@@ -142,12 +141,7 @@ export class ReferenceCleanup {
   private dropDiagramHolder(holder: BpmnElement): void {
     const gone = holder.is('bpmndi:BPMNPlane') ? (holder.parent as BpmnElement) : holder;
     new ElementContainment(gone).detach();
-    for (const element of new ElementWalk(gone).depthFirst({ bpmnOnly: true })) {
-      const id = element.id;
-      if (id) {
-        this.edit.document.ids.registry.release(id);
-      }
-    }
+    this.releaseIds([...new ElementWalk(gone).depthFirst({ bpmnOnly: true })]);
   }
 
   private static makeBlackBox({ holder, prop, target }: ElementReference, changes: ChangeSet): void {

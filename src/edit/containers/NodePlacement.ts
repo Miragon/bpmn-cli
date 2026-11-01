@@ -50,21 +50,21 @@ export class NodePlacement {
 
   scope(): BpmnElement {
     const { placement } = this;
-    const document = this.edit.document;
+    const { scopes } = this.edit.document;
     switch (this.mode) {
       case 'after':
       case 'between':
-        return document.scopes.scopeOf(this.edit.require(placement.after!, 'bpmn:FlowNode')) ?? document.scopes.defaultScope();
+        return this.scopeAround(this.edit.require(placement.after!, 'bpmn:FlowNode'));
       case 'before':
-        return document.scopes.scopeOf(this.edit.require(placement.before!, 'bpmn:FlowNode')) ?? document.scopes.defaultScope();
+        return this.scopeAround(this.edit.require(placement.before!, 'bpmn:FlowNode'));
       case 'flow':
-        return document.scopes.scopeOf(this.edit.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow')) ?? document.scopes.defaultScope();
+        return this.scopeAround(this.edit.require(placement.flow!, 'bpmn:SequenceFlow', 'sequence flow'));
       case 'on':
-        return document.scopes.scopeOf(this.edit.require(placement.on!, 'bpmn:Activity', 'activity')) ?? document.scopes.defaultScope();
+        return this.scopeAround(this.edit.require(placement.on!, 'bpmn:Activity', 'activity'));
       case 'in':
         return this.edit.requireScope(placement.in);
       default:
-        return document.scopes.defaultScope();
+        return scopes.defaultScope();
     }
   }
 
@@ -75,6 +75,11 @@ export class NodePlacement {
     }
     this.edit.document.tree.invalidate();
     return entryFlow;
+  }
+
+  private scopeAround(anchor: BpmnElement): BpmnElement {
+    const { scopes } = this.edit.document;
+    return scopes.scopeOf(anchor) ?? scopes.defaultScope();
   }
 
   private attach(node: BpmnElement, scope: BpmnElement, changes: ChangeSet): BpmnElement | undefined {

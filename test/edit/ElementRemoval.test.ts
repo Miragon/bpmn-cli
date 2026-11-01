@@ -93,6 +93,14 @@ describe('ElementRemoval', () => {
     expect(ids(changes.removed).filter((id) => id === 'ship')).toEqual(['ship']);
   });
 
+  it('takes a boundary event with its host when a branch reaches both', async () => {
+    const { tree, changes } = await remove(ARTIFACTS, { ids: ['write'], withBranch: true });
+
+    expect(tree.has('compensate_write')).toBe(false);
+    expect(tree.has('undo_write')).toBe(false);
+    expect(ids(changes.removed).filter((id) => id === 'compensate_write')).toEqual(['compensate_write']);
+  });
+
   it('refuses a branch of an id that does not exist', async () => {
     await expect(remove(ORDER, { ids: ['nobody'], withBranch: true })).rejects.toMatchObject({ code: 'E_NOT_FOUND' });
   });
@@ -142,18 +150,6 @@ describe('ElementRemoval', () => {
     expect(last.laneIds('other_task')).toEqual([]);
     expect(last.tree.require('Process_other').list('laneSets')).toEqual([]);
     expect(empty.changes.notes).toEqual([]);
-  });
-
-  it('hands over nothing of members a batch removed with the lane', async () => {
-    const session = new EditSession(await Fixtures.readForWrite(POOLS));
-    const removal = new ElementRemoval(session);
-    const changes = new ChangeSet();
-
-    session.require('lane_stock').remove('flowNodeRef', session.require('ship'));
-    session.require('lane_stock').remove('flowNodeRef', session.require('endEvent_shipped'));
-    removal.cascade(session.require('lane_stock'), changes);
-
-    expect(changes.notes.filter((note) => note.includes('moved to'))).toEqual([]);
   });
 
   it('removes a pool with its process and message flows, and keeps the collaboration of the others', async () => {

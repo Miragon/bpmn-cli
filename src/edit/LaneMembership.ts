@@ -124,7 +124,7 @@ export class LaneMembership {
     if (sets[0]) {
       return sets[0];
     }
-    const laneSet = this.edit.document.tree.create('bpmn:LaneSet', { id: this.edit.allocator.allocate(IdRequests.typeRequest('bpmn:LaneSet', { context: new ElementLabels(process).label() })).id });
+    const laneSet = this.newLaneSet(process);
     process.add('laneSets', laneSet);
     changes.note(`created laneSet ${laneSet.id} in ${process.id}`);
     return laneSet;
@@ -135,11 +135,15 @@ export class LaneMembership {
     if (existing) {
       return existing;
     }
-    const laneSet = this.edit.document.tree.create('bpmn:LaneSet', { id: this.edit.allocator.allocate(IdRequests.typeRequest('bpmn:LaneSet', { context: new ElementLabels(lane).label() })).id });
+    const laneSet = this.newLaneSet(lane);
     lane.set('childLaneSet', laneSet);
     laneSet.parent = lane;
     changes.note(`created nested laneSet ${laneSet.id} in lane ${lane.id}`);
     return laneSet;
+  }
+
+  private newLaneSet(owner: BpmnElement): BpmnElement {
+    return this.edit.document.tree.create('bpmn:LaneSet', { id: this.edit.allocator.allocate(IdRequests.typeRequest('bpmn:LaneSet', { context: new ElementLabels(owner).label() })).id });
   }
 
   private resolveLaneContainer(command: AddOperation): { process: BpmnElement; parentLane?: BpmnElement } {
@@ -155,11 +159,7 @@ export class LaneMembership {
       });
     }
     if (container.is('bpmn:Lane')) {
-      const process = document.scopes.processOf(container);
-      if (!process) {
-        throw BpmnError.model('E_INVALID_SCOPE', `Lane ${command.in} is not inside a process`, { element: command.in });
-      }
-      return { process, parentLane: container };
+      return { process: document.scopes.processOf(container)!, parentLane: container };
     }
     return { process: this.edit.requireScope(command.in) };
   }
@@ -168,9 +168,9 @@ export class LaneMembership {
     if (!node.is('bpmn:FlowNode')) {
       throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `${node.id} is a ${Kinds.label(node)}; only flow nodes can be lane members`, { element: node.id });
     }
-    const scope = this.edit.document.scopes.scopeOf(node);
-    if (!scope || !scope.is('bpmn:Process')) {
-      throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `${node.id} is inside sub-process ${scope ? scope.id : '?'}; nodes inside sub-processes cannot be lane members`, {
+    const scope = this.edit.document.scopes.scopeOf(node)!;
+    if (!scope.is('bpmn:Process')) {
+      throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `${node.id} is inside sub-process ${scope.id}; nodes inside sub-processes cannot be lane members`, {
         element: node.id,
         hint: 'Only nodes directly in the process can be assigned to lanes; the sub-process itself can.',
       });
