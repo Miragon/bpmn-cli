@@ -55,6 +55,8 @@ describe('RunReport', () => {
 
     expect(() => report.assertHorizontal([])).not.toThrow();
     scene.place.moved.add('A');
-    expect(() => report.assertHorizontal([])).toThrow(/drawn vertically/);
+    expect(() => report.assertHorizontal([])).toThrow(/pool Pool is drawn vertically/);
+    scene.plane.shapes.delete('Pool');
+    expect(() => report.assertHorizontal([])).toThrow(/lane L1 is drawn vertically/);
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FullLayout } from '../../../../src/drawing/full/FullLayout.js';
 import { BlockAdopter } from '../../../../src/drawing/incremental/steps/BlockAdopter.js';
 import { Plane } from '../../../../src/drawing/plane/Plane.js';
+import { Box } from '../../../support/ModelValues.js';
 import { PlacementScene } from '../../../support/PlacementScene.js';
 
 describe('BlockAdopter', () => {
@@ -24,6 +25,21 @@ describe('BlockAdopter', () => {
     expect(copy.parentId).toBe('Activity_Fzs3');
     expect(scene.run.fromEngine.has(first!.id)).toBe(true);
     expect(block.edges.every((edge) => scene.run.newEdges.has(edge.id))).toBe(true);
+  });
+
+  it('moves labels along and keeps a nested sub-process as the engine drew it', async () => {
+    const { scene, block, engine } = await blockScene();
+    const sub = engine.planes.flatMap((plane) => [...plane.shapes.values()]).find(({ id }) => id === 'Activity_Fzs3')!;
+    const [shape] = block.shapes;
+    const [edge] = block.edges;
+    shape!.label = new Box(10, 10, 30, 14);
+    edge!.label = new Box(20, 20, 30, 14);
+
+    new BlockAdopter(scene.run).adopt(scene.plane, { ...block, shapes: [sub, shape!] }, 5, 5);
+
+    expect(scene.shape('Activity_Fzs3')).toMatchObject({ expanded: true, container: true });
+    expect(scene.shape(shape!.id).label).toMatchObject({ x: 15, y: 15 });
+    expect(scene.edge(edge!.id).label).toMatchObject({ x: 25, y: 25 });
   });
 
   it('skips what the document lacks or the plane already holds', async () => {

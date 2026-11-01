@@ -32,6 +32,14 @@ describe('ContainerPlacer', () => {
     expect(placerOf(scene).followRoot()).toBeUndefined();
   });
 
+  it('keeps the drawing when the old root has no plane any more', async () => {
+    const xml = Fixtures.text('drawing/placement/join-backwards.before.bpmn');
+    const scene = new PlacementScene(await DrawingPair.of(xml, collaborationAdded(xml), noChanges));
+    scene.parts.before.rootId = 'Gone';
+
+    expect(placerOf(scene).followRoot()).toBeUndefined();
+  });
+
   it('draws a new lane in its pool', async () => {
     const xml = Fixtures.text('models/incremental/pool.bpmn');
     const added = xml.replace('<bpmn:startEvent id="S"', '<bpmn:laneSet id="LS"><bpmn:lane id="NewLane" name="Lane"><bpmn:flowNodeRef>S</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet><bpmn:startEvent id="S"');
@@ -74,6 +82,19 @@ describe('ContainerPlacer', () => {
     await placerOf(scene).placeContainers(undefined);
 
     expect(scene.shape('Box').bounds.height).toBe(60);
+  });
+
+  it('opens a plane for the content of a sub-process that is new and collapsed, none outside one', async () => {
+    const pair = await DrawingPair.read('add-subprocess');
+    pair.changes.expansions.expand('Activity_Fzs3', false);
+    const scene = new PlacementScene(pair);
+    const placer = placerOf(scene);
+    const expanded = placerOf(await PlacementScene.of('add-subprocess'));
+
+    expect(expanded.planeFor('Activity_Fzs3i')).toBeUndefined();
+    expect(placer.planeFor('Activity_Fzs3i')?.rootId).toBe('Activity_Fzs3');
+    scene.place.planes.length = 0;
+    expect(placer.planeFor('A')).toBeUndefined();
   });
 
   it('opens a plane for the content of a collapsed sub-process, none for a drawn expanded one', async () => {
