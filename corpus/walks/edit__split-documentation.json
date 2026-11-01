@@ -1,0 +1,5 @@
+{"model":"edit/order-check.bpmn","steps":[
+{"ops":[{"op":"split","after":"ship","name":"Express?","branches":[{"flowName":"yes","nodes":[{"kind":"userTask","name":"Call courier","set":{"doc":"Book the fast courier."}}]},{"flowName":"no","default":true,"nodes":[{"kind":"serviceTask","name":"Post parcel","set":{"doc":"Hand it to the post.","loop":"standard"}}]}]}]},
+{"ops":[{"op":"split","after":"reject","kind":"parallelGateway","branches":[{"nodes":[{"kind":"task","name":"Tell customer","set":{"loop":"standard","doc":"Send the letter."}},{"kind":"intermediateThrowEvent:message","name":"Sent","message":"Sent","set":{"doc":"Tell the shop."}}]},{"nodes":[{"kind":"task","name":"Refund","set":{"doc":""}}]}]}]},
+{"ops":[{"op":"add","kind":"task","name":"Archive","after":"ship","set":{"doc":"Keep it ten years."}},{"op":"add","kind":"textAnnotation","name":"Note","to":"ship","set":{"doc":"About the note."}}]}
+]}

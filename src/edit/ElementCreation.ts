@@ -37,7 +37,7 @@ export class ElementCreation {
     const taskMessage = ElementCreation.takesMessage(def) ? ['message'] : [];
     const expanded = def.family === 'subProcess' ? ['expanded'] : [];
     const text = def.kind === 'textAnnotation' ? ['text'] : [];
-    return ['doc', ...triggerKeys, ...taskMessage, ...expanded, ...text];
+    return [...triggerKeys, ...taskMessage, ...expanded, ...text];
   }
 
   add(command: AddOperation, idContext?: AnchorContext): ChangeSet {
@@ -50,7 +50,7 @@ export class ElementCreation {
     const keys = command.set ?? {};
     const element = this.createOfFamily({ command, def, trigger, keys, changes }, idContext);
     if (!Kinds.FLOW_NODE_FAMILIES.has(def.family)) {
-      this.finishWithoutLane(element, command, keys, def, changes);
+      this.finishWithoutLane(element, command, def, changes);
     }
     const rest = TriggerKeys.remainingKeys(keys, ElementCreation.consumedKeys(def));
     if (Object.keys(rest).length) {
@@ -135,16 +135,9 @@ export class ElementCreation {
     return annotation;
   }
 
-  private finishWithoutLane(element: BpmnElement, command: AddOperation, keys: ElementKeys, def: KindDefinition, changes: ChangeSet): void {
-    this.addDocumentation(element, keys['doc']);
+  private finishWithoutLane(element: BpmnElement, command: AddOperation, def: KindDefinition, changes: ChangeSet): void {
     if (command.lane) {
       changes.warn({ code: 'W_OPTION_IGNORED', message: `--lane is ignored for ${def.kind} ${element.id}`, element: element.id, hint: 'Only flow nodes can be lane members.' });
-    }
-  }
-
-  private addDocumentation(element: BpmnElement, text: string | undefined): void {
-    if (text) {
-      element.add('documentation', this.edit.document.tree.build('bpmn:Documentation', { text }));
     }
   }
 
@@ -235,7 +228,6 @@ export class ElementCreation {
         changes.note(`${element.id} will be laid out collapsed`);
       }
     }
-    this.addDocumentation(element, keys['doc']);
   }
 
   private joinLane(element: BpmnElement, explicitLane: BpmnElement | undefined, inherited: LaneInheritance, changes: ChangeSet): void {
