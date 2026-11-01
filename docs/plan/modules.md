@@ -67,7 +67,7 @@ Each folder holds at most 12 files; today `layout/incremental` has 26 and `layou
 class, or a value two subfolders share, sits in a sibling subfolder, never in the parent: `operations/fields/`
 holds `OperationDefinition`, `OperationField` and what they share behind its own `index.ts`, `model/` the 9 model operation definitions with split's branch and node and `drawing/` the 8 drawing operation definitions,
 whose operations drawing's `runners/` runs; `camunda/rules/` holds `CamundaRules` and `RuleReporter`, `camunda/c7/` and `camunda/c8/`
-one rule class per theme as today, `camunda/values/` holds `TimerValue`, `LinkEvents`, `SchemaText` and `BpmnSchema`;
+one rule class per theme as today, `camunda/values/` holds `TimerValue`, `LinkEvents`, `SchemaText`, `BpmnSchema` and `C7DescriptorNames`;
 `structure/` and `camunda/` never import each other.
 Today's `di/` becomes `plane/`. The full layout keeps its own `routing/`, so a replacement of the full
 layout swaps `full/` as one folder. In scoring, `plane/` holds `ScoringCriterion`, `ProblemKinds` and what every criterion reads;
