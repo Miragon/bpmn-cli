@@ -33,7 +33,8 @@ bpmn guide [topics…]
 
 ```text
 bpmn connect order.bpmn userTask_check endEvent_done name=done
-bpmn remove order.bpmn gateway_ok --bridge none --with-branch
+bpmn remove order.bpmn userTask_check --bridge none
+bpmn remove order.bpmn gateway_ok --with-branch
 bpmn retype order.bpmn userTask_check serviceTask
 bpmn order order.bpmn gateway_ok flow_okToRejected flow_okToCharge
 ```

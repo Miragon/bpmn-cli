@@ -15,6 +15,6 @@ The flags of `add` and `move`; one placement per command.
 ```text
 bpmn add order.bpmn userTask Rework --after gateway_ok --condition "=rework" --to userTask_check
 bpmn add order.bpmn boundaryEvent:timer Reminder --on serviceTask_charge timer=P2D nonInterrupting=true
-bpmn add order.bpmn participant Customer --black-box
+bpmn add order.bpmn participant Shop
 bpmn move order.bpmn serviceTask_charge --lane lane_sales
 ```
