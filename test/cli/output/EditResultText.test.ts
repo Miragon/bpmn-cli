@@ -8,8 +8,12 @@ const textOf = (changes: object = {}, report: object = {}) => new EditResultText
 const change = (id: string, kind = 'task') => ({ id, kind });
 
 describe('EditResultText', () => {
+  it('says no changes only of a result that equals the file, and otherwise that the drawing changed', () => {
+    expect(textOf({ unchanged: true }).split('\n')[0]).toBe('no changes');
+  });
+
   it('ends with the score, the state and the file', () => {
-    expect(textOf().split('\n')).toEqual(['no changes', 'layout quality: score 4 -> 9', "state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)", 'written: f.bpmn']);
+    expect(textOf().split('\n')).toEqual(['drawing changed', 'layout quality: score 4 -> 9', "state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)", 'written: f.bpmn']);
   });
 
   it('names what the score added and resolved, ids of two with an x', () => {

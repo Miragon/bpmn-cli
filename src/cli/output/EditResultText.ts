@@ -93,7 +93,8 @@ export class EditResultText {
       ...(removed.length ? [`removed: ${EditResultText.idList(removed.map(({ id }) => id || '(no id)'))}`] : []),
       ...format.map(EditResultText.formatLine),
     ];
-    return [...(changes.length ? changes : ['no changes']), ...this.findingLines(findings), ...notes.map((note) => `note: ${note}`)];
+    const nothingListed = this.result.unchanged ? 'no changes' : 'drawing changed';
+    return [...(changes.length ? changes : [nothingListed]), ...this.findingLines(findings), ...notes.map((note) => `note: ${note}`)];
   }
 
   private findingLines(findings: readonly Finding[]): string[] {
