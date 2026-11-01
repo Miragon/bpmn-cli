@@ -195,8 +195,7 @@ The draft PR is done when, rebased onto main's head:
    3 runs each.
 5. design-iq green on the release candidate in its own CI, on a branch of its own, and bpmn-to-code's
    skills name no retired command or flag.
-6. Every hard [guardrail](code.md#guardrails) green; `bpmn add` on a Camunda 8 model of 500 nodes no
-   slower than main on the same machine, best of 5 run in turn, as load only ever adds time; 7 nightly fuzz runs in a row without an
+6. Every hard [guardrail](code.md#guardrails) green; `bpmn add` on a Camunda 8 model of 500 nodes no slower than main on the same machine, median of 5 run in turn, as load only ever adds time; 7 nightly fuzz runs in a row without an
    error-severity violation, with hard layout defects counted as warnings (`--hard warn`, as in today's
    gate); the layout probe judges those against main.
 
