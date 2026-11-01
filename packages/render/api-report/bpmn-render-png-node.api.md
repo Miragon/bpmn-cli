@@ -4,6 +4,30 @@
 
 ```ts
 
+// @public (undocumented)
+export class PngRasterizer {
+    // (undocumented)
+    static load(options?: {
+        wasm?: Uint8Array | ArrayBuffer;
+    }): Promise<PngRasterizer>;
+    // (undocumented)
+    png(image: {
+        svg: string;
+    }): Uint8Array;
+}
+
+// @public (undocumented)
+export class RenderError extends Error {
+    constructor(code: RenderErrorCode, message: string, element?: string | undefined);
+    // (undocumented)
+    readonly code: RenderErrorCode;
+    // (undocumented)
+    readonly element?: string | undefined;
+}
+
+// @public (undocumented)
+export type RenderErrorCode = 'E_PARSE' | 'E_NOT_FOUND' | 'E_WRONG_KIND' | 'E_NO_MATCH' | 'E_RENDER';
+
 // (No @packageDocumentation comment for this package)
 
 ```

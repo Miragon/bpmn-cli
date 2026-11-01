@@ -4,6 +4,93 @@
 
 ```ts
 
+// @public (undocumented)
+export interface Badge {
+    // (undocumented)
+    at?: Point;
+    // (undocumented)
+    ids: string[];
+    // (undocumented)
+    n: number;
+}
+
+// @public (undocumented)
+export interface DiagramNote {
+    // (undocumented)
+    ids: string[];
+    // (undocumented)
+    kind: DiagramNoteKind;
+}
+
+// @public (undocumented)
+export type DiagramNoteKind = 'no-diagram' | 'undrawn' | 'broken-coordinates' | 'broken-labels' | 'empty-plane' | 'fit-on-other-plane' | 'fit-not-drawn';
+
+// @public (undocumented)
+export class DiagramRenderer {
+    // (undocumented)
+    static fromDefinitions(definitions: object): DiagramRenderer;
+    // (undocumented)
+    static fromXml(xml: string): Promise<DiagramRenderer>;
+    // (undocumented)
+    get planes(): string[];
+    // (undocumented)
+    svg(options?: SvgOptions): SvgImage;
+}
+
+// @public (undocumented)
+export interface Point {
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public (undocumented)
+export class RenderError extends Error {
+    constructor(code: RenderErrorCode, message: string, element?: string | undefined);
+    // (undocumented)
+    readonly code: RenderErrorCode;
+    // (undocumented)
+    readonly element?: string | undefined;
+}
+
+// @public (undocumented)
+export type RenderErrorCode = 'E_PARSE' | 'E_NOT_FOUND' | 'E_WRONG_KIND' | 'E_NO_MATCH' | 'E_RENDER';
+
+// @public (undocumented)
+export interface SvgImage {
+    // (undocumented)
+    badges: number[];
+    // (undocumented)
+    drawn: string[];
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    notes: DiagramNote[];
+    // (undocumented)
+    plane: string | undefined;
+    // (undocumented)
+    scale: number;
+    // (undocumented)
+    svg: string;
+    // (undocumented)
+    width: number;
+}
+
+// @public (undocumented)
+export interface SvgOptions {
+    // (undocumented)
+    badges?: readonly Badge[];
+    // (undocumented)
+    fit?: readonly string[];
+    // (undocumented)
+    maxSize?: number;
+    // (undocumented)
+    plane?: string;
+    // (undocumented)
+    scale?: number;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

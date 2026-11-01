@@ -4,6 +4,52 @@
 
 ```ts
 
+// @public (undocumented)
+export interface LabelSize extends TextSize {
+    // (undocumented)
+    lines: number;
+}
+
+// @public (undocumented)
+export interface TextBox {
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    width: number;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public (undocumented)
+export class TextMetrics {
+    // (undocumented)
+    static activitySize(name: string, size: TextSize, bottomRoom?: number): TextSize | undefined;
+    // (undocumented)
+    static readonly BOTTOM_ROOM = 17;
+    // (undocumented)
+    static readonly LABEL_LINE = 14;
+    // (undocumented)
+    static labelSize(name: string, maxWidth?: number): LabelSize;
+    // (undocumented)
+    static titleBox(bounds: TextBox, name: string | undefined): TextBox | undefined;
+    // (undocumented)
+    static titleDepth(name: string | undefined, width: number): number;
+    // (undocumented)
+    static width(text: string): number;
+    // (undocumented)
+    static wrap(text: string, maxWidth: number): string[];
+}
+
+// @public (undocumented)
+export interface TextSize {
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    width: number;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```
