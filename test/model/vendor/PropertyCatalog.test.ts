@@ -8,7 +8,7 @@ async function catalogOf(id: string): Promise<PropertyCatalog> {
 
 describe('PropertyCatalog', () => {
   it('documents every key of set with the elements it applies to', () => {
-    const docs = PropertyCatalog.docs();
+    const docs = PropertyCatalog.DOCS;
 
     expect(docs).toHaveLength(36);
     expect(docs[0]).toEqual({

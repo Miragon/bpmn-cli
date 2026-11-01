@@ -45,7 +45,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "node tools/build/run.mjs",
+    "build": "node tools/build/run.mjs && node tools/build-help.mjs",
     "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",

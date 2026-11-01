@@ -18,6 +18,8 @@ interface EnumerationPackage {
 }
 
 export class PropertyCatalog {
+  static readonly DOCS: readonly PropertyDoc[] = PropertyKeys.ALL.map(({ key, appliesTo, description }) => ({ key, appliesTo, description }));
+
   private static readonly BLOCKED: Readonly<Record<string, string>> = {
     attachedToRef: 'use `bpmn move <file> <id> --on <activityId>`',
     sourceRef: 'use source=<nodeId>',
@@ -46,10 +48,6 @@ export class PropertyCatalog {
 
   static of(element: BpmnElement): PropertyCatalog {
     return new PropertyCatalog(element);
-  }
-
-  static docs(): PropertyDoc[] {
-    return PropertyKeys.ALL.map(({ key, appliesTo, description }) => ({ key, appliesTo, description }));
   }
 
   static blockedReason(key: string): string | undefined {
