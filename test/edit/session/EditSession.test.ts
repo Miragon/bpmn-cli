@@ -22,6 +22,17 @@ describe('EditSession', () => {
     expect(() => edit.require('gone')).toThrow(expect.objectContaining({ code: 'E_NOT_FOUND', details: expect.objectContaining({ hint: expect.stringContaining('Created earlier in this batch: ship') }) }));
   });
 
+  it('frees the ids of an element and what it holds', async () => {
+    const document = await Fixtures.readForWrite('edit/sub-process.bpmn');
+    const edit = new EditSession(document);
+
+    edit.releaseIdsBelow(document.tree.require('Sub'));
+
+    expect(document.ids.registry.has('Sub')).toBe(false);
+    expect(document.ids.registry.has('Sub_task')).toBe(false);
+    expect(document.ids.registry.has('start')).toBe(true);
+  });
+
   it('keeps each former end of a node once and hands them to the element a retype made', async () => {
     const { document, edit } = await session();
     const [old, next] = [document.tree.require('check'), document.tree.require('ship')];

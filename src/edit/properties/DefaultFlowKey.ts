@@ -1,5 +1,5 @@
 import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, PropertyCatalog } from '../../model/index.js';
-import { SequenceFlows } from '../flows/SequenceFlows.js';
+import { FlowConditions } from '../flows/FlowConditions.js';
 import type { EditSession } from '../session/EditSession.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 
@@ -11,7 +11,7 @@ export class DefaultFlowKey {
       if (value && PropertyCoercer.booleanOf(el, 'default', value)) {
         this.makeDefaultFlow(el, changes);
       } else {
-        new SequenceFlows(this.edit).setDefault(el, false);
+        new FlowConditions(this.edit).setDefault(el, false);
       }
       return;
     }
@@ -40,7 +40,7 @@ export class DefaultFlowKey {
     const expr = flow.get<BpmnElement | undefined>('conditionExpression');
     const resourceKey = new PropertyCoercer(this.edit).resourceKeyOf(expr);
     const condition = expr?.get<string | undefined>('body') ?? (resourceKey ? `${resourceKey}=${String(expr!.attrs[resourceKey])}` : undefined);
-    new SequenceFlows(this.edit).setDefault(flow, true);
+    new FlowConditions(this.edit).setDefault(flow, true);
     if (condition) {
       changes.warn({
         code: 'W_CONDITION_DROPPED',

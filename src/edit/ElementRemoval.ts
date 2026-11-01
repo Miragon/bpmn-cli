@@ -4,6 +4,7 @@ import { BranchReach } from './containers/BranchReach.js';
 import { ElementContainment } from './containers/ElementContainment.js';
 import { ReferenceCleanup } from './containers/ReferenceCleanup.js';
 import { FlowBridge } from './flows/FlowBridge.js';
+import { JoinBridge } from './flows/JoinBridge.js';
 import { SequenceFlows } from './flows/SequenceFlows.js';
 import { LaneMembership } from './LaneMembership.js';
 import type { EditSession } from './session/EditSession.js';
@@ -77,7 +78,7 @@ export class ElementRemoval {
         throw BpmnError.model('E_INVALID_REMOVE', 'The definitions element cannot be removed', { element: id, hint: 'Delete the file instead.' });
       }
       if (el.is('bpmn:FlowNode')) {
-        new FlowBridge(this.edit, changes).bridgeRemoval(el, bridge, bridgeAll, removing);
+        new JoinBridge(this.edit, changes).bridgeRemoval(el, bridge, bridgeAll, removing);
       }
       this.cascade(el, changes);
       ElementRemoval.collectRemoved(changes, gone);

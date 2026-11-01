@@ -14,6 +14,16 @@ async function level(id: string, path = 'edit/extensions-camunda.bpmn') {
 }
 
 describe('ExtensionLevel', () => {
+  it('gives a host its extension elements once', async () => {
+    const document = await Fixtures.readForWrite('edit/order-check.bpmn');
+    const host = document.tree.require('ship');
+
+    const container = ExtensionLevel.containerOn(host, document);
+
+    expect(container.parent).toBe(host);
+    expect(ExtensionLevel.containerOn(host, document)).toBe(container);
+  });
+
   it('starts at the extension elements of the host and enters a vendor element', async () => {
     const { top } = await level('call');
     const io = top.items()[0]!;

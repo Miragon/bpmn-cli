@@ -1,5 +1,5 @@
 import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet } from '../../model/index.js';
-import { SequenceFlows } from '../flows/SequenceFlows.js';
+import { FlowConditions } from '../flows/FlowConditions.js';
 import type { EditSession } from '../session/EditSession.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 
@@ -23,7 +23,7 @@ export class ConditionKeys {
     const dropped: string[] = [];
     const language = ConditionKeys.keptLanguage(keys, condition, oldLanguage, resourceKey, dropped);
     if (!existing || !existing.is('bpmn:FormalExpression')) {
-      new SequenceFlows(this.edit).setCondition(flow, condition, language);
+      new FlowConditions(this.edit).setCondition(flow, condition, language);
     } else {
       ConditionKeys.rewriteExpression(flow, existing, condition, language, resourceKey, dropped);
     }
@@ -49,7 +49,7 @@ export class ConditionKeys {
     if (keys.get('language')) {
       throw BpmnError.model('E_NO_CONDITION', `${flow.id} has no condition to set a language on`, { element: flow.id, hint: 'Set condition=<expression> too.' });
     }
-    new SequenceFlows(this.edit).setCondition(flow, undefined);
+    new FlowConditions(this.edit).setCondition(flow, undefined);
     changes.change(ChangeEntries.of(flow, 'condition removed'));
   }
 

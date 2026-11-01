@@ -6,7 +6,7 @@ import { Camunda8Defaults } from './events/Camunda8Defaults.js';
 import { RootElements } from './events/RootElements.js';
 import { TriggerChange } from './events/TriggerChange.js';
 import { TriggerKeys } from './events/TriggerKeys.js';
-import { SequenceFlows } from './flows/SequenceFlows.js';
+import { FlowConditions } from './flows/FlowConditions.js';
 import { InapplicableContent } from './properties/InapplicableContent.js';
 import type { EditSession } from './session/EditSession.js';
 
@@ -76,7 +76,7 @@ export class ElementTypeChange {
     if (target !== el) {
       this.reportReplacement(el, target, to, changes);
     }
-    new SequenceFlows(this.edit).dropIgnoredConditions(target, changes);
+    new FlowConditions(this.edit).dropIgnoredConditions(target, changes);
     change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, changes, { on: target });
     this.edit.document.tree.invalidate();
     const detail =

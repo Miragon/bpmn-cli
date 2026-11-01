@@ -35,6 +35,17 @@ describe('RootElements', () => {
     expect(roots.ensure('bpmn:Error', 'Late', { errorCode: '' }).el.get('errorCode')).toBeUndefined();
   });
 
+  it('reports a message it had to create, and none it found', async () => {
+    const { roots } = await editing();
+    const changes = new ChangeSet();
+
+    expect(roots.ensureMessage('Paid', changes).id).toBe('Message_paid');
+    expect(changes.created).toEqual([]);
+
+    roots.ensureMessage('Shipped', changes);
+    expect(changes.created).toEqual([expect.objectContaining({ kind: 'message', name: 'Shipped', detail: 'root element' })]);
+  });
+
   it('refuses an empty name', async () => {
     const { roots } = await editing();
 

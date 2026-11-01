@@ -1,6 +1,7 @@
-import { type BpmnElement, BpmnError, type ChangeSet, ElementLabels, Kinds } from '../../model/index.js';
+import { type BpmnElement, type ChangeSet, ElementLabels } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { DeclarationOrder } from './DeclarationOrder.js';
+import { FlowConditions } from './FlowConditions.js';
 import { FlowIdFollower } from './FlowIdFollower.js';
 
 export interface FlowAttrs {
@@ -27,13 +28,13 @@ export class SequenceFlows {
       ...(attrs.name ? { name: attrs.name } : {}),
       sourceRef: source,
       targetRef: target,
-      ...(attrs.condition ? { conditionExpression: this.conditionExpression(attrs.condition, attrs.language) } : {}),
+      ...(attrs.condition ? { conditionExpression: new FlowConditions(this.edit).expression(attrs.condition, attrs.language) } : {}),
     });
     source.add('outgoing', flow);
     target.add('incoming', flow);
     new DeclarationOrder(scope).insertAfter(declareAfter ?? new DeclarationOrder(scope).lastFlowOf(source) ?? source, flow);
     if (attrs.isDefault) {
-      this.setDefault(flow, true);
+      new FlowConditions(this.edit).setDefault(flow, true);
     }
     document.tree.invalidate();
     return flow;
@@ -104,54 +105,6 @@ export class SequenceFlows {
     return { first: flow, second, ...(renamedFrom !== undefined ? { renamedFrom } : {}) };
   }
 
-  setDefault(flow: BpmnElement, isDefault: boolean): void {
-    const source = flow.get<BpmnElement>('sourceRef');
-    if (isDefault) {
-      if (!Kinds.branchesByCondition(source) && !source.is('bpmn:Activity')) {
-        throw BpmnError.model('E_INVALID_DEFAULT', `Only exclusive/inclusive/complex gateways and activities can have a default flow (${source.id} is a ${Kinds.label(source)})`, {
-          element: flow.id,
-        });
-      }
-      source.set('default', flow);
-      if (flow.get<BpmnElement | undefined>('conditionExpression')) {
-        flow.set('conditionExpression', undefined);
-      }
-    } else if (source.get<BpmnElement | undefined>('default') === flow) {
-      source.set('default', undefined);
-    }
-    this.edit.document.tree.invalidate();
-  }
-
-  setCondition(flow: BpmnElement, expr: string | undefined, language?: string): void {
-    const rules = this.edit.document.flowRules;
-    rules.assertCondition(expr);
-    rules.assertConditionTaken(flow.get<BpmnElement>('sourceRef'), expr, flow.id);
-    if (expr) {
-      flow.set('conditionExpression', this.conditionExpression(expr, language));
-      const source = flow.get<BpmnElement | undefined>('sourceRef');
-      if (source?.get<BpmnElement | undefined>('default') === flow) {
-        source.set('default', undefined);
-      }
-    } else {
-      flow.set('conditionExpression', undefined);
-    }
-    this.edit.document.tree.invalidate();
-  }
-
-  dropIgnoredConditions(source: BpmnElement, changes: ChangeSet, flows: BpmnElement[] = this.edit.document.flows.outgoing(source)): void {
-    if (!Kinds.ignoresConditions(source)) {
-      return;
-    }
-    for (const flow of flows) {
-      if (!flow.get<BpmnElement | undefined>('conditionExpression')) {
-        continue;
-      }
-      flow.set('conditionExpression', undefined);
-      changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${flow.id} was dropped: a ${Kinds.label(source)} takes no conditions`, element: flow.id, related: [source.id] });
-    }
-    this.edit.document.tree.invalidate();
-  }
-
   carryAssociations(from: BpmnElement, to: BpmnElement, changes: ChangeSet): BpmnElement[] {
     const carried = this.associationsOf(from);
     for (const association of carried) {
@@ -177,9 +130,5 @@ export class SequenceFlows {
       changes.remove({ id: association.id, kind: 'association' });
     }
     this.edit.document.tree.invalidate();
-  }
-
-  private conditionExpression(expr: string, language?: string): BpmnElement {
-    return this.edit.document.tree.build('bpmn:FormalExpression', { body: expr, ...(language ? { language } : {}) });
   }
 }

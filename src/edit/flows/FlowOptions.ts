@@ -1,7 +1,8 @@
 import { type BpmnElement, ChangeEntries, type ChangeSet } from '../../model/index.js';
 import type { ConnectOperation } from '../../operations/index.js';
 import type { EditSession } from '../session/EditSession.js';
-import { type FlowAttrs, SequenceFlows } from './SequenceFlows.js';
+import { FlowConditions } from './FlowConditions.js';
+import type { FlowAttrs } from './SequenceFlows.js';
 
 export interface FlowOptionValues {
   flowName?: string | undefined;
@@ -65,11 +66,11 @@ export class FlowOptions {
       touched = true;
     }
     if (this.values.condition !== undefined) {
-      new SequenceFlows(edit).setCondition(flow, this.values.condition, this.values.language);
+      new FlowConditions(edit).setCondition(flow, this.values.condition, this.values.language);
       touched = true;
     }
     if (this.values.default) {
-      new SequenceFlows(edit).setDefault(flow, true);
+      new FlowConditions(edit).setDefault(flow, true);
       touched = true;
     }
     if (touched) {

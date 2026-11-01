@@ -6,6 +6,7 @@ import { RootElements } from './events/RootElements.js';
 import { TriggerKeys } from './events/TriggerKeys.js';
 import { ZeebeSubscription } from './events/ZeebeSubscription.js';
 import { FlowIdFollower } from './flows/FlowIdFollower.js';
+import { FlowConditions } from './flows/FlowConditions.js';
 import { SequenceFlows } from './flows/SequenceFlows.js';
 import { LaneMembership } from './LaneMembership.js';
 import { ConditionKeys } from './properties/ConditionKeys.js';
@@ -227,10 +228,9 @@ export class PropertyEditor {
       throw PropertyCoercer.invalidValue(flow, key, 'a flow always needs a source and a target');
     }
     const node = this.edit.require(value, 'bpmn:FlowNode');
-    const sequenceFlows = new SequenceFlows(this.edit);
-    const renamed = sequenceFlows.redirect(flow, key === 'source' ? { source: node } : { target: node });
+    const renamed = new SequenceFlows(this.edit).redirect(flow, key === 'source' ? { source: node } : { target: node });
     if (key === 'source') {
-      sequenceFlows.dropIgnoredConditions(node, changes, [flow]);
+      new FlowConditions(this.edit).dropIgnoredConditions(node, changes, [flow]);
     }
     changes.change(ChangeEntries.ofFlow(flow, `${ChangeEntries.ofFlow(flow).detail} (${key} changed)${ChangeEntries.renamedNote(renamed)}`));
     return 'recorded by the key';

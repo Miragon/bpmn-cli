@@ -14,6 +14,10 @@ function propertyOf(element: BpmnElement, name: string) {
 }
 
 describe('PropertyCoercer', () => {
+  it.each([['${ok}', true], [' #{ok} ', true], ['ok', false], ['${a} and ${b', false]])('tells an expression from a script: %s', (body, expression) => {
+    expect(PropertyCoercer.isExpression(body)).toBe(expression);
+  });
+
   it.each([['true', true], [' YES ', true], ['1', true], ['on', true], ['false', false], ['no', false], ['0', false], ['Off', false]])('reads %s as a boolean', async (value, expected) => {
     const { document } = await open();
 
