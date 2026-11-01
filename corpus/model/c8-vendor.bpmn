@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_c8" targetNamespace="http://bpmn.io/schema/bpmn" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0">
+  <bpmn:process id="Process_c8" isExecutable="true">
+    <bpmn:serviceTask id="task_worker" name="Worker">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition id="definition_worker" type="charge" retries="3" />
+        <zeebe:ioMapping>
+          <zeebe:input source="=amount" target="total" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:businessRuleTask id="task_rule" name="Rule">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="price" resultVariable="result" />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="task_own_link" calledDecision="own" />
+    <bpmn:businessRuleTask id="task_no_link" />
+  </bpmn:process>
+</bpmn:definitions>
