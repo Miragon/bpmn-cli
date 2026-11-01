@@ -45,7 +45,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "node tools/build/run.mjs && node tools/build-help.mjs",
+    "build": "node tools/build/run.mjs",
     "dev": "npm run build && node bin/bpmn.js",
     "test": "vitest run",
     "test:watch": "vitest",

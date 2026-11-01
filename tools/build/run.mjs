@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Extractor, ExtractorConfig } from '@microsoft/api-extractor';
 import { build } from 'esbuild';
@@ -7,6 +7,9 @@ import { bundlesOf } from './bundles.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const DIST = join(ROOT, 'dist');
+const NEXT = join(ROOT, 'node_modules', '.cache', 'bpmn-build', `next-${process.pid}`);
+const PREVIOUS = `${NEXT}-previous`;
+const HELP = join(ROOT, 'tools', 'build-help.mjs');
 const DECLARATIONS = join(ROOT, '.api', 'build');
 const TSC = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
 
@@ -28,7 +31,7 @@ function rollUpDeclarations() {
       compiler: { tsconfigFilePath: join(ROOT, 'tsconfig.api.json') },
       apiReport: { enabled: false },
       docModel: { enabled: false },
-      dtsRollup: { enabled: true, untrimmedFilePath: join(DIST, 'index.d.ts') },
+      dtsRollup: { enabled: true, untrimmedFilePath: join(NEXT, 'index.d.ts') },
       tsdocMetadata: { enabled: false },
       messages: { extractorMessageReporting: { default: { logLevel: 'none' } }, tsdocMessageReporting: { default: { logLevel: 'none' } } },
     },
@@ -40,9 +43,31 @@ function rollUpDeclarations() {
   }
 }
 
-rmSync(DIST, { recursive: true, force: true });
-mkdirSync(DIST, { recursive: true });
+function addHelp() {
+  const { status } = spawnSync(process.execPath, [HELP, NEXT], { cwd: ROOT, stdio: 'inherit' });
+  if (status !== 0) {
+    process.exit(status ?? 1);
+  }
+}
+
+function swapIntoPlace() {
+  rmSync(PREVIOUS, { recursive: true, force: true });
+  try {
+    renameSync(DIST, PREVIOUS);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+  renameSync(NEXT, DIST);
+  rmSync(PREVIOUS, { recursive: true, force: true });
+}
+
+rmSync(NEXT, { recursive: true, force: true });
+mkdirSync(NEXT, { recursive: true });
 const { library, cli } = bundlesOf(ROOT);
-await Promise.all([build(library), build(cli)]);
+await Promise.all([build({ ...library, outdir: NEXT }), build({ ...cli, outdir: NEXT })]);
 emitDeclarations();
 rollUpDeclarations();
+addHelp();
+swapIntoPlace();

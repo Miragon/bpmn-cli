@@ -187,4 +187,4 @@ mkdirSync(TABLES, { recursive: true });
 for (const { path, text } of tables) {
   writeFileSync(path, text);
 }
-copyTopicsTo(join(ROOT, 'dist'));
+copyTopicsTo(resolve(process.argv[2] ?? join(ROOT, 'dist')));
