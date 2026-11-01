@@ -11,7 +11,7 @@ describe('PropertyKeys', () => {
   it('lists the keys in the order set documents them, the vendor placeholder ahead of the BPMN ones', () => {
     expect(PropertyKeys.ALL.map(({ key }) => key)).toEqual([
       'id', 'name', 'doc', '<prefix>:<attr>', '<property>', 'condition', 'language', 'default', 'default', 'source', 'target', 'trigger', 'timer', 'message', 'error', 'errorCode', 'signal', 'escalation',
-      'escalationCode', 'when', 'link', 'nonInterrupting', 'loop', 'cardinality', 'completion', 'expanded', 'triggeredByEvent', 'message', 'calledDecision', 'definition.<key>', 'loop.<key>',
+      'escalationCode', 'when', 'link', 'nonInterrupting', 'loop', 'cardinality', 'completion', 'expanded', 'triggeredByEvent', 'message', 'message', 'calledDecision', 'definition.<key>', 'loop.<key>',
       'condition.<key>', 'condition.<key>', 'lane', 'text',
     ]);
   });
