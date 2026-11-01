@@ -2,7 +2,7 @@
   "lines": {
     "total": 51500,
     "src/model": 6750,
-    "src/operations": 1250,
+    "src/operations": 1256,
     "src/edit": 8500,
     "src/scoring": 1400,
     "src/drawing": 19300,
