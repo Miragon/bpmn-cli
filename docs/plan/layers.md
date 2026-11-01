@@ -568,19 +568,19 @@ and runs bpmnlint; it imports nothing of the core. `LintInput` is the XML, the p
 warnings the core already reported.
 
 ```ts
-import { Linter } from 'bpmnlint';
-
 export class ProjectLint {
-  constructor(
-    private readonly config: LintConfig,
-    private readonly plugins: LintPlugins,
-  ) {}
+  static at(configPath: string): ProjectLint {
+    const config = new LintConfig(configPath);
+    return new ProjectLint(config, new LintPlugins(config));
+  }
 
   async run(input: LintInput): Promise<LintFinding[]> {
-    const definitions = await this.plugins.moddle().read(input.xml);
-    const linter = new Linter({ config: this.config.rules(), resolver: this.plugins.resolver() });
-    const reports = await linter.lint(definitions);
-    return new LintFindings(input).from(reports);
+    const { rules, unavailable } = await this.loaded();
+    const { rootElement, warnings } = await this.plugins.moddle().fromXML(input.xml);
+    const guard = new RuleGuard(this.plugins);
+    const linter = this.plugins.linter({ config: { rules }, resolver: guard.resolver() });
+    const reports = await linter.lint(rootElement);
+    return new LintFindings(input.platform, input.importWarnings).ofReports(reports, rootElement, guard.failures);
   }
 }
 ```

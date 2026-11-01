@@ -57,8 +57,9 @@ head.
 
 Until the write step, each new module is judged through an entry of its own in `tools/oracle/entries/`,
 added in its step's first commit: render's is the package's `.`, for the image probe; lint's is
-`ProjectLint` against main's `projectBpmnlint` (`src/node.ts:68`), for the findings probe; model,
-checks, drawing and edit follow. Until the step is done, an entry reports its differences in CI and
+`ProjectLint` against main's `projectBpmnlint` (`src/node.ts:68`), for the findings probe, and beside it
+`lint-cli`, `ProjectLint` against bpmnlint 12's own CLI on the projects with their plugin installed; model,
+checks, drawing and edit follow. An entry with `sidesFor` names both sides of an input itself. Until the step is done, an entry reports its differences in CI and
 fails only when their count per probe rises above the count kept in `tools/oracle/progress.json`; the
 commit that finishes the step makes it gate. A rebase that changes main's answers updates
 `progress.json` in the same rebase. The write step removes the module entries and the CLI step lint's:
@@ -98,8 +99,9 @@ the codes come from its `kindsJson()`. Words of this section:
 
 - Only the allow-list `tools/oracle/differences.json` (probe, pattern, reason) may differ. It starts with
   what goes on the [commands](cli.md#commands) and [flags](flags.md) pages, the
-  [behaviour that goes](cli.md#behaviour-that-goes), and, for `corpus/lint/`, the rule changes from
-  bpmnlint 11 to 12 and the plugin [decision](README.md#decisions).
+  [behaviour that goes](cli.md#behaviour-that-goes), and, for `corpus/lint/`, the plugin
+  [decision](README.md#decisions); bpmnlint 11.15 and 12.0 ship the same rules and configs, so their
+  change needs no row.
 - The [layout score](modules.md#layout-score) is the weighted sum of layout problems; lower is better.
   The oracle's score is the harness score: the 17 kinds that today's `tools/layout-regress.mjs` sums,
   which main's gate holds at 264 over the 115 scenarios (`tools/bench/regress-budget.json`). Hard defects are the kinds the layout score
@@ -228,17 +230,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
   model takes the defaults, `cli/files` reads conventions with it.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
-
-### 6. Lint
-
-Build `packages/lint`.
-
-- Today: 1,757 lines of bpmnlint adapters, run on every write; bpmnlint 11.15.
-- After: the [lint package](modules.md#lint-package) on bpmnlint 12, private, importing nothing of the
-  core; a plugin the project installs runs before the bundled copy ([decision](README.md#decisions)).
-- Files: `packages/lint/`, `corpus/lint/` with each example's `package.json`.
-- Done when: its oracle entry gates, taking the import warnings from main's answer; on the blueprints'
-  examples, each with its own plugin installed, it reports what bpmnlint 12's CLI reports there.
 
 ### 7. Model
 

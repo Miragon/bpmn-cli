@@ -126,7 +126,7 @@ From here main takes fixes only; each rebase brings them in ([where](rebuild.md#
 
 - [x] **4. Gate**: clear `rebuild` and set the guardrails · needs 3
 - [x] **5. Render**: build `packages/render` · needs 4
-- [ ] **6. Lint**: build `packages/lint` · needs 4 · [card](rebuild.md#6-lint)
+- [x] **6. Lint**: build `packages/lint` · needs 4
 
 Done when render draws the corpus in Node and in a browser bundle, and lint's oracle entry gates.
 

@@ -36,7 +36,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | write | run one write as a transaction, and `validate`; the rules that come from outside | `WriteTransaction`, `EditResult`, `HostValidators` (runs the host's validators), `FindingDelta` (what a write added, from every source), `DocumentValidation` (the checks, the host validators and the layout dry run of `validate`), `ValidationReport` | read flags or files, hold rules of its own | 1.2k |
 | api | the contract | the 8 functions of `index.ts`, one line each into a class | hold logic | 0.3k |
 | cli | the Node shell: words, files, text, exit codes | `Cli`, `EditCommand` (one class for all 17 edit commands), `CommandSyntax` (a command's positionals, flags and help), `NewCommand`, `ShowCommand`, `FindCommand`, `DiagramCommand`, `ConventionsCommand`, `ValidateCommand`, `ApplyCommand`, `RenderCommand`, `GuideCommand`, `CliShell`, `BpmnFile`, `IdConventionsReader`, `EditResultText`, `HelpTopics`, `ProjectLintValidator` | model logic | 1.9k |
-| `packages/lint` | run the project's `.bpmnlintrc` through bpmnlint, for `validate` | `ProjectLint`, `LintConfig`, `LintPlugins`, `LintFindings` | import the core, run on writes | 0.8k |
+| `packages/lint` | run the project's `.bpmnlintrc` through bpmnlint, for `validate` | `ProjectLint`, `LintConfig`, `LintPlugins`, `LintRules`, `RuleGuard`, `LintFindings` | import the core, run on writes | 0.8k |
 | `packages/render` | paint BPMN as SVG, PNG optional | `DiagramRenderer`, `DiagramReader`, `ShapePainter`, `EdgePainter`, `SvgComposer`, `TextMetrics`, `PngRasterizer` | lay out, query the graph, read files | 2.1k |
 
 ≈ 46k lines with both packages, capped at 47,000. Files, the `.bpmnlintrc` lookup and its naming read
@@ -463,14 +463,17 @@ publishing it later needs a name and a release, no change to its code.
 | `ProjectLint` | the entry: XML in, `LintFinding`s out |
 | `LintConfig` | reads the `.bpmnlintrc` and trusts project plugins only in a git repository the user owns, as today |
 | `LintPlugins` | loads the rules, configs and moddle extensions the config names, and the moddle that reads the XML with them |
+| `LintRules` | walks `extends` like bpmnlint, but leaves out only what it cannot resolve |
+| `RuleGuard` | turns a rule that throws or answers with a promise into `W_LINT_FAILED` |
 | `LintFindings` | turns bpmnlint's reports into findings, with hints that name bpmn-cli commands |
 
 - cli wraps `ProjectLint` as a `Validator` for `validateXml`, in a few lines; only cli imports the
   package, and a write never loads it.
 - Its tests use its own fixtures and temporary git repositories, never the edit API.
 - When the project installs a plugin that lint also bundles, the project's copy runs, wherever
-  `LintConfig` trusts project plugins; the bundled copy runs only when the project has none. Today the
-  bundled copy answers first ([decisions](README.md#decisions)).
+  `LintConfig` trusts project plugins; the bundled copy runs only when the project has none, and a rule
+  the project's copy lacks is left out, as it fails the project's CI. Today the bundled copy answers
+  first ([decisions](README.md#decisions)).
 
 ## Where today's code goes
 
