@@ -1,32 +1,12 @@
 import { type BpmnElement, BpmnError, type ChangeSet, Kinds } from '../../model/index.js';
 import type { AddOperation } from '../../operations/index.js';
 import type { EditSession } from '../session/EditSession.js';
-import { NodePlacement } from './NodePlacement.js';
 
 export class FlowAliases {
   constructor(private readonly edit: EditSession) {}
 
-  private static placementWords(command: AddOperation): string {
-    const mode = NodePlacement.modeOf(command);
-    if (mode === 'after') {
-      return `--after ${command.after} appends it`;
-    }
-    return mode === 'none' ? 'no placement' : `--${mode}`;
-  }
-
   bindFlowAs(command: AddOperation, node: BpmnElement, entryFlow: BpmnElement | undefined, changes: ChangeSet): void {
-    if (!command.flowAs) {
-      return;
-    }
-    const mode = NodePlacement.modeOf(command);
-    const flow = entryFlow ?? (mode === 'before' ? this.edit.document.flows.outgoing(node)[0] : undefined);
-    if (!flow) {
-      throw BpmnError.usage(`flowAs ${command.flowAs}: ${node.id} gets no flow from this placement (${mode === 'none' ? 'no placement' : `--${mode}`})`, {
-        element: node.id,
-        hint: 'Place the node with after / before / flow, or connect it with a connect op that has "as".',
-      });
-    }
-    changes.bind(command.flowAs, flow);
+    changes.bind(command.flowAs, entryFlow ?? this.edit.document.flows.outgoing(node)[0]);
   }
 
   bindOutAs(command: AddOperation, node: BpmnElement, changes: ChangeSet): void {
@@ -40,7 +20,7 @@ export class FlowAliases {
       return;
     }
     if (!out.length) {
-      throw BpmnError.usage(`outAs ${alias}: ${node.id} gets no flow out of it from this placement (${FlowAliases.placementWords(command)})`, {
+      throw BpmnError.usage(`outAs ${alias}: ${node.id} gets no flow out of it from this placement (--after ${command.after} appends it)`, {
         element: node.id,
         hint: 'outAs names the flow an add creates out of the new node: a splice, a prepend or "to" creates one. Otherwise connect the node with a connect op that has "as".',
       });

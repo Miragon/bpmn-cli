@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_lanes" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_orders">
+    <bpmn:participant id="pool_orders" name="Orders" processRef="Process_orders" />
+    <bpmn:participant id="pool_other" name="Other" processRef="Process_other" />
+    <bpmn:participant id="pool_blackBox" name="Bank" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_orders" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_orders">
+      <bpmn:lane id="lane_sales" name="Sales">
+        <bpmn:flowNodeRef>start_order</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>check</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>timer_check</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>gateway_route</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>sub_handle</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="lane_ops" name="Ops">
+        <bpmn:childLaneSet id="LaneSet_ops">
+          <bpmn:lane id="lane_inbound" name="Inbound">
+            <bpmn:flowNodeRef>pack</bpmn:flowNodeRef>
+          </bpmn:lane>
+          <bpmn:lane id="lane_outbound" name="Outbound">
+            <bpmn:flowNodeRef>ship</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>end_done</bpmn:flowNodeRef>
+          </bpmn:lane>
+        </bpmn:childLaneSet>
+      </bpmn:lane>
+      <bpmn:lane id="lane_idle" name="Idle" />
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start_order" name="Order in">
+      <bpmn:outgoing>flow_startToCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="check" name="Check">
+      <bpmn:incoming>flow_startToCheck</bpmn:incoming>
+      <bpmn:outgoing>flow_checkToRoute</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="timer_check" name="Too long" attachedToRef="check">
+      <bpmn:outgoing>flow_timerToLoose</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="timerDefinition_check" />
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="gateway_route" name="Route">
+      <bpmn:incoming>flow_checkToRoute</bpmn:incoming>
+      <bpmn:outgoing>flow_routeToPack</bpmn:outgoing>
+      <bpmn:outgoing>flow_routeToSub</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="pack" name="Pack">
+      <bpmn:incoming>flow_routeToPack</bpmn:incoming>
+      <bpmn:outgoing>flow_packToShip</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="ship" name="Ship">
+      <bpmn:incoming>flow_packToShip</bpmn:incoming>
+      <bpmn:outgoing>flow_shipToEnd</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:subProcess id="sub_handle" name="Handle">
+      <bpmn:incoming>flow_routeToSub</bpmn:incoming>
+      <bpmn:outgoing>flow_subToLoose</bpmn:outgoing>
+      <bpmn:task id="sub_task" name="Work" />
+    </bpmn:subProcess>
+    <bpmn:task id="loose_task" name="Loose">
+      <bpmn:incoming>flow_subToLoose</bpmn:incoming>
+      <bpmn:incoming>flow_timerToLoose</bpmn:incoming>
+      <bpmn:outgoing>flow_looseToEnd</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="end_done" name="Done">
+      <bpmn:incoming>flow_shipToEnd</bpmn:incoming>
+      <bpmn:incoming>flow_looseToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_startToCheck" sourceRef="start_order" targetRef="check" />
+    <bpmn:sequenceFlow id="flow_checkToRoute" sourceRef="check" targetRef="gateway_route" />
+    <bpmn:sequenceFlow id="flow_routeToPack" sourceRef="gateway_route" targetRef="pack" />
+    <bpmn:sequenceFlow id="flow_routeToSub" sourceRef="gateway_route" targetRef="sub_handle" />
+    <bpmn:sequenceFlow id="flow_packToShip" sourceRef="pack" targetRef="ship" />
+    <bpmn:sequenceFlow id="flow_shipToEnd" sourceRef="ship" targetRef="end_done" />
+    <bpmn:sequenceFlow id="flow_subToLoose" sourceRef="sub_handle" targetRef="loose_task" />
+    <bpmn:sequenceFlow id="flow_timerToLoose" sourceRef="timer_check" targetRef="loose_task" />
+    <bpmn:sequenceFlow id="flow_looseToEnd" sourceRef="loose_task" targetRef="end_done" />
+  </bpmn:process>
+  <bpmn:process id="Process_other" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_other">
+      <bpmn:lane id="lane_other" name="Elsewhere">
+        <bpmn:flowNodeRef>other_task</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="other_task" name="Other work" />
+  </bpmn:process>
+</bpmn:definitions>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_pool" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_ping" name="Ping" />
+  <bpmn:collaboration id="Collaboration_one">
+    <bpmn:participant id="pool_only" name="Only pool" processRef="Process_only" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_only" name="Only process" isExecutable="true">
+    <bpmn:task id="only_task" name="Work" />
+  </bpmn:process>
+</bpmn:definitions>
