@@ -4,6 +4,7 @@ import { corpusEdits, readCorpus } from '../lib/corpus.mjs';
 import { CORPUS_DIR } from '../lib/paths.mjs';
 
 const WALKS = join(CORPUS_DIR, 'walks');
+const NAMESPACES_OF_THE_DRAWING = /^xmlns:(bioc|color|bpmndi|dc|di)=/;
 const ENTITIES = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&apos;': "'", '&#10;': '\n', '&#xA;': '\n', '&#xa;': '\n' };
 
 function decoded(text) {
@@ -12,7 +13,7 @@ function decoded(text) {
 
 function attributesOf(tag) {
   const pairs = [...tag.matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)].map(([, name, double, single]) => `${name}=${decoded(double ?? single)}`);
-  return pairs.sort().join(' ');
+  return pairs.filter((pair) => !NAMESPACES_OF_THE_DRAWING.test(pair)).sort().join(' ');
 }
 
 function isDiagramTag(tag) {

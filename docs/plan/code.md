@@ -45,7 +45,7 @@ Folders: `src/<module>/index.ts` is the only way in. A subfolder names a domain 
   nested host), each fixed bug by its behaviour.
 - Not tested: private methods, plain getters, types, what moddle or commander do, one behaviour twice.
 - Layout tests assert invariants and order (no overlap, inside its lane), not pixels.
-- Verdict tables stay data in `corpus/engine/`: the models of 8 test files that carry 401
+- Verdict tables stay data in `corpus/engine/`: the models of 8 test files that carry 421
   recorded engine verdicts, and 762 FEEL expressions. Each row names the class whose rule it tests, and that class's mirrored test runs its
   rows in one `it.each`, so no row runs twice. An `OperationDefinition`'s mirrored test runs its accepted and
   refused operation examples the same way.

@@ -33,15 +33,15 @@ function mapRemove({ bridge, bridgeAll, ...kept }) {
 }
 
 function mapSplit({ branches, ...kept }) {
-  return { ...kept, branches: branches?.map((branch) => ({ ...branch, nodes: branch.nodes?.map(mapElementKeys) ?? [] })) };
+  if (!Array.isArray(branches)) {
+    return { ...kept, branches };
+  }
+  return { ...kept, branches: branches.map((branch) => (Array.isArray(branch?.nodes) ? { ...branch, nodes: branch.nodes.map(mapElementKeys) } : branch)) };
 }
 
-function mapAlign({ ids = [], axis, to, ...selection }) {
+function mapAlign({ ids = [], axis, to }) {
   const reference = to ?? ids[0];
   const key = axis === 'row' ? 'rowOf' : 'columnOf';
-  if (!ids.length) {
-    return [{ ...selection, op: 'place', [key]: reference }];
-  }
   return ids.filter((id) => id !== reference).map((id) => ({ op: 'place', ids: [id], [key]: reference }));
 }
 

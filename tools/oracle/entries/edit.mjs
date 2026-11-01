@@ -23,7 +23,9 @@ function subjectSide({ DocumentReader, DocumentWriter, ModelOperationRunner, Ope
     semanticEdit: (xml, ops) => attempt(async () => {
       const document = await new DocumentReader().readForWrite(xml);
       document.assertLossless();
-      const { changes } = new ModelOperationRunner(document).run(new OperationParser().parse(mapOperations(ops)));
+      const mapped = mapOperations(ops);
+      const parsed = mapped.length ? new OperationParser().parse(mapped) : { model: [], drawing: [] };
+      const { changes } = new ModelOperationRunner(document).run(parsed);
       const { created, changed, removed } = changes;
       return { xml: await new DocumentWriter().write(document, changes), created, changed, removed };
     }),

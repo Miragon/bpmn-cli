@@ -31,7 +31,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | edit | apply model operations to the semantics | `ModelOperationRunner`, one class per model operation ([below](#direction)), `LaneMembership`, `AliasTable` (what each `$name` of the running batch names) | touch DI, the diagram's coordinates | 7.5k |
 | scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
 | drawing | decide coordinates | `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard` (keeps a move only when `Scorer` finds it no worse), `ShapeSizes` ([below](#shape-sizes)) | change semantics, paint, judge itself | 14.5k |
-| checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
+| checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `ModelChecks` (both below, without what the second repeats of the first, `all()` and `at(ids)`), `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
 | views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, each with its text class beside it (`ModelViewText`); `ImageView` | write | 2.9k |
 | write | run one write as a transaction, and `validate`; the rules that come from outside | `WriteTransaction`, `EditResult`, `HostValidators` (runs the host's validators), `FindingDelta` (what a write added, from every source), `DocumentValidation` (the checks, the host validators and the layout dry run of `validate`), `ValidationReport` | read flags or files, hold rules of its own | 1.2k |
 | api | the contract | the 8 functions of `index.ts`, one line each into a class | hold logic | 0.3k |
@@ -46,7 +46,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 src/
 ├── model/    document/ xml/ kinds/ ids/ vendor/ diagram/ geometry/ findings/ errors/
 ├── operations/   fields/ model/ drawing/
-├── edit/     flows/ events/ properties/ extensions/ containers/
+├── edit/     flows/ events/ properties/ extensions/ containers/ session/
 ├── scoring/  plane/ shapes/ flows/ labels/
 ├── drawing/  plane/ incremental/{placement,routing,frames}/ full/{scopes,lanes,routing,trials}/ runners/
 ├── checks/   structure/ camunda/{rules,values,feel,c7,c8}/
@@ -67,7 +67,7 @@ Each folder holds at most 12 files; today `layout/incremental` has 26 and `layou
 class, or a value two subfolders share, sits in a sibling subfolder, never in the parent: `operations/fields/`
 holds `OperationDefinition`, `OperationField` and what they share behind its own `index.ts`, `model/` the 9 model operation definitions with split's branch and node and `drawing/` the 8 drawing operation definitions,
 whose operations drawing's `runners/` runs; `camunda/rules/` holds `CamundaRules` and `RuleReporter`, `camunda/c7/` and `camunda/c8/`
-one rule class per theme as today, `camunda/values/` holds `TimerValue`, `LinkEvents` and `SchemaText`;
+one rule class per theme as today, `camunda/values/` holds `TimerValue`, `LinkEvents`, `SchemaText` and `BpmnSchema`;
 `structure/` and `camunda/` never import each other.
 Today's `di/` becomes `plane/`. The full layout keeps its own `routing/`, so a replacement of the full
 layout swaps `full/` as one folder. In scoring, `plane/` holds `ScoringCriterion`, `ProblemKinds` and what every criterion reads;
@@ -138,7 +138,8 @@ flowchart TD
   | `split` | `BranchSplit` |
 
   The subfolders hold the BPMN parts the operation classes share and, by the folder rule, never import an operation
-  class. Operation classes may call
+  class; `session/` holds `EditSession`, the state of one running batch, and `AliasTable`, since the root is full at 12
+  files. Operation classes may call
   each other at the root, without a cycle, as today: `split` calls `ElementCreation` and `FlowConnector`,
   `add` with keys `PropertyEditor`, `retype` `ElementRemoval` (`BranchSplit.ts:15`,
   `ElementCreation.ts:417`, `ElementTypeChange.ts:18`). Parts never call an operation class, so today's ring of
@@ -519,7 +520,7 @@ minutes and an agent check can compare it with the code:
 
 - Does: says what is wrong with the model by bpmn-cli's own rules: its structure, and what Camunda 7
   or 8 rejects at deploy.
-- Holds: `StructureChecks`, `CamundaChecks`, one `CamundaRules` class per theme, `FeelParser`.
+- Holds: `ModelChecks`, `StructureChecks`, `CamundaChecks`, one `CamundaRules` class per theme, `FeelParser`.
 - Why: the rules ship with bpmn-cli and change with what it can keep and with Camunda's releases.
 - Does not: run a host's validators or bpmnlint, compare a before with an after, judge the drawing.
 

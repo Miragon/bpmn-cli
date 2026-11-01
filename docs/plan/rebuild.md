@@ -84,7 +84,7 @@ the codes come from its `kindsJson()`. Words of this section:
 | `edits/` | per model roundtrip's three edits, and the edits `tools/bench/gen-edits.mjs` generates, written out as operation JSON | 3 |
 | `lint/` | the 10 examples of [process-engine-blueprints](https://github.com/Miragon/process-engine-blueprints), each its `.bpmnlintrc`, its models, 36 in all, and its `package.json`, which the oracle installs so that the project's plugin runs (0.17.0 there); plus models for each case `packages/lint` handles | 6 |
 | `design-iq/` | the arguments of design-iq's `bpmn-edit*.test.ts` calls, and the paths of `OPS_SCHEMA` it reads. The operations step runs those tests in a design-iq checkout, its head on that day, recorded in `COMMIT`, and the write step runs them again on design-iq's head then; a shim installed in place of `@miragon/bpmn-cli` logs each call, and a Proxy around `OPS_SCHEMA` logs each read. Main answers the calls, with each validator answer per phase; plus one written call per row of design-iq's [map](modules.md#contract) that its tests do not reach, such as `showXml` with `scope`. It needs a design-iq checkout, so `node tools/oracle/design-iq-record.mjs [checkout]` records it, not `npm run oracle:record` | 8 |
-| `engine/` | the cases of main's 8 test files that run against live engines, as `.bpmn`: #123's 321 parity models, synthetic, one per rule case. #123's tests build each from template strings at run time (`engineModel('c7', …)`), so the checks step runs them once on its branch and writes each model out; one JSON of their codes, and the 401 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22 that main's tests record: `c7-profile` 82, `c8-profile` 151, `c7-profile-rules` 55, `c8-feel-and-deploy` 38, `c7-schema-rules` 33, `c8-values` 27, `e2e/camunda7-rules` 15, plus the models `c8-ops` fixes, which must deploy; the 762 FEEL verdicts of main's FEEL tests | 9 |
+| `engine/` | the cases of main's 8 test files that run against live engines, as `.bpmn`: `parity/`, the 1,076 models of #123's 109 rule specs, synthetic, and `parity/codes.json` with the code each case declares; `verdicts/`, the 421 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22 that main's tests record: `c7-profile` 82, `c8-profile` 151, `c7-profile-rules` 55, `c8-feel-and-deploy` 58, `c7-schema-rules` 33, `c8-values` 27, `e2e/camunda7-rules` 15; `fixed/`, the 5 models `c8-ops` fixes, which must deploy; `feel/`, the 762 FEEL verdicts of main's FEEL tests; `structure/`, models and main's findings for what the structure checks refuse. Each row names the class whose rule it tests | 9 |
 | `walks/` | the fuzz walks in `--mode incremental`, per step the operations and the file before. Main answers through `mutateDoc`: the file after `layout: false` with `changes.created`, `changes.relocated` and the expansion requests, and the file after the layout | 11 |
 | `scoring/` | small models, one or two per scoring criterion, each with the problem it shows; `ScoringCriterion`'s test runs every criterion on them | 10 |
 | `cli/` | one golden call per kept command and flag | 14 |
@@ -232,18 +232,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 9. Checks
-
-Build checks.
-
-- Today: Camunda checks by profile, host validators and the before/after compare in the same folder;
-  `DocumentCheck` draws a dry run; no live workflow.
-- After: the [checks row](modules.md#modules), only bpmn-cli's own rules, no layout code; a
-  live job runs the four engines as containers and deploys `corpus/engine/` when it or a pinned engine
-  version changes.
-- Files: `src/checks/`, `test/checks/`, `corpus/engine/`, `tools/oracle/live-engines.mjs`, its workflow.
-- Done when: the findings probe is green; FEEL verdicts and `corpus/engine/` pass; a live run agrees.
-
 ### 11. Drawing
 
 Build drawing.
@@ -254,16 +242,6 @@ Build drawing.
   `ChannelRouter` into the size limits.
 - Files: `src/drawing/`, `test/drawing/`, `corpus/walks/`.
 - Done when: the layout probe is green without edit, over the scenarios and the walks.
-
-### 12. Edit
-
-Build edit.
-
-- Today: folders by BPMN noun that import in a ring and reach drawing 5 times.
-- After: `ModelOperationRunner` and one class per operation at the root, the BPMN parts below; changes leave as a
-  `ChangeSet`; no drawing import.
-- Files: `src/edit/`, `test/edit/`.
-- Done when: the edits probe is green for semantics without DI over `corpus/walks/`.
 
 ### 13. Write, views and api
 

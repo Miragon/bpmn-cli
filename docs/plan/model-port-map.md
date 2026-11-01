@@ -264,3 +264,16 @@ Through `../operations/index.js`.
 | `parseBranches`, `defaultWithConditionViolation` in edit | gone: `applyToXml` always parses, so a batch reaches edit checked |
 | `opsExample()` | to the `guide ops` topic, with the keys under `set` |
 | `placementViolation`, `groupViolation` in cli | gone: `OperationParser` answers for the flags too |
+
+## Edit
+
+Through `../edit/index.js`.
+
+| old symbol on main | new call |
+| --- | --- |
+| `new ModelCommands(doc, edit).runBatch(commands)` | `new ModelOperationRunner(document, { force, platform }).run(parsed)`; `parsed` from `OperationParser`; the answer has `changes`, `model` and `drawing` with aliases resolved, `aliases` |
+| `EditBatch.refuseDroppedContent` | in `run`, unless `force` |
+| `new EditSession(doc, { conventions, platformChoice })` | set `document.conventions` first; the platform is the option `platform` |
+| `doc.layoutRequests` | `changes.expansions` |
+| `doc.followFlowEnds` | not read: only the ownership check set it, and that goes; flow ids still rename after their ends as on main |
+| main's operation JSON | `mapOperations(ops)` in `tools/oracle/operation-map.mjs`, for replays |

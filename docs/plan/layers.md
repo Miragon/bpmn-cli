@@ -100,7 +100,7 @@ sequenceDiagram
   edit->>model: BpmnTree, PropertyCatalog, ChangeSet
   write->>drawing: DiagramDrawing.update
   write->>scoring: Scorer.score before and after
-  write->>checks: StructureChecks, CamundaChecks on the new document
+  write->>checks: ModelChecks on the new document
   write->>model: DocumentWriter.write
   write-->>cli: EditResult
 ```
@@ -275,7 +275,7 @@ scores and checks the new document once, and serialises once. It is the only mod
 drawing, scoring and checks together.
 
 ```ts
-import { CamundaChecks, StructureChecks } from '../checks/index.js';
+import { ModelChecks } from '../checks/index.js';
 import { DiagramDrawing, DrawingSnapshot } from '../drawing/index.js';
 import { ModelOperationRunner } from '../edit/index.js';
 import { DocumentReader, DocumentWriter } from '../model/index.js';
@@ -296,7 +296,7 @@ export class WriteTransaction {
     new DiagramDrawing(document).update(snapshot, changes, operations.drawing);
     const score = scoreBefore.to(scorer.score(document));
 
-    const findings = [...new StructureChecks(document).all(), ...new CamundaChecks(document).all()];
+    const findings = new ModelChecks(document).all();
     const written = new DocumentWriter().write(document);
     const added = await new HostValidators(this.options.validators).added(xml, written);
 
