@@ -47,6 +47,35 @@ describe('IncrementalLayout', () => {
     expect(notes).toContain('Activity_Fzs3 drawn collapsed');
   });
 
+  it('routes a line again that does not reach its end, and says so', async () => {
+    const xml = Fixtures.text('models/incremental/pool.bpmn').replace('<di:waypoint x="420" y="160"/>', '<di:waypoint x="420" y="300"/>');
+    const { document, before, changes } = await DrawingPair.of(xml, xml, noChanges);
+
+    const { notes, rerouted } = await new IncrementalLayout(document, before).place(changes);
+
+    expect(rerouted).toContain('F2');
+    expect(notes).toContain('F2 routed again: it did not reach C');
+  });
+
+  it('removes a flow with a new end from a further view of the same root, which it does not lay out', async () => {
+    const xml = Fixtures.text('models/incremental/twoviews.bpmn');
+    const { document, before, changes } = await DrawingPair.of(xml, xml.replace('sourceRef="C" targetRef="D"', 'sourceRef="C" targetRef="E"'), noChanges);
+
+    const { notes, rerouted } = await new IncrementalLayout(document, before).place(changes);
+
+    expect(rerouted).toContain('F3');
+    expect(notes.join()).toContain('edge(s) of F3 removed from a further diagram');
+  });
+
+  it('routes a flow again whose source changed', async () => {
+    const xml = Fixtures.text('models/incremental/pool.bpmn');
+    const { document, before, changes } = await DrawingPair.of(xml, xml.replace('sourceRef="A" targetRef="C"', 'sourceRef="S" targetRef="C"'), noChanges);
+
+    const { rerouted } = await new IncrementalLayout(document, before).place(changes);
+
+    expect(rerouted).toContain('F2');
+  });
+
   it('passes a vertical plane when nothing is placed, moved or routed on it', async () => {
     const xml = Fixtures.text('models/incremental/vertical.bpmn');
     const { document, before, changes } = await DrawingPair.of(xml, xml, noChanges);

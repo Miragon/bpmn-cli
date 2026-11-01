@@ -43,6 +43,10 @@ export class LayoutRun implements RunSets {
     this.notes = place.notes;
   }
 
+  private static copyOf({ reroute, newEdges, fromEngine, active, relocated, grown, routedNow }: RunSets): RunSets {
+    return { reroute: new Set(reroute), newEdges: new Set(newEdges), fromEngine: new Set(fromEngine), active: new Set(active), relocated: new Set(relocated), grown: new Set(grown), routedNow: new Map(routedNow) };
+  }
+
   drawing(plane: Plane): Drawing {
     return this.place.newDrawing(plane, this.place.moved, this.place.placed);
   }
@@ -63,11 +67,10 @@ export class LayoutRun implements RunSets {
   }
 
   sets(): RunSets {
-    const { reroute, newEdges, fromEngine, active, relocated, grown, routedNow } = this;
-    return { reroute: new Set(reroute), newEdges: new Set(newEdges), fromEngine: new Set(fromEngine), active: new Set(active), relocated: new Set(relocated), grown: new Set(grown), routedNow: new Map(routedNow) };
+    return LayoutRun.copyOf(this);
   }
 
   restoreSets(sets: RunSets): void {
-    Object.assign(this, { ...sets, reroute: new Set(sets.reroute), newEdges: new Set(sets.newEdges), fromEngine: new Set(sets.fromEngine), active: new Set(sets.active), relocated: new Set(sets.relocated), grown: new Set(sets.grown), routedNow: new Map(sets.routedNow) });
+    Object.assign(this, LayoutRun.copyOf(sets));
   }
 }
