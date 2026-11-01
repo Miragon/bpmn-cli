@@ -23,6 +23,14 @@ describe('FlowConnector', () => {
     expect(element('flow_shipToReject').name).toBe('back');
   });
 
+  it('refuses a key of a message flow with the keys of the sequence flow it makes', async () => {
+    await expect(connect({ source: 'ship', target: 'reject', set: { message: 'Foo' } })).rejects.toMatchObject({ code: 'E_UNKNOWN_KEY', details: { element: 'flow_shipToReject', candidates: expect.arrayContaining(['condition', 'source']) } });
+  });
+
+  it('refuses a language without a condition, as set does', async () => {
+    await expect(connect({ source: 'ship', target: 'reject', set: { language: 'groovy' } })).rejects.toMatchObject({ code: 'E_NO_CONDITION' });
+  });
+
   it('writes the id, condition, language and default a connect names', async () => {
     const { element } = await connect({ source: 'gateway_ok', target: 'endEvent_done', id: 'flow_late', set: { condition: '${late}', language: 'juel' } });
     const flow = element('flow_late');

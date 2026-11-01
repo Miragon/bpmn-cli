@@ -36,10 +36,10 @@ export class FlowConnector {
     const kind = kinds.kindOf(source, target);
     this.assertNoIllegalSelfLoop(command, source, target, kind);
     const keys = command.set ?? {};
-    FlowConnector.assertKeysFor(kind, source, keys);
     const existing = kind === 'sequenceFlow' || kind === 'messageFlow' ? kinds.existingConnection(kind, source, target) : undefined;
     const same = command.ifAbsent ? (existing ?? kinds.existingConnection(kind, source, target)) : undefined;
     if (same) {
+      FlowConnector.assertKeysFor(kind, same, keys);
       changes.note(`${kind} ${same.id} ${command.source} -> ${command.target} already exists; nothing to do`);
       RootElements.bindRefAs(changes, command.refAs, same);
       return changes.bind(command.as, same);
@@ -48,6 +48,7 @@ export class FlowConnector {
       this.warnDuplicate(command, source, target, kind, changes);
     }
     const made = this.make(kind, source, target, command, changes);
+    FlowConnector.assertKeysFor(kind, made, keys);
     this.writeOtherKeys(made, keys, changes);
     changes.bind(command.as, made);
     RootElements.bindRefAs(changes, command.refAs, made);
@@ -56,9 +57,9 @@ export class FlowConnector {
     return changes;
   }
 
-  private static assertKeysFor(kind: ConnectionKind, element: BpmnElement, keys: Readonly<Record<string, string>>): void {
+  private static assertKeysFor(kind: ConnectionKind, flow: BpmnElement, keys: Readonly<Record<string, string>>): void {
     const given = (key: string): boolean => keys[key] !== undefined;
-    const refused = (key: string, allowed: string): BpmnError => PropertyCatalog.of(element).unknownKey(key, `on connect it applies to ${allowed}, not to a ${kind}`);
+    const refused = (key: string, allowed: string): BpmnError => PropertyCatalog.of(flow).unknownKey(key, `on connect it applies to ${allowed}, not to a ${kind}`);
     const sequenceOnly = FlowConnector.SEQUENCE_FLOW_KEYS.find(given);
     if (kind !== 'sequenceFlow' && sequenceOnly) {
       throw refused(sequenceOnly, 'sequence flows');
@@ -134,7 +135,8 @@ export class FlowConnector {
   }
 
   private writeOtherKeys(made: BpmnElement, keys: Readonly<Record<string, string>>, changes: ChangeSet): void {
-    const rest = TriggerKeys.remainingKeys(keys, FlowConnector.CREATION_KEYS);
+    const written = keys['condition'] ? FlowConnector.CREATION_KEYS : FlowConnector.CREATION_KEYS.filter((key) => key !== 'language');
+    const rest = TriggerKeys.remainingKeys(keys, written);
     if (Object.keys(rest).length) {
       changes.merge(new PropertyEditor(this.edit).set({ op: 'set', id: made.id, set: { ...rest } }));
     }

@@ -84,6 +84,11 @@ export class EventDefinitions {
     return 'date';
   }
 
+  private static rootName(trigger: RefTrigger, opts: TriggerOptions): string | undefined {
+    const { code } = EventDefinitions.REF_TRIGGERS[trigger];
+    return opts[trigger] ?? (code && opts[code]);
+  }
+
   private static isRefTrigger(trigger: Trigger): trigger is RefTrigger {
     return trigger in EventDefinitions.REF_TRIGGERS;
   }
@@ -96,7 +101,7 @@ export class EventDefinitions {
     const { tree } = this.edit.document;
     const type = Triggers.TABLE[trigger].definition;
     if (EventDefinitions.isRefTrigger(trigger)) {
-      const name = opts[trigger];
+      const name = EventDefinitions.rootName(trigger, opts);
       return tree.build(type, name ? { [EventDefinitions.REF_TRIGGERS[trigger].prop]: this.rootElement(trigger, name, opts) } : {});
     }
     switch (trigger) {
@@ -149,7 +154,7 @@ export class EventDefinitions {
   }
 
   private updateReference(def: BpmnElement, trigger: RefTrigger, opts: TriggerOptions): void {
-    const name = opts[trigger];
+    const name = EventDefinitions.rootName(trigger, opts);
     if (name === undefined) {
       return;
     }

@@ -1,4 +1,4 @@
-import type { BpmnElement, Trigger, TriggerOptions } from '../../model/index.js';
+import { type BpmnElement, PropertyCatalog, type Trigger, type TriggerOptions } from '../../model/index.js';
 import { PropertyCoercer } from '../properties/PropertyCoercer.js';
 
 export type ElementKeys = Readonly<Record<string, string>>;
@@ -21,6 +21,14 @@ export class TriggerKeys {
   static impliedTrigger(keys: ElementKeys): Trigger | undefined {
     const key = Object.keys(TriggerKeys.TRIGGER_OF_KEY).find((candidate) => keys[candidate] !== undefined);
     return key ? TriggerKeys.TRIGGER_OF_KEY[key] : undefined;
+  }
+
+  static assertFit(element: BpmnElement, keys: ElementKeys, trigger: Trigger): void {
+    const foreign = Object.keys(keys).find((key) => (TriggerKeys.TRIGGER_OF_KEY[key] ?? trigger) !== trigger);
+    if (foreign) {
+      const untaken = Object.keys(TriggerKeys.TRIGGER_OF_KEY).filter((key) => TriggerKeys.TRIGGER_OF_KEY[key] !== trigger);
+      throw PropertyCatalog.of(element).unknownKey(foreign, `${foreign} belongs to the ${TriggerKeys.TRIGGER_OF_KEY[foreign]} trigger, not ${trigger}`, untaken);
+    }
   }
 
   static optionsOf(keys: ElementKeys, element: BpmnElement): TriggerOptions {

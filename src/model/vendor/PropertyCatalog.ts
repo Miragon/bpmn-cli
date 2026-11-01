@@ -137,8 +137,8 @@ export class PropertyCatalog {
     throw this.unknownKey(key);
   }
 
-  unknownKey(key: string, reason?: string): BpmnError {
-    const keys = this.settableKeys();
+  unknownKey(key: string, reason?: string, untaken: readonly string[] = []): BpmnError {
+    const keys = this.settableKeys().filter((settable) => !untaken.includes(settable));
     const { element } = this;
     return BpmnError.model('E_UNKNOWN_KEY', `Unknown key "${key}" for ${Kinds.label(element)} ${element.id}${reason ? ` (${reason})` : ''}`, {
       element: element.id,

@@ -172,14 +172,15 @@ export class ElementCreation {
     }
     this.writeContent(node, element);
     this.joinLane(element, explicitLane, inherited, changes);
-    if (def.kind === 'eventSubProcess' && named) {
-      this.addStartEvent(id, named, keys, changes);
+    if (def.kind === 'eventSubProcess') {
+      this.startEventSubProcess(element, named, keys, changes);
     }
     return element;
   }
 
   private setEventTrigger({ def, keys, changes }: NewNode, event: BpmnElement, named: Trigger | undefined): string | undefined {
     const resolved = named ?? this.defaultTrigger(event, def);
+    TriggerKeys.assertFit(event, keys, resolved);
     const roots = new Set(this.edit.document.tree.definitions.list('rootElements'));
     new EventDefinitions(this.edit).setTrigger(event, resolved, TriggerKeys.optionsOf(keys, event));
     this.reportNewRoots(roots, changes);
@@ -244,6 +245,16 @@ export class ElementCreation {
       if (warning) {
         changes.warn(warning);
       }
+    }
+  }
+
+  private startEventSubProcess(element: BpmnElement, trigger: Trigger | undefined, keys: ElementKeys, changes: ChangeSet): void {
+    const [untriggered] = Object.keys(TriggerKeys.present(keys));
+    if (!trigger && untriggered) {
+      throw PropertyCatalog.of(element).unknownKey(untriggered, 'it belongs to the start event, and this event sub-process names no trigger');
+    }
+    if (trigger) {
+      this.addStartEvent(element.id, trigger, keys, changes);
     }
   }
 

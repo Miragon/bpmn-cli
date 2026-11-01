@@ -13,6 +13,13 @@ describe('TriggerKeys', () => {
     expect(TriggerKeys.impliedTrigger(keys)).toBe(trigger);
   });
 
+  it('refuses a key of another trigger and offers the keys of the event without those', async () => {
+    const element = Fixtures.element(await Fixtures.read('edit/events-triggers.bpmn'), 'boundary_timer');
+
+    expect(() => TriggerKeys.assertFit(element, { message: 'Foo' }, 'timer')).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_KEY', message: expect.stringContaining('message trigger') }));
+    expect(() => TriggerKeys.assertFit(element, { timer: 'PT1H', nonInterrupting: 'true', name: 'Wait' }, 'timer')).not.toThrow();
+  });
+
   it('reads the options of an event with nonInterrupting as a boolean', async () => {
     const element = Fixtures.element(await Fixtures.read('edit/events-triggers.bpmn'), 'boundary_timer');
 

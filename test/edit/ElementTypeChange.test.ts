@@ -68,10 +68,40 @@ describe('ElementTypeChange', () => {
     await expect(retyping(id, kind)).rejects.toMatchObject({ code });
   });
 
-  it('warns that trigger options mean nothing on a task', async () => {
-    const { changes } = await retyping('task_first', 'serviceTask', { timer: 'PT1H' });
+  it.each([
+    ['a timer on a service task', 'task_first', 'serviceTask', { timer: 'PT1H' }],
+    ['a message on a plain task', 'task_first', 'task', { message: 'Foo' }],
+    ['a key no element has', 'task_first', 'serviceTask', { bogus: '1' }],
+    ['the message of a timer event', 'boundary_first', 'boundaryEvent:timer', { message: 'Foo' }],
+  ])('refuses %s with the keys the type takes', async (_case, id, kind, set) => {
+    await expect(retyping(id, kind, set)).rejects.toMatchObject({ code: 'E_UNKNOWN_KEY', details: { candidates: expect.arrayContaining(['name']) } });
+  });
 
-    expect(changes.warnings).toEqual([expect.objectContaining({ code: 'W_OPTION_IGNORED', element: 'task_first' })]);
+  it.each(['sendTask', 'receiveTask'])('gives a %s its message', async (kind) => {
+    const { element } = await retyping('task_first', kind, { message: 'Foo' });
+
+    expect(element.get<BpmnElement>('messageRef').get('name')).toBe('Foo');
+  });
+
+  it('writes the plain keys it is given along with the new type', async () => {
+    const { element } = await retyping('task_first', 'serviceTask', { name: 'Renamed', doc: 'Why' });
+
+    expect(element.is('bpmn:ServiceTask')).toBe(true);
+    expect(element.name).toBe('Renamed');
+    expect(element.list('documentation')[0]?.get('text')).toBe('Why');
+  });
+
+  it('writes a key on an element that keeps its type', async () => {
+    const { element, changes } = await retyping('task_first', 'task', { name: 'Renamed' });
+
+    expect(element.name).toBe('Renamed');
+    expect(changes.notes).toEqual([]);
+  });
+
+  it('takes the trigger an event needs from its key', async () => {
+    const { element } = await retyping('boundary_first', 'boundaryEvent', { message: 'Paid' });
+
+    expect(element.list('eventDefinitions')[0]?.get<BpmnElement>('messageRef').get('name')).toBe('Paid');
   });
 
   it('gives an event a new trigger and binds its root element', async () => {

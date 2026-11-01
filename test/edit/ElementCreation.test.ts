@@ -20,6 +20,37 @@ function ends(flow: BpmnElement): string {
 }
 
 describe('ElementCreation', () => {
+  it.each([
+    ['the message of a timer event', { kind: 'boundaryEvent:timer', on: 'check', set: { message: 'Foo' } }],
+    ['the timer of a message event', { kind: 'boundaryEvent:message', on: 'check', set: { timer: 'PT1H' } }],
+    ['two triggers on one event', { kind: 'boundaryEvent', on: 'check', set: { timer: 'PT1H', message: 'Foo' } }],
+    ['the error code of an end event that signals', { kind: 'endEvent:signal', ...IN_ORDER_CHECK, set: { errorCode: 'E1' } }],
+    ['the timer of an event sub-process on an error', { kind: 'eventSubProcess:error', ...IN_ORDER_CHECK, set: { timer: 'PT1H' } }],
+    ['nonInterrupting on an event sub-process without a trigger', { kind: 'eventSubProcess', ...IN_ORDER_CHECK, set: { nonInterrupting: 'true' } }],
+  ])('refuses %s with the keys the event takes', async (_case, operation) => {
+    const document = await order();
+
+    expect(() => added(document, operation)).toThrow(expect.objectContaining({ code: 'E_UNKNOWN_KEY', details: expect.objectContaining({ candidates: expect.arrayContaining(['name']) }) }));
+  });
+
+  it('leaves the keys of other triggers out of the keys it offers a timer event', async () => {
+    const document = await order();
+    const operation = { kind: 'boundaryEvent:timer', on: 'check', set: { message: 'Foo' } };
+
+    expect(() => added(document, operation)).toThrow(expect.objectContaining({ details: expect.objectContaining({ candidates: expect.not.arrayContaining(['message', 'errorCode']) }) }));
+  });
+
+  it.each([
+    ['endEvent:error', { errorCode: 'E1' }, 'bpmn:Error', 'errorCode', 'E1'],
+    ['endEvent:escalation', { escalationCode: 'E2' }, 'bpmn:Escalation', 'escalationCode', 'E2'],
+  ])('names the root of an %s after its code when no name is given', async (kind, set, type, property, code) => {
+    const document = await order();
+
+    added(document, { kind, ...IN_ORDER_CHECK, set });
+
+    expect(document.tree.rootElementsOfType(type as 'bpmn:Error')[0]?.get(property)).toBe(code);
+  });
+
   it('splices a task after a node with one way out', async () => {
     const document = await order();
 

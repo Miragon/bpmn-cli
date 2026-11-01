@@ -8,7 +8,16 @@ import { TriggerChange } from './events/TriggerChange.js';
 import { TriggerKeys } from './events/TriggerKeys.js';
 import { FlowConditions } from './flows/FlowConditions.js';
 import { InapplicableContent } from './properties/InapplicableContent.js';
+import { PropertyEditor } from './PropertyEditor.js';
 import type { EditSession } from './session/EditSession.js';
+
+interface TypeChange {
+  el: BpmnElement;
+  from: KindDefinition;
+  to: KindDefinition;
+  trigger: Trigger | undefined;
+  given: TriggerOptions;
+}
 
 export class ElementTypeChange {
   private static readonly ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
@@ -57,18 +66,32 @@ export class ElementTypeChange {
     const parsed = ElementTypeChange.parseKind(command.kind, el.id);
     const to = parsed.def;
     ElementTypeChange.assertCompatible(el, from, to);
-    const oldLabel = Kinds.label(el);
-    const trigger = ElementTypeChange.resolveTrigger(el, to, parsed.trigger);
-    const given = TriggerKeys.optionsOf(command.set ?? {}, el);
-    const givenKeys = Object.keys(given) as Array<keyof TriggerOptions>;
-    ElementTypeChange.warnIgnoredOptions(el, to, givenKeys, changes);
-    const hasTriggerOptions = to.family === 'event' && givenKeys.length > 0;
-    const sameTrigger = trigger === Triggers.of(el);
-    if (from === to && sameTrigger && !hasTriggerOptions) {
-      changes.note(`${el.id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
-      RootElements.bindRefAs(changes, command.refAs, el);
-      return changes;
+    const keys = command.set ?? {};
+    const trigger = ElementTypeChange.resolveTrigger(el, to, parsed.trigger ?? TriggerKeys.impliedTrigger(keys));
+    const eventKeys = to.family === 'event' ? TriggerKeys.present(keys) : {};
+    TriggerKeys.assertFit(el, eventKeys, trigger ?? 'none');
+    const given = TriggerKeys.optionsOf(eventKeys, el);
+    const needsChange = from !== to || trigger !== Triggers.of(el) || Object.keys(given).length > 0;
+    const target = needsChange ? this.changeType({ el, from, to, trigger, given }, changes) : el;
+    const otherKeys = TriggerKeys.remainingKeys(keys, Object.keys(eventKeys));
+    if (Object.keys(otherKeys).length) {
+      changes.merge(new PropertyEditor(this.edit).set({ op: 'set', id: target.id, set: { ...otherKeys } }));
+    } else if (!needsChange) {
+      ElementTypeChange.noteUnchanged(el, changes);
     }
+    RootElements.bindRefAs(changes, command.refAs, target);
+    return changes;
+  }
+
+  private static noteUnchanged(el: BpmnElement, changes: ChangeSet): void {
+    const label = Kinds.label(el);
+    changes.note(`${el.id} is already a ${label}; nothing changed${label.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
+  }
+
+  private changeType({ el, from, to, trigger, given }: TypeChange, changes: ChangeSet): BpmnElement {
+    const oldLabel = Kinds.label(el);
+    const givenKeys = Object.keys(given) as Array<keyof TriggerOptions>;
+    const sameTrigger = trigger === Triggers.of(el);
     this.assertConnectable(el, to);
     const change = new TriggerChange(this.edit, el);
     const target = to.type === el.type ? el : this.swapType(el, to, changes);
@@ -77,15 +100,14 @@ export class ElementTypeChange {
       this.reportReplacement(el, target, to, changes);
     }
     new FlowConditions(this.edit).dropIgnoredConditions(target, changes);
-    change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, changes, { on: target });
+    change.change(trigger !== undefined && (!sameTrigger || givenKeys.length > 0) ? trigger : undefined, given, changes, { on: target });
     this.edit.document.tree.invalidate();
     const detail =
       from === to && sameTrigger
         ? `trigger options updated (${givenKeys.map((givenKey) => `${givenKey}=${String(given[givenKey])}`).join(' ')})`
         : `retyped from ${oldLabel} to ${Kinds.label(target)}`;
     changes.change(ChangeEntries.of(target, detail));
-    RootElements.bindRefAs(changes, command.refAs, target);
-    return changes;
+    return target;
   }
 
   private static currentKind(el: BpmnElement): KindDefinition {
@@ -114,17 +136,6 @@ export class ElementTypeChange {
       throw BpmnError.model('E_INVALID_RETYPE', `Cannot retype ${Kinds.label(el)} ${el.id} to ${to.kind}: ${reason}`, {
         element: el.id,
         hint: `Remove the element and add a new one of the wanted kind instead (\`bpmn remove <file> ${el.id}\`, then \`bpmn add <file> <kind> ...\`).`,
-      });
-    }
-  }
-
-  private static warnIgnoredOptions(el: BpmnElement, to: KindDefinition, givenKeys: Array<keyof TriggerOptions>, changes: ChangeSet): void {
-    if (to.family !== 'event' && givenKeys.length) {
-      changes.warn({
-        code: 'W_OPTION_IGNORED',
-        message: `Trigger options (${givenKeys.join(', ')}) are ignored for ${to.kind} ${el.id}`,
-        element: el.id,
-        hint: 'Trigger options apply to events only.',
       });
     }
   }
