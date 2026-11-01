@@ -24,7 +24,7 @@ function plantedCopy(plant) {
   const root = join(PLANTED_DIR, plant.name);
   rmSync(root, { recursive: true, force: true });
   mkdirSync(root, { recursive: true });
-  for (const name of ['dist', 'assets', 'package.json']) {
+  for (const name of ['bin', 'dist', 'assets', 'package.json']) {
     cpSync(join(MAIN_ROOT, name), join(root, name), { recursive: true });
   }
   symlinkSync(join(MAIN_ROOT, 'node_modules'), join(root, 'node_modules'));

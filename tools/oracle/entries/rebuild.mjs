@@ -1,8 +1,13 @@
+import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 import { buildSync } from 'esbuild';
+import { bundlesOf } from '../../build/bundles.mjs';
 import { onRebuild } from '../design-iq-map.mjs';
 import { openBuild } from '../lib/build-side.mjs';
-import { MAIN_ROOT, REPO_ROOT } from '../lib/paths.mjs';
+import { callCli, validateInProject } from '../lib/cli-call.mjs';
+import { MAIN_ROOT, REPO_ROOT, WORK_DIR } from '../lib/paths.mjs';
 import { mapOperations, resolveRowAlignsByKind } from '../operation-map.mjs';
 
 const DRAWING_OPERATIONS = new Set(['place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact', 'layout']);
@@ -10,6 +15,24 @@ const SELECTING_OPERATIONS = ['place', 'align', 'color', 'tidy'];
 const EXECUTION_PLATFORMS = { c7: 'Camunda Platform', c8: 'Camunda Cloud' };
 const MODELER_NAMESPACE = 'http://camunda.org/schema/modeler/1.0';
 const NO_PLANE = 'none';
+const CLI_ROOT = join(WORK_DIR, 'rebuild-cli');
+const CLI_BINARY = join(CLI_ROOT, 'bpmn.mjs');
+const HELP_FOLDERS = ['guide', 'project', 'tables'];
+
+function buildCli() {
+  const dist = join(CLI_ROOT, 'dist');
+  rmSync(CLI_ROOT, { recursive: true, force: true });
+  mkdirSync(CLI_ROOT, { recursive: true });
+  buildSync({ ...bundlesOf(REPO_ROOT).cli, outdir: dist });
+  for (const folder of HELP_FOLDERS) {
+    cpSync(join(REPO_ROOT, 'src/cli/help', folder), join(dist, folder), { recursive: true });
+  }
+  writeFileSync(CLI_BINARY, `import { Cli } from ${JSON.stringify(pathToFileURL(join(dist, 'cli.js')).href)};\nprocess.exitCode = await new Cli(process).run(process.argv.slice(2));\n`);
+}
+
+if (isMainThread) {
+  buildCli();
+}
 
 function loadPublicSurface() {
   const { outputFiles } = buildSync({ entryPoints: [join(REPO_ROOT, 'src/index.ts')], bundle: true, platform: 'browser', format: 'esm', write: false });
@@ -91,6 +114,8 @@ function subjectOf(api) {
     findings: (xml, platform) => attempt(async () => ({ rows: rowsOf(await api.validateXml(declaringPlatform(xml, platform))) })),
     render: (xml, plane) => attempt(() => renderPlane(api, xml, plane)),
     designIq: (call) => onRebuild(api, call),
+    cli: (call) => callCli(CLI_BINARY, call, call.args),
+    validateProject: ({ folder, file }) => validateInProject(CLI_BINARY, folder, file),
   };
 }
 

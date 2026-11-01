@@ -66,7 +66,7 @@ function refusalDifference(id, mainResult, subjectResult) {
   return `${id}: refusal: main ${mainResult.refused ?? 'answers'}, subject ${subjectResult.refused ?? 'answers'} (${subjectResult.reason ?? mainResult.reason ?? ''})`;
 }
 
-function differencesOf(id, mainResult, subjectResult) {
+export function differencesOf(id, mainResult, subjectResult) {
   if (mainResult.refused !== subjectResult.refused) {
     return [refusalDifference(id, mainResult, subjectResult)];
   }

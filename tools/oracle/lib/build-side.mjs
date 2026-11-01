@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { onMain } from '../design-iq-map.mjs';
+import { wordsOnMain } from '../probes/cli.mjs';
+import { callCli, validateInProject } from './cli-call.mjs';
 
 async function attempt(action) {
   try {
@@ -38,5 +40,7 @@ export async function openBuild(root) {
       return { svg, plane: drawn, planes };
     }),
     designIq: (call) => onMain(api, call),
+    cli: (call) => callCli(join(root, 'bin', 'bpmn.js'), call, wordsOnMain(call.args)),
+    validateProject: ({ folder, file }) => validateInProject(join(root, 'bin', 'bpmn.js'), folder, file),
   };
 }
