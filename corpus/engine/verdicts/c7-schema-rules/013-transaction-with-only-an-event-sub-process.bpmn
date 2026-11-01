@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:message id="M1" name="Verify1" /><bpmn:message id="M2" name="Verify2" />
+  <bpmn:process id="P_Verify" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start" /><bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="SP" /><bpmn:transaction id="SP"><bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="ESS" isInterrupting="false"><bpmn:messageEventDefinition messageRef="M1" /></bpmn:startEvent><bpmn:endEvent id="ESE" /><bpmn:sequenceFlow id="e1" sourceRef="ESS" targetRef="ESE" /></bpmn:subProcess></bpmn:transaction><bpmn:sequenceFlow id="F2" sourceRef="SP" targetRef="End" /><bpmn:endEvent id="End" />
+  </bpmn:process>
+
+</bpmn:definitions>

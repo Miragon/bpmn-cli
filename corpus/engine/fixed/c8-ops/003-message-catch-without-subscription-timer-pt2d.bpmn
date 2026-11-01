@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:message id="M1" name="Paid">
+  <bpmn:extensionElements>
+    <zeebe:subscription correlationKey="=x" />
+  </bpmn:extensionElements>
+</bpmn:message>
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:intermediateCatchEvent id="X"><bpmn:messageEventDefinition id="MD" messageRef="M1" /></bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
+    <bpmn:endEvent id="End" /><bpmn:boundaryEvent id="B" attachedToRef="T" cancelActivity="false"><bpmn:timerEventDefinition id="TD"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:boundaryEvent><bpmn:task id="T" />
+  </bpmn:process>
+</bpmn:definitions>

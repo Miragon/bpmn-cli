@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:error id="Err" name="Err" errorCode="E" camunda:errorMessage="m" />
+
+  <bpmn:process id="P_Test" isExecutable="true" camunda:historyTimeToLive="180" camunda:versionTag="1.0" camunda:candidateStarterGroups="g" camunda:isStartableInTasklist="true">
+    <bpmn:extensionElements><camunda:executionListener event="end" expression="${true}" /><camunda:potentialStarter><bpmn:resourceAssignmentExpression><bpmn:formalExpression>group(a)</bpmn:formalExpression></bpmn:resourceAssignmentExpression></camunda:potentialStarter></bpmn:extensionElements>
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:serviceTask id="X" camunda:type="external" camunda:topic="charge" camunda:taskPriority="5" camunda:asyncBefore="true" camunda:jobPriority="${prio}"><bpmn:extensionElements><camunda:inputOutput><camunda:inputParameter name="l"><camunda:list><camunda:value>a</camunda:value></camunda:list></camunda:inputParameter><camunda:inputParameter name="m"><camunda:map><camunda:entry key="k">v</camunda:entry></camunda:map></camunda:inputParameter><camunda:inputParameter name="s"><camunda:script scriptFormat="groovy">1</camunda:script></camunda:inputParameter><camunda:outputParameter name="o">${x}</camunda:outputParameter></camunda:inputOutput><camunda:executionListener event="start"><camunda:script scriptFormat="groovy">1</camunda:script></camunda:executionListener><camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:properties><camunda:property name="p" value="1" /></camunda:properties><camunda:errorEventDefinition id="CE" errorRef="Err" expression="${true}" /></bpmn:extensionElements></bpmn:serviceTask>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
+    <bpmn:endEvent id="End" />
+    <bpmn:userTask id="U" camunda:assignee="demo" camunda:candidateGroups="g" camunda:formRef="f" camunda:formRefBinding="latest" camunda:priority="${p}"><bpmn:extensionElements><camunda:taskListener event="create" expression="${true}"><camunda:field name="f" stringValue="v" /></camunda:taskListener></bpmn:extensionElements><bpmn:multiInstanceLoopCharacteristics camunda:collection="${items}" camunda:elementVariable="item" /></bpmn:userTask>
+    <bpmn:callActivity id="C" calledElement="Other" camunda:calledElementBinding="latest"><bpmn:extensionElements><camunda:in variables="all" /><camunda:out source="a" target="b" /><camunda:in businessKey="${k}" /></bpmn:extensionElements></bpmn:callActivity>
+    <bpmn:businessRuleTask id="R" camunda:decisionRef="d" camunda:resultVariable="r" camunda:mapDecisionResult="singleResult" />
+    <bpmn:scriptTask id="Sc" scriptFormat="groovy" camunda:resultVariable="r"><bpmn:script>1</bpmn:script></bpmn:scriptTask>
+  </bpmn:process>
+</bpmn:definitions>

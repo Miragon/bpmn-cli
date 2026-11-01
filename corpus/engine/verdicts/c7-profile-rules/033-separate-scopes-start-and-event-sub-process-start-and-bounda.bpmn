@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:signal id="Sig" name="Go" /><bpmn:signal id="Sig2" name="Go2" /><bpmn:message id="M" name="Pay" /><bpmn:message id="M2" name="Pay2" /><bpmn:message id="M3" name="Pay" />
+  <bpmn:process id="P_FollowUp" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start"><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:startEvent>
+<bpmn:receiveTask id="T" messageRef="M"><bpmn:multiInstanceLoopCharacteristics><bpmn:loopCardinality>2</bpmn:loopCardinality></bpmn:multiInstanceLoopCharacteristics></bpmn:receiveTask>
+<bpmn:userTask id="U"></bpmn:userTask>
+<bpmn:endEvent id="End" />
+<bpmn:sequenceFlow id="F0" sourceRef="Start" targetRef="T" />
+<bpmn:sequenceFlow id="F1" sourceRef="T" targetRef="U" />
+<bpmn:sequenceFlow id="F2" sourceRef="U" targetRef="End" />
+<bpmn:boundaryEvent id="B1" attachedToRef="T" ><bpmn:messageEventDefinition messageRef="M" /></bpmn:boundaryEvent><bpmn:sequenceFlow id="F_B1" sourceRef="B1" targetRef="End_B1" /><bpmn:endEvent id="End_B1" /><bpmn:boundaryEvent id="B2" attachedToRef="U" ><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:boundaryEvent><bpmn:sequenceFlow id="F_B2" sourceRef="B2" targetRef="End_B2" /><bpmn:endEvent id="End_B2" /><bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="ES_S" isInterrupting="false"><bpmn:signalEventDefinition signalRef="Sig" /></bpmn:startEvent><bpmn:sequenceFlow id="ES_F" sourceRef="ES_S" targetRef="ES_E" /><bpmn:endEvent id="ES_E" /></bpmn:subProcess>
+  </bpmn:process>
+</bpmn:definitions>

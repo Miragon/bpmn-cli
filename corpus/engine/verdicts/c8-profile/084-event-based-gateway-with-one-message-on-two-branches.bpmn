@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="M1" name="M1"><bpmn:extensionElements><zeebe:subscription correlationKey="=orderId" /></bpmn:extensionElements></bpmn:message>
+
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start"><bpmn:outgoing>F1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="G" />
+    <bpmn:eventBasedGateway id="G"><bpmn:incoming>F1</bpmn:incoming><bpmn:outgoing>G0</bpmn:outgoing><bpmn:outgoing>G1</bpmn:outgoing><bpmn:outgoing>G2</bpmn:outgoing></bpmn:eventBasedGateway>
+    <bpmn:sequenceFlow id="G0" sourceRef="G" targetRef="T0" />
+    <bpmn:intermediateCatchEvent id="T0"><bpmn:incoming>G0</bpmn:incoming><bpmn:outgoing>E0</bpmn:outgoing><bpmn:messageEventDefinition messageRef="M1" /></bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="E0" sourceRef="T0" targetRef="End0" />
+    <bpmn:endEvent id="End0"><bpmn:incoming>E0</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="G1" sourceRef="G" targetRef="T1" />
+    <bpmn:intermediateCatchEvent id="T1"><bpmn:incoming>G1</bpmn:incoming><bpmn:outgoing>E1</bpmn:outgoing><bpmn:messageEventDefinition messageRef="M1" /></bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="E1" sourceRef="T1" targetRef="End1" />
+    <bpmn:endEvent id="End1"><bpmn:incoming>E1</bpmn:incoming></bpmn:endEvent>
+    <bpmn:sequenceFlow id="G2" sourceRef="G" targetRef="T2" />
+    <bpmn:intermediateCatchEvent id="T2"><bpmn:incoming>G2</bpmn:incoming><bpmn:outgoing>E2</bpmn:outgoing><bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="E2" sourceRef="T2" targetRef="End2" />
+    <bpmn:endEvent id="End2"><bpmn:incoming>E2</bpmn:incoming></bpmn:endEvent>
+
+  </bpmn:process>
+</bpmn:definitions>

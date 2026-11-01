@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:error id="Err" name="Err" />
+
+  <bpmn:process id="P_Test" isExecutable="true" camunda:historyTimeToLive="180">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:userTask id="X" />
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
+    <bpmn:endEvent id="End" />
+    <bpmn:boundaryEvent id="B" attachedToRef="X"><bpmn:errorEventDefinition errorRef="Err" /></bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="End2" />
+    <bpmn:endEvent id="End2" />
+  </bpmn:process>
+</bpmn:definitions>

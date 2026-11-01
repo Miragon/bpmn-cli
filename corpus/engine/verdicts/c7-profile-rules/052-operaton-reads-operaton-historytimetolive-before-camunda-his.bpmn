@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:operaton="http://operaton.org/schema/1.0/bpmn" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_FollowUp" isExecutable="true" camunda:historyTimeToLive="180" operaton:historyTimeToLive="abc">
+<bpmn:startEvent id="Start" />
+<bpmn:userTask id="T"></bpmn:userTask>
+<bpmn:endEvent id="End" />
+<bpmn:sequenceFlow id="F0" sourceRef="Start" targetRef="T" />
+<bpmn:sequenceFlow id="F1" sourceRef="T" targetRef="End" />
+
+  </bpmn:process>
+</bpmn:definitions>

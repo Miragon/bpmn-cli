@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:message id="M1" name="Paid"><bpmn:extensionElements><zeebe:subscription correlationKey="=orderId" /></bpmn:extensionElements></bpmn:message>
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:receiveTask id="X" messageRef="M1" />
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="G" /><bpmn:exclusiveGateway id="G" default="F4" /><bpmn:sequenceFlow id="F3" sourceRef="G" targetRef="End"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= ok and amount = "big"</bpmn:conditionExpression></bpmn:sequenceFlow><bpmn:sequenceFlow id="F4" sourceRef="G" targetRef="End" />
+    <bpmn:endEvent id="End" />
+  </bpmn:process>
+</bpmn:definitions>
