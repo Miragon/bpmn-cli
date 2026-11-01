@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, ElementSlots, Kinds, type NestedSlot } from '../../model/index.js';
+import { type BpmnElement, BpmnError, ElementSlots, Kinds, type NestedSlot, type SlotRef } from '../../model/index.js';
 import type { ExtOperation } from '../../operations/index.js';
 import { NestedResolution } from '../properties/NestedResolution.js';
 import type { EditSession } from '../session/EditSession.js';
@@ -60,44 +60,62 @@ export class NestedHosts {
     if (slotText === undefined) {
       return { host: owner, command };
     }
+    const ref = NestedHosts.slotRefOf(owner, slotText);
+    const what = split?.rest ?? (command.index !== undefined ? String(command.index) : (command.type ?? '<type>'));
+    const id = owner.id;
+    const resolved = new NestedResolution(owner, ref, `${ref.text}.${what}`, (prefix) => `bpmn ext ${command.action} <file> ${id} '${prefix}.${what}'${command.action === 'add' ? ' ...' : ''}`).resolve();
+    const nested = resolved ?? this.createZeebeLoop(edit, owner, ref.slot, command, split?.rest, notes);
+    if (!nested) {
+      NestedHosts.failMissing(edit, owner, ref.slot, command);
+    }
+    this.nested.set(nested, { owner, slot: ref.slot, prefix: ref.text });
+    const { slot: _slot, ...rest } = command;
+    return { host: nested, command: { ...rest, ...(split ? { type: split.rest } : {}) } };
+  }
+
+  private static slotRefOf(owner: BpmnElement, slotText: string): SlotRef {
     const id = owner.id;
     const ref = ElementSlots.parseRef(slotText);
     if (!ref) {
       throw BpmnError.usage(`Unknown slot "${String(slotText)}"; use ${ElementSlots.NAMES.join(', ')}`, { element: id });
     }
-    const slot = ref.slot;
+    const { slot } = ref;
     if (!ElementSlots.slotsOf(owner).includes(slot)) {
       throw BpmnError.model('E_WRONG_KIND', `${Kinds.label(owner)} ${id} has no ${ElementSlots.TEXT[slot]} (${slot}.)`, {
         element: id,
         hint: 'definition. addresses the event definition of an event, loop. the loop characteristics of an activity, condition. the condition expression of a sequence flow or conditional event.',
       });
     }
-    const what = split?.rest ?? (command.index !== undefined ? String(command.index) : (command.type ?? '<type>'));
-    let nested = NestedResolution.resolve(owner, ref, `${ref.text}.${what}`, (prefix) => `bpmn ext ${command.action} <file> ${id} '${prefix}.${what}'${command.action === 'add' ? ' ...' : ''}`);
-    const zeebeLoop = (command.type !== undefined && new VendorElements(edit.document, this).canonicalName(split?.rest ?? command.type) === 'zeebe:loopCharacteristics') || (command.xml !== undefined && /^\s*<[\w.-]+:loopCharacteristics[\s/>]/.test(command.xml) && command.type === undefined);
-    if (!nested && command.action === 'add' && slot === 'loop' && zeebeLoop && !owner.get<BpmnElement | undefined>('loopCharacteristics')) {
-      nested = edit.document.tree.build('bpmn:MultiInstanceLoopCharacteristics');
-      nested.parent = owner;
-      owner.set('loopCharacteristics', nested);
-      notes.push(`${id}: created a parallel multi-instance loop for loop.${split?.rest ?? 'zeebe:loopCharacteristics'} (\`bpmn set <file> ${id} loop=sequential\` runs the items one after the other)`);
+    return ref;
+  }
+
+  private createZeebeLoop(edit: EditSession, owner: BpmnElement, slot: NestedSlot, command: ExtOperation, rest: string | undefined, notes: string[]): BpmnElement | undefined {
+    const zeebeLoop = (command.type !== undefined && new VendorElements(edit.document, this).canonicalName(rest ?? command.type) === 'zeebe:loopCharacteristics') || (command.xml !== undefined && /^\s*<[\w.-]+:loopCharacteristics[\s/>]/.test(command.xml) && command.type === undefined);
+    if (command.action !== 'add' || slot !== 'loop' || !zeebeLoop || owner.get<BpmnElement | undefined>('loopCharacteristics')) {
+      return undefined;
     }
-    if (!nested) {
-      const first: Record<NestedSlot, string> = {
-        definition: `give it a trigger first: \`bpmn set <file> ${id} trigger=<message|timer|error|signal|...>\``,
-        loop:
-          edit.platform() === 'c8'
-            ? `make it a multi-instance first: \`bpmn ext add <file> ${id} loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>\` (creates a parallel loop; \`bpmn set <file> ${id} loop=sequential\` for one after the other)`
-            : `make it a loop first: \`bpmn set <file> ${id} loop=parallel\` (or sequential, or 'loop.camunda:collection=\${items}')`,
-        condition: `give it a condition first: \`bpmn set <file> ${id} 'condition=\${...}'\` (conditional events: when=)`,
-      };
-      throw BpmnError.model(command.action === 'remove' ? 'E_NO_EXTENSION' : 'E_NO_NESTED_ELEMENT', `${Kinds.label(owner)} ${id} has no ${ElementSlots.TEXT[slot]}${command.action === 'remove' ? ', so no extension elements there' : ' to hold extension elements'}`, {
-        element: id,
-        hint: command.action === 'remove' ? 'Nothing to remove; `bpmn ext list <file> <id>` shows what is there.' : `${first[slot][0]!.toUpperCase()}${first[slot].slice(1)}.`,
-      });
-    }
-    this.nested.set(nested, { owner, slot, prefix: ref.text });
-    const { slot: _slot, ...rest } = command;
-    return { host: nested, command: { ...rest, ...(split ? { type: split.rest } : {}) } };
+    const id = owner.id;
+    const nested = edit.document.tree.build('bpmn:MultiInstanceLoopCharacteristics');
+    nested.parent = owner;
+    owner.set('loopCharacteristics', nested);
+    notes.push(`${id}: created a parallel multi-instance loop for loop.${rest ?? 'zeebe:loopCharacteristics'} (\`bpmn set <file> ${id} loop=sequential\` runs the items one after the other)`);
+    return nested;
+  }
+
+  private static failMissing(edit: EditSession, owner: BpmnElement, slot: NestedSlot, command: ExtOperation): never {
+    const id = owner.id;
+    const first: Record<NestedSlot, string> = {
+      definition: `give it a trigger first: \`bpmn set <file> ${id} trigger=<message|timer|error|signal|...>\``,
+      loop:
+        edit.platform() === 'c8'
+          ? `make it a multi-instance first: \`bpmn ext add <file> ${id} loop.zeebe:loopCharacteristics inputCollection==<items> inputElement=<item>\` (creates a parallel loop; \`bpmn set <file> ${id} loop=sequential\` for one after the other)`
+          : `make it a loop first: \`bpmn set <file> ${id} loop=parallel\` (or sequential, or 'loop.camunda:collection=\${items}')`,
+      condition: `give it a condition first: \`bpmn set <file> ${id} 'condition=\${...}'\` (conditional events: when=)`,
+    };
+    throw BpmnError.model(command.action === 'remove' ? 'E_NO_EXTENSION' : 'E_NO_NESTED_ELEMENT', `${Kinds.label(owner)} ${id} has no ${ElementSlots.TEXT[slot]}${command.action === 'remove' ? ', so no extension elements there' : ' to hold extension elements'}`, {
+      element: id,
+      hint: command.action === 'remove' ? 'Nothing to remove; `bpmn ext list <file> <id>` shows what is there.' : `${first[slot][0]!.toUpperCase()}${first[slot].slice(1)}.`,
+    });
   }
 
   private indexRef(text: string): { slot?: string; index: number } | undefined {

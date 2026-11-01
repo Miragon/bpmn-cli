@@ -1,17 +1,19 @@
 export class VendorFamily {
-  static ruleName(type: string): string {
-    return type.startsWith('operaton:') ? `camunda:${type.slice('operaton:'.length)}` : type;
+  constructor(private readonly type: string) {}
+
+  ruleName(): string {
+    return this.type.startsWith('operaton:') ? `camunda:${this.type.slice('operaton:'.length)}` : this.type;
   }
 
-  static inFamily(type: string, like: string): string {
-    return like.startsWith('operaton:') && type.startsWith('camunda:') ? `operaton:${type.slice('camunda:'.length)}` : type;
+  spell(type: string): string {
+    return this.type.startsWith('operaton:') && type.startsWith('camunda:') ? `operaton:${type.slice('camunda:'.length)}` : type;
   }
 
-  static isCamunda(type: string): boolean {
-    return VendorFamily.ruleName(type).startsWith('camunda:');
+  isCamunda(): boolean {
+    return this.ruleName().startsWith('camunda:');
   }
 
-  static familyPath(path: string, like: string): string {
-    return like.startsWith('operaton:') ? path.replace(/(^|[/'])camunda:/g, '$1operaton:') : path;
+  spellPath(path: string): string {
+    return this.type.startsWith('operaton:') ? path.replace(/(^|[/'])camunda:/g, '$1operaton:') : path;
   }
 }

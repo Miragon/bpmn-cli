@@ -20,7 +20,7 @@ export class ConnectionKinds {
   }
 
   private static existingAssociation(source: BpmnElement, target: BpmnElement): BpmnElement | undefined {
-    const containers = [ElementContainment.artifactContainerOf(source), ElementContainment.artifactContainerOf(target)];
+    const containers = [new ElementContainment(source).artifactContainer(), new ElementContainment(target).artifactContainer()];
     for (const container of containers) {
       const hit = container?.list('artifacts').find((artifact) => ConnectionKinds.associates(artifact, source, target));
       if (hit) {
@@ -31,7 +31,7 @@ export class ConnectionKinds {
   }
 
   private static existingDataAssociation(source: BpmnElement, target: BpmnElement): BpmnElement | undefined {
-    if (ElementContainment.isDataReference(source)) {
+    if (new ElementContainment(source).isDataReference()) {
       return target.list('dataInputAssociations').find((association) => association.list('sourceRef').includes(source));
     }
     return source.list('dataOutputAssociations').find((association) => association.get<BpmnElement | undefined>('targetRef') === target);
@@ -41,7 +41,7 @@ export class ConnectionKinds {
     if (source.is('bpmn:TextAnnotation') || target.is('bpmn:TextAnnotation')) {
       return 'association';
     }
-    if (ElementContainment.isDataReference(source) || ElementContainment.isDataReference(target)) {
+    if (new ElementContainment(source).isDataReference() || new ElementContainment(target).isDataReference()) {
       return 'dataAssociation';
     }
     if (source.is('bpmn:Participant') || target.is('bpmn:Participant')) {
@@ -57,7 +57,7 @@ export class ConnectionKinds {
     });
   }
 
-  existing(kind: ConnectionKind, source: BpmnElement, target: BpmnElement): BpmnElement | undefined {
+  existingConnection(kind: ConnectionKind, source: BpmnElement, target: BpmnElement): BpmnElement | undefined {
     switch (kind) {
       case 'sequenceFlow':
         return this.edit.document.flows.outgoing(source).find((flow) => flow.get<BpmnElement | undefined>('targetRef') === target);

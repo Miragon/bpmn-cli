@@ -38,7 +38,7 @@ export class FlowIdFollower {
       document.tree.invalidate();
       return '';
     }
-    if (!document.followFlowEnds || !this.namesEnds(old, oldSource, oldTarget)) {
+    if (!this.namesEnds(old, oldSource, oldTarget)) {
       return undefined;
     }
     const oldIds = [oldSource.id, oldTarget.id] as const;
@@ -48,7 +48,7 @@ export class FlowIdFollower {
       return undefined;
     }
     flow.set('id', id);
-    this.edit.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
+    this.edit.journal.recordRename(old, id, `${oldIds[0]} -> ${oldIds[1]}`, flow);
     this.followEdgeId(flow, old, id);
     return old;
   }
@@ -82,7 +82,7 @@ export class FlowIdFollower {
       return;
     }
     flow.set('id', id);
-    this.edit.recordRegenerated(old, id, was, flow);
+    this.edit.journal.recordRegenerated(old, id, was, flow);
     this.followEdgeId(flow, old, id);
   }
 

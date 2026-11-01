@@ -39,7 +39,7 @@ export class ModelOperationRunner {
     this.context = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => this.table.toRecord() };
   }
 
-  private static named(index: number, run: () => void): void {
+  private static runNamed(index: number, run: () => void): void {
     try {
       run();
     } catch (error) {
@@ -54,10 +54,10 @@ export class ModelOperationRunner {
     const all = new ChangeSet();
     const resolved = [...model];
     this.edit.begin();
-    this.inBatch(() => {
+    this.runInBatch(() => {
       model.forEach((operation, index) => {
-        ModelOperationRunner.named(index, () => {
-          resolved[index] = this.resolved(operation, index) as ModelOperation;
+        ModelOperationRunner.runNamed(index, () => {
+          resolved[index] = this.resolveAliases(operation, index) as ModelOperation;
           this.record(this.step(resolved[index]), all, index);
         });
       });
@@ -73,16 +73,16 @@ export class ModelOperationRunner {
     return { changes: all, model: resolved, drawing: resolvedDrawing, aliases: this.table.toRecord() };
   }
 
-  private resolved(operation: Operation, index: number): Operation {
+  private resolveAliases(operation: Operation, index: number): Operation {
     return new OperationAliases(operation).resolve((alias, key) => this.table.idOf(alias, index, operation, key));
   }
 
   private resolveDrawing(drawing: readonly DrawingOperation[], first: number): DrawingOperation[] {
     const resolved = [...drawing];
-    this.inBatch(() => {
+    this.runInBatch(() => {
       drawing.forEach((operation, position) => {
-        ModelOperationRunner.named(first + position, () => {
-          resolved[position] = this.resolved(operation, first + position) as DrawingOperation;
+        ModelOperationRunner.runNamed(first + position, () => {
+          resolved[position] = this.resolveAliases(operation, first + position) as DrawingOperation;
           for (const id of new OperationAliases(resolved[position]).referencedIds()) {
             this.edit.require(id);
           }
@@ -117,7 +117,7 @@ export class ModelOperationRunner {
     }
   }
 
-  private inBatch(run: () => void): void {
+  private runInBatch(run: () => void): void {
     this.edit.batch = this.context;
     try {
       run();
@@ -129,7 +129,7 @@ export class ModelOperationRunner {
   private step(operation: ModelOperation): ChangeSet {
     const changes = this.dispatch(operation);
     this.edit.allocator.reportSuffixed(changes);
-    changes.rename(this.edit.takeRenames());
+    changes.rename(this.edit.journal.takeRenames());
     return changes;
   }
 
@@ -174,7 +174,7 @@ export class ModelOperationRunner {
   }
 
   private refuseDroppedContent(): void {
-    const drops = this.edit.droppedContent;
+    const drops = this.edit.journal.droppedContent;
     const first = drops[0];
     if (!first) {
       return;

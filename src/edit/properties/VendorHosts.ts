@@ -2,6 +2,13 @@ import { type BpmnElement, BpmnError, CAMUNDA, ElementSlots, Kinds, type NestedS
 import type { EditSession } from '../session/EditSession.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 
+interface VendorPlace {
+  slot?: NestedSlot;
+  prefix?: string;
+  trigger?: Exclude<Trigger, 'none'>;
+  element?: BpmnElement;
+}
+
 export class VendorHosts {
   constructor(private readonly edit: EditSession) {}
 
@@ -10,25 +17,10 @@ export class VendorHosts {
     return /^[\w.:/,-]*$/.test(value) && /^[\w.:-]*$/.test(key) ? pair : `'${pair.replace(/'/g, "'\\''")}'`;
   }
 
-  private static placeFor(el: BpmnElement, name: string): { slot?: NestedSlot; prefix?: string; trigger?: Exclude<Trigger, 'none'>; element?: BpmnElement } | undefined {
-    if (el.is('bpmn:Event')) {
-      const defs = ElementSlots.definitionsOf(el);
-      const fit = defs.findIndex((definition) => CAMUNDA.attrAppliesTo(name, definition));
-      if (fit !== -1) {
-        return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
-      }
-      if (ElementSlots.slotsOf(el).includes('condition') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) {
-        return { slot: 'condition' };
-      }
-      const current = Triggers.of(el);
-      for (const trigger of Kinds.of(el)?.triggers ?? []) {
-        if (trigger === 'none' || trigger === current) {
-          continue;
-        }
-        if (CAMUNDA.attrAppliesTo(name, Triggers.TABLE[trigger].definition)) {
-          return { slot: 'definition', trigger };
-        }
-      }
+  private static placeFor(el: BpmnElement, name: string): VendorPlace | undefined {
+    const onEvent = el.is('bpmn:Event') ? VendorHosts.eventPlaceFor(el, name) : undefined;
+    if (onEvent) {
+      return onEvent;
     }
     if (el.is('bpmn:Activity') && CAMUNDA.attrAppliesTo(name, 'bpmn:MultiInstanceLoopCharacteristics')) {
       return { slot: 'loop' };
@@ -40,6 +32,24 @@ export class VendorHosts {
       const process = el.get<BpmnElement | undefined>('processRef');
       if (process && CAMUNDA.attrAppliesTo(name, process)) {
         return { element: process };
+      }
+    }
+    return undefined;
+  }
+
+  private static eventPlaceFor(el: BpmnElement, name: string): VendorPlace | undefined {
+    const defs = ElementSlots.definitionsOf(el);
+    const fit = defs.findIndex((definition) => CAMUNDA.attrAppliesTo(name, definition));
+    if (fit !== -1) {
+      return { slot: 'definition', prefix: defs.length > 1 ? `definition[${fit}]` : 'definition' };
+    }
+    if (ElementSlots.slotsOf(el).includes('condition') && CAMUNDA.attrAppliesTo(name, 'bpmn:FormalExpression')) {
+      return { slot: 'condition' };
+    }
+    const current = Triggers.of(el);
+    for (const trigger of Kinds.of(el)?.triggers ?? []) {
+      if (trigger !== 'none' && trigger !== current && CAMUNDA.attrAppliesTo(name, Triggers.TABLE[trigger].definition)) {
+        return { slot: 'definition', trigger };
       }
     }
     return undefined;
@@ -82,9 +92,6 @@ export class VendorHosts {
     if (ZEEBE.attr(local)) {
       return;
     }
-    const prefix = key.slice(0, idx);
-    const id = el.id;
-    const pair = VendorHosts.shellPair(local, value);
     const owners = ZEEBE.typeNames().filter((typeName) => ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
     const here = owners.filter((typeName) => ZEEBE.allowedOn(typeName, el) === true);
     const loop = el.is('bpmn:Activity') && owners.includes('zeebe:loopCharacteristics');
@@ -93,17 +100,23 @@ export class VendorHosts {
       return;
     }
     const target = here[0] ?? (loop ? 'zeebe:loopCharacteristics' : 'zeebe:subscription');
-    const type = `${prefix}:${target.slice('zeebe:'.length)}`;
-    const command = here.length
-      ? `\`bpmn ext add <file> ${id} ${type} ${pair}\``
-      : loop
-        ? `\`bpmn ext add <file> ${id} loop.${type} ${pair}\` (creates a parallel multi-instance loop when there is none)`
-        : el.is('bpmn:ReceiveTask') || ElementSlots.definitionsOf(el).some((definition) => definition.is('bpmn:MessageEventDefinition'))
-          ? `\`bpmn set <file> ${id} message=<MessageName>\` first (the correlation key belongs to the message the element waits for), then \`bpmn set <file> ${id} ${VendorHosts.shellPair(key, value)}\``
-          : `\`bpmn ext add <file> <messageId> ${type} ${pair}\` on a bpmn:Message (${Kinds.label(el)} ${id} waits for no message)`;
-    throw BpmnError.model('E_WRONG_HOST', `${key} is not an attribute of ${Kinds.label(el)} ${id}: Camunda 8 reads ${local} on the ${type} extension element`, {
-      element: id,
+    const type = `${key.slice(0, idx)}:${target.slice('zeebe:'.length)}`;
+    const pair = VendorHosts.shellPair(local, value);
+    const command = here.length ? `\`bpmn ext add <file> ${el.id} ${type} ${pair}\`` : VendorHosts.elsewhereCommand(el, key, value, type, pair, loop);
+    throw BpmnError.model('E_WRONG_HOST', `${key} is not an attribute of ${Kinds.label(el)} ${el.id}: Camunda 8 reads ${local} on the ${type} extension element`, {
+      element: el.id,
       hint: `Use ${command}.`,
     });
+  }
+
+  private static elsewhereCommand(el: BpmnElement, key: string, value: string, type: string, pair: string, loop: boolean): string {
+    const id = el.id;
+    if (loop) {
+      return `\`bpmn ext add <file> ${id} loop.${type} ${pair}\` (creates a parallel multi-instance loop when there is none)`;
+    }
+    if (el.is('bpmn:ReceiveTask') || ElementSlots.definitionsOf(el).some((definition) => definition.is('bpmn:MessageEventDefinition'))) {
+      return `\`bpmn set <file> ${id} message=<MessageName>\` first (the correlation key belongs to the message the element waits for), then \`bpmn set <file> ${id} ${VendorHosts.shellPair(key, value)}\``;
+    }
+    return `\`bpmn ext add <file> <messageId> ${type} ${pair}\` on a bpmn:Message (${Kinds.label(el)} ${id} waits for no message)`;
   }
 }

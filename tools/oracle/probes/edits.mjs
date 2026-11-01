@@ -5,6 +5,7 @@ import { CORPUS_DIR } from '../lib/paths.mjs';
 
 const WALKS = join(CORPUS_DIR, 'walks');
 const NAMESPACES_OF_THE_DRAWING = /^xmlns:(bioc|color|bpmndi|dc|di)=/;
+const DRAWING_OPERATIONS = new Set(['place', 'align', 'color', 'label', 'route', 'space', 'tidy', 'compact', 'layout']);
 const ENTITIES = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&apos;': "'", '&#10;': '\n', '&#xA;': '\n', '&#xa;': '\n' };
 
 function decoded(text) {
@@ -95,8 +96,13 @@ function walkFiles(folder) {
 
 function walkInputs() {
   return walkFiles(WALKS).flatMap((path) => {
-    const { steps = [] } = JSON.parse(readFileSync(path, 'utf8'));
-    return steps.map(({ ops, before, xml }, index) => ({ id: `${path.slice(WALKS.length + 1)}#${index}`, ops, xml: before ?? xml }));
+    const { model, start, steps = [] } = JSON.parse(readFileSync(path, 'utf8'));
+    let before = start ?? readCorpus(model);
+    return steps.map(({ ops, after }, index) => {
+      const input = { id: `${path.slice(WALKS.length + 1)}#${index}`, ops, xml: before };
+      before = after ?? before;
+      return input;
+    });
   });
 }
 
@@ -107,7 +113,8 @@ export default {
   },
   async compare({ id, model, ops, xml }, { main, subject }) {
     const original = xml ?? readCorpus(model);
-    const [mainResult, subjectResult] = [await main.semanticEdit(original, ops), await subject.semanticEdit(original, ops)];
+    const modelOps = ops.filter(({ op }) => !DRAWING_OPERATIONS.has(op));
+    const [mainResult, subjectResult] = [await main.semanticEdit(original, modelOps), await subject.semanticEdit(original, modelOps)];
     return { differences: differencesOf(id, mainResult, subjectResult), measures: { refused: mainResult.refused ? 1 : 0 } };
   },
   conclude(measures) {

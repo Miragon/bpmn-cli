@@ -2,9 +2,9 @@ import { type BpmnElement, BpmnError, type ChangeSet, ElementLabels, IdRequests,
 import { ElementContainment } from '../containers/ElementContainment.js';
 import type { EditSession } from '../session/EditSession.js';
 
-export const PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
-
 export class Associations {
+  private static readonly PLACEHOLDER_PROPERTY = '__targetRef_placeholder';
+
   constructor(private readonly edit: EditSession) {}
 
   createAssociation(source: BpmnElement, target: BpmnElement, opts: { id?: string }, changes: ChangeSet): BpmnElement {
@@ -27,11 +27,11 @@ export class Associations {
       });
     }
     const note = sourceIsNote ? source : target;
-    const container = ElementContainment.artifactContainerOf(note) ?? ElementContainment.artifactContainerOf(sourceIsNote ? target : source);
+    const container = new ElementContainment(note).artifactContainer() ?? new ElementContainment(sourceIsNote ? target : source).artifactContainer();
     if (!container) {
       throw BpmnError.model('E_INVALID_SCOPE', `Cannot find a process or collaboration to hold the association of ${note.id}`, { element: note.id });
     }
-    const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:Association', { context: Associations.between(source, target) }));
+    const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:Association', { context: Associations.contextBetween(source, target) }));
     const association = document.tree.create('bpmn:Association', {
       id,
       sourceRef: source,
@@ -50,8 +50,8 @@ export class Associations {
 
   createDataAssociation(source: BpmnElement, target: BpmnElement, opts: { id?: string }, changes: ChangeSet): BpmnElement {
     const document = this.edit.document;
-    const sourceIsData = ElementContainment.isDataReference(source);
-    const targetIsData = ElementContainment.isDataReference(target);
+    const sourceIsData = new ElementContainment(source).isDataReference();
+    const targetIsData = new ElementContainment(target).isDataReference();
     if (sourceIsData === targetIsData) {
       throw BpmnError.model('E_INVALID_ENDPOINT', `A data association needs a data object/store on exactly one side (${source.id} -> ${target.id})`, {
         element: source.id,
@@ -61,12 +61,12 @@ export class Associations {
     let association: BpmnElement;
     if (sourceIsData) {
       Associations.assertDataNode(target, 'input', source);
-      const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:DataInputAssociation', { context: Associations.between(source, target) }));
+      const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:DataInputAssociation', { context: Associations.contextBetween(source, target) }));
       association = document.tree.create('bpmn:DataInputAssociation', { id, sourceRef: [source], targetRef: this.placeholderProperty(target) });
       target.add('dataInputAssociations', association);
     } else {
       Associations.assertDataNode(source, 'output', target);
-      const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:DataOutputAssociation', { context: Associations.between(source, target) }));
+      const id = this.edit.allocator.explicitOr(opts.id, IdRequests.typeRequest('bpmn:DataOutputAssociation', { context: Associations.contextBetween(source, target) }));
       association = document.tree.create('bpmn:DataOutputAssociation', { id, targetRef: target });
       source.add('dataOutputAssociations', association);
     }
@@ -83,7 +83,7 @@ export class Associations {
         node.remove('dataInputAssociations', association);
         const property = association.get<BpmnElement | undefined>('targetRef');
         const stillUsed = node.list('dataInputAssociations').some((inputAssociation) => inputAssociation.get<BpmnElement | undefined>('targetRef') === property);
-        if (property && !stillUsed && property.get<string | undefined>('name') === PLACEHOLDER_PROPERTY) {
+        if (property && !stillUsed && property.get<string | undefined>('name') === Associations.PLACEHOLDER_PROPERTY) {
           node.remove('properties', property);
           document.ids.registry.release(property.id);
         }
@@ -95,7 +95,7 @@ export class Associations {
     document.tree.invalidate();
   }
 
-  private static between(source: BpmnElement, target: BpmnElement): string {
+  private static contextBetween(source: BpmnElement, target: BpmnElement): string {
     return `${new ElementLabels(source).label()} To ${new ElementLabels(target).label()}`;
   }
 
@@ -104,11 +104,11 @@ export class Associations {
   }
 
   private placeholderProperty(node: BpmnElement): BpmnElement {
-    const existing = node.list('properties').find((candidate) => candidate.get<string | undefined>('name') === PLACEHOLDER_PROPERTY);
+    const existing = node.list('properties').find((candidate) => candidate.get<string | undefined>('name') === Associations.PLACEHOLDER_PROPERTY);
     if (existing) {
       return existing;
     }
-    const property = this.edit.document.tree.create('bpmn:Property', { id: this.edit.allocator.allocate(IdRequests.typeRequest('bpmn:Property', { context: new ElementLabels(node).label() })).id, name: PLACEHOLDER_PROPERTY });
+    const property = this.edit.document.tree.create('bpmn:Property', { id: this.edit.allocator.allocate(IdRequests.typeRequest('bpmn:Property', { context: new ElementLabels(node).label() })).id, name: Associations.PLACEHOLDER_PROPERTY });
     node.add('properties', property);
     return property;
   }

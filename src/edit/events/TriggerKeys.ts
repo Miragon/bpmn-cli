@@ -27,7 +27,7 @@ export class TriggerKeys {
     const options: Record<string, unknown> = {};
     for (const key of TriggerKeys.ALL) {
       if (keys[key] !== undefined) {
-        options[key] = key === 'nonInterrupting' ? PropertyCoercer.bool(element, key, keys[key]) : keys[key];
+        options[key] = key === 'nonInterrupting' ? PropertyCoercer.booleanOf(element, key, keys[key]) : keys[key];
       }
     }
     return options as TriggerOptions;
@@ -37,7 +37,7 @@ export class TriggerKeys {
     return TriggerKeys.pick(keys, (key) => TriggerKeys.ALL.includes(key));
   }
 
-  static without(keys: ElementKeys, consumed: readonly string[] = TriggerKeys.ALL): ElementKeys {
+  static remainingKeys(keys: ElementKeys, consumed: readonly string[] = TriggerKeys.ALL): ElementKeys {
     return TriggerKeys.pick(keys, (key) => !consumed.includes(key));
   }
 

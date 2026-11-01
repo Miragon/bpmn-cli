@@ -4,11 +4,11 @@ import type { EditSession } from '../session/EditSession.js';
 export class PropertyCoercer {
   constructor(private readonly edit: EditSession) {}
 
-  static invalid(el: BpmnElement, key: string, message: string, hint?: string) {
+  static invalidValue(el: BpmnElement, key: string, message: string, hint?: string) {
     return BpmnError.model('E_INVALID_VALUE', `Invalid value for ${key} on ${el.id}: ${message}`, { element: el.id, ...(hint ? { hint } : {}) });
   }
 
-  static bool(el: BpmnElement, key: string, value: string): boolean {
+  static booleanOf(el: BpmnElement, key: string, value: string): boolean {
     const normalized = value.trim().toLowerCase();
     if (['true', 'yes', '1', 'on'].includes(normalized)) {
       return true;
@@ -16,7 +16,7 @@ export class PropertyCoercer {
     if (['false', 'no', '0', 'off'].includes(normalized)) {
       return false;
     }
-    throw PropertyCoercer.invalid(el, key, `"${value}" is not a boolean`, `Use ${key}=true or ${key}=false.`);
+    throw PropertyCoercer.invalidValue(el, key, `"${value}" is not a boolean`, `Use ${key}=true or ${key}=false.`);
   }
 
   coerce(el: BpmnElement, property: PropertyDescriptor, value: string, label: string = property.name): unknown {
@@ -27,17 +27,17 @@ export class PropertyCoercer {
       case 'String':
         return value;
       case 'Boolean':
-        return PropertyCoercer.bool(el, label, value);
+        return PropertyCoercer.booleanOf(el, label, value);
       case 'Integer': {
         if (!/^-?\d+$/.test(value.trim())) {
-          throw PropertyCoercer.invalid(el, label, `"${value}" is not an integer`);
+          throw PropertyCoercer.invalidValue(el, label, `"${value}" is not an integer`);
         }
         return Number(value);
       }
       case 'Real': {
         const numeric = Number(value);
         if (!value.trim() || Number.isNaN(numeric)) {
-          throw PropertyCoercer.invalid(el, label, `"${value}" is not a number`);
+          throw PropertyCoercer.invalidValue(el, label, `"${value}" is not a number`);
         }
         return numeric;
       }
@@ -45,7 +45,7 @@ export class PropertyCoercer {
         const literals = PropertyCatalog.of(el).enumLiterals(property.type) ?? [];
         const hit = literals.find((literal) => literal.toLowerCase() === value.trim().toLowerCase());
         if (!hit) {
-          throw PropertyCoercer.invalid(el, label, `"${value}" is not one of ${literals.join('|')}`);
+          throw PropertyCoercer.invalidValue(el, label, `"${value}" is not one of ${literals.join('|')}`);
         }
         return hit;
       }
@@ -60,7 +60,7 @@ export class PropertyCoercer {
     if (!local || CAMUNDA.attr(local)?.type !== 'Boolean') {
       return value;
     }
-    return String(PropertyCoercer.bool(el, label, value));
+    return String(PropertyCoercer.booleanOf(el, label, value));
   }
 
   setVendorAttribute(el: BpmnElement, key: string, value: string): void {

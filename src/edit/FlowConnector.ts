@@ -24,7 +24,7 @@ export class FlowConnector {
       ...(name ? { name } : {}),
       ...(condition !== undefined ? { condition } : {}),
       ...(language ? { language } : {}),
-      ...(keys['default'] && PropertyCoercer.bool(flow, 'default', keys['default']) ? { isDefault: true } : {}),
+      ...(keys['default'] && PropertyCoercer.booleanOf(flow, 'default', keys['default']) ? { isDefault: true } : {}),
     };
   }
 
@@ -37,8 +37,8 @@ export class FlowConnector {
     this.assertNoIllegalSelfLoop(command, source, target, kind);
     const keys = command.set ?? {};
     FlowConnector.assertKeysFor(kind, source, keys);
-    const existing = kind === 'sequenceFlow' || kind === 'messageFlow' ? kinds.existing(kind, source, target) : undefined;
-    const same = command.ifAbsent ? (existing ?? kinds.existing(kind, source, target)) : undefined;
+    const existing = kind === 'sequenceFlow' || kind === 'messageFlow' ? kinds.existingConnection(kind, source, target) : undefined;
+    const same = command.ifAbsent ? (existing ?? kinds.existingConnection(kind, source, target)) : undefined;
     if (same) {
       changes.note(`${kind} ${same.id} ${command.source} -> ${command.target} already exists; nothing to do`);
       RootElements.bindRefAs(changes, command.refAs, same);
@@ -134,7 +134,7 @@ export class FlowConnector {
   }
 
   private writeOtherKeys(made: BpmnElement, keys: Readonly<Record<string, string>>, changes: ChangeSet): void {
-    const rest = TriggerKeys.without(keys, FlowConnector.CREATION_KEYS);
+    const rest = TriggerKeys.remainingKeys(keys, FlowConnector.CREATION_KEYS);
     if (Object.keys(rest).length) {
       changes.merge(new PropertyEditor(this.edit).set({ op: 'set', id: made.id, set: { ...rest } }));
     }

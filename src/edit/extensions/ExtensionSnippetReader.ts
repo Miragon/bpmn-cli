@@ -10,6 +10,13 @@ interface RawNode {
   text: string;
 }
 
+interface SnippetScan {
+  xml: string;
+  roots: RawNode[];
+  stack: RawNode[];
+  cursor: number;
+}
+
 export class ExtensionSnippetReader {
   constructor(
     private readonly names: VendorElements,
@@ -36,109 +43,118 @@ export class ExtensionSnippetReader {
   }
 
   private read(xml: string): RawNode[] {
-    const roots: RawNode[] = [];
-    const stack: RawNode[] = [];
-    const nameRe = /[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?/y;
-    const attrRe = /\s*([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
-    const wsRe = /\s*/y;
-    const push = (node: RawNode): void => {
-      const top = stack[stack.length - 1];
-      (top ? top.children : roots).push(node);
-    };
-    let cursor = 0;
-    while (cursor < xml.length) {
-      const lt = xml.indexOf('<', cursor);
-      const text = xml.slice(cursor, lt === -1 ? xml.length : lt);
-      const top = stack[stack.length - 1];
-      if (top) {
-        top.text += XmlTextReader.decode(text);
-      } else if (text.trim()) {
-        throw new SnippetError(`text "${text.trim().slice(0, 20)}" outside of an element`);
-      }
+    const scan: SnippetScan = { xml, roots: [], stack: [], cursor: 0 };
+    while (scan.cursor < xml.length) {
+      const lt = xml.indexOf('<', scan.cursor);
+      ExtensionSnippetReader.readText(scan, xml.slice(scan.cursor, lt === -1 ? xml.length : lt));
       if (lt === -1) {
         break;
       }
-      if (xml.startsWith('<!--', lt)) {
-        const end = xml.indexOf('-->', lt + 4);
-        if (end === -1) {
-          throw new SnippetError('unterminated comment');
-        }
-        cursor = end + 3;
-        continue;
-      }
-      if (xml.startsWith('<![CDATA[', lt)) {
-        const end = xml.indexOf(']]>', lt + 9);
-        if (end === -1) {
-          throw new SnippetError('unterminated CDATA section');
-        }
-        if (!top) {
-          throw new SnippetError('CDATA outside of an element');
-        }
-        top.text += xml.slice(lt + 9, end);
-        cursor = end + 3;
-        continue;
-      }
-      if (xml.startsWith('<?', lt)) {
-        const end = xml.indexOf('?>', lt + 2);
-        if (end === -1) {
-          throw new SnippetError('unterminated processing instruction');
-        }
-        cursor = end + 2;
-        continue;
-      }
-      if (xml.startsWith('<!', lt)) {
-        throw new SnippetError('declarations (<!DOCTYPE ...>) are not allowed in a snippet');
-      }
-      if (xml.startsWith('</', lt)) {
-        const end = xml.indexOf('>', lt);
-        if (end === -1) {
-          throw new SnippetError('unterminated closing tag');
-        }
-        const name = xml.slice(lt + 2, end).trim();
-        const open = stack.pop();
-        if (!open || open.name !== name) {
-          throw new SnippetError(`unexpected closing tag </${name}>${open ? `, expected </${open.name}>` : ''}`);
-        }
-        cursor = end + 1;
-        continue;
-      }
-      nameRe.lastIndex = lt + 1;
-      const nm = nameRe.exec(xml);
-      if (!nm || nm.index !== lt + 1) {
-        throw new SnippetError(`invalid tag at offset ${lt}`);
-      }
-      const node: RawNode = { name: nm[0], attrs: {}, children: [], text: '' };
-      let nameEnd = nameRe.lastIndex;
-      for (;;) {
-        attrRe.lastIndex = nameEnd;
-        const am = attrRe.exec(xml);
-        if (am && am.index === nameEnd) {
-          node.attrs[am[1]!] = XmlTextReader.decode(am[2] ?? am[3] ?? '');
-          nameEnd = attrRe.lastIndex;
-          continue;
-        }
-        wsRe.lastIndex = nameEnd;
-        wsRe.exec(xml);
-        nameEnd = wsRe.lastIndex;
-        if (xml.startsWith('/>', nameEnd)) {
-          push(node);
-          cursor = nameEnd + 2;
-          break;
-        }
-        if (xml[nameEnd] === '>') {
-          push(node);
-          stack.push(node);
-          cursor = nameEnd + 1;
-          break;
-        }
-        throw new SnippetError(`invalid attribute syntax in <${node.name}>`);
-      }
+      ExtensionSnippetReader.readMarkup(scan, lt);
     }
-    const open = stack[stack.length - 1];
+    const open = scan.stack[scan.stack.length - 1];
     if (open) {
       throw new SnippetError(`unclosed element <${open.name}>`);
     }
-    return roots;
+    return scan.roots;
+  }
+
+  private static readText(scan: SnippetScan, text: string): void {
+    const top = scan.stack[scan.stack.length - 1];
+    if (top) {
+      top.text += XmlTextReader.decode(text);
+    } else if (text.trim()) {
+      throw new SnippetError(`text "${text.trim().slice(0, 20)}" outside of an element`);
+    }
+  }
+
+  private static readMarkup(scan: SnippetScan, lt: number): void {
+    const { xml } = scan;
+    if (xml.startsWith('<!--', lt)) {
+      scan.cursor = ExtensionSnippetReader.endOf(xml, '-->', lt + 4, 'unterminated comment');
+    } else if (xml.startsWith('<![CDATA[', lt)) {
+      ExtensionSnippetReader.readCdata(scan, lt);
+    } else if (xml.startsWith('<?', lt)) {
+      scan.cursor = ExtensionSnippetReader.endOf(xml, '?>', lt + 2, 'unterminated processing instruction');
+    } else if (xml.startsWith('<!', lt)) {
+      throw new SnippetError('declarations (<!DOCTYPE ...>) are not allowed in a snippet');
+    } else if (xml.startsWith('</', lt)) {
+      ExtensionSnippetReader.readClosingTag(scan, lt);
+    } else {
+      ExtensionSnippetReader.readOpeningTag(scan, lt);
+    }
+  }
+
+  private static endOf(xml: string, terminator: string, from: number, unterminated: string): number {
+    const end = xml.indexOf(terminator, from);
+    if (end === -1) {
+      throw new SnippetError(unterminated);
+    }
+    return end + terminator.length;
+  }
+
+  private static readCdata(scan: SnippetScan, lt: number): void {
+    const { xml } = scan;
+    const after = ExtensionSnippetReader.endOf(xml, ']]>', lt + 9, 'unterminated CDATA section');
+    const top = scan.stack[scan.stack.length - 1];
+    if (!top) {
+      throw new SnippetError('CDATA outside of an element');
+    }
+    top.text += xml.slice(lt + 9, after - 3);
+    scan.cursor = after;
+  }
+
+  private static readClosingTag(scan: SnippetScan, lt: number): void {
+    const { xml } = scan;
+    const after = ExtensionSnippetReader.endOf(xml, '>', lt, 'unterminated closing tag');
+    const name = xml.slice(lt + 2, after - 1).trim();
+    const open = scan.stack.pop();
+    if (!open || open.name !== name) {
+      throw new SnippetError(`unexpected closing tag </${name}>${open ? `, expected </${open.name}>` : ''}`);
+    }
+    scan.cursor = after;
+  }
+
+  private static readOpeningTag(scan: SnippetScan, lt: number): void {
+    const { xml } = scan;
+    const nameRe = /[A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?/y;
+    nameRe.lastIndex = lt + 1;
+    const nm = nameRe.exec(xml);
+    if (!nm || nm.index !== lt + 1) {
+      throw new SnippetError(`invalid tag at offset ${lt}`);
+    }
+    const node: RawNode = { name: nm[0], attrs: {}, children: [], text: '' };
+    const tagEnd = ExtensionSnippetReader.readAttributes(xml, node, nameRe.lastIndex);
+    const top = scan.stack[scan.stack.length - 1];
+    (top ? top.children : scan.roots).push(node);
+    if (xml.startsWith('/>', tagEnd)) {
+      scan.cursor = tagEnd + 2;
+    } else {
+      scan.stack.push(node);
+      scan.cursor = tagEnd + 1;
+    }
+  }
+
+  private static readAttributes(xml: string, node: RawNode, from: number): number {
+    const attrRe = /\s*([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)\s*=\s*(?:"([^"]*)"|'([^']*)')/y;
+    const wsRe = /\s*/y;
+    let nameEnd = from;
+    for (;;) {
+      attrRe.lastIndex = nameEnd;
+      const am = attrRe.exec(xml);
+      if (!am || am.index !== nameEnd) {
+        break;
+      }
+      node.attrs[am[1]!] = XmlTextReader.decode(am[2] ?? am[3] ?? '');
+      nameEnd = attrRe.lastIndex;
+    }
+    wsRe.lastIndex = nameEnd;
+    wsRe.exec(xml);
+    const tagEnd = wsRe.lastIndex;
+    if (!xml.startsWith('/>', tagEnd) && xml[tagEnd] !== '>') {
+      throw new SnippetError(`invalid attribute syntax in <${node.name}>`);
+    }
+    return tagEnd;
   }
 
   private toAny(el: BpmnElement, node: RawNode, scope: Record<string, string>, nested: boolean): BpmnElement {

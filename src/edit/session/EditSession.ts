@@ -1,4 +1,5 @@
-import { type BpmnDocument, type BpmnElement, ChangeEntries, type IdAllocator, type IdConventions, type IdState, type IdStyle, type Platform, type Rename } from '../../model/index.js';
+import { type BpmnDocument, type BpmnElement, ChangeEntries, type IdAllocator, type IdConventions, type IdStyle, type Platform } from '../../model/index.js';
+import { EditJournal } from './EditJournal.js';
 
 export interface BatchContext {
   created: string[];
@@ -12,25 +13,11 @@ export interface FormerEnd {
   labels: readonly string[];
 }
 
-export interface KeptIdState {
-  before: IdState;
-  wasLabel: string;
-}
-
-export interface DroppedContent {
-  element: string;
-  kind: string;
-  removed: string[];
-}
-
-
 export class EditSession {
   batch: BatchContext | undefined;
   readonly allocator: IdAllocator;
-  private renames: Rename[] = [];
+  readonly journal = new EditJournal();
   private readonly formerEnds = new Map<BpmnElement, FormerEnd[]>();
-  private idStates = new Map<string, KeptIdState>();
-  private readonly dropped: DroppedContent[] = [];
 
   constructor(
     readonly document: BpmnDocument,
@@ -60,23 +47,9 @@ export class EditSession {
   }
 
   begin(): void {
-    this.idStates.clear();
+    this.journal.clearIdStates();
     this.allocator.begin();
     this.formerEnds.clear();
-  }
-
-  recordRename(from: string, to: string, was?: string, el?: BpmnElement): void {
-    this.renames.push(ChangeEntries.about({ from, to, ...(was ? { was } : {}) }, el));
-  }
-
-  recordRegenerated(from: string, to: string, was?: string, el?: BpmnElement): void {
-    this.renames.push(ChangeEntries.about({ from, to, ...(was ? { was } : {}), regenerated: true as const }, el));
-  }
-
-  takeRenames(): Rename[] {
-    const out = this.renames;
-    this.renames = [];
-    return out;
   }
 
   recordFormerEnd(node: BpmnElement, end: FormerEnd): void {
@@ -101,25 +74,5 @@ export class EditSession {
     for (const end of former) {
       this.recordFormerEnd(next, end);
     }
-  }
-
-  recordIdState(id: string, before: IdState, wasLabel: string): void {
-    if (!this.idStates.has(id)) {
-      this.idStates.set(id, { before, wasLabel });
-    }
-  }
-
-  takeIdStates(): Map<string, KeptIdState> {
-    const out = this.idStates;
-    this.idStates = new Map();
-    return out;
-  }
-
-  recordDroppedContent(drop: DroppedContent): void {
-    this.dropped.push(drop);
-  }
-
-  get droppedContent(): readonly DroppedContent[] {
-    return this.dropped;
   }
 }

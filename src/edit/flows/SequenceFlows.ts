@@ -31,7 +31,7 @@ export class SequenceFlows {
     });
     source.add('outgoing', flow);
     target.add('incoming', flow);
-    DeclarationOrder.insertAfter(scope, declareAfter ?? DeclarationOrder.lastFlowOf(scope, source) ?? source, flow);
+    new DeclarationOrder(scope).insertAfter(declareAfter ?? new DeclarationOrder(scope).lastFlowOf(source) ?? source, flow);
     if (attrs.isDefault) {
       this.setDefault(flow, true);
     }
@@ -96,7 +96,7 @@ export class SequenceFlows {
     const rules = this.edit.document.flowRules;
     rules.assertRoles(source, node);
     rules.assertRoles(node, target);
-    DeclarationOrder.insertAfter(scope, DeclarationOrder.lastFlowOf(scope, source) ?? source, node);
+    new DeclarationOrder(scope).insertAfter(new DeclarationOrder(scope).lastFlowOf(source) ?? source, node);
     target.remove('incoming', flow);
     flow.set('targetRef', node);
     node.add('incoming', flow);

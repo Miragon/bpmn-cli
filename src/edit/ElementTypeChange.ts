@@ -1,4 +1,4 @@
-import { BpmnElement, BpmnError, CAMUNDA, ChangeEntries, ChangeSet, ElementText, ElementWalk, type Finding, type KindDefinition, KindParser, Kinds, type PropertyDescriptor, type Trigger, type TriggerOptions, Triggers, ZEEBE, ZeebeDescriptor } from '../model/index.js';
+import { BpmnElement, BpmnError, ChangeEntries, ChangeSet, ElementWalk, type KindDefinition, KindParser, Kinds, type PropertyDescriptor, type Trigger, type TriggerOptions, Triggers } from '../model/index.js';
 import type { RetypeOperation } from '../operations/index.js';
 import { ElementContainment } from './containers/ElementContainment.js';
 import { ElementRemoval } from './ElementRemoval.js';
@@ -7,11 +7,12 @@ import { RootElements } from './events/RootElements.js';
 import { TriggerChange } from './events/TriggerChange.js';
 import { TriggerKeys } from './events/TriggerKeys.js';
 import { SequenceFlows } from './flows/SequenceFlows.js';
+import { InapplicableContent } from './properties/InapplicableContent.js';
 import type { EditSession } from './session/EditSession.js';
 
-const ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
-
 export class ElementTypeChange {
+  private static readonly ACTIVITY_FAMILIES = new Set(['task', 'subProcess', 'callActivity']);
+
   constructor(private readonly edit: EditSession) {}
 
   private static eventPosition(def: KindDefinition): string {
@@ -19,7 +20,7 @@ export class ElementTypeChange {
   }
 
   private static incompatibility(from: KindDefinition, to: KindDefinition): string | undefined {
-    if (ACTIVITY_FAMILIES.has(from.family) && ACTIVITY_FAMILIES.has(to.family)) {
+    if (ElementTypeChange.ACTIVITY_FAMILIES.has(from.family) && ElementTypeChange.ACTIVITY_FAMILIES.has(to.family)) {
       return undefined;
     }
     if (from.family === 'gateway' && to.family === 'gateway') {
@@ -52,73 +53,28 @@ export class ElementTypeChange {
   retype(command: RetypeOperation): ChangeSet {
     const changes = new ChangeSet();
     const el = this.edit.require(command.id);
-    const id = el.id;
-    const from = Kinds.of(el);
-    if (!from) {
-      throw BpmnError.model('E_INVALID_RETYPE', `${el.type} ${id} cannot be retyped`, {
-        element: id,
-        hint: 'Only tasks, sub-processes, call activities, gateways and events can be retyped.',
-      });
-    }
-    let parsed;
-    try {
-      parsed = KindParser.parse(command.kind);
-    } catch (err) {
-      if (err instanceof BpmnError) {
-        throw BpmnError.model('E_UNKNOWN_KIND', err.message, { element: id, candidates: err.details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
-      }
-      throw err;
-    }
+    const from = ElementTypeChange.currentKind(el);
+    const parsed = ElementTypeChange.parseKind(command.kind, el.id);
     const to = parsed.def;
-    const reason = ElementTypeChange.incompatibility(from, to);
-    if (reason) {
-      throw BpmnError.model('E_INVALID_RETYPE', `Cannot retype ${Kinds.label(el)} ${id} to ${to.kind}: ${reason}`, {
-        element: id,
-        hint: `Remove the element and add a new one of the wanted kind instead (\`bpmn remove <file> ${id}\`, then \`bpmn add <file> <kind> ...\`).`,
-      });
-    }
+    ElementTypeChange.assertCompatible(el, from, to);
     const oldLabel = Kinds.label(el);
-    const keys = command.set ?? {};
     const trigger = ElementTypeChange.resolveTrigger(el, to, parsed.trigger);
-    const given = TriggerKeys.optionsOf(keys, el);
+    const given = TriggerKeys.optionsOf(command.set ?? {}, el);
     const givenKeys = Object.keys(given) as Array<keyof TriggerOptions>;
-    const isEvent = to.family === 'event';
-    if (!isEvent && givenKeys.length) {
-      changes.warn({
-        code: 'W_OPTION_IGNORED',
-        message: `Trigger options (${givenKeys.join(', ')}) are ignored for ${to.kind} ${id}`,
-        element: id,
-        hint: 'Trigger options apply to events only.',
-      });
-    }
-    const hasTriggerOptions = isEvent && givenKeys.length > 0;
-    const oldTrigger = Triggers.of(el);
-    const sameTrigger = trigger === oldTrigger;
+    ElementTypeChange.warnIgnoredOptions(el, to, givenKeys, changes);
+    const hasTriggerOptions = to.family === 'event' && givenKeys.length > 0;
+    const sameTrigger = trigger === Triggers.of(el);
     if (from === to && sameTrigger && !hasTriggerOptions) {
-      changes.note(`${id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
+      changes.note(`${el.id} is already a ${oldLabel}; nothing changed${oldLabel.includes(':') ? ' (to drop the trigger use `<kind>:none` or `bpmn set <file> <id> trigger=none`)' : ''}`);
       RootElements.bindRefAs(changes, command.refAs, el);
       return changes;
     }
-    if (to.kind === 'eventSubProcess' && (this.edit.document.flows.incoming(el).length || this.edit.document.flows.outgoing(el).length)) {
-      throw BpmnError.model('E_INVALID_RETYPE', `${id} has sequence flows; event sub-processes cannot be connected by sequence flows`, {
-        element: id,
-        candidates: [...this.edit.document.flows.incoming(el), ...this.edit.document.flows.outgoing(el)].map((element) => element.id),
-        hint: `Remove its flows first: \`bpmn remove <file> ${[...this.edit.document.flows.incoming(el), ...this.edit.document.flows.outgoing(el)].map((element) => element.id).join(' ')}\`.`,
-      });
-    }
-
+    this.assertConnectable(el, to);
     const change = new TriggerChange(this.edit, el);
     const target = to.type === el.type ? el : this.swapType(el, to, changes);
     ElementTypeChange.applyKindProps(target, from, to);
     if (target !== el) {
-      changes.replaced.push({ from: el, to: target });
-      const inapplicable = this.inapplicableCamundaContent(target, to);
-      if (inapplicable) {
-        changes.warn(inapplicable);
-      }
-      if (new Camunda8Defaults(this.edit).userTask(target)) {
-        changes.note(`${id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
-      }
+      this.reportReplacement(el, target, to, changes);
     }
     new SequenceFlows(this.edit).dropIgnoredConditions(target, changes);
     change.change(trigger !== undefined && (!sameTrigger || hasTriggerOptions) ? trigger : undefined, given, changes, { on: target });
@@ -132,57 +88,69 @@ export class ElementTypeChange {
     return changes;
   }
 
-  private camundaName(name: string): string | undefined {
-    const idx = name.indexOf(':');
-    if (idx <= 0 || !CAMUNDA.reads(this.edit.document.namespaces.uriOf(name.slice(0, idx)))) {
-      return undefined;
+  private static currentKind(el: BpmnElement): KindDefinition {
+    const from = Kinds.of(el);
+    if (!from) {
+      throw BpmnError.model('E_INVALID_RETYPE', `${el.type} ${el.id} cannot be retyped`, {
+        element: el.id,
+        hint: 'Only tasks, sub-processes, call activities, gateways and events can be retyped.',
+      });
     }
-    return `camunda:${name.slice(idx + 1)}`;
+    return from;
   }
 
-  private zeebeLocal(name: string): string | undefined {
-    const idx = name.indexOf(':');
-    if (idx <= 0 || this.edit.document.namespaces.uriOf(name.slice(0, idx)) !== ZeebeDescriptor.URI) {
-      return undefined;
+  private static parseKind(kind: string, id: string): ReturnType<typeof KindParser.parse> {
+    try {
+      return KindParser.parse(kind);
+    } catch (err) {
+      if (err instanceof BpmnError) {
+        throw BpmnError.model('E_UNKNOWN_KIND', err.message, { element: id, candidates: err.details.candidates ?? [], hint: 'Run `bpmn kinds` for the list of kinds.' });
+      }
+      throw err;
     }
-    return name.slice(idx + 1);
   }
 
-  private inapplicableCamundaContent(el: BpmnElement, to: KindDefinition): Finding | undefined {
-    const attrs = Object.keys(ElementText.vendorAttributes(el)).filter((key) => {
-      const name = this.camundaName(key);
-      if (name) {
-        return CAMUNDA.attrAppliesTo(name, el) === false;
-      }
-      const zeebeName = this.zeebeLocal(key);
-      const def = zeebeName ? ZEEBE.attr(zeebeName) : undefined;
-      return !!def && !def.owners.some((owner) => el.is(owner));
-    });
-    const exts: string[] = [];
-    for (const ext of el.get<BpmnElement | undefined>('extensionElements')?.get<BpmnElement[] | undefined>('values') ?? []) {
-      const name = this.camundaName(ext.type);
-      const zeebeName = name ? undefined : this.zeebeLocal(ext.type);
-      const misplaced = name ? CAMUNDA.allowedOn(name, el) === false : zeebeName ? ZEEBE.allowedOn(zeebeName, el) === false && !ZEEBE.nestedOnly(zeebeName) : false;
-      if (misplaced && !exts.includes(ext.type)) {
-        exts.push(ext.type);
-      }
+  private static assertCompatible(el: BpmnElement, from: KindDefinition, to: KindDefinition): void {
+    const reason = ElementTypeChange.incompatibility(from, to);
+    if (reason) {
+      throw BpmnError.model('E_INVALID_RETYPE', `Cannot retype ${Kinds.label(el)} ${el.id} to ${to.kind}: ${reason}`, {
+        element: el.id,
+        hint: `Remove the element and add a new one of the wanted kind instead (\`bpmn remove <file> ${el.id}\`, then \`bpmn add <file> <kind> ...\`).`,
+      });
     }
-    const names = [...attrs, ...exts];
-    if (!names.length) {
-      return undefined;
+  }
+
+  private static warnIgnoredOptions(el: BpmnElement, to: KindDefinition, givenKeys: Array<keyof TriggerOptions>, changes: ChangeSet): void {
+    if (to.family !== 'event' && givenKeys.length) {
+      changes.warn({
+        code: 'W_OPTION_IGNORED',
+        message: `Trigger options (${givenKeys.join(', ')}) are ignored for ${to.kind} ${el.id}`,
+        element: el.id,
+        hint: 'Trigger options apply to events only.',
+      });
     }
-    const id = el.id;
-    const fixes = [
-      ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((attr) => `${attr}=`).join(' ')}\``] : []),
-      ...exts.map((extType) => `\`bpmn ext remove <file> ${id} ${extType}\``),
-    ];
-    const warning: Finding = {
-      code: 'W_PROPERTY_INAPPLICABLE',
-      message: `${names.join(', ')} of ${id} ${names.length > 1 ? 'have' : 'has'} no effect on a ${to.kind} (kept as ${names.length > 1 ? 'they are' : 'it is'})`,
-      element: id,
-      hint: `The ${names.every((extName) => this.zeebeLocal(extName)) ? 'Zeebe (Camunda 8)' : names.some((extName) => this.zeebeLocal(extName)) ? 'Camunda 7 and Zeebe' : 'Camunda'} descriptor does not allow ${names.length > 1 ? 'them' : 'it'} on a ${to.kind}; remove with ${fixes.join(' and ')}, or retype back.`,
-    };
-    return warning;
+  }
+
+  private assertConnectable(el: BpmnElement, to: KindDefinition): void {
+    const { flows } = this.edit.document;
+    if (to.kind === 'eventSubProcess' && (flows.incoming(el).length || flows.outgoing(el).length)) {
+      throw BpmnError.model('E_INVALID_RETYPE', `${el.id} has sequence flows; event sub-processes cannot be connected by sequence flows`, {
+        element: el.id,
+        candidates: [...flows.incoming(el), ...flows.outgoing(el)].map((element) => element.id),
+        hint: `Remove its flows first: \`bpmn remove <file> ${[...flows.incoming(el), ...flows.outgoing(el)].map((element) => element.id).join(' ')}\`.`,
+      });
+    }
+  }
+
+  private reportReplacement(el: BpmnElement, target: BpmnElement, to: KindDefinition, changes: ChangeSet): void {
+    changes.replaced.push({ from: el, to: target });
+    const inapplicable = new InapplicableContent(this.edit).warningFor(target, to);
+    if (inapplicable) {
+      changes.warn(inapplicable);
+    }
+    if (new Camunda8Defaults(this.edit).userTask(target)) {
+      changes.note(`${el.id} is a Camunda user task now (zeebe:userTask added, like Camunda Modeler)`);
+    }
   }
 
   private static applyKindProps(el: BpmnElement, from: KindDefinition, to: KindDefinition): void {
@@ -229,7 +197,7 @@ export class ElementTypeChange {
       }
       const removed = changes.removed.slice(before).map((change) => change.id);
       if (removed.length) {
-        this.edit.recordDroppedContent({ element: el.id, kind: to.kind, removed });
+        this.edit.journal.recordDroppedContent({ element: el.id, kind: to.kind, removed });
       }
     }
     changes.warn({
@@ -259,16 +227,20 @@ export class ElementTypeChange {
 
   private swapType(el: BpmnElement, to: KindDefinition, changes: ChangeSet): BpmnElement {
     const next = this.edit.document.tree.build(to.type, { id: el.id });
+    this.carryProperties(el, next, to, changes);
+    Object.assign(next.attrs, el.attrs);
+    new ElementContainment(el).detach(next);
+    this.repointReferences(el, next);
+    this.edit.replaceElement(el, next);
+    this.edit.document.tree.invalidate();
+    return next;
+  }
+
+  private carryProperties(el: BpmnElement, next: BpmnElement, to: KindDefinition, changes: ChangeSet): void {
     const nextProps = next.descriptor.propertiesByName ?? {};
     for (const property of el.descriptor.properties ?? []) {
-      if (property.name === 'id') {
-        continue;
-      }
       const value = el.peek(property.name);
-      if (value === undefined || value === null || (Array.isArray(value) && !value.length)) {
-        continue;
-      }
-      if (ElementTypeChange.isReappliedKindProp(property.name)) {
+      if (property.name === 'id' || ElementTypeChange.isUnset(value) || ElementTypeChange.isReappliedKindProp(property.name)) {
         continue;
       }
       if (nextProps[property.name]) {
@@ -277,9 +249,14 @@ export class ElementTypeChange {
         this.dropProp(el, property, value, to, changes);
       }
     }
-    Object.assign(next.attrs, el.attrs);
-    ElementContainment.detach(el, next);
-    for (const ref of ElementContainment.referencesToAny(this.edit.document.tree.definitions, new Set([el]))) {
+  }
+
+  private static isUnset(value: unknown): boolean {
+    return value === undefined || value === null || (Array.isArray(value) && !value.length);
+  }
+
+  private repointReferences(el: BpmnElement, next: BpmnElement): void {
+    for (const ref of new ElementContainment(this.edit.document.tree.definitions).referencesToAny(new Set([el]))) {
       if (ref.holder.is('bpmndi:BPMNPlane') && !next.is('bpmn:SubProcess')) {
         this.dropDiagram(ref.holder.parent);
         continue;
@@ -290,8 +267,5 @@ export class ElementTypeChange {
         ref.holder.set(ref.prop, next);
       }
     }
-    this.edit.replaceElement(el, next);
-    this.edit.document.tree.invalidate();
-    return next;
   }
 }

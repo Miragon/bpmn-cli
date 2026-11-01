@@ -14,18 +14,18 @@ export class FlowBridge {
     private readonly command: BridgeCommand = 'remove',
   ) {}
 
-  forRemoval(node: BpmnElement, bridge: boolean, all: boolean, removing: ReadonlySet<string>): void {
+  bridgeRemoval(node: BpmnElement, bridge: boolean, all: boolean, removing: ReadonlySet<string>): void {
     if (all) {
       this.join(node, removing);
     } else if (bridge && this.isMerge(node)) {
       this.refuseSynchronisingJoin(node);
       this.join(node, removing);
     } else {
-      this.single(node, bridge, removing);
+      this.bridgeNode(node, bridge, removing);
     }
   }
 
-  single(node: BpmnElement, bridge: boolean, removing?: ReadonlySet<string>): void {
+  bridgeNode(node: BpmnElement, bridge: boolean, removing?: ReadonlySet<string>): void {
     const document = this.edit.document;
     const incoming = document.flows.incoming(node);
     const outgoing = document.flows.outgoing(node);
@@ -47,34 +47,9 @@ export class FlowBridge {
     this.detach(node, true);
   }
 
-  group(group: BpmnElement[]): void {
+  bridgeGroup(group: BpmnElement[]): void {
     const document = this.edit.document;
-    const inside = new Set<BpmnElement>();
-    for (const member of group) {
-      inside.add(member);
-      if (member.is('bpmn:Activity')) {
-        for (const boundary of document.scopes.boundaryEventsOf(member)) {
-          inside.add(boundary);
-        }
-      }
-    }
-    const entries: BpmnElement[] = [];
-    const exits: BpmnElement[] = [];
-    for (const member of inside) {
-      for (const flow of document.flows.incoming(member)) {
-        if (!inside.has(flow.get<BpmnElement>('sourceRef'))) {
-          entries.push(flow);
-        }
-      }
-      if (member.is('bpmn:BoundaryEvent')) {
-        continue;
-      }
-      for (const flow of document.flows.outgoing(member)) {
-        if (!inside.has(flow.get<BpmnElement>('targetRef'))) {
-          exits.push(flow);
-        }
-      }
-    }
+    const { entries, exits } = this.crossingFlows(this.withBoundaries(group));
     if (entries.length !== 1 || exits.length !== 1) {
       return;
     }
@@ -88,6 +63,32 @@ export class FlowBridge {
     const via = group.map((element) => element.id).join(', ');
     this.assertAllowed(outFlow.get<BpmnElement>('sourceRef'), inFlow, outFlow, undefined, via);
     this.carry(inFlow, outFlow, via, 'group');
+  }
+
+  private withBoundaries(group: BpmnElement[]): Set<BpmnElement> {
+    const inside = new Set<BpmnElement>();
+    for (const member of group) {
+      inside.add(member);
+      if (member.is('bpmn:Activity')) {
+        for (const boundary of this.edit.document.scopes.boundaryEventsOf(member)) {
+          inside.add(boundary);
+        }
+      }
+    }
+    return inside;
+  }
+
+  private crossingFlows(inside: Set<BpmnElement>): { entries: BpmnElement[]; exits: BpmnElement[] } {
+    const { flows } = this.edit.document;
+    const entries: BpmnElement[] = [];
+    const exits: BpmnElement[] = [];
+    for (const member of inside) {
+      entries.push(...flows.incoming(member).filter((flow) => !inside.has(flow.get<BpmnElement>('sourceRef'))));
+      if (!member.is('bpmn:BoundaryEvent')) {
+        exits.push(...flows.outgoing(member).filter((flow) => !inside.has(flow.get<BpmnElement>('targetRef'))));
+      }
+    }
+    return { entries, exits };
   }
 
   private static canLoopToItself(node: BpmnElement): boolean {
@@ -158,15 +159,9 @@ export class FlowBridge {
     const document = this.edit.document;
     const incoming = document.flows.incoming(node);
     const outgoing = document.flows.outgoing(node);
-    if (outgoing.length > 1) {
-      throw BpmnError.model('E_AMBIGUOUS_BRIDGE', `${node.id} has ${outgoing.length} outgoing flows (${outgoing.map((element) => element.id).join(', ')}): --bridge-all connects the predecessors of a join to its one successor, and here it is not clear which predecessor goes to which successor`, {
-        element: node.id,
-        candidates: outgoing.map((element) => element.id),
-        hint: `Remove the branches you do not need first (\`bpmn remove <file> <firstNodeOfBranch> --with-branch\`), or remove ${node.id} without bridging (\`--no-bridge\`) and connect what should stay with \`bpmn connect\`.`,
-      });
-    }
+    FlowBridge.assertOneSuccessor(node, outgoing);
     if (incoming.length <= 1 || !outgoing.length) {
-      this.single(node, true, removing);
+      this.bridgeNode(node, true, removing);
       return;
     }
     const outFlow = outgoing[0]!;
@@ -174,37 +169,65 @@ export class FlowBridge {
     for (const inFlow of incoming) {
       this.assertAllowed(node, inFlow, outFlow, removing);
     }
-    const outName = outFlow.get<string | undefined>('name');
-    if (outName) {
-      changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${outFlow.id} was dropped while bridging ${node.id} from ${incoming.length} predecessors`, element: outFlow.id });
-    }
-    if (outFlow.get<BpmnElement | undefined>('conditionExpression')) {
-      changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${outFlow.id} was dropped while bridging ${node.id} from ${incoming.length} predecessors`, element: outFlow.id });
-    }
+    this.warnJoinedOutFlow(node, outFlow, incoming.length);
     new SequenceFlows(this.edit).remove(outFlow, changes);
     changes.remove(ChangeEntries.ofFlow(outFlow));
-    const bridged: string[] = [];
-    for (const inFlow of incoming) {
-      const predecessor = inFlow.get<BpmnElement>('sourceRef');
-      const already = document.flows.outgoing(predecessor).some((flow) => flow !== inFlow && flow.get<BpmnElement | undefined>('targetRef') === successor);
-      if (predecessor === successor || predecessor === node || already) {
-        new SequenceFlows(this.edit).remove(inFlow, changes);
-        changes.remove(ChangeEntries.ofFlow(inFlow));
-        changes.note(`not bridged: ${predecessor.id} ${predecessor === successor ? 'is the successor itself' : predecessor === node ? 'is the removed node' : `already flows to ${successor.id}`}`);
-        continue;
-      }
-      const renamed = new SequenceFlows(this.edit).redirect(inFlow, { target: successor });
-      changes.change(ChangeEntries.ofFlow(inFlow, `${predecessor.id} -> ${successor.id} (bridged ${node.id})${ChangeEntries.renamedNote(renamed)}`));
-      bridged.push(predecessor.id);
-    }
+    const bridged = incoming.flatMap((inFlow) => this.bridgeIncoming(inFlow, node, successor));
     changes.note(`bridged all: ${bridged.join(', ')} -> ${successor.id}`);
     const sync = Kinds.synchronises(node);
     if (sync) {
       changes.note(`${node.id} synchronised ${bridged.join(', ')}; now each of them runs on to ${successor.id} on its own`);
     }
-    const count = document.flows.incoming(successor).length;
+    this.warnImplicitJoin(node, successor, sync);
+  }
+
+  private static assertOneSuccessor(node: BpmnElement, outgoing: readonly BpmnElement[]): void {
+    if (outgoing.length > 1) {
+      throw BpmnError.model('E_AMBIGUOUS_BRIDGE', `${node.id} has ${outgoing.length} outgoing flows (${outgoing.map((element) => element.id).join(', ')}): --bridge-all connects the predecessors of a join to its one successor, and here it is not clear which predecessor goes to which successor`, {
+        element: node.id,
+        candidates: outgoing.map((element) => element.id),
+        hint: `Remove the branches you do not need first (\`bpmn remove <file> <firstNodeOfBranch> --with-branch\`), or remove ${node.id} without bridging (\`--no-bridge\`) and connect what should stay with \`bpmn connect\`.`,
+      });
+    }
+  }
+
+  private warnJoinedOutFlow(node: BpmnElement, outFlow: BpmnElement, predecessors: number): void {
+    const { changes } = this;
+    const outName = outFlow.get<string | undefined>('name');
+    if (outName) {
+      changes.warn({ code: 'W_LABEL_DROPPED', message: `Flow label "${outName}" of ${outFlow.id} was dropped while bridging ${node.id} from ${predecessors} predecessors`, element: outFlow.id });
+    }
+    if (outFlow.get<BpmnElement | undefined>('conditionExpression')) {
+      changes.warn({ code: 'W_CONDITION_DROPPED', message: `Condition of ${outFlow.id} was dropped while bridging ${node.id} from ${predecessors} predecessors`, element: outFlow.id });
+    }
+  }
+
+  private bridgeIncoming(inFlow: BpmnElement, node: BpmnElement, successor: BpmnElement): string[] {
+    const { changes } = this;
+    const predecessor = inFlow.get<BpmnElement>('sourceRef');
+    const already = this.edit.document.flows.outgoing(predecessor).some((flow) => flow !== inFlow && flow.get<BpmnElement | undefined>('targetRef') === successor);
+    if (predecessor === successor || predecessor === node || already) {
+      new SequenceFlows(this.edit).remove(inFlow, changes);
+      changes.remove(ChangeEntries.ofFlow(inFlow));
+      changes.note(`not bridged: ${predecessor.id} ${FlowBridge.unbridgedReason(predecessor, node, successor)}`);
+      return [];
+    }
+    const renamed = new SequenceFlows(this.edit).redirect(inFlow, { target: successor });
+    changes.change(ChangeEntries.ofFlow(inFlow, `${predecessor.id} -> ${successor.id} (bridged ${node.id})${ChangeEntries.renamedNote(renamed)}`));
+    return [predecessor.id];
+  }
+
+  private static unbridgedReason(predecessor: BpmnElement, node: BpmnElement, successor: BpmnElement): string {
+    if (predecessor === successor) {
+      return 'is the successor itself';
+    }
+    return predecessor === node ? 'is the removed node' : `already flows to ${successor.id}`;
+  }
+
+  private warnImplicitJoin(node: BpmnElement, successor: BpmnElement, sync: boolean): void {
+    const count = this.edit.document.flows.incoming(successor).length;
     if (count > 1 && (sync || !successor.is('bpmn:Gateway'))) {
-      changes.warn({
+      this.changes.warn({
         code: 'W_IMPLICIT_JOIN',
         message: sync
           ? `${successor.id} now has ${count} incoming flows: the ${FlowBridge.joinKind(node)} join ${node.id} synchronised them, now each path runs on to ${successor.id} on its own`

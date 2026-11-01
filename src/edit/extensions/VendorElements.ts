@@ -2,12 +2,11 @@ import { type BpmnDocument, BpmnElement, BpmnError, CamundaDescriptor, DeclaredN
 import { ExtensionStructure } from './ExtensionStructure.js';
 import type { NestedHosts } from './NestedHosts.js';
 
-const NAME_RE = /^([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)$/;
-
-const CANONICAL_PREFIX: Readonly<Record<string, string>> = { [CamundaDescriptor.URI]: 'camunda', [CamundaDescriptor.OPERATON_URI]: 'operaton', [ZeebeDescriptor.URI]: 'zeebe', [DeclaredNamespaces.BPMN]: 'bpmn' };
-const CANONICAL_URI: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(CANONICAL_PREFIX).map(([uri, prefix]) => [prefix, uri]));
-
 export class VendorElements {
+  private static readonly NAME_RE = /^([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)$/;
+  private static readonly CANONICAL_PREFIX: Readonly<Record<string, string>> = { [CamundaDescriptor.URI]: 'camunda', [CamundaDescriptor.OPERATON_URI]: 'operaton', [ZeebeDescriptor.URI]: 'zeebe', [DeclaredNamespaces.BPMN]: 'bpmn' };
+  private static readonly CANONICAL_URI: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(VendorElements.CANONICAL_PREFIX).map(([uri, prefix]) => [prefix, uri]));
+
   constructor(
     private readonly document: BpmnDocument,
     private readonly hosts: NestedHosts,
@@ -17,20 +16,20 @@ export class VendorElements {
     const ns = (el.descriptor as { ns?: { prefix?: string; localName?: string; uri?: string } } | undefined)?.ns;
     const [prefix, local] = el.type.includes(':') ? (el.type.split(':') as [string, string]) : ['', el.type];
     const uri = ns?.uri ?? (prefix === 'bpmn' ? DeclaredNamespaces.BPMN : this.document.namespaces.uriOf(prefix));
-    return this.canonical(uri, ns?.localName ?? local, el.type);
+    return this.canonicalType(uri, ns?.localName ?? local, el.type);
   }
 
   canonicalName(name: string, scope: Record<string, string> = {}): string {
-    const match = NAME_RE.exec(name.trim());
+    const match = VendorElements.NAME_RE.exec(name.trim());
     if (!match) {
       return name.trim();
     }
     const uri = scope[match[1]!] ?? (match[1] === 'bpmn' ? DeclaredNamespaces.BPMN : this.document.namespaces.uriOf(match[1]!));
-    return this.canonical(uri, match[2]!, name.trim());
+    return this.canonicalType(uri, match[2]!, name.trim());
   }
 
   canonicalUri(prefix: string): string | undefined {
-    return CANONICAL_URI[prefix];
+    return VendorElements.CANONICAL_URI[prefix];
   }
 
   resolvePrefix(el: BpmnElement, prefix: string, scope: Record<string, string>): { prefix: string; uri: string } {
@@ -67,7 +66,7 @@ export class VendorElements {
     }
     const props: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(attrs)) {
-      const match = NAME_RE.exec(key);
+      const match = VendorElements.NAME_RE.exec(key);
       if (!match || match[1] === 'xmlns') {
         props[key] = value;
         continue;
@@ -123,17 +122,29 @@ export class VendorElements {
   pathOf(el: BpmnElement): string {
     const steps: string[] = [];
     for (let cur: BpmnElement | undefined = el; cur && !cur.is('bpmn:ExtensionElements'); cur = cur.parent) {
-      const parent = cur.parent;
-      const siblings = parent && parent.is('bpmn:ExtensionElements') ? parent.list('values') : parent ? this.kidsOf(parent) : [cur];
-      const same = siblings.filter((sibling) => sibling.type === cur!.type);
-      const key = this.keyOf(cur);
-      steps.unshift(key ? this.itemLabel(cur) : same.length > 1 ? `${cur.type}[${same.indexOf(cur)}]` : cur.type);
+      steps.unshift(this.stepOf(cur));
     }
     return steps.join('/');
   }
 
-  private canonical(uri: string | undefined, local: string, fallback: string): string {
-    const canonicalPrefix = uri ? CANONICAL_PREFIX[uri] : undefined;
+  private stepOf(el: BpmnElement): string {
+    if (this.keyOf(el)) {
+      return this.itemLabel(el);
+    }
+    const same = this.siblingsOf(el).filter((sibling) => sibling.type === el.type);
+    return same.length > 1 ? `${el.type}[${same.indexOf(el)}]` : el.type;
+  }
+
+  private siblingsOf(el: BpmnElement): readonly BpmnElement[] {
+    const { parent } = el;
+    if (!parent) {
+      return [el];
+    }
+    return parent.is('bpmn:ExtensionElements') ? parent.list('values') : this.kidsOf(parent);
+  }
+
+  private canonicalType(uri: string | undefined, local: string, fallback: string): string {
+    const canonicalPrefix = uri ? VendorElements.CANONICAL_PREFIX[uri] : undefined;
     if (canonicalPrefix) {
       return `${canonicalPrefix}:${local}`;
     }
@@ -154,7 +165,7 @@ export class VendorElements {
   }
 
   private splitName(name: string, el: BpmnElement): { prefix: string; local: string } {
-    const match = NAME_RE.exec(name.trim());
+    const match = VendorElements.NAME_RE.exec(name.trim());
     if (!match) {
       throw BpmnError.model('E_INVALID_VALUE', `"${name}" is not a prefixed element name (expected prefix:localName, e.g. zeebe:taskDefinition)`, { element: this.hosts.idOf(el) });
     }
@@ -172,7 +183,7 @@ export class VendorElements {
   }
 
   private qnameValue(value: string, scope: Record<string, string>): string {
-    const match = NAME_RE.exec(value.trim());
+    const match = VendorElements.NAME_RE.exec(value.trim());
     if (!match) {
       return value;
     }

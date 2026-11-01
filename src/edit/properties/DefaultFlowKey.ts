@@ -8,7 +8,7 @@ export class DefaultFlowKey {
 
   write(el: BpmnElement, value: string, changes: ChangeSet): void {
     if (el.is('bpmn:SequenceFlow')) {
-      if (value && PropertyCoercer.bool(el, 'default', value)) {
+      if (value && PropertyCoercer.booleanOf(el, 'default', value)) {
         this.makeDefaultFlow(el, changes);
       } else {
         new SequenceFlows(this.edit).setDefault(el, false);

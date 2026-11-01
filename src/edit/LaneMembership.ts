@@ -29,19 +29,23 @@ export class LaneMembership {
       this.assign(this.edit.require(memberId, 'bpmn:FlowNode', 'flow node'), lane, changes);
     }
     if (extra.length) {
-      const extraIds = extra.map((element) => element.id);
-      const owner = parentLane ?? process;
-      const reason = parentLane ? 'because a lane with child lanes has no direct members' : 'because the first lane covers the whole pool';
-      changes.warn({
-        code: 'W_OPTION_IGNORED',
-        message: `--members ${command.members!.join(',')}: ${id} also received the other ${extra.length} member(s) of ${owner.id} (${extraIds.join(', ')}), ${reason}`,
-        element: id,
-        related: extraIds,
-        hint: `Move them into a sibling lane: \`bpmn add <file> lane "<name>" --in ${owner.id} --members ${extraIds.join(',')}\`.`,
-      });
+      LaneMembership.warnExtraMembers(id, extra, parentLane, process, command, changes);
     }
     document.tree.invalidate();
     return lane;
+  }
+
+  private static warnExtraMembers(id: string, extra: BpmnElement[], parentLane: BpmnElement | undefined, process: BpmnElement, command: AddOperation, changes: ChangeSet): void {
+    const extraIds = extra.map((element) => element.id);
+    const owner = parentLane ?? process;
+    const reason = parentLane ? 'because a lane with child lanes has no direct members' : 'because the first lane covers the whole pool';
+    changes.warn({
+      code: 'W_OPTION_IGNORED',
+      message: `--members ${command.members!.join(',')}: ${id} also received the other ${extra.length} member(s) of ${owner.id} (${extraIds.join(', ')}), ${reason}`,
+      element: id,
+      related: extraIds,
+      hint: `Move them into a sibling lane: \`bpmn add <file> lane "<name>" --in ${owner.id} --members ${extraIds.join(',')}\`.`,
+    });
   }
 
   private takeOverMembers(lane: BpmnElement, owner: BpmnElement, nodes: BpmnElement[], command: AddOperation, changes: ChangeSet): BpmnElement[] {
@@ -66,44 +70,53 @@ export class LaneMembership {
     const document = this.edit.document;
     const process = this.assertLaneMember(node);
     if (lane) {
-      if (!lane.is('bpmn:Lane')) {
-        throw BpmnError.model('E_WRONG_KIND', `${lane.id} is a ${Kinds.label(lane)}, expected a lane`, { element: lane.id });
-      }
-      if (document.scopes.processOf(lane) !== process) {
-        throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `Lane ${lane.id} belongs to another process than ${node.id} (${process.id})`, {
-          element: node.id,
-          related: [lane.id],
-          hint: 'Nodes can only join lanes of their own process.',
-        });
-      }
-      const childSet = lane.get<BpmnElement | undefined>('childLaneSet');
-      const children = childSet ? childSet.list('lanes') : [];
-      if (children.length) {
-        throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `Lane ${lane.id} has child lanes; assign ${node.id} to one of them`, {
-          element: node.id,
-          related: [lane.id],
-          candidates: children.map((element) => element.id),
-        });
-      }
+      this.assertJoinable(node, lane, process);
     }
-    const current = document.scopes.lanesOf(node);
-    const unchanged = lane ? current.length === 1 && current[0] === lane : current.length === 0;
-    if (!unchanged) {
-      for (const other of current) {
-        other.remove('flowNodeRef', node);
-      }
-      if (lane) {
-        lane.add('flowNodeRef', node);
-      }
-      const name = node.name;
-      changes.change({ id: node.id, kind: Kinds.label(node), ...(name ? { name } : {}), detail: lane ? `lane ${lane.id}` : 'removed from lanes' });
-    }
+    this.switchLanes(node, lane, changes);
     if (node.is('bpmn:Activity')) {
       for (const boundary of document.scopes.boundaryEventsOf(node)) {
         this.assign(boundary, lane, changes);
       }
     }
     document.tree.invalidate();
+  }
+
+  private assertJoinable(node: BpmnElement, lane: BpmnElement, process: BpmnElement): void {
+    if (!lane.is('bpmn:Lane')) {
+      throw BpmnError.model('E_WRONG_KIND', `${lane.id} is a ${Kinds.label(lane)}, expected a lane`, { element: lane.id });
+    }
+    if (this.edit.document.scopes.processOf(lane) !== process) {
+      throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `Lane ${lane.id} belongs to another process than ${node.id} (${process.id})`, {
+        element: node.id,
+        related: [lane.id],
+        hint: 'Nodes can only join lanes of their own process.',
+      });
+    }
+    const childSet = lane.get<BpmnElement | undefined>('childLaneSet');
+    const children = childSet ? childSet.list('lanes') : [];
+    if (children.length) {
+      throw BpmnError.model('E_INVALID_LANE_MEMBERSHIP', `Lane ${lane.id} has child lanes; assign ${node.id} to one of them`, {
+        element: node.id,
+        related: [lane.id],
+        candidates: children.map((element) => element.id),
+      });
+    }
+  }
+
+  private switchLanes(node: BpmnElement, lane: BpmnElement | undefined, changes: ChangeSet): void {
+    const current = this.edit.document.scopes.lanesOf(node);
+    const unchanged = lane ? current.length === 1 && current[0] === lane : current.length === 0;
+    if (unchanged) {
+      return;
+    }
+    for (const other of current) {
+      other.remove('flowNodeRef', node);
+    }
+    if (lane) {
+      lane.add('flowNodeRef', node);
+    }
+    const name = node.name;
+    changes.change({ id: node.id, kind: Kinds.label(node), ...(name ? { name } : {}), detail: lane ? `lane ${lane.id}` : 'removed from lanes' });
   }
 
   private ensureLaneSet(process: BpmnElement, changes: ChangeSet): BpmnElement {

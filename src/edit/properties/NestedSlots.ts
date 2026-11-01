@@ -1,18 +1,18 @@
-import { BpmnElement, BpmnError, CAMUNDA, ChangeEntries, type ChangeSet, ElementSlots, Kinds, type NestedSlot, PropertyCatalog, Triggers, VendorDescriptor, ZEEBE, ZeebeDescriptor } from '../../model/index.js';
+import { BpmnElement, BpmnError, CAMUNDA, ChangeEntries, type ChangeSet, ElementSlots, Kinds, type NestedSlot, PropertyCatalog, type SlotRef, Triggers, VendorDescriptor, ZEEBE, ZeebeDescriptor } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
 import { IdRename } from './IdRename.js';
 import { NestedResolution } from './NestedResolution.js';
 import { PropertyCoercer } from './PropertyCoercer.js';
 
-const NESTED_BLOCKED: Record<string, string> = {
-  body: 'use condition= / when= / timer= / cardinality= / completion=',
-};
-
 export class NestedSlots {
+  private static readonly NESTED_BLOCKED: Record<string, string> = {
+    body: 'use condition= / when= / timer= / cardinality= / completion=',
+  };
+
   constructor(private readonly edit: EditSession) {}
 
   keysOf(slot: NestedSlot, target: BpmnElement): string[] {
-    const keys = ['id', ...PropertyCatalog.of(target).genericKeys().filter((genericKey) => !NESTED_BLOCKED[genericKey]), ...CAMUNDA.attrsFor(target).map((attr) => attr.name)];
+    const keys = ['id', ...PropertyCatalog.of(target).genericKeys().filter((genericKey) => !NestedSlots.NESTED_BLOCKED[genericKey]), ...CAMUNDA.attrsFor(target).map((attr) => attr.name)];
     return [...new Set(keys)].map((slotKey) => `${slot}.${slotKey}`);
   }
 
@@ -55,49 +55,68 @@ export class NestedSlots {
   }
 
   private checkKey(el: BpmnElement, slot: NestedSlot, target: BpmnElement, key: string, prefix: string = slot): void {
-    const id = el.id;
-    const full = `${prefix}.${key}`;
-    const zi = key.indexOf(':');
-    if (zi > 0 && this.edit.document.namespaces.uriOf(key.slice(0, zi)) === ZeebeDescriptor.URI && !ZEEBE.attr(key.slice(zi + 1))) {
-      const local = key.slice(zi + 1);
-      const owner = ZEEBE.typeNames().find((typeName) => ZEEBE.allowedOn(typeName, target) === true && ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
-      if (owner) {
-        throw BpmnError.model('E_WRONG_HOST', `${key} is not an attribute of the ${Kinds.typeLabel(target)} of ${Kinds.label(el)} ${id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
-          element: id,
-          hint: `Use \`bpmn ext add <file> ${id} ${prefix}.${key.slice(0, zi)}:${owner.slice('zeebe:'.length)} ${local}=<value>\`.`,
-        });
-      }
-    }
+    this.assertNoZeebeOwner(el, target, key, prefix);
     if (key.includes(':')) {
-      const local = new PropertyCoercer(this.edit).camundaLocal(key);
-      if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) {
-        return;
-      }
-      const owners = CAMUNDA.attr(local)?.owners ?? [];
-      const onElement = CAMUNDA.attrAppliesTo(`camunda:${local}`, el);
-      const multi = slot === 'loop' && owners.some((owner) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', owner));
-      throw BpmnError.model('E_WRONG_HOST', `${key} cannot be set on the ${Kinds.typeLabel(target)} of ${Kinds.label(el)} ${id}${multi ? ': it needs a multi-instance loop' : ''}`, {
-        element: id,
-        hint: multi
-          ? `Set loop=parallel or loop=sequential first (\`bpmn set <file> ${id} loop=parallel ${full}=<value>\`).`
-          : onElement
-            ? `It is an attribute of ${id} itself: \`bpmn set <file> ${id} ${key}=<value>\`.`
-            : `${key} belongs on ${owners.map((owner) => owner.replace('bpmn:', '')).join(', ')}.`,
-      });
-    }
-    if (key === 'id') {
+      this.assertVendorKeyFits(el, slot, target, key, `${prefix}.${key}`);
       return;
     }
-    const property = target.descriptor.propertiesByName?.[key];
-    const blocked = NESTED_BLOCKED[key];
-    if (!property || blocked || !PropertyCatalog.of(target).isSettable(property)) {
-      const keys = ['id', ...PropertyCatalog.of(target).genericKeys().filter((genericKey) => !NESTED_BLOCKED[genericKey])].map((slotKey) => `${prefix}.${slotKey}`);
-      throw BpmnError.model('E_UNKNOWN_KEY', `Unknown key "${full}" for ${Kinds.label(el)} ${id}: a ${Kinds.typeLabel(target)} has no settable attribute ${key}${blocked ? ` (${blocked})` : ''}`, {
-        element: id,
-        candidates: keys,
-        hint: `Keys of the ${ElementSlots.TEXT[slot]}: ${keys.join(', ')}, or a vendor attribute ${prefix}.<prefix>:<attr>.`,
+    if (key !== 'id') {
+      NestedSlots.assertSettable(el, slot, target, key, prefix);
+    }
+  }
+
+  private assertNoZeebeOwner(el: BpmnElement, target: BpmnElement, key: string, prefix: string): void {
+    const zi = key.indexOf(':');
+    if (zi <= 0 || this.edit.document.namespaces.uriOf(key.slice(0, zi)) !== ZeebeDescriptor.URI || ZEEBE.attr(key.slice(zi + 1))) {
+      return;
+    }
+    const local = key.slice(zi + 1);
+    const owner = ZEEBE.typeNames().find((typeName) => ZEEBE.allowedOn(typeName, target) === true && ZEEBE.type(typeName)!.attributes.some((attr) => attr.name === local));
+    if (owner) {
+      throw BpmnError.model('E_WRONG_HOST', `${key} is not an attribute of the ${Kinds.typeLabel(target)} of ${Kinds.label(el)} ${el.id}: Camunda 8 reads ${local} on its ${owner} extension element`, {
+        element: el.id,
+        hint: `Use \`bpmn ext add <file> ${el.id} ${prefix}.${key.slice(0, zi)}:${owner.slice('zeebe:'.length)} ${local}=<value>\`.`,
       });
     }
+  }
+
+  private assertVendorKeyFits(el: BpmnElement, slot: NestedSlot, target: BpmnElement, key: string, full: string): void {
+    const id = el.id;
+    const local = new PropertyCoercer(this.edit).camundaLocal(key);
+    if (!local || CAMUNDA.attrAppliesTo(`camunda:${local}`, target) !== false) {
+      return;
+    }
+    const owners = CAMUNDA.attr(local)?.owners ?? [];
+    const multi = slot === 'loop' && owners.some((owner) => VendorDescriptor.typeIs('bpmn:MultiInstanceLoopCharacteristics', owner));
+    throw BpmnError.model('E_WRONG_HOST', `${key} cannot be set on the ${Kinds.typeLabel(target)} of ${Kinds.label(el)} ${id}${multi ? ': it needs a multi-instance loop' : ''}`, {
+      element: id,
+      hint: NestedSlots.vendorKeyHint(el, key, full, multi, local, owners),
+    });
+  }
+
+  private static vendorKeyHint(el: BpmnElement, key: string, full: string, multi: boolean, local: string, owners: readonly string[]): string {
+    const id = el.id;
+    if (multi) {
+      return `Set loop=parallel or loop=sequential first (\`bpmn set <file> ${id} loop=parallel ${full}=<value>\`).`;
+    }
+    if (CAMUNDA.attrAppliesTo(`camunda:${local}`, el)) {
+      return `It is an attribute of ${id} itself: \`bpmn set <file> ${id} ${key}=<value>\`.`;
+    }
+    return `${key} belongs on ${owners.map((owner) => owner.replace('bpmn:', '')).join(', ')}.`;
+  }
+
+  private static assertSettable(el: BpmnElement, slot: NestedSlot, target: BpmnElement, key: string, prefix: string): void {
+    const property = target.descriptor.propertiesByName?.[key];
+    const blocked = NestedSlots.NESTED_BLOCKED[key];
+    if (property && !blocked && PropertyCatalog.of(target).isSettable(property)) {
+      return;
+    }
+    const keys = ['id', ...PropertyCatalog.of(target).genericKeys().filter((genericKey) => !NestedSlots.NESTED_BLOCKED[genericKey])].map((slotKey) => `${prefix}.${slotKey}`);
+    throw BpmnError.model('E_UNKNOWN_KEY', `Unknown key "${prefix}.${key}" for ${Kinds.label(el)} ${el.id}: a ${Kinds.typeLabel(target)} has no settable attribute ${key}${blocked ? ` (${blocked})` : ''}`, {
+      element: el.id,
+      candidates: keys,
+      hint: `Keys of the ${ElementSlots.TEXT[slot]}: ${keys.join(', ')}, or a vendor attribute ${prefix}.<prefix>:<attr>.`,
+    });
   }
 
   private static dropConditionBody(el: BpmnElement, expr: BpmnElement, changes: ChangeSet, key = 'camunda:resource'): void {
@@ -123,7 +142,7 @@ export class NestedSlots {
     }
     const id = el.id;
     const flow = el.is('bpmn:SequenceFlow');
-    throw PropertyCoercer.invalid(el,
+    throw PropertyCoercer.invalidValue(el,
       full,
       `removing the script resource ${String(target.attrs[key])} would leave ${flow ? 'the condition' : 'the condition of the conditional event'} empty (it has no inline body); the engines would fail every evaluation of an empty condition`,
       flow
@@ -133,55 +152,68 @@ export class NestedSlots {
 
   setKey(el: BpmnElement, slot: string, key: string, value: string, changes: ChangeSet, replacing = false): void {
     const full = `${slot}.${key}`;
-    if (key.includes(':')) {
-      value = new PropertyCoercer(this.edit).vendorValue(el, key, value, full);
-    }
+    const coercedValue = key.includes(':') ? new PropertyCoercer(this.edit).vendorValue(el, key, value, full) : value;
     const slots = ElementSlots.slotsOf(el);
     const ref = ElementSlots.parseRef(slot);
     if (!ref || !slots.includes(ref.slot) || !key) {
       throw PropertyCatalog.of(el).unknownKey(full, slots.length ? `nested keys of a ${Kinds.label(el)} start with ${slots.map((slotName) => `${slotName}.`).join(' or ')}` : `a ${Kinds.label(el)} has no nested element to address`);
     }
-    const refSlot = ref.slot;
-    let target = NestedResolution.resolve(el, ref, full);
-    if (!target) {
-      const nothingToRemove = !value;
-      if (nothingToRemove) {
-        return;
-      }
-      target = this.create(el, refSlot, key, changes);
+    const resolved = new NestedResolution(el, ref, full).resolve();
+    if (!resolved && !coercedValue) {
+      return;
     }
-    if (value) {
-      this.checkKey(el, refSlot, target, key, ref.text);
+    const target = resolved ?? this.create(el, ref.slot, key, changes);
+    if (coercedValue) {
+      this.checkKey(el, ref.slot, target, key, ref.text);
     }
-    if (refSlot === 'condition' && value && new PropertyCoercer(this.edit).isResourceKey(key)) {
+    this.guardCondition(el, ref.slot, target, key, coercedValue, full, replacing, changes);
+    this.writeKey(el, ref, target, key, coercedValue, full);
+    changes.change(ChangeEntries.of(el, coercedValue ? `${full}=${coercedValue}` : `${full} removed`));
+  }
+
+  private guardCondition(el: BpmnElement, slot: NestedSlot, target: BpmnElement, key: string, value: string, full: string, replacing: boolean, changes: ChangeSet): void {
+    if (slot !== 'condition') {
+      return;
+    }
+    if (value && new PropertyCoercer(this.edit).isResourceKey(key)) {
       NestedSlots.dropConditionBody(el, target, changes, key);
     }
-    if (refSlot === 'condition' && !value && !replacing) {
+    if (!value && !replacing) {
       this.assertConditionKept(el, target, key, full);
     }
+  }
+
+  private writeKey(el: BpmnElement, ref: SlotRef, target: BpmnElement, key: string, value: string, full: string): void {
     if (key.includes(':')) {
       PropertyCatalog.of(target).assertVendorKey(key);
       new PropertyCoercer(this.edit).setVendorAttribute(target, key, value);
     } else if (key === 'id') {
-      if (!value) {
-        throw PropertyCoercer.invalid(el, full, 'an id cannot be empty');
-      }
-      if (target.id) {
-        new IdRename(this.edit).rename(target, value);
-      } else {
-        this.edit.allocator.claim(value);
-        target.set('id', value);
-      }
+      this.writeId(el, target, value, full);
     } else if (!PropertyCoercer.removeUndefined(target, key, value)) {
-      this.checkKey(el, refSlot, target, key, ref.text);
-      const property = target.descriptor.propertiesByName![key]!;
-      const coerced = value ? new PropertyCoercer(this.edit).coerce(el, property, value, full) : undefined;
-      if (target.is('bpmn:CompensateEventDefinition') && key === 'activityRef' && coerced instanceof BpmnElement) {
-        this.assertCompensationInScope(el, coerced, full);
-      }
-      target.set(key, coerced);
+      this.writeProperty(el, ref, target, key, value, full);
     }
-    changes.change(ChangeEntries.of(el, value ? `${full}=${value}` : `${full} removed`));
+  }
+
+  private writeId(el: BpmnElement, target: BpmnElement, value: string, full: string): void {
+    if (!value) {
+      throw PropertyCoercer.invalidValue(el, full, 'an id cannot be empty');
+    }
+    if (target.id) {
+      new IdRename(this.edit).rename(target, value);
+    } else {
+      this.edit.allocator.claim(value);
+      target.set('id', value);
+    }
+  }
+
+  private writeProperty(el: BpmnElement, ref: SlotRef, target: BpmnElement, key: string, value: string, full: string): void {
+    this.checkKey(el, ref.slot, target, key, ref.text);
+    const property = target.descriptor.propertiesByName![key]!;
+    const coerced = value ? new PropertyCoercer(this.edit).coerce(el, property, value, full) : undefined;
+    if (target.is('bpmn:CompensateEventDefinition') && key === 'activityRef' && coerced instanceof BpmnElement) {
+      this.assertCompensationInScope(el, coerced, full);
+    }
+    target.set(key, coerced);
   }
 
   private assertCompensationInScope(event: BpmnElement, activity: BpmnElement, full: string): void {

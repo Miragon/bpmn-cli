@@ -39,6 +39,17 @@ export class EventGatewayRule {
     return `${ElementText.labelOf(target)} already has the incoming flow ${others.map((element) => element.id).join(', ')}; ${what} after an event-based gateway can have no other incoming flow`;
   }
 
+  private otherBranchTargets(gateway: BpmnElement, target: BpmnElement, leaving: BpmnElement[]): BpmnElement[] {
+    const targets: BpmnElement[] = [];
+    for (const flow of this.edit.document.flows.outgoing(gateway)) {
+      const flowTarget = flow.get<BpmnElement | undefined>('targetRef');
+      if (!leaving.includes(flow) && flowTarget && flowTarget !== target) {
+        targets.push(flowTarget);
+      }
+    }
+    return targets;
+  }
+
   private engineTargetProblem(gateway: BpmnElement, target: BpmnElement, leaving: BpmnElement[]): string | undefined {
     if (!target.is('bpmn:IntermediateCatchEvent')) {
       return `${ElementText.labelOf(target)} is not an intermediate catch event; an event-based gateway can only lead to message, timer, signal or conditional catch events`;
@@ -47,24 +58,18 @@ export class EventGatewayRule {
     if (!Triggers.EVENT_GATEWAY_TRIGGERS.includes(trigger)) {
       return `${ElementText.labelOf(target)} is a ${trigger === 'none' ? 'plain' : trigger} catch event; an event-based gateway can only wait for a message, timer, signal or condition`;
     }
-    const incoming = this.otherIncoming(target, leaving, 'a catch event');
-    if (incoming) {
-      return incoming;
-    }
+    return this.otherIncoming(target, leaving, 'a catch event') ?? this.duplicateSubscription(gateway, target, leaving);
+  }
+
+  private duplicateSubscription(gateway: BpmnElement, target: BpmnElement, leaving: BpmnElement[]): string | undefined {
     const mine = EventGatewayRule.subscriptionOf(target);
-    if (mine) {
-      for (const flow of this.edit.document.flows.outgoing(gateway)) {
-        if (leaving.includes(flow)) {
-          continue;
-        }
-        const flowTarget = flow.get<BpmnElement | undefined>('targetRef');
-        if (!flowTarget || flowTarget === target) {
-          continue;
-        }
-        const theirs = EventGatewayRule.subscriptionOf(flowTarget);
-        if (theirs && theirs.kind === mine.kind && theirs.name === mine.name) {
-          return `${flowTarget.id} on another branch of ${gateway.id} already waits for the ${mine.kind} "${mine.name}"; the engines allow one subscription per ${mine.kind} name and gateway`;
-        }
+    if (!mine) {
+      return undefined;
+    }
+    for (const flowTarget of this.otherBranchTargets(gateway, target, leaving)) {
+      const theirs = EventGatewayRule.subscriptionOf(flowTarget);
+      if (theirs && theirs.kind === mine.kind && theirs.name === mine.name) {
+        return `${flowTarget.id} on another branch of ${gateway.id} already waits for the ${mine.kind} "${mine.name}"; the engines allow one subscription per ${mine.kind} name and gateway`;
       }
     }
     return undefined;
@@ -75,33 +80,38 @@ export class EventGatewayRule {
     if (!receive && !target.is('bpmn:IntermediateCatchEvent')) {
       return `${ElementText.labelOf(target)} is neither an intermediate catch event nor a receive task; BPMN 2.0 lets an event-based gateway lead only to message, timer, signal or conditional catch events and receive tasks`;
     }
+    const definitions = receive ? undefined : EventGatewayRule.catchDefinitionProblem(target);
+    return definitions ?? this.otherIncoming(target, leaving, receive ? 'a receive task' : 'a catch event') ?? this.receiveBoundaryProblem(target, receive) ?? this.mixedWaitProblem(gateway, target, leaving, receive);
+  }
+
+  private static catchDefinitionProblem(target: BpmnElement): string | undefined {
+    const defs = target.get<BpmnElement[] | undefined>('eventDefinitions') ?? [];
+    const allowed = ['bpmn:MessageEventDefinition', 'bpmn:TimerEventDefinition', 'bpmn:SignalEventDefinition', 'bpmn:ConditionalEventDefinition'];
+    if (defs.length && defs.every((definition) => allowed.some((allowedType) => definition.is(allowedType)))) {
+      return undefined;
+    }
+    const trigger = Triggers.of(target) ?? 'none';
+    return `${ElementText.labelOf(target)} is a ${trigger === 'none' ? 'plain' : trigger} catch event; after an event-based gateway BPMN 2.0 allows message, timer, signal and conditional catch events only`;
+  }
+
+  private receiveBoundaryProblem(target: BpmnElement, receive: boolean): string | undefined {
     if (!receive) {
-      const defs = target.get<BpmnElement[] | undefined>('eventDefinitions') ?? [];
-      const allowed = ['bpmn:MessageEventDefinition', 'bpmn:TimerEventDefinition', 'bpmn:SignalEventDefinition', 'bpmn:ConditionalEventDefinition'];
-      if (!defs.length || defs.some((definition) => !allowed.some((allowedType) => definition.is(allowedType)))) {
-        const trigger = Triggers.of(target) ?? 'none';
-        return `${ElementText.labelOf(target)} is a ${trigger === 'none' ? 'plain' : trigger} catch event; after an event-based gateway BPMN 2.0 allows message, timer, signal and conditional catch events only`;
-      }
+      return undefined;
     }
-    const incoming = this.otherIncoming(target, leaving, receive ? 'a receive task' : 'a catch event');
-    if (incoming) {
-      return incoming;
+    const boundaries = this.edit.document.scopes.boundaryEventsOf(target);
+    if (!boundaries.length) {
+      return undefined;
     }
-    if (receive && this.edit.document.scopes.boundaryEventsOf(target).length) {
-      return `${ElementText.labelOf(target)} has boundary events (${this.edit.document.scopes.boundaryEventsOf(target).map((element) => element.id).join(', ')}); BPMN 2.0 does not allow them on a receive task after an event-based gateway`;
+    return `${ElementText.labelOf(target)} has boundary events (${boundaries.map((element) => element.id).join(', ')}); BPMN 2.0 does not allow them on a receive task after an event-based gateway`;
+  }
+
+  private mixedWaitProblem(gateway: BpmnElement, target: BpmnElement, leaving: BpmnElement[], receive: boolean): string | undefined {
+    if (!receive && !EventGatewayRule.waitsForMessage(target)) {
+      return undefined;
     }
-    if (receive || EventGatewayRule.waitsForMessage(target)) {
-      for (const flow of this.edit.document.flows.outgoing(gateway)) {
-        if (leaving.includes(flow)) {
-          continue;
-        }
-        const flowTarget = flow.get<BpmnElement | undefined>('targetRef');
-        if (!flowTarget || flowTarget === target) {
-          continue;
-        }
-        if (receive ? EventGatewayRule.waitsForMessage(flowTarget) : flowTarget.is('bpmn:ReceiveTask')) {
-          return `${flowTarget.id} on another branch of ${gateway.id} is a ${receive ? 'message catch event' : 'receive task'}; BPMN 2.0 does not mix receive tasks and message catch events behind one event-based gateway`;
-        }
+    for (const flowTarget of this.otherBranchTargets(gateway, target, leaving)) {
+      if (receive ? EventGatewayRule.waitsForMessage(flowTarget) : flowTarget.is('bpmn:ReceiveTask')) {
+        return `${flowTarget.id} on another branch of ${gateway.id} is a ${receive ? 'message catch event' : 'receive task'}; BPMN 2.0 does not mix receive tasks and message catch events behind one event-based gateway`;
       }
     }
     return undefined;

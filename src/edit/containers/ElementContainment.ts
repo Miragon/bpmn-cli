@@ -8,12 +8,14 @@ export interface ElementReference {
 }
 
 export class ElementContainment {
-  static isDataReference(element: BpmnElement): boolean {
-    return element.is('bpmn:DataObjectReference') || element.is('bpmn:DataStoreReference');
+  constructor(private readonly element: BpmnElement) {}
+
+  isDataReference(): boolean {
+    return this.element.is('bpmn:DataObjectReference') || this.element.is('bpmn:DataStoreReference');
   }
 
-  static artifactContainerOf(element: BpmnElement): BpmnElement | undefined {
-    for (let ancestor: BpmnElement | undefined = element; ancestor; ancestor = ancestor.parent) {
+  artifactContainer(): BpmnElement | undefined {
+    for (let ancestor: BpmnElement | undefined = this.element; ancestor; ancestor = ancestor.parent) {
       if (ancestor.is('bpmn:Process') || ancestor.is('bpmn:SubProcess') || ancestor.is('bpmn:Collaboration')) {
         return ancestor;
       }
@@ -21,27 +23,39 @@ export class ElementContainment {
     return undefined;
   }
 
-  static contains(parent: BpmnElement, child: BpmnElement): boolean {
-    const { descriptor } = parent;
+  contains(child: BpmnElement): boolean {
+    const { descriptor } = this.element;
     if (descriptor.isGeneric) {
-      return parent.list('$children').includes(child);
+      return this.element.list('$children').includes(child);
     }
     return (descriptor.properties ?? []).some((property) => {
       if (property.isReference) {
         return false;
       }
-      const value = ElementContainment.own(parent, property.name);
+      const value = this.element.peek(property.name);
       return Array.isArray(value) ? value.includes(child) : value === child;
     });
   }
 
-  static detach(element: BpmnElement, replacement?: BpmnElement): BpmnElement | undefined {
-    const { parent } = element;
+  isAttachedTo(root: BpmnElement): boolean {
+    let current = this.element;
+    while (current !== root) {
+      const parent = current.parent;
+      if (!parent || !new ElementContainment(parent).contains(current)) {
+        return false;
+      }
+      current = parent;
+    }
+    return true;
+  }
+
+  detach(replacement?: BpmnElement): BpmnElement | undefined {
+    const { parent } = this.element;
     if (!parent) {
       return undefined;
     }
     for (const property of parent.descriptor.properties ?? []) {
-      if (!property.isReference && ElementContainment.replaceIn(parent, property.name, element, replacement)) {
+      if (!property.isReference && this.replaceIn(parent, property.name, replacement)) {
         if (replacement) {
           replacement.parent = parent;
         }
@@ -51,9 +65,9 @@ export class ElementContainment {
     return parent;
   }
 
-  static referencesToAny(root: BpmnElement, targets: ReadonlySet<BpmnElement>): ElementReference[] {
+  referencesToAny(targets: ReadonlySet<BpmnElement>): ElementReference[] {
     const references: ElementReference[] = [];
-    for (const element of new ElementWalk(root).depthFirst()) {
+    for (const element of new ElementWalk(this.element).depthFirst()) {
       if (!element.descriptor.isGeneric) {
         references.push(...ElementContainment.referencesOf(element, targets));
       }
@@ -61,32 +75,28 @@ export class ElementContainment {
     return references;
   }
 
-  static nearestWithId(element: BpmnElement): BpmnElement | undefined {
-    let current: BpmnElement | undefined = element;
+  nearestWithId(): BpmnElement | undefined {
+    let current: BpmnElement | undefined = this.element;
     while (current && !current.get<string | undefined>('id')) {
       current = current.parent;
     }
     return current;
   }
 
-  private static own(parent: BpmnElement, property: string): unknown {
-    return parent.peek(property);
-  }
-
-  private static replaceIn(parent: BpmnElement, property: string, element: BpmnElement, replacement: BpmnElement | undefined): boolean {
-    const value = ElementContainment.own(parent, property);
+  private replaceIn(parent: BpmnElement, property: string, replacement: BpmnElement | undefined): boolean {
+    const value = parent.peek(property);
     if (Array.isArray(value)) {
-      const position = value.indexOf(element);
+      const position = value.indexOf(this.element);
       if (position === -1) {
         return false;
       }
-      parent.remove(property, element);
+      parent.remove(property, this.element);
       if (replacement) {
         parent.insert(property, position, replacement);
       }
       return true;
     }
-    if (value !== element) {
+    if (value !== this.element) {
       return false;
     }
     parent.set(property, replacement);
@@ -99,7 +109,7 @@ export class ElementContainment {
       if (!property.isReference) {
         continue;
       }
-      const value = ElementContainment.own(element, property.name);
+      const value = element.peek(property.name);
       const entries = property.isMany && Array.isArray(value) ? value : [value];
       for (const entry of entries) {
         if (entry instanceof BpmnElement && targets.has(entry)) {

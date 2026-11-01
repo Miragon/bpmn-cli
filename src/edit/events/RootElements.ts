@@ -3,21 +3,21 @@ import type { EditSession } from '../session/EditSession.js';
 
 export type RootRefType = 'bpmn:Message' | 'bpmn:Error' | 'bpmn:Signal' | 'bpmn:Escalation';
 
-const ROOT_PREFIX: Record<RootRefType, string> = {
-  'bpmn:Message': 'Message',
-  'bpmn:Error': 'Error',
-  'bpmn:Signal': 'Signal',
-  'bpmn:Escalation': 'Escalation',
-};
-
 export class RootElements {
+  private static readonly ROOT_PREFIX: Record<RootRefType, string> = {
+    'bpmn:Message': 'Message',
+    'bpmn:Error': 'Error',
+    'bpmn:Signal': 'Signal',
+    'bpmn:Escalation': 'Escalation',
+  };
+
   constructor(private readonly edit: EditSession) {}
 
   ensure(type: RootRefType, nameOrId: string, extra: Record<string, string | undefined> = {}): { el: BpmnElement; created: boolean } {
     const document = this.edit.document;
     const key = nameOrId.trim();
     if (!key) {
-      throw BpmnError.model('E_INVALID_VALUE', `The ${ROOT_PREFIX[type].toLowerCase()} name is empty`, { hint: 'Pass a name, e.g. --message OrderReceived.' });
+      throw BpmnError.model('E_INVALID_VALUE', `The ${RootElements.ROOT_PREFIX[type].toLowerCase()} name is empty`, { hint: 'Pass a name, e.g. --message OrderReceived.' });
     }
     const existing = document.tree.rootElementsOfType(type);
     let el = existing.find((candidate) => candidate.id === key) ?? existing.find((candidate) => candidate.get<string | undefined>('name') === key);

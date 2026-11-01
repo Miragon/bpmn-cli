@@ -91,12 +91,12 @@ export class BranchSplit {
     changes.bind(command.as, gateway);
     if (spliced) {
       const renamed = new SequenceFlows(this.edit).redirect(spliced, { target: gateway });
-      DeclarationOrder.insertAfter(scope, spliced, gateway);
+      new DeclarationOrder(scope).insertAfter(spliced, gateway);
       changes.change(ChangeEntries.ofFlow(spliced, `${command.after} -> ${gatewayId} (was -> ${successor!.id})${ChangeEntries.renamedNote(renamed)}`));
       changes.note(`inserted ${gatewayId} between ${command.after} and ${successor!.id}`);
     } else {
       const flow = new SequenceFlows(this.edit).create(anchor, gateway);
-      DeclarationOrder.insertAfter(scope, flow, gateway);
+      new DeclarationOrder(scope).insertAfter(flow, gateway);
       changes.create(ChangeEntries.ofFlow(flow));
       changes.note(`appended ${gatewayId} after ${command.after}`);
     }

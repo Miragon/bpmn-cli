@@ -19,32 +19,53 @@ export class LoopKeys {
       return;
     }
     if (key === 'loop') {
-      const mode = (value || 'none').trim().toLowerCase();
-      if (mode === 'none') {
-        el.set('loopCharacteristics', undefined);
-        if (current) {
-          this.dropLoop(el, current, mode, changes);
-        }
-      } else if (mode === 'standard') {
-        if (!current?.is('bpmn:StandardLoopCharacteristics')) {
-          const loop = this.edit.document.tree.build('bpmn:StandardLoopCharacteristics');
-          loop.parent = el;
-          el.set('loopCharacteristics', loop);
-          if (current) {
-            this.dropLoop(el, current, mode, changes);
-          }
-        }
-      } else if (mode === 'parallel' || mode === 'sequential') {
-        const multi = isMulti ? current! : this.createMultiInstance(el);
-        multi.set('isSequential', mode === 'sequential');
-        if (current && !isMulti) {
-          this.dropLoop(el, current, mode, changes);
-        }
-      } else {
-        throw PropertyCoercer.invalid(el, key, `"${value}" is not one of none|standard|parallel|sequential`);
-      }
+      this.writeMode(el, key, value, current, changes);
       return;
     }
+    this.writeMultiInstanceKey(el, key, value, current, changes);
+  }
+
+  private writeMode(el: BpmnElement, key: string, value: string, current: BpmnElement | undefined, changes: ChangeSet): void {
+    const mode = (value || 'none').trim().toLowerCase();
+    if (mode === 'none') {
+      el.set('loopCharacteristics', undefined);
+      this.dropReplaced(el, current, mode, changes);
+    } else if (mode === 'standard') {
+      this.makeStandard(el, current, changes);
+    } else if (mode === 'parallel' || mode === 'sequential') {
+      this.makeMultiInstance(el, mode, current, changes);
+    } else {
+      throw PropertyCoercer.invalidValue(el, key, `"${value}" is not one of none|standard|parallel|sequential`);
+    }
+  }
+
+  private makeStandard(el: BpmnElement, current: BpmnElement | undefined, changes: ChangeSet): void {
+    if (current?.is('bpmn:StandardLoopCharacteristics')) {
+      return;
+    }
+    const loop = this.edit.document.tree.build('bpmn:StandardLoopCharacteristics');
+    loop.parent = el;
+    el.set('loopCharacteristics', loop);
+    this.dropReplaced(el, current, 'standard', changes);
+  }
+
+  private makeMultiInstance(el: BpmnElement, mode: string, current: BpmnElement | undefined, changes: ChangeSet): void {
+    const isMulti = !!current?.is('bpmn:MultiInstanceLoopCharacteristics');
+    const multi = isMulti ? current! : this.createMultiInstance(el);
+    multi.set('isSequential', mode === 'sequential');
+    if (!isMulti) {
+      this.dropReplaced(el, current, mode, changes);
+    }
+  }
+
+  private dropReplaced(el: BpmnElement, current: BpmnElement | undefined, mode: string, changes: ChangeSet): void {
+    if (current) {
+      this.dropLoop(el, current, mode, changes);
+    }
+  }
+
+  private writeMultiInstanceKey(el: BpmnElement, key: string, value: string, current: BpmnElement | undefined, changes: ChangeSet): void {
+    const isMulti = !!current?.is('bpmn:MultiInstanceLoopCharacteristics');
     const prop = key === 'cardinality' ? 'loopCardinality' : 'completionCondition';
     if (!value) {
       if (isMulti) {
@@ -53,7 +74,7 @@ export class LoopKeys {
       return;
     }
     if (current && !isMulti) {
-      throw PropertyCoercer.invalid(el, key, `${key} needs a multi-instance loop, but ${el.id} has a standard loop`, 'Set loop=parallel or loop=sequential first.');
+      throw PropertyCoercer.invalidValue(el, key, `${key} needs a multi-instance loop, but ${el.id} has a standard loop`, 'Set loop=parallel or loop=sequential first.');
     }
     let multi = current;
     if (!multi) {

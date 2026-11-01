@@ -70,7 +70,8 @@ export class PropertyEditor {
   set(command: SetOperation): ChangeSet {
     const changes = new ChangeSet();
     const element = this.edit.require(command.id);
-    const entries = Object.entries(command.set).map(([key, value]): [string, string] => [PropertyEditor.normalizeKey(key), value]);
+    const given = Object.entries(command.set).filter(([, value]) => value !== undefined);
+    const entries = given.map(([key, value]): [string, string] => [PropertyEditor.normalizeKey(key), value]);
     this.assertDefaultWithoutCondition(element, entries);
     const keys = this.writePlainKeys(element, entries, changes);
     this.writeGroupedKeys(element, keys, changes);
@@ -95,10 +96,10 @@ export class PropertyEditor {
     if (!element.is('bpmn:SequenceFlow')) {
       return;
     }
-    const wantsDefault = entries.some(([key, value]) => key === 'default' && value && PropertyCoercer.bool(element, key, value));
+    const wantsDefault = entries.some(([key, value]) => key === 'default' && value && PropertyCoercer.booleanOf(element, key, value));
     const wantsCondition = entries.some(([key, value]) => key === 'condition' && value);
     if (wantsDefault && wantsCondition) {
-      throw PropertyCoercer.invalid(element, 'default', 'default=true and condition cannot be combined: a default flow has no condition', 'Set one of them, or condition= (empty) together with default=true.');
+      throw PropertyCoercer.invalidValue(element, 'default', 'default=true and condition cannot be combined: a default flow has no condition', 'Set one of them, or condition= (empty) together with default=true.');
     }
   }
 
@@ -151,7 +152,7 @@ export class PropertyEditor {
       return;
     }
     if (conditionKeys.get('condition')) {
-      throw PropertyCoercer.invalid(element, 'condition', 'a condition is either an inline expression (condition=) or a script resource (condition.camunda:resource=), not both', 'Pass one of them; a script resource also needs language=<script language>.');
+      throw PropertyCoercer.invalidValue(element, 'condition', 'a condition is either an inline expression (condition=) or a script resource (condition.camunda:resource=), not both', 'Pass one of them; a script resource also needs language=<script language>.');
     }
     if (conditionKeys.has('condition')) {
       conditionKeys.delete('condition');
@@ -191,7 +192,7 @@ export class PropertyEditor {
 
   private writeId(element: BpmnElement, value: string, key: string, changes: ChangeSet): ChangeRecording {
     if (!value) {
-      throw PropertyCoercer.invalid(element, key, 'an id cannot be empty');
+      throw PropertyCoercer.invalidValue(element, key, 'an id cannot be empty');
     }
     const formerId = element.id;
     new FlowIdFollower(this.edit).recordFormerEnd(element);
@@ -232,7 +233,7 @@ export class PropertyEditor {
       throw PropertyCatalog.of(flow).unknownKey(key, 'applies to sequence flows');
     }
     if (!value) {
-      throw PropertyCoercer.invalid(flow, key, 'a flow always needs a source and a target');
+      throw PropertyCoercer.invalidValue(flow, key, 'a flow always needs a source and a target');
     }
     const node = this.edit.require(value, 'bpmn:FlowNode');
     const sequenceFlows = new SequenceFlows(this.edit);
@@ -256,7 +257,7 @@ export class PropertyEditor {
     if (!element.is('bpmn:SubProcess')) {
       throw PropertyCatalog.of(element).unknownKey(key, 'applies to sub-processes');
     }
-    changes.expansions.expand(element.id, value ? PropertyCoercer.bool(element, key, value) : true);
+    changes.expansions.expand(element.id, value ? PropertyCoercer.booleanOf(element, key, value) : true);
     return 'left to set';
   }
 

@@ -6,10 +6,6 @@ export class AliasTable {
 
   constructor(private readonly document: BpmnDocument) {}
 
-  get size(): number {
-    return this.map.size;
-  }
-
   define(alias: string, el: BpmnElement, op: number): void {
     const prev = this.map.get(alias);
     if (prev) {

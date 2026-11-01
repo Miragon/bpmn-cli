@@ -24,7 +24,7 @@ export class ExtensionLevel {
     return this.parent ? this.names.itemLabel(this.parent) : 'extensionElements';
   }
 
-  inside(parent: BpmnElement): ExtensionLevel {
+  enter(parent: BpmnElement): ExtensionLevel {
     return new ExtensionLevel(this.document, this.names, this.host, parent);
   }
 
@@ -40,7 +40,7 @@ export class ExtensionLevel {
     if (this.parent) {
       const kids = [...this.parent.list('$children')];
       const order = ExtensionStructure.INSTANCE.childOrder(this.type!);
-      const rank = (item: BpmnElement): number => (order ? order.indexOf(VendorFamily.ruleName(this.names.typeOf(item))) : -1);
+      const rank = (item: BpmnElement): number => (order ? order.indexOf(new VendorFamily(this.names.typeOf(item)).ruleName()) : -1);
       const mine = rank(el);
       const at = mine === -1 ? -1 : kids.findIndex((kid) => rank(kid) > mine);
       if (at === -1) {
@@ -94,7 +94,7 @@ export class ExtensionLevel {
     }
     return this.items()
       .filter((item) => this.names.typeOf(item) === home)
-      .flatMap((container) => pick(this.inside(container)));
+      .flatMap((container) => pick(this.enter(container)));
   }
 
   selectDeep(step: Step): Array<{ el: BpmnElement; level: ExtensionLevel }> {
@@ -106,7 +106,7 @@ export class ExtensionLevel {
           out.push({ el: item, level: lv });
         }
         if (this.names.isGeneric(item)) {
-          visit(lv.inside(item));
+          visit(lv.enter(item));
         }
       }
     };

@@ -52,7 +52,7 @@ export class ElementCreation {
     if (!Kinds.FLOW_NODE_FAMILIES.has(def.family)) {
       this.finishWithoutLane(element, command, keys, def, changes);
     }
-    const rest = TriggerKeys.without(keys, ElementCreation.consumedKeys(def));
+    const rest = TriggerKeys.remainingKeys(keys, ElementCreation.consumedKeys(def));
     if (Object.keys(rest).length) {
       changes.merge(new PropertyEditor(this.edit).set({ op: 'set', id: element.id, set: { ...rest } }));
     }
@@ -229,7 +229,7 @@ export class ElementCreation {
       new EventGatewayRule(this.edit).warnFlow(flow, changes);
     }
     if (def.family === 'subProcess' && keys['expanded'] !== undefined) {
-      const expanded = PropertyCoercer.bool(element, 'expanded', keys['expanded']);
+      const expanded = PropertyCoercer.booleanOf(element, 'expanded', keys['expanded']);
       changes.expansions.expand(element.id, expanded);
       if (!expanded) {
         changes.note(`${element.id} will be laid out collapsed`);

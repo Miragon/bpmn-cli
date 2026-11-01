@@ -34,7 +34,7 @@ export class Artifacts {
 
   createTextAnnotation(scope: BpmnElement, opts: { id?: string; name?: string; text?: string }, changes: ChangeSet): BpmnElement {
     const document = this.edit.document;
-    if (ElementContainment.artifactContainerOf(scope) !== scope) {
+    if (new ElementContainment(scope).artifactContainer() !== scope) {
       throw BpmnError.model('E_INVALID_SCOPE', `${scope.id} is a ${Kinds.label(scope)}; text annotations can only be created in a process, sub-process or collaboration`, {
         element: scope.id,
       });
@@ -53,7 +53,7 @@ export class Artifacts {
       throw BpmnError.usage('A group needs --members <id,...>: the elements it is drawn around');
     }
     const members = opts.members.map((id) => this.edit.require(id));
-    const wrong = members.find((member) => !member.is('bpmn:FlowNode') && !ElementContainment.isDataReference(member));
+    const wrong = members.find((member) => !member.is('bpmn:FlowNode') && !new ElementContainment(member).isDataReference());
     if (wrong) {
       throw BpmnError.model('E_INVALID_VALUE', `${wrong.id} is a ${Kinds.label(wrong)}; group members are flow nodes, data objects and data stores`, { element: wrong.id });
     }

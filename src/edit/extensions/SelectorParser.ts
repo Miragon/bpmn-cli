@@ -27,39 +27,12 @@ export class SelectorParser {
       const step: Step = { name: match[0], text: match[0] };
       cursor = nameRe.lastIndex;
       if (source[cursor] === '[') {
-        let scan = cursor + 1;
-        let quote: string | undefined;
-        for (; scan < source.length; scan++) {
-          const ch = source[scan]!;
-          if (quote) {
-            if (ch === quote) {
-              quote = undefined;
-            }
-          } else if (ch === '"' || ch === "'") {
-            quote = ch;
-          } else if (ch === ']') {
-            break;
-          }
-        }
-        if (scan >= source.length) {
+        const close = SelectorParser.closingBracket(source, cursor);
+        if (close >= source.length) {
           this.fail(text, 'unclosed [', el);
         }
-        const inner = source.slice(cursor + 1, scan).trim();
-        if (/^\d+$/.test(inner)) {
-          step.index = Number(inner);
-        } else {
-          const eq = inner.indexOf('=');
-          if (eq <= 0) {
-            this.fail(text, `expected [attr=value] or [index], got [${inner}]`, el);
-          }
-          step.attr = inner.slice(0, eq).trim();
-          let attrValue = inner.slice(eq + 1).trim();
-          if (attrValue.length >= 2 && (attrValue[0] === '"' || attrValue[0] === "'") && attrValue[attrValue.length - 1] === attrValue[0]) {
-            attrValue = attrValue.slice(1, -1);
-          }
-          step.value = attrValue;
-        }
-        cursor = scan + 1;
+        this.readSelection(step, source.slice(cursor + 1, close).trim(), text, el);
+        cursor = close + 1;
         step.text = source.slice(start, cursor);
       }
       steps.push(step);
@@ -71,6 +44,39 @@ export class SelectorParser {
       }
       cursor++;
     }
+  }
+
+  private static closingBracket(source: string, open: number): number {
+    let quote: string | undefined;
+    for (let scan = open + 1; scan < source.length; scan++) {
+      const ch = source[scan]!;
+      if (quote) {
+        quote = ch === quote ? undefined : quote;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === ']') {
+        return scan;
+      }
+    }
+    return source.length;
+  }
+
+  private readSelection(step: Step, inner: string, text: string, el: BpmnElement): void {
+    if (/^\d+$/.test(inner)) {
+      step.index = Number(inner);
+      return;
+    }
+    const eq = inner.indexOf('=');
+    if (eq <= 0) {
+      this.fail(text, `expected [attr=value] or [index], got [${inner}]`, el);
+    }
+    step.attr = inner.slice(0, eq).trim();
+    step.value = SelectorParser.stripQuotes(inner.slice(eq + 1).trim());
+  }
+
+  private static stripQuotes(value: string): string {
+    const isQuoted = value.length >= 2 && (value[0] === '"' || value[0] === "'") && value[value.length - 1] === value[0];
+    return isQuoted ? value.slice(1, -1) : value;
   }
 
   fail(text: string, why: string, el: BpmnElement): never {

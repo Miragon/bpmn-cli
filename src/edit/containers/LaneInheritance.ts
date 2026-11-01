@@ -37,8 +37,11 @@ export class LaneInheritance {
 
   warning(id: string): Finding | undefined {
     const { lane, cross } = this;
-    const other = cross && lane ? (lane === cross.from ? cross.to : cross.from) : undefined;
-    if (!cross || !lane || !other) {
+    if (!cross || !lane) {
+      return undefined;
+    }
+    const other = lane === cross.from ? cross.to : cross.from;
+    if (!other) {
       return undefined;
     }
     const side = cross.branching

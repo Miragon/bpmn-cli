@@ -1,7 +1,5 @@
 import { type BpmnElement, BpmnError, ChangeEntries, ChangeSet } from '../model/index.js';
 import { type OrderOperation, ReorderTarget } from '../operations/index.js';
-import type { Pools } from './containers/Pools.js';
-import type { LaneMembership } from './LaneMembership.js';
 import type { EditSession } from './session/EditSession.js';
 
 export class ElementOrder {

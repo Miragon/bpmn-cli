@@ -27,20 +27,9 @@ export class TriggerChange {
   }
 
   change(trigger: Trigger | undefined, given: TriggerOptions, changes: ChangeSet, { on = this.el, strict = false }: { on?: BpmnElement; strict?: boolean } = {}): void {
-    let dropNonInterrupting = false;
+    const dropNonInterrupting = trigger !== undefined && this.losesNonInterrupting(on, trigger, given);
     if (trigger !== undefined) {
-      const merged: TriggerOptions = trigger === this.was ? { ...this.before.opts, ...given } : { ...given };
-      if (given.timer !== undefined && given.timerKind === undefined) {
-        delete merged.timerKind;
-      }
-      if (given.nonInterrupting === undefined && this.before.opts.nonInterrupting) {
-        if (EventTrigger.interruptingOnly(on, trigger)) {
-          merged.nonInterrupting = false;
-          dropNonInterrupting = true;
-        } else if (strict) {
-          merged.nonInterrupting = true;
-        }
-      }
+      const merged = this.mergedOptions(on, trigger, given, strict);
       if (strict && merged.nonInterrupting) {
         this.assertNonInterruptingAllowed(on, trigger);
       }
@@ -53,6 +42,23 @@ export class TriggerChange {
       this.warnNonInterruptingDropped(changes, on, trigger);
     }
     new IdRename(this.edit).recordState(on, this.state, this.label);
+  }
+
+  private losesNonInterrupting(on: BpmnElement, trigger: Trigger, given: TriggerOptions): boolean {
+    return given.nonInterrupting === undefined && !!this.before.opts.nonInterrupting && EventTrigger.interruptingOnly(on, trigger);
+  }
+
+  private mergedOptions(on: BpmnElement, trigger: Trigger, given: TriggerOptions, strict: boolean): TriggerOptions {
+    const merged: TriggerOptions = trigger === this.was ? { ...this.before.opts, ...given } : { ...given };
+    if (given.timer !== undefined && given.timerKind === undefined) {
+      delete merged.timerKind;
+    }
+    if (this.losesNonInterrupting(on, trigger, given)) {
+      merged.nonInterrupting = false;
+    } else if (given.nonInterrupting === undefined && this.before.opts.nonInterrupting && strict) {
+      merged.nonInterrupting = true;
+    }
+    return merged;
   }
 
   setNonInterrupting(value: boolean): void {
@@ -81,19 +87,25 @@ export class TriggerChange {
       if (!sends && !receives) {
         continue;
       }
-      let why: string | undefined;
-      if (trigger !== 'none' && trigger !== 'message') {
-        why = `a ${trigger} event cannot ${sends ? 'send' : 'receive'} messages`;
-      } else if (sends && !event.is('bpmn:ThrowEvent')) {
-        why = 'catching events cannot send messages';
-      } else if (receives && !event.is('bpmn:CatchEvent')) {
-        why = 'throwing events cannot receive messages';
-      }
+      const why = TriggerChange.conflictReason(event, trigger, sends, receives);
       if (why) {
         out.push({ flow, why });
       }
     }
     return out;
+  }
+
+  private static conflictReason(event: BpmnElement, trigger: Trigger, sends: boolean, receives: boolean): string | undefined {
+    if (trigger !== 'none' && trigger !== 'message') {
+      return `a ${trigger} event cannot ${sends ? 'send' : 'receive'} messages`;
+    }
+    if (sends && !event.is('bpmn:ThrowEvent')) {
+      return 'catching events cannot send messages';
+    }
+    if (receives && !event.is('bpmn:CatchEvent')) {
+      return 'throwing events cannot receive messages';
+    }
+    return undefined;
   }
 
   private assertMessageFlowsFit(event: BpmnElement): void {
@@ -151,6 +163,6 @@ export class TriggerChange {
       }
       return;
     }
-    throw PropertyCoercer.invalid(el, 'nonInterrupting', 'only boundary events and start events of event sub-processes can be non-interrupting');
+    throw PropertyCoercer.invalidValue(el, 'nonInterrupting', 'only boundary events and start events of event sub-processes can be non-interrupting');
   }
 }

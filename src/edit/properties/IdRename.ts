@@ -2,6 +2,8 @@ import { type BpmnElement, CAMUNDA, type ChangeSet, DiIdStyle, ElementWalk, IdCu
 import { FlowIdFollower } from '../flows/FlowIdFollower.js';
 import type { EditSession } from '../session/EditSession.js';
 
+type VendorIdReference = ReturnType<typeof CAMUNDA.idReferenceAttrs>[number];
+
 export class IdRename {
   constructor(private readonly edit: EditSession) {}
 
@@ -27,32 +29,32 @@ export class IdRename {
       if (element.is('bpmn:CallActivity') && element.get<string | undefined>('calledElement') === old) {
         element.set('calledElement', newId);
       }
-      if (!element.descriptor.isGeneric) {
-        continue;
-      }
-      if (element.type === 'zeebe:calledElement' && element.peek('processId') === old) {
-        element.set('processId', newId);
-      }
-      if (!vendorRefs.length) {
-        continue;
-      }
-      const [prefix, local] = element.type.split(':');
-      if (!prefix || !local || !CAMUNDA.reads(document.namespaces.uriOf(prefix))) {
-        continue;
-      }
-      for (const ref of vendorRefs) {
-        if (ref.element !== `camunda:${local}`) {
-          continue;
-        }
-        if (element.peek(ref.attr) === old) {
-          element.set(ref.attr, newId);
-        }
-        if (element.attrs?.[ref.attr] === old) {
-          element.attrs[ref.attr] = newId;
-        }
+      if (element.descriptor.isGeneric) {
+        this.followInGeneric(element, old, newId, vendorRefs);
       }
     }
     document.tree.invalidate();
+  }
+
+  private followInGeneric(element: BpmnElement, old: string, newId: string, vendorRefs: VendorIdReference[]): void {
+    if (element.type === 'zeebe:calledElement' && element.peek('processId') === old) {
+      element.set('processId', newId);
+    }
+    if (!vendorRefs.length) {
+      return;
+    }
+    const [prefix, local] = element.type.split(':');
+    if (!prefix || !local || !CAMUNDA.reads(this.edit.document.namespaces.uriOf(prefix))) {
+      return;
+    }
+    for (const ref of vendorRefs.filter((reference) => reference.element === `camunda:${local}`)) {
+      if (element.peek(ref.attr) === old) {
+        element.set(ref.attr, newId);
+      }
+      if (element.attrs?.[ref.attr] === old) {
+        element.attrs[ref.attr] = newId;
+      }
+    }
   }
 
   recordState(el: BpmnElement, before: IdState, wasLabel: string): void {
@@ -62,7 +64,7 @@ export class IdRename {
     const base = allocator.generatedBase(id);
     if (base === undefined) {
       if (style.declared) {
-        this.edit.recordIdState(id, before, wasLabel);
+        this.edit.journal.recordIdState(id, before, wasLabel);
       }
       return;
     }
@@ -75,7 +77,7 @@ export class IdRename {
     const flows = new FlowIdFollower(this.edit).namedAfter(el).map((flow) => ({ flow, was: `${flow.get<BpmnElement>('sourceRef').id} -> ${flow.get<BpmnElement>('targetRef').id}` }));
     this.rename(el, next);
     allocator.markGenerated(next, wanted);
-    this.edit.recordRegenerated(id, next, undefined, el);
+    this.edit.journal.recordRegenerated(id, next, undefined, el);
     for (const { flow, was } of flows) {
       new FlowIdFollower(this.edit).followRenamedEnd(flow, was);
     }
@@ -83,7 +85,7 @@ export class IdRename {
 
   reportStalePrefixes(changes: ChangeSet): void {
     const document = this.edit.document;
-    const states = this.edit.takeIdStates();
+    const states = this.edit.journal.takeIdStates();
     if (!states.size) {
       return;
     }

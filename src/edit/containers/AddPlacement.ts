@@ -28,15 +28,15 @@ export class AddPlacement {
     switch (NodePlacement.modeOf(command)) {
       case 'after':
       case 'between':
-        return this.at('After', command.after);
+        return this.contextAt('After', command.after);
       case 'before':
-        return this.at('Before', command.before);
+        return this.contextAt('Before', command.before);
       case 'flow':
         return this.afterSourceOfFlow();
       case 'on':
-        return this.at('On', command.on);
+        return this.contextAt('On', command.on);
       default:
-        return this.inScope();
+        return this.scopeContext();
     }
   }
 
@@ -58,7 +58,7 @@ export class AddPlacement {
     }
   }
 
-  private at(word: ContextWord, id: string | undefined): AnchorContext {
+  private contextAt(word: ContextWord, id: string | undefined): AnchorContext {
     const element = id ? this.edit.document.tree.byId(id) : undefined;
     return element ? new ElementLabels(element).anchorContext(word) : { context: word };
   }
@@ -68,7 +68,7 @@ export class AddPlacement {
     return source ? new ElementLabels(source).anchorContext('After') : undefined;
   }
 
-  private inScope(): AnchorContext | undefined {
+  private scopeContext(): AnchorContext | undefined {
     const { document } = this.edit;
     const scope = this.command.in ? document.tree.byId(this.command.in) : undefined;
     if (!scope) {

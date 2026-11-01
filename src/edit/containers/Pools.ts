@@ -2,13 +2,18 @@ import { type BpmnElement, BpmnError, type ChangeSet, ElementLabels, IdRequests,
 import type { AddOperation } from '../../operations/index.js';
 import type { EditSession } from '../session/EditSession.js';
 
+interface ParticipantProcess {
+  process?: BpmnElement;
+  mode: 'wrap' | 'bind' | 'new' | 'blackBox';
+}
+
 export class Pools {
   constructor(private readonly edit: EditSession) {}
 
   createParticipant(command: AddOperation, changes: ChangeSet): BpmnElement {
     const document = this.edit.document;
     const resolved = this.resolveParticipantProcess(command);
-    const context = resolved.process ? new ElementLabels(resolved.process).label() : resolved.mode === 'blackBox' ? 'Black box' : 'Pool';
+    const context = Pools.contextOf(resolved);
     const id = this.edit.allocator.explicitOr(command.id, IdRequests.kindRequest(Kinds.byName('participant')!, { ...(command.name ? { name: command.name } : {}), context }));
     const collab = this.ensureCollaboration(changes);
     let process = resolved.process;
@@ -24,14 +29,26 @@ export class Pools {
       ...(process ? { processRef: process } : {}),
     });
     collab.add('participants', participant);
-    const detail =
-      resolved.mode === 'blackBox' ? 'black box (no process)' : resolved.mode === 'wrap' ? `wraps process ${process!.id}` : `process ${process!.id}`;
-    changes.create({ id, kind: 'participant', ...(command.name ? { name: command.name } : {}), detail });
+    changes.create({ id, kind: 'participant', ...(command.name ? { name: command.name } : {}), detail: Pools.detailOf(resolved.mode, process) });
     if (resolved.mode === 'wrap') {
       changes.note(`collaboration ${collab.id} created; ${id} wraps the existing process ${process!.id}`);
     }
     document.tree.invalidate();
     return participant;
+  }
+
+  private static contextOf({ process, mode }: ParticipantProcess): string {
+    if (process) {
+      return new ElementLabels(process).label();
+    }
+    return mode === 'blackBox' ? 'Black box' : 'Pool';
+  }
+
+  private static detailOf(mode: ParticipantProcess['mode'], process: BpmnElement | undefined): string {
+    if (mode === 'blackBox') {
+      return 'black box (no process)';
+    }
+    return mode === 'wrap' ? `wraps process ${process!.id}` : `process ${process!.id}`;
   }
 
   private ensureCollaboration(changes: ChangeSet): BpmnElement {
@@ -59,7 +76,7 @@ export class Pools {
     this.edit.document.tree.definitions.insert('rootElements', idx + 1, process);
   }
 
-  private resolveParticipantProcess(command: AddOperation): { process?: BpmnElement; mode: 'wrap' | 'bind' | 'new' | 'blackBox' } {
+  private resolveParticipantProcess(command: AddOperation): ParticipantProcess {
     const document = this.edit.document;
     if (command.blackBox) {
       if (command.process) {
