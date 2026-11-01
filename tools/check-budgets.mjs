@@ -10,6 +10,7 @@ const CLI_PROGRAM = 'src/cli/CliProgram.ts';
 const MEASURED_CLI_OUTPUT = 'node_modules/.cache/bpmn-budgets';
 const COVERAGE_FLOOR = { lines: 90, branches: 85 };
 const RECORDED = ['commands', 'flagSlots', 'guideKilobytes'];
+const GUIDE_FOLDERS = ['src/cli/help/guide', 'src/cli/help/project', 'src/cli/help/tables'];
 const PARTS = [
   'src/model',
   'src/operations',
@@ -115,11 +116,22 @@ async function checkCommandsAndFlags() {
   return measured;
 }
 
+function checkGuide() {
+  const files = GUIDE_FOLDERS.map((folder) => join(ROOT, folder)).filter(existsSync).flatMap((folder) => readdirSync(folder).map((name) => join(folder, name)));
+  const bytes = files.reduce((sum, file) => sum + statSync(file).size, 0);
+  const kilobytes = Math.ceil(bytes / 100) / 10;
+  if (kilobytes > budgets.guideKilobytes) {
+    problems.push(`the guide has ${kilobytes} KB, over its budget of ${budgets.guideKilobytes}`);
+  }
+  return kilobytes;
+}
+
 const total = checkLines();
 checkCoverageFloors();
 checkRecordedBudgets();
 const runtimeExports = await checkRuntimeExports();
 const { commands, flagSlots } = await checkCommandsAndFlags();
+const guideKilobytes = checkGuide();
 
 for (const problem of problems) {
   console.error(`budgets: ${problem}`);
@@ -127,4 +139,4 @@ for (const problem of problems) {
 if (problems.length > 0) {
   process.exit(1);
 }
-console.log(`budgets: ${total} lines, ${runtimeExports} runtime exports, ${commands} commands, ${flagSlots} flag slots`);
+console.log(`budgets: ${total} lines, ${runtimeExports} runtime exports, ${commands} commands, ${flagSlots} flag slots, guide ${guideKilobytes} KB`);

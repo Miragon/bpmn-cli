@@ -36,6 +36,17 @@ describe('the budgets', () => {
     expect(status).toBe(1);
   });
 
+  it('measure the guide: its topics in kilobytes, over all three folders', () => {
+    repo.plant('src/cli/help/guide/core.md', 'x'.repeat(1200));
+    repo.plant('src/cli/help/tables/kinds.md', 'x'.repeat(1300));
+    expect(repo.checkBudgets().output).toContain('guide 2.5 KB');
+
+    repo.plantBudgets({ guideKilobytes: 2 });
+    const { status, output } = repo.checkBudgets();
+    expect(output).toContain('the guide has 2.5 KB, over its budget of 2');
+    expect(status).toBe(1);
+  });
+
   it('measure the commands and flag slots of the CLI', () => {
     repo.plant('package.json', '{}');
     repo.plant('src/cli/CliProgram.ts', 'export class CliProgram {\n  commander = { commands: [{ commands: [{ commands: [], options: [1, 2] }] }, { commands: [], options: [1] }] };\n}\n');
