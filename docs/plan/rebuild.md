@@ -231,16 +231,6 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 7. Model
-
-Build model.
-
-- Today: 18 `utils` files; `Doc` has ≈ 48 methods; `moddle.ts` has 168 importers.
-- After: the [model row](modules.md#modules), DI bookkeeping moved in; no class over 12 public methods.
-- Files: `src/model/`, `test/model/`.
-- Done when: the bytes probe is green for the corpus read and written back, and for roundtrip's `rename`
-  (`layout: false`) done through `BpmnElement`.
-
 ### 8. Operations
 
 Build operations on `zod/mini`.

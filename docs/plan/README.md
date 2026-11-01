@@ -132,7 +132,7 @@ Done when render draws the corpus in Node and in a browser bundle, and lint's or
 
 ### The core: 1.0.0-rc.1
 
-- [ ] **7. Model** · needs 2, 4 · [card](rebuild.md#7-model)
+- [x] **7. Model** · needs 4; step 2 still open, so model keeps the naming defaults as data
 - [ ] **8. Operations** · needs 7 · [card](rebuild.md#8-operations)
 - [ ] **9. Checks** · needs 7 · [card](rebuild.md#9-checks)
 - [ ] **10. Scoring** · needs 5, 7 · [card](rebuild.md#10-scoring)
