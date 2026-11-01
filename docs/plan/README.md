@@ -145,7 +145,8 @@ Done when every probe is green outside the allow-list and rc.1 is on `next`.
 
 ### Done: the draft PR
 
-- [ ] **15. Skill, evals and docs** · needs 14 · [card](rebuild.md#15-skill-evals-and-docs)
+- [ ] **15. Skill, evals and docs** · needs 14 · [card](rebuild.md#15-skill-evals-and-docs); the skill and its
+  tests are on 1.0, the eval runs on the release candidate and the docs are open
 - [ ] **16. Consumers**: try design-iq and the skills of bpmn-to-code on the release candidate, each in a
   branch of its own · needs 15 · done when design-iq's branch is green in its CI and bpmn-to-code's
   skills use `find` and `show <id>`
