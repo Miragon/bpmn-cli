@@ -17,7 +17,7 @@ export interface WalkSummary {
 }
 
 export interface WalkMetrics {
-  measure(xml: string): Promise<{ counts?: Record<string, number>; problems?: readonly unknown[]; score?: number }>;
+  measure(xml: string): Promise<{ counts?: Record<string, number>; problems?: readonly unknown[]; score?: number | null }>;
   diff(before: readonly unknown[], after: readonly unknown[]): { added: never[] };
   hard: string[];
 }
