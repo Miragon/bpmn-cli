@@ -6,7 +6,6 @@ const TEMPORARY_UNTIL_CODE_USES_THEM = {
   core: [
     '@miragon/bpmn-lint',
     'commander',
-    'zod',
   ],
 };
 
