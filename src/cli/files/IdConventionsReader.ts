@@ -20,6 +20,7 @@ export interface DeclaredConventions {
   where?: string | undefined;
   severity?: string | undefined;
   undeclared?: 'no config' | 'not loaded' | 'off' | undefined;
+  brokenConfig?: string | undefined;
 }
 
 export class IdConventionsReader {
@@ -74,7 +75,7 @@ export class IdConventionsReader {
   async of(rcPath: string, where: string): Promise<DeclaredConventions> {
     const content = IdConventionsReader.content(rcPath);
     if (!content) {
-      return { notes: [], where, undeclared: 'not loaded' };
+      return { notes: [], where, undeclared: 'not loaded', brokenConfig: rcPath };
     }
     const value = content.rules?.[IdConventionsReader.RULE];
     const parents = IdConventionsReader.parents(content);
