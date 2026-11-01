@@ -103,7 +103,12 @@ export class BpmnDocument {
     return this.importWarnings.filter((warning) => BpmnDocument.LOSSY_PATTERNS.some((pattern) => pattern.test(warning.message)));
   }
 
-  assertLossless(options: { force?: boolean } = {}): void {
+  get reportedImportWarnings(): ImportWarning[] {
+    const isDecisionLink = ({ property, element }: ImportWarning): boolean => property === 'calledDecision' && element?.$instanceOf('bpmn:BusinessRuleTask') === true;
+    return this.importWarnings.some(isDecisionLink) && this.platform() === 'none' ? this.importWarnings.filter((warning) => !isDecisionLink(warning)) : this.importWarnings;
+  }
+
+  assertLossless(options: { force?: boolean | undefined } = {}): void {
     const lossy = this.lossyImportWarnings;
     if (!lossy.length || options.force) {
       return;

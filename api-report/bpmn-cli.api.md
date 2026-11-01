@@ -4,6 +4,1140 @@
 
 ```ts
 
+// @public (undocumented)
+export function applyToXml(xml: string, operations: Operation[], options?: EditOptions): Promise<EditResult>;
+
+// @public (undocumented)
+export class BpmnError extends Error {
+    constructor(code: string, message: string, category?: ErrorCategory, details?: ErrorDetails);
+    // (undocumented)
+    readonly category: ErrorCategory;
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly details: ErrorDetails;
+    // (undocumented)
+    static readonly EXIT_CODES: Readonly<Record<ErrorCategory, number>>;
+    // (undocumented)
+    get exitCode(): number;
+    // (undocumented)
+    static firstLine(error: unknown): string;
+    // (undocumented)
+    static from(error: unknown): unknown;
+    // (undocumented)
+    static io(code: string, message: string, details?: ErrorDetails): BpmnError;
+    // (undocumented)
+    static model(code: string, message: string, details?: ErrorDetails): BpmnError;
+    // (undocumented)
+    toJSON(): Record<string, unknown>;
+    // (undocumented)
+    static usage(message: string, details?: ErrorDetails): BpmnError;
+}
+
+// @public (undocumented)
+export interface Change {
+    // (undocumented)
+    detail?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    kind: string;
+    // (undocumented)
+    name?: string;
+}
+
+// @public (undocumented)
+export interface CropOptions {
+    // (undocumented)
+    around?: string | undefined;
+    // (undocumented)
+    depth?: number | undefined;
+    // (undocumented)
+    ids?: string[] | undefined;
+    // (undocumented)
+    path?: [from: string, to: string] | undefined;
+}
+
+// @public (undocumented)
+export interface CutCount {
+    // (undocumented)
+    shown: number;
+    // (undocumented)
+    total: number;
+}
+
+// @public (undocumented)
+export interface DataLinks {
+    // (undocumented)
+    readBy?: ElementRef[] | undefined;
+    // (undocumented)
+    reads?: ElementRef[] | undefined;
+    // (undocumented)
+    writes?: ElementRef[] | undefined;
+    // (undocumented)
+    writtenBy?: ElementRef[] | undefined;
+}
+
+// @public (undocumented)
+export interface DiagramFacts {
+    // (undocumented)
+    counts: Record<ProblemKind, number>;
+    // (undocumented)
+    problems: readonly LayoutProblem[];
+    // (undocumented)
+    rows: PlaneRows[];
+    // (undocumented)
+    score: number;
+}
+
+// @public (undocumented)
+export interface DiagramNote {
+    // (undocumented)
+    ids: string[];
+    // (undocumented)
+    kind: DiagramNoteKind;
+}
+
+// @public (undocumented)
+export type DiagramNoteKind = 'no-diagram' | 'undrawn' | 'broken-coordinates' | 'broken-labels' | 'empty-plane' | 'fit-on-other-plane' | 'fit-not-drawn';
+
+// @public (undocumented)
+export interface DiagramResult extends DiagramFacts {
+    // (undocumented)
+    text: string;
+}
+
+// @public (undocumented)
+export function diagramXml(xml: string): Promise<DiagramResult>;
+
+// @public (undocumented)
+export interface EditOptions {
+    // (undocumented)
+    conventions?: IdConventions | undefined;
+    // (undocumented)
+    force?: boolean | undefined;
+    // (undocumented)
+    validators?: readonly Validator[] | undefined;
+}
+
+// @public (undocumented)
+export interface EditResult {
+    // (undocumented)
+    aliases: Record<string, string>;
+    // (undocumented)
+    changed: Change[];
+    // (undocumented)
+    created: Change[];
+    // (undocumented)
+    findings: Finding[];
+    // (undocumented)
+    format: FormatResult[];
+    // (undocumented)
+    notes: string[];
+    // (undocumented)
+    preexisting: ValidatorIssue[];
+    // (undocumented)
+    removed: Change[];
+    // (undocumented)
+    renamed: RenamedId[];
+    // (undocumented)
+    score: ScoreChange;
+    // (undocumented)
+    state: FindingCounts;
+    // (undocumented)
+    unchanged: boolean;
+    // (undocumented)
+    xml: string;
+}
+
+// @public (undocumented)
+export interface ElementCatch extends ElementRef {
+    // (undocumented)
+    nonInterrupting?: boolean | undefined;
+    // (undocumented)
+    on?: ElementRef | undefined;
+    // (undocumented)
+    to?: ElementRef[] | undefined;
+    // (undocumented)
+    trigger?: string | undefined;
+}
+
+// @public (undocumented)
+export interface ElementDetailData {
+    // (undocumented)
+    ancestors: ElementRef[];
+    // (undocumented)
+    annotations: Array<{
+        id: string;
+        text?: string | undefined;
+    }>;
+    // (undocumented)
+    attachedTo?: ElementRef[] | undefined;
+    // (undocumented)
+    attrs: Record<string, unknown>;
+    // (undocumented)
+    boundary: ElementCatch[];
+    // (undocumented)
+    caughtBy: ElementCatch[];
+    // (undocumented)
+    children?: ElementRef[] | undefined;
+    // (undocumented)
+    data?: DataLinks | undefined;
+    // (undocumented)
+    element: ElementRef;
+    // (undocumented)
+    eventSubProcesses: EventSubProcessCatch[];
+    // (undocumented)
+    extensions: ExtensionInfo[];
+    // (undocumented)
+    from?: ElementLink[] | undefined;
+    // (undocumented)
+    host?: ElementCatch | undefined;
+    // (undocumented)
+    kind: 'element';
+    // (undocumented)
+    lane?: ElementLane | undefined;
+    // (undocumented)
+    members?: ElementRef[] | undefined;
+    // (undocumented)
+    message?: ElementMessage | undefined;
+    // (undocumented)
+    messageFlows: PartnerFlow[];
+    // (undocumented)
+    pool?: ElementRef | undefined;
+    // (undocumented)
+    to?: ElementLink[] | undefined;
+    // (undocumented)
+    usedBy?: ElementRef[] | undefined;
+}
+
+// @public (undocumented)
+export interface ElementLane extends ElementRef {
+    // (undocumented)
+    parents?: ElementRef[] | undefined;
+    // (undocumented)
+    via?: ElementRef | undefined;
+}
+
+// @public (undocumented)
+export interface ElementLink extends ElementRef {
+    // (undocumented)
+    flow: ElementRef & FlowTraits;
+    // (undocumented)
+    pool?: ElementRef | undefined;
+}
+
+// @public (undocumented)
+export interface ElementMessage extends ElementRef {
+    // (undocumented)
+    correlationKey?: string | undefined;
+}
+
+// @public (undocumented)
+export interface ElementRef {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    kind: string;
+    // (undocumented)
+    name?: string | undefined;
+}
+
+// @public (undocumented)
+export interface ElementSummary extends ElementRef, FlagSource {
+    // (undocumented)
+    outgoing: OutgoingFlow[];
+}
+
+// @public (undocumented)
+export type ErrorCategory = 'usage' | 'model' | 'layout' | 'io' | 'internal';
+
+// @public (undocumented)
+export interface ErrorDetails {
+    // (undocumented)
+    [key: string]: unknown;
+    // (undocumented)
+    candidates?: string[];
+    // (undocumented)
+    element?: string;
+    // (undocumented)
+    hint?: string;
+    // (undocumented)
+    op?: number;
+    // (undocumented)
+    related?: string[];
+}
+
+// @public (undocumented)
+export interface EventSubProcessCatch extends ElementRef {
+    // (undocumented)
+    in: ElementRef;
+    // (undocumented)
+    start?: ElementCatch | undefined;
+}
+
+// @public (undocumented)
+export interface ExtensionFacts {
+    // (undocumented)
+    attrs: Record<string, string>;
+    // (undocumented)
+    body?: string | undefined;
+    // (undocumented)
+    children?: ExtensionFacts[] | undefined;
+    // (undocumented)
+    type: string;
+}
+
+// @public (undocumented)
+export interface ExtensionInfo extends ExtensionFacts {
+    // (undocumented)
+    index: number;
+    // (undocumented)
+    slot?: string | undefined;
+}
+
+// @public (undocumented)
+export type Family = 'task' | 'subProcess' | 'callActivity' | 'gateway' | 'event' | 'participant' | 'lane' | 'data' | 'artifact';
+
+// @public (undocumented)
+export interface FindHit extends ElementRef {
+    // (undocumented)
+    in?: string | undefined;
+    // (undocumented)
+    match?: string | undefined;
+}
+
+// @public (undocumented)
+export interface Finding {
+    // (undocumented)
+    code: string;
+    // (undocumented)
+    element?: string;
+    // (undocumented)
+    fix?: Suggestion;
+    // (undocumented)
+    hint?: string;
+    // (undocumented)
+    readonly key?: string;
+    // (undocumented)
+    message: string;
+    // (undocumented)
+    related?: string[];
+    // (undocumented)
+    severity?: Severity | ValidatorSeverity;
+    // (undocumented)
+    readonly subject?: string;
+    // (undocumented)
+    validator?: string;
+}
+
+// @public (undocumented)
+export interface FindingCounts {
+    // (undocumented)
+    errors: number;
+    // (undocumented)
+    warnings: number;
+}
+
+// @public (undocumented)
+export interface FindOptions {
+    // (undocumented)
+    in?: string | undefined;
+    // (undocumented)
+    kind?: string | undefined;
+    // (undocumented)
+    text?: string | undefined;
+}
+
+// @public (undocumented)
+export interface FindResult {
+    // (undocumented)
+    hits: FindHit[];
+    // (undocumented)
+    text: string;
+    // (undocumented)
+    total: number;
+}
+
+// @public (undocumented)
+export function findXml(xml: string, options?: FindOptions): Promise<FindResult>;
+
+// @public (undocumented)
+export interface FlagSource {
+    // (undocumented)
+    documentation?: string | undefined;
+    // (undocumented)
+    expanded?: boolean | undefined;
+    // (undocumented)
+    lane?: ElementRef | undefined;
+    // (undocumented)
+    nonInterrupting?: boolean | undefined;
+    // (undocumented)
+    props?: Record<string, unknown> | undefined;
+    // (undocumented)
+    trigger?: string | undefined;
+}
+
+// @public (undocumented)
+export interface FlowTraits {
+    // (undocumented)
+    condition?: string | undefined;
+    // (undocumented)
+    conditionResource?: string | undefined;
+    // (undocumented)
+    default?: boolean | undefined;
+    // (undocumented)
+    name?: string | undefined;
+}
+
+// @public (undocumented)
+export interface FormatResult {
+    // (undocumented)
+    colored?: string[];
+    // (undocumented)
+    index: number;
+    // (undocumented)
+    labels?: string[];
+    // (undocumented)
+    moved: string[];
+    // (undocumented)
+    notes?: string[];
+    // (undocumented)
+    op: string;
+    // (undocumented)
+    rerouted: string[];
+    // (undocumented)
+    reshaped?: string[];
+}
+
+// @public (undocumented)
+export interface IdConventions {
+    // (undocumented)
+    case?: 'camelCase' | 'PascalCase' | 'snake_case' | 'kebab-case';
+    // (undocumented)
+    ignored?: string[];
+    // (undocumented)
+    prefixes: Record<string, string>;
+    // (undocumented)
+    qualifier?: QualifierMode;
+    // (undocumented)
+    source?: string;
+}
+
+// @public (undocumented)
+export interface Implementation {
+    // (undocumented)
+    attrs?: Record<string, string> | undefined;
+    // (undocumented)
+    ext?: string[] | undefined;
+}
+
+// @public (undocumented)
+export type JsonSchema = Record<string, unknown>;
+
+// @public (undocumented)
+export interface Kind extends Pick<KindDefinition, 'kind' | 'type' | 'family' | 'aliases' | 'triggers' | 'props' | 'description'> {
+    // (undocumented)
+    pattern?: string;
+}
+
+// @public (undocumented)
+export interface KindDefinition {
+    // (undocumented)
+    aliases: string[];
+    // (undocumented)
+    branchesByCondition?: true;
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    family: Family;
+    // (undocumented)
+    kind: string;
+    // (undocumented)
+    namedAsQuestion?: true;
+    // (undocumented)
+    props?: Record<string, unknown>;
+    // (undocumented)
+    synchronises?: true;
+    // (undocumented)
+    triggers?: TriggerName[];
+    // (undocumented)
+    type: string;
+}
+
+// @public (undocumented)
+export function kindsJson(options?: {
+    conventions?: IdConventions;
+}): KindTableResult;
+
+// @public (undocumented)
+export interface KindTableResult {
+    // (undocumented)
+    kinds: Kind[];
+    // (undocumented)
+    triggers: Trigger[];
+}
+
+// @public (undocumented)
+export type LayoutCheck = {
+    status: 'ok' | 'skipped';
+} | {
+    status: 'failed';
+    error: Finding;
+};
+
+// @public (undocumented)
+export interface LayoutProblem {
+    // (undocumented)
+    at?: ProblemLocation;
+    // (undocumented)
+    detail?: string;
+    // (undocumented)
+    ids: string[];
+    // (undocumented)
+    kind: ProblemKind;
+}
+
+// @public (undocumented)
+export interface MessageFlowEnds {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    message?: string | undefined;
+    // (undocumented)
+    name?: string | undefined;
+    // (undocumented)
+    source: ElementRef;
+    // (undocumented)
+    target: ElementRef;
+}
+
+// @public (undocumented)
+export interface ModelCut {
+    // (undocumented)
+    around?: ElementRef | undefined;
+    // (undocumented)
+    depth?: number | undefined;
+    // (undocumented)
+    flows: CutCount;
+    // (undocumented)
+    in?: ElementRef | undefined;
+    // (undocumented)
+    nodes: CutCount;
+}
+
+// @public (undocumented)
+export interface ModelViewData {
+    // (undocumented)
+    collaboration?: ViewCollaboration | undefined;
+    // (undocumented)
+    cut?: ModelCut | undefined;
+    // (undocumented)
+    definitions: {
+        id: string;
+        targetNamespace?: string | undefined;
+        namespaces: string[];
+    };
+    // (undocumented)
+    file?: string | undefined;
+    // (undocumented)
+    groups?: ViewGroup[] | undefined;
+    // (undocumented)
+    importWarnings?: string[] | undefined;
+    // (undocumented)
+    kind: 'model';
+    // (undocumented)
+    processes: ViewProcess[];
+    // (undocumented)
+    rootElements: ViewRoot[];
+}
+
+// @public (undocumented)
+export interface NewOptions {
+    // (undocumented)
+    conventions?: IdConventions | undefined;
+    // (undocumented)
+    id?: string | undefined;
+    // (undocumented)
+    name?: string | undefined;
+    // (undocumented)
+    target?: Target | undefined;
+}
+
+// @public (undocumented)
+export function newXml(options?: NewOptions): Promise<string>;
+
+// @public (undocumented)
+export interface NumberedProblem extends Omit<LayoutProblem, 'at'> {
+    // (undocumented)
+    drawn: boolean;
+    // (undocumented)
+    n: number;
+}
+
+// @public (undocumented)
+export interface Operation {
+    // (undocumented)
+    [field: string]: unknown;
+    // (undocumented)
+    op: string;
+}
+
+// @public (undocumented)
+export const OPS_SCHEMA: JsonSchema;
+
+// @public (undocumented)
+export interface OutgoingFlow extends ElementRef, FlowTraits, VendorFacts {
+    // (undocumented)
+    language?: string | undefined;
+    // (undocumented)
+    target: ElementRef;
+}
+
+// @public (undocumented)
+export interface PartnerFlow extends ElementRef {
+    // (undocumented)
+    at?: string | undefined;
+    // (undocumented)
+    direction: 'in' | 'out';
+    // (undocumented)
+    message?: string | undefined;
+    // (undocumented)
+    partner: ElementRef;
+    // (undocumented)
+    pool?: ElementRef | undefined;
+}
+
+// @public (undocumented)
+export interface PlaneRows {
+    // (undocumented)
+    columns: number;
+    // (undocumented)
+    frames: RowFrame[];
+    // (undocumented)
+    gaps: WideGap[];
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    root: string;
+}
+
+// @public (undocumented)
+export type Platform = 'c7' | 'c8' | 'none';
+
+// @public (undocumented)
+export interface PlatformInfo {
+    // (undocumented)
+    detail: string;
+    // (undocumented)
+    operaton?: boolean;
+    // (undocumented)
+    platform: Platform;
+    // (undocumented)
+    source: 'executionPlatform' | 'namespace-use' | 'namespace-declaration' | 'none';
+}
+
+// @public (undocumented)
+export interface PlatformSummary extends PlatformInfo {
+    // (undocumented)
+    counts: Record<Severity, number>;
+}
+
+// @public (undocumented)
+export type ProblemKind = keyof typeof ProblemKinds.RECORDS;
+
+// @public (undocumented)
+export interface ProblemKindRecord {
+    // (undocumented)
+    measured?: boolean;
+    // (undocumented)
+    symmetric?: boolean;
+    // (undocumented)
+    weight: number;
+}
+
+// @public (undocumented)
+export class ProblemKinds {
+    // (undocumented)
+    static readonly ALL: ProblemKind[];
+    // (undocumented)
+    static isHard(kind: ProblemKind): boolean;
+    // (undocumented)
+    static perKind<TValue>(make: () => TValue): Record<ProblemKind, TValue>;
+    // (undocumented)
+    static recordOf(kind: ProblemKind): ProblemKindRecord;
+    // (undocumented)
+    static readonly RECORDS: {
+        readonly crossings: {
+            readonly weight: 5;
+            readonly symmetric: true;
+        };
+        readonly overlaps: {
+            readonly weight: 10;
+            readonly symmetric: true;
+        };
+        readonly frameIntrusion: {
+            readonly weight: 10;
+        };
+        readonly frameOverlap: {
+            readonly weight: 10;
+            readonly symmetric: true;
+        };
+        readonly through: {
+            readonly weight: 8;
+        };
+        readonly diagonal: {
+            readonly weight: 3;
+        };
+        readonly degenerateEdge: {
+            readonly weight: 10;
+        };
+        readonly detachedEdge: {
+            readonly weight: 10;
+        };
+        readonly missing: {
+            readonly weight: 10;
+        };
+        readonly labelClash: {
+            readonly weight: 2;
+        };
+        readonly labelOnLine: {
+            readonly weight: 1;
+        };
+        readonly inOut: {
+            readonly weight: 3;
+        };
+        readonly parallelRun: {
+            readonly weight: 1;
+            readonly symmetric: true;
+            readonly measured: true;
+        };
+        readonly outsideLane: {
+            readonly weight: 6;
+        };
+        readonly outsidePool: {
+            readonly weight: 8;
+        };
+        readonly outsideSub: {
+            readonly weight: 8;
+        };
+        readonly edgeLeavesLane: {
+            readonly weight: 1;
+        };
+        readonly edgeOutside: {
+            readonly weight: 4;
+        };
+        readonly msgThroughPool: {
+            readonly weight: 5;
+        };
+        readonly laneGap: {
+            readonly weight: 2;
+        };
+        readonly backwardFlow: {
+            readonly weight: 3;
+        };
+        readonly segmentOverlap: {
+            readonly weight: 2;
+            readonly symmetric: true;
+            readonly measured: true;
+        };
+        readonly labelOutsideFrame: {
+            readonly weight: 2;
+        };
+        readonly labelOnTitle: {
+            readonly weight: 2;
+        };
+        readonly messageLabelFar: {
+            readonly weight: 1;
+            readonly measured: true;
+        };
+        readonly failed: {
+            readonly weight: 50;
+        };
+    };
+}
+
+// @public (undocumented)
+export type ProblemLocation = {
+    plane: string;
+    x: number;
+    y: number;
+};
+
+// @public (undocumented)
+export type QualifierMode = 'off' | 'optional' | 'required';
+
+// @public (undocumented)
+export interface Rename {
+    // (undocumented)
+    from: string;
+    // (undocumented)
+    regenerated?: true;
+    // (undocumented)
+    takeover?: true;
+    // (undocumented)
+    to: string;
+    // (undocumented)
+    was?: string;
+}
+
+// @public (undocumented)
+export type RenamedId = Pick<Rename, 'from' | 'to' | 'takeover'>;
+
+// @public (undocumented)
+export interface RenderedImage extends SvgImage {
+    // (undocumented)
+    depth?: number | undefined;
+    // (undocumented)
+    problems?: NumberedProblem[] | undefined;
+}
+
+// @public (undocumented)
+export interface RenderOptions extends CropOptions {
+    // (undocumented)
+    problems?: boolean | undefined;
+}
+
+// @public (undocumented)
+export function renderXml(xml: string, options?: RenderOptions): Promise<RenderedImage>;
+
+// @public (undocumented)
+export interface RowFrame {
+    // (undocumented)
+    columns: number[][];
+    // (undocumented)
+    gaps?: Array<{
+        row: number;
+        before: number[];
+    }> | undefined;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    kind: RowFrameKind;
+    // (undocumented)
+    name?: string | undefined;
+    // (undocumented)
+    parent?: string | undefined;
+    // (undocumented)
+    rows: ElementRef[][];
+}
+
+// @public (undocumented)
+export type RowFrameKind = 'process' | 'collaboration' | 'participant' | 'lane' | 'subProcess';
+
+// @public (undocumented)
+export class ScoreChange {
+    constructor(before: ScoredProblems | undefined, after: ScoredProblems);
+    // (undocumented)
+    readonly added: LayoutProblem[];
+    // (undocumented)
+    readonly after: ScoreSummary;
+    // (undocumented)
+    readonly before: ScoreSummary | undefined;
+    // (undocumented)
+    readonly resolved: LayoutProblem[];
+}
+
+// @public (undocumented)
+export interface ScoredProblems extends ScoreSummary {
+    // (undocumented)
+    problems: readonly LayoutProblem[];
+}
+
+// @public (undocumented)
+export interface ScoreSummary {
+    // (undocumented)
+    counts: Record<ProblemKind, number>;
+    // (undocumented)
+    score: number;
+}
+
+// @public (undocumented)
+export type Severity = 'deploy' | 'runtime' | 'practice';
+
+// @public (undocumented)
+export interface ShowOptions {
+    // (undocumented)
+    around?: string | undefined;
+    // (undocumented)
+    depth?: number | undefined;
+    // (undocumented)
+    id?: string | undefined;
+    // (undocumented)
+    in?: string | undefined;
+}
+
+// @public (undocumented)
+export interface ShowResult {
+    // (undocumented)
+    state: {
+        errors: number;
+        warnings: number;
+    };
+    // (undocumented)
+    text: string;
+    // (undocumented)
+    view: ModelViewData | ElementDetailData;
+}
+
+// @public (undocumented)
+export function showXml(xml: string, options?: ShowOptions): Promise<ShowResult>;
+
+// @public (undocumented)
+export interface Suggestion {
+    // (undocumented)
+    [field: string]: unknown;
+    // (undocumented)
+    op: string;
+}
+
+// @public (undocumented)
+export interface SvgImage {
+    // (undocumented)
+    badges: number[];
+    // (undocumented)
+    drawn: string[];
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    notes: DiagramNote[];
+    // (undocumented)
+    plane: string | undefined;
+    // (undocumented)
+    scale: number;
+    // (undocumented)
+    svg: string;
+    // (undocumented)
+    width: number;
+}
+
+// @public (undocumented)
+export type Target = 'camunda8' | 'camunda7' | 'none';
+
+// @public (undocumented)
+export interface Trigger {
+    // (undocumented)
+    alsoOn?: string[];
+    // (undocumented)
+    description: string;
+    // (undocumented)
+    keys: string[];
+    // (undocumented)
+    kinds: string[];
+    // (undocumented)
+    trigger: TriggerName;
+    // (undocumented)
+    type?: string;
+}
+
+// @public (undocumented)
+export type TriggerName = 'none' | 'message' | 'timer' | 'error' | 'signal' | 'escalation' | 'conditional' | 'link' | 'compensate' | 'terminate' | 'cancel';
+
+// @public (undocumented)
+export interface ValidateOptions {
+    // (undocumented)
+    validators?: readonly Validator[] | undefined;
+}
+
+// @public (undocumented)
+export function validateXml(xml: string, options?: ValidateOptions): Promise<ValidationReport>;
+
+// @public (undocumented)
+export interface ValidationReport {
+    // (undocumented)
+    findings: Finding[];
+    // (undocumented)
+    importWarnings: string[];
+    // (undocumented)
+    layout: LayoutCheck;
+    // (undocumented)
+    ok: boolean;
+    // (undocumented)
+    platform: PlatformSummary;
+    // (undocumented)
+    state: FindingCounts;
+    // (undocumented)
+    validators: ValidatorSummary[];
+}
+
+// @public (undocumented)
+export interface Validator {
+    // (undocumented)
+    blocks?: boolean | undefined;
+    // (undocumented)
+    detail?: string | undefined;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    validate(xml: string, context: ValidatorContext): ValidatorFinding[] | Promise<ValidatorFinding[]>;
+}
+
+// @public (undocumented)
+export interface ValidatorContext {
+    // (undocumented)
+    file?: string | undefined;
+    // (undocumented)
+    importWarnings: ReadonlyArray<{
+        message: string;
+    }>;
+    // (undocumented)
+    operations: readonly Operation[];
+    // (undocumented)
+    phase: ValidatorPhase;
+    // (undocumented)
+    platform: Platform;
+}
+
+// @public (undocumented)
+export interface ValidatorFinding extends Pick<Finding, 'message' | 'element' | 'related' | 'hint'> {
+    // (undocumented)
+    code?: string;
+    // (undocumented)
+    key?: string;
+    // (undocumented)
+    ruleId?: string;
+    // (undocumented)
+    severity: string;
+}
+
+// @public (undocumented)
+export type ValidatorIssue = Finding & {
+    validator: string;
+    severity: ValidatorSeverity;
+};
+
+// @public (undocumented)
+export type ValidatorPhase = 'before' | 'after' | 'check';
+
+// @public (undocumented)
+export type ValidatorSeverity = 'error' | 'warning';
+
+// @public (undocumented)
+export interface ValidatorSummary extends FindingCounts {
+    // (undocumented)
+    blocks?: false;
+    // (undocumented)
+    detail?: string;
+    // (undocumented)
+    name: string;
+}
+
+// @public (undocumented)
+export interface VendorFacts {
+    // (undocumented)
+    attrs?: Record<string, string> | undefined;
+    // (undocumented)
+    extensionElements?: string[] | undefined;
+}
+
+// @public (undocumented)
+export interface ViewAnnotation {
+    // (undocumented)
+    attachedTo: ElementRef[];
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    text?: string | undefined;
+}
+
+// @public (undocumented)
+export interface ViewCollaboration extends ElementRef {
+    // (undocumented)
+    annotations?: ViewAnnotation[] | undefined;
+    // (undocumented)
+    messageFlows: Array<ElementRef & MessageFlowEnds>;
+    // (undocumented)
+    participants: ViewParticipant[];
+}
+
+// @public (undocumented)
+export interface ViewData extends ElementRef {
+    // (undocumented)
+    from: ElementRef[];
+    // (undocumented)
+    kind: 'dataObject' | 'dataStore';
+    // (undocumented)
+    to: ElementRef[];
+}
+
+// @public (undocumented)
+export interface ViewGroup extends ElementRef {
+    // (undocumented)
+    members: ElementRef[];
+}
+
+// @public (undocumented)
+export interface ViewLane extends ElementRef {
+    // (undocumented)
+    lanes?: ViewLane[] | undefined;
+    // (undocumented)
+    members: ElementRef[];
+}
+
+// @public (undocumented)
+export interface ViewNode extends ElementSummary, VendorFacts {
+    // (undocumented)
+    boundary?: ViewNode[] | undefined;
+    // (undocumented)
+    children?: ViewNode[] | undefined;
+    // (undocumented)
+    content?: number | undefined;
+    // (undocumented)
+    distance?: number | undefined;
+    // (undocumented)
+    expanded?: boolean | undefined;
+    // (undocumented)
+    from?: Array<ElementRef & {
+        source: ElementRef;
+    }> | undefined;
+    // (undocumented)
+    host?: ElementRef | undefined;
+    // (undocumented)
+    impl?: Implementation | undefined;
+    // (undocumented)
+    incoming: ElementRef[];
+    // (undocumented)
+    unreachable?: boolean | undefined;
+}
+
+// @public (undocumented)
+export interface ViewParticipant extends ElementRef {
+    // (undocumented)
+    process?: ElementRef | undefined;
+}
+
+// @public (undocumented)
+export interface ViewProcess extends ElementRef, VendorFacts {
+    // (undocumented)
+    annotations: ViewAnnotation[];
+    // (undocumented)
+    data: ViewData[];
+    // (undocumented)
+    executable: boolean;
+    // (undocumented)
+    lanes: ViewLane[];
+    // (undocumented)
+    nodes: ViewNode[];
+    // (undocumented)
+    participant?: ElementRef | undefined;
+}
+
+// @public (undocumented)
+export interface ViewRoot extends ElementRef {
+    // (undocumented)
+    code?: string | undefined;
+    // (undocumented)
+    correlationKey?: string | undefined;
+}
+
+// @public (undocumented)
+export interface WideGap {
+    // (undocumented)
+    after: number;
+    // (undocumented)
+    width: number;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

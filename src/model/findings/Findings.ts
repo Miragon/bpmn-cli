@@ -31,6 +31,11 @@ export interface ValidatorFinding extends Pick<Finding, 'message' | 'element' | 
   key?: string;
 }
 
+export interface FindingCounts {
+  errors: number;
+  warnings: number;
+}
+
 type UnserialisedFields = Pick<Finding, 'key' | 'subject'>;
 
 export class Findings {
@@ -43,6 +48,15 @@ export class Findings {
       }
     }
     return finding;
+  }
+
+  static countOf(findings: readonly Finding[]): FindingCounts {
+    const errors = findings.filter(({ severity }) => severity === 'error').length;
+    return { errors, warnings: findings.length - errors };
+  }
+
+  static ofLayout(this: void, { code, message, elementId }: { code: string; message: string; elementId: string }): Finding {
+    return { code: `W_LAYOUT_${code}`, message, element: elementId, severity: 'warning' };
   }
 
   static make(severity: Severity, code: string, message: string, element: string | undefined, extra: { related?: string[]; hint?: string; subject?: string } = {}): ProfileFinding {

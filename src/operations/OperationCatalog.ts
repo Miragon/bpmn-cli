@@ -23,6 +23,11 @@ export type DrawingOperation = LayoutOperation | TidyOperation | CompactOperatio
 
 export type Operation = ModelOperation | DrawingOperation;
 
+export interface OperationInput {
+  op: string;
+  [field: string]: unknown;
+}
+
 export class OperationCatalog {
   static readonly MODEL: readonly OperationDefinition[] = [new AddOperationDefinition(), new ConnectOperationDefinition(), new SetOperationDefinition(), new RemoveOperationDefinition(), new RetypeOperationDefinition(), new MoveOperationDefinition(), new OrderOperationDefinition(), new ExtOperationDefinition(), new SplitOperationDefinition()];
   static readonly DRAWING: readonly OperationDefinition[] = [new LayoutOperationDefinition(), new TidyOperationDefinition(), new CompactOperationDefinition(), new PlaceOperationDefinition(), new ColorOperationDefinition(), new LabelOperationDefinition(), new RouteOperationDefinition(), new SpaceOperationDefinition()];

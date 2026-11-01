@@ -1,4 +1,4 @@
-interface ProblemKindRecord {
+export interface ProblemKindRecord {
   weight: number;
   symmetric?: boolean;
   measured?: boolean;

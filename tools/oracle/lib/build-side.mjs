@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { onMain } from '../design-iq-map.mjs';
 
 async function attempt(action) {
   try {
@@ -36,5 +37,6 @@ export async function openBuild(root) {
       const { svg, plane: drawn, planes } = await api.renderSvg(xml, plane === undefined ? {} : { plane });
       return { svg, plane: drawn, planes };
     }),
+    designIq: (call) => onMain(api, call),
   };
 }

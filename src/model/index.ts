@@ -7,7 +7,7 @@ export { Samples } from './geometry/Samples.js';
 export { Segment } from './geometry/Segment.js';
 export { BpmnError, type ErrorCategory, type ErrorDetails } from './errors/BpmnError.js';
 export { ModelError } from './errors/ModelError.js';
-export { Findings, type Finding, type ProfileFinding, type Severity, type Suggestion, type ValidatorFinding, type ValidatorIssue, type ValidatorSeverity } from './findings/Findings.js';
+export { Findings, type Finding, type FindingCounts, type ProfileFinding, type Severity, type Suggestion, type ValidatorFinding, type ValidatorIssue, type ValidatorSeverity } from './findings/Findings.js';
 export { BpmnDocument, type DocumentSource } from './document/BpmnDocument.js';
 export { BpmnElement, type PropertyDescriptor, type ReadCopy, type TypeDescriptor } from './document/BpmnElement.js';
 export { BpmnScopes } from './document/BpmnScopes.js';

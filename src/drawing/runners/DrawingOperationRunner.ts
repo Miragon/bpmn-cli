@@ -24,7 +24,7 @@ interface Outcome {
 }
 
 export interface FormatResult {
-  op: DrawnOperation['op'];
+  op: string;
   index: number;
   moved: string[];
   rerouted: string[];

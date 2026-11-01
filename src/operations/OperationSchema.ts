@@ -45,3 +45,5 @@ export class OperationSchema {
     };
   }
 }
+
+export const OPS_SCHEMA: JsonSchema = new OperationSchema().write();

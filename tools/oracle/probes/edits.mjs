@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { designIqCalls, recordedFacts } from '../design-iq-map.mjs';
 import { corpusEdits, readCorpus } from '../lib/corpus.mjs';
 import { CORPUS_DIR } from '../lib/paths.mjs';
 
@@ -61,9 +62,13 @@ function firstDifference(left, right) {
   return undefined;
 }
 
+function refusalDifference(id, mainResult, subjectResult) {
+  return `${id}: refusal: main ${mainResult.refused ?? 'answers'}, subject ${subjectResult.refused ?? 'answers'} (${subjectResult.reason ?? mainResult.reason ?? ''})`;
+}
+
 function differencesOf(id, mainResult, subjectResult) {
   if (mainResult.refused !== subjectResult.refused) {
-    return [`${id}: refusal: main ${mainResult.refused ?? 'writes'}, subject ${subjectResult.refused ?? 'writes'} (${subjectResult.reason ?? mainResult.reason ?? ''})`];
+    return [refusalDifference(id, mainResult, subjectResult)];
   }
   if (mainResult.refused) {
     return [];
@@ -76,6 +81,25 @@ function differencesOf(id, mainResult, subjectResult) {
     const found = firstDifference(left, right);
     return found ? [`${id}: ${field}: ${found}`] : [];
   });
+}
+
+function comparedLines(value) {
+  return (Array.isArray(value) ? value : [value]).map((item) => (typeof item === 'string' ? item : JSON.stringify(item)));
+}
+
+export function differencesOfCall(id, mainFacts, subjectFacts) {
+  if (mainFacts.refused !== subjectFacts.refused) {
+    return [refusalDifference(id, mainFacts, subjectFacts)];
+  }
+  if (mainFacts.refused) {
+    return [];
+  }
+  const written = mainFacts.write ? differencesOf(id, mainFacts.write, subjectFacts.write) : [];
+  const compared = Object.entries(mainFacts.compared).flatMap(([field, value]) => {
+    const found = firstDifference(comparedLines(value), comparedLines(subjectFacts.compared[field]));
+    return found ? [`${id}: ${field}: ${found}`] : [];
+  });
+  return [...written, ...compared];
 }
 
 function benchInputs() {
@@ -109,9 +133,12 @@ function walkInputs() {
 export default {
   name: 'edits',
   inputs() {
-    return [...benchInputs(), ...walkInputs()];
+    return [...benchInputs(), ...walkInputs(), ...designIqCalls()];
   },
-  async compare({ id, model, ops, xml }, { main, subject }) {
+  async compare({ id, model, ops, xml, call }, { main, subject }) {
+    if (call) {
+      return { differences: differencesOfCall(id, recordedFacts(call), await subject.designIq(call)), measures: { refused: call.refused ? 1 : 0 } };
+    }
     const original = xml ?? readCorpus(model);
     const modelOps = ops.filter(({ op }) => !DRAWING_OPERATIONS.has(op));
     const [mainResult, subjectResult] = [await main.semanticEdit(original, modelOps), await subject.semanticEdit(original, modelOps)];

@@ -1,7 +1,7 @@
 export { OperationAliases } from './OperationAliases.js';
-export { OperationCatalog, type DrawingOperation, type ModelOperation, type Operation } from './OperationCatalog.js';
+export { OperationCatalog, type DrawingOperation, type ModelOperation, type Operation, type OperationInput } from './OperationCatalog.js';
 export { OperationParser, type ParsedOperations } from './OperationParser.js';
-export { OperationSchema, type JsonSchema } from './OperationSchema.js';
+export { OPS_SCHEMA, OperationSchema, type JsonSchema } from './OperationSchema.js';
 export { ReorderTarget } from './ReorderTarget.js';
 export { SpaceAmount, type ParsedSpaceAmount, type SpaceSize } from './fields/index.js';
 export type { AddOperation } from './model/AddOperationDefinition.js';

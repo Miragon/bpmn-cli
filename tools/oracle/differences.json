@@ -18,5 +18,20 @@
     "probe": "layout",
     "pattern": "^total over 156 walk steps: 696, main 691$",
     "reason": "align goes for one place per id (cli.md): walks/layout__controlflow__s01.json#6 scores 35 against 30, and main's own two places draw the same bytes at 35; one call moved both shapes at once, two calls route in between. No other step scores higher"
+  },
+  {
+    "probe": "edits",
+    "pattern": "^models/incremental/vertical\\.bpmn#E3: refusal: main answers, subject E_LAYOUT_INCREMENTAL ",
+    "reason": "Behaviour that goes (cli.md): main redraws vertical pools as horizontal ones on a failed placement; 1.0 keeps their direction and refuses with the hint to a last layout operation"
+  },
+  {
+    "probe": "edits",
+    "pattern": "^design-iq/\\d+:applyToXml: (semantics|changed): main: .*calledDecision=credit-limit-check .*\\| subject: .*camunda:decisionRef",
+    "reason": "The option platform goes (design-iq's map): the recorded call forces platform none on a file whose namespaces say Camunda 7, and 1.0 follows the file"
+  },
+  {
+    "probe": "bytes",
+    "pattern": "^models/incremental/vertical\\.bpmn#insert: main writes, subject E_LAYOUT_INCREMENTAL$",
+    "reason": "Behaviour that goes (cli.md): main redraws vertical pools as horizontal ones on a failed placement; 1.0 keeps their direction and refuses with the hint to a last layout operation"
   }
 ]
