@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Extractor, ExtractorConfig } from '@microsoft/api-extractor';
 import { build } from 'esbuild';
-import { CLI, LIBRARY, ROOT } from './bundles.mjs';
+import { bundlesOf } from './bundles.mjs';
 
+const ROOT = resolve(import.meta.dirname, '..', '..');
 const DIST = join(ROOT, 'dist');
 const DECLARATIONS = join(ROOT, '.api', 'build');
 const TSC = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
@@ -41,6 +42,7 @@ function rollUpDeclarations() {
 
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
-await Promise.all([build(LIBRARY), build(CLI)]);
+const { library, cli } = bundlesOf(ROOT);
+await Promise.all([build(library), build(cli)]);
 emitDeclarations();
 rollUpDeclarations();
