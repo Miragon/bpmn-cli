@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FlowIdFollower } from '../../../src/edit/flows/FlowIdFollower.js';
 import { SequenceFlows } from '../../../src/edit/flows/SequenceFlows.js';
 import { EditSession } from '../../../src/edit/session/EditSession.js';
 import { Fixtures } from '../../support/Fixtures.js';
@@ -8,7 +9,7 @@ async function open(path: string) {
   const document = await Fixtures.readForWrite(path);
   const edit = new EditSession(document);
   const element = (id: string) => document.tree.require(id);
-  return { changes: new ChangeSet(), document, element, flows: new SequenceFlows(edit) };
+  return { changes: new ChangeSet(), document, edit, element, flows: new SequenceFlows(edit) };
 }
 
 const expressionOf = (flow: BpmnElement) => flow.get<BpmnElement | undefined>('conditionExpression')?.get('body');
@@ -182,6 +183,30 @@ describe('SequenceFlows', () => {
 
       expect(spliced.first.id).toBe('f_aPlain');
       expect(spliced).not.toHaveProperty('renamedFrom');
+    });
+
+    it('leaves a flow under a prefix the file made up as it is after a splice', async () => {
+      const { document, element, flows } = await open('edit/flows-mixed-prefixes.bpmn');
+      const node = document.tree.create('bpmn:SubProcess', { id: 'subProcess_fz6Archive', name: 'Fz6 archive' });
+      element('P1').add('flowElements', node);
+
+      const spliced = flows.splice(element('fHandleTicketToFz3Pay'), node);
+
+      expect(spliced.first.id).toBe('fHandleTicketToFz3Pay');
+      expect(spliced).not.toHaveProperty('renamedFrom');
+      expect(spliced.second.id).toBe('flow_fz6ArchiveToFz3Pay');
+    });
+
+    it('follows a flow one end of which took another id earlier in the batch', async () => {
+      const { document, edit, element, flows } = await open('edit/flows-line.bpmn');
+      const task = element('task_a');
+      new FlowIdFollower(edit).recordFormerEnd(task);
+      task.set('id', 'task_verify');
+      document.tree.invalidate();
+      const node = document.tree.create('bpmn:Task', { id: 'task_log', name: 'Log' });
+      element('Process_line').add('flowElements', node);
+
+      expect(flows.splice(element('flow_aToB'), node).first.id).toBe('flow_verifyToLog');
     });
 
     it('refuses to put an end event in the middle of a flow', async () => {

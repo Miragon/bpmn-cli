@@ -167,7 +167,6 @@
     <bpmn:task id="t_groupBefore">
       <bpmn:outgoing>f_groupIn</bpmn:outgoing>
     </bpmn:task>
-    <bpmn:task id="t_danglingHost" />
     <bpmn:sequenceFlow id="f_dangling" />
     <bpmn:task id="t_group1">
       <bpmn:incoming>f_groupIn</bpmn:incoming>
