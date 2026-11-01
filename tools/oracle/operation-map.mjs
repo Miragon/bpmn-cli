@@ -1,3 +1,5 @@
+import { loadMainApi } from './lib/main-tools.mjs';
+
 const KEYS_OF_THE_ELEMENT = ['timer', 'message', 'error', 'errorCode', 'signal', 'escalation', 'escalationCode', 'when', 'link', 'nonInterrupting', 'doc', 'text'];
 const KEYS_OF_THE_CONNECTION = ['name', 'condition', 'language', 'default', 'message'];
 const FLOW_KEYS_OF_A_MOVE = ['flowName', 'flowId', 'condition', 'language', 'default'];
@@ -57,6 +59,18 @@ const MAPPINGS = {
   place: (operation) => without(operation, SELECTORS_OF_DRAWING),
   color: (operation) => without(operation, SELECTORS_OF_DRAWING),
 };
+
+async function idsOfKind(xml, kind) {
+  const { findXml } = await loadMainApi();
+  return (await findXml(xml, '', { kind })).map(({ id }) => id);
+}
+
+export function resolveRowAlignsByKind(operations, xml) {
+  return Promise.all(operations.map(async (operation) => {
+    const { op, axis, kind, ...kept } = operation;
+    return op === 'align' && axis === 'row' && kind ? { op, axis, ...kept, ids: await idsOfKind(xml, kind) } : operation;
+  }));
+}
 
 export function mapOperations(operations) {
   return operations.flatMap((operation) => (operation.op === 'align' ? mapAlign(operation) : (MAPPINGS[operation.op]?.(operation) ?? operation)));

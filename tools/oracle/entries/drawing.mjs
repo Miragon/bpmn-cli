@@ -1,6 +1,6 @@
 import { buildSync } from 'esbuild';
 import { REPO_ROOT } from '../lib/paths.mjs';
-import { mapOperations } from '../operation-map.mjs';
+import { mapOperations, resolveRowAlignsByKind } from '../operation-map.mjs';
 
 const ENTRY_SOURCE = `
 export { DiagramDrawing, DrawingSnapshot } from './src/drawing/index.ts';
@@ -27,11 +27,12 @@ function selectsByKind({ op, kind, via }) {
   return SELECTING_OPERATIONS.includes(op) && (kind || via);
 }
 
-function drawnOperations({ OperationParser }, step) {
-  if (step.ops.some(selectsByKind)) {
+async function drawnOperations({ OperationParser }, step) {
+  const resolved = await resolveRowAlignsByKind(step.ops, step.before);
+  if (resolved.some(selectsByKind)) {
     return undefined;
   }
-  const mapped = mapOperations(step.ops);
+  const mapped = mapOperations(resolved);
   const drawn = step.noLayout ? mapped.filter(({ op }) => op === 'order') : mapped;
   if (!drawn.length) {
     return [];
@@ -111,7 +112,7 @@ function subjectOf(drawing) {
       return { xml: await new DocumentWriter().plain(document) };
     }),
     walkStep: (step) => attempt(async () => {
-      const operations = drawnOperations(drawing, step);
+      const operations = await drawnOperations(drawing, step);
       if (!operations) {
         return { skipped: 'selects by kind, which 1.0 leaves to find' };
       }
