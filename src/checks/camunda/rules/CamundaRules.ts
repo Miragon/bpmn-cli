@@ -96,6 +96,10 @@ export abstract class CamundaRules {
     return unprefixedLink ? new DecisionLinkReader(this.document.namespaces).linkOf(el) : undefined;
   }
 
+  protected eventDefinitions(): BpmnElement[] {
+    return [...this.document.tree.walk(this.document.tree.definitions, { bpmnOnly: true })].filter((element) => element.is('bpmn:EventDefinition'));
+  }
+
   protected unprefixedAttributes(): UnprefixedAttributes[] {
     const found: UnprefixedAttributes[] = [];
     for (const el of this.document.tree.walk(this.document.tree.definitions, { bpmnOnly: true })) {

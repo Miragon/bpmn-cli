@@ -9,7 +9,7 @@ export class C8SchemaRules extends C8Rules {
   check(element: BpmnElement, reporter: RuleReporter): void {
     if (element.is('bpmn:Definitions')) {
       this.checkExecutable(reporter);
-      this.checkSchemaEventDefinitions(reporter);
+      this.eventDefinitions().forEach((def) => this.checkSchemaEventDefinition(def, reporter));
       this.checkSchema(reporter);
       this.checkIds(reporter);
       this.checkSchemaText(reporter);
@@ -32,9 +32,7 @@ export class C8SchemaRules extends C8Rules {
       reporter.deploy({ code: 'W_C8_DEPLOY_SCHEMA', element: this.document.tree.definitions, subject: 'definitions', message: `bpmn:definitions carries bpmn:extensionElements, which the BPMN schema does not allow there; Camunda 8 refuses the file`, hint: `Move the content to the process: \`bpmn ext remove <file> ${this.document.tree.definitions.id ?? '<definitionsId>'} <type>\`, then \`bpmn ext add <file> <processId> <type> ...\`.` });
     }
     for (const attributes of this.unprefixedAttributes()) {
-      for (const key of attributes.keys) {
-        this.checkSchemaAttribute(attributes, key, reporter);
-      }
+      attributes.keys.forEach((key) => this.checkSchemaAttribute(attributes, key, reporter));
     }
   }
 
@@ -123,14 +121,6 @@ export class C8SchemaRules extends C8Rules {
   private reportIdrefIssue(issue: SchemaTextIssue, owner: BpmnElement | undefined, where: string, reporter: RuleReporter): void {
     const ref = issue.attribute ? `${issue.ref}="${issue.value}"` : `<bpmn:${issue.ref}>${issue.value}</bpmn:${issue.ref}>`;
     reporter.deploy({ code: 'W_C8_DEPLOY_SCHEMA', element: owner ?? this.document.tree.definitions, subject: `idref:${issue.ref}:${issue.value}`, message: `${where[0]!.toUpperCase()}${where.slice(1)} has ${ref}, but the file has no element with the id ${issue.value}; Camunda 8 checks such references against the ids of the file (cvc-id.1) and refuses it`, hint: `Remove ${ref} from ${issue.owner ?? `<bpmn:${issue.element}>`} in the XML, or point it at an element of the file (bpmn-moddle drops the reference when it reads the file: \`bpmn\` refuses to write the file without --force, and a forced write leaves it out).` });
-  }
-
-  private checkSchemaEventDefinitions(reporter: RuleReporter): void {
-    for (const def of this.document.tree.walk(this.document.tree.definitions, { bpmnOnly: true })) {
-      if (def.is('bpmn:EventDefinition')) {
-        this.checkSchemaEventDefinition(def, reporter);
-      }
-    }
   }
 
   private checkSchemaEventDefinition(def: BpmnElement, reporter: RuleReporter): void {

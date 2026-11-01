@@ -7,16 +7,14 @@ import type { UnprefixedAttributes } from '../rules/CamundaRules.js';
 export class C7SchemaRules extends C7Rules {
   check(element: BpmnElement, reporter: RuleReporter): void {
     if (element.is('bpmn:Definitions')) {
-      this.checkSchemaEventDefinitions(reporter);
+      this.eventDefinitions().forEach((def) => this.checkSchemaEventDefinition(def, reporter));
       this.checkSchemaAttributes(reporter);
     }
   }
 
   private checkSchemaAttributes(reporter: RuleReporter): void {
     for (const attributes of this.unprefixedAttributes()) {
-      for (const key of attributes.keys) {
-        this.checkSchemaAttribute(attributes, key, reporter);
-      }
+      attributes.keys.forEach((key) => this.checkSchemaAttribute(attributes, key, reporter));
     }
   }
 
@@ -45,14 +43,6 @@ export class C7SchemaRules extends C7Rules {
       return `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`;
     }
     return `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''} (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`;
-  }
-
-  private checkSchemaEventDefinitions(reporter: RuleReporter): void {
-    for (const def of this.document.tree.walk(this.document.tree.definitions, { bpmnOnly: true })) {
-      if (def.is('bpmn:EventDefinition')) {
-        this.checkSchemaEventDefinition(def, reporter);
-      }
-    }
   }
 
   private static schemaEventOf(def: BpmnElement): BpmnElement | undefined {
