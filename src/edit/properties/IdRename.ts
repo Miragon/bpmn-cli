@@ -51,9 +51,6 @@ export class IdRename {
       if (element.peek(ref.attr) === old) {
         element.set(ref.attr, newId);
       }
-      if (element.attrs[ref.attr] === old) {
-        element.attrs[ref.attr] = newId;
-      }
     }
   }
 
@@ -115,11 +112,8 @@ export class IdRename {
     return `${/^[aeio]/i.test(kind) ? 'an' : 'a'} ${kind}`;
   }
 
-  private static requestOf(el: BpmnElement): IdRequest | undefined {
-    const def = Kinds.of(el);
-    if (!def) {
-      return undefined;
-    }
+  private static requestOf(el: BpmnElement): IdRequest {
+    const def = Kinds.of(el)!;
     const trigger = Triggers.of(el);
     const name = el.get<string | undefined>('name');
     return IdRequests.kindRequest(def, { ...(trigger && trigger !== 'none' ? { trigger } : {}), ...(name ? { name } : {}) });

@@ -72,8 +72,6 @@ describe('IdRename', () => {
     it('gives a derived DI id whose new id is taken the suffix _2', async () => {
       const { document, ids, shapeIds } = await open();
 
-      ids.rename(document.tree.require('task_suffix'), 'task_taken_x');
-      ids.rename(document.tree.require('task_bpmn'), 'task_bpmn');
       document.ids.registry.claim('task_one_di');
       ids.rename(document.tree.require('task_taken'), 'task_one');
 
@@ -181,6 +179,7 @@ describe('IdRename', () => {
       ids.reportStalePrefixes(changes);
 
       expect(changes.warnings[0]?.message).toBe('task_finished keeps its id, which element-id-naming (.bpmnlintrc) did not check on an end event; it expects endEvent_ for an endEvent:terminate');
+      expect(changes.warnings[0]?.hint).toContain('`bpmn set <file> task_finished id=endEvent_finished`');
       expect(edit.journal.takeIdStates().size).toBe(0);
     });
 

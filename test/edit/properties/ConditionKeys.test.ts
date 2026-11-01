@@ -101,6 +101,16 @@ describe('ConditionKeys', () => {
     await expect(write('flow_other', { condition: '   ' })).rejects.toMatchObject({ code: 'E_INVALID_VALUE' });
   });
 
+  it('lets a flow out of a parallel gateway lose a condition it should not have', async () => {
+    const document = await Fixtures.readForWrite('edit/properties-flows.bpmn');
+    const flow = document.tree.require('flow_fork_a');
+    flow.set('conditionExpression', document.tree.require('flow_juel').get('conditionExpression'));
+
+    new ConditionKeys(new EditSession(document)).write(flow, new Map([['condition', '']]), new ChangeSet());
+
+    expect(flow.get('conditionExpression')).toBeUndefined();
+  });
+
   it.each(['flow_fork_a', 'flow_wait_b'])('keeps a condition off %s, a flow out of a gateway that takes none', async (flowId) => {
     await expect(write(flowId, { condition: '${x}' })).rejects.toMatchObject({ code: 'E_INVALID_VALUE', details: { element: flowId } });
   });

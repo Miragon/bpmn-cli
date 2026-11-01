@@ -12,5 +12,10 @@
         <z:taskHeaders />
       </bpmn:extensionElements>
     </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="task_noDecision">
+      <bpmn:extensionElements>
+        <z:calledDecision resultVariable="x" />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
   </bpmn:process>
 </bpmn:definitions>
