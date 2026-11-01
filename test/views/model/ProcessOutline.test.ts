@@ -17,6 +17,13 @@ describe('ProcessOutline', () => {
     expect(drawn.at(-1)).toMatchObject({ id: 'Stray', unreachable: true });
   });
 
+  it('shows the flows of a file that leaves out the optional incoming and outgoing entries', async () => {
+    const { nodes } = await outline('views/implementation.bpmn', 'Process_Implementation');
+
+    expect(node(nodes, 'Charge')?.outgoing.map(({ id }) => id)).toEqual(['Flow_Resource']);
+    expect(node(nodes, 'Review')?.incoming.map(({ id }) => id)).toEqual(['Flow_Resource']);
+  });
+
   it('nests boundary events and children under their host', async () => {
     const assess = node((await outline()).nodes, 'Activity_Assess');
 

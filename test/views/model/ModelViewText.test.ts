@@ -69,6 +69,15 @@ describe('ModelViewText', () => {
     expect(await text('views/long-subprocess.bpmn')).toContain('find --in Process_Flat');
   });
 
+  it('cuts a long section and says how many lines it left out', () => {
+    const groups = Array.from({ length: 200 }, (_entry, index) => ({ id: `Group_${index}`, kind: 'group', members: [] }));
+
+    const lines = new ModelViewText({ kind: 'model', definitions: { id: 'Definitions', namespaces: [] }, processes: [], rootElements: [], groups }).text().split('\n');
+
+    expect(lines).toHaveLength(151);
+    expect(lines.at(-1)).toBe('groups: 51 left out, --json lists them');
+  });
+
   it('prints a data object and an annotation on their own', () => {
     expect(ModelViewText.dataLine({ id: 'Data', kind: 'dataStore', from: [], to: [] })).toBe('dataStore Data');
     expect(ModelViewText.annotationLine({ id: 'Note', attachedTo: [] })).toBe('Note');

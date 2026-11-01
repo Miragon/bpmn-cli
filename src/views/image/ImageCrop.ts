@@ -13,6 +13,7 @@ export interface CropOptions {
 export interface CropChoice {
   plane?: string | undefined;
   fit?: string[] | undefined;
+  depth?: number | undefined;
 }
 
 export class ImageCrop {
@@ -56,8 +57,8 @@ export class ImageCrop {
     ImageCrop.refuseMixed(options);
     const { ids, around, depth, path } = options;
     if (around !== undefined) {
-      const { distances } = new NeighbourhoodWalk(this.document).window(around, depth);
-      return this.withItsArtifacts([...distances.keys()].map(({ id }) => id));
+      const { distances, depth: used } = new NeighbourhoodWalk(this.document).window(around, depth);
+      return { ...this.withItsArtifacts([...distances.keys()].map(({ id }) => id)), depth: used };
     }
     if (path) {
       return this.withItsArtifacts(new FlowPath(this.document).between(...path).map(({ id }) => id));

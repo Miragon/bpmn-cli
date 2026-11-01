@@ -112,9 +112,7 @@ export class ModelViewText {
 
   private collaboration({ id, participants, messageFlows, annotations }: ViewCollaboration): void {
     this.out.push(`collaboration ${id}`);
-    for (const participant of participants) {
-      this.out.push(`  participant ${new ElementLine(participant).named} ${participant.process ? `= ${participant.process.id}` : '(black box)'}`);
-    }
+    this.section('', 1, participants.map((participant) => `participant ${new ElementLine(participant).named} ${participant.process ? `= ${participant.process.id}` : '(black box)'}`), 'participants');
     this.section('', 1, messageFlows.map(FlowLine.message), 'message flows');
     this.section('annotations:', 1, (annotations ?? []).map(ModelViewText.annotationLine));
   }
@@ -124,14 +122,14 @@ export class ModelViewText {
       return;
     }
     const pad = ElementLine.INDENT.repeat(depth);
-    if (this.spent) {
-      this.out.push(`${pad}${noun}: ${lines.length} left out, --json lists them`);
-      return;
-    }
-    if (title) {
+    const room = Math.max(0, ModelViewText.MAX_LINES - this.out.length);
+    if (room && title) {
       this.out.push(`${pad}${title}`);
     }
-    this.out.push(...lines.map((line) => `${pad}${title ? ElementLine.INDENT : ''}${line}`));
+    this.out.push(...lines.slice(0, room).map((line) => `${pad}${title ? ElementLine.INDENT : ''}${line}`));
+    if (lines.length > room) {
+      this.out.push(`${pad}${noun}: ${lines.length - room} left out, --json lists them`);
+    }
   }
 
   private process(process: ViewProcess): void {

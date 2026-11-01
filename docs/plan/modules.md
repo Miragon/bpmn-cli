@@ -32,7 +32,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | scoring | judge a drawing: find its layout problems and sum them to the layout score | `Scorer`, `ScoringCriterion` (one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion`, `LabelOnLineCriterion`), `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator` | change the document, lay out | 1.4k |
 | drawing | decide coordinates | `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard` (keeps a move only when `Scorer` finds it no worse), `ShapeSizes` ([below](#shape-sizes)) | change semantics, paint, judge itself | 14.5k |
 | checks | say what is wrong with the model, by bpmn-cli's own rules: its structure, and what Camunda rejects | `ModelChecks` (both below, without what the second repeats of the first, `all()` and `at(ids)`), `StructureChecks`, `CamundaChecks`, `CamundaRules` (one subclass per theme, such as `C8FlowRules`), `RuleReporter`, `FeelParser` | run a host's validators or bpmnlint, compare before and after, judge the drawing, change the document | 5.6k |
-| views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, each with its text class beside it (`ModelViewText`); `ImageView` | write | 2.9k |
+| views | answer each read as data and as text | `ShowQuery` (the outline, a part of it, or one element), `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, each with its text class beside it (`ModelViewText`), which holds the data type it prints; `ImageView`; `facts/` the readers the views share, `lines/` the text values | write | 2.9k |
 | write | run one write as a transaction, and `validate`; the rules that come from outside | `WriteTransaction`, `EditResult`, `HostValidators` (runs the host's validators), `FindingDelta` (what a write added, from every source), `DocumentValidation` (the checks, the host validators and the layout dry run of `validate`), `ValidationReport` | read flags or files, hold rules of its own | 1.2k |
 | api | the contract | the 8 functions of `index.ts`, one line each into a class | hold logic | 0.3k |
 | cli | the Node shell: words, files, text, exit codes | `Cli`, `EditCommand` (one class for all 17 edit commands), `CommandSyntax` (a command's positionals, flags and help), `NewCommand`, `ShowCommand`, `FindCommand`, `DiagramCommand`, `ConventionsCommand`, `ValidateCommand`, `ApplyCommand`, `RenderCommand`, `GuideCommand`, `CliShell`, `BpmnFile`, `IdConventionsReader`, `EditResultText`, `HelpTopics`, `ProjectLintValidator` | model logic | 1.9k |
@@ -50,7 +50,7 @@ src/
 ├── scoring/  plane/ shapes/ flows/ labels/
 ├── drawing/  plane/ groups/ diagram/ incremental/{placement,routing,frames}/ full/{scopes,lanes,routing,links,trials}/ runners/
 ├── checks/   structure/ camunda/{rules,values,feel,c7,c8}/
-├── views/    model/ element/ around/ find/ diagram/ conventions/ image/
+├── views/    model/ element/ around/ find/ diagram/ conventions/ image/ facts/ lines/
 ├── write/
 ├── api/
 ├── cli/      commands/ output/ help/ files/

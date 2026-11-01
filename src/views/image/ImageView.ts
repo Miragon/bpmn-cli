@@ -15,6 +15,7 @@ export interface NumberedProblem extends Omit<LayoutProblem, 'at'> {
 
 export interface RenderedImage extends SvgImage {
   problems?: NumberedProblem[] | undefined;
+  depth?: number | undefined;
 }
 
 export class ImageView {
@@ -50,15 +51,15 @@ export class ImageView {
   }
 
   private badged(renderer: DiagramRenderer, problems: readonly LayoutProblem[] | undefined, isDrawn: boolean): RenderedImage {
-    const crop = new ImageCrop(this.document).of(this.options);
+    const { depth, ...crop } = new ImageCrop(this.document).of(this.options);
     const image = renderer.svg(crop);
     if (!problems) {
-      return image;
+      return { ...image, depth };
     }
     const located = isDrawn ? new ProblemLocator(this.document).locate(problems) : problems;
     const listed = crop.fit ? located.filter(({ ids }) => ids.some((id) => image.drawn.includes(id))) : located;
     const badges = ImageView.badgesOn(image.plane, listed);
     const badged = badges.length ? renderer.svg({ ...crop, badges }) : image;
-    return { ...badged, problems: ImageView.numbered(listed, badged.badges) };
+    return { ...badged, depth, problems: ImageView.numbered(listed, badged.badges) };
   }
 }

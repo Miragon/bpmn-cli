@@ -15,10 +15,11 @@ describe('ImageView', () => {
 
   it('crops to the neighbourhood of an id', async () => {
     const whole = await image();
-    const { drawn, width } = await image({ around: 'Activity_InnerTask', depth: 1 });
+    const { drawn, width, depth } = await image({ around: 'Activity_InnerTask' });
 
     expect(drawn).toContain('Activity_InnerTask');
     expect(width).toBeLessThan(whole.width);
+    expect(depth).toBe(1);
   });
 
   it('draws the plane of a collapsed sub-process for its id', async () => {
