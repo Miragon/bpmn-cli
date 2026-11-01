@@ -31,6 +31,14 @@ describe('OperationAliases', () => {
     expect(ADD).toMatchObject({ after: '$start' });
   });
 
+  it('leaves the id keys an operation does not give out of the resolved copy', () => {
+    const operation: Operation = { op: 'set', id: '$task', set: { name: 'Review', lane: '$lane' } };
+
+    const resolved = new OperationAliases(operation).resolve((alias) => `id_${alias.slice(1)}`);
+
+    expect(resolved).toStrictEqual({ op: 'set', id: 'id_task', set: { name: 'Review', lane: 'id_lane' } });
+  });
+
   it('hands back an operation without aliases', () => {
     const operation: Operation = { op: 'tidy' };
     expect(new OperationAliases(operation).resolve(() => 'never')).toBe(operation);

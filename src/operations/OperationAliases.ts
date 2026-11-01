@@ -75,7 +75,11 @@ export class OperationAliases {
     const resolved = (value: unknown, key: string): unknown => (OperationAliases.isAlias(value) ? idOf(value, key) : value);
     for (const { key, holder, name } of this.slots(copy)) {
       const value = holder[name];
-      holder[name] = Array.isArray(value) ? value.map((entry, entryIndex) => resolved(entry, `${key}[${entryIndex}]`)) : resolved(value, key);
+      if (Array.isArray(value)) {
+        holder[name] = value.map((entry, entryIndex) => resolved(entry, `${key}[${entryIndex}]`));
+      } else if (value !== undefined) {
+        holder[name] = resolved(value, key);
+      }
     }
     return copy;
   }
