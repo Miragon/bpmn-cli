@@ -39,7 +39,7 @@ since its bundles load them at run time, and API Extractor rolls render's public
 | `packages/lint` | run the project's `.bpmnlintrc` through bpmnlint, for `validate` | `ProjectLint`, `LintConfig`, `LintPlugins`, `LintRules`, `RuleGuard`, `LintFindings` | import the core, run on writes | 0.8k |
 | `packages/render` | paint BPMN as SVG, PNG optional | `DiagramRenderer`, `DiagramReader`, `ShapePainter`, `EdgePainter`, `SvgComposer`, `TextMetrics`, `PngRasterizer` | lay out, query the graph, read files | 2.1k |
 
-≈ 46k lines with both packages was the estimate, capped at 47,000; the measure is 51,280
+≈ 46k lines with both packages was the estimate, capped at 47,000; the measure is 51.3k
 ([why](README.md#the-line-target-missed)). Files, the `.bpmnlintrc` lookup and its naming read
 (≈ 0.4k) live in `cli/files`.
 
@@ -503,7 +503,7 @@ publishing it later needs a name and a release, no change to its code.
 | `adapters/out/render`, PNG and image files | 1,801 | `packages/render` |
 | bpmnlint adapters, `ProjectBpmnlint.ts` | 1,757 | `packages/lint`; the `.bpmnlintrc` lookup and naming read to `cli/files` |
 | other file adapters | 186 | cli |
-| total | 53,642 | ≈ 46k estimated, 51,280 measured |
+| total | 53,642 | ≈ 46k estimated, 51.3k measured |
 
 ## Architecture doc
 
