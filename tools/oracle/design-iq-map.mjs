@@ -167,6 +167,6 @@ export async function onMain(api, call) {
     const answer = call.function === 'kindsJson' ? api.kindsJson() : await api[call.function](documentOf(document), ...withStubs);
     return FACTS_OF_MAIN[call.function](answer, call);
   } catch (error) {
-    return refusalOf(error);
+    return refusalOnMain({ ...call, refused: { code: error.code ?? error.name, message: error.message } });
   }
 }

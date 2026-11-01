@@ -2,7 +2,7 @@ import { BpmnError, DiIds, ModelError, type BpmnDocument, type ChangeSet } from 
 import { DiagramColors } from './diagram/DiagramColors.js';
 import { Stickies, type MovedSticky } from './diagram/Stickies.js';
 import type { DrawingSnapshot } from './DrawingSnapshot.js';
-import { FullLayout, type LayoutWarning } from './full/FullLayout.js';
+import type { LayoutWarning } from './full/FullLayout.js';
 import { Groups } from './groups/Groups.js';
 import { IncrementalLayout, type IncrementalReport } from './incremental/IncrementalLayout.js';
 import { DrawingOperationRunner, type DrawnOperation, type FormatResult } from './runners/DrawingOperationRunner.js';
@@ -35,12 +35,12 @@ export class DiagramDrawing {
     return { ...layout, format, stickies };
   }
 
-  private draw(before: DrawingSnapshot, changes: ChangeSet, operations: readonly DrawnOperation[]): Layout | Promise<Layout> {
+  private draw(before: DrawingSnapshot, changes: ChangeSet, operations: readonly DrawnOperation[]): Promise<Layout> {
     if (before.isEmpty() || operations.some(({ op }) => op === 'layout')) {
       return this.drawInFull(changes);
     }
     const onlyDrawingOperations = operations.length > 0 && changes.isEmpty && !changes.relocated.length && !this.hasExpansions(changes);
-    return onlyDrawingOperations ? DiagramDrawing.untouched('kept') : this.placeChanges(before, changes);
+    return onlyDrawingOperations ? Promise.resolve(DiagramDrawing.untouched('kept')) : this.placeChanges(before, changes);
   }
 
   private hasExpansions({ expansions }: ChangeSet): boolean {
@@ -48,7 +48,8 @@ export class DiagramDrawing {
     return expand.length + collapse.length > 0;
   }
 
-  private drawInFull(changes: ChangeSet): Layout {
+  private async drawInFull(changes: ChangeSet): Promise<Layout> {
+    const { FullLayout } = await import('./full/FullLayout.js');
     const colors = new DiagramColors(this.document.tree);
     const remembered = colors.read();
     const { warnings, expanded, givenIds, notes } = new FullLayout(this.document, changes.expansions).draw();

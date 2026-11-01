@@ -45,7 +45,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --format=esm --platform=neutral --packages=external --outfile=dist/index.js",
+    "build": "esbuild src/index.ts --bundle --splitting --format=esm --platform=neutral --main-fields=module,main --external:bpmn-moddle --external:moddle --external:zod --outdir=dist",
     "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",

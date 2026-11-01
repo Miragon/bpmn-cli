@@ -32,10 +32,10 @@ export class ShowQuery {
     return { errors, warnings: findings.length - errors };
   }
 
-  answer(): ShowResult {
+  async answer(): Promise<ShowResult> {
     this.refuseMixedOptions();
     const { text, view } = this.shown();
-    const state = ShowQuery.stateOf(new ModelChecks(this.document).all());
+    const state = ShowQuery.stateOf(await new ModelChecks(this.document).all());
     const stateLine = `state: ${ShowQuery.counted(state.errors, 'error')}, ${ShowQuery.counted(state.warnings, 'warning')} (bpmn validate lists them and runs the project's lint)`;
     return { text: `${text}\n${stateLine}`, view, state };
   }

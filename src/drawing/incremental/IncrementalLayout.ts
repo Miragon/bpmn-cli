@@ -1,6 +1,6 @@
 import { DiPruner, type Box, type BpmnDocument, type ChangeSet } from '../../model/index.js';
 import type { DrawingSnapshot } from '../DrawingSnapshot.js';
-import { FullLayout, type EngineDrawing } from '../full/FullLayout.js';
+import type { EngineDrawing } from '../full/FullLayout.js';
 import type { DEdge } from '../plane/DEdge.js';
 import type { Plane } from '../plane/Plane.js';
 import { PlaneReader } from '../plane/PlaneReader.js';
@@ -105,7 +105,7 @@ export class IncrementalLayout {
     const { before, document } = this;
     const edgesBefore = new Map<DEdge, EdgeBefore>();
     let engineRun: Promise<EngineDrawing> | undefined;
-    const engine = (): Promise<EngineDrawing> => (engineRun ??= FullLayout.engineDrawing(document, changes.expansions));
+    const engine = (): Promise<EngineDrawing> => (engineRun ??= import('../full/FullLayout.js').then(({ FullLayout }) => FullLayout.engineDrawing(document, changes.expansions)));
     const adopter = new BlockAdopter(run);
     const containers = new ContainerPlacer(run, before, adopter, engine);
     run.place.hooks.planeFor = (id) => containers.planeFor(id);

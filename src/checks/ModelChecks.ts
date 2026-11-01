@@ -16,16 +16,16 @@ export class ModelChecks {
     return `${element}|${related?.[0] ?? ''}`;
   }
 
-  all(): Finding[] {
+  async all(): Promise<Finding[]> {
     const structure = new StructureChecks(this.document).all();
     const invalidHosts = new Set(structure.filter(({ code }) => code === 'E_INVALID_HOST').map(({ element }) => element));
-    const camunda = new CamundaChecks(this.document, this.platform).all().filter(({ code, element }) => !ModelChecks.BOUNDARY_HOST_CODES.includes(code) || !invalidHosts.has(element));
+    const camunda = (await new CamundaChecks(this.document, this.platform).all()).filter(({ code, element }) => !ModelChecks.BOUNDARY_HOST_CODES.includes(code) || !invalidHosts.has(element));
     return [...ModelChecks.withoutRepeats(structure, camunda), ...camunda];
   }
 
-  at(elements: Iterable<string>): Finding[] {
+  async at(elements: Iterable<string>): Promise<Finding[]> {
     const touched = new Set(elements);
-    return this.all().filter(({ element }) => element !== undefined && touched.has(element));
+    return (await this.all()).filter(({ element }) => element !== undefined && touched.has(element));
   }
 
   private static withoutRepeats(structure: Finding[], camunda: ProfileFinding[]): Finding[] {

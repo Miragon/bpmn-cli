@@ -57,7 +57,7 @@ export class DocumentValidation {
     const document = await new DocumentReader().read(xml);
     const { reportedImportWarnings: importWarnings, file } = document;
     const platform = new PlatformDetection(document.tree.definitions).info();
-    const checks = new ModelChecks(document).all();
+    const checks = await new ModelChecks(document).all();
     const hosts = new HostValidators(this.options.validators, { platform: platform.platform, file, operations: [], importWarnings });
     const runs = await hosts.run(xml, 'check');
     const { layout, warnings } = checks.some(({ severity }) => severity === 'error') ? { layout: { status: 'skipped' } as const, warnings: [] } : await this.layoutDryRun(document);

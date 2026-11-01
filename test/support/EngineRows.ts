@@ -37,7 +37,7 @@ export interface FeelRow {
 }
 
 interface Checks {
-  all(): Finding[];
+  all(): Finding[] | Promise<Finding[]>;
 }
 
 type ChecksOf = (document: BpmnDocument, platform?: 'c7' | 'c8') => Checks;
@@ -99,7 +99,7 @@ export class EngineRows {
 
   async expectVerdict(row: VerdictRow): Promise<void> {
     const document = await Fixtures.read(`engine/${row.model}`);
-    const findings = this.checksOf(document).all();
+    const findings = await this.checksOf(document).all();
     const readsOperaton = new PlatformDetection(document.tree.definitions).info().operaton === true;
     const verdict = readsOperaton ? (row.operaton ?? row.engine) : row.engine;
 
@@ -109,13 +109,13 @@ export class EngineRows {
 
   async expectParity(row: ParityRow): Promise<void> {
     const platform = row.model.startsWith('parity/c7/') ? 'c7' : 'c8';
-    const codes = this.checksOf(await Fixtures.read(`engine/${row.model}`), platform).all().map(({ code }) => code);
+    const codes = (await this.checksOf(await Fixtures.read(`engine/${row.model}`), platform).all()).map(({ code }) => code);
 
     expect(codes.filter((code) => code === row.codes[0]).length).toBeGreaterThanOrEqual(row.codes.length);
   }
 
   async expectStructure(row: StructureRow): Promise<void> {
-    const findings = this.checksOf(await Fixtures.read(`engine/${row.model}`)).all();
+    const findings = await this.checksOf(await Fixtures.read(`engine/${row.model}`)).all();
 
     const rows = findings.map(({ code, severity, element }) => ({ code, severity, element: element ?? '-' }));
 

@@ -3,7 +3,7 @@ import { ModelChecks } from '../../src/checks/ModelChecks.js';
 import { Fixtures } from '../support/Fixtures.js';
 
 describe('ModelChecks', () => {
-  const codesOf = async (path: string) => new ModelChecks(await Fixtures.read(path)).all().map(({ code }) => code);
+  const codesOf = async (path: string) => (await new ModelChecks(await Fixtures.read(path)).all()).map(({ code }) => code);
 
   it('holds the structure and the Camunda findings of a model', async () => {
     const codes = await codesOf('engine/verdicts/c7-profile/065-boundary-event-on-a-compensation-handler.bpmn');
@@ -15,8 +15,8 @@ describe('ModelChecks', () => {
   it('drops the structure warning about an event gateway branch Camunda already refuses', async () => {
     const document = await Fixtures.read('engine/parity/c7/c7-event-gateway-branches-unique/08-a-camunda-8-diagram.bpmn');
 
-    expect(new ModelChecks(document, 'none').all().map(({ code }) => code)).toContain('W_EVENT_GATEWAY_TARGET');
-    expect(new ModelChecks(document, 'c7').all().map(({ code }) => code)).not.toContain('W_EVENT_GATEWAY_TARGET');
+    expect((await new ModelChecks(document, 'none').all()).map(({ code }) => code)).toContain('W_EVENT_GATEWAY_TARGET');
+    expect((await new ModelChecks(document, 'c7').all()).map(({ code }) => code)).not.toContain('W_EVENT_GATEWAY_TARGET');
   });
 
   it('drops the missing start the Camunda finding repeats', async () => {
@@ -29,14 +29,14 @@ describe('ModelChecks', () => {
   it('runs no Camunda checks on a platform of none', async () => {
     const document = await Fixtures.read('engine/verdicts/c7-profile/065-boundary-event-on-a-compensation-handler.bpmn');
 
-    expect(new ModelChecks(document, 'none').all().every(({ code }) => /^[EW]_(?!C[78]_)/.test(code))).toBe(true);
+    expect((await new ModelChecks(document, 'none').all()).every(({ code }) => /^[EW]_(?!C[78]_)/.test(code))).toBe(true);
   });
 
   it('tells the findings at the touched elements', async () => {
     const document = await Fixtures.read('engine/structure/boundary-event-without-a-host.bpmn');
     const checks = new ModelChecks(document);
 
-    expect(checks.at(['B']).map(({ code }) => code).sort()).toEqual(checks.all().filter(({ element }) => element === 'B').map(({ code }) => code).sort());
-    expect(checks.at(['Start'])).toEqual([]);
+    expect((await checks.at(['B'])).map(({ code }) => code).sort()).toEqual((await checks.all()).filter(({ element }) => element === 'B').map(({ code }) => code).sort());
+    expect(await checks.at(['Start'])).toEqual([]);
   });
 });

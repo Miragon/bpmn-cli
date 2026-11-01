@@ -72,7 +72,7 @@ export class WriteTransaction {
     const run = new ModelOperationRunner(document, { force }).run(operations);
     const drawing = await this.draw(document, snapshot, run);
     const score = new ScoreChange(scoreBefore, this.scoreOf(document));
-    const checks = new ModelChecks(document).all();
+    const checks = await new ModelChecks(document).all();
     const renames = new IdRenames(run.changes);
     const delta = new FindingDelta(renames.newIds());
     await this.refuseNewErrors(input, run, checks, renames, delta);
@@ -108,7 +108,7 @@ export class WriteTransaction {
       return;
     }
     const before = await new DocumentReader().read(input);
-    const added = delta.newErrors(errors, new ModelChecks(before).at(renames.oldIdsOf(touched)));
+    const added = delta.newErrors(errors, await new ModelChecks(before).at(renames.oldIdsOf(touched)));
     if (added.length) {
       throw WriteTransaction.structureRefusal(added);
     }
