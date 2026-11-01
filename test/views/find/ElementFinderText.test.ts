@@ -15,6 +15,12 @@ describe('ElementFinderText', () => {
     expect(new ElementFinderText([{ id: 'Task_1', kind: 'task', match: `camunda:topic=${'x'.repeat(120)}` }]).text()).toContain(`[camunda:topic=${'x'.repeat(83)}...]`);
   });
 
+  it('keeps a name and a value over lines on the line of its hit', () => {
+    const text = new ElementFinderText([{ id: 'Task_1', kind: 'task', name: 'Check\nthe\torder', match: 'camunda:topic=first\nsecond' }]).text();
+
+    expect(text).toBe('Task_1  task  "Check the order"    [camunda:topic=first second]');
+  });
+
   it('prints nothing for no hit', () => {
     expect(new ElementFinderText([]).text()).toBe('');
   });

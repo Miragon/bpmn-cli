@@ -12,7 +12,11 @@ export class FindCommand {
   constructor(private readonly shell: CliShell) {}
 
   private static tabbed({ id, kind, name, in: within, match }: FindHit): string {
-    return [id, kind, name ?? '', within ?? '', match ?? ''].join('\t').trimEnd();
+    return [id, kind, FindCommand.oneLine(name), within ?? '', FindCommand.oneLine(match)].join('\t').trimEnd();
+  }
+
+  private static oneLine(value = ''): string {
+    return value.replace(/\s+/g, ' ').trim();
   }
 
   register(program: Command): void {
