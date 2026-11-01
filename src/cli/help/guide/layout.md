@@ -6,7 +6,7 @@ One rule: a plane with shapes is drawn incrementally, an empty one in full. The 
 
 ```text
 bpmn layout order.bpmn
-bpmn set order.bpmn subProcess_pack expanded=false
+bpmn set <file> <subProcessId> expanded=false
 ```
 
 Branches: the default flow continues straight, the others go below and above in declaration order. `bpmn order` changes that order, `set <flowId> default=true` the straight one.

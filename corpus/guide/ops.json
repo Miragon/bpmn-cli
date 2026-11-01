@@ -1,0 +1,4 @@
+[
+  { "op": "add", "kind": "userTask", "name": "Approve", "after": "userTask_check", "as": "$approve" },
+  { "op": "set", "id": "$approve", "set": { "doc": "Four eyes" } }
+]
