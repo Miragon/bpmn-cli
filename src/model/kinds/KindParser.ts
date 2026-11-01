@@ -58,7 +58,7 @@ export class KindParser {
         throw error;
       }
       const { candidates } = error.details;
-      throw new BpmnError(error.code, error.message, 'usage', { ...(candidates?.length ? { candidates } : {}), hint: 'Run `bpmn kinds` for the full list of kinds and triggers.' });
+      throw new BpmnError(error.code, error.message, 'usage', { ...(candidates?.length ? { candidates } : {}), hint: 'Run `bpmn guide kinds` for the full list of kinds and triggers.' });
     }
   }
 
@@ -114,12 +114,12 @@ export class KindParser {
   private static unknown(kindToken: string): BpmnError {
     const rejection = KindParser.rejectionOf(kindToken);
     if (rejection) {
-      return new BpmnError('E_UNSUPPORTED_KIND', `Kind "${kindToken}" is rejected: ${rejection}`, 'usage', { hint: 'Run `bpmn kinds` for the supported kinds.' });
+      return new BpmnError('E_UNSUPPORTED_KIND', `Kind "${kindToken}" is rejected: ${rejection}`, 'usage', { hint: 'Run `bpmn guide kinds` for the supported kinds.' });
     }
     const candidates = KindParser.suggest(kindToken);
-    return new BpmnError('E_UNKNOWN_KIND', `Unknown kind "${kindToken}"${candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : ''}. Run \`bpmn kinds\` for the full list.`, 'usage', {
+    return new BpmnError('E_UNKNOWN_KIND', `Unknown kind "${kindToken}"${candidates.length ? ` (did you mean: ${candidates.join(', ')}?)` : ''}. Run \`bpmn guide kinds\` for the full list.`, 'usage', {
       candidates,
-      hint: 'Run `bpmn kinds` for the full list.',
+      hint: 'Run `bpmn guide kinds` for the full list.',
     });
   }
 
@@ -158,7 +158,7 @@ export class KindParser {
     if (!trigger || !allowed.includes(trigger)) {
       throw new BpmnError('E_INVALID_TRIGGER', `Trigger "${raw}" is not allowed on eventSubProcess. Allowed: ${allowed.join(', ')}`, 'usage', {
         candidates: allowed,
-        hint: 'eventSubProcess:<trigger> creates the event sub-process with a startEvent:<trigger> inside, e.g. eventSubProcess:error --error PaymentFailed.',
+        hint: 'eventSubProcess:<trigger> creates the event sub-process with a startEvent:<trigger> inside, e.g. eventSubProcess:error error=PaymentFailed.',
       });
     }
     return { def: Kinds.byName('eventSubProcess')!, trigger };

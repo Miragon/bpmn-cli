@@ -10,7 +10,7 @@ describe('PropertyCatalog', () => {
   it('documents every key of set with the elements it applies to', () => {
     const docs = PropertyCatalog.docs();
 
-    expect(docs).toHaveLength(35);
+    expect(docs).toHaveLength(36);
     expect(docs[0]).toEqual({
       key: 'id',
       appliesTo: 'any',
@@ -115,5 +115,13 @@ describe('PropertyCatalog', () => {
 
     expect(catalog.readBeforeGeneric(document)).toEqual({ id: 'task_review', name: 'Review order' });
     expect(catalog.readAfterGeneric(document)).toEqual({ loop: 'sequential', cardinality: '3', completion: '${done}', lane: 'Lane_inside' });
+  });
+
+  it('takes the message of a message flow as a key', async () => {
+    const document = await Fixtures.read('models/incremental/orders.bpmn');
+    const catalog = PropertyCatalog.of(document.tree.require('Msg_1'));
+
+    expect(catalog.entry('message').appliesTo).toBe('messageFlow');
+    expect(catalog.settableKeys()).toContain('message');
   });
 });
