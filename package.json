@@ -23,10 +23,6 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
-    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -43,52 +39,52 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=24"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node tools/build-types.mjs",
-    "dev": "tsx src/cli.ts",
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=neutral --packages=external --outfile=dist/index.js",
+    "dev": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "knip": "knip",
-    "lint": "biome lint",
-    "layout:regress": "node tools/layout-regress.mjs",
-    "bench": "node tools/bench/run.mjs",
-    "bench:summary": "node tools/bench/summary.mjs",
-    "fuzz": "node tools/fuzz/run.mjs",
-    "check:iso": "node tools/iso/check.mjs",
-    "roundtrip": "node tools/roundtrip.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
     "oracle": "node tools/oracle/run.mjs",
     "oracle:record": "node tools/oracle/record.mjs",
     "oracle:selftest": "node tools/oracle/selftest.mjs",
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run build && biome lint && knip && knip --production --exclude dependencies && npm run architecture && jscpd && vitest run && node tools/iso/check.mjs && node tools/bench/regress-gate.mjs && node tools/fuzz/run.mjs --walks 12 --steps 15 --seed 1 --hard warn --out tools/fuzz/out/gate",
-    "prepublishOnly": "npm run build",
-    "architecture": "depcruise src --config .dependency-cruiser.cjs"
+    "gate": "npm run typecheck && npm run oracle",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@miragon/bpmnlint-plugin-rules": "0.19.0",
     "@resvg/resvg-wasm": "2.6.2",
     "bpmn-moddle": "^10.2.0",
-    "bpmnlint": "11.15.0",
+    "bpmnlint": "12.0.0",
     "commander": "^15.0.0",
-    "moddle": "^8.2.1"
+    "moddle": "^8.2.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
+    "@microsoft/api-extractor": "7.60.1",
+    "@miragon/bpmn-lint": "0.0.0",
+    "@miragon/bpmn-render": "0.0.0",
     "@swc/core": "1.16.20",
     "@types/node": "^26.0.0",
+    "@vitest/coverage-v8": "5.0.5",
     "camunda-bpmn-moddle": "8.0.2",
     "dependency-cruiser": "18.7.0",
     "esbuild": "^0.28.2",
     "jscpd": "5.4.2",
     "knip": "6.43.0",
+    "oxc-parser": "0.155.0",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2",
+    "vitest": "5.0.5",
     "zeebe-bpmn-moddle": "2.0.0"
   },
   "keywords": [

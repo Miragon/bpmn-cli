@@ -2,10 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
-tools/.regress-work/
 *.bak
-tools/bench/results/
-tools/fuzz/out/
 coverage/
 *.tgz
 .claude/worktrees/
@@ -15,3 +12,4 @@ plugins/bpmn-cli/evals/results/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 .oracle/
+.api/

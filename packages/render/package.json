@@ -1,0 +1,27 @@
+{
+  "name": "@miragon/bpmn-render",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Paints BPMN as SVG, PNG optional, headless and without the core.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./png": {
+      "node": "./src/png/node/index.ts",
+      "default": "./src/png/index.ts"
+    },
+    "./text": "./src/text/index.ts"
+  },
+  "dependencies": {
+    "bpmn-moddle": "^10.2.0"
+  },
+  "peerDependencies": {
+    "@resvg/resvg-wasm": "2.6.2"
+  },
+  "peerDependenciesMeta": {
+    "@resvg/resvg-wasm": {
+      "optional": true
+    }
+  }
+}

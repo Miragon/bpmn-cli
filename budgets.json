@@ -1,0 +1,35 @@
+{
+  "lines": {
+    "total": 47000,
+    "src/model": 6700,
+    "src/operations": 1200,
+    "src/edit": 7500,
+    "src/scoring": 1400,
+    "src/drawing": 14500,
+    "src/checks": 5600,
+    "src/views": 2900,
+    "src/write": 1200,
+    "src/api": 300,
+    "src/cli": 1900,
+    "packages/lint/src": 800,
+    "packages/render/src": 2100
+  },
+  "coverage": {
+    "src/model": { "lines": 90, "branches": 85 },
+    "src/operations": { "lines": 90, "branches": 85 },
+    "src/edit": { "lines": 90, "branches": 85 },
+    "src/scoring": { "lines": 90, "branches": 85 },
+    "src/drawing": { "lines": 90, "branches": 85 },
+    "src/checks": { "lines": 90, "branches": 85 },
+    "src/views": { "lines": 90, "branches": 85 },
+    "src/write": { "lines": 90, "branches": 85 },
+    "src/api": { "lines": 90, "branches": 85 },
+    "src/cli": { "lines": 90, "branches": 85 },
+    "packages/lint/src": { "lines": 90, "branches": 85 },
+    "packages/render/src": { "lines": 90, "branches": 85 }
+  },
+  "runtimeExports": 10,
+  "commands": 26,
+  "flagSlots": 143,
+  "guideKilobytes": 20
+}
