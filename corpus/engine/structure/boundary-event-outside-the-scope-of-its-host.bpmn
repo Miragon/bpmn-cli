@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Sub" />
+    <bpmn:subProcess id="Sub"><bpmn:startEvent id="In" /><bpmn:task id="T" /><bpmn:endEvent id="Out" /><bpmn:sequenceFlow id="F2" sourceRef="In" targetRef="T" /><bpmn:sequenceFlow id="F3" sourceRef="T" targetRef="Out" /></bpmn:subProcess>
+    <bpmn:sequenceFlow id="F4" sourceRef="Sub" targetRef="End" />
+    <bpmn:endEvent id="End" />
+    <bpmn:boundaryEvent id="B" attachedToRef="T"><bpmn:timerEventDefinition /></bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="F5" sourceRef="B" targetRef="End" />
+  </bpmn:process>
+</bpmn:definitions>

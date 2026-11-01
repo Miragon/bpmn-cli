@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="C"><bpmn:participant id="PA" processRef="P" /><bpmn:messageFlow id="M" sourceRef="T" targetRef="U" /></bpmn:collaboration>
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="T" />
+    <bpmn:task id="T" />
+    <bpmn:sequenceFlow id="F2" sourceRef="T" targetRef="U" />
+    <bpmn:task id="U" />
+    <bpmn:sequenceFlow id="F3" sourceRef="U" targetRef="End" />
+    <bpmn:endEvent id="End" />
+  </bpmn:process>
+</bpmn:definitions>

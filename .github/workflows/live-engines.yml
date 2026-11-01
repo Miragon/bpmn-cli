@@ -1,0 +1,31 @@
+# Deploys corpus/engine/ to Camunda 7, CIB seven, Operaton and Camunda 8 in containers and fails when
+# an engine no longer answers what the corpus records. The engine versions are pinned in
+# tools/oracle/live-engines.mjs, so a new version runs this job too.
+name: live engines
+
+on:
+  pull_request:
+    paths:
+      - corpus/engine/**
+      - tools/oracle/live-engines.mjs
+      - .github/workflows/live-engines.yml
+
+permissions:
+  contents: read
+
+jobs:
+  live-engines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node tools/oracle/live-engines.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-engines
+          path: .oracle/live-engines.json
+          if-no-files-found: ignore
