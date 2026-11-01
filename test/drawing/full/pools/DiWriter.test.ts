@@ -47,4 +47,21 @@ describe('DiWriter', () => {
 
     expect(warnings.map(({ code, elementId }) => [code, elementId])).toEqual([['DI_NOT_CREATED', 'Line']]);
   });
+
+  it('warns about a data association out of a collapsed sub-process, whose sourceRef is a list', async () => {
+    const document = await Fixtures.read('layout/gallery__01-xor-join.bpmn');
+    const { tree } = document;
+    const process = tree.processes()[0]!;
+    const writer = new DiWriter(tree);
+    const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(process);
+    const [element] = tree.all().values();
+    const association = tree.build('bpmn:DataInputAssociation', { id: 'Data', sourceRef: [element!.raw] });
+    scope.crossLinks.push({ el: association, id: 'Data', sourceId: 'Nowhere', targetId: 'Nothing' });
+    const warnings: EngineWarning[] = [];
+
+    writer.emitScope(scope, new Point(0, 0));
+    writer.writePlane(tree.definitions, process, process.id, warnings);
+
+    expect(warnings.map(({ elementId }) => elementId)).toEqual(['Data']);
+  });
 });

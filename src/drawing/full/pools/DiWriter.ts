@@ -116,7 +116,7 @@ export class DiWriter {
       if (sourceBox && targetBox) {
         this.edge(link.el, [new BoxBorder(sourceBox).pointTowards(targetBox.center), new BoxBorder(targetBox).pointTowards(sourceBox.center)]);
       } else {
-        const toGroup = [link.el.peek<BpmnElement>('sourceRef'), link.el.peek<BpmnElement>('targetRef')].some((end) => end?.is('bpmn:Group'));
+        const toGroup = [link.el.peek<BpmnElement | BpmnElement[]>('sourceRef'), link.el.peek<BpmnElement>('targetRef')].flat().some((end) => end?.is('bpmn:Group'));
         warnings.push({ code: 'DI_NOT_CREATED', elementId: link.el.id, message: `No DI created for ${link.el.id} (${toGroup ? 'an end is a group: its box is drawn after the layout' : 'its ends are on different diagrams'})` });
       }
     }
