@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+    modeler:executionPlatform="Camunda Cloud"
+    modeler:executionPlatformVersion="8.10.0"
+    
+    id="definitions_test" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process_test" isExecutable="false">
+    <bpmn:startEvent id="startEvent_received"><bpmn:extensionElements><zeebe:ioMapping><zeebe:input source="=1" target="a" /></zeebe:ioMapping></bpmn:extensionElements></bpmn:startEvent>
+  </bpmn:process>
+  
+</bpmn:definitions>

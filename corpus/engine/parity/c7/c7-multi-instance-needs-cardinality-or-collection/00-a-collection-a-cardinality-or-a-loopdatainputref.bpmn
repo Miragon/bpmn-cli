@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+    modeler:executionPlatform="Camunda Platform"
+    modeler:executionPlatformVersion="7.24.0"
+    
+    id="definitions_test" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process_test" isExecutable="true">
+    <bpmn:userTask id="userTask_a"><bpmn:multiInstanceLoopCharacteristics camunda:collection="${items}" camunda:elementVariable="item" /></bpmn:userTask>
+          <bpmn:userTask id="userTask_b"><bpmn:multiInstanceLoopCharacteristics><bpmn:loopCardinality>3</bpmn:loopCardinality></bpmn:multiInstanceLoopCharacteristics></bpmn:userTask>
+          <bpmn:userTask id="userTask_c"><bpmn:ioSpecification><bpmn:dataInput id="dataInput_items" /><bpmn:inputSet><bpmn:dataInputRefs>dataInput_items</bpmn:dataInputRefs></bpmn:inputSet><bpmn:outputSet /></bpmn:ioSpecification><bpmn:multiInstanceLoopCharacteristics><bpmn:loopDataInputRef>dataInput_items</bpmn:loopDataInputRef></bpmn:multiInstanceLoopCharacteristics></bpmn:userTask>
+          <bpmn:userTask id="userTask_d"><bpmn:multiInstanceLoopCharacteristics camunda:collection="${items}"><bpmn:loopCardinality /></bpmn:multiInstanceLoopCharacteristics></bpmn:userTask>
+          <bpmn:userTask id="userTask_e"><bpmn:standardLoopCharacteristics /></bpmn:userTask>
+  </bpmn:process>
+  
+</bpmn:definitions>

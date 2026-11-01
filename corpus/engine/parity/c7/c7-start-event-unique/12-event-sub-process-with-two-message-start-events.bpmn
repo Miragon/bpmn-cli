@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+    modeler:executionPlatform="Camunda Platform"
+    modeler:executionPlatformVersion="7.24.0"
+    
+    id="definitions_test" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process_test" isExecutable="true">
+    <bpmn:startEvent id="Start" /><bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="ES1"><bpmn:messageEventDefinition messageRef="M" /></bpmn:startEvent><bpmn:startEvent id="ES2"><bpmn:messageEventDefinition messageRef="M2" /></bpmn:startEvent></bpmn:subProcess>
+  </bpmn:process>
+  <bpmn:signal id="Sig" name="Go" /><bpmn:message id="M" name="Pay" /><bpmn:message id="M2" name="Pay2" />
+</bpmn:definitions>
