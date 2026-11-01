@@ -38,6 +38,7 @@ function plantedCopy(plant) {
 }
 
 const redProbes = ({ verdicts }) => verdicts.filter(({ verdict }) => verdict === 'red').map(({ probe }) => probe);
+const redBesides = (judged, { alsoRed = [] }) => redProbes(judged).filter((probe) => !alsoRed.includes(probe));
 
 async function mainAgainstItselfTwice() {
   const firstRun = await runOracle({ entryNames: ['main'] });
@@ -54,10 +55,10 @@ function checkVerdictRules(plant, run) {
   const planted = run.runs.find(({ probe }) => probe === plant.probe);
   const count = planted.differences.length;
   const progressAt = (limit) => ({ allowList: [], progress: { planted: { [plant.probe]: limit } } });
-  check(redProbes(judge(run.runs, progressAt(count))).length === 0, `${plant.probe}: in progress at ${count}, it only reports`);
+  check(redBesides(judge(run.runs, progressAt(count)), plant).length === 0, `${plant.probe}: in progress at ${count}, it only reports`);
   check(redProbes(judge(run.runs, progressAt(count - 1))).includes(plant.probe), `${plant.probe}: in progress at ${count - 1}, it fails`);
   const allowed = { allowList: [{ probe: plant.probe, pattern: '.', reason: 'selftest' }], progress: {} };
-  check(redProbes(judge(run.runs, allowed)).length === 0, `${plant.probe}: the allow-list explains what it names`);
+  check(redBesides(judge(run.runs, allowed), plant).length === 0, `${plant.probe}: the allow-list explains what it names`);
 }
 
 async function plantedChange(plant) {
@@ -65,7 +66,8 @@ async function plantedChange(plant) {
   const run = await runOracle({ entryFiles: [PLANTED_ENTRY], entryOptions: { plantedRoot } });
   const counts = run.runs.map(({ probe, differences }) => `${probe} ${differences.length}`).join(', ');
   const red = redProbes(judge(run.runs, NOTHING_ALLOWED));
-  check(red.length === 1 && red[0] === plant.probe, `plant in ${plant.target} turns only ${plant.probe} red: ${counts}; ${run.wallSeconds} s`);
+  const expected = [plant.probe, ...(plant.alsoRed ?? [])];
+  check(red.length === expected.length && expected.every((probe) => red.includes(probe)), `plant in ${plant.target} turns only ${expected.join(' and ')} red: ${counts}; ${run.wallSeconds} s`);
   checkVerdictRules(plant, run);
   rmSync(plantedRoot, { recursive: true, force: true });
 }
