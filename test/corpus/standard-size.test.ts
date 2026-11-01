@@ -6,7 +6,7 @@ import { DiagramDrawing, DrawingSnapshot } from '../../src/drawing/index.js';
 import { ChangeSet, DocumentWriter } from '../../src/model/index.js';
 import { DrawingPair } from '../support/DrawingPair.js';
 import { Fixtures } from '../support/Fixtures.js';
-import { StandardSize } from '../support/StandardSize.js';
+import { StandardSize } from './StandardSize.js';
 
 const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
 
