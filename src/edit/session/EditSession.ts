@@ -8,6 +8,8 @@ export interface BatchContext {
   aliases: () => Record<string, string>;
 }
 
+export type SubProcessExpansion = 'expanded' | 'collapsed' | 'collapsed by batch';
+
 export interface FormerEnd {
   id: string;
   labels: readonly string[];
@@ -68,9 +70,13 @@ export class EditSession {
     layout.expand(subProcess.id, expanded);
   }
 
-  isCollapsed(subProcess: BpmnElement): boolean {
-    const expanded = this.requestedExpansions.get(subProcess) ?? this.document.diagram.expansionState().get(subProcess.id) ?? true;
-    return !expanded;
+  expansionOf(subProcess: BpmnElement): SubProcessExpansion {
+    const requested = this.requestedExpansions.get(subProcess);
+    if (requested === false) {
+      return 'collapsed by batch';
+    }
+    const expanded = requested ?? this.document.diagram.expansionState().get(subProcess.id) ?? true;
+    return expanded ? 'expanded' : 'collapsed';
   }
 
   recordFormerEnd(node: BpmnElement, end: FormerEnd): void {
