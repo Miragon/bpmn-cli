@@ -64,7 +64,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: '^(dist|coverage|[.]oracle|[.]api)/' },
+    exclude: { path: '^(dist|coverage|[.]work|[.]api)/' },
     tsConfig: { fileName: 'tsconfig.json' },
     tsPreCompilationDeps: true,
     parser: 'swc',

@@ -1,9 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { ensureMainBuilt } from '../../oracle/lib/main-build.mjs';
-import { MAIN_ROOT } from '../../oracle/lib/paths.mjs';
 import { ROOT } from '../../fuzz/lib/setup.mjs';
+import { ensureMainBuilt, MAIN_ROOT } from './main-build.mjs';
 
 export const FORCEABLE = new Set(['E_IMPORT_LOSSY', 'E_VALIDATION']);
 
@@ -20,24 +19,20 @@ function cliError(stderr) {
   return reportedError?.code ? { code: reportedError.code, message: String(reportedError.message).slice(0, 200) } : { code: 'E_UNPARSED', message: stderr.trim().split('\n')[0]?.slice(0, 200) };
 }
 
-function newArm() {
-  const bin = join(ROOT, 'bin', 'bpmn.js');
+function armOf(key, root, editsOf) {
+  const bin = join(root, 'bin', 'bpmn.js');
   return {
-    key: 'new', bin, cliOf: (spec, edit) => spec.edits[edit].cli,
+    key, bin, cliOf: (spec, edit) => editsOf(spec)[edit].cli,
     global: { layout: (file) => [bin, 'layout', file, '--force', '--json'], tidy: (file) => [bin, 'tidy', file, '--force', '--json'] },
     edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', ...(force ? ['--force'] : [])],
   };
 }
 
+const newArm = () => armOf('new', ROOT, (spec) => spec.edits);
+
 function baselineArm() {
   ensureMainBuilt({ log: console.log });
-  const bin = join(MAIN_ROOT, 'bin', 'bpmn.js');
-  const noLint = ['--no-lint-config'];
-  return {
-    key: 'baseline', bin, cliOf: (spec, edit) => spec.mainEdits[edit].cli,
-    global: { layout: (file) => [bin, 'layout', file, '--force', '--json', ...noLint], tidy: (file) => [bin, 'layout', file, '--tidy', '--force', '--json', ...noLint] },
-    edit: (file, ops, force) => [bin, 'apply', file, ops, '--json', '--layout', 'auto', ...noLint, ...(force ? ['--force'] : [])],
-  };
+  return armOf('baseline', MAIN_ROOT, (spec) => spec.mainEdits);
 }
 
 const ARMS = { new: newArm, baseline: baselineArm };

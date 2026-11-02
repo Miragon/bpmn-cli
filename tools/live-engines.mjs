@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { CORPUS_DIR, WORK_DIR } from './lib/paths.mjs';
+import { join, resolve } from 'node:path';
+
+const REPO_ROOT = resolve(import.meta.dirname, '..');
+const CORPUS_DIR = join(REPO_ROOT, 'corpus');
+const WORK_DIR = join(REPO_ROOT, '.work');
 
 const RUNTIME = 'podman';
 const READY_TIMEOUT_MS = 300_000;
