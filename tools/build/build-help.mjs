@@ -3,14 +3,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TABLES = join(ROOT, 'src/cli/help/tables');
 const TOPIC_FOLDERS = ['guide', 'project', 'tables'];
 const CHECK_ONLY = process.argv.includes('--check');
 
-const { BpmnError, kindsJson, OPS_SCHEMA } = await tsImport('../src/api/index.ts', import.meta.url);
-const { ElementSlots, NewDocument, PropertyCatalog, ZEEBE } = await tsImport('../src/model/index.ts', import.meta.url);
-const { Swatches } = await tsImport('../src/drawing/diagram/Swatches.ts', import.meta.url);
+const { BpmnError, kindsJson, OPS_SCHEMA } = await tsImport('../../src/api/index.ts', import.meta.url);
+const { ElementSlots, NewDocument, PropertyCatalog, ZEEBE } = await tsImport('../../src/model/index.ts', import.meta.url);
+const { Swatches } = await tsImport('../../src/drawing/diagram/Swatches.ts', import.meta.url);
 
 const { kinds, triggers } = kindsJson();
 

@@ -7,7 +7,7 @@ import { runWalk } from './lib/walk.mjs';
 const SPEC = { seed: 1, steps: 30, out: undefined, exec: 'cli', via: 'commands', detEvery: 10, semantic: true, format: true, render: true, hard: 'error', replay: undefined, saveSteps: false, strict: false };
 
 export async function walkOnce(model, options) {
-  const out = resolve(options.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'walks', `${basename(model, '.bpmn')}-s${options.seed}`));
+  const out = resolve(options.out ?? join(ROOT, 'tools', 'verify', 'fuzz', 'out', 'walks', `${basename(model, '.bpmn')}-s${options.seed}`));
   mkdirSync(out, { recursive: true });
   const log = join(out, 'log.jsonl');
   writeFileSync(log, '');
@@ -35,7 +35,7 @@ async function main() {
   try {
     options = parseArgs(process.argv.slice(2), SPEC);
     if (options._.length !== 1) {
-      throw new Error('usage: node tools/fuzz/walk.mjs <model.bpmn> [options]');
+      throw new Error('usage: node tools/verify/fuzz/walk.mjs <model.bpmn> [options]');
     }
   } catch (error) {
     console.error(error.message);

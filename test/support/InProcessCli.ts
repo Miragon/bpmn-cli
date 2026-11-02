@@ -24,7 +24,7 @@ export class InProcessCli {
 
   copied(corpusPath: string): string {
     const target = join(this.folder, basename(corpusPath));
-    copyFileSync(join('corpus', corpusPath), target);
+    copyFileSync(join('fixtures', corpusPath), target);
     return target;
   }
 

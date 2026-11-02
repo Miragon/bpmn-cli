@@ -13,7 +13,7 @@ interface GoldenCall {
   shared?: boolean;
 }
 
-const CALLS: GoldenCall[] = JSON.parse(readFileSync('corpus/cli/calls.json', 'utf8'));
+const CALLS: GoldenCall[] = JSON.parse(readFileSync('fixtures/cli/calls.json', 'utf8'));
 const MAX_TEXT_BYTES = 1024;
 const SHARED_ON_THE_VARIANTS = ['-o', '--dry-run', '--force', '--json'];
 const READS = ['show', 'find', 'diagram', 'conventions', 'validate', 'render', 'guide'];
@@ -52,7 +52,7 @@ async function inFolder({ model, args, ops }: GoldenCall): Promise<string[]> {
   return args.map((word) => (word === 'model.bpmn' ? file : word === 'ops.json' || word === 'out.png' || word === 'out.svg' ? join(cli.folder, word) : word));
 }
 
-describe('the golden calls of corpus/cli', () => {
+describe('the golden calls of fixtures/cli', () => {
   it('name every flag of every command', () => {
     const missing = leaves(silentProgram()).flatMap(({ name, flags }) => {
       const calls = callsOf(name);

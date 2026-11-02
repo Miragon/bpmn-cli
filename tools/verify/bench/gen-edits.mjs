@@ -180,7 +180,7 @@ export async function generate(xml) {
 async function main() {
   const files = process.argv.slice(2);
   if (!files.length) {
-    console.error('usage: node tools/bench/gen-edits.mjs <file.bpmn>...');
+    console.error('usage: node tools/verify/bench/gen-edits.mjs <file.bpmn>...');
     process.exit(2);
   }
   for (const file of files) {

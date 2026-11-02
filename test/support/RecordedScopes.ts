@@ -56,7 +56,7 @@ export interface RecordedScope {
   faults?: { crossings: number; hits: number; labels: number };
 }
 
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus', 'drawing', 'channel-router-scopes.json');
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'drawing', 'channel-router-scopes.json');
 
 export class RecordedScopes {
   static all(): RecordedScope[] {

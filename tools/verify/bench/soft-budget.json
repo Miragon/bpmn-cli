@@ -1,0 +1,15 @@
+{
+  "note": "Per corpus and edit, the largest number of the rebuild's runs that may add a crossing or a backward flow; tools/verify/bench/lib/compare.mjs holds the run to it. Lower it when the layout improves; raise it only with a reviewed reason.",
+  "corpora": {
+    "scenarios": {
+      "E8": {
+        "crossings": 9,
+        "backwardFlow": 1
+      },
+      "E9": {
+        "crossings": 9,
+        "backwardFlow": 1
+      }
+    }
+  }
+}

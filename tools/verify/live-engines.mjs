@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const REPO_ROOT = resolve(import.meta.dirname, '..');
-const CORPUS_DIR = join(REPO_ROOT, 'corpus');
+const REPO_ROOT = resolve(import.meta.dirname, '..', '..');
+const CORPUS_DIR = join(REPO_ROOT, 'fixtures');
 const WORK_DIR = join(REPO_ROOT, '.work');
 
 const RUNTIME = 'podman';

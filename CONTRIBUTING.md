@@ -29,11 +29,11 @@ or later is required. `npm run dev -- <command>` builds and runs the CLI.
 | --- | --- |
 | `lint` | biome: block statements, function and file size, nested ternaries; errors only |
 | `typecheck` | tsc strict over `src/` and `packages/`, and over the tests |
-| `structure` | `tools/check-structure.mjs`: classes, free functions, mirrored tests, folders, no comments |
+| `structure` | `tools/gate/check-structure.mjs`: classes, free functions, mirrored tests, folders, no comments |
 | `jscpd` | copied code over 0.25 % |
 | `knip` | dead files, exports and dependencies, then test-only code in `src/` |
 | `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
-| `check-build` | `tools/check-build/`, one class per check, `-- . budgets`, `iso` or `bundle` runs one group: `budgets.json` (lines per module and package, runtime exports, commands, flag slots, the guide, the coverage floors); Node code in `.` or render's `.` and the browser start imports over their budget; the painter, camunda-compat, bpmnlint or resvg loaded on a write |
+| `check-build` | `tools/gate/check-build/`, one class per check, `-- . budgets`, `iso` or `bundle` runs one group: `budgets.json` (lines per module and package, runtime exports, commands, flag slots, the guide, the coverage floors); Node code in `.` or render's `.` and the browser start imports over their budget; the painter, camunda-compat, bpmnlint or resvg loaded on a write |
 | `api` | the public `.d.ts` against the reports in `api-report/`; `npm run api:update` writes them when a change is meant |
 | `build` | the bundles, and the help tables written from the catalogues |
 | `coverage` | the tests, with 90 % lines and 85 % branches per module and package; raise only |
@@ -49,7 +49,7 @@ and bench: [docs/testing.md](docs/testing.md). The rules behind them: [how code 
 - `packages/render` and `packages/lint`: private workspaces whose `exports` point at their TypeScript
   sources, so tsc, vitest and esbuild reach `@miragon/bpmn-render/text` and the others without a build.
 - `test/`: mirrors `src/`, one test per class; `test/repo/` proves the guardrails on planted repositories.
-- `corpus/`: every BPMN input of the tests, the fuzz and the bench, all of it synthetic or public.
+- `fixtures/`: every BPMN input of the tests, the fuzz and the bench, all of it synthetic or public.
 - `tools/`: the fuzz, the bench, the live engine run and the guardrails' checks.
 - `docs/adr/`: the architecture decisions and why they were made.
 - `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
@@ -117,7 +117,7 @@ dependency-cruiser the imports ([architecture](docs/architecture.md#layers)).
   the matching page in `docs/`.
 - **Block style.** The bodies of `if`, `else` and loops are blocks on lines of their own, with
   `} else {` on the closing line. `biome lint` enforces this with the plugin
-  `tools/biome/block-statements.grit`.
+  `tools/gate/biome/block-statements.grit`.
 - **No comments.** Names carry the meaning. One class per file, named like it; a helper of one class is
   a `private` method, a helper of many a method of its value. No free functions but the 8 of the contract,
   no `utils`, and a mirrored test per class. `npm run structure` holds this.

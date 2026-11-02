@@ -8,7 +8,7 @@ import { DrawingPair } from '../support/DrawingPair.js';
 import { Fixtures } from '../support/Fixtures.js';
 import { StandardSize } from './StandardSize.js';
 
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures');
 
 function bpmnFilesBelow(folder: string): string[] {
   return readdirSync(folder).flatMap((name) => {

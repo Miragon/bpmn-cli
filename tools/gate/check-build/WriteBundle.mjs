@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { build } from 'esbuild';
-import { bundlesOf } from '../build/bundles.mjs';
+import { bundlesOf } from '../../build/bundles.mjs';
 import { ImportGraph } from './ImportGraph.mjs';
 
 const STATIC = 'import-statement';

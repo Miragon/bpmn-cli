@@ -32,7 +32,7 @@ describe('bpmn with its read commands', () => {
   });
 
   it('reads a model from stdin', async () => {
-    const stdin = readFileSync('corpus/edit/order-check.bpmn', 'utf8');
+    const stdin = readFileSync('fixtures/edit/order-check.bpmn', 'utf8');
 
     expect((await cli.run(['show', '-', 'check'], { stdin })).stdout).toContain('Check order');
   });

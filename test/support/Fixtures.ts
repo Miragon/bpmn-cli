@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { type BpmnDocument, type BpmnElement, DocumentReader } from '../../src/model/index.js';
 import { OperationParser, type ParsedOperations } from '../../src/operations/index.js';
 
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures');
 
 export class Fixtures {
   static text(path: string): string {

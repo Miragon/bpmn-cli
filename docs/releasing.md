@@ -59,7 +59,7 @@ npm install -g @miragon/bpmn-cli@next
 ```
 
 From the first candidate on the contract is frozen: the API report changes only to fix a bug, named in the next candidate's
-notes. The live engine run goes once over `corpus/engine/` on the candidate
+notes. The live engine run goes once over `fixtures/engine/` on the candidate
 ([testing](testing.md#live-engines)).
 
 The release itself comes from `main`, through the release PR that release-please opens: with

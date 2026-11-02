@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT } from '../../fuzz/lib/setup.mjs';
-import { ensureMainBuilt, MAIN_ROOT } from './main-build.mjs';
+import { ensureMainBuilt, MAIN_ROOT } from '../../../shared/main-build.mjs';
 
 export const FORCEABLE = new Set(['E_IMPORT_LOSSY', 'E_VALIDATION']);
 

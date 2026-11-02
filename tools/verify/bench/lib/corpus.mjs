@@ -3,7 +3,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { corpusFiles, ROOT } from '../../fuzz/lib/setup.mjs';
 import { generate } from '../gen-edits.mjs';
-import { ensureMainBuilt, MAIN_ROOT } from './main-build.mjs';
+import { ensureMainBuilt, MAIN_ROOT } from '../../../shared/main-build.mjs';
 
 function envCorpora(env) {
   const used = new Set(['scenarios']);
@@ -23,7 +23,7 @@ function envCorpora(env) {
 }
 
 export function resolveCorpora({ only, env = process.env }) {
-  const list = [{ name: 'scenarios', dir: join(ROOT, 'corpus', 'layout') }, ...envCorpora(env)];
+  const list = [{ name: 'scenarios', dir: join(ROOT, 'fixtures', 'layout') }, ...envCorpora(env)];
   return list.filter((corpus) => !only?.length || only.includes(corpus.name)).map((corpus) => ({ ...corpus, files: corpusFiles([corpus.dir]) }));
 }
 
@@ -42,7 +42,7 @@ async function specOf(corpus, file, mainGenerator) {
 
 export async function writeSpecs(corpora, out, filter) {
   ensureMainBuilt({ log: console.log });
-  const mainGenerator = await import(pathToFileURL(join(MAIN_ROOT, 'tools', 'bench', 'gen-edits.mjs')).href);
+  const mainGenerator = await import(pathToFileURL(join(MAIN_ROOT, 'tools', 'verify', 'bench', 'gen-edits.mjs')).href);
   const specs = [];
   for (const corpus of corpora) {
     const dir = join(out, 'specs', corpus.name);

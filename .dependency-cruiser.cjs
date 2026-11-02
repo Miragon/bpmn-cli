@@ -50,7 +50,7 @@ module.exports = {
     forbid('node-builtins-only-in-cli-lint-and-the-png-node-entry', { path: SOURCE, pathNot: ['^src/cli/', '^packages/lint/', '^packages/render/src/png/node/'] }, { dependencyTypes: ['core'] }),
     forbid(
       'bpmnlint-loads-only-in-lint',
-      { pathNot: ['^packages/lint/', '^src/cli/files/', '^test/drawing/.*ShapeSizes[.]test[.]ts$', '^test/corpus/'] },
+      { pathNot: ['^packages/lint/', '^src/cli/files/', '^test/drawing/.*ShapeSizes[.]test[.]ts$', '^test/fixtures/'] },
       { path: LINT_LOADERS },
     ),
     {

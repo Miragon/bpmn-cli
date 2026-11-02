@@ -231,7 +231,7 @@ async function main() {
     console.error(error.message);
     process.exit(2);
   }
-  options.out = resolve(options.out ?? join(ROOT, 'tools', 'bench', 'results', 'latest'));
+  options.out = resolve(options.out ?? join(ROOT, 'tools', 'verify', 'bench', 'results', 'latest'));
   await bench(options);
   if (options.arms.split(',').length < 2) {
     return;

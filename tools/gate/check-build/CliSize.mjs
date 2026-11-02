@@ -2,7 +2,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { bundlesOf } from '../build/bundles.mjs';
+import { bundlesOf } from '../../build/bundles.mjs';
 
 const CLI_PROGRAM = 'src/cli/CliProgram.ts';
 const MEASURED_CLI_OUTPUT = 'node_modules/.cache/bpmn-budgets';

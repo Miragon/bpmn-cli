@@ -2,9 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { ensureMainBuilt, MAIN_ROOT } from './bench/lib/main-build.mjs';
+import { ensureMainBuilt, MAIN_ROOT } from '../shared/main-build.mjs';
 
-const ROOT = resolve(import.meta.dirname, '..');
+const ROOT = resolve(import.meta.dirname, '..', '..');
 const BIN = join(ROOT, 'bin', 'bpmn.js');
 const MAIN_BIN = join(MAIN_ROOT, 'bin', 'bpmn.js');
 const RUNS = 5;

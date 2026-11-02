@@ -113,7 +113,7 @@ async function main() {
   try {
     options = parseArgs(process.argv.slice(2), SPEC);
     if (options._.length !== 1) {
-      throw new Error('usage: node tools/fuzz/minimize.mjs <walk-dir> [--kind regex] [--detail regex] [--out dir]');
+      throw new Error('usage: node tools/verify/fuzz/minimize.mjs <walk-dir> [--kind regex] [--detail regex] [--out dir]');
     }
   } catch (error) {
     console.error(error.message);

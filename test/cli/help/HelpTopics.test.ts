@@ -49,7 +49,7 @@ describe('HelpTopics', () => {
   });
 
   it('holds the tables the catalogues write', () => {
-    const { status, stderr } = spawnSync(process.execPath, ['tools/build-help.mjs', '--check'], { cwd: ROOT, encoding: 'utf8' });
+    const { status, stderr } = spawnSync(process.execPath, ['tools/build/build-help.mjs', '--check'], { cwd: ROOT, encoding: 'utf8' });
 
     expect(stderr).toBe('');
     expect(status).toBe(0);

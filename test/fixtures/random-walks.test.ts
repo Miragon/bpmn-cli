@@ -3,12 +3,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, BpmnError, diagramXml, kindsJson } from '../../src/index.js';
-import { type Executor, libExecutor } from '../../tools/fuzz/lib/exec.mjs';
-import { analyse, drawingInvariants } from '../../tools/fuzz/lib/analyse.mjs';
-import { runWalk, type WalkMetrics, type WalkSummary } from '../../tools/fuzz/lib/walk.mjs';
+import { type Executor, libExecutor } from '../../tools/verify/fuzz/lib/exec.mjs';
+import { analyse, drawingInvariants } from '../../tools/verify/fuzz/lib/analyse.mjs';
+import { runWalk, type WalkMetrics, type WalkSummary } from '../../tools/verify/fuzz/lib/walk.mjs';
 import { ProblemKinds, ScoreChange } from '../support/ModelValues.js';
 
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures');
 const STEPS = 15;
 const EVERY_FOURTH_STEP = 4;
 const SYNTHETIC = ['boundary', 'collabnote', 'groups', 'lanesub', 'orders', 'orders-boundaries', 'polish-collab', 'polish-lanes', 'polish-remove', 'pool', 'sub', 'sub3', 'subtop2', 'twoviews', 'nan', 'vertical'].map((name) => `models/incremental/${name}.bpmn`);

@@ -30,7 +30,7 @@ jobs:
         if: always()
         with:
           name: fuzz
-          path: tools/fuzz/out/latest/
+          path: tools/verify/fuzz/out/latest/
           if-no-files-found: ignore
 
   bench:
@@ -52,6 +52,6 @@ jobs:
         with:
           name: bench
           path: |
-            tools/bench/results/latest/*.jsonl
-            tools/bench/results/latest/meta.json
+            tools/verify/bench/results/latest/*.jsonl
+            tools/verify/bench/results/latest/meta.json
           if-no-files-found: ignore

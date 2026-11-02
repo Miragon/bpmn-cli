@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { type BpmnDocument, type BpmnElement, DocumentReader, DocumentWriter } from '../../src/model/index.js';
 import { Fixtures } from '../support/Fixtures.js';
 
-const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'corpus');
+const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures');
 
 function bpmnFilesBelow(folder: string): string[] {
   return readdirSync(folder).flatMap((name) => {

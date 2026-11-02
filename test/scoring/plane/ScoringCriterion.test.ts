@@ -4,7 +4,7 @@ import { ProblemKinds } from '../../../src/scoring/plane/ProblemKinds.js';
 import { Scorer } from '../../../src/scoring/Scorer.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
-const FIXTURES = readdirSync(new URL('../../../corpus/scoring/', import.meta.url));
+const FIXTURES = readdirSync(new URL('../../../fixtures/scoring/', import.meta.url));
 
 describe('ScoringCriterion', () => {
   it('pins every kind but failed to exactly one criterion of 22', () => {

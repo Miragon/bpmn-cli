@@ -9,7 +9,7 @@ const ROOT = resolve(import.meta.dirname, '..', '..');
 const DIST = join(ROOT, 'dist');
 const NEXT = join(ROOT, 'node_modules', '.cache', 'bpmn-build', `next-${process.pid}`);
 const PREVIOUS = `${NEXT}-previous`;
-const HELP = join(ROOT, 'tools', 'build-help.mjs');
+const HELP = join(ROOT, 'tools', 'build', 'build-help.mjs');
 const DECLARATIONS = join(ROOT, '.api', 'build');
 const TSC = join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
 

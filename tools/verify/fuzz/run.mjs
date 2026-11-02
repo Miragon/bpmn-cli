@@ -133,7 +133,7 @@ async function main() {
     console.error('no .bpmn files in the corpus');
     process.exit(2);
   }
-  const root = resolve(options.out ?? join(ROOT, 'tools', 'fuzz', 'out', 'latest'));
+  const root = resolve(options.out ?? join(ROOT, 'tools', 'verify', 'fuzz', 'out', 'latest'));
   rmSync(join(root, 'walks'), { recursive: true, force: true });
   mkdirSync(root, { recursive: true });
   const metrics = await loadMetrics();

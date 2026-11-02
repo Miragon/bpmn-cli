@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Cli } from '../../src/cli/index.js';
 import { HelpTopics } from '../../src/cli/help/HelpTopics.js';
 
-const SEEDS = join(import.meta.dirname, '..', '..', 'corpus', 'guide');
+const SEEDS = join(import.meta.dirname, '..', '..', 'fixtures', 'guide');
 const PATTERN_LINE = /<[a-zA-Z]|\s\[/;
 const SHELL_WORD = /(?:[^\s'"]+|'[^']*'|"[^"]*")+/g;
 

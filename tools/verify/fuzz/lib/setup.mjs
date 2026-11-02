@@ -2,10 +2,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ensureScorersBuilt, SCORERS_ROOT } from '../../bench/lib/main-build.mjs';
+import { ensureScorersBuilt, SCORERS_ROOT } from '../../../shared/main-build.mjs';
 import { cliExecutor, libExecutor } from './exec.mjs';
 
-export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 export const DEFAULT_BIN = join(ROOT, 'bin', 'bpmn.js');
 const LIBRARY = join(ROOT, 'dist', 'index.js');
 
@@ -83,7 +83,7 @@ export function corpusFiles(dirs, filter) {
 export const envDirs = (name) => (process.env[name] ?? '').split(':').map((entry) => entry.trim()).filter(Boolean);
 
 export function defaultCorpus() {
-  return [join(ROOT, 'corpus', 'models'), join(ROOT, 'corpus', 'layout'), ...envDirs('BPMN_FUZZ_CORPUS')];
+  return [join(ROOT, 'fixtures', 'models'), join(ROOT, 'fixtures', 'layout'), ...envDirs('BPMN_FUZZ_CORPUS')];
 }
 
 export function parseArgs(argv, spec) {

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LAST_RELEASE_BEFORE_THE_REFACTORING = 'v0.9.0';
 export const WORK_DIR = join(REPO_ROOT, '.work');
 export const MAIN_ROOT = join(WORK_DIR, 'main');
