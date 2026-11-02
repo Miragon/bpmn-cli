@@ -74,7 +74,6 @@ costs minutes per run for what the cases per public method ask anyway; and class
 | --- | --- |
 | `models/` | the fixtures |
 | `layout/` | the 115 layout scenarios, each with 0.9's score over all 26 kinds; `scores.json`, 0.9's counts per kind on every corpus file |
-| `design-iq/` | the paths of `OPS_SCHEMA` design-iq read on 0.9, and its `COMMIT` |
 | `engine/` | `parity/`: the 610 distinct models of 109 rule specs, with `codes.json` naming each of the 1,077 cases' model; `verdicts/`: 421 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22; `fixed/`; `feel/`: 762 FEEL verdicts; `structure/` |
 | `walks/` | recorded fuzz walks, per step the operations and the file before |
 | `scoring/` | small models per scoring criterion |

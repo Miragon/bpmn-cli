@@ -3,7 +3,7 @@ import { BrowserBundle } from './BrowserBundle.mjs';
 const BROWSER_ENTRIES = ['src/index.ts', 'packages/render/src/index.ts', 'packages/render/src/text/index.ts'];
 
 /**
- * design-iq loads the core and the renderer in the browser.
+ * Browser editors load the core and the renderer.
  * A Node-only import or global would break it only there, after release, so it fails here.
  */
 export class BrowserEntries {

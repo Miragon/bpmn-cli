@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { BrowserEntries } from './BrowserEntries.mjs';
 import { CliSize } from './CliSize.mjs';
 import { CoverageFloors } from './CoverageFloors.mjs';
-import { DesignIqImports } from './DesignIqImports.mjs';
+import { BrowserStartImports } from './BrowserStartImports.mjs';
 import { GuideSize } from './GuideSize.mjs';
 import { LineBudget } from './LineBudget.mjs';
 import { RuntimeExports } from './RuntimeExports.mjs';
@@ -11,7 +11,7 @@ import { WriteBundle } from './WriteBundle.mjs';
 
 const GROUPS = {
   budgets: [LineBudget, CoverageFloors, RuntimeExports, CliSize, GuideSize],
-  iso: [BrowserEntries, DesignIqImports],
+  iso: [BrowserEntries, BrowserStartImports],
   bundle: [WriteBundle],
 };
 

@@ -5,7 +5,7 @@ import { ImportGraph } from './ImportGraph.mjs';
 const CORE_ENTRY = 'src/index.ts';
 
 /**
- * The core's runtime API stays small: every export is a promise to consumers such as design-iq.
+ * The core's runtime API stays small: every export is a promise to its consumers.
  * An extra export has to be a deliberate decision.
  */
 export class RuntimeExports {

@@ -33,7 +33,7 @@ or later is required. `npm run dev -- <command>` builds and runs the CLI.
 | `jscpd` | copied code over 0.25 % |
 | `knip` | dead files, exports and dependencies, then test-only code in `src/` |
 | `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
-| `check-build` | `tools/check-build/`, one class per check, `-- . budgets`, `iso` or `bundle` runs one group: `budgets.json` (lines per module and package, runtime exports, commands, flag slots, the guide, the coverage floors); Node code in `.` or render's `.` and design-iq's import set over its budget; the painter, camunda-compat, bpmnlint or resvg loaded on a write |
+| `check-build` | `tools/check-build/`, one class per check, `-- . budgets`, `iso` or `bundle` runs one group: `budgets.json` (lines per module and package, runtime exports, commands, flag slots, the guide, the coverage floors); Node code in `.` or render's `.` and the browser start imports over their budget; the painter, camunda-compat, bpmnlint or resvg loaded on a write |
 | `api` | the public `.d.ts` against the reports in `api-report/`; `npm run api:update` writes them when a change is meant |
 | `build` | the bundles, and the help tables written from the catalogues |
 | `coverage` | the tests, with 90 % lines and 85 % branches per module and package; raise only |
