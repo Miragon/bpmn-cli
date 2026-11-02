@@ -230,4 +230,4 @@ and `BpmnError` weighs about 800 KB minified, held by a budget. PNG output and b
 - [Validators](validators.md): block or report with your own rules.
 - [Operations](ops.md): every operation `applyToXml` takes.
 - [Guarantees and limits](contract.md): what a write changes.
-- [From 0.9 to 1.0](migration.md): what a host changes.
+- [Migrating from 0.9](migration.md): what a host changes.

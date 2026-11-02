@@ -1,10 +1,10 @@
-# From 0.9 to 1.0
+# Migrating from 0.9
 
-1.0 is rebuilt from zero: one way to say each thing, a contract of ten exports, and a write that touches
+The CLI and the library are rebuilt from zero: one way to say each thing, a contract of ten exports, and a write that touches
 only what it changed. This page lists what you type or call differently. An item that is gone answers
 `E_USAGE` and names no replacement, so look it up here.
 
-**Node 24 or later is required.** Until 1.0.0 is released, the release
+**Node 24 or later is required.** Until the next release is out, its release
 candidates install with `npm install -g @miragon/bpmn-cli@next`.
 
 ## The one rule
@@ -16,7 +16,7 @@ A flag says where an element goes and how the command runs; what the element hol
 0.9  bpmn add <file> boundaryEvent:timer [name] --on <activityId> --timer <iso> --non-interrupting
      bpmn add order.bpmn boundaryEvent:timer Reminder --on check --timer P2D --non-interrupting
 
-1.0  bpmn add <file> boundaryEvent:timer [name] --on <activityId> timer=<iso> nonInterrupting=true
+now  bpmn add <file> boundaryEvent:timer [name] --on <activityId> timer=<iso> nonInterrupting=true
      bpmn add order.bpmn boundaryEvent:timer Reminder --on check timer=P2D nonInterrupting=true
 ```
 
@@ -25,7 +25,7 @@ warning.
 
 ## Commands
 
-| 0.9 | 1.0 |
+| 0.9 | now |
 | --- | --- |
 | `bpmn metrics <file>` | `bpmn diagram <file>` |
 | `bpmn show <file> --layout` | `bpmn diagram <file>` |
@@ -42,7 +42,7 @@ warning.
 
 Every write keeps `-o`, `--dry-run`, `--force` and `--json`.
 
-| 0.9 | 1.0 |
+| 0.9 | now |
 | --- | --- |
 | `--summary` | the default text is the short report |
 | `--pretty` | `--json`; `jq` indents |
@@ -57,7 +57,7 @@ Every write keeps `-o`, `--dry-run`, `--force` and `--json`.
 
 ## Flags of one command
 
-| 0.9 | 1.0 |
+| 0.9 | now |
 | --- | --- |
 | `bpmn new <file> --name <text>` | `bpmn new <file> [name]`, as on `add` |
 | `bpmn new <file> --no-executable` | `bpmn new <file> --target none` |
@@ -87,7 +87,7 @@ Every write keeps `-o`, `--dry-run`, `--force` and `--json`.
 
 ## Operations
 
-| 0.9 | 1.0 |
+| 0.9 | now |
 | --- | --- |
 | `{ "op": "add", …, "timer": "P2D" }`, also `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`, `doc`, `text`, on `add` and `retype` | `{ "op": "add", …, "set": { "timer": "P2D" } }` |
 | `collapsed` on `add` | `"set": { "expanded": false }` |
@@ -105,7 +105,7 @@ Operations are parsed strictly: an unknown key answers `E_USAGE` and names the k
 
 ## Behaviour that changed
 
-| 0.9 | 1.0 |
+| 0.9 | now |
 | --- | --- |
 | every write with model operations redrew a diagram the CLI drew itself | the drawing stays; a build from scratch over several writes ends with `bpmn layout` |
 | when the incremental layout failed, a full redraw replaced the drawing | `E_LAYOUT_INCREMENTAL` with a hint to a last `layout` operation |
@@ -128,7 +128,7 @@ Scripts that read the text of a write change with it: the lines are `created <ki
 `.` goes from 94 exports to 10, and `./node` goes: nothing reads files any more.
 [Library use](library.md) has the contract; every option type lives beside it.
 
-| 0.9 | 1.0 |
+| 0.9 | now |
 | --- | --- |
 | `@miragon/bpmn-cli/node`: `mutateFile`, `layoutFile`, `checkFile`, `loadDoc`, `writeAtomic`, `bpmnlintEngine` | read and write the file yourself, and call `applyToXml`, `validateXml` |
 | `Doc`, `mutateDoc`, `layoutDoc`, `checkDoc`, `runOps`, `parseOps`, the views, the profiles | gone: the eight functions take and return strings and data |
@@ -161,11 +161,11 @@ Scripts that read the text of a write change with it: the lines are `created <ki
 | `BpmnError` | the same `code`, `category` (`usage`, `model`, `layout`, `io`, `internal`) and `details` |
 
 A host that lets an agent build a model over many calls tells it to end the build with a `layout`
-operation: 1.0 no longer redraws by itself. Words a host shows from CLI hints follow the new names:
+operation: a write no longer redraws by itself. Words a host shows from CLI hints follow the new names:
 `diagram` for `show --layout` and `metrics`, `tidy` for `layout --tidy`, `guide` for `kinds`.
 
 ## Next steps
 
-- [Commands](commands.md): every command of 1.0.
+- [Commands](commands.md): every command.
 - [Library use](library.md): the ten exports and their options.
 - [Validators](validators.md): the validator hook.

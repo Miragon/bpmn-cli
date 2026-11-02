@@ -10,7 +10,7 @@ With the [plugin](./claude-code-plugin.md), Claude runs these commands for you. 
 for example _"Model the order process with lanes for sales, warehouse and accounting."_
 :::
 
-Coming from 0.9? [From 0.9 to 1.0](./migration.md) lists what changed.
+Coming from 0.9? [Migrating from 0.9](./migration.md) lists what changed.
 
 ## 1. Install
 

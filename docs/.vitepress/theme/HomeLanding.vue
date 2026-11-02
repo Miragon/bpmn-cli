@@ -65,7 +65,7 @@ async function copyInstall() {
             <span>Needs Node 24+</span>
             <span class="pre-release">
               <span class="marker" aria-hidden="true" />
-              <span><strong>Pre-1.0:</strong> pin the version, a minor can break a command.</span>
+              <span><strong>0.x:</strong> pin the version, a minor can break a command.</span>
             </span>
           </p>
           <a class="start" :href="withBase('/getting-started')">Get started <span aria-hidden="true">→</span></a>

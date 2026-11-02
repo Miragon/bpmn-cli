@@ -76,8 +76,8 @@ node tools/oracle/design-iq-record.mjs <checkout> # record corpus/design-iq/ fro
   decision, with its reason: what goes on the commands and flags pages, the behaviour that goes, an ADR.
 - The rebuild never grades itself: the layout probe, the fuzz and the bench score both sides with main's
   scorers. `Scorer`'s own test holds it to main's counts.
-- A rebase that changes main's answers ports the fix or names it in the list. After 1.0 the oracle compares
-  the last release with main.
+- A rebase that changes main's answers ports the fix or names it in the list. After the release the oracle
+  compares the last release with main.
 - A new probe, entry or recording is one file in `tools/oracle/probes/`, `entries/` or `recordings/`, and
   its proof one in `plants/`.
 

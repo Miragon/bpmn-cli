@@ -293,4 +293,4 @@ More codes: `bpmn guide errors`.
 - [reference/camunda7.md](reference/camunda7.md) - Camunda 7 / CIB seven / Operaton recipes and the C7 profile
 - [reference/camunda8.md](reference/camunda8.md) - Camunda 8 (Zeebe) recipes and the C8 profile
 - [reference/recipes.md](reference/recipes.md) - complete sessions: order-to-cash from scratch in one batch, a safe change to a drawn model, review feedback, a C7 external task, a C8 job worker
-- [reference/migration.md](reference/migration.md) - from the 0.x CLI to 1.0: what replaces each retired command, flag and op key
+- [reference/migration.md](reference/migration.md) - from the CLI of 0.9 and earlier: what replaces each retired command, flag and op key

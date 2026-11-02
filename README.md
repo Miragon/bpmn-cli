@@ -72,7 +72,7 @@ process step by step.
 | Ask the CLI itself | `guide`, `--help` |
 
 Details: [command reference](https://miragon.github.io/bpmn-cli/commands). Coming from 0.9:
-[From 0.9 to 1.0](https://miragon.github.io/bpmn-cli/migration).
+[Migrating from 0.9](https://miragon.github.io/bpmn-cli/migration).
 
 ## Claude Code plugin
 
@@ -127,10 +127,10 @@ The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)
 - [A worked session](https://miragon.github.io/bpmn-cli/walkthrough): one process from an empty file to a validated model
 - [Library use](https://miragon.github.io/bpmn-cli/library)
 - [Validators](https://miragon.github.io/bpmn-cli/validators): a library host's own checks inside the write
-- [From 0.9 to 1.0](https://miragon.github.io/bpmn-cli/migration): what a user types and a host calls differently
+- [Migrating from 0.9](https://miragon.github.io/bpmn-cli/migration): what a user types and a host calls differently
 - [Architecture](https://miragon.github.io/bpmn-cli/architecture): the modules, what each holds and what it does not do
 - For maintainers, in the repository only: [testing](docs/testing.md),
-  [releasing](docs/releasing.md) and the [plan to 1.0](docs/plan/README.md)
+  [releasing](docs/releasing.md) and the [plan of the refactoring](docs/plan/README.md)
 
 ## Contributing
 

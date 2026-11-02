@@ -36,7 +36,7 @@ export default miragonDocs({
         { text: "Claude Code plugin", link: "/claude-code-plugin" },
         { text: "A worked session", link: "/walkthrough" },
         { text: "Guarantees and limits", link: "/contract" },
-        { text: "From 0.9 to 1.0", link: "/migration" },
+        { text: "Migrating from 0.9", link: "/migration" },
       ],
     },
     {

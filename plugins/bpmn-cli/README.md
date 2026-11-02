@@ -24,7 +24,7 @@ The skill runs `bpmn` when it is on `PATH`, else `npx -y @miragon/bpmn-cli@<vers
 version of this plugin (Node 24+). It pre-approves only those two commands.
 
 - `skills/bpmn/SKILL.md` - the standing rules and the core loop; `skills/bpmn/reference/` - batch
-  format, formatting, Camunda 7, Camunda 8, complete recipes and the way from the 0.x CLI to 1.0,
+  format, formatting, Camunda 7, Camunda 8, complete recipes and the way from the CLI of 0.9 and earlier,
   loaded when needed
 - `evals/` - the eval suite (`claude plugin eval`), see [evals/README.md](evals/README.md)
 

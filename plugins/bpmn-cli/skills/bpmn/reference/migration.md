@@ -1,9 +1,9 @@
-# From the 0.x CLI to 1.0
+# From the CLI of 0.9 and earlier
 
 A retired word answers `E_USAGE`, or `E_UNKNOWN_KEY` when it is a `key=value`.
 Use the right column.
 
-| 0.x | 1.0 |
+| 0.9 and earlier | now |
 | --- | --- |
 | `bpmn metrics <file>`, `show --layout` | `bpmn diagram <file>` |
 | `show --conventions` | `bpmn conventions <file>` |
