@@ -392,7 +392,7 @@ the same way.
 | `FORMAT_OP_NAMES` (l. 550, 618) | `OPS_SCHEMA.$defs.drawingOp`, a `oneOf` of the 8 drawing operations, read as design-iq reads `$defs.op`; no eleventh runtime export |
 | `NamedValidator` (l. 393), `Warning` (l. 431, 520) | `Validator`, `Finding` |
 | `BpmnError` (l. 494) and its categories (l. 499) | the same `code`, `category` (`usage`, `model`, `layout`, `io`, `internal`) and `details` |
-| options `platform` and `file` (l. 243) | gone: the file's namespaces give the platform, and Camunda checks run only on executable processes |
+| options `platform` and `file` (l. 243) | gone: the file's namespaces give the platform. A write runs the Camunda checks on executable processes only; `validateXml` runs them on the file, where the rules about a process skip one that is not executable and the schema check covers every element, since the engines validate the whole file against the BPMN schema |
 | `set calledDecision=` under `platform: none` on a Camunda 7 file (`bpmn-edit-tools` fixture) | writes `camunda:decisionRef`, since the platform comes from the file and no `platform: none` exists; design-iq's fixture and test adapt |
 | CLI words in hints, `CLI_WORDS` (l. 578 to 594) | the same table on the refactored names: `diagram` for `show --layout` and `metrics`, `tidy` for `layout --tidy`, `guide` for `kinds`; the `state` line carries no backticks around `bpmn validate`, so `CLI_WORDS` must match it bare |
 | the `problems:` that end `showXml`'s text today | `validateXml(xml).findings`, which design-iq's `validate_bpmn` adds to its own (`http/mcp.ts:1033`); `show` ends with the state line, whose `bpmn validate` `CLI_WORDS` turns into `validate_bpmn` |
