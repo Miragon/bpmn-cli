@@ -18,50 +18,35 @@ export default miragonDocs({
   srcExclude: ["releasing.md", "testing.md", "adr/**"],
 
   nav: [
-    {
-      text: "Getting started",
-      link: "/getting-started",
-      activeMatch: "^/(getting-started|claude-code-plugin|walkthrough|contract|migration)",
-    },
-    { text: "Commands", link: "/commands", activeMatch: "^/(commands|reference|ops|camunda|layout|bpmnlint)" },
-    { text: "Library", link: "/library", activeMatch: "^/(library|validators)" },
+    { text: "Getting started", link: "/getting-started", activeMatch: "^/(getting-started|modeling|camunda|layout|bpmnlint|library)" },
+    { text: "Reference", link: "/commands", activeMatch: "^/(commands|contract)" },
   ],
 
-  // One sidebar for every page: the CLI is small enough to show it all.
   sidebar: [
     {
       text: "Start",
+      items: [{ text: "Getting started", link: "/getting-started" }],
+    },
+    {
+      text: "Guides",
       items: [
-        { text: "Getting started", link: "/getting-started" },
-        { text: "Claude Code plugin", link: "/claude-code-plugin" },
-        { text: "A worked session", link: "/walkthrough" },
-        { text: "Guarantees and limits", link: "/contract" },
-        { text: "Migrating from 0.9", link: "/migration" },
+        { text: "Model a process", link: "/modeling" },
+        { text: "Camunda 7 and 8", link: "/camunda" },
+        { text: "Layout", link: "/layout" },
+        { text: "bpmnlint", link: "/bpmnlint" },
+        { text: "Library", link: "/library" },
       ],
     },
     {
-      text: "Using the CLI",
+      text: "Reference",
       items: [
         { text: "Commands", link: "/commands" },
-        { text: "Syntax and output", link: "/reference" },
-        { text: "Operations (bpmn apply)", link: "/ops" },
-        { text: "Camunda 7 and Camunda 8", link: "/camunda" },
-        { text: "Layout and formatting", link: "/layout" },
-        { text: "bpmnlint", link: "/bpmnlint" },
-      ],
-    },
-    {
-      text: "Library",
-      items: [
-        { text: "Library use", link: "/library" },
-        { text: "Validators", link: "/validators" },
+        { text: "Guarantees and limits", link: "/contract" },
       ],
     },
     {
       text: "Contributing",
-      items: [
-        { text: "Architecture", link: "/architecture" },
-      ],
+      items: [{ text: "Architecture", link: "/architecture" }],
     },
   ],
 })

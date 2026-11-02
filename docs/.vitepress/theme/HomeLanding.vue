@@ -9,9 +9,9 @@ const installs = [
   { name: "Homebrew", prompt: "$", lines: ["brew install miragon/tap/bpmn-cli"] },
 ]
 const steps = [
-  { name: "Read", link: "/commands#show-and-find", command: "bpmn show", effect: "Prints the model as text." },
-  { name: "Change", link: "/commands#add", command: "bpmn add · set · apply", effect: "Writes XML and drawing together." },
-  { name: "Look", link: "/commands#render", command: "bpmn render", effect: "Draws the picture the agent sees." },
+  { name: "Read", link: "/commands#overview", command: "bpmn show", effect: "Prints the model as text." },
+  { name: "Change", link: "/modeling", command: "bpmn add · set · apply", effect: "Writes XML and drawing together." },
+  { name: "Look", link: "/layout", command: "bpmn render", effect: "Draws the picture the agent sees." },
   { name: "Check", link: "/camunda", command: "bpmn validate", effect: "Flags what the engine would refuse." },
 ]
 

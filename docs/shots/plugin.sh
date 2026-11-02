@@ -1,4 +1,4 @@
-# claude-code-plugin.md: what the skill looks at after a change.
+# getting-started.md (Claude Code plugin): what the skill looks at after a change.
 bpmn new order.bpmn "Order handling"
 bpmn add order.bpmn start "Order received"
 bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
