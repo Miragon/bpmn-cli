@@ -26,7 +26,7 @@ const run = await runOracle({
   filter: options.filter,
   workers: options.jobs ? Number(options.jobs) : undefined,
 });
-const judged = judge(run.runs, { allowList: readJson('differences.json'), progress: readJson('progress.json') });
+const judged = judge(run.runs, { allowList: readJson('differences.json') });
 const recordedAt = JSON.parse(readCorpus('layout/scores.json')).commit;
 const result = { commit, recordedAt, workers: run.workers, wallSeconds: run.wallSeconds, ...judged };
 writeFileSync(RESULT_FILE, `${JSON.stringify(result, null, 1)}\n`);

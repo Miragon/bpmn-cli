@@ -9,7 +9,7 @@ import { loadModules } from './lib/registry.mjs';
 import { judge } from './lib/verdict.mjs';
 
 const PLANTED_ENTRY = fileURLToPath(new URL('./lib/planted-entry.mjs', import.meta.url));
-const NOTHING_ALLOWED = { allowList: [], progress: {} };
+const NOTHING_ALLOWED = { allowList: [] };
 
 const failures = [];
 
@@ -52,12 +52,7 @@ async function mainAgainstItselfTwice() {
 }
 
 function checkVerdictRules(plant, run) {
-  const planted = run.runs.find(({ probe }) => probe === plant.probe);
-  const count = planted.differences.length;
-  const progressAt = (limit) => ({ allowList: [], progress: { planted: { [plant.probe]: limit } } });
-  check(redBesides(judge(run.runs, progressAt(count)), plant).length === 0, `${plant.probe}: in progress at ${count}, it only reports`);
-  check(redProbes(judge(run.runs, progressAt(count - 1))).includes(plant.probe), `${plant.probe}: in progress at ${count - 1}, it fails`);
-  const allowed = { allowList: [{ probe: plant.probe, pattern: '.', reason: 'selftest' }], progress: {} };
+  const allowed = { allowList: [{ probe: plant.probe, pattern: '.', reason: 'selftest' }] };
   check(redBesides(judge(run.runs, allowed), plant).length === 0, `${plant.probe}: the allow-list explains what it names`);
 }
 

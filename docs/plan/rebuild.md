@@ -59,10 +59,7 @@ Until the write step, each new module is judged through an entry of its own in `
 added in its step's first commit: render's is the package's `.`, for the image probe; lint's is
 `ProjectLint` against main's `projectBpmnlint` (`src/node.ts:68`), for the findings probe, and beside it
 `lint-cli`, `ProjectLint` against bpmnlint 12's own CLI on the projects with their plugin installed; model,
-checks, drawing and edit follow. An entry with `sidesFor` names both sides of an input itself. Until the step is done, an entry reports its differences in CI and
-fails only when their count per probe rises above the count kept in `tools/oracle/progress.json`; the
-commit that finishes the step makes it gate. A rebase that changes main's answers updates
-`progress.json` in the same rebase. The write step removes the module entries and the CLI step `lint`:
+checks, drawing and edit follow. An entry with `sidesFor` names both sides of an input itself. The write step removes the module entries and the CLI step `lint`:
 from then on the oracle compares only the public surface, but for `lint-cli`, which stays and gates, as
 bpmnlint 12's CLI answers no public call.
 
@@ -126,8 +123,7 @@ the codes come from its `kindsJson()`. Words of this section:
 `.oracle/result.json`; `npm run oracle:record` records `corpus/` again; `npm run oracle:selftest` runs main
 against itself twice and plants one change per probe in a throwaway copy of the build. A later probe, entry
 or recording is one file in `tools/oracle/probes/`, `entries/` or `recordings/`, and its proof one in
-`plants/`. An entry named in `progress.json` reports up to its counts; any other entry gates, so the commit
-that finishes a step removes its row.
+`plants/`. Every entry gates.
 
 ## Order
 
