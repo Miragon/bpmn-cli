@@ -23,23 +23,20 @@ or later is required. `npm run dev -- <command>` builds and runs the CLI.
 
 ## Scripts (the quality gate)
 
-`npm run gate` runs everything a change has to pass, in this order; each also runs alone:
+`npm run gate` runs everything a change has to pass, cheapest first, and stops at the first failure; each also runs alone:
 
 | script | checks |
 | --- | --- |
+| `lint` | biome: block statements, function and file size, nested ternaries; errors only |
 | `typecheck` | tsc strict over `src/` and `packages/`, and over the tests |
-| `lint` | biome: block statements, function size, nested ternaries; errors only |
-| `structure` | `tools/check-structure.mjs`: classes, free functions, mirrored tests, sizes, folders, no comments |
-| `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
-| `knip` | dead files, exports and dependencies |
-| `knip:production` | test-only code in `src/` |
+| `structure` | `tools/check-structure.mjs`: classes, free functions, mirrored tests, folders, no comments |
 | `jscpd` | copied code over 0.25 % |
-| `budgets` | `budgets.json`: lines per module and package, runtime exports, commands, flag slots, the coverage floors |
+| `knip` | dead files, exports and dependencies, then test-only code in `src/` |
+| `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
+| `check-build` | `tools/check-build/`, one class per check, `-- . budgets`, `iso` or `bundle` runs one group: `budgets.json` (lines per module and package, runtime exports, commands, flag slots, the guide, the coverage floors); Node code in `.` or render's `.` and design-iq's import set over its budget; the painter, camunda-compat, bpmnlint or resvg loaded on a write |
 | `api` | the public `.d.ts` against the reports in `api-report/`; `npm run api:update` writes them when a change is meant |
-| `iso` | Node code in `.` or render's `.`; design-iq's import set over its budget |
-| `bundle` | the painter, camunda-compat, bpmnlint or resvg loaded on a write |
-| `coverage` | the tests, with 90 % lines and 85 % branches per module and package; raise only |
 | `build` | the bundles, and the help tables written from the catalogues |
+| `coverage` | the tests, with 90 % lines and 85 % branches per module and package; raise only |
 | `timings` | `--version` over 60 ms; `bpmn add` on a model of 500 nodes over 1.2 times main's time |
 
 CI runs the gate on every pull request and every push to `main`. What each layer holds, the corpus, fuzz

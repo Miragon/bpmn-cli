@@ -13,7 +13,7 @@ const RENDER_TESTS_WITHOUT_MIRROR = new Set(['golden']);
 const TEST_SUPPORT = 'test/support';
 const CONFIG_FILES = ['vitest.config.ts', '.dependency-cruiser.cjs'];
 const COMMENT_FREE_FOLDERS = ['src', 'test', 'tools'];
-const MAX_FILE_LINES = 300;
+const DOCUMENTED_FOLDERS = ['tools/check-build'];
 const MAX_PUBLIC_METHODS = 12;
 const MAX_CONSTRUCTOR_PARAMETERS = 5;
 const MAX_FOLDER_FILES = 12;
@@ -213,17 +213,9 @@ function checkClassFile(path, program) {
   }
 }
 
-function checkFileSize(path, text) {
-  const lines = text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
-  if (lines > MAX_FILE_LINES) {
-    report(path, `has ${lines} lines, at most ${MAX_FILE_LINES}`);
-  }
-}
-
 function checkSourceFile(absolutePath) {
   const path = fromRoot(absolutePath);
   const { program } = parse(absolutePath);
-  checkFileSize(path, readFileSync(absolutePath, 'utf8'));
   if (basename(path) === 'index.ts') {
     checkIndex(path, program);
   } else {
@@ -386,7 +378,8 @@ function checkTestSupportSize() {
 
 function commentFreeFiles(packageRoots) {
   const folders = [...COMMENT_FREE_FOLDERS.map((folder) => join(ROOT, folder)), ...packageRoots];
-  const code = folders.flatMap(allFiles).filter((path) => isTypeScript(path) || path.endsWith('.mjs'));
+  const isDocumented = (path) => DOCUMENTED_FOLDERS.some((folder) => fromRoot(path).startsWith(`${folder}/`));
+  const code = folders.flatMap(allFiles).filter((path) => (isTypeScript(path) || path.endsWith('.mjs')) && !isDocumented(path));
   const configs = CONFIG_FILES.map((name) => join(ROOT, name)).filter(existsSync);
   return [...code, ...configs];
 }

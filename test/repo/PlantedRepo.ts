@@ -49,15 +49,15 @@ export class PlantedRepo {
   }
 
   checkBudgets(): ToolRun {
-    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-budgets.mjs'), this.root]);
+    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-build', 'run.mjs'), this.root, 'budgets']);
   }
 
   checkIso(): ToolRun {
-    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'iso', 'check.mjs'), this.root]);
+    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-build', 'run.mjs'), this.root, 'iso']);
   }
 
   checkBundle(): ToolRun {
-    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-bundle.mjs'), this.root]);
+    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'check-build', 'run.mjs'), this.root, 'bundle']);
   }
 
   plantBudgets(changes: object): void {
