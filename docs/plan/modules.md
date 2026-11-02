@@ -1,7 +1,7 @@
 # Packages, modules and the contract
 
-Which part does what at 1.0, and which way do imports go? bpmn-cli 1.0 is one core package with ten
-modules that import in one direction, and two private packages beside it, render and lint.
+Which part does what after the refactoring, and which way do imports go? The refactored bpmn-cli is one core
+package with ten modules that import in one direction, and two private packages beside it, render and lint.
 What the code of each looks like, along one change: [layers by example](layers.md).
 
 ## Packages
@@ -107,7 +107,7 @@ flowchart TD
   commander and the plugin's `./naming`. It builds its operation commands from `OPS_SCHEMA`, and its help is
   Markdown that `npm run build` writes from the catalogues.
 - drawing and scoring import render's `./text` for label sizes, views imports render's `.` for images.
-- Today edit reaches drawing 5 times. At 1.0 a write runs in this order: drawing takes a `DrawingSnapshot` of
+- Today edit reaches drawing 5 times. After the refactoring a write runs in this order: drawing takes a `DrawingSnapshot` of
   the document, edit applies the model operations and records them in a `ChangeSet`, drawing compares the
   document with the `DrawingSnapshot`. From the `ChangeSet` drawing reads only the created and moved ids and the
   sub-processes to expand or collapse (`expanded=`). DI bookkeeping (≈ 0.5k) moves into `model/diagram`.
@@ -212,7 +212,7 @@ Scorer ──runs──> every ScoringCriterion, on every plane ──reports─
     main's `regress-gate.mjs` holds its total today; that budget only falls, and the test lists each
     scenario that scores higher. `tools/layout-regress.mjs`, its second copy of the analysis and the
     17-kind subset it sums (`HARNESS_KEYS`) leave `tools/`.
-- Until 1.0 the oracle judges with main's analysis, run in main's worktree at the commit `rebuild` sits
+- Until the release the oracle judges with main's analysis, run in main's worktree at the commit `rebuild` sits
   on, so the rebuild never grades itself ([oracle](rebuild.md#oracle)).
 
 ## Shape sizes
@@ -372,10 +372,10 @@ interface NewOptions {
   it any more, so a host reads it as undefined) and the operations, under `operations` where today says `ops`, and gains `importWarnings`, the import warnings the report already holds. cli passes
   them to lint, which then needs no `BpmnDocument` of the core (today `ctx.doc()`, `BpmnlintValidator.ts:89`).
 
-design-iq at 1.0: the oracle replays its recorded calls along this map, and the consumers step ports it
+design-iq after the refactoring: the oracle replays its recorded calls along this map, and the consumers step ports it
 the same way.
 
-| design-iq at 26a9517, on bpmn-cli 0.9.0; `bpmn-edit.ts` unless named | 1.0 |
+| design-iq at 26a9517, on bpmn-cli 0.9.0; `bpmn-edit.ts` unless named | after |
 | --- | --- |
 | `findXml(xml, text)` (l. 333), its hits' `scope` and `match` (l. 357) | `(await findXml(xml, { text })).hits`, the same hits, `in` in place of `scope`: the id, a string, of the innermost lane, sub-process or pool |
 | `showXml(xml, { id, context })` (l. 335) | `(await showXml(xml, { id })).text` |
@@ -394,14 +394,14 @@ the same way.
 | `BpmnError` (l. 494) and its categories (l. 499) | the same `code`, `category` (`usage`, `model`, `layout`, `io`, `internal`) and `details` |
 | options `platform` and `file` (l. 243) | gone: the file's namespaces give the platform, and Camunda checks run only on executable processes |
 | `set calledDecision=` under `platform: none` on a Camunda 7 file (`bpmn-edit-tools` fixture) | writes `camunda:decisionRef`, since the platform comes from the file and no `platform: none` exists; design-iq's fixture and test adapt |
-| CLI words in hints, `CLI_WORDS` (l. 578 to 594) | the same table on 1.0's names: `diagram` for `show --layout` and `metrics`, `tidy` for `layout --tidy`, `guide` for `kinds`; the `state` line carries no backticks around `bpmn validate`, so `CLI_WORDS` must match it bare |
+| CLI words in hints, `CLI_WORDS` (l. 578 to 594) | the same table on the refactored names: `diagram` for `show --layout` and `metrics`, `tidy` for `layout --tidy`, `guide` for `kinds`; the `state` line carries no backticks around `bpmn validate`, so `CLI_WORDS` must match it bare |
 | the `problems:` that end `showXml`'s text today | `validateXml(xml).findings`, which design-iq's `validate_bpmn` adds to its own (`http/mcp.ts:1033`); `show` ends with the state line, whose `bpmn validate` `CLI_WORDS` turns into `validate_bpmn` |
 | a drawing operation before the model operation that adds its target (`bpmn-edit-tools.test.ts:300`) | `E_USAGE` with the hint to send the model operations first, where 0.9 answers `E_NOT_FOUND` ([behaviour that goes](cli.md#behaviour-that-goes)) |
 
-ask-miragon after 1.0, as a follow-up: it pins 0.5.0 and imports 12 internals; the contract keeps what
-this map needs.
+ask-miragon after the release, as a follow-up: it pins 0.5.0 and imports 12 internals; the contract keeps
+what this map needs.
 
-| 0.5 internals | where | 1.0 call |
+| 0.5 internals | where | call after the refactoring |
 | --- | --- | --- |
 | `Doc`, `mutateDoc`, `parseOps`, `CliError` | `draft.ts`, `change.ts`, `fix.ts`, `retarget.ts:29`, `server.ts:219` | a draft is `newXml` plus `applyToXml`; change and fix resend with a last `layout` operation on `E_LAYOUT_INCREMENTAL`; retarget, which copies the namespaces of `Doc.create({ target })`, takes them from `newXml({ target })`; `BpmnError`, whose `code`, `category` and `details` replace `CliError.toJSON()` (`draft.ts:23`) |
 | `ChangeSet.renames` with `takeover`, `Change.detail` | `fix.ts:66`, `change.ts:74` | `EditResult.renamed`, with `takeover`, and the changes' `detail` |

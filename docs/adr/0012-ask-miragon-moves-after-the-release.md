@@ -1,4 +1,4 @@
-# 12. ask-miragon moves after 1.0
+# 12. ask-miragon moves after the release
 
 Accepted, 2026-11-01.
 
@@ -8,7 +8,7 @@ ask-miragon pins 0.5.0 and imports 12 internals, so it cannot move before the co
 
 ## Decision
 
-ask-miragon moves from 0.5.0 to 1.0 after the release, as a follow-up.
+ask-miragon moves from 0.5.0 to the refactored library after the release, as a follow-up.
 
 ## Consequences
 

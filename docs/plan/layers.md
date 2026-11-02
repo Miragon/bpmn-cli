@@ -7,8 +7,8 @@ smaller helpers are named where they first appear, signatures settle in the step
 [code rules](code.md#classes): one class per file, no comments, a block for every `if`. Imports are
 shown where they cross a module, since they show which layer uses which.
 
-There is no `domain/` folder at 1.0. Today's `domain/` splits into model, operations, edit, drawing, scoring,
-checks, views and write; today's `application/` and `adapters/` become write, api, cli and the two packages.
+There is no `domain/` folder after the refactoring. Today's `domain/` splits into model, operations, edit,
+drawing, scoring, checks, views and write; today's `application/` and `adapters/` become write, api, cli and the two packages.
 
 ## Entries
 
@@ -33,7 +33,7 @@ process.exitCode = await new Cli(process).run(process.argv.slice(2));
 
 ```text
 today  bpmn add order.bpmn boundaryEvent:timer Reminder --on check --timer P2D --non-interrupting --id remind
-1.0    bpmn add order.bpmn boundaryEvent:timer Reminder --on check --id remind timer=P2D nonInterrupting=true
+after  bpmn add order.bpmn boundaryEvent:timer Reminder --on check --id remind timer=P2D nonInterrupting=true
 ```
 
 What it prints today, on main 4cbec59:
@@ -48,7 +48,7 @@ layout quality: score 0 -> 0
 written: order.bpmn
 ```
 
-What it prints at 1.0, at most 1 KB: the full redraw goes, the layout score and the counts end the text.
+What it prints after the refactoring, at most 1 KB: the full redraw goes, the layout score and the counts end the text.
 
 ```text
 created boundaryEvent:timer remind "Reminder" on check
@@ -546,8 +546,8 @@ export class ShowQuery {
 }
 ```
 
-`bpmn show order.bpmn remind` prints at 1.0 everything needed to change the element, today's `show`,
-`show --context` and `ext list` in one:
+`bpmn show order.bpmn remind` prints after the refactoring everything needed to change the element, today's
+`show`, `show --context` and `ext list` in one:
 
 ```text
 boundaryEvent:timer remind "Reminder"

@@ -8,7 +8,7 @@ Accepted, 2026-11-01.
 
 ## Decision
 
-The docs are reworked for 1.0, and `docs/architecture.md` becomes a compact map: per module what it does, what it holds, why it exists and what it deliberately does not do.
+The docs are reworked for the refactoring, and `docs/architecture.md` becomes a compact map: per module what it does, what it holds, why it exists and what it deliberately does not do.
 
 ## Consequences
 

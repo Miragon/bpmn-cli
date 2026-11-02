@@ -1,6 +1,6 @@
 # Rebuild
 
-How do we build 1.0 from zero without losing what today's code does right? The rebuild grows on the
+How do we build the refactored CLI from zero without losing what today's code does right? The rebuild grows on the
 branch `rebuild`, one draft PR into main; main keeps the old code and its fixes, and judges every difference.
 
 ## Where
@@ -14,7 +14,7 @@ branch `rebuild`, one draft PR into main; main keeps the old code and its fixes,
 | a branch `rebuild`, one draft PR rebased onto main; main keeps the old code and its fixes | one PR to review, always up to date with main, which the oracle has proven | **yes** |
 
 - Main stays as users know it: the docs site, the marketplace through the `release` branch, releases at
-  the owner's call. It takes fixes, no features, until 1.0.
+  the owner's call. It takes fixes, no features, until the release.
 - `rebuild` is rebased onto main whenever main moves, at the latest before a step starts. The rebase
   carries main's `docs/`, `plugins/`, `.github/`, changelog and version bumps along.
 - After a rebase, `git diff <old base> <new base> -- src test` lists what main's new commits changed in
@@ -26,7 +26,7 @@ branch `rebuild`, one draft PR into main; main keeps the old code and its fixes,
 - This plan ends with the draft PR, not with a merge ([later](#later)).
 - Operation JSON stays as on main but for these fields; `tools/oracle` maps them, so recorded edits replay:
 
-| operation | today | 1.0 |
+| operation | today | after |
 | --- | --- | --- |
 | `add`, `retype` | `timer`, `message`, `error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`, `doc`, `text` | the same names under `set` ([flag or key](flags.md#flag-or-keyvalue)) |
 | `add` | `collapsed` | `set: { expanded: false }` |
@@ -109,15 +109,15 @@ the codes come from its `kindsJson()`. Words of this section:
   goes on and the layout probe judges them.
 - The layout probe scores both sides with main's scorers, run in main's worktree at the commit
   `rebuild` sits on: layout-regress's analyser and weights for the score, and main's
-  `layoutProblemsOfXml` for the hard defects. After 1.0
-  both come from the tag `pre-1.0`, since 1.0 exports no scorer. The rebuild's `Scorer` never grades
+  `layoutProblemsOfXml` for the hard defects. After the release
+  both come from the tag `pre-refactoring`, since the refactored library exports no scorer. The rebuild's `Scorer` never grades
   itself here; the fuzz and the bench use the same scorers. `Scorer`'s mirrored test holds it to main's
   counts per kind in `corpus/layout/scores.json`.
-- design-iq's recorded calls reach 1.0 through `tools/oracle/design-iq-map`, the
+- design-iq's recorded calls reach the refactored library through `tools/oracle/design-iq-map`, the
   [map](modules.md#contract).
 - A rebase that brings a fix changes main's answers; the same rebase ports the fix or names it in the
   list.
-- After 1.0 the oracle compares the last release with main.
+- After the release the oracle compares the last release with main.
 
 `npm run oracle` judges (`--probe`, `--entry`, `--filter`, `--jobs`) and leaves its result in
 `.oracle/result.json`; `npm run oracle:record` records `corpus/` again; `npm run oracle:selftest` runs main
@@ -137,7 +137,7 @@ flowchart LR
   scoring & operations --> drawing[drawing]
   operations --> edit[edit]
   checks & drawing & edit --> write[write, views, api]
-  write & lint --> cli[cli, rc.1] --> skill[skill, docs] --> consumers[consumers] --> ready[draft PR ready]
+  write & lint --> cli[cli, first release candidate] --> skill[skill, docs] --> consumers[consumers] --> ready[draft PR ready]
 ```
 
 | step | ≈ lines | ≈ commits | why here |
@@ -160,23 +160,24 @@ flowchart LR
 
 | line | until the draft PR is done | after a merge |
 | --- | --- | --- |
-| main, the old code | fixes only; releases as today, at the owner's call | 1.x only; no fix line for the old code |
-| `@miragon/bpmn-cli` from `rebuild` | nothing until the CLI step, then `1.0.0-rc.N` on `next`; moves neither the `release` branch nor the Homebrew tap; bumps no plugin file | `1.0.0` from main on `latest`; the `release` branch and the tap follow as with every release |
+| main, the old code | fixes only; releases as today, at the owner's call | the refactored line only; no fix line for the old code |
+| `@miragon/bpmn-cli` from `rebuild` | nothing until the CLI step, then `0.10.0-rc.N` on `next`; moves neither the `release` branch nor the Homebrew tap; bumps no plugin file | `0.10.0` from main on `latest`; the `release` branch and the tap follow as with every release |
 | `packages/render` | private, built into the core's library and CLI | published as `@miragon/bpmn-render` only when its [trigger](README.md#triggers) fires |
 | `packages/lint` | private, built into the core's CLI | published only when its [trigger](README.md#triggers) fires |
 
 Today `release-please.yml` publishes without `--tag`, feeds the tap on every release and bumps the
 skill's pin. release-please does not run on `rebuild`: a rebase replaces the commits its tags name, and
 its release PR would be a second PR. From the CLI step on, `release-please.yml` on `rebuild` also runs
-on a pushed tag `v1.0.0-rc.N`: it publishes that commit, whose `package.json` holds the same version,
+on a pushed tag `vX.Y.Z-rc.N`, here `v0.10.0-rc.N`: it publishes that commit, whose `package.json` holds the same version,
 with `--tag next`, and feeds no tap. The file keeps its name, so npm's trusted publishing, which trusts
 `release-please.yml`, accepts it.
 
-From rc.1 the contract is frozen: the API report changes only to fix a bug, named in the next rc's
-notes, so design-iq's branch breaks only on purpose.
+From the first release candidate the contract is frozen: the API report changes only to fix a bug, named
+in the next rc's notes, so design-iq's branch breaks only on purpose.
 
-Why 1.0.0, not 0.10: the rebuild is the one break, with an API report from day one; more 0.x minors
-invite today's churn of 15 repo-wide restructures in 20 days.
+Why 0.10.0: release-please proposes the next minor for breaking commits on 0.x, as `bump-minor-pre-major`
+is on, and the rebuild ships as a major refactoring under it. It stays the one break, with an API report
+from day one, against today's churn of 15 repo-wide restructures in 20 days.
 
 ## Done
 
@@ -201,16 +202,16 @@ The draft PR is done when, rebased onto main's head:
 
 ## Later
 
-Merging the draft PR and shipping 1.0.0 are not part of this plan. For that day:
+Merging the draft PR and shipping the release are not part of this plan. For that day:
 
 - Main's ruleset asks for linear history; the PR merges by rebase, without conflicts, so release-please
-  reads each commit's `BREAKING CHANGE:` footer into the 1.0.0 changelog.
-- release-please goes back to main's release line with `release-as: 1.0.0`; with
-  `bump-minor-pre-major` it would propose 0.10.0 for a breaking change.
-- Main's last commit before the merge is tagged `pre-1.0`, from which the oracle takes main's scorers.
-- Merge and publish 1.0.0 on the same day: the docs site deploys on every push to main, and
+  reads each commit's `BREAKING CHANGE:` footer into the release's changelog.
+- release-please goes back to main's release line and proposes the next minor, 0.10.0, from the
+  `BREAKING CHANGE:` footers, as `bump-minor-pre-major` is on.
+- Main's last commit before the merge is tagged `pre-refactoring`, from which the oracle takes main's scorers.
+- Merge and publish the release on the same day: the docs site deploys on every push to main, and
   bpmn-to-code's marketplace takes the bpmn-cli plugin from `ref: main` (`marketplace.json:19`), so
-  both show 1.0 with the merge.
+  both show the refactored CLI with the merge.
 
 ## Steps
 
@@ -232,21 +233,22 @@ Publish `./naming` from `@miragon/bpmnlint-plugin-rules`.
 - Files: Miragon/bpmnlint-rules, the one change outside the draft PR.
 - Done when: on npm, and it loads in Node and in a browser bundle without bpmnlint.
 
-### 14. CLI and rc.1
+### 14. CLI and the first release candidate
 
-The CLI is built and gates. Left: ship 1.0.0-rc.1 and run the first nightly.
+The CLI is built and gates. Left: ship the first release candidate, `v0.10.0-rc.1`, and run the first
+nightly.
 
 - Today: the [target](cli.md#target) and the tag and nightly workflows are on the branch; no release candidate is on npm, and the nightly's schedule runs only from the default branch.
 - After: [release candidates](#releases) on `next`.
 - Files: none but the tag.
-- Done when: rc.1 on `next`; nightly fuzz and bench ran on it.
+- Done when: the first release candidate on `next`; nightly fuzz and bench ran on it.
 
 ### 15. Skill, evals and docs
 
 Update the skill and its evals, rework the docs.
 
 - Today: all describe main's CLI; `docs/architecture.md` walks today's layers in 377 lines.
-- After: 1.0, with a migration note; project lint findings come only from `bpmn validate`; element
+- After: the refactored CLI, with a migration note; project lint findings come only from `bpmn validate`; element
   properties are `key=value`; builds over several writes end with `bpmn layout`; the
   [architecture doc](modules.md#architecture-doc) as a compact map.
 - Files: `plugins/bpmn-cli/`, `docs/`, `test/contract/`, `test/e2e/plugin.test.ts`.

@@ -1,9 +1,9 @@
 # Flags
 
-What does each flag do, what is it worth, and does 1.0 keep it? Commands, and what goes with them, are
+What does each flag do, what is it worth, and does the refactoring keep it? Commands, and what goes with them, are
 on the [commands page](cli.md).
 
-| measure | today | 1.0 |
+| measure | today | after |
 | --- | ---: | ---: |
 | flag slots over all commands | 443 | 143 |
 | shared write flags | 15 | 4 |
@@ -74,11 +74,11 @@ time such as `P2D` (two days).
 today  bpmn add <file> boundaryEvent:timer [name] --on <activityId> --timer <iso> --non-interrupting
        bpmn add order.bpmn boundaryEvent:timer Reminder --on check --timer P2D --non-interrupting
 
-1.0    bpmn add <file> boundaryEvent:timer [name] --on <activityId> timer=<iso> nonInterrupting=true
+after  bpmn add <file> boundaryEvent:timer [name] --on <activityId> timer=<iso> nonInterrupting=true
        bpmn add order.bpmn boundaryEvent:timer Reminder --on check timer=P2D nonInterrupting=true
 ```
 
-| today | 1.0 |
+| today | after |
 | --- | --- |
 | `--timer <iso>` | `timer=<iso>`: `R/PT1H` is a cycle, `PT5M` a duration, a date a date |
 | `--timer-kind <kind>` | goes: `timer=` tells the kinds apart |
@@ -113,7 +113,7 @@ bpmn set order.bpmn check doc="Four eyes" camunda:assignee=kermit
 
 Every write command takes them today; the reads (`show`, `find`, `diagram`, `conventions`, `validate`) and `render` take `--json`.
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--json` | prints the result as JSON | programs and graders read data | skill 2 and evals 2, all on reads (`kinds`, `metrics`) · docs 13 | keep |
 | `-o` | writes to another file, `-` to stdout | try on a copy; pipe a result | skill 8 · docs 12 | keep |
@@ -135,7 +135,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `new`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--name` | the process name | the skill names every new process | skill 7 · docs 14 | goes: `[name]`, as on `add` |
 | `--id` | the process id | an id before the first element exists | skill 4 | keep |
@@ -144,7 +144,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `show`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--in` | only one pool, process, lane or sub-process | a big model in a small context; the word of `add --in` | as `--scope` | new, from `--scope`, which takes no lane today |
 | `--around` | only the neighbourhood of an id | a big model in a small context | skill 4 · b2c 1 · diq 1 | keep |
@@ -158,7 +158,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `find`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--kind` | one kind, as `add` writes it, or a family: `task`, `event`, `gateway` | every service task in one call, to write its workers | skill 1 | keep, takes families |
 | `--in` | only inside one pool, process, lane or sub-process | the ids of one lane, to colour or place them | 0 | new |
@@ -167,7 +167,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `validate`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--strict` | exit 5 on warnings | a grader and CI gates want it | skill 5 · docs 3 · evals 2 | keep |
 | `--lint-config` | picks the `.bpmnlintrc` | a config outside the tree | 0 | keep |
@@ -178,7 +178,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `render`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `-o` | the image file; `.png` or `.svg` by extension | the only output | skill 7 · docs 10 | keep |
 | `--around`, `--depth` | crop to the neighbourhood of an id | a readable image of a big model | skill 2 · docs 2 | keep |
@@ -191,13 +191,13 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `guide`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--short` | the 5 KB core | the whole guide stays under 20 KB, so `guide` replaces `--short` | skill 1 · docs 2 · evals 2 | goes: `guide`, `guide <topics…>` |
 
 ### `kinds`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--section` | one part of the tables | the tables become guide topics | skill 8 · docs 3 | goes: `guide <topic>` |
 
@@ -205,7 +205,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `add`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--after` | appends after a node, or splices into its outgoing flow | the main way to place a node | skill 30 · docs 53 · diq 9 | keep |
 | `--before` | prepends before a node | places in front of a join | skill 2 | keep |
@@ -230,7 +230,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `connect`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--id` | the id of the connection | later operations refer to it | skill 13 · docs 2 · diq 2, with `--name` | keep |
 | `--name` | the label of the connection | what the flow holds | as above | `key=value`: `name=<text>` |
@@ -240,13 +240,13 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `set`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--unset` | removes a key | the same as `key=` | 0 | goes: `key=`, which set already reads |
 
 ### `remove`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--no-bridge` | removes without connecting predecessor and successor | the remedy that `E_INVALID_BRIDGE` names | 0 | goes: `--bridge none` |
 | `--bridge-all` | connects every predecessor of a join | the remedy for a join | 0 | goes: `--bridge all` |
@@ -256,21 +256,21 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `retype`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--timer` … `--non-interrupting` (10) | the new event definition | the same keys as `add` | skill 1 · docs 1 | `key=value`: `retype <file> <id> <kind> [key=value…]` |
 | `--timer-kind` | cycle, duration or date | `timer=` tells them apart | 0 | goes: `timer=<iso>` |
 
 ### `move`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--after`, `--before`, `--flow`, `--in`, `--on` | the new place, as on `add` | one placement grammar | docs 1 | keep |
 | `--lane` | the new lane; empty removes it | design-iq moves nodes between lanes | skill 3 · diq 4 | keep |
 
 ### `ext add`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--body` | text content of the element | scripts and expressions | skill 2 · docs 3 | `key=value`: `body=<text>` |
 | `--xml` | a raw snippet with nested elements | what attributes cannot express | diq 1 | keep |
@@ -280,20 +280,20 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `layout`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--expand`, `--collapse` | redraws sub-processes expanded or collapsed | the same as `set <id> expanded=` | diq 1 | `key=value`: `set <file> <id> expanded=false` |
 | `--tidy` | tidies instead of redrawing | its help says "= bpmn tidy" | diq 1 | goes: `bpmn tidy` |
 
 ### `tidy`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--path`, `--via`, `--kind`, `--branch` | pick ids by path, branch or kind | none: no use; `tidy` takes ids | 0 | goes: `tidy <ids…>` |
 
 ### `place`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--row-of`, `--below`, `--above` | puts nodes into a row | straightens a path | skill 4 · docs 3 | keep |
 | `--column-of`, `--after`, `--before` | puts nodes into a column | vertical lanes need columns | 0 | keep |
@@ -303,13 +303,13 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `align`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--axis`, `--to`, `--path`, `--via`, `--kind`, `--branch` | lines shapes up | the command goes | skill 2 | goes: one `place` per id |
 
 ### `color`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--color` | one of the bpmn-js colours, or `default` | the colour | skill 6 · diq 1 | keep |
 | `--path`, `--branch` | pick ids by path or branch | colours the happy path | skill 5 | keep |
@@ -317,19 +317,19 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ### `label`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--side` | the side the label goes to | the only option | skill 2 | keep |
 
 ### `route`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--exit`, `--entry` | the sides a flow leaves and enters by | the only options | skill 2 | keep |
 
 ### `space`
 
-| flag | does | worth | uses | 1.0 |
+| flag | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `--after`, `--below`, `--by` | where and how much room to make | the only options | skill 5 | keep |
 
@@ -345,7 +345,7 @@ Every write command takes them today; the reads (`show`, `find`, `diagram`, `con
 
 ## Per command
 
-| command | flag slots today | 1.0 |
+| command | flag slots today | after |
 | --- | ---: | ---: |
 | `new` | 19 | 4 |
 | `show` | 11 | 4 |

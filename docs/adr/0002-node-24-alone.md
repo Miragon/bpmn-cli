@@ -8,7 +8,7 @@ bpmnlint 12 asks for Node 24, and project lint moves to bpmnlint 12.
 
 ## Decision
 
-1.0 runs on Node 24 and later only; every workflow runs Node 24 alone.
+The refactored CLI runs on Node 24 and later only; every workflow runs Node 24 alone.
 
 ## Consequences
 

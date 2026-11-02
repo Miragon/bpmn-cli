@@ -66,7 +66,7 @@ Each catches what a unit test cannot see. All are hard gates but the last row, a
 | `test/e2e/`: CLI in-process, one file per command group, one spawn smoke test | flags, exit codes, stdout, files; a text result over 1 KB |
 | `test/contract/`: design-iq's recorded calls | a consumer's calls break |
 | `test/corpus/`: golden corpus, property test | a no-op changes bytes; incomplete DI, nondeterminism; a drawn shape that bpmnlint's `standard-size` reports |
-| [oracle](rebuild.md#oracle) | a difference from main, after 1.0 from the last release |
+| [oracle](rebuild.md#oracle) | a difference from main, after the release from the last release |
 | render's `test/golden/`, ≈ 20 SVGs | a shape or colour changes |
 | tsc strict | type errors |
 | biome with the block statement plugin, errors only | the function size limits, nested ternaries |
@@ -81,7 +81,7 @@ Each catches what a unit test cannot see. All are hard gates but the last row, a
 | `test/contract/`: spy test, result fixtures | over 2 parses or 3 serialisations per write, one parse more when the new file has an error, to read the old one |
 | esbuild metafile | the painter (render's `.` or `./png`), camunda-compat or bpmnlint loaded on a write |
 | `FullLayout`'s scenario rows, 115 models of `corpus/layout/` | their total above main's, a budget that only falls; it lists each scenario that scores higher |
-| `test/contract/`: names test | the skill, the guide or a hint the corpus produces names a command or flag 1.0 lacks; `docs/architecture.md` lacks a module or names a class that does not exist |
+| `test/contract/`: names test | the skill, the guide or a hint the corpus produces names a command or flag the refactored CLI lacks; `docs/architecture.md` lacks a module or names a class that does not exist |
 | `test/repo/`: hygiene | private paths, control bytes; a dependency of a private package that the core lacks or pins at another version |
 | a live run over `corpus/engine/` when it or a pinned engine version changes, and once on the release candidate | our checks and Camunda drifting apart |
 | timings, nightly fuzz, bench | slow calls, rare crashes |

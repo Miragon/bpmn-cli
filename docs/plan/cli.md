@@ -1,6 +1,6 @@
 # Commands and flags
 
-Which commands and flags exist today and at 1.0, and why does each item go or stay? The CLI is a
+Which commands and flags exist today and after the refactoring, and why does each item go or stay? The CLI is a
 projection of the library: a command is a call or an operation, its flags the call's options or the operation's keys.
 
 ## Today
@@ -120,7 +120,7 @@ describes, `find` lists ids, `diagram` judges the drawing. They use the words of
 (`--in` as on `add` and `move`), every line names the kind and the id, and a cut says what it left out
 and how to zoom in ([reads](#how-the-reads-answer)).
 
-| command | does | worth | uses | 1.0 |
+| command | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `show` | the model, a part of it, or one element with everything needed to change it | the one read for agents and design-iq | skill 22 · docs 14 · diq 4 · ask 1 · b2c 7 | keep; `show <id>` takes over `--context` and `ext list` |
 | `find` | one line per element that matches a text, a kind or a container, id first | ids fast in a big model, ids to pipe into `color` or `place` | skill 3 · docs 1 · diq 3 · b2c 1 | keep; the text becomes optional, `--in` joins |
@@ -133,7 +133,7 @@ and how to zoom in ([reads](#how-the-reads-answer)).
 
 ### Edit
 
-| command | does | worth | uses | 1.0 |
+| command | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `add` | creates an element and wires it in | the main write | skill 55 · docs 93 · diq 21 | keep |
 | `connect` | a sequence or message flow | the flows a placement does not make | skill 9 · docs 8 · diq 4 | keep |
@@ -148,7 +148,7 @@ and how to zoom in ([reads](#how-the-reads-answer)).
 
 ### Draw
 
-| command | does | worth | uses | 1.0 |
+| command | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `layout` | redraws in full | the escape when the incremental layout cannot place a change | skill 2 · docs 3 · diq 3 | keep |
 | `tidy` | removes overlaps and small gaps, keeps the drawing | design-iq calls it | skill 1 · diq 1 | keep |
@@ -162,7 +162,7 @@ and how to zoom in ([reads](#how-the-reads-answer)).
 
 ### Image and help
 
-| command | does | worth | uses | 1.0 |
+| command | does | worth | uses | after |
 | --- | --- | --- | --- | --- |
 | `render` | an image without a browser | agents look at what they built | skill 8 · evals 3 · docs 16 | keep |
 | `kinds` | the tables of element kinds | help; programs call `kindsJson()` | skill 8 · docs 9 · diq 2 | goes: `guide <topic>` |

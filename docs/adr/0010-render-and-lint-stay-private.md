@@ -12,4 +12,4 @@ Render and lint stay private packages until someone outside bpmn-cli needs one; 
 
 ## Consequences
 
-No second release line and no exact pin before 1.0. Publishing one later changes no code.
+No second release line and no exact pin before the release. Publishing one later changes no code.

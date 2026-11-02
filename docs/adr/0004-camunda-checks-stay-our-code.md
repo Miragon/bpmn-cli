@@ -8,7 +8,7 @@ The experiment Miragon/bpmn-cli#123 runs the checks as bpmnlint rules, on top of
 
 ## Decision
 
-The Camunda checks stay bpmn-cli's own code. #123 and #113 stay open; 1.0 does not need them.
+The Camunda checks stay bpmn-cli's own code. #123 and #113 stay open; the refactoring does not need them.
 
 ## Consequences
 

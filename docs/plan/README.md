@@ -1,6 +1,6 @@
-# Plan: bpmn-cli 1.0, rebuilt from zero
+# Plan: the refactored bpmn-cli, rebuilt from zero
 
-bpmn-cli 1.0 is built from zero on the branch `rebuild`, one draft PR into main, beside today's code.
+The refactored bpmn-cli is built from zero on the branch `rebuild`, one draft PR into main, beside today's code.
 Today's code works but is hard to change: 84 `utils` files, 64 folder cycles, no class with a test of its own, 443 flag
 slots, and a write that takes over a second. Main's algorithms and data are ported into new classes with
 new tests; no file is copied as it is. Main also stays the judge: a tool, the oracle, runs main and the
@@ -12,8 +12,8 @@ time of a write was measured three commits earlier, at 4cbec59.
 | --- | --- |
 | [modules](modules.md) | which packages and modules exist, which way imports go, what the library exports |
 | [layers by example](layers.md) | what the code of each layer looks like, along one change |
-| [commands](cli.md) | which commands 1.0 keeps, and which behaviour goes |
-| [flags](flags.md) | which flags 1.0 keeps, and when an input is a flag or a `key=value` |
+| [commands](cli.md) | which commands the refactoring keeps, and which behaviour goes |
+| [flags](flags.md) | which flags the refactoring keeps, and when an input is a flag or a `key=value` |
 | [code](code.md) | how code is cut into classes, how tests follow them, which checks hold the cut |
 | [rebuild](rebuild.md) | where the rebuild grows, how the oracle judges it, the steps, releases and when it is done |
 
@@ -34,7 +34,7 @@ time of a write was measured three commits earlier, at 4cbec59.
 | flag slot | one flag on one command; a flag every write takes counts once per command |
 | probe | one comparison the oracle makes between main and the rebuild, such as bytes or layout ([oracle](rebuild.md#oracle)) |
 | allow-list | the differences from main the oracle accepts, each with its reason |
-| `next` | the npm dist-tag the release candidates `1.0.0-rc.N` go to; `latest` stays on main's releases until 1.0.0 |
+| `next` | the npm dist-tag the release candidates `0.10.0-rc.N` go to; `latest` stays on main's releases until the release |
 
 ## At a glance
 
@@ -68,13 +68,13 @@ the CLI and parsing take most of it.
 What stays is what one of these uses. The short names head the use counts on the
 [commands](cli.md#commands) and [flags](flags.md) pages.
 
-| user | short name | uses | reaches 1.0 |
+| user | short name | uses | reaches the refactoring |
 | --- | --- | --- | --- |
 | the bpmn skill in `plugins/bpmn-cli/`, with 7 evals | skill, evals | the CLI | updated on `rebuild`, in the draft PR |
 | the docs site in `docs/` | docs | the CLI | updated with the skill |
 | design-iq, Miragon's modelling workspace | diq | pins bpmn-cli 0.9.0; the library: `applyToXml`, `showXml`, `findXml`, its own validators | tries the release candidate in a branch of its own, along its [map](modules.md#contract) |
 | the skills of bpmn-to-code | b2c | `bpmn show`, `bpmn find` | checked against the release candidate |
-| ask-miragon | ask | pins bpmn-cli 0.5.0 and imports 12 of its internals | moves after 1.0, along its [map](modules.md#contract) |
+| ask-miragon | ask | pins bpmn-cli 0.5.0 and imports 12 of its internals | moves after the release, along its [map](modules.md#contract) |
 | the CI of Miragon's [process-engine-blueprints](https://github.com/Miragon/process-engine-blueprints): 10 examples, each with a `.bpmnlintrc` | | bpmnlint 12 with `@miragon/bpmnlint-plugin-rules` 0.17.0; bpmn-cli 0.7.0 only as a dev dependency, not in the lint | `bpmn validate` reports what that CI reports |
 
 ## Who finds what
@@ -82,7 +82,7 @@ What stays is what one of these uses. The short names head the use counts on the
 Five things report problems. Two are bpmn-cli's own rules about the model, two run rules that come from
 outside, and one judges the drawing:
 
-| term | whose rules | asks | codes | runs | lives at 1.0 |
+| term | whose rules | asks | codes | runs | lives after the refactoring |
 | --- | --- | --- | --- | --- | --- |
 | structure checks | bpmn-cli's | is the file BPMN the CLI can read, change and draw | `E_*`, `W_*` | writes with model operations, `validate` | `checks/structure` |
 | Camunda checks | bpmn-cli's | what Camunda 7 or 8 rejects at deploy, FEEL included | `W_C7_*`, `W_C8_*` | writes with model operations on executable processes, `validate` on every process, since Camunda 8 refuses a file without an executable one | `checks/camunda` |
@@ -112,8 +112,8 @@ Made from 2026-10-30 to 2026-11-01; each is an ADR in `docs/adr/`.
 - [8. No workaround for an antipattern](../adr/0008-no-workaround-for-an-antipattern.md)
 - [9. Rework the docs, with a compact architecture map](../adr/0009-compact-architecture-doc.md)
 - [10. Render and lint stay private packages](../adr/0010-render-and-lint-stay-private.md)
-- [11. Consumers adapt to what 1.0 drops](../adr/0011-consumers-adapt.md)
-- [12. ask-miragon moves after 1.0](../adr/0012-ask-miragon-moves-after-1-0.md)
+- [11. Consumers adapt to what the refactoring drops](../adr/0011-consumers-adapt.md)
+- [12. ask-miragon moves after the release](../adr/0012-ask-miragon-moves-after-the-release.md)
 - [13. #123's parity models go into the corpus](../adr/0013-parity-models-go-into-the-corpus.md)
 - [14. Operations are parsed strictly](../adr/0014-operations-parse-strictly.md)
 - [15. What a flag says, and what a key says](../adr/0015-flag-or-key-value.md)
@@ -143,7 +143,7 @@ From here main takes fixes only; each rebase brings them in ([where](rebuild.md#
 
 Done when render draws the corpus in Node and in a browser bundle, and lint's oracle entry gates.
 
-### The core: 1.0.0-rc.1
+### The core: the first release candidate
 
 - [x] **7. Model** · needs 4; step 2 still open, so model keeps the naming defaults as data
 - [x] **8. Operations** · needs 7
@@ -152,26 +152,26 @@ Done when render draws the corpus in Node and in a browser bundle, and lint's or
 - [x] **11. Drawing** · needs 8, 10
 - [x] **12. Edit** · needs 8
 - [x] **13. Write, views and api** · needs 9 to 12 · [card](rebuild.md#13-write-views-and-api)
-- [ ] **14. CLI, ship rc.1** · needs 6, 13 · [card](rebuild.md#14-cli-and-rc1)
+- [ ] **14. CLI, ship the first release candidate** · needs 6, 13 · [card](rebuild.md#14-cli-and-the-first-release-candidate)
 
-Done when every probe is green outside the allow-list and rc.1 is on `next`.
+Done when every probe is green outside the allow-list and the first release candidate is on `next`.
 
 ### Done: the draft PR
 
 - [ ] **15. Skill, evals and docs** · needs 14 · [card](rebuild.md#15-skill-evals-and-docs); the skill and its
-  tests are on 1.0, the eval runs on the release candidate and the docs are open
+  tests are on the refactored CLI, the eval runs on the release candidate and the docs are open
 - [ ] **16. Consumers**: try design-iq and the skills of bpmn-to-code on the release candidate, each in a
   branch of its own · needs 15 · done when design-iq's branch is green in its CI and bpmn-to-code's
   skills use `find` and `show <id>`
 - [ ] **17. Ready**: rebase onto main's head and check the [done](rebuild.md#done) criteria · needs 16 ·
   done when they hold
 
-Merging the PR and shipping 1.0.0 come after this plan ([later](rebuild.md#later)). Follow-up after 1.0:
-ask-miragon moves from 0.5.0 to 1.0 along its [map](modules.md#contract).
+Merging the PR and shipping the release come after this plan ([later](rebuild.md#later)). Follow-up after the
+release: ask-miragon moves from 0.5.0 to the refactored library along its [map](modules.md#contract).
 
 ## Triggers
 
-1.0 does without these until the event happens.
+The refactored CLI does without these until the event happens.
 
 | when | then |
 | --- | --- |
@@ -193,4 +193,4 @@ ask-miragon moves from 0.5.0 to 1.0 along its [map](modules.md#contract).
   changes every hash.
 - A made decision leaves the table as an ADR in `docs/adr/`. A shipped release shrinks to one line.
 
-The layers at 1.0: [architecture.md](../architecture.md). Gate: [testing.md](../testing.md).
+The layers after the refactoring: [architecture.md](../architecture.md). Gate: [testing.md](../testing.md).
