@@ -19,7 +19,7 @@ export class EdgePainter {
   private readonly style: Style;
 
   constructor(private readonly edge: PlaneEdge) {
-    this.style = new Style(edge.di);
+    this.style = new Style(edge.planeElement);
   }
 
   svg(): string {
@@ -140,10 +140,10 @@ export class EdgePainter {
   }
 
   private envelope(): string {
-    const { id, di } = this.edge;
+    const { id, planeElement } = this.edge;
     const { fill, stroke } = this.style;
     const middle = this.halfway();
-    const initiating = di.value('messageVisibleKind') === 'initiating';
+    const initiating = planeElement.value('messageVisibleKind') === 'initiating';
     const left = middle.x - EdgePainter.ENVELOPE_WIDTH / 2;
     const top = middle.y - EdgePainter.ENVELOPE_HEIGHT / 2;
     return `<path data-message="${Svg.attribute(id)}" d="M${Svg.number(left)} ${Svg.number(top)}v14h21v-14ZL${Svg.number(middle.x)} ${Svg.number(top + 6)}L${Svg.number(left + EdgePainter.ENVELOPE_WIDTH)} ${Svg.number(top)}" fill="${initiating ? fill : stroke}" stroke="${initiating ? stroke : fill}" stroke-width="1" stroke-linejoin="round"/>`;

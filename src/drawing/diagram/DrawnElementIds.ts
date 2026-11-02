@@ -69,7 +69,7 @@ export class DrawnElementIds {
   }
 
   give(): GivenId[] {
-    const idless = [...this.document.tree.walk(undefined, { bpmnOnly: true })].filter((element) => !element.isDi && !DrawnElementIds.hasId(element) && DrawnElementIds.DRAWN.some((type) => element.is(type)));
+    const idless = [...this.document.tree.walk(undefined, { bpmnOnly: true })].filter((element) => !element.isDrawingPart && !DrawnElementIds.hasId(element) && DrawnElementIds.DRAWN.some((type) => element.is(type)));
     const connectionsLast = [...idless.filter((element) => !DrawnElementIds.isConnection(element)), ...idless.filter(DrawnElementIds.isConnection)];
     return connectionsLast.map((element) => this.giveId(element));
   }

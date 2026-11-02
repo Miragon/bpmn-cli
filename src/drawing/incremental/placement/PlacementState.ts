@@ -1,7 +1,7 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
 import { Box, DiagramIndex } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import { DShape, type ShapeKind } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import { PlaneShape, type ShapeKind } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane, Spacing } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
@@ -10,10 +10,10 @@ import { ShapeSizes, type ShapeSize } from '../../plane/ShapeSizes.js';
 import type { Drawing } from '../Drawing.js';
 
 export interface Reuse {
-  shape: DShape;
-  boundaries: DShape[];
+  shape: PlaneShape;
+  boundaries: PlaneShape[];
   from: Plane;
-  content?: { shapes: DShape[]; edges: DEdge[] };
+  content?: { shapes: PlaneShape[]; edges: PlaneEdge[] };
 }
 
 export interface Probe {
@@ -26,9 +26,9 @@ export interface Probe {
 
 export interface PlacementHooks {
   planeFor(id: string): Plane | undefined;
-  afterPlace?: ((plane: Plane, shape: DShape) => void) | undefined;
+  afterPlace?: ((plane: Plane, shape: PlaneShape) => void) | undefined;
   afterNode?: ((plane: Plane, id: string) => void) | undefined;
-  reattachBoundaries?: ((plane: Plane, host: DShape) => void) | undefined;
+  reattachBoundaries?: ((plane: Plane, host: PlaneShape) => void) | undefined;
 }
 
 export interface PlacementInput {
@@ -55,7 +55,7 @@ export interface PlacerMemo {
   continued: Set<string>;
 }
 
-type Ends = Pick<DEdge, 'sourceId' | 'targetId'>;
+type Ends = Pick<PlaneEdge, 'sourceId' | 'targetId'>;
 
 export class PlacementState implements PlacerMemo {
   private static readonly FRAME_PAD = 15;
@@ -166,14 +166,14 @@ export class PlacementState implements PlacerMemo {
     return PlaneReader.shapeKind(element) === 'subProcess' && !this.collapsed.has(id) ? { ...ShapeSizes.NEW_SUB_PROCESS } : ShapeSizes.of(element);
   }
 
-  newShape(plane: Plane, id: string, bounds: Box): DShape {
+  newShape(plane: Plane, id: string, bounds: Box): PlaneShape {
     const reuse = this.reuse.get(id);
     const element = this.semantics.byId.get(id)!;
     const shape = PlaneReader.shapeOf(this.semantics, id, element, bounds, this.expandedOf(id));
-    if (reuse?.shape.di) {
-      shape.di = reuse.shape.di;
+    if (reuse?.shape.planeElement) {
+      shape.planeElement = reuse.shape.planeElement;
     } else if (!reuse) {
-      shape.di = this.planes.map((candidate) => candidate.unbounded?.get(id)).find((unbounded) => !!unbounded);
+      shape.planeElement = this.planes.map((candidate) => candidate.unbounded?.get(id)).find((unbounded) => !!unbounded);
     }
     const scope = this.semantics.scopeOf.get(id);
     const scopeId = scope?.peek<string>('id');
@@ -188,7 +188,7 @@ export class PlacementState implements PlacerMemo {
     return shape;
   }
 
-  commit(plane: Plane, shape: DShape): void {
+  commit(plane: Plane, shape: PlaneShape): void {
     const frame = shape.kind === 'boundary' ? undefined : new Frames(plane).of(shape);
     this.fitIntoInterior(shape, frame);
     plane.shapes.set(shape.id, shape);
@@ -215,7 +215,7 @@ export class PlacementState implements PlacerMemo {
     return { id, kind, ...(parentId ? { parentId } : {}), ...(laneId ? { laneId } : {}), ...(poolId ? { poolId } : {}) };
   }
 
-  placeAt(plane: Plane, id: string, left: number, centreY: number, { width, height }: ShapeSize): DShape {
+  placeAt(plane: Plane, id: string, left: number, centreY: number, { width, height }: ShapeSize): PlaneShape {
     const shape = this.newShape(plane, id, new Box(Math.round(left), Math.round(centreY - height / 2), width, height));
     this.commit(plane, shape);
     return shape;
@@ -246,12 +246,12 @@ export class PlacementState implements PlacerMemo {
     return reuse ? reuse.shape.expanded === true : !this.collapsed.has(id) || this.blockSize.has(id);
   }
 
-  private drawnEnds(plane: Plane, edge: DEdge): Ends {
+  private drawnEnds(plane: Plane, edge: PlaneEdge): Ends {
     const end = (now: string | undefined, old: string | undefined): string | undefined => (!now || plane.shapes.has(now) || now === this.current ? now : old);
     return { sourceId: end(edge.sourceId, this.oldSource.get(edge.id)), targetId: end(edge.targetId, this.oldTarget.get(edge.id)) };
   }
 
-  private fitIntoInterior(shape: DShape, frame: DShape | undefined): void {
+  private fitIntoInterior(shape: PlaneShape, frame: PlaneShape | undefined): void {
     if (!frame) {
       return;
     }
@@ -263,7 +263,7 @@ export class PlacementState implements PlacerMemo {
     }
   }
 
-  private bringAlong(plane: Plane, shape: DShape, reuse: Reuse): void {
+  private bringAlong(plane: Plane, shape: PlaneShape, reuse: Reuse): void {
     const dx = shape.bounds.x - reuse.shape.bounds.x;
     const dy = shape.bounds.y - reuse.shape.bounds.y;
     for (const moving of [...reuse.boundaries, ...(reuse.content?.shapes ?? [])]) {
@@ -281,9 +281,9 @@ export class PlacementState implements PlacerMemo {
     this.reuse.delete(shape.id);
   }
 
-  private makeRoomForLabel(plane: Plane, shape: DShape, frame: DShape | undefined): void {
+  private makeRoomForLabel(plane: Plane, shape: PlaneShape, frame: PlaneShape | undefined): void {
     const name = shape.el.peek<string>('name')?.trim();
-    if (!name || frame?.kind !== 'subProcess' || !DShape.hasExternalLabel(shape.kind) || DShape.defaultLabelSide(shape.kind) !== 'above') {
+    if (!name || frame?.kind !== 'subProcess' || !PlaneShape.hasExternalLabel(shape.kind) || PlaneShape.defaultLabelSide(shape.kind) !== 'above') {
       return;
     }
     const room = this.drawing(plane).space.roomBelowTitle(frame, shape.labelAt(TextMetrics.labelSize(name), 'above'), shape.id);

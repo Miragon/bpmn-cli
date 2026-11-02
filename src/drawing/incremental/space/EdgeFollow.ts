@@ -1,5 +1,5 @@
 import type { Point } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
 import type { SpacePass, SpaceResult } from './SpacePass.js';
 
 export class EdgeFollow {
@@ -64,7 +64,7 @@ export class EdgeFollow {
     return !shape || (shape !== pass.scope!.frame && !pass.insideFrame(shape));
   }
 
-  private staysPut({ sourceId, targetId }: DEdge): boolean {
+  private staysPut({ sourceId, targetId }: PlaneEdge): boolean {
     const { pass } = this;
     if (sourceId && targetId && pass.keep.has(sourceId) && pass.keep.has(targetId)) {
       return true;
@@ -72,7 +72,7 @@ export class EdgeFollow {
     return !!pass.scope && !this.changed(sourceId) && !this.changed(targetId) && this.outsideFrame(sourceId) && this.outsideFrame(targetId);
   }
 
-  private shiftEdge(edge: DEdge): void {
+  private shiftEdge(edge: PlaneEdge): void {
     const { pass } = this;
     const { axis, delta, line, band, along, push } = pass;
     const bends = !push || push.has(edge.id) || this.changed(edge.sourceId) || this.changed(edge.targetId);
@@ -97,14 +97,14 @@ export class EdgeFollow {
     }
   }
 
-  private endAt({ points, sourceId, targetId }: DEdge, index: number): string | undefined {
+  private endAt({ points, sourceId, targetId }: PlaneEdge, index: number): string | undefined {
     if (index === 0) {
       return sourceId;
     }
     return index === points.length - 1 ? targetId : undefined;
   }
 
-  private pointShifts(edge: DEdge, index: number, block: string | undefined, bends: boolean): boolean {
+  private pointShifts(edge: PlaneEdge, index: number, block: string | undefined, bends: boolean): boolean {
     const { pass, result } = this;
     const { axis, line, band, along, plane } = pass;
     const point = edge.points[index]!;

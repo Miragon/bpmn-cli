@@ -40,7 +40,7 @@ export class BpmnTree {
     if (!this.index) {
       this.index = new Map();
       for (const element of this.walk(this.definitions, { bpmnOnly: true })) {
-        const id = element.isDi ? undefined : element.get<string | undefined>('id');
+        const id = element.isDrawingPart ? undefined : element.get<string | undefined>('id');
         if (id) {
           this.index.set(id, element);
         }

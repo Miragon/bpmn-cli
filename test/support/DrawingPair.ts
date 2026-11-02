@@ -71,13 +71,13 @@ export class DrawingPair {
     const idNow = new Map(renamed.map(({ from, to }) => [from, to]));
     const now = (id: string): string => idNow.get(id) ?? id;
     const elementNow = (element: BpmnElement): BpmnElement => document.tree.byId(now(element.peek<string>('id') ?? '')) ?? element;
-    const key = (plane: BpmnElement | undefined, di: BpmnElement, id: string | undefined): string => `${plane?.peek<string>('id')}|${di.type}|${id}`;
-    const drawn = new Map(document.diagram.planes().flatMap((plane) => plane.list('planeElement').map((di) => [key(plane, di, di.peek<BpmnElement>('bpmnElement')?.peek<string>('id')), di] as const)));
-    for (const [di, entry] of [...before.byDi]) {
-      before.byDi.delete(di);
-      const current = drawn.get(key(entry.planeDi, di, now(entry.id)));
+    const key = (plane: BpmnElement | undefined, planeElement: BpmnElement, id: string | undefined): string => `${plane?.peek<string>('id')}|${planeElement.type}|${id}`;
+    const drawn = new Map(document.diagram.planes().flatMap((plane) => plane.list('planeElement').map((planeElement) => [key(plane, planeElement, planeElement.peek<BpmnElement>('bpmnElement')?.peek<string>('id')), planeElement] as const)));
+    for (const [planeElement, entry] of [...before.byPlaneElement]) {
+      before.byPlaneElement.delete(planeElement);
+      const current = drawn.get(key(entry.bpmnPlane, planeElement, now(entry.id)));
       if (current) {
-        before.byDi.set(current, { ...entry, planeDi: current.parent });
+        before.byPlaneElement.set(current, { ...entry, bpmnPlane: current.parent });
       }
     }
     for (const [id, element] of [...before.els]) {
@@ -89,9 +89,9 @@ export class DrawingPair {
     }
     before.stickies = before.stickies.map((sticky) => ({ ...sticky, process: elementNow(sticky.process), node: elementNow(sticky.node) }));
     const requested = new Set([...expand, ...collapse]);
-    for (const [di, { id, expanded }] of before.byDi) {
+    for (const [planeElement, { id, expanded }] of before.byPlaneElement) {
       if (expanded !== undefined && requested.has(before.currentId(id))) {
-        di.set('isExpanded', expanded);
+        planeElement.set('isExpanded', expanded);
       }
     }
   }

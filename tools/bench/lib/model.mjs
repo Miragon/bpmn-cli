@@ -82,7 +82,7 @@ export async function readModel(xml) {
 
 export const centre = (bounds) => ({ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 });
 
-export function diCoverage(model) {
+export function drawingCoverage(model) {
   let withDi = 0;
   for (const id of model.nodes.keys()) {
     if (model.shapes.has(id)) {

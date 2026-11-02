@@ -1,7 +1,7 @@
 import { Box, Interval, Samples, type BpmnElement } from '../../model/index.js';
 import type { PlaneDrawing } from '../../scoring/index.js';
-import type { DEdge } from './DEdge.js';
-import type { DShape } from './DShape.js';
+import type { PlaneEdge } from './PlaneEdge.js';
+import type { PlaneShape } from './PlaneShape.js';
 
 export interface Spacing {
   gap: number;
@@ -9,15 +9,15 @@ export interface Spacing {
   rowTol: number;
 }
 
-type Ends = Pick<DEdge, 'sourceId' | 'targetId'>;
+type Ends = Pick<PlaneEdge, 'sourceId' | 'targetId'>;
 
 export class Plane {
   static readonly DETACHED_GAP = 10;
 
   private static readonly MAX_PARENT_DEPTH = 20;
 
-  readonly shapes = new Map<string, DShape>();
-  readonly edges = new Map<string, DEdge>();
+  readonly shapes = new Map<string, PlaneShape>();
+  readonly edges = new Map<string, PlaneEdge>();
   dropped: BpmnElement[] = [];
   unbounded?: Map<string, BpmnElement> | undefined;
   deleted?: boolean | undefined;
@@ -26,24 +26,24 @@ export class Plane {
     public id: string,
     public rootId: string,
     public root: BpmnElement,
-    public di?: BpmnElement,
+    public bpmnPlane?: BpmnElement,
   ) {}
 
   static drawingsOf(planes: readonly Plane[]): PlaneDrawing[] {
     return planes.filter((plane) => !plane.deleted).map((plane) => plane.drawing());
   }
 
-  leaves(): DShape[] {
+  leaves(): PlaneShape[] {
     return [...this.shapes.values()].filter((shape) => shape.isLeaf);
   }
 
-  contentBox(filter: (shape: DShape) => boolean = (shape) => shape.isLeaf): Box | undefined {
+  contentBox(filter: (shape: PlaneShape) => boolean = (shape) => shape.isLeaf): Box | undefined {
     return Box.unionAll([...this.shapes.values()].filter(filter).map((shape) => shape.bounds));
   }
 
-  contentOf(subProcessId: string): { shapes: DShape[]; edges: DEdge[] } {
+  contentOf(subProcessId: string): { shapes: PlaneShape[]; edges: PlaneEdge[] } {
     const inside = new Set<string>();
-    const belongs = (shape: DShape): boolean => shape.parentId === subProcessId || (!!shape.parentId && inside.has(shape.parentId)) || (!!shape.hostId && inside.has(shape.hostId));
+    const belongs = (shape: PlaneShape): boolean => shape.parentId === subProcessId || (!!shape.parentId && inside.has(shape.parentId)) || (!!shape.hostId && inside.has(shape.hostId));
     for (let grew = true; grew; ) {
       grew = false;
       for (const shape of this.shapes.values()) {
@@ -53,15 +53,15 @@ export class Plane {
         }
       }
     }
-    const edgeReaches = (edge: DEdge): boolean => (!!edge.sourceId && inside.has(edge.sourceId)) || (!!edge.targetId && inside.has(edge.targetId));
+    const edgeReaches = (edge: PlaneEdge): boolean => (!!edge.sourceId && inside.has(edge.sourceId)) || (!!edge.targetId && inside.has(edge.targetId));
     return { shapes: [...this.shapes.values()].filter((shape) => inside.has(shape.id)), edges: [...this.edges.values()].filter(edgeReaches) };
   }
 
-  boundariesOf(hostId: string): DShape[] {
+  boundariesOf(hostId: string): PlaneShape[] {
     return [...this.shapes.values()].filter((shape) => shape.hostId === hostId);
   }
 
-  outermost(shapes: readonly DShape[]): DShape[] {
+  outermost(shapes: readonly PlaneShape[]): PlaneShape[] {
     const ids = new Set(shapes.map((shape) => shape.id));
     return shapes.filter((shape) => {
       let parentId = shape.parentId;
@@ -75,7 +75,7 @@ export class Plane {
     });
   }
 
-  spacing(endsOf: (edge: DEdge) => Ends | undefined = (edge) => edge): Spacing {
+  spacing(endsOf: (edge: PlaneEdge) => Ends | undefined = (edge) => edge): Spacing {
     const gaps: number[] = [];
     const rows: number[] = [];
     for (const edge of this.edges.values()) {
@@ -89,22 +89,22 @@ export class Plane {
     return { gap, row, rowTol: Math.max(5, row / 4) };
   }
 
-  verticalBand(): DShape | undefined {
-    return [...this.shapes.values()].find((shape) => (shape.kind === 'participant' || shape.kind === 'lane') && shape.di?.peek<boolean>('isHorizontal') === false);
+  verticalBand(): PlaneShape | undefined {
+    return [...this.shapes.values()].find((shape) => (shape.kind === 'participant' || shape.kind === 'lane') && shape.planeElement?.peek<boolean>('isHorizontal') === false);
   }
 
   drawing(): PlaneDrawing {
     return { shapes: [...this.shapes.values()].map((shape) => shape.drawing()), edges: [...this.edges.values()].map((edge) => edge.drawing()), root: this.rootId, unmeasuredIds: [...(this.unbounded?.keys() ?? [])] };
   }
 
-  private spacedPair(edge: DEdge, endsOf: (edge: DEdge) => Ends | undefined): [DShape, DShape] | undefined {
+  private spacedPair(edge: PlaneEdge, endsOf: (edge: PlaneEdge) => Ends | undefined): [PlaneShape, PlaneShape] | undefined {
     const ends = edge.kind === 'sequenceFlow' ? endsOf(edge) : undefined;
     const source = ends?.sourceId ? this.shapes.get(ends.sourceId) : undefined;
     const target = ends?.targetId ? this.shapes.get(ends.targetId) : undefined;
     return source && target && source.kind !== 'boundary' && !source.container && !target.container ? [source, target] : undefined;
   }
 
-  private measurePair([source, target]: [DShape, DShape], gaps: number[], rows: number[]): void {
+  private measurePair([source, target]: [PlaneShape, PlaneShape], gaps: number[], rows: number[]): void {
     const dy = Math.abs(source.bounds.center.y - target.bounds.center.y);
     if (dy <= 5) {
       const gap = target.bounds.x - source.bounds.right;

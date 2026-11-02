@@ -28,7 +28,7 @@ export class BandPainter {
   }
 
   private horizontal(): boolean {
-    return this.shape.di.value('isHorizontal') !== false;
+    return this.shape.planeElement.value('isHorizontal') !== false;
   }
 
   private separator(): string {

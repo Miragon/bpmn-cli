@@ -1,4 +1,4 @@
-import { analyse, bbox, diInvariants, geometry, reportedIds, stability } from './analyse.mjs';
+import { analyse, bbox, drawingInvariants, geometry, reportedIds, stability } from './analyse.mjs';
 import { genStep } from './generate.mjs';
 import { rng } from './rng.mjs';
 
@@ -111,7 +111,7 @@ const hardCount = (measured, hard) => hard.reduce((sum, kind) => sum + (measured
 
 async function checkSuccess(cfg, st, res, ops) {
   const next = await analyse(res.xml);
-  const inv = diInvariants(next);
+  const inv = drawingInvariants(next);
   const violations = inv.filter((invariant) => !st.inv.has(invariant)).map((invariant) => ({ kind: `di:${invariant.split('|')[0]}`, detail: invariant.slice(invariant.indexOf('|') + 1) }));
   const now = await measureSafe(cfg.metrics, res.xml);
   if (now.error) {
@@ -141,7 +141,7 @@ async function determinism(cfg, prevXml, ops, res) {
 async function initialState(xml, metrics) {
   const analysed = await analyse(xml);
   const met = await measureSafe(metrics, xml);
-  return { xml, a: analysed, inv: new Set(diInvariants(analysed)), met: met.error ? { counts: {}, problems: undefined } : met, box0: bbox(analysed) };
+  return { xml, a: analysed, inv: new Set(drawingInvariants(analysed)), met: met.error ? { counts: {}, problems: undefined } : met, box0: bbox(analysed) };
 }
 
 export async function runWalk(cfg) {

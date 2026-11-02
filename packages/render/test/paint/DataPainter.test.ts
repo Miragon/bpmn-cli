@@ -7,7 +7,7 @@ import { CorpusModel } from '../golden/CorpusModel.js';
 describe('DataPainter', () => {
   async function painterOf(id: string, path = 'models/render/gallery.bpmn'): Promise<DataPainter> {
     const shape = await CorpusModel.shape(path, id);
-    const style = new Style(shape.di);
+    const style = new Style(shape.planeElement);
     return new DataPainter(shape, style, new LabelPainter(style.label));
   }
 

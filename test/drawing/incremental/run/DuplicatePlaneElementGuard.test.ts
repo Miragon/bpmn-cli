@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { DuplicateDiGuard } from '../../../../src/drawing/incremental/run/DuplicateDiGuard.js';
+import { DuplicatePlaneElementGuard } from '../../../../src/drawing/incremental/run/DuplicatePlaneElementGuard.js';
 import type { BpmnElement } from '../../../support/ModelValues.js';
 import { Fixtures } from '../../../support/Fixtures.js';
 
-describe('DuplicateDiGuard', () => {
+describe('DuplicatePlaneElementGuard', () => {
   const planeOf = (definitions: BpmnElement): BpmnElement => definitions.list('diagrams')[0]!.peek<BpmnElement>('plane')!;
 
   it('passes a drawing that keeps one DI per element', async () => {
     const { tree } = await Fixtures.read('models/incremental/pool.bpmn');
 
-    expect(() => new DuplicateDiGuard(tree.definitions).assertNone(tree.definitions)).not.toThrow();
+    expect(() => new DuplicatePlaneElementGuard(tree.definitions).assertNone(tree.definitions)).not.toThrow();
   });
 
   it('refuses a second DI element on one plane', async () => {
     const { tree } = await Fixtures.read('models/incremental/pool.bpmn');
-    const guard = new DuplicateDiGuard(tree.definitions);
+    const guard = new DuplicatePlaneElementGuard(tree.definitions);
     const plane = planeOf(tree.definitions);
 
     plane.add('planeElement', tree.build('bpmndi:BPMNShape', { id: 'Twice_di', bpmnElement: tree.require('A') }));
@@ -27,6 +27,6 @@ describe('DuplicateDiGuard', () => {
     const plane = planeOf(tree.definitions);
     plane.add('planeElement', tree.build('bpmndi:BPMNShape', { id: 'Twice_di', bpmnElement: tree.require('A') }));
 
-    expect(() => new DuplicateDiGuard(tree.definitions).assertNone(tree.definitions)).not.toThrow();
+    expect(() => new DuplicatePlaneElementGuard(tree.definitions).assertNone(tree.definitions)).not.toThrow();
   });
 });

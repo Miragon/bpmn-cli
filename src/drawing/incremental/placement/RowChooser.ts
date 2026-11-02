@@ -1,5 +1,5 @@
 import { Box } from '../../../model/index.js';
-import type { DShape, ShapeKind } from '../../plane/DShape.js';
+import type { PlaneShape, ShapeKind } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { ShapeSize } from '../../plane/ShapeSizes.js';
@@ -24,12 +24,12 @@ export interface OpenedRows {
   step: number;
   floor: number;
   basePenalty?: number;
-  anchor?: DShape | undefined;
+  anchor?: PlaneShape | undefined;
   descend?: number;
 }
 
 export interface RowsAbove {
-  anchor: DShape;
+  anchor: PlaneShape;
   start: number;
   step: number;
   penalty: number;
@@ -68,7 +68,7 @@ export class RowChooser {
     return base + RowChooser.OPEN_ROW + RowChooser.OPEN_PER_SHAPE * Math.min(RowChooser.OPEN_MAX_SHAPES, moving) + delta * 0.2;
   }
 
-  freeRows(plane: Plane, frame: DShape | undefined, { left, size, extent, exclude }: RowSearch, start: { centre: number; step: number; count: number; up?: boolean }): FreeRow[] {
+  freeRows(plane: Plane, frame: PlaneShape | undefined, { left, size, extent, exclude }: RowSearch, start: { centre: number; step: number; count: number; up?: boolean }): FreeRow[] {
     const { width, height } = size;
     const { centre: startCentre, step, count, up } = start;
     const blockers = this.obstacles.of(plane, frame, exclude);
@@ -88,7 +88,7 @@ export class RowChooser {
     return rows;
   }
 
-  cheapest(id: string, plane: Plane, from: DShape, kind: ShapeKind, cands: Cand[]): Cand {
+  cheapest(id: string, plane: Plane, from: PlaneShape, kind: ShapeKind, cands: Cand[]): Cand {
     const ranked = cands.map((cand) => ({ cand, cost: this.costs.ofCandidate(plane, from, kind, cand) }));
     ranked.sort((first, second) => first.cost - second.cost);
     this.state.heads.set(id, ranked.length);
@@ -96,7 +96,7 @@ export class RowChooser {
     return ranked[chosenIndex]?.cand ?? cands[0]!;
   }
 
-  rowCandidates(plane: Plane, probe: Pick<DShape, 'parentId' | 'poolId'>, frame: DShape | undefined, search: RowSearch, opened: OpenedRows): Cand[] {
+  rowCandidates(plane: Plane, probe: Pick<PlaneShape, 'parentId' | 'poolId'>, frame: PlaneShape | undefined, search: RowSearch, opened: OpenedRows): Cand[] {
     const { left, size, extent, exclude } = search;
     const { first, step, floor, basePenalty = 0, anchor, descend } = opened;
     const rows = this.freeRows(plane, frame, search, { centre: first, step, count: 3 });
@@ -117,7 +117,7 @@ export class RowChooser {
     return [...cands, { x: left, centre: first, size, extent, penalty: RowChooser.openPenalty(basePenalty, RowChooser.movingBelow(plane, insert.line, band), insert.delta), insert }];
   }
 
-  rowsAbove(plane: Plane, probe: Probe, frame: DShape | undefined, search: RowSearch, above: RowsAbove): Cand[] {
+  rowsAbove(plane: Plane, probe: Probe, frame: PlaneShape | undefined, search: RowSearch, above: RowsAbove): Cand[] {
     const { left, size, extent } = search;
     const { start, step, penalty, top } = above;
     const inner = frame ? Frames.interior(frame, RowChooser.FRAME_PAD) : undefined;
@@ -136,7 +136,7 @@ export class RowChooser {
     return cands;
   }
 
-  rowInLane(plane: Plane, lane: DShape, { left, size, exclude }: Pick<RowSearch, 'left' | 'size' | 'exclude'>, prefer: readonly number[]): number {
+  rowInLane(plane: Plane, lane: PlaneShape, { left, size, exclude }: Pick<RowSearch, 'left' | 'size' | 'exclude'>, prefer: readonly number[]): number {
     const { width, height } = size;
     const { rowTol, row } = this.state.spacingFor(plane);
     const blockers = this.obstacles.of(plane, lane, exclude);
@@ -155,7 +155,7 @@ export class RowChooser {
     return Math.round((below ?? inner.y) + Math.max(30, row - 80) + height / 2);
   }
 
-  intoOwnLane(plane: Plane, probe: Probe, left: number, centre: number, size: ShapeSize, prefer: readonly number[], anchor?: DShape): number {
+  intoOwnLane(plane: Plane, probe: Probe, left: number, centre: number, size: ShapeSize, prefer: readonly number[], anchor?: PlaneShape): number {
     const lane = probe.laneId ? plane.shapes.get(probe.laneId) : undefined;
     if (!lane) {
       return centre;
@@ -168,7 +168,7 @@ export class RowChooser {
     return this.rowInLane(plane, lane, { left, size, exclude: new Set([probe.id]) }, prefer);
   }
 
-  private belowCandidate(plane: Plane, frame: DShape | undefined, { left, size, extent }: RowSearch, band: SpaceBand, at: { row: FreeRow; rowIndex: number; first: number; step: number; basePenalty: number }): Cand {
+  private belowCandidate(plane: Plane, frame: PlaneShape | undefined, { left, size, extent }: RowSearch, band: SpaceBand, at: { row: FreeRow; rowIndex: number; first: number; step: number; basePenalty: number }): Cand {
     const { row, rowIndex, first, step, basePenalty } = at;
     const cand: Cand = { x: left, centre: row.centre, size, extent, penalty: basePenalty + RowChooser.RANK_PENALTY * rowIndex + (row.onLine ? RowChooser.ON_LINE_PENALTY : 0) + Math.max(0, (row.centre - first) / step - 1) * RowChooser.ROW_STEP_PENALTY };
     if (!frame) {
@@ -185,7 +185,7 @@ export class RowChooser {
     return cand;
   }
 
-  private openedAtFrameTop(plane: Plane, probe: Probe, frame: DShape, { left, size, extent }: RowSearch, { row, inner, above, linePenalty }: { row: FreeRow; inner: Box; above: RowsAbove; linePenalty: number }): Cand {
+  private openedAtFrameTop(plane: Plane, probe: Probe, frame: PlaneShape, { left, size, extent }: RowSearch, { row, inner, above, linePenalty }: { row: FreeRow; inner: Box; above: RowsAbove; linePenalty: number }): Cand {
     const { anchor, penalty, top } = above;
     const delta = Math.ceil(inner.y - (row.centre - size.height / 2));
     const band = this.obstacles.spaceBand(plane, probe, anchor);
@@ -216,7 +216,7 @@ export class RowChooser {
     return shape?.isLeaf && shape.bounds.y > floor + 0.5 ? [shape.bounds.y] : [];
   }
 
-  private laneRows(plane: Plane, lane: DShape, tolerance: number, exclude: ReadonlySet<string>): number[] {
+  private laneRows(plane: Plane, lane: PlaneShape, tolerance: number, exclude: ReadonlySet<string>): number[] {
     const centres = [...plane.shapes.values()].filter((shape) => shape.isLeaf && shape.kind !== 'boundary' && shape.laneId === lane.id && !exclude.has(shape.id)).map((shape) => shape.bounds.center.y).sort((first, second) => first - second);
     const clusters: Array<{ centre: number; count: number }> = [];
     for (const centre of centres) {

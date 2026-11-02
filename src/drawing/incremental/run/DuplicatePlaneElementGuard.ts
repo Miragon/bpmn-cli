@@ -1,10 +1,10 @@
 import type { BpmnElement } from '../../../model/index.js';
 
-export class DuplicateDiGuard {
+export class DuplicatePlaneElementGuard {
   private readonly before: Map<string, number>;
 
   constructor(definitions: BpmnElement) {
-    this.before = DuplicateDiGuard.counts(definitions);
+    this.before = DuplicatePlaneElementGuard.counts(definitions);
   }
 
   private static counts(definitions: BpmnElement): Map<string, number> {
@@ -23,7 +23,7 @@ export class DuplicateDiGuard {
   }
 
   assertNone(definitions: BpmnElement): void {
-    for (const [key, count] of DuplicateDiGuard.counts(definitions)) {
+    for (const [key, count] of DuplicatePlaneElementGuard.counts(definitions)) {
       if (count > Math.max(1, this.before.get(key) ?? 0)) {
         const [plane, id] = key.split('|');
         throw new Error(`internal: the incremental layout drew ${id} twice on ${plane}`);

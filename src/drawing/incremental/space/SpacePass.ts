@@ -1,6 +1,6 @@
 import type { Box } from '../../../model/index.js';
 import { BoxAxis, type Axis, type Band } from '../../plane/BoxAxis.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 
@@ -23,7 +23,7 @@ export interface SpaceResult {
 export type Decision = 'move' | 'resize' | 'stay';
 
 export interface FrameScope {
-  frame: DShape;
+  frame: PlaneShape;
   ancestors: Set<string>;
   grow: Set<string>;
 }
@@ -75,7 +75,7 @@ export class SpacePass implements PassParts {
     return new SpacePass({ ...this, band, scope });
   }
 
-  boxOf({ id }: Pick<DShape, 'id'>): Box {
+  boxOf({ id }: Pick<PlaneShape, 'id'>): Box {
     return this.before.get(id)!;
   }
 
@@ -84,11 +84,11 @@ export class SpacePass implements PassParts {
     return (this.axis === 'x' ? center.x : center.y) >= this.line;
   }
 
-  pushed(shape: DShape): boolean {
+  pushed(shape: PlaneShape): boolean {
     return !this.push || shape.kind === 'participant' || shape.kind === 'lane' || this.push.has(shape.id);
   }
 
-  rigid(candidate: DShape): boolean {
+  rigid(candidate: PlaneShape): boolean {
     if (!this.held || candidate.kind !== 'subProcess' || !candidate.container || this.held.has(candidate.id) || this.keep.has(candidate.id)) {
       return false;
     }
@@ -96,8 +96,8 @@ export class SpacePass implements PassParts {
     return this.along.near(box) < this.line && this.along.far(box) > this.line && this.along.overlapsBand(box, this.band);
   }
 
-  rigidAround(shape: DShape): DShape | undefined {
-    let outermost: DShape | undefined;
+  rigidAround(shape: PlaneShape): PlaneShape | undefined {
+    let outermost: PlaneShape | undefined;
     let current = shape.parentId ? this.plane.shapes.get(shape.parentId) : undefined;
     for (let depth = 0; current && depth < SpacePass.MAX_DEPTH; depth++) {
       if (this.rigid(current)) {
@@ -108,8 +108,8 @@ export class SpacePass implements PassParts {
     return outermost;
   }
 
-  frameChain(shape: DShape): DShape[] {
-    const chain: DShape[] = [];
+  frameChain(shape: PlaneShape): PlaneShape[] {
+    const chain: PlaneShape[] = [];
     let current = shape.hostId ? (this.plane.shapes.get(shape.hostId) ?? shape) : shape;
     if (current !== shape) {
       chain.push(current);
@@ -126,7 +126,7 @@ export class SpacePass implements PassParts {
     return chain;
   }
 
-  insideFrame(shape: DShape): boolean {
+  insideFrame(shape: PlaneShape): boolean {
     const scope = this.scope!;
     if (this.frameChain(shape).includes(scope.frame)) {
       return true;

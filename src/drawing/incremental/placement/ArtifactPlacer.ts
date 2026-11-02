@@ -1,5 +1,5 @@
 import { Box, type BpmnElement } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { ShapeSize } from '../../plane/ShapeSizes.js';
@@ -47,7 +47,7 @@ export class ArtifactPlacer {
   placeArtifact(plane: Plane, id: string): void {
     const element = this.state.semantics.byId.get(id)!;
     const size = this.state.sizeFor(id);
-    const anchor = this.anchorsOf(id).map((anchorId) => plane.shapes.get(anchorId)).find((shape): shape is DShape => !!shape);
+    const anchor = this.anchorsOf(id).map((anchorId) => plane.shapes.get(anchorId)).find((shape): shape is PlaneShape => !!shape);
     if (!anchor) {
       this.neighbours.placeUnconnected(plane, id);
       return;
@@ -59,7 +59,7 @@ export class ArtifactPlacer {
     this.state.commit(plane, this.state.newShape(plane, id, new Box(Math.round(x), Math.round(y), width, height)));
   }
 
-  private bestSpot(plane: Plane, frame: DShape | undefined, exclude: ReadonlySet<string>, spots: readonly Box[]): Box {
+  private bestSpot(plane: Plane, frame: PlaneShape | undefined, exclude: ReadonlySet<string>, spots: readonly Box[]): Box {
     const blockers = this.obstacles.of(plane, frame, exclude);
     const lines = this.obstacles.edgeBoxes(plane);
     const inner = frame ? Frames.interior(frame, 5) : undefined;

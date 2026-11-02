@@ -1,5 +1,5 @@
 import { Box, Point, Polyline, Segment } from '../../../model/index.js';
-import type { DShape, ShapeKind } from '../../plane/DShape.js';
+import type { PlaneShape, ShapeKind } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { Semantics } from '../../plane/Semantics.js';
 import { ShapeSides } from '../../plane/ShapeSides.js';
@@ -25,7 +25,7 @@ export interface Cand {
   top?: Box;
 }
 
-type RowSource = Pick<DShape, 'id' | 'hostId' | 'kind' | 'parentId' | 'bounds'>;
+type RowSource = Pick<PlaneShape, 'id' | 'hostId' | 'kind' | 'parentId' | 'bounds'>;
 
 interface PricedLine {
   segments: Segment[];
@@ -66,7 +66,7 @@ export class RowCosts {
     return segments.reduce((length, { start, end }) => length + Math.abs(end.x - start.x) + Math.abs(end.y - start.y), 0);
   }
 
-  ofCandidate(plane: Plane, from: DShape, kind: ShapeKind, cand: Cand): number {
+  ofCandidate(plane: Plane, from: PlaneShape, kind: ShapeKind, cand: Cand): number {
     const box = new Box(cand.x, cand.centre - cand.size.height / 2, cand.size.width, cand.size.height);
     const shift = cand.insert ?? cand.grow;
     const { hostId, parentId } = from;

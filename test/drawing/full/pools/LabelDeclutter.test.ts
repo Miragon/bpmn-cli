@@ -7,15 +7,15 @@ describe('LabelDeclutter', () => {
   function shape(document: BpmnDocument, element: BpmnElement, box: Box, label?: Box, extra: Record<string, unknown> = {}): BpmnElement {
     const { tree } = document;
     const bounds = (at: Box): BpmnElement => tree.build('dc:Bounds', { x: at.x, y: at.y, width: at.width, height: at.height });
-    const di = tree.build('bpmndi:BPMNShape', { bpmnElement: element, bounds: bounds(box), ...extra });
+    const planeElement = tree.build('bpmndi:BPMNShape', { bpmnElement: element, bounds: bounds(box), ...extra });
     if (label) {
-      di.set('label', tree.build('bpmndi:BPMNLabel', { bounds: bounds(label) }));
+      planeElement.set('label', tree.build('bpmndi:BPMNLabel', { bounds: bounds(label) }));
     }
-    return di;
+    return planeElement;
   }
 
-  function labelOf(di: BpmnElement): Box {
-    const bounds = di.peek<BpmnElement>('label')!.peek<BpmnElement>('bounds')!;
+  function labelOf(planeElement: BpmnElement): Box {
+    const bounds = planeElement.peek<BpmnElement>('label')!.peek<BpmnElement>('bounds')!;
     return new Box(bounds.get<number>('x'), bounds.get<number>('y'), bounds.get<number>('width'), bounds.get<number>('height'));
   }
 

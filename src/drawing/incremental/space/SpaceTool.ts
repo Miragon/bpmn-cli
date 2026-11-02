@@ -1,7 +1,7 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
 import type { Box } from '../../../model/index.js';
 import { BoxAxis, type Axis } from '../../plane/BoxAxis.js';
-import { DShape } from '../../plane/DShape.js';
+import { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { FrameSpace } from './FrameSpace.js';
@@ -37,7 +37,7 @@ export class SpaceTool {
       return [];
     }
     const moved = [id];
-    const move = (moving: DShape): void => moving.translate(dx, dy);
+    const move = (moving: PlaneShape): void => moving.translate(dx, dy);
     move(shape);
     for (const boundary of this.plane.boundariesOf(id)) {
       move(boundary);
@@ -75,11 +75,11 @@ export class SpaceTool {
     return FrameSpace.applied(pass.scoped(along.bandOf(request.within ?? frame?.bounds)));
   }
 
-  unitBox(shape: DShape): Box {
+  unitBox(shape: PlaneShape): Box {
     return this.plane.boundariesOf(shape.id).reduce((unit, boundary) => unit.union(boundary.bounds), shape.bounds.copy());
   }
 
-  borderPad(frame: DShape, box: Box, axis: Axis): number {
+  borderPad(frame: PlaneShape, box: Box, axis: Axis): number {
     let pad = 0;
     const room = SpaceTool.BOUNDARY_ROOM;
     for (const { bounds } of this.plane.boundariesOf(frame.id)) {
@@ -92,13 +92,13 @@ export class SpaceTool {
     return pad;
   }
 
-  fitInFrame(id: string, pad = 15, frameOf: (shape: DShape) => DShape | undefined = (shape) => new Frames(this.plane).of(shape), keepAlso: Iterable<string> = []): SpaceResult {
+  fitInFrame(id: string, pad = 15, frameOf: (shape: PlaneShape) => PlaneShape | undefined = (shape) => new Frames(this.plane).of(shape), keepAlso: Iterable<string> = []): SpaceResult {
     const into: SpaceResult = { moved: new Set(), resized: new Set() };
     let inner = this.plane.shapes.get(id);
     const content = inner?.kind === 'subProcess' && inner.container ? this.plane.contentOf(id).shapes.map((child) => child.id) : [];
     const keep = new Set([id, ...this.plane.boundariesOf(id).map((boundary) => boundary.id), ...content, ...keepAlso]);
     for (let round = 0; inner && round < SpaceTool.MAX_FRAMES; round++) {
-      const frame: DShape | undefined = this.frameAround(inner, frameOf, round > 0);
+      const frame: PlaneShape | undefined = this.frameAround(inner, frameOf, round > 0);
       if (!frame) {
         break;
       }
@@ -108,7 +108,7 @@ export class SpaceTool {
     return into;
   }
 
-  roomBelowTitle(sub: DShape, label: Box, anchor: string): { delta: number; res: SpaceResult } | undefined {
+  roomBelowTitle(sub: PlaneShape, label: Box, anchor: string): { delta: number; res: SpaceResult } | undefined {
     const delta = Math.ceil(Frames.labelArea(sub).y - label.y);
     if (delta <= 0) {
       return undefined;
@@ -134,7 +134,7 @@ export class SpaceTool {
     return holders;
   }
 
-  private growthScope(frame: DShape, axis: Axis): { within?: Box; frame?: string } {
+  private growthScope(frame: PlaneShape, axis: Axis): { within?: Box; frame?: string } {
     if (frame.kind === 'subProcess' && frame.container) {
       return { frame: frame.id };
     }
@@ -147,15 +147,15 @@ export class SpaceTool {
     return SpaceTool.withinOf(frame.poolId ? this.plane.shapes.get(frame.poolId)?.bounds : undefined);
   }
 
-  private labelOrDefault(shape: DShape): Box | undefined {
+  private labelOrDefault(shape: PlaneShape): Box | undefined {
     const name = shape.el.peek<string>('name')?.trim();
-    if (!name || shape.kind === 'boundary' || !DShape.hasExternalLabel(shape.kind)) {
+    if (!name || shape.kind === 'boundary' || !PlaneShape.hasExternalLabel(shape.kind)) {
       return undefined;
     }
-    return shape.label ?? shape.labelAt(TextMetrics.labelSize(name), DShape.defaultLabelSide(shape.kind));
+    return shape.label ?? shape.labelAt(TextMetrics.labelSize(name), PlaneShape.defaultLabelSide(shape.kind));
   }
 
-  private frameAround(inner: DShape, frameOf: (shape: DShape) => DShape | undefined, holdingCentre: boolean): DShape | undefined {
+  private frameAround(inner: PlaneShape, frameOf: (shape: PlaneShape) => PlaneShape | undefined, holdingCentre: boolean): PlaneShape | undefined {
     let frame = frameOf(inner);
     while (frame && holdingCentre && !frame.bounds.contains(inner.bounds.center)) {
       frame = frameOf(frame);
@@ -163,7 +163,7 @@ export class SpaceTool {
     return frame;
   }
 
-  private growFrame(frame: DShape, inner: DShape, label: Box | undefined, fit: Fit): void {
+  private growFrame(frame: PlaneShape, inner: PlaneShape, label: Box | undefined, fit: Fit): void {
     const box = inner.kind === 'participant' || inner.kind === 'lane' ? inner.bounds : this.unitBox(inner);
     const framePad = inner.kind === 'lane' ? 0 : fit.pad;
     const reach = (axis: Axis): number => {
@@ -174,7 +174,7 @@ export class SpaceTool {
     this.growTowards(frame, 'y', reach('y') - frame.bounds.bottom, fit);
   }
 
-  private growTowards(frame: DShape, axis: Axis, over: number, { id, keep, into }: Fit): void {
+  private growTowards(frame: PlaneShape, axis: Axis, over: number, { id, keep, into }: Fit): void {
     if (over <= 0.5) {
       return;
     }

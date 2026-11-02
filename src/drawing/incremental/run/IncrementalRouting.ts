@@ -1,6 +1,6 @@
 import type { BpmnElement, Point } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import type { Drawing } from '../Drawing.js';
@@ -10,7 +10,7 @@ import type { LayoutRun } from './LayoutRun.js';
 export class IncrementalRouting {
   constructor(
     private readonly run: LayoutRun,
-    private readonly edgesBefore: ReadonlyMap<DEdge, EdgeBefore>,
+    private readonly edgesBefore: ReadonlyMap<PlaneEdge, EdgeBefore>,
   ) {}
 
   routeNow(plane: Plane, id: string): void {
@@ -29,7 +29,7 @@ export class IncrementalRouting {
         this.routeKept(plane, edge);
       }
     }
-    if (!shape.label && DShape.hasExternalLabel(shape.kind) && element.peek<string>('name')) {
+    if (!shape.label && PlaneShape.hasExternalLabel(shape.kind) && element.peek<string>('name')) {
       drawing.labels.placeShapeLabel(shape);
     }
     this.run.place.spacing.delete(plane);
@@ -103,7 +103,7 @@ export class IncrementalRouting {
     this.routeKept(plane, edge);
   }
 
-  private isDrawnElsewhere(plane: Plane, id: string, edge: DEdge): boolean {
+  private isDrawnElsewhere(plane: Plane, id: string, edge: PlaneEdge): boolean {
     const { sourceId, targetId } = edge;
     if (edge.kind === 'messageFlow' || edge.points.length < 2 || sourceId === id || targetId === id || !sourceId || !targetId) {
       return false;
@@ -112,12 +112,12 @@ export class IncrementalRouting {
     return ends.sourceId === sourceId && ends.targetId === targetId && plane.shapes.has(sourceId) && plane.shapes.has(targetId);
   }
 
-  private brokeWhenPlaced({ routes }: Drawing, id: string, edge: DEdge, detached: boolean): boolean {
+  private brokeWhenPlaced({ routes }: Drawing, id: string, edge: PlaneEdge, detached: boolean): boolean {
     const was = this.run.routedNow.get(edge.id) ?? this.edgesBefore.get(edge);
     return !!was && (routes.brokenEdge(edge, was, { detached }) || (this.run.place.continued.has(id) && routes.grazes(edge, [id])) || routes.touchesFresh(edge));
   }
 
-  private routeKept(plane: Plane, edge: DEdge): void {
+  private routeKept(plane: Plane, edge: PlaneEdge): void {
     const drawing = this.run.drawing(plane);
     if (drawing.reroute(edge)) {
       this.run.routedNow.set(edge.id, drawing.routes.edgeBefore(edge));

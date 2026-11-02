@@ -1,7 +1,7 @@
 import { Box, DiagramIndex, Point } from '../../../model/index.js';
 import type { Block } from '../../full/FullLayout.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import type { LayoutRun } from '../run/LayoutRun.js';
@@ -21,7 +21,7 @@ export class BlockAdopter {
     block.planes.forEach((blockPlane) => this.adoptPlane(blockPlane));
   }
 
-  private adoptShape(shape: DShape, target: Plane, dx: number, dy: number): void {
+  private adoptShape(shape: PlaneShape, target: Plane, dx: number, dy: number): void {
     if (!this.run.semantics.byId.has(shape.id) || target.shapes.has(shape.id)) {
       return;
     }
@@ -48,7 +48,7 @@ export class BlockAdopter {
     }
   }
 
-  private adoptEdge(edge: DEdge, target: Plane, dx: number, dy: number): void {
+  private adoptEdge(edge: PlaneEdge, target: Plane, dx: number, dy: number): void {
     const element = this.run.semantics.byId.get(edge.id);
     if (!element || target.edges.has(edge.id)) {
       return;

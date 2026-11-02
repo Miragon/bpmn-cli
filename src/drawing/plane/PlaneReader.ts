@@ -1,10 +1,10 @@
 import { DiagramIndex, Point, type Box, type BpmnElement } from '../../model/index.js';
-import { DEdge, type EdgeKind } from './DEdge.js';
-import { DShape, type ShapeKind } from './DShape.js';
+import { PlaneEdge, type EdgeKind } from './PlaneEdge.js';
+import { PlaneShape, type ShapeKind } from './PlaneShape.js';
 import { Plane } from './Plane.js';
 import { Semantics } from './Semantics.js';
 
-export type EdgeEnds = Pick<DEdge, 'sourceId' | 'targetId'>;
+export type EdgeEnds = Pick<PlaneEdge, 'sourceId' | 'targetId'>;
 
 export class PlaneReader {
   private static readonly SHAPE_KINDS: ReadonlyArray<[string, ShapeKind]> = [
@@ -54,9 +54,9 @@ export class PlaneReader {
     return { sourceId: idOf(element.peek<BpmnElement>('sourceRef')), targetId: idOf(element.peek<BpmnElement>('targetRef')) };
   }
 
-  static shapeOf(semantics: Semantics, id: string, element: BpmnElement, bounds: Box, expanded: boolean | undefined): DShape {
+  static shapeOf(semantics: Semantics, id: string, element: BpmnElement, bounds: Box, expanded: boolean | undefined): PlaneShape {
     const kind = PlaneReader.shapeKind(element);
-    const shape = new DShape(id, element, bounds, kind, kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true));
+    const shape = new PlaneShape(id, element, bounds, kind, kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true));
     shape.expanded = expanded;
     if (kind === 'boundary') {
       shape.hostId = element.peek<BpmnElement>('attachedToRef')?.peek<string>('id');
@@ -66,16 +66,16 @@ export class PlaneReader {
     return shape;
   }
 
-  static edgeOf(element: BpmnElement, id: string, points: Point[] = []): DEdge {
-    const edge = new DEdge(id, element, PlaneReader.edgeKind(element), points);
+  static edgeOf(element: BpmnElement, id: string, points: Point[] = []): PlaneEdge {
+    const edge = new PlaneEdge(id, element, PlaneReader.edgeKind(element), points);
     const { sourceId, targetId } = PlaneReader.edgeEnds(element);
     edge.sourceId = sourceId;
     edge.targetId = targetId;
     return edge;
   }
 
-  private static labelBoxOf(di: BpmnElement): Box | undefined {
-    return DiagramIndex.boxOf(di.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds'));
+  private static labelBoxOf(planeElement: BpmnElement): Box | undefined {
+    return DiagramIndex.boxOf(planeElement.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds'));
   }
 
   planes(): Plane[] {
@@ -83,52 +83,52 @@ export class PlaneReader {
   }
 
   plane(diagram: BpmnElement): Plane | undefined {
-    const di = diagram.peek<BpmnElement>('plane');
-    const root = di?.peek<BpmnElement>('bpmnElement') ?? (di ? DiagramIndex.displayRoot(diagram.parent) : undefined);
+    const bpmnPlane = diagram.peek<BpmnElement>('plane');
+    const root = bpmnPlane?.peek<BpmnElement>('bpmnElement') ?? (bpmnPlane ? DiagramIndex.displayRoot(diagram.parent) : undefined);
     const rootId = root?.peek<string>('id');
-    if (!di || !root || !rootId) {
+    if (!bpmnPlane || !root || !rootId) {
       return undefined;
     }
-    const plane = new Plane(di.peek<string>('id') ?? `BPMNPlane_${rootId}`, rootId, root, di);
-    for (const planeElement of di.list('planeElement')) {
+    const plane = new Plane(bpmnPlane.peek<string>('id') ?? `BPMNPlane_${rootId}`, rootId, root, bpmnPlane);
+    for (const planeElement of bpmnPlane.list('planeElement')) {
       this.readInto(plane, planeElement);
     }
     this.linkParents(plane);
     return plane;
   }
 
-  private readInto(plane: Plane, di: BpmnElement): void {
-    const element = di.peek<BpmnElement>('bpmnElement');
+  private readInto(plane: Plane, planeElement: BpmnElement): void {
+    const element = planeElement.peek<BpmnElement>('bpmnElement');
     const id = element?.peek<string>('id');
     if (!element || !id) {
       return;
     }
-    if (di.is('bpmndi:BPMNShape')) {
-      this.readShape(plane, di, element, id);
-    } else if (di.is('bpmndi:BPMNEdge')) {
-      plane.edges.set(id, this.readEdge(di, element, id));
+    if (planeElement.is('bpmndi:BPMNShape')) {
+      this.readShape(plane, planeElement, element, id);
+    } else if (planeElement.is('bpmndi:BPMNEdge')) {
+      plane.edges.set(id, this.readEdge(planeElement, element, id));
     }
   }
 
-  private readShape(plane: Plane, di: BpmnElement, element: BpmnElement, id: string): void {
-    const bounds = DiagramIndex.boxOf(di.peek<BpmnElement>('bounds'));
+  private readShape(plane: Plane, planeElement: BpmnElement, element: BpmnElement, id: string): void {
+    const bounds = DiagramIndex.boxOf(planeElement.peek<BpmnElement>('bounds'));
     if (!bounds) {
       plane.unbounded ??= new Map();
-      plane.unbounded.set(id, di);
+      plane.unbounded.set(id, planeElement);
       return;
     }
-    const expanded = DiagramIndex.isSubProcess(element) ? di.peek<boolean>('isExpanded') === true : undefined;
+    const expanded = DiagramIndex.isSubProcess(element) ? planeElement.peek<boolean>('isExpanded') === true : undefined;
     const shape = PlaneReader.shapeOf(this.semantics, id, element, bounds, expanded);
-    shape.di = di;
-    shape.label = PlaneReader.labelBoxOf(di);
+    shape.planeElement = planeElement;
+    shape.label = PlaneReader.labelBoxOf(planeElement);
     plane.shapes.set(id, shape);
   }
 
-  private readEdge(di: BpmnElement, element: BpmnElement, id: string): DEdge {
-    const points = di.list('waypoint').map((waypoint) => new Point(waypoint.peek<number>('x') ?? 0, waypoint.peek<number>('y') ?? 0));
+  private readEdge(planeElement: BpmnElement, element: BpmnElement, id: string): PlaneEdge {
+    const points = planeElement.list('waypoint').map((waypoint) => new Point(waypoint.peek<number>('x') ?? 0, waypoint.peek<number>('y') ?? 0));
     const edge = PlaneReader.edgeOf(element, id, points);
-    edge.di = di;
-    edge.label = PlaneReader.labelBoxOf(di);
+    edge.planeElement = planeElement;
+    edge.label = PlaneReader.labelBoxOf(planeElement);
     return edge;
   }
 

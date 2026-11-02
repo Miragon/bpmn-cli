@@ -1,7 +1,7 @@
 import { Box, type Point } from '../../../model/index.js';
 import { BoxAxis, type Axis } from '../../plane/BoxAxis.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 
 export interface Strip {
@@ -12,7 +12,7 @@ export interface Strip {
 
 export interface Occupancy {
   skip: ReadonlySet<string>;
-  solid?: ((shape: DShape) => boolean) | undefined;
+  solid?: ((shape: PlaneShape) => boolean) | undefined;
   loose?: ReadonlySet<string> | undefined;
 }
 
@@ -36,7 +36,7 @@ export class PlaneStrips {
 
   constructor(private readonly plane: Plane) {}
 
-  private static isExpanded(shape: DShape): boolean {
+  private static isExpanded(shape: PlaneShape): boolean {
     return shape.kind === 'subProcess' && shape.container;
   }
 
@@ -77,7 +77,7 @@ export class PlaneStrips {
     return axis === 'x' ? from.y === to.y : from.x === to.x;
   }
 
-  private static takeEdge(axis: Axis, { label, points }: DEdge, take: (box: Box, margin?: number) => void): void {
+  private static takeEdge(axis: Axis, { label, points }: PlaneEdge, take: (box: Box, margin?: number) => void): void {
     if (label) {
       take(label);
     }

@@ -1,4 +1,4 @@
-import { DiIdMemo, type BpmnDocument, type LayoutRequests } from '../../model/index.js';
+import { DrawingIdMemory, type BpmnDocument, type LayoutRequests } from '../../model/index.js';
 import { DrawnElementIds, type GivenId } from '../diagram/DrawnElementIds.js';
 import type { RedrawnGroups } from '../groups/GroupRedraw.js';
 import { Groups } from '../groups/Groups.js';
@@ -50,12 +50,12 @@ export class FullLayout {
     const givenIds = new DrawnElementIds(document).give();
     tree.invalidate();
     const expanded = diagram.expandedIds(expansions.expansion());
-    const diIds = DiIdMemo.remember(definitions);
+    const drawingIds = DrawingIdMemory.remember(definitions);
     const before = new Groups(tree);
     const groups = [...before.remembered(), ...before.undrawn()];
     const { warnings } = new CleanEngine(document, expanded, Groups.membersOf(groups)).run();
     const redrawn = new Groups(tree).redraw(groups);
-    diIds.restore(definitions);
+    drawingIds.restore(definitions);
     return { warnings: warnings.map((warning) => ({ ...warning, relatedElementIds: [] })), expanded: [...expanded], givenIds, notes: FullLayout.groupNotes(redrawn) };
   }
 }

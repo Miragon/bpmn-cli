@@ -1,6 +1,6 @@
 import { DocumentReader, DocumentWriter, type BpmnDocument, type BpmnElement, type Box, type LayoutRequests } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import { Semantics } from '../../plane/Semantics.js';
@@ -8,8 +8,8 @@ import { CleanEngine } from './CleanEngine.js';
 
 export interface Block {
   box: Box;
-  shapes: DShape[];
-  edges: DEdge[];
+  shapes: PlaneShape[];
+  edges: PlaneEdge[];
   planes: Plane[];
 }
 

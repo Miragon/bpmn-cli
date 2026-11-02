@@ -7,7 +7,7 @@ export type LabelSide = 'above' | 'below' | 'left' | 'right';
 
 type LabelBox = Pick<Box, 'width' | 'height'>;
 
-export class DShape {
+export class PlaneShape {
   static readonly LABEL_SIDES: Readonly<Record<string, readonly LabelSide[]>> = {
     event: ['below', 'above', 'right', 'left'],
     boundary: ['below', 'right', 'left', 'above'],
@@ -20,7 +20,7 @@ export class DShape {
   private static readonly BESIDE_STEP = 10;
   private static readonly BORDER_TOLERANCE = 2;
 
-  di?: BpmnElement | undefined;
+  planeElement?: BpmnElement | undefined;
   expanded?: boolean | undefined;
   label?: Box | undefined;
   hostId?: string | undefined;
@@ -37,7 +37,7 @@ export class DShape {
   ) {}
 
   static defaultLabelSide(kind: ShapeKind): LabelSide {
-    return DShape.LABEL_SIDES[kind]?.[0] ?? 'below';
+    return PlaneShape.LABEL_SIDES[kind]?.[0] ?? 'below';
   }
 
   static hasExternalLabel(kind: ShapeKind): boolean {
@@ -49,9 +49,9 @@ export class DShape {
     return current && Box.same(current, box) ? current : new Box(Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height));
   }
 
-  static storedLabel(di: BpmnElement | undefined, label: Box | undefined): Box | undefined {
-    const bounds = di?.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds');
-    return label ? DShape.storedBox(bounds, label) : DiagramIndex.boxOf(bounds);
+  static storedLabel(planeElement: BpmnElement | undefined, label: Box | undefined): Box | undefined {
+    const bounds = planeElement?.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds');
+    return label ? PlaneShape.storedBox(bounds, label) : DiagramIndex.boxOf(bounds);
   }
 
   get isLeaf(): boolean {
@@ -66,8 +66,8 @@ export class DShape {
   }
 
   drawing(): ShapeDrawing {
-    const { id, el, di, bounds, expanded, label } = this;
-    return { id, el, expanded, bounds: DShape.storedBox(di?.peek<BpmnElement>('bounds'), bounds), label: DShape.storedLabel(di, label) };
+    const { id, el, planeElement, bounds, expanded, label } = this;
+    return { id, el, expanded, bounds: PlaneShape.storedBox(planeElement?.peek<BpmnElement>('bounds'), bounds), label: PlaneShape.storedLabel(planeElement, label) };
   }
 
   translate(dx: number, dy: number): void {
@@ -75,16 +75,16 @@ export class DShape {
     this.label?.translate(dx, dy);
   }
 
-  labelAt(size: LabelBox, side: LabelSide, host?: DShape, step = 0): Box {
+  labelAt(size: LabelBox, side: LabelSide, host?: PlaneShape, step = 0): Box {
     const { bounds } = this;
     const { width, height } = size;
-    const offset = DShape.LABEL_GAP + step * (height + DShape.STACK_GAP);
+    const offset = PlaneShape.LABEL_GAP + step * (height + PlaneShape.STACK_GAP);
     if (side === 'below' && this.kind === 'boundary' && host) {
-      return new Box(Math.round(bounds.right + DShape.STACK_GAP), Math.round(host.bounds.bottom + 2 + step * (height + DShape.STACK_GAP)), width, height);
+      return new Box(Math.round(bounds.right + PlaneShape.STACK_GAP), Math.round(host.bounds.bottom + 2 + step * (height + PlaneShape.STACK_GAP)), width, height);
     }
     const centred = Math.round(bounds.center.x - width / 2);
     const middled = Math.round(bounds.center.y - height / 2);
-    const beside = DShape.LABEL_GAP + step * DShape.BESIDE_STEP;
+    const beside = PlaneShape.LABEL_GAP + step * PlaneShape.BESIDE_STEP;
     switch (side) {
       case 'below':
         return new Box(centred, Math.round(bounds.bottom + offset), width, height);
@@ -99,7 +99,7 @@ export class DShape {
 
   labelSide(host?: Box): LabelSide | 'inside' | undefined {
     const { label, bounds } = this;
-    const tolerance = DShape.BORDER_TOLERANCE;
+    const tolerance = PlaneShape.BORDER_TOLERANCE;
     if (!label) {
       return undefined;
     }

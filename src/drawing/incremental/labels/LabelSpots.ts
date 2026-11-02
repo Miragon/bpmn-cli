@@ -1,6 +1,6 @@
 import { Box, Polyline, type Point } from '../../../model/index.js';
 import { DrawnPlane } from '../../../scoring/index.js';
-import type { DShape, LabelSide } from '../../plane/DShape.js';
+import type { PlaneShape, LabelSide } from '../../plane/PlaneShape.js';
 import { ShapeSides } from '../../plane/ShapeSides.js';
 
 export interface LabelSize {
@@ -19,7 +19,7 @@ export class LabelSpots {
     return new Box(Math.round(left), Math.round(top), this.size.width, this.size.height);
   }
 
-  aroundSide(shape: DShape, side: LabelSide, name: string | undefined, host?: DShape): Box[] {
+  aroundSide(shape: PlaneShape, side: LabelSide, name: string | undefined, host?: PlaneShape): Box[] {
     const { width, height } = this.size;
     const { center } = shape.bounds;
     const over = name ? Math.max(0, DrawnPlane.glyph(shape.bounds, name).width - width) / 2 : 0;

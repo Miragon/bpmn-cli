@@ -1,4 +1,4 @@
-import { type BpmnElement, DiIdStyle, ElementLabels, type IdRequest, IdRequests, IdSlug, IdWords, FlowEnds } from '../../model/index.js';
+import { type BpmnElement, DrawingIdStyle, ElementLabels, type IdRequest, IdRequests, IdSlug, IdWords, FlowEnds } from '../../model/index.js';
 import type { EditSession, FormerEnd } from '../session/EditSession.js';
 
 export class FlowIdFollower {
@@ -96,7 +96,7 @@ export class FlowIdFollower {
   }
 
   private followEdgeId(flow: BpmnElement, old: string, id: string): void {
-    DiIdStyle.followRename(this.edit.document.tree.definitions, flow, old, id, this.edit.document.ids.registry);
+    DrawingIdStyle.followRename(this.edit.document.tree.definitions, flow, old, id, this.edit.document.ids.registry);
     this.edit.document.tree.invalidate();
   }
 

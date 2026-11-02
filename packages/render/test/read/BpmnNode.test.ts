@@ -37,8 +37,8 @@ describe('BpmnNode', () => {
   });
 
   it('reads a colour attribute of a foreign namespace', async () => {
-    const { di } = await CorpusModel.shape(gallery, 'Gateway_WhichPath');
-    expect(di.attribute('bioc:stroke')).toBe('#0d4372');
+    const { planeElement } = await CorpusModel.shape(gallery, 'Gateway_WhichPath');
+    expect(planeElement.attribute('bioc:stroke')).toBe('#0d4372');
   });
 
   it('walks the tree and leaves out what it is told to skip', async () => {

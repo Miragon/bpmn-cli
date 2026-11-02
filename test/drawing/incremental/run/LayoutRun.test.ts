@@ -46,8 +46,8 @@ describe('LayoutRun', () => {
   async function sceneWithRename() {
     const scene = await PlacementScene.of('add-after');
     const shape = scene.shape('Activity_Report');
-    const entry = scene.parts.before.byDi.get(shape.di!)!;
-    scene.parts.before.byDi.set(shape.di!, { ...entry, id: 'Old' });
+    const entry = scene.parts.before.byPlaneElement.get(shape.planeElement!)!;
+    scene.parts.before.byPlaneElement.set(shape.planeElement!, { ...entry, id: 'Old' });
     scene.parts.before.els.set('Old', shape.el);
     return { run: scene.run, shape, before: scene.parts.before };
   }

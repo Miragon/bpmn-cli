@@ -6,7 +6,7 @@ import { LaneBox } from '../scopes/LaneBox.js';
 import { ScopeFrame } from '../scopes/ScopeFrame.js';
 import { ScopePlacer, type PlaceOptions } from '../scopes/ScopePlacer.js';
 import { CollaborationArtifacts } from './CollaborationArtifacts.js';
-import { DiWriter, type EngineWarning } from './DiWriter.js';
+import { FreshDrawingWriter, type EngineWarning } from './FreshDrawingWriter.js';
 import { PoolStacker } from './PoolStacker.js';
 
 export class CleanEngine {
@@ -16,7 +16,7 @@ export class CleanEngine {
     private readonly groups?: ReadonlyMap<string, readonly string[]>,
   ) {}
 
-  private static drawProcess(root: BpmnElement, writer: DiWriter, placer: ScopePlacer, options: PlaceOptions): void {
+  private static drawProcess(root: BpmnElement, writer: FreshDrawingWriter, placer: ScopePlacer, options: PlaceOptions): void {
     const { OUTER_MARGIN, LANE_HEADER, LANE_PADDING } = ShapeSizes;
     const scope = placer.layOut(root);
     new LaneArranger(scope, root, options.groups).apply();
@@ -47,7 +47,7 @@ export class CleanEngine {
     const collapsedScopes = new Map<string, ScopeLayout>();
     const options: PlaceOptions = { expanded, collapsedScopes, ...(groups?.size ? { groups } : {}) };
     const placer = new ScopePlacer(options);
-    const writer = new DiWriter(document.tree);
+    const writer = new FreshDrawingWriter(document.tree);
     if (root.is('bpmn:Collaboration')) {
       this.drawCollaboration(root, writer, placer, options, warnings);
     } else {
@@ -62,7 +62,7 @@ export class CleanEngine {
     return { warnings };
   }
 
-  private drawCollaboration(root: BpmnElement, writer: DiWriter, placer: ScopePlacer, options: PlaceOptions, warnings: EngineWarning[]): void {
+  private drawCollaboration(root: BpmnElement, writer: FreshDrawingWriter, placer: ScopePlacer, options: PlaceOptions, warnings: EngineWarning[]): void {
     const stack = new PoolStacker(root, writer);
     stack.drawPools(placer, options.groups);
     stack.drawMessageFlows(warnings);

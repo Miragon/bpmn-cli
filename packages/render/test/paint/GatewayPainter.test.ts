@@ -6,7 +6,7 @@ import { CorpusModel } from '../golden/CorpusModel.js';
 describe('GatewayPainter', () => {
   async function painted(id: string, path = 'models/render/gallery.bpmn'): Promise<string> {
     const shape = await CorpusModel.shape(path, id);
-    return new GatewayPainter(shape, new Style(shape.di)).svg();
+    return new GatewayPainter(shape, new Style(shape.planeElement)).svg();
   }
 
   it('draws an exclusive gateway with its marker when the DI shows it', async () => {

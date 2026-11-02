@@ -7,7 +7,7 @@ import { CorpusModel } from '../golden/CorpusModel.js';
 describe('ActivityPainter', () => {
   async function painted(id: string): Promise<string> {
     const shape = await CorpusModel.shape('models/render/gallery.bpmn', id);
-    const style = new Style(shape.di);
+    const style = new Style(shape.planeElement);
     return new ActivityPainter(shape, style, new LabelPainter(style.label)).svg();
   }
 

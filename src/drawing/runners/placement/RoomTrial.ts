@@ -2,13 +2,13 @@ import type { Box } from '../../../model/index.js';
 import type { Drawing } from '../../incremental/Drawing.js';
 import type { OperationBefore } from '../../incremental/OperationBefore.js';
 import type { Axis } from '../../plane/BoxAxis.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 
 export interface RoomRequest {
-  moved: readonly DShape[];
-  references: readonly DShape[];
+  moved: readonly PlaneShape[];
+  references: readonly PlaneShape[];
   before: OperationBefore;
   target: string;
   holds(): boolean;
@@ -16,19 +16,19 @@ export interface RoomRequest {
 }
 
 export interface DisplacedFrame {
-  reference: DShape;
-  frame: DShape;
+  reference: PlaneShape;
+  frame: PlaneShape;
 }
 
 export interface StrayShape {
-  shape: DShape;
-  frame: DShape;
+  shape: PlaneShape;
+  frame: PlaneShape;
 }
 
 export interface RoomOutcome {
   ok: boolean;
   notes: string[];
-  swallowed: DShape[];
+  swallowed: PlaneShape[];
   displaced: DisplacedFrame[];
   collided: Array<[string, string]>;
   strayed: StrayShape[];
@@ -92,7 +92,7 @@ export class RoomTrial {
     return { notes: [`moved ${names} ${lock.includes('x') ? 'down' : 'right'} a little to clear ${cleared}`], stuck: false };
   }
 
-  private fitLabel(shape: DShape, pinned: readonly string[]): void {
+  private fitLabel(shape: PlaneShape, pinned: readonly string[]): void {
     const { label } = shape;
     const frame = this.frames.of(shape);
     if (!frame || !label) {
@@ -111,7 +111,7 @@ export class RoomTrial {
     }
   }
 
-  private bandOfFrame(frame: DShape): Box | undefined {
+  private bandOfFrame(frame: PlaneShape): Box | undefined {
     if (frame.kind === 'subProcess' || frame.kind === 'participant') {
       return frame.bounds.copy();
     }
@@ -125,10 +125,10 @@ export class RoomTrial {
     });
   }
 
-  private frameLeft(reference: DShape): DShape | undefined {
+  private frameLeft(reference: PlaneShape): PlaneShape | undefined {
     const { bounds } = this.request.before;
     const was = bounds.get(reference.id);
-    let lost: DShape | undefined;
+    let lost: PlaneShape | undefined;
     for (const frame of this.frames.chain(reference)) {
       const box = bounds.get(frame.id);
       if (!box || !was) {
@@ -143,12 +143,12 @@ export class RoomTrial {
     return lost;
   }
 
-  private swallowed(): DShape[] {
+  private swallowed(): PlaneShape[] {
     const subProcesses = this.shapes().filter((shape) => shape.kind === 'subProcess' && shape.container);
     return this.request.references.filter((reference) => !this.movedIds.includes(reference.id) && subProcesses.some((subProcess) => this.covers(subProcess, reference)));
   }
 
-  private covers(subProcess: DShape, reference: DShape): boolean {
+  private covers(subProcess: PlaneShape, reference: PlaneShape): boolean {
     const { bounds } = this.request.before;
     if (subProcess.id === reference.id || this.isInside(reference, subProcess.id) || !subProcess.bounds.overlaps(reference.bounds)) {
       return false;
@@ -156,7 +156,7 @@ export class RoomTrial {
     return !(bounds.get(subProcess.id) ?? subProcess.bounds).overlaps(bounds.get(reference.id) ?? reference.bounds);
   }
 
-  private isInside(shape: DShape, subProcessId: string): boolean {
+  private isInside(shape: PlaneShape, subProcessId: string): boolean {
     let parentId = shape.parentId ?? (shape.hostId ? this.plane.shapes.get(shape.hostId)?.parentId : undefined);
     for (let depth = 0; parentId && depth < RoomTrial.MAX_DEPTH; depth++) {
       if (parentId === subProcessId) {
@@ -181,12 +181,12 @@ export class RoomTrial {
     return [...collided, ...this.newFrameIntrusions(leaves)];
   }
 
-  private newFrameIntrusions(leaves: readonly DShape[]): Array<[string, string]> {
+  private newFrameIntrusions(leaves: readonly PlaneShape[]): Array<[string, string]> {
     const subProcesses = this.shapes().filter((shape) => shape.kind === 'subProcess' && shape.container);
     return subProcesses.flatMap((frame) => leaves.filter((leaf) => !this.isInside(leaf, frame.id) && this.newlyOverlap(leaf, frame)).map((leaf): [string, string] => [leaf.id, frame.id]));
   }
 
-  private newlyOverlap(first: DShape, second: DShape): boolean {
+  private newlyOverlap(first: PlaneShape, second: PlaneShape): boolean {
     const { bounds } = this.request.before;
     const was = [bounds.get(first.id), bounds.get(second.id)] as const;
     return first.bounds.overlaps(second.bounds) && !(was[0] && was[1] && was[0].overlaps(was[1]));
@@ -198,7 +198,7 @@ export class RoomTrial {
       .flatMap((shape) => this.framesLeftBy(shape).map((frame) => ({ shape, frame })));
   }
 
-  private framesLeftBy(shape: DShape): DShape[] {
+  private framesLeftBy(shape: PlaneShape): PlaneShape[] {
     const { bounds } = this.request.before;
     const was = bounds.get(shape.id);
     if (!was) {
@@ -213,7 +213,7 @@ export class RoomTrial {
     });
   }
 
-  private shapes(): DShape[] {
+  private shapes(): PlaneShape[] {
     return [...this.plane.shapes.values()];
   }
 }

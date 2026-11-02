@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { applyToXml, BpmnError, diagramXml, kindsJson } from '../../src/index.js';
 import { type Executor, libExecutor } from '../../tools/fuzz/lib/exec.mjs';
-import { analyse, diInvariants } from '../../tools/fuzz/lib/analyse.mjs';
+import { analyse, drawingInvariants } from '../../tools/fuzz/lib/analyse.mjs';
 import { runWalk, type WalkMetrics, type WalkSummary } from '../../tools/fuzz/lib/walk.mjs';
 import { ProblemKinds, ScoreChange } from '../support/ModelValues.js';
 
@@ -75,7 +75,7 @@ describe('seeded random walks through the public API', () => {
     const [first, second] = [await applyToXml(xml, [{ op: 'layout' }]), await applyToXml(xml, [{ op: 'layout' }])];
 
     expect(second.xml).toBe(first.xml);
-    expect(diInvariants(await analyse(first.xml))).toEqual([]);
+    expect(drawingInvariants(await analyse(first.xml))).toEqual([]);
   });
 });
 

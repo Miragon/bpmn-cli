@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { DiIdStyle, type IdClaims } from '../../../src/model/diagram/DiIdStyle.js';
+import { DrawingIdStyle, type IdClaims } from '../../../src/model/diagram/DrawingIdStyle.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 function claimsOver(taken: Set<string>): IdClaims {
   return { has: (id) => taken.has(id), claim: (id) => void taken.add(id), release: (id) => void taken.delete(id) };
 }
 
-describe('DiIdStyle', () => {
+describe('DrawingIdStyle', () => {
   it('lists every id of the file, the semantic ones and those of the diagram', async () => {
-    const ids = DiIdStyle.allIds((await Fixtures.read('model/events.bpmn')).tree.definitions);
+    const ids = DrawingIdStyle.allIds((await Fixtures.read('model/events.bpmn')).tree.definitions);
 
     expect(ids.has('task_review')).toBe(true);
     expect(ids.has('task_review_di')).toBe(true);
@@ -17,9 +17,9 @@ describe('DiIdStyle', () => {
   });
 
   it('takes the style most shapes follow, and lets edges without a style of their own follow the shapes', async () => {
-    const suffixed = DiIdStyle.stylesOf((await Fixtures.read('model/events.bpmn')).tree.definitions);
-    const bpmnShapes = DiIdStyle.stylesOf((await Fixtures.read('model/di-styles.bpmn')).tree.definitions);
-    const undrawn = DiIdStyle.stylesOf((await Fixtures.read('model/c8-vendor.bpmn')).tree.definitions);
+    const suffixed = DrawingIdStyle.stylesOf((await Fixtures.read('model/events.bpmn')).tree.definitions);
+    const bpmnShapes = DrawingIdStyle.stylesOf((await Fixtures.read('model/di-styles.bpmn')).tree.definitions);
+    const undrawn = DrawingIdStyle.stylesOf((await Fixtures.read('model/c8-vendor.bpmn')).tree.definitions);
 
     expect(suffixed).toEqual({ shape: 'suffix', edge: 'suffix' });
     expect(bpmnShapes).toEqual({ shape: 'bpmn', edge: 'bpmn' });
@@ -33,23 +33,23 @@ describe('DiIdStyle', () => {
     ['bpmn', 'Shape', 'Activity_ApproveTheIncomingSupplierInvoiceForPaymentInTheLedger', 'BPMNShape_Activity_ApproveTheIncomingSupplierInvoiceFor'],
     ['suffix', 'Shape', 'Activity_ApproveTheIncomingSupplierInvoiceForPaymentInTheLedger', 'Activity_ApproveTheIncomingSupplierInvoiceForPaymentInThe_di'],
   ] as const)('writes the %s style of a %s id %s as %s, cutting a long id at a word', (style, kind, id, expected) => {
-    expect(DiIdStyle.styledId(style, kind, id)).toBe(expected);
+    expect(DrawingIdStyle.styledId(style, kind, id)).toBe(expected);
   });
 
   it('derives plane and diagram ids from the root, cut to leave room for a collision suffix', () => {
     const longProcess = 'Process_SupplierInvoicesOfTheAccountsPayableDepartment';
 
-    expect(DiIdStyle.rootDiId('Plane', 'Process_1')).toBe('BPMNPlane_Process_1');
-    expect(DiIdStyle.rootDiId('Diagram', longProcess)).toBe('BPMNDiagram_Process_SupplierInvoicesOfTheAccountsPayable');
+    expect(DrawingIdStyle.rootDrawingId('Plane', 'Process_1')).toBe('BPMNPlane_Process_1');
+    expect(DrawingIdStyle.rootDrawingId('Diagram', longProcess)).toBe('BPMNDiagram_Process_SupplierInvoicesOfTheAccountsPayable');
   });
 
   it('tells whether a plane or diagram id was derived from the root, in full or cut', () => {
     const longProcess = 'Process_SupplierInvoicesOfTheAccountsPayableDepartment';
 
-    expect(DiIdStyle.namesRoot('Plane', 'BPMNPlane_Process_1', 'Process_1')).toBe(true);
-    expect(DiIdStyle.namesRoot('Plane', 'BPMNPlane_Process_SupplierInvoicesOfTheAccountsPayable', longProcess)).toBe(true);
-    expect(DiIdStyle.namesRoot('Plane', 'BPMNPlane_1', 'Process_1')).toBe(false);
-    expect(DiIdStyle.namesRoot('Diagram', 'BPMNPlane_Process_1', 'Process_1')).toBe(false);
+    expect(DrawingIdStyle.namesRoot('Plane', 'BPMNPlane_Process_1', 'Process_1')).toBe(true);
+    expect(DrawingIdStyle.namesRoot('Plane', 'BPMNPlane_Process_SupplierInvoicesOfTheAccountsPayable', longProcess)).toBe(true);
+    expect(DrawingIdStyle.namesRoot('Plane', 'BPMNPlane_1', 'Process_1')).toBe(false);
+    expect(DrawingIdStyle.namesRoot('Diagram', 'BPMNPlane_Process_1', 'Process_1')).toBe(false);
   });
 
   it('classifies a plane element as a shape, an edge or neither', async () => {
@@ -57,14 +57,14 @@ describe('DiIdStyle', () => {
     const plane = document.diagram.planes()[0]!;
     const [shape, , , edge] = plane.list('planeElement');
 
-    expect([DiIdStyle.kindOf(shape!), DiIdStyle.kindOf(edge!), DiIdStyle.kindOf(plane)]).toEqual(['Shape', 'Edge', undefined]);
+    expect([DrawingIdStyle.kindOf(shape!), DrawingIdStyle.kindOf(edge!), DrawingIdStyle.kindOf(plane)]).toEqual(['Shape', 'Edge', undefined]);
   });
 
   it('numbers an id that is taken and claims the one it returns', () => {
     const taken = new Set(['task_a_di', 'task_a_di_2']);
 
-    expect(DiIdStyle.claimUnique(taken, 'task_a_di')).toBe('task_a_di_3');
-    expect(DiIdStyle.claimUnique(taken, 'task_b_di')).toBe('task_b_di');
+    expect(DrawingIdStyle.claimUnique(taken, 'task_a_di')).toBe('task_a_di_3');
+    expect(DrawingIdStyle.claimUnique(taken, 'task_b_di')).toBe('task_b_di');
     expect(taken.has('task_a_di_3')).toBe(true);
   });
 
@@ -72,9 +72,9 @@ describe('DiIdStyle', () => {
     const document = await Fixtures.read('models/incremental/twoviews.bpmn');
     const definitions = document.tree.definitions;
     const task = document.tree.require('A');
-    const claims = claimsOver(DiIdStyle.allIds(definitions));
+    const claims = claimsOver(DrawingIdStyle.allIds(definitions));
 
-    const changed = DiIdStyle.followRename(definitions, task, 'A', 'Alpha', claims);
+    const changed = DrawingIdStyle.followRename(definitions, task, 'A', 'Alpha', claims);
 
     const ids = definitions.list('diagrams').flatMap((diagram) => diagram.get<typeof task>('plane').list('planeElement').filter((element) => element.peek<typeof task>('bpmnElement') === task).map((element) => element.id));
     expect([changed, ids]).toEqual([true, ['Alpha_di', 'V2_A_di']]);
@@ -84,11 +84,11 @@ describe('DiIdStyle', () => {
   it('numbers the new DI id when another element already holds it, and leaves a DI id that is still right', async () => {
     const document = await Fixtures.read('model/di-styles.bpmn');
     const definitions = document.tree.definitions;
-    const taken = DiIdStyle.allIds(definitions);
+    const taken = DrawingIdStyle.allIds(definitions);
     taken.add('BPMNShape_task_z');
 
-    const numbered = DiIdStyle.followRename(definitions, document.tree.require('task_a'), 'task_a', 'task_z', claimsOver(taken));
-    const unchanged = DiIdStyle.followRename(definitions, document.tree.require('task_b'), 'task_b', 'task_b', claimsOver(taken));
+    const numbered = DrawingIdStyle.followRename(definitions, document.tree.require('task_a'), 'task_a', 'task_z', claimsOver(taken));
+    const unchanged = DrawingIdStyle.followRename(definitions, document.tree.require('task_b'), 'task_b', 'task_b', claimsOver(taken));
 
     expect([numbered, taken.has('BPMNShape_task_z_2'), unchanged]).toEqual([true, true, false]);
   });
@@ -97,6 +97,6 @@ describe('DiIdStyle', () => {
     const document = await Fixtures.read('model/di-styles.bpmn');
     const definitions = document.tree.definitions;
 
-    expect(DiIdStyle.followRename(definitions, document.tree.require('flow_ab'), 'flow_ab', 'flow_xy', claimsOver(DiIdStyle.allIds(definitions)))).toBe(false);
+    expect(DrawingIdStyle.followRename(definitions, document.tree.require('flow_ab'), 'flow_ab', 'flow_xy', claimsOver(DrawingIdStyle.allIds(definitions)))).toBe(false);
   });
 });

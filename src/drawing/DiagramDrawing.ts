@@ -1,4 +1,4 @@
-import { BpmnError, DiIds, ModelError, type BpmnDocument, type ChangeSet } from '../model/index.js';
+import { BpmnError, DrawingIds, ModelError, type BpmnDocument, type ChangeSet } from '../model/index.js';
 import { DiagramColors } from './diagram/DiagramColors.js';
 import { Stickies, type MovedSticky } from './diagram/Stickies.js';
 import type { DrawingSnapshot } from './DrawingSnapshot.js';
@@ -74,7 +74,7 @@ export class DiagramDrawing {
     const report = await this.placeOrRefuse(before, changes);
     const { tree } = this.document;
     const groups = new Groups(tree);
-    const ids = new DiIds(tree.definitions);
+    const ids = new DrawingIds(tree.definitions);
     const { drawn } = groups.redraw(groups.undrawn(), (id) => ids.shape(id));
     this.relabelRenamedGroups(before, groups);
     return { ...DiagramDrawing.untouched('incremental'), ...report, placed: [...report.placed, ...drawn] };

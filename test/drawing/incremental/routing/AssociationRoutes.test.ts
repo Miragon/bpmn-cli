@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AssociationRoutes } from '../../../../src/drawing/incremental/routing/AssociationRoutes.js';
 import { EdgeDamage } from '../../../../src/drawing/incremental/routing/EdgeDamage.js';
-import { DEdge } from '../../../../src/drawing/plane/DEdge.js';
+import { PlaneEdge } from '../../../../src/drawing/plane/PlaneEdge.js';
 import { PlaneReader } from '../../../../src/drawing/plane/PlaneReader.js';
 import { Fixtures } from '../../../support/Fixtures.js';
 import { Polyline } from '../../../support/ModelValues.js';
@@ -54,8 +54,8 @@ describe('AssociationRoutes', () => {
     expect(routesOf(plane).route(edge, [])).toBeUndefined();
   });
 
-  function associationOnFlow(plane: Awaited<ReturnType<typeof planeOf>>, ends: [string, string]): DEdge {
-    const edge = new DEdge('onFlow', plane.edges.get('As')!.el, 'association');
+  function associationOnFlow(plane: Awaited<ReturnType<typeof planeOf>>, ends: [string, string]): PlaneEdge {
+    const edge = new PlaneEdge('onFlow', plane.edges.get('As')!.el, 'association');
     [edge.sourceId, edge.targetId] = ends;
     plane.edges.set(edge.id, edge);
     return edge;

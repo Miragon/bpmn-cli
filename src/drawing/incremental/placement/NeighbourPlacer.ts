@@ -1,5 +1,5 @@
 import { Box, type BpmnElement } from '../../../model/index.js';
-import type { DShape, ShapeKind } from '../../plane/DShape.js';
+import type { PlaneShape, ShapeKind } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane, Spacing } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
@@ -20,7 +20,7 @@ interface Spot {
   spacing: Spacing;
   size: ShapeSize;
   probe: Probe;
-  frame: DShape | undefined;
+  frame: PlaneShape | undefined;
   exclude: Set<string>;
   kind: ShapeKind;
 }
@@ -51,7 +51,7 @@ export class NeighbourPlacer {
     this.chain = new ChainSearch(state);
   }
 
-  placeAfter(plane: Plane, id: string, preds: DShape[], pending: ReadonlySet<string>): void {
+  placeAfter(plane: Plane, id: string, preds: PlaneShape[], pending: ReadonlySet<string>): void {
     const main = preds[0]!;
     const host = main.hostId ? plane.shapes.get(main.hostId) : undefined;
     const spot = this.spotOf(plane, id, [main, host]);
@@ -72,7 +72,7 @@ export class NeighbourPlacer {
     }
   }
 
-  placeBefore(plane: Plane, id: string, successor: DShape): void {
+  placeBefore(plane: Plane, id: string, successor: PlaneShape): void {
     const { spacing, size, probe, frame, exclude } = this.spotOf(plane, id, [successor]);
     const inner = frame ? Frames.interior(frame, 10) : undefined;
     const left = successor.bounds.x - spacing.gap - size.width;
@@ -93,7 +93,7 @@ export class NeighbourPlacer {
     this.state.placeAt(plane, id, shifted, this.rows.intoOwnLane(plane, probe, shifted, successor.bounds.center.y, size, [], successor), size);
   }
 
-  placeUnconnected(plane: Plane, id: string): DShape {
+  placeUnconnected(plane: Plane, id: string): PlaneShape {
     const { spacing, size, frame, exclude } = this.spotOf(plane, id, []);
     const members = [...plane.shapes.values()].filter((shape) => shape.id !== id && shape.isLeaf && shape.kind !== 'boundary' && shape.kind !== 'annotation' && shape.kind !== 'data' && this.obstacles.within(plane, shape, frame) && shape !== frame);
     if (members.length) {
@@ -114,7 +114,7 @@ export class NeighbourPlacer {
     return this.state.placeAt(plane, id, left, bottom + 60 + size.height / 2, size);
   }
 
-  private spotOf(plane: Plane, id: string, anchors: ReadonlyArray<DShape | undefined>): Spot {
+  private spotOf(plane: Plane, id: string, anchors: ReadonlyArray<PlaneShape | undefined>): Spot {
     const probe = this.state.probeOf(plane, id);
     return {
       plane,
@@ -128,7 +128,7 @@ export class NeighbourPlacer {
     };
   }
 
-  private placeCand({ plane, id, probe }: Spot, cand: Cand, anchor: DShape): void {
+  private placeCand({ plane, id, probe }: Spot, cand: Cand, anchor: PlaneShape): void {
     if (cand.insert) {
       const { line, delta, within, frame } = cand.insert;
       this.state.recordSpace(this.state.drawing(plane).space.makeSpace({ axis: 'y', line, delta, anchors: [anchor.id, probe.parentId], ...(within ? { within } : {}), ...(frame ? { frame } : {}) }));
@@ -139,7 +139,7 @@ export class NeighbourPlacer {
     this.state.placeAt(plane, id, cand.x, this.rows.intoOwnLane(plane, probe, cand.x, cand.centre, cand.size, [], anchor), cand.size);
   }
 
-  private placeOnExceptionPath(spot: Spot, event: DShape, host: DShape | undefined, pending: ReadonlySet<string>): void {
+  private placeOnExceptionPath(spot: Spot, event: PlaneShape, host: PlaneShape | undefined, pending: ReadonlySet<string>): void {
     const { plane, id, spacing, size, probe, frame, exclude, kind } = spot;
     const anchor = host ?? event;
     const extent = this.chain.extent(id, pending, spacing.gap);
@@ -157,7 +157,7 @@ export class NeighbourPlacer {
     this.placeCand(spot, this.rows.cheapest(id, plane, event, kind, cands), event);
   }
 
-  private placeOnRow(spot: Spot, main: DShape, preds: DShape[], successor: DShape | undefined, branchDrawn: boolean): void {
+  private placeOnRow(spot: Spot, main: PlaneShape, preds: PlaneShape[], successor: PlaneShape | undefined, branchDrawn: boolean): void {
     const { plane, id, spacing, size, probe } = spot;
     const maxRight = Math.max(...preds.map((pred) => pred.bounds.right));
     const sameRow = !!successor && Math.abs(successor.bounds.center.y - main.bounds.center.y) <= spacing.rowTol;
@@ -177,11 +177,11 @@ export class NeighbourPlacer {
     }
   }
 
-  private branchedBeforeTheBatch(main: DShape, id: string): boolean {
+  private branchedBeforeTheBatch(main: PlaneShape, id: string): boolean {
     return Semantics.sequenceFlows(this.state.semantics.byId.get(main.id), 'outgoing').some((flow) => flow.peek<BpmnElement>('targetRef')?.peek<string>('id') !== id && this.state.oldTarget.has(flow.peek<string>('id') ?? ''));
   }
 
-  private clearRow({ plane, id, spacing, size, probe, frame, exclude }: Spot, main: DShape, preds: DShape[], successor: DShape | undefined, place: RowPlace): void {
+  private clearRow({ plane, id, spacing, size, probe, frame, exclude }: Spot, main: PlaneShape, preds: PlaneShape[], successor: PlaneShape | undefined, place: RowPlace): void {
     const { box, center, gap, successorGap, maxRight } = place;
     const blockers = this.obstacles.of(plane, frame, exclude);
     const clearOfSuccessor = !successor || Math.abs(successor.bounds.center.y - center) > size.height / 2 + successor.bounds.height / 2 || successor.bounds.x >= box.right + Math.max(Math.min(spacing.gap, NeighbourPlacer.MAX_SUCCESSOR_GAP), successorGap);
@@ -199,11 +199,11 @@ export class NeighbourPlacer {
     }
   }
 
-  private successorStaysBehind(successor: DShape, preds: DShape[], maxRight: number): boolean {
+  private successorStaysBehind(successor: PlaneShape, preds: PlaneShape[], maxRight: number): boolean {
     return successor.bounds.x < maxRight + 1 && preds.some((pred) => successor.bounds.x >= pred.bounds.right) && !preds.some((pred) => this.state.leadsTo(successor.id, pred.id));
   }
 
-  private placeOnBranch(spot: Spot, main: DShape, drawnSuccessors: DShape[], pending: ReadonlySet<string>): void {
+  private placeOnBranch(spot: Spot, main: PlaneShape, drawnSuccessors: PlaneShape[], pending: ReadonlySet<string>): void {
     const { plane, id, spacing, size, probe, frame, exclude, kind } = spot;
     const left = main.bounds.right + spacing.gap;
     const middle = main.bounds.center.y;

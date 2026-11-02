@@ -1,7 +1,7 @@
 import { Box, Samples } from '../../../model/index.js';
 import type { Axis } from '../../plane/BoxAxis.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { Semantics } from '../../plane/Semantics.js';
 import { ShapeSizes, type ShapeSize } from '../../plane/ShapeSizes.js';
@@ -26,7 +26,7 @@ export class FrameEditor {
     private readonly touched: Set<string>,
   ) {}
 
-  private static shiftAll(shapes: readonly DShape[], edges: readonly DEdge[], dx: number, dy: number): void {
+  private static shiftAll(shapes: readonly PlaneShape[], edges: readonly PlaneEdge[], dx: number, dy: number): void {
     for (const shape of shapes) {
       shape.translate(dx, dy);
     }
@@ -35,7 +35,7 @@ export class FrameEditor {
     }
   }
 
-  wrapPool(pool: DShape): void {
+  wrapPool(pool: PlaneShape): void {
     const { HEADER, PAD } = FrameEditor;
     const parts = [...this.plane.shapes.values()].filter((shape) => shape !== pool).flatMap((shape) => (shape.label ? [shape.bounds, shape.label] : [shape.bounds]));
     const points = [...this.plane.edges.values()].flatMap((edge) => edge.points).map((point) => new Box(point.x, point.y, 0, 0));
@@ -43,13 +43,13 @@ export class FrameEditor {
     pool.bounds = box ? new Box(Math.round(box.x - HEADER - PAD), Math.round(box.y - PAD), Math.round(box.width + HEADER + 2 * PAD), Math.round(box.height + 2 * PAD)) : new Box(100, 80, 600, 250);
   }
 
-  placePool(pool: DShape, blackBox: boolean, size?: ShapeSize): void {
+  placePool(pool: PlaneShape, blackBox: boolean, size?: ShapeSize): void {
     const others = this.pools().filter((existing) => existing !== pool);
     const height = size?.height ?? (blackBox ? ShapeSizes.BLACK_BOX_HEIGHT : FrameEditor.POOL_HEIGHT);
     pool.bounds = others.length ? this.poolBelow(others, height, size) : this.firstPool(pool, height, size);
   }
 
-  placeLane(lane: DShape): boolean {
+  placeLane(lane: PlaneShape): boolean {
     const container = this.parentFrame(lane);
     if (!container) {
       return false;
@@ -111,11 +111,11 @@ export class FrameEditor {
     }
   }
 
-  reseatBoundaries(host: DShape, old: Box): void {
+  reseatBoundaries(host: PlaneShape, old: Box): void {
     new BoundaryReseat(this.plane, host, old, this.touched).reseat();
   }
 
-  collapse(sub: DShape, child: Plane, gap: number): void {
+  collapse(sub: PlaneShape, child: Plane, gap: number): void {
     const { shapes, edges } = this.plane.contentOf(sub.id);
     const old = sub.bounds.copy();
     FrameEditor.shiftAll(shapes, edges, FrameEditor.CHILD_PLANE_X - (old.x + FrameEditor.PAD), FrameEditor.CHILD_PLANE_Y - (old.y + FrameEditor.TOP_PAD));
@@ -140,7 +140,7 @@ export class FrameEditor {
     this.record(this.space.closeStrip({ axis: 'x', from: sub.bounds.right, to: old.right + gap, gap, ...(band ? { within: band.copy() } : {}) }));
   }
 
-  expand(sub: DShape, child: Plane | undefined, semantics: Semantics): void {
+  expand(sub: PlaneShape, child: Plane | undefined, semantics: Semantics): void {
     const { PAD, TOP_PAD } = FrameEditor;
     const content = child ? [...child.shapes.values()] : [];
     const box = Box.unionAll(content.flatMap((shape) => (shape.label ? [shape.bounds, shape.label] : [shape.bounds])));
@@ -165,11 +165,11 @@ export class FrameEditor {
     result?.resized.forEach((id) => this.touched.add(id));
   }
 
-  private pools(): DShape[] {
+  private pools(): PlaneShape[] {
     return [...this.plane.shapes.values()].filter((shape) => shape.kind === 'participant');
   }
 
-  private firstPool(pool: DShape, height: number, size: ShapeSize | undefined): Box {
+  private firstPool(pool: PlaneShape, height: number, size: ShapeSize | undefined): Box {
     const { HEADER, PAD, POOL_WIDTH } = FrameEditor;
     const content = Box.unionAll([...this.plane.shapes.values()].filter((shape) => shape !== pool).map((shape) => shape.bounds));
     const left = content ? content.x - HEADER - PAD : 100;
@@ -177,7 +177,7 @@ export class FrameEditor {
     return new Box(Math.round(left), Math.round(top), Math.round(size?.width ?? Math.max(POOL_WIDTH, content ? content.width + HEADER + 2 * PAD : POOL_WIDTH)), height);
   }
 
-  private poolBelow(others: readonly DShape[], height: number, size: ShapeSize | undefined): Box {
+  private poolBelow(others: readonly PlaneShape[], height: number, size: ShapeSize | undefined): Box {
     const sorted = [...others].sort((upper, lower) => upper.bounds.y - lower.bounds.y);
     const gaps = sorted.slice(1).map((pool, index) => pool.bounds.y - sorted[index]!.bounds.bottom);
     const gap = Math.max(0, Math.round(new Samples(gaps.filter((spacing) => spacing >= 0)).median() ?? FrameEditor.POOL_GAP));
@@ -186,20 +186,20 @@ export class FrameEditor {
     return new Box(widest.bounds.x, Math.round(lowest + gap), Math.max(widest.bounds.width, size?.width ?? 0), height);
   }
 
-  private siblingLanes(poolId: string | undefined, parentId: string | undefined, except: string): DShape[] {
+  private siblingLanes(poolId: string | undefined, parentId: string | undefined, except: string): PlaneShape[] {
     return [...this.plane.shapes.values()].filter((shape) => shape.kind === 'lane' && shape.id !== except && shape.poolId === poolId && shape.laneId === parentId).sort((upper, lower) => upper.bounds.y - lower.bounds.y);
   }
 
-  private parentFrame({ laneId, poolId }: DShape): DShape | undefined {
+  private parentFrame({ laneId, poolId }: PlaneShape): PlaneShape | undefined {
     if (laneId) {
       return this.plane.shapes.get(laneId);
     }
     return poolId ? this.plane.shapes.get(poolId) : undefined;
   }
 
-  private containerChain(container: DShape): DShape[] {
-    const chain: DShape[] = [];
-    let current: DShape | undefined = container;
+  private containerChain(container: PlaneShape): PlaneShape[] {
+    const chain: PlaneShape[] = [];
+    let current: PlaneShape | undefined = container;
     for (let depth = 0; current && depth < FrameEditor.MAX_CHAIN; depth++) {
       chain.push(current);
       current = current.kind === 'lane' ? this.parentFrame(current) : undefined;
@@ -207,14 +207,14 @@ export class FrameEditor {
     return chain;
   }
 
-  private occupied(box: Box, pool: DShape | undefined): boolean {
+  private occupied(box: Box, pool: PlaneShape | undefined): boolean {
     return [...this.plane.shapes.values()].some(({ isLeaf, kind, bounds }) => {
       const { y } = bounds.center;
       return isLeaf && kind !== 'boundary' && y > box.y && y < box.bottom && (!pool || (bounds.x >= pool.bounds.x && bounds.x <= pool.bounds.right));
     });
   }
 
-  private growSub(sub: DShape, axis: Axis, delta: number): void {
+  private growSub(sub: PlaneShape, axis: Axis, delta: number): void {
     if (delta > 0) {
       const line = (axis === 'x' ? sub.bounds.right : sub.bounds.bottom) - 0.5;
       const keep = new Set(this.plane.boundariesOf(sub.id).map((boundary) => boundary.id));
@@ -222,7 +222,7 @@ export class FrameEditor {
     }
   }
 
-  private adoptContent(sub: DShape, child: Plane, box: Box | undefined, semantics: Semantics): void {
+  private adoptContent(sub: PlaneShape, child: Plane, box: Box | undefined, semantics: Semantics): void {
     const content = [...child.shapes.values()];
     const edges = [...child.edges.values()];
     if (box) {

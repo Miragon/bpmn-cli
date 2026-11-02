@@ -41,7 +41,7 @@ export class C8SchemaRules extends C8Rules {
   }
 
   private schemaHint(attributes: UnprefixedAttributes, key: string): string {
-    const { id, di, addr } = attributes;
+    const { id, inDrawing, addr } = attributes;
     const link = this.decisionLinkOf(attributes, key);
     if (link) {
       return `Write the decision link the Camunda 8 way: \`bpmn set <file> ${id} ${ShellWords.quote(`calledDecision=${link.value}`)}\` (${this.zeebeName('calledDecision')}; the unprefixed ${key} is removed; give it a resultVariable).`;
@@ -49,7 +49,7 @@ export class C8SchemaRules extends C8Rules {
     if (addr) {
       return `Remove it: \`bpmn set <file> ${addr.slot(`${key}=`)}\` (vendor attributes need their namespace prefix; Camunda 8 settings are mostly ${this.prefix}: extension elements).`;
     }
-    if (di) {
+    if (inDrawing) {
       return `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).`;
     }
     return `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''}.`;
@@ -64,9 +64,9 @@ export class C8SchemaRules extends C8Rules {
       if (typeof id !== 'string' || !id || SchemaText.NCNAME.test(id.trim())) {
         continue;
       }
-      const di = el.isDi;
+      const inDrawing = el.isDrawingPart;
       const fixed = id.replace(/[^A-Za-z0-9_.-]+/g, '_').replace(/^(?=[^A-Za-z_])/, '_');
-      reporter.deploy({ code: 'W_C8_DEPLOY_SCHEMA', element: el, subject: `id:${id}`, message: `${di ? el.type : this.describe(el)} has the id "${id}", which is no XML NCName (${id.includes(':') ? 'a colon is not allowed in an id' : 'letters, digits, _ . - and no leading digit'}); Camunda 8 validates the file against the BPMN schema and refuses it`, hint: di ? `Rename it in the XML (or redraw the diagram: \`bpmn layout <file>\`).` : `\`bpmn set <file> ${ShellWords.quote(id)} id=${fixed}\`.` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_SCHEMA', element: el, subject: `id:${id}`, message: `${inDrawing ? el.type : this.describe(el)} has the id "${id}", which is no XML NCName (${id.includes(':') ? 'a colon is not allowed in an id' : 'letters, digits, _ . - and no leading digit'}); Camunda 8 validates the file against the BPMN schema and refuses it`, hint: inDrawing ? `Rename it in the XML (or redraw the diagram: \`bpmn layout <file>\`).` : `\`bpmn set <file> ${ShellWords.quote(id)} id=${fixed}\`.` });
     }
   }
 

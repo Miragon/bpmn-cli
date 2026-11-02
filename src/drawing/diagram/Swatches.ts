@@ -25,29 +25,29 @@ export class Swatches {
     return colors;
   }
 
-  static set(di: BpmnElement, swatch: SwatchName | undefined): boolean {
-    const before = Swatches.fingerprint(di);
-    const label = di.peek<BpmnElement>('label');
+  static set(planeElement: BpmnElement, swatch: SwatchName | undefined): boolean {
+    const before = Swatches.fingerprint(planeElement);
+    const label = planeElement.peek<BpmnElement>('label');
     for (const key of new Set([...Swatches.SHAPE_COLORS, ...Swatches.EDGE_COLORS])) {
-      di.set(key, undefined);
+      planeElement.set(key, undefined);
     }
     label?.set('color:color', undefined);
     if (swatch) {
-      Swatches.paint(di, label, Swatches.TABLE[swatch]);
+      Swatches.paint(planeElement, label, Swatches.TABLE[swatch]);
     }
-    return Swatches.fingerprint(di) !== before;
+    return Swatches.fingerprint(planeElement) !== before;
   }
 
-  private static fingerprint(di: BpmnElement): string {
-    return JSON.stringify([Swatches.colorsOf(di, [...Swatches.SHAPE_COLORS, ...Swatches.EDGE_COLORS]), Swatches.colorsOf(di.peek<BpmnElement>('label'), Swatches.LABEL_COLORS)]);
+  private static fingerprint(planeElement: BpmnElement): string {
+    return JSON.stringify([Swatches.colorsOf(planeElement, [...Swatches.SHAPE_COLORS, ...Swatches.EDGE_COLORS]), Swatches.colorsOf(planeElement.peek<BpmnElement>('label'), Swatches.LABEL_COLORS)]);
   }
 
-  private static paint(di: BpmnElement, label: BpmnElement | undefined, { fill, stroke }: { fill: string; stroke: string }): void {
-    di.set('bioc:stroke', stroke);
-    di.set('color:border-color', stroke);
-    if (!di.is('bpmndi:BPMNEdge')) {
-      di.set('bioc:fill', fill);
-      di.set('color:background-color', fill);
+  private static paint(planeElement: BpmnElement, label: BpmnElement | undefined, { fill, stroke }: { fill: string; stroke: string }): void {
+    planeElement.set('bioc:stroke', stroke);
+    planeElement.set('color:border-color', stroke);
+    if (!planeElement.is('bpmndi:BPMNEdge')) {
+      planeElement.set('bioc:fill', fill);
+      planeElement.set('color:background-color', fill);
     }
     label?.set('color:color', stroke);
   }

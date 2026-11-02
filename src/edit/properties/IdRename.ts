@@ -1,4 +1,4 @@
-import { type BpmnElement, CAMUNDA, type ChangeSet, DiIdStyle, ElementWalk, IdCut, IdRegistry, type IdRequest, IdRequests, type IdState, Kinds, Triggers, FlowEnds } from '../../model/index.js';
+import { type BpmnElement, CAMUNDA, type ChangeSet, DrawingIdStyle, ElementWalk, IdCut, IdRegistry, type IdRequest, IdRequests, type IdState, Kinds, Triggers, FlowEnds } from '../../model/index.js';
 import { FlowIdFollower } from '../flows/FlowIdFollower.js';
 import type { EditSession } from '../session/EditSession.js';
 
@@ -22,7 +22,7 @@ export class IdRename {
     el.set('id', newId);
     if (old) {
       document.ids.registry.release(old);
-      DiIdStyle.followRename(document.tree.definitions, el, old, newId, document.ids.registry);
+      DrawingIdStyle.followRename(document.tree.definitions, el, old, newId, document.ids.registry);
     }
     const vendorRefs = CAMUNDA.idReferenceAttrs().filter((reference) => el.is(reference.target));
     for (const element of new ElementWalk(document.tree.definitions).depthFirst()) {

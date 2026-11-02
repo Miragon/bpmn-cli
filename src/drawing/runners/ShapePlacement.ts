@@ -2,7 +2,7 @@ import { Box, BpmnError } from '../../model/index.js';
 import type { PlaceOperation } from '../../operations/index.js';
 import type { OperationBefore } from '../incremental/OperationBefore.js';
 import type { Axis } from '../plane/BoxAxis.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import { Frames } from '../plane/Frames.js';
 import type { Plane, Spacing } from '../plane/Plane.js';
 import type { DrawnDiagram } from './DrawnDiagram.js';
@@ -11,20 +11,20 @@ import { RoomMaker } from './placement/RoomMaker.js';
 
 interface Placing {
   plane: Plane;
-  reference: DShape;
+  reference: PlaneShape;
   referenceUnit: Box;
   spacing: Spacing;
 }
 
 interface PlacedTarget {
-  shape: DShape;
+  shape: PlaneShape;
   unit: Box;
 }
 
 export class ShapePlacement {
   private static readonly CLEAR = 20;
 
-  private readonly fixed: DShape[] = [];
+  private readonly fixed: PlaneShape[] = [];
   private readonly words: string[] = [];
 
   constructor(
@@ -58,7 +58,7 @@ export class ShapePlacement {
     return { shape: found.shape, unit: this.unitOf(plane, found.shape) };
   }
 
-  private unitOf(plane: Plane, shape: DShape): Box {
+  private unitOf(plane: Plane, shape: PlaneShape): Box {
     return shape.container ? shape.bounds : this.diagram.drawing(plane).space.unitBox(shape);
   }
 
@@ -103,7 +103,7 @@ export class ShapePlacement {
     return 0;
   }
 
-  private moveGroup(placing: Placing, group: readonly DShape[], dx: number, dy: number): string[] {
+  private moveGroup(placing: Placing, group: readonly PlaneShape[], dx: number, dy: number): string[] {
     const { plane, reference } = placing;
     const target = this.words.join(' and ');
     this.refuseLeavingTargets(plane, group, dx, dy);
@@ -121,7 +121,7 @@ export class ShapePlacement {
     return drawing.settle(this.before);
   }
 
-  private refuseLeavingTargets(plane: Plane, group: readonly DShape[], dx: number, dy: number): void {
+  private refuseLeavingTargets(plane: Plane, group: readonly PlaneShape[], dx: number, dy: number): void {
     const frames = new Frames(plane);
     for (const frame of this.fixed.filter((shape) => shape.container)) {
       for (const member of group.filter((shape) => frames.chain(shape).includes(frame))) {

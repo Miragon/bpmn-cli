@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { DiWriter, type EngineWarning } from '../../../../src/drawing/full/pools/DiWriter.js';
+import { FreshDrawingWriter, type EngineWarning } from '../../../../src/drawing/full/pools/FreshDrawingWriter.js';
 import { ScopePlacer } from '../../../../src/drawing/full/scopes/ScopePlacer.js';
 import { Box, Point, type BpmnElement } from '../../../support/ModelValues.js';
 import { Fixtures } from '../../../support/Fixtures.js';
 
-describe('DiWriter', () => {
+describe('FreshDrawingWriter', () => {
   it('writes whole pixels and keeps each shape box by its element', async () => {
     const document = await Fixtures.read('models/incremental/boundary.bpmn');
-    const writer = new DiWriter(document.tree);
+    const writer = new FreshDrawingWriter(document.tree);
     const [element] = document.tree.all().values();
 
     writer.shape(element!, new Box(10.4, 20.6, 100, 80));
 
-    const bounds = writer.di[0]!.peek<BpmnElement>('bounds')!;
+    const bounds = writer.planeElements[0]!.peek<BpmnElement>('bounds')!;
     expect([bounds.get('x'), bounds.get('y')]).toEqual([10, 21]);
     expect(writer.absBoxes.get(element!.id)?.x).toBe(10.4);
   });
@@ -22,7 +22,7 @@ describe('DiWriter', () => {
     const { tree } = document;
     const process = tree.processes()[0]!;
     const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(process);
-    const writer = new DiWriter(tree);
+    const writer = new FreshDrawingWriter(tree);
 
     writer.emitScope(scope, new Point(80, 80));
     tree.definitions.set('diagrams', []);
@@ -36,7 +36,7 @@ describe('DiWriter', () => {
     const document = await Fixtures.read('layout/gallery__01-xor-join.bpmn');
     const { tree } = document;
     const process = tree.processes()[0]!;
-    const writer = new DiWriter(tree);
+    const writer = new FreshDrawingWriter(tree);
     const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(process);
     const association = tree.build('bpmn:Association', { id: 'Line' });
     scope.crossLinks.push({ el: association, id: 'Line', sourceId: 'Nowhere', targetId: 'Nothing' });
@@ -52,7 +52,7 @@ describe('DiWriter', () => {
     const document = await Fixtures.read('layout/gallery__01-xor-join.bpmn');
     const { tree } = document;
     const process = tree.processes()[0]!;
-    const writer = new DiWriter(tree);
+    const writer = new FreshDrawingWriter(tree);
     const scope = new ScopePlacer({ expanded: new Set(), collapsedScopes: new Map() }).layOut(process);
     const [element] = tree.all().values();
     const association = tree.build('bpmn:DataInputAssociation', { id: 'Data', sourceRef: [element!.raw] });

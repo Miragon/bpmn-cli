@@ -1,4 +1,4 @@
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { SpacePass, SpaceResult } from './SpacePass.js';
 
@@ -30,11 +30,11 @@ export class GrowthCap {
     }
   }
 
-  private farBefore(shape: DShape): number {
+  private farBefore(shape: PlaneShape): number {
     return this.pass.along.far(this.pass.boxOf(shape));
   }
 
-  private setFar(container: DShape, to: number): void {
+  private setFar(container: PlaneShape, to: number): void {
     const { pass, result } = this;
     if (pass.axis === 'x') {
       container.bounds.width = to - container.bounds.x;
@@ -48,7 +48,7 @@ export class GrowthCap {
     }
   }
 
-  private capFrames(frames: DShape[], holds: (shape: DShape) => boolean): void {
+  private capFrames(frames: PlaneShape[], holds: (shape: PlaneShape) => boolean): void {
     const { pass, result } = this;
     const { along, delta } = pass;
     let farBefore = Number.NEGATIVE_INFINITY;
@@ -69,7 +69,7 @@ export class GrowthCap {
     }
   }
 
-  private inLanes(lanes: readonly DShape[], shape: DShape): boolean {
+  private inLanes(lanes: readonly PlaneShape[], shape: PlaneShape): boolean {
     const { pass, frames } = this;
     const owner = shape.hostId ? (pass.plane.shapes.get(shape.hostId) ?? shape) : shape;
     if (frames.of(owner)) {
@@ -83,7 +83,7 @@ export class GrowthCap {
     const { pass, result } = this;
     const free = [...pass.plane.shapes.values()].filter((shape) => shape.kind === 'lane' && !shape.poolId);
     const tops = free.some((lane) => result.moved.has(lane.id)) ? [] : free.filter((lane) => !lane.laneId && result.resized.has(lane.id));
-    const done = new Set<DShape>();
+    const done = new Set<PlaneShape>();
     for (const top of tops) {
       if (done.has(top)) {
         continue;

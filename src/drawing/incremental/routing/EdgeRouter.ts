@@ -1,6 +1,6 @@
 import { Point, Polyline, type Box } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { ShapeSides, type Side } from '../../plane/ShapeSides.js';
 import { AssociationRoutes } from './AssociationRoutes.js';
@@ -48,7 +48,7 @@ export class EdgeRouter {
     return [new Point(box.x, box.y), new Point(box.right, box.bottom)];
   }
 
-  routeRank(edge: DEdge): number {
+  routeRank(edge: PlaneEdge): number {
     if ((edge.sourceId && this.plane.edges.has(edge.sourceId)) || (edge.targetId && this.plane.edges.has(edge.targetId))) {
       return 2;
     }
@@ -76,7 +76,7 @@ export class EdgeRouter {
     return lines;
   }
 
-  routeEdge(edge: DEdge, opts: RouteOptions): Point[] | undefined {
+  routeEdge(edge: PlaneEdge, opts: RouteOptions): Point[] | undefined {
     if (edge.kind === 'association' || edge.kind === 'dataAssociation' || edge.kind === 'other') {
       return this.associations.route(edge, opts.lines);
     }
@@ -85,27 +85,27 @@ export class EdgeRouter {
     return source && target ? this.routeFlow(edge, source, target, opts) : undefined;
   }
 
-  grazes(edge: DEdge, ids: Iterable<string>): boolean {
+  grazes(edge: PlaneEdge, ids: Iterable<string>): boolean {
     return this.damage.grazes(edge, ids);
   }
 
-  touchesFresh(edge: DEdge): boolean {
+  touchesFresh(edge: PlaneEdge): boolean {
     return this.damage.touchesFresh(edge);
   }
 
-  edgeBefore(edge: DEdge): EdgeBefore {
+  edgeBefore(edge: PlaneEdge): EdgeBefore {
     return this.damage.edgeBefore(edge);
   }
 
-  detachedEnds(edge: DEdge): string[] {
+  detachedEnds(edge: PlaneEdge): string[] {
     return this.damage.detachedEnds(edge);
   }
 
-  brokenEdge(edge: DEdge, before: EdgeBefore | undefined, { detached = true }: { detached?: boolean } = {}): boolean {
+  brokenEdge(edge: PlaneEdge, before: EdgeBefore | undefined, { detached = true }: { detached?: boolean } = {}): boolean {
     return this.damage.broken(edge, before, detached);
   }
 
-  private commonFrame(source: DShape, target: DShape): Box | undefined {
+  private commonFrame(source: PlaneShape, target: PlaneShape): Box | undefined {
     if (source.kind === 'participant' || target.kind === 'participant') {
       return undefined;
     }
@@ -121,12 +121,12 @@ export class EdgeRouter {
     return undefined;
   }
 
-  private sidesFor(shape: DShape, role: 'source' | 'target'): Side[] {
+  private sidesFor(shape: PlaneShape, role: 'source' | 'target'): Side[] {
     const host = shape.kind === 'boundary' && role === 'source' && shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
     return host ? [ShapeSides.attached(shape.bounds, host.bounds)] : ShapeSides.of(shape.kind, role);
   }
 
-  private gatewayEnds(edge: DEdge, gateway: DShape, lines: readonly Point[][]): GatewayEnd[] {
+  private gatewayEnds(edge: PlaneEdge, gateway: PlaneShape, lines: readonly Point[][]): GatewayEnd[] {
     const settled = new Set(lines);
     const ends: GatewayEnd[] = [];
     for (const other of this.plane.edges.values()) {
@@ -143,10 +143,10 @@ export class EdgeRouter {
     return ends;
   }
 
-  private routeFlow(edge: DEdge, source: DShape, target: DShape, opts: RouteOptions): Point[] {
+  private routeFlow(edge: PlaneEdge, source: PlaneShape, target: PlaneShape, opts: RouteOptions): Point[] {
     const message = edge.kind === 'messageFlow';
     const frame = message ? undefined : this.commonFrame(source, target);
-    const ends = (gateway: DShape): GatewayEnd[] => (gateway.kind === 'gateway' && !message ? this.gatewayEnds(edge, gateway, opts.lines) : []);
+    const ends = (gateway: PlaneShape): GatewayEnd[] => (gateway.kind === 'gateway' && !message ? this.gatewayEnds(edge, gateway, opts.lines) : []);
     const targetEnds = ends(target);
     const taken = (shareEntries: boolean): Side[] => (opts.targetSides ? [] : EdgeRouter.takenSides(targetEnds, shareEntries));
     const freeLines = this.obstacles.freeLines();

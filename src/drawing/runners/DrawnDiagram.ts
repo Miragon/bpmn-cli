@@ -2,8 +2,8 @@ import { BpmnError, type BpmnDocument, type BpmnElement, type ErrorDetails } fro
 import { ElementHomes, ProblemReport, Scorer, type LayoutProblem, type LayoutScore } from '../../scoring/index.js';
 import { Drawing } from '../incremental/Drawing.js';
 import { OperationBefore } from '../incremental/OperationBefore.js';
-import type { DEdge } from '../plane/DEdge.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneEdge } from '../plane/PlaneEdge.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import { Plane } from '../plane/Plane.js';
 import { PlaneReader } from '../plane/PlaneReader.js';
 import { PlaneWriter } from '../plane/PlaneWriter.js';
@@ -52,7 +52,7 @@ export class DrawnDiagram {
     return BpmnError.model('E_NO_SHAPE', `${id} has no ${what} in the diagram`, { element: id, hint: this.noShapeHint(element, id) });
   }
 
-  drawnShape(id: string): { plane: Plane; shape: DShape } {
+  drawnShape(id: string): { plane: Plane; shape: PlaneShape } {
     const element = this.document.tree.require(id);
     if (!this.planes.length) {
       throw this.noDiagram();
@@ -69,7 +69,7 @@ export class DrawnDiagram {
     throw this.noShape(element, id);
   }
 
-  drawnEdge(id: string, draw = false): { plane: Plane; edge: DEdge } {
+  drawnEdge(id: string, draw = false): { plane: Plane; edge: PlaneEdge } {
     const element = this.document.tree.require(id, ['bpmn:SequenceFlow', 'bpmn:MessageFlow'], 'sequence or message flow');
     if (!this.planes.length) {
       throw this.noDiagram();
@@ -89,7 +89,7 @@ export class DrawnDiagram {
     return { plane, edge };
   }
 
-  movableShape(id: string): { plane: Plane; shape: DShape } {
+  movableShape(id: string): { plane: Plane; shape: PlaneShape } {
     const found = this.drawnShape(id);
     const { kind } = found.shape;
     if (kind === 'boundary') {
@@ -152,7 +152,7 @@ export class DrawnDiagram {
     return showsBoth(plane) ? plane : undefined;
   }
 
-  private boundaryFollowsHost(id: string, { hostId }: DShape): BpmnError {
+  private boundaryFollowsHost(id: string, { hostId }: PlaneShape): BpmnError {
     const details: ErrorDetails = {
       element: id,
       ...(hostId ? { related: [hostId] } : {}),

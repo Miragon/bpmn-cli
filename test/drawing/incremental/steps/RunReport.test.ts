@@ -44,7 +44,7 @@ describe('RunReport', () => {
   it('reports what left the document as pruned', async () => {
     const scene = await PlacementScene.of('remove-node');
     const { tree } = scene.parts.document;
-    scene.parts.before.byDi.set(tree.build('bpmndi:BPMNShape', { id: 'Removed_di' }), { id: 'Removed', type: 'bpmn:Task', kind: 'task' });
+    scene.parts.before.byPlaneElement.set(tree.build('bpmndi:BPMNShape', { id: 'Removed_di' }), { id: 'Removed', type: 'bpmn:Task', kind: 'task' });
 
     expect(reportOf(scene).of(['Pruned'], [], new Map()).pruned).toEqual(['Pruned', 'Removed']);
   });

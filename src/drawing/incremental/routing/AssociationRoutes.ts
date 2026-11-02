@@ -1,6 +1,6 @@
 import { Box, BoxBorder, Point, Polyline } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { Semantics } from '../../plane/Semantics.js';
 import { EdgeDamage } from './EdgeDamage.js';
@@ -14,8 +14,8 @@ interface Dock {
 }
 
 interface DockRequest {
-  edge: DEdge;
-  flow: DEdge;
+  edge: PlaneEdge;
+  flow: PlaneEdge;
   from: Box;
   obstacles: Box[];
   lines: readonly Point[][];
@@ -45,7 +45,7 @@ export class AssociationRoutes {
     return new Box(Math.round(point.x), Math.round(point.y), 0, 0);
   }
 
-  private static flowAnchor(edge: DEdge): Box | undefined {
+  private static flowAnchor(edge: PlaneEdge): Box | undefined {
     const longest = new Polyline(edge.points).segments().reduce<{ start: Point; end: Point; length: number } | undefined>((best, { start, end }) => {
       const length = Math.abs(start.x - end.x) + Math.abs(start.y - end.y);
       return !best || length > best.length ? { start, end, length } : best;
@@ -53,7 +53,7 @@ export class AssociationRoutes {
     return longest && new Box(Math.round((longest.start.x + longest.end.x) / 2), Math.round((longest.start.y + longest.end.y) / 2), 0, 0);
   }
 
-  private static dockSpots(flow: DEdge, center: Point): Point[] {
+  private static dockSpots(flow: PlaneEdge, center: Point): Point[] {
     const spots = new Polyline(flow.points).segments().flatMap(({ start, end }) => {
       const nearest = EdgeDamage.nearestOn([start, end], center);
       return [...(nearest ? [nearest] : []), new Point((start.x + end.x) / 2, (start.y + end.y) / 2)];
@@ -66,7 +66,7 @@ export class AssociationRoutes {
     return new Polyline(points).segments().reduce((sum, { start, end }) => sum + Math.abs(end.x - start.x) + Math.abs(end.y - start.y), base);
   }
 
-  route(edge: DEdge, lines: readonly Point[][]): Point[] | undefined {
+  route(edge: PlaneEdge, lines: readonly Point[][]): Point[] | undefined {
     const source = edge.sourceId ? this.plane.shapes.get(edge.sourceId) : undefined;
     const target = edge.targetId ? this.plane.shapes.get(edge.targetId) : undefined;
     const sourceAnchor = this.anchorOf(edge.sourceId);
@@ -82,7 +82,7 @@ export class AssociationRoutes {
     return source && target ? this.aroundObstacles(edge, source, target, line, lines) : line;
   }
 
-  private aroundObstacles(edge: DEdge, source: DShape, target: DShape, line: Point[], lines: readonly Point[][]): Point[] {
+  private aroundObstacles(edge: PlaneEdge, source: PlaneShape, target: PlaneShape, line: Point[], lines: readonly Point[][]): Point[] {
     const obstacles = this.obstacles.around(edge, source, target);
     if (this.clear(edge, line, obstacles)) {
       return line;
@@ -91,12 +91,12 @@ export class AssociationRoutes {
     return new Polyline(OrthogonalRouter.route({ source: source.bounds, target: target.bounds, obstacles, lines, ...freeLines })).rounded();
   }
 
-  private clear(edge: DEdge, line: readonly Point[], obstacles: readonly Box[]): boolean {
+  private clear(edge: PlaneEdge, line: readonly Point[], obstacles: readonly Box[]): boolean {
     const polyline = new Polyline(line);
     return !obstacles.some((obstacle) => polyline.hits(obstacle)) && !this.damage.touchesFresh(edge, line);
   }
 
-  private dockedRoute(edge: DEdge, source: DShape | undefined, target: DShape | undefined, lines: readonly Point[][]): Point[] | undefined {
+  private dockedRoute(edge: PlaneEdge, source: PlaneShape | undefined, target: PlaneShape | undefined, lines: readonly Point[][]): Point[] | undefined {
     const shape = source ?? target;
     const flow = this.plane.edges.get((source ? edge.targetId : edge.sourceId) ?? '');
     if (!shape || (source && target) || !flow || flow.points.length < 2) {

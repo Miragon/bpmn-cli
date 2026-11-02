@@ -11,7 +11,7 @@ export class ElementColoring {
 
   run(): string[] {
     const swatch = this.operation.color === 'default' ? undefined : this.operation.color;
-    const colored = [...new Set(this.operation.ids)].filter((id) => Swatches.set(this.diOf(id), swatch));
+    const colored = [...new Set(this.operation.ids)].filter((id) => Swatches.set(this.planeElementOf(id), swatch));
     if (swatch && colored.length) {
       this.diagram.document.namespaces.declare('bioc');
       this.diagram.document.namespaces.declare('color');
@@ -19,16 +19,16 @@ export class ElementColoring {
     return colored;
   }
 
-  private diOf(id: string): BpmnElement {
+  private planeElementOf(id: string): BpmnElement {
     const { document, planes } = this.diagram;
     const element = document.tree.require(id);
     if (!planes.length) {
       throw this.diagram.noDiagram();
     }
-    const di = planes.map((plane) => plane.shapes.get(id)?.di ?? plane.edges.get(id)?.di).find((found) => !!found);
-    if (!di) {
+    const planeElement = planes.map((plane) => plane.shapes.get(id)?.planeElement ?? plane.edges.get(id)?.planeElement).find((found) => !!found);
+    if (!planeElement) {
       throw this.diagram.noShape(element, id, 'shape or connection');
     }
-    return di;
+    return planeElement;
   }
 }

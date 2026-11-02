@@ -1,5 +1,5 @@
 import type { Box } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Decision, SpacePass } from './SpacePass.js';
 
 export class SpaceDecisions {
@@ -9,11 +9,11 @@ export class SpaceDecisions {
 
   constructor(private readonly pass: SpacePass) {}
 
-  private static isBand({ kind }: DShape): boolean {
+  private static isBand({ kind }: PlaneShape): boolean {
     return kind === 'participant' || kind === 'lane' || kind === 'group';
   }
 
-  private static centred(shape: DShape, box: Box): boolean {
+  private static centred(shape: PlaneShape, box: Box): boolean {
     const { x, y } = shape.bounds.center;
     return x >= box.x && x <= box.right && y >= box.y && y <= box.bottom;
   }
@@ -29,7 +29,7 @@ export class SpaceDecisions {
     return this.decisions;
   }
 
-  private decide(shape: DShape, depth = 0): Decision {
+  private decide(shape: PlaneShape, depth = 0): Decision {
     const known = this.decisions.get(shape.id);
     if (known) {
       return known;
@@ -39,7 +39,7 @@ export class SpaceDecisions {
     return verdict;
   }
 
-  private verdictOn(shape: DShape, depth: number): Decision {
+  private verdictOn(shape: PlaneShape, depth: number): Decision {
     const { pass } = this;
     const deeper = depth < SpaceDecisions.MAX_DEPTH;
     const host = shape.hostId ? pass.plane.shapes.get(shape.hostId) : undefined;
@@ -58,7 +58,7 @@ export class SpaceDecisions {
     return leader ? SpaceDecisions.moveOrStay(this.decide(leader, depth + 1) === 'move') : this.verdictAlone(shape);
   }
 
-  private verdictWithHost(shape: DShape, host: DShape, hostDecision: Decision): Decision {
+  private verdictWithHost(shape: PlaneShape, host: PlaneShape, hostDecision: Decision): Decision {
     const { pass } = this;
     if (host.container && hostDecision === 'resize') {
       return SpaceDecisions.moveOrStay(pass.centreBeyondLine(pass.boxOf(shape)));
@@ -66,7 +66,7 @@ export class SpaceDecisions {
     return SpaceDecisions.moveOrStay(hostDecision === 'move');
   }
 
-  private verdictAlone(shape: DShape): Decision {
+  private verdictAlone(shape: PlaneShape): Decision {
     const { pass } = this;
     const { along, line, band, delta } = pass;
     const box = pass.boxOf(shape);
@@ -82,13 +82,13 @@ export class SpaceDecisions {
     return 'stay';
   }
 
-  private carrierOf(shape: DShape): DShape | undefined {
+  private carrierOf(shape: PlaneShape): PlaneShape | undefined {
     const { pass } = this;
     const ids = [shape.kind === 'participant' ? undefined : this.geometricPool(shape), this.geometricLane(shape), shape.parentId];
     return ids.map((id) => (id ? pass.plane.shapes.get(id) : undefined)).find((carrier) => !!carrier && pass.along.near(pass.boxOf(carrier)) >= pass.line);
   }
 
-  private scopeDecision(shape: DShape): Decision | undefined {
+  private scopeDecision(shape: PlaneShape): Decision | undefined {
     const { pass } = this;
     const { scope, along, line } = pass;
     if (!scope || shape === scope.frame || pass.insideFrame(shape)) {
@@ -101,7 +101,7 @@ export class SpaceDecisions {
     return along.near(box) < line && along.far(box) > line ? 'resize' : 'stay';
   }
 
-  private geometricPool(shape: DShape): string | undefined {
+  private geometricPool(shape: PlaneShape): string | undefined {
     if (shape.poolId || SpaceDecisions.isBand(shape) || shape.hostId || shape.parentId) {
       return shape.poolId;
     }
@@ -114,7 +114,7 @@ export class SpaceDecisions {
     return undefined;
   }
 
-  private geometricLane(shape: DShape): string | undefined {
+  private geometricLane(shape: PlaneShape): string | undefined {
     if (shape.laneId || SpaceDecisions.isBand(shape) || shape.hostId || shape.parentId) {
       return shape.laneId;
     }

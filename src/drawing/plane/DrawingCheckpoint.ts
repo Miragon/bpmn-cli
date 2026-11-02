@@ -1,6 +1,6 @@
 import { Polyline, type Box, type Point } from '../../model/index.js';
-import type { DEdge } from './DEdge.js';
-import type { DShape } from './DShape.js';
+import type { PlaneEdge } from './PlaneEdge.js';
+import type { PlaneShape } from './PlaneShape.js';
 import type { Plane } from './Plane.js';
 
 interface SavedShape {
@@ -16,8 +16,8 @@ interface SavedEdge {
 }
 
 export class DrawingCheckpoint {
-  private readonly shapes = new Map<DShape, SavedShape>();
-  private readonly edges = new Map<DEdge, SavedEdge>();
+  private readonly shapes = new Map<PlaneShape, SavedShape>();
+  private readonly edges = new Map<PlaneEdge, SavedEdge>();
 
   constructor(plane?: Plane) {
     if (plane) {
@@ -30,19 +30,19 @@ export class DrawingCheckpoint {
     plane.edges.forEach((edge) => this.keepEdge(edge));
   }
 
-  keepShape(shape: DShape): void {
+  keepShape(shape: PlaneShape): void {
     if (!this.shapes.has(shape)) {
       this.shapes.set(shape, { bounds: shape.bounds.copy(), label: shape.label?.copy() });
     }
   }
 
-  keepEdge(edge: DEdge): void {
+  keepEdge(edge: PlaneEdge): void {
     if (!this.edges.has(edge)) {
       this.edges.set(edge, { points: new Polyline(edge.points).copy(), label: edge.label?.copy(), sourceId: edge.sourceId, targetId: edge.targetId });
     }
   }
 
-  boundsOf(shape: DShape): Box {
+  boundsOf(shape: PlaneShape): Box {
     return this.shapes.get(shape)!.bounds;
   }
 

@@ -54,7 +54,7 @@ export class ReferenceChecks {
 
   private checkReferencesOf(holder: BpmnElement): void {
     const descriptor = holder.descriptor as { isGeneric?: boolean; properties?: ReferenceProperty[] };
-    if (descriptor.isGeneric || ReferenceChecks.isDi(holder)) {
+    if (descriptor.isGeneric || ReferenceChecks.isDrawingPart(holder)) {
       return;
     }
     const index = this.document.tree.all();
@@ -106,7 +106,7 @@ export class ReferenceChecks {
     }
   }
 
-  private static isDi(el: BpmnElement): boolean {
+  private static isDrawingPart(el: BpmnElement): boolean {
     return /^(bpmndi|di|dc):/.test(el.type);
   }
 }

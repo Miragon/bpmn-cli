@@ -1,7 +1,7 @@
 import { Box, BpmnError, type BpmnElement, type Point } from '../../../model/index.js';
 import type { Drawing } from '../../incremental/Drawing.js';
 import type { OperationBefore } from '../../incremental/OperationBefore.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { Semantics } from '../../plane/Semantics.js';
@@ -13,11 +13,11 @@ type Border = 'top' | 'bottom';
 
 interface Move {
   plane: Plane;
-  event: DShape;
-  host: DShape;
+  event: PlaneShape;
+  host: PlaneShape;
   side: Border;
-  frame: DShape | undefined;
-  path: DShape[];
+  frame: PlaneShape | undefined;
+  path: PlaneShape[];
 }
 
 export class BoundaryPlacement {
@@ -31,7 +31,7 @@ export class BoundaryPlacement {
     private readonly notes: string[],
   ) {}
 
-  private static mirrorOffset(node: DShape, host: DShape): number {
+  private static mirrorOffset(node: PlaneShape, host: PlaneShape): number {
     return Math.round(2 * host.bounds.center.y - 2 * node.bounds.center.y);
   }
 
@@ -55,14 +55,14 @@ export class BoundaryPlacement {
     return offset ? [start + offset, start - offset] : [start];
   }
 
-  private static notABoundary(id: string, event: DShape): BpmnError {
+  private static notABoundary(id: string, event: PlaneShape): BpmnError {
     return BpmnError.model('E_WRONG_KIND', `"${id}" is ${event.kind === 'boundary' ? 'a boundary event without a drawn host' : `a ${event.kind}`}: side moves a boundary event to a border of its host`, {
       element: id,
       hint: 'Give the boundary event (`bpmn show <file> <hostId>` lists them); other shapes take a row and / or a column: --row-of, --below, --above, --column-of, --after, --before.',
     });
   }
 
-  private static hasLaneBelow(plane: Plane, frame: DShape): boolean {
+  private static hasLaneBelow(plane: Plane, frame: PlaneShape): boolean {
     return [...plane.shapes.values()].some((lane) => lane.kind === 'lane' && lane !== frame && lane.poolId === frame.poolId && lane.bounds.y >= frame.bounds.bottom - 1);
   }
 
@@ -83,18 +83,18 @@ export class BoundaryPlacement {
     return this.moveAcross(move);
   }
 
-  private exceptionPath(plane: Plane, event: DShape, host: DShape, side: Border): DShape[] {
+  private exceptionPath(plane: Plane, event: PlaneShape, host: PlaneShape, side: Border): PlaneShape[] {
     const frames = new Frames(plane);
     const home = frames.of(host);
     const beyond = (box: Box): boolean => (side === 'bottom' ? box.y >= host.bounds.bottom - 0.5 : box.bottom <= host.bounds.y + 0.5);
-    const followable = (node: DShape): boolean => node.id !== host.id && node.isLeaf && node.kind !== 'boundary' && beyond(node.bounds) && frames.of(node) === home;
+    const followable = (node: PlaneShape): boolean => node.id !== host.id && node.isLeaf && node.kind !== 'boundary' && beyond(node.bounds) && frames.of(node) === home;
     const { byId } = this.diagram.semantics;
-    const path: DShape[] = [];
+    const path: PlaneShape[] = [];
     const inPath = new Set([event.id]);
     for (const id of inPath) {
       for (const flow of Semantics.sequenceFlows(byId.get(id), 'outgoing')) {
         const node = plane.shapes.get(flow.peek<BpmnElement>('targetRef')?.peek<string>('id') ?? '');
-        const onlyFromPath = (candidate: DShape): boolean => Semantics.sequenceFlows(byId.get(candidate.id), 'incoming').every((incoming) => inPath.has(incoming.peek<BpmnElement>('sourceRef')?.peek<string>('id') ?? ''));
+        const onlyFromPath = (candidate: PlaneShape): boolean => Semantics.sequenceFlows(byId.get(candidate.id), 'incoming').every((incoming) => inPath.has(incoming.peek<BpmnElement>('sourceRef')?.peek<string>('id') ?? ''));
         if (node && !inPath.has(node.id) && followable(node) && onlyFromPath(node)) {
           inPath.add(node.id);
           path.push(node);
@@ -117,7 +117,7 @@ export class BoundaryPlacement {
     }
   }
 
-  private makeRoomAbove(drawing: Drawing, host: DShape, frame: DShape, path: readonly DShape[]): void {
+  private makeRoomAbove(drawing: Drawing, host: PlaneShape, frame: PlaneShape, path: readonly PlaneShape[]): void {
     const top = Math.min(...path.map((node) => drawing.space.unitBox(node).y + BoundaryPlacement.mirrorOffset(node, host)));
     const deficit = Math.ceil(Frames.interior(frame, BoundaryPlacement.FRAME_PAD).y - top);
     if (deficit > 0) {
@@ -127,7 +127,7 @@ export class BoundaryPlacement {
     }
   }
 
-  private makeRoomBelow(drawing: Drawing, host: DShape, frame: DShape, path: readonly DShape[]): void {
+  private makeRoomBelow(drawing: Drawing, host: PlaneShape, frame: PlaneShape, path: readonly PlaneShape[]): void {
     const low = Math.max(...path.map((node) => drawing.space.unitBox(node).bottom + BoundaryPlacement.mirrorOffset(node, host)));
     const deficit = Math.ceil(low - Frames.interior(frame, BoundaryPlacement.FRAME_PAD).bottom);
     if (deficit > 0) {
@@ -157,7 +157,7 @@ export class BoundaryPlacement {
     return rerouted;
   }
 
-  private movePath(room: RoomMaker, drawing: Drawing, host: DShape, side: Border, path: readonly DShape[]): void {
+  private movePath(room: RoomMaker, drawing: Drawing, host: PlaneShape, side: Border, path: readonly PlaneShape[]): void {
     const shifts = path.map((node) => ({ node, offset: BoundaryPlacement.mirrorOffset(node, host) }));
     for (const { node, offset } of shifts) {
       room.checkFrames([node], 0, offset, `on the ${side} side of ${host.id}`, [host]);
@@ -167,7 +167,7 @@ export class BoundaryPlacement {
     }
   }
 
-  private rerouted(drawing: Drawing, event: DShape): string[] {
+  private rerouted(drawing: Drawing, event: PlaneShape): string[] {
     const rerouted = drawing.settle(this.before);
     for (const edge of drawing.plane.edges.values()) {
       if (edge.sourceId === event.id && !rerouted.includes(edge.id) && drawing.reroute(edge)) {
@@ -177,7 +177,7 @@ export class BoundaryPlacement {
     return rerouted;
   }
 
-  private freeSpot(plane: Plane, event: DShape, host: DShape, side: Border): Box {
+  private freeSpot(plane: Plane, event: PlaneShape, host: PlaneShape, side: Border): Box {
     const spot = this.spotOnBorder(plane, event, host, side);
     if (!spot) {
       throw BpmnError.model('E_NO_ROOM', `There is no room for ${event.id} on the ${side} border of ${host.id}: other boundary events and docking connections take it`, {
@@ -189,7 +189,7 @@ export class BoundaryPlacement {
     return spot;
   }
 
-  private spotOnBorder(plane: Plane, event: DShape, host: DShape, side: Border): Box | undefined {
+  private spotOnBorder(plane: Plane, event: PlaneShape, host: PlaneShape, side: Border): Box | undefined {
     const hostBox = host.bounds;
     const { width, height } = event.bounds;
     const y = Math.round((side === 'top' ? hostBox.y : hostBox.bottom) - height / 2);

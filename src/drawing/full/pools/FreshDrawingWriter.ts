@@ -16,8 +16,8 @@ interface ShapeOptions {
   label?: Box | undefined;
 }
 
-export class DiWriter {
-  readonly di: BpmnElement[] = [];
+export class FreshDrawingWriter {
+  readonly planeElements: BpmnElement[] = [];
   readonly absBoxes = new Map<string, Box>();
 
   private readonly crossLinks: ScopeLayout['crossLinks'] = [];
@@ -40,21 +40,21 @@ export class DiWriter {
   }
 
   shape(element: BpmnElement, box: Box, { extra = {}, label }: ShapeOptions = {}): void {
-    const shapeDi = this.tree.build('bpmndi:BPMNShape', { id: `BPMNShape_${element.id}`, bpmnElement: element, bounds: this.bounds(box), ...extra });
+    const shape = this.tree.build('bpmndi:BPMNShape', { id: `BPMNShape_${element.id}`, bpmnElement: element, bounds: this.bounds(box), ...extra });
     if (label) {
-      shapeDi.set('label', this.tree.build('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+      shape.set('label', this.tree.build('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
     }
-    this.di.push(shapeDi);
+    this.planeElements.push(shape);
     this.absBoxes.set(element.id, box.copy());
   }
 
   edge(element: BpmnElement, points: readonly Point[], label?: Box): void {
     const waypoint = points.map((point) => this.tree.build('dc:Point', { x: Math.round(point.x), y: Math.round(point.y) }));
-    const edgeDi = this.tree.build('bpmndi:BPMNEdge', { id: `BPMNEdge_${element.id}`, bpmnElement: element, waypoint });
+    const edge = this.tree.build('bpmndi:BPMNEdge', { id: `BPMNEdge_${element.id}`, bpmnElement: element, waypoint });
     if (label) {
-      edgeDi.set('label', this.tree.build('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
+      edge.set('label', this.tree.build('bpmndi:BPMNLabel', { bounds: this.bounds(label) }));
     }
-    this.di.push(edgeDi);
+    this.planeElements.push(edge);
   }
 
   emitScope(scope: ScopeLayout, origin: Point): void {
@@ -66,22 +66,22 @@ export class DiWriter {
       this.emitNode(node, origin);
     }
     for (const edge of scope.edges) {
-      this.edge(edge.el, DiWriter.shiftedPoints(edge.points, origin), edge.label && DiWriter.shifted(edge.label, origin));
+      this.edge(edge.el, FreshDrawingWriter.shiftedPoints(edge.points, origin), edge.label && FreshDrawingWriter.shifted(edge.label, origin));
     }
     for (const compensation of scope.compensations) {
-      this.edge(compensation.el, DiWriter.shiftedPoints(compensation.points, origin));
+      this.edge(compensation.el, FreshDrawingWriter.shiftedPoints(compensation.points, origin));
     }
     for (const artifact of scope.artifacts) {
       const label = artifact.kind === 'annotation' ? undefined : ScopeLabels.of(artifact, 'data');
-      this.shape(artifact.el, DiWriter.shifted(artifact.box, origin), { label: label && DiWriter.shifted(label, origin) });
+      this.shape(artifact.el, FreshDrawingWriter.shifted(artifact.box, origin), { label: label && FreshDrawingWriter.shifted(label, origin) });
       for (const link of artifact.links) {
-        this.edge(link.el, DiWriter.shiftedPoints(link.points, origin));
+        this.edge(link.el, FreshDrawingWriter.shiftedPoints(link.points, origin));
       }
     }
   }
 
   fixLaneShapes(lane: LaneBox, poolBox: Box, baseX: number): void {
-    const laneShape = this.di.find((element) => element.peek('bpmnElement') === lane.el);
+    const laneShape = this.planeElements.find((element) => element.peek('bpmnElement') === lane.el);
     if (laneShape) {
       const bounds = laneShape.peek<BpmnElement>('bounds')!;
       bounds.set('x', baseX + lane.box.x);
@@ -94,14 +94,14 @@ export class DiWriter {
   }
 
   startPlane(): void {
-    this.di.length = 0;
+    this.planeElements.length = 0;
   }
 
   writePlane(definitions: BpmnElement, element: BpmnElement, id: string, warnings: EngineWarning[]): void {
     this.flushCrossLinks(warnings);
-    new LabelDeclutter(this.di).run();
+    new LabelDeclutter(this.planeElements).run();
     const plane = this.tree.build('bpmndi:BPMNPlane', { id: `BPMNPlane_${id}`, bpmnElement: element });
-    plane.add('planeElement', ...this.di);
+    plane.add('planeElement', ...this.planeElements);
     const diagram = this.tree.build('bpmndi:BPMNDiagram', { id: `BPMNDiagram_${id}`, plane });
     plane.parent = diagram;
     definitions.add('diagrams', diagram);
@@ -109,7 +109,7 @@ export class DiWriter {
 
   private flushCrossLinks(warnings: EngineWarning[]): void {
     const { absBoxes, crossLinks } = this;
-    const here = new Set(this.di.filter((element) => element.is('bpmndi:BPMNShape')).map((element) => element.peek<BpmnElement>('bpmnElement')!.id));
+    const here = new Set(this.planeElements.filter((element) => element.is('bpmndi:BPMNShape')).map((element) => element.peek<BpmnElement>('bpmnElement')!.id));
     for (const link of crossLinks) {
       const sourceBox = here.has(link.sourceId) ? absBoxes.get(link.sourceId) : undefined;
       const targetBox = here.has(link.targetId) ? absBoxes.get(link.targetId) : undefined;
@@ -128,26 +128,26 @@ export class DiWriter {
   }
 
   private emitLane(lane: LaneBox, origin: Point): void {
-    this.shape(lane.el, DiWriter.shifted(lane.box, origin), { extra: { isHorizontal: true } });
+    this.shape(lane.el, FreshDrawingWriter.shifted(lane.box, origin), { extra: { isHorizontal: true } });
     for (const child of lane.children) {
       this.emitLane(child, origin);
     }
   }
 
   private emitNode(node: GNode, origin: Point): void {
-    const box = DiWriter.shifted(node.box, origin);
+    const box = FreshDrawingWriter.shifted(node.box, origin);
     if (node.child) {
       this.shape(node.el, box, { extra: { isExpanded: true } });
       this.emitChild(node, node.child, box);
     } else if (node.kind === 'subProcess' || node.kind === 'eventSubProcess') {
       this.shape(node.el, box);
     } else {
-      const label = DiWriter.labelOf(node);
-      this.shape(node.el, box, { extra: node.el.is('bpmn:ExclusiveGateway') ? { isMarkerVisible: true } : {}, label: label && DiWriter.shifted(label, origin) });
+      const label = FreshDrawingWriter.labelOf(node);
+      this.shape(node.el, box, { extra: node.el.is('bpmn:ExclusiveGateway') ? { isMarkerVisible: true } : {}, label: label && FreshDrawingWriter.shifted(label, origin) });
     }
     for (const event of node.boundary) {
       const label = ScopeLabels.of(event, 'boundary');
-      this.shape(event.el, DiWriter.shifted(event.box, origin), { label: label && DiWriter.shifted(label, origin) });
+      this.shape(event.el, FreshDrawingWriter.shifted(event.box, origin), { label: label && FreshDrawingWriter.shifted(label, origin) });
     }
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEdge } from '../../../src/drawing/plane/DEdge.js';
-import { DShape } from '../../../src/drawing/plane/DShape.js';
+import { PlaneEdge } from '../../../src/drawing/plane/PlaneEdge.js';
+import { PlaneShape } from '../../../src/drawing/plane/PlaneShape.js';
 import { Plane } from '../../../src/drawing/plane/Plane.js';
 import { PlaneReader } from '../../../src/drawing/plane/PlaneReader.js';
 import { PlaneWriter } from '../../../src/drawing/plane/PlaneWriter.js';
@@ -25,14 +25,14 @@ describe('PlaneWriter', () => {
   it('rounds what moved to whole pixels and keeps the DI objects', async () => {
     const { planes, writer } = await drawn('models/incremental/boundary.bpmn');
     const shape = planes[0]!.shapes.get('C')!;
-    const { di } = shape;
+    const { planeElement } = shape;
     shape.bounds = new Box(1000.4, 2000.6, 100, 80);
 
     writer.write(planes);
 
-    expect(shape.di).toBe(di);
-    expect(di!.peek<BpmnElement>('bounds')!.peek('x')).toBe(1000);
-    expect(di!.peek<BpmnElement>('bounds')!.peek('y')).toBe(2001);
+    expect(shape.planeElement).toBe(planeElement);
+    expect(planeElement!.peek<BpmnElement>('bounds')!.peek('x')).toBe(1000);
+    expect(planeElement!.peek<BpmnElement>('bounds')!.peek('y')).toBe(2001);
   });
 
   it('keeps two waypoints when rounding would merge them', async () => {
@@ -42,41 +42,41 @@ describe('PlaneWriter', () => {
 
     writer.write(planes);
 
-    expect(edge.di!.list('waypoint')).toHaveLength(2);
+    expect(edge.planeElement!.list('waypoint')).toHaveLength(2);
   });
 
   it('creates DI for a new shape and a new edge in the id style of the file', async () => {
     const { document, planes, writer } = await drawn('models/incremental/boundary.bpmn');
     const plane = planes[0]!;
     const fresh = document.tree.create('bpmn:ExclusiveGateway', { id: 'fresh' });
-    const shape = new DShape('fresh', fresh, new Box(0, 0, 50, 50), 'gateway', false);
+    const shape = new PlaneShape('fresh', fresh, new Box(0, 0, 50, 50), 'gateway', false);
     shape.label = new Box(0, 60, 20, 14);
     plane.shapes.set('fresh', shape);
     const flow = document.tree.create('bpmn:SequenceFlow', { id: 'fresh_flow' });
-    const edge = new DEdge('fresh_flow', flow, 'sequenceFlow', [new Point(0, 0), new Point(10, 0)]);
+    const edge = new PlaneEdge('fresh_flow', flow, 'sequenceFlow', [new Point(0, 0), new Point(10, 0)]);
     edge.label = new Box(1, 2, 3, 4);
     plane.edges.set('fresh_flow', edge);
 
     writer.write(planes);
 
-    expect(shape.di?.peek('isMarkerVisible')).toBe(true);
-    expect(shape.di?.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds')?.peek('y')).toBe(60);
-    expect(edge.di?.list('waypoint')).toHaveLength(2);
-    expect(plane.di!.list('planeElement')).toContain(edge.di);
+    expect(shape.planeElement?.peek('isMarkerVisible')).toBe(true);
+    expect(shape.planeElement?.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds')?.peek('y')).toBe(60);
+    expect(edge.planeElement?.list('waypoint')).toHaveLength(2);
+    expect(plane.bpmnPlane!.list('planeElement')).toContain(edge.planeElement);
   });
 
   it('marks a new pool horizontal and a new sub-process with its expansion', async () => {
     const { document, planes, writer } = await drawn('models/incremental/boundary.bpmn');
-    const pool = new DShape('new_pool', document.tree.create('bpmn:Participant', { id: 'new_pool' }), new Box(0, 0, 500, 200), 'participant', true);
-    const sub = new DShape('new_sub', document.tree.create('bpmn:SubProcess', { id: 'new_sub' }), new Box(0, 0, 350, 200), 'subProcess', true);
+    const pool = new PlaneShape('new_pool', document.tree.create('bpmn:Participant', { id: 'new_pool' }), new Box(0, 0, 500, 200), 'participant', true);
+    const sub = new PlaneShape('new_sub', document.tree.create('bpmn:SubProcess', { id: 'new_sub' }), new Box(0, 0, 350, 200), 'subProcess', true);
     sub.expanded = true;
     planes[0]!.shapes.set('new_pool', pool);
     planes[0]!.shapes.set('new_sub', sub);
 
     writer.write(planes);
 
-    expect(pool.di?.peek('isHorizontal')).toBe(true);
-    expect(sub.di?.peek('isExpanded')).toBe(true);
+    expect(pool.planeElement?.peek('isHorizontal')).toBe(true);
+    expect(sub.planeElement?.peek('isExpanded')).toBe(true);
   });
 
   it('follows a collapse of an existing sub-process', async () => {
@@ -86,7 +86,7 @@ describe('PlaneWriter', () => {
 
     writer.write(planes);
 
-    expect(sub.di!.peek('isExpanded')).toBe(false);
+    expect(sub.planeElement!.peek('isExpanded')).toBe(false);
   });
 
   it('creates plane and diagram for a plane without DI', async () => {
@@ -97,7 +97,7 @@ describe('PlaneWriter', () => {
     writer.write([plane]);
 
     expect(document.tree.definitions.list('diagrams')).toHaveLength(2);
-    expect(plane.di?.peek('bpmnElement')).toBe(sub);
+    expect(plane.bpmnPlane?.peek('bpmnElement')).toBe(sub);
     expect(plane.id).not.toBe('new');
   });
 
@@ -108,7 +108,7 @@ describe('PlaneWriter', () => {
 
     writer.write(planes);
 
-    expect(planes[0]!.di!.peek('bpmnElement')).toBe(root);
+    expect(planes[0]!.bpmnPlane!.peek('bpmnElement')).toBe(root);
   });
 
   it('deletes a dropped element and a deleted plane', async () => {
@@ -116,13 +116,13 @@ describe('PlaneWriter', () => {
     const [main, view] = planes;
     const dropped = main!.shapes.get('A')!;
     main!.shapes.delete('A');
-    main!.dropped.push(dropped.di!);
+    main!.dropped.push(dropped.planeElement!);
     view!.deleted = true;
 
     writer.write(planes);
 
     expect(main!.dropped).toEqual([]);
-    expect(main!.di!.list('planeElement')).not.toContain(dropped.di);
+    expect(main!.bpmnPlane!.list('planeElement')).not.toContain(dropped.planeElement);
     expect(document.tree.definitions.list('diagrams')).toHaveLength(1);
   });
 
@@ -135,7 +135,7 @@ describe('PlaneWriter', () => {
 
     writer.write(planes);
 
-    expect(view!.di!.list('planeElement')).toContain(shape.di);
-    expect(main!.di!.list('planeElement')).not.toContain(shape.di);
+    expect(view!.bpmnPlane!.list('planeElement')).toContain(shape.planeElement);
+    expect(main!.bpmnPlane!.list('planeElement')).not.toContain(shape.planeElement);
   });
 });

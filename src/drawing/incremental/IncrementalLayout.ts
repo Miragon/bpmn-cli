@@ -1,7 +1,7 @@
-import { DiPruner, type Box, type BpmnDocument, type ChangeSet } from '../../model/index.js';
+import { DrawingPruner, type Box, type BpmnDocument, type ChangeSet } from '../../model/index.js';
 import type { DrawingSnapshot } from '../DrawingSnapshot.js';
 import type { EngineDrawing } from '../full/FullLayout.js';
-import type { DEdge } from '../plane/DEdge.js';
+import type { PlaneEdge } from '../plane/PlaneEdge.js';
 import type { Plane } from '../plane/Plane.js';
 import { PlaneReader } from '../plane/PlaneReader.js';
 import { PlaneWriter } from '../plane/PlaneWriter.js';
@@ -12,7 +12,7 @@ import { NodePlacer } from './placement/NodePlacer.js';
 import { PlacementState } from './placement/PlacementState.js';
 import type { EdgeBefore } from './routing/EdgeRouter.js';
 import { CrossingRepair } from './run/CrossingRepair.js';
-import { DuplicateDiGuard } from './run/DuplicateDiGuard.js';
+import { DuplicatePlaneElementGuard } from './run/DuplicatePlaneElementGuard.js';
 import { EdgeCollection } from './run/EdgeCollection.js';
 import { FrameGrowth } from './run/FrameGrowth.js';
 import { IncrementalRouting } from './run/IncrementalRouting.js';
@@ -37,7 +37,7 @@ interface Steps {
   labels: LabelRefresh;
   nodes: NewNodes;
   report: RunReport;
-  edgesBefore: Map<DEdge, EdgeBefore>;
+  edgesBefore: Map<PlaneEdge, EdgeBefore>;
 }
 
 export class IncrementalLayout {
@@ -50,9 +50,9 @@ export class IncrementalLayout {
     const { tree } = this.document;
     const { definitions } = tree;
     const semantics = Semantics.of(definitions);
-    const prunedNow = DiPruner.prune(definitions, semantics.byId);
+    const prunedNow = DrawingPruner.prune(definitions, semantics.byId);
     const stale = this.before.pruneReEnded(definitions);
-    const duplicates = new DuplicateDiGuard(definitions);
+    const duplicates = new DuplicatePlaneElementGuard(definitions);
     const run = this.runOf(semantics, changes);
     if (stale.length) {
       run.notes.push(`edge(s) of ${[...new Set(stale)].join(', ')} removed from a further diagram of the same root: their ends changed, and further diagrams are not laid out`);
@@ -103,7 +103,7 @@ export class IncrementalLayout {
 
   private stepsOf(run: LayoutRun, changes: ChangeSet, baseline: ReadonlyMap<string, Box>): Steps {
     const { before, document } = this;
-    const edgesBefore = new Map<DEdge, EdgeBefore>();
+    const edgesBefore = new Map<PlaneEdge, EdgeBefore>();
     let engineRun: Promise<EngineDrawing> | undefined;
     const engine = (): Promise<EngineDrawing> => (engineRun ??= import('../full/FullLayout.js').then(({ FullLayout }) => FullLayout.engineDrawing(document, changes.expansions)));
     const adopter = new BlockAdopter(run);
@@ -130,7 +130,7 @@ export class IncrementalLayout {
       for (const edge of plane.edges.values()) {
         edgesBefore.set(edge, routes.edgeBefore(edge));
         const ends = vertical ? [] : routes.detachedEnds(edge);
-        if (ends.length && !(edge.di && this.before.changedEnds(edge.di).length)) {
+        if (ends.length && !(edge.planeElement && this.before.changedEnds(edge.planeElement).length)) {
           detached.set(edge.id, ends);
         }
       }

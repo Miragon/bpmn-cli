@@ -13,7 +13,7 @@ export class ShapePainter {
   private readonly labels: LabelPainter;
 
   constructor(private readonly shape: PlaneShape) {
-    this.style = new Style(shape.di);
+    this.style = new Style(shape.planeElement);
     this.labels = new LabelPainter(this.style.label);
   }
 

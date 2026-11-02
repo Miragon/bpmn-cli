@@ -2,7 +2,7 @@ import type { BpmnElement } from '../../model/index.js';
 import { ReorderTarget, type OrderOperation } from '../../operations/index.js';
 import type { Drawing } from '../incremental/Drawing.js';
 import type { OperationBefore } from '../incremental/OperationBefore.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import type { Plane } from '../plane/Plane.js';
 import type { DrawnDiagram } from './DrawnDiagram.js';
 
@@ -16,15 +16,15 @@ export class BandReordering {
     private readonly notes: string[],
   ) {}
 
-  private static byTop(bands: readonly DShape[]): DShape[] {
+  private static byTop(bands: readonly PlaneShape[]): PlaneShape[] {
     return [...bands].sort((one, other) => one.bounds.y - other.bounds.y);
   }
 
-  private static inOrder(bands: readonly DShape[], byTop: readonly DShape[]): boolean {
+  private static inOrder(bands: readonly PlaneShape[], byTop: readonly PlaneShape[]): boolean {
     return bands.every((band, index) => band === byTop[index]);
   }
 
-  private static isCarried({ kind, hostId, parentId }: DShape): boolean {
+  private static isCarried({ kind, hostId, parentId }: PlaneShape): boolean {
     return kind !== 'participant' && !hostId && !parentId;
   }
 
@@ -32,7 +32,7 @@ export class BandReordering {
     return elements.map((element) => element.peek<string>('id') ?? '').filter(Boolean);
   }
 
-  private static laneBandOf(shape: DShape, bands: readonly DShape[], subtrees: Map<DShape, Set<string>>, poolId: string | undefined): DShape | undefined {
+  private static laneBandOf(shape: PlaneShape, bands: readonly PlaneShape[], subtrees: Map<PlaneShape, Set<string>>, poolId: string | undefined): PlaneShape | undefined {
     const { id, kind, laneId, bounds } = shape;
     if (kind === 'lane') {
       return bands.find((band) => band.id !== id && subtrees.get(band)!.has(id));
@@ -44,7 +44,7 @@ export class BandReordering {
     return shape.poolId === poolId && (!shape.container || kind === 'subProcess') ? bands.find((band) => y >= band.bounds.y && y < band.bounds.bottom) : undefined;
   }
 
-  private static moveBand(drawing: Drawing, band: DShape, members: readonly DShape[], dy: number): void {
+  private static moveBand(drawing: Drawing, band: PlaneShape, members: readonly PlaneShape[], dy: number): void {
     if (!dy) {
       return;
     }
@@ -58,7 +58,7 @@ export class BandReordering {
     }
   }
 
-  private static growOverfullLanes(drawing: Drawing, bands: readonly DShape[], members: Map<DShape, DShape[]>): void {
+  private static growOverfullLanes(drawing: Drawing, bands: readonly PlaneShape[], members: Map<PlaneShape, PlaneShape[]>): void {
     const { poolId } = bands[0]!;
     const pool = poolId ? drawing.plane.shapes.get(poolId) : undefined;
     for (const band of bands) {
@@ -70,7 +70,7 @@ export class BandReordering {
     }
   }
 
-  private static poolBandOf({ poolId, bounds }: DShape, plane: Plane, bands: readonly DShape[]): DShape | undefined {
+  private static poolBandOf({ poolId, bounds }: PlaneShape, plane: Plane, bands: readonly PlaneShape[]): PlaneShape | undefined {
     if (poolId) {
       return plane.shapes.get(poolId);
     }
@@ -128,10 +128,10 @@ export class BandReordering {
     return subtree;
   }
 
-  private laneMembers(plane: Plane, bands: readonly DShape[]): Map<DShape, DShape[]> {
+  private laneMembers(plane: Plane, bands: readonly PlaneShape[]): Map<PlaneShape, PlaneShape[]> {
     const subtrees = new Map(bands.map((band) => [band, this.laneSubtree(band.id)]));
     const { poolId } = bands[0]!;
-    const members = new Map<DShape, DShape[]>(bands.map((band) => [band, []]));
+    const members = new Map<PlaneShape, PlaneShape[]>(bands.map((band) => [band, []]));
     for (const shape of [...plane.shapes.values()].filter(BandReordering.isCarried)) {
       const band = BandReordering.laneBandOf(shape, bands, subtrees, poolId);
       if (band) {
@@ -169,7 +169,7 @@ export class BandReordering {
     return drawing.settle(this.before);
   }
 
-  private stacked(byTop: readonly DShape[]): boolean {
+  private stacked(byTop: readonly PlaneShape[]): boolean {
     for (let index = 0; index + 1 < byTop.length; index++) {
       const upper = byTop[index]!;
       const lower = byTop[index + 1]!;
@@ -181,8 +181,8 @@ export class BandReordering {
     return true;
   }
 
-  private poolMembers(plane: Plane, bands: readonly DShape[]): Map<DShape, DShape[]> {
-    const members = new Map<DShape, DShape[]>(bands.map((band) => [band, []]));
+  private poolMembers(plane: Plane, bands: readonly PlaneShape[]): Map<PlaneShape, PlaneShape[]> {
+    const members = new Map<PlaneShape, PlaneShape[]>(bands.map((band) => [band, []]));
     for (const shape of [...plane.shapes.values()].filter(BandReordering.isCarried)) {
       const pool = BandReordering.poolBandOf(shape, plane, bands);
       if (pool) {

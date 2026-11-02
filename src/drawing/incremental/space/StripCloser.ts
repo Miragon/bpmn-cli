@@ -1,7 +1,7 @@
 import type { Box } from '../../../model/index.js';
 import { BoxAxis, type Axis, type Band } from '../../plane/BoxAxis.js';
 import { DrawingCheckpoint } from '../../plane/DrawingCheckpoint.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { SpaceRequest, SpaceResult } from './SpacePass.js';
 
@@ -66,7 +66,7 @@ export class StripCloser {
     return along.near(box) < high && along.far(box) > low && along.overlapsBand(box, band);
   }
 
-  private borderInside({ bounds }: DShape, { along, low, high }: Opening): boolean {
+  private borderInside({ bounds }: PlaneShape, { along, low, high }: Opening): boolean {
     const near = along.near(bounds), far = along.far(bounds);
     return (near > low && near < high) || (far > low && far < high);
   }

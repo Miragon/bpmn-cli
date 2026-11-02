@@ -1,4 +1,4 @@
-import { Box, ChangeEntries, DiagramIndex, DiPruner, Point, Polyline, type BpmnDocument, type BpmnElement } from '../model/index.js';
+import { Box, ChangeEntries, DiagramIndex, DrawingPruner, Point, Polyline, type BpmnDocument, type BpmnElement } from '../model/index.js';
 import { Stickies, type ResolvedAnchor, type StickyAnchor } from './diagram/Stickies.js';
 import { Plane } from './plane/Plane.js';
 import { PlaneReader, type EdgeEnds } from './plane/PlaneReader.js';
@@ -6,7 +6,7 @@ import { Semantics } from './plane/Semantics.js';
 
 export interface SnapEntry {
   id: string;
-  planeDi?: BpmnElement | undefined;
+  bpmnPlane?: BpmnElement | undefined;
   type: string;
   kind: string;
   bounds?: Box;
@@ -31,7 +31,7 @@ export interface RedrawnElements {
 }
 
 export class DrawingSnapshot {
-  readonly byDi = new Map<BpmnElement, SnapEntry>();
+  readonly byPlaneElement = new Map<BpmnElement, SnapEntry>();
   readonly scopeOf = new Map<string, string>();
   readonly hostOf = new Map<string, string>();
   readonly names = new Map<string, string>();
@@ -81,7 +81,7 @@ export class DrawingSnapshot {
   }
 
   redrawnIn({ tree }: BpmnDocument): RedrawnElements {
-    const drawn = new Map([...this.byDi.values()].map((entry) => [this.currentId(entry.id), entry]));
+    const drawn = new Map([...this.byPlaneElement.values()].map((entry) => [this.currentId(entry.id), entry]));
     const planes = new PlaneReader(tree.definitions, Semantics.of(tree.definitions)).planes();
     const moved = planes.flatMap((plane) => [...plane.shapes.values()]).filter(({ id, bounds }) => !Box.same(drawn.get(id)?.bounds, bounds));
     const rerouted = planes.flatMap((plane) => [...plane.edges.values()]).filter(({ id, points }) => !new Polyline(drawn.get(id)?.points ?? []).same(new Polyline(points)));
@@ -89,7 +89,7 @@ export class DrawingSnapshot {
   }
 
   changedEnds(edge: BpmnElement): ChangedEnd[] {
-    const old = this.byDi.get(edge);
+    const old = this.byPlaneElement.get(edge);
     const element = edge.peek<BpmnElement>('bpmnElement');
     if (!old || !element || (old.kind !== 'sequenceFlow' && old.kind !== 'messageFlow')) {
       return [];
@@ -106,7 +106,7 @@ export class DrawingSnapshot {
   }
 
   pruneReEnded(definitions: BpmnElement): string[] {
-    return DiPruner.pruneEdges(definitions, (edge, plane, further) => {
+    return DrawingPruner.pruneEdges(definitions, (edge, plane, further) => {
       const ends = further ? this.changedEnds(edge) : [];
       return ends.length > 0 && !ends.every((end) => DrawingSnapshot.reaches(edge, plane, end));
     });
@@ -155,18 +155,18 @@ export class DrawingSnapshot {
 
   private notePlane(plane: Plane): void {
     for (const shape of plane.shapes.values()) {
-      if (shape.di) {
+      if (shape.planeElement) {
         if (shape.el.is('bpmn:FlowNode')) {
           this.flowNodeShapes++;
         }
         const { id, kind, bounds, label, expanded, laneId, poolId, parentId } = shape;
-        this.byDi.set(shape.di, { id, planeDi: plane.di, type: shape.el.type, kind, bounds: bounds.copy(), label: label?.copy(), expanded, laneId, poolId, parentId });
+        this.byPlaneElement.set(shape.planeElement, { id, bpmnPlane: plane.bpmnPlane, type: shape.el.type, kind, bounds: bounds.copy(), label: label?.copy(), expanded, laneId, poolId, parentId });
       }
     }
     for (const edge of plane.edges.values()) {
-      if (edge.di) {
+      if (edge.planeElement) {
         const { id, kind, points, label, sourceId, targetId } = edge;
-        this.byDi.set(edge.di, { id, planeDi: plane.di, type: edge.el.type, kind, points: new Polyline(points).copy(), label: label?.copy(), sourceId, targetId });
+        this.byPlaneElement.set(edge.planeElement, { id, bpmnPlane: plane.bpmnPlane, type: edge.el.type, kind, points: new Polyline(points).copy(), label: label?.copy(), sourceId, targetId });
       }
     }
   }

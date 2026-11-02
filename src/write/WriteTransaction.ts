@@ -77,7 +77,7 @@ export class WriteTransaction {
   private async change(document: BpmnDocument, operations: ParsedOperations, input: string, hosts: HostValidators, hostBefore: readonly ValidatorRun[]): Promise<EditResult> {
     const { force } = this.options;
     const snapshot = DrawingSnapshot.of(document);
-    const scoreBefore = snapshot.byDi.size > 0 ? this.scoreOf(document) : undefined;
+    const scoreBefore = snapshot.byPlaneElement.size > 0 ? this.scoreOf(document) : undefined;
     const run = new ModelOperationRunner(document, { force }).run(operations);
     const drawing = await this.draw(document, snapshot, run);
     const score = new ScoreChange(scoreBefore, this.scoreOf(document));

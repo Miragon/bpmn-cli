@@ -1,6 +1,6 @@
 import { Box, type BpmnElement } from '../../model/index.js';
 import type { DrawingSnapshot, SnapEntry } from '../DrawingSnapshot.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import { Frames } from '../plane/Frames.js';
 import { Plane } from '../plane/Plane.js';
 import { ShapeSizes } from '../plane/ShapeSizes.js';
@@ -76,16 +76,16 @@ export class DrawingDiff {
     }
   }
 
-  private planeOfDi(planeDi: BpmnElement | undefined): Plane | undefined {
-    return planeDi ? this.run.planes.find((plane) => plane.di === planeDi) : undefined;
+  private planeDrawnOn(bpmnPlane: BpmnElement | undefined): Plane | undefined {
+    return bpmnPlane ? this.run.planes.find((plane) => plane.bpmnPlane === bpmnPlane) : undefined;
   }
 
-  private liveDi(): Set<BpmnElement> {
+  private livePlaneElements(): Set<BpmnElement> {
     const live = new Set<BpmnElement>();
     for (const plane of this.run.planes) {
-      for (const { di } of [...plane.shapes.values(), ...plane.edges.values()]) {
-        if (di) {
-          live.add(di);
+      for (const { planeElement } of [...plane.shapes.values(), ...plane.edges.values()]) {
+        if (planeElement) {
+          live.add(planeElement);
         }
       }
     }
@@ -93,11 +93,11 @@ export class DrawingDiff {
   }
 
   private removedStrips(): Strip[] {
-    const live = this.liveDi();
+    const live = this.livePlaneElements();
     const strips: Strip[] = [];
-    for (const [di, entry] of this.before.byDi) {
-      const plane = this.planeOfDi(entry.planeDi);
-      if (!live.has(di) && entry.bounds && plane) {
+    for (const [planeElement, entry] of this.before.byPlaneElement) {
+      const plane = this.planeDrawnOn(entry.bpmnPlane);
+      if (!live.has(planeElement) && entry.bounds && plane) {
         strips.push(...this.stripOfRemoved(plane, entry, entry.bounds));
       }
     }
@@ -124,10 +124,10 @@ export class DrawingDiff {
     return { plane, box, ...(poolId ? { poolId } : {}), ...(parentId ? { parentId } : {}) };
   }
 
-  private reattach(plane: Plane, shape: DShape): void {
+  private reattach(plane: Plane, shape: PlaneShape): void {
     const { run, before } = this;
     const hostBefore = run.cur(before.hostOf.get(run.oldId(shape)));
-    if (!shape.di || !before.byDi.has(shape.di) || hostBefore === undefined || hostBefore === shape.hostId || !plane.shapes.has(shape.id)) {
+    if (!shape.planeElement || !before.byPlaneElement.has(shape.planeElement) || hostBefore === undefined || hostBefore === shape.hostId || !plane.shapes.has(shape.id)) {
       return;
     }
     plane.shapes.delete(shape.id);
@@ -136,7 +136,7 @@ export class DrawingDiff {
     this.rerouteTouching(plane, new Set([shape.id]), new Set());
   }
 
-  private movedHome(plane: Plane, shape: DShape, relocated: ReadonlySet<string>): boolean {
+  private movedHome(plane: Plane, shape: PlaneShape, relocated: ReadonlySet<string>): boolean {
     const { run, before } = this;
     const scopeNow = run.semantics.scopeOf.get(shape.id)?.peek<string>('id');
     const scopeBefore = run.cur(before.scopeOf.get(run.oldId(shape)));
@@ -144,7 +144,7 @@ export class DrawingDiff {
     return relocated.has(shape.id) || scopeNow !== scopeBefore || (!!home && home !== plane);
   }
 
-  private lift(plane: Plane, shape: DShape): Strip {
+  private lift(plane: Plane, shape: PlaneShape): Strip {
     const { run, before } = this;
     const boundaries = plane.boundariesOf(shape.id);
     const content = shape.kind === 'subProcess' && shape.expanded ? plane.contentOf(shape.id) : undefined;
@@ -153,7 +153,7 @@ export class DrawingDiff {
     }
     run.place.reuse.set(shape.id, { shape, boundaries, from: plane, ...(content ? { content } : {}) });
     run.relocated.add(shape.id);
-    const was = shape.di ? before.byDi.get(shape.di) : undefined;
+    const was = shape.planeElement ? before.byPlaneElement.get(shape.planeElement) : undefined;
     const own = new Set([shape.id, ...boundaries.map((boundary) => boundary.id)]);
     this.rerouteTouching(plane, own, new Set(content?.edges.map((edge) => edge.id)));
     return this.stripAt(plane, shape.bounds.copy(), was ? run.cur(was.poolId) : shape.poolId, was ? run.cur(was.parentId) : shape.parentId);
@@ -167,7 +167,7 @@ export class DrawingDiff {
     }
   }
 
-  private frameOf({ plane, poolId, parentId }: Strip): DShape | undefined {
+  private frameOf({ plane, poolId, parentId }: Strip): PlaneShape | undefined {
     if (parentId) {
       return plane.shapes.get(parentId);
     }
@@ -184,7 +184,7 @@ export class DrawingDiff {
     const band = frame?.bounds;
     const sub = frame?.kind === 'subProcess' ? frame : undefined;
     const keep = sub ? this.outsideOf(plane, sub) : undefined;
-    const inBand = (shape: DShape): boolean => !band || (shape.bounds.center.y >= band.y && shape.bounds.center.y <= band.bottom);
+    const inBand = (shape: PlaneShape): boolean => !band || (shape.bounds.center.y >= band.y && shape.bounds.center.y <= band.bottom);
     if (!plane.leaves().some((shape) => shape.bounds.x >= to && inBand(shape) && !keep?.has(shape.id))) {
       return;
     }
@@ -193,21 +193,21 @@ export class DrawingDiff {
     result?.moved.forEach((id) => run.place.moved.add(id));
   }
 
-  private outsideOf(plane: Plane, sub: DShape): Set<string> {
+  private outsideOf(plane: Plane, sub: PlaneShape): Set<string> {
     const frames = new Frames(plane);
     return new Set([...plane.shapes.values()].filter((shape) => shape !== sub && shape.hostId !== sub.id && !frames.within(shape, sub)).map((shape) => shape.id));
   }
 
-  private shrinkRetyped(plane: Plane, shape: DShape): void {
+  private shrinkRetyped(plane: Plane, shape: PlaneShape): void {
     const { run } = this;
-    const old = shape.di ? this.before.byDi.get(shape.di) : undefined;
-    if (shape.kind === 'subProcess' || !old?.expanded || !shape.di) {
+    const old = shape.planeElement ? this.before.byPlaneElement.get(shape.planeElement) : undefined;
+    if (shape.kind === 'subProcess' || !old?.expanded || !shape.planeElement) {
       return;
     }
     const was = shape.bounds.copy();
     const { width, height } = ShapeSizes.TASK;
     shape.bounds = new Box(was.x, Math.round(was.center.y - height / 2), width, height);
-    shape.di.set('isExpanded', undefined);
+    shape.planeElement.set('isExpanded', undefined);
     shape.container = false;
     const drawing = run.drawing(plane);
     drawing.frames.reseatBoundaries(shape, was);
@@ -220,7 +220,7 @@ export class DrawingDiff {
     own.forEach((id) => run.reroute.add(id));
   }
 
-  private childPlane(shape: DShape): Plane {
+  private childPlane(shape: PlaneShape): Plane {
     const { planes } = this.run;
     const existing = planes.find((plane) => plane.rootId === shape.id);
     if (existing) {
@@ -231,7 +231,7 @@ export class DrawingDiff {
     return child;
   }
 
-  private toggle(plane: Plane, shape: DShape, expand: boolean): void {
+  private toggle(plane: Plane, shape: PlaneShape, expand: boolean): void {
     const { run } = this;
     const { frames } = run.drawing(plane);
     if (expand) {

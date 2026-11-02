@@ -1,5 +1,5 @@
 import { Box, type BpmnElement } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { ShapeSides } from '../../plane/ShapeSides.js';
 import { BoundarySpots } from './BoundarySpots.js';
@@ -24,7 +24,7 @@ export class BoundaryPlacer {
     return inside && Math.min(Math.abs(x - host.x), Math.abs(x - host.right), Math.abs(y - host.y), Math.abs(y - host.bottom)) <= tolerance;
   }
 
-  reattachBoundaries(plane: Plane, host: DShape): void {
+  reattachBoundaries(plane: Plane, host: PlaneShape): void {
     for (const boundary of plane.boundariesOf(host.id)) {
       if (BoundaryPlacer.onBorder(boundary.bounds, host.bounds)) {
         continue;
@@ -55,7 +55,7 @@ export class BoundaryPlacer {
     return true;
   }
 
-  topCandidates(plane: Plane, id: string, probe: Probe, event: DShape, host: DShape, frame: DShape | undefined, search: RowSearch): Cand[] {
+  topCandidates(plane: Plane, id: string, probe: Probe, event: PlaneShape, host: PlaneShape, frame: PlaneShape | undefined, search: RowSearch): Cand[] {
     if (ShapeSides.attached(event.bounds, host.bounds) !== 'bottom' || !this.sitsWhereTheCliPutsIt(plane, event, host)) {
       return [];
     }
@@ -71,7 +71,7 @@ export class BoundaryPlacer {
     return lefts.flatMap((left, rank) => this.rows.rowsAbove(plane, probe, frame, { ...search, left }, { anchor: event, start: host.bounds.center.y - row, step: row, penalty: RowChooser.TOP_ROW + 40 * rank, top: spot }));
   }
 
-  seatOnTop(plane: Plane, event: DShape, spot: Box): void {
+  seatOnTop(plane: Plane, event: PlaneShape, spot: Box): void {
     const moved = this.state.drawing(plane).space.shiftShape(event.id, spot.x - event.bounds.x, spot.y - event.bounds.y);
     moved.filter((id) => !this.state.placed.has(id)).forEach((id) => this.state.moved.add(id));
     if (event.label) {
@@ -80,7 +80,7 @@ export class BoundaryPlacer {
     this.state.notes.push(`${event.id} moved to the top border of ${event.hostId}: its path runs above it (below, it would cross a line or take more room)`);
   }
 
-  private makeRoomBelow(plane: Plane, host: DShape, event: Box): void {
+  private makeRoomBelow(plane: Plane, host: PlaneShape, event: Box): void {
     const zone = new Box(event.x - 10, host.bounds.bottom, event.width + 20, event.height / 2 + 35);
     const own = new Set([host.id, ...plane.boundariesOf(host.id).map((boundary) => boundary.id)]);
     const blockers = [...plane.shapes.values()].filter((other) => !own.has(other.id) && (other.isLeaf || (other.kind === 'subProcess' && other.container && other.id !== host.parentId)) && other.bounds.overlaps(zone));
@@ -93,7 +93,7 @@ export class BoundaryPlacer {
     }
   }
 
-  private sitsWhereTheCliPutsIt(plane: Plane, event: DShape, host: DShape): boolean {
+  private sitsWhereTheCliPutsIt(plane: Plane, event: PlaneShape, host: PlaneShape): boolean {
     if (this.state.placed.has(event.id)) {
       return true;
     }

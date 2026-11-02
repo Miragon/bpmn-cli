@@ -1,13 +1,13 @@
 import { DrawingCheckpoint } from '../../plane/DrawingCheckpoint.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { PlacerMemo } from '../placement/PlacementState.js';
 import type { LayoutRun, RunSets } from './LayoutRun.js';
 
 export interface Checkpoint {
   planes: Plane[];
-  members: Map<Plane, { shapes: DShape[]; edges: DEdge[] }>;
+  members: Map<Plane, { shapes: PlaneShape[]; edges: PlaneEdge[] }>;
   drawing: DrawingCheckpoint;
   placer: PlacerMemo;
   sets: RunSets;

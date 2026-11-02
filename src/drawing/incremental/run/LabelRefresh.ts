@@ -1,7 +1,7 @@
 import { Polyline } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Drawing } from '../Drawing.js';
 import type { LayoutRun } from './LayoutRun.js';
 
@@ -32,9 +32,9 @@ export class LabelRefresh {
     }
   }
 
-  private refreshShape(drawing: Drawing, shape: DShape, fresh: readonly Polyline[]): void {
+  private refreshShape(drawing: Drawing, shape: PlaneShape, fresh: readonly Polyline[]): void {
     const { label } = shape;
-    const external = DShape.hasExternalLabel(shape.kind);
+    const external = PlaneShape.hasExternalLabel(shape.kind);
     const { labels } = drawing;
     if ((this.run.place.placed.has(shape.id) && !label) || (this.run.place.relabel.has(shape.id) && external)) {
       labels.placeShapeLabel(shape);
@@ -46,15 +46,15 @@ export class LabelRefresh {
     }
   }
 
-  private refreshRenamed(drawing: Drawing, owner: DShape | DEdge): void {
+  private refreshRenamed(drawing: Drawing, owner: PlaneShape | PlaneEdge): void {
     const name = owner.el.peek<string>('name');
     if (name && name !== this.before.names.get(this.run.oldId(owner))) {
       drawing.labels.refitLabel(owner);
     }
   }
 
-  private clearOfOldTitle(owner: DShape | DEdge, sub: DShape): boolean {
-    const label = owner.di ? this.before.byDi.get(owner.di)?.label : undefined;
+  private clearOfOldTitle(owner: PlaneShape | PlaneEdge, sub: PlaneShape): boolean {
+    const label = owner.planeElement ? this.before.byPlaneElement.get(owner.planeElement)?.label : undefined;
     const title = this.run.oldTitle(sub);
     return !label || !title || !label.overlaps(title);
   }

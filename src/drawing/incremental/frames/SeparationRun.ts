@@ -1,5 +1,5 @@
 import type { Box } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { SpaceTool } from '../space/SpaceTool.js';
@@ -30,8 +30,8 @@ interface Move {
 }
 
 interface Conflict {
-  first: DShape;
-  second: DShape;
+  first: PlaneShape;
+  second: PlaneShape;
   gap: number;
 }
 
@@ -46,7 +46,7 @@ export class SeparationRun {
   private static readonly SHIFTS: Readonly<Record<Direction, readonly [number, number]>> = { right: [1, 0], down: [0, 1], up: [0, -1] };
 
   private readonly result: SeparateResult = { moved: new Set(), resized: new Set(), unresolved: [] };
-  private readonly units: Map<string, DShape>;
+  private readonly units: Map<string, PlaneShape>;
   private readonly active: Set<string>;
   private readonly movable: Set<string>;
   private readonly lockedX: Set<string>;
@@ -103,7 +103,7 @@ export class SeparationRun {
     return first < second ? `${first}|${second}` : `${second}|${first}`;
   }
 
-  private static isUnit(shape: DShape): boolean {
+  private static isUnit(shape: PlaneShape): boolean {
     return shape.isLeaf || (shape.kind === 'subProcess' && shape.container);
   }
 
@@ -120,8 +120,8 @@ export class SeparationRun {
     return this.result;
   }
 
-  private unitsOfPlane(): Map<string, DShape> {
-    const units = new Map<string, DShape>();
+  private unitsOfPlane(): Map<string, PlaneShape> {
+    const units = new Map<string, PlaneShape>();
     for (const shape of this.plane.shapes.values()) {
       const host = shape.hostId ? this.plane.shapes.get(shape.hostId) : undefined;
       if (SeparationRun.isUnit(shape) && !(host && SeparationRun.isUnit(host))) {
@@ -143,7 +143,7 @@ export class SeparationRun {
     return new Set([...ids].flatMap((id) => this.unitOf(id) ?? []));
   }
 
-  private inside(inner: DShape, outer: DShape): boolean {
+  private inside(inner: PlaneShape, outer: PlaneShape): boolean {
     let parentId = inner.parentId ?? (inner.hostId ? this.plane.shapes.get(inner.hostId)?.parentId : undefined);
     for (let depth = 0; parentId && depth < SeparationRun.MAX_DEPTH; depth++) {
       if (parentId === outer.id) {
@@ -154,11 +154,11 @@ export class SeparationRun {
     return false;
   }
 
-  private nested(first: DShape, second: DShape): boolean {
+  private nested(first: PlaneShape, second: PlaneShape): boolean {
     return this.inside(first, second) || this.inside(second, first);
   }
 
-  private swallows(frame: DShape, other: DShape): boolean {
+  private swallows(frame: PlaneShape, other: PlaneShape): boolean {
     const [frameBefore, otherBefore] = [this.baseline?.get(frame.id), this.baseline?.get(other.id)];
     const overlapsNow = frame !== other && frame.container && other.kind !== 'annotation' && !this.nested(frame, other) && frame.bounds.overlaps(other.bounds);
     return overlapsNow && !(frameBefore && otherBefore?.overlaps(frameBefore));
@@ -215,7 +215,7 @@ export class SeparationRun {
     return undefined;
   }
 
-  private noWorseThanBaseline(id: string, first: DShape, second: DShape, box: Box, secondBox: Box, gap: number): boolean {
+  private noWorseThanBaseline(id: string, first: PlaneShape, second: PlaneShape, box: Box, secondBox: Box, gap: number): boolean {
     if (!this.baseline) {
       return false;
     }
@@ -224,7 +224,7 @@ export class SeparationRun {
     return !!firstBefore && !!secondBefore && SeparationRun.shortfall(firstBefore, secondBefore, gap) >= SeparationRun.shortfall(box, secondBox, gap) - 1;
   }
 
-  private movesOf(mover: DShape, obstacle: DShape, sideways: boolean, boxes: Boxes, gap: number): Move[] {
+  private movesOf(mover: PlaneShape, obstacle: PlaneShape, sideways: boolean, boxes: Boxes, gap: number): Move[] {
     const box = boxes.get(mover.id)!;
     const other = boxes.get(obstacle.id)!;
     const used = this.used.get(mover.id);
@@ -242,12 +242,12 @@ export class SeparationRun {
     return moves;
   }
 
-  private topOf(mover: DShape): number {
+  private topOf(mover: PlaneShape): number {
     const frame = new Frames(this.plane).of(mover);
     return frame ? frame.bounds.y + (frame.kind === 'subProcess' ? 25 : 10) : Number.NEGATIVE_INFINITY;
   }
 
-  private candidateMoves(one: DShape, other: DShape, boxes: Boxes, gap: number): Move[] {
+  private candidateMoves(one: PlaneShape, other: PlaneShape, boxes: Boxes, gap: number): Move[] {
     const [first, second] = SeparationRun.readingOrder(boxes.get(one.id)!, boxes.get(other.id)!) <= 0 ? [one, other] : [other, one];
     const pairs = [
       [second, first],

@@ -1,13 +1,13 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
 import { Box, type BpmnElement } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import { DShape, type LabelSide } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import { PlaneShape, type LabelSide } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { LabelClutter } from './LabelClutter.js';
 import { LabelSpots, type LabelSize } from './LabelSpots.js';
 
-type Owner = DShape | DEdge;
+type Owner = PlaneShape | PlaneEdge;
 
 export class LabelPlacer {
   private static readonly STEPS = 3;
@@ -32,22 +32,22 @@ export class LabelPlacer {
     return new Box(left, Math.round(center.y - height / 2), width, height);
   }
 
-  labelOnSide(shape: DShape, side: LabelSide, size: LabelSize): Box {
+  labelOnSide(shape: PlaneShape, side: LabelSide, size: LabelSize): Box {
     const host = this.hostOf(shape);
     const clutter = this.clutterAround(shape, host);
     const spots = new LabelSpots(size).aroundSide(shape, side, LabelPlacer.nameOf(shape.el), host);
     return this.firstFree(shape, clutter, spots) ?? spots[0]!;
   }
 
-  placeShapeLabel(shape: DShape, prefer?: LabelSide): Box | undefined {
+  placeShapeLabel(shape: PlaneShape, prefer?: LabelSide): Box | undefined {
     const name = LabelPlacer.nameOf(shape.el);
-    if (!name || !DShape.hasExternalLabel(shape.kind)) {
+    if (!name || !PlaneShape.hasExternalLabel(shape.kind)) {
       return undefined;
     }
     const size = this.sizeOf(name);
     const host = this.hostOf(shape);
     const clutter = this.clutterAround(shape, host);
-    const order = DShape.LABEL_SIDES[shape.kind] ?? DShape.LABEL_SIDES['event']!;
+    const order = PlaneShape.LABEL_SIDES[shape.kind] ?? PlaneShape.LABEL_SIDES['event']!;
     const sides = prefer ? [prefer, ...order.filter((side) => side !== prefer)] : order;
     const spots = this.firstSpots(shape, sides, size, !prefer ? host : undefined, host);
     const spotter = new LabelSpots(size);
@@ -57,7 +57,7 @@ export class LabelPlacer {
     return shape.label;
   }
 
-  placeEdgeLabel(edge: DEdge): Box | undefined {
+  placeEdgeLabel(edge: PlaneEdge): Box | undefined {
     const name = LabelPlacer.nameOf(edge.el);
     if (!name || edge.points.length < 2 || !(edge.el.is('bpmn:SequenceFlow') || edge.el.is('bpmn:MessageFlow'))) {
       return undefined;
@@ -68,17 +68,17 @@ export class LabelPlacer {
     return edge.label;
   }
 
-  clearTitles(wasClear: (owner: Owner, sub: DShape) => boolean): Array<[string, string]> {
-    const titles = [...this.plane.shapes.values()].flatMap((shape): Array<[DShape, Box]> => {
+  clearTitles(wasClear: (owner: Owner, sub: PlaneShape) => boolean): Array<[string, string]> {
+    const titles = [...this.plane.shapes.values()].flatMap((shape): Array<[PlaneShape, Box]> => {
       const title = Frames.title(shape);
       return title ? [[shape, title]] : [];
     });
-    const onTitle = (box: Box): DShape | undefined => titles.find(([, title]) => box.overlaps(title))?.[0];
+    const onTitle = (box: Box): PlaneShape | undefined => titles.find(([, title]) => box.overlaps(title))?.[0];
     const cleared: Array<[string, string]> = [];
     for (const owner of titles.length ? [...this.plane.shapes.values(), ...this.plane.edges.values()] : []) {
       const old = owner.label;
       const sub = old && LabelPlacer.nameOf(owner.el) ? onTitle(old) : undefined;
-      if (!old || !sub || !wasClear(owner, sub) || (owner instanceof DShape && !DShape.hasExternalLabel(owner.kind))) {
+      if (!old || !sub || !wasClear(owner, sub) || (owner instanceof PlaneShape && !PlaneShape.hasExternalLabel(owner.kind))) {
         continue;
       }
       this.replaceLabel(owner);
@@ -97,10 +97,10 @@ export class LabelPlacer {
     if (!name) {
       return undefined;
     }
-    if (!(owner instanceof DShape)) {
+    if (!(owner instanceof PlaneShape)) {
       return this.placeEdgeLabel(owner);
     }
-    if (!DShape.hasExternalLabel(owner.kind)) {
+    if (!PlaneShape.hasExternalLabel(owner.kind)) {
       return undefined;
     }
     if (!owner.label) {
@@ -120,11 +120,11 @@ export class LabelPlacer {
     return { width, height };
   }
 
-  private hostOf({ hostId }: DShape): DShape | undefined {
+  private hostOf({ hostId }: PlaneShape): PlaneShape | undefined {
     return hostId ? this.plane.shapes.get(hostId) : undefined;
   }
 
-  private clutterAround(shape: DShape, host: DShape | undefined): LabelClutter {
+  private clutterAround(shape: PlaneShape, host: PlaneShape | undefined): LabelClutter {
     const clutter = new LabelClutter(this.plane, shape.id, new Set([shape.id, ...(host ? [host.id] : [])]));
     if (host) {
       clutter.shapes.push(host.bounds);
@@ -132,7 +132,7 @@ export class LabelPlacer {
     return clutter;
   }
 
-  private firstSpots(shape: DShape, sides: readonly LabelSide[], size: LabelSize, boundaryHost: DShape | undefined, host: DShape | undefined): Box[] {
+  private firstSpots(shape: PlaneShape, sides: readonly LabelSide[], size: LabelSize, boundaryHost: PlaneShape | undefined, host: PlaneShape | undefined): Box[] {
     const spots: Box[] = [];
     for (let step = 0; step < LabelPlacer.STEPS; step++) {
       if (shape.kind === 'boundary' && boundaryHost) {
@@ -144,7 +144,7 @@ export class LabelPlacer {
     return spots;
   }
 
-  private firstFree(shape: DShape, clutter: LabelClutter, ...lists: Array<readonly Box[]>): Box | undefined {
+  private firstFree(shape: PlaneShape, clutter: LabelClutter, ...lists: Array<readonly Box[]>): Box | undefined {
     const frame = shape.kind === 'boundary' ? undefined : new Frames(this.plane).of(shape);
     const home = frame ? this.homeOf(shape) : undefined;
     const area = frame ? Frames.labelArea(frame) : undefined;
@@ -162,12 +162,12 @@ export class LabelPlacer {
     return tiers.flatMap((name) => all.find((spot) => !clutter.collides(spot, name)) ?? [])[0];
   }
 
-  private frameOf(shape: DShape | undefined): DShape | undefined {
+  private frameOf(shape: PlaneShape | undefined): PlaneShape | undefined {
     return (shape?.parentId ? this.plane.shapes.get(shape.parentId) : undefined) ?? (shape?.poolId ? this.plane.shapes.get(shape.poolId) : undefined);
   }
 
-  private homeOf(owner: Owner): DShape | undefined {
-    if (owner instanceof DShape) {
+  private homeOf(owner: Owner): PlaneShape | undefined {
+    if (owner instanceof PlaneShape) {
       return this.frameOf(owner);
     }
     const source = this.frameOf(owner.sourceId ? this.plane.shapes.get(owner.sourceId) : undefined);
@@ -175,7 +175,7 @@ export class LabelPlacer {
   }
 
   private replaceLabel(owner: Owner): void {
-    if (!(owner instanceof DShape)) {
+    if (!(owner instanceof PlaneShape)) {
       this.placeEdgeLabel(owner);
       return;
     }

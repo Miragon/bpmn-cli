@@ -1,6 +1,6 @@
 import type { BpmnElement } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import { Semantics } from '../../plane/Semantics.js';
@@ -8,8 +8,8 @@ import type { LayoutRun } from './LayoutRun.js';
 
 interface DrawnEnds {
   plane: Plane;
-  source: DShape;
-  target: DShape;
+  source: PlaneShape;
+  target: PlaneShape;
 }
 
 export class JoinPuller {
@@ -18,7 +18,7 @@ export class JoinPuller {
     private readonly before: DrawingSnapshot,
   ) {}
 
-  private static sameFrame(shape: DShape | undefined, join: DShape): boolean {
+  private static sameFrame(shape: PlaneShape | undefined, join: PlaneShape): boolean {
     return !!shape && shape.poolId === join.poolId && shape.parentId === join.parentId;
   }
 
@@ -58,12 +58,12 @@ export class JoinPuller {
     return plane && source && target ? { plane, source, target } : undefined;
   }
 
-  private isKeptGatewayAhead(join: DShape, source: DShape): boolean {
-    const kept = !!join.di && this.before.byDi.has(join.di) && !this.run.relocated.has(join.id) && !this.run.place.joins.has(join.id);
+  private isKeptGatewayAhead(join: PlaneShape, source: PlaneShape): boolean {
+    const kept = !!join.planeElement && this.before.byPlaneElement.has(join.planeElement) && !this.run.relocated.has(join.id) && !this.run.place.joins.has(join.id);
     return kept && join.el.is('bpmn:Gateway') && join.bounds.center.x < source.bounds.x;
   }
 
-  private pullJoin(plane: Plane, join: DShape, source: DShape, next: Map<string, string[]>): void {
+  private pullJoin(plane: Plane, join: PlaneShape, source: PlaneShape, next: Map<string, string[]>): void {
     const incoming = Semantics.sequenceFlows(join.el, 'incoming');
     const outgoing = Semantics.sequenceFlows(join.el, 'outgoing');
     const successor = outgoing.length === 1 ? plane.shapes.get(outgoing[0]!.peek<BpmnElement>('targetRef')?.peek<string>('id') ?? '') : undefined;

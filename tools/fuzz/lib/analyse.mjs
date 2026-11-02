@@ -5,7 +5,7 @@ const fin = (value) => typeof value === 'number' && Number.isFinite(value);
 const boxOf = (bounds) => (bounds ? { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height } : undefined);
 
 function emptySemantics() {
-  return { byId: new Map(), nodes: [], flows: [], lanes: [], participants: [], processes: [], collab: undefined, scopeOf: new Map(), laneOf: new Map(), needsDi: [], msgFlows: [] };
+  return { byId: new Map(), nodes: [], flows: [], lanes: [], participants: [], processes: [], collab: undefined, scopeOf: new Map(), laneOf: new Map(), needsDrawing: [], msgFlows: [] };
 }
 
 function readSemantics(defs) {
@@ -23,28 +23,28 @@ function readSemantics(defs) {
       reg(fe, scope);
       if (isA(fe, 'bpmn:SequenceFlow')) {
         sem.flows.push(fe);
-        sem.needsDi.push(fe);
+        sem.needsDrawing.push(fe);
       } else if (isA(fe, 'bpmn:FlowNode')) {
         sem.nodes.push(fe);
-        sem.needsDi.push(fe);
+        sem.needsDrawing.push(fe);
         for (const da of [...(fe.dataInputAssociations ?? []), ...(fe.dataOutputAssociations ?? [])]) {
           if (!da.id) {
             continue;
           }
           reg(da, scope);
-          sem.needsDi.push(da);
+          sem.needsDrawing.push(da);
         }
         if (isA(fe, 'bpmn:SubProcess')) {
           walkScope(fe, fe);
         }
       } else if (isA(fe, 'bpmn:DataObjectReference') || isA(fe, 'bpmn:DataStoreReference')) {
-        sem.needsDi.push(fe);
+        sem.needsDrawing.push(fe);
       }
     }
     for (const artifact of container.artifacts ?? []) {
       reg(artifact, scope);
       if (!isA(artifact, 'bpmn:Group')) {
-        sem.needsDi.push(artifact);
+        sem.needsDrawing.push(artifact);
       }
     }
   };
@@ -53,7 +53,7 @@ function readSemantics(defs) {
       for (const lane of ls.lanes ?? []) {
         reg(lane);
         sem.lanes.push({ id: lane.id, processId: proc.id, el: lane, hasChildren: !!lane.childLaneSet?.lanes?.length });
-        sem.needsDi.push(lane);
+        sem.needsDrawing.push(lane);
         for (const ref of lane.flowNodeRef ?? []) {
           if (ref?.id) {
             sem.laneOf.set(ref.id, lane.id);
@@ -72,17 +72,17 @@ function readSemantics(defs) {
       for (const participant of re.participants ?? []) {
         reg(participant, re);
         sem.participants.push({ id: participant.id, processId: participant.processRef?.id, el: participant });
-        sem.needsDi.push(participant);
+        sem.needsDrawing.push(participant);
       }
       for (const messageFlow of re.messageFlows ?? []) {
         reg(messageFlow, re);
         sem.msgFlows.push(messageFlow);
-        sem.needsDi.push(messageFlow);
+        sem.needsDrawing.push(messageFlow);
       }
       for (const artifact of re.artifacts ?? []) {
         reg(artifact, re);
         if (!isA(artifact, 'bpmn:Group')) {
-          sem.needsDi.push(artifact);
+          sem.needsDrawing.push(artifact);
         }
       }
     } else if (isA(re, 'bpmn:Process')) {
@@ -95,25 +95,25 @@ function readSemantics(defs) {
 }
 
 function readPlane(plane) {
-  const planeDi = { id: plane.id, rootId: plane.bpmnElement?.id, shapes: new Map(), edges: new Map(), dupes: [], dangling: [] };
+  const drawnPlane = { id: plane.id, rootId: plane.bpmnElement?.id, shapes: new Map(), edges: new Map(), dupes: [], dangling: [] };
   for (const pe of plane.planeElement ?? []) {
     const eid = pe.bpmnElement?.id;
     if (!eid) {
-      planeDi.dangling.push(pe.id);
+      drawnPlane.dangling.push(pe.id);
       continue;
     }
-    if (planeDi.shapes.has(eid) || planeDi.edges.has(eid)) {
-      planeDi.dupes.push(eid);
+    if (drawnPlane.shapes.has(eid) || drawnPlane.edges.has(eid)) {
+      drawnPlane.dupes.push(eid);
     }
     const label = boxOf(pe.label?.bounds);
     if (isA(pe, 'bpmndi:BPMNShape')) {
       const bounds = pe.bounds;
-      planeDi.shapes.set(eid, { id: eid, x: bounds?.x, y: bounds?.y, w: bounds?.width, h: bounds?.height, expanded: pe.isExpanded, label });
+      drawnPlane.shapes.set(eid, { id: eid, x: bounds?.x, y: bounds?.y, w: bounds?.width, h: bounds?.height, expanded: pe.isExpanded, label });
     } else if (isA(pe, 'bpmndi:BPMNEdge')) {
-      planeDi.edges.set(eid, { id: eid, pts: (pe.waypoint ?? []).map((waypoint) => ({ x: waypoint.x, y: waypoint.y })), label });
+      drawnPlane.edges.set(eid, { id: eid, pts: (pe.waypoint ?? []).map((waypoint) => ({ x: waypoint.x, y: waypoint.y })), label });
     }
   }
-  return planeDi;
+  return drawnPlane;
 }
 
 export async function analyse(xml) {
@@ -191,7 +191,7 @@ function geometryProblems(plane) {
 
 function placementProblems(analysis) {
   const out = [];
-  for (const el of analysis.sem.needsDi) {
+  for (const el of analysis.sem.needsDrawing) {
     const home = homePlane(analysis, el);
     const on = analysis.planes.filter((plane) => plane.shapes.has(el.id) || plane.edges.has(el.id));
     if (!on.length) {
@@ -299,7 +299,7 @@ function staleProblems(analysis) {
   return out;
 }
 
-export function diInvariants(analysis) {
+export function drawingInvariants(analysis) {
   if (analysis.parseError) {
     return [`parse|${analysis.parseError}`];
   }

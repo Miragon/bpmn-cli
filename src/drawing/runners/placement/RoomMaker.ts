@@ -1,16 +1,16 @@
 import { Box, BpmnError } from '../../../model/index.js';
 import type { Drawing } from '../../incremental/Drawing.js';
 import { DrawingCheckpoint } from '../../plane/DrawingCheckpoint.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { FrameEscape } from './FrameEscape.js';
 import { RoomTrial, type RoomOutcome, type RoomRequest } from './RoomTrial.js';
 
 interface Departure {
-  shape: DShape;
-  frame: DShape;
-  there: DShape;
+  shape: PlaneShape;
+  frame: PlaneShape;
+  there: PlaneShape;
   box: Box;
   farReference: boolean;
 }
@@ -50,7 +50,7 @@ export class RoomMaker {
     return frame.kind === 'subProcess' ? RoomMaker.subProcessHint(departure) : `Nodes cannot leave their pool; pick a reference inside ${frame.id}.`;
   }
 
-  private static blockage({ swallowed, displaced, collided, strayed }: RoomOutcome, references: readonly DShape[]): { why: string; related: string[] } {
+  private static blockage({ swallowed, displaced, collided, strayed }: RoomOutcome, references: readonly PlaneShape[]): { why: string; related: string[] } {
     if (swallowed.length) {
       const ids = swallowed.map((frame) => frame.id);
       return { why: `its frame would have to grow over ${ids.join(', ')}`, related: ids };
@@ -73,7 +73,7 @@ export class RoomMaker {
     return { why: 'what is in the way cannot give way without moving the reference or the shapes off it', related: references.map((reference) => reference.id) };
   }
 
-  checkFrames(shapes: readonly DShape[], dx: number, dy: number, target: string, references: readonly DShape[] = []): void {
+  checkFrames(shapes: readonly PlaneShape[], dx: number, dy: number, target: string, references: readonly PlaneShape[] = []): void {
     const escape = new FrameEscape(this.plane);
     for (const shape of shapes) {
       const frame = this.frames.of(shape);
@@ -106,7 +106,7 @@ export class RoomMaker {
     notes.push(...outcome.notes);
   }
 
-  private staysAwayFrom(references: readonly DShape[], frame: DShape, box: Box): boolean {
+  private staysAwayFrom(references: readonly PlaneShape[], frame: PlaneShape, box: Box): boolean {
     return frame.kind === 'subProcess' && references.length > 0 && references.every((reference) => reference !== frame && !this.frames.chain(reference).includes(frame)) && !box.isInside(frame.bounds);
   }
 

@@ -3,4 +3,4 @@ export interface AnalysedModel {
 }
 
 export function analyse(xml: string): Promise<AnalysedModel>;
-export function diInvariants(analysis: AnalysedModel): string[];
+export function drawingInvariants(analysis: AnalysedModel): string[];

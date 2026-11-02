@@ -19,7 +19,7 @@ export class GatewayPainter {
   }
 
   private marker(): string {
-    const { element, di } = this.shape;
+    const { element, planeElement } = this.shape;
     if (element.is('bpmn:ParallelGateway')) {
       return this.bar('M0 -12V12M-12 0H12', 4.5);
     }
@@ -32,7 +32,7 @@ export class GatewayPainter {
     if (element.is('bpmn:EventBasedGateway')) {
       return this.eventBasedMarker();
     }
-    return element.is('bpmn:ExclusiveGateway') && di.value('isMarkerVisible') === true ? this.bar('M-7.5 -9.5L7.5 9.5M7.5 -9.5L-7.5 9.5', 4.5) : '';
+    return element.is('bpmn:ExclusiveGateway') && planeElement.value('isMarkerVisible') === true ? this.bar('M-7.5 -9.5L7.5 9.5M7.5 -9.5L-7.5 9.5', 4.5) : '';
   }
 
   private eventBasedMarker(): string {

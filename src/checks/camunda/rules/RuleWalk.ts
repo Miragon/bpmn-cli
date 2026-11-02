@@ -36,6 +36,6 @@ export abstract class RuleWalk {
   }
 
   private static isBpmnChild(child: unknown): child is BpmnElement {
-    return child instanceof Object && 'isBpmn' in child && 'isDi' in child && child.isBpmn === true && child.isDi === false;
+    return child instanceof Object && 'isBpmn' in child && 'isDrawingPart' in child && child.isBpmn === true && child.isDrawingPart === false;
   }
 }

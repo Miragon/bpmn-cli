@@ -31,7 +31,7 @@ export class GroupRedraw {
     this.homes = shapes.planes().map((plane) => ({ plane, root: plane.peek<BpmnElement>('bpmnElement')?.peek<string>('id'), shapes: GroupShapes.items(plane) }));
   }
 
-  static boundsDi(tree: BpmnTree, box: Box): BpmnElement {
+  static boundsElement(tree: BpmnTree, box: Box): BpmnElement {
     return tree.build('dc:Bounds', { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) });
   }
 
@@ -173,9 +173,9 @@ export class GroupRedraw {
 
   private finish(group: RememberedGroup, el: BpmnElement, plane: BpmnElement, box: Box, label: Box | undefined): void {
     const { tree } = this;
-    const shape = tree.build('bpmndi:BPMNShape', { id: this.shapeId(group.id), bpmnElement: el, bounds: GroupRedraw.boundsDi(tree, box) });
+    const shape = tree.build('bpmndi:BPMNShape', { id: this.shapeId(group.id), bpmnElement: el, bounds: GroupRedraw.boundsElement(tree, box) });
     if (label) {
-      shape.set('label', tree.build('bpmndi:BPMNLabel', { bounds: GroupRedraw.boundsDi(tree, label) }));
+      shape.set('label', tree.build('bpmndi:BPMNLabel', { bounds: GroupRedraw.boundsElement(tree, label) }));
     }
     this.finished.set(group, { plane, shape });
   }

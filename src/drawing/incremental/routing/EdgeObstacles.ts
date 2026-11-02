@@ -1,6 +1,6 @@
 import type { Box, Point } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { Semantics } from '../../plane/Semantics.js';
 
@@ -9,13 +9,13 @@ export class EdgeObstacles {
 
   constructor(private readonly plane: Plane) {}
 
-  static solidFor({ kind, isLeaf, container }: DShape, edge: DEdge): boolean {
+  static solidFor({ kind, isLeaf, container }: PlaneShape, edge: PlaneEdge): boolean {
     return isLeaf || (kind === 'subProcess' && container) || (edge.kind === 'messageFlow' && kind === 'participant');
   }
 
-  ancestors(shape: DShape): Set<string> {
+  ancestors(shape: PlaneShape): Set<string> {
     const ancestors = new Set<string>();
-    let current: DShape | undefined = shape;
+    let current: PlaneShape | undefined = shape;
     for (let depth = 0; current && depth < EdgeObstacles.MAX_DEPTH; depth++) {
       for (const id of [current.parentId, current.laneId, current.poolId]) {
         if (id) {
@@ -27,7 +27,7 @@ export class EdgeObstacles {
     return ancestors;
   }
 
-  around(edge: DEdge, ...ends: DShape[]): Box[] {
+  around(edge: PlaneEdge, ...ends: PlaneShape[]): Box[] {
     const keepOut = new Set(ends.flatMap((end) => [end.id, ...this.ancestors(end)]));
     return [...this.plane.shapes.values()].filter((shape) => !keepOut.has(shape.id) && EdgeObstacles.solidFor(shape, edge)).map((shape) => shape.bounds);
   }

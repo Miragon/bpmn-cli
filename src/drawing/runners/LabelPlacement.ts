@@ -2,7 +2,7 @@ import { TextMetrics } from '@miragon/bpmn-render/text';
 import { Box, BpmnError } from '../../model/index.js';
 import type { LabelOperation } from '../../operations/index.js';
 import type { OperationBefore } from '../incremental/OperationBefore.js';
-import { DShape, type LabelSide } from '../plane/DShape.js';
+import { PlaneShape, type LabelSide } from '../plane/PlaneShape.js';
 import { Frames } from '../plane/Frames.js';
 import type { Plane } from '../plane/Plane.js';
 import type { DrawnDiagram } from './DrawnDiagram.js';
@@ -63,7 +63,7 @@ export class LabelPlacement {
   private placeOnShape(name: string | undefined): PlacedLabel {
     const { id, side } = this.operation;
     const { plane, shape } = this.diagram.drawnShape(id);
-    if (!DShape.hasExternalLabel(shape.kind)) {
+    if (!PlaneShape.hasExternalLabel(shape.kind)) {
       throw BpmnError.model('E_WRONG_KIND', `"${id}" has no external label (tasks, sub-processes, pools and lanes carry their name inside the shape)`, {
         element: id,
         hint: 'Labels can be placed for events, gateways, data objects / stores and flows.',
@@ -77,7 +77,7 @@ export class LabelPlacement {
     return { labels: changed ? [id] : [], rerouted };
   }
 
-  private roomForTitle(plane: Plane, shape: DShape, size: Pick<Box, 'width' | 'height'>): string[] {
+  private roomForTitle(plane: Plane, shape: PlaneShape, size: Pick<Box, 'width' | 'height'>): string[] {
     const { id, side } = this.operation;
     const drawing = this.diagram.drawing(plane);
     const frame = shape.kind === 'boundary' ? undefined : new Frames(plane).of(shape);

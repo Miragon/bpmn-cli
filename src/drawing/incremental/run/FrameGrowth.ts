@@ -1,6 +1,6 @@
 import { Box } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { LayoutRun } from './LayoutRun.js';
@@ -55,7 +55,7 @@ export class FrameGrowth {
     }
   }
 
-  private growGroup(group: DShape, shape: DShape): void {
+  private growGroup(group: PlaneShape, shape: PlaneShape): void {
     const box = group.bounds;
     const pad = FrameGrowth.GROUP_PAD;
     const left = Math.min(box.x, shape.bounds.x - pad);
@@ -70,7 +70,7 @@ export class FrameGrowth {
     }
   }
 
-  private growForTitle(plane: Plane, shape: DShape): void {
+  private growForTitle(plane: Plane, shape: PlaneShape): void {
     const title = Frames.title(shape);
     const old = this.run.oldTitle(shape);
     const gained = title && (old ? title.height - old.height : title.bottom - shape.bounds.y);

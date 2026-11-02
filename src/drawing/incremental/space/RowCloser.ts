@@ -1,13 +1,13 @@
 import { Box } from '../../../model/index.js';
 import { DrawingCheckpoint } from '../../plane/DrawingCheckpoint.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { SpaceResult } from './SpacePass.js';
 import { SpaceTool } from './SpaceTool.js';
 
 export interface RowGap {
   box: Box;
-  frame: DShape | undefined;
+  frame: PlaneShape | undefined;
   from: number;
   to: number;
   gap: number;
@@ -55,7 +55,7 @@ export class RowCloser {
     const leaves = this.plane.leaves();
     const stayers = leaves.filter((leaf) => !moved.has(leaf.id));
     const movers = leaves.filter((leaf) => moved.has(leaf.id));
-    const newlyOver = (shape: DShape, other: DShape): boolean => shape.bounds.overlaps(other.bounds, CLEARANCE) && !saved.boundsOf(shape).overlaps(saved.boundsOf(other), CLEARANCE);
+    const newlyOver = (shape: PlaneShape, other: PlaneShape): boolean => shape.bounds.overlaps(other.bounds, CLEARANCE) && !saved.boundsOf(shape).overlaps(saved.boundsOf(other), CLEARANCE);
     const onLeaf = movers.some((mover) => stayers.some((other) => other.id !== mover.hostId && other.hostId !== mover.id && newlyOver(mover, other)));
     const subs = [...this.plane.shapes.values()].filter((shape) => shape.container && shape.kind === 'subProcess' && moved.has(shape.id));
     return onLeaf || subs.some((sub) => stayers.some((other) => other.hostId !== sub.id && newlyOver(sub, other)));

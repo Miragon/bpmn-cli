@@ -1,6 +1,6 @@
 import { Box, Polyline, type Point } from '../../model/index.js';
-import type { DEdge } from '../plane/DEdge.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneEdge } from '../plane/PlaneEdge.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import { Frames } from '../plane/Frames.js';
 import type { Plane } from '../plane/Plane.js';
 import type { EdgeBefore, EdgeRouter } from './routing/EdgeRouter.js';
@@ -13,7 +13,7 @@ export interface PlaneRoutes {
 export class OperationBefore {
   readonly bounds = new Map<string, Box>();
   readonly points = new Map<string, Point[]>();
-  readonly edges = new Map<DEdge, EdgeBefore>();
+  readonly edges = new Map<PlaneEdge, EdgeBefore>();
   readonly labels = new Map<string, Box>();
 
   constructor(private readonly drawings: readonly PlaneRoutes[]) {
@@ -29,12 +29,12 @@ export class OperationBefore {
     }
   }
 
-  unchanged(edge: DEdge): boolean {
+  unchanged(edge: PlaneEdge): boolean {
     const old = this.points.get(edge.id);
     return !!old && new Polyline(old).same(new Polyline(edge.points));
   }
 
-  clearOfTitle(owner: DShape | DEdge, sub: DShape): boolean {
+  clearOfTitle(owner: PlaneShape | PlaneEdge, sub: PlaneShape): boolean {
     const label = this.labels.get(owner.id);
     const bounds = this.bounds.get(sub.id);
     const title = bounds ? Frames.titleBox(bounds, sub.el.peek<string>('name')) : undefined;
@@ -49,23 +49,23 @@ export class OperationBefore {
     return this.drawings.flatMap(({ plane }) => [...plane.edges.values()].filter((edge) => this.pointsChanged(edge)).map((edge) => edge.id));
   }
 
-  private keepShape(shape: DShape): void {
+  private keepShape(shape: PlaneShape): void {
     this.bounds.set(shape.id, shape.bounds.copy());
     this.keepLabel(shape);
   }
 
-  private keepLabel({ id, label }: DShape | DEdge): void {
+  private keepLabel({ id, label }: PlaneShape | PlaneEdge): void {
     if (label) {
       this.labels.set(id, label.copy());
     }
   }
 
-  private boxChanged({ id, bounds }: DShape): boolean {
+  private boxChanged({ id, bounds }: PlaneShape): boolean {
     const box = this.bounds.get(id);
     return !!box && !Box.same(box, bounds);
   }
 
-  private pointsChanged({ id, points }: DEdge): boolean {
+  private pointsChanged({ id, points }: PlaneEdge): boolean {
     const old = this.points.get(id);
     return !!old && !new Polyline(old).same(new Polyline(points));
   }

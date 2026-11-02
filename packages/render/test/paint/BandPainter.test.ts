@@ -7,7 +7,7 @@ import { CorpusModel } from '../golden/CorpusModel.js';
 describe('BandPainter', () => {
   async function painterOf(path: string, id: string): Promise<BandPainter> {
     const shape = await CorpusModel.shape(path, id);
-    const style = new Style(shape.di);
+    const style = new Style(shape.planeElement);
     return new BandPainter(shape, style, new LabelPainter(style.label));
   }
 

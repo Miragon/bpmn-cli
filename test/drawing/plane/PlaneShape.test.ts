@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DShape } from '../../../src/drawing/plane/DShape.js';
+import { PlaneShape } from '../../../src/drawing/plane/PlaneShape.js';
 import { Box } from '../../support/ModelValues.js';
 import { ScopeSketch } from '../../support/ScopeSketch.js';
 
-describe('DShape', () => {
-  const shape = (kind: DShape['kind'], bounds = new Box(100, 100, 36, 36), container = false): DShape => new DShape('shape', ScopeSketch.element('bpmn:Task', 'shape'), bounds, kind, container);
+describe('PlaneShape', () => {
+  const shape = (kind: PlaneShape['kind'], bounds = new Box(100, 100, 36, 36), container = false): PlaneShape => new PlaneShape('shape', ScopeSketch.element('bpmn:Task', 'shape'), bounds, kind, container);
   const size = { width: 40, height: 14 };
 
   it('counts a shape as a leaf unless it is a container or a group', () => {
@@ -12,7 +12,7 @@ describe('DShape', () => {
   });
 
   it('names a frame in words', () => {
-    expect(['participant', 'lane', 'subProcess'].map((kind) => shape(kind as DShape['kind']).frameWord)).toEqual(['pool', 'lane', 'sub-process']);
+    expect(['participant', 'lane', 'subProcess'].map((kind) => shape(kind as PlaneShape['kind']).frameWord)).toEqual(['pool', 'lane', 'sub-process']);
   });
 
   it('moves its label along', () => {
@@ -25,10 +25,10 @@ describe('DShape', () => {
   });
 
   it('draws events and data with an external label, below by default, gateways above', () => {
-    expect(['event', 'boundary', 'gateway', 'data', 'task'].map((kind) => DShape.hasExternalLabel(kind as DShape['kind']))).toEqual([true, true, true, true, false]);
-    expect(DShape.defaultLabelSide('gateway')).toBe('above');
-    expect(DShape.defaultLabelSide('event')).toBe('below');
-    expect(DShape.defaultLabelSide('task')).toBe('below');
+    expect(['event', 'boundary', 'gateway', 'data', 'task'].map((kind) => PlaneShape.hasExternalLabel(kind as PlaneShape['kind']))).toEqual([true, true, true, true, false]);
+    expect(PlaneShape.defaultLabelSide('gateway')).toBe('above');
+    expect(PlaneShape.defaultLabelSide('event')).toBe('below');
+    expect(PlaneShape.defaultLabelSide('task')).toBe('below');
   });
 
   it('places a label on each side', () => {

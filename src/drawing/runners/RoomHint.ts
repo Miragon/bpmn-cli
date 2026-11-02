@@ -1,7 +1,7 @@
 import { BpmnError, type BpmnElement } from '../../model/index.js';
 import type { PlaceOperation, SpaceOperation } from '../../operations/index.js';
 import { DrawingCheckpoint } from '../plane/DrawingCheckpoint.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import type { DrawnDiagram } from './DrawnDiagram.js';
 import { ShapePlacement } from './ShapePlacement.js';
 import { SpaceInsertion } from './SpaceInsertion.js';
@@ -39,7 +39,7 @@ export class RoomHint {
     }
   }
 
-  private shapeOf(id: string | undefined): DShape | undefined {
+  private shapeOf(id: string | undefined): PlaneShape | undefined {
     return id ? this.diagram.planes.map((plane) => plane.shapes.get(id)).find((found) => !!found) : undefined;
   }
 

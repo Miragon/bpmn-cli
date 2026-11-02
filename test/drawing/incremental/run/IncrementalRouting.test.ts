@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { IncrementalRouting } from '../../../../src/drawing/incremental/run/IncrementalRouting.js';
-import type { DEdge } from '../../../../src/drawing/plane/DEdge.js';
+import type { PlaneEdge } from '../../../../src/drawing/plane/PlaneEdge.js';
 import type { EdgeBefore } from '../../../../src/drawing/incremental/routing/EdgeRouter.js';
 import { Box, Point } from '../../../support/ModelValues.js';
 import { PlacementScene } from '../../../support/PlacementScene.js';
 
 describe('IncrementalRouting', () => {
-  const routingOf = (scene: PlacementScene, before = new Map<DEdge, EdgeBefore>()): IncrementalRouting => new IncrementalRouting(scene.run, before);
+  const routingOf = (scene: PlacementScene, before = new Map<PlaneEdge, EdgeBefore>()): IncrementalRouting => new IncrementalRouting(scene.run, before);
   const TASK = 'manualTask_fz2ArchiveContractShipNotifyDocument';
 
   it('routes the flows of a node a batch just placed and measures the spacing again', async () => {

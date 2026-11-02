@@ -30,7 +30,7 @@ export class ElementFinder {
   }
 
   private static isSearched(element: BpmnElement): boolean {
-    return !element.isDi && !element.is('bpmn:DataObject') && !element.is('bpmn:DataStore') && ElementFinder.SEARCHED_TYPES.some((type) => element.is(type));
+    return !element.isDrawingPart && !element.is('bpmn:DataObject') && !element.is('bpmn:DataStore') && ElementFinder.SEARCHED_TYPES.some((type) => element.is(type));
   }
 
   private static isAssociation(element: BpmnElement): boolean {

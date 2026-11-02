@@ -56,7 +56,7 @@ describe('Frames', () => {
 
   it('tells a shape that frames others by its DI', async () => {
     const plane = await planeOf('models/incremental/lanesub.bpmn');
-    const isContainer = (id: string): boolean => Frames.isContainerDi(plane.shapes.get(id)!.di!, plane.shapes.get(id)!.el);
+    const isContainer = (id: string): boolean => Frames.isContainerShape(plane.shapes.get(id)!.planeElement!, plane.shapes.get(id)!.el);
 
     expect(['Pool', 'L1', 'SP', 'T1'].map(isContainer)).toEqual([true, true, true, false]);
   });

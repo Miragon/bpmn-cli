@@ -7,10 +7,10 @@ export class Style {
   readonly label: string;
   readonly filled: boolean;
 
-  constructor(di: BpmnNode) {
-    const fill = Style.color(di, 'color:background-color') ?? Style.color(di, 'bioc:fill');
-    this.stroke = Style.color(di, 'color:border-color') ?? Style.color(di, 'bioc:stroke') ?? Svg.STROKE;
-    this.label = Style.color(di.ref('label'), 'color:color') ?? this.stroke;
+  constructor(planeElement: BpmnNode) {
+    const fill = Style.color(planeElement, 'color:background-color') ?? Style.color(planeElement, 'bioc:fill');
+    this.stroke = Style.color(planeElement, 'color:border-color') ?? Style.color(planeElement, 'bioc:stroke') ?? Svg.STROKE;
+    this.label = Style.color(planeElement.ref('label'), 'color:color') ?? this.stroke;
     this.fill = fill ?? Svg.FILL;
     this.filled = !!fill;
   }

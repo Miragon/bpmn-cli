@@ -1,5 +1,5 @@
 import type { BpmnElement } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { ArtifactPlacer } from './ArtifactPlacer.js';
@@ -18,8 +18,8 @@ interface Chosen {
   id: string;
   plane: Plane;
   mode: Mode;
-  preds?: DShape[];
-  successor?: DShape;
+  preds?: PlaneShape[];
+  successor?: PlaneShape;
 }
 
 interface Queue {
@@ -73,7 +73,7 @@ export class NodePlacer {
     return true;
   }
 
-  pushBehind(plane: Plane, source: DShape, target: DShape): boolean {
+  pushBehind(plane: Plane, source: PlaneShape, target: PlaneShape): boolean {
     return this.room.pushBehind(plane, source, target);
   }
 
@@ -190,7 +190,7 @@ export class NodePlacer {
       const successors = this.state.semantics.successors(joinId);
       const successor = successors.length === 1 ? plane.shapes.get(successors[0]!) : undefined;
       const placedJoin = this.state.placed.has(joinId) && !pending.has(joinId);
-      if (join?.el.is('bpmn:Gateway') && placedJoin && successor && preds.length >= 2 && preds.every((pred): pred is DShape => !!pred) && this.joinsBackwards(join, preds, successor)) {
+      if (join?.el.is('bpmn:Gateway') && placedJoin && successor && preds.length >= 2 && preds.every((pred): pred is PlaneShape => !!pred) && this.joinsBackwards(join, preds, successor)) {
         plane.shapes.delete(joinId);
         this.state.joins.set(joinId, successor.id);
         this.state.current = joinId;
@@ -200,8 +200,8 @@ export class NodePlacer {
     }
   }
 
-  private joinsBackwards(join: DShape, preds: readonly DShape[], successor: DShape): boolean {
-    const sameFrame = (shape: DShape): boolean => shape.poolId === join.poolId && shape.parentId === join.parentId;
+  private joinsBackwards(join: PlaneShape, preds: readonly PlaneShape[], successor: PlaneShape): boolean {
+    const sameFrame = (shape: PlaneShape): boolean => shape.poolId === join.poolId && shape.parentId === join.parentId;
     const rightmost = Math.max(...preds.map((pred) => pred.bounds.right));
     if (!preds.every(sameFrame) || !sameFrame(successor) || (successor.bounds.x <= rightmost && successor.bounds.x < join.bounds.right)) {
       return false;

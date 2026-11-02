@@ -3,7 +3,7 @@ import { Frames } from '../../plane/Frames.js';
 import { ShapeSizes } from '../../plane/ShapeSizes.js';
 import { LaneBox } from '../scopes/LaneBox.js';
 import type { PoolLayout, PoolLayouts } from '../scopes/PoolLayouts.js';
-import type { DiWriter, EngineWarning } from './DiWriter.js';
+import type { FreshDrawingWriter, EngineWarning } from './FreshDrawingWriter.js';
 import { NotePlacer, type NoteJob, type NoteWorld } from './NotePlacer.js';
 
 type Lines = ReadonlyMap<string, Point[]>;
@@ -12,11 +12,11 @@ export class CollaborationArtifacts {
   constructor(
     private readonly root: BpmnElement,
     private readonly pools: PoolLayouts,
-    private readonly writer: DiWriter,
+    private readonly writer: FreshDrawingWriter,
   ) {}
 
-  private static pointsOf(di: BpmnElement): Point[] {
-    return di.list('waypoint').map((waypoint) => new Point(waypoint.get<number>('x'), waypoint.get<number>('y')));
+  private static pointsOf(edge: BpmnElement): Point[] {
+    return edge.list('waypoint').map((waypoint) => new Point(waypoint.get<number>('x'), waypoint.get<number>('y')));
   }
 
   private static clip(box: Box, laneBox: Box | undefined): Box {
@@ -153,10 +153,10 @@ export class CollaborationArtifacts {
 
   private drawnLines(): Map<string, Point[]> {
     const lines = new Map<string, Point[]>();
-    for (const di of this.writer.di) {
-      const element = di.peek<BpmnElement>('bpmnElement');
-      if (element && !di.is('bpmndi:BPMNShape')) {
-        lines.set(element.id, CollaborationArtifacts.pointsOf(di));
+    for (const planeElement of this.writer.planeElements) {
+      const element = planeElement.peek<BpmnElement>('bpmnElement');
+      if (element && !planeElement.is('bpmndi:BPMNShape')) {
+        lines.set(element.id, CollaborationArtifacts.pointsOf(planeElement));
       }
     }
     return lines;
@@ -207,10 +207,10 @@ export class CollaborationArtifacts {
   }
 
   private drawnWorld(): NoteWorld {
-    const { di, absBoxes } = this.writer;
+    const { planeElements, absBoxes } = this.writer;
     const obstacles: Box[] = [];
     const lines: Segment[] = [];
-    for (const element of di) {
+    for (const element of planeElements) {
       const owner = element.peek<BpmnElement>('bpmnElement');
       const label = owner && DiagramIndex.boxOf(element.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds'));
       if (label) {
@@ -220,7 +220,7 @@ export class CollaborationArtifacts {
         lines.push(...new Polyline(CollaborationArtifacts.pointsOf(element)).segments());
       }
       const box = owner && element.is('bpmndi:BPMNShape') ? absBoxes.get(owner.id) : undefined;
-      if (box && !Frames.isContainerDi(element, owner!)) {
+      if (box && !Frames.isContainerShape(element, owner!)) {
         obstacles.push(box);
       }
     }

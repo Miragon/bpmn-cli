@@ -46,7 +46,7 @@ describe('BoundaryPlacer', () => {
     const moved = scene.shape('B');
     expect(moved.bounds.y).toBeLessThan(400);
     expect(scene.place.moved.has('B')).toBe(true);
-    expect(moved.di).toBe(event.di);
+    expect(moved.planeElement).toBe(event.planeElement);
   });
 
   it('leaves an event on its border alone', async () => {

@@ -14,7 +14,7 @@ const noChanges: RecordedChanges = { created: [], changed: [], removed: [], relo
 
 function boxOf(document: BpmnDocument, id: string): Box {
   const shapes = document.diagram.planes().flatMap((plane) => plane.list('planeElement'));
-  const bounds = shapes.find((di) => di.peek<BpmnElement>('bpmnElement')?.peek('id') === id)!.peek<BpmnElement>('bounds')!;
+  const bounds = shapes.find((planeElement) => planeElement.peek<BpmnElement>('bpmnElement')?.peek('id') === id)!.peek<BpmnElement>('bounds')!;
   return new Box(bounds.peek<number>('x')!, bounds.peek<number>('y')!, bounds.peek<number>('width')!, bounds.peek<number>('height')!);
 }
 

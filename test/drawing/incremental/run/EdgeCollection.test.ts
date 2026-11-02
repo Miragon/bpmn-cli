@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EdgeCollection } from '../../../../src/drawing/incremental/run/EdgeCollection.js';
-import type { DEdge } from '../../../../src/drawing/plane/DEdge.js';
+import type { PlaneEdge } from '../../../../src/drawing/plane/PlaneEdge.js';
 import type { EdgeBefore } from '../../../../src/drawing/incremental/routing/EdgeRouter.js';
 import { Plane } from '../../../../src/drawing/plane/Plane.js';
 import { Point } from '../../../support/ModelValues.js';
@@ -8,7 +8,7 @@ import { PlacementScene } from '../../../support/PlacementScene.js';
 
 describe('EdgeCollection', () => {
   function collected(scene: PlacementScene): Set<string> {
-    const before = new Map<DEdge, EdgeBefore>([...scene.plane.edges.values()].map((edge) => [edge, scene.drawing().routes.edgeBefore(edge)]));
+    const before = new Map<PlaneEdge, EdgeBefore>([...scene.plane.edges.values()].map((edge) => [edge, scene.drawing().routes.edgeBefore(edge)]));
     new EdgeCollection(scene.run, scene.parts.before, before).collect();
     return scene.run.reroute;
   }

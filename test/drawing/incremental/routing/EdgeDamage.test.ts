@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EdgeDamage } from '../../../../src/drawing/incremental/routing/EdgeDamage.js';
-import { DEdge } from '../../../../src/drawing/plane/DEdge.js';
+import { PlaneEdge } from '../../../../src/drawing/plane/PlaneEdge.js';
 import { PlaneReader } from '../../../../src/drawing/plane/PlaneReader.js';
 import { Fixtures } from '../../../support/Fixtures.js';
 import { Box, Point } from '../../../support/ModelValues.js';
@@ -79,7 +79,7 @@ describe('EdgeDamage', () => {
   it('measures the gap of an end that docks on another line', async () => {
     const plane = await planeOf();
     const element = plane.edges.get('F1')!.el;
-    const note = new DEdge('note', element, 'association', [new Point(250, 300), new Point(530, 130)]);
+    const note = new PlaneEdge('note', element, 'association', [new Point(250, 300), new Point(530, 130)]);
     note.sourceId = 'E2';
     note.targetId = 'F3';
     plane.edges.set('note', note);

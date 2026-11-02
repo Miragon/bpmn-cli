@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FrameEditor } from '../../../../src/drawing/incremental/frames/FrameEditor.js';
 import { SpaceTool } from '../../../../src/drawing/incremental/space/SpaceTool.js';
-import { DShape } from '../../../../src/drawing/plane/DShape.js';
+import { PlaneShape } from '../../../../src/drawing/plane/PlaneShape.js';
 import { Plane } from '../../../../src/drawing/plane/Plane.js';
 import { PlaneReader } from '../../../../src/drawing/plane/PlaneReader.js';
 import { Semantics } from '../../../../src/drawing/plane/Semantics.js';
@@ -23,8 +23,8 @@ describe('FrameEditor', () => {
     return new FrameEditor(plane, new SpaceTool(plane), touched);
   }
 
-  function newFrame(plane: Plane, id: string, kind: 'participant' | 'lane'): DShape {
-    return new DShape(id, plane.root, new Box(0, 0, 0, 0), kind, true);
+  function newFrame(plane: Plane, id: string, kind: 'participant' | 'lane'): PlaneShape {
+    return new PlaneShape(id, plane.root, new Box(0, 0, 0, 0), kind, true);
   }
 
   it('wraps a pool around all shapes, labels and lines of the plane', async () => {

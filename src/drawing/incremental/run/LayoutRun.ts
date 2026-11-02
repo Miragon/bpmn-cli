@@ -1,7 +1,7 @@
 import type { Box, BpmnDocument } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { Semantics } from '../../plane/Semantics.js';
@@ -49,8 +49,8 @@ export class LayoutRun implements RunSets {
     return this.place.newDrawing(plane, this.place.moved, this.place.placed);
   }
 
-  oldId(element: DShape | DEdge): string {
-    return (element.di && this.before.byDi.get(element.di)?.id) || element.id;
+  oldId(element: PlaneShape | PlaneEdge): string {
+    return (element.planeElement && this.before.byPlaneElement.get(element.planeElement)?.id) || element.id;
   }
 
   cur(id: string): string;
@@ -59,8 +59,8 @@ export class LayoutRun implements RunSets {
     return this.before.currentId(id);
   }
 
-  oldTitle(shape: DShape): Box | undefined {
-    const was = shape.di ? this.before.byDi.get(shape.di) : undefined;
+  oldTitle(shape: PlaneShape): Box | undefined {
+    const was = shape.planeElement ? this.before.byPlaneElement.get(shape.planeElement) : undefined;
     return was?.bounds && was.kind === 'subProcess' && was.expanded === true ? Frames.titleBox(was.bounds, this.before.names.get(was.id)) : undefined;
   }
 

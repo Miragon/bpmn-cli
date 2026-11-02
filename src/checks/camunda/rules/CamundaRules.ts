@@ -21,7 +21,7 @@ export interface UnprefixedAttributes {
   el: BpmnElement;
   owner: BpmnElement | undefined;
   id: string | undefined;
-  di: boolean;
+  inDrawing: boolean;
   addr: ElementAddress | undefined;
   keys: string[];
 }
@@ -130,8 +130,8 @@ export abstract class CamundaRules {
       owner = owner.parent;
     }
     const id = owner?.id;
-    const di = el.isDi || !!owner?.isDi;
-    return { el, owner, id, di, addr: di ? undefined : this.unprefixedAddress(el, owner), keys };
+    const inDrawing = el.isDrawingPart || !!owner?.isDrawingPart;
+    return { el, owner, id, inDrawing, addr: inDrawing ? undefined : this.unprefixedAddress(el, owner), keys };
   }
 
   private unprefixedAddress(el: BpmnElement, owner: BpmnElement | undefined): ElementAddress | undefined {

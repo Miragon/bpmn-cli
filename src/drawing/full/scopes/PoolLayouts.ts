@@ -7,7 +7,7 @@ export interface PoolLayout {
   scope?: ScopeLayout | undefined;
   box: Box;
   origin: Point;
-  di?: BpmnElement[] | undefined;
+  planeElements?: BpmnElement[] | undefined;
 }
 
 export class PoolLayouts {

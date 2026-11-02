@@ -25,7 +25,7 @@ export class C7SchemaRules extends C7Rules {
   }
 
   private schemaHint(attributes: UnprefixedAttributes, key: string, fits: boolean): string {
-    const { el, id, di, addr } = attributes;
+    const { el, id, inDrawing, addr } = attributes;
     const implemented = Object.keys(el.attrs ?? {}).some((attributeName) => /^[\w.-]+:(class|delegateExpression|expression|type)$/.test(attributeName) && CAMUNDA.reads(this.ns.uriOfName(attributeName)));
     const link = implemented ? undefined : this.decisionLinkOf(attributes, key);
     if (link) {
@@ -37,7 +37,7 @@ export class C7SchemaRules extends C7Rules {
     if (addr) {
       return `Remove it: \`bpmn set <file> ${addr.slot(`${key}=`)}\` (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`;
     }
-    if (di) {
+    if (inDrawing) {
       return `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`;
     }
     return `Remove ${key}="..." from the XML${id ? ` of ${id}` : ''} (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`;

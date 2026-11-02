@@ -1,6 +1,6 @@
 import type { BpmnElement } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
-import type { DEdge } from '../../plane/DEdge.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
 import type { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import type { EdgeBefore, EdgeRouter } from '../routing/EdgeRouter.js';
@@ -18,7 +18,7 @@ export class EdgeCollection {
   constructor(
     private readonly run: LayoutRun,
     private readonly before: DrawingSnapshot,
-    private readonly edgesBefore: ReadonlyMap<DEdge, EdgeBefore>,
+    private readonly edgesBefore: ReadonlyMap<PlaneEdge, EdgeBefore>,
   ) {}
 
   collect(): void {
@@ -43,7 +43,7 @@ export class EdgeCollection {
     }
   }
 
-  private adoptConnection(element: BpmnElement, id: string, drawn: { plane: Plane; edge: DEdge } | undefined): void {
+  private adoptConnection(element: BpmnElement, id: string, drawn: { plane: Plane; edge: PlaneEdge } | undefined): void {
     const home = this.homeOf(element, id);
     if (!home) {
       return;
@@ -67,7 +67,7 @@ export class EdgeCollection {
     return this.run.planes.find((plane) => holds(plane, sourceId) && holds(plane, targetId));
   }
 
-  private needsRoute(check: PlaneCheck, edge: DEdge): boolean {
+  private needsRoute(check: PlaneCheck, edge: PlaneEdge): boolean {
     const routedNow = this.run.routedNow.get(edge.id);
     if (routedNow) {
       return !this.heldSince(check, edge, routedNow);
@@ -75,7 +75,7 @@ export class EdgeCollection {
     if (this.run.newEdges.has(edge.id)) {
       return true;
     }
-    const old = edge.di ? this.before.byDi.get(edge.di) : undefined;
+    const old = edge.planeElement ? this.before.byPlaneElement.get(edge.planeElement) : undefined;
     const ends = PlaneReader.edgeEnds(edge.el);
     edge.sourceId = ends.sourceId;
     edge.targetId = ends.targetId;
@@ -85,12 +85,12 @@ export class EdgeCollection {
     return endsChanged || endPlaced || this.brokeOrTouches(check, edge, this.edgesBefore.get(edge));
   }
 
-  private heldSince(check: PlaneCheck, edge: DEdge, routedNow: EdgeBefore): boolean {
+  private heldSince(check: PlaneCheck, edge: PlaneEdge, routedNow: EdgeBefore): boolean {
     const { sourceId, targetId } = PlaneReader.edgeEnds(edge.el);
     return sourceId === edge.sourceId && targetId === edge.targetId && edge.points.length >= 2 && !this.brokeOrTouches(check, edge, routedNow);
   }
 
-  private brokeOrTouches({ routes, detached }: PlaneCheck, edge: DEdge, was: EdgeBefore | undefined): boolean {
+  private brokeOrTouches({ routes, detached }: PlaneCheck, edge: PlaneEdge, was: EdgeBefore | undefined): boolean {
     return routes.brokenEdge(edge, was, { detached }) || routes.grazes(edge, this.run.place.continued) || routes.touchesFresh(edge);
   }
 }

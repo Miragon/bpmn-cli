@@ -1,12 +1,12 @@
 import { Box, Segment, type Point } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 
 export interface PushRequest {
   line: number;
   delta: number;
-  successor: DShape | undefined;
+  successor: PlaneShape | undefined;
   id?: string;
   box?: Box;
   fixed?: ReadonlySet<string> | undefined;
@@ -20,14 +20,14 @@ export class PushSet {
   private readonly pushed = new Set<string>();
   private readonly next = new Map<string, string[]>();
   private readonly links = new Map<string, string[]>();
-  private readonly queue: DShape[] = [];
+  private readonly queue: PlaneShape[] = [];
   private solids: Box[] = [];
   private labels: Box[] = [];
 
   constructor(
     private readonly plane: Plane,
     private readonly request: PushRequest,
-    private readonly unitBox: (shape: DShape) => Box,
+    private readonly unitBox: (shape: PlaneShape) => Box,
   ) {
     for (const edge of plane.edges.values()) {
       this.indexEdge(edge);
@@ -58,7 +58,7 @@ export class PushSet {
     return this.pushed;
   }
 
-  private indexEdge({ kind, sourceId, targetId }: DEdge): void {
+  private indexEdge({ kind, sourceId, targetId }: PlaneEdge): void {
     if (!sourceId || !targetId) {
       return;
     }
@@ -71,13 +71,13 @@ export class PushSet {
     }
   }
 
-  private movable(shape: DShape): boolean {
+  private movable(shape: PlaneShape): boolean {
     const { line, fixed } = this.request;
     const { kind, bounds, container } = shape;
     return !fixed?.has(shape.id) && !shape.hostId && !shape.parentId && kind !== 'participant' && kind !== 'lane' && kind !== 'group' && (bounds.x >= line || (container && bounds.center.x >= line));
   }
 
-  private take(shape: DShape | undefined): void {
+  private take(shape: PlaneShape | undefined): void {
     if (shape && !this.pushed.has(shape.id) && this.movable(shape)) {
       this.pushed.add(shape.id);
       this.queue.push(shape);
@@ -94,7 +94,7 @@ export class PushSet {
     }
   }
 
-  private followFrom(part: DShape): void {
+  private followFrom(part: PlaneShape): void {
     for (const target of this.next.get(part.id) ?? []) {
       this.take(this.plane.shapes.get(target));
     }
@@ -156,7 +156,7 @@ export class PushSet {
     return grew;
   }
 
-  private comesClose(shape: DShape): boolean {
+  private comesClose(shape: PlaneShape): boolean {
     const ownLabels = [shape, ...this.plane.boundariesOf(shape.id)].flatMap((part) => part.label ?? []);
     return this.hits(this.unitBox(shape), PushSet.CLEAR) || ownLabels.some((label) => this.hits(label, PushSet.LABEL_CLEAR));
   }
@@ -174,7 +174,7 @@ export class PushSet {
     return grew;
   }
 
-  private isCrossed(edge: DEdge): boolean {
+  private isCrossed(edge: PlaneEdge): boolean {
     const { sourceId, targetId, points, label } = edge;
     if (this.pushed.has(edge.id) || [sourceId, targetId].some((end) => !end || end === this.request.id || this.pushed.has(end))) {
       return false;

@@ -5,8 +5,8 @@ import { PlacementObstacles } from '../../src/drawing/incremental/placement/Plac
 import { PlacementState } from '../../src/drawing/incremental/placement/PlacementState.js';
 import { RowChooser } from '../../src/drawing/incremental/placement/RowChooser.js';
 import { LayoutRun } from '../../src/drawing/incremental/run/LayoutRun.js';
-import type { DEdge } from '../../src/drawing/plane/DEdge.js';
-import type { DShape } from '../../src/drawing/plane/DShape.js';
+import type { PlaneEdge } from '../../src/drawing/plane/PlaneEdge.js';
+import type { PlaneShape } from '../../src/drawing/plane/PlaneShape.js';
 import { Plane } from '../../src/drawing/plane/Plane.js';
 import { PlaneReader } from '../../src/drawing/plane/PlaneReader.js';
 import { Semantics } from '../../src/drawing/plane/Semantics.js';
@@ -61,11 +61,11 @@ export class PlacementScene {
     return old;
   }
 
-  shape(id: string): DShape {
+  shape(id: string): PlaneShape {
     return this.plane.shapes.get(id)!;
   }
 
-  edge(id: string): DEdge {
+  edge(id: string): PlaneEdge {
     return this.plane.edges.get(id)!;
   }
 

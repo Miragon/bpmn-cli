@@ -1,5 +1,5 @@
 import type { Box } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import { EdgeFollow } from './EdgeFollow.js';
 import { GrowthCap } from './GrowthCap.js';
@@ -59,7 +59,7 @@ export class SpaceApplier {
     }
   }
 
-  private capShrink(container: DShape, before: Box): void {
+  private capShrink(container: PlaneShape, before: Box): void {
     const { pass } = this;
     const { along, axis, plane } = pass;
     const frames = new Frames(plane);
@@ -97,7 +97,7 @@ export class SpaceApplier {
     this.alignLanes();
   }
 
-  private alignPool(pool: DShape, grownPool: DShape): void {
+  private alignPool(pool: PlaneShape, grownPool: PlaneShape): void {
     const { pass, result } = this;
     const target = grownPool.bounds.right;
     const untouched = !result.resized.has(pool.id) && !result.moved.has(pool.id);
@@ -108,7 +108,7 @@ export class SpaceApplier {
     }
   }
 
-  private reachOf(pool: DShape): number {
+  private reachOf(pool: PlaneShape): number {
     const { shapes, edges } = this.pass.plane;
     const content = [...shapes.values()].filter((shape) => shape.poolId === pool.id && shape.kind !== 'lane').map((shape) => shape.bounds.right + SpaceApplier.POOL_PAD);
     const docks = [...edges.values()].flatMap((edge) => [edge.sourceId === pool.id ? edge.points[0] : undefined, edge.targetId === pool.id ? edge.points.at(-1) : undefined]).flatMap((dock) => (dock ? [dock.x + SpaceApplier.POOL_PAD] : []));

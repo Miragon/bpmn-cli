@@ -1,6 +1,6 @@
 import { BoxBorder, Point, Polyline } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Plane } from '../../plane/Plane.js';
 import { EdgeObstacles } from './EdgeObstacles.js';
 
@@ -49,7 +49,7 @@ export class EdgeDamage {
     return best;
   }
 
-  grazes(edge: DEdge, ids: Iterable<string>, { points = edge.points, margin = 1, labels = false }: GrazeOptions = {}): boolean {
+  grazes(edge: PlaneEdge, ids: Iterable<string>, { points = edge.points, margin = 1, labels = false }: GrazeOptions = {}): boolean {
     if (points.length < 2) {
       return false;
     }
@@ -64,15 +64,15 @@ export class EdgeDamage {
     return false;
   }
 
-  touchesFresh(edge: DEdge, points: readonly Point[] = edge.points): boolean {
+  touchesFresh(edge: PlaneEdge, points: readonly Point[] = edge.points): boolean {
     return (edge.kind === 'association' || edge.kind === 'dataAssociation') && this.grazes(edge, this.fresh, { points, margin: EdgeDamage.GRAZE_GAP, labels: true });
   }
 
-  edgeBefore(edge: DEdge): EdgeBefore {
+  edgeBefore(edge: PlaneEdge): EdgeBefore {
     return { points: new Polyline(edge.points).copy(), cut: this.cutShapes(edge), ...this.endGaps(edge) };
   }
 
-  detachedEnds(edge: DEdge): string[] {
+  detachedEnds(edge: PlaneEdge): string[] {
     if (edge.points.length < 2) {
       return [];
     }
@@ -86,24 +86,24 @@ export class EdgeDamage {
     });
   }
 
-  broken(edge: DEdge, before: EdgeBefore | undefined, detached: boolean): boolean {
+  broken(edge: PlaneEdge, before: EdgeBefore | undefined, detached: boolean): boolean {
     if (new Polyline(edge.points).rounded().length < 2 || (detached && this.detachedEnds(edge).length)) {
       return true;
     }
     return this.gapsGrew(edge, before) || this.lostRightAngles(edge, before) || [...this.cutShapes(edge)].some((id) => !before?.cut.has(id));
   }
 
-  private gapsGrew(edge: DEdge, before: EdgeBefore | undefined): boolean {
+  private gapsGrew(edge: PlaneEdge, before: EdgeBefore | undefined): boolean {
     const now = this.endGaps(edge);
     return now.sourceGap > Math.max(EdgeDamage.GAP_TOLERANCE, (before?.sourceGap ?? 0) + 1) || now.targetGap > Math.max(EdgeDamage.GAP_TOLERANCE, (before?.targetGap ?? 0) + 1);
   }
 
-  private lostRightAngles(edge: DEdge, before: EdgeBefore | undefined): boolean {
+  private lostRightAngles(edge: PlaneEdge, before: EdgeBefore | undefined): boolean {
     const flow = edge.kind === 'sequenceFlow' || edge.kind === 'messageFlow';
     return flow && !new Polyline(edge.points).isOrthogonal() && (!before || new Polyline(before.points).isOrthogonal());
   }
 
-  private ownShapes(edge: DEdge): Set<string> {
+  private ownShapes(edge: PlaneEdge): Set<string> {
     const own = new Set<string>();
     for (const end of [edge.sourceId, edge.targetId]) {
       const shape = end ? this.plane.shapes.get(end) : undefined;
@@ -120,7 +120,7 @@ export class EdgeDamage {
     return own;
   }
 
-  private surroundings(ends: ReadonlyArray<DShape | undefined>): Set<string> {
+  private surroundings(ends: ReadonlyArray<PlaneShape | undefined>): Set<string> {
     const around = new Set<string>();
     for (const end of ends) {
       for (const id of end ? this.obstacles.ancestors(end) : []) {
@@ -136,7 +136,7 @@ export class EdgeDamage {
     return around;
   }
 
-  private cutShapes(edge: DEdge): Set<string> {
+  private cutShapes(edge: PlaneEdge): Set<string> {
     const ends = new Set([edge.sourceId, edge.targetId]);
     const source = edge.sourceId ? this.plane.shapes.get(edge.sourceId) : undefined;
     const target = edge.targetId ? this.plane.shapes.get(edge.targetId) : undefined;
@@ -167,7 +167,7 @@ export class EdgeDamage {
     return round ? Math.max(0, distance - shape.bounds.width / 2 + 1) : distance;
   }
 
-  private endGaps(edge: DEdge): EndGaps {
+  private endGaps(edge: PlaneEdge): EndGaps {
     return { sourceGap: this.gapOf(edge.sourceId, edge.points[0]), targetGap: this.gapOf(edge.targetId, edge.points.at(-1)) };
   }
 }

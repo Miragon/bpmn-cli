@@ -1,5 +1,5 @@
 import { Box } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import type { PlacementState } from './PlacementState.js';
@@ -20,7 +20,7 @@ export class PlacementObstacles {
 
   constructor(private readonly state: PlacementState) {}
 
-  private static centreIn(box: Box, frame: DShape | undefined): boolean {
+  private static centreIn(box: Box, frame: PlaneShape | undefined): boolean {
     if (!frame) {
       return true;
     }
@@ -29,11 +29,11 @@ export class PlacementObstacles {
     return x > bounds.x && x < bounds.right && y > bounds.y && y < bounds.bottom;
   }
 
-  within(plane: Plane, shape: DShape, frame: DShape | undefined): boolean {
+  within(plane: Plane, shape: PlaneShape, frame: PlaneShape | undefined): boolean {
     return new Frames(plane).within(shape, frame);
   }
 
-  of(plane: Plane, frame: DShape | undefined, exclude: ReadonlySet<string>, plain = true): Obstacles {
+  of(plane: Plane, frame: PlaneShape | undefined, exclude: ReadonlySet<string>, plain = true): Obstacles {
     const found: Obstacles = { boxes: [], labels: [] };
     const shapes = [...plane.shapes.values()].filter((shape) => !exclude.has(shape.id) && shape !== frame);
     for (const shape of shapes) {
@@ -49,8 +49,8 @@ export class PlacementObstacles {
     return found;
   }
 
-  homeGroups(plane: Plane, anchors: ReadonlyArray<DShape | undefined>): string[] {
-    const centreInside = (anchor: DShape | undefined, group: DShape): boolean => !!anchor && PlacementObstacles.centreIn(anchor.bounds, group);
+  homeGroups(plane: Plane, anchors: ReadonlyArray<PlaneShape | undefined>): string[] {
+    const centreInside = (anchor: PlaneShape | undefined, group: PlaneShape): boolean => !!anchor && PlacementObstacles.centreIn(anchor.bounds, group);
     return [...plane.shapes.values()].filter((group) => group.kind === 'group' && anchors.some((anchor) => centreInside(anchor, group))).map((group) => group.id);
   }
 
@@ -58,7 +58,7 @@ export class PlacementObstacles {
     return !obstacles.boxes.some((obstacle) => obstacle.overlaps(box, clearance)) && !obstacles.labels.some((label) => label.overlaps(box, PlacementObstacles.LABEL_CLEARANCE));
   }
 
-  spaceBand(plane: Plane, shape: Pick<DShape, 'parentId' | 'poolId'>, anchor?: DShape): SpaceBand {
+  spaceBand(plane: Plane, shape: Pick<PlaneShape, 'parentId' | 'poolId'>, anchor?: PlaneShape): SpaceBand {
     const sub = shape.parentId ? plane.shapes.get(shape.parentId) : undefined;
     if (sub) {
       return { within: sub.bounds.copy(), frame: sub.id };
@@ -72,7 +72,7 @@ export class PlacementObstacles {
     return smallest ? { within: smallest.bounds.copy() } : {};
   }
 
-  contentBottom(plane: Plane, frame: DShape | undefined, exclude: ReadonlySet<string>): number | undefined {
+  contentBottom(plane: Plane, frame: PlaneShape | undefined, exclude: ReadonlySet<string>): number | undefined {
     const { boxes, labels } = this.of(plane, frame, exclude, false);
     const member = (id: string | undefined): boolean => {
       const shape = id ? plane.shapes.get(id) : undefined;
@@ -91,7 +91,7 @@ export class PlacementObstacles {
     }));
   }
 
-  private noteShape(plane: Plane, shape: DShape, frame: DShape | undefined, found: Obstacles): void {
+  private noteShape(plane: Plane, shape: PlaneShape, frame: PlaneShape | undefined, found: Obstacles): void {
     const solid = shape.isLeaf || (shape.kind === 'subProcess' && shape.container);
     const member = this.within(plane, shape, frame);
     const drawnIn = !member && !!frame && solid && shape.bounds.overlaps(frame.bounds) && !new Frames(plane).within(frame, shape);

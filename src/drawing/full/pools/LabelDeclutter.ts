@@ -23,15 +23,15 @@ export class LabelDeclutter {
   private readonly placed: Box[] = [];
   private readonly titleBoxes: Box[];
 
-  constructor(di: readonly BpmnElement[]) {
-    for (const element of di) {
+  constructor(planeElements: readonly BpmnElement[]) {
+    for (const element of planeElements) {
       this.read(element);
     }
     this.titleBoxes = [...this.titles.values()].filter((title): title is Box => !!title);
   }
 
-  private static isContainer(di: BpmnElement, element: BpmnElement): boolean {
-    return element.is('bpmn:Participant') || element.is('bpmn:Lane') || (element.is('bpmn:SubProcess') && di.get<boolean | undefined>('isExpanded') === true);
+  private static isContainer(shape: BpmnElement, element: BpmnElement): boolean {
+    return element.is('bpmn:Participant') || element.is('bpmn:Lane') || (element.is('bpmn:SubProcess') && shape.get<boolean | undefined>('isExpanded') === true);
   }
 
   private static holds(frame: Box, point: Point): boolean {
@@ -53,28 +53,28 @@ export class LabelDeclutter {
     }
   }
 
-  private read(di: BpmnElement): void {
-    const element = di.peek<BpmnElement>('bpmnElement');
+  private read(planeElement: BpmnElement): void {
+    const element = planeElement.peek<BpmnElement>('bpmnElement');
     if (!element) {
       return;
     }
-    const isShape = di.is('bpmndi:BPMNShape');
-    const shape = isShape ? DiagramIndex.boxOf(di.peek<BpmnElement>('bounds')) : undefined;
+    const isShape = planeElement.is('bpmndi:BPMNShape');
+    const shape = isShape ? DiagramIndex.boxOf(planeElement.peek<BpmnElement>('bounds')) : undefined;
     if (shape) {
-      this.readShape(shape, di, element);
+      this.readShape(shape, planeElement, element);
     }
-    const points = isShape ? undefined : di.list('waypoint').map((waypoint) => new Point(waypoint.get<number>('x'), waypoint.get<number>('y')));
+    const points = isShape ? undefined : planeElement.list('waypoint').map((waypoint) => new Point(waypoint.get<number>('x'), waypoint.get<number>('y')));
     if (points) {
       this.lines.push(...new Polyline(points).segments());
     }
-    const bounds = di.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds');
+    const bounds = planeElement.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds');
     if (bounds) {
       this.items.push({ el: element, bounds, box: DiagramIndex.boxOf(bounds)!, shape, points });
     }
   }
 
-  private readShape(shape: Box, di: BpmnElement, element: BpmnElement): void {
-    if (!LabelDeclutter.isContainer(di, element)) {
+  private readShape(shape: Box, planeElement: BpmnElement, element: BpmnElement): void {
+    if (!LabelDeclutter.isContainer(planeElement, element)) {
       this.shapes.push(shape);
       return;
     }

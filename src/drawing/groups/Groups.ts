@@ -46,7 +46,7 @@ export class Groups {
     for (const planeElement of this.shapes.planes().flatMap((plane) => plane.list('planeElement'))) {
       const box = planeElement.is('bpmndi:BPMNShape') && planeElement.peek('bpmnElement') === group ? DiagramIndex.boxOf(planeElement.peek<BpmnElement>('bounds')) : undefined;
       if (box) {
-        planeElement.set('label', name.trim() ? this.labelDi(GroupFit.labelOn(box, TextMetrics.labelSize(name))) : undefined);
+        planeElement.set('label', name.trim() ? this.labelElement(GroupFit.labelOn(box, TextMetrics.labelSize(name))) : undefined);
       }
     }
   }
@@ -76,7 +76,7 @@ export class Groups {
     return { id, bounds: new Box(0, 0, 0, 0), label: size && new Box(0, 0, size.width, size.height), members };
   }
 
-  private labelDi(box: Box): BpmnElement {
-    return this.tree.build('bpmndi:BPMNLabel', { bounds: GroupRedraw.boundsDi(this.tree, box) });
+  private labelElement(box: Box): BpmnElement {
+    return this.tree.build('bpmndi:BPMNLabel', { bounds: GroupRedraw.boundsElement(this.tree, box) });
   }
 }

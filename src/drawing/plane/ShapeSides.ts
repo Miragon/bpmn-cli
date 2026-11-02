@@ -1,5 +1,5 @@
 import { Point, type Box } from '../../model/index.js';
-import type { ShapeKind } from './DShape.js';
+import type { ShapeKind } from './PlaneShape.js';
 
 export type Side = 'left' | 'right' | 'top' | 'bottom';
 

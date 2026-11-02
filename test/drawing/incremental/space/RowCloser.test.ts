@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RowCloser, type RowGap } from '../../../../src/drawing/incremental/space/RowCloser.js';
-import { DEdge } from '../../../../src/drawing/plane/DEdge.js';
+import { PlaneEdge } from '../../../../src/drawing/plane/PlaneEdge.js';
 import type { Plane } from '../../../../src/drawing/plane/Plane.js';
 import { PlaneReader } from '../../../../src/drawing/plane/PlaneReader.js';
 import { Fixtures } from '../../../support/Fixtures.js';
@@ -77,7 +77,7 @@ describe('RowCloser', () => {
   it('undoes the close when a line ties the moved shape to one that stays behind', async () => {
     const plane = await planeOf();
     emptied(plane);
-    const tie = new DEdge('tie', plane.edges.get('F1')!.el, 'sequenceFlow', [new Point(610, 160), new Point(610, 232)]);
+    const tie = new PlaneEdge('tie', plane.edges.get('F1')!.el, 'sequenceFlow', [new Point(610, 160), new Point(610, 232)]);
     tie.sourceId = 'D';
     tie.targetId = 'E2';
     plane.edges.set('tie', tie);
@@ -89,7 +89,7 @@ describe('RowCloser', () => {
   it('undoes the close when an association would tear', async () => {
     const plane = await planeOf();
     emptied(plane);
-    const note = new DEdge('note', plane.edges.get('F1')!.el, 'association', [new Point(610, 160), new Point(610, 232)]);
+    const note = new PlaneEdge('note', plane.edges.get('F1')!.el, 'association', [new Point(610, 160), new Point(610, 232)]);
     note.sourceId = 'D';
     note.targetId = 'A';
     plane.edges.set('note', note);

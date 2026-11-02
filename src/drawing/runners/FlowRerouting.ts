@@ -20,7 +20,7 @@ export class FlowRerouting {
     const before = new Polyline(new Polyline(edge.points).copy());
     const drawing = this.diagram.drawing(plane);
     if (!drawing.reroute(edge, { ...(exit ? { sourceSides: [exit] } : {}), ...(entry ? { targetSides: [entry] } : {}) })) {
-      if (!edge.di) {
+      if (!edge.planeElement) {
         plane.edges.delete(id);
       }
       throw BpmnError.model('E_NO_SHAPE', `${id} cannot be routed: an end has no shape in its diagram`, { element: id, hint: 'Run `bpmn layout <file>` to draw the missing shapes.' });

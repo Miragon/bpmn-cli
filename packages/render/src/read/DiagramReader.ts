@@ -10,7 +10,7 @@ export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAss
 export interface PlaneShape {
   id: string;
   element: BpmnNode;
-  di: BpmnNode;
+  planeElement: BpmnNode;
   bounds: Box;
   kind: ShapeKind;
   container: boolean;
@@ -24,7 +24,7 @@ export interface PlaneShape {
 export interface PlaneEdge {
   id: string;
   element: BpmnNode;
-  di: BpmnNode;
+  planeElement: BpmnNode;
   kind: EdgeKind;
   sourceId: string | undefined;
   targetId: string | undefined;
@@ -118,8 +118,8 @@ export class DiagramReader {
     return new Box(x, y, width, height);
   }
 
-  private static labelOf(di: BpmnNode): Box | undefined {
-    return DiagramReader.boxOf(di.ref('label')?.ref('bounds'));
+  private static labelOf(planeElement: BpmnNode): Box | undefined {
+    return DiagramReader.boxOf(planeElement.ref('label')?.ref('bounds'));
   }
 
   private static displayRoot(definitions: BpmnNode | undefined): BpmnNode | undefined {
@@ -127,52 +127,52 @@ export class DiagramReader {
   }
 
   private plane(diagram: BpmnNode): Plane | undefined {
-    const di = diagram.ref('plane');
-    const rootId = (di?.ref('bpmnElement') ?? (di ? DiagramReader.displayRoot(diagram.parent) : undefined))?.id;
-    if (!di || !rootId) {
+    const bpmnPlane = diagram.ref('plane');
+    const rootId = (bpmnPlane?.ref('bpmnElement') ?? (bpmnPlane ? DiagramReader.displayRoot(diagram.parent) : undefined))?.id;
+    if (!bpmnPlane || !rootId) {
       return undefined;
     }
     const plane: Plane = { rootId, shapes: new Map(), edges: new Map() };
-    for (const element of di.list('planeElement')) {
+    for (const element of bpmnPlane.list('planeElement')) {
       this.readInto(plane, element);
     }
     this.linkParents(plane);
     return plane;
   }
 
-  private readInto(plane: Plane, di: BpmnNode): void {
-    const element = di.ref('bpmnElement');
+  private readInto(plane: Plane, planeElement: BpmnNode): void {
+    const element = planeElement.ref('bpmnElement');
     const id = element?.id;
     if (!element || !id) {
       return;
     }
-    if (di.is('bpmndi:BPMNShape')) {
-      const shape = this.shapeOf(di, element, id);
+    if (planeElement.is('bpmndi:BPMNShape')) {
+      const shape = this.shapeOf(planeElement, element, id);
       if (shape) {
         plane.shapes.set(id, shape);
       }
-    } else if (di.is('bpmndi:BPMNEdge')) {
-      plane.edges.set(id, this.edgeOf(di, element, id));
+    } else if (planeElement.is('bpmndi:BPMNEdge')) {
+      plane.edges.set(id, this.edgeOf(planeElement, element, id));
     }
   }
 
-  private shapeOf(di: BpmnNode, element: BpmnNode, id: string): PlaneShape | undefined {
-    const bounds = DiagramReader.boxOf(di.ref('bounds'));
+  private shapeOf(planeElement: BpmnNode, element: BpmnNode, id: string): PlaneShape | undefined {
+    const bounds = DiagramReader.boxOf(planeElement.ref('bounds'));
     if (!bounds) {
       return undefined;
     }
     const kind = DiagramReader.kindOf(element, DiagramReader.SHAPE_KINDS);
-    const expanded = Semantics.isSubProcess(element) ? di.value('isExpanded') === true : undefined;
+    const expanded = Semantics.isSubProcess(element) ? planeElement.value('isExpanded') === true : undefined;
     const container = kind === 'participant' || kind === 'lane' || (kind === 'subProcess' && expanded === true);
     const hostId = kind === 'boundary' ? element.ref('attachedToRef')?.id : undefined;
     const laneId = kind === 'lane' ? this.semantics.laneParent.get(id) : this.semantics.laneOf.get(id);
-    return { id, element, di, bounds, kind, container, expanded, label: DiagramReader.labelOf(di), hostId, laneId };
+    return { id, element, planeElement, bounds, kind, container, expanded, label: DiagramReader.labelOf(planeElement), hostId, laneId };
   }
 
-  private edgeOf(di: BpmnNode, element: BpmnNode, id: string): PlaneEdge {
+  private edgeOf(planeElement: BpmnNode, element: BpmnNode, id: string): PlaneEdge {
     const coordinate = (waypoint: BpmnNode, axis: string): number => (waypoint.value(axis) as number | undefined) ?? 0;
-    const points = di.list('waypoint').map((waypoint) => ({ x: coordinate(waypoint, 'x'), y: coordinate(waypoint, 'y') }));
-    return { id, element, di, kind: DiagramReader.kindOf(element, DiagramReader.EDGE_KINDS), points, label: DiagramReader.labelOf(di), ...DiagramReader.edgeEnds(element) };
+    const points = planeElement.list('waypoint').map((waypoint) => ({ x: coordinate(waypoint, 'x'), y: coordinate(waypoint, 'y') }));
+    return { id, element, planeElement, kind: DiagramReader.kindOf(element, DiagramReader.EDGE_KINDS), points, label: DiagramReader.labelOf(planeElement), ...DiagramReader.edgeEnds(element) };
   }
 
   private linkParents(plane: Plane): void {

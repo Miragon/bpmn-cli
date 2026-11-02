@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEdge } from '../../../src/drawing/plane/DEdge.js';
+import { PlaneEdge } from '../../../src/drawing/plane/PlaneEdge.js';
 import { Box, Point } from '../../support/ModelValues.js';
 import { ScopeSketch } from '../../support/ScopeSketch.js';
 
-describe('DEdge', () => {
-  const edge = (points: Point[]): DEdge => new DEdge('flow', ScopeSketch.element('bpmn:SequenceFlow', 'flow'), 'sequenceFlow', points);
+describe('PlaneEdge', () => {
+  const edge = (points: Point[]): PlaneEdge => new PlaneEdge('flow', ScopeSketch.element('bpmn:SequenceFlow', 'flow'), 'sequenceFlow', points);
   const size = { width: 40, height: 14 };
 
   it('moves its waypoints and label along', () => {

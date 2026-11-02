@@ -3,7 +3,7 @@ import type { Box } from '../../../model/index.js';
 import type { Drawing } from '../../incremental/Drawing.js';
 import type { SpaceResult } from '../../incremental/space/SpaceTool.js';
 import { BoxAxis, type Axis } from '../../plane/BoxAxis.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { PlaneStrips, type Strip, type StripOptions } from './PlaneStrips.js';
@@ -52,7 +52,7 @@ export class Compactor {
     this.gaps = this.strips.gaps();
   }
 
-  private static solidBand(shape: DShape): boolean {
+  private static solidBand(shape: PlaneShape): boolean {
     return shape.kind === 'participant' || (shape.kind === 'subProcess' && shape.container);
   }
 
@@ -79,11 +79,11 @@ export class Compactor {
     return this.stats;
   }
 
-  private shapes(): DShape[] {
+  private shapes(): PlaneShape[] {
     return [...this.plane.shapes.values()];
   }
 
-  private wanted(frame: DShape): boolean {
+  private wanted(frame: PlaneShape): boolean {
     const { only } = this.options;
     if (!only || only.has(frame.id)) {
       return true;
@@ -120,7 +120,7 @@ export class Compactor {
     }
   }
 
-  private closeSubProcess(frame: DShape, axis: Axis): void {
+  private closeSubProcess(frame: PlaneShape, axis: Axis): void {
     const along = BoxAxis.of(axis);
     const outside = this.shapes().filter((shape) => shape !== frame && shape.hostId !== frame.id && !this.frames.within(shape, frame));
     const box = frame.bounds;
@@ -135,7 +135,7 @@ export class Compactor {
     this.close(axis, strips, box, new Set(outside.map((shape) => shape.id)));
   }
 
-  private closePoolColumns(pools: readonly DShape[]): void {
+  private closePoolColumns(pools: readonly PlaneShape[]): void {
     const { only } = this.options;
     const chosen = pools.filter((pool) => !only || only.has(pool.id)).sort((one, other) => one.bounds.y - other.bounds.y);
     for (const pool of chosen.filter((candidate) => this.hasContent(candidate))) {
@@ -149,7 +149,7 @@ export class Compactor {
 
   private closeLaneRows(): void {
     const shapes = this.shapes();
-    const isLeafLane = (lane: DShape): boolean => lane.kind === 'lane' && !shapes.some((child) => child.kind === 'lane' && child.laneId === lane.id);
+    const isLeafLane = (lane: PlaneShape): boolean => lane.kind === 'lane' && !shapes.some((child) => child.kind === 'lane' && child.laneId === lane.id);
     const lanes = shapes.filter((lane) => isLeafLane(lane) && this.wanted(lane)).sort((one, other) => other.bounds.y - one.bounds.y);
     for (const lane of lanes) {
       const { y, bottom } = lane.bounds;
@@ -159,7 +159,7 @@ export class Compactor {
     }
   }
 
-  private closePoolRows(pools: readonly DShape[]): void {
+  private closePoolRows(pools: readonly PlaneShape[]): void {
     const lanesLess = pools.filter((pool) => this.wanted(pool) && !this.lanesOf(pool).length).sort((one, other) => other.bounds.y - one.bounds.y);
     for (const pool of lanesLess.filter((candidate) => this.hasContent(candidate))) {
       const strips = this.findStrips('y', pool.bounds, { start: pool.bounds.y, end: pool.bounds.bottom, lead: PlaneStrips.PAD, trail: PlaneStrips.PAD, gap: this.gaps.y, skip: new Set([pool.id]) });
@@ -174,7 +174,7 @@ export class Compactor {
     }
   }
 
-  private closeBetweenPools(pools: readonly DShape[]): void {
+  private closeBetweenPools(pools: readonly PlaneShape[]): void {
     const sorted = [...pools].sort((one, other) => one.bounds.y - other.bounds.y);
     const gaps = sorted
       .slice(1)
@@ -187,7 +187,7 @@ export class Compactor {
     }
   }
 
-  private alignPools(pools: readonly DShape[]): void {
+  private alignPools(pools: readonly PlaneShape[]): void {
     const edge = Math.max(...pools.map((pool) => pool.bounds.right));
     for (const pool of pools) {
       const old = pool.bounds.right;
@@ -203,21 +203,21 @@ export class Compactor {
     }
   }
 
-  private lanesOf(pool: DShape): DShape[] {
+  private lanesOf(pool: PlaneShape): PlaneShape[] {
     return this.shapes().filter((lane) => lane.kind === 'lane' && lane.poolId === pool.id);
   }
 
-  private hasContent(pool: DShape): boolean {
+  private hasContent(pool: PlaneShape): boolean {
     return this.shapes().some((shape) => shape.isLeaf && shape.poolId === pool.id);
   }
 
-  private topOf(subProcess: DShape): number {
+  private topOf(subProcess: PlaneShape): number {
     return Math.max(Compactor.SUB_TOP, Math.round(TextMetrics.titleDepth(subProcess.el.peek<string>('name'), subProcess.bounds.width) + Compactor.TITLE_ROOM));
   }
 
-  private chainIds(shape: DShape): Set<string> {
+  private chainIds(shape: PlaneShape): Set<string> {
     const ids = new Set<string>([shape.id]);
-    let current: DShape | undefined = shape;
+    let current: PlaneShape | undefined = shape;
     for (let depth = 0; current && depth < Compactor.MAX_DEPTH; depth++) {
       const { parentId, laneId, poolId } = current;
       [parentId, laneId, poolId].filter((id): id is string => !!id).forEach((id) => ids.add(id));
@@ -226,14 +226,14 @@ export class Compactor {
     return ids;
   }
 
-  private frameAbove({ parentId, laneId }: DShape): DShape | undefined {
+  private frameAbove({ parentId, laneId }: PlaneShape): PlaneShape | undefined {
     if (parentId) {
       return this.plane.shapes.get(parentId);
     }
     return laneId ? this.plane.shapes.get(laneId) : undefined;
   }
 
-  private depth(shape: DShape): number {
+  private depth(shape: PlaneShape): number {
     let depth = 0;
     for (let parentId = shape.parentId; parentId && depth < Compactor.MAX_DEPTH; parentId = this.plane.shapes.get(parentId)?.parentId) {
       depth++;

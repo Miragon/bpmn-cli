@@ -6,7 +6,7 @@ import { CorpusModel } from '../golden/CorpusModel.js';
 describe('EventPainter', () => {
   async function painted(id: string): Promise<string> {
     const shape = await CorpusModel.shape('models/render/gallery.bpmn', id);
-    return new EventPainter(shape, new Style(shape.di)).svg();
+    return new EventPainter(shape, new Style(shape.planeElement)).svg();
   }
 
   it('draws a start event with one thin ring and no glyph', async () => {

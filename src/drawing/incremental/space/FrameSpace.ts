@@ -1,5 +1,5 @@
 import { Box } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { SpaceApplier } from './SpaceApplier.js';
 import { SpaceDecisions } from './SpaceDecisions.js';
 import type { Decision, FrameScope, SpacePass, SpaceResult } from './SpacePass.js';
@@ -15,7 +15,7 @@ export class FrameSpace {
     return new SpaceApplier(pass).apply(new SpaceDecisions(pass).all());
   }
 
-  inFrame(frame: DShape): SpaceResult {
+  inFrame(frame: PlaneShape): SpaceResult {
     const { base } = this;
     let scope: FrameScope | undefined = this.scopeFor(frame);
     for (let round = 0; scope && round < FrameSpace.MAX_ROUNDS; round++) {
@@ -62,7 +62,7 @@ export class FrameSpace {
     return axis === 'x' ? new Box(from, box.y, length, box.height) : new Box(box.x, from, box.width, length);
   }
 
-  private swallows(pass: SpacePass, decisions: ReadonlyMap<string, Decision>, resized: DShape): boolean {
+  private swallows(pass: SpacePass, decisions: ReadonlyMap<string, Decision>, resized: PlaneShape): boolean {
     const box = pass.boxOf(resized);
     const region = this.growthRegion(pass, box);
     const around = new Set(pass.frameChain(resized).map((frame) => frame.id));
@@ -75,13 +75,13 @@ export class FrameSpace {
     });
   }
 
-  private swallowers(pass: SpacePass, decisions: ReadonlyMap<string, Decision>): DShape[] {
+  private swallowers(pass: SpacePass, decisions: ReadonlyMap<string, Decision>): PlaneShape[] {
     const scope = pass.scope!;
     const growing = [...pass.plane.shapes.values()].filter((shape) => decisions.get(shape.id) === 'resize' && (shape === scope.frame || scope.grow.has(shape.id)));
     return growing.filter((resized) => this.swallows(pass, decisions, resized));
   }
 
-  private frameUp(shape: DShape): DShape | undefined {
+  private frameUp(shape: PlaneShape): PlaneShape | undefined {
     const { shapes } = this.base.plane;
     if (shape.kind === 'participant') {
       return undefined;
@@ -90,16 +90,16 @@ export class FrameSpace {
     return parent ?? (shape.poolId ? shapes.get(shape.poolId) : undefined);
   }
 
-  private widen(scope: FrameScope, grown: readonly DShape[]): FrameScope | undefined {
+  private widen(scope: FrameScope, grown: readonly PlaneShape[]): FrameScope | undefined {
     const targets = grown.map((shape) => this.frameUp(shape));
     if (targets.some((target) => !target)) {
       return undefined;
     }
-    const next = (targets as DShape[]).sort((first, second) => this.base.frameChain(first).length - this.base.frameChain(second).length)[0]!;
+    const next = (targets as PlaneShape[]).sort((first, second) => this.base.frameChain(first).length - this.base.frameChain(second).length)[0]!;
     return this.scopeFor(next, scope.grow);
   }
 
-  private scopeFor(frame: DShape, grow: ReadonlySet<string> = new Set()): FrameScope {
+  private scopeFor(frame: PlaneShape, grow: ReadonlySet<string> = new Set()): FrameScope {
     const ancestors = new Set(this.base.frameChain(frame).map((shape) => shape.id));
     return { frame, ancestors, grow: new Set([...grow].filter((id) => ancestors.has(id))) };
   }

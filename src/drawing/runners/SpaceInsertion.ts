@@ -3,7 +3,7 @@ import { SpaceAmount, type SpaceOperation } from '../../operations/index.js';
 import type { Drawing } from '../incremental/Drawing.js';
 import type { OperationBefore } from '../incremental/OperationBefore.js';
 import { BoxAxis, type Axis } from '../plane/BoxAxis.js';
-import type { DShape } from '../plane/DShape.js';
+import type { PlaneShape } from '../plane/PlaneShape.js';
 import { Frames } from '../plane/Frames.js';
 import type { Plane } from '../plane/Plane.js';
 import { PlaneStrips, type Strip } from './compaction/PlaneStrips.js';
@@ -13,9 +13,9 @@ import { DrawnDiagram } from './DrawnDiagram.js';
 interface ClosingTarget {
   referenceId: string;
   plane: Plane;
-  shape: DShape;
+  shape: PlaneShape;
   axis: Axis;
-  pool: DShape | undefined;
+  pool: PlaneShape | undefined;
   where: string;
 }
 
@@ -41,7 +41,7 @@ export class SpaceInsertion {
     return Math.round((new Samples(widths).median() ?? SpaceInsertion.DEFAULT_COLUMN) + plane.spacing().gap);
   }
 
-  private static poolOf(plane: Plane, shape: DShape): DShape | undefined {
+  private static poolOf(plane: Plane, shape: PlaneShape): PlaneShape | undefined {
     if (shape.kind === 'participant') {
       return shape;
     }
@@ -55,12 +55,12 @@ export class SpaceInsertion {
     return axis === 'x' ? `; one column is ${own} px: --by ${delta}col moves by ${delta} columns` : `; one row is ${own} px: --by ${delta}row moves by ${delta} rows`;
   }
 
-  private static lineAt(drawing: Drawing, shape: DShape, axis: Axis): number {
+  private static lineAt(drawing: Drawing, shape: PlaneShape, axis: Axis): number {
     const far = BoxAxis.of(axis).far(shape.container ? shape.bounds : drawing.space.unitBox(shape));
     return shape.container ? far - 1 : far + 1;
   }
 
-  private static regionBeyond(axis: Axis, pool: DShape | undefined, far: number): Box {
+  private static regionBeyond(axis: Axis, pool: PlaneShape | undefined, far: number): Box {
     const { FAR } = SpaceInsertion;
     if (axis === 'y') {
       return new Box(-FAR, far, 2 * FAR, FAR);

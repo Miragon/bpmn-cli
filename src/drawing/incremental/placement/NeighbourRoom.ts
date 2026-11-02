@@ -1,6 +1,6 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
 import { Box, type BpmnElement } from '../../../model/index.js';
-import { DShape } from '../../plane/DShape.js';
+import { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { PlaneReader } from '../../plane/PlaneReader.js';
 import type { ShapeSize } from '../../plane/ShapeSizes.js';
@@ -26,7 +26,7 @@ export class NeighbourRoom {
     private readonly obstacles: PlacementObstacles,
   ) {}
 
-  push(plane: Plane, anchor: DShape, scope: Pick<DShape, 'parentId' | 'poolId'>, request: PushRequest): void {
+  push(plane: Plane, anchor: PlaneShape, scope: Pick<PlaneShape, 'parentId' | 'poolId'>, request: PushRequest): void {
     const band = this.obstacles.spaceBand(plane, scope, anchor);
     const space = this.state.drawing(plane).space;
     const push = band.frame ? undefined : new PushSet(plane, request, (shape) => space.unitBox(shape)).collect();
@@ -35,7 +35,7 @@ export class NeighbourRoom {
     this.state.recordSpace(space.makeSpace({ axis: 'x', line, delta: request.delta, anchors: [anchor.id, scope.parentId], ...band, ...(push ? { push } : {}), ...keep }));
   }
 
-  pushBehind(plane: Plane, source: DShape, target: DShape): boolean {
+  pushBehind(plane: Plane, source: PlaneShape, target: PlaneShape): boolean {
     if (target.bounds.center.x >= source.bounds.x || this.state.leadsTo(target.id, source.id)) {
       return false;
     }
@@ -48,7 +48,7 @@ export class NeighbourRoom {
     return true;
   }
 
-  localShift(plane: Plane, box: Box, line: number, blockers: Obstacles, successor: DShape | undefined, gap: number): number | undefined {
+  localShift(plane: Plane, box: Box, line: number, blockers: Obstacles, successor: PlaneShape | undefined, gap: number): number | undefined {
     let need = 0;
     const clear = (obstacle: Box, room: number): boolean => {
       if (!obstacle.overlaps(box, room)) {
@@ -68,7 +68,7 @@ export class NeighbourRoom {
     return Math.ceil(need);
   }
 
-  reachOf(shape: DShape): LabelReach | undefined {
+  reachOf(shape: PlaneShape): LabelReach | undefined {
     const side = shape.labelSide();
     if (!shape.label || (side !== 'above' && side !== 'below')) {
       return undefined;
@@ -80,10 +80,10 @@ export class NeighbourRoom {
     const element = this.state.semantics.byId.get(id);
     const kind = element ? PlaneReader.shapeKind(element) : undefined;
     const name = element?.peek<string>('name')?.trim();
-    if (!kind || !name || kind === 'boundary' || !DShape.hasExternalLabel(kind)) {
+    if (!kind || !name || kind === 'boundary' || !PlaneShape.hasExternalLabel(kind)) {
       return undefined;
     }
-    const side = DShape.defaultLabelSide(kind);
+    const side = PlaneShape.defaultLabelSide(kind);
     const over = (TextMetrics.labelSize(name).width - size.width) / 2;
     return side === 'above' || side === 'below' ? { side, left: over, right: over } : undefined;
   }
@@ -92,7 +92,7 @@ export class NeighbourRoom {
     return left && right && left.side === right.side ? Math.ceil(Math.max(0, left.right) + Math.max(0, right.left) + NeighbourRoom.LABEL_APART) : 0;
   }
 
-  private leadingTo(plane: Plane, source: DShape): Set<string> {
+  private leadingTo(plane: Plane, source: PlaneShape): Set<string> {
     const fixed = new Set<string>();
     const queue = [source.id];
     for (let current = queue.shift(); current && fixed.size <= NeighbourRoom.MAX_FIXED; current = queue.shift()) {

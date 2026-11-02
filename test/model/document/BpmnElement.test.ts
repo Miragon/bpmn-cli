@@ -34,7 +34,7 @@ describe('BpmnElement', () => {
     const task = document.tree.require('task_worker');
     const vendor = task.get<BpmnElement>('extensionElements').list('values')[0]!;
 
-    expect([task.isBpmn, task.isGeneric, task.isDi]).toEqual([true, false, false]);
+    expect([task.isBpmn, task.isGeneric, task.isDrawingPart]).toEqual([true, false, false]);
     expect([vendor.isBpmn, vendor.isGeneric, vendor.type]).toEqual([false, true, 'zeebe:taskDefinition']);
     expect(vendor.id).toBe('definition_worker');
   });

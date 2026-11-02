@@ -2,7 +2,7 @@ import { Box, type Point } from '../../../model/index.js';
 import type { Drawing } from '../../incremental/Drawing.js';
 import type { SpaceResult } from '../../incremental/space/SpaceTool.js';
 import { BoxAxis, type Axis } from '../../plane/BoxAxis.js';
-import type { DEdge } from '../../plane/DEdge.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
 import { PlaneStrips, type Strip } from './PlaneStrips.js';
 
 export class StripClosure {
@@ -21,14 +21,14 @@ export class StripClosure {
     return from + ((coordinate - from) * keep) / (to - from);
   }
 
-  private static touches({ points, label }: DEdge, axis: Axis, strip: Strip, within: Box | undefined): boolean {
+  private static touches({ points, label }: PlaneEdge, axis: Axis, strip: Strip, within: Box | undefined): boolean {
     const along = BoxAxis.of(axis);
     const band = along.bandOf(within);
     const hit = (box: Box): boolean => along.far(box) + 1 > strip.from && along.near(box) - 1 < strip.to && along.overlapsBand(box.grow(1), band);
     return [...points.slice(1, -1).map(({ x, y }) => new Box(x, y, 0, 0)), ...(label ? [label] : [])].some(hit);
   }
 
-  private static squeezeBends({ points }: DEdge, axis: Axis, strip: Strip, within: Box | undefined): void {
+  private static squeezeBends({ points }: PlaneEdge, axis: Axis, strip: Strip, within: Box | undefined): void {
     for (const point of points.slice(1, -1)) {
       const { along, across } = StripClosure.coordinates(point, axis);
       if (StripClosure.inClosedPart(along, strip) && StripClosure.withinBand(across, axis, within)) {
@@ -37,7 +37,7 @@ export class StripClosure {
     }
   }
 
-  private static squeezeLabel({ label }: DEdge, axis: Axis, strip: Strip, within: Box | undefined): void {
+  private static squeezeLabel({ label }: PlaneEdge, axis: Axis, strip: Strip, within: Box | undefined): void {
     if (!label) {
       return;
     }

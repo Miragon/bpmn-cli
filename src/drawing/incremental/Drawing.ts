@@ -1,7 +1,7 @@
 import { Polyline, type Point } from '../../model/index.js';
 import { DrawingCheckpoint } from '../plane/DrawingCheckpoint.js';
-import type { DEdge } from '../plane/DEdge.js';
-import { DShape } from '../plane/DShape.js';
+import type { PlaneEdge } from '../plane/PlaneEdge.js';
+import { PlaneShape } from '../plane/PlaneShape.js';
 import type { Plane } from '../plane/Plane.js';
 import type { Side } from '../plane/ShapeSides.js';
 import type { TrialGuard } from '../plane/TrialGuard.js';
@@ -40,11 +40,11 @@ export class Drawing {
     return new DrawingCheckpoint(this.plane);
   }
 
-  routeOrder(edges: Iterable<DEdge>): DEdge[] {
+  routeOrder(edges: Iterable<PlaneEdge>): PlaneEdge[] {
     return [...edges].sort((left, right) => this.routes.routeRank(left) - this.routes.routeRank(right));
   }
 
-  reroute(edge: DEdge, opts: { lines?: Point[][]; sourceSides?: Side[]; targetSides?: Side[] } = {}): boolean {
+  reroute(edge: PlaneEdge, opts: { lines?: Point[][]; sourceSides?: Side[]; targetSides?: Side[] } = {}): boolean {
     const { lines, ...sides } = opts;
     const points = this.routes.routeEdge(edge, { lines: lines ?? this.routes.routingLines(edge.id), ...sides });
     if (!points || points.length < 2) {
@@ -54,17 +54,17 @@ export class Drawing {
     return true;
   }
 
-  adoptRoute(edge: DEdge, points: Point[]): void {
+  adoptRoute(edge: PlaneEdge, points: Point[]): void {
     edge.points = points;
     if (edge.label || edge.el.peek<string>('name')) {
       this.labels.placeEdgeLabel(edge);
     }
   }
 
-  clearLabels(fresh: readonly DEdge[]): void {
+  clearLabels(fresh: readonly PlaneEdge[]): void {
     for (const shape of this.plane.shapes.values()) {
       const { label } = shape;
-      if (!label || !DShape.hasExternalLabel(shape.kind) || !fresh.some((edge) => new Polyline(edge.points).hits(label, 1))) {
+      if (!label || !PlaneShape.hasExternalLabel(shape.kind) || !fresh.some((edge) => new Polyline(edge.points).hits(label, 1))) {
         continue;
       }
       const host = shape.hostId ? this.plane.shapes.get(shape.hostId)?.bounds : undefined;
@@ -75,7 +75,7 @@ export class Drawing {
 
   settle(before: OperationBefore): string[] {
     this.translateRigidEdges(before);
-    const rerouted: DEdge[] = [];
+    const rerouted: PlaneEdge[] = [];
     for (const edge of this.routeOrder(this.plane.edges.values())) {
       if (this.routes.brokenEdge(edge, before.edges.get(edge)) && this.reroute(edge)) {
         rerouted.push(edge);

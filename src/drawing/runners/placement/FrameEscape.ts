@@ -1,5 +1,5 @@
 import type { Box, Point } from '../../../model/index.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 
@@ -8,7 +8,7 @@ export class FrameEscape {
 
   constructor(private readonly plane: Plane) {}
 
-  of(shape: DShape, frame: DShape, box: Box): DShape | undefined {
+  of(shape: PlaneShape, frame: PlaneShape, box: Box): PlaneShape | undefined {
     const inner = Frames.interior(frame, 0);
     const center = box.center;
     const tolerance = frame.kind === 'lane' || frame.kind === 'participant' ? FrameEscape.HEADER_TOLERANCE : 0.5;
@@ -22,7 +22,7 @@ export class FrameEscape {
     return frame.kind === 'lane' ? this.outOfLane(shape, frame, center) : undefined;
   }
 
-  private outOfLane(shape: DShape, frame: DShape, center: Point): DShape | undefined {
+  private outOfLane(shape: PlaneShape, frame: PlaneShape, center: Point): PlaneShape | undefined {
     const there = this.laneAt(shape.poolId, center);
     if (there) {
       return there.id === frame.id ? undefined : there;
@@ -31,8 +31,8 @@ export class FrameEscape {
     return center.y >= frame.bounds.bottom && laneFollows ? frame : undefined;
   }
 
-  private laneAt(poolId: string | undefined, point: Point): DShape | undefined {
-    let smallest: DShape | undefined;
+  private laneAt(poolId: string | undefined, point: Point): PlaneShape | undefined {
+    let smallest: PlaneShape | undefined;
     for (const lane of this.shapes()) {
       if (lane.kind !== 'lane' || lane.poolId !== poolId || !lane.bounds.contains(point)) {
         continue;
@@ -44,7 +44,7 @@ export class FrameEscape {
     return smallest;
   }
 
-  private shapes(): DShape[] {
+  private shapes(): PlaneShape[] {
     return [...this.plane.shapes.values()];
   }
 }

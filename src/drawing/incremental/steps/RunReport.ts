@@ -1,6 +1,6 @@
 import { Box, BpmnError, ModelError, Polyline, type BpmnElement } from '../../../model/index.js';
 import type { DrawingSnapshot } from '../../DrawingSnapshot.js';
-import type { DEdge } from '../../plane/DEdge.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
 import type { LayoutRun } from '../run/LayoutRun.js';
 import type { EdgeBefore } from '../routing/EdgeRouter.js';
 
@@ -34,7 +34,7 @@ export class RunReport {
     }
   }
 
-  of(prunedNow: readonly string[], rerouted: string[], edgesBefore: ReadonlyMap<DEdge, EdgeBefore>): IncrementalReport {
+  of(prunedNow: readonly string[], rerouted: string[], edgesBefore: ReadonlyMap<PlaneEdge, EdgeBefore>): IncrementalReport {
     const { place, newEdges, relocated, notes } = this.run;
     const pruned = this.prunedSince(prunedNow);
     const routed = new Set([...rerouted, ...newEdges]);
@@ -50,10 +50,10 @@ export class RunReport {
   }
 
   private prunedSince(prunedNow: readonly string[]): Set<string> {
-    const live = new Set<BpmnElement>(this.run.planes.flatMap((plane) => [...plane.shapes.values(), ...plane.edges.values()].flatMap((element) => element.di ?? [])));
+    const live = new Set<BpmnElement>(this.run.planes.flatMap((plane) => [...plane.shapes.values(), ...plane.edges.values()].flatMap((element) => element.planeElement ?? [])));
     const pruned = new Set(prunedNow);
-    for (const [di, entry] of this.before.byDi) {
-      if (!live.has(di) && !this.run.semantics.byId.has(entry.id)) {
+    for (const [planeElement, entry] of this.before.byPlaneElement) {
+      if (!live.has(planeElement) && !this.run.semantics.byId.has(entry.id)) {
         pruned.add(entry.id);
       }
     }
@@ -63,7 +63,7 @@ export class RunReport {
   private movedShapes(): string[] {
     const { place, relocated, planes } = this.run;
     const moved = planes.flatMap((plane) => [...plane.shapes.values()].filter((shape) => {
-      const old = shape.di && (!place.placed.has(shape.id) || relocated.has(shape.id)) ? this.before.byDi.get(shape.di) : undefined;
+      const old = shape.planeElement && (!place.placed.has(shape.id) || relocated.has(shape.id)) ? this.before.byPlaneElement.get(shape.planeElement) : undefined;
       return !!old?.bounds && !Box.same(old.bounds, shape.bounds);
     })).map((shape) => shape.id);
     return [...new Set([...moved, ...relocated])];

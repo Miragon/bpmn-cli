@@ -9,7 +9,7 @@ import { LaneBox } from '../scopes/LaneBox.js';
 import { PoolLayouts, type PoolLayout } from '../scopes/PoolLayouts.js';
 import { ScopeFrame } from '../scopes/ScopeFrame.js';
 import type { ScopePlacer } from '../scopes/ScopePlacer.js';
-import type { DiWriter, EngineWarning } from './DiWriter.js';
+import type { FreshDrawingWriter, EngineWarning } from './FreshDrawingWriter.js';
 
 type MessageFlowEnds = Omit<MessageFlowJob, 'sourcePool' | 'targetPool'> & { sourcePool?: PoolLayout | undefined; targetPool?: PoolLayout | undefined };
 
@@ -21,7 +21,7 @@ export class PoolStacker {
 
   constructor(
     private readonly root: BpmnElement,
-    private readonly writer: DiWriter,
+    private readonly writer: FreshDrawingWriter,
   ) {}
 
   private static laneDepth({ scope }: PoolLayout): number {
@@ -95,7 +95,7 @@ export class PoolStacker {
   private write(pool: PoolLayout): void {
     const { writer } = this;
     const { box, scope, origin } = pool;
-    const first = writer.di.length;
+    const first = writer.planeElements.length;
     writer.shape(pool.participant, box, { extra: { isHorizontal: true } });
     if (scope) {
       const laned = scope.lanes.length > 0;
@@ -107,7 +107,7 @@ export class PoolStacker {
         writer.fixLaneShapes(lane, box, box.x + ShapeSizes.PARTICIPANT_HEADER);
       }
     }
-    pool.di = writer.di.slice(first);
+    pool.planeElements = writer.planeElements.slice(first);
   }
 
   private boundaryBoxes(element: BpmnElement): Box[] {
@@ -146,15 +146,15 @@ export class PoolStacker {
     const obstacles: Box[] = [];
     const lines: Segment[] = [];
     const crossable: Segment[] = [];
-    for (const di of pool.di ?? []) {
-      const element = di.peek<BpmnElement>('bpmnElement');
-      if (element && di.is('bpmndi:BPMNShape')) {
+    for (const planeElement of pool.planeElements ?? []) {
+      const element = planeElement.peek<BpmnElement>('bpmnElement');
+      if (element && planeElement.is('bpmndi:BPMNShape')) {
         const box = this.writer.absBoxes.get(element.id);
-        if (box && !Frames.isContainerDi(di, element)) {
+        if (box && !Frames.isContainerShape(planeElement, element)) {
           obstacles.push(box);
         }
       } else if (element) {
-        const segments = new Polyline(di.list('waypoint').map((waypoint) => new Point(waypoint.get<number>('x'), waypoint.get<number>('y')))).segments();
+        const segments = new Polyline(planeElement.list('waypoint').map((waypoint) => new Point(waypoint.get<number>('x'), waypoint.get<number>('y')))).segments();
         lines.push(...segments);
         crossable.push(...(Semantics.isAnnotationLine(element) ? [] : segments));
       }
@@ -167,15 +167,15 @@ export class PoolStacker {
       return;
     }
     const moveBounds = (bounds: BpmnElement | undefined): void => bounds?.set('y', bounds.get<number>('y') + dy);
-    for (const di of pool.di ?? []) {
-      moveBounds(di.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds'));
-      if (di.is('bpmndi:BPMNShape')) {
-        moveBounds(di.peek<BpmnElement>('bounds'));
-        const element = di.peek<BpmnElement>('bpmnElement');
+    for (const planeElement of pool.planeElements ?? []) {
+      moveBounds(planeElement.peek<BpmnElement>('label')?.peek<BpmnElement>('bounds'));
+      if (planeElement.is('bpmndi:BPMNShape')) {
+        moveBounds(planeElement.peek<BpmnElement>('bounds'));
+        const element = planeElement.peek<BpmnElement>('bpmnElement');
         const box = element && this.writer.absBoxes.get(element.id);
         box?.translate(0, dy);
       } else {
-        for (const waypoint of di.list('waypoint')) {
+        for (const waypoint of planeElement.list('waypoint')) {
           waypoint.set('y', waypoint.get<number>('y') + dy);
         }
       }

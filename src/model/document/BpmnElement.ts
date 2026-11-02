@@ -32,14 +32,14 @@ export class BpmnElement {
   private static readonly wrappers = new WeakMap<ModdleObject, BpmnElement>();
   private static readonly DETACHED_ATTRS: Record<string, unknown> = Object.freeze({});
   private static readonly BPMN_TYPE = /^(bpmn|bpmndi|dc|di):/;
-  private static readonly DI_TYPE = /^(bpmndi|dc|di):/;
+  private static readonly DRAWING_TYPE = /^(bpmndi|dc|di):/;
 
   readonly type: string;
   readonly descriptor: TypeDescriptor;
   readonly attrs: Record<string, unknown>;
   readonly isGeneric: boolean;
   readonly isBpmn: boolean;
-  readonly isDi: boolean;
+  readonly isDrawingPart: boolean;
 
   private constructor(readonly raw: ModdleObject) {
     this.type = raw.$type;
@@ -47,7 +47,7 @@ export class BpmnElement {
     this.attrs = raw.$attrs ?? BpmnElement.DETACHED_ATTRS;
     this.isGeneric = !!raw.$descriptor.isGeneric;
     this.isBpmn = !this.isGeneric && BpmnElement.BPMN_TYPE.test(raw.$type);
-    this.isDi = BpmnElement.DI_TYPE.test(raw.$type);
+    this.isDrawingPart = BpmnElement.DRAWING_TYPE.test(raw.$type);
   }
 
   static of(raw: ModdleObject): BpmnElement {

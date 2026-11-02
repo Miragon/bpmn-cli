@@ -80,7 +80,7 @@ describe('PlacementState', () => {
 
     const shape = scene.place.newShape(scene.plane, 'B', new Box(old.bounds.x + 10, old.bounds.y + 5, 36, 36));
 
-    expect(shape.di).toBe(old.di);
+    expect(shape.planeElement).toBe(old.planeElement);
     expect(shape.label).toMatchObject({ x: 300, y: 185 });
   });
 

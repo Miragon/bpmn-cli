@@ -37,9 +37,9 @@ describe('ElementWalk', () => {
 
   it('leaves out what the skip names, with all below it', async () => {
     const { tree } = await Fixtures.read('model/events.bpmn');
-    const stored = [...new ElementWalk(tree.definitions).stored((element) => element.isDi)];
+    const stored = [...new ElementWalk(tree.definitions).stored((element) => element.isDrawingPart)];
 
-    expect(stored.some(({ isDi }) => isDi)).toBe(false);
+    expect(stored.some(({ isDrawingPart }) => isDrawingPart)).toBe(false);
     expect(stored).toContain(tree.require('task_review'));
     expect(new Set(stored).size).toBe(stored.length);
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EdgeRouter } from '../../../../src/drawing/incremental/routing/EdgeRouter.js';
-import { DEdge } from '../../../../src/drawing/plane/DEdge.js';
+import { PlaneEdge } from '../../../../src/drawing/plane/PlaneEdge.js';
 import { PlaneReader } from '../../../../src/drawing/plane/PlaneReader.js';
 import { Fixtures } from '../../../support/Fixtures.js';
 import { Point, Polyline } from '../../../support/ModelValues.js';
@@ -14,10 +14,10 @@ describe('EdgeRouter', () => {
   it('routes sequence flows before message flows before lines on a flow', async () => {
     const plane = await planeOf('models/incremental/polish-collab.bpmn');
     const router = new EdgeRouter(plane);
-    const onFlow = new DEdge('onFlow', plane.edges.get('F1')!.el, 'association');
+    const onFlow = new PlaneEdge('onFlow', plane.edges.get('F1')!.el, 'association');
     onFlow.targetId = 'F1';
     plane.edges.set('onFlow', onFlow);
-    const fromFlow = new DEdge('fromFlow', plane.edges.get('F1')!.el, 'association');
+    const fromFlow = new PlaneEdge('fromFlow', plane.edges.get('F1')!.el, 'association');
     fromFlow.sourceId = 'F1';
     plane.edges.set('fromFlow', fromFlow);
 

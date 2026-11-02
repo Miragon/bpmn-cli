@@ -1,6 +1,6 @@
 import { Box, Polyline, type Point } from '../../../model/index.js';
-import type { DEdge } from '../../plane/DEdge.js';
-import type { DShape } from '../../plane/DShape.js';
+import type { PlaneEdge } from '../../plane/PlaneEdge.js';
+import type { PlaneShape } from '../../plane/PlaneShape.js';
 import type { Plane } from '../../plane/Plane.js';
 import { ShapeSizes, type ShapeSize } from '../../plane/ShapeSizes.js';
 
@@ -29,7 +29,7 @@ export class BoundarySpots {
     return centres;
   }
 
-  spotOnBorder(host: DShape, size: ShapeSize, self?: string): Box {
+  spotOnBorder(host: PlaneShape, size: ShapeSize, self?: string): Box {
     const hostBox = host.bounds;
     const others = this.plane.boundariesOf(host.id).filter((boundary) => boundary.id !== self).map((boundary) => boundary.bounds);
     const offset = Math.min(ShapeSizes.EVENT.width / 2 + 7, hostBox.width / 2);
@@ -50,7 +50,7 @@ export class BoundarySpots {
     return new Box(Math.round(hostBox.right - offset - size.width / 2), Math.round(onBottom), size.width, size.height);
   }
 
-  spotOnTop(event: DShape, host: DShape): Box | undefined {
+  spotOnTop(event: PlaneShape, host: PlaneShape): Box | undefined {
     const hostBox = host.bounds;
     const { width, height } = event.bounds;
     const top = Math.round(hostBox.y - height / 2);
@@ -69,7 +69,7 @@ export class BoundarySpots {
     return undefined;
   }
 
-  private topSpotTest(event: DShape, host: DShape): (box: Box) => boolean {
+  private topSpotTest(event: PlaneShape, host: PlaneShape): (box: Box) => boolean {
     const { shapes, edges } = this.plane;
     const others = this.plane.boundariesOf(host.id).filter((boundary) => boundary.id !== event.id).map((boundary) => boundary.bounds);
     const docks = this.docksOn(host, (edge) => edge.sourceId !== event.id);
@@ -78,7 +78,7 @@ export class BoundarySpots {
     return (box) => !others.some((other) => other.overlaps(box, BoundarySpots.DOCK_MARGIN)) && !BoundarySpots.onDock(box, docks) && !labels.some((label) => label.overlaps(box, BoundarySpots.HOST_LABEL_MARGIN)) && !lines.some((line) => line.hits(box, BoundarySpots.LINE_REACH));
   }
 
-  private docksOn(host: DShape, counts: (edge: DEdge) => boolean): Point[] {
+  private docksOn(host: PlaneShape, counts: (edge: PlaneEdge) => boolean): Point[] {
     const docks: Point[] = [];
     for (const edge of this.plane.edges.values()) {
       if (edge.points.length >= 2 && counts(edge)) {

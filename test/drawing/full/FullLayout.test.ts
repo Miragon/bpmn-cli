@@ -33,7 +33,7 @@ describe('FullLayout', () => {
 
   it('keeps a task with three boundary events at the standard size', async () => {
     const { document } = await drawn('layout/artifacts__10-three-boundaries.bpmn');
-    const task = document.diagram.planes()[0]!.list('planeElement').find((di) => di.peek('bpmnElement') === Fixtures.element(document, 'Activity_Approve'))!;
+    const task = document.diagram.planes()[0]!.list('planeElement').find((planeElement) => planeElement.peek('bpmnElement') === Fixtures.element(document, 'Activity_Approve'))!;
 
     expect(task.peek<{ peek(property: string): number }>('bounds')?.peek('width')).toBe(100);
   });
