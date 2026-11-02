@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.10.0](https://github.com/Miragon/bpmn-cli/compare/v0.9.0...v0.10.0) (2026-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* `key=` (`"key": ""` in a batch) no longer removes a key; use `--unset key` (`"unset": ["key"]`). An empty value is refused.
+* CLI and library rebuilt, details in [Migrating from 0.9](https://github.com/Miragon/bpmn-cli/blob/f4ba39b551a3a4d39bd81edb2ce62bdc4956f6f1/docs/migration.md)
+    - Node 24 or later
+    - element contents as `key=value` instead of flags (`timer=P2D`, not `--timer P2D`)
+    - `metrics` → `diagram`, `show --conventions` → `conventions`, `show --context` and `ext list` → `show <id>`, `kinds` → `guide kinds`, `layout --tidy` → `tidy`; `align`, `rm`, `replace` and `colour` removed
+    - writes keep the drawing, a full redraw only via `bpmn layout`; `--layout`, `--relayout` and `--no-layout` removed
+    - lint only in `bpmn validate`, `--strict` and `--lint-config` moved there
+    - new shapes in bpmn-js sizes
+    - `show` without `problems:`, `--depth` 1 by default, `--scope` and `--inner` → `--in`
+    - operation JSON with element contents under `set`, parsed strictly
+    - library with 10 exports instead of 94, without `./node` and the `Doc` API
+
+### Features
+
+* add --unset &lt;key&gt; and refuse an empty value ([#162](https://github.com/Miragon/bpmn-cli/issues/162)) ([3e984d0](https://github.com/Miragon/bpmn-cli/commit/3e984d0bfa0a26a4818fdbd7b5baef094e2d1fc7))
+
+
+### Bug Fixes
+
+* attach data associations to a sub-process when it collapses ([#156](https://github.com/Miragon/bpmn-cli/issues/156)) ([0ba382c](https://github.com/Miragon/bpmn-cli/commit/0ba382cf87336ec50bd7560b4bd5cb183cd433d8))
+* let message= drop only the messageRef of an event and remove unused messages ([#155](https://github.com/Miragon/bpmn-cli/issues/155)) ([effbb9d](https://github.com/Miragon/bpmn-cli/commit/effbb9dc828b98dffaa15ee9b67657464c1ca737))
+* repair what any edit leaves behind: unused root elements and data reaching into a collapsed sub-process ([#159](https://github.com/Miragon/bpmn-cli/issues/159)) ([8a5a7ec](https://github.com/Miragon/bpmn-cli/commit/8a5a7ec4ed206795e2afce248765b5f6c5580403))
+
+
+### Code Refactoring
+
+* restructure bpmn-cli into layered modules ([f4ba39b](https://github.com/Miragon/bpmn-cli/commit/f4ba39b551a3a4d39bd81edb2ce62bdc4956f6f1))
+
 ## [0.9.0](https://github.com/Miragon/bpmn-cli/compare/v0.8.0...v0.9.0) (2026-10-30)
 
 
