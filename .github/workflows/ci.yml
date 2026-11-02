@@ -1,8 +1,8 @@
 # Checks every pull request (including release-please's release PRs) and every push to main:
-# the guardrails and the oracle (`npm run gate`), the manifests of the Claude Code plugin and its
+# the guardrails (`npm run gate`), the manifests of the Claude Code plugin and its
 # marketplace (`claude plugin validate`), and the corporate identity of the docs (the vendored docs
 # kit and brand-lint). The gate's checkout is the pull request's head with full history, so the
-# oracle finds main at the commit the branch sits on.
+# timings find main at the commit the branch sits on.
 name: ci
 
 on:

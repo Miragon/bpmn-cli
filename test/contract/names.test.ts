@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { CliProgram } from '../../src/cli/CliProgram.js';
 import { HelpTopics } from '../../src/cli/help/HelpTopics.js';
 import * as contract from '../../src/index.js';
-import { designIqCalls, onRebuild } from '../../tools/oracle/design-iq-map.mjs';
 
 interface Names {
   flagsOf: Map<string, Set<string>>;
@@ -75,16 +74,6 @@ function hintOfRefusal(error: unknown): string[] {
   return [message, ...(details?.hint ? [details.hint] : [])];
 }
 
-async function hintsOfRefusedCall(call: Parameters<typeof onRebuild>[1]): Promise<string[]> {
-  const hints: string[] = [];
-  const applyToXml: typeof contract.applyToXml = (...input) => contract.applyToXml(...input).catch((error: unknown) => {
-    hints.push(...hintOfRefusal(error));
-    throw error;
-  });
-  await onRebuild({ ...contract, applyToXml }, call);
-  return hints;
-}
-
 function filesBelow(folder: string): string[] {
   return readdirSync(folder).flatMap((name) => {
     const path = join(folder, name);
@@ -131,11 +120,4 @@ describe('the names of the guide and the hints', () => {
     expect(hints.length).toBeGreaterThan(1000);
     expect([...new Set(hints.flatMap((hint) => unknownNames(hint, names)))]).toEqual([]);
   }, 120000);
-
-  it("names in the refusals of design-iq's calls only commands and flags that exist", async () => {
-    const hints = (await Promise.all(designIqCalls().map(({ call }) => hintsOfRefusedCall(call)))).flat();
-
-    expect(hints.length).toBeGreaterThan(0);
-    expect([...new Set(hints.flatMap((hint) => unknownNames(hint, names)))]).toEqual([]);
-  });
 });
