@@ -6,14 +6,14 @@
 #   npm trust github @miragon/bpmn-cli --file release-please.yml --repo Miragon/bpmn-cli --allow-publish
 # See docs/releasing.md.
 #
-# A pushed tag v1.0.0-rc.N takes the other path: release-please does not run, publish-rc publishes that
+# A pushed release-candidate tag vX.Y.Z-rc.N takes the other path: release-please does not run, publish-rc publishes that
 # commit, whose package.json holds the same version, on the dist-tag next, and no tap or branch moves.
 name: release-please
 
 on:
   push:
     branches: [main]
-    tags: ['v1.0.0-rc.*']
+    tags: ['v*-rc.*']
 
 jobs:
   release-please:

@@ -1,13 +1,14 @@
 # Rare crashes and slow drift: a fuzz with a new seed every night and the bench against main, both
 # scored by main's scorers in the worktree tools/oracle builds. GitHub starts a schedule only from the
-# default branch, so until the rebuild is merged this runs on a tag v1.0.0-rc.N or by hand.
+# default branch, so until the refactoring is merged this runs on a release-candidate tag vX.Y.Z-rc.N or by
+# hand.
 name: nightly
 
 on:
   schedule:
     - cron: '17 2 * * *'
   push:
-    tags: ['v1.0.0-rc.*']
+    tags: ['v*-rc.*']
   workflow_dispatch:
 
 permissions:
