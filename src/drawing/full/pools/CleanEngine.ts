@@ -47,7 +47,7 @@ export class CleanEngine {
     const collapsedScopes = new Map<string, ScopeLayout>();
     const options: PlaceOptions = { expanded, collapsedScopes, ...(groups?.size ? { groups } : {}) };
     const placer = new ScopePlacer(options);
-    const writer = new FreshDrawingWriter(document.tree);
+    const writer = new FreshDrawingWriter(document.tree, expanded);
     if (root.is('bpmn:Collaboration')) {
       this.drawCollaboration(root, writer, placer, options, warnings);
     } else {

@@ -15,6 +15,10 @@ export class Fixtures {
     return new DocumentReader().read(Fixtures.text(path));
   }
 
+  static parse(xml: string): Promise<BpmnDocument> {
+    return new DocumentReader().read(xml);
+  }
+
   static readForWrite(path: string): Promise<BpmnDocument> {
     return new DocumentReader().readForWrite(Fixtures.text(path));
   }

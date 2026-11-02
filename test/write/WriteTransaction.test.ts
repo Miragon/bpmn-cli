@@ -6,6 +6,7 @@ import { BpmnError } from '../support/ModelValues.js';
 
 const orderCheck = Fixtures.text('edit/order-check.bpmn');
 const crossScope = Fixtures.text('layout/artifacts__04b-data-crossscope.bpmn');
+const collapsedCrossing = Fixtures.text('edit/collapsed-data-crossing.bpmn');
 const collapse = { op: 'set', id: 'Activity_Sub', set: { expanded: false } };
 const readsAcrossPlanes = { op: 'connect', source: 'DataObjectReference_App', target: 'Activity_Review' };
 const write = (xml: string, operations: unknown[], options = {}) => new WriteTransaction(options).apply(xml, operations);
@@ -120,28 +121,88 @@ describe('WriteTransaction', () => {
     expect((await write(vertical, [add, { op: 'layout' }])).created[0]?.name).toBe('New');
   });
 
-  it('warns of a data association the incremental layout left undrawn, across the plane of a collapsed sub-process', async () => {
-    const { findings } = await write(crossScope, [collapse, readsAcrossPlanes]);
+  it('attaches a data association reaching into a sub-process to the sub-process when it collapses, and draws it', async () => {
+    const { xml, notes, findings } = await write(crossScope, [collapse]);
+    const subProcess = (await Fixtures.parse(xml)).tree.require('Activity_Sub');
 
-    expect(findings.filter(({ code }) => code === 'W_LAYOUT_DI_NOT_CREATED')).toEqual([
-      { code: 'W_LAYOUT_DI_NOT_CREATED', element: 'association_appToReview', message: 'No DI created for association_appToReview (the write left it undrawn)', severity: 'warning' },
-    ]);
+    expect(subProcess.list('dataInputAssociations').map(({ id }) => id)).toEqual(['DataInputAssociation_4']);
+    expect(xml).toContain('bpmnElement="DataInputAssociation_4"');
+    expect(notes).toContain('DataInputAssociation_4 moved from Activity_Score to the collapsed Activity_Sub');
+    expect(findings.filter(({ code }) => code === 'W_LAYOUT_DI_NOT_CREATED')).toEqual([]);
   });
 
-  it('warns once, with the reason of the full layout, of each association it could not draw', async () => {
-    const { findings } = await write(crossScope, [collapse, readsAcrossPlanes, { op: 'layout' }]);
+  it('merges data associations that read the same data into one on the collapsed sub-process', async () => {
+    const { xml, notes } = await write(crossScope, [readsAcrossPlanes, collapse]);
+    const subProcess = (await Fixtures.parse(xml)).tree.require('Activity_Sub');
 
-    expect(findings.filter(({ code }) => code === 'W_LAYOUT_DI_NOT_CREATED').map(({ element, message }) => [element, message])).toEqual([
-      ['DataInputAssociation_4', 'No DI created for DataInputAssociation_4 (its ends are on different diagrams)'],
-      ['association_appToReview', 'No DI created for association_appToReview (its ends are on different diagrams)'],
-    ]);
+    expect(subProcess.list('dataInputAssociations').map(({ id }) => id)).toEqual(['DataInputAssociation_4']);
+    expect(xml).not.toContain('association_appToReview');
+    expect(notes).toContain('association_appToReview removed: the collapsed Activity_Sub already reads DataObjectReference_App');
   });
 
-  it('keeps quiet of a data association the file had left undrawn before the collapse', async () => {
-    const { findings, score } = await write(crossScope, [collapse]);
+  it('attaches a data output from inside to the collapsed sub-process', async () => {
+    const writesAcrossPlanes = { op: 'connect', source: 'Activity_Review', target: 'DataObjectReference_App', id: 'reviewWritesApp' };
+    const { xml } = await write(crossScope, [writesAcrossPlanes, collapse]);
+    const subProcess = (await Fixtures.parse(xml)).tree.require('Activity_Sub');
 
-    expect(score.after.counts.missing).toBe(1);
-    expect(findings).toEqual([]);
+    expect(subProcess.list('dataOutputAssociations').map(({ id }) => id)).toEqual(['reviewWritesApp']);
+    expect(xml).toContain('bpmnElement="reviewWritesApp"');
+  });
+
+  it('attaches a data association of a nested element to the outermost collapsed sub-process', async () => {
+    const nested = [
+      { op: 'add', kind: 'subProcess', name: 'Inner', id: 'inner', in: 'Activity_Sub' },
+      { op: 'add', kind: 'task', name: 'Deep', id: 'deep', in: 'inner' },
+      { op: 'connect', source: 'DataObjectReference_App', target: 'deep', id: 'appToDeep' },
+    ];
+    const { xml } = await write(crossScope, [...nested, collapse]);
+    const tree = (await Fixtures.parse(xml)).tree;
+
+    expect(tree.require('deep').list('dataInputAssociations')).toEqual([]);
+    expect(tree.require('Activity_Sub').list('dataInputAssociations').map(({ id }) => id)).toEqual(['DataInputAssociation_4']);
+  });
+
+  it('attaches a data association to the collapsing inner sub-process when the outer one stays expanded', async () => {
+    const nested = [
+      { op: 'add', kind: 'subProcess', name: 'Inner', id: 'inner', in: 'Activity_Sub' },
+      { op: 'add', kind: 'task', name: 'Deep', id: 'deep', in: 'inner' },
+      { op: 'connect', source: 'DataObjectReference_App', target: 'deep', id: 'appToDeep' },
+      { op: 'set', id: 'inner', set: { expanded: false } },
+    ];
+    const { xml } = await write(crossScope, nested);
+    const tree = (await Fixtures.parse(xml)).tree;
+
+    expect(tree.require('inner').list('dataInputAssociations').map(({ id }) => id)).toEqual(['appToDeep']);
+    expect(xml).toContain('bpmnElement="appToDeep"');
+  });
+
+  it('warns of a data association from outside to data inside the sub-process it collapses', async () => {
+    const readsInside = { op: 'connect', source: 'DataObjectReference_Score', target: 'Activity_Inform', id: 'informReadsScore' };
+    const { findings } = await write(crossScope, [readsInside, collapse]);
+
+    expect(findings).toContainEqual(expect.objectContaining({ code: 'W_DATA_IN_COLLAPSED', element: 'informReadsScore', message: 'informReadsScore reaches DataObjectReference_Score inside the collapsed Activity_Sub and stays undrawn' }));
+  });
+
+  it('refuses to connect into a sub-process collapsed and renamed earlier in the batch', async () => {
+    const rename = { op: 'set', id: 'Activity_Sub', set: { id: 'Activity_Renamed' } };
+
+    expect((await refusalOf(write(crossScope, [collapse, rename, readsAcrossPlanes]))).code).toBe('E_INVALID_ENDPOINT');
+  });
+
+  it('repairs a file collapsed before, when the collapse is set again', async () => {
+    const { xml, findings } = await write(collapsedCrossing, [collapse]);
+    const subProcess = (await Fixtures.parse(xml)).tree.require('Activity_Sub');
+
+    expect(subProcess.list('dataInputAssociations').map(({ id }) => id)).toEqual(['DataInputAssociation_4']);
+    expect(xml).toContain('bpmnElement="DataInputAssociation_4"');
+    expect(findings.filter(({ code }) => code.startsWith('W_LAYOUT_'))).toEqual([]);
+  });
+
+  it('refuses to connect data to an element inside a collapsed sub-process', async () => {
+    const refusal = await refusalOf(write(crossScope, [collapse, readsAcrossPlanes]));
+
+    expect(refusal.code).toBe('E_INVALID_ENDPOINT');
+    expect(refusal.message).toBe('Activity_Review is inside the collapsed Activity_Sub; its data association could not be drawn');
   });
 
   it('refuses an error the change adds and writes it when forced', async () => {

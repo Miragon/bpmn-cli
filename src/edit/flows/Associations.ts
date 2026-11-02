@@ -80,7 +80,7 @@ export class Associations {
     return source.is('bpmn:BoundaryEvent') && Triggers.of(source) === 'compensate' && target.is('bpmn:Activity');
   }
 
-  private placeholderProperty(node: BpmnElement): BpmnElement {
+  placeholderProperty(node: BpmnElement): BpmnElement {
     const existing = node.list('properties').find((candidate) => candidate.get<string | undefined>('name') === Associations.PLACEHOLDER_PROPERTY);
     if (existing) {
       return existing;

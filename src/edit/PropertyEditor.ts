@@ -1,10 +1,12 @@
 import { type BpmnElement, ChangeEntries, ChangeSet, ElementSlots, PropertyCatalog } from '../model/index.js';
 import type { SetOperation } from '../operations/index.js';
 import { Artifacts } from './containers/Artifacts.js';
+import { ElementRemoval } from './ElementRemoval.js';
 import { EventKeys } from './events/EventKeys.js';
 import { RootElements } from './events/RootElements.js';
 import { TriggerKeys } from './events/TriggerKeys.js';
 import { ZeebeSubscription } from './events/ZeebeSubscription.js';
+import { CollapsedSubProcessData } from './flows/CollapsedSubProcessData.js';
 import { FlowIdFollower } from './flows/FlowIdFollower.js';
 import { FlowConditions } from './flows/FlowConditions.js';
 import { SequenceFlows } from './flows/SequenceFlows.js';
@@ -250,7 +252,11 @@ export class PropertyEditor {
     if (!element.is('bpmn:SubProcess')) {
       throw PropertyCatalog.of(element).unknownKey(key, 'applies to sub-processes');
     }
-    changes.expansions.expand(element.id, value ? PropertyCoercer.booleanOf(element, key, value) : true);
+    const expanded = value ? PropertyCoercer.booleanOf(element, key, value) : true;
+    this.edit.requestExpansion(element, expanded, changes.expansions);
+    if (!expanded) {
+      new CollapsedSubProcessData(this.edit).attachToCollapsed(element, changes, (duplicate, merged) => new ElementRemoval(this.edit).cascade(duplicate, merged));
+    }
     return 'left to set';
   }
 
