@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool" processRef="process" />
+  </bpmn:collaboration>
+  <bpmn:process id="process">
+    <bpmn:laneSet id="lanes">
+      <bpmn:lane id="lane_top"><bpmn:flowNodeRef>task</bpmn:flowNodeRef></bpmn:lane>
+      <bpmn:lane id="lane_bottom"></bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="task" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_di" bpmnElement="pool" isHorizontal="true"><dc:Bounds x="100" y="100" width="600" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="lane_top_di" bpmnElement="lane_top" isHorizontal="true"><dc:Bounds x="130" y="100" width="570" height="100" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="lane_bottom_di" bpmnElement="lane_bottom" isHorizontal="true"><dc:Bounds x="130" y="200" width="570" height="100" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_di" bpmnElement="task"><dc:Bounds x="200" y="110" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

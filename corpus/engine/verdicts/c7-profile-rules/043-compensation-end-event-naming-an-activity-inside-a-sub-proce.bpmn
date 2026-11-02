@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:signal id="Sig" name="Go" /><bpmn:signal id="Sig2" name="Go2" /><bpmn:message id="M" name="Pay" /><bpmn:message id="M2" name="Pay2" /><bpmn:message id="M3" name="Pay" />
+  <bpmn:process id="P_FollowUp" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start" />
+<bpmn:userTask id="Host"></bpmn:userTask>
+<bpmn:subProcess id="Sub" ><bpmn:startEvent id="SS" /><bpmn:userTask id="Inner" /><bpmn:endEvent id="SE" /><bpmn:sequenceFlow id="s0" sourceRef="SS" targetRef="Inner" /><bpmn:sequenceFlow id="s1" sourceRef="Inner" targetRef="SE" /></bpmn:subProcess>
+<bpmn:endEvent id="End"><bpmn:compensateEventDefinition activityRef="Inner" /></bpmn:endEvent>
+<bpmn:sequenceFlow id="F0" sourceRef="Start" targetRef="Host" />
+<bpmn:sequenceFlow id="F1" sourceRef="Host" targetRef="Sub" />
+<bpmn:sequenceFlow id="F2" sourceRef="Sub" targetRef="End" />
+
+  </bpmn:process>
+</bpmn:definitions>

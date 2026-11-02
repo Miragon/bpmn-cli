@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process">
+    <bpmn:dataObject id="object" />
+    <bpmn:dataObjectReference id="data_read" dataObjectRef="object" />
+    <bpmn:dataObjectReference id="data_written" dataObjectRef="object" />
+    <bpmn:task id="task">
+      <bpmn:dataInputAssociation id="input">
+        <bpmn:sourceRef>data_read</bpmn:sourceRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="output">
+        <bpmn:targetRef>data_written</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:task>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="task_di" bpmnElement="task"><dc:Bounds x="300" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="data_read_di" bpmnElement="data_read"><dc:Bounds x="100" y="115" width="36" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="data_written_di" bpmnElement="data_written"><dc:Bounds x="600" y="115" width="36" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="input_di" bpmnElement="input"><di:waypoint x="136" y="140" /><di:waypoint x="300" y="140" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="output_di" bpmnElement="output"><di:waypoint x="400" y="140" /><di:waypoint x="520" y="140" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

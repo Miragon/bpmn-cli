@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process">
+    <bpmn:task id="task_a" />
+    <bpmn:task id="task_b" />
+    <bpmn:exclusiveGateway id="gateway_join" />
+    <bpmn:task id="task_end" />
+    <bpmn:sequenceFlow id="flow_left" sourceRef="task_a" targetRef="gateway_join" />
+    <bpmn:sequenceFlow id="flow_right" sourceRef="task_b" targetRef="gateway_join" />
+    <bpmn:sequenceFlow id="flow_end" sourceRef="gateway_join" targetRef="task_end" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="task_a_di" bpmnElement="task_a"><dc:Bounds x="100" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_b_di" bpmnElement="task_b"><dc:Bounds x="500" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="gateway_join_di" bpmnElement="gateway_join"><dc:Bounds x="300" y="100" width="50" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_end_di" bpmnElement="task_end"><dc:Bounds x="500" y="85" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_left_di" bpmnElement="flow_left"><di:waypoint x="200" y="340" /><di:waypoint x="325" y="340" /><di:waypoint x="325" y="150" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_right_di" bpmnElement="flow_right"><di:waypoint x="500" y="340" /><di:waypoint x="325" y="340" /><di:waypoint x="325" y="150" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_end_di" bpmnElement="flow_end"><di:waypoint x="350" y="125" /><di:waypoint x="500" y="125" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

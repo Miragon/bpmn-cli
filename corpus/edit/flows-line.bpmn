@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_flowsLine" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_line" isExecutable="true">
+    <bpmn:startEvent id="startEvent_start" name="Start">
+      <bpmn:outgoing>flow_startToA</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="task_a" name="A">
+      <bpmn:incoming>flow_startToA</bpmn:incoming>
+      <bpmn:outgoing>flow_aToB</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="task_b" name="B">
+      <bpmn:incoming>flow_aToB</bpmn:incoming>
+      <bpmn:outgoing>flow_bToC</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_0twin12" name="B" />
+    <bpmn:task id="task_c" name="C">
+      <bpmn:incoming>flow_bToC</bpmn:incoming>
+      <bpmn:outgoing>flow_cToDone</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="endEvent_done" name="Done">
+      <bpmn:incoming>flow_cToDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_startToA" sourceRef="startEvent_start" targetRef="task_a" />
+    <bpmn:sequenceFlow id="flow_aToB" sourceRef="task_a" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_bToC" sourceRef="task_b" targetRef="task_c" />
+    <bpmn:sequenceFlow id="flow_cToDone" sourceRef="task_c" targetRef="endEvent_done" />
+    <bpmn:sequenceFlow sourceRef="Activity_0twin12" targetRef="task_c" />
+    <bpmn:textAnnotation id="note_flow"><bpmn:text>Hands over</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="association_noteToFlow" sourceRef="note_flow" targetRef="flow_aToB" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_line">
+    <bpmndi:BPMNPlane id="BPMNPlane_line" bpmnElement="Process_line">
+      <bpmndi:BPMNShape id="startEvent_start_di" bpmnElement="startEvent_start">
+        <dc:Bounds x="100" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_a_di" bpmnElement="task_a">
+        <dc:Bounds x="260" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_b_di" bpmnElement="task_b">
+        <dc:Bounds x="420" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_c_di" bpmnElement="task_c">
+        <dc:Bounds x="580" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="endEvent_done_di" bpmnElement="endEvent_done">
+        <dc:Bounds x="740" y="100" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_startToA_di" bpmnElement="flow_startToA">
+        <di:waypoint x="200" y="140" />
+        <di:waypoint x="260" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_aToB_di" bpmnElement="flow_aToB">
+        <di:waypoint x="360" y="140" />
+        <di:waypoint x="420" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_bToC_di" bpmnElement="flow_bToC">
+        <di:waypoint x="520" y="140" />
+        <di:waypoint x="580" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_cToDone_di" bpmnElement="flow_cToDone">
+        <di:waypoint x="680" y="140" />
+        <di:waypoint x="740" y="140" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

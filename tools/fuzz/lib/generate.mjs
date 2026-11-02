@@ -1,42 +1,10 @@
-/**
- * Random but valid-looking edits for the fuzzer, conditioned on the current
- * model.
- *
- * Contract
- *  - `genStep(a, r, step, { semantic, format })` reads an analyse() result and
- *    returns `{ name, ops }` or undefined (nothing applicable after 20 tries):
- *    `ops` is a batch in the JSON format of `bpmn apply` (src/domain/commands/CommandParser.ts), so the
- *    same step runs through the CLI, through `apply` or in-process; `name`
- *    is the generator (statistics, minimisation messages). Generators are
- *    picked by weight; every random choice comes from `r`, so the same model,
- *    seed and step number give the same step.
- *  - `toArgv(ops)` -> the equivalent single CLI command (`['add', '%F', ...]`,
- *    `%F` = the file) for a one-op batch that has one, else undefined (run it
- *    with `apply`).
- *  - New element names start with `Fz<step>`, ids created on purpose with
- *    `<Prefix>_Fz<letter><step>`; a later step may reference them, and when a
- *    minimised sequence drops their creator the reference is simply refused.
- * Semantic generators: add after / into a flow / as a branch, boundary event
- * with handler, connect, remove node / flow, move after / into a flow / to a
- * lane, retype, rename, split, sub-process with content, expand / collapse,
- * lane, data object / store, annotation, order flows. Format generators: place
- * (row and column variants), align, color, route, label, space (also closing),
- * tidy, compact, selectors (color --path, align / color --kind, place --branch),
- * order of pools and
- * lanes. Pure; no I/O.
- */
-
 const TASKS = ['task', 'userTask', 'serviceTask', 'scriptTask', 'sendTask', 'manualTask', 'businessRuleTask'];
 const WORDS = ['check', 'invoice', 'approve', 'order', 'customer', 'document', 'review', 'contract', 'ship', 'payment', 'archive', 'notify', 'clarify', 'escalate'];
 const GATEWAYS = ['exclusiveGateway', 'parallelGateway', 'inclusiveGateway'];
-
-/* ------------------------------------------------------------------ */
-/* model facts                                                          */
-/* ------------------------------------------------------------------ */
+const TRIGGER_VALUES = { timer: () => 'PT1H', error: (step) => `Err${step}`, message: (step) => `Msg${step}`, signal: (step) => `Sig${step}` };
 
 const lowerFirst = (text) => text.replace(/^./, (firstChar) => firstChar.toLowerCase());
 
-/** Flat facts about nodes, flows, lanes and pools of an analyse() result. */
 export function info(analysis) {
   const { sem } = analysis;
   const nodes = sem.nodes.map((node) => ({
@@ -61,10 +29,6 @@ const isEnd = (node) => node.type === 'endEvent';
 const isBoundary = (node) => node.type === 'boundaryEvent';
 const isSub = (node) => /subProcess|transaction|adHocSubProcess/i.test(node.type);
 
-/* ------------------------------------------------------------------ */
-/* generators: (ctx) => { name, ops } | undefined                        */
-/* ------------------------------------------------------------------ */
-
 function context(analysis, random, step) {
   const inf = info(analysis);
   const nodes = inf.nodes;
@@ -84,9 +48,11 @@ const one = (name, op) => ({ name, ops: [op] });
 
 function addAfter(ctx) {
   const anchor = ctx.r.pick(ctx.appendable);
-  if (!anchor) return undefined;
+  if (!anchor) {
+    return undefined;
+  }
   const kind = ctx.r.pick([...TASKS, 'exclusiveGateway', 'intermediateThrowEvent', 'callActivity', 'subProcess', 'intermediateCatchEvent:timer']);
-  const extra = kind.endsWith(':timer') ? { timer: 'PT5M' } : kind === 'subProcess' ? { collapsed: true } : {};
+  const extra = kind.endsWith(':timer') ? { set: { timer: 'PT5M' } } : kind === 'subProcess' ? { set: { expanded: false } } : {};
   if (anchor.outgoing.length > 1 && !isGateway(anchor)) {
     return one('add-flow', { op: 'add', kind, name: ctx.name(), flow: ctx.r.pick(anchor.outgoing), ...extra });
   }
@@ -100,7 +66,9 @@ function addIntoFlow(ctx) {
 
 function addBranch(ctx) {
   const gateway = ctx.r.pick(ctx.N.filter((node) => isGateway(node) && node.type !== 'eventBasedGateway'));
-  if (!gateway) return undefined;
+  if (!gateway) {
+    return undefined;
+  }
   const target = ctx.r.pick(ctx.inScope(gateway.scope).filter((node) => !isStart(node) && !isBoundary(node) && node.id !== gateway.id));
   return target && one('add-branch', { op: 'add', kind: ctx.r.pick(TASKS), name: ctx.name(), after: gateway.id, to: target.id });
 }
@@ -108,15 +76,15 @@ function addBranch(ctx) {
 function addBoundary(ctx) {
   const { r: random, step } = ctx;
   const host = random.pick(ctx.N.filter((node) => isActivity(node) && !node.triggered));
-  if (!host) return undefined;
+  if (!host) {
+    return undefined;
+  }
   const id = `Event_Fzb${step}`;
   const trigger = random.pick(['timer', 'error', 'message', 'signal']);
-  const add = { op: 'add', kind: `boundaryEvent:${trigger}`, name: `Fzb${step}`, id, on: host.id };
-  if (trigger === 'timer') add.timer = 'PT1H';
-  if (trigger === 'error') add.error = `Err${step}`;
-  if (trigger === 'message') add.message = `Msg${step}`;
-  if (trigger === 'signal') add.signal = `Sig${step}`;
-  if (trigger !== 'error' && random.chance(0.5)) add.nonInterrupting = true;
+  const add = { op: 'add', kind: `boundaryEvent:${trigger}`, name: `Fzb${step}`, id, on: host.id, set: { [trigger]: TRIGGER_VALUES[trigger](step) } };
+  if (trigger !== 'error' && random.chance(0.5)) {
+    add.set.nonInterrupting = true;
+  }
   const ops = [add];
   if (random.chance(0.6)) {
     ops.push({ op: 'add', kind: random.pick(['endEvent', 'userTask']), name: `Fzb${step} handling`, id: `Activity_Fzbh${step}`, after: id });
@@ -130,14 +98,18 @@ function addBoundary(ctx) {
 
 function connect(ctx) {
   const src = ctx.r.pick(ctx.N.filter((node) => !isEnd(node) && node.type !== 'eventBasedGateway'));
-  if (!src) return undefined;
+  if (!src) {
+    return undefined;
+  }
   const existing = new Set(ctx.inf.flows.filter((flow) => flow.source === src.id).map((flow) => flow.target));
   const target = ctx.r.pick(ctx.inScope(src.scope).filter((node) => !isStart(node) && !isBoundary(node) && node.id !== src.id && !existing.has(node.id)));
   return target && one('connect', { op: 'connect', source: src.id, target: target.id });
 }
 
 function removeNode(ctx) {
-  if (ctx.N.length < 8) return undefined;
+  if (ctx.N.length < 8) {
+    return undefined;
+  }
   const starts = ctx.N.filter(isStart);
   const removed = ctx.r.pick(ctx.N.filter((node) => !(isStart(node) && starts.filter((start) => start.scope === node.scope).length < 2)));
   return removed && one('remove-node', { op: 'remove', ids: [removed.id] });
@@ -150,9 +122,13 @@ function removeFlow(ctx) {
 
 function move(ctx) {
   const moved = ctx.r.pick(ctx.N.filter((node) => (isActivity(node) || isGateway(node) || /intermediate/.test(node.type)) && !node.triggered));
-  if (!moved) return undefined;
+  if (!moved) {
+    return undefined;
+  }
   const target = ctx.r.pick(ctx.inScope(moved.scope).filter((node) => node.id !== moved.id && !isEnd(node) && !isBoundary(node) && node.type !== 'eventBasedGateway'));
-  if (!target) return undefined;
+  if (!target) {
+    return undefined;
+  }
   if (target.outgoing.length > 1 && !isGateway(target)) {
     return one('move-flow', { op: 'move', ids: [moved.id], flow: ctx.r.pick(target.outgoing) });
   }
@@ -160,9 +136,13 @@ function move(ctx) {
 }
 
 function moveLane(ctx) {
-  if (ctx.inf.leafLanes.length < 2) return undefined;
+  if (ctx.inf.leafLanes.length < 2) {
+    return undefined;
+  }
   const moved = ctx.r.pick(ctx.N.filter((node) => node.lane && !isBoundary(node)));
-  if (!moved) return undefined;
+  if (!moved) {
+    return undefined;
+  }
   const proc = ctx.inf.lanes.find((candidate) => candidate.id === moved.lane)?.processId;
   const lane = ctx.r.pick(ctx.inf.leafLanes.filter((candidate) => candidate.processId === proc && candidate.id !== moved.lane));
   return lane && one('move-lane', { op: 'move', ids: [moved.id], lane: lane.id });
@@ -171,7 +151,9 @@ function moveLane(ctx) {
 function retype(ctx) {
   const { r: random } = ctx;
   const element = random.pick(ctx.N);
-  if (!element) return undefined;
+  if (!element) {
+    return undefined;
+  }
   if (TASKS.includes(element.type)) {
     return one('retype', { op: 'retype', id: element.id, kind: random.pick([...TASKS.filter((taskType) => taskType !== element.type), 'callActivity', 'subProcess']) });
   }
@@ -180,7 +162,7 @@ function retype(ctx) {
   }
   if (isEnd(element)) {
     const kind = random.pick(['endEvent:terminate', 'endEvent:none', 'endEvent:signal']);
-    return one('retype', { op: 'retype', id: element.id, kind, ...(kind.endsWith('signal') ? { signal: 'S1' } : {}) });
+    return one('retype', { op: 'retype', id: element.id, kind, ...(kind.endsWith('signal') ? { set: { signal: 'S1' } } : {}) });
   }
   if (element.type === 'subProcess' && !element.triggered) {
     return one('retype', { op: 'retype', id: element.id, kind: random.pick(['transaction', 'adHocSubProcess']) });
@@ -190,16 +172,17 @@ function retype(ctx) {
 
 function rename(ctx) {
   const element = ctx.r.pick([...ctx.N, ...ctx.inf.flows]);
-  return element && one('rename', { op: 'set', id: element.id, values: { name: ctx.name() } });
+  return element && one('rename', { op: 'set', id: element.id, set: { name: ctx.name() } });
 }
 
-/** Splice targets: no gateway, at most one outgoing flow, not a boundary event. */
 const spliceable = (ctx) => ctx.appendable.filter((node) => !isGateway(node) && node.outgoing.length <= 1 && !isBoundary(node));
 
 function split(ctx) {
   const { r: random, step } = ctx;
   const anchor = random.pick(spliceable(ctx));
-  if (!anchor) return undefined;
+  if (!anchor) {
+    return undefined;
+  }
   const kind = random.pick(GATEWAYS);
   const branches = [];
   for (let branchIndex = 0, nb = 2 + random.int(2); branchIndex < nb; branchIndex++) {
@@ -208,7 +191,9 @@ function split(ctx) {
       nodes.push({ kind: random.pick(TASKS), name: `Fz${step} b${branchIndex} n${nodeIndex}` });
     }
     const br = { nodes };
-    if (kind !== 'parallelGateway') br.flowName = `opt ${branchIndex}`;
+    if (kind !== 'parallelGateway') {
+      br.flowName = `opt ${branchIndex}`;
+    }
     if (kind === 'exclusiveGateway' && branchIndex === 0) {
       br.default = true;
     } else if (kind !== 'parallelGateway') {
@@ -222,7 +207,9 @@ function split(ctx) {
 function addSubProcess(ctx) {
   const { r: random, step } = ctx;
   const anchor = random.pick(spliceable(ctx));
-  if (!anchor) return undefined;
+  if (!anchor) {
+    return undefined;
+  }
   const sub = `Activity_Fzs${step}`;
   const ops = [
     { op: 'add', kind: 'subProcess', name: `Fzs${step} sub`, id: sub, after: anchor.id },
@@ -238,8 +225,10 @@ function addSubProcess(ctx) {
 
 function toggleExpanded(ctx) {
   const subProcess = ctx.r.pick(ctx.N.filter((node) => isSub(node) && !node.triggered));
-  if (!subProcess) return undefined;
-  return one('expand-toggle', { op: 'set', id: subProcess.id, values: { expanded: ctx.inf.shapeOf(subProcess.id)?.expanded ? 'false' : 'true' } });
+  if (!subProcess) {
+    return undefined;
+  }
+  return one('expand-toggle', { op: 'set', id: subProcess.id, set: { expanded: !ctx.inf.shapeOf(subProcess.id)?.expanded } });
 }
 
 function addLane(ctx) {
@@ -249,7 +238,9 @@ function addLane(ctx) {
 
 function addData(ctx) {
   const act = ctx.r.pick(ctx.N.filter((node) => isActivity(node) && ctx.drawn(node)));
-  if (!act) return undefined;
+  if (!act) {
+    return undefined;
+  }
   const id = `DataObjectReference_Fzd${ctx.step}`;
   const ops = [{ op: 'add', kind: ctx.r.chance(0.3) ? 'dataStore' : 'dataObject', name: `Fzd${ctx.step}`, id, in: act.scope }];
   ops.push(ctx.r.chance(0.5) ? { op: 'connect', source: act.id, target: id } : { op: 'connect', source: id, target: act.id });
@@ -258,17 +249,17 @@ function addData(ctx) {
 
 function addAnnotation(ctx) {
   const annotated = ctx.r.pick(ctx.N.filter(ctx.drawn));
-  if (!annotated) return undefined;
+  if (!annotated) {
+    return undefined;
+  }
   const id = `TextAnnotation_Fzt${ctx.step}`;
-  return { name: 'add-annotation', ops: [{ op: 'add', kind: 'textAnnotation', text: `note ${ctx.step} ${ctx.r.pick(WORDS)}`, id, in: annotated.scope }, { op: 'connect', source: id, target: annotated.id }] };
+  return { name: 'add-annotation', ops: [{ op: 'add', kind: 'textAnnotation', set: { text: `note ${ctx.step} ${ctx.r.pick(WORDS)}` }, id, in: annotated.scope }, { op: 'connect', source: id, target: annotated.id }] };
 }
 
 function orderFlows(ctx) {
   const branching = ctx.r.pick(ctx.N.filter((node) => node.outgoing.length >= 2));
   return branching && one('order-flows', { op: 'order', id: branching.id, flows: ctx.r.shuffle(branching.outgoing) });
 }
-
-/* format ------------------------------------------------------------- */
 
 const placeable = (ctx) => ctx.N.filter((node) => !isBoundary(node) && ctx.drawn(node));
 const sameFrame = (ctx, anchor) => placeable(ctx).filter((node) => node.id !== anchor.id && node.scope === anchor.scope && node.lane === anchor.lane);
@@ -278,13 +269,19 @@ function place(ctx) {
   const { r: random } = ctx;
   const all = placeable(ctx);
   const placed = random.pick(all);
-  if (!placed) return undefined;
+  if (!placed) {
+    return undefined;
+  }
   const peers = sameFrame(ctx, placed);
   const reference = random.chance(0.8) ? random.pick(peers) : random.pick(all.filter((node) => node.id !== placed.id));
-  if (!reference) return undefined;
+  if (!reference) {
+    return undefined;
+  }
   const ids = [placed.id];
   const succ = ctx.inf.flows.filter((flow) => flow.source === placed.id).map((flow) => flow.target).filter((targetId) => targetId !== reference.id && all.some((node) => node.id === targetId));
-  if (succ.length && random.chance(0.3)) ids.push(succ[0]);
+  if (succ.length && random.chance(0.3)) {
+    ids.push(succ[0]);
+  }
   const mode = random.pick(['below', 'above', 'row-of', 'after', 'before', 'row-of+after', 'below+column-of']);
   const parts = mode.split('+');
   const op = { op: 'place', ids };
@@ -295,11 +292,15 @@ function place(ctx) {
   return one(`place-${mode}`, op);
 }
 
+const lineUp = (reference, ids, key) => ids.map((id) => ({ op: 'place', ids: [id], [key]: reference }));
+
 function align(ctx) {
   const anchor = ctx.r.pick(placeable(ctx));
-  if (!anchor) return undefined;
+  if (!anchor) {
+    return undefined;
+  }
   const peers = ctx.r.shuffle(sameFrame(ctx, anchor)).slice(0, 1 + ctx.r.int(2));
-  return peers.length ? one('align', { op: 'align', ids: [anchor.id, ...peers.map((peer) => peer.id)], axis: ctx.r.pick(['row', 'column']) }) : undefined;
+  return peers.length ? { name: 'align', ops: lineUp(anchor.id, peers.map((peer) => peer.id), ctx.r.pick(['rowOf', 'columnOf'])) } : undefined;
 }
 
 function color(ctx) {
@@ -309,9 +310,13 @@ function color(ctx) {
 
 function route(ctx) {
   const flow = ctx.r.pick(ctx.inf.flows);
-  if (!flow) return undefined;
+  if (!flow) {
+    return undefined;
+  }
   const op = { op: 'route', id: flow.id };
-  if (ctx.r.chance(0.6)) op.exit = ctx.r.pick(['right', 'top', 'bottom', 'left']);
+  if (ctx.r.chance(0.6)) {
+    op.exit = ctx.r.pick(['right', 'top', 'bottom', 'left']);
+  }
   if (ctx.r.chance(0.6)) {
     op.entry = ctx.r.pick(['left', 'top', 'bottom', 'right']);
   }
@@ -325,12 +330,13 @@ function label(ctx) {
 
 function space(ctx) {
   const target = ctx.r.chance(0.8) ? ctx.r.pick(placeable(ctx)) : ctx.r.pick(ctx.inf.leafLanes);
-  if (!target) return undefined;
+  if (!target) {
+    return undefined;
+  }
   const dir = ctx.r.chance(0.6) ? 'after' : 'below';
   const op = { op: 'space', [dir]: target.id };
   if (ctx.r.chance(0.4)) {
     op.by = ctx.r.pick(['column', 'row', 20 + ctx.r.int(200)]);
-    // closing space (negative amounts)
   } else if (ctx.r.chance(0.3)) {
     op.by = ctx.r.pick(['-column', '-row', -(20 + ctx.r.int(200))]);
   }
@@ -338,7 +344,7 @@ function space(ctx) {
 }
 
 function compact(ctx) {
-  const frames = [...ctx.inf.participants.filter((participant) => ctx.inf.shapeOf(participant.id)).map((participant) => participant.id), ...ctx.inf.leafLanes.map((lane) => lane.id), ...ctx.N.filter((node) => isSub(node) && ctx.inf.shapeOf(node.id)?.container).map((node) => node.id)];
+  const frames = [...ctx.inf.participants.filter((participant) => ctx.inf.shapeOf(participant.id)).map((participant) => participant.id), ...ctx.inf.leafLanes.map((lane) => lane.id), ...ctx.N.filter((node) => isSub(node) && ctx.inf.shapeOf(node.id)?.expanded).map((node) => node.id)];
   if (!frames.length || ctx.r.chance(0.5)) {
     return one('compact', { op: 'compact' });
   }
@@ -351,7 +357,6 @@ function orderPools(ctx) {
   return inf.collab && drawn.length >= 2 ? one('order-pools', { op: 'order', id: inf.collab, pools: ctx.r.shuffle(drawn.map((participant) => participant.id)) }) : undefined;
 }
 
-/** format ops with selectors: a path, a kind, a branch */
 function select(ctx) {
   const { r: random } = ctx;
   const nodes = placeable(ctx);
@@ -362,25 +367,39 @@ function select(ctx) {
   }
   if (pick === 1) {
     const kind = random.pick(['endEvent', 'startEvent', 'exclusiveGateway', 'userTask', 'task']);
-    return random.chance(0.5) ? one('align-kind', { op: 'align', kind, axis: random.pick(['row', 'column']) }) : one('color-kind', { op: 'color', kind, color: random.pick(['orange', 'purple', 'default']) });
+    const ids = nodes.filter((node) => node.type === kind).map((node) => node.id);
+    if (!ids.length) {
+      return undefined;
+    }
+    return ids.length > 1 && random.chance(0.5) ? { name: 'align-kind', ops: lineUp(ids[0], ids.slice(1), random.pick(['rowOf', 'columnOf'])) } : one('color-kind', { op: 'color', ids, color: random.pick(['orange', 'purple', 'default']) });
   }
   const split = random.pick(ctx.N.filter((node) => isGateway(node) && node.outgoing.length >= 2 && ctx.drawn(node)));
-  if (!split) return undefined;
+  if (!split) {
+    return undefined;
+  }
   const flow = random.pick(split.outgoing);
   const ref = random.pick(sameFrame(ctx, split)) ?? split;
   return one('place-branch', { op: 'place', branch: flow, [random.pick(['below', 'above'])]: ref.id });
 }
 
 function tidy(ctx) {
-  if (ctx.r.chance(0.5)) return one('tidy', { op: 'tidy' });
+  if (ctx.r.chance(0.5)) {
+    return one('tidy', { op: 'tidy' });
+  }
   const ids = ctx.r.shuffle(placeable(ctx).map((node) => node.id)).slice(0, 2 + ctx.r.int(4));
   return ids.length ? one('tidy-ids', { op: 'tidy', ids }) : undefined;
+}
+
+function redraw() {
+  return one('layout', { op: 'layout' });
 }
 
 function orderLanes(ctx) {
   const { inf } = ctx;
   const participant = ctx.r.pick(inf.participants.filter((candidate) => inf.lanes.filter((lane) => lane.processId === candidate.processId).length >= 2));
-  if (!participant) return undefined;
+  if (!participant) {
+    return undefined;
+  }
   const isChild = (lane) => inf.lanes.some((otherLane) => otherLane.el.childLaneSet?.lanes?.some((ch) => ch.id === lane.id));
   const top = inf.lanes.filter((lane) => lane.processId === participant.processId && !isChild(lane));
   return top.length >= 2 ? one('order-lanes', { op: 'order', id: participant.id, lanes: ctx.r.shuffle(top.map((lane) => lane.id)) }) : undefined;
@@ -391,7 +410,7 @@ const SEMANTIC = [
   [5, move], [5, moveLane], [5, retype], [5, rename], [4, split], [3, addSubProcess], [2, toggleExpanded], [1, addLane],
   [2, addData], [1, addAnnotation], [1, orderFlows],
 ];
-const FORMAT = [[6, place], [3, align], [3, color], [4, route], [3, label], [3, space], [2, tidy], [1, orderLanes], [2, compact], [1, orderPools], [3, select]];
+const FORMAT = [[6, place], [3, align], [3, color], [4, route], [3, label], [3, space], [2, tidy], [1, orderLanes], [2, compact], [1, orderPools], [3, select], [1, redraw]];
 
 export function genStep(analysis, random, step, { semantic = true, format = true } = {}) {
   const generatorContext = context(analysis, random, step);
@@ -401,44 +420,42 @@ export function genStep(analysis, random, step, { semantic = true, format = true
     let remaining = random.next() * total;
     const gen = gens.find(([weight]) => (remaining -= weight) <= 0) ?? gens[gens.length - 1];
     const out = gen[1](generatorContext);
-    if (out) return out;
+    if (out) {
+      return out;
+    }
   }
   return undefined;
 }
 
-/* ------------------------------------------------------------------ */
-/* the equivalent CLI command                                           */
-/* ------------------------------------------------------------------ */
-
 const flags = (op, table) => table.flatMap(([key, flag]) => {
   const value = op[key];
-  if (value === undefined || value === false) return [];
+  if (value === undefined || value === false) {
+    return [];
+  }
   return value === true ? [flag] : [flag, String(value)];
 });
 
+const keyValues = (set) => Object.entries(set ?? {}).map(([key, value]) => `${key}=${value}`);
+
 const ADD_FLAGS = [
   ['id', '--id'], ['after', '--after'], ['before', '--before'], ['flow', '--flow'], ['in', '--in'], ['on', '--on'], ['to', '--to'],
-  ['lane', '--lane'], ['flowName', '--flow-name'], ['condition', '--condition'], ['default', '--default'], ['collapsed', '--collapsed'],
-  ['text', '--text'], ['timer', '--timer'], ['message', '--message'], ['error', '--error'], ['signal', '--signal'],
-  ['nonInterrupting', '--non-interrupting'],
+  ['lane', '--lane'], ['flowName', '--flow-name'], ['condition', '--condition'], ['default', '--default'],
 ];
 const MOVE_FLAGS = [['after', '--after'], ['before', '--before'], ['flow', '--flow'], ['in', '--in'], ['on', '--on'], ['lane', '--lane']];
-const PLACE_FLAGS = [['rowOf', '--row-of'], ['below', '--below'], ['above', '--above'], ['columnOf', '--column-of'], ['after', '--after'], ['before', '--before']];
-const TRIGGER_FLAGS = [['timer', '--timer'], ['message', '--message'], ['error', '--error'], ['signal', '--signal']];
-/** selectors last: --path / --via take every value up to the next flag */
-const selectorArgv = (op) => [...(op.path ? ['--path', ...op.path] : []), ...(op.via ? ['--via', ...op.via] : []), ...flags(op, [['kind', '--kind'], ['branch', '--branch']])];
+const PLACE_FLAGS = [['rowOf', '--row-of'], ['below', '--below'], ['above', '--above'], ['columnOf', '--column-of'], ['after', '--after'], ['before', '--before'], ['branch', '--branch']];
+const pathArgv = (op) => (op.path ? ['--path', ...op.path] : []);
 
 const ARGV = {
-  add: (op) => ['add', '%F', op.kind, ...(op.name !== undefined ? [op.name] : []), ...flags(op, ADD_FLAGS)],
-  connect: (op) => ['connect', '%F', op.source, op.target, ...flags(op, [['name', '--name'], ['id', '--id'], ['condition', '--condition'], ['default', '--default']])],
-  set: (op) => ['set', '%F', op.id, ...Object.entries(op.values).map(([key, value]) => `${key}=${value}`)],
-  remove: (op) => ['remove', '%F', ...op.ids, ...(op.bridge === false ? ['--no-bridge'] : [])],
-  retype: (op) => ['retype', '%F', op.id, op.kind, ...flags(op, TRIGGER_FLAGS)],
+  add: (op) => ['add', '%F', op.kind, ...(op.name !== undefined ? [op.name] : []), ...keyValues(op.set), ...flags(op, ADD_FLAGS)],
+  connect: (op) => ['connect', '%F', op.source, op.target, ...keyValues(op.set), ...flags(op, [['id', '--id']])],
+  set: (op) => ['set', '%F', op.id, ...keyValues(op.set)],
+  remove: (op) => ['remove', '%F', ...op.ids, ...flags(op, [['bridge', '--bridge']])],
+  retype: (op) => ['retype', '%F', op.id, op.kind, ...keyValues(op.set)],
   move: (op) => ['move', '%F', ...op.ids, ...flags(op, MOVE_FLAGS)],
   order: (op) => ['order', '%F', op.id, ...(op.flows ?? op.lanes ?? op.pools)],
-  place: (op) => ['place', '%F', ...(op.ids ?? []), ...flags(op, PLACE_FLAGS), ...selectorArgv(op)],
-  align: (op) => ['align', '%F', ...(op.ids ?? []), '--axis', op.axis, ...flags(op, [['to', '--to']]), ...selectorArgv(op)],
-  color: (op) => ['color', '%F', ...(op.ids ?? []), '--color', op.color, ...selectorArgv(op)],
+  layout: () => ['layout', '%F'],
+  place: (op) => ['place', '%F', ...(op.ids ?? []), ...flags(op, PLACE_FLAGS), ...pathArgv(op)],
+  color: (op) => ['color', '%F', ...(op.ids ?? []), '--color', op.color, ...flags(op, [['branch', '--branch']]), ...pathArgv(op)],
   compact: (op) => ['compact', '%F', ...(op.ids ?? [])],
   label: (op) => ['label', '%F', op.id, '--side', op.side],
   route: (op) => ['route', '%F', op.id, ...flags(op, [['exit', '--exit'], ['entry', '--entry']])],
@@ -446,11 +463,12 @@ const ARGV = {
   tidy: (op) => ['tidy', '%F', ...(op.ids ?? [])],
 };
 
-/** A key=value positional would be misread when a name contains '=' at the start: such ops go through apply. */
 const safeName = (op) => op.op !== 'add' || op.name === undefined || !/^[A-Za-z_][\w:.-]*=/.test(op.name);
 
 export function toArgv(ops) {
-  if (ops.length !== 1) return undefined;
+  if (ops.length !== 1) {
+    return undefined;
+  }
   const [op] = ops;
   return ARGV[op.op] && safeName(op) ? ARGV[op.op](op) : undefined;
 }

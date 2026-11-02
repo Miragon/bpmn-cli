@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_padded" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_padded">
+    <bpmn:laneSet id="LaneSet_padded">
+      <bpmn:lane id="Lane_padded">
+        <bpmn:flowNodeRef>task_first</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef> task_second </bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="task_first" />
+    <bpmn:task id="task_second" />
+    <bpmn:sequenceFlow id="flow_padded" sourceRef=" task_first " targetRef="task_second" />
+  </bpmn:process>
+</bpmn:definitions>

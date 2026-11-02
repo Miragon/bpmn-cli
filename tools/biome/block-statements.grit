@@ -14,16 +14,13 @@ any {
     $block <: r"\{[^\n]*\S[^\n]*\}",
     register_diagnostic(span=$block, message="Block style: the body of if, else and loops goes on lines of its own.")
   },
-  JsIfStatement(consequent=$then, else_clause=$else) as $if where {
-    $else <: JsElseClause(alternate=$alt),
-    or { $then <: not JsBlockStatement(), $alt <: and { not JsBlockStatement(), not JsIfStatement() } },
-    register_diagnostic(span=$if, message="Block style: an if with an else has blocks in all branches.")
-  },
-  JsIfStatement(consequent=$then, else_clause=$else) as $if where {
-    $else <: .,
+  JsIfStatement(consequent=$then) as $if where {
     $then <: not JsBlockStatement(),
-    $if <: not r"[^\n]{1,80}",
-    register_diagnostic(span=$if, message="Block style: an if without braces fits on one line of at most 80 characters.")
+    register_diagnostic(span=$if, message="Block style: the body of an if is a block.")
+  },
+  JsElseClause(alternate=$alt) as $else where {
+    $alt <: and { not JsBlockStatement(), not JsIfStatement() },
+    register_diagnostic(span=$else, message="Block style: the body of an else is a block.")
   },
   or {
     JsForStatement(body=$body),

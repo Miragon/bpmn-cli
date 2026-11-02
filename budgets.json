@@ -1,0 +1,36 @@
+{
+  "lines": {
+    "total": 60000,
+    "src/model": 8000,
+    "src/operations": 1500,
+    "src/edit": 10000,
+    "src/scoring": 2000,
+    "src/drawing": 22500,
+    "src/checks": 7500,
+    "src/views": 3500,
+    "src/write": 1000,
+    "src/api": 300,
+    "src/cli": 2500,
+    "packages/lint/src": 1000,
+    "packages/render/src": 2500
+  },
+  "coverage": {
+    "src/model": { "lines": 90, "branches": 85 },
+    "src/operations": { "lines": 90, "branches": 85 },
+    "src/edit": { "lines": 90, "branches": 85 },
+    "src/scoring": { "lines": 90, "branches": 85 },
+    "src/drawing": { "lines": 90, "branches": 85 },
+    "src/checks": { "lines": 90, "branches": 85 },
+    "src/views": { "lines": 90, "branches": 85 },
+    "src/write": { "lines": 90, "branches": 85 },
+    "src/api": { "lines": 90, "branches": 85 },
+    "src/cli": { "lines": 90, "branches": 85 },
+    "packages/lint/src": { "lines": 90, "branches": 85 },
+    "packages/render/src": { "lines": 90, "branches": 85 }
+  },
+  "runtimeExports": 10,
+  "designIqImportKilobytes": 810,
+  "commands": 26,
+  "flagSlots": 143,
+  "guideKilobytes": 20
+}

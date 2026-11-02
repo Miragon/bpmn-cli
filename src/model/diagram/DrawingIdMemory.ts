@@ -1,0 +1,130 @@
+import type { BpmnElement } from '../document/BpmnElement.js';
+import { DrawingIdStyle, type PlaneElementKind, type DrawingRootKind, type DrawingIdPatterns } from './DrawingIdStyle.js';
+
+interface DiagramMemo {
+  root?: string | undefined;
+  plane?: string | undefined;
+  diagram?: string | undefined;
+}
+
+export class DrawingIdMemory {
+  readonly shapes = new Map<string, string>();
+  readonly edges = new Map<string, string>();
+  readonly diagrams: DiagramMemo[] = [];
+
+  private constructor(readonly styles: DrawingIdPatterns) {}
+
+  static remember(definitions: BpmnElement): DrawingIdMemory {
+    const memo = new DrawingIdMemory(DrawingIdStyle.stylesOf(definitions));
+    for (const diagram of definitions.list('diagrams')) {
+      const plane = diagram.peek<BpmnElement>('plane');
+      memo.diagrams.push({ root: plane?.peek<BpmnElement>('bpmnElement')?.peek<string>('id'), plane: plane?.peek<string>('id'), diagram: diagram.peek<string>('id') });
+      for (const planeElement of plane?.list('planeElement') ?? []) {
+        memo.rememberPlaneElement(planeElement);
+      }
+    }
+    return memo;
+  }
+
+  private static elementIdOf(planeElement: BpmnElement): string | undefined {
+    return planeElement.peek<BpmnElement>('bpmnElement')?.peek<string>('id');
+  }
+
+  private static rootId(kind: DrawingRootKind, element: BpmnElement, root: string | undefined): string {
+    return root ? DrawingIdStyle.rootDrawingId(kind, root) : (element.peek<string>('id') ?? `BPMN${kind}_1`);
+  }
+
+  private static derived(memo: DiagramMemo): boolean {
+    return !!memo.root && (DrawingIdStyle.namesRoot('Plane', memo.plane, memo.root) || DrawingIdStyle.namesRoot('Diagram', memo.diagram, memo.root));
+  }
+
+  restore(definitions: BpmnElement): void {
+    const diagrams = definitions.list('diagrams');
+    const taken = DrawingIdMemory.idsOutsideDrawing(definitions, diagrams);
+    const fresh: Array<{ element: BpmnElement; base: string }> = [];
+    const claim = (element: BpmnElement, wanted: string | undefined, base: string): void => {
+      if (wanted && !taken.has(wanted)) {
+        taken.add(wanted);
+        element.set('id', wanted);
+      } else {
+        fresh.push({ element, base });
+      }
+    };
+    this.restoreDiagrams(diagrams, claim);
+    for (const planeElement of diagrams.flatMap((diagram) => diagram.peek<BpmnElement>('plane')?.list('planeElement') ?? [])) {
+      this.restorePlaneElement(planeElement, claim);
+    }
+    const isUncut = ({ element, base }: { element: BpmnElement; base: string }): boolean => element.peek('id') === base;
+    for (const { element, base } of [...fresh.filter(isUncut), ...fresh.filter((candidate) => !isUncut(candidate))]) {
+      element.set('id', DrawingIdStyle.claimUnique(taken, base));
+    }
+  }
+
+  private static idsOutsideDrawing(definitions: BpmnElement, diagrams: readonly BpmnElement[]): Set<string> {
+    const taken = DrawingIdStyle.allIds(definitions);
+    for (const diagram of diagrams) {
+      const plane = diagram.peek<BpmnElement>('plane');
+      for (const element of [diagram, ...(plane ? [plane] : []), ...(plane?.list('planeElement') ?? [])]) {
+        const id = element.peek<string>('id');
+        if (id) {
+          taken.delete(id);
+        }
+      }
+    }
+    return taken;
+  }
+
+  private rememberPlaneElement(planeElement: BpmnElement): void {
+    const planeElementId = planeElement.peek<string>('id');
+    const elementId = DrawingIdMemory.elementIdOf(planeElement);
+    const kind = DrawingIdStyle.kindOf(planeElement);
+    if (!planeElementId || !elementId || !kind) {
+      return;
+    }
+    const into = kind === 'Shape' ? this.shapes : this.edges;
+    if (!into.has(elementId)) {
+      into.set(elementId, planeElementId);
+    }
+  }
+
+  private restoreDiagrams(diagrams: readonly BpmnElement[], claim: (element: BpmnElement, wanted: string | undefined, base: string) => void): void {
+    const old = [...this.diagrams];
+    const main = old[0];
+    const claimRoots = (diagram: BpmnElement, memo: DiagramMemo | undefined): void => {
+      const plane = diagram.peek<BpmnElement>('plane');
+      const root = plane?.peek<BpmnElement>('bpmnElement')?.peek<string>('id');
+      if (plane) {
+        claim(plane, memo?.plane, DrawingIdMemory.rootId('Plane', plane, root));
+      }
+      claim(diagram, memo?.diagram, DrawingIdMemory.rootId('Diagram', diagram, root));
+    };
+    const unmatched: BpmnElement[] = [];
+    for (const diagram of diagrams) {
+      const root = diagram.peek<BpmnElement>('plane')?.peek<BpmnElement>('bpmnElement')?.peek<string>('id');
+      const index = old.findIndex((memo) => memo.root === root);
+      if (index === -1) {
+        unmatched.push(diagram);
+      } else {
+        claimRoots(diagram, old.splice(index, 1)[0]);
+      }
+    }
+    for (const diagram of unmatched) {
+      const reused = diagram === diagrams[0] && main && old.includes(main) && !DrawingIdMemory.derived(main) ? main : undefined;
+      if (reused) {
+        old.splice(old.indexOf(reused), 1);
+      }
+      claimRoots(diagram, reused);
+    }
+  }
+
+  private restorePlaneElement(planeElement: BpmnElement, claim: (element: BpmnElement, wanted: string | undefined, base: string) => void): void {
+    const elementId = DrawingIdMemory.elementIdOf(planeElement);
+    const kind: PlaneElementKind | undefined = DrawingIdStyle.kindOf(planeElement);
+    if (!elementId || !kind) {
+      return;
+    }
+    const wanted = (kind === 'Shape' ? this.shapes : this.edges).get(elementId);
+    const style = kind === 'Shape' ? this.styles.shape : this.styles.edge;
+    claim(planeElement, wanted, DrawingIdStyle.styledId(style ?? 'bpmn', kind, elementId));
+  }
+}

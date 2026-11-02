@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool_a" processRef="process_a" />
+    <bpmn:participant id="pool_b" processRef="process_b" />
+    <bpmn:messageFlow id="message_far" sourceRef="task_a" targetRef="task_b" name="Far" />
+    <bpmn:messageFlow id="message_near" sourceRef="task_b" targetRef="task_a" name="Near" />
+  </bpmn:collaboration>
+  <bpmn:process id="process_a">
+    <bpmn:task id="task_a" />
+  </bpmn:process>
+  <bpmn:process id="process_b">
+    <bpmn:task id="task_b" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_a_di" bpmnElement="pool_a" isHorizontal="true"><dc:Bounds x="100" y="100" width="500" height="150" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_a_di" bpmnElement="task_a"><dc:Bounds x="200" y="130" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="pool_b_di" bpmnElement="pool_b" isHorizontal="true"><dc:Bounds x="100" y="400" width="500" height="150" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_b_di" bpmnElement="task_b"><dc:Bounds x="200" y="430" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="message_far_di" bpmnElement="message_far"><di:waypoint x="250" y="210" /><di:waypoint x="250" y="430" /><bpmndi:BPMNLabel><dc:Bounds x="400" y="320" width="60" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="message_near_di" bpmnElement="message_near"><di:waypoint x="280" y="430" /><di:waypoint x="280" y="210" /><bpmndi:BPMNLabel><dc:Bounds x="290" y="320" width="60" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_editor" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_order" name="Order" />
+  <bpmn:collaboration id="Collaboration_editor">
+    <bpmn:participant id="participant_main" processRef="Process_editor" />
+    <bpmn:participant id="participant_other" />
+    <bpmn:messageFlow id="flow_message" sourceRef="task_send" targetRef="participant_other" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_editor" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_editor">
+      <bpmn:lane id="Lane_sales">
+        <bpmn:flowNodeRef>task_plain</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_billing" />
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start" name="Start" />
+    <bpmn:exclusiveGateway id="gateway_split" default="flow_other" />
+    <bpmn:parallelGateway id="gateway_fork" />
+    <bpmn:task id="task_plain" name="Plain">
+      <bpmn:documentation>First</bpmn:documentation>
+      <bpmn:documentation>Second</bpmn:documentation>
+    </bpmn:task>
+    <bpmn:task id="task_bare" />
+    <bpmn:serviceTask id="task_service" calledDecision="stray" />
+    <bpmn:sendTask id="task_send" messageRef="Message_order" />
+    <bpmn:receiveTask id="task_receive" />
+    <bpmn:businessRuleTask id="task_rule" />
+    <bpmn:subProcess id="sub_plain" />
+    <bpmn:intermediateCatchEvent id="catch_message">
+      <bpmn:messageEventDefinition id="message_def" messageRef="Message_order" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_timer">
+      <bpmn:timerEventDefinition id="timer_def"><bpmn:timeDuration>PT1M</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_script">
+      <bpmn:conditionalEventDefinition id="conditional_script">
+        <bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://ready.groovy" />
+      </bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="flow_in" sourceRef="start" targetRef="gateway_split" />
+    <bpmn:sequenceFlow id="flow_juel" sourceRef="gateway_split" targetRef="task_plain">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_script" sourceRef="gateway_split" targetRef="task_bare">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://check.groovy" />
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_other" sourceRef="gateway_split" targetRef="task_service" />
+    <bpmn:sequenceFlow id="flow_plain" sourceRef="gateway_split" targetRef="task_rule" />
+    <bpmn:group id="group_named" />
+  </bpmn:process>
+</bpmn:definitions>

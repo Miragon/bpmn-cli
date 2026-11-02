@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_lossy" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_lossy">
+    <bpmn:task id="task_twice">
+      <bpmn:standardLoopCharacteristics id="loop_first" />
+      <bpmn:multiInstanceLoopCharacteristics id="loop_second" />
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow_nowhere" sourceRef="missing" targetRef="task_twice" />
+  </bpmn:process>
+</bpmn:definitions>

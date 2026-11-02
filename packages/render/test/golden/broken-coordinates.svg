@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="646" height="248" viewBox="132 60 646 248.2" font-family="Arial, Arimo, sans-serif">
+<rect x="132" y="60" width="646" height="248.2" fill="#ffffff"/>
+<g data-id="S"><circle cx="170" cy="120" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="A"><rect x="240" y="80" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="290" y="123.6">Task A</tspan></text></g>
+<g data-id="E2"><circle cx="310" cy="250" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="D"><rect x="560" y="80" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="610" y="123.6">Task D</tspan></text></g>
+<g data-id="E"><circle cx="740" cy="120" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="B"><circle cx="310" cy="160" r="18" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><circle cx="310" cy="160" r="15" fill="none" stroke="#22242a" stroke-width="1.5"/><g transform="translate(310 160)"><circle r="10.5" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><path d="M0 -7.6L0 -9.8M3.8 -6.6L4.9 -8.5M6.6 -3.8L8.5 -4.9M7.6 0L9.8 0M6.6 3.8L8.5 4.9M3.8 6.6L4.9 8.5M0 7.6L0 9.8M-3.8 6.6L-4.9 8.5M-6.6 3.8L-8.5 4.9M-7.6 0L-9.8 0M-6.6 -3.8L-8.5 -4.9M-3.8 -6.6L-4.9 -8.5" stroke="#22242a" stroke-width="1"/><path d="M0 -7L0 0L5 2.5" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linecap="round"/></g></g>
+<g data-id="F1"><path d="M188 120L240 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M229 124L240 120L229 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F2"><path d="M340 120L400 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M389 124L400 120L389 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F3"><path d="M500 120L560 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M549 124L560 120L549 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F4"><path d="M660 120L722 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M711 124L722 120L711 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F5"><path d="M310 178L310 232" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M306 221L310 232L314 221Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<text data-label="B" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="350" y="189.9">Timeout</tspan></text>
+<text data-label="E2" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="310" y="284.9">Late</tspan></text>
+</svg>

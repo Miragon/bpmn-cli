@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start"><bpmn:extensionElements><zeebe:ioMapping><zeebe:input source="=1" target="a" /><zeebe:output source="=2" target="b" /></zeebe:ioMapping></bpmn:extensionElements></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:serviceTask id="X"><bpmn:extensionElements><zeebe:taskDefinition type="work" /></bpmn:extensionElements></bpmn:serviceTask>
+    <bpmn:boundaryEvent id="B" attachedToRef="X"><bpmn:extensionElements><zeebe:ioMapping><zeebe:input source="=1" target="c" /></zeebe:ioMapping></bpmn:extensionElements><bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="T" />
+    <bpmn:intermediateThrowEvent id="T"><bpmn:extensionElements><zeebe:ioMapping><zeebe:input source="=1" target="d" /></zeebe:ioMapping></bpmn:extensionElements></bpmn:intermediateThrowEvent>
+    <bpmn:sequenceFlow id="F3" sourceRef="T" targetRef="End" />
+    <bpmn:endEvent id="End"><bpmn:extensionElements><zeebe:ioMapping><zeebe:input source="=1" target="e" /></zeebe:ioMapping></bpmn:extensionElements></bpmn:endEvent>
+    <bpmn:sequenceFlow id="F4" sourceRef="B" targetRef="End2" /><bpmn:endEvent id="End2" />
+  </bpmn:process>
+</bpmn:definitions>

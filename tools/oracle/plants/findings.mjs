@@ -1,0 +1,7 @@
+export default {
+  probe: 'findings',
+  alsoRed: ['cli'],
+  target: 'domain/validation/structure/ScopeLint.js',
+  find: `this.findings.warning('W_IMPLICIT_JOIN',`,
+  replace: `this.findings.warning('W_IMPLICIT_MERGE',`,
+};

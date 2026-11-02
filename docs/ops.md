@@ -1,23 +1,29 @@
-# Ops JSON (`bpmn apply`)
+# Operations (`bpmn apply`)
 
 `bpmn apply <file> ops.json` (or `-` for stdin) runs many changes as one transaction. Use it
 whenever a change touches more than one element.
 
 ::: tip From the CLI
-`bpmn guide ops` prints every op with every key; `bpmn kinds --json` -> `ops` is the JSON Schema.
+`bpmn guide ops` lists every operation with its keys. Programs read `OPS_SCHEMA`, the JSON Schema of all
+operations, from the [library](library.md).
 :::
 
 ## Running a batch
 
-- If any op fails, nothing is written and the error names the op (`ops[3] (add): ...`).
+- If any operation fails, nothing is written and the error names it (`ops[3] (add): ...`).
 - Only the final state is validated and laid out. Steps that are invalid alone (an event sub-process
   before its start event) pass.
-- An op is an object with `"op"` and the flags of the matching command in lowerCamelCase
-  (`--flow-name` -> `flowName`). The input is an array of ops or `{"ops": [...]}`.
+- An operation is an object with `"op"` and the flags of the matching command in lowerCamelCase
+  (`--flow-name` -> `flowName`). What the element holds, the `key=value`s of the command, goes under
+  `"set"`. The input is an array of operations or `{"ops": [...]}`.
+- Operations are parsed strictly: an unknown key answers `E_USAGE` and names the keys the operation takes.
+- Model operations come first. A model operation after a drawing operation answers `E_USAGE`: send two
+  batches.
+- `--dry-run` runs a risky batch without writing.
 
 ## A first batch
 
-`"as": "$book"` names the new task, so later ops never guess its id.
+`"as": "$book"` names the new task, so later operations never guess its id.
 
 ```json [book.json]
 [
@@ -31,7 +37,7 @@ whenever a change touches more than one element.
   {
     "op": "set",
     "id": "$book",
-    "values": { "doc": "Posts the invoice to the ledger." }
+    "set": { "doc": "Posts the invoice to the ledger." }
   },
   {
     "op": "ext",
@@ -44,30 +50,38 @@ whenever a change touches more than one element.
 ```
 
 ```console
-$ bpmn apply order.bpmn book.json --summary
+$ bpmn apply order.bpmn book.json
 created serviceTask: serviceTask_bookInvoice
 created sequenceFlow: flow_bookInvoiceToInvoiceHandled
 aliases: $book = serviceTask_bookInvoice
 changed: flow_checkInvoiceToBookInvoice
 renamed: flow_checkInvoiceToInvoiceHandled -> flow_checkInvoiceToBookInvoice
-layout: full, score 0 -> 0
+note: inserted between userTask_checkInvoice and endEvent_invoiceHandled
+layout quality: score 0 -> 0
+state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)
 written: order.bpmn
 ```
 
-## The ops
+## The operations
 
-| op | required keys |
+Nine change what the model says, eight only where things are drawn.
+
+| operation | required keys |
 | --- | --- |
 | `add` | `kind` |
 | `connect` | `source`, `target` |
-| `set` | `id`, and `values` or `unset` |
+| `set` | `id`, `set` |
 | `remove` | `ids` |
 | `retype` | `id`, `kind` |
 | `move` | `ids` |
 | `order` | `id` |
 | `ext` | `id`, `action` (`add` / `remove`) |
 | `split` | `after`, `branches` |
-| `place`, `align`, `color`, `label`, `route`, `space`, `tidy`, `compact` | see `bpmn guide ops` |
+| `layout`, `tidy`, `compact` | none |
+| `place`, `space` | see `bpmn guide ops` |
+| `color` | `color` |
+| `label` | `id`, `side` |
+| `route` | `id` |
 
 ## `split`
 
@@ -79,13 +93,13 @@ end event stops there.
 
 | key | names | on |
 | --- | --- | --- |
-| `"as"` | what the op creates | `add`, `connect`, `split`, split nodes |
+| `"as"` | what the operation creates | `add`, `connect`, `split`, split nodes |
 | `"flowAs"` | the flow into a new node | `add` that appends or prepends, split nodes |
 | `"outAs"` | the one flow an `add` creates out of the new node | `add` that splices, prepends or has `"to"` |
 | `"joinAs"` | the join of a split | `split` |
 | `"refAs"` | the message, error, signal or escalation | `add` with a trigger |
 
-An alias is defined once and used only after its op. It follows its element through a rename and a
+An alias is defined once and used only after its operation. It follows its element through a rename and a
 retype. On a splice `"flowAs"` names the flow into the new node and `"outAs"` the flow the splice
 creates (new node -> old successor), so the same batch can give it a condition:
 
@@ -100,12 +114,10 @@ creates (new node -> old successor), so the same batch can give it a condition:
 }
 ```
 
-
 ## A full example
 
 After a start event, a "Check invoice" user task and an end event in a Camunda 8 file, this batch
 splits after the check, adds a reminder timer with its own path and gives both tasks a job type.
-`bpmn kinds --json` -> `opsExample` returns it.
 
 ```json [ops.json]
 {
@@ -149,9 +161,8 @@ splits after the check, adds a reminder timer with its own path and gives both t
       "kind": "boundaryEvent:timer",
       "name": "Reminder",
       "on": "$clarify",
-      "timer": "P2D",
-      "nonInterrupting": true,
-      "as": "$reminder"
+      "as": "$reminder",
+      "set": { "timer": "P2D", "nonInterrupting": true }
     },
     {
       "op": "add",
@@ -171,7 +182,7 @@ splits after the check, adds a reminder timer with its own path and gives both t
     {
       "op": "set",
       "id": "$book",
-      "values": {
+      "set": {
         "name": "Book invoice in ERP",
         "doc": "Posts the invoice to the ledger."
       }
@@ -201,6 +212,6 @@ splits after the check, adds a reminder timer with its own path and gives both t
 
 ## Next steps
 
-- [Commands](commands.md): the command behind each op, with its options.
-- [Camunda 7 and Camunda 8](camunda.md): the extension elements the `ext` ops write.
+- [Commands](commands.md): the command behind each operation, with its flags.
+- [Camunda 7 and Camunda 8](camunda.md): the extension elements the `ext` operations write.
 - [A worked session](walkthrough.md): a batch inside a whole modelling session.

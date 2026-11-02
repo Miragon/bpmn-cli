@@ -1,377 +1,162 @@
 # Architecture
 
-How `src/` is built, and how a command gets from the terminal into the BPMN model.
-`npm run architecture` (dependency-cruiser, `.dependency-cruiser.cjs`) checks every rule on this page. The folder table and where new code
-goes are in [CONTRIBUTING.md](https://github.com/Miragon/bpmn-cli/blob/main/CONTRIBUTING.md#how-the-package-is-laid-out).
+The map of the code: its layers, the path of one write, who finds which problem, and one section per
+module in a fixed shape. `npm run architecture` (dependency-cruiser) holds the imports,
+`test/contract/architecture.test.ts` holds this page's modules and names, and the rules for how code is
+cut are in [CONTRIBUTING.md](https://github.com/Miragon/bpmn-cli/blob/main/CONTRIBUTING.md).
 
-## One domain, three ways in
+## Layers
 
-bpmn-cli runs as the `bpmn` command, as a Node library (`@miragon/bpmn-cli/node`) and as a
-browser library (`@miragon/bpmn-cli`). All three must change a model in exactly the same way.
-So what a change means lives once, in the **domain**, which knows nothing about files, flags
-or `process`. Around it, the **application** offers one use case per thing a caller can do,
-also a pure query (`show`, `find`, `metrics`, an SVG in memory) that needs no outbound port.
-At the edge, **adapters** translate between the outside world and those use cases; neither the
-CLI nor the library skips the use case to call the domain. This is a hexagonal architecture
-(ports and adapters).
+bpmn-cli is one package with ten modules that import in one direction, and two private packages that
+esbuild builds into what it ships. `src/<module>/index.ts` is the only way into a module.
 
 ```mermaid
-flowchart TB
-  terminal(["Terminal"]) --> cli
-  lib(["Node / browser code"]) --> portIn
-
-  cli["CLI<br/>adapters/in/cli"] --> portIn
-  portIn{{"Use case<br/>application/port/in"}} --> service["Service<br/>application/service"]
-  service --> domain["Domain<br/>domain/"]
-  service --> portOut{{"Port<br/>application/port/out"}}
-  portOut --> files["Files<br/>adapters/out/files"]
-  portOut --> memory["No project, no files<br/>adapters/out/memory"]
-  portOut --> render["SVG renderer<br/>adapters/out/render"]
-  files --> store["Loading and saving a document<br/>adapters/out/document"]
-  memory --> store
-  files --> bpmnlint["bpmnlint<br/>adapters/out/bpmnlint"]
-  lib --> bpmnlint
-
-  classDef adapter stroke:#2f80ed,stroke-width:2px
-  classDef app stroke:#f2994a,stroke-width:2px
-  classDef core stroke:#27ae60,stroke-width:3px
-  class cli,files,memory,store,bpmnlint,render adapter
-  class portIn,service,portOut app
-  class domain core
+flowchart TD
+  cli --> api
+  cli --> lint
+  cli -->|PNG| png
+  api --> write & views
+  write --> edit & drawing & checks
+  views --> drawing & checks
+  write & views & drawing --> scoring
+  edit & drawing --> operations
+  operations & checks & scoring --> model
+  drawing & scoring -->|TextMetrics| render
+  views -->|SVG| render
+  subgraph pkg["packages/render, private"]
+    render["render"]
+    png["./png"]
+  end
+  subgraph lintpkg["packages/lint, private"]
+    lint
+  end
 ```
 
-The frame colour shows the layer: blue for adapters, orange for the application, green for the
-domain. Imports point inwards only: adapters → application → domain.
-The entries in the root of `src/` (`cli.ts`, `index.ts`, `node.ts`, `api.ts`) are the only files that know
-every layer. They create the services with `new` and pass the adapters in. There is no
-container.
-`adapters/out/bpmnlint/` wraps an injected bpmnlint as a `Validator` of the domain. The file
-adapters hand it the `.bpmnlintrc` they load; `index.ts` hands it to hosts that bring their own
-bpmnlint. `adapters/out/document/` is what the file store and the in-memory store share behind
-the `DocumentPort`: a source parsed into a `Doc`, the target of a write, the save.
-`adapters/out/render/` draws a plane as SVG behind the `RenderDiagramPort`, browser-safe; the
-file adapters only write or rasterise what it drew.
+- The layers, top down: cli · api · write, views · edit, drawing, checks · operations, scoring · model. A
+  module may import any lower layer, never its own; the arrows show the main paths.
+- Neither package imports the core. Of our code, cli imports only api, `packages/lint` and render's
+  `./png`; it builds the edit commands from `OPS_SCHEMA`.
+- Node builtins appear only in cli, lint and render's Node entry, so the library runs in a browser.
 
-| rule (checked by the test) | why |
-| --- | --- |
-| `domain/` imports no application, adapter or entry | the domain runs anywhere, also in a browser |
-| `application/` imports no adapter | a service does not know whether it writes to disk or does not write at all |
-| only adapters and entries import `node:*` | the browser bundle stays free of Node |
-| `adapters/in` knows use cases only by their interface | the entry decides which service is behind it |
-| the entries import only types from `domain/` and re-export only the public classes and constants the test lists | the entries reach the domain only through the use cases, so the CLI and the library run the same way in |
-| an adapter imports another only where the test names it (the CLI the reports, the files bpmnlint, the files and the memory store the shared document store) | the entries wire the adapters |
-| `application/service/` holds only services; each implements one use case and uses no other class of `application/service/` | one way in, no hidden orchestration |
+## One write
 
-## The journey of `bpmn add`
+`bpmn add order.bpmn userTask Check --after start` becomes the operation
+`{ op: 'add', kind: 'userTask', name: 'Check', after: 'start' }`, and `applyToXml` runs it:
 
-```sh
-bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
-```
+1. `EditCommand` in cli reads the file through `BpmnFile` and calls `applyToXml`, which is one line into
+   `WriteTransaction`.
+2. `OperationParser` reads the operations strictly and sorts them into model and drawing operations;
+   `DocumentReader` parses the XML once. Host validators run on the old file.
+3. `DrawingSnapshot` records what is drawn, and `Scorer` scores it.
+4. `ModelOperationRunner` applies the model operations to the semantics and records them in a `ChangeSet`.
+5. `DiagramDrawing` compares the document with the snapshot and draws: incrementally at what the
+   `ChangeSet` names, in full on an empty plane or with a `layout` operation. Drawing operations run last.
+6. `Scorer` scores the new drawing, `ModelChecks` checks the new document once, whole, and when it has an
+   error `FindingDelta` compares it with the old document, checked whole too. A new error, wherever it
+   sits, refuses the write.
+7. `DocumentWriter` writes only what changed; host validators run on the new text, and `FindingDelta`
+   compares their findings with those from before.
+8. `WriteOutcome` makes the `EditResult`, `EditResultText` prints it in at most 1 KB, and `BpmnFile` writes
+   the file. Nothing is written before this step, so a refusal leaves the file as it was.
 
-```mermaid
-flowchart TB
-  user(["bpmn add"]) --> s1["1 · AddElementCommand"] --> s2{{"2 · EditDocumentUseCase"}} --> s3["3 · EditDocumentService"] --> s4["4 · EditBatch"] --> s5["5 · ModelCommands"] --> s6["6 · ElementCreation"]
-  s3 <-- "read · write" --> s7[("7 · FileDocumentStore")]
-  s3 -- result --> s8["8 · MutationText"]
+## Who finds what
 
-  classDef adapter stroke:#2f80ed,stroke-width:2px
-  classDef app stroke:#f2994a,stroke-width:2px
-  classDef core stroke:#27ae60,stroke-width:3px
-  class s1,s7,s8 adapter
-  class s2,s3 app
-  class s4,s5,s6 core
-```
+Five things report problems. Two are bpmn-cli's own rules about the model, two run rules from outside,
+and one judges the drawing.
 
-Eight stops, framed in the colours of their layer. The file system (7) is only touched by the
-service, through a port; the domain never sees it.
+| term | whose rules | asks | codes | runs | lives |
+| --- | --- | --- | --- | --- | --- |
+| structure checks | bpmn-cli's | is the file BPMN the CLI can read, change and draw | `E_*`, `W_*` | every write, `validate` | `checks/structure` |
+| Camunda checks | bpmn-cli's | what Camunda 7 or 8 rejects at deploy, FEEL included | `W_C7_*`, `W_C8_*` | writes on executable processes, `validate` on all | `checks/camunda` |
+| host validators | the embedding app's | whatever the app asks | the app's | writes, before and after; `validate`, once | `write`: `HostValidators` runs them |
+| project lint | the project's `.bpmnlintrc` | the project's naming and modelling rules | bpmnlint rule names | `validate` only | `packages/lint`, handed in by cli as a validator |
+| layout score | bpmn-cli's | how well the model is drawn | problem kinds such as `crossings` | every write, `diagram`, the layout's trials | `scoring` |
 
-The snippets below are the real functions, shortened: checks, options and edge cases are left
-out (`…`), the calls that hand over to the next stop are kept.
+- checks holds only bpmn-cli's own rules. It neither runs foreign rules nor compares a before with an after.
+- What a write added is told by one class, `FindingDelta`. Structure and Camunda checks it compares over the
+  whole file, checking the old document only when the new one has errors; warnings are reported at the
+  touched elements and counted elsewhere. Host validators run on the old file and the new one, and it compares their findings over the whole file.
 
-### 1. Flags become data
+## model
 
-When the CLI starts, `cli.ts` creates the `Cli`, and every command class registers its verb with
-commander. For `add`, commander later calls `run()` with the parsed flags. It turns them into a
-plain object, the same shape `bpmn apply` reads from JSON, and hands it on.
+- Does: holds a document and writes it back byte for byte where nothing changed.
+- Holds: `BpmnDocument`, `BpmnTree`, `BpmnElement`, `DocumentReader`, `DocumentWriter`, `TextPreservation`, `ChangeSet`, `DiagramIndex`, `Kinds`, `IdAllocator`, `PropertyCatalog`, `NewDocument`, `BpmnError`, the geometry values `Point`, `Box`, `Segment`, `Polyline`.
+- Why: everything else reads the same tree, and a git diff of a write shows only the write because one module owns the text.
+- Does not: draw, check or edit.
 
-```ts
-// src/adapters/in/cli/AddElementCommand.ts
-export class AddElementCommand extends MutationCommand {
-  register(program: Command): void {
-    this.define(program, 'add')
-      .option('--after <id>')
-      .option('--before <id>')
-      // …
-      .action((file, kind, name, keyValues, options) =>
-        this.run(file, kind, name, keyValues, options),
-      )
-  }
+## operations
 
-  private async run(
-    file: string,
-    kind: string,
-    name: string | undefined,
-    keyValues: string[],
-    options: RawOpts,
-  ) {
-    const opts = this.mutationOptions(options)
-    this.checkPlacementFlags(options)
-    const command: AddElement = {
-      op: 'add',
-      kind,                       // 'userTask'
-      name,                       // 'Check invoice'
-      after: options['after'],    // 'startEvent_orderReceived'
-      // …
-    }
-    await this.mutate(file, [command], opts)
-  }
-}
-```
+- Does: describes each operation once: its fields, its rules and its help.
+- Holds: `OperationDefinition` with one subclass per operation, such as `AddOperationDefinition`, `OperationField`, `FieldValues`, `OperationCatalog`, `OperationParser`, `OperationSchema`, `OperationAliases`, `ReorderTarget`.
+- Why: `OPS_SCHEMA`, the batch parser and the 17 edit commands come from one definition, so a new operation flag touches one place.
+- Does not: apply an operation.
 
-An error thrown here reaches `Cli.run`, which prints it with its code and hint. From here on
-nobody knows about flags any more.
+## edit
 
-### 2. Through the port
+- Does: applies the model operations to the semantics of the document.
+- Holds: `ModelOperationRunner`, one class per model operation (`ElementCreation`, `FlowConnector`, `PropertyEditor`, `ElementRemoval`, `ElementTypeChange`, `ElementMove`, `ElementOrder`, `ExtensionEditor`, `BranchSplit`), `LaneMembership`, `EditSession`, `AliasTable`.
+- Why: what a change means in BPMN lives once, whichever way in it came, and drawing sees only the result.
+- Does not: touch DI, the diagram's coordinates.
 
-`mutate()` lives in the base class of every changing command. It calls the use case and prints
-what comes back. The CLI only knows the interface `EditDocumentUseCase`; which service is
-behind it, `cli.ts` decided at startup.
+## scoring
 
-```ts
-// src/adapters/in/cli/MutationCommand.ts
-protected async mutate(
-  file: string,
-  commands: EditCommand[],
-  opts: MutationFlags,
-) {
-  const result = await this.cli.useCases.editDocument.edit({
-    ...opts,
-    source: { file },
-    commands,
-  })
-  // step 8
-  await this.printMutation(result, opts, this.cli.io.stdout)
-}
-```
+- Does: judges a drawing: finds its layout problems and sums them to the layout score.
+- Holds: `Scorer`, `ScoringCriterion` with one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion` and `LabelOnLineCriterion`, `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator`.
+- Why: writes, the layout, `diagram` and the tests measure with one model, and a change to the measure is a change to one module.
+- Does not: change the document, lay out, read files, know the CLI or bpmnlint.
 
-```ts
-// src/application/port/in/EditDocumentUseCase.ts
-export interface EditDocumentUseCase {
-  edit(command: EditDocumentUseCase.Command): Promise<MutationResult>
-}
+## drawing
 
-export declare namespace EditDocumentUseCase {
-  interface Command extends FileMutationOptions {
-    source: DocumentSource   // { file } or an already loaded { doc }
-    commands: EditCommand[]
-  }
-}
-```
+- Does: decides coordinates: keeps a drawing and fits a change in, or draws a model in full.
+- Holds: `DiagramDrawing`, `DrawingSnapshot`, `IncrementalLayout`, `FullLayout`, `DrawingOperationRunner`, `ChannelRouter`, `TrialGuard`, `ShapeSizes`.
+- Why: an agent names elements, never coordinates, and a person's drawing has to survive its edits.
+- Does not: change the semantics, paint, or judge itself: `TrialGuard` asks `Scorer`.
 
-### 3. Load, run, save
+## checks
 
-The service is short on purpose: get the document, let the domain work, write the result.
-`settings` and `documents` are outbound ports, handed in by the constructor. The call into
-the domain stands on a line of its own; reading and writing the file are calls of the port
-around it.
+- Does: says what is wrong with the model by bpmn-cli's own rules: its structure, and what Camunda 7 or 8 rejects at deploy.
+- Holds: `ModelChecks`, `StructureChecks`, `CamundaChecks`, `CamundaRules` with one subclass per theme, such as `C8FlowRules`, `RuleReporter`, `FeelParser`.
+- Why: the rules ship with bpmn-cli and change with what it can keep and with Camunda's releases.
+- Does not: run a host's validators or bpmnlint, compare a before with an after, judge the drawing, change the document.
 
-```ts
-// src/application/service/EditDocumentService.ts
-export class EditDocumentService implements EditDocumentUseCase {
-  constructor(
-    private readonly settings: LoadProjectSettingsPort,
-    private readonly documents: DocumentPort,
-  ) {}
+## views
 
-  async edit(command: EditDocumentUseCase.Command) {
-    const { source, commands, ...opts } = command
-    const doc = await this.documents.load(source, { ...opts, lossless: true })   // step 7: read the file
-    const target = await this.documents.target(doc.file, opts)
-    const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo(opts, target)
-    const result = await new EditBatch(doc, commands, project).run(target)      // step 4: the domain
-    await this.documents.save(result, doc, target, opts)                        // step 7: write the file
-    return result
-  }
-}
-```
+- Does: answers each read as data and as text.
+- Holds: `ShowQuery`, `ModelView`, `ElementDetail`, `NeighbourhoodView`, `ElementFinder`, `DiagramView`, `ConventionsTable`, `KindTable`, `ImageView`, each answer with its text class beside it, such as `ModelViewText`.
+- Why: the library and the CLI print the same answer, and `--json` is the same answer as data.
+- Does not: write.
 
-In the CLI the ports are a `FileDocumentStore` and `BpmnlintProjectSettings`; `applyToXml()`
-passes `NoProjectSettings`, `NoDocumentFiles` and a `{ doc }` with `dryRun`, so nothing is read
-or written.
+## write
 
-### 4. The batch
+- Does: runs one write as a transaction, and `validate`: the checks, the host validators and a layout dry run.
+- Holds: `WriteTransaction`, `WriteOutcome`, `IdRenames`, `HostValidators`, `FindingDelta`, `DocumentValidation`, `NewModel`.
+- Why: only a write has a before and an after, so the rules from outside and every comparison live here.
+- Does not: hold rules of its own, read flags or files.
 
-The domain starts here. `EditBatch` runs all commands of one call on the `Doc` in
-memory, then validates, lays out the drawing and writes only the changed parts back into the
-original text. If anything throws, nothing is written: the caller keeps its input.
+## api
 
-```ts
-// src/domain/batch/EditBatch.ts
-async run(file = this.doc.file): Promise<MutationResult> {
-  // lossless import, Camunda 7 / 8 rules loaded
-  await this.guard()
+- Does: is the contract: the 8 functions of `src/api/index.ts`, one line each into a class, and `OPS_SCHEMA` and `BpmnError` beside them.
+- Holds: no class; it re-exports the options and results the classes below it declare.
+- Why: `api-report/` holds this surface, so a change to it is a decision, not a side effect.
+- Does not: hold logic or declare a type of its own.
 
-  // remember the state before: warnings already there, the drawing
-  const findings = await FindingBaseline.capture(this.doc, …)
-  const diagram = await BatchDrawing.capture(this.doc, …)
+## cli
 
-  // step 5: run every command on the model
-  const { batch } = await this.runCommands(diagram)
+- Does: is the Node shell: words in, files read and written, text out, exit codes.
+- Holds: `Cli`, `CliProgram`, `EditCommand`, `CommandSyntax`, `NewCommand`, `ShowCommand`, `FindCommand`, `DiagramCommand`, `ConventionsCommand`, `ValidateCommand`, `ApplyCommand`, `RenderCommand`, `GuideCommand`, `CliShell`, `BpmnFile`, `LintConfigLookup`, `IdConventionsReader`, `NamingTable`, `EditResultText`, `HelpTopics`, `ProjectLintValidator`.
+- Why: the CLI is a projection of the library: a command is a call or an operation, its flags the call's options or the operation's keys.
+- Does not: hold model logic.
 
-  // new errors refuse the write
-  await this.validateAndDropProfileDuplicates(findings, batch)
+## packages/lint
 
-  // lay out the drawing, rewrite only what changed in the text
-  const drawn = await diagram.apply(this.edit, batch.commands, batch.changes)
-  const xml = await this.keptText(drawn.xml, …)
+- Does: runs the project's `.bpmnlintrc` through bpmnlint, for `bpmn validate`.
+- Holds: `ProjectLint`, `LintConfig`, `LintPlugins`, `LintRules`, `RuleGuard`, `LintFindings`.
+- Why: XML and a config go in and findings come out, so it stands alone, private until someone outside needs it.
+- Does not: import the core, or run on a write.
 
-  return this.result(file, batch, xml, drawn.layout, …)
-}
-```
+## packages/render
 
-### 5. The right service for the op
-
-`ModelCommands` runs the commands in order and hands each one to the class that knows
-it, created with the `EditSession`: the `Doc` and what the running batch recorded so far. Commands that only move shapes (`place`, `align`, `color`, …) are left for the layout in
-step 4.
-
-```ts
-// src/domain/batch/ModelCommands.ts
-private dispatch(command: EditCommand): ChangeSet {
-  if (isDiagramCommand(command)) return new ChangeSet()
-  switch (command.op) {
-    case 'add':
-      return new ElementCreation(this.edit).add(command)
-    case 'connect':
-      return new Connections(this.edit).connect(command)
-    case 'set':
-      return new Properties(this.edit).set(command)
-    case 'remove':
-      return new ElementRemoval(this.edit).remove(command)
-    // … retype, move, order, ext, split
-  }
-}
-```
-
-### 6. The model changes
-
-`ElementCreation` makes the new element in the bpmn-moddle tree of the `Doc`, places it
-after `startEvent_orderReceived` (which creates the sequence flow), and records everything it did in
-a `ChangeSet`.
-
-```ts
-// src/domain/editing/elements/ElementCreation.ts
-export class ElementCreation {
-  constructor(private readonly edit: EditSession) {}
-
-  add(command: AddElement): ChangeSet {
-    const cs = new ChangeSet()
-    // 'userTask' → bpmn:UserTask
-    const { def, trigger } = parseKindToAdd(command.kind)
-    const el = this.addFlowNode(command, def, trigger, cs)
-    if (command.set) {
-      const values = { op: 'set', id: idOf(el), values: command.set }
-      cs.merge(new Properties(this.edit).set(values))
-    }
-    return cs
-  }
-
-  private addFlowNode(
-    command: AddElement,
-    def: KindDef,
-    trigger: Trigger | undefined,
-    cs: ChangeSet,
-  ): El {
-    // 'userTask_checkInvoice'
-    const id = this.edit.allocator.explicitOr(command.id, …)
-    const el = this.edit.doc.create(def.type, { id, name: command.name })
-    cs.create({ id, kind: def.kind, name: command.name })
-
-    // --after: splice in behind the anchor and add the sequence flow
-    new NodePlacement(this.edit, command).place(el, cs)
-    return el
-  }
-}
-```
-
-### 7. The file
-
-`FileDocumentStore` implements the `DocumentPort`. What it shares with the in-memory
-`NoDocumentFiles` (parsing a source into a `Doc`, the lossless check, the target of a write,
-whether to write at all) is their base class `DocumentStore` in `adapters/out/document/`; the
-file store only adds the bytes on disk. It is the only class on this path that imports `node:fs`.
-
-```ts
-// src/adapters/out/document/DocumentStore.ts
-export abstract class DocumentStore implements DocumentPort {
-  async load(source, opts = {}) {
-    const doc = await this.parse(source)   // a { doc }, its XML or the bytes of a file
-    if (opts.lossless) doc.assertLossless(opts)
-    return doc
-  }
-
-  async save(result, doc, target, opts) {
-    if (!opts.dryRun && target) result.written = await this.write(target, result.xml, …)
-  }
-}
-
-// src/adapters/out/files/FileDocumentStore.ts
-export class FileDocumentStore extends DocumentStore {
-  // decoded in the encoding the XML declares
-  protected read(file: string): Promise<string> {
-    return readXml(file)
-  }
-
-  protected async write(target: string, xml: string, opts: WriteOptions) {
-    // a no-op leaves the file alone
-    if (opts.unchanged && inPlace) return false
-    if (opts.backup && opts.source) await FileDocumentStore.backup(opts.source)
-    // a failed write leaves the old file
-    await writeAtomic(target, xml)
-    return true
-  }
-}
-```
-
-### 8. The answer
-
-Back in `MutationCommand`, the result becomes a report (`MutationReportBuilder`) and then text
-(`MutationText`), both in `adapters/in/report/`. The library returns the same report, so the
-CLI and `applyToXml()` describe a change in the same words.
-
-```txt
-created userTask userTask_checkInvoice "Check invoice" - after startEvent_orderReceived
-created sequenceFlow flow_orderReceivedToCheckInvoice - startEvent_orderReceived -> userTask_checkInvoice
-layout: ok - full (engine-owned diagram: redrawn)
-written: order.bpmn
-```
-
-### Other ways in
-
-- `bpmn apply` differs only in step 1: it reads the commands as JSON instead of flags.
-- `mutateFile()` (`node.ts`) starts at step 2.
-- `applyToXml()` (`api.ts`) starts at step 2, with nothing in step 7 and no project
-  `.bpmnlintrc`, and returns the XML instead of saving it.
-
-From step 2 onwards, all of them run the same code.
-
-## One definition per command
-
-Each command (`add`, `connect`, …) is plain data with one **definition** in
-`domain/commands/definitions/`. The definition names its fields, which of them hold ids, and
-its checks. Every place that needs to know a command reads the definition, so they cannot drift
-apart:
-
-```mermaid
-flowchart LR
-  def["AddElementDefinition"] --> parser["bpmn apply<br/>accepts and checks the JSON"]
-  def --> schema["OPS_SCHEMA<br/>for agents and editors"]
-  def --> help["bpmn add --help<br/>option texts"]
-
-  classDef core stroke:#27ae60,stroke-width:2px
-  class def core
-```
-
-A new command therefore needs a definition, a `case` in `ModelCommands` and a class of
-`domain/editing/` created with the `EditSession`. `bpmn apply` and `applyToXml()` accept it from then on. A verb of its own on
-the command line (`bpmn <verb>`) is optional and lives in `adapters/in/cli/`.
+- Does: paints BPMN as SVG, PNG optional, in plain Node and in a browser.
+- Holds: `DiagramRenderer`, `DiagramReader`, `ShapePainter`, `EdgePainter`, `SvgComposer`, `TextMetrics`, `PngRasterizer`.
+- Why: nothing else draws BPMN headless with bpmn-js quality, so it is written to be published once someone outside wants it.
+- Does not: lay out, query the graph, read files.

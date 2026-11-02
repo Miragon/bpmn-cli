@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process">
+    <bpmn:task id="task_a" />
+    <bpmn:task id="task_b" />
+    <bpmn:sequenceFlow id="flow_one_point" sourceRef="task_a" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_no_length" sourceRef="task_a" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_fine" sourceRef="task_a" targetRef="task_b" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="process">
+      <bpmndi:BPMNShape id="task_a_di" bpmnElement="task_a"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_b_di" bpmnElement="task_b"><dc:Bounds x="300" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_one_point_di" bpmnElement="flow_one_point"><di:waypoint x="200" y="140" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_no_length_di" bpmnElement="flow_no_length"><di:waypoint x="250" y="140" /><di:waypoint x="250" y="140" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_fine_di" bpmnElement="flow_fine"><di:waypoint x="200" y="120" /><di:waypoint x="300" y="120" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

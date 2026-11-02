@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_flowsEndpoints" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:signal id="Signal_stop" name="Stop" />
+  <bpmn:collaboration id="Collaboration_endpoints">
+    <bpmn:participant id="pool_a" name="A" processRef="Process_a" />
+    <bpmn:participant id="pool_b" name="B" processRef="Process_b" />
+    <bpmn:participant id="pool_empty" name="Empty" />
+    <bpmn:messageFlow id="m_existing" sourceRef="a_send" targetRef="b_receive" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_a" isExecutable="true">
+    <bpmn:startEvent id="a_start">
+      <bpmn:outgoing>f_a1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="a_task" name="Work">
+      <bpmn:incoming>f_a1</bpmn:incoming>
+      <bpmn:outgoing>f_a2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="a_gateway" name="Route">
+      <bpmn:incoming>f_a2</bpmn:incoming>
+      <bpmn:outgoing>f_a3</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="a_end" name="Done">
+      <bpmn:incoming>f_a3</bpmn:incoming>
+      <bpmn:messageEventDefinition id="def_aEnd" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="a_endSignal" name="Stopped">
+      <bpmn:signalEventDefinition id="def_aSignal" signalRef="Signal_stop" />
+    </bpmn:endEvent>
+    <bpmn:sendTask id="a_send" name="Send" />
+    <bpmn:intermediateCatchEvent id="a_catchMessage" name="Hear">
+      <bpmn:messageEventDefinition id="def_aCatch" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="a_throwMessage" name="Say">
+      <bpmn:messageEventDefinition id="def_aThrow" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="a_linkThrow" name="To shipping">
+      <bpmn:linkEventDefinition id="def_aLinkThrow" name="Shipping" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateCatchEvent id="a_linkCatch" name="From order">
+      <bpmn:linkEventDefinition id="def_aLinkCatch" name="Shipping" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:parallelGateway id="a_fork" />
+    <bpmn:subProcess id="a_eventSub" triggeredByEvent="true" />
+    <bpmn:subProcess id="a_sub" name="Inner">
+      <bpmn:task id="a_inner" name="Inner work" />
+      <bpmn:textAnnotation id="a_innerNote"><bpmn:text>Inner note</bpmn:text></bpmn:textAnnotation>
+    </bpmn:subProcess>
+    <bpmn:task id="a_guarded" name="Guarded" />
+    <bpmn:boundaryEvent id="a_compensate" attachedToRef="a_guarded">
+      <bpmn:compensateEventDefinition id="def_aCompensate" />
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="a_timer" attachedToRef="a_guarded">
+      <bpmn:timerEventDefinition id="def_aTimer" />
+    </bpmn:boundaryEvent>
+    <bpmn:task id="a_undo" name="Undo" />
+    <bpmn:task id="a_handler" name="Handler" isForCompensation="true" />
+    <bpmn:task id="a_reader" name="Read">
+      <bpmn:property id="property_slot" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="in_read">
+        <bpmn:sourceRef>a_data</bpmn:sourceRef>
+        <bpmn:targetRef>property_slot</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="out_read">
+        <bpmn:targetRef>a_store</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:task>
+    <bpmn:dataObject id="DataObject_a" />
+    <bpmn:dataObjectReference id="a_data" name="Order" dataObjectRef="DataObject_a" />
+    <bpmn:dataObjectReference id="a_data2" name="Invoice" dataObjectRef="DataObject_a" />
+    <bpmn:dataStoreReference id="a_store" name="Archive" />
+    <bpmn:sequenceFlow id="f_a1" sourceRef="a_start" targetRef="a_task" />
+    <bpmn:sequenceFlow id="f_a2" sourceRef="a_task" targetRef="a_gateway" />
+    <bpmn:sequenceFlow id="f_a3" sourceRef="a_gateway" targetRef="a_end" />
+    <bpmn:textAnnotation id="a_note"><bpmn:text>Note</bpmn:text></bpmn:textAnnotation>
+    <bpmn:textAnnotation id="a_note2"><bpmn:text>Second note</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="association_existing" sourceRef="a_note" targetRef="a_task" />
+  </bpmn:process>
+  <bpmn:process id="Process_b" isExecutable="false">
+    <bpmn:receiveTask id="b_receive" name="Receive" />
+    <bpmn:task id="b_task" name="Other work" />
+    <bpmn:startEvent id="b_start">
+      <bpmn:messageEventDefinition id="def_bStart" />
+    </bpmn:startEvent>
+  </bpmn:process>
+  <bpmn:process id="Process_loose" isExecutable="false">
+    <bpmn:task id="c_task" name="Unpooled" />
+  </bpmn:process>
+</bpmn:definitions>

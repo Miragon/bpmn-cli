@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:error id="Err" name="E" />
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start"></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="End" />
+    <bpmn:endEvent id="End"><bpmn:errorEventDefinition id="ED" errorRef="Err" /></bpmn:endEvent>
+  </bpmn:process>
+</bpmn:definitions>

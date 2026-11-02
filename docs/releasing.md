@@ -25,10 +25,46 @@ repository or in GitHub secrets.
    tarball, writes `Formula/bpmn-cli.rb` with its sha256, installs and tests the formula, and pushes it
    to [Miragon/homebrew-tap](https://github.com/Miragon/homebrew-tap) (see [Homebrew](#homebrew)).
 
-The `ci` workflow (`.github/workflows/ci.yml`) runs `npm run typecheck` and `npm run gate` on every pull
-request, including the release PRs.
+The `ci` workflow (`.github/workflows/ci.yml`) runs `npm run gate` on every pull request, including the
+release PRs, and on every push to `main`.
 
 To force a specific version, add a `Release-As: X.Y.Z` footer to a commit on `main`.
+
+## Release candidates
+
+The release candidates `X.Y.Z-rc.N` of the next release go to the npm dist-tag `next`; `latest` stays on
+the last release until the next one ships. release-please does not take part: a release candidate is cut by
+hand from a branch.
+
+1. Set `version` in `package.json` to `X.Y.Z-rc.N`, for example `0.10.0-rc.1`, and commit it. `npm test`
+   must pass.
+2. Tag that commit and push the tag:
+   ```
+   git tag vX.Y.Z-rc.N
+   git push origin vX.Y.Z-rc.N
+   ```
+3. The push of a tag `v*-rc.*` starts `release-please.yml`, whose job `publish-rc` checks that the tag
+   names the version in `package.json`, runs `npm ci`, `npm run build` and `npm test`, and runs
+   `npm publish --tag next` with an OIDC token. The file keeps its name, so npm's trusted publishing
+   accepts it.
+4. The same tag starts `nightly.yml`, since GitHub starts a schedule only from the default branch: the fuzz
+   and the bench run on the candidate.
+
+A release candidate moves neither the `release` branch nor the Homebrew tap, and bumps no plugin file, so
+users of `latest`, the tap and the marketplace see nothing. Try one with:
+
+```
+npm view @miragon/bpmn-cli dist-tags
+npm install -g @miragon/bpmn-cli@next
+```
+
+From the first candidate on the contract is frozen: the API report changes only to fix a bug, named in the next candidate's
+notes. The live engine run goes once over `corpus/engine/` on the candidate
+([testing](testing.md#live-engines)).
+
+The release itself comes from `main`, through the release PR that release-please opens: with
+`bump-minor-pre-major` a breaking change on 0.x proposes the next minor, so 0.9 is followed by 0.10.0. It
+goes to `latest` as every release does.
 
 ## One-time npm setup
 

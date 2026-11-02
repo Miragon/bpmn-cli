@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process" isExecutable="false">
+    <bpmn:startEvent id="start" />
+    <bpmn:task name="Check invoice" />
+    <bpmn:task id="next" />
+    <bpmn:sequenceFlow sourceRef="start" targetRef="next" />
+    <bpmn:textAnnotation />
+  </bpmn:process>
+</bpmn:definitions>

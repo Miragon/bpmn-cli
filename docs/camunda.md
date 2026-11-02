@@ -9,14 +9,13 @@ How to make a model deployable, and what `bpmn validate` checks before the engin
 | Camunda 8 (Zeebe) | `zeebe:` | `camunda8` |
 
 ::: tip From the CLI
-`bpmn guide camunda7`, `bpmn guide camunda8` and `bpmn kinds` print the full reference.
+`bpmn guide camunda7`, `bpmn guide camunda8` and `bpmn guide zeebe-elements` print the short reference.
 :::
 
 ## Platform and checks
 
 `bpmn new <file> --target camunda7` (or `camunda8`) writes the namespace and the execution platform.
-An existing file is detected from `modeler:executionPlatform` or its namespace; `--platform
-c7|c8|none` overrides it.
+An existing file is detected from `modeler:executionPlatform` or its namespace.
 
 The CLI knows where each engine attribute belongs and refuses a wrong place with `E_WRONG_HOST`,
 whose hint is the right command. Engine findings are warnings that name the fixing command, so use
@@ -31,7 +30,7 @@ added with `ext add`.
 | what | command |
 | --- | --- |
 | external task | `bpmn set <file> <id> camunda:type=external camunda:topic=<topic>` |
-| input mapping | `bpmn ext add <file> <id> camunda:inputParameter name=<name> --body '${<expression>}'` |
+| input mapping | `bpmn ext add <file> <id> camunda:inputParameter name=<name> 'body=${<expression>}'` |
 | user task | `bpmn set <file> <id> camunda:candidateGroups=<groups>` |
 | form field | `bpmn ext add <file> <id> camunda:formField id=<field> type=boolean` |
 | multi-instance | `bpmn set <file> <id> 'loop.camunda:collection=${<list>}' loop.camunda:elementVariable=<variable>` |
@@ -45,16 +44,15 @@ An external worker checks a claim. A BPMN error catches the "not covered" case, 
 approves the rest.
 
 ```sh
-bpmn new claim.bpmn --name "Claim handling" --target camunda7
+bpmn new claim.bpmn "Claim handling" --target camunda7
 bpmn add claim.bpmn start "Claim received"
 bpmn add claim.bpmn serviceTask "Check coverage" \
   --after startEvent_claimReceived camunda:type=external \
   camunda:topic=check-coverage
 bpmn ext add claim.bpmn serviceTask_checkCoverage camunda:inputParameter \
-  name=amount --body '${amount}'
+  name=amount 'body=${amount}'
 bpmn add claim.bpmn boundary:error "Not covered" \
-  --on serviceTask_checkCoverage --error "Not covered" \
-  --error-code NOT_COVERED
+  --on serviceTask_checkCoverage error="Not covered" errorCode=NOT_COVERED
 bpmn add claim.bpmn end "Claim rejected" --after event_notCovered
 bpmn add claim.bpmn userTask "Approve claim" \
   --after serviceTask_checkCoverage camunda:candidateGroups=claims
@@ -77,8 +75,8 @@ or an external task without topic), runtime, and practice.
 worker user task, which Tasklist in V2 mode does not list.
 
 Settings are extension elements, added with `ext add`. FEEL values start with `=`, so write
-`attr==<expression>`: `source==order.total` is `source="=order.total"`. `bpmn kinds --section
-zeebeElements` lists every zeebe element.
+`attr==<expression>`: `source==order.total` is `source="=order.total"`. `bpmn guide zeebe-elements`
+lists every zeebe element.
 
 | what | command |
 | --- | --- |
@@ -95,7 +93,7 @@ A job worker checks an invoice. Amounts over 1000 go to the finance group, the r
 flow. The process then waits for the payment message.
 
 ```sh
-bpmn new invoice.bpmn --name "Invoice approval" --target camunda8
+bpmn new invoice.bpmn "Invoice approval" --target camunda8
 bpmn add invoice.bpmn start "Invoice received"
 bpmn add invoice.bpmn serviceTask "Check invoice" \
   --after startEvent_invoiceReceived
@@ -113,9 +111,9 @@ bpmn ext add invoice.bpmn userTask_approveInvoice \
 bpmn add invoice.bpmn exclusiveGateway --id gateway_approved \
   --after userTask_approveInvoice
 bpmn connect invoice.bpmn gateway_amountOver1000 gateway_approved \
-  --name no --default
+  name=no default=true
 bpmn add invoice.bpmn receiveTask "Wait for payment" \
-  --after gateway_approved --message "Payment received"
+  --after gateway_approved message="Payment received"
 bpmn ext add invoice.bpmn receiveTask_waitForPayment zeebe:subscription \
   correlationKey==invoiceId
 bpmn add invoice.bpmn end "Invoice settled" --after receiveTask_waitForPayment
@@ -138,11 +136,11 @@ valid, 1 warning(s)
 
 ## bpmnlint and camunda-compat
 
-camunda-compat comes with bpmn-cli and runs from the project's `.bpmnlintrc`. Its findings overlap
-with the `W_C7_*` / `W_C8_*` rules; both are listed. Setup: [bpmnlint](bpmnlint.md).
+camunda-compat comes with bpmn-cli and runs from the project's `.bpmnlintrc`, in `bpmn validate`. Its
+findings overlap with the `W_C7_*` / `W_C8_*` checks; both are listed. Setup: [bpmnlint](bpmnlint.md).
 
 ## Next steps
 
-- [bpmnlint](bpmnlint.md): run the project's `.bpmnlintrc` on every write.
-- [Commands](commands.md): `set` and `ext` with all their options.
+- [bpmnlint](bpmnlint.md): run the project's `.bpmnlintrc` in `bpmn validate`.
+- [Commands](commands.md): `set` and `ext` with all their flags.
 - [A worked session](walkthrough.md): a Camunda 8 model from an empty file.

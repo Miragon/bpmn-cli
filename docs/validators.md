@@ -1,66 +1,68 @@
 # Validators
 
 A library host can run its own checks inside a write. They see exactly the XML that would be
-written, and an error the change adds refuses the write. The CLI runs only the project's bpmnlint,
-as an [advisory validator](#advisory-validators). Passing validators: [Library use](library.md).
+written, and an error the change adds refuses the write. The CLI runs only the project's
+[bpmnlint](bpmnlint.md), in `bpmn validate`. Passing validators: [Library use](library.md).
 
 ## An example
 
-A house rule: a path ends in an end event. The first write would add a task without an outgoing
-flow and is refused; the second one passes.
+A house rule: nobody archives by hand. The first write would add such a task and is refused; the second
+one passes.
 
 ```ts
 import {
   applyToXml,
   BpmnError,
+  findXml,
   newXml,
-  type NamedValidator,
+  type Validator,
 } from '@miragon/bpmn-cli';
 
-// a house rule: a path ends in an end event, never in a task or a gateway
-const houseRules: NamedValidator = {
+const houseRules: Validator = {
   name: 'house-rules',
   detail: 'our modelling guideline',
-  covers: { DEAD_END: 'W_DEAD_END' },
-  validateDoc: (doc) =>
-    doc.processes()
-      .flatMap((process) => doc.flowNodes(process))
-      .filter((node) => node.$type !== 'bpmn:EndEvent')
-      .filter((node) => doc.outgoing(node).length === 0)
-      .map((node) => ({
+  async validate(xml) {
+    const { hits } = await findXml(xml, { kind: 'task' });
+    return hits
+      .filter((task) => task.name === 'Archive')
+      .map((task) => ({
         severity: 'error',
-        code: 'DEAD_END',
-        message: `${node.id} has no outgoing sequence flow`,
-        element: node.id,
-      })),
+        code: 'NO_ARCHIVE_TASK',
+        message: `${task.id}: archiving is a job of the records system`,
+        element: task.id,
+        hint: 'Remove the task or rename it.',
+      }));
+  },
 };
 
-let { xml } = await newXml({ processName: 'Order handling' });
-({ xml } = await applyToXml(xml, [
+const start = await applyToXml(await newXml({ name: 'Order handling' }), [
   { op: 'add', kind: 'start', name: 'Order received' },
   { op: 'add', kind: 'end', name: 'Done', after: 'startEvent_orderReceived' },
-]));
+]);
+
+const archive = {
+  op: 'add',
+  kind: 'userTask',
+  name: 'Archive',
+  after: 'startEvent_orderReceived',
+};
 
 try {
-  const archive = {
-    op: 'add',
-    kind: 'userTask',
-    name: 'Archive',
-    in: 'orderHandling',
-  };
-  await applyToXml(xml, [archive], { validators: [houseRules] });
-} catch (err) {
-  if (!(err instanceof BpmnError)) throw err;
-  err.code;
+  await applyToXml(start.xml, [archive], { validators: [houseRules] });
+} catch (error) {
+  if (!(error instanceof BpmnError)) {
+    throw error;
+  }
+  error.code;
   // 'E_VALIDATION'
-  err.message;
+  error.message;
   // 'The change would introduce 1 error(s) reported by validator
   //  house-rules; nothing was written'
-  err.details.errors;
-  // [{ code: 'DEAD_END',
-  //    message: 'userTask_archive has no outgoing sequence flow',
+  error.details.errors;
+  // [{ code: 'NO_ARCHIVE_TASK',
+  //    message: 'userTask_archive: archiving is a job of the records system',
   //    validator: 'house-rules', severity: 'error',
-  //    element: 'userTask_archive' }]
+  //    element: 'userTask_archive', hint: 'Remove the task or rename it.' }]
 }
 
 const check = {
@@ -69,85 +71,46 @@ const check = {
   name: 'Check invoice',
   after: 'startEvent_orderReceived',
 };
-const edit = await applyToXml(xml, [check], { validators: [houseRules] });
+const edit = await applyToXml(start.xml, [check], { validators: [houseRules] });
 
-edit.result.validation.validators;
-// [{ name: 'house-rules', detail: 'our modelling guideline',
-//    errors: [], warnings: [], preexisting: [], resolved: [],
-//    counts: { errors: 0, warnings: 0 } }]
+edit.findings;
+// []
 ```
 
 ## Writing a validator
 
-A validator is a function `(xml, ctx) => findings`, sync or async, or a `NamedValidator` object:
+A validator is an object:
 
 | field | meaning |
 | --- | --- |
-| `name` | shown with every finding: `[name]` in text, `validator` in JSON |
-| `validate` / `validateDoc` | `(xml, ctx)` or `(doc, ctx)` to findings; read the `Doc`, never change it |
+| `name` | shown with every finding: `validator` in a finding |
+| `validate` | `(xml, context)` to findings, sync or async |
 | `detail` | one line on why it runs |
-| `covers` | finding code -> the built-in warning it repeats, which is then dropped (`DEAD_END: 'W_DEAD_END'`) |
 | `blocks` | `false` makes it advisory |
 
-`ctx` has `file`, `phase` (`'before'`, `'after'` or `'check'`), `platform`, `ops` and `doc()`.
+`context` has `phase` (`'before'`, `'after'` or `'check'`), `platform`, `operations`, `importWarnings` and
+`file`; the library sets no `file`, so a host reads it as undefined.
 
-A finding is `{ severity, code, message, element?, hint? }`. `severity: 'error'` (any case) is an
-error, anything else a warning. bpmnlint's `{ severity: 'ERROR', ruleId, message }` is accepted
-as it is.
+A finding is `{ severity, code, message, element?, related?, hint?, key? }`. `severity: 'error'` (any case)
+is an error, anything else a warning. bpmnlint's `{ severity: 'ERROR', ruleId, message }` is accepted as
+it is. `key` says which finding of the old file this one is; without it the code and the element, or the
+message, tell them apart.
 
 ## Before and after
 
-A write runs every validator on the document before the ops and on the candidate after them, and
-compares the findings:
+A write runs every validator on the old file and on the new one, and compares the findings over the whole
+file:
 
 | finding | blocking (default) | advisory (`blocks: false`) |
 | --- | --- | --- |
-| an error the change adds | refuses the write (`E_VALIDATION`) unless `force: true` | reported in `result.warnings.added`; the write goes through |
-| an error the file already had | `W_PREEXISTING_ERROR`, never blocks | counted only |
-| a warning the change adds | reported | reported |
-| a finding the change removed | in `result.warnings.resolved` | the same |
+| an error the change adds | refuses the write (`E_VALIDATION`) unless `force: true` | in `findings`; the write goes through |
+| a warning the change adds | in `findings` | in `findings` |
+| an error the file already had | in `preexisting`, never blocks | the same |
 
-So an old problem never makes a file uneditable. A check (`validateXml`, `checkFile`) runs each
-validator once and reports every finding.
-
-### Left out
-
-A finding that says nothing about the change (it comes from data the file does not keep) carries
-`leftOut: '<reason>'`. A write counts it but never compares it, so it never blocks.
-
-## Advisory validators
-
-A validator with `blocks: false` reports and never refuses. The project's bpmnlint is one
-([bpmnlint](bpmnlint.md)). A host can run the plugin's default configuration the same way:
-
-```js
-import {
-  applyToXml,
-  bpmnlintValidator,
-  idConventionsFromLint,
-  ID_NAMING_RULE,
-  resolveBpmnlintConfig,
-} from '@miragon/bpmn-cli';
-import { bpmnlintEngine } from '@miragon/bpmn-cli/node';
-
-const engine = bpmnlintEngine();
-const rc = engine.plugin.getDefaultLintConfig({ engine: 'c7' });
-const resolved = await resolveBpmnlintConfig(engine, rc);
-const { conventions, notes } = idConventionsFromLint(
-  resolved.rules[ID_NAMING_RULE],
-  engine.plugin.naming,
-);
-const lint = bpmnlintValidator(engine, resolved, {
-  detail: 'default rules',
-  notes,
-});
-await applyToXml(xml, ops, { validators: [lint], conventions });
-```
-
-The engine defaults turn `@miragon/rules/element-id-naming` on. Pass `conventions` to the write, or
-the lint reports every new id ([Library: building blocks](library.md#building-blocks)).
+So an old problem never makes a file uneditable. `validateXml` runs each validator once, with the phase
+`check`, and reports every finding under its `validators` summary.
 
 ## Next steps
 
-- [Library use](library.md): the options of `applyToXml` and the file helpers.
+- [Library use](library.md): the options of `applyToXml`.
 - [bpmnlint](bpmnlint.md): the project's rules on the command line.

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_crossing" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_crossing" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_crossing">
+      <bpmn:lane id="lane_top" name="Top"><bpmn:flowNodeRef>first</bpmn:flowNodeRef></bpmn:lane>
+      <bpmn:lane id="lane_middle" name="Middle"><bpmn:flowNodeRef>second</bpmn:flowNodeRef></bpmn:lane>
+      <bpmn:lane id="lane_low" name="Low"><bpmn:flowNodeRef>low</bpmn:flowNodeRef></bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="first" name="First"><bpmn:outgoing>flow_firstToSecond</bpmn:outgoing></bpmn:task>
+    <bpmn:sequenceFlow id="flow_firstToSecond" sourceRef="first" targetRef="second" />
+    <bpmn:task id="second" name="Second"><bpmn:incoming>flow_firstToSecond</bpmn:incoming></bpmn:task>
+    <bpmn:task id="low" name="Low" />
+    <bpmn:task id="loose" name="Loose" />
+    <bpmn:boundaryEvent id="loose_timer" attachedToRef="loose">
+      <bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:task id="unassigned" name="Unassigned" />
+  </bpmn:process>
+</bpmn:definitions>

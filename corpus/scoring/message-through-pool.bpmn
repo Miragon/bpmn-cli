@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool_sender" processRef="process_sender" />
+    <bpmn:participant id="pool_passed" processRef="process_passed" />
+    <bpmn:participant id="pool_receiver" processRef="process_receiver" />
+    <bpmn:messageFlow id="message" sourceRef="task_send" targetRef="task_receive" />
+  </bpmn:collaboration>
+  <bpmn:process id="process_sender">
+    <bpmn:task id="task_send" />
+  </bpmn:process>
+  <bpmn:process id="process_passed">
+  </bpmn:process>
+  <bpmn:process id="process_receiver">
+    <bpmn:task id="task_receive" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_sender_di" bpmnElement="pool_sender" isHorizontal="true"><dc:Bounds x="100" y="100" width="500" height="150" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_send_di" bpmnElement="task_send"><dc:Bounds x="200" y="130" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="pool_passed_di" bpmnElement="pool_passed" isHorizontal="true"><dc:Bounds x="100" y="300" width="500" height="150" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="pool_receiver_di" bpmnElement="pool_receiver" isHorizontal="true"><dc:Bounds x="100" y="500" width="500" height="150" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_receive_di" bpmnElement="task_receive"><dc:Bounds x="200" y="530" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="message_di" bpmnElement="message"><di:waypoint x="250" y="210" /><di:waypoint x="250" y="530" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

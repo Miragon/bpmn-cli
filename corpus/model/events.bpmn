@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_events" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_order" name="OrderPlaced" />
+  <bpmn:error id="Error_late" name="Late" errorCode="E42" />
+  <bpmn:signal id="Signal_stop" name="Stop" />
+  <bpmn:escalation id="Escalation_up" name="Up" escalationCode="E7" />
+  <bpmn:category id="Category_marks">
+    <bpmn:categoryValue id="CategoryValue_review" value="Review" />
+  </bpmn:category>
+  <bpmn:process id="Process_events" name="Events" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_main">
+      <bpmn:lane id="Lane_sales" name="Sales">
+        <bpmn:flowNodeRef>start_timer</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>task_review</bpmn:flowNodeRef>
+        <bpmn:childLaneSet id="LaneSet_sales">
+          <bpmn:lane id="Lane_inside" name="Inside">
+            <bpmn:flowNodeRef>task_review</bpmn:flowNodeRef>
+          </bpmn:lane>
+        </bpmn:childLaneSet>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_billing" name="Billing">
+        <bpmn:flowNodeRef>gateway_choice</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start_timer" name="Every hour">
+      <bpmn:documentation>Runs hourly</bpmn:documentation>
+      <bpmn:documentation>Twice a day on weekends</bpmn:documentation>
+      <bpmn:outgoing>flow_start</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="timer_cycle"><bpmn:timeCycle>R/PT1H</bpmn:timeCycle></bpmn:timerEventDefinition>
+    </bpmn:startEvent>
+    <bpmn:userTask id="task_review" name="Review order">
+      <bpmn:incoming>flow_start</bpmn:incoming>
+      <bpmn:outgoing>flow_choice</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="true">
+        <bpmn:loopCardinality>3</bpmn:loopCardinality>
+        <bpmn:completionCondition>${done}</bpmn:completionCondition>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="boundary_soon" name="Soon" cancelActivity="false" attachedToRef="task_review">
+      <bpmn:outgoing>flow_soon</bpmn:outgoing>
+      <bpmn:timerEventDefinition><bpmn:timeDuration>PT5M</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="boundary_late" attachedToRef="task_review">
+      <bpmn:errorEventDefinition id="error_late" errorRef="Error_late" />
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="gateway_choice" name="Approved?" default="flow_no">
+      <bpmn:incoming>flow_choice</bpmn:incoming>
+      <bpmn:outgoing>flow_yes</bpmn:outgoing>
+      <bpmn:outgoing>flow_no</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="task_send" name="Send" messageRef="Message_order">
+      <bpmn:incoming>flow_yes</bpmn:incoming>
+      <bpmn:outgoing>flow_send</bpmn:outgoing>
+      <bpmn:standardLoopCharacteristics />
+    </bpmn:sendTask>
+    <bpmn:intermediateThrowEvent id="throw_link" name="To end">
+      <bpmn:incoming>flow_send</bpmn:incoming>
+      <bpmn:linkEventDefinition id="link_out" name="ToEnd" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateCatchEvent id="catch_link" name="From start">
+      <bpmn:outgoing>flow_link</bpmn:outgoing>
+      <bpmn:linkEventDefinition id="link_in" name="ToEnd" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_condition" name="Ready">
+      <bpmn:incoming>flow_link</bpmn:incoming>
+      <bpmn:outgoing>flow_ready</bpmn:outgoing>
+      <bpmn:conditionalEventDefinition id="condition_ready"><bpmn:condition xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${ready}</bpmn:condition></bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_date" name="On the day">
+      <bpmn:incoming>flow_ready</bpmn:incoming>
+      <bpmn:outgoing>flow_day</bpmn:outgoing>
+      <bpmn:timerEventDefinition><bpmn:timeDate>2026-12-24</bpmn:timeDate></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="end_two" name="Two definitions">
+      <bpmn:incoming>flow_day</bpmn:incoming>
+      <bpmn:messageEventDefinition id="message_out" messageRef="Message_order" />
+      <bpmn:signalEventDefinition id="signal_out" signalRef="Signal_stop" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="end_escalation">
+      <bpmn:incoming>flow_soon</bpmn:incoming>
+      <bpmn:escalationEventDefinition id="escalation_out" escalationRef="Escalation_up" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="end_plain">
+      <bpmn:incoming>flow_no</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="sub_events" triggeredByEvent="true">
+      <bpmn:startEvent id="start_message" isInterrupting="false">
+        <bpmn:messageEventDefinition id="message_in" messageRef="Message_order" />
+      </bpmn:startEvent>
+    </bpmn:subProcess>
+    <bpmn:adHocSubProcess id="sub_adhoc" name="Ad hoc">
+      <bpmn:completionCondition>${enough}</bpmn:completionCondition>
+      <bpmn:task id="task_inside" name="Inside" />
+    </bpmn:adHocSubProcess>
+    <bpmn:sequenceFlow id="flow_start" sourceRef="start_timer" targetRef="task_review" />
+    <bpmn:sequenceFlow id="flow_choice" sourceRef="task_review" targetRef="gateway_choice" />
+    <bpmn:sequenceFlow id="flow_yes" name="yes" sourceRef="gateway_choice" targetRef="task_send">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" language="feel">=ok</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_no" sourceRef="gateway_choice" targetRef="end_plain" />
+    <bpmn:sequenceFlow id="flow_send" sourceRef="task_send" targetRef="throw_link" />
+    <bpmn:sequenceFlow id="flow_link" sourceRef="catch_link" targetRef="catch_condition" />
+    <bpmn:sequenceFlow id="flow_ready" sourceRef="catch_condition" targetRef="catch_date" />
+    <bpmn:sequenceFlow id="flow_day" sourceRef="catch_date" targetRef="end_two" />
+    <bpmn:sequenceFlow id="flow_soon" sourceRef="boundary_soon" targetRef="end_escalation" />
+    <bpmn:group id="group_review" categoryValueRef="CategoryValue_review" />
+    <bpmn:textAnnotation id="note_review"><bpmn:text>Checked by hand</bpmn:text></bpmn:textAnnotation>
+    <bpmn:association id="association_note" sourceRef="task_review" targetRef="note_review" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_events">
+      <bpmndi:BPMNShape id="task_review_di" bpmnElement="task_review"><dc:Bounds x="200" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_send_di" bpmnElement="task_send"><dc:Bounds x="400" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="sub_adhoc_di" bpmnElement="sub_adhoc" isExpanded="false"><dc:Bounds x="600" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_yes_di" bpmnElement="flow_yes"><di:waypoint x="300" y="140" /><di:waypoint x="400" y="140" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

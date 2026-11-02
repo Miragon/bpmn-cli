@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="G" />
+    <bpmn:exclusiveGateway id="G" default="SD" />
+    <bpmn:sequenceFlow id="SD" sourceRef="G" targetRef="EndD" />
+    <bpmn:endEvent id="EndD" />
+    <bpmn:sequenceFlow id="S0" sourceRef="G" targetRef="End0"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= x andy</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End0" />
+    <bpmn:sequenceFlow id="S1" sourceRef="G" targetRef="End1"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= x in [1..5]</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End1" />
+    <bpmn:sequenceFlow id="S2" sourceRef="G" targetRef="End2"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= x in (&gt; 1, &lt; 5)</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End2" />
+    <bpmn:sequenceFlow id="S3" sourceRef="G" targetRef="End3"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= {a: 1}.a = 1</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End3" />
+    <bpmn:sequenceFlow id="S4" sourceRef="G" targetRef="End4"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= string length(x) &gt; 2</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End4" />
+
+  </bpmn:process>
+</bpmn:definitions>

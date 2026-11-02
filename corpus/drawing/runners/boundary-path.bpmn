@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions_p" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="S">
+      <bpmn:outgoing>flow_sToApprove</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="A" name="Approve">
+      <bpmn:incoming>flow_sToApprove</bpmn:incoming>
+      <bpmn:outgoing>flow_approveToE</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="TB" name="2 days" attachedToRef="A">
+      <bpmn:outgoing>flow_from2DaysToRemind</bpmn:outgoing>
+      <bpmn:timerEventDefinition>
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:task id="R" name="Remind">
+      <bpmn:incoming>flow_from2DaysToRemind</bpmn:incoming>
+      <bpmn:outgoing>flow_remindToReminded</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="TE" name="Reminded">
+      <bpmn:incoming>flow_remindToReminded</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_remindToReminded" sourceRef="R" targetRef="TE" />
+    <bpmn:sequenceFlow id="flow_from2DaysToRemind" sourceRef="TB" targetRef="R" />
+    <bpmn:endEvent id="E">
+      <bpmn:incoming>flow_approveToE</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_approveToE" sourceRef="A" targetRef="E" />
+    <bpmn:sequenceFlow id="flow_sToApprove" sourceRef="S" targetRef="A" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_P">
+    <bpmndi:BPMNPlane id="BPMNPlane_P" bpmnElement="P">
+      <bpmndi:BPMNShape id="BPMNShape_S" bpmnElement="S">
+        <dc:Bounds x="93" y="128" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_A" bpmnElement="A">
+        <dc:Bounds x="189" y="106" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_TB" bpmnElement="TB">
+        <dc:Bounds x="246" y="168" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="286" y="188" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_R" bpmnElement="R">
+        <dc:Bounds x="349" y="265" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_TE" bpmnElement="TE">
+        <dc:Bounds x="509" y="287" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="493" y="329" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_E" bpmnElement="E">
+        <dc:Bounds x="381" y="128" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_remindToReminded" bpmnElement="flow_remindToReminded">
+        <di:waypoint x="449" y="305" />
+        <di:waypoint x="509" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_from2DaysToRemind" bpmnElement="flow_from2DaysToRemind">
+        <di:waypoint x="264" y="204" />
+        <di:waypoint x="264" y="305" />
+        <di:waypoint x="349" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_approveToE" bpmnElement="flow_approveToE">
+        <di:waypoint x="289" y="146" />
+        <di:waypoint x="381" y="146" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_sToApprove" bpmnElement="flow_sToApprove">
+        <di:waypoint x="129" y="146" />
+        <di:waypoint x="189" y="146" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

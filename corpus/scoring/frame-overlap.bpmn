@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool_first" processRef="process_first" />
+    <bpmn:participant id="pool_second" processRef="process_second" />
+    <bpmn:participant id="pool_apart" processRef="process_apart" />
+  </bpmn:collaboration>
+  <bpmn:process id="process_first">
+  </bpmn:process>
+  <bpmn:process id="process_second">
+  </bpmn:process>
+  <bpmn:process id="process_apart">
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_first_di" bpmnElement="pool_first" isHorizontal="true"><dc:Bounds x="100" y="100" width="500" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="pool_second_di" bpmnElement="pool_second" isHorizontal="true"><dc:Bounds x="100" y="250" width="500" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="pool_apart_di" bpmnElement="pool_apart" isHorizontal="true"><dc:Bounds x="100" y="500" width="500" height="200" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

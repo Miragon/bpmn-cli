@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_lines" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_lines" isExecutable="true">
+    <bpmn:task id="task_lines" name="Check&#10;the&#9;order" />
+    <bpmn:serviceTask id="task_topic" camunda:topic="first&#10;second" camunda:type="external" />
+  </bpmn:process>
+</bpmn:definitions>

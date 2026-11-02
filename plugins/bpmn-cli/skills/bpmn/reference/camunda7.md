@@ -9,7 +9,7 @@ right command in the hint (`E_WRONG_HOST`). The CLI reference is
 
 ## A new file
 
-`bpmn new <file> --name "..." --target camunda7` writes the `camunda:` and
+`bpmn new <file> "<name>" --target camunda7` writes the `camunda:` and
 `modeler:` namespaces, the platform (`Camunda Platform`, 7.24.0) and
 `camunda:historyTimeToLive="180"` - the engines refuse an executable process
 without a TTL. An existing file's platform is in the `platform:` line of
@@ -32,7 +32,7 @@ Nested elements without an id take the prefix of their slot:
 end / throw event), `loop.` (multi-instance: `loop.camunda:collection`,
 `loop.camunda:elementVariable`, `loop.camunda:asyncBefore`) and `condition.`
 (`condition.camunda:resource` for a script resource condition). All of them:
-`bpmn kinds --section nestedKeys`. Quote values with `${...}` in single quotes.
+`bpmn guide nested-keys`. Quote values with `${...}` in single quotes.
 
 ```bash
 bpmn set payment.bpmn userTask_informCustomer camunda:candidateGroups=support camunda:formKey=camunda-forms:deployment:inform-customer.form
@@ -50,12 +50,12 @@ Child types are filed into their container, created when missing
 a path reaches into nested containers.
 
 ```bash
-bpmn ext add payment.bpmn serviceTask_chargeCreditCard camunda:outputParameter name=transactionId --body '${transactionId}'
-bpmn ext add payment.bpmn serviceTask_chargeCreditCard camunda:failedJobRetryTimeCycle --body R3/PT5M
+bpmn ext add payment.bpmn serviceTask_chargeCreditCard camunda:outputParameter name=transactionId 'body=${transactionId}'
+bpmn ext add payment.bpmn serviceTask_chargeCreditCard camunda:failedJobRetryTimeCycle body=R3/PT5M
 bpmn ext add payment.bpmn userTask_informCustomer camunda:taskListener event=create 'expression=${task.setPriority(80)}'
 bpmn ext add payment.bpmn userTask_notifyParty camunda:formField id=notified type=boolean
 bpmn ext add payment.bpmn userTask_notifyParty 'camunda:formField[id=notified]/camunda:validation/camunda:constraint' name=required
-bpmn ext list payment.bpmn serviceTask_chargeCreditCard
+bpmn show payment.bpmn serviceTask_chargeCreditCard
 bpmn ext remove payment.bpmn serviceTask_chargeCreditCard 'camunda:outputParameter[name=transactionId]'
 ```
 
@@ -82,8 +82,8 @@ engines refuse (no TTL, a service task without implementation, an external
 task without topic, a multi-instance loop without collection or cardinality,
 two `camunda:inputOutput`, ...), other `W_C7_*` findings deploy but misbehave
 (misplaced or unknown attributes, Camunda 8 content, ...). Each finding's hint
-is the fixing command; every write reports the findings it introduced. The
-findings are warnings, so plain `validate` exits 0 - use `--strict` when the
+is the fixing command; a write reports the findings at the elements it touched.
+The findings are warnings, so plain `validate` exits 0 - use `--strict` when the
 model must be clean.
 
 A project that runs bpmnlint in CI (a `.bpmnlintrc` with

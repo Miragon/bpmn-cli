@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_speaking" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_speaking" isExecutable="true">
+    <bpmn:task id="task_Check" name="Check" />
+    <bpmn:task id="task_AfterCheck" />
+    <bpmn:exclusiveGateway id="gateway_AfterCheckJoin" />
+    <bpmn:exclusiveGateway id="gateway_AfterCheck" />
+    <bpmn:task id="Activity_0f3k9d2" />
+    <bpmn:task id="StartEvent_1" />
+    <bpmn:task id="task_Pay" name="Pay the bill" />
+    <bpmn:task id="task_Rechnung" name="Rechnung prüfen" />
+    <bpmn:sequenceFlow id="flow_0f3k9d2" sourceRef="task_Check" targetRef="task_Pay" />
+    <bpmn:startEvent id="timerStartEvent_Daily"><bpmn:timerEventDefinition id="timer_daily"><bpmn:timeCycle>R/P1D</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:task id="Activity_1x2y3z4" name="Pay bill" />
+    <bpmn:exclusiveGateway id="Gateway_0a1b2c3" />
+    <bpmn:intermediateCatchEvent id="Event_0a1b2c3"><bpmn:timerEventDefinition id="timer_wait"><bpmn:timeDuration>PT1M</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>
+    <bpmn:association id="Association_0a1b2c3" sourceRef="task_Check" targetRef="note_Hint" />
+    <bpmn:textAnnotation id="note_Hint"><bpmn:text>Ask the customer</bpmn:text></bpmn:textAnnotation>
+    <bpmn:textAnnotation id="Annotation_0f3k9d2"><bpmn:text>Ask the customer</bpmn:text></bpmn:textAnnotation>
+    <bpmn:textAnnotation id="TextAnnotation_1a2b3c4" />
+  </bpmn:process>
+</bpmn:definitions>

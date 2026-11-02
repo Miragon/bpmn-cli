@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:message id="M" name="Pay" /><bpmn:signal id="Sig" name="Go" />
+  <bpmn:process id="P_Integration" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start" /><bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="G" /><bpmn:eventBasedGateway id="G" />
+<bpmn:sequenceFlow id="F2" sourceRef="G" targetRef="W" /><bpmn:intermediateCatchEvent id="W"><bpmn:linkEventDefinition id="LDef" name="L" /><bpmn:conditionalEventDefinition id="CDef"><bpmn:condition xsi:type="bpmn:tFormalExpression">${false}</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent><bpmn:sequenceFlow id="F3" sourceRef="W" targetRef="End" /><bpmn:endEvent id="End" />
+<bpmn:sequenceFlow id="F4" sourceRef="G" targetRef="T2" /><bpmn:intermediateCatchEvent id="T2"><bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent><bpmn:sequenceFlow id="F5" sourceRef="T2" targetRef="End2" /><bpmn:endEvent id="End2" />
+  </bpmn:process>
+</bpmn:definitions>

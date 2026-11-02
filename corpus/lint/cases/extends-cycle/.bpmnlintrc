@@ -1,0 +1,6 @@
+{
+  "extends": [
+    "plugin:loop/first",
+    "plugin:loop/deep0"
+  ]
+}

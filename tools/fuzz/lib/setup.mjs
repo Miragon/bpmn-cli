@@ -1,63 +1,56 @@
-/**
- * Wiring of the fuzz tools to this repository: paths, the measuring library,
- * executors, corpus discovery and argument parsing.
- *
- * Contract
- *  - ROOT is the repository; DEFAULT_BIN its built CLI (bin/bpmn.js), which
- *    env BPMN_BIN overrides.
- *  - `loadMetrics()` imports dist/index.js (always this repo's build,
- *    whatever CLI is fuzzed) -> { measure, diff, hard, keys }.
- *  - `loadRender()` imports dist/node.js -> { draw(xml), maxSize }:
- *    the PNG of `bpmn render --problems --tiles` (the walk's render oracle).
- *  - `makeExecutor({ exec, via, workDir, bin })`: exec 'cli' (default, in
- *    CLI_ENV) or 'lib' (dist/index.js in-process).
- *  - `CLI_ENV`: the environment the tools run the CLI in (also the benchmark,
- *    tools/layout-regress.mjs and the demo).
- *  - `corpusFiles(dirs, filter)`: every *.bpmn below the given directories,
- *    sorted, de-duplicated. `defaultCorpus()`: test/fixtures and tools/scenarios
- *    plus the directories in env BPMN_FUZZ_CORPUS (colon-separated; private
- *    corpora stay outside the repository).
- *  - `parseArgs(argv, spec)`: `--name value` / `--flag` / `--no-flag` options;
- *    spec maps names to defaults (boolean defaults make flags).
- * Throws a readable error when dist/ is missing (run `npm run build`).
- */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { loadHardKinds, loadMainApi } from '../../oracle/lib/main-tools.mjs';
+import { ensureMainBuilt } from '../../oracle/lib/main-build.mjs';
 import { cliExecutor, libExecutor } from './exec.mjs';
-import { hardKinds, newKinds } from './metric-kinds.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 export const DEFAULT_BIN = join(ROOT, 'bin', 'bpmn.js');
-export const CLI_ENV = process.env;
-const DIST = join(ROOT, 'dist');
+const LIBRARY = join(ROOT, 'dist', 'index.js');
 
-async function importDist(rel) {
-  const file = join(DIST, rel);
-  if (!existsSync(file)) {
-    throw new Error(`${file} is missing: run \`npm run build\` first`);
+export async function loadLibrary() {
+  if (!existsSync(LIBRARY)) {
+    throw new Error(`${LIBRARY} is missing: run \`npm run build\` first`);
   }
-  return import(pathToFileURL(file).href);
+  return import(pathToFileURL(LIBRARY).href);
 }
 
 export async function loadMetrics() {
-  const api = await importDist('index.js');
-  const lib = { KEYS: api.METRIC_KEYS, WEIGHTS: api.METRIC_WEIGHTS };
-  return { measure: api.layoutProblemsOfXml, diff: api.diffProblems, hard: hardKinds(lib), keys: [...lib.KEYS], newKinds: newKinds(lib) };
+  ensureMainBuilt();
+  const [main, hard] = await Promise.all([loadMainApi(), loadHardKinds()]);
+  return { measure: main.layoutProblemsOfXml, diff: main.diffProblems, hard: [...hard], keys: [...main.METRIC_KEYS], weights: { ...main.METRIC_WEIGHTS } };
 }
 
-export async function loadRender() {
-  const lib = await importDist('node.js');
-  const core = await importDist('index.js');
-  return { draw: (xml) => lib.renderPng(xml, { problems: true, tiles: true }), maxSize: core.RENDER_MAX_SIZE };
+function renderingCli(bin, workDir) {
+  mkdirSync(workDir, { recursive: true });
+  const [file, png] = [join(workDir, 'rendered.bpmn'), join(workDir, 'rendered.png')];
+  return {
+    draw(xml) {
+      writeFileSync(file, xml);
+      const { status, stdout, stderr } = spawnSync(process.execPath, [bin, 'render', file, '-o', png, '--problems', '--json'], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+      if (status !== 0) {
+        throw new Error(`exit ${status}: ${stderr || stdout}`);
+      }
+      return JSON.parse(stdout);
+    },
+  };
+}
+
+export async function loadRender({ exec = 'cli', workDir, bin }) {
+  if (exec === 'cli') {
+    return renderingCli(bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir);
+  }
+  const { renderXml } = await loadLibrary();
+  return { draw: (xml) => renderXml(xml, { problems: true }) };
 }
 
 export async function makeExecutor({ exec = 'cli', via = 'commands', workDir, bin }) {
   if (exec === 'lib') {
-    const api = await importDist('index.js');
-    return libExecutor({ Doc: api.Doc, parseOps: api.parseOps, mutateDoc: api.mutateDoc, BpmnError: api.BpmnError }, { label: 'lib:dist' });
+    return libExecutor(await loadLibrary(), { label: 'lib:dist' });
   }
-  return cliExecutor({ bin: bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir, via, env: CLI_ENV });
+  return cliExecutor({ bin: bin ?? process.env.BPMN_BIN ?? DEFAULT_BIN, workDir, via });
 }
 
 function walkDir(dir, out) {
@@ -74,7 +67,9 @@ function walkDir(dir, out) {
 export function corpusFiles(dirs, filter) {
   const out = [];
   for (const dir of dirs) {
-    if (!existsSync(dir)) throw new Error(`corpus directory ${dir} does not exist`);
+    if (!existsSync(dir)) {
+      throw new Error(`corpus directory ${dir} does not exist`);
+    }
     if (statSync(dir).isDirectory()) {
       walkDir(resolve(dir), out);
     } else {
@@ -87,7 +82,7 @@ export function corpusFiles(dirs, filter) {
 export const envDirs = (name) => (process.env[name] ?? '').split(':').map((entry) => entry.trim()).filter(Boolean);
 
 export function defaultCorpus() {
-  return [join(ROOT, 'test', 'fixtures'), join(ROOT, 'tools', 'scenarios'), ...envDirs('BPMN_FUZZ_CORPUS')];
+  return [join(ROOT, 'corpus', 'models'), join(ROOT, 'corpus', 'layout'), ...envDirs('BPMN_FUZZ_CORPUS')];
 }
 
 export function parseArgs(argv, spec) {

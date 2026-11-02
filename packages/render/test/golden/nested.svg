@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1016" height="600" viewBox="80 60 1016 600" font-family="Arial, Arimo, sans-serif">
+<rect x="80" y="60" width="1016" height="600" fill="#ffffff"/>
+<g data-id="OUT"><rect x="180" y="80" width="640" height="420" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="500" y="97.8">Outer</tspan></text></g>
+<g data-id="IN"><rect x="280" y="110" width="300" height="160" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="430" y="127.8">Inner</tspan></text></g>
+<g data-id="S"><circle cx="118" cy="290" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="OS"><circle cx="228" cy="190" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="IS"><circle cx="318" cy="190" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="I1"><rect x="370" y="150" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="420" y="193.6">Inner task</tspan></text></g>
+<g data-id="IE"><circle cx="528" cy="190" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="RIGHT"><rect x="640" y="150" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="690" y="193.6">Right</tspan></text></g>
+<g data-id="OE"><circle cx="788" cy="190" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="LOW"><rect x="400" y="330" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="450" y="373.6">Low</tspan></text></g>
+<g data-id="AFTER"><rect x="880" y="300" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="930" y="343.6">After</tspan></text></g>
+<g data-id="E"><circle cx="1058" cy="340" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="BELOW"><rect x="650" y="560" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="700" y="603.6">Below</tspan></text></g>
+<g data-id="F1"><path d="M136 290L180 290" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M169 294L180 290L169 286Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F2"><path d="M820 340L880 340" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M869 344L880 340L869 336Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F3"><path d="M980 340L1040 340" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M1029 344L1040 340L1029 336Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="G1"><path d="M246 190L280 190" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M269 194L280 190L269 186Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="G2"><path d="M580 190L640 190" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M629 194L640 190L629 186Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="G3"><path d="M740 190L770 190" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M759 194L770 190L759 186Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="H1"><path d="M336 190L370 190" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M359 194L370 190L359 186Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="H2"><path d="M470 190L510 190" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M499 194L510 190L499 186Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+</svg>

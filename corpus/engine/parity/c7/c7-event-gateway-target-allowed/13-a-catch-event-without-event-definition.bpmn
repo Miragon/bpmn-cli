@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+    modeler:executionPlatform="Camunda Platform"
+    modeler:executionPlatformVersion="7.24.0"
+    
+    id="definitions_test" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process_test" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+      <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="G" />
+      <bpmn:eventBasedGateway id="G" />
+      <bpmn:sequenceFlow id="G0" sourceRef="G" targetRef="T0" />
+      <bpmn:intermediateCatchEvent id="T0"><bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition></bpmn:intermediateCatchEvent>
+      <bpmn:sequenceFlow id="E0" sourceRef="T0" targetRef="End0" />
+      <bpmn:endEvent id="End0" />
+<bpmn:sequenceFlow id="G1" sourceRef="G" targetRef="T1" />
+      <bpmn:intermediateCatchEvent id="T1"></bpmn:intermediateCatchEvent>
+      <bpmn:sequenceFlow id="E1" sourceRef="T1" targetRef="End1" />
+      <bpmn:endEvent id="End1" />
+  </bpmn:process>
+  <bpmn:message id="M1" name="M1" /><bpmn:message id="M1b" name="M1" /><bpmn:message id="M2" name="M2" /><bpmn:signal id="S1" name="Go" /><bpmn:signal id="S1b" name="Go" />
+</bpmn:definitions>

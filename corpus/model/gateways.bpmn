@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_gateways" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_gateways" isExecutable="true">
+    <bpmn:startEvent id="start_gw">
+      <bpmn:outgoing>flow_to_fork</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:parallelGateway id="gateway_fork" name="Fork">
+      <bpmn:incoming>flow_to_fork</bpmn:incoming>
+      <bpmn:outgoing>flow_to_wait</bpmn:outgoing>
+      <bpmn:outgoing>flow_to_other</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:eventBasedGateway id="gateway_wait">
+      <bpmn:incoming>flow_to_wait</bpmn:incoming>
+      <bpmn:outgoing>flow_to_message</bpmn:outgoing>
+      <bpmn:outgoing>flow_to_timer</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="catch_message" name="Reply">
+      <bpmn:incoming>flow_to_message</bpmn:incoming>
+      <bpmn:messageEventDefinition id="message_reply" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_timer" name="Timeout">
+      <bpmn:incoming>flow_to_timer</bpmn:incoming>
+      <bpmn:timerEventDefinition id="timer_timeout"><bpmn:timeDuration>PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="task_other" name="Other">
+      <bpmn:incoming>flow_to_other</bpmn:incoming>
+      <bpmn:dataInputAssociation id="association_input">
+        <bpmn:sourceRef>data_order</bpmn:sourceRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:task>
+    <bpmn:inclusiveGateway id="gateway_any" />
+    <bpmn:complexGateway id="gateway_complex" />
+    <bpmn:dataObject id="DataObject_order" />
+    <bpmn:dataObjectReference id="data_order" dataObjectRef="DataObject_order" />
+    <bpmn:sequenceFlow id="flow_to_fork" sourceRef="start_gw" targetRef="gateway_fork" />
+    <bpmn:sequenceFlow id="flow_to_wait" sourceRef="gateway_fork" targetRef="gateway_wait" />
+    <bpmn:sequenceFlow id="flow_to_other" sourceRef="gateway_fork" targetRef="task_other" />
+    <bpmn:sequenceFlow id="flow_to_message" sourceRef="gateway_wait" targetRef="catch_message" />
+    <bpmn:sequenceFlow id="flow_to_timer" sourceRef="gateway_wait" targetRef="catch_timer" />
+  </bpmn:process>
+</bpmn:definitions>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_bare" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_bare" isExecutable="false">
+    <bpmn:businessRuleTask id="task_linked" calledDecision="first" />
+    <bpmn:businessRuleTask id="task_new" />
+  </bpmn:process>
+</bpmn:definitions>

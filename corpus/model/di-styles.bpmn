@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_styles" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_styles" isExecutable="true">
+    <bpmn:task id="task_a" name="A" />
+    <bpmn:task id="task_b" name="B" />
+    <bpmn:task id="task_c" name="C" />
+    <bpmn:sequenceFlow id="flow_ab" sourceRef="task_a" targetRef="task_b" />
+    <bpmn:sequenceFlow id="flow_bc" sourceRef="task_b" targetRef="task_c" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_styles">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_styles" bpmnElement="Process_styles">
+      <bpmndi:BPMNShape id="BPMNShape_task_a" bpmnElement="task_a"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_task_b" bpmnElement="task_b"><dc:Bounds x="300" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_task_c" bpmnElement="task_c"><dc:Bounds x="500" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="line_ab" bpmnElement="flow_ab"><di:waypoint x="200" y="140" /><di:waypoint x="300" y="140" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="line_bc" bpmnElement="flow_bc"><di:waypoint x="400" y="140" /><di:waypoint x="500" y="140" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

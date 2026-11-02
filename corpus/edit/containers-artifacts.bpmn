@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:acme="http://acme.test/schema" id="Definitions_artifacts" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:dataStore id="DataStore_archive" name="Archive" />
+  <bpmn:dataStore id="DataStore_ledger" name="Ledger" />
+  <bpmn:category id="Category_review">
+    <bpmn:categoryValue id="CategoryValue_review" value="Review" />
+    <bpmn:categoryValue id="CategoryValue_shared" value="Shared" />
+  </bpmn:category>
+  <bpmn:process id="Process_main" isExecutable="true">
+    <bpmn:extensionElements>
+      <acme:outer>
+        <acme:inner />
+      </acme:outer>
+    </bpmn:extensionElements>
+    <bpmn:startEvent id="start_main">
+      <bpmn:outgoing>flow_startToWrite</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="write" name="Write" default="flow_writeToRead">
+      <bpmn:incoming>flow_startToWrite</bpmn:incoming>
+      <bpmn:outgoing>flow_writeToRead</bpmn:outgoing>
+      <bpmn:outgoing>flow_writeToCall</bpmn:outgoing>
+      <bpmn:property id="property_input" name="input" />
+      <bpmn:property id="property_kept" name="kept" />
+      <bpmn:dataInputAssociation id="input_note">
+        <bpmn:sourceRef>ref_note</bpmn:sourceRef>
+        <bpmn:targetRef>property_input</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataOutputAssociation id="output_archive">
+        <bpmn:targetRef>ref_archive</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="compensate_write" attachedToRef="write">
+      <bpmn:compensateEventDefinition id="compensateDefinition_write" />
+    </bpmn:boundaryEvent>
+    <bpmn:task id="undo_write" name="Undo write" isForCompensation="true" />
+    <bpmn:task id="read" name="Read">
+      <bpmn:incoming>flow_writeToRead</bpmn:incoming>
+      <bpmn:outgoing>flow_readToEnd</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:callActivity id="call_helper" name="Call helper" calledElement="Process_helper">
+      <bpmn:incoming>flow_writeToCall</bpmn:incoming>
+      <bpmn:outgoing>flow_callToEnd</bpmn:outgoing>
+    </bpmn:callActivity>
+    <bpmn:endEvent id="end_main">
+      <bpmn:incoming>flow_readToEnd</bpmn:incoming>
+      <bpmn:incoming>flow_callToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="sub_notes" name="Notes">
+      <bpmn:subProcess id="sub_inner" name="Inner">
+        <bpmn:task id="inner_one" name="One" />
+        <bpmn:task id="inner_two" name="Two" />
+      </bpmn:subProcess>
+      <bpmn:task id="notes_task" name="Note it" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="sub_onError" name="On error" triggeredByEvent="true">
+      <bpmn:startEvent id="start_onError" isInterrupting="false">
+        <bpmn:errorEventDefinition id="errorDefinition_onError" />
+      </bpmn:startEvent>
+    </bpmn:subProcess>
+    <bpmn:task id="twin_source" name="Twin source">
+      <bpmn:outgoing>flow_twinOne</bpmn:outgoing>
+      <bpmn:outgoing>flow_twinTwo</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="twin_target" name="Twin target">
+      <bpmn:incoming>flow_twinOne</bpmn:incoming>
+      <bpmn:incoming>flow_twinTwo</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:dataObject id="DataObject_note" />
+    <bpmn:dataObjectReference id="ref_note" name="Note" dataObjectRef="DataObject_note" />
+    <bpmn:dataObjectReference id="ref_noteCopy" name="Note copy" dataObjectRef="DataObject_note" />
+    <bpmn:dataObject id="DataObject_single" />
+    <bpmn:dataObjectReference id="ref_single" name="Single" dataObjectRef="DataObject_single" />
+    <bpmn:dataStoreReference id="ref_archive" name="Archive" dataStoreRef="DataStore_archive" />
+    <bpmn:dataStoreReference id="ref_ledger" name="Ledger" dataStoreRef="DataStore_ledger" />
+    <bpmn:sequenceFlow id="flow_startToWrite" sourceRef="start_main" targetRef="write" />
+    <bpmn:sequenceFlow id="flow_writeToRead" sourceRef="write" targetRef="read" />
+    <bpmn:sequenceFlow id="flow_writeToCall" sourceRef="write" targetRef="call_helper" />
+    <bpmn:sequenceFlow id="flow_readToEnd" sourceRef="read" targetRef="end_main" />
+    <bpmn:sequenceFlow id="flow_callToEnd" sourceRef="call_helper" targetRef="end_main" />
+    <bpmn:sequenceFlow id="flow_twinOne" sourceRef="twin_source" targetRef="twin_target" />
+    <bpmn:sequenceFlow id="flow_twinTwo" sourceRef="twin_source" targetRef="twin_target" />
+    <bpmn:association id="association_compensate" associationDirection="One" sourceRef="compensate_write" targetRef="undo_write" />
+    <bpmn:association id="association_note" sourceRef="note_write" targetRef="read" />
+    <bpmn:textAnnotation id="note_write">
+      <bpmn:text>Write twice</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:group id="group_review" categoryValueRef="CategoryValue_review" />
+    <bpmn:group id="group_sharedOne" categoryValueRef="CategoryValue_shared" />
+    <bpmn:group id="group_sharedTwo" categoryValueRef="CategoryValue_shared" />
+    <bpmn:group id="group_bare" />
+  </bpmn:process>
+  <bpmn:process id="Process_helper" isExecutable="false">
+    <bpmn:task id="helper_task" name="Help" />
+  </bpmn:process>
+</bpmn:definitions>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_nested" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_order" name="Order" />
+  <bpmn:process id="Process_nested" isExecutable="true">
+    <bpmn:intermediateThrowEvent id="throw_none" />
+    <bpmn:startEvent id="start_plain" />
+    <bpmn:intermediateCatchEvent id="catch_timers">
+      <bpmn:timerEventDefinition id="timer_first"><bpmn:timeDuration>PT1M</bpmn:timeDuration></bpmn:timerEventDefinition>
+      <bpmn:timerEventDefinition><bpmn:timeDuration>PT2M</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="end_mixed">
+      <bpmn:messageEventDefinition id="message_mixed" />
+      <bpmn:signalEventDefinition id="signal_mixed" />
+    </bpmn:endEvent>
+    <bpmn:intermediateCatchEvent id="catch_message">
+      <bpmn:messageEventDefinition messageRef="Message_order" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="throw_link">
+      <bpmn:linkEventDefinition id="link_out" name="ToEnd" flavour="stray" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:intermediateCatchEvent id="catch_conditional">
+      <bpmn:conditionalEventDefinition id="conditional_empty" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_script">
+      <bpmn:conditionalEventDefinition id="conditional_script">
+        <bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://ready.groovy" />
+      </bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_inline">
+      <bpmn:conditionalEventDefinition id="conditional_inline">
+        <bpmn:condition xsi:type="bpmn:tFormalExpression">${ready}</bpmn:condition>
+      </bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="throw_compensate">
+      <bpmn:compensateEventDefinition id="compensate_outer" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:task id="task_outer" />
+    <bpmn:userTask id="task_user" />
+    <bpmn:task id="task_multi">
+      <bpmn:multiInstanceLoopCharacteristics />
+    </bpmn:task>
+    <bpmn:task id="task_standard">
+      <bpmn:standardLoopCharacteristics />
+    </bpmn:task>
+    <bpmn:subProcess id="sub_inner">
+      <bpmn:task id="task_inner" />
+      <bpmn:subProcess id="sub_nested" />
+      <bpmn:intermediateThrowEvent id="throw_inner">
+        <bpmn:compensateEventDefinition id="compensate_inner" />
+      </bpmn:intermediateThrowEvent>
+      <bpmn:subProcess id="sub_events" triggeredByEvent="true">
+        <bpmn:task id="task_event_sub" />
+        <bpmn:intermediateThrowEvent id="throw_event_sub">
+          <bpmn:compensateEventDefinition id="compensate_event_sub" />
+        </bpmn:intermediateThrowEvent>
+      </bpmn:subProcess>
+    </bpmn:subProcess>
+    <bpmn:subProcess id="sub_noActivities">
+      <bpmn:intermediateThrowEvent id="throw_alone">
+        <bpmn:compensateEventDefinition id="compensate_alone" />
+      </bpmn:intermediateThrowEvent>
+    </bpmn:subProcess>
+    <bpmn:exclusiveGateway id="gateway_split" default="flow_default" />
+    <bpmn:sequenceFlow id="flow_default" sourceRef="gateway_split" targetRef="task_outer" />
+    <bpmn:sequenceFlow id="flow_plain" sourceRef="gateway_split" targetRef="task_user" />
+    <bpmn:sequenceFlow id="flow_juel" sourceRef="gateway_split" targetRef="task_multi">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_script" sourceRef="gateway_split" targetRef="task_standard">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="deployment://check.groovy" />
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_both" sourceRef="gateway_split" targetRef="sub_inner">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" camunda:resource="deployment://check.groovy">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+</bpmn:definitions>

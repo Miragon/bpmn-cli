@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_ExpenseClaim" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.31.0">
+  <bpmn:process id="Process_ExpenseClaim" name="Expense claim" isExecutable="false">
+    <bpmn:startEvent id="Event_ClaimSubmitted" name="Fz0 check">
+      <bpmn:outgoing>Flow_ClaimSubmittedToCheckClaim</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Activity_ApproveClaim" name="Approve claim">
+      <bpmn:incoming>flow_fz1DocumentToApproveClaim</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApproveClaimToPayClaim</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Activity_PayClaim" name="Pay claim">
+      <bpmn:incoming>Flow_ApproveClaimToPayClaim</bpmn:incoming>
+      <bpmn:outgoing>Flow_PayClaimToClaimPaid</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="Event_ClaimPaid" name="Claim paid">
+      <bpmn:incoming>Flow_PayClaimToClaimPaid</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ClaimSubmittedToCheckClaim" sourceRef="Event_ClaimSubmitted" targetRef="Activity_CheckClaim" />
+    <bpmn:userTask id="Activity_CheckClaim" name="Check claim">
+      <bpmn:incoming>Flow_ClaimSubmittedToCheckClaim</bpmn:incoming>
+      <bpmn:outgoing>flow_checkClaimToFz4EscalateInvoiceEscalateNotifyShip</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_checkClaimToFz4EscalateInvoiceEscalateNotifyShip" sourceRef="Activity_CheckClaim" targetRef="task_fz4EscalateInvoiceEscalateNotifyShip" />
+    <bpmn:task id="task_fz4EscalateInvoiceEscalateNotifyShip" name="Fz4 escalate invoice escalate notify ship and check document">
+      <bpmn:incoming>flow_checkClaimToFz4EscalateInvoiceEscalateNotifyShip</bpmn:incoming>
+      <bpmn:outgoing>flow_fz4EscalateInvoiceEscalateNotifyShipToFz2Approve</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow_fz4EscalateInvoiceEscalateNotifyShipToFz2Approve" sourceRef="task_fz4EscalateInvoiceEscalateNotifyShip" targetRef="businessRuleTask_fz2Approve" />
+    <bpmn:businessRuleTask id="businessRuleTask_fz2Approve" name="Fz2 approve">
+      <bpmn:incoming>flow_fz4EscalateInvoiceEscalateNotifyShipToFz2Approve</bpmn:incoming>
+      <bpmn:outgoing>flow_fz2ApproveToFz1Document</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:sequenceFlow id="flow_fz2ApproveToFz1Document" sourceRef="businessRuleTask_fz2Approve" targetRef="userTask_fz1Document" />
+    <bpmn:userTask id="userTask_fz1Document" name="Fz1 document">
+      <bpmn:incoming>flow_fz2ApproveToFz1Document</bpmn:incoming>
+      <bpmn:outgoing>flow_fz1DocumentToApproveClaim</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="flow_fz1DocumentToApproveClaim" sourceRef="userTask_fz1Document" targetRef="Activity_ApproveClaim" />
+    <bpmn:sequenceFlow id="Flow_ApproveClaimToPayClaim" sourceRef="Activity_ApproveClaim" targetRef="Activity_PayClaim" />
+    <bpmn:sequenceFlow id="Flow_PayClaimToClaimPaid" sourceRef="Activity_PayClaim" targetRef="Event_ClaimPaid" />
+    <bpmn:textAnnotation id="TextAnnotation_CheckedByFinance">
+      <bpmn:text>Checked by finance</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_CheckClaimNote" associationDirection="None" sourceRef="Activity_CheckClaim" targetRef="TextAnnotation_CheckedByFinance" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_ExpenseClaim">
+    <bpmndi:BPMNPlane id="BPMNPlane_ExpenseClaim" bpmnElement="Process_ExpenseClaim">
+      <bpmndi:BPMNShape id="Event_ClaimSubmitted_di" bpmnElement="Event_ClaimSubmitted">
+        <dc:Bounds x="102" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="83" y="62" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CheckClaim_di" bpmnElement="Activity_CheckClaim">
+        <dc:Bounds x="198" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ApproveClaim_di" bpmnElement="Activity_ApproveClaim">
+        <dc:Bounds x="829" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_PayClaim_di" bpmnElement="Activity_PayClaim">
+        <dc:Bounds x="989" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_ClaimPaid_di" bpmnElement="Event_ClaimPaid">
+        <dc:Bounds x="1151" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1143" y="125" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TextAnnotation_CheckedByFinance_di" bpmnElement="TextAnnotation_CheckedByFinance">
+        <dc:Bounds x="991" y="325" width="120" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ClaimSubmittedToCheckClaim_di" bpmnElement="Flow_ClaimSubmittedToCheckClaim">
+        <di:waypoint x="138" y="100" />
+        <di:waypoint x="198" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ApproveClaimToPayClaim_di" bpmnElement="Flow_ApproveClaimToPayClaim">
+        <di:waypoint x="929" y="100" />
+        <di:waypoint x="989" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_PayClaimToClaimPaid_di" bpmnElement="Flow_PayClaimToClaimPaid">
+        <di:waypoint x="1089" y="100" />
+        <di:waypoint x="1151" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_CheckClaimNote_di" bpmnElement="Association_CheckClaimNote">
+        <di:waypoint x="248" y="140" />
+        <di:waypoint x="248" y="340" />
+        <di:waypoint x="991" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="userTask_fz1Document_di" bpmnElement="userTask_fz1Document">
+        <dc:Bounds x="678" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_fz1DocumentToApproveClaim_di" bpmnElement="flow_fz1DocumentToApproveClaim">
+        <di:waypoint x="778" y="100" />
+        <di:waypoint x="829" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="businessRuleTask_fz2Approve_di" bpmnElement="businessRuleTask_fz2Approve">
+        <dc:Bounds x="518" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_fz2ApproveToFz1Document_di" bpmnElement="flow_fz2ApproveToFz1Document">
+        <di:waypoint x="618" y="100" />
+        <di:waypoint x="678" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="task_fz4EscalateInvoiceEscalateNotifyShip_di" bpmnElement="task_fz4EscalateInvoiceEscalateNotifyShip">
+        <dc:Bounds x="358" y="60" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_fz4EscalateInvoiceEscalateNotifyShipToFz2Approve_di" bpmnElement="flow_fz4EscalateInvoiceEscalateNotifyShipToFz2Approve">
+        <di:waypoint x="458" y="100" />
+        <di:waypoint x="518" y="100" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_checkClaimToFz4EscalateInvoiceEscalateNotifyShip_di" bpmnElement="flow_checkClaimToFz4EscalateInvoiceEscalateNotifyShip">
+        <di:waypoint x="298" y="100" />
+        <di:waypoint x="358" y="100" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

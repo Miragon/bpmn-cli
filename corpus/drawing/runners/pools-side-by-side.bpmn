@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1"><bpmn:task id="A" name="A" /><bpmn:task id="B" name="B" /></bpmn:process>
+  <bpmn:process id="Process_2"><bpmn:task id="X" name="X" /></bpmn:process>
+  <bpmn:collaboration id="Collab"><bpmn:participant id="Left" processRef="Process_1" /><bpmn:participant id="Right" processRef="Process_2" /><bpmn:participant id="Below" /></bpmn:collaboration>
+  <bpmndi:BPMNDiagram id="D">
+    <bpmndi:BPMNPlane id="Plane" bpmnElement="Collab">
+      <bpmndi:BPMNShape id="Left_di" bpmnElement="Left" isHorizontal="true"><dc:Bounds x="0" y="0" width="400" height="500" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_di" bpmnElement="A"><dc:Bounds x="60" y="40" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B_di" bpmnElement="B"><dc:Bounds x="220" y="40" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Right_di" bpmnElement="Right" isHorizontal="true"><dc:Bounds x="420" y="0" width="300" height="500" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="X_di" bpmnElement="X"><dc:Bounds x="480" y="400" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Below_di" bpmnElement="Below" isHorizontal="true"><dc:Bounds x="0" y="540" width="720" height="60" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

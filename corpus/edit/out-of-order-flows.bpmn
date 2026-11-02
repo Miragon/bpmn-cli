@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_order" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_order" isExecutable="true">
+    <bpmn:sequenceFlow id="flow_toB" sourceRef="gateway" targetRef="taskB" />
+    <bpmn:sequenceFlow id="flow_toA" sourceRef="gateway" targetRef="taskA" />
+    <bpmn:exclusiveGateway id="gateway"><bpmn:outgoing>flow_toA</bpmn:outgoing><bpmn:outgoing>flow_toB</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:task id="taskA"><bpmn:incoming>flow_toA</bpmn:incoming></bpmn:task>
+    <bpmn:task id="taskB"><bpmn:incoming>flow_toB</bpmn:incoming></bpmn:task>
+  </bpmn:process>
+</bpmn:definitions>

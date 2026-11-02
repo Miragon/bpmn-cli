@@ -1,0 +1,12 @@
+{
+  "extends": [
+    "bpmnlint:recommended",
+    "plugin:@miragon/rules/recommended-for-automation",
+    "plugin:local/recommended"
+  ],
+  "rules": {
+    "local/flags-process": "error",
+    "camunda-compat/nope": "error",
+    "@miragon/rules/nope": "warn"
+  }
+}

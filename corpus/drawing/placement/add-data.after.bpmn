@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_S10" name="s10" isExecutable="true">
+    <bpmn:startEvent id="Event_Start" name="Start">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Activity_CollectData" name="Collect data">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Activity_Analyse" name="Analyse">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+      <bpmn:property id="property_analyse" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="association_fzd6ToAnalyse">
+        <bpmn:sourceRef>DataObjectReference_Fzd6</bpmn:sourceRef>
+        <bpmn:targetRef>property_analyse</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:task>
+    <bpmn:task id="Activity_Report" name="Report">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_Sufficient" name="Sufficient?">
+      <bpmn:incoming>flow_fz1ShipNotifyPaymentOrderApproveAndShipToSufficient</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="Event_End" name="End">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_5" name="yes" sourceRef="Gateway_Sufficient" targetRef="Event_End" />
+    <bpmn:sequenceFlow id="Flow_6" name="no, collect more" sourceRef="Gateway_Sufficient" targetRef="Activity_CollectData" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Report" targetRef="serviceTask_fz1ShipNotifyPaymentOrderApproveAndShip" />
+    <bpmn:serviceTask id="serviceTask_fz1ShipNotifyPaymentOrderApproveAndShip" name="Fz1 ship notify payment order approve and ship escalate">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>flow_fz1ShipNotifyPaymentOrderApproveAndShipToSufficient</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="flow_fz1ShipNotifyPaymentOrderApproveAndShipToSufficient" sourceRef="serviceTask_fz1ShipNotifyPaymentOrderApproveAndShip" targetRef="Gateway_Sufficient" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Analyse" targetRef="Activity_Report" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_CollectData" targetRef="Activity_Analyse" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Event_Start" targetRef="Activity_CollectData" />
+    <bpmn:dataStoreReference id="DataObjectReference_Fzd6" name="Fzd6" dataStoreRef="dataStoreItem_fzd6" />
+  </bpmn:process>
+  <bpmn:dataStore id="dataStoreItem_fzd6" name="Fzd6" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_S10">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_S10" bpmnElement="Process_S10">
+      <bpmndi:BPMNShape id="BPMNShape_Event_Start" bpmnElement="Event_Start" bioc:stroke="#831311" bioc:fill="#ffcdd2" color:background-color="#ffcdd2" color:border-color="#831311">
+        <dc:Bounds x="80" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel color:color="#831311">
+          <dc:Bounds x="79" y="144" width="39" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_CollectData" bpmnElement="Activity_CollectData">
+        <dc:Bounds x="176" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Analyse" bpmnElement="Activity_Analyse">
+        <dc:Bounds x="336" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Activity_Report" bpmnElement="Activity_Report">
+        <dc:Bounds x="552" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Gateway_Sufficient" bpmnElement="Gateway_Sufficient" isMarkerVisible="true">
+        <dc:Bounds x="816" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="872" y="113" width="89" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_Event_End" bpmnElement="Event_End" bioc:stroke="#831311" bioc:fill="#ffcdd2" color:background-color="#ffcdd2" color:border-color="#831311">
+        <dc:Bounds x="496" y="102" width="36" height="36" />
+        <bpmndi:BPMNLabel color:color="#831311">
+          <dc:Bounds x="502" y="144" width="25" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_5" bpmnElement="Flow_5">
+        <di:waypoint x="841" y="95" />
+        <di:waypoint x="841" y="65" />
+        <di:waypoint x="514" y="65" />
+        <di:waypoint x="514" y="102" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="522" y="47" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_6" bpmnElement="Flow_6">
+        <di:waypoint x="841" y="145" />
+        <di:waypoint x="841" y="330" />
+        <di:waypoint x="226" y="330" />
+        <di:waypoint x="226" y="160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="583" y="298" width="90" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_4" bpmnElement="Flow_4" bioc:stroke="#831311" color:border-color="#831311">
+        <di:waypoint x="652" y="120" />
+        <di:waypoint x="672" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_3" bpmnElement="Flow_3">
+        <di:waypoint x="386" y="160" />
+        <di:waypoint x="386" y="315" />
+        <di:waypoint x="537" y="315" />
+        <di:waypoint x="537" y="120" />
+        <di:waypoint x="552" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_2" bpmnElement="Flow_2">
+        <di:waypoint x="276" y="120" />
+        <di:waypoint x="336" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_Flow_1" bpmnElement="Flow_1">
+        <di:waypoint x="116" y="120" />
+        <di:waypoint x="176" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="BPMNShape_serviceTask_fz1ShipNotifyPaymentOrderApproveAndShip" bpmnElement="serviceTask_fz1ShipNotifyPaymentOrderApproveAndShip">
+        <dc:Bounds x="672" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_fz1ShipNotifyPaymentOrderApproveAndShipTo" bpmnElement="flow_fz1ShipNotifyPaymentOrderApproveAndShipToSufficient">
+        <di:waypoint x="672" y="100" />
+        <di:waypoint x="657" y="100" />
+        <di:waypoint x="657" y="80" />
+        <di:waypoint x="794" y="80" />
+        <di:waypoint x="794" y="120" />
+        <di:waypoint x="816" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

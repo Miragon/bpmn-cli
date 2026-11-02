@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions_p" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration_p">
+    <bpmn:participant id="Pool" name="Org" processRef="P" />
+  </bpmn:collaboration>
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:laneSet id="laneSet_p">
+      <bpmn:lane id="L1" name="Clerk">
+        <bpmn:childLaneSet id="laneSet_clerk">
+          <bpmn:lane id="L1a" name="Front">
+            <bpmn:flowNodeRef>S</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>A</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>G</bpmn:flowNodeRef>
+          </bpmn:lane>
+          <bpmn:lane id="L1b" name="Back">
+            <bpmn:flowNodeRef>B</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>E</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>C</bpmn:flowNodeRef>
+            <bpmn:flowNodeRef>E2</bpmn:flowNodeRef>
+          </bpmn:lane>
+        </bpmn:childLaneSet>
+      </bpmn:lane>
+      <bpmn:lane id="L2" name="Boss" />
+    </bpmn:laneSet>
+    <bpmn:startEvent id="S" name="Start">
+      <bpmn:outgoing>flow_startToCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="A" name="Check">
+      <bpmn:incoming>flow_startToCheck</bpmn:incoming>
+      <bpmn:outgoing>flow_checkToOk</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="G" name="ok?">
+      <bpmn:incoming>flow_checkToOk</bpmn:incoming>
+      <bpmn:outgoing>F_yes</bpmn:outgoing>
+      <bpmn:outgoing>F_no</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="B" name="Book">
+      <bpmn:incoming>F_yes</bpmn:incoming>
+      <bpmn:outgoing>flow_bookToDone</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="E" name="Done">
+      <bpmn:incoming>flow_bookToDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_bookToDone" sourceRef="B" targetRef="E" />
+    <bpmn:sequenceFlow id="F_yes" name="yes" sourceRef="G" targetRef="B" />
+    <bpmn:task id="C" name="Clarify">
+      <bpmn:incoming>F_no</bpmn:incoming>
+      <bpmn:outgoing>flow_clarifyToStopped</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E2" name="Stopped">
+      <bpmn:incoming>flow_clarifyToStopped</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_clarifyToStopped" sourceRef="C" targetRef="E2" />
+    <bpmn:sequenceFlow id="F_no" name="no" sourceRef="G" targetRef="C" />
+    <bpmn:sequenceFlow id="flow_checkToOk" sourceRef="A" targetRef="G" />
+    <bpmn:sequenceFlow id="flow_startToCheck" sourceRef="S" targetRef="A" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_collaboration_p">
+    <bpmndi:BPMNPlane id="BPMNPlane_collaboration_p" bpmnElement="collaboration_p">
+      <bpmndi:BPMNShape id="BPMNShape_Pool" bpmnElement="Pool" isHorizontal="true">
+        <dc:Bounds x="93" y="87" width="725" height="540" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_L1" bpmnElement="L1" isHorizontal="true">
+        <dc:Bounds x="123" y="87" width="695" height="420" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_L1a" bpmnElement="L1a" isHorizontal="true">
+        <dc:Bounds x="153" y="87" width="665" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_L1b" bpmnElement="L1b" isHorizontal="true">
+        <dc:Bounds x="153" y="227" width="665" height="280" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_L2" bpmnElement="L2" isHorizontal="true">
+        <dc:Bounds x="123" y="507" width="695" height="120" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_S" bpmnElement="S">
+        <dc:Bounds x="213" y="139" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="208" y="181" width="47" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_A" bpmnElement="A">
+        <dc:Bounds x="309" y="117" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_G" bpmnElement="G" isMarkerVisible="true">
+        <dc:Bounds x="469" y="132" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="478" y="112" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_B" bpmnElement="B">
+        <dc:Bounds x="579" y="257" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_E" bpmnElement="E">
+        <dc:Bounds x="739" y="279" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="737" y="321" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_C" bpmnElement="C">
+        <dc:Bounds x="579" y="397" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_E2" bpmnElement="E2">
+        <dc:Bounds x="739" y="419" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="727" y="461" width="61" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_bookToDone" bpmnElement="flow_bookToDone">
+        <di:waypoint x="679" y="297" />
+        <di:waypoint x="739" y="297" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_F_yes" bpmnElement="F_yes">
+        <di:waypoint x="494" y="182" />
+        <di:waypoint x="494" y="297" />
+        <di:waypoint x="579" y="297" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="502" y="279" width="33" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_clarifyToStopped" bpmnElement="flow_clarifyToStopped">
+        <di:waypoint x="679" y="437" />
+        <di:waypoint x="739" y="437" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_F_no" bpmnElement="F_no">
+        <di:waypoint x="494" y="182" />
+        <di:waypoint x="494" y="437" />
+        <di:waypoint x="579" y="437" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="502" y="419" width="26" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_checkToOk" bpmnElement="flow_checkToOk">
+        <di:waypoint x="409" y="157" />
+        <di:waypoint x="469" y="157" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="BPMNEdge_flow_startToCheck" bpmnElement="flow_startToCheck">
+        <di:waypoint x="249" y="157" />
+        <di:waypoint x="309" y="157" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

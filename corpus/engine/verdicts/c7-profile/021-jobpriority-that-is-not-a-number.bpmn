@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_Test" isExecutable="true" camunda:historyTimeToLive="180">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:serviceTask id="X" camunda:expression="${true}" camunda:asyncBefore="true" camunda:jobPriority="high"></bpmn:serviceTask>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
+    <bpmn:endEvent id="End" />
+
+  </bpmn:process>
+</bpmn:definitions>

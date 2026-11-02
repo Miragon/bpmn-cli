@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_FollowUp" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start" />
+<bpmn:subProcess id="Sub1"><bpmn:startEvent id="SS1" /><bpmn:sequenceFlow id="s1" sourceRef="SS1" targetRef="LT1" /><bpmn:intermediateThrowEvent id="LT1"><bpmn:linkEventDefinition name="L1" /></bpmn:intermediateThrowEvent><bpmn:intermediateCatchEvent id="C1"><bpmn:linkEventDefinition name="L1" /></bpmn:intermediateCatchEvent><bpmn:sequenceFlow id="F_C1" sourceRef="C1" targetRef="SE1" /><bpmn:endEvent id="SE1" /></bpmn:subProcess>
+<bpmn:subProcess id="Sub2"><bpmn:startEvent id="SS2" /><bpmn:sequenceFlow id="s2" sourceRef="SS2" targetRef="LT2" /><bpmn:intermediateThrowEvent id="LT2"><bpmn:linkEventDefinition name="L1" /></bpmn:intermediateThrowEvent><bpmn:intermediateCatchEvent id="C2"><bpmn:linkEventDefinition name="L1" /></bpmn:intermediateCatchEvent><bpmn:sequenceFlow id="F_C2" sourceRef="C2" targetRef="SE2" /><bpmn:endEvent id="SE2" /></bpmn:subProcess>
+<bpmn:endEvent id="End" />
+<bpmn:sequenceFlow id="F0" sourceRef="Start" targetRef="Sub1" />
+<bpmn:sequenceFlow id="F1" sourceRef="Sub1" targetRef="Sub2" />
+<bpmn:sequenceFlow id="F2" sourceRef="Sub2" targetRef="End" />
+
+  </bpmn:process>
+</bpmn:definitions>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool" processRef="process" />
+  </bpmn:collaboration>
+  <bpmn:process id="process">
+    <bpmn:laneSet id="lanes">
+      <bpmn:lane id="lane_upper"><bpmn:flowNodeRef>task_a</bpmn:flowNodeRef><bpmn:flowNodeRef>task_b</bpmn:flowNodeRef></bpmn:lane>
+      <bpmn:lane id="lane_lower"><bpmn:flowNodeRef>task_c</bpmn:flowNodeRef></bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="task_a" />
+    <bpmn:task id="task_b" />
+    <bpmn:task id="task_c" />
+    <bpmn:sequenceFlow id="flow_out_of_pool" sourceRef="task_a" targetRef="task_c" />
+    <bpmn:sequenceFlow id="flow_out_of_lane" sourceRef="task_a" targetRef="task_b" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_di" bpmnElement="pool" isHorizontal="true"><dc:Bounds x="100" y="100" width="600" height="300" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="lane_upper_di" bpmnElement="lane_upper" isHorizontal="true"><dc:Bounds x="130" y="100" width="570" height="180" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="lane_lower_di" bpmnElement="lane_lower" isHorizontal="true"><dc:Bounds x="130" y="280" width="570" height="120" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_a_di" bpmnElement="task_a"><dc:Bounds x="200" y="120" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_b_di" bpmnElement="task_b"><dc:Bounds x="400" y="120" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="task_c_di" bpmnElement="task_c"><dc:Bounds x="200" y="300" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_out_of_pool_di" bpmnElement="flow_out_of_pool"><di:waypoint x="200" y="160" /><di:waypoint x="50" y="160" /><di:waypoint x="50" y="340" /><di:waypoint x="200" y="340" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_out_of_lane_di" bpmnElement="flow_out_of_lane"><di:waypoint x="300" y="200" /><di:waypoint x="300" y="290" /><di:waypoint x="450" y="290" /><di:waypoint x="450" y="200" /></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="collaboration">
+    <bpmn:participant id="pool" processRef="process" />
+  </bpmn:collaboration>
+  <bpmn:process id="process">
+    <bpmn:startEvent id="event_inside" name="Inside" />
+    <bpmn:startEvent id="event_outside" name="Outside" />
+    <bpmn:startEvent id="event_unnamed" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="diagram">
+    <bpmndi:BPMNPlane id="plane" bpmnElement="collaboration">
+      <bpmndi:BPMNShape id="pool_di" bpmnElement="pool" isHorizontal="true"><dc:Bounds x="100" y="100" width="500" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_inside_di" bpmnElement="event_inside"><dc:Bounds x="200" y="180" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="195" y="220" width="50" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_outside_di" bpmnElement="event_outside"><dc:Bounds x="300" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="295" y="304" width="50" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="event_unnamed_di" bpmnElement="event_unnamed"><dc:Bounds x="400" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="395" y="304" width="50" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

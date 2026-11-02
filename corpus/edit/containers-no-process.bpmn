@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_none" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_ping" name="Ping" />
+</bpmn:definitions>

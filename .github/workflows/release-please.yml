@@ -5,14 +5,19 @@
 # npm side (one-time): the package must exist on npm, then trust this workflow file:
 #   npm trust github @miragon/bpmn-cli --file release-please.yml --repo Miragon/bpmn-cli --allow-publish
 # See docs/releasing.md.
+#
+# A pushed release-candidate tag vX.Y.Z-rc.N takes the other path: release-please does not run, publish-rc publishes that
+# commit, whose package.json holds the same version, on the dist-tag next, and no tap or branch moves.
 name: release-please
 
 on:
   push:
     branches: [main]
+    tags: ['v*-rc.*']
 
 jobs:
   release-please:
+    if: ${{ github.ref_type == 'branch' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,6 +57,28 @@ jobs:
       # no NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token. No --provenance: npm adds it to
       # trusted publishes on its own.
       - run: npm publish
+
+  publish-rc:
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm trusted publishing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: The tag names the version in package.json
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+      # trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm publish --tag next
 
   plugin-release-branch:
     needs: [release-please, publish]

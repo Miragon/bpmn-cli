@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:serviceTask id="X"><bpmn:extensionElements><zeebe:taskDefinition type="work" /><zeebe:ioMapping><zeebe:input source="abc" target="a" /><zeebe:input target="b" /><zeebe:output source="=a" target="x.y" /></zeebe:ioMapping></bpmn:extensionElements></bpmn:serviceTask>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
+    <bpmn:endEvent id="End" />
+
+  </bpmn:process>
+</bpmn:definitions>

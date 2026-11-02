@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_latin" targetNamespace="http://bpmn.io/schema/bpmn">
+  <!-- a comment the text keeps -->
+  <bpmn:process id="Process_latin">
+    <bpmn:task id="task_latin" name="Pruefung" />
+  </bpmn:process>
+</bpmn:definitions>

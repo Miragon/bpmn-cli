@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="S0"><bpmn:timerEventDefinition id="TD0"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 * * 7</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F0" sourceRef="S0" targetRef="E0" />
+    <bpmn:endEvent id="E0" />
+    <bpmn:startEvent id="S1"><bpmn:timerEventDefinition id="TD1"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 * * 0</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="S1" targetRef="E1" />
+    <bpmn:endEvent id="E1" />
+    <bpmn:startEvent id="S2"><bpmn:timerEventDefinition id="TD2"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 ? * MON-FRI</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F2" sourceRef="S2" targetRef="E2" />
+    <bpmn:endEvent id="E2" />
+    <bpmn:startEvent id="S3"><bpmn:timerEventDefinition id="TD3"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0/15 8-17 * JAN-DEC *</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F3" sourceRef="S3" targetRef="E3" />
+    <bpmn:endEvent id="E3" />
+    <bpmn:startEvent id="S4"><bpmn:timerEventDefinition id="TD4"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 L * ?</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F4" sourceRef="S4" targetRef="E4" />
+    <bpmn:endEvent id="E4" />
+    <bpmn:startEvent id="S5"><bpmn:timerEventDefinition id="TD5"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 ? * 5#2</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F5" sourceRef="S5" targetRef="E5" />
+    <bpmn:endEvent id="E5" />
+    <bpmn:startEvent id="S6"><bpmn:timerEventDefinition id="TD6"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 1,15 * *</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F6" sourceRef="S6" targetRef="E6" />
+    <bpmn:endEvent id="E6" />
+    <bpmn:startEvent id="S7"><bpmn:timerEventDefinition id="TD7"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 5/10 * * * *</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F7" sourceRef="S7" targetRef="E7" />
+    <bpmn:endEvent id="E7" />
+    <bpmn:startEvent id="S8"><bpmn:timerEventDefinition id="TD8"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 29 2 ?</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F8" sourceRef="S8" targetRef="E8" />
+    <bpmn:endEvent id="E8" />
+    <bpmn:startEvent id="S9"><bpmn:timerEventDefinition id="TD9"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 * * mon</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F9" sourceRef="S9" targetRef="E9" />
+    <bpmn:endEvent id="E9" />
+    <bpmn:startEvent id="S10"><bpmn:timerEventDefinition id="TD10"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">*/30 * * * * *</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F10" sourceRef="S10" targetRef="E10" />
+    <bpmn:endEvent id="E10" />
+    <bpmn:startEvent id="S11"><bpmn:timerEventDefinition id="TD11"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 LW * ?</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F11" sourceRef="S11" targetRef="E11" />
+    <bpmn:endEvent id="E11" />
+    <bpmn:startEvent id="S12"><bpmn:timerEventDefinition id="TD12"><bpmn:timeCycle xsi:type="bpmn:tFormalExpression">0 0 9 ? * 5L</bpmn:timeCycle></bpmn:timerEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F12" sourceRef="S12" targetRef="E12" />
+    <bpmn:endEvent id="E12" />
+  </bpmn:process>
+</bpmn:definitions>

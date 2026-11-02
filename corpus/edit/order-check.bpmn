@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_orderCheck" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_orderCheck" isExecutable="true">
+    <bpmn:startEvent id="startEvent_orderReceived" name="Order received">
+      <bpmn:outgoing>flow_receivedToCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="check" name="Check order">
+      <bpmn:incoming>flow_receivedToCheck</bpmn:incoming>
+      <bpmn:outgoing>flow_checkToOk</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="gateway_ok" name="Order ok?" default="flow_okToReject">
+      <bpmn:incoming>flow_checkToOk</bpmn:incoming>
+      <bpmn:outgoing>flow_okToShip</bpmn:outgoing>
+      <bpmn:outgoing>flow_okToReject</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="ship" name="Ship order">
+      <bpmn:incoming>flow_okToShip</bpmn:incoming>
+      <bpmn:outgoing>flow_shipToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="reject" name="Reject order">
+      <bpmn:incoming>flow_okToReject</bpmn:incoming>
+      <bpmn:outgoing>flow_rejectToJoin</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="gateway_join">
+      <bpmn:incoming>flow_shipToJoin</bpmn:incoming>
+      <bpmn:incoming>flow_rejectToJoin</bpmn:incoming>
+      <bpmn:outgoing>flow_joinToDone</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="endEvent_done" name="Done">
+      <bpmn:incoming>flow_joinToDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_receivedToCheck" sourceRef="startEvent_orderReceived" targetRef="check" />
+    <bpmn:sequenceFlow id="flow_checkToOk" sourceRef="check" targetRef="gateway_ok" />
+    <bpmn:sequenceFlow id="flow_okToShip" name="yes" sourceRef="gateway_ok" targetRef="ship">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">${ok}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="flow_okToReject" name="no" sourceRef="gateway_ok" targetRef="reject" />
+    <bpmn:sequenceFlow id="flow_shipToJoin" sourceRef="ship" targetRef="gateway_join" />
+    <bpmn:sequenceFlow id="flow_rejectToJoin" sourceRef="reject" targetRef="gateway_join" />
+    <bpmn:sequenceFlow id="flow_joinToDone" sourceRef="gateway_join" targetRef="endEvent_done" />
+  </bpmn:process>
+</bpmn:definitions>

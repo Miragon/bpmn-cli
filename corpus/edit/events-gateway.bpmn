@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_gateway" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_paid" name="Paid" />
+  <bpmn:message id="Message_other" name="Other" />
+  <bpmn:signal id="Signal_stop" name="Stop" />
+  <bpmn:process id="Process_gateway" isExecutable="true">
+    <bpmn:task id="task_before" name="Before">
+      <bpmn:outgoing>flow_toWait</bpmn:outgoing>
+      <bpmn:outgoing>flow_toJoined</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:eventBasedGateway id="gateway_wait">
+      <bpmn:incoming>flow_toWait</bpmn:incoming>
+      <bpmn:outgoing>flow_toPaid</bpmn:outgoing>
+      <bpmn:outgoing>flow_toStop</bpmn:outgoing>
+      <bpmn:outgoing>flow_toTimer</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:intermediateCatchEvent id="catch_paid" name="Paid">
+      <bpmn:incoming>flow_toPaid</bpmn:incoming>
+      <bpmn:messageEventDefinition id="definition_paid" messageRef="Message_paid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_stop" name="Stop">
+      <bpmn:incoming>flow_toStop</bpmn:incoming>
+      <bpmn:signalEventDefinition id="definition_stop" signalRef="Signal_stop" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_timer" name="Later">
+      <bpmn:incoming>flow_toTimer</bpmn:incoming>
+      <bpmn:timerEventDefinition id="definition_timer"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_joined" name="Joined">
+      <bpmn:incoming>flow_toJoined</bpmn:incoming>
+      <bpmn:messageEventDefinition id="definition_joined" messageRef="Message_other" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="loose_task" name="Loose task" />
+    <bpmn:intermediateCatchEvent id="loose_plain" name="Plain" />
+    <bpmn:intermediateCatchEvent id="loose_link" name="Link">
+      <bpmn:linkEventDefinition id="definition_link" name="Go" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="loose_paid" name="Paid again">
+      <bpmn:messageEventDefinition id="definition_paidAgain" messageRef="Message_paid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="loose_stop" name="Stop again">
+      <bpmn:signalEventDefinition id="definition_stopAgain" signalRef="Signal_stop" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="loose_other" name="Other message">
+      <bpmn:messageEventDefinition id="definition_other" messageRef="Message_other" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="loose_unnamed" name="No message yet">
+      <bpmn:messageEventDefinition id="definition_unnamed" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:receiveTask id="loose_receive" name="Receive" />
+    <bpmn:receiveTask id="held_receive" name="Held receive" />
+    <bpmn:boundaryEvent id="boundary_held" attachedToRef="held_receive">
+      <bpmn:timerEventDefinition id="definition_held"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:eventBasedGateway id="gateway_receiving">
+      <bpmn:outgoing>flow_toReceive</bpmn:outgoing>
+      <bpmn:outgoing>flow_toTask</bpmn:outgoing>
+      <bpmn:outgoing>flow_toLater</bpmn:outgoing>
+    </bpmn:eventBasedGateway>
+    <bpmn:receiveTask id="branch_receive" name="Branch receive">
+      <bpmn:incoming>flow_toReceive</bpmn:incoming>
+    </bpmn:receiveTask>
+    <bpmn:task id="branch_task" name="Branch task">
+      <bpmn:incoming>flow_toTask</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:intermediateCatchEvent id="branch_later" name="Branch later">
+      <bpmn:incoming>flow_toLater</bpmn:incoming>
+      <bpmn:timerEventDefinition id="definition_later"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT2H</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="flow_toWait" sourceRef="task_before" targetRef="gateway_wait" />
+    <bpmn:sequenceFlow id="flow_toJoined" sourceRef="task_before" targetRef="catch_joined" />
+    <bpmn:sequenceFlow id="flow_toPaid" sourceRef="gateway_wait" targetRef="catch_paid" />
+    <bpmn:sequenceFlow id="flow_toStop" sourceRef="gateway_wait" targetRef="catch_stop" />
+    <bpmn:sequenceFlow id="flow_toTimer" sourceRef="gateway_wait" targetRef="catch_timer" />
+    <bpmn:sequenceFlow id="flow_toReceive" sourceRef="gateway_receiving" targetRef="branch_receive" />
+    <bpmn:sequenceFlow id="flow_toTask" sourceRef="gateway_receiving" targetRef="branch_task" />
+    <bpmn:sequenceFlow id="flow_toLater" sourceRef="gateway_receiving" targetRef="branch_later" />
+  </bpmn:process>
+</bpmn:definitions>

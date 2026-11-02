@@ -1,0 +1,44 @@
+{
+  "unchanged": false,
+  "created": [
+    {
+      "id": "task_audit",
+      "kind": "task",
+      "name": "Audit",
+      "detail": "after Task_A"
+    },
+    {
+      "id": "flow_auditToSplit",
+      "kind": "sequenceFlow",
+      "detail": "task_audit -> Gw_Split"
+    }
+  ],
+  "changed": [
+    {
+      "id": "F2",
+      "kind": "sequenceFlow",
+      "detail": "Task_A -> task_audit (was -> Gw_Split)"
+    },
+    {
+      "id": "task_audit",
+      "kind": "task",
+      "name": "Audit",
+      "detail": "lane Lane_1"
+    }
+  ],
+  "removed": [],
+  "renamed": [],
+  "aliases": {
+    "$audit": "task_audit"
+  },
+  "findings": [],
+  "preexisting": [],
+  "state": {
+    "errors": 0,
+    "warnings": 4
+  },
+  "format": [],
+  "notes": [
+    "inserted between Task_A and Gw_Split"
+  ]
+}

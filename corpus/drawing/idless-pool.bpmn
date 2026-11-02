@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration>
+    <bpmn:participant name="Sales" processRef="process" />
+  </bpmn:collaboration>
+  <bpmn:process id="process" isExecutable="false">
+    <bpmn:laneSet>
+      <bpmn:lane name="Front desk" />
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start" />
+    <bpmn:startEvent>
+      <bpmn:timerEventDefinition />
+    </bpmn:startEvent>
+    <bpmn:textAnnotation id="note" />
+    <bpmn:association sourceRef="start" targetRef="note" />
+    <bpmn:association />
+  </bpmn:process>
+  <bpmn:process isExecutable="false">
+    <bpmn:task name="Elsewhere" />
+  </bpmn:process>
+</bpmn:definitions>

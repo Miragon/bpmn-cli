@@ -1,0 +1,8 @@
+{
+ "model": "models/views/claims.bpmn",
+ "steps": [
+  { "ops": [{ "op": "remove", "ids": ["Event_CancelRequested"] }] },
+  { "ops": [{ "op": "remove", "ids": ["Participant_Insurer"] }] },
+  { "ops": [{ "op": "set", "id": "Activity_OnCancel", "values": { "triggeredByEvent": false } }] }
+ ]
+}

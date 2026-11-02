@@ -1,0 +1,7 @@
+[
+{"model":"fixed/c8-ops/000-service-task-send-task-and-message-end-without-job.bpmn","name":"service task, send task and message end without job","engine":"accept"},
+{"model":"fixed/c8-ops/001-juel-condition-and-a-static-correlation-key.bpmn","name":"JUEL condition and a static correlation key","engine":"accept"},
+{"model":"fixed/c8-ops/002-multi-instance-without-zeebe-loop-call-activity-without-zeeb.bpmn","name":"multi-instance without zeebe loop, call activity without zeebe:calledElement","engine":"accept"},
+{"model":"fixed/c8-ops/003-message-catch-without-subscription-timer-pt2d.bpmn","name":"message catch without subscription, timer PT2D","engine":"accept"},
+{"model":"fixed/c8-ops/004-business-rule-task-with-an-unprefixed-calleddecision.bpmn","name":"business rule task with an unprefixed calledDecision","engine":"accept"}
+]

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Data">
+    <bpmn:dataObject id="DataObject_List" isCollection="true" />
+    <bpmn:dataObjectReference id="DataObjectReference_List" name="Items" dataObjectRef="DataObject_List" />
+    <bpmn:task id="Task_Io">
+      <bpmn:ioSpecification id="Io_1">
+        <bpmn:dataInput id="DataInput_In" />
+        <bpmn:dataOutput id="DataOutput_Out" />
+      </bpmn:ioSpecification>
+    </bpmn:task>
+    <bpmn:textAnnotation id="TextAnnotation_Empty" />
+    <bpmn:sequenceFlow id="Category_Odd" name="A flow drawn as a shape" sourceRef="Task_Io" targetRef="Task_Io" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Process_Data">
+      <bpmndi:BPMNShape id="List_di" bpmnElement="DataObjectReference_List"><dc:Bounds x="100" y="100" width="36" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="In_di" bpmnElement="DataInput_In"><dc:Bounds x="200" y="100" width="36" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Out_di" bpmnElement="DataOutput_Out"><dc:Bounds x="300" y="100" width="36" height="50" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Note_di" bpmnElement="TextAnnotation_Empty"><dc:Bounds x="400" y="100" width="100" height="30" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Odd_di" bpmnElement="Category_Odd"><dc:Bounds x="500" y="100" width="100" height="30" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

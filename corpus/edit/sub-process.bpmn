@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_sub" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_sub" isExecutable="true">
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>flow_startToSub</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="Sub" name="Handle">
+      <bpmn:incoming>flow_startToSub</bpmn:incoming>
+      <bpmn:outgoing>flow_subToEnd</bpmn:outgoing>
+      <bpmn:startEvent id="Sub_start">
+        <bpmn:outgoing>flow_subStartToTask</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:task id="Sub_task" name="Work">
+        <bpmn:incoming>flow_subStartToTask</bpmn:incoming>
+      </bpmn:task>
+      <bpmn:sequenceFlow id="flow_subStartToTask" sourceRef="Sub_start" targetRef="Sub_task" />
+    </bpmn:subProcess>
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>flow_subToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="flow_startToSub" sourceRef="start" targetRef="Sub" />
+    <bpmn:sequenceFlow id="flow_subToEnd" sourceRef="Sub" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>

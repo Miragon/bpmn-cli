@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_Integration" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start" />
+<bpmn:intermediateThrowEvent id="T"><bpmn:signalEventDefinition /><bpmn:messageEventDefinition camunda:expression="${true}" /></bpmn:intermediateThrowEvent>
+<bpmn:endEvent id="End" />
+<bpmn:sequenceFlow id="F0" sourceRef="Start" targetRef="T" />
+<bpmn:sequenceFlow id="F1" sourceRef="T" targetRef="End" />
+
+  </bpmn:process>
+</bpmn:definitions>

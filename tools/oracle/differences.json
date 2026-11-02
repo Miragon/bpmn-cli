@@ -1,0 +1,42 @@
+[
+  {
+    "probe": "cli",
+    "pattern": "^lint/examples/[^:]+\\.bpmn#validate: main only: @miragon/rules/element-id-naming error Association_(0reycrf|185chbk|1q9i1wm)$",
+    "reason": "The plugin decision (ADR 2): main's bundled 0.19 answers first and names association ids; the examples pin 0.17, whose copy now runs and does not, as bpmnlint 12's CLI reports there"
+  },
+  {
+    "probe": "cli",
+    "pattern": "^lint/examples/[^:]+\\.bpmn#validate: (exit: main 2, subject 0|verdict: main 3 error\\(s\\), ([23]) warning\\(s\\), subject valid, \\2 warning\\(s\\)), main's errors alone: Association_0reycrf, Association_185chbk, Association_1q9i1wm$",
+    "reason": "The plugin decision (ADR 2): main's bundled 0.19 answers first and names association ids; the examples pin 0.17, whose copy now runs and does not, as bpmnlint 12's CLI reports there; the three association ids were main's only errors there, so its exit and verdict follow"
+  },
+  {
+    "probe": "cli",
+    "pattern": "^lint/cases/project-copy-runs/model\\.bpmn#validate: (main only: @miragon/rules/(element-id-naming|no-generated-ids) warning |verdict: main 1 error\\(s\\), 9 warning\\(s\\), subject 1 error\\(s\\), 4 warning\\(s\\)$)",
+    "reason": "The plugin decision (ADR 2): the project installs its own @miragon/bpmnlint-plugin-rules, so its config runs, not the bundled one main answers with"
+  },
+  {
+    "probe": "cli",
+    "pattern": "^lint/cases/project-copy-lacks-a-rule/model\\.bpmn#validate: (main only: @miragon/rules/no-generated-ids error Activity_0049ryx|subject only: W_LINT_UNAVAILABLE warning -|(exit: main 2, subject 0|verdict: main 1 error\\(s\\), 3 warning\\(s\\), subject valid, 4 warning\\(s\\)), main's errors alone: Activity_0049ryx)$",
+    "reason": "The plugin decision (ADR 2): a rule the project's copy lacks is left out and named, as the project's CI fails on it; main falls back to the bundled rule"
+  },
+  {
+    "probe": "layout",
+    "pattern": "^total over 156 walk steps: 696, main 691$",
+    "reason": "align goes for one place per id (cli.md): walks/layout__controlflow__s01.json#6 scores 35 against 30, and main's own two places draw the same bytes at 35; one call moved both shapes at once, two calls route in between. No other step scores higher"
+  },
+  {
+    "probe": "edits",
+    "pattern": "^models/incremental/vertical\\.bpmn#E3: refusal: main answers, subject E_LAYOUT_INCREMENTAL ",
+    "reason": "Open decision for the owner (cli.md, behaviour that goes): main redraws a vertical pool as a horizontal one on a placement; the rebuild draws nothing and refuses with E_LAYOUT_INCREMENTAL, so no write turns the drawing, and no write places into it either. The way out is `bpmn layout`, which redraws horizontally; 0.9's --no-layout has no replacement"
+  },
+  {
+    "probe": "edits",
+    "pattern": "^design-iq/\\d+:applyToXml: (semantics|changed): main: .*calledDecision=credit-limit-check .*\\| subject: .*camunda:decisionRef",
+    "reason": "design-iq's map: `set calledDecision=` on a Camunda 7 file writes camunda:decisionRef, since the platform comes from the file and the rebuild has no `platform: none`; the recorded call forced that option, and design-iq's fixture and test adapt"
+  },
+  {
+    "probe": "bytes",
+    "pattern": "^models/incremental/vertical\\.bpmn#insert: main writes, subject E_LAYOUT_INCREMENTAL$",
+    "reason": "Open decision for the owner (cli.md, behaviour that goes): main redraws a vertical pool as a horizontal one on a placement; the rebuild draws nothing and refuses with E_LAYOUT_INCREMENTAL, so no write turns the drawing, and no write places into it either. The way out is `bpmn layout`, which redraws horizontally; 0.9's --no-layout has no replacement"
+  }
+]

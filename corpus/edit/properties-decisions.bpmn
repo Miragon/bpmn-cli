@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_decisions" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_decisions" isExecutable="false">
+    <bpmn:businessRuleTask id="task_camunda" camunda:decisionRef="old-c7" />
+    <bpmn:businessRuleTask id="task_zeebe">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="old-c8" resultVariable="price" />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="task_both" camunda:decisionRef="old-c7" calledDecision="bare" calledElement="hand">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="old-c8" />
+        <zeebe:taskHeaders />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="task_noDecision">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision resultVariable="price" />
+      </bpmn:extensionElements>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="task_new" />
+    <bpmn:serviceTask id="task_service" calledDecision="stray" />
+  </bpmn:process>
+</bpmn:definitions>

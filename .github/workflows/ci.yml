@@ -1,8 +1,8 @@
 # Checks every pull request (including release-please's release PRs) and every push to main:
-# typecheck, build, tests, the layout-regression budget and a short seeded fuzz run (`npm run gate`),
-# the build and tests on the oldest Node the package supports (engines.node), the manifests of
-# the Claude Code plugin and its marketplace (`claude plugin validate`), and the corporate identity
-# of the docs (the vendored docs kit and brand-lint).
+# the guardrails and the oracle (`npm run gate`), the manifests of the Claude Code plugin and its
+# marketplace (`claude plugin validate`), and the corporate identity of the docs (the vendored docs
+# kit and brand-lint). The gate's checkout is the pull request's head with full history, so the
+# oracle finds main at the commit the branch sits on.
 name: ci
 
 on:
@@ -18,26 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
       - run: npm run gate
-
-  # engines.node is >=22.12.0 (commander 15, vitest 5); this job keeps the floor honest.
-  node-floor:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22.12'
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npx vitest run
 
   # plugins/bpmn-cli and .claude-plugin/marketplace.json. Validation is local: no login, no API key.
   # Claude Code is pinned so that a new release's checks do not fail an unrelated pull request;

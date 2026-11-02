@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_FollowUp" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:startEvent id="Start" /><bpmn:userTask id="T" default="F3" /><bpmn:endEvent id="E1" /><bpmn:endEvent id="E2" /><bpmn:endEvent id="E3" />
+<bpmn:sequenceFlow id="F0" sourceRef="Start" targetRef="T" />
+<bpmn:sequenceFlow id="F1" sourceRef="T" targetRef="E1"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" /></bpmn:sequenceFlow>
+<bpmn:sequenceFlow id="F2" sourceRef="T" targetRef="E2"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${a}</bpmn:conditionExpression></bpmn:sequenceFlow>
+<bpmn:sequenceFlow id="F3" sourceRef="T" targetRef="E3" />
+  </bpmn:process>
+</bpmn:definitions>

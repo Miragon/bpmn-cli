@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_pool" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_shared">
+    <bpmn:participant id="pool_first" name="First" processRef="Process_shared" />
+    <bpmn:participant id="pool_second" name="Second" processRef="Process_shared" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_shared" isExecutable="false">
+    <bpmn:task id="shared_task" name="Work" />
+  </bpmn:process>
+</bpmn:definitions>

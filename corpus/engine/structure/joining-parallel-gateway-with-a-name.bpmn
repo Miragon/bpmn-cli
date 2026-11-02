@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="P" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="Fork" />
+    <bpmn:parallelGateway id="Fork" />
+    <bpmn:sequenceFlow id="F2" sourceRef="Fork" targetRef="Join" />
+    <bpmn:sequenceFlow id="F3" sourceRef="Fork" targetRef="Join" />
+    <bpmn:exclusiveGateway id="Join" name="Joined" />
+    <bpmn:sequenceFlow id="F4" sourceRef="Join" targetRef="End" />
+    <bpmn:endEvent id="End" />
+  </bpmn:process>
+</bpmn:definitions>

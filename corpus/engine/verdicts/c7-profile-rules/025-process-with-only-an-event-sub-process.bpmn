@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+<bpmn:signal id="Sig" name="Go" /><bpmn:signal id="Sig2" name="Go2" /><bpmn:message id="M" name="Pay" /><bpmn:message id="M2" name="Pay2" /><bpmn:message id="M3" name="Pay" />
+  <bpmn:process id="P_FollowUp" isExecutable="true" camunda:historyTimeToLive="180">
+<bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="ES_S" ><bpmn:messageEventDefinition messageRef="M" /></bpmn:startEvent><bpmn:sequenceFlow id="ES_F" sourceRef="ES_S" targetRef="ES_E" /><bpmn:endEvent id="ES_E" /></bpmn:subProcess>
+  </bpmn:process>
+</bpmn:definitions>

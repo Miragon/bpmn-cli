@@ -1,7 +1,7 @@
 # The animated demo on the landing page (theme/LandingDemo.vue): the model of
 # "Getting started" before and after one `bpmn add`. The before picture gets the canvas of the
 # after picture, so both line up when the demo fades from one to the other.
-bpmn new order.bpmn --name "Order handling"
+bpmn new order.bpmn "Order handling"
 bpmn add order.bpmn start "Order received"
 bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
 bpmn add order.bpmn end "Done" --after userTask_checkInvoice

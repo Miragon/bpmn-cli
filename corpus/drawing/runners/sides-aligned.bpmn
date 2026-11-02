@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collab"><bpmn:participant id="First" processRef="P1" /><bpmn:participant id="Second" processRef="P2" /></bpmn:collaboration>
+  <bpmn:process id="P1">
+    <bpmn:laneSet id="LS"><bpmn:lane id="FirstLane" name="Lane"><bpmn:flowNodeRef>A</bpmn:flowNodeRef><bpmn:flowNodeRef>B</bpmn:flowNodeRef></bpmn:lane></bpmn:laneSet>
+    <bpmn:task id="A" name="A" /><bpmn:task id="B" name="B" />
+  </bpmn:process>
+  <bpmn:process id="P2"><bpmn:task id="X" name="X" /><bpmn:task id="Y" name="Y" /></bpmn:process>
+  <bpmndi:BPMNDiagram id="D">
+    <bpmndi:BPMNPlane id="Plane" bpmnElement="Collab">
+      <bpmndi:BPMNShape id="First_di" bpmnElement="First" isHorizontal="true"><dc:Bounds x="100" y="100" width="1000" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="FirstLane_di" bpmnElement="FirstLane" isHorizontal="true"><dc:Bounds x="130" y="100" width="970" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_di" bpmnElement="A"><dc:Bounds x="200" y="150" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B_di" bpmnElement="B"><dc:Bounds x="800" y="150" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Second_di" bpmnElement="Second" isHorizontal="true"><dc:Bounds x="100" y="340" width="1000" height="200" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="X_di" bpmnElement="X"><dc:Bounds x="200" y="400" width="100" height="80" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Y_di" bpmnElement="Y"><dc:Bounds x="500" y="400" width="100" height="80" /></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

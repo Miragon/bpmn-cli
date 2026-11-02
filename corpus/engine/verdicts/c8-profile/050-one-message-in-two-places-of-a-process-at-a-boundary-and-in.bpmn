@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="M1" name="M1"><bpmn:extensionElements><zeebe:subscription correlationKey="=orderId" /></bpmn:extensionElements></bpmn:message>
+
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:receiveTask id="X" messageRef="M1" />
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="End" />
+    <bpmn:endEvent id="End" />
+<bpmn:intermediateCatchEvent id="X2"><bpmn:messageEventDefinition id="MD" messageRef="M1" /></bpmn:intermediateCatchEvent>    <bpmn:subProcess id="ESP" triggeredByEvent="true">
+      <bpmn:startEvent id="ESP_S"><bpmn:messageEventDefinition id="MD2" messageRef="M1" /></bpmn:startEvent>
+      <bpmn:sequenceFlow id="ESP_F" sourceRef="ESP_S" targetRef="ESP_E" />
+      <bpmn:endEvent id="ESP_E" />
+    </bpmn:subProcess>
+
+  </bpmn:process>
+</bpmn:definitions>

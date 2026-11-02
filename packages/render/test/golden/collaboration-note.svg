@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="540" viewBox="80 40 940 540" font-family="Arial, Arimo, sans-serif">
+<rect x="80" y="40" width="940" height="540" fill="#ffffff"/>
+<g data-id="PA"><rect x="100" y="60" width="500" height="260" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><path d="M130 60V320" stroke="#22242a" stroke-width="1.5"/><text transform="rotate(-90 115 190)" font-size="12" fill="#22242a" text-anchor="middle"><tspan x="115" y="193.6">A</tspan></text></g>
+<g data-id="PB"><rect x="100" y="360" width="900" height="200" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><path d="M130 360V560" stroke="#22242a" stroke-width="1.5"/><text transform="rotate(-90 115 460)" font-size="12" fill="#22242a" text-anchor="middle"><tspan x="115" y="463.6">B</tspan></text></g>
+<g data-id="S"><circle cx="180" cy="130" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="A"><rect x="250" y="90" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="300" y="133.6">A</tspan></text></g>
+<g data-id="E"><circle cx="430" cy="130" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="Z"><rect x="250" y="200" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="300" y="243.6">Z</tspan></text></g>
+<g data-id="S2"><circle cx="180" cy="460" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="Q"><rect x="650" y="420" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="700" y="463.6">Q</tspan></text></g>
+<g data-id="E3"><circle cx="920" cy="460" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="Note"><path d="M800 380H790V410H800" fill="none" stroke="#22242a" stroke-width="1.5"/><text font-size="12" fill="#22242a" text-anchor="start"><tspan x="797" y="397.8">note</tspan></text></g>
+<g data-id="F1"><path d="M198 130L250 130" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M239 134L250 130L239 126Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="F2"><path d="M350 130L412 130" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M401 134L412 130L401 126Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="H1"><path d="M198 460L650 460" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M639 464L650 460L639 456Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="H2"><path d="M750 460L902 460" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M891 464L902 460L891 456Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="As"><path d="M750 440L790 400" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="0.5 4.5" stroke-linecap="round"/></g>
+</svg>

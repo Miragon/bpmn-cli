@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="594" height="253" viewBox="114.13 45 593.87 253.2" font-family="Arial, Arimo, sans-serif">
+<rect x="114.13" y="45" width="593.87" height="253.2" fill="#ffffff"/>
+<g data-id="Start"><circle cx="170" cy="120" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
+<g data-id="Task_Check"><rect x="240" y="80" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><g transform="translate(244 84)"><path d="M2 18V15C2 11.5 5 10 10 10C15 10 18 11.5 18 15V18Z" fill="#ffffff" stroke="#22242a" stroke-width="1.2"/><circle cx="10" cy="6" r="3.8" fill="#ffffff" stroke="#22242a" stroke-width="1.2"/><path d="M6 18V15M14 18V15" fill="none" stroke="#22242a" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></g><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="290" y="123.6">Check order</tspan></text></g>
+<g data-id="Gateway_Ok"><path d="M420 95L445 120L420 145L395 120Z" fill="#ffffff" stroke="#22242a" stroke-width="2" stroke-linejoin="round"/><g transform="translate(420 120)"><path d="M-7.5 -9.5L7.5 9.5M7.5 -9.5L-7.5 9.5" fill="none" stroke="#22242a" stroke-width="4.5"/></g></g>
+<g data-id="Task_Script"><rect x="500" y="80" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><g transform="translate(504 84)"><path d="M6 2H17C14 5 14 8 16 10.5C18 13 18 16 15 18H4C7 15 7 12 5 9.5C3 7 3 4 6 2Z" fill="#ffffff" stroke="#22242a" stroke-width="1.2" stroke-linejoin="round"/><path d="M7.5 6H13.5M8.5 9.5H14.5M8.5 13H14.5" fill="none" stroke="#22242a" stroke-width="1" stroke-linejoin="round" stroke-linecap="round"/></g><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="550" y="123.6">Pick &amp; pack</tspan></text></g>
+<g data-id="End"><circle cx="670" cy="120" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="End_Rejected"><circle cx="420" cy="240" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
+<g data-id="Flow_1"><path d="M188 120L240 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M229 124L240 120L229 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="Flow_2"><path d="M340 120L395 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M384 124L395 120L384 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="Flow_Yes"><path d="M445 120L500 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M489 124L500 120L489 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<g data-id="Flow_No"><path d="M420 145L420 222" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M416 211L420 222L424 211Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/><path d="M415.5 150.5L424.5 159.5" stroke="#22242a" stroke-width="1.5"/></g>
+<g data-id="Flow_4"><path d="M600 120L652 120" fill="none" stroke="#22242a" stroke-width="1.5" stroke-linejoin="round"/><path d="M641 124L652 120L641 116Z" fill="#22242a" stroke="#22242a" stroke-width="1" stroke-linejoin="round"/></g>
+<text data-label="Start" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="170.5" y="154.9">Order received</tspan></text>
+<text data-label="Gateway_Ok" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="420" y="74.9">Order ok?</tspan></text>
+<text data-label="End" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="670.5" y="154.9">Done</tspan></text>
+<text data-label="End_Rejected" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="420" y="274.9">Rejected</tspan></text>
+<text data-label="Flow_Yes" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="472" y="111.9">yes</tspan></text>
+<text data-label="Flow_No" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="435" y="182.9">no</tspan></text>
+</svg>

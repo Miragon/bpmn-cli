@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start"><bpmn:conditionalEventDefinition id="CD3"><bpmn:condition xsi:type="bpmn:tFormalExpression">= y</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:startEvent>
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="X" />
+    <bpmn:serviceTask id="X"><bpmn:extensionElements><zeebe:taskDefinition type="work" /></bpmn:extensionElements></bpmn:serviceTask>
+    <bpmn:sequenceFlow id="F2" sourceRef="X" targetRef="C" /><bpmn:intermediateCatchEvent id="C"><bpmn:conditionalEventDefinition id="CD1"><bpmn:extensionElements><zeebe:conditionalFilter variableNames="z" variableEvents="create, update" /></bpmn:extensionElements><bpmn:condition xsi:type="bpmn:tFormalExpression">= z</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:intermediateCatchEvent><bpmn:sequenceFlow id="F5" sourceRef="C" targetRef="End" />
+    <bpmn:endEvent id="End" />
+    <bpmn:boundaryEvent id="B" attachedToRef="X"><bpmn:conditionalEventDefinition id="CD2"><bpmn:condition xsi:type="bpmn:tFormalExpression">= x &gt; 1</bpmn:condition></bpmn:conditionalEventDefinition></bpmn:boundaryEvent>
+    <bpmn:sequenceFlow id="F3" sourceRef="B" targetRef="End2" />
+    <bpmn:endEvent id="End2" />
+  </bpmn:process>
+</bpmn:definitions>

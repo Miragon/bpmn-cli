@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_Implementation" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Implementation" isExecutable="true">
+    <bpmn:serviceTask id="Charge" name="Charge">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="charge-card" retries="3" />
+        <zeebe:ioMapping><zeebe:input source="=order.total" target="amount" /><zeebe:output source="=r" target="receipt" /></zeebe:ioMapping>
+        <zeebe:taskHeaders><zeebe:header key="channel" value="web" /></zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:multiInstanceLoopCharacteristics id="Loop_Charge" isSequential="true">
+        <bpmn:extensionElements><zeebe:loopCharacteristics inputCollection="=items" inputElement="item" /></bpmn:extensionElements>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:serviceTask>
+    <bpmn:callActivity id="Call" calledElement="billing">
+      <bpmn:extensionElements><camunda:in source="a" target="a" /><camunda:in source="b" target="b" /><camunda:executionListener event="start" class="x.Y" /></bpmn:extensionElements>
+    </bpmn:callActivity>
+    <bpmn:callActivity id="CallC8">
+      <bpmn:extensionElements><zeebe:calledElement processId="billing-c8" /></bpmn:extensionElements>
+    </bpmn:callActivity>
+    <bpmn:userTask id="Review" name="Review">
+      <bpmn:extensionElements>
+        <zeebe:formDefinition formId="review-form" />
+        <zeebe:assignmentDefinition assignee="clerk" candidateGroups="office" />
+      </bpmn:extensionElements>
+      <bpmn:standardLoopCharacteristics />
+    </bpmn:userTask>
+    <bpmn:scriptTask id="Compute" scriptFormat="groovy">
+      <bpmn:extensionElements><zeebe:script expression="=a + 1" resultVariable="b" /></bpmn:extensionElements>
+      <bpmn:documentation>Adds one.</bpmn:documentation>
+      <bpmn:documentation>   </bpmn:documentation>
+    </bpmn:scriptTask>
+    <bpmn:task id="Script" name="Long script">
+      <bpmn:extensionElements>
+        <camunda:script scriptFormat="groovy">line one
+line two</camunda:script>
+        <camunda:properties>
+          <camunda:property name="one" value="1" /><camunda:property name="two" value="2" /><camunda:property name="three" value="3" /><camunda:property name="four" value="4" />
+          <camunda:property name="five" value="5" /><camunda:property name="six" value="6" /><camunda:property name="seven" value="7" />
+        </camunda:properties>
+        <camunda:failedJobRetryTimeCycle>R3/PT10M; then stop</camunda:failedJobRetryTimeCycle>
+        <camunda:inputOutput />
+      </bpmn:extensionElements>
+    </bpmn:task>
+    <bpmn:task id="Plain" />
+    <bpmn:businessRuleTask id="Decide" camunda:decisionRef="pick-route" />
+    <bpmn:sendTask id="Notify" messageRef="Message_Notice" />
+    <bpmn:task id="Compensate" isForCompensation="true" />
+    <bpmn:sequenceFlow id="Flow_Resource" sourceRef="Charge" targetRef="Review">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="check.groovy" />
+    </bpmn:sequenceFlow>
+    <bpmn:intermediateCatchEvent id="Both">
+      <bpmn:timerEventDefinition id="Def_Timer"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+      <bpmn:messageEventDefinition id="Def_Message" messageRef="Message_Notice" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="WhenReady">
+      <bpmn:conditionalEventDefinition><bpmn:condition xsi:type="bpmn:tFormalExpression">${ready}</bpmn:condition></bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="WhenAny"><bpmn:conditionalEventDefinition /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="LinkIn"><bpmn:linkEventDefinition name="Jump" /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="LinkOut"><bpmn:linkEventDefinition name="Jump" /></bpmn:intermediateThrowEvent>
+    <bpmn:intermediateThrowEvent id="LinkNameless"><bpmn:linkEventDefinition /></bpmn:intermediateThrowEvent>
+    <bpmn:intermediateCatchEvent id="Wait"><bpmn:timerEventDefinition /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="Unnamed"><bpmn:messageEventDefinition /></bpmn:intermediateCatchEvent>
+    <bpmn:endEvent id="Stop"><bpmn:terminateEventDefinition /></bpmn:endEvent>
+  </bpmn:process>
+  <bpmn:message id="Message_Notice" name="Notice">
+    <bpmn:extensionElements><zeebe:subscription correlationKey="=order.id" /></bpmn:extensionElements>
+  </bpmn:message>
+</bpmn:definitions>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_triggers" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_paid" name="Paid" />
+  <bpmn:error id="Error_late" name="Late" errorCode="E1" />
+  <bpmn:signal id="Signal_stop" name="Stop" />
+  <bpmn:escalation id="Escalation_up" name="Up" escalationCode="ESC" />
+  <bpmn:process id="Process_triggers" isExecutable="true">
+    <bpmn:startEvent id="start_plain" />
+    <bpmn:task id="task_work" name="Work" />
+    <bpmn:boundaryEvent id="boundary_timer" cancelActivity="false" attachedToRef="task_work">
+      <bpmn:timerEventDefinition id="timer_boundary"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT5M</bpmn:timeDuration></bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="boundary_error" attachedToRef="task_work">
+      <bpmn:errorEventDefinition id="error_boundary" errorRef="Error_late" />
+    </bpmn:boundaryEvent>
+    <bpmn:intermediateCatchEvent id="catch_message" name="Paid">
+      <bpmn:messageEventDefinition id="message_definition" messageRef="Message_paid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_signal" name="Stopped">
+      <bpmn:signalEventDefinition id="signal_definition" signalRef="Signal_stop" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_retried" name="Timer with retries">
+      <bpmn:timerEventDefinition id="timer_retries">
+        <bpmn:extensionElements><camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle></bpmn:extensionElements>
+        <bpmn:timeDate xsi:type="bpmn:tFormalExpression">2030-01-01T00:00:00Z</bpmn:timeDate>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_both" name="Paid or late">
+      <bpmn:messageEventDefinition id="both_message" messageRef="Message_paid" />
+      <bpmn:timerEventDefinition id="both_timer"><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>
+      <bpmn:signalEventDefinition id="both_signal" signalRef="Signal_stop" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_twice" name="Paid twice">
+      <bpmn:messageEventDefinition id="twice_first" messageRef="Message_paid" />
+      <bpmn:messageEventDefinition id="twice_second" messageRef="Message_paid" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_script" name="Script condition">
+      <bpmn:conditionalEventDefinition id="condition_script"><bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy" camunda:resource="check.groovy" /></bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_groovy" name="Groovy condition">
+      <bpmn:conditionalEventDefinition id="condition_groovy"><bpmn:condition xsi:type="bpmn:tFormalExpression" language="groovy">ok</bpmn:condition></bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_bare_condition" name="Bare condition">
+      <bpmn:conditionalEventDefinition id="condition_bare" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_bare_timer" name="Bare timer">
+      <bpmn:timerEventDefinition id="timer_bare" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_double_timer" name="Two timers">
+      <bpmn:timerEventDefinition id="timer_double">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration>
+        <bpmn:timeCycle xsi:type="bpmn:tFormalExpression">R/PT1H</bpmn:timeCycle>
+      </bpmn:timerEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_juel" name="Juel condition">
+      <bpmn:conditionalEventDefinition id="condition_juel"><bpmn:condition xsi:type="bpmn:tFormalExpression" language="juel">${old}</bpmn:condition></bpmn:conditionalEventDefinition>
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="catch_link" name="From start">
+      <bpmn:linkEventDefinition id="link_definition" name="Go" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:intermediateThrowEvent id="throw_plain" name="Say hi" />
+    <bpmn:endEvent id="end_plain" />
+    <bpmn:endEvent id="end_error">
+      <bpmn:errorEventDefinition id="error_end" errorRef="Error_late" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="end_escalation">
+      <bpmn:escalationEventDefinition id="escalation_end" escalationRef="Escalation_up" />
+    </bpmn:endEvent>
+    <bpmn:subProcess id="sub_events" triggeredByEvent="true">
+      <bpmn:startEvent id="handler_message" isInterrupting="false">
+        <bpmn:messageEventDefinition id="handler_definition" messageRef="Message_paid" />
+      </bpmn:startEvent>
+      <bpmn:startEvent id="handler_plain" />
+    </bpmn:subProcess>
+  </bpmn:process>
+</bpmn:definitions>

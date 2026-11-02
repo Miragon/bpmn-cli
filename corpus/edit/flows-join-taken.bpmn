@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_flowsJoinTaken" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_joinTaken" isExecutable="true">
+    <bpmn:task id="ship" name="Ship">
+      <bpmn:outgoing>flow_shipToTaken</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="gateway_forkJoin" name="Taken">
+      <bpmn:incoming>flow_shipToTaken</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:sequenceFlow id="flow_shipToTaken" sourceRef="ship" targetRef="gateway_forkJoin" />
+  </bpmn:process>
+</bpmn:definitions>

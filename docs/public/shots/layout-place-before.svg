@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="815" height="460" viewBox="60 60 815 460" font-family="Arial, Arimo, sans-serif">
 <rect x="60" y="60" width="815" height="460" fill="#ffffff"/>
-<g data-id="participant_customer"><rect x="80" y="80" width="775" height="60" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="467.5" y="113.6">Customer</tspan></text></g>
 <g data-id="participant_orderHandling"><rect x="80" y="220" width="775" height="280" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><path d="M110 220V500" stroke="#22242a" stroke-width="1.5"/><text transform="rotate(-90 95 360)" font-size="12" fill="#22242a" text-anchor="middle"><tspan x="95" y="363.6">Order handling</tspan></text></g>
+<g data-id="participant_customer"><rect x="80" y="80" width="775" height="60" fill="#ffffff" stroke="#22242a" stroke-width="1.5"/><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="467.5" y="113.6">Customer</tspan></text></g>
 <g data-id="startEvent_orderReceived"><circle cx="158" cy="290" r="18" fill="#ffffff" stroke="#22242a" stroke-width="2"/></g>
 <g data-id="userTask_checkInvoice"><rect x="236" y="250" width="100" height="80" rx="10" fill="#ffffff" stroke="#22242a" stroke-width="2"/><g transform="translate(240 254)"><path d="M2 18V15C2 11.5 5 10 10 10C15 10 18 11.5 18 15V18Z" fill="#ffffff" stroke="#22242a" stroke-width="1.2"/><circle cx="10" cy="6" r="3.8" fill="#ffffff" stroke="#22242a" stroke-width="1.2"/><path d="M6 18V15M14 18V15" fill="none" stroke="#22242a" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></g><text font-size="12" fill="#22242a" text-anchor="middle"><tspan x="286" y="293.6">Check invoice</tspan></text></g>
 <g data-id="endEvent_invoiceHandled"><circle cx="794" cy="290" r="18" fill="#ffffff" stroke="#22242a" stroke-width="4"/></g>
@@ -23,6 +23,6 @@
 <text data-label="flow_invoiceOkToBookInvoice" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="470.5" y="281.9">yes</tspan></text>
 <text data-label="flow_invoiceOkToAskCustomer" font-size="11" fill="#22242a" text-anchor="middle"><tspan x="442" y="421.9">no</tspan></text>
 <text data-message="messageFlow_askCustomerToCustomer" font-size="12" fill="#22242a" text-anchor="middle"><tspan x="492.01" y="329.8">Question</tspan></text>
-<g data-problem="1"><circle cx="468" cy="290" r="9" fill="#e03131" stroke="#ffffff" stroke-width="1.5"/><text x="468" y="293.96" font-size="11" fill="#ffffff" text-anchor="middle">1</text></g>
-<g data-problem="2"><circle cx="486" cy="279" r="9" fill="#e03131" stroke="#ffffff" stroke-width="1.5"/><text x="486" y="282.96" font-size="11" fill="#ffffff" text-anchor="middle">2</text></g>
+<g data-badge="1"><circle cx="468" cy="290" r="9" fill="#e03131" stroke="#ffffff" stroke-width="1.5"/><text x="468" y="293.96" font-size="11" fill="#ffffff" text-anchor="middle">1</text></g>
+<g data-badge="2"><circle cx="486" cy="279" r="9" fill="#e03131" stroke="#ffffff" stroke-width="1.5"/><text x="486" y="282.96" font-size="11" fill="#ffffff" text-anchor="middle">2</text></g>
 </svg>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.9.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:process id="P_Test" isExecutable="true">
+    <bpmn:startEvent id="Start" />
+    <bpmn:sequenceFlow id="F1" sourceRef="Start" targetRef="G" />
+    <bpmn:exclusiveGateway id="G" default="S1" />
+    <bpmn:sequenceFlow id="S0" sourceRef="G" targetRef="End0"><bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= x &gt; 1 and y != "a"</bpmn:conditionExpression></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End0" />
+    <bpmn:sequenceFlow id="S1" sourceRef="G" targetRef="End1"></bpmn:sequenceFlow>
+    <bpmn:endEvent id="End1" />
+
+  </bpmn:process>
+</bpmn:definitions>

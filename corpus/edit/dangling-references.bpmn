@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_dangling" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_dangling">
+    <bpmn:participant id="pool" processRef="Process_dangling" />
+    <bpmn:participant id="pool_lost" processRef="Process_gone" />
+    <bpmn:messageFlow id="message_noEnds" />
+    <bpmn:messageFlow id="message_noTarget" sourceRef="pool" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_dangling" isExecutable="true">
+    <bpmn:laneSet id="LaneSet_dangling">
+      <bpmn:lane id="lane">
+        <bpmn:flowNodeRef>first</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>gone_node</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>flow_ok</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="first">
+      <bpmn:incoming>flow_ok</bpmn:incoming>
+      <bpmn:incoming>flow_noSource</bpmn:incoming>
+      <bpmn:outgoing>flow_noTarget</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="gateway" default="gone_flow">
+      <bpmn:outgoing>flow_gateway</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="last">
+      <bpmn:incoming>flow_gateway</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:boundaryEvent id="boundary_lost" attachedToRef="gone_node" />
+    <bpmn:sequenceFlow id="flow_ok" sourceRef="start" targetRef="first" />
+    <bpmn:sequenceFlow id="flow_gateway" sourceRef="gateway" targetRef="last" />
+    <bpmn:sequenceFlow id="flow_noEnds" />
+    <bpmn:sequenceFlow id="flow_noSource" targetRef="first" />
+    <bpmn:sequenceFlow id="flow_noTarget" sourceRef="first" />
+    <bpmn:sequenceFlow id="flow_goneSource" sourceRef="gone_node" targetRef="last" />
+    <bpmn:sequenceFlow id="flow_goneTarget" sourceRef="start" targetRef="gone_node" />
+    <bpmn:association id="association_noEnds" />
+    <bpmn:association id="association_noTarget" sourceRef="first" />
+  </bpmn:process>
+</bpmn:definitions>

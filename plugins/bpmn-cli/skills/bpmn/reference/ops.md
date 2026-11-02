@@ -1,8 +1,7 @@
 # Ops JSON, placement, kinds and set keys
 
 The essentials for writing `bpmn apply` batches. The CLI is the reference:
-`bpmn guide ops`, `bpmn guide placement`, `bpmn kinds --section ops --json`
-(the JSON Schema of every op), `bpmn kinds --section kinds,triggers,setKeys,nestedKeys`.
+`bpmn guide ops`, `bpmn guide placement`, `bpmn guide kinds triggers set-keys nested-keys`.
 The examples build `invoice.bpmn` from scratch and run in order.
 
 ## Batch format
@@ -11,12 +10,14 @@ The examples build `invoice.bpmn` from scratch and run in order.
   or stdin (`printf '%s' '[...]' | bpmn apply f.bpmn -`). With `-` as the model
   file the model comes from stdin and the result goes to stdout.
 - Every op is `{"op": "<name>", ...}` with the flags of the matching command in
-  lowerCamelCase (`--flow-name` -> `flowName`, `--non-interrupting` ->
-  `nonInterrupting`, `--if-absent` -> `ifAbsent`).
+  lowerCamelCase (`--flow-name` -> `flowName`, `--if-absent` -> `ifAbsent`). What
+  the element holds, the `key=value`s of the command, goes under `"set"`
+  (`"set": { "timer": "P2D", "nonInterrupting": true }`).
 - Order: the whole batch is checked first (unknown op / key, wrong type,
-  conflicting placement, undefined alias: nothing runs), then the semantic ops
-  run in order, then validation and one layout, then the format ops in order,
-  then one write. Any failure writes nothing and names the op (`ops[3] (add): ...`).
+  conflicting placement, undefined alias, a model op behind a format op: nothing
+  runs), then the model ops run in order, then validation and one layout, then
+  the format ops in order, then one write. Any failure writes nothing and names
+  the op (`ops[3] (add): ...`).
 - Keep the JSON in single quotes so `${...}` reaches the CLI unchanged; an
   apostrophe inside it is `\u0027`. `printf '%s'` passes it on byte for byte
   (`echo` may interpret backslashes in some shells), and a heredoc holding JSON
@@ -24,24 +25,25 @@ The examples build `invoice.bpmn` from scratch and run in order.
 
 | op | keys (required in bold) |
 | --- | --- |
-| add | **kind**, name, id, as, flowAs, outAs, after, before, flow, in, on, to, lane, flowName, flowId, condition, language, default, trigger keys, collapsed, ifAbsent, doc, set, process, blackBox, text, members |
-| connect | **source**, **target**, name, id, as, condition, language, default, message, ifAbsent |
-| set | **id**, values (map), unset (list) |
-| remove | **ids**, bridge, bridgeAll, withBranch, ifExists |
-| retype | **id**, **kind**, trigger keys |
-| move | **ids**, after, before, flow, in, on, lane, flow keys |
+| add | **kind**, name, id, as, flowAs, outAs, refAs, after, before, flow, in, on, to, lane, flowName, flowId, condition, language, default, ifAbsent, set, process, blackBox, members |
+| connect | **source**, **target**, id, as, refAs, ifAbsent, set |
+| set | **id**, **set** (map), refAs |
+| remove | **ids**, bridge (`none`, `all`), withBranch, ifExists |
+| retype | **id**, **kind**, set, refAs |
+| move | **ids**, after, before, flow, in, on, lane |
 | order | **id**, one of flows / lanes / pools |
 | ext | **id**, **action** (add / remove), type, attrs, body, xml, replace, index, slot |
 | split | **after**, **branches**, kind, name, id, as, join, joinId, joinAs, joinName |
-| place, align, color, label, route, space, tidy, compact | see [formatting.md](formatting.md) |
+| layout, place, color, label, route, space, tidy, compact | see [formatting.md](formatting.md) |
 
-Trigger keys: `timer`, `timerKind`, `message`, `error`, `errorCode`, `signal`,
-`escalation`, `escalationCode`, `when`, `link`, `nonInterrupting`.
+Keys under `set` are the keys of `bpmn set`; a trigger takes `timer`, `message`,
+`error`, `errorCode`, `signal`, `escalation`, `escalationCode`, `when`, `link`,
+`nonInterrupting`.
 
 ## Ids and aliases
 
 Give every created element an explicit speaking `id` in the patterns
-`bpmn show <file> --conventions` lists; without a `.bpmnlintrc` these are
+`bpmn conventions <file>` lists; without a `.bpmnlintrc` these are
 `element-id-naming`'s defaults (`serviceTask_<verbObject>`, `userTask_<verbObject>`,
 `gateway_<question>`, `startEvent_<state>`, `endEvent_<state>`, `event_<state>`,
 `lane_<role>`, `participant_<party>`, `dataObject_<thing>`, `dataStore_<thing>`,
@@ -51,7 +53,7 @@ not name, set an alias - `"as"` on add / connect / split and split nodes,
 `"flowAs"` for the flow into a new node, `"outAs"` for the flow an add creates
 out of it (on a splice: to the old successor, so the same batch can set its
 condition), `"joinAs"` for a split's join - and use
-`"$alias"` wherever an id goes (also inside `values` for `default`, `source`,
+`"$alias"` wherever an id goes (also inside `set` for `default`, `source`,
 `target`, `lane`). The result prints `aliases: $x = <id>`. An alias follows
 its element through a rename and a retype, so create, retype, then configure
 works in one batch.
@@ -59,7 +61,7 @@ works in one batch.
 ## A first batch: split, aliases, end
 
 ```bash
-bpmn new invoice.bpmn --name "Invoice approval" --id invoiceApproval
+bpmn new invoice.bpmn "Invoice approval" --id invoiceApproval
 printf '%s' '[
   { "op": "add", "kind": "startEvent", "name": "Invoice received", "id": "startEvent_invoiceReceived", "in": "invoiceApproval" },
   { "op": "add", "kind": "userTask", "name": "Check invoice", "id": "userTask_checkInvoice", "after": "startEvent_invoiceReceived" },
@@ -69,7 +71,7 @@ printf '%s' '[
       { "flowName": "no", "nodes": [ { "kind": "userTask", "name": "Clarify invoice", "id": "userTask_clarifyInvoice", "flowAs": "$toClarify" },
                                        { "kind": "sendTask", "name": "Inform supplier", "id": "sendTask_informSupplier" } ] }
     ] },
-  { "op": "set", "id": "gateway_invoiceOk", "values": { "default": "$toClarify" } },
+  { "op": "set", "id": "gateway_invoiceOk", "set": { "default": "$toClarify" } },
   { "op": "add", "kind": "endEvent", "name": "Invoice handled", "id": "endEvent_invoiceHandled", "after": "gateway_invoiceOkJoin" }
 ]' | bpmn apply invoice.bpmn -
 bpmn show invoice.bpmn
@@ -102,13 +104,13 @@ printf '%s' '[
   { "op": "connect", "source": "dataObject_invoice", "target": "userTask_checkInvoice" },
   { "op": "add", "kind": "dataStore", "name": "Ledger", "id": "dataStore_ledger", "in": "invoiceApproval" },
   { "op": "connect", "source": "serviceTask_bookInvoice", "target": "dataStore_ledger" },
-  { "op": "add", "kind": "boundaryEvent:timer", "name": "5 days", "id": "event_clarificationOverdue", "on": "userTask_clarifyInvoice", "timer": "P5D" },
+  { "op": "add", "kind": "boundaryEvent:timer", "name": "5 days", "id": "event_clarificationOverdue", "on": "userTask_clarifyInvoice", "set": { "timer": "P5D" } },
   { "op": "add", "kind": "endEvent", "name": "Invoice returned", "id": "endEvent_invoiceReturned", "after": "event_clarificationOverdue" },
   { "op": "add", "kind": "subProcess", "name": "Archive invoice", "id": "subProcess_archiveInvoice", "before": "endEvent_invoiceHandled" },
   { "op": "add", "kind": "startEvent", "name": "Archiving started", "id": "startEvent_archivingStarted", "in": "subProcess_archiveInvoice" },
   { "op": "add", "kind": "serviceTask", "name": "Store PDF", "id": "serviceTask_storePdf", "after": "startEvent_archivingStarted" },
   { "op": "add", "kind": "endEvent", "name": "Archived", "id": "endEvent_archived", "after": "serviceTask_storePdf" }
-]' | bpmn apply invoice.bpmn - --summary
+]' | bpmn apply invoice.bpmn -
 ```
 
 - `connect` infers the connection: data object -> task is a data input
@@ -121,14 +123,14 @@ printf '%s' '[
 
 ```bash
 printf '%s' '[
-  { "op": "set", "id": "userTask_checkInvoice", "values": { "name": "Check invoice and order", "doc": "Compare the invoice with the purchase order." } },
-  { "op": "set", "id": "serviceTask_storePdf", "values": { "loop": "parallel", "cardinality": "${count}" } },
-  { "op": "retype", "id": "startEvent_invoiceReceived", "kind": "startEvent:message", "message": "Invoice" },
+  { "op": "set", "id": "userTask_checkInvoice", "set": { "name": "Check invoice and order", "doc": "Compare the invoice with the purchase order." } },
+  { "op": "set", "id": "serviceTask_storePdf", "set": { "loop": "parallel", "cardinality": "${count}" } },
+  { "op": "retype", "id": "startEvent_invoiceReceived", "kind": "startEvent:message", "set": { "message": "Invoice" } },
   { "op": "retype", "id": "serviceTask_bookInvoice", "kind": "scriptTask" },
   { "op": "remove", "ids": ["sendTask_informSupplier"] },
   { "op": "add", "kind": "endEvent", "name": "Invoice handled", "id": "endEvent_invoiceHandled", "ifAbsent": true, "in": "invoiceApproval" },
   { "op": "remove", "ids": ["serviceTask_payInvoice"], "ifExists": true }
-]' | bpmn apply invoice.bpmn - --summary
+]' | bpmn apply invoice.bpmn -
 bpmn validate invoice.bpmn
 ```
 
@@ -136,15 +138,16 @@ bpmn validate invoice.bpmn
   `message` / `error` / ... (events), `loop` (`standard`, `parallel`,
   `sequential`, `none`), `cardinality`, `completion`, `calledElement`, any BPMN
   attribute by property name, vendor attributes with their prefix
-  (`camunda:assignee`); `key=` / `"unset": ["key"]` removes. Nested elements:
-  `definition.<key>`, `loop.<key>`, `condition.<key>`. Every key per element:
-  `bpmn kinds --section setKeys,nestedKeys`.
+  (`camunda:assignee`); `key=` (`"key": ""` in a batch) removes. Nested elements:
+  `definition.<key>`, `loop.<key>`, `condition.<key>`. A sub-process
+  `expanded=false` collapses in place. Every key per element:
+  `bpmn guide set-keys nested-keys`.
 - `retype` keeps id, name, flows and extensions; `kind:none` drops a trigger;
   a sub-process with content becomes a task only with `--force`.
 - `remove` takes connected flows, boundary events and associations along and
-  bridges a node with one incoming and one outgoing flow; `"bridge": false`
+  bridges a node with one incoming and one outgoing flow; `"bridge": "none"`
   leaves the gap, `"withBranch": true` also removes the path only that node
-  leads to, `"bridgeAll": true` connects every predecessor of a join to its
+  leads to, `"bridge": "all"` connects every predecessor of a join to its
   successor.
 - `ifAbsent` (with an explicit id) and `ifExists` make a batch safe to re-run.
 
@@ -153,13 +156,13 @@ bpmn validate invoice.bpmn
 Tasks: `task`, `userTask`, `serviceTask`, `sendTask`, `receiveTask`,
 `scriptTask`, `manualTask`, `businessRuleTask`. Sub-processes: `subProcess`,
 `eventSubProcess:<trigger>` (with its start event), `adHocSubProcess`,
-`transaction`; `callActivity` (`set calledElement=<processId>`). Gateways:
+`transaction`; `callActivity` (`calledElement=<processId>`). Gateways:
 `exclusiveGateway`, `parallelGateway`, `inclusiveGateway`, `complexGateway`, `eventBasedGateway`
 (name exclusive gateways as a question, name their branches). Events:
 `startEvent`, `endEvent`, `intermediateCatchEvent`, `intermediateThrowEvent`,
 `boundaryEvent` with `:message`, `:timer`, `:error`, `:signal`, `:escalation`,
 `:conditional`, `:link`, `:compensate`, `:terminate`, `:cancel` - which trigger
-fits which event: `bpmn kinds --section kinds,triggers`. Timers are ISO 8601:
+fits which event: `bpmn guide kinds triggers`. Timers are ISO 8601:
 `PT2H` / `P3D` (duration), `R/PT1H` (cycle), a date-time (date). Messages,
 errors, signals and escalations are root elements found by name or created
 (ids like `message_<name>`); never guess those ids: name

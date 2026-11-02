@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" id="Definitions_bpmn2" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn2:process id="Process_bpmn2"><bpmn2:userTask id="review" /></bpmn2:process>
+</bpmn2:definitions>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:modeler="http://camunda.org/schema/modeler/1.0" xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+    modeler:executionPlatform="Camunda Platform"
+    modeler:executionPlatformVersion="7.24.0"
+    
+    id="definitions_test" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="process_test" isExecutable="true">
+    <bpmn:callActivity id="callActivity_a" calledElement="other" camunda:calledElementBinding="version" camunda:calledElementVersion="3" />
+          <bpmn:callActivity id="callActivity_b" calledElement="other" camunda:calledElementBinding="versionTag" camunda:calledElementVersionTag="1.0" />
+          <bpmn:businessRuleTask id="businessRuleTask_c" camunda:decisionRef="risk" camunda:decisionRefBinding="versionTag" camunda:decisionRefVersionTag="1.0" />
+          <bpmn:userTask id="userTask_d" camunda:formRef="form" camunda:formRefBinding="version" camunda:formRefVersion="2" />
+          <bpmn:callActivity id="callActivity_e" calledElement="other" camunda:calledElementBinding="latest" />
+  </bpmn:process>
+  
+</bpmn:definitions>

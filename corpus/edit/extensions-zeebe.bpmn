@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_extensionsZeebe" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_zeebe" isExecutable="true">
+    <bpmn:serviceTask id="worker" name="Worker">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="work" />
+        <zeebe:ioMapping>
+          <zeebe:output source="=r" target="r" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    <bpmn:task id="plain" name="Plain" />
+    <bpmn:task id="looped" name="Looped"><bpmn:multiInstanceLoopCharacteristics /></bpmn:task>
+    <bpmn:receiveTask id="receive" name="Receive" messageRef="message_order" />
+    <bpmn:intermediateCatchEvent id="waiter"><bpmn:messageEventDefinition id="def_waiter" messageRef="message_order" /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="keyless"><bpmn:messageEventDefinition id="def_keyless" /></bpmn:intermediateCatchEvent>
+    <bpmn:intermediateCatchEvent id="timerCatch"><bpmn:timerEventDefinition id="def_timer" /></bpmn:intermediateCatchEvent>
+    <bpmn:startEvent id="begin" />
+  </bpmn:process>
+  <bpmn:message id="message_order" name="Order" />
+</bpmn:definitions>

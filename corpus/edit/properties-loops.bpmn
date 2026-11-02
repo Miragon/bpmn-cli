@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_loops" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_loops" isExecutable="true">
+    <bpmn:task id="task_plain" />
+    <bpmn:task id="task_standard">
+      <bpmn:standardLoopCharacteristics id="loop_standard" />
+    </bpmn:task>
+    <bpmn:task id="task_multi">
+      <bpmn:multiInstanceLoopCharacteristics id="loop_multi" isSequential="true" camunda:collection="items">
+        <bpmn:loopCardinality xsi:type="bpmn:tFormalExpression">3</bpmn:loopCardinality>
+        <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">${done}</bpmn:completionCondition>
+      </bpmn:multiInstanceLoopCharacteristics>
+    </bpmn:task>
+    <bpmn:task id="task_two_vendor">
+      <bpmn:multiInstanceLoopCharacteristics camunda:collection="items" camunda:elementVariable="item" />
+    </bpmn:task>
+    <bpmn:adHocSubProcess id="sub_adhoc">
+      <bpmn:task id="task_inside" />
+    </bpmn:adHocSubProcess>
+    <bpmn:adHocSubProcess id="sub_adhoc_multi">
+      <bpmn:multiInstanceLoopCharacteristics id="loop_adhoc" />
+      <bpmn:task id="task_inside_multi" />
+    </bpmn:adHocSubProcess>
+  </bpmn:process>
+</bpmn:definitions>
