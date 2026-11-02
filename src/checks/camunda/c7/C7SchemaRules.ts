@@ -32,10 +32,10 @@ export class C7SchemaRules extends C7Rules {
       return `Write the decision link in the engines' spelling: \`bpmn set <file> ${id} ${ShellWords.quote(`calledDecision=${link.value}`)}\` (${this.prefix}:decisionRef; the unprefixed ${key} is removed).`;
     }
     if (fits) {
-      return `Use the vendor attribute instead: \`bpmn set <file> ${id} ${ShellWords.quote(`${key}=`)} ${ShellWords.quote(`${this.prefix}:${key}=${String(el.attrs[key] ?? '')}`)}\`.`;
+      return `Use the vendor attribute instead: \`bpmn set <file> ${id} --unset ${ShellWords.quote(key)} ${ShellWords.quote(`${this.prefix}:${key}=${String(el.attrs[key] ?? '')}`)}\`.`;
     }
     if (addr) {
-      return `Remove it: \`bpmn set <file> ${addr.slot(`${key}=`)}\` (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`;
+      return `Remove it: \`bpmn set <file> ${addr.unset(key)}\` (vendor attributes need their namespace prefix, e.g. ${this.prefix}:<name>).`;
     }
     if (inDrawing) {
       return `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram, which writes new diagram elements: \`bpmn layout <file>\` (the hand-made layout is lost).`;

@@ -53,17 +53,24 @@ describe('EventKeys', () => {
     expect(alias.changes.changed[0]?.detail).toBe('trigger=message');
   });
 
-  it('takes an empty error code without a change to the error', async () => {
-    const { document, changes } = await writing('end_error', { errorCode: '' });
+  it('removes the code of the error it references and keeps the error', async () => {
+    const { document } = await writing('end_error', { errorCode: '' });
 
-    expect(document.tree.require('Error_late').get('errorCode')).toBe('E1');
-    expect(changes.changed[0]?.detail).toBe('trigger=error');
+    expect(document.tree.require('Error_late').get('errorCode')).toBeUndefined();
+    expect(document.tree.require('end_error').list('eventDefinitions')[0]?.get('errorRef')).toBe(document.tree.require('Error_late'));
+  });
+
+  it('removes the error it references and keeps the error another event still references', async () => {
+    const { document } = await writing('end_error', { error: '' });
+
+    expect(document.tree.require('end_error').list('eventDefinitions')[0]?.get('errorRef')).toBeUndefined();
+    expect(document.tree.byId('Error_late')).toBeDefined();
   });
 
   it.each([
     ['a trigger BPMN does not know', 'end_plain', { trigger: 'rain' }, 'E_INVALID_VALUE'],
     ['a key of another trigger', 'catch_message', { trigger: 'message', timer: 'PT1H' }, 'E_INVALID_VALUE'],
-    ['a key without a value', 'catch_message', { signal: '' }, 'E_INVALID_VALUE'],
+    ['a timer without a value', 'catch_message', { timer: '' }, 'E_INVALID_VALUE'],
     ['a trigger the kind does not allow', 'end_plain', { timer: 'PT1H' }, 'E_INVALID_TRIGGER'],
     ['a trigger on a task', 'task_work', { message: 'Paid' }, 'E_INVALID_TRIGGER'],
   ])('refuses %s', async (_case, id, keys, code) => {

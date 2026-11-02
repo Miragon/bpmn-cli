@@ -178,12 +178,12 @@ export class C7ImplementationRules extends C7Rules {
 
   private reportUnsupportedType({ el, owner, label, reporter, set }: ImplementationSite, type: string): void {
     const mail = type.toLowerCase() === 'mail' ? ' (the standard engine distributions cannot load the mail task)' : '';
-    reporter.deploy({ code: 'W_C7_DEPLOY_IMPLEMENTATION', element: el, owner, subject: 'impl:type', message: `${this.prefix}:type="${type}" on ${label} is not supported (only "external" and "shell")${mail}; the engines refuse the file`, hint: `Use an external task: ${set(`${this.prefix}:type=external ${this.prefix}:topic=<topic>`)}, or remove it: ${set(`${this.prefix}:type=`)}.` });
+    reporter.deploy({ code: 'W_C7_DEPLOY_IMPLEMENTATION', element: el, owner, subject: 'impl:type', message: `${this.prefix}:type="${type}" on ${label} is not supported (only "external" and "shell")${mail}; the engines refuse the file`, hint: `Use an external task: ${set(`${this.prefix}:type=external ${this.prefix}:topic=<topic>`)}, or remove it: ${this.unsetCommand(el, owner, `${this.prefix}:type`)}.` });
   }
 
-  private checkResultVariable({ el, owner, label, reporter, set }: ImplementationSite): void {
+  private checkResultVariable({ el, owner, label, reporter }: ImplementationSite): void {
     if (this.c7(el, 'resultVariable') !== undefined && (this.nonEmpty(this.c7(el, 'class')) || this.nonEmpty(this.c7(el, 'delegateExpression')))) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_RESULT_VARIABLE', element: el, owner, subject: 'resultVariable', message: `${label} combines ${this.prefix}:resultVariable with ${this.nonEmpty(this.c7(el, 'class')) ? `${this.prefix}:class` : `${this.prefix}:delegateExpression`}; the engines support a result variable only with ${this.prefix}:expression and refuse the file`, hint: `Remove it: ${set(`${this.prefix}:resultVariable=`)} (or switch to ${this.prefix}:expression=\${...}).` });
+      reporter.deploy({ code: 'W_C7_DEPLOY_RESULT_VARIABLE', element: el, owner, subject: 'resultVariable', message: `${label} combines ${this.prefix}:resultVariable with ${this.nonEmpty(this.c7(el, 'class')) ? `${this.prefix}:class` : `${this.prefix}:delegateExpression`}; the engines support a result variable only with ${this.prefix}:expression and refuse the file`, hint: `Remove it: ${this.unsetCommand(el, owner, `${this.prefix}:resultVariable`)} (or switch to ${this.prefix}:expression=\${...}).` });
     }
   }
 }

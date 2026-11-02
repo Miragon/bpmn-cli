@@ -40,7 +40,7 @@ export class C7FlowRules extends C7Rules {
     if (source && (Kinds.ignoresConditions(source) || source.peek<BpmnElement>('default') === flow)) {
       return;
     }
-    reporter.runtime({ code: 'W_C7_EMPTY_CONDITION', element: flow, subject: 'emptyCondition', message: `Sequence flow ${flow.id} has an empty condition (no expression and no ${this.prefix}:resource): it deploys, but the engines fail when they evaluate it`, hint: `Give it one: \`bpmn set <file> ${flow.id} ${ShellWords.quote('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${flow.id} condition=\`.` });
+    reporter.runtime({ code: 'W_C7_EMPTY_CONDITION', element: flow, subject: 'emptyCondition', message: `Sequence flow ${flow.id} has an empty condition (no expression and no ${this.prefix}:resource): it deploys, but the engines fail when they evaluate it`, hint: `Give it one: \`bpmn set <file> ${flow.id} ${ShellWords.quote('condition=${expression}')}\`, or remove it: \`bpmn set <file> ${flow.id} --unset condition\`.` });
   }
 
   private checkEventGateway(gw: BpmnElement, reporter: RuleReporter): void {
@@ -85,7 +85,7 @@ export class C7FlowRules extends C7Rules {
   }
 
   private static reportConditionedDefault(gw: BpmnElement, flow: BpmnElement, reporter: RuleReporter): void {
-    reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `default:${flow.id}`, message: `Default flow ${flow.id} of exclusive gateway ${gw.id} has a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} condition=\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, set: { condition: '' } } });
+    reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `default:${flow.id}`, message: `Default flow ${flow.id} of exclusive gateway ${gw.id} has a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} --unset condition\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, unset: ['condition'] } });
   }
 
   private checkExclusiveGateway(gw: BpmnElement, reporter: RuleReporter): void {
@@ -123,7 +123,7 @@ export class C7FlowRules extends C7Rules {
     if (flow === def) {
       C7FlowRules.reportConditionedDefault(gw, flow, reporter);
     } else {
-      reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `single:${flow.id}`, message: `Exclusive gateway ${gw.id} has a single outgoing flow ${flow.id} with a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} condition=\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, set: { condition: '' } } });
+      reporter.deploy({ code: 'W_C7_DEPLOY_EXCLUSIVE_GATEWAY', element: gw, subject: `single:${flow.id}`, message: `Exclusive gateway ${gw.id} has a single outgoing flow ${flow.id} with a condition; the engines refuse the file`, hint: `\`bpmn set <file> ${flow.id} --unset condition\`.`, related: [flow.id], fix: { op: 'set', id: flow.id, unset: ['condition'] } });
     }
   }
 

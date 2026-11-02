@@ -15,13 +15,21 @@ export class EditCommand {
     for (const positional of this.syntax.positionals()) {
       command.argument(positional);
     }
-    for (const { usage, help: flagHelp, choices } of [...this.syntax.flags(), ...CommandSyntax.SHARED_FLAGS]) {
-      command.addOption(choices ? new Option(usage, flagHelp).choices(choices) : new Option(usage, flagHelp));
+    for (const { usage, help: flagHelp, choices, repeated } of [...this.syntax.flags(), ...CommandSyntax.SHARED_FLAGS]) {
+      command.addOption(EditCommand.optionOf(usage, flagHelp, choices, repeated));
     }
     command.action((...words: unknown[]) => {
       const input = this.syntax.parse(words);
       return this.shell.write(input, [input.operation]).catch((error: unknown) => Promise.reject(this.forCommand(error)));
     });
+  }
+
+  private static optionOf(usage: string, help: string, choices: readonly string[] | undefined, repeated: boolean | undefined): Option {
+    const option = new Option(usage, help);
+    if (choices) {
+      return option.choices(choices);
+    }
+    return repeated ? option.argParser((value: string, previous: string[] = []) => [...previous, value]) : option;
   }
 
   private forCommand(error: unknown): unknown {

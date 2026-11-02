@@ -27,9 +27,9 @@ The examples build `invoice.bpmn` from scratch and run in order.
 | --- | --- |
 | add | **kind**, name, id, as, flowAs, outAs, refAs, after, before, flow, in, on, to, lane, flowName, flowId, condition, language, default, ifAbsent, set, process, blackBox, members |
 | connect | **source**, **target**, id, as, refAs, ifAbsent, set |
-| set | **id**, **set** (map), refAs |
+| set | **id**, set (map), unset (list), refAs |
 | remove | **ids**, bridge (`none`, `all`), withBranch, ifExists |
-| retype | **id**, **kind**, set, refAs |
+| retype | **id**, **kind**, set, unset, refAs |
 | move | **ids**, after, before, flow, in, on, lane |
 | order | **id**, one of flows / lanes / pools |
 | ext | **id**, **action** (add / remove), type, attrs, body, xml, replace, index, slot |
@@ -138,7 +138,7 @@ bpmn validate invoice.bpmn
   `message` / `error` / ... (events), `loop` (`standard`, `parallel`,
   `sequential`, `none`), `cardinality`, `completion`, `calledElement`, any BPMN
   attribute by property name, vendor attributes with their prefix
-  (`camunda:assignee`); `key=` (`"key": ""` in a batch) removes. Nested elements:
+  (`camunda:assignee`); `--unset key` (`"unset": ["key"]` in a batch) removes; an empty value is refused. Nested elements:
   `definition.<key>`, `loop.<key>`, `condition.<key>`. A sub-process
   `expanded=false` collapses in place. Every key per element:
   `bpmn guide set-keys nested-keys`.

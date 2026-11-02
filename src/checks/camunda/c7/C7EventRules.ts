@@ -192,7 +192,7 @@ export class C7EventRules extends C7Rules {
       .slice(0, 5);
     const what = ref.is('bpmn:FlowNode') ? `${this.describe(ref, undefined)}, which is not in ${sid}` : `${ref.id}, which is not a flow node`;
     const key = `${this.addressOf(def, el)?.prefix ?? 'definition.'}activityRef`;
-    reporter.deploy({ code: 'W_C7_DEPLOY_EVENT_DEFINITION', element: el, subject: 'activityRef', message: `Compensation event ${el.id} names activityRef ${what}; the engines compensate only activities of the throw event's own (sub-)process and refuse the file`, hint: `\`bpmn set <file> ${el.id} ${ShellWords.quote(`${key}=<activityId>`)}\`${candidates.length ? ` (in ${sid}: ${candidates.join(', ')})` : ''}, or compensate the whole scope: \`bpmn set <file> ${el.id} ${ShellWords.quote(`${key}=`)}\`.`, related: ref.id ? [ref.id] : [] });
+    reporter.deploy({ code: 'W_C7_DEPLOY_EVENT_DEFINITION', element: el, subject: 'activityRef', message: `Compensation event ${el.id} names activityRef ${what}; the engines compensate only activities of the throw event's own (sub-)process and refuse the file`, hint: `\`bpmn set <file> ${el.id} ${ShellWords.quote(`${key}=<activityId>`)}\`${candidates.length ? ` (in ${sid}: ${candidates.join(', ')})` : ''}, or compensate the whole scope: \`bpmn set <file> ${el.id} --unset ${ShellWords.quote(key)}\`.`, related: ref.id ? [ref.id] : [] });
   }
 
   private checkReceiveTask(el: BpmnElement, reporter: RuleReporter): void {

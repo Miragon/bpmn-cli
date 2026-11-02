@@ -47,7 +47,7 @@ export class C8SchemaRules extends C8Rules {
       return `Write the decision link the Camunda 8 way: \`bpmn set <file> ${id} ${ShellWords.quote(`calledDecision=${link.value}`)}\` (${this.zeebeName('calledDecision')}; the unprefixed ${key} is removed; give it a resultVariable).`;
     }
     if (addr) {
-      return `Remove it: \`bpmn set <file> ${addr.slot(`${key}=`)}\` (vendor attributes need their namespace prefix; Camunda 8 settings are mostly ${this.prefix}: extension elements).`;
+      return `Remove it: \`bpmn set <file> ${addr.unset(key)}\` (vendor attributes need their namespace prefix; Camunda 8 settings are mostly ${this.prefix}: extension elements).`;
     }
     if (inDrawing) {
       return `Remove ${key}="..." from the XML of ${id ?? 'the diagram element'}, or redraw the diagram: \`bpmn layout <file>\` (the hand-made layout is lost).`;

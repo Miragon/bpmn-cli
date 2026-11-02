@@ -53,7 +53,7 @@ export abstract class CamundaRules {
 
   protected unsetCommand(el: BpmnElement, owner: BpmnElement | undefined, key: string): string {
     const address = this.addressOf(el, owner);
-    return address ? `\`bpmn set <file> ${address.slot(`${key}=`)}\`` : 'edit the XML';
+    return address ? `\`bpmn set <file> ${address.unset(key)}\`` : 'edit the XML';
   }
 
   protected attr(el: BpmnElement | undefined, name: string): string | undefined {

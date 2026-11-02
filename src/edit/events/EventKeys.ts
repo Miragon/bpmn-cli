@@ -11,6 +11,8 @@ interface TriggerKeyValues {
 }
 
 export class EventKeys {
+  private static readonly REMOVABLE: ReadonlySet<string> = new Set(['message', 'error', 'errorCode', 'signal', 'escalation', 'escalationCode']);
+
   constructor(private readonly edit: EditSession) {}
 
   write(el: BpmnElement, keys: Map<string, string>, changes: ChangeSet): void {
@@ -57,7 +59,7 @@ export class EventKeys {
       } else if (key !== 'trigger') {
         values.requested = EventKeys.impliedTrigger(el, key, values.requested);
         EventKeys.assertHasValue(el, key, value);
-        values.given[key] = key === 'message' ? value : value || undefined;
+        values.given[key] = EventKeys.REMOVABLE.has(key) ? value : value || undefined;
       }
     }
     return values;
@@ -72,8 +74,8 @@ export class EventKeys {
   }
 
   private static assertHasValue(el: BpmnElement, key: string, value: string): void {
-    if (!value && key !== 'errorCode' && key !== 'escalationCode' && key !== 'message') {
-      throw PropertyCoercer.invalidValue(el, key, `${key} needs a value`, 'Use trigger=none to remove the trigger.');
+    if (!value && !EventKeys.REMOVABLE.has(key)) {
+      throw PropertyCoercer.invalidValue(el, key, `${key} cannot be removed on its own`, 'Use trigger=none to remove the trigger.');
     }
   }
 }

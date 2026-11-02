@@ -1,6 +1,6 @@
 # Set keys
 
-`bpmn set <file> <id> key=value`; `key=` removes. The same on `add`, `retype`, `connect`. The trigger keys, such as `timer=`: `bpmn guide triggers`.
+`bpmn set <file> <id> key=value`, also on `add`, `retype`, `connect`; `--unset <key>` removes (`set`, `retype`). The trigger keys, such as `timer=`: `bpmn guide triggers`.
 
 any:
 - `id`: Rename the element

@@ -4,9 +4,9 @@
 
 - `add`: kind* name id as flowAs outAs refAs after before flow in on to lane flowName flowId condition language default ifAbsent set process blackBox members
 - `connect`: source* target* id as refAs ifAbsent set
-- `set`: id* set* refAs
+- `set`: id* set unset refAs
 - `remove`: ids* bridge withBranch ifExists
-- `retype`: id* kind* set refAs
+- `retype`: id* kind* set unset refAs
 - `move`: ids* after before flow in on lane
 - `order`: id* flows lanes pools
 - `ext`: id* action* type attrs body xml replace index slot

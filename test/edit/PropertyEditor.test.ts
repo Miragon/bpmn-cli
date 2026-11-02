@@ -6,7 +6,11 @@ import { type BpmnElement, ChangeSet } from '../support/ModelValues.js';
 
 async function set(id: string, values: Record<string, string>, refAs?: string) {
   const document = await Fixtures.readForWrite('edit/properties-editor.bpmn');
-  const operation = Fixtures.operations([{ op: 'set', id, set: values, ...(refAs ? { refAs } : {}) }]).model[0] as Parameters<PropertyEditor['set']>[0];
+  const given = Object.entries(values);
+  const kept = Object.fromEntries(given.filter(([, value]) => value !== ''));
+  const unset = given.filter(([, value]) => value === '').map(([key]) => key);
+  const keys = { ...(Object.keys(kept).length ? { set: kept } : {}), ...(unset.length ? { unset } : {}) };
+  const operation = Fixtures.operations([{ op: 'set', id, ...keys, ...(refAs ? { refAs } : {}) }]).model[0] as Parameters<PropertyEditor['set']>[0];
   const changes = new PropertyEditor(new EditSession(document)).set(operation);
   const details = changes.changed.map(({ detail }) => detail);
   return { document, changes, details, element: document.tree.byId(values['id'] ?? id)! };

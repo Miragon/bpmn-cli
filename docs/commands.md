@@ -17,7 +17,7 @@ operations, exit codes), generated from the code.
 | Change | `new <file> [<name>]` | a file with one empty process; `--target camunda7\|camunda8\|none` |
 | | `add <file> <kind> [<name>]` | create an element and wire it in |
 | | `connect <file> <source> <target>` | sequence flow, message flow, association or data association, by the ends |
-| | `set <file> <id> <key=value...>` | change properties; `id=<new>` renames, `key=` removes |
+| | `set <file> <id> <key=value...>` | change properties; `id=<new>` renames, `--unset <key>` removes |
 | | `remove <file> <ids...>` | remove elements and bridge the gap |
 | | `retype <file> <id> <kind>` | change the kind, keep id, flows and boundary events |
 | | `move <file> <ids...>` | detach nodes and place them again, like `add` |
@@ -86,7 +86,7 @@ when missing. Full lists: `bpmn guide kinds triggers`.
 
 | trigger | keys |
 | --- | --- |
-| `message` | `message=<name>`; an empty `message=` drops only the `messageRef` (connector-implemented throw events) |
+| `message` | `message=<name>`; `--unset message` drops only the `messageRef` (connector-implemented throw events) |
 | `timer` | `timer=<iso>`: `PT5M` a duration, `R/PT1H` a cycle, a date a date |
 | `error` | `error=<name>`, `errorCode=<code>` |
 | `signal` | `signal=<name>` |

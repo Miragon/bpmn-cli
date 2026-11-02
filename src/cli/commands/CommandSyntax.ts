@@ -30,6 +30,7 @@ export interface Flag {
   help: string;
   field: string;
   choices?: readonly string[] | undefined;
+  repeated?: boolean;
 }
 
 export interface OperationWords {
@@ -50,6 +51,7 @@ export class CommandSyntax {
   private static readonly INDEX_SELECTOR = /^(?:(definition|loop|condition)\.)?(\d+)$/;
   private static readonly WHOLE_NUMBER = /^\s*-?\d+\s*$/;
   private static readonly PLACEHOLDERS: Readonly<Record<string, string>> = { flowName: 'text', condition: 'expr', language: 'lang', xml: 'snippet', by: 'amount' };
+  private static readonly REPEATED: ReadonlySet<string> = new Set(['unset']);
   private static readonly EXTENSION_ONLY = ['action', 'attrs', 'body'];
   private static readonly IDS: Word = { usage: '<ids...>', field: 'ids' };
   private static readonly OPTIONAL_IDS: Word = { usage: '[ids...]', field: 'ids' };
@@ -99,7 +101,7 @@ export class CommandSyntax {
       return '';
     }
     if (schema.type === 'array') {
-      return ' <ids...>';
+      return CommandSyntax.REPEATED.has(field) ? ' <key>' : ' <ids...>';
     }
     return ` <${schema.enum ? 'value' : (CommandSyntax.PLACEHOLDERS[field] ?? 'id')}>`;
   }
@@ -157,6 +159,7 @@ export class CommandSyntax {
       help: schema.description ?? '',
       field,
       choices: schema.enum,
+      repeated: CommandSyntax.REPEATED.has(field),
     }));
   }
 
@@ -181,17 +184,21 @@ export class CommandSyntax {
     const { op: _op, action: _action, ...fields } = operation;
     const rest = this.shape.words.flatMap(({ field }) => this.positionalWords(field, fields));
     for (const { field, usage } of this.flags()) {
-      rest.push(...CommandSyntax.flagWords(usage, fields[field]));
+      rest.push(...CommandSyntax.flagWords(usage, fields[field], CommandSyntax.REPEATED.has(field)));
       delete fields[field];
     }
     return Object.keys(fields).length ? undefined : { command: this.name.split(' '), rest };
   }
 
-  private static flagWords(usage: string, value: unknown): string[] {
+  private static flagWords(usage: string, value: unknown, repeated: boolean): string[] {
     if (value === undefined || value === false) {
       return [];
     }
-    return [usage.split(' ')[0]!, ...(value === true ? [] : [value].flat().map(String))];
+    const flag = usage.split(' ')[0]!;
+    if (repeated) {
+      return [value].flat().flatMap((item) => [flag, String(item)]);
+    }
+    return [flag, ...(value === true ? [] : [value].flat().map(String))];
   }
 
   private positionalWords(field: string, fields: Record<string, unknown>): string[] {

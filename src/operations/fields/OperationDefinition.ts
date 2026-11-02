@@ -1,6 +1,7 @@
 import { EditDistance } from '../../model/index.js';
 import { FieldRefusal } from './FieldRefusal.js';
 import { OperationCheck } from './OperationCheck.js';
+import type { Wording } from './RefusalWording.js';
 import { SetKeys } from './SetKeys.js';
 import type { OperationField } from './OperationField.js';
 import type { OperationLocation } from './OperationLocation.js';
@@ -33,8 +34,33 @@ export abstract class OperationDefinition {
       throw location.refusal(`expected an object, got ${FieldRefusal.describe(input)}`);
     }
     const fields = this.readFields(input as Record<string, unknown>, location);
-    this.check(new OperationCheck(location, fields));
-    return fields;
+    const operation = new OperationCheck(location, fields);
+    this.assertEveryKeyHasValue(operation);
+    this.check(operation);
+    return this.withUnsetKeysAsRemovals(operation);
+  }
+
+  private assertEveryKeyHasValue(operation: OperationCheck): void {
+    const keys = (operation.fields['set'] as Record<string, string> | undefined) ?? {};
+    const empty = Object.keys(keys).find((key) => keys[key] === '');
+    if (empty === undefined) {
+      return;
+    }
+    const removal: Wording = this.fields['unset'] ? (key) => `Use ${key('unset')} ${empty} to remove it.` : `Leave ${empty} out.`;
+    throw operation.fail(`${empty} needs a value`, removal, [], 'E_INVALID_VALUE');
+  }
+
+  private withUnsetKeysAsRemovals(operation: OperationCheck): Record<string, unknown> {
+    const { unset, ...fields } = operation.fields;
+    if (unset === undefined) {
+      return fields;
+    }
+    const keys = (fields['set'] as Record<string, string> | undefined) ?? {};
+    const both = (unset as string[]).find((key) => key in keys);
+    if (both !== undefined) {
+      throw operation.fail((key) => `${both} is in ${key('set')} and ${key('unset')}`, 'Set it or remove it, not both.');
+    }
+    return { ...fields, set: { ...keys, ...Object.fromEntries((unset as string[]).map((key) => [key, ''])) } };
   }
 
   private readFields(input: Record<string, unknown>, location: OperationLocation): Record<string, unknown> {

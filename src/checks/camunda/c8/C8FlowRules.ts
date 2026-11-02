@@ -59,7 +59,7 @@ export class C8FlowRules extends C8Rules {
       const body = cc.peek<string>('body') ?? '';
       const fix = `\`bpmn set <file> ${el.id} ${ShellWords.quote(`completion==${this.feelOf(this.isFeel(body) ? body.trim().slice(1) : body)}`)}\` (check the FEEL syntax)`;
       if (!this.isFeel(body)) {
-        reporter.deploy({ code: 'W_C8_DEPLOY_EXPRESSION', element: el, subject: 'adHoc:completion', message: `The completion condition "${body.trim()}" of ad-hoc sub-process ${el.id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, hint: `${fix}, or remove it: \`bpmn set <file> ${el.id} completion=\`.` });
+        reporter.deploy({ code: 'W_C8_DEPLOY_EXPRESSION', element: el, subject: 'adHoc:completion', message: `The completion condition "${body.trim()}" of ad-hoc sub-process ${el.id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, hint: `${fix}, or remove it: \`bpmn set <file> ${el.id} --unset completion\`.` });
       } else {
         this.checkFeel(el, undefined, 'adHoc:completion', `The completion condition of ad-hoc sub-process ${el.id}`, body, `${fix}.`, reporter);
       }
@@ -75,10 +75,10 @@ export class C8FlowRules extends C8Rules {
     const source = flow.peek<BpmnElement>('sourceRef');
     this.checkFeel(flow, undefined, 'condition', `The condition of sequence flow ${flow.id}`, body, `\`bpmn set <file> ${flow.id} ${ShellWords.quote(`condition==${this.feelOf(body.trim().slice(1))}`)}\` (check the FEEL syntax: and / or, = for equality, not(...)).`, reporter);
     if (!this.isFeel(body)) {
-      reporter.deploy({ code: 'W_C8_DEPLOY_EXPRESSION', element: flow, subject: 'condition', message: `The condition "${body.trim()}" of sequence flow ${flow.id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, hint: body.trim() ? `\`bpmn set <file> ${flow.id} ${ShellWords.quote(`condition==${this.feelOf(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${flow.id} ${ShellWords.quote('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${flow.id} condition=\`).` });
+      reporter.deploy({ code: 'W_C8_DEPLOY_EXPRESSION', element: flow, subject: 'condition', message: `The condition "${body.trim()}" of sequence flow ${flow.id} is no FEEL expression; Camunda 8 needs one starting with = and refuses the file`, hint: body.trim() ? `\`bpmn set <file> ${flow.id} ${ShellWords.quote(`condition==${this.feelOf(body)}`)}\` (check the FEEL syntax: and / or, = for equality).` : `Give it one (\`bpmn set <file> ${flow.id} ${ShellWords.quote('condition== <expression>')}\`) or remove it (\`bpmn set <file> ${flow.id} --unset condition\`).` });
     }
     if (source && !source.is('bpmn:Gateway')) {
-      reporter.runtime({ code: 'W_C8_CONDITION_IGNORED', element: flow, subject: 'conditionIgnored', message: `Sequence flow ${flow.id} out of ${this.describe(source)} has a condition; Camunda 8 evaluates conditions at exclusive and inclusive gateways only and always takes this flow`, hint: `Remove it (\`bpmn set <file> ${flow.id} condition=\`), or branch with a gateway: \`bpmn add <file> exclusiveGateway "<Question?>" --after ${source.id}\`, then move the condition onto its flows.` });
+      reporter.runtime({ code: 'W_C8_CONDITION_IGNORED', element: flow, subject: 'conditionIgnored', message: `Sequence flow ${flow.id} out of ${this.describe(source)} has a condition; Camunda 8 evaluates conditions at exclusive and inclusive gateways only and always takes this flow`, hint: `Remove it (\`bpmn set <file> ${flow.id} --unset condition\`), or branch with a gateway: \`bpmn add <file> exclusiveGateway "<Question?>" --after ${source.id}\`, then move the condition onto its flows.` });
     }
   }
 
