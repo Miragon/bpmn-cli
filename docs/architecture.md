@@ -45,6 +45,9 @@ flowchart TD
 - `checks/structure/` and `checks/camunda/` never import each other.
 - In edit, the operation classes sit at the module root and may call each other, as `BranchSplit` calls
   `ElementCreation`; the subfolders hold the BPMN parts they share and never call an operation class.
+- What an edit leaves behind is repaired in one place, `edit/consequences/`, not by each operation:
+  every consequence finds its problems before and after a batch and repairs only the new ones, such as a
+  message nothing refers to any more or a data association reaching into a collapsed sub-process.
 
 ## One write
 

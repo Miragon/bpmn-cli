@@ -188,15 +188,6 @@ describe('PropertyEditor', () => {
       expect((await setMessage('task_send', '')).element.get('messageRef')).toBeUndefined();
     });
 
-    it('removes the message nothing refers to any more', async () => {
-      const { document, changes } = await setMessage('task_receive', 'Invoice');
-      const invoice = document.tree.require('task_receive').get<BpmnElement>('messageRef');
-      new PropertyEditor(new EditSession(document)).setTaskMessage(document.tree.require('task_receive'), '', changes);
-
-      expect(document.tree.byId(invoice.id)).toBeUndefined();
-      expect(changes.removed).toEqual([expect.objectContaining({ id: invoice.id })]);
-    });
-
     it('sets the message of a message flow', async () => {
       const { document } = await setMessage('flow_message', 'Order');
 
