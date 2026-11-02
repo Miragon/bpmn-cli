@@ -79,10 +79,16 @@ export class DocumentNamespaces {
 
   /** Any prefix bound to the modeler namespace counts. */
   executionPlatform(): string | undefined {
+    return this.modelerAttribute('executionPlatform');
+  }
+
+  executionPlatformVersion(): string | undefined {
+    return this.modelerAttribute('executionPlatformVersion');
+  }
+
+  private modelerAttribute(local: string): string | undefined {
     for (const [attrName, attrValue] of Object.entries(this.definitions.$attrs ?? {})) {
-      if (!attrName.endsWith(':executionPlatform') && attrName !== 'executionPlatform') {
-        continue;
-      }
+      if (!attrName.endsWith(`:${local}`) && attrName !== local) continue;
       const uri = this.uriOfName(attrName);
       if (uri && uri !== MODELER_URI) continue;
       if (typeof attrValue === 'string') return attrValue;

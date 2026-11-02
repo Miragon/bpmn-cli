@@ -7,7 +7,7 @@ import type { DiagramCommandResult } from '../../../domain/diagram/commands/Diag
 import type { Finding } from '../../../domain/document/Finding.js';
 import type { CheckResult } from '../../../application/port/in/ValidateDocumentUseCase.js';
 import type { LayoutStatus } from '../../../domain/diagram/types.js';
-import type { PlatformSummary } from '../../../domain/validation/profiles/PlatformProfiles.js';
+import type { PlatformSummary } from '../../../domain/validation/PlatformCheck.js';
 import type { Change } from '../../../domain/document/ChangeSet.js';
 import type { ValidationResult } from '../../../domain/validation/StructuralValidator.js';
 import type { ValidatorReport } from '../../../domain/validation/validators.js';

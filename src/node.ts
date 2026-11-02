@@ -21,6 +21,7 @@ import { EditDocumentService } from './application/service/EditDocumentService.j
 import { ReadDocumentService } from './application/service/ReadDocumentService.js';
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
 import { ValidateDocumentService } from './application/service/ValidateDocumentService.js';
+import { BpmnlintEngineLint } from './adapters/out/bpmnlint/BpmnlintEngineLint.js';
 import { ProjectBpmnlint, type BpmnlintSettings } from './adapters/out/files/ProjectBpmnlint.js';
 import type { FileBpmnlintOptions, ProjectIdConventions } from './application/port/out/LoadProjectSettingsPort.js';
 import { FileDocumentStore } from './adapters/out/files/FileDocumentStore.js';
@@ -28,6 +29,7 @@ import { BpmnlintProjectSettings } from './adapters/out/files/BpmnlintProjectSet
 
 const FILES = new FileDocumentStore();
 const PROJECT = new BpmnlintProjectSettings();
+const ENGINE = new BpmnlintEngineLint();
 
 export * from './index.js';
 export { readXml, decodeXmlBytes, writeAtomic } from './adapters/out/files/utils/files.js';
@@ -39,18 +41,18 @@ export function readDoc(file: string): Promise<Doc> { return new ReadDocumentSer
 /** Loads a file; fails with E_IMPORT_LOSSY when bpmn-moddle dropped content, unless force. */
 export function loadDoc(file: string, opts: { force?: boolean } = {}): Promise<Doc> { return new ReadDocumentService(FILES).read({ source: { file }, lossless: true, ...opts }); }
 /** Loads a file, applies ops and writes it back (or to opts.out). */
-export function mutateFile(file: string, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES).edit({ ...opts, source: { file }, commands: ops }); }
+export function mutateFile(file: string, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES, ENGINE).edit({ ...opts, source: { file }, commands: ops }); }
 /** Applies ops to a loaded document and writes it to opts.out ?? doc.file. */
-export function mutateDocToFile(doc: Doc, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES).edit({ ...opts, source: { doc }, commands: ops }); }
+export function mutateDocToFile(doc: Doc, ops: EditCommand[], opts: FileMutationOptions = {}): Promise<MutationResult> { return new EditDocumentService(PROJECT, FILES, ENGINE).edit({ ...opts, source: { doc }, commands: ops }); }
 /** `bpmn layout`: redraws a file (or with `tidy` only removes overlaps) and writes it back. */
-export function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> { return new RelayoutDiagramService(PROJECT, FILES).relayout({ ...opts, source: { file } }); }
+export function layoutFile(file: string, opts: FileLayoutOptions = {}): Promise<MutationResult> { return new RelayoutDiagramService(PROJECT, FILES, ENGINE).relayout({ ...opts, source: { file } }); }
 /** `bpmn validate`: validates a file and dry-runs the layout without writing anything. */
-export function checkFile(file: string, opts: FileCheckOptions = {}): Promise<CheckResult> { return new ValidateDocumentService(PROJECT, FILES).validate({ ...opts, source: { file } }); }
+export function checkFile(file: string, opts: FileCheckOptions = {}): Promise<CheckResult> { return new ValidateDocumentService(PROJECT, FILES, ENGINE).validate({ ...opts, source: { file } }); }
 /**
  * checkFile for a document read elsewhere (`bpmn validate -`); without a file
  * the .bpmnlintrc is looked up from `opts.lintFrom`.
  */
-export function checkLoadedDoc(doc: Doc, opts: FileCheckOptions = {}): Promise<CheckResult> { return new ValidateDocumentService(PROJECT, FILES).validate({ ...opts, source: { doc } }); }
+export function checkLoadedDoc(doc: Doc, opts: FileCheckOptions = {}): Promise<CheckResult> { return new ValidateDocumentService(PROJECT, FILES, ENGINE).validate({ ...opts, source: { doc } }); }
 export { type PngImage, type PngRenderResult } from './adapters/out/files/PngRenderer.js';
 export { BPMNLINT_CONFIG_FILE } from './adapters/out/files/ConfigLookup.js';
 export type { BpmnlintChain, BpmnlintTier } from './adapters/out/files/ChainResolver.js';

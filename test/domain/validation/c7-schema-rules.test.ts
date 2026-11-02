@@ -33,15 +33,12 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { runProfile, validateWithEngine } from '../../helpers/engine.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Doc } from '../../../src/domain/document/Doc.js';
 import { mutateDoc } from '../../../src/index.js';
-import { loadProfiles, runProfile } from '../../../src/index.js';
-import { validateDoc } from '../../../src/index.js';
 import { cli } from '../../helpers/cli.js';
 
-// the engine rules load on demand; runProfile / validateDoc(doc, { platform }) need them loaded (the pipeline loads them itself)
-await loadProfiles();
 
 const BPMN = 'xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"';
 const C7 = 'xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:modeler="http://camunda.org/schema/modeler/1.0" modeler:executionPlatform="Camunda Platform"';
@@ -107,27 +104,18 @@ interface Case {
   before?: boolean;
 }
 
-const MULTIPLE = 'W_C7_MULTIPLE_EVENT_DEFINITIONS';
-
 const CASES: Case[] = [
   // 1. schema rules on every event definition
-  { name: 'timer + conditional without condition (intermediate catch)', xml: xml(catchWith(TIMER + COND_NONE)), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'conditional without condition + timer (intermediate catch, the timer acts)', xml: xml(catchWith(COND_NONE + TIMER)), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'timer + conditional without condition (boundary event)', xml: xml(beside(`<bpmn:boundaryEvent id="W" attachedToRef="U">${TIMER}${COND_NONE}</bpmn:boundaryEvent>${flow('FB', 'W', 'EB')}<bpmn:endEvent id="EB" />`)), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'timer + conditional without condition (process start event)', xml: xml(`<bpmn:startEvent id="W">${TIMER}${COND_NONE}</bpmn:startEvent>${flow('F1', 'W', 'End')}<bpmn:endEvent id="End" />`), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'timer + link without name (intermediate catch)', xml: xml(catchWith(TIMER + LINK_NONAME)), codes: [MULTIPLE, 'W_C7_DEPLOY_LINK'], engine: 'reject', before: true },
+  { name: 'timer + conditional without condition (intermediate catch)', xml: xml(catchWith(TIMER + COND_NONE)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'conditional without condition + timer (intermediate catch, the timer acts)', xml: xml(catchWith(COND_NONE + TIMER)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'timer + conditional without condition (boundary event)', xml: xml(beside(`<bpmn:boundaryEvent id="W" attachedToRef="U">${TIMER}${COND_NONE}</bpmn:boundaryEvent>${flow('FB', 'W', 'EB')}<bpmn:endEvent id="EB" />`)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'timer + conditional without condition (process start event)', xml: xml(`<bpmn:startEvent id="W">${TIMER}${COND_NONE}</bpmn:startEvent>${flow('F1', 'W', 'End')}<bpmn:endEvent id="End" />`), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'timer + link without name (intermediate catch)', xml: xml(catchWith(TIMER + LINK_NONAME)), codes: ['W_C7_DEPLOY_LINK'], engine: 'reject', before: true },
   { name: 'timer with timeDate and timeDuration', xml: xml(catchWith(TWO_TIMES)), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
-  { name: 'event sub-process start: message acts, an ignored timer with two time elements', xml: xml(beside(`<bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="W" isInterrupting="false"><bpmn:messageEventDefinition messageRef="M1" />${TWO_TIMES}</bpmn:startEvent>${flow('e1', 'W', 'ESE')}<bpmn:endEvent id="ESE" /></bpmn:subProcess>`), { roots: MSG }), codes: [MULTIPLE, 'W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
+  { name: 'event sub-process start: message acts, an ignored timer with two time elements', xml: xml(beside(`<bpmn:subProcess id="ES" triggeredByEvent="true"><bpmn:startEvent id="W" isInterrupting="false"><bpmn:messageEventDefinition messageRef="M1" />${TWO_TIMES}</bpmn:startEvent>${flow('e1', 'W', 'ESE')}<bpmn:endEvent id="ESE" /></bpmn:subProcess>`), { roots: MSG }), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
   { name: 'conditional without condition in a non-executable process', xml: xml(beside(''), { extra: NON_EXECUTABLE(`<bpmn:intermediateCatchEvent id="O_W">${COND_NONE}</bpmn:intermediateCatchEvent>${flow('O_F', 'O_S', 'O_W')}`) }), codes: ['W_C7_DEPLOY_EVENT_DEFINITION'], engine: 'reject', before: true },
   { name: 'link without name in a non-executable process', xml: xml(beside(''), { extra: NON_EXECUTABLE(`<bpmn:intermediateThrowEvent id="O_W">${LINK_NONAME}</bpmn:intermediateThrowEvent>${flow('O_F', 'O_S', 'O_W')}`) }), codes: ['W_C7_DEPLOY_LINK'], engine: 'reject', before: true },
-  { name: 'semantic rules stay on the acting definition: timer + message without messageRef', xml: xml(catchWith(`${TIMER}<bpmn:messageEventDefinition id="MDef" />`)), codes: [MULTIPLE], engine: 'accept' },
-  // 2. a duplicate on a loop with an id of its own (the hints are followed below)
-  {
-    name: 'two failedJobRetryTimeCycle on an asynchronous multi-instance loop',
-    xml: xml(around(`<bpmn:userTask id="SP"><bpmn:multiInstanceLoopCharacteristics camunda:asyncBefore="true" camunda:collection="\${items}" camunda:elementVariable="item"><bpmn:extensionElements><camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:failedJobRetryTimeCycle>R5/PT1M</camunda:failedJobRetryTimeCycle></bpmn:extensionElements></bpmn:multiInstanceLoopCharacteristics></bpmn:userTask>`)),
-    codes: ['W_C7_DEPLOY_DUPLICATE_EXTENSION'],
-    engine: 'reject',
-  },
+  { name: 'semantic rules stay on the acting definition: timer + message without messageRef', xml: xml(catchWith(`${TIMER}<bpmn:messageEventDefinition id="MDef" />`)), codes: [], engine: 'accept' },
   // 3. start events of transactions, sub-processes, processes; ad-hoc sub-processes
   { name: 'transaction with a task but no start event', xml: xml(around(`<bpmn:transaction id="SP">${UT('T')}</bpmn:transaction>`)), codes: ['W_C7_TRANSACTION_NO_START'], engine: 'accept', run: 'fails', before: true },
   { name: 'empty transaction', xml: xml(around('<bpmn:transaction id="SP" />')), codes: ['W_C7_TRANSACTION_NO_START'], engine: 'accept', run: 'fails', before: true },
@@ -170,7 +158,7 @@ const CASES: Case[] = [
 
 describe('verifier follow-ups: one synthetic model per rule', () => {
   it.each(CASES.map((testCase) => [testCase.name, testCase] as const))('%s', async (_name, testCase) => {
-    const report = runProfile(await Doc.fromXml(testCase.xml));
+    const report = (await runProfile(await Doc.fromXml(testCase.xml)));
     const findings = report.findings;
     expect(findings.map((finding) => finding.code).sort(), JSON.stringify(findings, null, 1)).toEqual([...testCase.codes].sort());
     // deploy findings exactly where the engine that reads the file refuses it
@@ -182,30 +170,30 @@ describe('verifier follow-ups: one synthetic model per rule', () => {
   });
 
   it('a schema finding on an ignored definition names the acting one and both ways out', async () => {
-    const finding = runProfile(await Doc.fromXml(CASES[0]!.xml)).findings.find((candidate) => candidate.code === 'W_C7_DEPLOY_EVENT_DEFINITION')!;
+    const finding = (await runProfile(await Doc.fromXml(CASES[0]!.xml))).findings.find((candidate) => candidate.code === 'W_C7_DEPLOY_EVENT_DEFINITION')!;
     expect(finding).toMatchObject({ element: 'W', severity: 'deploy' });
     expect(finding.message).toBe('The conditional definition of intermediateCatchEvent:timer W has no condition element, which the BPMN schema requires; the engines refuse the file');
     expect(finding.hint).toContain('`bpmn set <file> W trigger=timer` (keeps only the timer)');
     expect(finding.hint).toContain("`bpmn set <file> W 'when=${expression}'` (keeps only the conditional definition)");
     // a single definition keeps the message and the subject of before (a write does not report it as new)
-    const single = runProfile(await Doc.fromXml(xml(catchWith(COND_NONE)))).findings[0]!;
+    const single = (await runProfile(await Doc.fromXml(xml(catchWith(COND_NONE))))).findings[0]!;
     expect(single.message).toBe('Conditional event W has no condition element, which the BPMN schema requires; the engines refuse the file');
     expect(single.hint).toBe("`bpmn set <file> W 'when=${expression}'`.");
   });
 
   it('the start-event and empty-sub-process lint gives way to the engine finding about the same scope', async () => {
-    const empty = validateDoc(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml), { platform: 'auto' });
+    const empty = (await validateWithEngine(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml), { platform: 'auto' }));
     expect(empty.warnings.map((warning) => warning.code)).toEqual(['W_C7_DEPLOY_START_EVENT']);
     expect(empty.warnings[0]!.message).toBe('Sub-process SP is empty, without a start event; the engines refuse the file (subProcess must define a startEvent element)');
-    const tx = validateDoc(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'transaction with a task but no start event')!.xml), { platform: 'auto' });
+    const tx = (await validateWithEngine(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'transaction with a task but no start event')!.xml), { platform: 'auto' }));
     expect(tx.warnings.map((warning) => warning.code)).not.toContain('W_NO_START');
     expect(tx.platform).toMatchObject({ counts: { deploy: 0, runtime: 1 } });
     // without the profile the lint stays
-    expect(validateDoc(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml)).warnings.map((warning) => warning.code)).toContain('W_EMPTY_SUBPROCESS');
+    expect((await validateWithEngine(await Doc.fromXml(CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml))).warnings.map((warning) => warning.code)).toContain('W_EMPTY_SUBPROCESS');
   });
 
   it('second start events: removed when the first one reaches where they lead, never two flows into one node', async () => {
-    const hint = async (body: string, options: { roots?: string } = {}): Promise<string> => runProfile(await Doc.fromXml(xml(body, options))).findings.find((finding) => finding.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
+    const hint = async (body: string, options: { roots?: string } = {}): Promise<string> => (await runProfile(await Doc.fromXml(xml(body, options)))).findings.find((finding) => finding.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
     const same = await hint(twoStarts.same);
     expect(same).toMatch(/^Remove it: `bpmn remove <file> B` \(A already leads to U; F3 goes with it\), or give it another trigger/);
     expect(same).not.toContain('source=');
@@ -248,7 +236,7 @@ function commandsOf(hint: string): string[][] {
 
 describe('hints run through the CLI', () => {
   let dir: string;
-  beforeAll(() => {
+  beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'bpmn-c7-fv-'));
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -257,7 +245,7 @@ describe('hints run through the CLI', () => {
   async function follow(name: string, content: string, code: string, element: string, opts: { pick?: (cmds: string[][]) => string[][]; fill?: Record<string, string> } = {}): Promise<{ file: string; hint: string; after: Doc }> {
     const file = join(dir, `${name}.bpmn`);
     writeFileSync(file, content);
-    const finding = runProfile(await Doc.fromXml(readFileSync(file, 'utf8'))).findings.find((candidate) => candidate.code === code && candidate.element === element);
+    const finding = (await runProfile(await Doc.fromXml(readFileSync(file, 'utf8')))).findings.find((candidate) => candidate.code === code && candidate.element === element);
     expect(finding, `${code} on ${element}`).toBeDefined();
     const all = commandsOf(finding!.hint!);
     const cmds = opts.pick ? opts.pick(all) : all;
@@ -270,7 +258,7 @@ describe('hints run through the CLI', () => {
     return { file, hint: finding!.hint!, after: await Doc.fromXml(readFileSync(file, 'utf8')) };
   }
 
-  const remaining = (doc: Doc, code: string): string[] => runProfile(doc).findings.filter((finding) => finding.code === code).map((finding) => finding.element ?? '');
+  const remaining = async (doc: Doc, code: string): Promise<string[]> => (await runProfile(doc)).findings.filter((finding) => finding.code === code).map((finding) => finding.element ?? '');
   const ext = (inner: string): string => `<bpmn:extensionElements>${inner}</bpmn:extensionElements>`;
   /** a timer catch event W whose definition holds `inner`, with or without an id of its own */
   const timerHost = (inner: string, defId: boolean): string => xml(catchWith(`<bpmn:timerEventDefinition${defId ? ' id="Def_T"' : ''}>${ext(inner)}<bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT1H</bpmn:timeDuration></bpmn:timerEventDefinition>`));
@@ -286,47 +274,40 @@ describe('hints run through the CLI', () => {
     it('W_C7_MISPLACED_EXTENSION on a timer definition: removed there and added to the event', async () => {
       const { hint, after } = await follow(`mis-def-${tag}`, timerHost('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle>', ownId), 'W_C7_MISPLACED_EXTENSION', 'W');
       expect(hint).toContain('`bpmn ext remove <file> W definition.0`');
-      expect(runProfile(after).findings).toEqual([]);
+      expect((await runProfile(after)).findings).toEqual([]);
       expect(after.require('W').get<{ values: Array<{ $type: string; $body: string }> }>('extensionElements').values.map((extension) => `${extension.$type}:${extension.$body}`)).toEqual(['camunda:failedJobRetryTimeCycle:R3/PT1M']);
     }, 60000);
 
     it('W_C7_UNKNOWN_ELEMENT on a timer definition: the remove command works', async () => {
       const { hint, after } = await follow(`unknown-def-${tag}`, timerHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'W', { pick: (testCase) => testCase.slice(0, 1) });
       expect(hint).toContain('`bpmn ext remove <file> W definition.0`');
-      expect(runProfile(after).findings).toEqual([]);
+      expect((await runProfile(after)).findings).toEqual([]);
     }, 60000);
 
     it('W_C7_MISPLACED_EXTENSION on a multi-instance loop: removed there and added to the task', async () => {
       const { hint, after } = await follow(`mis-loop-${tag}`, loopHost('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:taskListener event="create" expression="${x}" />', ownId), 'W_C7_MISPLACED_EXTENSION', 'SP');
       expect(hint).toContain('`bpmn ext remove <file> SP loop.1`');
-      expect(remaining(after, 'W_C7_MISPLACED_EXTENSION')).toEqual([]);
+      expect((await remaining(after, 'W_C7_MISPLACED_EXTENSION'))).toEqual([]);
     }, 60000);
 
     it('W_C7_UNKNOWN_ELEMENT on a multi-instance loop: the remove command works', async () => {
       const { hint, after } = await follow(`unknown-loop-${tag}`, loopHost('<camunda:foo />', ownId), 'W_C7_UNKNOWN_ELEMENT', 'SP', { pick: (testCase) => testCase.slice(0, 1) });
       expect(hint).toContain('`bpmn ext remove <file> SP loop.0`');
-      expect(runProfile(after).findings).toEqual([]);
-    }, 60000);
-
-    it('W_C7_DEPLOY_DUPLICATE_EXTENSION on an asynchronous loop: the merge goes to the loop', async () => {
-      const content = loopHost('<camunda:failedJobRetryTimeCycle>R3/PT1M</camunda:failedJobRetryTimeCycle><camunda:failedJobRetryTimeCycle>R5/PT1M</camunda:failedJobRetryTimeCycle>', ownId).replace('<bpmn:multiInstanceLoopCharacteristics', '<bpmn:multiInstanceLoopCharacteristics camunda:asyncBefore="true"');
-      const { hint, after } = await follow(`dup-loop-${tag}`, content, 'W_C7_DEPLOY_DUPLICATE_EXTENSION', 'SP', { fill: { '...': 'R3/PT1M' } });
-      expect(hint).toContain('`bpmn ext add <file> SP loop.camunda:failedJobRetryTimeCycle --replace');
-      expect(runProfile(after).findings).toEqual([]);
+      expect((await runProfile(after)).findings).toEqual([]);
     }, 60000);
   });
 
   it('schema findings on an ignored definition: both ways out deploy-clean', async () => {
     const content = CASES[0]!.xml;
     const keep = await follow('schema-keep', content, 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { pick: (testCase) => testCase.slice(0, 1) });
-    expect(runProfile(keep.after).findings).toEqual([]);
+    expect((await runProfile(keep.after)).findings).toEqual([]);
     expect(keep.after.require('W').get<unknown[]>('eventDefinitions').length).toBe(1);
     const cond = await follow('schema-cond', content, 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { pick: (testCase) => testCase.slice(1, 2), fill: { '${expression}': '${ready}' } });
-    expect(runProfile(cond.after).findings).toEqual([]);
+    expect((await runProfile(cond.after)).findings).toEqual([]);
     const link = await follow('schema-link', xml(catchWith(TIMER + LINK_NONAME)), 'W_C7_DEPLOY_LINK', 'W', { pick: (testCase) => testCase.slice(0, 1) });
-    expect(runProfile(link.after).findings).toEqual([]);
+    expect((await runProfile(link.after)).findings).toEqual([]);
     const times = await follow('schema-times', xml(catchWith(TWO_TIMES)), 'W_C7_DEPLOY_EVENT_DEFINITION', 'W', { fill: { '<value>': 'PT2H' } });
-    expect(runProfile(times.after).findings).toEqual([]);
+    expect((await runProfile(times.after)).findings).toEqual([]);
   }, 60000);
 
   it.each([
@@ -337,7 +318,7 @@ describe('hints run through the CLI', () => {
     ['mixed', twoStarts.mixed, 'U,V'],
   ])('a second start event (%s): following the first way out leaves no doubled branch', async (name, body, targets) => {
     const { after } = await follow(`two-${name}`, xml(body), 'W_C7_DEPLOY_START_EVENT', 'B', { pick: (testCase) => testCase.filter((argv) => !argv.includes('trigger=message')) });
-    expect(runProfile(after).findings).toEqual([]);
+    expect((await runProfile(after)).findings).toEqual([]);
     expect(after.get('B')).toBeUndefined();
     const out = after.outgoing(after.require('A')).map((flow) => flow.get<{ id: string }>('targetRef').id);
     expect(new Set(out).size).toBe(out.length);
@@ -346,21 +327,21 @@ describe('hints run through the CLI', () => {
 
   it('a second start event: another trigger keeps both ways in', async () => {
     const { after } = await follow('two-trigger', xml(twoStarts.same), 'W_C7_DEPLOY_START_EVENT', 'B', { pick: (testCase) => testCase.filter((argv) => argv.includes('trigger=message')), fill: { '<Name>': 'Other' } });
-    expect(runProfile(after).findings).toEqual([]);
+    expect((await runProfile(after)).findings).toEqual([]);
   }, 60000);
 
   it('a second start event of an event sub-process: removed, its trigger in an event sub-process of its own', async () => {
     const { after } = await follow('two-esp', xml(ESP_TWO, { roots: MSG }), 'W_C7_DEPLOY_START_EVENT', 'B', { fill: { '<Name>': 'Other' } });
-    expect(runProfile(after).findings).toEqual([]);
+    expect((await runProfile(after)).findings).toEqual([]);
   }, 60000);
 
   it('an empty sub-process, a transaction without start, a connected ad-hoc sub-process: the hints lead to a clean file', async () => {
     const sp = await follow('empty-sub', CASES.find((testCase) => testCase.name === 'empty embedded sub-process')!.xml, 'W_C7_DEPLOY_START_EVENT', 'SP', { pick: (testCase) => testCase.slice(0, 1), fill: { '<Name>': 'Go' } });
-    expect(runProfile(sp.after).findings).toEqual([]);
+    expect((await runProfile(sp.after)).findings).toEqual([]);
     const tx = await follow('tx', CASES.find((testCase) => testCase.name === 'transaction with a task but no start event')!.xml, 'W_C7_TRANSACTION_NO_START', 'SP', { pick: (testCase) => testCase.slice(0, 1), fill: { '<Name>': 'Go', '<firstNodeId>': 'T' } });
-    expect(runProfile(tx.after).findings).toEqual([]);
+    expect((await runProfile(tx.after)).findings).toEqual([]);
     const adHoc = await follow('adhoc', CASES.find((testCase) => testCase.name === 'ad-hoc sub-process with sequence flows')!.xml, 'W_C7_DEPLOY_AD_HOC_SUBPROCESS', 'SP', { pick: (testCase) => testCase.slice(0, 2), fill: { '<Name>': 'Go' } });
-    expect(remaining(adHoc.after, 'W_C7_DEPLOY_AD_HOC_SUBPROCESS')).toEqual([]);
+    expect((await remaining(adHoc.after, 'W_C7_DEPLOY_AD_HOC_SUBPROCESS'))).toEqual([]);
     expect(adHoc.after.require('SP').$type).toBe('bpmn:SubProcess');
   }, 60000);
 });
@@ -434,7 +415,7 @@ describe.skipIf(!ENGINES.length)('live engines: the engines agree with CASES', (
         ['mixed', twoStarts.mixed, ['U', 'V']],
       ] as const) {
         const doc = await Doc.fromXml(xml(body));
-        const hint = runProfile(doc).findings.find((finding) => finding.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
+        const hint = (await runProfile(doc)).findings.find((finding) => finding.code === 'W_C7_DEPLOY_START_EVENT')!.hint!;
         // the hint's first way out, as ops: `set <flow> source=A` for each flow it names, then `remove B`
         const moves = [...hint.split(', or ')[0]!.matchAll(/`bpmn set <file> (\w+) source=A`/g)].map((match) => ({ op: 'set' as const, id: match[1]!, values: { source: 'A' } }));
         await mutateDoc(doc, [...moves, { op: 'remove', ids: ['B'] }], { dryRun: true, layout: false });

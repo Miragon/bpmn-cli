@@ -9,6 +9,7 @@ import { EditDocumentService } from './application/service/EditDocumentService.j
 import { CreateDocumentService } from './application/service/CreateDocumentService.js';
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
 import { ValidateDocumentService } from './application/service/ValidateDocumentService.js';
+import { BpmnlintEngineLint } from './adapters/out/bpmnlint/BpmnlintEngineLint.js';
 import { ReadDocumentService } from './application/service/ReadDocumentService.js';
 import { ShowConventionsService } from './application/service/ShowConventionsService.js';
 import { RenderDiagramService } from './application/service/RenderDiagramService.js';
@@ -37,15 +38,16 @@ function exitWhenWritten(): void {
 
 const files = new FileDocumentStore();
 const project = new BpmnlintProjectSettings();
-const relayoutDiagram = new RelayoutDiagramService(project, files);
+const engine = new BpmnlintEngineLint();
+const relayoutDiagram = new RelayoutDiagramService(project, files, engine);
 if (process.env['BPMN_LAYOUT_DEBUG']) {
   relayoutDiagram.setDebugSink({ sink: (line) => process.stderr.write(`${line}\n`) });
 }
 const cli = new Cli(VERSION, {
-  editDocument: new EditDocumentService(project, files),
-  createDocument: new CreateDocumentService(project, files),
+  editDocument: new EditDocumentService(project, files, engine),
+  createDocument: new CreateDocumentService(project, files, engine),
   relayoutDiagram,
-  validateDocument: new ValidateDocumentService(project, files),
+  validateDocument: new ValidateDocumentService(project, files, engine),
   readDocument: new ReadDocumentService(files),
   showModel: new ShowModelService(),
   showConventions: new ShowConventionsService(project),

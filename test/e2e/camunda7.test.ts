@@ -349,10 +349,10 @@ describe('find shows the matched vendor value; kinds documents the C7 keys (#8, 
     expect(json.triggers['message']!.alsoOn).toEqual(['sendTask', 'receiveTask']);
   });
 
-  it('the library exports the platform profile', () => {
-    expect(typeof lib.runProfile).toBe('function');
-    expect(typeof lib.loadProfile).toBe('function');
-    expect(typeof lib.loadProfiles).toBe('function');
+  it('the library exports the platform detection; the engine rules run in checkDoc and every write', () => {
+    expect('runProfile' in lib).toBe(false);
+    expect('loadProfile' in lib).toBe(false);
+    expect('loadProfiles' in lib).toBe(false);
     expect(typeof lib.detectPlatform).toBe('function');
     expect(lib.PLATFORM_CHOICES).toEqual(['auto', 'c7', 'c8', 'none']);
   });

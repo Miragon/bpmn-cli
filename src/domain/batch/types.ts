@@ -6,6 +6,7 @@ import type { PlatformChoice } from '../document/vendor/PlatformDetection.js';
 import type { ValidationResult } from '../validation/StructuralValidator.js';
 import type { ValidationDelta } from '../validation/FindingBaseline.js';
 import type { Validator } from '../validation/validators.js';
+import type { EngineLint } from '../validation/EngineLint.js';
 import type { ModelView } from '../views/model-view.js';
 
 /** How one batch runs: its layout, guards, validators and id conventions. */
@@ -15,6 +16,8 @@ export interface MutationOptions extends DrawingOptions {
   show?: boolean;
   /** platform profile whose new findings are reported: 'auto' (default), 'none' switches it off */
   platform?: PlatformChoice;
+  /** the Camunda 7 / 8 rules; without them a change reports no platform findings */
+  engine?: EngineLint;
   /** receives the layout engines' diagnostic lines during this call */
   debug?: DebugSink;
   /** run on the candidate XML; errors the change introduces block the write */

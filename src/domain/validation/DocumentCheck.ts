@@ -6,7 +6,8 @@ import { LayoutDebug, type DebugSink } from '../diagram/layout/LayoutDebug.js';
 import { FullLayout } from '../diagram/layout/FullLayout.js';
 import { reportedImportWarnings } from '../editing/utils/decision-link-warnings.js';
 import { PlatformDetection, type PlatformChoice } from '../document/vendor/PlatformDetection.js';
-import { PLATFORM_PROFILES } from './profiles/PlatformProfiles.js';
+import type { EngineLint } from './EngineLint.js';
+import { PlatformCheck } from './PlatformCheck.js';
 import { StructuralValidator, type ValidationResult } from './StructuralValidator.js';
 import { ValidatorSet } from './ValidatorSet.js';
 import { counts, withValidatorReports } from './utils/validator-issues.js';
@@ -18,6 +19,9 @@ import { toBpmnError } from '../document/utils/bpmn-error.js';
 export interface CheckOptions {
 
   platform?: PlatformChoice;
+
+  /** the Camunda 7 / 8 rules; without it the check has no platform findings */
+  engine?: EngineLint;
 
   /** their errors fail the check, an advisory one's too */
   validators?: Validator[];
@@ -51,8 +55,10 @@ export class DocumentCheck {
   run(): Promise<CheckResult> {
     return LayoutDebug.during(this.opts.debug, async () => {
       const platform = this.opts.platform ?? 'auto';
-      await PLATFORM_PROFILES.ensure(this.doc, platform);
-      let validation = new StructuralValidator(this.doc).validate({ platform });
+      const structure = new StructuralValidator(this.doc);
+      const structural = structure.validate();
+      const report = await new PlatformCheck(this.opts.engine).run(this.doc, platform);
+      let validation = structure.withProfile(structural, report, report.findings);
       const structuralErrors = validation.errors.length;
       const importWarnings = reportedImportWarnings(this.doc).map((warning) => warning.message.split('\n')[0]!);
       const validators = new ValidatorSet(this.opts.validators);

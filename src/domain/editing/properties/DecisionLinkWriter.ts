@@ -112,7 +112,7 @@ export class DecisionLinkWriter {
               element: shownId(el),
               hint: `Name the variable that receives the result: \`bpmn ext add <file> ${shownId(el)} ${call.$type} decisionId=${value} resultVariable=<variable> --replace\`.`,
             },
-            { covers: ['decision:resultVariable'] },
+            { covers: ['ext:calledDecision.resultVariable'] },
           ),
         );
       }

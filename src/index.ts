@@ -9,7 +9,7 @@ import type { ChangeSet } from './domain/document/ChangeSet.js';
 import type { EditCommand } from './domain/commands/types.js';
 import type { CheckResult } from './application/port/in/ValidateDocumentUseCase.js';
 import type { MutationResult } from './domain/batch/types.js';
-import type { ValidateOptions, ValidationResult } from './domain/validation/StructuralValidator.js';
+import type { ValidationResult } from './domain/validation/StructuralValidator.js';
 import type { IdConventions } from './domain/document/ids/IdConventions.js';
 import type { ConventionsView, Undeclared } from './domain/document/ids/ConventionsTable.js';
 import type { BpmnlintRuleSetting, BpmnlintSeverity, BpmnlintConfig, BpmnlintEngine, ResolvedBpmnlintConfig } from './adapters/out/bpmnlint/bpmnlint-contract.js';
@@ -17,8 +17,7 @@ import type { NamedValidator, ValidatorFinding } from './domain/validation/valid
 import type { El, Model } from './domain/document/utils/moddle.js';
 import type { LayoutMetrics, LayoutProblem } from './domain/diagram/utils/problems.js';
 import type { Warning } from './domain/document/BpmnError.js';
-import type { Platform, PlatformChoice, PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
-import type { ProfileReport } from './domain/validation/profiles/PlatformProfiles.js';
+import type { PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
 import { AgentGuide } from './adapters/in/report/AgentGuide.js';
 import { KindsReference } from './adapters/in/report/KindsReference.js';
 import type { PreservedText } from './domain/document/xml/TextPreservation.js';
@@ -41,6 +40,7 @@ import { EditDocumentService } from './application/service/EditDocumentService.j
 import { RelayoutDiagramService } from './application/service/RelayoutDiagramService.js';
 import { NoProjectSettings } from './adapters/out/memory/NoProjectSettings.js';
 import { NoDocumentFiles } from './adapters/out/memory/NoDocumentFiles.js';
+import { BpmnlintEngineLint } from './adapters/out/bpmnlint/BpmnlintEngineLint.js';
 import { DetailText } from './adapters/in/report/DetailText.js';
 import { LayoutText } from './adapters/in/report/LayoutText.js';
 import { ModelViewText } from './adapters/in/report/ModelViewText.js';
@@ -57,6 +57,7 @@ import type { ExtensionInfo } from './domain/document/ExtensionLister.js';
 import type { LayoutOptions, LayoutResult } from './domain/diagram/layout/FullLayout.js';
 const NO_PROJECT = new NoProjectSettings();
 const NO_FILES = new NoDocumentFiles();
+const ENGINE = new BpmnlintEngineLint();
 /* the in-memory API: strings in, strings / data out */
 export { mutateDoc, layoutDoc, checkDoc, applyToXml, newXml, layoutXml, validateXml, viewXml, showXml, conventionsXml, metricsXml, findXml, extensionsXml, type EditOptions, type EditResult, type EditReport, type LayoutXmlOptions, type ShownView, type ValidateXmlOptions, type ViewOptions } from './api.js';
 export { type MutationReport, type MutationReportLike, type MutationSummary, type ValidationReport, type WarningReport } from './adapters/in/report/command-report.js';
@@ -116,7 +117,7 @@ export { type LayoutDocOptions } from './application/port/in/RelayoutDiagramUseC
 export type { ValidationDelta } from './domain/validation/FindingBaseline.js';
 /* text-preserving output, for hosts that serialise models themselves */
 export { type PreservedText } from './domain/document/xml/TextPreservation.js';
-export function preserveText(original: string, baseline: string, next: string): Promise<PreservedText> { return new EditDocumentService(NO_PROJECT, NO_FILES).preserveText({ original, baseline, next }); }
+export function preserveText(original: string, baseline: string, next: string): Promise<PreservedText> { return new EditDocumentService(NO_PROJECT, NO_FILES, ENGINE).preserveText({ original, baseline, next }); }
 /* a host's validators, run inside the write transaction and by validate */
 export type { NamedValidator, Validator, ValidatorContext, ValidatorFinding, ValidatorFn, ValidatorIssue, ValidatorReport, ValidatorSeverity } from './domain/validation/validators.js';
 /* the project's bpmnlint configuration as an advisory validator; bpmnlint itself is injected */
@@ -156,12 +157,12 @@ export function conventionsView(
 export type { DecisionLink } from './domain/editing/properties/DecisionLinkReader.js';
 
 export { ChangeSet, type Change } from './domain/document/ChangeSet.js';
-export type { ValidateOptions, ValidationResult } from './domain/validation/StructuralValidator.js';
-/** Structural validation and lint of a document, with the platform profile on request. */
-export function validateDoc(doc: Doc, opts: ValidateOptions = {}): ValidationResult { return new ValidateDocumentService(NO_PROJECT, NO_FILES).validateStructure({ ...opts, doc }); }
-/* the platform profile: Camunda 7 / 8 rules, loaded on demand */
+export type { ValidationResult } from './domain/validation/StructuralValidator.js';
+/** Structural validation and lint of a document; the Camunda 7 / 8 rules run in checkDoc and every write. */
+export function validateDoc(doc: Doc): ValidationResult { return new ValidateDocumentService(NO_PROJECT, NO_FILES, ENGINE).validateStructure({ doc }); }
+/* the platform: Camunda 7 / 8 rules, bpmnlint rules that load on demand */
 export { PLATFORM_CHOICES, TARGETS, type Platform, type PlatformChoice, type PlatformInfo } from './domain/document/vendor/PlatformDetection.js';
-export type { PlatformSummary, ProfileReport } from './domain/validation/profiles/PlatformProfiles.js';
+export type { PlatformSummary } from './domain/validation/PlatformCheck.js';
 export type { ProfileFinding, Severity } from './domain/document/Finding.js';
 export type { ExtensionInfo } from './domain/document/ExtensionLister.js';
 export { type ModelView, type ElementDetail, type DetailMessageFlow, type DetailData, type FindHit } from './domain/views/model-view.js';
@@ -210,29 +211,11 @@ export function parseOps(input: unknown): EditCommand[] {
 }
 
 /**
- * Loads the engine rules of `platform` (cached), needed before the synchronous runProfile and
- * validateDoc; the async API loads them itself. A failed load (E_PROFILE_LOAD) is retried later.
- */
-export function loadProfile(platform: Platform): Promise<void> {
-  return new ValidateDocumentService(NO_PROJECT, NO_FILES).loadProfile({ platform });
-}
-
-/** Loads the engine rules of several platforms (default: all). */
-export function loadProfiles(platforms?: readonly Exclude<Platform, 'none'>[]): Promise<void> {
-  return new ValidateDocumentService(NO_PROJECT, NO_FILES).loadProfiles(platforms !== undefined ? { platforms } : {});
-}
-
-/** Runs the profile of the document's platform (or `choice`); its rules must be loaded. */
-export function runProfile(doc: Doc, choice?: PlatformChoice): ProfileReport {
-  return new ValidateDocumentService(NO_PROJECT, NO_FILES).runProfile({ doc, ...(choice !== undefined ? { choice } : {}) });
-}
-
-/**
  * Detects the target engine: modeler:executionPlatform, else the vendor namespace the content
  * uses, else a declared one.
  */
 export function detectPlatform(doc: Doc): PlatformInfo {
-  return new ValidateDocumentService(NO_PROJECT, NO_FILES).detectPlatform({ doc });
+  return new ValidateDocumentService(NO_PROJECT, NO_FILES, ENGINE).detectPlatform({ doc });
 }
 
 /** `bpmn guide`: the agent cheat sheet. */
@@ -290,5 +273,5 @@ export function locateProblems(defs: El, problems: readonly LayoutProblem[]): La
  * treat the returned XML as the truth and re-parse it if you need DI.
  */
 export function layoutModel(model: Model, opts: LayoutOptions = {}): Promise<LayoutResult> {
-  return new RelayoutDiagramService(NO_PROJECT, NO_FILES).layoutModel({ ...opts, model });
+  return new RelayoutDiagramService(NO_PROJECT, NO_FILES, ENGINE).layoutModel({ ...opts, model });
 }

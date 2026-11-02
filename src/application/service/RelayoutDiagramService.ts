@@ -8,6 +8,7 @@ import { LayoutDebug } from '../../domain/diagram/layout/LayoutDebug.js';
 import type { LayoutDocOptions, RelayoutDiagramUseCase } from '../port/in/RelayoutDiagramUseCase.js';
 import type { MutationResult } from '../../domain/batch/types.js';
 import type { DocumentPort } from '../port/out/DocumentPort.js';
+import type { EngineLintPort } from '../port/out/EngineLintPort.js';
 import type { LoadProjectSettingsPort } from '../port/out/LoadProjectSettingsPort.js';
 
 /** Ids that are no sub-process are errors, not silent no-ops. */
@@ -15,6 +16,7 @@ export class RelayoutDiagramService implements RelayoutDiagramUseCase {
   constructor(
     private readonly settings: LoadProjectSettingsPort,
     private readonly documents: DocumentPort,
+    private readonly engine: EngineLintPort,
   ) {}
 
   async relayout(command: RelayoutDiagramUseCase.Command): Promise<RelayoutDiagramUseCase.Result> {
@@ -22,7 +24,7 @@ export class RelayoutDiagramService implements RelayoutDiagramUseCase {
     RelayoutDiagramService.assertOptions(opts);
     const doc = await this.documents.load(source, { ...opts, lossless: true });
     const target = await this.documents.target(doc.file, opts);
-    const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo(opts, target);
+    const project = (await this.settings.lint(opts.file ?? target, opts)).applyTo({ engine: this.engine, ...opts }, target);
     const result = project.tidy ? await this.tidy(doc, project, target) : await this.redraw(doc, project, target);
     await this.documents.save(result, doc, target, opts);
     return result;
