@@ -11,9 +11,6 @@ const CONTRACT_FILE = 'src/api/index.ts';
 const CORE_TESTS_WITHOUT_MIRROR = new Set(['e2e', 'contract', 'fixtures', 'repo', 'support']);
 const RENDER_TESTS_WITHOUT_MIRROR = new Set(['golden']);
 const TEST_SUPPORT = 'test/support';
-const CONFIG_FILES = ['vitest.config.ts', '.dependency-cruiser.cjs'];
-const COMMENT_FREE_FOLDERS = ['src', 'test', 'tools'];
-const DOCUMENTED_FOLDERS = ['tools/gate/check-build'];
 const MAX_PUBLIC_METHODS = 12;
 const MAX_CONSTRUCTOR_PARAMETERS = 5;
 const MAX_FOLDER_FILES = 12;
@@ -376,24 +373,6 @@ function checkTestSupportSize() {
   }
 }
 
-function commentFreeFiles(packageRoots) {
-  const folders = [...COMMENT_FREE_FOLDERS.map((folder) => join(ROOT, folder)), ...packageRoots];
-  const isDocumented = (path) => DOCUMENTED_FOLDERS.some((folder) => fromRoot(path).startsWith(`${folder}/`));
-  const code = folders.flatMap(allFiles).filter((path) => (isTypeScript(path) || path.endsWith('.mjs')) && !isDocumented(path));
-  const configs = CONFIG_FILES.map((name) => join(ROOT, name)).filter(existsSync);
-  return [...code, ...configs];
-}
-
-function checkComments(packageRoots) {
-  for (const file of commentFreeFiles(packageRoots)) {
-    const { comments } = parse(file);
-    if (comments.length > 0) {
-      const line = readFileSync(file, 'utf8').slice(0, comments[0].start).split('\n').length;
-      report(`${fromRoot(file)}:${line}`, `holds ${comments.length} comment(s); names carry the meaning`);
-    }
-  }
-}
-
 function packageRoots() {
   const packages = join(ROOT, 'packages');
   return existsSync(packages) ? readdirSync(packages).map((name) => join(packages, name)).filter((path) => statSync(path).isDirectory()) : [];
@@ -412,10 +391,8 @@ function partOfCore() {
 }
 
 checkCoreLayout();
-const packages = packageRoots();
-[partOfCore(), ...packages.map(partOfPackage)].forEach(checkPart);
+[partOfCore(), ...packageRoots().map(partOfPackage)].forEach(checkPart);
 checkTestSupportSize();
-checkComments(packages);
 
 for (const violation of [...new Set(violations)]) {
   console.error(violation);

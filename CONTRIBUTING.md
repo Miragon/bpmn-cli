@@ -29,7 +29,7 @@ or later is required. `npm run dev -- <command>` builds and runs the CLI.
 | --- | --- |
 | `lint` | biome: block statements, function and file size, nested ternaries; errors only |
 | `typecheck` | tsc strict over `src/` and `packages/`, and over the tests |
-| `structure` | `tools/gate/check-structure.mjs`: classes, free functions, mirrored tests, folders, no comments |
+| `structure` | `tools/gate/check-structure.mjs`: classes, free functions, mirrored tests, folders |
 | `jscpd` | copied code over 0.25 % |
 | `knip` | dead files, exports and dependencies, then test-only code in `src/` |
 | `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
@@ -118,9 +118,12 @@ dependency-cruiser the imports ([architecture](docs/architecture.md#layers)).
 - **Block style.** The bodies of `if`, `else` and loops are blocks on lines of their own, with
   `} else {` on the closing line. `biome lint` enforces this with the plugin
   `tools/gate/biome/block-statements.grit`.
-- **No comments.** Names carry the meaning. One class per file, named like it; a helper of one class is
-  a `private` method, a helper of many a method of its value. No free functions but the 8 of the contract,
-  no `utils`, and a mirrored test per class. `npm run structure` holds this.
+- **Comments say why, not what.** Names carry what the code does, so a comment that repeats it goes. A
+  comment earns its place when it gives the reason something exists or works the way it does and the
+  code cannot say it, such as a rule from the BPMN standard or a decision that is easy to undo by mistake.
+- One class per file, named like it; a helper of one class is a `private` method, a helper of many a
+  method of its value. No free functions but the 8 of the contract, no `utils`, and a mirrored test per
+  class. `npm run structure` holds this.
 
 ## Before opening a PR
 
