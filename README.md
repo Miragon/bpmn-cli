@@ -9,6 +9,11 @@ A command line tool that lets an AI agent (or a human at a shell) edit BPMN 2.0 
 **semantically**: it names elements and operations, and the CLI keeps the drawing. No BPMN XML,
 no diagram coordinates.
 
+> [!WARNING]
+> bpmn-cli is experimental and has not reached 1.0.0 yet. Until then, any minor release may contain
+> breaking changes to commands, flags and output. Pin an exact version and check the
+> [changelog](CHANGELOG.md) before you upgrade.
+
 ![The order process drawn by bpmn render: Order received, Check invoice, the gateway Invoice ok? with the branches Book invoice and Ask customer, and a message flow to the Customer pool](docs/public/shots/walkthrough-3-pools.svg)
 
 ## Why
