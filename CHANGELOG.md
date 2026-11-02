@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.0](https://github.com/Miragon/bpmn-cli/compare/v0.9.0...v0.10.0) (2026-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* restructure bpmn-cli into layered modules ([#140](https://github.com/Miragon/bpmn-cli/issues/140))
+
+### Code Refactoring
+
+* restructure bpmn-cli into layered modules ([#140](https://github.com/Miragon/bpmn-cli/issues/140)) ([f4ba39b](https://github.com/Miragon/bpmn-cli/commit/f4ba39b551a3a4d39bd81edb2ce62bdc4956f6f1))
+
 ## [0.9.0](https://github.com/Miragon/bpmn-cli/compare/v0.8.0...v0.9.0) (2026-10-30)
 
 
