@@ -13,7 +13,8 @@
         "noExcessiveLinesPerFunction": { "level": "error", "options": { "maxLines": 50 } }
       },
       "style": {
-        "noNestedTernary": "error"
+        "noNestedTernary": "error",
+        "noExcessiveLinesPerFile": { "level": "error", "options": { "maxLines": 300 } }
       }
     }
   },
@@ -23,7 +24,7 @@
       "linter": {
         "rules": {
           "complexity": { "noExcessiveCognitiveComplexity": "off", "noExcessiveLinesPerFunction": "off" },
-          "style": { "noNestedTernary": "off" }
+          "style": { "noNestedTernary": "off", "noExcessiveLinesPerFile": "off" }
         }
       }
     }

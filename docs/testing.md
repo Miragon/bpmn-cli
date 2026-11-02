@@ -48,7 +48,7 @@ Layout tests assert invariants and order, such as no overlap and inside its lane
 
 `npm run gate` runs everything a change has to pass, in this order; each also runs alone. CI runs it on
 every pull request and every push to `main`. [CONTRIBUTING.md](../CONTRIBUTING.md#scripts-the-quality-gate)
-lists what each step checks. `npm run budgets` holds `budgets.json`: lines per module and package, the
+lists what each step checks. `npm run check-build -- . budgets` holds `budgets.json`: lines per module and package, the
 10 exports, the 26 commands, the 143 flag slots and the guide's 20 KB. Raising a number needs a reason in
 the commit, and coverage only rises.
 

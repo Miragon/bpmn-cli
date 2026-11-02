@@ -73,7 +73,6 @@ describe('the structure check', () => {
     ['a file with two classes', { 'src/model/Point.ts': `${CLASS}class Other {}\n`, 'test/model/Point.test.ts': POINT_TEST }, 'holds 2 classes'],
     ['a class hidden in an expression', { 'src/model/Point.ts': `${CLASS}export const other = new (class {})();\n`, 'test/model/Point.test.ts': POINT_TEST }, 'holds 2 classes'],
     ['a class not named like its file', { 'src/model/Dot.ts': CLASS, 'test/model/Dot.test.ts': POINT_TEST.replace('Point', 'Dot') }, 'is not named like its file'],
-    ['a file over 300 lines', { 'src/model/Point.ts': `${CLASS}${'\n'.repeat(300)}`, 'test/model/Point.test.ts': POINT_TEST }, 'at most 300'],
     ['13 public methods', { 'src/model/Point.ts': `export class Point {\n${methods(13)}}\n`, 'test/model/Point.test.ts': POINT_TEST }, 'has 13 public methods'],
     ['6 constructor parameters', { 'src/model/Point.ts': 'export class Point {\n  constructor(a: 1, b: 2, c: 3, d: 4, e: 5, f: 6) {\n    console.log(a, b, c, d, e, f);\n  }\n}\n', 'test/model/Point.test.ts': POINT_TEST }, 'has 6 constructor parameters'],
     ['only static methods', { 'src/model/Point.ts': 'export class Point {\n  static x(): number {\n    return 1;\n  }\n}\n', 'test/model/Point.test.ts': POINT_TEST }, 'no catalogue'],

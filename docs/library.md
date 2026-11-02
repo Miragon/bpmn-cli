@@ -220,7 +220,7 @@ project's `.bpmnlintrc`. A host that wants those rules runs bpmnlint itself and 
 
 ## Browser bundles
 
-The package runs in a browser; `npm run iso` fails on anything Node-only. The Camunda 7 and 8 rules are
+The package runs in a browser; `npm run check-build -- . iso` fails on anything Node-only. The Camunda 7 and 8 rules are
 chunks of their own, loaded the first time a document of that platform is checked, and `renderXml` loads
 the painter on demand. The set `applyToXml`, `showXml`, `findXml`, `validateXml`, `kindsJson`, `OPS_SCHEMA`
 and `BpmnError` weighs about 800 KB minified, held by a budget. PNG output and bpmnlint are the CLI's.

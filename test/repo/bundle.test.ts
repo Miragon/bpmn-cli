@@ -7,6 +7,7 @@ let repo: PlantedRepo;
 
 beforeEach(() => {
   repo = new PlantedRepo();
+  repo.plantBudgets({});
   repo.plant('package.json', JSON.stringify({ sideEffects: false, dependencies: { bpmnlint: '12.0.0' } }));
   repo.plant('src/api/index.ts', APPLY_TO_XML);
   repo.plant('packages/lint/package.json', JSON.stringify({ name: '@miragon/bpmn-lint', exports: './src/index.ts', sideEffects: true }));
