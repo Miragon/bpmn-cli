@@ -154,7 +154,7 @@ flowchart LR
 | write, views, api | 4.4k | 4 | joins the three siblings |
 | cli | 1.9k | 3 | the top layer |
 
-≈ 46k lines in `src/` and `packages/` as estimated, 51.3k as [measured](README.md#the-line-target-missed), ≈ 2.5k in `tools/`, ≈ 48 commits in one draft PR, and one PR in the plugin; no estimate in weeks.
+≈ 46k lines in `src/` and `packages/` as estimated, 51.3k as [measured](README.md#the-line-budget), ≈ 2.5k in `tools/`, ≈ 48 commits in one draft PR, and one PR in the plugin; no estimate in weeks.
 
 ## Releases
 

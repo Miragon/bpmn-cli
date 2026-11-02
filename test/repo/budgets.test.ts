@@ -66,7 +66,7 @@ describe('the budgets', () => {
     expect(status).toBe(1);
   });
 
-  it('fail on a total over 47,000 lines', () => {
+  it('fail on a total over its line budget', () => {
     repo.plantBudgets({ lines: { ...JSON.parse(repo.plantedBudgets()).lines, total: 1 } });
     repo.plant('src/api/index.ts', exportsOfCount(2));
     expect(repo.checkBudgets().output).toContain('src/ and packages/ have');

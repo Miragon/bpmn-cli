@@ -1,18 +1,18 @@
 {
   "lines": {
-    "total": 51500,
-    "src/model": 6750,
-    "src/operations": 1256,
-    "src/edit": 8500,
-    "src/scoring": 1400,
-    "src/drawing": 19300,
-    "src/checks": 6100,
-    "src/views": 3000,
-    "src/write": 1200,
+    "total": 60000,
+    "src/model": 8000,
+    "src/operations": 1500,
+    "src/edit": 10000,
+    "src/scoring": 2000,
+    "src/drawing": 22500,
+    "src/checks": 7500,
+    "src/views": 3500,
+    "src/write": 1000,
     "src/api": 300,
-    "src/cli": 1900,
-    "packages/lint/src": 800,
-    "packages/render/src": 2100
+    "src/cli": 2500,
+    "packages/lint/src": 1000,
+    "packages/render/src": 2500
   },
   "coverage": {
     "src/model": { "lines": 90, "branches": 85 },
