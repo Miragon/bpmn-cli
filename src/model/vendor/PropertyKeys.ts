@@ -72,14 +72,14 @@ export class PropertyKeys {
 
   static readonly ALL: readonly PropertyDefinition[] = [
     { key: 'id', appliesTo: 'any', description: 'Rename the element; every reference (flows, lanes, boundary hosts, calledElement) follows, and so does a DI id derived from the old id (BPMNShape_<id>, <id>_di)', read: (element) => ({ id: element.id }) },
-    { key: 'name', appliesTo: 'any', description: 'Display name (empty value removes it; a group\'s name is the value of its category value)', read: (element) => PropertyKeys.readIf('name', element.name) },
-    { key: 'doc', appliesTo: 'any', description: 'Documentation text (alias: documentation; empty removes it)', read: PropertyKeys.readDocumentation },
+    { key: 'name', appliesTo: 'any', description: 'Display name (`--unset name` removes it; a group\'s name is the value of its category value)', read: (element) => PropertyKeys.readIf('name', element.name) },
+    { key: 'doc', appliesTo: 'any', description: 'Documentation text (alias: documentation; `--unset doc` removes it)', read: PropertyKeys.readDocumentation },
     { key: '<prefix>:<attr>', appliesTo: 'any', description: 'Vendor attribute, e.g. camunda:assignee=alice or zeebe:modelerTemplate=x (xmlns declared automatically for known prefixes)' },
     { key: '<property>', appliesTo: 'any', description: 'Any attribute of the BPMN type by property name, e.g. isExecutable, calledElement, scriptFormat, script, implementation, isForCompensation, completionQuantity, gatewayDirection, instantiate' },
-    { key: 'condition', appliesTo: 'sequenceFlow', description: 'Condition expression (empty removes it; clears the default marker of the flow)', read: (flow) => PropertyKeys.readIf('condition', PropertyKeys.expressionBody(flow, 'conditionExpression')) },
+    { key: 'condition', appliesTo: 'sequenceFlow', description: 'Condition expression (`--unset condition` removes it; clears the default marker of the flow)', read: (flow) => PropertyKeys.readIf('condition', PropertyKeys.expressionBody(flow, 'conditionExpression')) },
     { key: 'language', appliesTo: 'sequenceFlow', description: 'Expression language of the condition', read: (flow) => PropertyKeys.readIf('language', flow.get<BpmnElement | undefined>('conditionExpression')?.get<string | undefined>('language')) },
     { key: 'default', appliesTo: 'sequenceFlow', description: 'true|false: make this flow the default flow of its source gateway/activity (removes its condition; a previous default flow loses the marker)', read: (flow) => PropertyKeys.readIf('default', flow.get<BpmnElement | undefined>('sourceRef')?.get<BpmnElement | undefined>('default') === flow) },
-    { key: 'default', appliesTo: 'flowNode', description: 'Id of the default outgoing flow of a gateway/activity (empty clears it)', read: (node) => PropertyKeys.readReference('default', node.peek<BpmnElement>('default')) },
+    { key: 'default', appliesTo: 'flowNode', description: 'Id of the default outgoing flow of a gateway/activity (`--unset default` clears it)', read: (node) => PropertyKeys.readReference('default', node.peek<BpmnElement>('default')) },
     { key: 'source', appliesTo: 'sequenceFlow', description: 'Redirect the flow: new source node id', read: (flow) => PropertyKeys.readReference('source', flow.get<BpmnElement | undefined>('sourceRef')) },
     { key: 'target', appliesTo: 'sequenceFlow', description: 'Redirect the flow: new target node id', read: (flow) => PropertyKeys.readReference('target', flow.get<BpmnElement | undefined>('targetRef')) },
     { key: 'trigger', appliesTo: 'event', description: 'Event trigger: none|message|timer|error|signal|escalation|conditional|link|compensate|terminate|cancel', read: PropertyKeys.readTrigger },

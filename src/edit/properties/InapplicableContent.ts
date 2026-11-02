@@ -23,7 +23,7 @@ export class InapplicableContent {
     }
     const id = el.id;
     const fixes = [
-      ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((attr) => `${attr}=`).join(' ')}\``] : []),
+      ...(attrs.length ? [`\`bpmn set <file> ${id} ${attrs.map((attr) => `--unset ${attr}`).join(' ')}\``] : []),
       ...exts.map((extType) => `\`bpmn ext remove <file> ${id} ${extType}\``),
     ];
     return {

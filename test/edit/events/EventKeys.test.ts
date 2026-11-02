@@ -71,6 +71,8 @@ describe('EventKeys', () => {
     ['a trigger BPMN does not know', 'end_plain', { trigger: 'rain' }, 'E_INVALID_VALUE'],
     ['a key of another trigger', 'catch_message', { trigger: 'message', timer: 'PT1H' }, 'E_INVALID_VALUE'],
     ['a timer without a value', 'catch_message', { timer: '' }, 'E_INVALID_VALUE'],
+    ['removing a key of another trigger', 'catch_message', { signal: '' }, 'E_INVALID_VALUE'],
+    ['removing the error while naming a new code', 'boundary_error', { error: '', errorCode: 'E9' }, 'E_INVALID_VALUE'],
     ['a trigger the kind does not allow', 'end_plain', { timer: 'PT1H' }, 'E_INVALID_TRIGGER'],
     ['a trigger on a task', 'task_work', { message: 'Paid' }, 'E_INVALID_TRIGGER'],
   ])('refuses %s', async (_case, id, keys, code) => {

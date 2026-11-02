@@ -86,7 +86,7 @@ when missing. Full lists: `bpmn guide kinds triggers`.
 
 | trigger | keys |
 | --- | --- |
-| `message` | `message=<name>`; `--unset message` drops only the `messageRef` (connector-implemented throw events) |
+| `message` | `message=<name>`; leave it out on `add` (or `--unset message` on `set`) for no `messageRef` (connector-implemented throw events) |
 | `timer` | `timer=<iso>`: `PT5M` a duration, `R/PT1H` a cycle, a date a date |
 | `error` | `error=<name>`, `errorCode=<code>` |
 | `signal` | `signal=<name>` |

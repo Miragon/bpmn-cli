@@ -19,7 +19,7 @@ export class EventKeys {
     const def = Kinds.of(el);
     const allowed = def?.triggers ?? [];
     const change = new TriggerChange(this.edit, el);
-    const { requested, given, nonInterrupting } = EventKeys.readKeys(el, keys, EventKeys.namedTrigger(el, keys, allowed));
+    const { requested, given, nonInterrupting } = EventKeys.readKeys(el, keys, EventKeys.namedTrigger(el, keys, allowed), change.current.trigger);
     const trigger = requested ?? change.current.trigger;
     if (nonInterrupting !== undefined && requested === undefined && !Object.keys(given).length) {
       change.setNonInterrupting(nonInterrupting);
@@ -51,18 +51,35 @@ export class EventKeys {
     return trigger;
   }
 
-  private static readKeys(el: BpmnElement, keys: Map<string, string>, named: Trigger | undefined): TriggerKeyValues {
+  private static readKeys(el: BpmnElement, keys: Map<string, string>, named: Trigger | undefined, current: Trigger): TriggerKeyValues {
     const values: TriggerKeyValues = { requested: named, given: {}, nonInterrupting: undefined };
     for (const [key, value] of keys) {
       if (key === 'nonInterrupting') {
         values.nonInterrupting = value ? PropertyCoercer.booleanOf(el, key, value) : false;
       } else if (key !== 'trigger') {
-        values.requested = EventKeys.impliedTrigger(el, key, values.requested);
         EventKeys.assertHasValue(el, key, value);
+        EventKeys.assertHeldToRemove(el, key, value, named, current);
+        values.requested = EventKeys.impliedTrigger(el, key, values.requested);
         values.given[key] = EventKeys.REMOVABLE.has(key) ? value : value || undefined;
       }
     }
+    EventKeys.assertCodeKeepsItsReference(el, values.given);
     return values;
+  }
+
+  private static assertHeldToRemove(el: BpmnElement, key: string, value: string, named: Trigger | undefined, current: Trigger): void {
+    const implied = TriggerKeys.TRIGGER_OF_KEY[key]!;
+    if (value === '' && named === undefined && implied !== current) {
+      throw PropertyCoercer.invalidValue(el, key, `${el.id} has no ${implied} trigger, so no ${key} to remove`, `Its trigger is ${current}.`);
+    }
+  }
+
+  private static assertCodeKeepsItsReference(el: BpmnElement, given: Record<string, unknown>): void {
+    for (const [reference, code] of [['error', 'errorCode'], ['escalation', 'escalationCode']] as const) {
+      if (given[reference] === '' && given[code]) {
+        throw PropertyCoercer.invalidValue(el, code, `${code} needs the ${reference} that removing ${reference} drops`, `Name the ${reference} to use: ${reference}=<Name> ${code}=${String(given[code])}.`);
+      }
+    }
   }
 
   private static impliedTrigger(el: BpmnElement, key: string, requested: Trigger | undefined): Trigger {
