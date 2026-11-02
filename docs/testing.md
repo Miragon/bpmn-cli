@@ -90,9 +90,9 @@ node tools/oracle/design-iq-record.mjs <checkout> # record corpus/design-iq/ fro
 | `models/` | the fixtures |
 | `layout/` | the 115 layout scenarios, each with main's score over all 26 kinds; `scores.json`, main's counts per kind on every corpus file |
 | `edits/` | per model a no-op, a rename and an insert, and the bench edits, as operation JSON |
-| `lint/` | the 10 examples of process-engine-blueprints with their `.bpmnlintrc` and `package.json`, and models for each case `packages/lint` handles |
+| `lint/` | 7 of the 10 examples of process-engine-blueprints with their `.bpmnlintrc` and `package.json`, the others being byte-identical in models and config, and models for each case `packages/lint` handles |
 | `design-iq/` | the arguments of design-iq's recorded calls, the paths of `OPS_SCHEMA` it reads, and `COMMIT` |
-| `engine/` | `parity/`: 1,076 models of 109 rule specs, with `codes.json`; `verdicts/`: 421 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22; `fixed/`; `feel/`: 762 FEEL verdicts; `structure/` |
+| `engine/` | `parity/`: the 610 distinct models of 109 rule specs, with `codes.json` naming each of the 1,077 cases' model; `verdicts/`: 421 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22; `fixed/`; `feel/`: 762 FEEL verdicts; `structure/` |
 | `walks/` | recorded fuzz walks, per step the operations and the file before |
 | `scoring/` | small models per scoring criterion |
 | `cli/` | one golden call per kept command and flag |
