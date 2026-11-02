@@ -70,6 +70,24 @@ describe('ModelOperationRunner', () => {
     expect(changes.warnings.map(({ code }) => code)).not.toContain('W_LANES_WITHOUT_POOL');
   });
 
+  it('warns once per process of lanes without a pool, and drops what the first lane took when later lanes take it', async () => {
+    const { changes } = await run([
+      { op: 'add', kind: 'lane', name: 'Sales', members: ['check', 'ship'] },
+      { op: 'add', kind: 'lane', name: 'Billing', members: ['startEvent_orderReceived', 'gateway_ok', 'reject', 'gateway_join', 'endEvent_done'] },
+    ]);
+
+    expect(changes.warnings.map(({ code }) => code)).toEqual(['W_LANES_WITHOUT_POOL']);
+  });
+
+  it('keeps the warning about what the first lane took for the members no later lane takes', async () => {
+    const { changes } = await run([
+      { op: 'add', kind: 'lane', name: 'Sales', members: ['check', 'ship'] },
+      { op: 'add', kind: 'lane', name: 'Billing', members: ['reject'] },
+    ]);
+
+    expect(changes.warnings.find(({ code }) => code === 'W_OPTION_IGNORED')).toMatchObject({ element: 'lane_sales', related: ['startEvent_orderReceived', 'gateway_ok', 'gateway_join', 'endEvent_done'] });
+  });
+
   it('keeps the warning about a task with two ways out unless a later op removes one', async () => {
     const connect = { op: 'connect', source: 'ship', target: 'reject' };
 

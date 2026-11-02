@@ -1,4 +1,4 @@
-import { type BpmnElement, BpmnError, type ChangeSet, ElementLabels, IdRequests, Kinds } from '../model/index.js';
+import { type BpmnElement, BpmnError, type ChangeSet, ElementLabels, type Finding, IdRequests, Kinds } from '../model/index.js';
 import type { AddOperation } from '../operations/index.js';
 import type { EditSession } from './session/EditSession.js';
 
@@ -20,7 +20,7 @@ export class LaneMembership {
     if (!document.flows.participantOf(process)) {
       changes.warn({
         code: 'W_LANES_WITHOUT_POOL',
-        message: `Process ${process.id} has lanes but no participant; lanes are only drawn inside a pool`,
+        message: `Process ${process.id} has lanes but no participant; outside a pool only a full layout draws them`,
         element: id,
         hint: `Add a pool with \`add participant "<name>"\` (it wraps the existing process).`,
       });
@@ -29,23 +29,28 @@ export class LaneMembership {
       this.assign(this.edit.require(memberId, 'bpmn:FlowNode', 'flow node'), lane, changes);
     }
     if (extra.length) {
-      LaneMembership.warnExtraMembers(id, extra, parentLane, process, command, changes);
+      changes.warn(LaneMembership.extraMembers(lane, extra));
     }
     document.tree.invalidate();
     return lane;
   }
 
-  private static warnExtraMembers(id: string, extra: BpmnElement[], parentLane: BpmnElement | undefined, process: BpmnElement, command: AddOperation, changes: ChangeSet): void {
+  static extraMembersAtTheEnd(lane: BpmnElement, extraIds: readonly string[]): Finding[] {
+    const kept = lane.list('flowNodeRef').filter((node) => extraIds.includes(node.id));
+    return kept.length ? [LaneMembership.extraMembers(lane, kept)] : [];
+  }
+
+  private static extraMembers(lane: BpmnElement, extra: readonly BpmnElement[]): Finding {
     const extraIds = extra.map((element) => element.id);
-    const owner = parentLane ?? process;
-    const reason = parentLane ? 'because a lane with child lanes has no direct members' : 'because the first lane covers the whole pool';
-    changes.warn({
+    const owner = lane.parent!.parent!;
+    const reason = owner.is('bpmn:Lane') ? 'because a lane with child lanes has no direct members' : 'because the first lane covers the whole pool';
+    return {
       code: 'W_OPTION_IGNORED',
-      message: `--members ${command.members!.join(',')}: ${id} also received the other ${extra.length} member(s) of ${owner.id} (${extraIds.join(', ')}), ${reason}`,
-      element: id,
+      message: `--members: ${lane.id} also received the other ${extra.length} member(s) of ${owner.id} (${extraIds.join(', ')}), ${reason}`,
+      element: lane.id,
       related: extraIds,
       hint: `Move them into a sibling lane: \`bpmn add <file> lane "<name>" --in ${owner.id} --members ${extraIds.join(',')}\`.`,
-    });
+    };
   }
 
   private takeOverMembers(lane: BpmnElement, owner: BpmnElement, nodes: BpmnElement[], command: AddOperation, changes: ChangeSet): BpmnElement[] {

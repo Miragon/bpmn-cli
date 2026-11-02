@@ -42,12 +42,12 @@ describe('LaneMembership', () => {
     expect(changes.notes[0]).toBe(`created laneSet ${lane.parent?.id} in Process_orderCheck`);
   });
 
-  it('warns that lanes without a pool are not drawn', async () => {
+  it('warns that outside a pool only a full layout draws the lanes', async () => {
     const { lanes, changes } = await setUp(ORDER);
 
     const lane = lanes.createLane(laneOperation({}), changes);
 
-    expect(changes.warnings[0]).toMatchObject({ code: 'W_LANES_WITHOUT_POOL', element: lane.id });
+    expect(changes.warnings[0]).toMatchObject({ code: 'W_LANES_WITHOUT_POOL', element: lane.id, message: 'Process Process_orderCheck has lanes but no participant; outside a pool only a full layout draws them' });
   });
 
   it('adds a lane to a pool without a warning and keeps the members the first lane holds', async () => {
@@ -79,6 +79,18 @@ describe('LaneMembership', () => {
     expect(changes.warnings.map(({ code }) => code)).toEqual(['W_LANES_WITHOUT_POOL', 'W_OPTION_IGNORED']);
     expect(changes.warnings[1]?.related).toEqual(['startEvent_orderReceived', 'gateway_ok', 'reject', 'gateway_join', 'endEvent_done']);
     expect(changes.warnings[1]?.message).toContain('because the first lane covers the whole pool');
+  });
+
+  it('narrows the warning about extra members to those the lane still holds, and drops it when it holds none', async () => {
+    const { lanes, changes, session } = await setUp(ORDER);
+    const lane = lanes.createLane(laneOperation({ name: 'Sales', members: ['check'] }), changes);
+    const other = lanes.createLane(laneOperation({ name: 'Billing', members: ['ship', 'reject'] }), new ChangeSet());
+
+    const [narrowed] = LaneMembership.extraMembersAtTheEnd(lane, ['ship', 'reject', 'endEvent_done']);
+
+    expect(narrowed).toMatchObject({ code: 'W_OPTION_IGNORED', element: lane.id, related: ['endEvent_done'], message: `--members: ${lane.id} also received the other 1 member(s) of Process_orderCheck (endEvent_done), because the first lane covers the whole pool` });
+    expect(LaneMembership.extraMembersAtTheEnd(lane, ['ship', 'reject'])).toEqual([]);
+    expect(session.require(other.id).list('flowNodeRef').map(({ id }) => id)).toEqual(['ship', 'reject']);
   });
 
   it('nests the first child lane and hands it the members of its parent', async () => {

@@ -1,4 +1,4 @@
-import { type BatchContext, type BpmnDocument, BpmnError, ChangeSet, type Finding, type Platform } from '../model/index.js';
+import { type BatchContext, type BpmnDocument, type BpmnElement, BpmnError, ChangeSet, type Finding, type Platform } from '../model/index.js';
 import { type DrawingOperation, type ModelOperation, type Operation, OperationAliases, type ParsedOperations } from '../operations/index.js';
 import { BranchSplit } from './BranchSplit.js';
 import { ElementCreation } from './ElementCreation.js';
@@ -8,6 +8,7 @@ import { ElementRemoval } from './ElementRemoval.js';
 import { ElementTypeChange } from './ElementTypeChange.js';
 import { ExtensionEditor } from './ExtensionEditor.js';
 import { FlowConnector } from './FlowConnector.js';
+import { LaneMembership } from './LaneMembership.js';
 import { IdRename } from './properties/IdRename.js';
 import { PropertyEditor } from './PropertyEditor.js';
 import { AliasTable } from './session/AliasTable.js';
@@ -65,7 +66,7 @@ export class ModelOperationRunner {
     const resolvedDrawing = this.resolveDrawing(drawing, model.length);
     all.bindings = [];
     all.replaced = [];
-    all.warnings = all.warnings.filter((warning) => this.stillHolds(warning));
+    all.warnings = this.atTheEnd(all.warnings);
     new IdRename(this.edit).reportStalePrefixes(all);
     if (!this.options.force) {
       this.refuseDroppedContent();
@@ -156,14 +157,32 @@ export class ModelOperationRunner {
     }
   }
 
-  private stillHolds(warning: Finding): boolean {
-    const { document } = this;
-    const element = warning.element ? document.tree.byId(warning.element) : undefined;
-    switch (warning.code) {
-      case 'W_LANES_WITHOUT_POOL': {
-        const process = document.scopes.processOf(element?.parent);
-        return !!process && !document.flows.participantOf(process);
+  private atTheEnd(warnings: readonly Finding[]): Finding[] {
+    const warnedProcesses = new Set<BpmnElement>();
+    return warnings.flatMap((warning) => {
+      const element = warning.element ? this.document.tree.byId(warning.element) : undefined;
+      if (warning.code === 'W_OPTION_IGNORED' && element?.is('bpmn:Lane')) {
+        return LaneMembership.extraMembersAtTheEnd(element, warning.related ?? []);
       }
+      if (warning.code === 'W_LANES_WITHOUT_POOL') {
+        return this.firstWithoutPool(warning, element, warnedProcesses);
+      }
+      return this.stillHolds(warning, element) ? [warning] : [];
+    });
+  }
+
+  private firstWithoutPool(warning: Finding, lane: BpmnElement | undefined, warnedProcesses: Set<BpmnElement>): Finding[] {
+    const process = this.document.scopes.processOf(lane?.parent);
+    if (!process || this.document.flows.participantOf(process) || warnedProcesses.has(process)) {
+      return [];
+    }
+    warnedProcesses.add(process);
+    return [warning];
+  }
+
+  private stillHolds(warning: Finding, element: BpmnElement | undefined): boolean {
+    const { document } = this;
+    switch (warning.code) {
       case 'W_IMPLICIT_SPLIT':
         return !!element && !element.is('bpmn:Gateway') && document.flows.outgoing(element).length > 1;
       case 'W_IMPLICIT_JOIN':
