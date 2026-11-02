@@ -37,6 +37,14 @@ flowchart TD
 - Neither package imports the core. Of our code, cli imports only api, `packages/lint` and render's
   `./png`; it builds the edit commands from `OPS_SCHEMA`.
 - Node builtins appear only in cli, lint and render's Node entry, so the library runs in a browser.
+- No cycle, type imports included.
+- scoring imports only model and render's `./text`, and only drawing, write and views import it.
+- Only cli imports `packages/lint`. bpmnlint and its plugins load only there and in `cli/files`, which
+  reads the id conventions through `@miragon/bpmnlint-plugin-rules` until it publishes `./naming`
+  ([#143](https://github.com/Miragon/bpmn-cli/issues/143)), so a write never loads bpmnlint.
+- `checks/structure/` and `checks/camunda/` never import each other.
+- In edit, the operation classes sit at the module root and may call each other, as `BranchSplit` calls
+  `ElementCreation`; the subfolders hold the BPMN parts they share and never call an operation class.
 
 ## One write
 

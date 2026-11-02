@@ -19,8 +19,7 @@ npm run gate
 ```
 
 It is a TypeScript CLI and library on npm workspaces, tested with [Vitest](https://vitest.dev/). Node 24
-or later is required. `npm run dev -- <command>` builds and runs the CLI. Until the rebuild is merged,
-[the plan](docs/plan/README.md) is the spec.
+or later is required. `npm run dev -- <command>` builds and runs the CLI.
 
 ## Scripts (the quality gate)
 
@@ -41,12 +40,10 @@ or later is required. `npm run dev -- <command>` builds and runs the CLI. Until 
 | `bundle` | the painter, camunda-compat, bpmnlint or resvg loaded on a write |
 | `coverage` | the tests, with 90 % lines and 85 % branches per module and package; raise only |
 | `build` | the bundles, and the help tables written from the catalogues |
-| `timings` | `--version` over 60 ms; `bpmn add` on a model of 500 nodes slower than main |
-| `oracle` | every difference from main that `tools/oracle/differences.json` does not explain |
+| `timings` | `--version` over 60 ms; `bpmn add` on a model of 500 nodes over 1.2 times main's time |
 
-CI runs the gate on every pull request and every push to `main`. What each layer holds, and the oracle,
-the corpus, fuzz and bench: [docs/testing.md](docs/testing.md). The rules behind them are in
-[docs/plan/code.md](docs/plan/code.md).
+CI runs the gate on every pull request and every push to `main`. What each layer holds, the corpus, fuzz
+and bench: [docs/testing.md](docs/testing.md). The rules behind them: [how code is cut](#how-code-is-cut).
 
 ## How the package is laid out
 
@@ -55,15 +52,15 @@ the corpus, fuzz and bench: [docs/testing.md](docs/testing.md). The rules behind
 - `packages/render` and `packages/lint`: private workspaces whose `exports` point at their TypeScript
   sources, so tsc, vitest and esbuild reach `@miragon/bpmn-render/text` and the others without a build.
 - `test/`: mirrors `src/`, one test per class; `test/repo/` proves the guardrails on planted repositories.
-- `corpus/`: every BPMN input of the oracle and the tests, all of it synthetic or public.
-- `tools/`: the oracle, the fuzz, the bench and the guardrails' checks.
+- `corpus/`: every BPMN input of the tests, the fuzz and the bench, all of it synthetic or public.
+- `tools/`: the fuzz, the bench, the live engine run and the guardrails' checks.
 - `docs/adr/`: the architecture decisions and why they were made.
 - `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
   VitePress site with its own `package.json` and lockfile. `npm --prefix docs ci` once, then
   `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
   fails the build; the `docs` workflow builds it on every pull request that touches `docs/` and
   deploys it from `main`). A new page goes into the sidebar in `docs/.vitepress/config.ts`;
-  maintainer notes (`testing.md`, `releasing.md`, the plan in `plan/`, the decisions in `adr/`) stay
+  maintainer notes (`testing.md`, `releasing.md`, the decisions in `adr/`) stay
   out of the site via `srcExclude`. `npm --prefix docs run shots` draws the pictures with the built CLI,
   from the recipes in `docs/shots/`.
   The site is built with the Miragon docs kit: `docs/.vitepress/config.ts` passes the repo's name,
@@ -91,6 +88,26 @@ bundles load them at run time, and `test/repo/hygiene.test.ts` holds the two equ
   `src/api/index.ts` only when a command needs it.
 - `docs/architecture.md` has a section per module; a new module or a renamed class changes it, and
   `test/contract/architecture.test.ts` says so.
+
+### How code is cut
+
+- A type lives with the class that makes it. A private helper is `static` when it reads no state; a
+  helper of many classes is a method of their value, such as `Point`, `Box` or `IdSlug`.
+- One element is read and changed through `BpmnElement`. `BpmnTree` returns the same one for a moddle
+  object on every call, so `===`, `Set` and `Map` hold. No free `is` or `idOf`.
+- A catalogue, such as the kinds or the codes, is a class with `static readonly` typed records and query
+  methods.
+- Nouns for classes, verbs for methods; no `Util`, `Helper`, `Manager`, `Service`, `Impl`, `Base`.
+- An interface or abstract class only with two implementations today.
+- At most 300 lines per file, 12 public methods and 5 constructor parameters per class, 50 lines and a
+  cognitive complexity of 15 per function. A class that does not fit splits into its phases.
+- `src/<module>/index.ts` is the only way into a module. A subfolder names a domain concept (`lanes/`,
+  `routing/`), holds at most 12 files, sits at most two levels below its module and never imports a value
+  from its parent; what two subfolders share sits in a sibling subfolder. `utils`, `helpers`, `common`,
+  `shared`, `misc` and `types` are banned names.
+
+`npm run structure` holds the files, classes, sizes and folders, biome the function sizes, and
+dependency-cruiser the imports ([architecture](docs/architecture.md#layers)).
 
 ## Ground rules
 
