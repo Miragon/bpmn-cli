@@ -13,7 +13,8 @@ const EXAMPLES: Example[] = [
   ['refuses message outside set', { source: 'a', target: 'b', message: 'Order' }, 'unknown key "message"'],
   ['names its ends source and target, not from', { from: 'a', target: 'b' }, 'unknown key "from" (did you mean "source"?)'],
   ['names its ends source and target, not to', { source: 'a', to: 'b' }, 'unknown key "to" (did you mean "target"?)'],
-  ['refuses a default flow with a condition under set', { source: 'a', target: 'b', set: { default: true, condition: '=ok' } }, 'mutually exclusive'],
+  ['offers source for sourc, not set', { sourc: 'a', target: 'b' }, 'unknown key "sourc" (did you mean "source"?)'],
+  ['refuses a default flow with a condition under set',{ source: 'a', target: 'b', set: { default: true, condition: '=ok' } }, 'mutually exclusive'],
 ];
 
 describe('ConnectOperationDefinition', () => {

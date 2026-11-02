@@ -49,6 +49,10 @@ describe('OperationDefinition', () => {
     expect(() => new TagDefinition().read({ op: 'tag', timer: 'P2D', set: { name: 'a' } }, LOCATION)).toThrow(expect.objectContaining({ details: expect.objectContaining({ hint: 'What the element holds goes under "set": {"op":"tag","set":{"name":"a","timer":"P2D"}}.' }) }));
   });
 
+  it('offers the nearest key, not set, for a typo of a key it takes', () => {
+    expect(() => new TagDefinition().read({ labl: 'a' }, LOCATION)).toThrow(expect.objectContaining({ message: expect.stringContaining('unknown key "labl" (did you mean "label"?)'), details: expect.objectContaining({ hint: expect.stringContaining('`bpmn guide ops`'), candidates: ['label'] }) }));
+  });
+
   it('gives the general hint for an object under an unknown key', () => {
     expect(() => new TagDefinition().read({ values: { name: 'a' } }, LOCATION)).toThrow(expect.objectContaining({ details: expect.objectContaining({ hint: expect.stringContaining('`bpmn guide ops`') }) }));
   });

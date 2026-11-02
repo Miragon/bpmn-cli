@@ -1,6 +1,7 @@
 import { EditDistance } from '../../model/index.js';
 import { FieldRefusal } from './FieldRefusal.js';
 import { OperationCheck } from './OperationCheck.js';
+import { SetKeys } from './SetKeys.js';
 import type { OperationField } from './OperationField.js';
 import type { OperationLocation } from './OperationLocation.js';
 
@@ -74,7 +75,7 @@ export abstract class OperationDefinition {
     if (this.fields['id'] && input['id'] === undefined && OperationDefinition.ID_LIKE.has(key)) {
       return { key: 'id', hint: `${this.name} names its element with "id": ${JSON.stringify({ ...known(Object.entries(rest)), id: value })}.` };
     }
-    if (this.fields['set'] && typeof value !== 'object') {
+    if (this.fields['set'] && typeof value !== 'object' && SetKeys.ofKind(input['kind']).takes(key)) {
       const set = { ...(rest['set'] as object | undefined), [key]: value };
       return { key: 'set', hint: `What the element holds goes under "set": ${JSON.stringify({ ...known(Object.entries(rest)), set })}.` };
     }
