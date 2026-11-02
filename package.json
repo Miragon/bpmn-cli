@@ -52,7 +52,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
     "lint": "biome lint",
-    "structure": "node tools/gate/check-structure.mjs",
+    "structure": "node tools/gate/check-structure/run.mjs",
     "architecture": "depcruise src packages test --config .dependency-cruiser.cjs",
     "knip": "knip --treat-config-hints-as-errors && knip --production --exclude dependencies",
     "jscpd": "jscpd",

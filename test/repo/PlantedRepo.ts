@@ -45,7 +45,7 @@ export class PlantedRepo {
   }
 
   checkStructure(): ToolRun {
-    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'gate', 'check-structure.mjs'), this.root]);
+    return this.run(process.execPath, [join(REPOSITORY, 'tools', 'gate', 'check-structure', 'run.mjs'), this.root]);
   }
 
   checkBudgets(): ToolRun {
@@ -71,7 +71,7 @@ export class PlantedRepo {
 
   cruise(): ToolRun {
     const depcruise = join(REPOSITORY, 'node_modules', '.bin', 'depcruise');
-    return this.run(depcruise, ['src', 'packages', '--config', join(REPOSITORY, '.dependency-cruiser.cjs')]);
+    return this.run(depcruise, ['src', 'packages', 'test', '--config', join(REPOSITORY, '.dependency-cruiser.cjs')]);
   }
 
   remove(): void {

@@ -42,6 +42,11 @@ module.exports = {
     forbid('package-imports-no-core', { path: '^packages/' }, { path: '^src/' }),
     forbid('package-imports-no-other-package', { path: '^packages/([^/]+)/' }, { path: '^packages/', pathNot: '^packages/$1/' }),
     forbid('package-test-stays-in-its-package', { path: '^packages/([^/]+)/test/' }, { pathNot: ['^packages/$1/', '^node_modules/'], dependencyTypesNot: ['core'] }),
+    forbid(
+      'core-test-reaches-other-modules-through-support',
+      { path: '^test/([^/]+)/', pathNot: '^test/(e2e|contract|fixtures|repo|support)/' },
+      { path: '^(src|packages)/', pathNot: '^src/$1/', dependencyTypesNot: ['type-only'] },
+    ),
     forbid('lint-imported-only-by-cli', { pathNot: ['^src/cli/', '^packages/lint/'] }, { path: '^packages/lint/' }),
     forbid('core-reaches-packages-through-their-entries', { path: '^(src|test)/' }, { path: '^packages/', pathNot: [RENDER_ROOT_ENTRY, RENDER_TEXT_ENTRY, RENDER_PNG_ENTRY, LINT_ENTRY] }),
     forbid('render-root-imported-only-by-views', { path: '^src/', pathNot: '^src/views/' }, { path: RENDER_ROOT_ENTRY }),

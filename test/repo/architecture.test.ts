@@ -17,6 +17,7 @@ beforeEach(() => {
   repo.plant('packages/render/src/text/index.ts', 'export {};\n');
   repo.plant('packages/render/src/png/index.ts', 'export {};\n');
   repo.plant('packages/render/src/png/node/index.ts', 'export {};\n');
+  repo.plant('test/support/Fixtures.ts', 'export {};\n');
 });
 
 afterEach(() => {
@@ -38,6 +39,8 @@ describe('the import rules', () => {
     ['a Node builtin in the png node entry', 'packages/render/src/png/node/index.ts', "import 'node:fs';\n"],
     ['the plugin root in cli/files during the interim', 'src/cli/files/Reader.ts', "import '@miragon/bpmnlint-plugin-rules';\n"],
     ['bpmnlint in lint', 'packages/lint/src/index.ts', "import 'bpmnlint';\n"],
+    ['a type of another module in a core test', 'test/edit/Move.test.ts', "import type { Point } from '../../src/model/Point.js';\nexport type Input = Point;\n"],
+    ['a value through test/support in a core test', 'test/edit/Move.test.ts', "import '../support/Fixtures.js';\n"],
     ['a type of the module root in a subfolder', 'src/model/ids/Id.ts', "import type { Point } from '../Point.js';\nexport type Id = Point;\n"],
   ])('allows %s', (_name, path, source) => {
     repo.plant('src/model/Point.ts', 'export class Point {}\n');
@@ -61,6 +64,8 @@ describe('the import rules', () => {
     ['a package importing the core', 'packages/lint/src/index.ts', "export * from '../../../src/model/index.js';\n", 'package-imports-no-core'],
     ['a package importing a package', 'packages/lint/src/index.ts', "export * from '@miragon/bpmn-render';\n", 'package-imports-no-other-package'],
     ['a package test leaving its package', 'packages/lint/test/Lint.test.ts', "import '../../../src/model/index.js';\n", 'package-test-stays-in-its-package'],
+    ['a value of another module in a core test', 'test/edit/Move.test.ts', "import '../../src/model/Point.js';\n", 'core-test-reaches-other-modules-through-support'],
+    ['a package value in a core test', 'test/edit/Move.test.ts', "import '@miragon/bpmn-render/text';\n", 'core-test-reaches-other-modules-through-support'],
     ['lint imported by write', 'src/write/index.ts', "export * from '@miragon/bpmn-lint';\n", 'lint-imported-only-by-cli'],
     ['render internals', 'src/views/index.ts', "export * from '../../packages/render/src/paint/Painter.js';\n", 'core-reaches-packages-through-their-entries'],
     ['render root in drawing', 'src/drawing/index.ts', "export * from '@miragon/bpmn-render';\n", 'render-root-imported-only-by-views'],

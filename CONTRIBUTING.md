@@ -29,7 +29,7 @@ or later is required. `npm run dev -- <command>` builds and runs the CLI.
 | --- | --- |
 | `lint` | biome: block statements, function and file size, nested ternaries; errors only |
 | `typecheck` | tsc strict over `src/` and `packages/`, and over the tests |
-| `structure` | `tools/gate/check-structure.mjs`: classes, free functions, mirrored tests, folders |
+| `structure` | `tools/gate/check-structure/`, one class per check: classes, free functions, mirrored tests, folders |
 | `jscpd` | copied code over 0.25 % |
 | `knip` | dead files, exports and dependencies, then test-only code in `src/` |
 | `architecture` | dependency-cruiser: layers, entries, package edges, cycles with type imports |
