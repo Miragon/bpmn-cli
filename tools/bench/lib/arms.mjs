@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { ensureMainBuilt } from '../../oracle/lib/main-build.mjs';
 import { MAIN_ROOT } from '../../oracle/lib/paths.mjs';
 import { ROOT } from '../../fuzz/lib/setup.mjs';
 
@@ -29,6 +30,7 @@ function newArm() {
 }
 
 function baselineArm() {
+  ensureMainBuilt({ log: console.log });
   const bin = join(MAIN_ROOT, 'bin', 'bpmn.js');
   const noLint = ['--no-lint-config'];
   return {
