@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="Process_1" isExecutable="true">
-    <bpmn:startEvent id="start" unknown="1"><bpmn:outgoing>flow_1</bpmn:outgoing></bpmn:startEvent>
-    <bpmn:businessRuleTask id="decide" calledDecision="approve"><bpmn:incoming>flow_1</bpmn:incoming></bpmn:businessRuleTask>
-    <bpmn:sequenceFlow id="flow_1" sourceRef="start" targetRef="decide" />
-    <bpmn:sequenceFlow id="flow_2" sourceRef="start" targetRef="nowhere" />
-  </bpmn:process>
-</bpmn:definitions>

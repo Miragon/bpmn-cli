@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="Process_1" isExecutable="true">
-    <bpmn:startEvent id="start"><bpmn:outgoing>flow_1</bpmn:outgoing></bpmn:startEvent>
-    <bpmn:serviceTask id="work" camunda:topic="x"><bpmn:incoming>flow_1</bpmn:incoming></bpmn:serviceTask>
-    <bpmn:sequenceFlow id="flow_1" sourceRef="start" targetRef="work" />
-  </bpmn:process>
-</bpmn:definitions>

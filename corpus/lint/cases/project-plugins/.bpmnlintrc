@@ -1,7 +1,0 @@
-{
-  "extends": "plugin:local/recommended",
-  "rules": {
-    "@acme/scoped/flags-process": "info",
-    "local/off-by-config": "off"
-  }
-}
