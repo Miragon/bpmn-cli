@@ -2,8 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { ensureMainBuilt } from './oracle/lib/main-build.mjs';
-import { MAIN_ROOT } from './oracle/lib/paths.mjs';
+import { ensureMainBuilt, MAIN_ROOT } from './bench/lib/main-build.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const BIN = join(ROOT, 'bin', 'bpmn.js');

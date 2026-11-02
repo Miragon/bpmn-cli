@@ -269,7 +269,7 @@ function checkCoreLayout() {
   for (const name of readdirSync(source)) {
     const isFolder = statSync(join(source, name)).isDirectory();
     if (isFolder && !MODULES.includes(name)) {
-      report(`src/${name}`, 'is no module of the plan');
+      report(`src/${name}`, 'is no module of docs/architecture.md');
     }
     if (!isFolder && name !== 'index.ts') {
       report(`src/${name}`, 'the root of src/ holds only index.ts');

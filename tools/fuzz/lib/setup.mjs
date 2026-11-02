@@ -2,8 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadHardKinds, loadMainApi } from '../../oracle/lib/main-tools.mjs';
-import { ensureMainBuilt } from '../../oracle/lib/main-build.mjs';
+import { ensureScorersBuilt, SCORERS_ROOT } from '../../bench/lib/main-build.mjs';
 import { cliExecutor, libExecutor } from './exec.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -18,9 +17,11 @@ export async function loadLibrary() {
 }
 
 export async function loadMetrics() {
-  ensureMainBuilt();
-  const [main, hard] = await Promise.all([loadMainApi(), loadHardKinds()]);
-  return { measure: main.layoutProblemsOfXml, diff: main.diffProblems, hard: [...hard], keys: [...main.METRIC_KEYS], weights: { ...main.METRIC_WEIGHTS } };
+  ensureScorersBuilt();
+  const fromScorers = (path) => import(pathToFileURL(join(SCORERS_ROOT, path)).href);
+  const [scorers, { hardKinds }] = await Promise.all([fromScorers('dist/index.js'), fromScorers('tools/fuzz/lib/metric-kinds.mjs')]);
+  const hard = hardKinds({ KEYS: scorers.METRIC_KEYS, WEIGHTS: scorers.METRIC_WEIGHTS });
+  return { measure: scorers.layoutProblemsOfXml, diff: scorers.diffProblems, hard, keys: [...scorers.METRIC_KEYS], weights: { ...scorers.METRIC_WEIGHTS } };
 }
 
 function renderingCli(bin, workDir) {

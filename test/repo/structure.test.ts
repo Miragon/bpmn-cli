@@ -90,7 +90,7 @@ describe('the structure check', () => {
     ['code in an index.ts', { 'src/model/index.ts': 'export const a = 1;\n' }, 'holds only re-exports'],
     ['a ninth function in api', { 'src/api/index.ts': 'export function layoutXml(): void {\n  return;\n}\n' }, 'holds only re-exports and the 8 contract functions'],
     ['logic in a contract function', { 'src/api/index.ts': 'export function newXml(): string {\n  const a = 1;\n  return String(a);\n}\n' }, 'newXml is one line into a class'],
-    ['a module the plan lacks', { 'src/extra/index.ts': 'export {};\n' }, 'is no module of the plan'],
+    ['a module docs/architecture.md lacks', { 'src/extra/index.ts': 'export {};\n' }, 'is no module of docs/architecture.md'],
     ['a file in the root of src/', { 'src/cli.ts': 'export {};\n' }, 'the root of src/ holds only index.ts'],
     ['a class of a package with no test', { 'packages/render/src/text/TextMetrics.ts': CLASS.replace('Point', 'TextMetrics') }, 'class TextMetrics has no mirrored test packages/render/test/text/TextMetrics.test.ts'],
   ] as [string, Record<string, string>, string][])('fails on %s', (_name, files, expected) => {

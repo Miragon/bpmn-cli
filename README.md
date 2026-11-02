@@ -135,7 +135,7 @@ The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/)
 - [Migrating from 0.9](https://miragon.github.io/bpmn-cli/migration): what a user types and a host calls differently
 - [Architecture](https://miragon.github.io/bpmn-cli/architecture): the modules, what each holds and what it does not do
 - For maintainers, in the repository only: [testing](docs/testing.md),
-  [releasing](docs/releasing.md) and the [plan of the refactoring](docs/plan/README.md)
+  [releasing](docs/releasing.md) and the [architecture decisions](docs/adr/)
 
 ## Contributing
 

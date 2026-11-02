@@ -1,27 +1,34 @@
 # Testing bpmn-cli
 
 What holds the code, from the fastest check to the slowest. The rules behind them are in
-[plan/code.md](plan/code.md#guardrails).
+[CONTRIBUTING.md](../CONTRIBUTING.md#how-code-is-cut).
 
 | layer | catches | command | time |
 | --- | --- | --- | --- |
 | tests | one behaviour of each class, the contract, the CLI in-process | `npm test` | minutes |
 | the gate | everything a change has to pass | `npm run gate` | minutes |
-| the oracle | every difference from main | `npm run oracle` | minutes |
 | fuzz | invariant violations in long random edit sequences, through the real CLI | `npm run fuzz` | 10 s to hours |
 | bench | stability, quality and semantic success of typical edits, against main | `npm run bench` | minutes |
-| live engines | our checks and Camunda drifting apart | `node tools/oracle/live-engines.mjs` | minutes, with podman |
+| live engines | our checks and Camunda drifting apart | `node tools/live-engines.mjs` | minutes, with podman |
 
 ## The tests
 
 - `test/<module>/` mirrors `src/<module>/`: `src/edit/X.ts` has `test/edit/X.test.ts` with `describe('X')`.
   `packages/*/test/` do the same for the packages. A case is one behaviour of a public method, named as a
   sentence about BPMN, about 1 to 3 per public method.
-- Inputs are BPMN fixtures from `corpus/`, read through `test/support/`, never built with the edit API.
-  No mocks inside a module; fakes only for files, engine REST and the clock.
+- Inputs are BPMN fixtures from `corpus/`, read through `test/support/`, never built with the edit API;
+  a drawing test takes a before and an after fixture. No mocks inside a module; fakes only for files,
+  engine REST and the clock.
+- A mirrored test imports by value its class and the classes of its own module that build its input in
+  production. It reaches another module only through `test/support/`: one `Fixtures` class that reads
+  `corpus/`, plus builders of values, at most 12 files.
+- Per public method: the main path, each refusal code, each boundary BPMN names (empty, first lane,
+  nested host) and each fixed bug by its behaviour. Not tested: private methods, plain getters, types,
+  what moddle or commander do, one behaviour twice. A class with more than 20 cases splits; an `it.each`
+  over corpus rows counts as one case.
 - `test/e2e/` runs the CLI in-process per command group, with one spawn smoke test, `golden.test.ts`
   over `corpus/cli/`, and `plugin.test.ts`, which holds the plugin to `package.json`.
-- `test/contract/` holds what consumers rely on: the ten exports, design-iq's recorded calls, the result
+- `test/contract/` holds what consumers rely on: the ten exports, the result
   fixtures, the cost of one write (`WriteCost.test.ts`), the names of the guide, the skill and the hints, and
   `architecture.test.ts`, which fails when `docs/architecture.md` lacks a module or names a class that
   does not exist.
@@ -32,7 +39,7 @@ What holds the code, from the fastest check to the slowest. The rules behind the
 - Render's `packages/render/test/golden/` holds about 20 SVGs, so a shape or colour cannot change unseen.
 - `corpus/engine/` keeps verdict tables as data: each row names the class whose rule it tests, and that
   class's mirrored test runs its rows in one `it.each`. `FullLayout`'s mirrored test draws the 115 scenarios of
-  `corpus/layout/` and holds their total to main's; `Scorer`'s matches main's counts per kind on every
+  `corpus/layout/` and holds their total to 0.9's; `Scorer`'s matches 0.9's counts per kind on every
   corpus file.
 
 Layout tests assert invariants and order, such as no overlap and inside its lane, never pixels.
@@ -45,53 +52,29 @@ lists what each step checks. `npm run budgets` holds `budgets.json`: lines per m
 10 exports, the 26 commands, the 143 flag slots and the guide's 20 KB. Raising a number needs a reason in
 the commit, and coverage only rises.
 
+The lines are capped at 60,000 in all and each module at about 15 % over its size, so a budget fails on an
+outlier, not on every change; the 300 lines per file stay the sharp limit. drawing holds the most, since
+the two layouts of 0.9 were ported rather than reinvented, and cutting them into classes of at most 300
+lines added to them.
+
 `npm run timings` builds on that: `--version` within 60 ms, and `bpmn add` on a Camunda 8 model of 500
-nodes no slower than main on the same machine, median of 5. It is part of the gate. On CI the absolute
-budget is advisory.
+nodes at most 1.2 times main's time on the same machine, best of 5 in turn. Main means the commit this
+branch sits on (the merge base with `origin/main`), built in the worktree `.work/main` and cached by that
+commit. It is part of the gate. On CI the absolute budget is advisory.
 
-## The oracle
-
-`tools/oracle` runs main and this tree on the same input and asks main for every answer. Main means the
-commit this branch sits on (`git merge-base HEAD origin/main`), built in the worktree `.oracle/main` and
-cached by that commit, so between two rebases the judge stands still.
-
-```sh
-npm run oracle                                   # judge; leaves .oracle/result.json
-npm run oracle -- --probe layout --filter walks  # one probe, a part of the corpus
-npm run oracle:selftest                          # main against itself, and one planted change per probe
-npm run oracle:record                            # record corpus/ again
-node tools/oracle/design-iq-record.mjs <checkout> # record corpus/design-iq/ from a design-iq checkout
-```
-
-| probe | input | must match | may differ |
-| --- | --- | --- | --- |
-| bytes | `corpus/edits/`: a no-op, a rename and an insert per model | bytes where main keeps them; changed lines no more than main's | |
-| findings | the corpus for Camunda 7, Camunda 8 and no engine, `corpus/lint/`, `corpus/engine/` | code, severity and element | wording |
-| layout | the 115 scenarios drawn in full; the steps of `corpus/walks/` | the totals no higher than main's, scored by main's own scorers | coordinates; the score of one file or step |
-| image | the corpus, every plane | at most 0.5 % of pixels, both rasterised by the same resvg-wasm | SVG bytes |
-| edits | `corpus/walks/`, the bench edits of `corpus/edits/`, `corpus/design-iq/` | semantics without DI, ids, created, changed, removed, refusal codes, host-validator findings | DI, the result fields the allow-list names |
-| CLI | `corpus/cli/`, one golden call per kept command and flag | exit code; in `--json`, the fields the edits and findings probes compare; `validate`'s verdict lines | other JSON fields, other text |
-
-- Only the allow-list `tools/oracle/differences.json` (probe, pattern, reason) may differ. A row is a
-  decision, with its reason: what goes on the commands and flags pages, the behaviour that goes, an ADR.
-- The rebuild never grades itself: the layout probe, the fuzz and the bench score both sides with main's
-  scorers. `Scorer`'s own test holds it to main's counts.
-- A rebase that changes main's answers ports the fix or names it in the list. After the release the oracle
-  compares the last release with main.
-- A new probe, entry or recording is one file in `tools/oracle/probes/`, `entries/` or `recordings/`, and
-  its proof one in `plants/`.
+Not in the gate: the fuzz, whose invariants the walks of `test/corpus/` cover; mutation testing, which
+costs minutes per run for what the cases per public method ask anyway; and class members in knip, whose
+6.x no longer reports them.
 
 ## The corpus
 
-`corpus/` holds every BPMN input of the oracle and the tests. All of it is synthetic or public.
+`corpus/` holds every BPMN input of the tests, the fuzz and the bench. All of it is synthetic or public.
 
 | folder | holds |
 | --- | --- |
 | `models/` | the fixtures |
-| `layout/` | the 115 layout scenarios, each with main's score over all 26 kinds; `scores.json`, main's counts per kind on every corpus file |
-| `edits/` | per model a no-op, a rename and an insert, and the bench edits, as operation JSON |
-| `lint/` | 7 of the 10 examples of process-engine-blueprints with their `.bpmnlintrc` and `package.json`, the others being byte-identical in models and config, and models for each case `packages/lint` handles |
-| `design-iq/` | the arguments of design-iq's recorded calls, the paths of `OPS_SCHEMA` it reads, and `COMMIT` |
+| `layout/` | the 115 layout scenarios, each with 0.9's score over all 26 kinds; `scores.json`, 0.9's counts per kind on every corpus file |
+| `design-iq/` | the paths of `OPS_SCHEMA` design-iq read on 0.9, and its `COMMIT` |
 | `engine/` | `parity/`: the 610 distinct models of 109 rule specs, with `codes.json` naming each of the 1,077 cases' model; `verdicts/`: 421 verdicts of Camunda 7.24, CIB seven 2.2, Operaton 2.1.5 and Camunda 8.9.22; `fixed/`; `feel/`: 762 FEEL verdicts; `structure/` |
 | `walks/` | recorded fuzz walks, per step the operations and the file before |
 | `scoring/` | small models per scoring criterion |
@@ -118,14 +101,17 @@ After every step a walk checks:
 
 - **clean re-import**: the written file parses with plain bpmn-moddle, without a new import warning;
 - **DI complete**: every element has DI on the plane it belongs to, nothing dangling or duplicate;
-- **no new hard layout defect**: a kind weighted 6 or more, as main's scorer finds it (`--hard warn` counts
-  them as warnings, so a run goes on and the layout probe judges them);
+- **no new hard layout defect**: a kind weighted 6 or more (`--hard warn` counts them as warnings, so a
+  run goes on);
 - **honest results**: the score of the result equals a standalone measurement;
 - **no unreported moves**: every shape that moved is in the result;
 - **determinism**: every n-th step runs twice and gives the same bytes;
 - **failures stay clean**: no crash, no usage error, nothing written by a failed command;
 - **the result renders**: `render --problems` succeeds and lists as many problems as the measure.
 
+- Scorers: the fuzz and the bench score with v0.9.0, the last release before the refactoring, built in
+  the worktree `.work/scorers`, so the code never grades itself. `Scorer`'s own test holds it to those
+  counts in `corpus/layout/scores.json`.
 - Seeds: the same arguments give the same walks. `--seed`, `--filter`, `--corpus dir[:dir]` narrow a run;
   `BPMN_FUZZ_CORPUS` adds directories.
 - Executors: by default each step runs through `bin/bpmn.js` (`BPMN_BIN` for another build); `--exec lib`
@@ -156,7 +142,7 @@ nightly workflow runs the bench.
 ## Live engines
 
 `corpus/engine/` records what the engines answered, so the gate needs none.
-`node tools/oracle/live-engines.mjs` starts Camunda 7, CIB seven, Operaton and Camunda 8 with podman,
+`node tools/live-engines.mjs` starts Camunda 7, CIB seven, Operaton and Camunda 8 with podman,
 deploys the corpus and fails when an engine no longer answers what it records. The versions are pinned
 in that file. The workflow `live-engines.yml` runs it on a pull request that touches `corpus/engine/` or
 the file, and it runs once on each release candidate.

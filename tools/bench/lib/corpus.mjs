@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { corpusFiles, ROOT } from '../../fuzz/lib/setup.mjs';
-import { loadMainGenerator } from '../../oracle/lib/main-tools.mjs';
 import { generate } from '../gen-edits.mjs';
+import { ensureMainBuilt, MAIN_ROOT } from './main-build.mjs';
 
 function envCorpora(env) {
   const used = new Set(['scenarios']);
@@ -40,7 +41,8 @@ async function specOf(corpus, file, mainGenerator) {
 }
 
 export async function writeSpecs(corpora, out, filter) {
-  const mainGenerator = await loadMainGenerator();
+  ensureMainBuilt({ log: console.log });
+  const mainGenerator = await import(pathToFileURL(join(MAIN_ROOT, 'tools', 'bench', 'gen-edits.mjs')).href);
   const specs = [];
   for (const corpus of corpora) {
     const dir = join(out, 'specs', corpus.name);

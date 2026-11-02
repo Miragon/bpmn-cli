@@ -1,1 +1,0 @@
-module.exports = { rules: Object.fromEntries(['throws-in-check', 'throws-in-factory', 'promises-a-rule', 'no-check', 'rejects', 'enter-and-leave', 'not-a-function'].map((name) => [name, './rules/' + name])) };

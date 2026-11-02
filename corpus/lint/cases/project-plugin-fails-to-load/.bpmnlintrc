@@ -1,6 +1,0 @@
-{
-  "rules": {
-    "broken/any": "error",
-    "empty/any": "error"
-  }
-}

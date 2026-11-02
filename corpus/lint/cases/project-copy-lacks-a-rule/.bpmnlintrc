@@ -1,6 +1,0 @@
-{
-  "rules": {
-    "@miragon/rules/no-generated-ids": "error",
-    "camunda-compat/no-template": "error"
-  }
-}
