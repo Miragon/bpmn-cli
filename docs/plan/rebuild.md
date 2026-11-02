@@ -198,7 +198,7 @@ The draft PR is done when, rebased onto main's head:
 
 ### Open fuzz case
 
-`di:noDi`, on main too: artifacts__04b-data-crossscope, seed 504788352 (`node tools/fuzz/walk.mjs corpus/layout/artifacts__04b-data-crossscope.bpmn --seed 504788352 --steps 30 --exec lib`). Left open: collapsing a sub-process whose task reads a data object of the parent scope puts the two ends on different planes, so the association has no plane to be drawn on. A fix decides what such an association means, which is no small change.
+`di:noDi`, on main too: artifacts__04b-data-crossscope, seed 504788352 (`node tools/fuzz/walk.mjs corpus/layout/artifacts__04b-data-crossscope.bpmn --seed 504788352 --steps 30 --exec lib`). Left open: collapsing a sub-process whose task reads a data object of the parent scope puts the two ends on different planes, so the association has no plane to be drawn on. A fix decides what such an association means: [#142](https://github.com/Miragon/bpmn-cli/issues/142).
 
 ## Later
 
