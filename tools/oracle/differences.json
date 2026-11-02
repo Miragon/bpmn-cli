@@ -27,16 +27,16 @@
   {
     "probe": "edits",
     "pattern": "^models/incremental/vertical\\.bpmn#E3: refusal: main answers, subject E_LAYOUT_INCREMENTAL ",
-    "reason": "Open decision for the owner (cli.md, behaviour that goes): main redraws a vertical pool as a horizontal one on a placement; 1.0 draws nothing and refuses with E_LAYOUT_INCREMENTAL, so no write turns the drawing, and no write places into it either. The way out is `bpmn layout`, which redraws horizontally; 0.9's --no-layout has no replacement"
+    "reason": "Open decision for the owner (cli.md, behaviour that goes): main redraws a vertical pool as a horizontal one on a placement; the rebuild draws nothing and refuses with E_LAYOUT_INCREMENTAL, so no write turns the drawing, and no write places into it either. The way out is `bpmn layout`, which redraws horizontally; 0.9's --no-layout has no replacement"
   },
   {
     "probe": "edits",
     "pattern": "^design-iq/\\d+:applyToXml: (semantics|changed): main: .*calledDecision=credit-limit-check .*\\| subject: .*camunda:decisionRef",
-    "reason": "design-iq's map: `set calledDecision=` on a Camunda 7 file writes camunda:decisionRef, since the platform comes from the file and 1.0 has no `platform: none`; the recorded call forced that option, and design-iq's fixture and test adapt"
+    "reason": "design-iq's map: `set calledDecision=` on a Camunda 7 file writes camunda:decisionRef, since the platform comes from the file and the rebuild has no `platform: none`; the recorded call forced that option, and design-iq's fixture and test adapt"
   },
   {
     "probe": "bytes",
     "pattern": "^models/incremental/vertical\\.bpmn#insert: main writes, subject E_LAYOUT_INCREMENTAL$",
-    "reason": "Open decision for the owner (cli.md, behaviour that goes): main redraws a vertical pool as a horizontal one on a placement; 1.0 draws nothing and refuses with E_LAYOUT_INCREMENTAL, so no write turns the drawing, and no write places into it either. The way out is `bpmn layout`, which redraws horizontally; 0.9's --no-layout has no replacement"
+    "reason": "Open decision for the owner (cli.md, behaviour that goes): main redraws a vertical pool as a horizontal one on a placement; the rebuild draws nothing and refuses with E_LAYOUT_INCREMENTAL, so no write turns the drawing, and no write places into it either. The way out is `bpmn layout`, which redraws horizontally; 0.9's --no-layout has no replacement"
   }
 ]

@@ -107,7 +107,7 @@ function subjectOf(api) {
     walkStep: (step) => attempt(async () => {
       const operations = await resolveRowAlignsByKind(step.ops, step.before);
       if (operations.some(selectsByKind)) {
-        return { skipped: 'selects by kind, which 1.0 leaves to find' };
+        return { skipped: 'selects by kind, which the rebuild leaves to find' };
       }
       let xml = step.before;
       for (const batch of batchesOf(mapOperations(operations))) {
@@ -125,7 +125,7 @@ function subjectOf(api) {
 
 export default {
   name: 'rebuild',
-  describes: "the public surface: applyToXml, validateXml and renderXml. 1.0 has no option platform, so a file declares the engine a c7 or c8 input forces, and main answers a none input for the file's own engine. --no-layout goes too, so main answers a roundtrip without layout incrementally, as every 1.0 write draws",
+  describes: "the public surface: applyToXml, validateXml and renderXml. The rebuild has no option platform, so a file declares the engine a c7 or c8 input forces, and main answers a none input for the file's own engine. --no-layout goes too, so main answers a roundtrip without layout incrementally, as every 1.0 write draws",
   async open() {
     return subjectOf(await loadPublicSurface());
   },
