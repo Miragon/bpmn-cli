@@ -42,7 +42,7 @@ describe('FieldRefusal', () => {
 
   it.each<[z.ZodMiniType, string, unknown, string]>([
     [FieldValues.references(1), 'ids', ['a', 1], '"ids[1]" must be a string, got number 1'],
-    [FieldValues.keys, 'set', { name: null }, '"set.name" must be a string (numbers and booleans are converted); "" removes a property, got null'],
+    [FieldValues.keys, 'set', { name: null }, '"set.name" must be a string (numbers and booleans are converted), got null'],
     [FieldValues.keys, 'set', { ' ': 'x' }, '"set. " contains an empty key'],
   ])('points into a list and into the keys', (schema, key, input, message) => {
     expect(refusalOf(OperationField.optional(schema, 'help'), key, input).message).toContain(message);

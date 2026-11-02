@@ -86,7 +86,7 @@ export class EventDefinitions {
 
   private static rootName(trigger: RefTrigger, opts: TriggerOptions): string | undefined {
     const { code } = EventDefinitions.REF_TRIGGERS[trigger];
-    return opts[trigger] ?? (code && opts[code]);
+    return opts[trigger] ?? (code ? opts[code] || undefined : undefined);
   }
 
   private static isRefTrigger(trigger: Trigger): trigger is RefTrigger {
@@ -155,10 +155,13 @@ export class EventDefinitions {
 
   private updateReference(def: BpmnElement, trigger: RefTrigger, opts: TriggerOptions): void {
     const name = EventDefinitions.rootName(trigger, opts);
+    const { prop, code } = EventDefinitions.REF_TRIGGERS[trigger];
     if (name === undefined) {
+      if (code && opts[code] === '') {
+        def.get<BpmnElement | undefined>(prop)?.set(code, undefined);
+      }
       return;
     }
-    const { prop } = EventDefinitions.REF_TRIGGERS[trigger];
     if (!name) {
       def.set(prop, undefined);
       return;

@@ -15,9 +15,12 @@ export class FieldValues {
   static readonly alias = z.string('must be a string').check(z.regex(FieldValues.ALIAS, 'must be an alias like "$check" ($ and a letter, then letters, digits, _ or -)'));
   static readonly keys = z.record(
     z.string().check(z.regex(/\S/)),
-    z.pipe(z.union([z.string(), z.number(), z.boolean()], 'must be a string (numbers and booleans are converted); "" removes a property'), z.transform(String)),
+    z.pipe(z.union([z.string(), z.number(), z.boolean()], 'must be a string (numbers and booleans are converted)'), z.transform(String)),
     { error: (issue) => (issue.code === 'invalid_key' ? 'contains an empty key' : 'must be an object of key/value pairs') },
   );
+  static readonly unsetKeys = z
+    .array(z.string('must be a string').check(z.regex(/^[^=]*[^=\s][^=]*$/, 'must be a key without "=", e.g. "name"')), 'must be an array of keys')
+    .check(z.minLength(1, 'needs at least 1 key'));
   static readonly size = z.pipe(
     z.union([z.string().check(z.regex(FieldValues.SIZE, FieldValues.SIZE_DEMAND)), z.int()], FieldValues.SIZE_DEMAND).check(z.refine((value) => SpaceAmount.parse(value) !== undefined, FieldValues.SIZE_DEMAND)),
     z.transform((value): SpaceSize => (typeof value === 'string' && /^\s*-?\d+\s*$/.test(value) ? Number(value) : value)),

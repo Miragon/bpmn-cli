@@ -7,15 +7,17 @@ export class SetOperationDefinition extends OperationDefinition {
   readonly description = 'Set or remove properties of an element.';
   readonly fields = {
     id: OperationField.required(FieldValues.reference, 'Element id.'),
-    set: OperationField.required(FieldValues.keys, 'Properties to set (`bpmn guide set-keys` lists the keys per element family); an empty string removes the property.'),
+    set: OperationField.optional(FieldValues.keys, 'Properties to set (`bpmn guide set-keys` lists the keys per element family).'),
+    unset: FieldSets.unset,
     refAs: FieldSets.refAs,
   };
   override readonly referenceKeys = ['id'];
-  override readonly schemaRules = [{ properties: { set: { minProperties: 1 } } }];
+  override readonly schemaRules = [{ anyOf: [{ required: ['set'], properties: { set: { minProperties: 1 } } }, { required: ['unset'] }] }];
 
   protected override check(operation: OperationCheck): void {
-    if (!Object.keys(operation.fields['set'] as object).length) {
-      throw operation.fail((key) => `nothing to do: ${key('set')} is empty`, RefusalWording.onlyInBatch('Example: {"op":"set","id":"task_x","set":{"name":"New name"}}.'));
+    const keys = (operation.fields['set'] as object | undefined) ?? {};
+    if (!Object.keys(keys).length && operation.fields['unset'] === undefined) {
+      throw operation.fail((key) => `nothing to do: give ${key('set')} or ${key('unset')}`, RefusalWording.onlyInBatch('Example: {"op":"set","id":"task_x","set":{"name":"New name"}} or {"op":"set","id":"task_x","unset":["name"]}.'));
     }
   }
 }

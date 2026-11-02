@@ -9,6 +9,7 @@ export class RetypeOperationDefinition extends OperationDefinition {
     id: OperationField.required(FieldValues.reference, 'Element id.'),
     kind: FieldSets.kind,
     set: FieldSets.elementKeys,
+    unset: FieldSets.unset,
     refAs: FieldSets.refAs,
   };
   override readonly referenceKeys = ['id'];

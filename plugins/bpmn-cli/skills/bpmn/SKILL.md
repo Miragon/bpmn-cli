@@ -198,7 +198,8 @@ Exit codes: 0 ok, 1 usage, 2 model/validation error, 3 layout, 4 file/parse,
   `condition`, `default`, `flowId`, `flowAs`.
 - `set` takes its changes in `set`:
   `{ "op": "set", "id": "flow_orderOkYes", "set": { "name": "yes", "condition": "${orderOk}" } }`;
-  an empty value removes a key; a `default` flow has no condition.
+  `"unset": ["key"]` removes a key (an empty value is refused); a `default`
+  flow has no condition.
 - `connect` holds its flow's `name`, `condition`, `language`, `default` and
   `message` under `"set"` too.
 - Pools: the first `participant` wraps the existing process; add further pools

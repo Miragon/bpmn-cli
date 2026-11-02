@@ -19,7 +19,7 @@ describe('InapplicableContent', () => {
       code: 'W_PROPERTY_INAPPLICABLE',
       element: 'task_oneAttribute',
       message: 'camunda:assignee of task_oneAttribute has no effect on a serviceTask (kept as it is)',
-      hint: 'The Camunda descriptor does not allow it on a serviceTask; remove with `bpmn set <file> task_oneAttribute camunda:assignee=`, or retype back.',
+      hint: 'The Camunda descriptor does not allow it on a serviceTask; remove with `bpmn set <file> task_oneAttribute --unset camunda:assignee`, or retype back.',
     });
   });
 
@@ -45,7 +45,7 @@ describe('InapplicableContent', () => {
     const warning = await warningOn('task_mixed');
 
     expect(warning?.hint).toContain('The Camunda 7 and Zeebe descriptor');
-    expect(warning?.hint).toContain('camunda:assignee=` and `bpmn ext remove');
+    expect(warning?.hint).toContain('--unset camunda:assignee` and `bpmn ext remove');
   });
 
   it('finds a Zeebe attribute of a host that does not take it', async () => {

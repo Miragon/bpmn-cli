@@ -19,6 +19,10 @@ export class ElementAddress {
     return `${this.id} ${ShellWords.quote(`${this.prefix}${text}`)}`;
   }
 
+  unset(key: string): string {
+    return `${this.id} --unset ${ShellWords.quote(`${this.prefix}${key}`)}`;
+  }
+
   private static nestedPrefix(element: BpmnElement, owner: BpmnElement): string | undefined {
     const definitions = owner.list('eventDefinitions');
     if (definitions.includes(element)) {

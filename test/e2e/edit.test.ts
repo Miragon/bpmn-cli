@@ -94,6 +94,14 @@ describe('bpmn with its edit commands', () => {
     expect((await cli.run(['apply', '-', '-'])).stderr).toContain('cannot both come from stdin');
   });
 
+  it('removes keys with a repeated --unset and refuses an empty value', async () => {
+    await cli.run(['set', file, 'check', 'doc=Four eyes', 'camunda:assignee=kermit']);
+
+    expect(await cli.run(['set', file, 'check', '--unset', 'doc', 'name=Check it', '--unset', 'camunda:assignee'])).toMatchObject({ exit: 0 });
+    expect(readFileSync(file, 'utf8')).not.toMatch(/Four eyes|kermit/);
+    expect(await cli.run(['set', file, 'check', 'name='])).toMatchObject({ exit: 1, stderr: 'error E_INVALID_VALUE: name needs a value\n  hint: Use --unset name to remove it.\n' });
+  });
+
   it('keeps extension attributes, the body and the selector apart', async () => {
     const camunda = cli.copied('edit/extensions-camunda.bpmn');
 
@@ -104,7 +112,7 @@ describe('bpmn with its edit commands', () => {
   });
 
   it('answers E_USAGE to a retired command, alias or flag, and E_UNKNOWN_KEY to what the element does not hold', async () => {
-    for (const words of [['metrics', file], ['rm', file, 'check'], ['add', file, 'userTask', '--timer', 'P2D'], ['remove', file, 'check', '--no-bridge'], ['set', file, 'check', '--unset', 'doc'], ['ext', 'list', file, 'check']]) {
+    for (const words of [['metrics', file], ['rm', file, 'check'], ['add', file, 'userTask', '--timer', 'P2D'], ['remove', file, 'check', '--no-bridge'], ['ext', 'list', file, 'check']]) {
       expect(await cli.run(words)).toMatchObject({ exit: 1, stderr: expect.stringMatching(/^error E_USAGE: /) });
     }
     expect(await cli.run(['add', file, 'userTask', '--after', 'check', 'timer=P2D'])).toMatchObject({ exit: 2, stderr: expect.stringContaining('E_UNKNOWN_KEY') });

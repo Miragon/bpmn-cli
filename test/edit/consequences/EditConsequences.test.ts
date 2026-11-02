@@ -15,8 +15,9 @@ describe('EditConsequences', () => {
     ['removing every event that catches it', 'edit/events-triggers.bpmn', [{ op: 'remove', ids: ['catch_signal', 'catch_both'] }], 'Signal_stop'],
     ['changing the trigger of every event that refers to it', 'edit/events-triggers.bpmn', [{ op: 'remove', ids: ['end_error'] }, { op: 'set', id: 'boundary_error', set: { trigger: 'escalation', escalation: 'Up' } }], 'Error_late'],
     ['retyping the only task that sends it', 'edit/retype-elements.bpmn', [{ op: 'retype', id: 'send_paid', kind: 'userTask' }], 'Message_paid'],
-    ['unlinking it from the only task that sends it', 'edit/retype-elements.bpmn', [{ op: 'set', id: 'send_paid', set: { message: '' } }], 'Message_paid'],
+    ['unlinking it from the only task that sends it', 'edit/retype-elements.bpmn', [{ op: 'set', id: 'send_paid', unset: ['message'] }], 'Message_paid'],
     ['removing the only task that sends it', 'edit/retype-elements.bpmn', [{ op: 'remove', ids: ['send_paid'] }], 'Message_paid'],
+    ['unsetting the error on every event that throws or catches it', 'edit/events-triggers.bpmn', [{ op: 'set', id: 'end_error', unset: ['error'] }, { op: 'set', id: 'boundary_error', unset: ['error'] }], 'Error_late'],
   ])('removes a root element the batch left unreferenced by %s', async (_case, path, ops, rootId) => {
     const { changes, rootIds } = await run(path, ops);
 
@@ -32,7 +33,7 @@ describe('EditConsequences', () => {
 
   it('keeps a message the batch unlinks and links again', async () => {
     const { changes, rootIds } = await run('edit/retype-elements.bpmn', [
-      { op: 'set', id: 'send_paid', set: { message: '' } },
+      { op: 'set', id: 'send_paid', unset: ['message'] },
       { op: 'set', id: 'send_paid', set: { message: 'Paid' } },
     ]);
 

@@ -123,7 +123,7 @@ export class NestedSlots {
       code: 'W_PROPERTY_DROPPED',
       message: `The condition "${body}" of ${el.id} was dropped: a script resource condition has no inline body`,
       element: el.id,
-      hint: `To go back to an inline condition remove the resource and set the body in one command: \`bpmn set <file> ${el.id} condition.${key}= '${el.is('bpmn:SequenceFlow') ? 'condition' : 'when'}=<expression>'\`.`,
+      hint: `To go back to an inline condition remove the resource and set the body in one command: \`bpmn set <file> ${el.id} --unset condition.${key} '${el.is('bpmn:SequenceFlow') ? 'condition' : 'when'}=<expression>'\`.`,
     });
   }
 
@@ -140,8 +140,8 @@ export class NestedSlots {
       full,
       `removing the script resource ${String(target.attrs[key])} would leave ${flow ? 'the condition' : 'the condition of the conditional event'} empty (it has no inline body); the engines would fail every evaluation of an empty condition`,
       flow
-        ? `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} ${full}= 'condition=\${...}'\`, or remove the whole condition: \`bpmn set <file> ${id} condition=\`.`
-        : `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} ${full}= 'when=\${...}'\` (a conditional event always needs a condition), or point it at another script: \`bpmn set <file> ${id} ${full}=<uri>\`.`);
+        ? `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} --unset ${full} 'condition=\${...}'\`, or remove the whole condition: \`bpmn set <file> ${id} --unset condition\`.`
+        : `Replace it with an inline condition in the same command: \`bpmn set <file> ${id} --unset ${full} 'when=\${...}'\` (a conditional event always needs a condition), or point it at another script: \`bpmn set <file> ${id} ${full}=<uri>\`.`);
   }
 
   setKey(el: BpmnElement, slot: string, key: string, value: string, changes: ChangeSet, replacing = false): void {

@@ -60,7 +60,7 @@ function shortKind(kind) {
 }
 
 function triggersTable() {
-  const lines = ['# Triggers', '', '`bpmn add <file> <kind>:<trigger> [key=value…]`. `timer=`: `R/PT1H` a cycle, `PT5M` a duration, a date a date. Empty `message=`: no `messageRef` (connector throw events).', ''];
+  const lines = ['# Triggers', '', '`bpmn add <file> <kind>:<trigger> [key=value…]`. `timer=`: `R/PT1H` a cycle, `PT5M` a duration, a date a date. Without `message=`: no `messageRef` (connector throw events).', ''];
   for (const { trigger, keys, kinds: hosts, alsoOn } of triggers) {
     const keyList = keys.length > 0 ? ` ${keys.map((key) => `\`${key}=\``).join(' ')}` : '';
     lines.push(`- \`${trigger}\`${keyList}: ${[...hosts, ...(alsoOn ?? [])].map(shortKind).join(', ')}`);
@@ -71,7 +71,7 @@ function triggersTable() {
 function setKeysTable() {
   const triggerKeys = new Set(triggers.flatMap(({ keys }) => keys));
   const documented = PropertyCatalog.DOCS.filter(({ key, appliesTo }) => appliesTo !== 'event' || !triggerKeys.has(key));
-  const lines = ['# Set keys', '', '`bpmn set <file> <id> key=value`; `key=` removes. The same on `add`, `retype`, `connect`. The trigger keys, such as `timer=`: `bpmn guide triggers`.'];
+  const lines = ['# Set keys', '', '`bpmn set <file> <id> key=value`, also on `add`, `retype`, `connect`; `--unset <key>` removes (`set`, `retype`). The trigger keys, such as `timer=`: `bpmn guide triggers`.'];
   for (const [appliesTo, keys] of Map.groupBy(documented, ({ appliesTo }) => appliesTo)) {
     lines.push('', `${appliesTo}:`);
     for (const { key, description } of keys) {

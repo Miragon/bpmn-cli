@@ -41,14 +41,14 @@ export class GatewayChecks {
     if (!this.isJoinGateway(node) || !this.findings.nameOf(node)) {
       return;
     }
-    this.findings.warning('W_NAMED_JOIN', `Joining gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} name=\`.`, fix: { op: 'set', id: ElementText.shownId(node), set: { name: '' } } });
+    this.findings.warning('W_NAMED_JOIN', `Joining gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} --unset name\`.`, fix: { op: 'set', id: ElementText.shownId(node), unset: ['name'] } });
   }
 
   private checkParallelName(node: BpmnElement): void {
     if (!node.is('bpmn:ParallelGateway') || !this.findings.nameOf(node)) {
       return;
     }
-    this.findings.warning('W_NAMED_PARALLEL', `Parallel gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} name=\`.`, fix: { op: 'set', id: ElementText.shownId(node), set: { name: '' } } });
+    this.findings.warning('W_NAMED_PARALLEL', `Parallel gateway ${this.findings.describe(node)} should not have a name`, ElementText.shownId(node), { hint: `Unset it: \`bpmn set <file> ${ElementText.shownId(node)} --unset name\`.`, fix: { op: 'set', id: ElementText.shownId(node), unset: ['name'] } });
   }
 
   private checkIgnoredConditions(node: BpmnElement, outgoing: BpmnElement[]): void {
@@ -59,7 +59,7 @@ export class GatewayChecks {
     if (!conditional.length) {
       return;
     }
-    this.findings.warning('W_CONDITION_IGNORED', `Flows ${conditional.map((element) => ElementText.shownId(element)).join(', ')} out of ${this.findings.describe(node)} have a condition, which the gateway never evaluates`, ElementText.shownId(node), { related: conditional.map((element) => ElementText.shownId(element)), hint: `Remove them (\`bpmn set <file> ${ElementText.shownId(conditional[0])} condition=\`), or branch by condition: \`bpmn retype <file> ${ElementText.shownId(node)} exclusiveGateway\`.` });
+    this.findings.warning('W_CONDITION_IGNORED', `Flows ${conditional.map((element) => ElementText.shownId(element)).join(', ')} out of ${this.findings.describe(node)} have a condition, which the gateway never evaluates`, ElementText.shownId(node), { related: conditional.map((element) => ElementText.shownId(element)), hint: `Remove them (\`bpmn set <file> ${ElementText.shownId(conditional[0])} --unset condition\`), or branch by condition: \`bpmn retype <file> ${ElementText.shownId(node)} exclusiveGateway\`.` });
   }
 
   private checkEventGatewayTargets(node: BpmnElement, outgoing: BpmnElement[]): void {

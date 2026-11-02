@@ -29,6 +29,8 @@ export class FieldSets {
 
   static readonly elementKeys = OperationField.optional(FieldValues.keys, 'What the element holds: the keys of `bpmn set`, e.g. {"timer": "P2D", "camunda:assignee": "kermit"}.');
 
+  static readonly unset = OperationField.optional(FieldValues.unsetKeys, 'Keys to remove from the element, e.g. name or camunda:assignee (`bpmn guide set-keys` lists them).');
+
   static readonly noDefaultWithCondition = { not: { required: ['default', 'condition'], properties: { default: { const: true } } } };
 
   static readonly placementRules = [['after', 'flow'], ['after', 'in'], ['after', 'on'], ['before', 'flow'], ['before', 'in'], ['before', 'on'], ['flow', 'in'], ['flow', 'on'], ['in', 'on']].map((pair) => ({ not: { required: pair } }));

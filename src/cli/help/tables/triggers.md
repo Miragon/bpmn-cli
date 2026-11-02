@@ -1,6 +1,6 @@
 # Triggers
 
-`bpmn add <file> <kind>:<trigger> [key=value…]`. `timer=`: `R/PT1H` a cycle, `PT5M` a duration, a date a date. Empty `message=`: no `messageRef` (connector throw events).
+`bpmn add <file> <kind>:<trigger> [key=value…]`. `timer=`: `R/PT1H` a cycle, `PT5M` a duration, a date a date. Without `message=`: no `messageRef` (connector throw events).
 
 - `none`: start, end, throw
 - `message` `message=`: start, end, catch, throw, boundary, send, receive

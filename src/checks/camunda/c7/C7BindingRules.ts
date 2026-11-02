@@ -83,7 +83,7 @@ export class C7BindingRules extends C7Rules {
     if (called === undefined && caseRef === undefined) {
       reporter.deploy({ code: 'W_C7_DEPLOY_CALLED_ELEMENT', element: el, subject: 'calledElement', message: `Call activity ${el.id} has no calledElement (nor ${this.prefix}:caseRef); the engines refuse the file`, hint: `\`bpmn set <file> ${el.id} calledElement=<processId>\`.` });
     } else if (called !== undefined && caseRef !== undefined) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_CALLED_ELEMENT', element: el, subject: 'calledElement+caseRef', message: `Call activity ${el.id} has both calledElement and ${this.prefix}:caseRef; the engines refuse the file`, hint: `Keep one: \`bpmn set <file> ${el.id} ${this.prefix}:caseRef=\`.` });
+      reporter.deploy({ code: 'W_C7_DEPLOY_CALLED_ELEMENT', element: el, subject: 'calledElement+caseRef', message: `Call activity ${el.id} has both calledElement and ${this.prefix}:caseRef; the engines refuse the file`, hint: `Keep one: \`bpmn set <file> ${el.id} --unset ${this.prefix}:caseRef\`.` });
     } else if (called === '') {
       reporter.runtime({ code: 'W_C7_BAD_VALUE', element: el, subject: 'attr:calledElement', message: `Call activity ${el.id} has an empty calledElement; it fails when it runs`, hint: `\`bpmn set <file> ${el.id} calledElement=<processId>\`.` });
     }
@@ -108,7 +108,7 @@ export class C7BindingRules extends C7Rules {
       return;
     }
     if (this.c7(el, 'formKey') !== undefined) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_FORM', element: el, subject: 'formKey+formRef', message: `${this.describe(el, undefined)} has both ${this.prefix}:formKey and ${this.prefix}:formRef; the engines refuse the file`, hint: `Keep one: \`bpmn set <file> ${el.id} ${this.prefix}:formKey=\` (or ${this.prefix}:formRef=).` });
+      reporter.deploy({ code: 'W_C7_DEPLOY_FORM', element: el, subject: 'formKey+formRef', message: `${this.describe(el, undefined)} has both ${this.prefix}:formKey and ${this.prefix}:formRef; the engines refuse the file`, hint: `Keep one: \`bpmn set <file> ${el.id} --unset ${this.prefix}:formKey\` (or --unset ${this.prefix}:formRef).` });
     }
     const binding = this.c7(el, 'formRefBinding');
     if (binding === undefined || !C7BindingRules.FORM_BINDINGS.includes(binding)) {
@@ -132,7 +132,7 @@ export class C7BindingRules extends C7Rules {
       const message = `Multi-instance ${this.describe(activity, undefined)} has neither a loop cardinality nor ${this.prefix}:collection${misplaced !== undefined ? ` (${this.prefix}:collection sits on the activity, not on the loop)` : ''}; the engines refuse the file`;
       const hint =
         misplaced !== undefined
-          ? `Move it onto the loop: \`bpmn set <file> ${activity.id} ${this.prefix}:collection= ${ShellWords.quote(`loop.${this.prefix}:collection=${misplaced}`)}${this.c7(activity, 'elementVariable') !== undefined ? ` ${this.prefix}:elementVariable= ${ShellWords.quote(`loop.${this.prefix}:elementVariable=${this.c7(activity, 'elementVariable')}`)}` : ''}\`.`
+          ? `Move it onto the loop: \`bpmn set <file> ${activity.id} --unset ${this.prefix}:collection ${ShellWords.quote(`loop.${this.prefix}:collection=${misplaced}`)}${this.c7(activity, 'elementVariable') !== undefined ? ` --unset ${this.prefix}:elementVariable ${ShellWords.quote(`loop.${this.prefix}:elementVariable=${this.c7(activity, 'elementVariable')}`)}` : ''}\`.`
           : `\`bpmn set <file> ${activity.id} ${ShellWords.quote(`loop.${this.prefix}:collection=\${items}`)} loop.${this.prefix}:elementVariable=item\` (or \`bpmn set <file> ${activity.id} cardinality=3\`).`;
       reporter.deploy({ code: 'W_C7_DEPLOY_MULTI_INSTANCE', element: activity, subject: 'mi', message, hint });
       return;
@@ -141,7 +141,7 @@ export class C7BindingRules extends C7Rules {
       reporter.deploy({ code: 'W_C7_DEPLOY_MULTI_INSTANCE', element: activity, subject: 'mi:cardinality', message: `Multi-instance ${this.describe(activity, undefined)} has an empty loop cardinality; the engines refuse the file`, hint: `\`bpmn set <file> ${activity.id} cardinality=3\` (a number or \${...}).` });
     }
     if (elementVariable !== undefined && collection === undefined && !dataInput) {
-      reporter.deploy({ code: 'W_C7_DEPLOY_MULTI_INSTANCE', element: activity, subject: 'mi:elementVariable', message: `Multi-instance ${this.describe(activity, undefined)} has ${this.prefix}:elementVariable but no ${this.prefix}:collection; the engines refuse the file`, hint: `\`bpmn set <file> ${activity.id} ${ShellWords.quote(`loop.${this.prefix}:collection=\${items}`)}\` (or remove it: \`bpmn set <file> ${activity.id} loop.${this.prefix}:elementVariable=\`).` });
+      reporter.deploy({ code: 'W_C7_DEPLOY_MULTI_INSTANCE', element: activity, subject: 'mi:elementVariable', message: `Multi-instance ${this.describe(activity, undefined)} has ${this.prefix}:elementVariable but no ${this.prefix}:collection; the engines refuse the file`, hint: `\`bpmn set <file> ${activity.id} ${ShellWords.quote(`loop.${this.prefix}:collection=\${items}`)}\` (or remove it: \`bpmn set <file> ${activity.id} --unset loop.${this.prefix}:elementVariable\`).` });
     }
   }
 

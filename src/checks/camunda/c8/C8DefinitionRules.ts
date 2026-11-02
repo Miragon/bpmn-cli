@@ -186,6 +186,6 @@ export class C8DefinitionRules extends C8Rules {
     if (this.document.scopes.scopeOf(ref) === scope) {
       return;
     }
-    reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_DEFINITION', element: el, subject: 'activityRef', message: `Compensation event ${el.id} names ${ref.id}, which is not in its own scope ${scope?.id}; Camunda 8 refuses the file`, hint: `\`bpmn set <file> ${el.id} definition.activityRef=<activityId>\` (an activity of ${scope?.id}), or \`definition.activityRef=\` to compensate the whole scope.`, related: [ref.id] });
+    reporter.deploy({ code: 'W_C8_DEPLOY_EVENT_DEFINITION', element: el, subject: 'activityRef', message: `Compensation event ${el.id} names ${ref.id}, which is not in its own scope ${scope?.id}; Camunda 8 refuses the file`, hint: `\`bpmn set <file> ${el.id} definition.activityRef=<activityId>\` (an activity of ${scope?.id}), or \`--unset definition.activityRef\` to compensate the whole scope.`, related: [ref.id] });
   }
 }

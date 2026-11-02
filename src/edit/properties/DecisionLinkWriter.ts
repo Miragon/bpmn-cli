@@ -19,7 +19,7 @@ export class DecisionLinkWriter {
     if (!el.is('bpmn:BusinessRuleTask')) {
       throw BpmnError.model('E_UNKNOWN_KEY', `Unknown key "calledDecision" for ${Kinds.label(el)} ${ElementText.shownId(el)} (the decision link of a business rule task)`, {
         element: ElementText.shownId(el),
-        hint: `Only a businessRuleTask calls a decision: \`bpmn retype <file> ${ElementText.shownId(el)} businessRuleTask\` first. An unprefixed calledDecision="..." attribute on another element is removed with \`bpmn set <file> ${ElementText.shownId(el)} calledDecision=\`.`,
+        hint: `Only a businessRuleTask calls a decision: \`bpmn retype <file> ${ElementText.shownId(el)} businessRuleTask\` first. An unprefixed calledDecision="..." attribute on another element is removed with \`bpmn set <file> ${ElementText.shownId(el)} --unset calledDecision\`.`,
       });
     }
     const reader = new DecisionLinkReader(this.edit.document.namespaces);

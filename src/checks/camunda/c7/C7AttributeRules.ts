@@ -51,12 +51,12 @@ export class C7AttributeRules extends C7Rules {
     const prefix = key.slice(0, key.indexOf(':'));
     const fits = !!guess && applicable.includes(guess);
     const elsewhere = guess && !fits ? ` It applies to ${this.kindsText(CAMUNDA.attr(guess)!.owners)} only.` : '';
-    reporter.runtime({ code: 'W_C7_UNKNOWN_ATTRIBUTE', element: el, owner, subject: `attr:${key}`, message: `${this.describe(el, owner)} has the unknown attribute ${key}${guess ? ` (did you mean ${prefix}:${guess}?${elsewhere})` : ''}; the engines ignore it`, hint: fits && addr ? `Rename it: \`bpmn set <file> ${addr.slot(`${key}=`)} ${ShellWords.quote(`${addr.prefix}${prefix}:${guess}=${value}`)}\`.` : `Remove it: ${unset}.` });
+    reporter.runtime({ code: 'W_C7_UNKNOWN_ATTRIBUTE', element: el, owner, subject: `attr:${key}`, message: `${this.describe(el, owner)} has the unknown attribute ${key}${guess ? ` (did you mean ${prefix}:${guess}?${elsewhere})` : ''}; the engines ignore it`, hint: fits && addr ? `Rename it: \`bpmn set <file> ${addr.unset(key)} ${ShellWords.quote(`${addr.prefix}${prefix}:${guess}=${value}`)}\`.` : `Remove it: ${unset}.` });
   }
 
   private misplacedHint(el: BpmnElement, owner: BpmnElement | undefined, key: string, local: string, value: string, owners: string[]): string {
     const addr = this.addressOf(el, owner);
-    const unset = addr?.slot(`${key}=`);
+    const unset = addr?.unset(key);
     const move = (prefix: string): string => `\`bpmn set <file> ${unset} ${ShellWords.quote(`${prefix}${this.prefix}:${local}=${value}`)}\``;
     const home = addr?.prefix === '' ? this.homeHint(el, owners, move) : undefined;
     return home ?? (addr ? `Remove it: \`bpmn set <file> ${unset}\`.` : 'Remove it from the XML.');

@@ -34,7 +34,7 @@ export class LaneChecks {
     for (const lane of lanes) {
       for (const member of lane.list('flowNodeRef')) {
         if (!member.is('bpmn:FlowNode') || !direct.includes(member)) {
-          this.findings.error('E_INVALID_LANE_MEMBER', `Lane ${ElementText.shownId(lane)} lists ${ElementText.shownId(member)}, which is not a flow node of process ${ElementText.shownId(process)}`, ElementText.shownId(lane), { related: [ElementText.shownId(member)], hint: 'Only flow nodes declared directly in the process (not inside sub-processes) can be lane members. Fix with `bpmn set <file> <nodeId> lane=`.' });
+          this.findings.error('E_INVALID_LANE_MEMBER', `Lane ${ElementText.shownId(lane)} lists ${ElementText.shownId(member)}, which is not a flow node of process ${ElementText.shownId(process)}`, ElementText.shownId(lane), { related: [ElementText.shownId(member)], hint: 'Only flow nodes declared directly in the process (not inside sub-processes) can be lane members. Fix with `bpmn set <file> <nodeId> --unset lane`.' });
           continue;
         }
         seen.set(member, [...(seen.get(member) ?? []), lane]);

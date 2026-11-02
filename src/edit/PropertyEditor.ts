@@ -67,7 +67,7 @@ export class PropertyEditor {
   set(command: SetOperation): ChangeSet {
     const changes = new ChangeSet();
     const element = this.edit.require(command.id);
-    const entries = Object.entries(command.set).map(([key, value]): [string, string] => [PropertyEditor.normalizeKey(key), value]);
+    const entries = Object.entries(command.set ?? {}).map(([key, value]): [string, string] => [PropertyEditor.normalizeKey(key), value]);
     this.assertDefaultWithoutCondition(element, entries);
     const keys = this.writePlainKeys(element, entries, changes);
     this.writeGroupedKeys(element, keys, changes);
