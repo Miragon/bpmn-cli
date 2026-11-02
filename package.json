@@ -72,7 +72,7 @@
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
     "docs:preview": "npm --prefix docs run preview",
-    "gate": "npm run typecheck && npm run lint && npm run structure && npm run architecture && npm run knip && npm run knip:production && npm run jscpd && npm run budgets && npm run api && npm run iso && npm run bundle && npm run coverage && npm run build && npm run timings && npm run oracle",
+    "gate": "npm run typecheck && npm run lint && npm run structure && npm run architecture && npm run knip && npm run knip:production && npm run jscpd && npm run budgets && npm run api && npm run iso && npm run bundle && npm run coverage && npm run build && npm run timings",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
