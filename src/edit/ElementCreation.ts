@@ -227,7 +227,7 @@ export class ElementCreation {
     }
     if (def.family === 'subProcess' && keys['expanded'] !== undefined) {
       const expanded = PropertyCoercer.booleanOf(element, 'expanded', keys['expanded']);
-      changes.expansions.expand(element.id, expanded);
+      this.edit.requestExpansion(element, expanded, changes.expansions);
       if (!expanded) {
         changes.note(`${element.id} will be laid out collapsed`);
       }

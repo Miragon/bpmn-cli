@@ -9,6 +9,7 @@ export { BpmnError, type CommandRefusal, type CommandWords, type ErrorDetails } 
 export { ModelError } from './errors/ModelError.js';
 export { Findings, type Finding, type FindingCounts, type ProfileFinding, type Severity, type Suggestion, type ValidatorFinding, type ValidatorIssue, type ValidatorSeverity } from './findings/Findings.js';
 export { BpmnDocument } from './document/BpmnDocument.js';
+export { DataAssociationEnds, type HiddenEnd } from './kinds/DataAssociationEnds.js';
 export { FlowEnds } from './kinds/FlowEnds.js';
 export { BpmnElement, type PropertyDescriptor } from './document/BpmnElement.js';
 export { BpmnTree } from './document/BpmnTree.js';

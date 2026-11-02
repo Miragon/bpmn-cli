@@ -1,4 +1,4 @@
-import { type BpmnDocument, type BpmnElement, ChangeEntries, ElementWalk, type IdAllocator, type IdConventions, type IdStyle, type Platform } from '../../model/index.js';
+import { type BpmnDocument, type BpmnElement, ChangeEntries, ElementWalk, type IdAllocator, type IdConventions, type IdStyle, type LayoutRequests, type Platform } from '../../model/index.js';
 import { EditJournal } from './EditJournal.js';
 
 export interface BatchContext {
@@ -18,6 +18,7 @@ export class EditSession {
   readonly allocator: IdAllocator;
   readonly journal = new EditJournal();
   private readonly formerEnds = new Map<BpmnElement, FormerEnd[]>();
+  private readonly requestedExpansions = new Map<BpmnElement, boolean>();
 
   constructor(
     readonly document: BpmnDocument,
@@ -59,6 +60,17 @@ export class EditSession {
     this.journal.clearIdStates();
     this.allocator.begin();
     this.formerEnds.clear();
+    this.requestedExpansions.clear();
+  }
+
+  requestExpansion(subProcess: BpmnElement, expanded: boolean, layout: LayoutRequests): void {
+    this.requestedExpansions.set(subProcess, expanded);
+    layout.expand(subProcess.id, expanded);
+  }
+
+  isCollapsed(subProcess: BpmnElement): boolean {
+    const expanded = this.requestedExpansions.get(subProcess) ?? this.document.diagram.expansionState().get(subProcess.id) ?? true;
+    return !expanded;
   }
 
   recordFormerEnd(node: BpmnElement, end: FormerEnd): void {

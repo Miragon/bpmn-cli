@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DocumentValidation } from '../../src/write/DocumentValidation.js';
 import type { Validator, ValidatorContext } from '../../src/write/HostValidators.js';
+import { WriteTransaction } from '../../src/write/WriteTransaction.js';
 import { Fixtures } from '../support/Fixtures.js';
 
 const report = (path: string, validators?: Validator[]) => new DocumentValidation({ validators }).report(Fixtures.text(path));
@@ -31,6 +32,29 @@ describe('DocumentValidation', () => {
 
   it('keeps operaton on the platform of a Camunda 7 file', async () => {
     expect((await report('model/operaton.bpmn')).platform.operaton).toBe(true);
+  });
+
+  it('reports a data association reaching into a collapsed sub-process and names the collapse that attaches it', async () => {
+    const { findings } = await report('edit/collapsed-data-crossing.bpmn');
+
+    expect(findings.filter(({ element }) => element === 'DataInputAssociation_4')).toEqual([
+      {
+        code: 'W_LAYOUT_DATA_IN_COLLAPSED',
+        element: 'DataInputAssociation_4',
+        message: 'DataInputAssociation_4 reaches Activity_Score inside the collapsed Activity_Sub and cannot be drawn; `bpmn set <file> Activity_Sub expanded=false` attaches it to Activity_Sub',
+        severity: 'warning',
+      },
+    ]);
+  });
+
+  it('reports data inside a collapsed sub-process read from outside, naming to move the data out', async () => {
+    const { xml } = await new WriteTransaction({}).apply(Fixtures.text('layout/artifacts__04b-data-crossscope.bpmn'), [
+      { op: 'connect', source: 'DataObjectReference_Score', target: 'Activity_Inform', id: 'informReadsScore' },
+      { op: 'set', id: 'Activity_Sub', set: { expanded: false } },
+    ]);
+    const { findings } = await new DocumentValidation({}).report(xml);
+
+    expect(findings).toContainEqual(expect.objectContaining({ code: 'W_LAYOUT_DATA_IN_COLLAPSED', element: 'informReadsScore', message: 'informReadsScore reaches DataObjectReference_Score inside the collapsed Activity_Sub and cannot be drawn; move DataObjectReference_Score out of Activity_Sub, or expand it' }));
   });
 
   it('counts a warning of the layout as a warning', async () => {

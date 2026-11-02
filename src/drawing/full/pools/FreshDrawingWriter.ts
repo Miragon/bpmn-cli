@@ -1,4 +1,4 @@
-import { Box, BoxBorder, Point, type BpmnElement, type BpmnTree } from '../../../model/index.js';
+import { Box, BoxBorder, type BpmnElement, type BpmnTree, DataAssociationEnds, type HiddenEnd, Point } from '../../../model/index.js';
 import { ShapeSizes } from '../../plane/ShapeSizes.js';
 import type { GNode, ScopeLayout } from '../scopes/GNode.js';
 import type { LaneBox } from '../scopes/LaneBox.js';
@@ -22,7 +22,10 @@ export class FreshDrawingWriter {
 
   private readonly crossLinks: ScopeLayout['crossLinks'] = [];
 
-  constructor(private readonly tree: BpmnTree) {}
+  constructor(
+    private readonly tree: BpmnTree,
+    private readonly expanded: ReadonlySet<string> = new Set(),
+  ) {}
 
   private static shifted(box: Box, offset: Point): Box {
     return new Box(box.x + offset.x, box.y + offset.y, box.width, box.height);
@@ -107,6 +110,14 @@ export class FreshDrawingWriter {
     definitions.add('diagrams', diagram);
   }
 
+  private static hiddenMessage(association: BpmnElement, { end, subProcess }: HiddenEnd): string {
+    const reason = `${association.id} reaches ${end.id} inside the collapsed ${subProcess.id} and cannot be drawn`;
+    if (end.is('bpmn:DataObjectReference') || end.is('bpmn:DataStoreReference')) {
+      return `${reason}; move ${end.id} out of ${subProcess.id}, or expand it`;
+    }
+    return `${reason}; \`bpmn set <file> ${subProcess.id} expanded=false\` attaches it to ${subProcess.id}`;
+  }
+
   private flushCrossLinks(warnings: EngineWarning[]): void {
     const { absBoxes, crossLinks } = this;
     const here = new Set(this.planeElements.filter((element) => element.is('bpmndi:BPMNShape')).map((element) => element.peek<BpmnElement>('bpmnElement')!.id));
@@ -116,6 +127,11 @@ export class FreshDrawingWriter {
       if (sourceBox && targetBox) {
         this.edge(link.el, [new BoxBorder(sourceBox).pointTowards(targetBox.center), new BoxBorder(targetBox).pointTowards(sourceBox.center)]);
       } else {
+        const hidden = new DataAssociationEnds(link.el).hiddenEnd((subProcess) => !this.expanded.has(subProcess.id));
+        if (hidden) {
+          warnings.push({ code: 'DATA_IN_COLLAPSED', elementId: link.el.id, message: FreshDrawingWriter.hiddenMessage(link.el, hidden) });
+          continue;
+        }
         const toGroup = [link.el.peek<BpmnElement | BpmnElement[]>('sourceRef'), link.el.peek<BpmnElement>('targetRef')].flat().some((end) => end?.is('bpmn:Group'));
         warnings.push({ code: 'DI_NOT_CREATED', elementId: link.el.id, message: `No DI created for ${link.el.id} (${toGroup ? 'an end is a group: its box is drawn after the layout' : 'its ends are on different diagrams'})` });
       }

@@ -4,6 +4,7 @@ import { EventGatewayRule } from './events/EventGatewayRule.js';
 import { RootElements } from './events/RootElements.js';
 import { TriggerKeys } from './events/TriggerKeys.js';
 import { Associations } from './flows/Associations.js';
+import { CollapsedSubProcessData } from './flows/CollapsedSubProcessData.js';
 import { type ConnectionKind, ConnectionKinds } from './flows/ConnectionKinds.js';
 import { MessageFlows } from './flows/MessageFlows.js';
 import { SequenceFlows } from './flows/SequenceFlows.js';
@@ -106,6 +107,7 @@ export class FlowConnector {
       case 'association':
         return new Associations(this.edit).createAssociation(source, target, identified, changes);
       default:
+        new CollapsedSubProcessData(this.edit).assertConnectable(source, target);
         return new Associations(this.edit).createDataAssociation(source, target, identified, changes);
     }
   }
