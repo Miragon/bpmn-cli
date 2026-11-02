@@ -14,5 +14,5 @@ docs/.vitepress/dist/
 .work/
 .api/
 .vitest/
-tools/fuzz/out/
-tools/bench/results/
+tools/verify/fuzz/out/
+tools/verify/bench/results/

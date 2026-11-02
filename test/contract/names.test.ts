@@ -11,7 +11,7 @@ interface Names {
   anyFlag: Set<string>;
 }
 
-const CORPUS = join(import.meta.dirname, '..', '..', 'corpus');
+const CORPUS = join(import.meta.dirname, '..', '..', 'fixtures');
 const SKILL = join(import.meta.dirname, '..', '..', 'plugins', 'bpmn-cli', 'skills', 'bpmn');
 const COMMAND = /(?:^|[`(\s])bpmn ([a-z]+)(?: (add|remove))?([^`\n]*)/gm;
 const FLAG = /(?<![\w-])--[a-z][a-z-]*/g;

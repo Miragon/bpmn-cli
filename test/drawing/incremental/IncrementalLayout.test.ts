@@ -8,7 +8,7 @@ import { DrawingPair, type RecordedChanges } from '../../support/DrawingPair.js'
 import { Box, BpmnError, ChangeSet, Scorer, type BpmnDocument, type BpmnElement } from '../../support/ModelValues.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
-const WALKS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'corpus', 'walks');
+const WALKS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'fixtures', 'walks');
 const LONG_TITLE = Array.from({ length: 12 }, () => 'Clarify the order').join(' ');
 const noChanges: RecordedChanges = { created: [], changed: [], removed: [], relocated: [], expand: [], collapse: [], renamed: [] };
 

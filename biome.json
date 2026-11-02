@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": { "includes": ["src/**/*.ts", "packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "test/**/*.ts", "tools/**/*.mjs", "!!.work"] },
-  "plugins": ["./tools/biome/block-statements.grit"],
+  "plugins": ["./tools/gate/biome/block-statements.grit"],
   "formatter": { "enabled": false },
   "assist": { "enabled": false },
   "linter": {

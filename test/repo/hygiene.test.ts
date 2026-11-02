@@ -47,7 +47,7 @@ describe('repository hygiene', () => {
   it('scans the repository', () => {
     expect(repoFiles).toContain('README.md');
     expect(repoFiles).toContain(join('src', 'index.ts'));
-    expect(repoFiles.some((file) => file.startsWith('corpus'))).toBe(true);
+    expect(repoFiles.some((file) => file.startsWith('fixtures'))).toBe(true);
   });
 
   it('holds no control characters in text files, only tab, newline and carriage return', () => {

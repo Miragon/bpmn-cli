@@ -12,4 +12,4 @@ Shapes bpmn-cli creates get the bpmn-js size: 100 by 80 for a task, 50 by 50 for
 
 ## Consequences
 
-`ShapeSizes`' test holds the table to the rule, and `test/corpus/standard-size.test.ts` runs the rule over every drawn model.
+`ShapeSizes`' test holds the table to the rule, and `test/fixtures/standard-size.test.ts` runs the rule over every drawn model.

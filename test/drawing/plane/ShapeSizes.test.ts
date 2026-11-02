@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ShapeSizes } from '../../../src/drawing/plane/ShapeSizes.js';
 import { Fixtures } from '../../support/Fixtures.js';
-import { StandardSize } from '../../corpus/StandardSize.js';
+import { StandardSize } from '../../fixtures/StandardSize.js';
 
 const SHAPES: Array<[string, string, string]> = [
   ['bpmn:task', 'task', 'TASK'],

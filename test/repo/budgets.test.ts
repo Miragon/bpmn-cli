@@ -105,18 +105,18 @@ describe('the iso check', () => {
     expect(status).toBe(1);
   });
 
-  it('measures only what design-iq imports and what loads with it', () => {
-    repo.plantBudgets({ designIqImportKilobytes: 1 });
+  it('measures only the browser start imports and what loads with them', () => {
+    repo.plantBudgets({ browserStartImportKilobytes: 1 });
     repo.plant('src/api/Heavy.ts', `export const heavy = '${'x'.repeat(4000)}';\n`);
     repo.plant('src/api/index.ts', "export const findXml = () => import('./Heavy.js');\nexport const unused = '" + 'y'.repeat(4000) + "';\n");
     expect(repo.checkIso()).toMatchObject({ status: 0, output: expect.stringContaining('1 of 7 imports') });
   });
 
-  it("fails on design-iq's import set over its budget", () => {
-    repo.plantBudgets({ designIqImportKilobytes: 1 });
+  it("fails on the browser start imports over their budget", () => {
+    repo.plantBudgets({ browserStartImportKilobytes: 1 });
     repo.plant('src/api/index.ts', `export const applyToXml = '${'x'.repeat(4000)}';\n`);
     const { status, output } = repo.checkIso();
-    expect(output).toContain("design-iq's import set is");
+    expect(output).toContain("the browser start imports are");
     expect(status).toBe(1);
   });
 });

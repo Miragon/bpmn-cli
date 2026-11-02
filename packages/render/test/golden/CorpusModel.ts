@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { DiagramReader, type Plane, type PlaneEdge, type PlaneShape } from '../../src/read/DiagramReader.js';
 
 export class CorpusModel {
-  private static readonly CORPUS = fileURLToPath(new URL('../../../../corpus/', import.meta.url));
+  private static readonly CORPUS = fileURLToPath(new URL('../../../../fixtures/', import.meta.url));
   private static readonly FIXTURES = fileURLToPath(new URL('./fixtures/', import.meta.url));
 
   static xml(path: string): string {
