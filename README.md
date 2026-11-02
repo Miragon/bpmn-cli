@@ -61,7 +61,7 @@ state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lin
 ```
 
 The result is a normal `.bpmn` file that opens in Camunda Modeler / bpmn-js with a laid-out
-diagram. [A worked session](https://miragon.github.io/bpmn-cli/walkthrough) builds a complete
+diagram. [Model a process](https://miragon.github.io/bpmn-cli/modeling) builds a complete
 process step by step.
 
 ## Commands
@@ -76,8 +76,7 @@ process step by step.
 | Check before deploying | `validate` (also runs the project's `.bpmnlintrc`) |
 | Ask the CLI itself | `guide`, `--help` |
 
-Details: [command reference](https://miragon.github.io/bpmn-cli/commands). Coming from 0.9:
-[Migrating from 0.9](https://miragon.github.io/bpmn-cli/migration).
+Details: [command reference](https://miragon.github.io/bpmn-cli/commands).
 
 ## Claude Code plugin
 
@@ -90,7 +89,7 @@ BPMN model, instead of writing BPMN XML by hand.
 /plugin install bpmn-cli@miragon-bpmn
 ```
 
-Details: [Claude Code plugin](https://miragon.github.io/bpmn-cli/claude-code-plugin), and the plugin
+Details: [Claude Code plugin](https://miragon.github.io/bpmn-cli/getting-started#claude-code-plugin), and the plugin
 itself in [plugins/bpmn-cli](plugins/bpmn-cli/README.md).
 
 ## Camunda 7 and Camunda 8
@@ -116,23 +115,20 @@ Details: [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint).
 The package is also a library that edits BPMN in memory, in Node and in the browser: ten exports that
 take and return strings and data.
 
-Details: [library use](https://miragon.github.io/bpmn-cli/library), [validators](https://miragon.github.io/bpmn-cli/validators).
+Details: [library use](https://miragon.github.io/bpmn-cli/library).
 
 ## Documentation
 
 The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), is built from [docs/](docs/):
 
-- [Command reference](https://miragon.github.io/bpmn-cli/commands): every command with its options
-- [Syntax and output](https://miragon.github.io/bpmn-cli/reference): ids, kinds, triggers, placement, set keys, output, errors and exit codes
-- [Operations](https://miragon.github.io/bpmn-cli/ops): the batch format of `bpmn apply`
-- [Layout and formatting](https://miragon.github.io/bpmn-cli/layout): how a write draws, and the diagram-only commands
-- [The contract and its limits](https://miragon.github.io/bpmn-cli/contract): what the CLI guarantees, what a write changes, limitations
-- [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda): platform settings with worked examples
-- [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate
-- [A worked session](https://miragon.github.io/bpmn-cli/walkthrough): one process from an empty file to a validated model
-- [Library use](https://miragon.github.io/bpmn-cli/library)
-- [Validators](https://miragon.github.io/bpmn-cli/validators): a library host's own checks inside the write
-- [Migrating from 0.9](https://miragon.github.io/bpmn-cli/migration): what a user types and a host calls differently
+- [Getting started](https://miragon.github.io/bpmn-cli/getting-started): install the CLI or the Claude Code plugin, a first model
+- [Model a process](https://miragon.github.io/bpmn-cli/modeling): one process from an empty file to a validated model, with batches
+- [Camunda 7 and 8](https://miragon.github.io/bpmn-cli/camunda): engine settings and deploy checks
+- [Layout](https://miragon.github.io/bpmn-cli/layout): how a write draws, and the commands that change only the drawing
+- [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate, and id conventions
+- [Library](https://miragon.github.io/bpmn-cli/library): the package API and host validators
+- [Commands](https://miragon.github.io/bpmn-cli/commands): every command, flags and keys, kinds, output and exit codes
+- [Guarantees and limits](https://miragon.github.io/bpmn-cli/contract): what a write promises and where it stops
 - [Architecture](https://miragon.github.io/bpmn-cli/architecture): the modules, what each holds and what it does not do
 - For maintainers, in the repository only: [testing](docs/testing.md),
   [releasing](docs/releasing.md) and the [architecture decisions](docs/adr/)

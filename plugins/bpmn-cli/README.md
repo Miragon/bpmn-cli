@@ -53,7 +53,7 @@ version of this plugin (Node 24+). It pre-approves only those two commands.
   `.bpmn-render/` in the working directory is scratch: delete it or add it to `.gitignore`.
 - **Progressive disclosure** - `SKILL.md` holds the rules (about 480 tokens always loaded, about
   6.3k when it fires); `reference/` has the batch format, formatting and rendering, Camunda 7,
-  Camunda 8, complete recipes and the migration from 0.x; for everything else the skill sends Claude
+  Camunda 8 and complete recipes; for everything else the skill sends Claude
   to `bpmn guide <topics>`, so the CLI's own documentation stays the single source.
 
 The plugin's version is the package version: release-please bumps

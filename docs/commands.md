@@ -1,282 +1,169 @@
 # Commands
 
-What each command does and what is easy to get wrong. bpmn-cli has 26 commands. A flag says where an
-element goes and how the command runs; what the element holds is a `key=value`
-([Flag or key](reference.md#flag-or-key-value)).
-
-::: tip From the CLI
-`bpmn guide commands` and `bpmn <command> --help` print every option. `bpmn guide kinds` and the other
-topics of `bpmn guide` print the tables of kinds, keys and exit codes.
-:::
+Every command at a glance, the rules they share, and what they print. `bpmn <command> --help` prints
+every option of one command; `bpmn guide <topic>` prints the full tables (kinds, triggers, keys,
+operations, exit codes), generated from the code.
 
 ## Overview
 
 | group | command | what it does |
 | --- | --- | --- |
-| Read | [`show`, `find`](#show-and-find) | print the model without coordinates, search it |
-| | [`diagram`](#diagram) | judge the drawing: score, problems, rows and columns |
-| | [`conventions`](#conventions) | the id patterns new ids follow here |
-| | [`render`](#render) | draw the diagram as PNG or SVG |
-| | [`validate`](#validate) | check structure, engine rules and the project's bpmnlint |
-| Change | [`new`](#new) | create a file with one empty process |
-| | [`add`](#add) | create an element and wire it in |
-| | [`connect`](#connect) | connect two elements |
-| | [`set`](#set) | change properties, rename ids |
-| | [`remove`](#remove) | remove elements and bridge the gap |
-| | [`retype`](#retype) | change the kind, keep id and flows |
-| | [`move`, `order`](#move-and-order) | place nodes elsewhere, order branches, lanes and pools |
-| | [`ext add`, `ext remove`](#ext) | write vendor extension elements |
-| | [`apply`](#apply) | run a JSON list of operations as one transaction |
-| Draw | [`place`, `color`, `label`, `route`, `space`, `tidy`, `compact`](layout.md#formatting-without-xml) | change the drawing by naming elements |
-| | [`layout`](#layout) | redraw the whole diagram |
-| Help | [`guide`](#guide) | the help, by topic |
+| Read | `show <file> [<id>]` | the model as text, or everything about one element; `--in`, `--around --depth` narrow it |
+| | `find <file> [<text>]` | one tab-separated line per match over ids, names and values; `--kind`, `--in` filter |
+| | `diagram <file>` | the layout score, its problems with ids, the rows and columns |
+| | `conventions <file>` | the id pattern of each kind ([bpmnlint](./bpmnlint.md#id-conventions)) |
+| | `render <file> -o <png\|svg>` | draw it; `<ids>`, `--around`, `--path` crop, `--problems` numbers the problems |
+| | `validate <file>` | structure, engine rules, the project's bpmnlint and a layout dry run |
+| Change | `new <file> [<name>]` | a file with one empty process; `--target camunda7\|camunda8\|none` |
+| | `add <file> <kind> [<name>]` | create an element and wire it in |
+| | `connect <file> <source> <target>` | sequence flow, message flow, association or data association, by the ends |
+| | `set <file> <id> <key=value...>` | change properties; `id=<new>` renames, `key=` removes |
+| | `remove <file> <ids...>` | remove elements and bridge the gap |
+| | `retype <file> <id> <kind>` | change the kind, keep id, flows and boundary events |
+| | `move <file> <ids...>` | detach nodes and place them again, like `add` |
+| | `order <file> <id> <ids...>` | order a node's outgoing flows, a pool's lanes or the pools |
+| | `ext add\|remove <file> <id> <type>` | vendor extension elements (`camunda:`, `zeebe:`) |
+| | `apply <file> <ops.json>` | a batch of operations as one transaction |
+| Draw | `layout`, `place`, `color`, `label`, `route`, `space`, `tidy`, `compact` | change the drawing only ([Layout](./layout.md)) |
+| Help | `guide [<topics...>]` | the help, by topic |
 
-`-` as the file reads the model from stdin; a write then prints the XML to stdout. Ids, kinds and
-keys are in [Syntax and output](reference.md).
+`-` as the file reads the model from stdin; a write then prints the XML to stdout.
 
-## Options of every write
+## Flags and keys
+
+A **flag** says where an element goes and how the command runs. A **`key=value`** says what the
+element holds, the same on `add`, `set`, `retype` and `connect`, and under `"set"` in a batch.
+
+```sh
+bpmn add order.bpmn boundary:timer "2 days" --on userTask_checkInvoice timer=P2D nonInterrupting=true
+bpmn set order.bpmn userTask_checkInvoice name="Check the invoice" camunda:assignee=kermit
+bpmn connect order.bpmn gateway_invoiceOk serviceTask_bookInvoice name=yes condition="= ok"
+```
+
+A key the element does not take is refused (`E_UNKNOWN_KEY`) with the keys it does take; an unknown
+flag answers `E_USAGE`. Every write takes:
 
 | option | effect |
 | --- | --- |
-| `--json` | the result as JSON on stdout, errors as JSON on stderr |
+| `--json` | the result as one JSON line on stdout, errors as JSON on stderr; never cut |
 | `-o <file>` | write elsewhere; `-o -` writes the XML to stdout |
-| `--dry-run` | run everything and write nothing |
-| `--force` | write despite a lossy import, new errors or content a retype deletes; on `new`, overwrite a file |
+| `--dry-run` | run everything, write nothing |
+| `--force` | write despite new errors, a lossy import or content a retype deletes; on `new`, overwrite |
 
-The reads and `render` take `--json` too.
+## Placement
 
-## `new`
+`add` and `move` place a node with one of these. Without one it goes into the only process,
+unconnected.
 
-```sh
-bpmn new order.bpmn "Order handling" --target camunda8
-```
-
-The name gives the process id `orderHandling`; without a name the id is `Process_1`, and `--id` sets
-one. `--target camunda8` declares the `zeebe:` and `modeler:` namespaces, `--target camunda7` the
-`camunda:` and `modeler:` namespaces plus the `historyTimeToLive` the engine needs, and `--target none`
-makes the process not executable. Use `camunda7` for CIB seven and Operaton too
-([Camunda 7 and Camunda 8](camunda.md)).
-
-## `show` and `find`
-
-Each read answers one question, and its flags only narrow the answer.
-
-| form | prints |
+| flag | rule |
 | --- | --- |
-| `show <file>` | the whole model in flow order, then lanes and data, then the state line |
-| `show <file> <id>` | everything needed to change one element: place, flows, what catches it, attributes, numbered extensions |
-| `show <file> --in <id>` | one pool, process, lane or sub-process |
-| `show <file> --around <id> --depth 1` | the element and its neighbours, for large models |
-| `find <file> <text>` | one line per match over ids, names and vendor values, case-insensitive |
-| `find <file> --kind task --in <id>` | every element of a kind or family (`task`, `event`, `gateway`) in a container |
+| `--after <X>` | after X, spliced into its single outgoing flow if it has one |
+| `--before <Y>` | the mirror image |
+| `--after <X> --before <Y>` | into the flow X -> Y |
+| `--flow <F>` | into flow F |
+| `--in <S>` | into a process, sub-process or pool, unconnected (lanes, data and annotations take only this) |
+| `--on <A>` | a boundary event on activity A |
+| `--lane <L>` | into lane L; on `move`, an empty value takes it out |
+| `--to <T>` | also connect the new node to T |
 
-A node line reads `<kind> <id> "<name>" -> <target> (<flowId>)`. A long outline collapses further scopes
-to one line that names the `show --in` that opens them; `--json` is never cut.
+`--flow-name`, `--condition` and `--default` describe the flow into the new node. A group takes
+`--members <ids...>` instead. The first `participant` wraps the existing process; `--black-box`
+makes an empty pool. Sequence flows never cross pools (`E_CROSS_SCOPE`): use a message flow.
 
-`find` prints id, kind, name and container, separated by tabs, so ids pipe:
+## Kinds and triggers
 
-```console
-$ bpmn find order.bpmn --kind event | cut -f1
-startEvent_orderReceived
-endEvent_done
-```
+A kind is its name (`userTask`), an alias (`user`) or the moddle type (`bpmn:UserTask`). Events take
+a trigger suffix, whose details are keys. Messages, errors and signals are found by name and created
+when missing. Full lists: `bpmn guide kinds triggers`.
 
-No hit prints nothing and exits 0.
-
-## `diagram`
-
-The drawing as text: the layout score on line 1, every problem with its ids, then the rows and columns.
-
-```console
-$ bpmn diagram order.bpmn
-score 6: crossings 1, labelOnLine 1
-  crossings    flow_invoiceOkToBookInvoice x messageFlow_askCustomerToCustomer
-  labelOnLine  flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer
-participant participant_customer "Customer"  c0..c5
-participant participant_orderHandling "Order handling"  c0..c5   row 1: c0 startEvent_orderReceived, c1 userTask_checkInvoice, c2 gateway_invoiceOk, c3 serviceTask_bookInvoice, c4 gateway_invoiceOkJoin, c5 endEvent_invoiceHandled
-                                                                 row 2: c3 sendTask_askCustomer
-```
-
-Every write prints the same score before and after. Lower is better, 0 means no problems. Graders read
-`.score` from `--json`, which is `null` on a file without a drawing. A crossing with the dotted line of a text annotation is no problem, and flows are
-not routed around one; a line through the annotation's text is (`through`).
-
-## `conventions`
-
-The id patterns new ids of each kind follow, from the nearest `.bpmnlintrc` or the defaults of
-`element-id-naming`. It also answers for a file that does not exist yet.
-See [bpmnlint](bpmnlint.md#checking).
-
-## `add`
-
-Creates one element and wires it in. A placement flag says where; trailing `key=value` pairs say what
-it holds.
-
-```sh
-bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived \
-  camunda:assignee=kermit
-bpmn add order.bpmn boundary:timer "2 days" --on userTask_checkInvoice \
-  timer=P2D nonInterrupting=true
-```
-
-- Placement: `--after`, `--before`, `--flow`, `--in`, `--on`, `--lane` ([Placement grammar](reference.md#placement-grammar)).
-- `--flow-name`, `--flow-id`, `--condition`, `--language` and `--default` describe the flow into the new
-  node; `bpmn set <file> <flowId>` changes it later.
-- The id comes from the name (`userTask_checkInvoice`). `--id` with `--if-absent` makes the add idempotent.
-- Lanes, data and annotations take `--in` only; wire them afterwards with `connect`.
-- A group takes no placement: `--members <ids...>` names what it is drawn around.
-- The first `participant` wraps the existing process. `--black-box` creates an empty pool and never
-  wraps, so add a normal participant first.
-
-## `connect`
-
-```sh
-bpmn connect order.bpmn gateway_invoiceOk serviceTask_bookInvoice name=yes
-```
-
-The endpoints decide the kind: sequence flow, message flow (different pools), association
-(annotation) or data association. What the flow holds is a key: `name=`, `condition=`, `language=`,
-`default=true`, and `message=` on a message flow. A second outgoing flow from a node that is no gateway
-warns `W_IMPLICIT_SPLIT`.
-
-## `set`
-
-```sh
-bpmn set order.bpmn userTask_checkInvoice name="Check the invoice" \
-  camunda:asyncBefore=true
-bpmn set order.bpmn userTask_clarifyInvoice \
-  'loop.camunda:collection=${invoices}'
-```
-
-`key=` removes a property. `id=<newId>` renames and re-points every reference. Parts without an id take
-a prefix: `definition.`, `loop.`, `condition.`. In a Camunda 8 file most settings are extension
-elements, written with `ext add`. An unknown key answers `E_UNKNOWN_KEY` with the keys the element takes.
-
-## `remove`
-
-Removes elements with everything that depends on them, then bridges the gap.
-
-| situation | what happens |
+| family | kinds (aliases) |
 | --- | --- |
-| one flow in, one out | predecessor connected to successor; `--bridge none` leaves the gap |
-| a merge that does not synchronise | bridged from every predecessor |
-| a parallel or inclusive join | refused (`E_AMBIGUOUS_BRIDGE`): choose `--bridge all` or `--bridge none` |
-| `--with-branch` | also removes the path only this node leads to |
+| tasks | `task`, `userTask` (`user`), `serviceTask` (`service`), `scriptTask` (`script`), `sendTask` (`send`), `receiveTask` (`receive`), `manualTask` (`manual`), `businessRuleTask` (`rule`) |
+| sub-processes | `subProcess` (`sub`), `eventSubProcess:<trigger>` (`eventSub`), `adHocSubProcess` (`adhoc`), `transaction`, `callActivity` (`call`) |
+| gateways | `exclusiveGateway` (`xor`), `parallelGateway` (`and`), `inclusiveGateway` (`or`), `eventBasedGateway` (`eventBased`), `complexGateway` (`complex`; no Camunda engine runs it) |
+| events | `startEvent` (`start`), `endEvent` (`end`), `intermediateCatchEvent` (`catch`), `intermediateThrowEvent` (`throw`), `boundaryEvent` (`boundary`) |
+| others | `participant` (`pool`), `lane`, `dataObject` (`data`), `dataStore` (`store`), `textAnnotation` (`note`), `group` |
 
-`--if-exists` skips unknown ids, so a batch can run twice.
+| trigger | keys |
+| --- | --- |
+| `message` | `message=<name>` |
+| `timer` | `timer=<iso>`: `PT5M` a duration, `R/PT1H` a cycle, a date a date |
+| `error` | `error=<name>`, `errorCode=<code>` |
+| `signal` | `signal=<name>` |
+| `escalation` | `escalation=<name>`, `escalationCode=<code>` |
+| `conditional` | `when=<expr>` |
+| `link` | `link=<name>` |
+| `none`, `compensate`, `terminate`, `cancel` | none |
 
-## `retype`
+`nonInterrupting=true` makes a boundary event or an event sub-process start non-interrupting.
+`retype` keeps the trigger unless the new kind names one (`startEvent:none` drops it).
 
-Changes the kind within a family and keeps id, name, flows, boundary events and lane.
+## Common keys
 
-```sh
-bpmn retype order.bpmn startEvent_orderReceived startEvent:message message=OrderReceived
-```
+| on | keys |
+| --- | --- |
+| any element | `id`, `name`, `doc`, any BPMN attribute, vendor attributes (`camunda:assignee`) |
+| sequence flows | `condition`, `language`, `default`, `source`, `target` |
+| flow nodes | `lane`, `default` (the id of the default outgoing flow) |
+| activities | `loop` (`standard`, `parallel`, `sequential`), `cardinality`, `completion` |
+| sub-processes | `expanded` (`false` collapses in place), `triggeredByEvent` |
+| business rule tasks | `calledDecision` |
+| nested parts | `definition.<key>`, `loop.<key>`, `condition.<key>` |
 
-A kind without trigger keeps the current trigger. To drop it, write `retype startEvent_orderReceived startEvent:none`.
-A sub-process with content becomes a task only with `--force`.
+In a Camunda 8 file most settings are extension elements ([Camunda 7 and 8](./camunda.md)). Every
+key: `bpmn guide set-keys nested-keys`.
 
-## `move` and `order`
+## Removing and moving
 
-`move` detaches nodes, bridges the gap like `remove`, and places them again with the flags of
-`add`. `--lane` moves them into a lane, an empty value out of it. `order` sets the order of a node's
-outgoing flows, a pool's lanes or a collaboration's pools.
+`remove` takes what depends on the element along and connects predecessor to successor.
+`--bridge none` leaves the gap, `--with-branch` removes the path only this node leads to, and
+`--if-exists` skips unknown ids. At a parallel or inclusive join it cannot guess: `E_AMBIGUOUS_BRIDGE`
+asks for `--bridge all` or `--bridge none`. `move` bridges the same way and then places the nodes
+with the flags of `add`.
 
-```sh
-bpmn move order.bpmn userTask_clarifyInvoice --before serviceTask_bookInvoice
-bpmn order order.bpmn gateway_invoiceOk flow_invoiceOkToClarifyInvoice \
-  flow_invoiceOkToBookInvoice
-```
-
-The flow order drives the picture: the default flow (else the first) continues straight, the others
-go alternately below and above it. To pin a branch as the continuation, make it the default.
-
-## `ext`
-
-Writes vendor extension elements. `show <id>` reads them, numbered. The sub-command comes first, and
-each `key=value` is an attribute of the element; `body=` is its text.
+## Extension elements
 
 ```console
 $ bpmn ext add order.bpmn serviceTask_bookInvoice camunda:inputParameter name=amount 'body=${order.total}'
 $ bpmn show order.bpmn serviceTask_bookInvoice
-serviceTask serviceTask_bookInvoice "Book invoice"
 ...
 ext 0: camunda:inputOutput  in amount=${order.total}
-...
 $ bpmn ext remove order.bpmn serviceTask_bookInvoice 'camunda:inputParameter[name=amount]'
 ```
 
-Containers such as `camunda:inputOutput` are created and removed for you. `--xml` takes a raw snippet
-with nested elements, `--replace` replaces instead of merging. Quote selectors: `[` and `]` are glob
-characters in zsh.
+Each `key=value` is an attribute, `body=` the text. Containers such as `camunda:inputOutput` are made
+and removed for you. `--xml` takes a raw snippet, `--replace` replaces instead of merging. Quote
+selectors: zsh expands `[` and `]`.
 
-## `apply`
+## Output and exit codes
 
-Runs a JSON list of operations as one transaction: all or nothing, one layout pass. `"as": "$name"`
-names what an operation creates. See [Operations](ops.md).
-
-```json [ops.json]
-[
-  { "op": "add", "kind": "userTask", "name": "Ship order",
-    "after": "serviceTask_bookInvoice", "as": "$ship" },
-  { "op": "set", "id": "$ship", "set": { "camunda:assignee": "piggy" } }
-]
-```
-
-```sh
-bpmn apply order.bpmn ops.json
-```
-
-## `validate`
-
-Checks a file without writing: structure, the engine rules of its platform, the project's bpmnlint and
-a layout dry run.
-
-| result | exit code |
-| --- | --- |
-| `valid, 2 warning(s)` | 0, or 5 under `--strict` |
-| `1 error(s), 2 warning(s)` | 2 |
-
-A `W_C7_DEPLOY_*` or `W_C8_DEPLOY_*` warning means the engine refuses the file. A bpmnlint error
-fails the check ([bpmnlint](bpmnlint.md)). A write reports what it touched and any error it adds, and counts the
-rest in its state line; `validate` lists everything.
-
-## `layout`
-
-Redraws the whole diagram from the model; colours and DI ids survive. It ends a model built from scratch
-over several writes, and it is the way out when `E_LAYOUT_INCREMENTAL` says a change found no place.
-`bpmn tidy` only removes overlaps ([Layout and formatting](layout.md)).
-
-## `render`
-
-Draws a diagram as PNG or SVG, by the extension of `-o`, without a browser, so you or an agent can look
-at it.
+A write prints what it created, changed, renamed and removed, its findings at the touched elements,
+the layout score, the state of the whole file and the file line. Errors go to stderr, each with a
+hint:
 
 ```console
-$ bpmn render order.bpmn --around gateway_invoiceOk --depth 1 --problems -o ok.svg
-wrote ok.svg  490x265 px  ~166 image tokens  scale 1.00  plane collaboration_orderHandling
-crop: around gateway_invoiceOk (depth 1): 7 elements
-problems (numbered in the image):
-  1 crossings [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]
-  2 labelOnLine [flow_invoiceOkToBookInvoice, messageFlow_askCustomerToCustomer]
+$ bpmn add order.bpmn userTask Ship --after userTask_check
+error E_NOT_FOUND: No element with id "userTask_check" (did you mean: userTask_checkInvoice?)
+  element: userTask_check
+  candidates: userTask_checkInvoice
+  op: #0
+  hint: Run `bpmn show <file>` or `bpmn find <file> <text>` to list ids.
 ```
 
-<figure class="diagram">
-  <img src="/shots/commands-render-problems.svg" alt="A crop around the gateway Invoice ok? with the customer pool above it; the crossing of the message flow and the yes flow is numbered" />
-  <figcaption><code>render --around ... --problems</code>: the problems of <code>bpmn diagram</code>, numbered</figcaption>
-</figure>
+| exit | meaning |
+| --- | --- |
+| 0 | ok, warnings allowed |
+| 1 | usage: unknown command, flag, operation or key |
+| 2 | model or validation error; on `validate`, also a bpmnlint error |
+| 3 | layout error (`E_LAYOUT_*`) |
+| 4 | file, parse or render error |
+| 5 | `validate --strict` found warnings |
+| 70 | internal error (`BPMN_DEBUG=1` prints the stack) |
 
-Ids crop to these elements, and an id of a collapsed sub-process picks its plane. On a large model
-render a crop (`<ids>`, `--around`, `--path <from> <to>`): the whole plane is scaled down until labels
-are unreadable.
+`bpmn guide errors` lists the common codes with their fix.
 
-## `guide`
+## Quoting
 
-`guide` prints the core of the help, `guide <topics...>` the named topics, from `contract` to
-`exit-codes`; the core ends with the list. The tables of kinds, keys and codes are written from the code.
-
-## Next steps
-
-- [Operations](ops.md): many changes in one batch.
-- [Layout and formatting](layout.md): how the drawing is kept, and the draw commands.
-- [Syntax and output](reference.md): every kind, trigger and key.
+Write expressions in single quotes (`--condition '${amount > 100}'`): in double quotes the shell
+expands `${...}` to nothing. Quote names with spaces and whole pairs (`name="Check it"`). In a batch
+file nothing is expanded.

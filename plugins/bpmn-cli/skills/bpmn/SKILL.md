@@ -282,7 +282,7 @@ Every command and fix: [reference/formatting.md](reference/formatting.md).
 | `E_NO_ROOM` | Run the `bpmn space ...` command of the hint (checked to make the room), then place again; in a batch after other ops the hint names the space op to put before the place op; without one, move the shapes it names first. |
 | `E_UNKNOWN_ALIAS` | Define the alias (`as` / `flowAs` / `outAs` / `joinAs` / `refAs`) in an earlier op of the batch. |
 | `E_IMPORT_LOSSY` | The file has content the reader would drop. Show the user `bpmn validate` output and ask before `--force`; do not repair the XML by hand. |
-| `E_USAGE` | Bad flag or ops key: the message names it; see `bpmn <command> --help`. A word of the 0.x CLI: [reference/migration.md](reference/migration.md). |
+| `E_USAGE` | Bad flag or ops key: the message names it; see `bpmn <command> --help`. |
 
 More codes: `bpmn guide errors`.
 
@@ -293,4 +293,3 @@ More codes: `bpmn guide errors`.
 - [reference/camunda7.md](reference/camunda7.md) - Camunda 7 / CIB seven / Operaton recipes and the C7 profile
 - [reference/camunda8.md](reference/camunda8.md) - Camunda 8 (Zeebe) recipes and the C8 profile
 - [reference/recipes.md](reference/recipes.md) - complete sessions: order-to-cash from scratch in one batch, a safe change to a drawn model, review feedback, a C7 external task, a C8 job worker
-- [reference/migration.md](reference/migration.md) - from the CLI of 0.9 and earlier: what replaces each retired command, flag and op key

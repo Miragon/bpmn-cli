@@ -1,4 +1,4 @@
-# walkthrough.md: the order process after the first steps, after the split batch, and with the pools.
+# modeling.md: the order process after the first steps, after the split batch, and with the pools.
 bpmn new order.bpmn "Order handling" --target camunda8
 bpmn add order.bpmn start "Order received"
 bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived

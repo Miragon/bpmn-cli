@@ -1,5 +1,5 @@
 # layout.md, layout: the same change on a formatted drawing, kept by the write and redrawn by bpmn layout.
-# The model of "A worked session" (walkthrough.md): an invoice split, two pools, a message flow.
+# The model of "Model a process" (modeling.md): an invoice split, two pools, a message flow.
 cat > ops.json <<'EOF'
 { "ops": [
   { "op": "split", "after": "userTask_checkInvoice", "name": "Invoice ok?",

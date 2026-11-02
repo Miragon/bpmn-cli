@@ -1,5 +1,5 @@
 # layout.md, formatting: the customer pool on top adds a crossing, place moves Ask customer and resolves it.
-# The model of "A worked session" (walkthrough.md): an invoice split, two pools, a message flow.
+# The model of "Model a process" (modeling.md): an invoice split, two pools, a message flow.
 cat > ops.json <<'EOF'
 { "ops": [
   { "op": "split", "after": "userTask_checkInvoice", "name": "Invoice ok?",
