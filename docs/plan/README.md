@@ -100,25 +100,17 @@ outside, and one judges the drawing:
 
 ## Decisions
 
-Made from 2026-10-30 to 2026-11-01; each is an ADR in `docs/adr/`.
+Made from 2026-10-30 to 2026-11-01. The ones that hold after the refactoring are ADRs in `docs/adr/`; the ones about how the refactoring is carried out, such as one branch, Node 24, the oracle and its corpus, live in this plan.
 
-- [1. Rebuild on one branch, one draft PR into main](../adr/0001-rebuild-on-one-branch.md)
-- [2. Node 24 and later only](../adr/0002-node-24-alone.md)
-- [3. The oracle judges the layout by totals](../adr/0003-oracle-judges-layout-by-totals.md)
-- [4. The Camunda checks stay bpmn-cli's own code](../adr/0004-camunda-checks-stay-our-code.md)
-- [5. Project lint runs only in `bpmn validate`](../adr/0005-project-lint-only-in-validate.md)
-- [6. The project's copy of a bpmnlint plugin runs](../adr/0006-the-projects-plugin-copy-runs.md)
-- [7. New shapes get the bpmn-js size](../adr/0007-shapes-get-the-bpmn-js-size.md)
-- [8. No workaround for an antipattern](../adr/0008-no-workaround-for-an-antipattern.md)
-- [9. Rework the docs, with a compact architecture map](../adr/0009-compact-architecture-doc.md)
-- [10. Render and lint stay private packages](../adr/0010-render-and-lint-stay-private.md)
-- [11. Consumers adapt to what the refactoring drops](../adr/0011-consumers-adapt.md)
-- [12. ask-miragon moves after the release](../adr/0012-ask-miragon-moves-after-the-release.md)
-- [13. #123's parity models go into the corpus](../adr/0013-parity-models-go-into-the-corpus.md)
-- [14. Operations are parsed strictly](../adr/0014-operations-parse-strictly.md)
-- [15. What a flag says, and what a key says](../adr/0015-flag-or-key-value.md)
-- [16. The layout score is a module of its own](../adr/0016-scoring-is-a-module.md)
-- [17. Each read answers one question](../adr/0017-each-read-answers-one-question.md)
+- [1. Project lint runs only in `bpmn validate`](../adr/0001-project-lint-only-in-validate.md)
+- [2. The project's copy of a bpmnlint plugin runs](../adr/0002-the-projects-plugin-copy-runs.md)
+- [3. New shapes get the bpmn-js size](../adr/0003-shapes-get-the-bpmn-js-size.md)
+- [4. No workaround for an antipattern](../adr/0004-no-workaround-for-an-antipattern.md)
+- [5. Render and lint stay private packages](../adr/0005-render-and-lint-stay-private.md)
+- [6. Operations are parsed strictly](../adr/0006-operations-parse-strictly.md)
+- [7. What a flag says, and what a key says](../adr/0007-flag-or-key-value.md)
+- [8. The layout score is a module of its own](../adr/0008-scoring-is-a-module.md)
+- [9. Each read answers one question](../adr/0009-each-read-answers-one-question.md)
 
 ## Steps
 

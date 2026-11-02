@@ -1,10 +1,10 @@
-# 17. Each read answers one question
+# 9. Each read answers one question
 
 Accepted, 2026-11-01.
 
 ## Context
 
-Today's reads overlap: `metrics`, `show --layout`, `ext list` and `--context` answer parts of each other's questions.
+Reads whose answers overlap make a caller combine several of them and guess which one is right.
 
 ## Decision
 
@@ -12,4 +12,4 @@ Each read answers one question: `show` describes the model or one element, `find
 
 ## Consequences
 
-`find` stays a command; `metrics` and `show --layout` become `diagram`; `ext list` and `--context` go into `show <id>`.
+A new question gets a read of its own or narrows an existing one by a flag; no read takes a flag that turns its answer into another's.

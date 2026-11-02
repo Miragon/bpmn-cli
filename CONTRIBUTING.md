@@ -57,7 +57,7 @@ the corpus, fuzz and bench: [docs/testing.md](docs/testing.md). The rules behind
 - `test/`: mirrors `src/`, one test per class; `test/repo/` proves the guardrails on planted repositories.
 - `corpus/`: every BPMN input of the oracle and the tests, all of it synthetic or public.
 - `tools/`: the oracle, the fuzz, the bench and the guardrails' checks.
-- `docs/adr/`: the decisions behind the refactoring.
+- `docs/adr/`: the architecture decisions and why they were made.
 - `docs/`: the docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), a
   VitePress site with its own `package.json` and lockfile. `npm --prefix docs ci` once, then
   `npm run docs:dev` serves it with live reload and `npm run docs:build` builds it (a dead link
