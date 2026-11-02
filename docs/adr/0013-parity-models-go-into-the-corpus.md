@@ -8,7 +8,7 @@ The 1,076 parity models of Miragon/bpmn-cli#123, from its 109 rule specs, cover 
 
 ## Decision
 
-They go into `corpus/engine/`: synthetic, one per rule case, the cases of main's Camunda check tests written as files.
+They go into `corpus/engine/`: synthetic, the cases of main's Camunda check tests written as files, one file per distinct model. Cases with the same model share it.
 
 ## Consequences
 
