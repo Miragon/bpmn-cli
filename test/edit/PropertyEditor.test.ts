@@ -145,6 +145,22 @@ describe('PropertyEditor', () => {
     await expect(set(id, values)).rejects.toMatchObject(refusal);
   });
 
+  describe('an empty message on an event', () => {
+    it('keeps the message event definition and drops only its reference', async () => {
+      const { element } = await set('catch_message', { message: '' });
+      const [definition] = element.get<BpmnElement[]>('eventDefinitions');
+
+      expect(definition!.is('bpmn:MessageEventDefinition')).toBe(true);
+      expect(definition!.get('messageRef')).toBeUndefined();
+    });
+
+    it('keeps the message while another element still refers to it', async () => {
+      const { document } = await set('catch_message', { message: '' });
+
+      expect(document.tree.byId('Message_order')).toBeDefined();
+    });
+  });
+
   describe('setTaskMessage', () => {
     async function setMessage(id: string, name: string) {
       const document = await Fixtures.readForWrite('edit/properties-editor.bpmn');
@@ -170,6 +186,15 @@ describe('PropertyEditor', () => {
 
     it('unlinks the message with an empty name', async () => {
       expect((await setMessage('task_send', '')).element.get('messageRef')).toBeUndefined();
+    });
+
+    it('removes the message nothing refers to any more', async () => {
+      const { document, changes } = await setMessage('task_receive', 'Invoice');
+      const invoice = document.tree.require('task_receive').get<BpmnElement>('messageRef');
+      new PropertyEditor(new EditSession(document)).setTaskMessage(document.tree.require('task_receive'), '', changes);
+
+      expect(document.tree.byId(invoice.id)).toBeUndefined();
+      expect(changes.removed).toEqual([expect.objectContaining({ id: invoice.id })]);
     });
 
     it('sets the message of a message flow', async () => {

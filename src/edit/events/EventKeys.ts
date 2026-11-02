@@ -1,5 +1,6 @@
 import { type BpmnElement, BpmnError, ChangeEntries, type ChangeSet, Kinds, type Trigger, type TriggerOptions, Triggers } from '../../model/index.js';
 import { PropertyCoercer } from '../properties/PropertyCoercer.js';
+import { RootElements } from './RootElements.js';
 import type { EditSession } from '../session/EditSession.js';
 import { TriggerChange } from './TriggerChange.js';
 import { TriggerKeys } from './TriggerKeys.js';
@@ -30,11 +31,18 @@ export class EventKeys {
         hint: `Allowed triggers: ${allowed.join(', ') || 'none'}.`,
       });
     }
+    const previousMessage = EventKeys.messageOf(el);
     change.change(trigger, { ...given, ...(nonInterrupting !== undefined ? { nonInterrupting } : {}) } as TriggerOptions, changes, { strict: true });
+    new RootElements(this.edit).dropUnusedMessage(previousMessage, changes);
     const details = Object.entries(given)
       .filter(([, entryValue]) => entryValue !== undefined)
       .map(([entryKey, entryValue]) => `${entryKey}=${String(entryValue)}`);
     changes.change(ChangeEntries.of(el, [`trigger=${trigger}`, ...details, ...(nonInterrupting !== undefined ? [`nonInterrupting=${nonInterrupting}`] : [])].join(' ')));
+  }
+
+  private static messageOf(el: BpmnElement): BpmnElement | undefined {
+    const definition = el.list('eventDefinitions').find((candidate) => candidate.is('bpmn:MessageEventDefinition'));
+    return definition?.get<BpmnElement | undefined>('messageRef');
   }
 
   private static namedTrigger(el: BpmnElement, keys: Map<string, string>, allowed: readonly Trigger[]): Trigger | undefined {
@@ -57,7 +65,7 @@ export class EventKeys {
       } else if (key !== 'trigger') {
         values.requested = EventKeys.impliedTrigger(el, key, values.requested);
         EventKeys.assertHasValue(el, key, value);
-        values.given[key] = value || undefined;
+        values.given[key] = key === 'message' ? value : value || undefined;
       }
     }
     return values;
@@ -72,7 +80,7 @@ export class EventKeys {
   }
 
   private static assertHasValue(el: BpmnElement, key: string, value: string): void {
-    if (!value && key !== 'errorCode' && key !== 'escalationCode') {
+    if (!value && key !== 'errorCode' && key !== 'escalationCode' && key !== 'message') {
       throw PropertyCoercer.invalidValue(el, key, `${key} needs a value`, 'Use trigger=none to remove the trigger.');
     }
   }

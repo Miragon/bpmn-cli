@@ -60,7 +60,7 @@ function shortKind(kind) {
 }
 
 function triggersTable() {
-  const lines = ['# Triggers', '', '`bpmn add <file> <kind>:<trigger> [key=value…]`. `timer=`: `R/PT1H` a cycle, `PT5M` a duration, a date a date.', ''];
+  const lines = ['# Triggers', '', '`bpmn add <file> <kind>:<trigger> [key=value…]`. `timer=`: `R/PT1H` a cycle, `PT5M` a duration, a date a date. Empty `message=`: no `messageRef` (connector throw events).', ''];
   for (const { trigger, keys, kinds: hosts, alsoOn } of triggers) {
     const keyList = keys.length > 0 ? ` ${keys.map((key) => `\`${key}=\``).join(' ')}` : '';
     lines.push(`- \`${trigger}\`${keyList}: ${[...hosts, ...(alsoOn ?? [])].map(shortKind).join(', ')}`);

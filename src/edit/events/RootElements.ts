@@ -1,5 +1,6 @@
 import { type BpmnElement, BpmnError, type ChangeSet, IdRequests, Kinds, Triggers } from '../../model/index.js';
 import type { EditSession } from '../session/EditSession.js';
+import { ElementContainment } from '../containers/ElementContainment.js';
 
 export type RootRefType = 'bpmn:Message' | 'bpmn:Error' | 'bpmn:Signal' | 'bpmn:Escalation';
 
@@ -42,6 +43,17 @@ export class RootElements {
       changes.create({ id: el.id, kind: 'message', name: el.get<string>('name'), detail: 'root element' });
     }
     return el;
+  }
+
+  dropUnusedMessage(message: BpmnElement | undefined, changes: ChangeSet): void {
+    const definitions = this.edit.document.tree.definitions;
+    if (!message || new ElementContainment(definitions).referencesToAny(new Set([message])).length) {
+      return;
+    }
+    if (definitions.remove('rootElements', message)) {
+      changes.remove({ id: message.id, kind: 'message', detail: 'no longer referenced' });
+      this.edit.document.tree.invalidate();
+    }
   }
 
   static bindRefAs(changes: ChangeSet, alias: string | undefined, el: BpmnElement | undefined): void {

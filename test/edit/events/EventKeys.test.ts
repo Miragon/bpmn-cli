@@ -63,7 +63,7 @@ describe('EventKeys', () => {
   it.each([
     ['a trigger BPMN does not know', 'end_plain', { trigger: 'rain' }, 'E_INVALID_VALUE'],
     ['a key of another trigger', 'catch_message', { trigger: 'message', timer: 'PT1H' }, 'E_INVALID_VALUE'],
-    ['a key without a value', 'catch_message', { message: '' }, 'E_INVALID_VALUE'],
+    ['a key without a value', 'catch_message', { signal: '' }, 'E_INVALID_VALUE'],
     ['a trigger the kind does not allow', 'end_plain', { timer: 'PT1H' }, 'E_INVALID_TRIGGER'],
     ['a trigger on a task', 'task_work', { message: 'Paid' }, 'E_INVALID_TRIGGER'],
   ])('refuses %s', async (_case, id, keys, code) => {
