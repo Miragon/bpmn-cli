@@ -1,5 +1,5 @@
 {
- "commit": "089ba0554f4a6d6a2fc186cd0b5c59f773a300f0",
+ "commit": "db8477e933953a9c92467499b58f939f5dbb41ad",
  "kinds": ["crossings","overlaps","frameIntrusion","frameOverlap","through","diagonal","degenerateEdge","detachedEdge","missing","labelClash","labelOnLine","inOut","parallelRun","outsideLane","outsidePool","outsideSub","edgeLeavesLane","edgeOutside","msgThroughPool","laneGap","backwardFlow","segmentOverlap","labelOutsideFrame","labelOnTitle","messageLabelFar","failed"],
  "weights": {"crossings":5,"overlaps":10,"frameIntrusion":10,"frameOverlap":10,"through":8,"diagonal":3,"degenerateEdge":10,"detachedEdge":10,"missing":10,"labelClash":2,"labelOnLine":1,"inOut":3,"parallelRun":1,"outsideLane":6,"outsidePool":8,"outsideSub":8,"edgeLeavesLane":1,"edgeOutside":4,"msgThroughPool":5,"laneGap":2,"backwardFlow":3,"segmentOverlap":2,"labelOutsideFrame":2,"labelOnTitle":2,"messageLabelFar":1,"failed":50},
  "files": {
