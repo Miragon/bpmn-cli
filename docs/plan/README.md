@@ -123,7 +123,8 @@ what is there after, which files it touches and when it is done; steps 1, 16 and
 - [x] **1. Branch**: branch `rebuild` off main at 089ba05 and open it as a draft PR into main, without a
   ruleset, since each rebase force-pushes it · done when the draft PR runs the gate
 - [ ] **2. Naming subpath**: publish `./naming` from `@miragon/bpmnlint-plugin-rules`, the one change
-  outside the draft PR · [card](rebuild.md#2-naming-subpath)
+  outside the draft PR · [card](rebuild.md#2-naming-subpath) · moved to a follow-up after the release:
+  [#143](https://github.com/Miragon/bpmn-cli/issues/143)
 - [x] **3. Oracle** · needs 1
 
 From here main takes fixes only; each rebase brings them in ([where](rebuild.md#where)).
@@ -145,7 +146,7 @@ Done when render draws the corpus in Node and in a browser bundle, and lint's or
 - [x] **11. Drawing** · needs 8, 10
 - [x] **12. Edit** · needs 8
 - [x] **13. Write, views and api** · needs 9 to 12 · [card](rebuild.md#13-write-views-and-api)
-- [ ] **14. CLI, ship the first release candidate** · needs 6, 13 · [card](rebuild.md#14-cli-and-the-first-release-candidate)
+- [x] **14. CLI, ship the first release candidate** · needs 6, 13 · [card](rebuild.md#14-cli-and-the-first-release-candidate)
 
 Done when every probe is green outside the allow-list and the first release candidate is on `next`.
 
@@ -153,9 +154,9 @@ Done when every probe is green outside the allow-list and the first release cand
 
 - [ ] **15. Skill, evals and docs** · needs 14 · [card](rebuild.md#15-skill-evals-and-docs); the skill and its
   tests are on the refactored CLI, the eval runs on the release candidate and the docs are open
-- [ ] **16. Consumers**: try design-iq and the skills of bpmn-to-code on the release candidate, each in a
-  branch of its own · needs 15 · done when design-iq's branch is green in its CI and bpmn-to-code's
-  skills use `find` and `show <id>`
+- [ ] **16. Consumers**: try design-iq on the release candidate, in a branch of its own · needs 15 · done
+  when design-iq's branch is green in its CI. bpmn-to-code uses only the CLI in its skills; they move to
+  `show <id>` and the new version in a docs change after the release
 - [ ] **17. Ready**: rebase onto main's head and check the [done](rebuild.md#done) criteria · needs 16 ·
   done when they hold
 
