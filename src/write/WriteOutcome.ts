@@ -59,13 +59,21 @@ export class WriteOutcome {
       removed,
       renamed: renames.list(),
       aliases: run.aliases,
-      findings: [...this.ofTheChange(), ...host.added, ...drawing.warnings.map(Findings.ofLayout)],
+      findings: [...this.ofTheChange(), ...host.added, ...this.ofTheDrawing()],
       preexisting: host.preexisting,
       state: Findings.countOf(checks),
       score: { ...(before ? { before } : {}), after, added, resolved },
       format: drawing.format,
       notes: [...notes, ...drawing.notes],
     };
+  }
+
+  private ofTheDrawing(): Finding[] {
+    const { drawing, score } = this.parts;
+    const warned = drawing.warnings.map(Findings.ofLayout);
+    const warnedIds = new Set(warned.map(({ element }) => element));
+    const undrawnIds = score.added.filter(({ kind, ids: [id] }) => kind === 'missing' && !warnedIds.has(id)).map(({ ids: [id] }) => id!);
+    return [...warned, ...undrawnIds.map((id) => Findings.ofLayout({ code: 'DI_NOT_CREATED', elementId: id, message: `No DI created for ${id} (the write left it undrawn)` }))];
   }
 
   private ofTheChange(): Finding[] {

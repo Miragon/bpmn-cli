@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { DrawingReport } from '../../src/drawing/index.js';
 import type { OperationRun } from '../../src/edit/index.js';
 import type { Finding } from '../../src/model/index.js';
+import type { LayoutProblem } from '../../src/scoring/index.js';
 import { IdRenames } from '../../src/write/IdRenames.js';
 import { type WriteOutcomeParts, WriteOutcome } from '../../src/write/WriteOutcome.js';
 import { ChangeSet, ScoreChange } from '../support/ModelValues.js';
 
-const noScore = { counts: {}, score: 0, problems: [] } as unknown as ConstructorParameters<typeof ScoreChange>[1];
+const scored = (problems: LayoutProblem[]) => ({ counts: {}, score: 0, problems }) as unknown as ConstructorParameters<typeof ScoreChange>[1];
+const noScore = scored([]);
+const missing = (id: string): LayoutProblem => ({ kind: 'missing', ids: [id] });
 
 const partsWith = (build: (changes: ChangeSet) => void, fields: Partial<WriteOutcomeParts> = {}): WriteOutcomeParts => {
   const changes = new ChangeSet();
@@ -68,6 +71,23 @@ describe('WriteOutcome', () => {
 
     expect(findings.map(({ code }) => code)).toEqual(['gate/new', 'W_LAYOUT_DI_NOT_CREATED']);
     expect(notes).toEqual(['appended', 'placed']);
+  });
+
+  it('warns of an element the write left undrawn, but not of one that was undrawn before', () => {
+    const score = new ScoreChange(scored([missing('old')]), scored([missing('old'), missing('new')]));
+
+    const { findings } = new WriteOutcome(partsWith(() => undefined, { score })).result();
+
+    expect(findings).toEqual([{ code: 'W_LAYOUT_DI_NOT_CREATED', element: 'new', message: 'No DI created for new (the write left it undrawn)', severity: 'warning' }]);
+  });
+
+  it('keeps the reason of the layout when it warned of the same undrawn element', () => {
+    const drawing = { warnings: [{ code: 'DI_NOT_CREATED', elementId: 'flow', message: 'No DI created for flow (an end has no shape)' }], format: [], notes: [] } as unknown as DrawingReport;
+    const score = new ScoreChange(scored([]), scored([missing('flow')]));
+
+    const { findings } = new WriteOutcome(partsWith(() => undefined, { drawing, score })).result();
+
+    expect(findings.map(({ message }) => message)).toEqual(['No DI created for flow (an end has no shape)']);
   });
 
   it('is unchanged when the new text is the old one', () => {

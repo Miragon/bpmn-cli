@@ -59,6 +59,16 @@ describe('EditResultText', () => {
     expect(textOf({ findings })).toContain('forced E_A: a\nwarning W_B: b');
   });
 
+  it('keeps a warning when it cuts what the drawing operations moved', () => {
+    const moved = Array.from({ length: 8 }, (_, index) => `${'Activity_'.padEnd(120, 'x')}${index}`);
+    const format = Array.from({ length: 3 }, (_, index) => ({ op: 'layout', index, moved, rerouted: [] }));
+    const findings = [{ code: 'W_LAYOUT_DI_NOT_CREATED', message: 'No DI created for flow (an end has no shape)', element: 'flow', severity: 'warning' }];
+
+    const lines = textOf({ changed: [change('sub')], format, findings }).split('\n');
+
+    expect(lines.slice(0, 3)).toEqual(['changed: sub', 'warning W_LAYOUT_DI_NOT_CREATED flow: No DI created for flow (an end has no shape)', '... 3 more lines (--json lists them)']);
+  });
+
   it('stays within 1 KB and says how much it left out', () => {
     const created = Array.from({ length: 200 }, (_, index) => change(`task_${index}`, `kind${index}`));
     const text = textOf({ created });

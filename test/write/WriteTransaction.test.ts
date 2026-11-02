@@ -5,6 +5,9 @@ import { Fixtures } from '../support/Fixtures.js';
 import { BpmnError } from '../support/ModelValues.js';
 
 const orderCheck = Fixtures.text('edit/order-check.bpmn');
+const crossScope = Fixtures.text('layout/artifacts__04b-data-crossscope.bpmn');
+const collapse = { op: 'set', id: 'Activity_Sub', set: { expanded: false } };
+const readsAcrossPlanes = { op: 'connect', source: 'DataObjectReference_App', target: 'Activity_Review' };
 const write = (xml: string, operations: unknown[], options = {}) => new WriteTransaction(options).apply(xml, operations);
 
 const refusalOf = async (attempt: Promise<unknown>): Promise<BpmnError> => {
@@ -115,6 +118,30 @@ describe('WriteTransaction', () => {
 
     expect((await refusalOf(write(vertical, [add]))).code).toBe('E_LAYOUT_INCREMENTAL');
     expect((await write(vertical, [add, { op: 'layout' }])).created[0]?.name).toBe('New');
+  });
+
+  it('warns of a data association the incremental layout left undrawn, across the plane of a collapsed sub-process', async () => {
+    const { findings } = await write(crossScope, [collapse, readsAcrossPlanes]);
+
+    expect(findings.filter(({ code }) => code === 'W_LAYOUT_DI_NOT_CREATED')).toEqual([
+      { code: 'W_LAYOUT_DI_NOT_CREATED', element: 'association_appToReview', message: 'No DI created for association_appToReview (the write left it undrawn)', severity: 'warning' },
+    ]);
+  });
+
+  it('warns once, with the reason of the full layout, of each association it could not draw', async () => {
+    const { findings } = await write(crossScope, [collapse, readsAcrossPlanes, { op: 'layout' }]);
+
+    expect(findings.filter(({ code }) => code === 'W_LAYOUT_DI_NOT_CREATED').map(({ element, message }) => [element, message])).toEqual([
+      ['DataInputAssociation_4', 'No DI created for DataInputAssociation_4 (its ends are on different diagrams)'],
+      ['association_appToReview', 'No DI created for association_appToReview (its ends are on different diagrams)'],
+    ]);
+  });
+
+  it('keeps quiet of a data association the file had left undrawn before the collapse', async () => {
+    const { findings, score } = await write(crossScope, [collapse]);
+
+    expect(score.after.counts.missing).toBe(1);
+    expect(findings).toEqual([]);
   });
 
   it('refuses an error the change adds and writes it when forced', async () => {
