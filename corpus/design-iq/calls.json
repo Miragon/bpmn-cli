@@ -693,10 +693,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/b6e54d32c4f4d388.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
@@ -707,10 +704,7 @@
        "ruleId": "bpmn/flow",
        "message": "userTask_checkOrder is a dead end (no outgoing flow, process order-handling)"
       }
-     ],
-     "xml": {
-      "file": "files/e00749e7b2bfb221.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -940,18 +934,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/b6e54d32c4f4d388.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/e1a5a6b7cf636575.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -1460,18 +1448,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/184a8de968a07b0e.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -1942,18 +1924,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/a5417b738e6de205.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -2187,10 +2163,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -2415,18 +2388,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/2814550bfa9248ff.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -2716,10 +2683,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -2811,10 +2775,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
@@ -2825,10 +2786,7 @@
        "ruleId": "bpmn/flow",
        "message": "event_timer1Day is a dead end (no outgoing flow, process order-to-cash)"
       }
-     ],
-     "xml": {
-      "file": "files/65dfa28d8f53f9f7.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -3222,18 +3180,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/249d10e318865c86.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/477094c4480cdab1.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -3760,18 +3712,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/7ca275bfe9008f5f.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/6c1a92cdf0c68f69.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -4103,18 +4049,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/2a521ccc423b52a9.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -4446,18 +4386,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -4869,10 +4803,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/ce5a444dbc558c96.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -4894,10 +4825,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/e39567135605c37e.bpmn"
-     }
+     ]
     }
    ],
    "count": 2,
@@ -5337,10 +5265,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/ce5a444dbc558c96.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -5362,10 +5287,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/d70b2957689eafe1.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -5854,18 +5776,12 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/ce5a444dbc558c96.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/d999b800d68ef88c.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -6322,10 +6238,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/ce5a444dbc558c96.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -6347,10 +6260,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/e39567135605c37e.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -6755,18 +6665,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/c91c338a088f9f51.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/c9fbdb2e82256c5f.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 2,
@@ -7175,18 +7079,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -7518,18 +7416,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/0f80f3f1da6c4caa.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -7889,18 +7781,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/16fda808761cc47f.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 5,
@@ -8244,18 +8130,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/f33ec27c32dd84df.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/2ac2118fff5dce0c.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -8429,18 +8309,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/305cdabcbd4d50e3.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/1a19cbe0ec5cc4ff.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -8614,18 +8488,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/01e84b8c9c6e0bc5.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/36be23ca2e65e8c7.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -8676,10 +8544,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/f814fdc39f35709a.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -8919,10 +8784,7 @@
        "ruleId": "bpmn/lanes",
        "message": "Activity_wip is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/3bf5f9081fd98b53.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -8943,10 +8805,7 @@
        "ruleId": "bpmn/lanes",
        "message": "Activity_wip is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/7edfe46ae4c7c74a.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -9435,10 +9294,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra_1 is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/06bbda834eef17c4.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -9465,10 +9321,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra_0 is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/df54efad91c77f62.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -9549,10 +9402,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra_0 is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/df54efad91c77f62.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -9568,10 +9418,7 @@
        "ruleId": "bpmn/flow",
        "message": "Task_validate_order is unreachable (no incoming flow, process order-to-cash)"
       }
-     ],
-     "xml": {
-      "file": "files/f2d0b2d1280c2dd6.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -9678,10 +9525,7 @@
        "ruleId": "bpmn/lanes",
        "message": "StartEvent_extra_1 is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/06bbda834eef17c4.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -9737,10 +9581,7 @@
        "ruleId": "bpmn/lanes",
        "message": "startEvent_faxReceived is not assigned to any lane"
       }
-     ],
-     "xml": {
-      "file": "files/4aa205e85b550b61.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -10312,10 +10153,7 @@
        "message": "13 activities — consider extracting a sub-process (7±2 rule)",
        "key": "bpmn/complexity:# activities — consider extracting a sub-process (7±2 rule)"
       }
-     ],
-     "xml": {
-      "file": "files/683e8d6f9c05700e.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -10327,10 +10165,7 @@
        "message": "12 activities — consider extracting a sub-process (7±2 rule)",
        "key": "bpmn/complexity:# activities — consider extracting a sub-process (7±2 rule)"
       }
-     ],
-     "xml": {
-      "file": "files/4e7dc8a0282942e0.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -10798,10 +10633,7 @@
        "message": "13 activities — consider extracting a sub-process (7±2 rule)",
        "key": "bpmn/complexity:# activities — consider extracting a sub-process (7±2 rule)"
       }
-     ],
-     "xml": {
-      "file": "files/683e8d6f9c05700e.bpmn"
-     }
+     ]
     },
     {
      "validator": "design-iq",
@@ -10812,10 +10644,7 @@
        "ruleId": "bpmn/complexity",
        "message": "14 activities — consider extracting a sub-process (7±2 rule)"
       }
-     ],
-     "xml": {
-      "file": "files/b1ba9a11da8d02d5.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -11290,10 +11119,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
@@ -11304,10 +11130,7 @@
        "ruleId": "bpmn/flow",
        "message": "event_timer1Day is a dead end (no outgoing flow, process order-to-cash)"
       }
-     ],
-     "xml": {
-      "file": "files/65dfa28d8f53f9f7.bpmn"
-     }
+     ]
     }
    ],
    "count": 1,
@@ -11588,10 +11411,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -11844,18 +11664,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/5118eccb6984ac86.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -12285,18 +12099,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/239b150ebc542e1d.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/a9074d12fad2e59a.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -12720,18 +12528,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/7062108b3706ca25.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/72523d2cd1174743.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -12991,10 +12793,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -13051,10 +12850,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -13105,10 +12901,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -13163,10 +12956,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -13221,10 +13011,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -13627,18 +13414,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/d20fe3df24b2460f.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/1004788cda101cd7.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -14105,18 +13886,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/20c9dcafc5c944e6.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/28c038cc0d873334.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -14847,18 +14622,12 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/6e3dbcfc3045a690.bpmn"
-     }
+     "findings": []
     },
     {
      "validator": "design-iq",
      "phase": "after",
-     "findings": [],
-     "xml": {
-      "file": "files/12ea33eaaa685e8c.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -15131,10 +14900,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,
@@ -15178,10 +14944,7 @@
     {
      "validator": "design-iq",
      "phase": "before",
-     "findings": [],
-     "xml": {
-      "file": "files/1557775dc8945fb2.bpmn"
-     }
+     "findings": []
     }
    ],
    "count": 1,

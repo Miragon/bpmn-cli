@@ -80,7 +80,7 @@ function callRecord({ type: _type, validators, args, answer, ...call }) {
     ...call,
     args: [isDocument(first) ? { file: stored(first) } : first, ...rest],
     ...(isDocument(answer?.xml) ? { answer: { ...answer, xml: { file: stored(answer.xml) } } } : { answer: kept(call.function, answer) }),
-    validators: validators.map(({ xml, ...found }) => ({ ...found, xml: { file: stored(xml) } })),
+    validators: validators.map(({ xml: _xml, ...found }) => found),
   };
 }
 
