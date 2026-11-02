@@ -8,6 +8,7 @@ import { ElementRemoval } from './ElementRemoval.js';
 import { ElementTypeChange } from './ElementTypeChange.js';
 import { ExtensionEditor } from './ExtensionEditor.js';
 import { FlowConnector } from './FlowConnector.js';
+import { EditConsequences } from './consequences/EditConsequences.js';
 import { LaneMembership } from './LaneMembership.js';
 import { IdRename } from './properties/IdRename.js';
 import { PropertyEditor } from './PropertyEditor.js';
@@ -30,6 +31,7 @@ export class ModelOperationRunner {
   private readonly edit: EditSession;
   private readonly table: AliasTable;
   private readonly context: BatchContext;
+  private readonly consequences: EditConsequences;
 
   constructor(
     private readonly document: BpmnDocument,
@@ -37,6 +39,7 @@ export class ModelOperationRunner {
   ) {
     this.edit = new EditSession(document, options.platform);
     this.table = new AliasTable(document);
+    this.consequences = new EditConsequences(this.edit, new ElementRemoval(this.edit));
     this.context = { created: [], renamed: new Map(), retyped: new Set(), aliases: () => this.table.toRecord() };
   }
 
@@ -55,6 +58,7 @@ export class ModelOperationRunner {
     const all = new ChangeSet();
     const resolved = [...model];
     this.edit.begin();
+    this.consequences.findProblemsAtStart();
     this.runInBatch(() => {
       model.forEach((operation, index) => {
         ModelOperationRunner.runNamed(index, () => {
@@ -62,6 +66,7 @@ export class ModelOperationRunner {
           this.record(this.step(resolved[index]), all, index);
         });
       });
+      this.consequences.repairNewProblems(all);
     });
     const resolvedDrawing = this.resolveDrawing(drawing, model.length);
     all.bindings = [];
