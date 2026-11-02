@@ -159,6 +159,10 @@ export class EventDefinitions {
       return;
     }
     const { prop } = EventDefinitions.REF_TRIGGERS[trigger];
+    if (!name) {
+      def.set(prop, undefined);
+      return;
+    }
     const el = this.rootElement(trigger, name, opts);
     if (def.get<BpmnElement | undefined>(prop) !== el) {
       def.set(prop, el);

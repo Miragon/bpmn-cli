@@ -78,7 +78,9 @@ export class PropertyEditor {
 
   setTaskMessage(task: BpmnElement, name: string, changes: ChangeSet): void {
     if (!name) {
+      const unlinked = task.get<BpmnElement | undefined>('messageRef');
       task.set('messageRef', undefined);
+      new RootElements(this.edit).dropUnusedMessage(unlinked, changes);
       return;
     }
     task.set('messageRef', new RootElements(this.edit).ensureMessage(name, changes));
