@@ -1,4 +1,11 @@
 const LAYERS = [['cli'], ['api'], ['write', 'views'], ['edit', 'drawing', 'checks'], ['operations', 'scoring'], ['model']];
+const BUDGETED_MODULES = Object.keys(require('./budgets.json').lines)
+  .filter((part) => part.startsWith('src/'))
+  .map((part) => part.slice('src/'.length));
+const UNLAYERED = BUDGETED_MODULES.filter((module) => !LAYERS.flat().includes(module));
+if (UNLAYERED.length > 0) {
+  throw new Error(`budgets.json names modules without a layer: ${UNLAYERED.join(', ')}`);
+}
 const LINT_LOADERS = '^node_modules/(bpmnlint|bpmnlint-plugin-[^/]+|@[^/]+/bpmnlint-plugin-[^/]+)/';
 const PLUGIN_ROOT_ENTRY = '^node_modules/@miragon/bpmnlint-plugin-rules/dist/index[.]js$';
 const RENDER_ROOT_ENTRY = '^packages/render/src/index[.]ts$';

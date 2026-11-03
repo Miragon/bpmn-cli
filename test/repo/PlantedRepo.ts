@@ -5,7 +5,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPOSITORY = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MODULES = ['model', 'operations', 'edit', 'scoring', 'drawing', 'checks', 'views', 'write', 'api', 'cli'];
+const BUDGETS = readFileSync(join(REPOSITORY, 'budgets.json'), 'utf8');
+const CORE_MODULES = Object.keys(JSON.parse(BUDGETS).lines)
+  .filter((part) => part.startsWith('src/'))
+  .map((part) => part.slice('src/'.length));
 
 export interface ToolRun {
   status: number | null;
@@ -17,7 +20,8 @@ export class PlantedRepo {
 
   constructor() {
     this.plant('src/index.ts', "export * from './api/index.js';\n");
-    for (const module of MODULES) {
+    this.plant('budgets.json', BUDGETS);
+    for (const module of CORE_MODULES) {
       this.plant(`src/${module}/index.ts`, 'export {};\n');
     }
     this.plant('packages/render/src/index.ts', 'export {};\n');
@@ -61,7 +65,7 @@ export class PlantedRepo {
   }
 
   plantBudgets(changes: object): void {
-    const budgets: object = JSON.parse(readFileSync(join(REPOSITORY, 'budgets.json'), 'utf8'));
+    const budgets: object = JSON.parse(BUDGETS);
     this.plant('budgets.json', JSON.stringify({ ...budgets, ...changes }));
   }
 

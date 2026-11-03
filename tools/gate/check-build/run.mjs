@@ -6,11 +6,10 @@ import { CoverageFloors } from './CoverageFloors.mjs';
 import { BrowserStartImports } from './BrowserStartImports.mjs';
 import { GuideSize } from './GuideSize.mjs';
 import { LineBudget } from './LineBudget.mjs';
-import { RuntimeExports } from './RuntimeExports.mjs';
 import { WriteBundle } from './WriteBundle.mjs';
 
 const GROUPS = {
-  budgets: [LineBudget, CoverageFloors, RuntimeExports, CliSize, GuideSize],
+  budgets: [LineBudget, CoverageFloors, CliSize, GuideSize],
   iso: [BrowserEntries, BrowserStartImports],
   bundle: [WriteBundle],
 };

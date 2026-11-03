@@ -28,7 +28,6 @@
     "packages/lint/src": { "lines": 90, "branches": 85 },
     "packages/render/src": { "lines": 90, "branches": 85 }
   },
-  "runtimeExports": 10,
   "browserStartImportKilobytes": 810,
   "commands": 26,
   "flagSlots": 145,

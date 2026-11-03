@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { parseSync } from 'oxc-parser';
+import { BudgetedParts } from '../../shared/BudgetedParts.mjs';
 
 const CORE_TESTS_WITHOUT_MIRROR = new Set(['e2e', 'contract', 'fixtures', 'repo', 'support']);
 const RENDER_TESTS_WITHOUT_MIRROR = new Set(['golden']);
@@ -9,12 +10,11 @@ const RENDER_TESTS_WITHOUT_MIRROR = new Set(['golden']);
  * The files every structure check reads: the core and each package, parsed once.
  */
 export class SourceTree {
-  static MODULES = ['model', 'operations', 'edit', 'scoring', 'drawing', 'checks', 'views', 'write', 'api', 'cli'];
-
   #programs = new Map();
 
   constructor(root) {
     this.root = root;
+    this.modules = BudgetedParts.of(root).coreModules();
   }
 
   fromRoot(absolutePath) {
@@ -60,7 +60,7 @@ export class SourceTree {
       sourceRoot: coreSource,
       testRoot: join(this.root, 'test'),
       testsWithoutMirror: CORE_TESTS_WITHOUT_MIRROR,
-      moduleRoots: SourceTree.MODULES.map((module) => join(coreSource, module)),
+      moduleRoots: this.modules.map((module) => join(coreSource, module)),
     };
     return [core, ...this.#packageRoots().map((packageRoot) => this.#partOfPackage(packageRoot))];
   }
