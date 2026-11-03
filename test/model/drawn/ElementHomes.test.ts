@@ -1,5 +1,5 @@
+import { ElementHomes } from '../../../src/model/index.js';
 import { describe, expect, it } from 'vitest';
-import { ElementHomes } from '../../../src/scoring/plane/ElementHomes.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 describe('ElementHomes', () => {

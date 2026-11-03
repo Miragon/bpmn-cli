@@ -1,5 +1,4 @@
-import { Point, Polyline, Segment, type Box } from '../../../model/index.js';
-import { DrawnPlane } from '../../../scoring/index.js';
+import { type Box, DrawnPlane, Point, Polyline, Segment } from '../../../model/index.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
 import { Semantics } from '../../plane/Semantics.js';

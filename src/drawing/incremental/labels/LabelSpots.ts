@@ -1,5 +1,4 @@
-import { Box, Polyline, type Point } from '../../../model/index.js';
-import { DrawnPlane } from '../../../scoring/index.js';
+import { Box, DrawnPlane, type Point, Polyline } from '../../../model/index.js';
 import type { PlaneShape, LabelSide } from '../../plane/PlaneShape.js';
 import { ShapeSides } from '../../plane/ShapeSides.js';
 

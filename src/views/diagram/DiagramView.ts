@@ -1,6 +1,6 @@
 import { PlaneReader, type Plane, type Semantics } from '../../drawing/index.js';
-import { Kinds, type BpmnDocument } from '../../model/index.js';
-import { DrawnPlane, ElementHomes, ProblemKinds, Scorer } from '../../scoring/index.js';
+import { type BpmnDocument, DrawnPlane, ElementHomes, Kinds } from '../../model/index.js';
+import { ProblemKinds, Scorer } from '../../scoring/index.js';
 import { DiagramColumns, type PlaneShape } from './DiagramColumns.js';
 import { DiagramViewText, type DiagramFacts, type PlaneRows, type RowFrame, type RowFrameKind } from './DiagramViewText.js';
 

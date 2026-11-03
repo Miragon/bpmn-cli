@@ -1,6 +1,4 @@
-import { DrawnPlane } from '../plane/DrawnPlane.js';
-import type { DrawnShape } from '../plane/DrawnShape.js';
-import { ElementHomes } from '../plane/ElementHomes.js';
+import { DrawnPlane, type DrawnShape, ElementHomes } from '../../model/index.js';
 import type { ProblemReport } from '../plane/ProblemReport.js';
 import { ScoringCriterion } from '../plane/ScoringCriterion.js';
 

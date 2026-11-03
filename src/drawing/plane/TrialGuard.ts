@@ -1,4 +1,5 @@
-import { ProblemKinds, ProblemReport, Scorer, type ElementHomes, type LayoutProblem, type LayoutScore } from '../../scoring/index.js';
+import type { ElementHomes } from '../../model/index.js';
+import { ProblemKinds, ProblemReport, Scorer, type LayoutProblem, type LayoutScore } from '../../scoring/index.js';
 import { Plane } from './Plane.js';
 
 export interface TrialPolicy {

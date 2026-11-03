@@ -1,7 +1,7 @@
 import type { Badge, DiagramNote, DiagramRenderer, SvgImage } from '@miragon/bpmn-render';
 import { DiagramDrawing, DrawingSnapshot } from '../../drawing/index.js';
-import { BpmnError, ChangeSet, type BpmnDocument } from '../../model/index.js';
-import { DrawnPlane, ElementHomes, ProblemLocator, Scorer, type LayoutProblem } from '../../scoring/index.js';
+import { type BpmnDocument, BpmnError, ChangeSet, DrawnPlane, ElementHomes } from '../../model/index.js';
+import { ProblemLocator, Scorer, type LayoutProblem } from '../../scoring/index.js';
 import { ImageCrop, type CropOptions } from './ImageCrop.js';
 
 export type { DiagramNote, SvgImage };

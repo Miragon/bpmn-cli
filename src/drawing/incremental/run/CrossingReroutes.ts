@@ -1,5 +1,4 @@
-import { Polyline, type Point } from '../../../model/index.js';
-import { DrawnEdge } from '../../../scoring/index.js';
+import { DrawnEdge, type Point, Polyline } from '../../../model/index.js';
 import type { PlaneEdge } from '../../plane/PlaneEdge.js';
 import type { Plane } from '../../plane/Plane.js';
 import { Semantics } from '../../plane/Semantics.js';

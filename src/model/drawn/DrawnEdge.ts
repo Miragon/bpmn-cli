@@ -1,4 +1,8 @@
-import { Polyline, type Box, type BpmnElement, type Point, type Segment } from '../../model/index.js';
+import type { BpmnElement } from '../document/BpmnElement.js';
+import type { Box } from '../geometry/Box.js';
+import type { Point } from '../geometry/Point.js';
+import { Polyline } from '../geometry/Polyline.js';
+import type { Segment } from '../geometry/Segment.js';
 
 export type EdgeDrawing = Pick<DrawnEdge, 'id' | 'el' | 'points'> & Partial<Pick<DrawnEdge, 'label'>>;
 

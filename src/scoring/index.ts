@@ -1,8 +1,4 @@
 export { LayoutScore } from './LayoutScore.js';
-export { DrawnEdge, type EdgeDrawing } from './plane/DrawnEdge.js';
-export { DrawnPlane, type PlaneDrawing } from './plane/DrawnPlane.js';
-export type { ShapeDrawing } from './plane/DrawnShape.js';
-export { ElementHomes } from './plane/ElementHomes.js';
 export { ProblemKinds, type ProblemKind } from './plane/ProblemKinds.js';
 export { ProblemReport, type LayoutProblem } from './plane/ProblemReport.js';
 export { ProblemLocator } from './ProblemLocator.js';

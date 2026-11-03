@@ -1,4 +1,5 @@
-import type { Box, BpmnElement } from '../../model/index.js';
+import type { BpmnElement } from '../document/BpmnElement.js';
+import type { Box } from '../geometry/Box.js';
 
 export type ShapeDrawing = Pick<DrawnShape, 'id' | 'el' | 'bounds'> & Partial<Pick<DrawnShape, 'expanded' | 'label'>>;
 

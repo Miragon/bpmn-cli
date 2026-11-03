@@ -1,4 +1,4 @@
-import { DrawnPlane } from '../plane/DrawnPlane.js';
+import { DrawnPlane } from '../../model/index.js';
 import type { ProblemReport } from '../plane/ProblemReport.js';
 import { ScoringCriterion } from '../plane/ScoringCriterion.js';
 

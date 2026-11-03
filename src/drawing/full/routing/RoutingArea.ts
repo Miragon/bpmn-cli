@@ -1,5 +1,4 @@
-import { Box, Point, Polyline, type Segment } from '../../../model/index.js';
-import { DrawnEdge } from '../../../scoring/index.js';
+import { Box, DrawnEdge, Point, Polyline, type Segment } from '../../../model/index.js';
 import type { GEdge, GNode, LaneBandInfo, ScopeLayout } from '../scopes/GNode.js';
 import { Scope } from '../scopes/Scope.js';
 import { ScopeLabels } from '../scopes/ScopeLabels.js';

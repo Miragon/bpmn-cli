@@ -1,9 +1,6 @@
-import { Box, Point, type BpmnDocument, type Segment } from '../model/index.js';
+import { Box, type BpmnDocument, DrawnEdge, DrawnPlane, ElementHomes, Point, type Segment } from '../model/index.js';
 import { JoinTail } from './flows/JoinTail.js';
 import { LabelTitleCriterion } from './labels/LabelTitleCriterion.js';
-import { DrawnEdge } from './plane/DrawnEdge.js';
-import { DrawnPlane } from './plane/DrawnPlane.js';
-import { ElementHomes } from './plane/ElementHomes.js';
 import { ProblemReport, type LayoutProblem } from './plane/ProblemReport.js';
 
 export class ProblemLocator {

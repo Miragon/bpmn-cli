@@ -1,4 +1,5 @@
-import { ElementHomes, ProblemKinds, ProblemReport, type LayoutProblem } from '../../../scoring/index.js';
+import { ElementHomes } from '../../../model/index.js';
+import { ProblemKinds, ProblemReport, type LayoutProblem } from '../../../scoring/index.js';
 import { TrialGuard, type TrialPolicy } from '../../plane/TrialGuard.js';
 import type { LayoutRun } from './LayoutRun.js';
 
