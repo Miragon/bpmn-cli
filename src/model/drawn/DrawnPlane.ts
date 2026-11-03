@@ -1,4 +1,8 @@
-import { Box, DiagramIndex, Point, type BpmnDocument, type BpmnElement } from '../../model/index.js';
+import { DiagramIndex } from '../diagram/DiagramIndex.js';
+import type { BpmnDocument } from '../document/BpmnDocument.js';
+import type { BpmnElement } from '../document/BpmnElement.js';
+import { Box } from '../geometry/Box.js';
+import { Point } from '../geometry/Point.js';
 import { DrawnEdge, type EdgeDrawing } from './DrawnEdge.js';
 import { DrawnShape, type ShapeDrawing } from './DrawnShape.js';
 import type { ElementHomes } from './ElementHomes.js';

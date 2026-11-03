@@ -1,7 +1,5 @@
 import { TextMetrics } from '@miragon/bpmn-render/text';
-import { Box } from '../../model/index.js';
-import type { DrawnPlane } from '../plane/DrawnPlane.js';
-import type { DrawnShape } from '../plane/DrawnShape.js';
+import { Box, type DrawnPlane, type DrawnShape } from '../../model/index.js';
 import type { ProblemReport } from '../plane/ProblemReport.js';
 import { ScoringCriterion } from '../plane/ScoringCriterion.js';
 

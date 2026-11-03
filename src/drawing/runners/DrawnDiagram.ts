@@ -1,5 +1,5 @@
-import { BpmnError, type BpmnDocument, type BpmnElement, type ErrorDetails } from '../../model/index.js';
-import { ElementHomes, ProblemReport, Scorer, type LayoutProblem, type LayoutScore } from '../../scoring/index.js';
+import { type BpmnDocument, type BpmnElement, BpmnError, ElementHomes, type ErrorDetails } from '../../model/index.js';
+import { ProblemReport, Scorer, type LayoutProblem, type LayoutScore } from '../../scoring/index.js';
 import { Drawing } from '../incremental/Drawing.js';
 import { OperationBefore } from '../incremental/OperationBefore.js';
 import type { PlaneEdge } from '../plane/PlaneEdge.js';

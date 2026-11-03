@@ -1,4 +1,4 @@
-import type { BpmnDocument } from '../model/index.js';
+import { type BpmnDocument, DrawnPlane, ElementHomes, type PlaneDrawing } from '../model/index.js';
 import { BackwardFlowCriterion } from './flows/BackwardFlowCriterion.js';
 import { CrossingCriterion } from './flows/CrossingCriterion.js';
 import { DegenerateEdgeCriterion } from './flows/DegenerateEdgeCriterion.js';
@@ -16,8 +16,6 @@ import { LabelOutsideFrameCriterion } from './labels/LabelOutsideFrameCriterion.
 import { LabelTitleCriterion } from './labels/LabelTitleCriterion.js';
 import { MessageLabelCriterion } from './labels/MessageLabelCriterion.js';
 import { LayoutScore } from './LayoutScore.js';
-import { DrawnPlane, type PlaneDrawing } from './plane/DrawnPlane.js';
-import { ElementHomes } from './plane/ElementHomes.js';
 import { ProblemReport } from './plane/ProblemReport.js';
 import type { ScoringCriterion } from './plane/ScoringCriterion.js';
 import { ContainmentCriterion } from './shapes/ContainmentCriterion.js';

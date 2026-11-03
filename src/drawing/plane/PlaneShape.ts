@@ -1,5 +1,4 @@
-import { Box, DiagramIndex, type BpmnElement } from '../../model/index.js';
-import type { ShapeDrawing } from '../../scoring/index.js';
+import { Box, type BpmnElement, DiagramIndex, type ShapeDrawing } from '../../model/index.js';
 
 export type ShapeKind = 'task' | 'subProcess' | 'event' | 'gateway' | 'boundary' | 'data' | 'annotation' | 'participant' | 'lane' | 'group' | 'other';
 

@@ -1,6 +1,4 @@
-import { Segment, type Point } from '../../model/index.js';
-import { DrawnEdge } from '../plane/DrawnEdge.js';
-import type { DrawnShape } from '../plane/DrawnShape.js';
+import { DrawnEdge, type DrawnShape, type Point, Segment } from '../../model/index.js';
 
 interface Run {
   segment: Segment;

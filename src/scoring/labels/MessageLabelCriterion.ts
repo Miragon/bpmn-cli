@@ -1,5 +1,4 @@
-import { Point, type Box, type Segment } from '../../model/index.js';
-import type { DrawnPlane } from '../plane/DrawnPlane.js';
+import { type Box, type DrawnPlane, Point, type Segment } from '../../model/index.js';
 import type { ProblemReport } from '../plane/ProblemReport.js';
 import { ScoringCriterion } from '../plane/ScoringCriterion.js';
 

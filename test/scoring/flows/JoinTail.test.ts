@@ -1,7 +1,6 @@
+import { DrawnPlane, ElementHomes } from '../../support/ModelValues.js';
 import { describe, expect, it } from 'vitest';
 import { JoinTail } from '../../../src/scoring/flows/JoinTail.js';
-import { DrawnPlane } from '../../../src/scoring/plane/DrawnPlane.js';
-import { ElementHomes } from '../../../src/scoring/plane/ElementHomes.js';
 import { Fixtures } from '../../support/Fixtures.js';
 
 async function planeOf(file: string): Promise<DrawnPlane> {

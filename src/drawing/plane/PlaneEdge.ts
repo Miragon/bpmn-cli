@@ -1,5 +1,4 @@
-import { Box, Point, Polyline, type BpmnElement } from '../../model/index.js';
-import type { EdgeDrawing } from '../../scoring/index.js';
+import { Box, type BpmnElement, type EdgeDrawing, Point, Polyline } from '../../model/index.js';
 import { PlaneShape, type LabelSide } from './PlaneShape.js';
 
 export type EdgeKind = 'sequenceFlow' | 'messageFlow' | 'association' | 'dataAssociation' | 'other';

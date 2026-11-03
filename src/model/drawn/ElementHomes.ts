@@ -1,4 +1,5 @@
-import type { BpmnDocument, BpmnElement } from '../../model/index.js';
+import type { BpmnDocument } from '../document/BpmnDocument.js';
+import type { BpmnElement } from '../document/BpmnElement.js';
 
 export class ElementHomes {
   readonly parents = new Map<string | undefined, BpmnElement>();

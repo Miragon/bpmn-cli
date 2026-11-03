@@ -1,9 +1,9 @@
 import { ModelChecks } from '../checks/index.js';
 import { DiagramDrawing, type DrawingReport, type DrawnOperation, DrawingSnapshot } from '../drawing/index.js';
 import { ModelOperationRunner, type OperationRun } from '../edit/index.js';
-import { type BpmnDocument, BpmnError, DocumentReader, DocumentWriter, type Finding, type IdConventions, type ValidatorIssue } from '../model/index.js';
+import { type BpmnDocument, BpmnError, DocumentReader, DocumentWriter, DrawnPlane, ElementHomes, type Finding, type IdConventions, type ValidatorIssue } from '../model/index.js';
 import { OperationParser, type OrderOperation, type ParsedOperations } from '../operations/index.js';
-import { DrawnPlane, ElementHomes, type LayoutScore, ScoreChange, Scorer } from '../scoring/index.js';
+import { type LayoutScore, ScoreChange, Scorer } from '../scoring/index.js';
 import { FindingDelta } from './FindingDelta.js';
 import { type HostContext, HostValidators, type Validator, type ValidatorRun } from './HostValidators.js';
 import { IdRenames } from './IdRenames.js';

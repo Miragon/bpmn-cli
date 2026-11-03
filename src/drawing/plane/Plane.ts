@@ -1,5 +1,4 @@
-import { Box, Interval, Samples, type BpmnElement } from '../../model/index.js';
-import type { PlaneDrawing } from '../../scoring/index.js';
+import { Box, type BpmnElement, Interval, type PlaneDrawing, Samples } from '../../model/index.js';
 import type { PlaneEdge } from './PlaneEdge.js';
 import type { PlaneShape } from './PlaneShape.js';
 

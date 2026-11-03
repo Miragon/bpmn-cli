@@ -91,7 +91,7 @@ and one judges the drawing.
 ## model
 
 - Does: holds a document and writes it back byte for byte where nothing changed.
-- Holds: `BpmnDocument`, `BpmnTree`, `BpmnElement`, `DocumentReader`, `DocumentWriter`, `TextPreservation`, `ChangeSet`, `DiagramIndex`, `Kinds`, `IdAllocator`, `PropertyCatalog`, `NewDocument`, `BpmnError`, the geometry values `Point`, `Box`, `Segment`, `Polyline`.
+- Holds: `BpmnDocument`, `BpmnTree`, `BpmnElement`, `DocumentReader`, `DocumentWriter`, `TextPreservation`, `ChangeSet`, `DiagramIndex`, `Kinds`, `IdAllocator`, `PropertyCatalog`, `NewDocument`, `BpmnError`, the geometry values `Point`, `Box`, `Segment`, `Polyline`, and the read-only view of what is drawn: `DrawnPlane`, `DrawnShape`, `DrawnEdge`, `ElementHomes`.
 - Why: everything else reads the same tree, and a git diff of a write shows only the write because one module owns the text.
 - Does not: draw, check or edit.
 
@@ -112,7 +112,7 @@ and one judges the drawing.
 ## scoring
 
 - Does: judges a drawing: finds its layout problems and sums them to the layout score.
-- Holds: `Scorer`, `ScoringCriterion` with one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion` and `LabelOnLineCriterion`, `DrawnPlane`, `ElementHomes`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator`.
+- Holds: `Scorer`, `ScoringCriterion` with one subclass per problem or group of problems, such as `OverlapCriterion`, `CrossingCriterion` and `LabelOnLineCriterion`, `ProblemReport`, `ProblemKinds`, `LayoutScore`, `ScoreChange`, `ProblemLocator`.
 - Why: writes, the layout, `diagram` and the tests measure with one model, and a change to the measure is a change to one module.
 - Does not: change the document, lay out, read files, know the CLI or bpmnlint.
 
