@@ -1,4 +1,4 @@
-import { LineBudget } from './LineBudget.mjs';
+import { BudgetedParts } from '../../shared/BudgetedParts.mjs';
 
 const FLOOR = { lines: 90, branches: 85 };
 
@@ -9,10 +9,11 @@ const FLOOR = { lines: 90, branches: 85 };
 export class CoverageFloors {
   constructor(_root, budgets) {
     this.coverage = budgets.coverage;
+    this.parts = new BudgetedParts(budgets).parts;
   }
 
   async run() {
-    const lowered = LineBudget.PARTS.filter((part) => this.isBelowFloor(this.coverage[part]));
+    const lowered = this.parts.filter((part) => this.isBelowFloor(this.coverage[part]));
     const problems = lowered.map((part) => `${part}: coverage below ${FLOOR.lines} % lines, ${FLOOR.branches} % branches; coverage is raised only`);
     return { problems, summary: `coverage at least ${FLOOR.lines} % lines, ${FLOOR.branches} % branches` };
   }

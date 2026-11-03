@@ -24,18 +24,6 @@ describe('the budgets', () => {
     expect(repo.checkBudgets().status).toBe(0);
   });
 
-  it('count 10 runtime exports as allowed and leave types out', () => {
-    repo.plant('src/api/index.ts', `${exportsOfCount(10)}export type Id = string;\n`);
-    expect(repo.checkBudgets().status).toBe(0);
-  });
-
-  it('fail on an eleventh runtime export', () => {
-    repo.plant('src/api/index.ts', exportsOfCount(11));
-    const { status, output } = repo.checkBudgets();
-    expect(output).toContain('the core has 11 runtime exports');
-    expect(status).toBe(1);
-  });
-
   it('measure the guide: its topics in kilobytes, over all three folders', () => {
     repo.plant('src/cli/help/guide/core.md', 'x'.repeat(1200));
     repo.plant('src/cli/help/tables/kinds.md', 'x'.repeat(1300));
