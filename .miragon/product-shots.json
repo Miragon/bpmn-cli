@@ -1,0 +1,18 @@
+{
+  "skillVersion": "1.29.0",
+  "products": [
+    {
+      "id": "bpmn-cli-readme",
+      "target": "web",
+      "title": "bpmn-cli",
+      "label": "Miragon CLI",
+      "claim": "Your agent edits the model, not the XML.",
+      "icon": "docs/assets/icon.svg",
+      "out": "docs/assets",
+      "web": { "url": "https://miragon.github.io/bpmn-cli/", "viewport": "960x900" },
+      "shots": {
+        "hero": { "path": "./", "selector": "figure.window" }
+      }
+    }
+  ]
+}

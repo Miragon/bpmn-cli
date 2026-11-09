@@ -6,9 +6,7 @@
 [![CI](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/Miragon/bpmn-cli)](LICENSE)
 
-![bpmn add inserts the user task Approve invoice after Check invoice in order.bpmn, the drawing makes room for it, and bpmn validate reports the model valid for Camunda 8](docs/assets/hero.gif)
-
-**Your agent edits the model, not the XML.**
+![bpmn-cli by Miragon: your agent edits the model, not the XML. A bpmn add command inserts the task Approve invoice into order.bpmn](docs/assets/cover.png)
 
 A command line tool and Claude Code plugin your AI agent uses to create, read and change BPMN 2.0 models. Before 1.0, a minor release can change a command, so pin the version ([changelog](CHANGELOG.md)).
 
@@ -23,6 +21,8 @@ BPMN XML is long and full of coordinates, so an agent that writes it is slow and
 - **A picture to check.** `bpmn render` draws PNG or SVG without a browser, so the agent sees what changed.
 - **Ready to deploy.** With `--target camunda7` or `camunda8`, `bpmn validate` checks the engine's deploy rules ([Camunda 7, CIB seven, Operaton and 8](https://miragon.github.io/bpmn-cli/camunda)).
 - **Your lint rules, before CI.** `bpmn validate` runs your `.bpmnlintrc`, and generated ids follow its naming rule ([bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint)).
+
+![bpmn add inserts the user task Approve invoice after Check invoice in order.bpmn, the drawing makes room for it, and bpmn validate reports the model valid for Camunda 8](docs/assets/demo.gif)
 
 ## Install
 
