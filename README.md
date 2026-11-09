@@ -6,7 +6,7 @@
 [![CI](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/Miragon/bpmn-cli)](LICENSE)
 
-![The order process drawn by bpmn render: Order received, Check invoice, the gateway Invoice ok? with the branches Book invoice and Ask customer, and a message flow to the Customer pool](docs/public/shots/walkthrough-3-pools.svg)
+![bpmn add inserts the user task Approve invoice after Check invoice in order.bpmn, the drawing makes room for it, and bpmn validate reports the model valid for Camunda 8](docs/assets/hero.gif)
 
 **Your agent edits the model, not the XML.**
 
