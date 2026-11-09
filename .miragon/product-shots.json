@@ -9,9 +9,16 @@
       "claim": "Your agent edits the model, not the XML.",
       "icon": "docs/assets/icon.svg",
       "out": "docs/assets",
-      "web": { "url": "https://miragon.github.io/bpmn-cli/", "viewport": "960x900" },
+      "web": {
+        "url": "https://miragon.github.io/bpmn-cli/",
+        "viewport": "1600x960"
+      },
       "shots": {
-        "hero": { "path": "./", "selector": "figure.window" }
+        "hero": {
+          "path": "./",
+          "journey": ".miragon/cover-card.mjs",
+          "selector": "figure.window"
+        }
       }
     }
   ]

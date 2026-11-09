@@ -6,7 +6,7 @@
 [![CI](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/Miragon/bpmn-cli)](LICENSE)
 
-![bpmn-cli by Miragon: your agent edits the model, not the XML. A bpmn add command inserts the task Approve invoice into order.bpmn](docs/assets/cover.png)
+![bpmn-cli by Miragon: your agent edits the model, not the XML. A bpmn add command inserts the task Approve invoice into order.bpmn](docs/assets/cover.webp)
 
 A command line tool and Claude Code plugin your AI agent uses to create, read and change BPMN 2.0 models. Before 1.0, a minor release can change a command, so pin the version ([changelog](CHANGELOG.md)).
 
