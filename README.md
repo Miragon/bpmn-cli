@@ -1,53 +1,45 @@
 # bpmn-cli
 
-[![npm version](https://img.shields.io/npm/v/@miragon/bpmn-cli.svg)](https://www.npmjs.com/package/@miragon/bpmn-cli)
+[![npm](https://img.shields.io/npm/v/@miragon/bpmn-cli.svg)](https://www.npmjs.com/package/@miragon/bpmn-cli)
+[![Homebrew](https://img.shields.io/badge/Homebrew-miragon%2Ftap-FBB040?logo=homebrew&logoColor=white)](https://github.com/Miragon/homebrew-tap)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-D97757?logo=claude&logoColor=white)](https://miragon.github.io/bpmn-cli/getting-started#claude-code-plugin)
 [![CI](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Miragon/bpmn-cli/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-miragon.github.io%2Fbpmn--cli-blue.svg)](https://miragon.github.io/bpmn-cli/)
+[![License: MIT](https://img.shields.io/github/license/Miragon/bpmn-cli)](LICENSE)
 
-A command line tool that lets an AI agent (or a human at a shell) edit BPMN 2.0 models
-**semantically**: it names elements and operations, and the CLI keeps the drawing. No BPMN XML,
-no diagram coordinates.
+![bpmn-cli by Miragon: your agent edits the model, not the XML. A bpmn add command inserts the task Approve invoice into order.bpmn](docs/assets/cover.webp)
 
-> [!WARNING]
-> bpmn-cli is experimental and has not reached 1.0.0 yet. Until then, any minor release may contain
-> breaking changes to commands, flags and output. Pin an exact version and check the
-> [changelog](CHANGELOG.md) before you upgrade.
-
-![The order process drawn by bpmn render: Order received, Check invoice, the gateway Invoice ok? with the branches Book invoice and Ask customer, and a message flow to the Customer pool](docs/public/shots/walkthrough-3-pools.svg)
+A command line tool and Claude Code plugin your AI agent uses to create, read and change BPMN 2.0 models. Before 1.0, a minor release can change a command, so pin the version ([changelog](CHANGELOG.md)).
 
 ## Why
 
-A language model writes its answer token by token, so the time and the cost of a change grow with
-the text it has to produce. BPMN XML is a lot of text, most of it diagram coordinates. An agent
-that edits the XML itself is slow, and every coordinate it writes is a chance to break the file.
+BPMN XML is long and full of coordinates, so an agent that writes it is slow and breaks it. Here the agent names the change; the CLI writes the XML and the drawing and refuses a broken one.
 
-bpmn-cli turns this around: the agent says what should change, in one short command, and the CLI
-writes the XML and the drawing. What you get:
+## What you get
 
-- **Fast, because the agent writes little.** One short command replaces kilobytes of XML.
-- **Cheap to read.** The agent reads a compact text view of the model instead of the XML, so
-  large models fit into its context.
-- **Correct by construction.** The agent names elements and changes; references, ids and
-  coordinates are the CLI's job.
-- **Careful with your drawing.** A diagram stays as it is; new elements are fitted in next to their
-  neighbours, and `bpmn layout` redraws only when you ask.
-- **Ready to deploy.** Camunda 7 and Camunda 8 settings are set by name and checked before you
-  deploy.
+- **Fast and cheap.** One command replaces kilobytes of XML; `bpmn show` reads the model as compact text.
+- **Your drawing stays.** New elements fit in beside their neighbours; `bpmn layout` redraws only on request ([limits](https://miragon.github.io/bpmn-cli/contract)).
+- **A picture to check.** `bpmn render` draws PNG or SVG without a browser, so the agent sees what changed.
+- **Ready to deploy.** With `--target camunda7` or `camunda8`, `bpmn validate` checks the engine's deploy rules ([Camunda 7, CIB seven, Operaton and 8](https://miragon.github.io/bpmn-cli/camunda)).
+- **Your lint rules, before CI.** `bpmn validate` runs your `.bpmnlintrc`, and generated ids follow its naming rule ([bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint)).
+
+![bpmn add inserts the user task Approve invoice after Check invoice in order.bpmn, the drawing makes room for it, and bpmn validate reports the model valid for Camunda 8](docs/assets/demo.gif)
 
 ## Install
 
-Requires Node 24 or later.
+You need Node.js 24 or later; Homebrew brings it on macOS and Linux.
 
-```
-npm install -g @miragon/bpmn-cli   # puts `bpmn` on your PATH
-brew install miragon/tap/bpmn-cli  # or with Homebrew (pulls in Node)
-bpmn guide                         # the core of the help, and its topics
+```sh
+npm install -g @miragon/bpmn-cli   # or
+brew install miragon/tap/bpmn-cli
 ```
 
-## Quick start
+Without installing: `npx -y @miragon/bpmn-cli` in place of `bpmn`. With Claude Code, add the [plugin](#with-claude-code).
 
-```
+## Get started
+
+Each command prints the ids it created, such as `created startEvent: startEvent_orderReceived`:
+
+```console
 $ bpmn new order.bpmn "Order handling"
 $ bpmn add order.bpmn start "Order received"
 $ bpmn add order.bpmn userTask "Check invoice" --after startEvent_orderReceived
@@ -60,83 +52,41 @@ process orderHandling "Order handling" executable
 state: 0 errors, 0 warnings (bpmn validate lists them and runs the project's lint)
 ```
 
-The result is a normal `.bpmn` file that opens in Camunda Modeler / bpmn-js with a laid-out
-diagram. [Model a process](https://miragon.github.io/bpmn-cli/modeling) builds a complete
-process step by step.
+`order.bpmn` opens in Camunda Modeler and bpmn-js; [Getting started](https://miragon.github.io/bpmn-cli/getting-started) walks through more.
 
 ## Commands
 
 | Task | Commands |
 | --- | --- |
-| Read a model | `show`, `find`, `diagram`, `conventions` |
+| Read and check a model | `show`, `find`, `diagram`, `conventions`, `render`, `validate` |
 | Change the process | `new`, `add`, `connect`, `set`, `remove`, `retype`, `move`, `order`, `ext add`, `ext remove` |
 | Change several things at once | `apply` (a batch of operations as JSON) |
-| Format the diagram | `place`, `color`, `label`, `route`, `space`, `tidy`, `compact`, `layout` |
-| Look at the diagram | `render` (PNG or SVG, no browser) |
-| Check before deploying | `validate` (also runs the project's `.bpmnlintrc`) |
+| Change only the drawing | `layout`, `place`, `color`, `label`, `route`, `space`, `tidy`, `compact` |
 | Ask the CLI itself | `guide`, `--help` |
 
-Details: [command reference](https://miragon.github.io/bpmn-cli/commands).
+Every option: the [command reference](https://miragon.github.io/bpmn-cli/commands) or `bpmn <command> --help`.
 
-## Claude Code plugin
+## With Claude Code
 
-This repository is also a [Claude Code](https://code.claude.com/docs/en/plugins) plugin
-marketplace. Its skill `bpmn` makes Claude use this CLI whenever a request creates or touches a
-BPMN model, instead of writing BPMN XML by hand.
+The plugin makes Claude use the CLI instead of writing XML, and render and validate before it calls a model done. It runs `bpmn`, or `npx` when that is missing.
 
-```
+```txt
 /plugin marketplace add Miragon/bpmn-cli
 /plugin install bpmn-cli@miragon-bpmn
 ```
 
-Details: [Claude Code plugin](https://miragon.github.io/bpmn-cli/getting-started#claude-code-plugin), and the plugin
-itself in [plugins/bpmn-cli](plugins/bpmn-cli/README.md).
+Then ask in plain words: "Add a reminder timer on Check invoice". Updates and team setup: [Claude Code plugin](https://miragon.github.io/bpmn-cli/getting-started#claude-code-plugin). Other agents run the CLI directly; `bpmn guide` is written for them.
 
-## Camunda 7 and Camunda 8
+## Help and feedback
 
-Models can target Camunda 7 (including CIB seven and Operaton) or Camunda 8. The CLI sets the
-platform's implementation details and validates them against its deploy rules.
-
-Details: [Camunda 7 and Camunda 8](https://miragon.github.io/bpmn-cli/camunda).
-
-## bpmnlint
-
-A project's bpmnlint configuration (`.bpmnlintrc`) runs in `bpmn validate`, the gate an agent runs
-before it calls a model done, so it fixes the findings instead of meeting them in CI. The ids
-bpmn-cli generates follow `@miragon/rules/element-id-naming`: the prefixes and case the
-`.bpmnlintrc` declares, else the rule's defaults (`userTask_checkInvoice`,
-`flow_checkInvoiceToBookInvoice`), so they pass the rule out of the box
-(`bpmn conventions <file>` lists them).
-
-Details: [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint).
-
-## Library use
-
-The package is also a library that edits BPMN in memory, in Node and in the browser: ten exports that
-take and return strings and data.
-
-Details: [library use](https://miragon.github.io/bpmn-cli/library).
-
-## Documentation
-
-The docs site, [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/), is built from [docs/](docs/):
-
-- [Getting started](https://miragon.github.io/bpmn-cli/getting-started): install the CLI or the Claude Code plugin, a first model
-- [Model a process](https://miragon.github.io/bpmn-cli/modeling): one process from an empty file to a validated model, with batches
-- [Camunda 7 and 8](https://miragon.github.io/bpmn-cli/camunda): engine settings and deploy checks
-- [Layout](https://miragon.github.io/bpmn-cli/layout): how a write draws, and the commands that change only the drawing
-- [bpmnlint](https://miragon.github.io/bpmn-cli/bpmnlint): the project's `.bpmnlintrc` in validate, and id conventions
-- [Library](https://miragon.github.io/bpmn-cli/library): the package API and host validators
-- [Commands](https://miragon.github.io/bpmn-cli/commands): every command, flags and keys, kinds, output and exit codes
-- [Guarantees and limits](https://miragon.github.io/bpmn-cli/contract): what a write promises and where it stops
-- [Architecture](https://miragon.github.io/bpmn-cli/architecture): the modules, what each holds and what it does not do
-- For maintainers, in the repository only: [testing](docs/testing.md),
-  [releasing](docs/releasing.md) and the [architecture decisions](docs/adr/)
+- **Documentation:** every command and limit is at [miragon.github.io/bpmn-cli](https://miragon.github.io/bpmn-cli/).
+- **Bugs and ideas:** [open an issue](https://github.com/Miragon/bpmn-cli/issues) with the `.bpmn` file and the command.
+- **Library:** to edit BPMN from Node or browser code, see [Library use](https://miragon.github.io/bpmn-cli/library).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Building and testing: [CONTRIBUTING.md](CONTRIBUTING.md). Outside pull requests are not accepted at the moment; issues are welcome.
 
 ## License
 
-[MIT](LICENSE) © Miragon GmbH.
+[MIT](LICENSE) © Miragon GmbH
