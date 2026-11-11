@@ -32,7 +32,7 @@ describe('IdConventionsReader', () => {
   });
 
   it('finds the rule in a configuration of the plugin a file extends', async () => {
-    const { conventions, severity } = await read(JSON.stringify({ extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/all'] }));
+    const { conventions, severity } = await read(JSON.stringify({ extends: ['bpmnlint:recommended', 'plugin:@miragon/rules/strict'] }));
 
     expect(conventions?.prefixes['bpmn:UserTask']).toBe('userTask_');
     expect(severity).toBe('error');
@@ -40,7 +40,7 @@ describe('IdConventionsReader', () => {
 
   it('takes a number as the severity and lets the file switch an inherited rule off', async () => {
     expect((await read(JSON.stringify({ rules: { [RULE]: 1 } }))).severity).toBe('warn');
-    expect(await read(JSON.stringify({ extends: 'plugin:@miragon/rules/all', rules: { [RULE]: 'off' } }))).toEqual({ notes: [], where: '.bpmnlintrc in .', undeclared: 'off' });
+    expect(await read(JSON.stringify({ extends: 'plugin:@miragon/rules/strict', rules: { [RULE]: 'off' } }))).toEqual({ notes: [], where: '.bpmnlintrc in .', undeclared: 'off' });
   });
 
   it('says why it declares nothing', async () => {
