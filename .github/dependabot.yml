@@ -9,7 +9,8 @@ updates:
       - dependencies
     open-pull-requests-limit: 10
     commit-message:
-      prefix: chore
+      prefix: fix
+      prefix-development: chore
       include: scope
     cooldown:
       default-days: 5
