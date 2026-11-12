@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run fuzz -- --walks 60 --steps 30 --seed ${{ github.run_number }} --hard warn --minimize
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: fuzz
@@ -47,7 +47,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run bench
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bench

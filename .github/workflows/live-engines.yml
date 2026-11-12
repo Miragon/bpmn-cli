@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 24
       - run: node tools/verify/live-engines.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: live-engines
