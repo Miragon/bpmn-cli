@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/Miragon/bpmn-cli/compare/v0.10.0...v0.10.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **deps:** bump the npm-minor-patch group with 3 updates ([#169](https://github.com/Miragon/bpmn-cli/issues/169)) ([36d31a7](https://github.com/Miragon/bpmn-cli/commit/36d31a7da886d6cf75a7454af53d0c4720f07d46))
+
 ## [0.10.0](https://github.com/Miragon/bpmn-cli/compare/v0.9.0...v0.10.0) (2026-11-02)
 
 
