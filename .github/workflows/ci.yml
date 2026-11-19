@@ -44,11 +44,9 @@ jobs:
       - run: claude plugin validate --strict plugins/bpmn-cli
       - run: claude plugin validate --strict .
 
-  # The corporate identity: the docs kit in docs/.vitepress/miragon/ equals the release of
-  # Miragon/corporate-identity it was vendored from, and brand-lint finds no hard violation in the
-  # docs and the README (rules and exceptions in .miragon/brand.json). That repo is private: without
-  # the secret (not set up yet, or a pull request from a fork) the job warns and skips; the docs
-  # workflow still checks the kit against its own manifest.
+  # The corporate identity: brand-lint finds no hard violation in the docs and the README (rules
+  # and exceptions in .miragon/brand.json). It comes from Miragon/corporate-identity, a private
+  # repo: without the secret (not set up yet, or a pull request from a fork) the job warns and skips.
   brand:
     runs-on: ubuntu-latest
     env:
@@ -58,9 +56,8 @@ jobs:
 
       - name: No access to Miragon/corporate-identity
         if: env.CI_SOURCE_TOKEN == ''
-        run: echo "::warning title=Brand checks skipped::CORPORATE_IDENTITY_READ_TOKEN is not set, so the docs kit is not compared with Miragon/corporate-identity and brand-lint does not run. Add the secret (contents:read on Miragon/corporate-identity)."
+        run: echo "::warning title=Brand checks skipped::CORPORATE_IDENTITY_READ_TOKEN is not set, so brand-lint does not run. Add the secret (contents:read on Miragon/corporate-identity)."
 
-      # Keep ref on the release in docs/.vitepress/miragon/manifest.json.
       - uses: actions/checkout@v7
         if: env.CI_SOURCE_TOKEN != ''
         with:
@@ -75,10 +72,6 @@ jobs:
         if: env.CI_SOURCE_TOKEN != ''
         with:
           node-version: 24
-
-      - name: The docs kit equals the CI release
-        if: env.CI_SOURCE_TOKEN != ''
-        run: node docs/.vitepress/miragon/check.mjs --ci .ci-source
 
       - name: brand-lint
         if: env.CI_SOURCE_TOKEN != ''

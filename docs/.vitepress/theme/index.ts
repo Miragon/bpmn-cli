@@ -1,7 +1,7 @@
-// The theme of the Miragon docs kit (docs/.vitepress/miragon/theme/), unchanged, plus this site's own
+// The theme of the Miragon docs kit (@miragon/docs-starter), unchanged, plus this site's own
 // parts: the landing page (HomeLanding.vue with the animated LandingDemo.vue), diagram cards and
 // wrapped CLI output (custom.css). Own styles use the roles --cd-ui-* only.
-import MiragonTheme from "../miragon/theme"
+import MiragonTheme from "@miragon/docs-starter/theme"
 import HomeLanding from "./HomeLanding.vue"
 import "./custom.css"
 

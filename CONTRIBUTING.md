@@ -60,12 +60,10 @@ and bench: [docs/testing.md](docs/testing.md). The rules behind them: [how code 
   maintainer notes (`testing.md`, `releasing.md`, the decisions in `adr/`) stay
   out of the site via `srcExclude`. `npm --prefix docs run shots` draws the pictures with the built CLI,
   from the recipes in `docs/shots/`.
-  The site is built with the Miragon docs kit: `docs/.vitepress/config.ts` passes the repo's name,
-  nav and sidebar to its `miragonDocs()`, and the kit sets the theme, the colours light and dark,
-  the GitHub-style heading anchors and the legal row. The kit in `docs/.vitepress/miragon/` and the
-  logos in `docs/public/logo/` are vendored unchanged from Miragon's corporate identity (skill
-  `docs-site` of the miragon-brand plugin): do not edit them here, `npm --prefix docs run check:kit`
-  fails on a hand edit, and the `docs` workflow runs it on every pull request that touches `docs/`.
+  The site is built with the Miragon docs kit, the npm package `@miragon/docs-starter` (from
+  Miragon/brand-toolbox): `docs/.vitepress/config.ts` passes the repo's name, nav and sidebar to
+  its `miragonDocs()`, and the kit sets the theme, the colours light and dark, the GitHub-style
+  heading anchors and the legal row. A new kit comes with an update of that package.
   `.miragon/brand.json` switches brand-lint on for the docs and the README.
 - `plugins/bpmn-cli/`: the Claude Code plugin (see its [README](plugins/bpmn-cli/README.md)).
 
