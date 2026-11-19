@@ -1,7 +1,6 @@
-// The docs site, built with the Miragon docs kit (docs/.vitepress/miragon/, vendored from
-// Miragon/corporate-identity, skill docs-site). The kit sets everything else: base from
+// The docs site, built with the Miragon docs kit (@miragon/docs-starter). The kit sets everything else: base from
 // DOCS_BASE, theme, colours light and dark, GitHub anchors, Mermaid, search, the legal row.
-import { miragonDocs } from "./miragon/config"
+import { miragonDocs } from "@miragon/docs-starter"
 
 export default miragonDocs({
   repo: "Miragon/bpmn-cli",
