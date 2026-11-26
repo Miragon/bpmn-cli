@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.1](https://github.com/Miragon/bpmn-cli/compare/v0.10.0...v0.10.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **deps:** bump the npm-minor-patch group with 3 updates ([#169](https://github.com/Miragon/bpmn-cli/issues/169)) ([36d31a7](https://github.com/Miragon/bpmn-cli/commit/36d31a7da886d6cf75a7454af53d0c4720f07d46))
+* **deps:** bump the npm-minor-patch group with 4 updates ([#171](https://github.com/Miragon/bpmn-cli/issues/171)) ([b4840f1](https://github.com/Miragon/bpmn-cli/commit/b4840f161dc5d49f9464b21097973c1584505319))
+* **deps:** bump the npm-minor-patch group with 5 updates ([#174](https://github.com/Miragon/bpmn-cli/issues/174)) ([ea4ce61](https://github.com/Miragon/bpmn-cli/commit/ea4ce61354c1d582cf92007af47b0313e84a6892))
+* **layout:** keep shapes out of foreign sub-processes and pools from overlapping ([#175](https://github.com/Miragon/bpmn-cli/issues/175)) ([7964811](https://github.com/Miragon/bpmn-cli/commit/796481173e34dc6b27c97be621f69599ddc30c1c))
+
 ## [0.10.0](https://github.com/Miragon/bpmn-cli/compare/v0.9.0...v0.10.0) (2026-11-02)
 
 
