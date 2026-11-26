@@ -74,12 +74,20 @@ export class SpaceDecisions {
       return SpaceDecisions.moveOrStay(pass.centreBeyondLine(box) && pass.pushed(shape));
     }
     if (along.near(box) >= line) {
-      return SpaceDecisions.moveOrStay(along.overlapsBand(box, band) && pass.pushed(shape));
+      return SpaceDecisions.moveOrStay((along.overlapsBand(box, band) || this.belowGrowingPool(shape, box)) && pass.pushed(shape));
     }
     if ((shape.container || (shape.kind === 'group' && pass.pushed(shape))) && along.far(box) > line && along.overlapsBand(box, band)) {
       return delta < 0 && along.beyondBand(box, band) ? 'stay' : 'resize';
     }
     return 'stay';
+  }
+
+  private belowGrowingPool(shape: PlaneShape, box: Box): boolean {
+    const { pass } = this;
+    if (shape.kind !== 'participant') {
+      return false;
+    }
+    return [...pass.plane.shapes.values()].some((pool) => pool.kind === 'participant' && pool !== shape && pass.along.overlapsBand(box, pass.along.bandOf(pass.boxOf(pool))) && this.decide(pool) === 'resize');
   }
 
   private carrierOf(shape: PlaneShape): PlaneShape | undefined {
