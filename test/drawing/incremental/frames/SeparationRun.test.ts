@@ -167,6 +167,17 @@ describe('SeparationRun', () => {
     expect(frame.bounds.overlaps(plane.shapes.get('T')!.bounds)).toBe(false);
   });
 
+  it('never moves a shape up into a sub-process it does not belong to', async () => {
+    const plane = await planeOf('models/incremental/sub.bpmn');
+    const end = plane.shapes.get('E')!;
+    end.bounds = new Box(400, 320, 36, 36);
+    plane.shapes.get('T')!.bounds = new Box(380, 345, 100, 80);
+    const result = run(plane, { active: ['E'], movable: ['E'] });
+
+    expect(end.bounds.overlaps(plane.shapes.get('SP')!.bounds)).toBe(false);
+    expect(result.unresolved).toEqual([['E', 'T']]);
+  });
+
   it('leaves a task that lay on the sub-process before', async () => {
     const plane = await planeOf('models/incremental/sub.bpmn');
     const task = plane.shapes.get('T')!;
