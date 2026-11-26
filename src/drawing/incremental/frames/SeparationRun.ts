@@ -1,4 +1,4 @@
-import type { Box } from '../../../model/index.js';
+import { Box } from '../../../model/index.js';
 import type { PlaneShape } from '../../plane/PlaneShape.js';
 import { Frames } from '../../plane/Frames.js';
 import type { Plane } from '../../plane/Plane.js';
@@ -255,8 +255,20 @@ export class SeparationRun {
     ] as const;
     return pairs
       .flatMap(([mover, obstacle]) => (this.movable.has(mover.id) ? this.movesOf(mover, obstacle, mover === second, boxes, gap) : []))
-      .filter((move) => move.need > 0 && !(move.direction === 'right' ? this.lockedX : this.lockedY).has(move.unit))
+      .filter((move) => move.need > 0 && !(move.direction === 'right' ? this.lockedX : this.lockedY).has(move.unit) && !this.entersForeignFrame(move, boxes))
       .sort((left, right) => left.need - right.need);
+  }
+
+  private entersForeignFrame({ unit, direction, need }: Move, boxes: Boxes): boolean {
+    const mover = this.units.get(unit)!;
+    const box = boxes.get(unit)!;
+    const [dx, dy] = SeparationRun.SHIFTS[direction];
+    const distance = Math.ceil(need);
+    const landing = new Box(box.x + dx * distance, box.y + dy * distance, box.width, box.height);
+    return [...this.units.values()].some((frame) => {
+      const frameBox = boxes.get(frame.id)!;
+      return frame !== mover && frame.container && !this.movable.has(frame.id) && !this.nested(mover, frame) && !box.overlaps(frameBox) && landing.overlaps(frameBox);
+    });
   }
 
   private resolve({ first, second, gap }: Conflict, boxes: Boxes): void {
