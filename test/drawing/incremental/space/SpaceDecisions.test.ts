@@ -62,6 +62,15 @@ describe('SpaceDecisions', () => {
     expect(result.get('N')).toBe('move');
   });
 
+  it('moves every pool stacked below a pool that grows in the band, whatever order the diagram lists them in', async () => {
+    const plane = await planeOf('models/incremental/pools-stacked.bpmn');
+    const result = decisions(plane, { axis: 'y', line: 260, band: [780, 920] });
+
+    expect(result.get('Wide')).toBe('resize');
+    expect(result.get('Narrow')).toBe('move');
+    expect(result.get('Lower')).toBe('move');
+  });
+
   it('leaves a frame alone when shrinking it would cut outside the band', async () => {
     const plane = await planeOf('models/incremental/lanesub.bpmn');
 

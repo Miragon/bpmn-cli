@@ -87,7 +87,9 @@ export class SpaceDecisions {
     if (shape.kind !== 'participant') {
       return false;
     }
-    return [...pass.plane.shapes.values()].some((pool) => pool.kind === 'participant' && pool !== shape && pass.along.overlapsBand(box, pass.along.bandOf(pass.boxOf(pool))) && this.decide(pool) === 'resize');
+    const { along, line } = pass;
+    const crossesLine = (pool: PlaneShape): boolean => along.near(pass.boxOf(pool)) < line && along.far(pass.boxOf(pool)) > line;
+    return [...pass.plane.shapes.values()].some((pool) => pool.kind === 'participant' && crossesLine(pool) && along.overlapsBand(box, along.bandOf(pass.boxOf(pool))) && this.decide(pool) === 'resize');
   }
 
   private carrierOf(shape: PlaneShape): PlaneShape | undefined {
